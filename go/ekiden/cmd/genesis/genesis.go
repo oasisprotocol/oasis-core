@@ -400,8 +400,8 @@ func AppendStorageState(doc *genesis.Document, states []string, l *logging.Logge
 			return err
 		}
 
-		var log storage.WriteLog
-		if err = json.Unmarshal(b, &log); err != nil {
+		var sg storage.Genesis
+		if err = json.Unmarshal(b, &sg); err != nil {
 			l.Error("failed to parse genesis storage state",
 				"err", err,
 				"filename", v,
@@ -409,7 +409,9 @@ func AppendStorageState(doc *genesis.Document, states []string, l *logging.Logge
 			return err
 		}
 
-		storageSt.State = append(storageSt.State, log...)
+		for ns, log := range sg.State {
+			storageSt.State[ns] = append(storageSt.State[ns], log...)
+		}
 	}
 
 	doc.Storage = storageSt

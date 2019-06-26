@@ -84,7 +84,8 @@ fn bench_insert(b: &mut Bencher) {
             tree.insert(Context::background(), keys[i].as_ref(), vals[i].as_ref())
                 .expect("insert");
         }
-        tree.commit(Context::background()).expect("commit");
+        tree.commit(Context::background(), Default::default(), 0)
+            .expect("commit");
     });
 }
 
@@ -100,7 +101,8 @@ fn bench_insert_batch(b: &mut Bencher, num_values: usize, commit: bool) {
                 .expect("insert");
         }
         if commit {
-            tree.commit(Context::background()).expect("commit");
+            tree.commit(Context::background(), Default::default(), 0)
+                .expect("commit");
         }
     });
 }

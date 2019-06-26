@@ -3,6 +3,7 @@ package leveldb
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -22,8 +23,8 @@ var (
 	writeLogKeyPrefix = []byte{'L'}
 )
 
-func makeWriteLogKey(startHash hash.Hash, endHash hash.Hash) []byte {
-	return append(append(writeLogKeyPrefix, startHash[:]...), endHash[:]...)
+func makeWriteLogKey(startRoot node.Root, endRoot node.Root) []byte {
+	return append(append(writeLogKeyPrefix, startRoot.Hash[:]...), endRoot.Hash[:]...)
 }
 
 type leveldbNodeDB struct {
@@ -42,7 +43,7 @@ func New(dirname string) (api.NodeDB, error) {
 	return &leveldbNodeDB{db: db}, nil
 }
 
-func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error) {
+func (d *leveldbNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
 	if ptr == nil || !ptr.IsClean() {
 		panic("urkel/db/leveldb: attempted to get invalid pointer from node database")
 	}
@@ -58,8 +59,12 @@ func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, e
 	return node.UnmarshalBinary(bytes)
 }
 
-func (d *leveldbNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
-	bytes, err := d.db.Get(makeWriteLogKey(startHash, endHash), nil)
+func (d *leveldbNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (api.WriteLogIterator, error) {
+	if !endRoot.Follows(&startRoot) {
+		return nil, errors.New("urkel/db/leveldb: end root must follow start root")
+	}
+
+	bytes, err := d.db.Get(makeWriteLogKey(startRoot, endRoot), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +75,7 @@ func (d *leveldbNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, en
 	}
 
 	return api.ReviveHashedDBWriteLog(ctx, log, func(h hash.Hash) (*node.LeafNode, error) {
-		leaf, err := d.GetNode(endHash, &node.Pointer{Hash: h, Clean: true})
+		leaf, err := d.GetNode(endRoot, &node.Pointer{Hash: h, Clean: true})
 		if err != nil {
 			return nil, err
 		}
@@ -105,14 +110,23 @@ func (b *leveldbBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtr
 	return subtree
 }
 
-func (b *leveldbBatch) PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, annotations writelog.WriteLogAnnotations) error {
+func (b *leveldbBatch) PutWriteLog(
+	startRoot node.Root,
+	endRoot node.Root,
+	writeLog writelog.WriteLog,
+	annotations writelog.WriteLogAnnotations,
+) error {
+	if !endRoot.Follows(&startRoot) {
+		return errors.New("urkel/db/leveldb: end root must follow start root")
+	}
+
 	log := api.MakeHashedDBWriteLog(writeLog, annotations)
 	bytes := cbor.Marshal(log)
-	b.bat.Put(makeWriteLogKey(startHash, endHash), bytes)
+	b.bat.Put(makeWriteLogKey(startRoot, endRoot), bytes)
 	return nil
 }
 
-func (b *leveldbBatch) Commit(root hash.Hash) error {
+func (b *leveldbBatch) Commit(root node.Root) error {
 	if err := b.db.db.Write(b.bat, &opt.WriteOptions{Sync: true}); err != nil {
 		return err
 	}

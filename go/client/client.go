@@ -288,8 +288,14 @@ func (c *Client) getTxnData(ctx context.Context, blk *block.Block) ([][]byte, []
 		return [][]byte{}, [][]byte{}, nil
 	}
 
+	ioRoot := storage.Root{
+		Namespace: blk.Header.Namespace,
+		Round:     blk.Header.Round,
+		Hash:      blk.Header.IORoot,
+	}
+
 	// Fetch transaction input and output.
-	tree, err := urkel.NewWithRoot(ctx, c.common.storage, nil, blk.Header.IORoot)
+	tree, err := urkel.NewWithRoot(ctx, c.common.storage, nil, ioRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "client: failed to fetch given io root")
 	}
@@ -377,10 +383,16 @@ func (c *Client) GetTxnByBlockHash(ctx context.Context, runtimeID signature.Publ
 }
 
 // GetTransactions returns a list of transactions under the given transaction root.
-func (c *Client) GetTransactions(ctx context.Context, runtimeID signature.PublicKey, root hash.Hash) ([][]byte, error) {
-	if root.IsEmpty() {
+func (c *Client) GetTransactions(ctx context.Context, runtimeID signature.PublicKey, round uint64, rootHash hash.Hash) ([][]byte, error) {
+	if rootHash.IsEmpty() {
 		return [][]byte{}, nil
 	}
+
+	root := storage.Root{
+		Round: round,
+		Hash:  rootHash,
+	}
+	copy(root.Namespace[:], runtimeID[:])
 
 	tree, err := urkel.NewWithRoot(ctx, c.common.storage, nil, root)
 	if err != nil {

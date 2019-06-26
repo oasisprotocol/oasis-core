@@ -27,8 +27,8 @@ var (
 	writeLogKeyPrefix = []byte{'L'}
 )
 
-func makeWriteLogKey(startHash hash.Hash, endHash hash.Hash) []byte {
-	return append(append(writeLogKeyPrefix, startHash[:]...), endHash[:]...)
+func makeWriteLogKey(startRoot node.Root, endRoot node.Root) []byte {
+	return append(append(writeLogKeyPrefix, startRoot.Hash[:]...), endRoot.Hash[:]...)
 }
 
 // New creates a new BadgerDB-backed node database.
@@ -58,7 +58,7 @@ type badgerNodeDB struct {
 	closedCh  chan struct{}
 }
 
-func (d *badgerNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error) {
+func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
 	if ptr == nil || !ptr.IsClean() {
 		panic("urkel/db/badger: attempted to get invalid pointer from node database")
 	}
@@ -92,15 +92,19 @@ func (d *badgerNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, er
 	return n, nil
 }
 
-func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (api.WriteLogIterator, error) {
+	if !endRoot.Follows(&startRoot) {
+		return nil, errors.New("urkel/db/badger: end root must follow start root")
+	}
+
 	tx := d.db.NewTransaction(false)
 	defer tx.Discard()
-	item, err := tx.Get(makeWriteLogKey(startHash, endHash))
+	item, err := tx.Get(makeWriteLogKey(startRoot, endRoot))
 	if err != nil {
 		d.logger.Error("failed to Get write log from backing store",
 			"err", err,
-			"start_hash", startHash,
-			"end_hash", endHash,
+			"start_root", startRoot,
+			"end_root", endRoot,
 		)
 		return nil, errors.Wrap(err, "urkel/db/badger: failed to Get write log from backing store")
 	}
@@ -121,7 +125,7 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, end
 	}
 
 	return api.ReviveHashedDBWriteLog(ctx, dbLog, func(h hash.Hash) (*node.LeafNode, error) {
-		leaf, err := d.GetNode(endHash, &node.Pointer{Hash: h, Clean: true})
+		leaf, err := d.GetNode(endRoot, &node.Pointer{Hash: h, Clean: true})
 		if err != nil {
 			return nil, err
 		}
@@ -201,16 +205,25 @@ func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtr
 	return subtree
 }
 
-func (ba *badgerBatch) PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, annotations writelog.WriteLogAnnotations) error {
+func (ba *badgerBatch) PutWriteLog(
+	startRoot node.Root,
+	endRoot node.Root,
+	writeLog writelog.WriteLog,
+	annotations writelog.WriteLogAnnotations,
+) error {
+	if !endRoot.Follows(&startRoot) {
+		return errors.New("urkel/db/badger: end root must follow start root")
+	}
+
 	log := api.MakeHashedDBWriteLog(writeLog, annotations)
 	bytes := cbor.Marshal(log)
-	if err := ba.bat.Set(makeWriteLogKey(startHash, endHash), bytes); err != nil {
+	if err := ba.bat.Set(makeWriteLogKey(startRoot, endRoot), bytes); err != nil {
 		return errors.Wrap(err, "urkel/db/badger: set returned error")
 	}
 	return nil
 }
 
-func (ba *badgerBatch) Commit(root hash.Hash) error {
+func (ba *badgerBatch) Commit(root node.Root) error {
 	if err := ba.bat.Flush(); err != nil {
 		return err
 	}

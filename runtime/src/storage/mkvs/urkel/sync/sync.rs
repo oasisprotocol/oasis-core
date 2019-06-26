@@ -22,7 +22,7 @@ pub trait ReadSync {
     fn get_subtree(
         &mut self,
         ctx: Context,
-        root_hash: Hash,
+        root: Root,
         id: NodeID,
         max_depth: u8,
     ) -> Fallible<Subtree>;
@@ -35,7 +35,7 @@ pub trait ReadSync {
     fn get_path(
         &mut self,
         ctx: Context,
-        root_hash: Hash,
+        root: Root,
         key: Hash,
         start_depth: u8,
     ) -> Fallible<Subtree>;
@@ -45,5 +45,5 @@ pub trait ReadSync {
     /// It is the responsibility of the caller to validate that the node
     /// is consistent. The node's cached hash should be considered invalid
     /// and must be recomputed locally.
-    fn get_node(&mut self, ctx: Context, root_hash: Hash, id: NodeID) -> Fallible<NodeRef>;
+    fn get_node(&mut self, ctx: Context, root: Root, id: NodeID) -> Fallible<NodeRef>;
 }

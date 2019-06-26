@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cache/lru"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
@@ -27,8 +28,8 @@ type RootCache struct {
 
 // GetTree gets a tree entry from the cache by the root iff present, or creates
 // a new tree with the specified root in the node database.
-func (rc *RootCache) GetTree(ctx context.Context, root hash.Hash) (*urkel.Tree, error) {
-	cachedTree, present := rc.rootCache.Get(root)
+func (rc *RootCache) GetTree(ctx context.Context, root Root) (*urkel.Tree, error) {
+	cachedTree, present := rc.rootCache.Get(root.EncodedHash())
 	if present {
 		return cachedTree.(*urkel.Tree), nil
 	}
@@ -43,7 +44,31 @@ func (rc *RootCache) GetTree(ctx context.Context, root hash.Hash) (*urkel.Tree, 
 
 // Apply applies the write log, bypassing the apply operation iff the new root
 // already is in the node database.
-func (rc *RootCache) Apply(ctx context.Context, root, expectedNewRoot hash.Hash, log WriteLog) (*hash.Hash, error) {
+func (rc *RootCache) Apply(
+	ctx context.Context,
+	ns common.Namespace,
+	srcRound uint64,
+	srcRoot hash.Hash,
+	dstRound uint64,
+	dstRoot hash.Hash,
+	writeLog WriteLog,
+) (*hash.Hash, error) {
+	root := Root{
+		Namespace: ns,
+		Round:     srcRound,
+		Hash:      srcRoot,
+	}
+	expectedNewRoot := Root{
+		Namespace: ns,
+		Round:     dstRound,
+		Hash:      dstRoot,
+	}
+
+	// Sanity check the expected new root.
+	if !expectedNewRoot.Follows(&root) {
+		return nil, errors.New("storage/rootcache: expected root does not follow root")
+	}
+
 	mu := rc.getApplyLock(root, expectedNewRoot)
 	mu.Lock()
 	defer mu.Unlock()
@@ -53,10 +78,10 @@ func (rc *RootCache) Apply(ctx context.Context, root, expectedNewRoot hash.Hash,
 	// Check if we already have the expected new root in our local DB.
 	if urkel.HasRoot(rc.localDB, expectedNewRoot) {
 		// We do, don't apply anything.
-		r = expectedNewRoot
+		r = dstRoot
 
 		// Do a fake get to update the LRU cache frequency.
-		_, _ = rc.rootCache.Get(expectedNewRoot)
+		_, _ = rc.rootCache.Get(expectedNewRoot.EncodedHash())
 	} else {
 		// We don't, apply operations.
 		tree, err := urkel.NewWithRoot(ctx, rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
@@ -64,7 +89,7 @@ func (rc *RootCache) Apply(ctx context.Context, root, expectedNewRoot hash.Hash,
 			return nil, err
 		}
 
-		for _, entry := range log {
+		for _, entry := range writeLog {
 			if len(entry.Value) == 0 {
 				err = tree.Remove(ctx, entry.Key)
 			} else {
@@ -75,23 +100,27 @@ func (rc *RootCache) Apply(ctx context.Context, root, expectedNewRoot hash.Hash,
 			}
 		}
 
-		_, r, err = tree.Commit(ctx)
+		// TODO: Validate root against expected new root and error on mismatch.
+		//       (This will break ekiden/cmd/storage/benchmark.)
+
+		_, r, err = tree.Commit(ctx, ns, dstRound)
 		if err != nil {
 			return nil, err
 		}
+		expectedNewRoot.Hash = r
 
 		// Also save tree root in local LRU cache.
-		_ = rc.rootCache.Put(r, tree)
+		_ = rc.rootCache.Put(expectedNewRoot.EncodedHash(), tree)
 	}
 
 	return &r, nil
 }
 
-func (rc *RootCache) getApplyLock(root, expectedNewRoot hash.Hash) *sync.Mutex {
+func (rc *RootCache) getApplyLock(root, expectedNewRoot Root) *sync.Mutex {
 	// Lock the Apply call based on (oldRoot, expectedNewRoot), so that when
 	// multiple compute committees commit the same write logs, we only write
 	// the first one and go through the fast path for the rest.
-	lockID := root.String() + expectedNewRoot.String()
+	lockID := root.EncodedHash().String() + expectedNewRoot.EncodedHash().String()
 
 	rc.applyLocksGuard.Lock()
 	defer rc.applyLocksGuard.Unlock()

@@ -16,7 +16,12 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(header *block.Header) {
 
 	// Change the state root by adding a new key. We need to actually commit the
 	// modified root to storage as we need a storage receipt.
-	stateTree, err := urkel.NewWithRoot(n.ctx, n.commonNode.Storage, nil, header.StateRoot)
+	stateRoot := storage.Root{
+		Namespace: header.Namespace,
+		Round:     header.Round,
+		Hash:      header.StateRoot,
+	}
+	stateTree, err := urkel.NewWithRoot(n.ctx, n.commonNode.Storage, nil, stateRoot)
 	if err != nil {
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,
@@ -34,7 +39,7 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(header *block.Header) {
 		return
 	}
 
-	writeLog, newStateRoot, err := stateTree.Commit(n.ctx)
+	writeLog, newStateRoot, err := stateTree.Commit(n.ctx, header.Namespace, header.Round)
 	if err != nil {
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,
@@ -47,19 +52,21 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(header *block.Header) {
 	applyOps := []storage.ApplyOp{
 		// I/O root (unchanged).
 		storage.ApplyOp{
-			Root:            header.IORoot,
-			ExpectedNewRoot: header.IORoot,
-			WriteLog:        make(storage.WriteLog, 0),
+			SrcRound: header.Round,
+			SrcRoot:  header.IORoot,
+			DstRoot:  header.IORoot,
+			WriteLog: make(storage.WriteLog, 0),
 		},
 		// State root.
 		storage.ApplyOp{
-			Root:            header.StateRoot,
-			ExpectedNewRoot: newStateRoot,
-			WriteLog:        writeLog,
+			SrcRound: header.Round,
+			SrcRoot:  header.StateRoot,
+			DstRoot:  newStateRoot,
+			WriteLog: writeLog,
 		},
 	}
 
-	receipts, err := n.commonNode.Storage.ApplyBatch(n.ctx, applyOps)
+	receipts, err := n.commonNode.Storage.ApplyBatch(n.ctx, header.Namespace, header.Round, applyOps)
 	if err != nil {
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,

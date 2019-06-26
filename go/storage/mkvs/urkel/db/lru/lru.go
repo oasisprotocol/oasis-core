@@ -63,7 +63,7 @@ func New(sizeInBytes uint64, filename string) (api.NodeDB, error) {
 	return db, nil
 }
 
-func (d *lruNodeDB) GetNode(root hash.Hash, ptr *urkel.Pointer) (urkel.Node, error) {
+func (d *lruNodeDB) GetNode(root urkel.Root, ptr *urkel.Pointer) (urkel.Node, error) {
 	if ptr == nil || !ptr.IsClean() {
 		panic("urkel/db/lru: attempted to get invalid pointer from node database")
 	}
@@ -80,7 +80,11 @@ func (d *lruNodeDB) GetNode(root hash.Hash, ptr *urkel.Pointer) (urkel.Node, err
 	return node.Extract(), nil
 }
 
-func (d *lruNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+func (d *lruNodeDB) GetWriteLog(ctx context.Context, startRoot urkel.Root, endRoot urkel.Root) (api.WriteLogIterator, error) {
+	if !endRoot.Follows(&startRoot) {
+		return nil, errors.New("urkel/db/lru: end root must follow start root")
+	}
+
 	return nil, api.ErrWriteLogNotFound
 }
 
@@ -222,11 +226,20 @@ func (b *memoryBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtre
 	return subtree
 }
 
-func (b *memoryBatch) PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error {
+func (b *memoryBatch) PutWriteLog(
+	startRoot urkel.Root,
+	endRoot urkel.Root,
+	writeLog writelog.WriteLog,
+	logAnnotations writelog.WriteLogAnnotations,
+) error {
+	if !endRoot.Follows(&startRoot) {
+		return errors.New("urkel/db/lru: end root must follow start root")
+	}
+
 	return nil
 }
 
-func (b *memoryBatch) Commit(root hash.Hash) error {
+func (b *memoryBatch) Commit(root urkel.Root) error {
 	b.db.Lock()
 	defer b.db.Unlock()
 

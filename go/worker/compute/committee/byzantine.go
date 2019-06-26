@@ -30,7 +30,8 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(ioRoot *hash.Hash, inputs runtime
 		return err
 	}
 
-	writeLog, newIoRoot, err := ioTree.Commit(n.ctx)
+	header := n.commonNode.CurrentBlock.Header
+	writeLog, newIoRoot, err := ioTree.Commit(n.ctx, header.Namespace, header.Round+1)
 	if err != nil {
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,
@@ -38,7 +39,15 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(ioRoot *hash.Hash, inputs runtime
 		return err
 	}
 
-	_, err = n.commonNode.Storage.Apply(n.ctx, oldIoRoot, newIoRoot, writeLog)
+	_, err = n.commonNode.Storage.Apply(
+		n.ctx,
+		header.Namespace,
+		header.Round+1,
+		oldIoRoot,
+		header.Round+1,
+		newIoRoot,
+		writeLog,
+	)
 	if err != nil {
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,

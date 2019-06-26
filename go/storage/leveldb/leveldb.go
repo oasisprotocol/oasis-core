@@ -5,6 +5,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -33,46 +34,44 @@ type leveldbBackend struct {
 	closeOnce  sync.Once
 }
 
-func (b *leveldbBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.Receipt, error) {
-	receipt := api.ReceiptBody{
-		Version: 1,
-		Roots:   roots,
-	}
-	signed, err := signature.SignSigned(*b.signingKey, api.ReceiptSignatureContext, &receipt)
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.Receipt{
-		Signed: *signed,
-	}, nil
-}
-
-func (b *leveldbBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.Receipt, error) {
+func (b *leveldbBackend) ApplyBatch(
+	ctx context.Context,
+	ns common.Namespace,
+	dstRound uint64,
+	ops []api.ApplyOp,
+) ([]*api.Receipt, error) {
 	var newRoots []hash.Hash
 	for _, op := range ops {
-		newRoot, err := b.rootCache.Apply(ctx, op.Root, op.ExpectedNewRoot, op.WriteLog)
+		newRoot, err := b.rootCache.Apply(ctx, ns, op.SrcRound, op.SrcRoot, dstRound, op.DstRoot, op.WriteLog)
 		if err != nil {
 			return nil, err
 		}
 		newRoots = append(newRoots, *newRoot)
 	}
 
-	receipt, err := b.signReceipt(ctx, newRoots)
+	receipt, err := api.SignReceipt(b.signingKey, ns, dstRound, newRoots)
 	return []*api.Receipt{receipt}, err
 }
 
-func (b *leveldbBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
-	newRoot, err := b.rootCache.Apply(ctx, root, expectedNewRoot, log)
+func (b *leveldbBackend) Apply(
+	ctx context.Context,
+	ns common.Namespace,
+	srcRound uint64,
+	srcRoot hash.Hash,
+	dstRound uint64,
+	dstRoot hash.Hash,
+	writeLog api.WriteLog,
+) ([]*api.Receipt, error) {
+	newRoot, err := b.rootCache.Apply(ctx, ns, srcRound, srcRoot, dstRound, dstRoot, writeLog)
 	if err != nil {
 		return nil, err
 	}
 
-	receipt, err := b.signReceipt(ctx, []hash.Hash{*newRoot})
+	receipt, err := api.SignReceipt(b.signingKey, ns, dstRound, []hash.Hash{*newRoot})
 	return []*api.Receipt{receipt}, err
 }
 
-func (b *leveldbBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (b *leveldbBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
 	tree, err := b.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err
@@ -81,7 +80,7 @@ func (b *leveldbBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (b *leveldbBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (b *leveldbBackend) GetPath(ctx context.Context, root api.Root, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
 	tree, err := b.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err
@@ -90,7 +89,7 @@ func (b *leveldbBackend) GetPath(ctx context.Context, root hash.Hash, key hash.H
 	return tree.GetPath(ctx, root, key, startDepth)
 }
 
-func (b *leveldbBackend) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
+func (b *leveldbBackend) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {
 	tree, err := b.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err
@@ -99,8 +98,8 @@ func (b *leveldbBackend) GetNode(ctx context.Context, root hash.Hash, id api.Nod
 	return tree.GetNode(ctx, root, id)
 }
 
-func (b *leveldbBackend) GetDiff(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
-	return b.nodedb.GetWriteLog(ctx, startHash, endHash)
+func (b *leveldbBackend) GetDiff(ctx context.Context, startRoot api.Root, endRoot api.Root) (api.WriteLogIterator, error) {
+	return b.nodedb.GetWriteLog(ctx, startRoot, endRoot)
 }
 
 func (b *leveldbBackend) Cleanup() {

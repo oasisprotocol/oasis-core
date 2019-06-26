@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -107,6 +108,8 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		defer pprof.StopCPUProfile()
 	}
 
+	var ns common.Namespace
+
 	// Benchmark MKVS storage (single-insert).
 	for _, sz := range []int{
 		256, 512, 1024, 4096, 8192, 16384, 32768,
@@ -115,8 +118,10 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		key := []byte(strconv.Itoa(sz))
 
 		// This will store the new Urkel tree root for later lookups.
-		var newRoot hash.Hash
-		newRoot.Empty()
+		var newRoot storageAPI.Root
+		newRoot.Namespace = ns
+		newRoot.Round = 1
+		newRoot.Hash.Empty()
 
 		// Apply.
 		res := testing.Benchmark(func(b *testing.B) {
@@ -132,7 +137,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 				b.StartTimer()
 
 				var receipts []*storageAPI.Receipt
-				receipts, err = storage.Apply(context.Background(), root, unknown, wl)
+				receipts, err = storage.Apply(context.Background(), ns, 0, root, 1, unknown, wl)
 				if err != nil {
 					b.Fatalf("failed to Apply(): %v", err)
 				}
@@ -143,7 +148,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 				if err = receipts[0].Open(&receiptBody); err != nil {
 					b.Fatalf("failed to Open(): %v", err)
 				}
-				newRoot = receiptBody.Roots[0]
+				newRoot.Hash = receiptBody.Roots[0]
 				b.StartTimer()
 			}
 		})
@@ -160,7 +165,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		res = testing.Benchmark(func(b *testing.B) {
 			b.SetBytes(int64(sz))
 			for i := 0; i < b.N; i++ {
-				_, err = storage.GetSubtree(context.Background(), newRoot, storageAPI.NodeID{Path: newRoot, Depth: 0}, 10)
+				_, err = storage.GetSubtree(context.Background(), newRoot, storageAPI.NodeID{Depth: 0}, 10)
 				if err != nil {
 					b.Fatalf("failed to GetSubtree(): %v", err)
 				}
@@ -202,7 +207,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 					}
 					b.StartTimer()
 
-					_, err = storage.Apply(context.Background(), root, unknown, wl)
+					_, err = storage.Apply(context.Background(), ns, 0, root, 1, unknown, wl)
 					if err != nil {
 						b.Fatalf("failed to Apply(): %v", err)
 					}
@@ -244,7 +249,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		b.SetParallelism(100)
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				_, cerr = storage.Apply(context.Background(), emptyRoot, expectedNewRoot, wl)
+				_, cerr = storage.Apply(context.Background(), ns, 0, emptyRoot, 1, expectedNewRoot, wl)
 				if cerr != nil {
 					b.Fatalf("failed to Apply(): %v", cerr)
 				}

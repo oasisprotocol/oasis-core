@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -19,6 +20,10 @@ var (
 	// ErrCantProve is the error returned when the backend is incapable
 	// of generating proofs (unsupported, no key, etc).
 	ErrCantProve = errors.New("storage: unable to provide proofs")
+
+	// ErrNoRoots is the error returned when the generated receipt would
+	// not contain any roots.
+	ErrNoRoots = errors.New("storage: no roots to generate receipt for")
 
 	// ReceiptSignatureContext is the signature context used for verifying MKVS receipts.
 	ReceiptSignatureContext = []byte("EkStrRct")
@@ -43,10 +48,14 @@ type WriteLogIterator = nodedb.WriteLogIterator
 // ReceiptBody is the body of a receipt.
 type ReceiptBody struct {
 	// Version is the storage data structure version.
-	Version uint16
+	Version uint16 `codec:"version"`
+	// Namespace is the chain namespace under which the root(s) are stored.
+	Namespace common.Namespace `codec:"ns"`
+	// Round is the chain round in which the root(s) are stored.
+	Round uint64 `codec:"round"`
 	// Roots are the merkle roots of the merklized data structure that the
 	// storage node is certifying to store.
-	Roots []hash.Hash
+	Roots []hash.Hash `codec:"roots"`
 }
 
 // Receipt is a signed ReceiptBody.
@@ -78,6 +87,33 @@ func (s *Receipt) MarshalCBOR() []byte {
 func (s *Receipt) UnmarshalCBOR(data []byte) error {
 	return s.Signed.UnmarshalCBOR(data)
 }
+
+// SignReceipt signs a storage receipt for the given roots.
+func SignReceipt(sk *signature.PrivateKey, ns common.Namespace, round uint64, roots []hash.Hash) (*Receipt, error) {
+	if sk == nil {
+		return nil, ErrCantProve
+	}
+	if len(roots) == 0 {
+		return nil, ErrNoRoots
+	}
+	receipt := ReceiptBody{
+		Version:   1,
+		Namespace: ns,
+		Round:     round,
+		Roots:     roots,
+	}
+	signed, err := signature.SignSigned(*sk, ReceiptSignatureContext, &receipt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Receipt{
+		Signed: *signed,
+	}, nil
+}
+
+// Root is a storage root.
+type Root = urkelNode.Root
 
 // NodeID is a root-relative node identifier which uniquely identifies
 // a node under a given root.
@@ -114,13 +150,14 @@ type Subtree = syncer.Subtree
 
 // ApplyOp is an apply operation within a batch of apply operations.
 type ApplyOp struct {
-	// Root is the merkle root to apply the operations against. It may
+	// SrcRound is the source root round.
+	SrcRound uint64
+	// SrcRoot is the merkle root to apply the operations against. It may
 	// refer to a nil node (empty hash) in which case a new root will be
 	// created.
-	Root hash.Hash
-	// ExpectedNewRoot is the expected merkle root after applying the
-	// write log.
-	ExpectedNewRoot hash.Hash
+	SrcRoot hash.Hash
+	// DstRoot is the expected merkle root after applying the write log.
+	DstRoot hash.Hash
 	// WriteLog is a write log of operations to apply.
 	WriteLog WriteLog
 }
@@ -134,17 +171,30 @@ type Backend interface {
 	// The expected new root is used to check if the new root after all the
 	// operations are applied already exists in the local DB.  If it does, the
 	// Apply is ignored.
-	Apply(context.Context, hash.Hash, hash.Hash, WriteLog) ([]*Receipt, error)
+	Apply(
+		ctx context.Context,
+		ns common.Namespace,
+		srcRound uint64,
+		srcRoot hash.Hash,
+		dstRound uint64,
+		dstRoot hash.Hash,
+		writeLog WriteLog,
+	) ([]*Receipt, error)
 
 	// ApplyBatch applies multiple sets of operations against the MKVS and
 	// returns a single receipt covering all applied roots.
 	//
 	// See Apply for more details.
-	ApplyBatch(context.Context, []ApplyOp) ([]*Receipt, error)
+	ApplyBatch(
+		ctx context.Context,
+		ns common.Namespace,
+		dstRound uint64,
+		ops []ApplyOp,
+	) ([]*Receipt, error)
 
 	// GetDiff returns an iterator of write log entries that must be applied
 	// to get from the first given hash to the second one.
-	GetDiff(context.Context, hash.Hash, hash.Hash) (WriteLogIterator, error)
+	GetDiff(context.Context, Root, Root) (WriteLogIterator, error)
 
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()
@@ -165,5 +215,5 @@ type ClientBackend interface {
 // Genesis is the storage genesis state.
 type Genesis struct {
 	// State is the genesis state for the merklized key-value store.
-	State WriteLog `codec:"state"`
+	State map[common.Namespace]WriteLog `codec:"state"`
 }

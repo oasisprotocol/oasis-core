@@ -97,8 +97,14 @@ func (s *Service) worker() {
 			if !blk.Header.IORoot.IsEmpty() {
 				ctx, cancel := context.WithTimeout(context.TODO(), storageTimeout)
 
+				ioRoot := storage.Root{
+					Namespace: blk.Header.Namespace,
+					Round:     blk.Header.Round,
+					Hash:      blk.Header.IORoot,
+				}
+
 				var tree *urkel.Tree
-				tree, err = urkel.NewWithRoot(ctx, s.storage, nil, blk.Header.IORoot)
+				tree, err = urkel.NewWithRoot(ctx, s.storage, nil, ioRoot)
 				if err != nil {
 					logger.Error("can't get block tags from storage",
 						"err", err,

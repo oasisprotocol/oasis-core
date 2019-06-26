@@ -25,7 +25,7 @@ pub struct UrkelOptions {
     node_capacity: usize,
     value_capacity: usize,
     prefetch_depth: u8,
-    root_hash: Option<Hash>,
+    root: Option<Root>,
 }
 
 impl UrkelOptions {
@@ -52,9 +52,9 @@ impl UrkelOptions {
         self
     }
 
-    /// Set an existing root hash as the root for the new tree.
-    pub fn with_root(mut self, root_hash: Hash) -> Self {
-        self.root_hash = Some(root_hash);
+    /// Set an existing root as the root for the new tree.
+    pub fn with_root(mut self, root: Root) -> Self {
+        self.root = Some(root);
         self
     }
 
@@ -116,20 +116,20 @@ impl UrkelTree {
             .borrow_mut()
             .set_prefetch_depth(opts.prefetch_depth);
 
-        if let Some(root_hash) = opts.root_hash {
+        if let Some(root) = opts.root {
             tree.cache
                 .borrow_mut()
                 .set_pending_root(Rc::new(RefCell::new(NodePointer {
                     clean: true,
-                    hash: root_hash,
+                    hash: root.hash,
                     ..Default::default()
                 })));
-            tree.cache.borrow_mut().set_sync_root(root_hash);
+            tree.cache.borrow_mut().set_sync_root(root);
             // NOTE: Path can be anything here as the depth is 0 so it is actually ignored.
             let ptr = tree
                 .cache
                 .borrow_mut()
-                .prefetch(&ctx, root_hash, Hash::default(), 0)?;
+                .prefetch(&ctx, root.hash, Hash::default(), 0)?;
             if !ptr.borrow().is_null() {
                 tree.cache.borrow_mut().set_pending_root(ptr);
             }
@@ -144,7 +144,7 @@ impl UrkelTree {
             node_capacity: 50_000,
             value_capacity: 16 * 1024 * 1024,
             prefetch_depth: 0,
-            root_hash: None,
+            root: None,
         }
     }
 }

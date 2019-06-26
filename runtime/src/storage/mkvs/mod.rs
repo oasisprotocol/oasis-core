@@ -6,7 +6,7 @@ use serde::{self, ser::SerializeSeq, Serializer};
 use serde_bytes::Bytes;
 use serde_derive::Deserialize;
 
-use crate::common::crypto::hash::Hash;
+use crate::common::{crypto::hash::Hash, roothash::Namespace};
 
 pub mod urkel;
 
@@ -81,7 +81,12 @@ pub trait MKVS: Send + Sync {
     fn remove(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>>;
 
     /// Commit all database changes to the underlying store.
-    fn commit(&mut self, ctx: Context) -> Fallible<(WriteLog, Hash)>;
+    fn commit(
+        &mut self,
+        ctx: Context,
+        namespace: Namespace,
+        round: u64,
+    ) -> Fallible<(WriteLog, Hash)>;
 
     /// Rollback any pending changes.
     fn rollback(&mut self);

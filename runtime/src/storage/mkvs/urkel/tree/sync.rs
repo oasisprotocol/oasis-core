@@ -16,13 +16,13 @@ impl ReadSync for UrkelTree {
     fn get_subtree(
         &mut self,
         ctx: Context,
-        root_hash: Hash,
+        root: Root,
         id: NodeID,
         max_depth: u8,
     ) -> Fallible<Subtree> {
         let ctx = ctx.freeze();
         let pending_root = self.cache.borrow().get_pending_root();
-        if root_hash != pending_root.borrow().hash {
+        if root != self.cache.borrow().get_sync_root() {
             return Err(SyncerError::InvalidRoot.into());
         }
         if !pending_root.borrow().clean {
@@ -49,12 +49,12 @@ impl ReadSync for UrkelTree {
     fn get_path(
         &mut self,
         ctx: Context,
-        root_hash: Hash,
+        root: Root,
         key: Hash,
         start_depth: u8,
     ) -> Fallible<Subtree> {
         let ctx = ctx.freeze();
-        if root_hash != self.cache.borrow().get_pending_root().borrow().hash {
+        if root != self.cache.borrow().get_sync_root() {
             return Err(SyncerError::InvalidRoot.into());
         }
         if !self.cache.borrow().get_pending_root().borrow().clean {
@@ -91,9 +91,9 @@ impl ReadSync for UrkelTree {
         }
     }
 
-    fn get_node(&mut self, ctx: Context, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
+    fn get_node(&mut self, ctx: Context, root: Root, id: NodeID) -> Fallible<NodeRef> {
         let ctx = ctx.freeze();
-        if root_hash != self.cache.borrow().get_pending_root().borrow().hash {
+        if root != self.cache.borrow().get_sync_root() {
             Err(SyncerError::InvalidRoot.into())
         } else if !self.cache.borrow().get_pending_root().borrow().clean {
             Err(SyncerError::DirtyRoot.into())

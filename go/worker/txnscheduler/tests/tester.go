@@ -70,7 +70,7 @@ func testQueueCall(
 	stateCh <-chan committee.NodeState,
 	rtNode *committee.Node,
 	roothash roothash.Backend,
-	storage storage.Backend,
+	st storage.Backend,
 ) {
 	// Subscribe to roothash blocks.
 	blocksCh, sub, err := roothash.WatchBlocks(runtimeID)
@@ -102,7 +102,11 @@ func testQueueCall(
 		require.EqualValues(t, block.Normal, blk.Header.HeaderType)
 
 		ctx := context.Background()
-		tree, err := urkel.NewWithRoot(ctx, storage, nil, blk.Header.IORoot)
+		tree, err := urkel.NewWithRoot(ctx, st, nil, storage.Root{
+			Namespace: blk.Header.Namespace,
+			Round:     blk.Header.Round,
+			Hash:      blk.Header.IORoot,
+		})
 		require.NoError(t, err, "NewWithRoot")
 
 		rawInputs, err := tree.Get(ctx, block.IoKeyInputs)

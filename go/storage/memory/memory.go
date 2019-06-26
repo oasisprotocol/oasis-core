@@ -3,12 +3,14 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	memoryNodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/memory"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -29,13 +31,37 @@ type memoryBackend struct {
 	signingKey *signature.PrivateKey
 }
 
-func (b *memoryBackend) apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) (*hash.Hash, error) {
+func (b *memoryBackend) apply(
+	ctx context.Context,
+	ns common.Namespace,
+	srcRound uint64,
+	srcRoot hash.Hash,
+	dstRound uint64,
+	dstRoot hash.Hash,
+	writeLog api.WriteLog,
+) (*hash.Hash, error) {
+	root := api.Root{
+		Namespace: ns,
+		Round:     srcRound,
+		Hash:      srcRoot,
+	}
+	expectedNewRoot := api.Root{
+		Namespace: ns,
+		Round:     dstRound,
+		Hash:      dstRoot,
+	}
+
+	// Sanity check the expected new root.
+	if !expectedNewRoot.Follows(&root) {
+		return nil, errors.New("storage/rootcache: expected root does not follow root")
+	}
+
 	var r hash.Hash
 
 	// Check if we already have the expected new root in our local DB.
 	if urkel.HasRoot(b.nodedb, expectedNewRoot) {
 		// We do, don't apply anything.
-		r = expectedNewRoot
+		r = dstRoot
 	} else {
 		// We don't, apply operations.
 		tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
@@ -43,7 +69,7 @@ func (b *memoryBackend) apply(ctx context.Context, root hash.Hash, expectedNewRo
 			return nil, err
 		}
 
-		for _, entry := range log {
+		for _, entry := range writeLog {
 			if len(entry.Value) == 0 {
 				err = tree.Remove(ctx, entry.Key)
 			} else {
@@ -54,7 +80,10 @@ func (b *memoryBackend) apply(ctx context.Context, root hash.Hash, expectedNewRo
 			}
 		}
 
-		_, r, err = tree.Commit(ctx)
+		// TODO: Validate root against expected new root and error on mismatch.
+		//       (This will break ekiden/cmd/storage/benchmark.)
+
+		_, r, err = tree.Commit(ctx, ns, dstRound)
 		if err != nil {
 			return nil, err
 		}
@@ -63,48 +92,43 @@ func (b *memoryBackend) apply(ctx context.Context, root hash.Hash, expectedNewRo
 	return &r, nil
 }
 
-func (b *memoryBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.Receipt, error) {
-	if b.signingKey == nil {
-		return nil, api.ErrCantProve
-	}
-	receipt := api.ReceiptBody{
-		Version: 1,
-		Roots:   roots,
-	}
-	signed, err := signature.SignSigned(*b.signingKey, api.ReceiptSignatureContext, &receipt)
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.Receipt{
-		Signed: *signed,
-	}, nil
-}
-
-func (b *memoryBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.Receipt, error) {
+func (b *memoryBackend) ApplyBatch(
+	ctx context.Context,
+	ns common.Namespace,
+	dstRound uint64,
+	ops []api.ApplyOp,
+) ([]*api.Receipt, error) {
 	var roots []hash.Hash
 	for _, op := range ops {
-		root, err := b.apply(ctx, op.Root, op.ExpectedNewRoot, op.WriteLog)
+		r, err := b.apply(ctx, ns, op.SrcRound, op.SrcRoot, dstRound, op.DstRoot, op.WriteLog)
 		if err != nil {
 			return nil, err
 		}
-		roots = append(roots, *root)
+		roots = append(roots, *r)
 	}
 
-	receipt, err := b.signReceipt(ctx, roots)
+	receipt, err := api.SignReceipt(b.signingKey, ns, dstRound, roots)
 	return []*api.Receipt{receipt}, err
 }
 
-func (b *memoryBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
-	r, err := b.apply(ctx, root, expectedNewRoot, log)
+func (b *memoryBackend) Apply(
+	ctx context.Context,
+	ns common.Namespace,
+	srcRound uint64,
+	srcRoot hash.Hash,
+	dstRound uint64,
+	dstRoot hash.Hash,
+	writeLog api.WriteLog,
+) ([]*api.Receipt, error) {
+	r, err := b.apply(ctx, ns, srcRound, srcRoot, dstRound, dstRoot, writeLog)
 	if err != nil {
 		return nil, err
 	}
-	receipt, err := b.signReceipt(ctx, []hash.Hash{*r})
+	receipt, err := api.SignReceipt(b.signingKey, ns, dstRound, []hash.Hash{*r})
 	return []*api.Receipt{receipt}, err
 }
 
-func (b *memoryBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (b *memoryBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
 	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
@@ -113,7 +137,7 @@ func (b *memoryBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.N
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (b *memoryBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (b *memoryBackend) GetPath(ctx context.Context, root api.Root, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
 	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
@@ -122,7 +146,7 @@ func (b *memoryBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Ha
 	return tree.GetPath(ctx, root, key, startDepth)
 }
 
-func (b *memoryBackend) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
+func (b *memoryBackend) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {
 	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
@@ -131,8 +155,8 @@ func (b *memoryBackend) GetNode(ctx context.Context, root hash.Hash, id api.Node
 	return tree.GetNode(ctx, root, id)
 }
 
-func (b *memoryBackend) GetDiff(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
-	return b.nodedb.GetWriteLog(ctx, startHash, endHash)
+func (b *memoryBackend) GetDiff(ctx context.Context, startRoot api.Root, endRoot api.Root) (api.WriteLogIterator, error) {
+	return b.nodedb.GetWriteLog(ctx, startRoot, endRoot)
 }
 
 func (b *memoryBackend) Cleanup() {

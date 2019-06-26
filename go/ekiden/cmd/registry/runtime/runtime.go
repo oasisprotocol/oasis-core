@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/json"
@@ -325,7 +326,10 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 				return nil, nil, err
 			}
 		}
-		_, newRoot, err := tree.Commit(ctx)
+
+		var ns common.Namespace
+		copy(ns[:], id[:])
+		_, newRoot, err := tree.Commit(ctx, ns, 0)
 		if err != nil {
 			logger.Error("failed to apply runtime genesis storage state",
 				"err", err,

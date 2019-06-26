@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/api"
@@ -27,14 +28,17 @@ type grpcServer struct {
 }
 
 func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.ApplyResponse, error) {
-	var root hash.Hash
-	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
+	var ns common.Namespace
+	if err := ns.UnmarshalBinary(req.GetNamespace()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
 	}
 
-	var expectedNewRoot hash.Hash
-	if err := expectedNewRoot.UnmarshalBinary(req.GetExpectedNewRoot()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal expected new root")
+	var srcRoot, dstRoot hash.Hash
+	if err := srcRoot.UnmarshalBinary(req.GetSrcRoot()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal src root")
+	}
+	if err := dstRoot.UnmarshalBinary(req.GetDstRoot()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal dst root")
 	}
 
 	var log api.WriteLog
@@ -46,7 +50,7 @@ func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 	}
 
 	<-s.backend.Initialized()
-	receipts, err := s.backend.Apply(ctx, root, expectedNewRoot, log)
+	receipts, err := s.backend.Apply(ctx, ns, req.GetSrcRound(), srcRoot, req.GetDstRound(), dstRoot, log)
 
 	if err != nil {
 		return nil, err
@@ -56,16 +60,19 @@ func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 }
 
 func (s *grpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) (*pb.ApplyBatchResponse, error) {
+	var ns common.Namespace
+	if err := ns.UnmarshalBinary(req.GetNamespace()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
+	}
+
 	var ops []api.ApplyOp
 	for _, op := range req.GetOps() {
-		var root hash.Hash
-		if err := root.UnmarshalBinary(op.GetRoot()); err != nil {
-			return nil, errors.Wrap(err, "storage: failed to unmarshal root")
+		var srcRoot, dstRoot hash.Hash
+		if err := srcRoot.UnmarshalBinary(op.GetSrcRoot()); err != nil {
+			return nil, errors.Wrap(err, "storage: failed to unmarshal src root")
 		}
-
-		var expectedNewRoot hash.Hash
-		if err := expectedNewRoot.UnmarshalBinary(op.GetExpectedNewRoot()); err != nil {
-			return nil, errors.Wrap(err, "storage: failed to unmarshal expected new root")
+		if err := dstRoot.UnmarshalBinary(op.GetDstRoot()); err != nil {
+			return nil, errors.Wrap(err, "storage: failed to unmarshal dst root")
 		}
 
 		var log api.WriteLog
@@ -77,14 +84,15 @@ func (s *grpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) 
 		}
 
 		ops = append(ops, api.ApplyOp{
-			Root:            root,
-			ExpectedNewRoot: expectedNewRoot,
-			WriteLog:        log,
+			SrcRound: op.GetSrcRound(),
+			SrcRoot:  srcRoot,
+			DstRoot:  dstRoot,
+			WriteLog: log,
 		})
 	}
 
 	<-s.backend.Initialized()
-	receipts, err := s.backend.ApplyBatch(ctx, ops)
+	receipts, err := s.backend.ApplyBatch(ctx, ns, req.GetDstRound(), ops)
 
 	if err != nil {
 		return nil, err
@@ -94,8 +102,8 @@ func (s *grpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) 
 }
 
 func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) (*pb.GetSubtreeResponse, error) {
-	var root hash.Hash
-	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {
+	var root api.Root
+	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
 	}
 
@@ -127,8 +135,8 @@ func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) 
 }
 
 func (s *grpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.GetPathResponse, error) {
-	var root hash.Hash
-	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {
+	var root api.Root
+	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
 	}
 
@@ -154,8 +162,8 @@ func (s *grpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.G
 }
 
 func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.GetNodeResponse, error) {
-	var root hash.Hash
-	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {
+	var root api.Root
+	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
 	}
 
@@ -185,21 +193,19 @@ func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.G
 }
 
 func (s *grpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffServer) error {
-	var startHash hash.Hash
-	if err := startHash.UnmarshalBinary(req.GetStartHash()); err != nil {
-		return errors.Wrap(err, "storage: failed to unmarshal start hash")
+	var startRoot, endRoot api.Root
+	if err := startRoot.UnmarshalCBOR(req.GetStartRoot()); err != nil {
+		return errors.Wrap(err, "storage: failed to unmarshal start root")
 	}
-
-	var endHash hash.Hash
-	if err := endHash.UnmarshalBinary(req.GetEndHash()); err != nil {
-		return errors.Wrap(err, "storage: failed to unmarshal end hash")
+	if err := endRoot.UnmarshalCBOR(req.GetEndRoot()); err != nil {
+		return errors.Wrap(err, "storage: failed to unmarshal end root")
 	}
 
 	syncOptions := req.GetOpts()
 
 	<-s.backend.Initialized()
 
-	it, err := s.backend.GetDiff(stream.Context(), startHash, endHash)
+	it, err := s.backend.GetDiff(stream.Context(), startRoot, endRoot)
 	if err != nil {
 		return err
 	}

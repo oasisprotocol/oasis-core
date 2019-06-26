@@ -19,9 +19,12 @@ message LogEntry {
 }
 
 message ApplyRequest {
-    bytes root = 1;
-    bytes expected_new_root = 2;
-    repeated LogEntry log = 3;
+    bytes namespace = 1;
+    uint64 src_round = 2;
+    bytes src_root = 3;
+    uint64 dst_round = 4;
+    bytes dst_root = 5;
+    repeated LogEntry log = 6;
 }
 
 message ApplyResponse {
@@ -30,13 +33,16 @@ message ApplyResponse {
 }
 
 message ApplyOp {
-    bytes root = 1;
-    bytes expected_new_root = 2;
-    repeated LogEntry log = 3;
+    uint64 src_round = 1;
+    bytes src_root = 2;
+    bytes dst_root = 3;
+    repeated LogEntry log = 4;
 }
 
 message ApplyBatchRequest {
-    repeated ApplyOp ops = 1;
+    bytes namespace = 1;
+    uint64 dst_round = 2;
+    repeated ApplyOp ops = 3;
 }
 
 message ApplyBatchResponse {
@@ -84,8 +90,8 @@ message GetDiffRequest {
         uint64 limit = 2;
     }
 
-    bytes start_hash = 1;
-    bytes end_hash = 2;
+    bytes start_root = 1;
+    bytes end_root = 2;
     SyncOptions opts = 3;
 }
 

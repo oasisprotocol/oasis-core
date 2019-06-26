@@ -147,8 +147,11 @@ func (s *Storage) initGenesis(gen *storageApi.Genesis) error {
 
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
-	if _, err := s.storage.Apply(ctx, emptyRoot, emptyRoot, gen.State); err != nil {
-		return err
+
+	for ns, state := range gen.State {
+		if _, err := s.storage.Apply(ctx, ns, 0, emptyRoot, 0, emptyRoot, state); err != nil {
+			return err
+		}
 	}
 
 	return nil

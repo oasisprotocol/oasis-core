@@ -61,7 +61,8 @@ fn test_basic() {
         .expect("get_some");
     assert_eq!(value.as_slice(), value_zero);
 
-    let (log, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (log, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(
         format!("{:?}", hash),
         "f83b5a082f1d05c31aadc863c44df9b2b322b570e47e7528faf484ca2084ad08"
@@ -156,7 +157,8 @@ fn test_basic() {
     );
 
     // Tree now has key_zero and key_one and should hash as if the mangling didn't happen.
-    let (log, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (log, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(
         format!("{:?}", hash),
         "839bb81bff8bc8bb0bee99405a094bcb1d983f9f830cc3e3475e07cb7da4b90c"
@@ -185,7 +187,8 @@ fn test_basic() {
             .is_none()
     );
 
-    let (log, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (log, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(
         format!("{:?}", hash),
         "f83b5a082f1d05c31aadc863c44df9b2b322b570e47e7528faf484ca2084ad08"
@@ -225,7 +228,8 @@ fn test_insert_commit_batch() {
         assert_eq!(values[i], value.as_slice());
     }
 
-    let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (_, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(format!("{:?}", hash), ALL_ITEMS_ROOT);
 }
 
@@ -251,10 +255,11 @@ fn test_insert_commit_each() {
             .expect("get_some");
         assert_eq!(values[i], value.as_slice());
 
-        UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     }
 
-    let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (_, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(format!("{:?}", hash), ALL_ITEMS_ROOT);
 }
 
@@ -281,7 +286,8 @@ fn test_remove() {
             .expect("get_some");
         assert_eq!(values[i], value.as_slice());
 
-        let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+        let (_, hash) = UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+            .expect("commit");
         roots.push(hash);
     }
 
@@ -291,13 +297,15 @@ fn test_remove() {
         tree.remove(Context::background(), keys[i].as_slice())
             .expect("remove");
 
-        let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+        let (_, hash) = UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+            .expect("commit");
         assert_eq!(hash, roots[i - 1]);
     }
 
     tree.remove(Context::background(), keys[0].as_slice())
         .expect("remove");
-    let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (_, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(hash, Hash::empty_hash());
 }
 
@@ -318,7 +326,8 @@ fn test_syncer_basic_no_prefetch() {
         .expect("insert");
     }
 
-    let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (_, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(format!("{:?}", hash), ALL_ITEMS_ROOT);
 
     // Create a "remote" tree that talks to the original tree via the
@@ -328,7 +337,10 @@ fn test_syncer_basic_no_prefetch() {
     let stats = StatsCollector::new(Box::new(tree));
     let remote_tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .with_root(hash)
+        .with_root(Root {
+            hash,
+            ..Default::default()
+        })
         .new(Context::background(), Box::new(stats))
         .expect("with_root");
 
@@ -371,7 +383,8 @@ fn test_syncer_basic_with_prefetch() {
         .expect("insert");
     }
 
-    let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (_, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(format!("{:?}", hash), ALL_ITEMS_ROOT);
 
     // Create a "remote" tree that talks to the original tree via the
@@ -381,7 +394,10 @@ fn test_syncer_basic_with_prefetch() {
     let stats = StatsCollector::new(Box::new(tree));
     let remote_tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .with_root(hash)
+        .with_root(Root {
+            hash,
+            ..Default::default()
+        })
         .with_prefetch_depth(10)
         .new(Context::background(), Box::new(stats))
         .expect("with_root");
@@ -425,12 +441,16 @@ fn test_syncer_get_path() {
         .expect("insert");
     }
 
-    let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (_, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
 
     // Test with a remote tree via the read-syncer interface.
     let mut remote_tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .with_root(hash)
+        .with_root(Root {
+            hash,
+            ..Default::default()
+        })
         .with_prefetch_depth(10)
         .new(Context::background(), Box::new(tree))
         .expect("with_root");
@@ -438,7 +458,15 @@ fn test_syncer_get_path() {
     for i in 0..keys.len() {
         let hkey = Hash::digest_bytes(&keys[i]);
         let st = remote_tree
-            .get_path(Context::background(), hash, hkey, 0)
+            .get_path(
+                Context::background(),
+                Root {
+                    hash,
+                    ..Default::default()
+                },
+                hkey,
+                0,
+            )
             .expect("get_path");
 
         // Reconstructed subtree should contain key as leaf node.
@@ -486,7 +514,8 @@ fn test_syncer_remove() {
         )
         .expect("insert");
 
-        let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+        let (_, hash) = UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+            .expect("commit");
         roots.push(hash);
     }
 
@@ -494,7 +523,10 @@ fn test_syncer_remove() {
 
     let mut remote_tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .with_root(roots[roots.len() - 1])
+        .with_root(Root {
+            hash: roots[roots.len() - 1],
+            ..Default::default()
+        })
         .new(Context::background(), Box::new(tree))
         .expect("with_root");
 
@@ -504,7 +536,13 @@ fn test_syncer_remove() {
             .expect("remove");
     }
 
-    let (_, hash) = UrkelTree::commit(&mut remote_tree, Context::background()).expect("commit");
+    let (_, hash) = UrkelTree::commit(
+        &mut remote_tree,
+        Context::background(),
+        Default::default(),
+        0,
+    )
+    .expect("commit");
     assert_eq!(hash, Hash::empty_hash());
 }
 
@@ -524,7 +562,7 @@ fn test_value_eviction() {
         )
         .expect("insert");
     }
-    UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
 
     let stats = tree.stats(Context::background(), 0);
     assert_eq!(
@@ -552,7 +590,7 @@ fn test_node_eviction() {
         )
         .expect("insert");
     }
-    UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
 
     let stats = tree.stats(Context::background(), 0);
     // Only a subset of nodes should remain in cache.
@@ -614,7 +652,7 @@ fn test_debug_stats() {
     // Cached leaf value size will update on commit.
     assert_eq!(0, stats.cache.leaf_value_size, "cache.leaf_value_size");
 
-    UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
 
     let stats = tree.stats(Context::background(), 0);
     assert_eq!(28, stats.max_depth, "max_depth");

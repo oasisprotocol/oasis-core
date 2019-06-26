@@ -408,7 +408,6 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 
 	// Create empty block based on previous block while we hold the lock.
 	blk := block.NewEmptyBlock(n.commonNode.CurrentBlock, 0, block.Normal)
-	stateRoot := n.commonNode.CurrentBlock.Header.StateRoot
 
 	n.transitionLocked(StateProcessingMerge{doneCh: doneCh, cancel: cancel})
 
@@ -418,7 +417,6 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 		defer close(doneCh)
 
 		// TODO: Actually merge (#1823).
-		_ = stateRoot
 		blk.Header.IORoot = results[0].IORoot
 		blk.Header.StateRoot = results[0].StateRoot
 
@@ -430,19 +428,21 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 		applyOps := []storage.ApplyOp{
 			// I/O root.
 			storage.ApplyOp{
-				Root:            blk.Header.IORoot,
-				ExpectedNewRoot: blk.Header.IORoot,
-				WriteLog:        make(storage.WriteLog, 0),
+				SrcRound: blk.Header.Round,
+				SrcRoot:  blk.Header.IORoot,
+				DstRoot:  blk.Header.IORoot,
+				WriteLog: make(storage.WriteLog, 0),
 			},
 			// State root.
 			storage.ApplyOp{
-				Root:            blk.Header.StateRoot,
-				ExpectedNewRoot: blk.Header.StateRoot,
-				WriteLog:        make(storage.WriteLog, 0),
+				SrcRound: blk.Header.Round,
+				SrcRoot:  blk.Header.StateRoot,
+				DstRoot:  blk.Header.StateRoot,
+				WriteLog: make(storage.WriteLog, 0),
 			},
 		}
 
-		receipts, err := n.commonNode.Storage.ApplyBatch(ctx, applyOps)
+		receipts, err := n.commonNode.Storage.ApplyBatch(ctx, blk.Header.Namespace, blk.Header.Round, applyOps)
 		if err != nil {
 			n.logger.Error("failed to apply to storage",
 				"err", err,

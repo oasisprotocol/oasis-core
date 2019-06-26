@@ -2,12 +2,15 @@
 use std::{any::Any, cell::RefCell, rc::Rc};
 
 use ekiden_runtime::{
-    common::{crypto::hash::Hash, roothash::Block},
+    common::{
+        crypto::hash::Hash,
+        roothash::{Block, Namespace},
+    },
     storage::{
         mkvs::{
             urkel::{
                 marshal::Marshal,
-                sync::{NodeBox, NodeID, NodeRef, ReadSync, Subtree},
+                sync::{NodeBox, NodeID, NodeRef, ReadSync, Root, Subtree},
             },
             UrkelTree, WriteLog,
         },
@@ -69,7 +72,11 @@ impl Clone for BlockSnapshot {
         let block_hash = self.block_hash.clone();
         let read_syncer = self.read_syncer.clone();
         let mkvs = UrkelTree::make()
-            .with_root(self.block.header.state_root)
+            .with_root(Root {
+                namespace: self.block.header.namespace,
+                round: self.block.header.round,
+                hash: self.block.header.state_root,
+            })
             .new(Context::background(), Box::new(read_syncer.clone()))
             .expect("prefetching disabled so new must always succeed");
 
@@ -90,7 +97,11 @@ impl BlockSnapshot {
     ) -> Self {
         let read_syncer = RemoteReadSync(storage_client);
         let mkvs = UrkelTree::make()
-            .with_root(block.header.state_root)
+            .with_root(Root {
+                namespace: block.header.namespace,
+                round: block.header.round,
+                hash: block.header.state_root,
+            })
             .new(Context::background(), Box::new(read_syncer.clone()))
             .expect("prefetching disabled so new must always succeed");
 
@@ -116,7 +127,12 @@ impl MKVS for BlockSnapshot {
         unimplemented!("block snapshot is read-only");
     }
 
-    fn commit(&mut self, _ctx: Context) -> Fallible<(WriteLog, Hash)> {
+    fn commit(
+        &mut self,
+        _ctx: Context,
+        _namespace: Namespace,
+        _round: u64,
+    ) -> Fallible<(WriteLog, Hash)> {
         unimplemented!("block snapshot is read-only");
     }
 
@@ -136,12 +152,12 @@ impl ReadSync for RemoteReadSync {
     fn get_subtree(
         &mut self,
         _ctx: Context,
-        root_hash: Hash,
+        root: Root,
         id: NodeID,
         max_depth: u8,
     ) -> Fallible<Subtree> {
         let mut request = api::storage::GetSubtreeRequest::new();
-        request.set_root(root_hash.as_ref().to_vec());
+        request.set_root(serde_cbor::to_vec(&root).unwrap());
         request.set_id({
             let mut nid = api::storage::NodeID::new();
             nid.set_path(id.path.as_ref().to_vec());
@@ -163,12 +179,12 @@ impl ReadSync for RemoteReadSync {
     fn get_path(
         &mut self,
         _ctx: Context,
-        root_hash: Hash,
+        root: Root,
         key: Hash,
         start_depth: u8,
     ) -> Fallible<Subtree> {
         let mut request = api::storage::GetPathRequest::new();
-        request.set_root(root_hash.as_ref().to_vec());
+        request.set_root(serde_cbor::to_vec(&root).unwrap());
         request.set_key(key.as_ref().to_vec());
         request.set_start_depth(start_depth.into());
 
@@ -182,9 +198,9 @@ impl ReadSync for RemoteReadSync {
         Ok(st)
     }
 
-    fn get_node(&mut self, _ctx: Context, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
+    fn get_node(&mut self, _ctx: Context, root: Root, id: NodeID) -> Fallible<NodeRef> {
         let mut request = api::storage::GetNodeRequest::new();
-        request.set_root(root_hash.as_ref().to_vec());
+        request.set_root(serde_cbor::to_vec(&root).unwrap());
         request.set_id({
             let mut nid = api::storage::NodeID::new();
             nid.set_path(id.path.as_ref().to_vec());

@@ -19,14 +19,18 @@ fn test_simple() {
     tree.insert(Context::background(), b"moo", b"boo")
         .expect("insert");
 
-    let (_, root) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (_, root) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
 
     let st = tree
         .get_subtree(
             Context::background(),
-            root,
+            Root {
+                hash: root,
+                ..Default::default()
+            },
             NodeID {
-                path: root,
+                path: Default::default(),
                 depth: 0,
             },
             10,
@@ -51,11 +55,11 @@ impl ReadSync for DummySerialSyncer {
     fn get_subtree(
         &mut self,
         ctx: Context,
-        root_hash: Hash,
+        root: Root,
         id: NodeID,
         max_depth: u8,
     ) -> Fallible<Subtree> {
-        let obj = self.backing.get_subtree(ctx, root_hash, id, max_depth)?;
+        let obj = self.backing.get_subtree(ctx, root, id, max_depth)?;
         let bytes = obj.marshal_binary()?;
         let mut new_st = Subtree::new();
         new_st.unmarshal_binary(bytes.as_ref())?;
@@ -65,19 +69,19 @@ impl ReadSync for DummySerialSyncer {
     fn get_path(
         &mut self,
         ctx: Context,
-        root_hash: Hash,
+        root: Root,
         key: Hash,
         start_depth: u8,
     ) -> Fallible<Subtree> {
-        let obj = self.backing.get_path(ctx, root_hash, key, start_depth)?;
+        let obj = self.backing.get_path(ctx, root, key, start_depth)?;
         let bytes = obj.marshal_binary()?;
         let mut new_st = Subtree::new();
         new_st.unmarshal_binary(bytes.as_ref())?;
         Ok(new_st)
     }
 
-    fn get_node(&mut self, ctx: Context, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
-        let obj = self.backing.get_node(ctx, root_hash, id)?;
+    fn get_node(&mut self, ctx: Context, root: Root, id: NodeID) -> Fallible<NodeRef> {
+        let obj = self.backing.get_node(ctx, root, id)?;
         let bytes = obj.borrow().marshal_binary()?;
         let mut new_node = NodeBox::default();
         new_node.unmarshal_binary(bytes.as_ref())?;
@@ -108,13 +112,17 @@ fn test_nil_pointers() {
     // Verify at least one null pointer somewhere.
     //println!("full tree: {:#?}", tree);
 
-    let (_, root) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+    let (_, root) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
 
     let wire = DummySerialSyncer {
         backing: Box::new(tree),
     };
     let mut remote = UrkelTree::make()
-        .with_root(root)
+        .with_root(Root {
+            hash: root,
+            ..Default::default()
+        })
         .new(Context::background(), Box::new(wire))
         .expect("remote_tree");
 
