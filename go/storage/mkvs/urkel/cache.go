@@ -10,7 +10,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
 
@@ -23,7 +23,7 @@ type cache struct {
 
 	// pendingRoot is the pending root which will become the new root if
 	// the currently cached contents is committed.
-	pendingRoot *internal.Pointer
+	pendingRoot *node.Pointer
 	// syncRoot is the root at which all node database and syncer cache
 	// lookups will be done.
 	syncRoot hash.Hash
@@ -88,38 +88,38 @@ func (c *cache) setSyncRoot(root hash.Hash) {
 	c.syncRoot = root
 }
 
-func (c *cache) setPendingRoot(ptr *internal.Pointer) {
+func (c *cache) setPendingRoot(ptr *node.Pointer) {
 	c.pendingRoot = ptr
 }
 
-func (c *cache) newLeafNodePtr(node *internal.LeafNode) *internal.Pointer {
-	return &internal.Pointer{
-		Node: node,
+func (c *cache) newLeafNodePtr(n *node.LeafNode) *node.Pointer {
+	return &node.Pointer{
+		Node: n,
 	}
 }
 
-func (c *cache) newLeafNode(key hash.Hash, val []byte) *internal.Pointer {
-	return c.newLeafNodePtr(&internal.LeafNode{
+func (c *cache) newLeafNode(key hash.Hash, val []byte) *node.Pointer {
+	return c.newLeafNodePtr(&node.LeafNode{
 		Key:   key,
 		Value: c.newValue(val),
 	})
 }
 
-func (c *cache) newInternalNodePtr(node *internal.InternalNode) *internal.Pointer {
-	return &internal.Pointer{
-		Node: node,
+func (c *cache) newInternalNodePtr(n *node.InternalNode) *node.Pointer {
+	return &node.Pointer{
+		Node: n,
 	}
 }
 
-func (c *cache) newInternalNode(left *internal.Pointer, right *internal.Pointer) *internal.Pointer {
-	return c.newInternalNodePtr(&internal.InternalNode{
+func (c *cache) newInternalNode(left *node.Pointer, right *node.Pointer) *node.Pointer {
+	return c.newInternalNodePtr(&node.InternalNode{
 		Left:  left,
 		Right: right,
 	})
 }
 
 // useNode moves the node to the front of the LRU list.
-func (c *cache) useNode(ptr *internal.Pointer) {
+func (c *cache) useNode(ptr *node.Pointer) {
 	if ptr.LRU == nil {
 		return
 	}
@@ -127,7 +127,7 @@ func (c *cache) useNode(ptr *internal.Pointer) {
 }
 
 // useValue moves the value to the front of the LRU list.
-func (c *cache) useValue(v *internal.Value) {
+func (c *cache) useValue(v *node.Value) {
 	if v.LRU == nil {
 		return
 	}
@@ -135,7 +135,7 @@ func (c *cache) useValue(v *internal.Value) {
 }
 
 // commitNode makes the node eligible for eviction.
-func (c *cache) commitNode(ptr *internal.Pointer) {
+func (c *cache) commitNode(ptr *node.Pointer) {
 	if !ptr.IsClean() {
 		panic("urkel: commitNode called on dirty node")
 	}
@@ -154,9 +154,9 @@ func (c *cache) commitNode(ptr *internal.Pointer) {
 
 	ptr.LRU = c.lruNodes.PushFront(ptr)
 	switch n := ptr.Node.(type) {
-	case *internal.InternalNode:
+	case *node.InternalNode:
 		c.internalNodeCount++
-	case *internal.LeafNode:
+	case *node.LeafNode:
 		c.leafNodeCount++
 
 		if n.Value != nil {
@@ -166,7 +166,7 @@ func (c *cache) commitNode(ptr *internal.Pointer) {
 }
 
 // commitValue makes the value eligible for eviction.
-func (c *cache) commitValue(v *internal.Value) {
+func (c *cache) commitValue(v *node.Value) {
 	if !v.Clean {
 		panic("urkel: commitValue called on dirty value")
 	}
@@ -191,7 +191,7 @@ func (c *cache) commitValue(v *internal.Value) {
 
 // rollbackNode marks a tree node as no longer being eligible for
 // eviction due to it becoming dirty.
-func (c *cache) rollbackNode(ptr *internal.Pointer) {
+func (c *cache) rollbackNode(ptr *node.Pointer) {
 	if ptr.LRU == nil {
 		// Node has not yet been committed to cache.
 		return
@@ -200,33 +200,33 @@ func (c *cache) rollbackNode(ptr *internal.Pointer) {
 	c.lruNodes.Remove(ptr.LRU)
 
 	switch ptr.Node.(type) {
-	case *internal.InternalNode:
+	case *node.InternalNode:
 		c.internalNodeCount--
-	case *internal.LeafNode:
+	case *node.LeafNode:
 		c.leafNodeCount--
 	}
 
 	ptr.LRU = nil
 }
 
-func (c *cache) newValuePtr(v *internal.Value) *internal.Value {
+func (c *cache) newValuePtr(v *node.Value) *node.Value {
 	// TODO: Deduplicate values.
 	return v
 }
 
-func (c *cache) newValue(val []byte) *internal.Value {
-	return c.newValuePtr(&internal.Value{Value: val})
+func (c *cache) newValue(val []byte) *node.Value {
+	return c.newValuePtr(&node.Value{Value: val})
 }
 
 // removeNode removes a tree node.
-func (c *cache) removeNode(ptr *internal.Pointer) {
+func (c *cache) removeNode(ptr *node.Pointer) {
 	if ptr.LRU == nil {
 		// Node has not yet been committed to cache.
 		return
 	}
 
 	switch n := ptr.Node.(type) {
-	case *internal.InternalNode:
+	case *node.InternalNode:
 		// Remove subtrees first.
 		if n.Left != nil && n.Left.Node != nil {
 			c.removeNode(n.Left)
@@ -241,9 +241,9 @@ func (c *cache) removeNode(ptr *internal.Pointer) {
 	c.lruNodes.Remove(ptr.LRU)
 
 	switch n := ptr.Node.(type) {
-	case *internal.InternalNode:
+	case *node.InternalNode:
 		c.internalNodeCount--
-	case *internal.LeafNode:
+	case *node.LeafNode:
 		// Also remove the value.
 		c.removeValue(n.Value)
 		c.leafNodeCount--
@@ -254,7 +254,7 @@ func (c *cache) removeNode(ptr *internal.Pointer) {
 }
 
 // removeValue removes a value.
-func (c *cache) removeValue(v *internal.Value) {
+func (c *cache) removeValue(v *node.Value) {
 	if v.LRU == nil {
 		// Value has not yet been committed to cache.
 		return
@@ -270,7 +270,7 @@ func (c *cache) removeValue(v *internal.Value) {
 func (c *cache) evictValues(targetCapacity uint64) {
 	for c.lruValues.Len() > 0 && c.valueSize+targetCapacity > c.valueCapacity {
 		elem := c.lruValues.Back()
-		v := elem.Value.(*internal.Value)
+		v := elem.Value.(*node.Value)
 		c.removeValue(v)
 	}
 }
@@ -280,30 +280,30 @@ func (c *cache) evictNodes(targetCapacity uint64) {
 	// TODO: Consider optimizing this to know which nodes are eligible for removal.
 	for c.lruNodes.Len() > 0 && c.internalNodeCount+c.leafNodeCount+targetCapacity > c.nodeCapacity {
 		elem := c.lruNodes.Back()
-		n := elem.Value.(*internal.Pointer)
+		n := elem.Value.(*node.Pointer)
 		c.removeNode(n)
 	}
 }
 
-func (c *cache) derefNodeID(ctx context.Context, id internal.NodeID) (*internal.Pointer, error) {
+func (c *cache) derefNodeID(ctx context.Context, id node.ID) (*node.Pointer, error) {
 	curPtr := c.pendingRoot
 	var d uint8
 	for d = 0; d < id.Depth; d++ {
-		node, err := c.derefNodePtr(ctx, id.AtDepth(d), curPtr, nil)
+		nd, err := c.derefNodePtr(ctx, id.AtDepth(d), curPtr, nil)
 		if err != nil {
 			return nil, err
 		}
 
-		switch n := node.(type) {
+		switch n := nd.(type) {
 		case nil:
 			return nil, nil
-		case *internal.InternalNode:
+		case *node.InternalNode:
 			if getKeyBit(id.Path, d) {
 				curPtr = n.Right
 			} else {
 				curPtr = n.Left
 			}
-		case *internal.LeafNode:
+		case *node.LeafNode:
 			break
 		}
 	}
@@ -315,7 +315,7 @@ func (c *cache) derefNodeID(ctx context.Context, id internal.NodeID) (*internal.
 //
 // This may result in node database accesses or remote syncing if the node
 // is not available locally.
-func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *internal.Pointer, key *hash.Hash) (internal.Node, error) {
+func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer, key *hash.Hash) (node.Node, error) {
 	if ptr == nil {
 		return nil, nil
 	}
@@ -330,10 +330,10 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 	}
 
 	// First, attempt to fetch from the local node database.
-	node, err := c.db.GetNode(c.syncRoot, ptr)
+	n, err := c.db.GetNode(c.syncRoot, ptr)
 	switch err {
 	case nil:
-		ptr.Node = node
+		ptr.Node = n
 		// Commit node to cache.
 		c.commitNode(ptr)
 	case db.ErrNodeNotFound:
@@ -344,15 +344,15 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 
 		if key == nil {
 			// Target key is not known, we need to prefetch the node.
-			if node, err = c.rs.GetNode(ctx, c.syncRoot, id); err != nil {
+			if n, err = c.rs.GetNode(ctx, c.syncRoot, id); err != nil {
 				return nil, err
 			}
 
-			if err = node.Validate(ptr.Hash); err != nil {
+			if err = n.Validate(ptr.Hash); err != nil {
 				return nil, err
 			}
 
-			ptr.Node = node
+			ptr.Node = n
 			// Commit node to cache.
 			c.commitNode(ptr)
 		} else {
@@ -365,7 +365,7 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 
 			// reconstructSubtree commits nodes to cache so a separate commitNode
 			// is not needed.
-			var newPtr *internal.Pointer
+			var newPtr *node.Pointer
 			if newPtr, err = c.reconstructSubtree(ctx, ptr.Hash, st, id.Depth, (8*hash.Size)-1); err != nil {
 				return nil, err
 			}
@@ -383,7 +383,7 @@ func (c *cache) derefNodePtr(ctx context.Context, id internal.NodeID, ptr *inter
 //
 // This may result in node database accesses or remote syncing if the value
 // is not available locally.
-func (c *cache) derefValue(ctx context.Context, v *internal.Value) ([]byte, error) {
+func (c *cache) derefValue(ctx context.Context, v *node.Value) ([]byte, error) {
 	// Move the accessed value to the front of the LRU list.
 	if v.LRU != nil || v.Value != nil {
 		c.useValue(v)
@@ -425,7 +425,7 @@ func (c *cache) derefValue(ctx context.Context, v *internal.Value) ([]byte, erro
 }
 
 // prefetch prefetches a given subtree up to the configured prefetch depth.
-func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath hash.Hash, depth uint8) (*internal.Pointer, error) {
+func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath hash.Hash, depth uint8) (*node.Pointer, error) {
 	if c.prefetchDepth == 0 {
 		return nil, nil
 	}
@@ -433,7 +433,7 @@ func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath
 	ctx, cancel := context.WithTimeout(ctx, c.syncerPrefetchTimeout)
 	defer cancel()
 
-	st, err := c.rs.GetSubtree(ctx, c.syncRoot, internal.NodeID{Path: subtreePath, Depth: depth}, c.prefetchDepth)
+	st, err := c.rs.GetSubtree(ctx, c.syncRoot, node.ID{Path: subtreePath, Depth: depth}, c.prefetchDepth)
 	switch err {
 	case nil:
 	case syncer.ErrUnsupported:
@@ -452,7 +452,7 @@ func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath
 
 // reconstructSubtree reconstructs a tree summary received through a
 // remote syncer.
-func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *syncer.Subtree, depth, maxDepth uint8) (*internal.Pointer, error) {
+func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *syncer.Subtree, depth, maxDepth uint8) (*node.Pointer, error) {
 	ptr, err := c.doReconstructSummary(st, st.Root, depth, maxDepth)
 	if err != nil {
 		return nil, err
@@ -493,7 +493,7 @@ func (c *cache) doReconstructSummary(
 	sptr syncer.SubtreePointer,
 	depth uint8,
 	maxDepth uint8,
-) (*internal.Pointer, error) {
+) (*node.Pointer, error) {
 	if depth > maxDepth {
 		return nil, errors.New("urkel: maximum depth exceeded")
 	}
@@ -507,18 +507,18 @@ func (c *cache) doReconstructSummary(
 	}
 
 	if sptr.Full {
-		node, err := st.GetFullNodeAt(sptr.Index)
+		nd, err := st.GetFullNodeAt(sptr.Index)
 		if err != nil {
 			return nil, err
 		}
 
-		var ptr *internal.Pointer
-		switch n := node.(type) {
-		case *internal.InternalNode:
+		var ptr *node.Pointer
+		switch n := nd.(type) {
+		case *node.InternalNode:
 			// Internal node.
 			n.Clean = false
 			ptr = c.newInternalNodePtr(n)
-		case *internal.LeafNode:
+		case *node.LeafNode:
 			// Leaf node.
 			n.Clean = false
 			n.Value = c.newValuePtr(n.Value)

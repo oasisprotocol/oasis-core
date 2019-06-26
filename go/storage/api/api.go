@@ -3,130 +3,30 @@ package api
 
 import (
 	"context"
-	"crypto/sha512"
-	"encoding/hex"
 	"errors"
 
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
-// KeySize is the size of a storage key in bytes.
-const KeySize = 32
-
 var (
-	// ErrKeyNotFound is the error returned when the requested key
-	// is not present in storage.
-	ErrKeyNotFound = errors.New("storage: key not found")
-
-	// ErrKeyExpired is the error returned when the requested key
-	// is expired.
-	ErrKeyExpired = errors.New("storage: key expired")
-
-	// ErrIncoherentTime is the error returned when the timekeeping
-	// is not coherent.
-	ErrIncoherentTime = errors.New("storage: incoherent time")
-
 	// ErrCantProve is the error returned when the backend is incapable
 	// of generating proofs (unsupported, no key, etc).
 	ErrCantProve = errors.New("storage: unable to provide proofs")
 
-	// ReceiptSignatureContext is the signature context used for verifying receipts.
-	ReceiptSignatureContext = []byte("EkStrRec")
+	// ReceiptSignatureContext is the signature context used for verifying MKVS receipts.
+	ReceiptSignatureContext = []byte("EkStrRct")
 
-	// MKVSReceiptSignatureContext is the signature context used for verifying MKVS receipts.
-	MKVSReceiptSignatureContext = []byte("EkStrRct")
-
+	_ cbor.Marshaler   = (*ReceiptBody)(nil)
+	_ cbor.Unmarshaler = (*ReceiptBody)(nil)
 	_ cbor.Marshaler   = (*Receipt)(nil)
 	_ cbor.Unmarshaler = (*Receipt)(nil)
-	_ cbor.Marshaler   = (*SignedReceipt)(nil)
-	_ cbor.Unmarshaler = (*SignedReceipt)(nil)
-	_ cbor.Marshaler   = (*MKVSReceiptBody)(nil)
-	_ cbor.Unmarshaler = (*MKVSReceiptBody)(nil)
-	_ cbor.Marshaler   = (*MKVSReceipt)(nil)
-	_ cbor.Unmarshaler = (*MKVSReceipt)(nil)
 )
-
-// Key is a storage key.
-type Key [KeySize]byte
-
-// String returns a string representation of a key.
-func (k Key) String() string {
-	return hex.EncodeToString(k[:])
-}
-
-// KeyInfo is a key and its associated metadata in storage.
-type KeyInfo struct {
-	// Key is the key of the value.
-	Key Key
-
-	// Expiration is the expiration time of the key/value pair.
-	Expiration epochtime.EpochTime
-}
-
-// Value is a data blob and its associated metadata in storage.
-type Value struct {
-	_struct struct{} `codec:",toarray"` // nolint
-
-	// Data is the data blob.
-	Data []byte
-
-	// Expiration is the expiration time of the data blob.
-	Expiration uint64
-}
-
-// String returns a string representation of a value.
-func (v Value) String() string {
-	return hex.EncodeToString(v.Data)
-}
-
-// Receipt is a proof that a set of keys exist in storage.
-type Receipt struct {
-	Keys []Key `codec:"keys"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (r *Receipt) MarshalCBOR() []byte {
-	return cbor.Marshal(r)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
-func (r *Receipt) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, r)
-}
-
-// SignedReceipt is a signed proof that a set of keys exist in storage.
-type SignedReceipt struct {
-	signature.Signed
-}
-
-// Open first verifies the blob signature then unmarshals the blob.
-func (s *SignedReceipt) Open(receipt *Receipt) error {
-	return s.Signed.Open(ReceiptSignatureContext, receipt)
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (s *SignedReceipt) MarshalCBOR() []byte {
-	return s.Signed.MarshalCBOR()
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
-func (s *SignedReceipt) UnmarshalCBOR(data []byte) error {
-	return s.Signed.UnmarshalCBOR(data)
-}
-
-// InsertOptions specify the behavior of insert operations.
-type InsertOptions struct {
-	// LocalOnly specifies that certain backends which support combined
-	// local/remote inserts (e.g., caching backends) should only insert
-	// into the local cache and not propagate inserts remotely.
-	LocalOnly bool
-}
 
 // WriteLog is a write log.
 //
@@ -137,7 +37,7 @@ type WriteLog = urkel.WriteLog
 type LogEntry = urkel.LogEntry
 
 // ReceiptBody is the body of a receipt.
-type MKVSReceiptBody struct {
+type ReceiptBody struct {
 	// Version is the storage data structure version.
 	Version uint16
 	// Roots are the merkle roots of the merklized data structure that the
@@ -145,54 +45,51 @@ type MKVSReceiptBody struct {
 	Roots []hash.Hash
 }
 
-// MKVSReceipt is a signed MKVSReceiptBody.
-type MKVSReceipt struct {
+// Receipt is a signed ReceiptBody.
+type Receipt struct {
 	signature.Signed
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
-func (rb *MKVSReceiptBody) MarshalCBOR() []byte {
+func (rb *ReceiptBody) MarshalCBOR() []byte {
 	return cbor.Marshal(rb)
 }
 
 // UnmarshalCBOR deserializes a CBOR byte vector into the given type.
-func (rb *MKVSReceiptBody) UnmarshalCBOR(data []byte) error {
+func (rb *ReceiptBody) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, rb)
 }
 
 // Open first verifies the blob signature then unmarshals the blob.
-func (s *MKVSReceipt) Open(receipt *MKVSReceiptBody) error {
-	return s.Signed.Open(MKVSReceiptSignatureContext, receipt)
+func (s *Receipt) Open(receipt *ReceiptBody) error {
+	return s.Signed.Open(ReceiptSignatureContext, receipt)
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
-func (s *MKVSReceipt) MarshalCBOR() []byte {
+func (s *Receipt) MarshalCBOR() []byte {
 	return s.Signed.MarshalCBOR()
 }
 
 // UnmarshalCBOR deserializes a CBOR byte vector into the given type.
-func (s *MKVSReceipt) UnmarshalCBOR(data []byte) error {
+func (s *Receipt) UnmarshalCBOR(data []byte) error {
 	return s.Signed.UnmarshalCBOR(data)
 }
 
 // NodeID is a root-relative node identifier which uniquely identifies
 // a node under a given root.
-type NodeID = urkel.NodeID
+type NodeID = node.ID
 
 // Node is either an InternalNode or a LeafNode.
-type Node = urkel.Node
+type Node = node.Node
 
 // Pointer is a pointer to another node.
-type Pointer = urkel.Pointer
+type Pointer = node.Pointer
 
 // InternalNode is an internal node with two children.
-type InternalNode = urkel.InternalNode
+type InternalNode = node.InternalNode
 
 // LeafNode is a leaf node containing a key/value pair.
-type LeafNode = urkel.LeafNode
-
-// MKVSValue holds the value.
-type MKVSValue = urkel.Value
+type LeafNode = node.LeafNode
 
 // SubtreeIndex is a subtree index.
 type SubtreeIndex = syncer.SubtreeIndex
@@ -233,13 +130,13 @@ type Backend interface {
 	// The expected new root is used to check if the new root after all the
 	// operations are applied already exists in the local DB.  If it does, the
 	// Apply is ignored.
-	Apply(context.Context, hash.Hash, hash.Hash, WriteLog) ([]*MKVSReceipt, error)
+	Apply(context.Context, hash.Hash, hash.Hash, WriteLog) ([]*Receipt, error)
 
 	// ApplyBatch applies multiple sets of operations against the MKVS and
 	// returns a single receipt covering all applied roots.
 	//
 	// See Apply for more details.
-	ApplyBatch(context.Context, []ApplyOp) ([]*MKVSReceipt, error)
+	ApplyBatch(context.Context, []ApplyOp) ([]*Receipt, error)
 
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()
@@ -247,16 +144,6 @@ type Backend interface {
 	// Initialized returns a channel that will be closed when the
 	// backend is initialized and ready to service requests.
 	Initialized() <-chan struct{}
-}
-
-// HashStorageKey generates a storage key from its value.
-//
-// All backends MUST use this method to hash values (generate keys).
-func HashStorageKey(value []byte) Key {
-	sum := sha512.Sum512_256(value)
-	var k Key
-	copy(k[:], sum[:])
-	return k
 }
 
 // Genesis is the storage genesis state.

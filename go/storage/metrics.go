@@ -64,7 +64,7 @@ type metricsWrapper struct {
 	api.Backend
 }
 
-func (w *metricsWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
+func (w *metricsWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
 	start := time.Now()
 	receipts, err := w.Backend.Apply(ctx, root, expectedNewRoot, log)
 	storageLatency.With(labelApply).Observe(time.Since(start).Seconds())
@@ -83,7 +83,7 @@ func (w *metricsWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewR
 	return receipts, err
 }
 
-func (w *metricsWrapper) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.MKVSReceipt, error) {
+func (w *metricsWrapper) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.Receipt, error) {
 	start := time.Now()
 	receipts, err := w.Backend.ApplyBatch(ctx, ops)
 	storageLatency.With(labelApplyBatch).Observe(time.Since(start).Seconds())

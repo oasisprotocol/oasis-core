@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
 var ErrNodeNotFound = errors.New("urkel: node not found in node db")
@@ -13,7 +13,7 @@ var ErrNodeNotFound = errors.New("urkel: node not found in node db")
 // NodeDB is the persistence layer used for persisting the in-memory tree.
 type NodeDB interface {
 	// GetNode lookups up a node in the database.
-	GetNode(root hash.Hash, ptr *internal.Pointer) (internal.Node, error)
+	GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error)
 
 	// GetValue lookups up a value in the database.
 	GetValue(id hash.Hash) ([]byte, error)
@@ -28,13 +28,13 @@ type NodeDB interface {
 // Subtree is a NodeDB-specific subtree implementation.
 type Subtree interface {
 	// PutNode persists a node in the NodeDB.
-	PutNode(depth uint8, ptr *internal.Pointer) error
+	PutNode(depth uint8, ptr *node.Pointer) error
 
 	// VisitCleanNode is called for any clean node encountered during commit
 	// for which no further processing will be done (as it is marked clean).
 	//
 	// The specific NodeDB implementation may wish to do further processing.
-	VisitCleanNode(depth uint8, ptr *internal.Pointer) error
+	VisitCleanNode(depth uint8, ptr *node.Pointer) error
 
 	// Commit marks the subtree as complete.
 	Commit() error
@@ -46,7 +46,7 @@ type Batch interface {
 	// persisting nodes under a given root.
 	//
 	// Depth is the depth of the node that subtreeRoot points to.
-	MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *internal.Pointer) Subtree
+	MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *node.Pointer) Subtree
 
 	// OnCommit registers a hook to run after a successful commit.
 	OnCommit(hook func())
@@ -85,7 +85,7 @@ func NewNopNodeDB() (NodeDB, error) {
 }
 
 // GetNode returns an ErrNodeNotFound error.
-func (d *nopNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.Node, error) {
+func (d *nopNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error) {
 	return nil, ErrNodeNotFound
 }
 
@@ -107,7 +107,7 @@ func (d *nopNodeDB) NewBatch() Batch {
 	return &nopBatch{}
 }
 
-func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *internal.Pointer) Subtree {
+func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *node.Pointer) Subtree {
 	return &nopSubtree{}
 }
 
@@ -117,11 +117,11 @@ func (b *nopBatch) Reset() {
 // nopSubtree is a no-op subtree.
 type nopSubtree struct{}
 
-func (s *nopSubtree) PutNode(depth uint8, ptr *internal.Pointer) error {
+func (s *nopSubtree) PutNode(depth uint8, ptr *node.Pointer) error {
 	return nil
 }
 
-func (s *nopSubtree) VisitCleanNode(depth uint8, ptr *internal.Pointer) error {
+func (s *nopSubtree) VisitCleanNode(depth uint8, ptr *node.Pointer) error {
 	return nil
 }
 

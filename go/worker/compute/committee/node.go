@@ -217,15 +217,15 @@ func (n *Node) queueBatchBlocking(
 	// nodes: https://github.com/oasislabs/ekiden/issues/1809.
 
 	// Verify storage receipt signatures.
-	receiptBody := storage.MKVSReceiptBody{
+	receiptBody := storage.ReceiptBody{
 		Version: 1,
 		Roots:   []hash.Hash{ioRoot},
 	}
-	receipt := storage.MKVSReceipt{}
+	receipt := storage.Receipt{}
 	receipt.Signed.Blob = receiptBody.MarshalCBOR()
 	for _, sig := range storageSignatures {
 		receipt.Signed.Signature = sig
-		var tmp storage.MKVSReceiptBody
+		var tmp storage.ReceiptBody
 		if err := receipt.Open(&tmp); err != nil {
 			n.logger.Warn("received invalid storage receipt signature in external batch",
 				"signature", sig,
@@ -590,7 +590,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		// For now accept a signature from anyone.
 		signatures := []signature.Signature{}
 		for _, receipt := range receipts {
-			var receiptBody storage.MKVSReceiptBody
+			var receiptBody storage.ReceiptBody
 			if err = receipt.Open(&receiptBody); err != nil {
 				n.logger.Error("failed to open receipt",
 					"receipt", receipt,

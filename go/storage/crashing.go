@@ -56,7 +56,7 @@ func (w *crashingWrapper) GetValue(ctx context.Context, root hash.Hash, id hash.
 	return res, err
 }
 
-func (w *crashingWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
+func (w *crashingWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
 	crash.Here(crashPointWriteBefore)
 	res, err := w.Backend.Apply(ctx, root, expectedNewRoot, log)
 	crash.Here(crashPointWriteAfter)

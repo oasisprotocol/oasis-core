@@ -31,7 +31,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
 const (
@@ -272,7 +272,7 @@ type grpcResponse struct {
 	node *node.Node
 }
 
-func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(context.Context, storage.StorageClient, *node.Node, chan<- *grpcResponse), expectedNewRoots []hash.Hash) ([]*api.MKVSReceipt, error) {
+func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(context.Context, storage.StorageClient, *node.Node, chan<- *grpcResponse), expectedNewRoots []hash.Hash) ([]*api.Receipt, error) {
 	b.connectedNodesState.RLock()
 	defer b.connectedNodesState.RUnlock()
 
@@ -287,7 +287,7 @@ func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(cont
 		go fn(ctx, clientState.client, b.connectedNodesState.nodes[i], ch)
 	}
 	successes := 0
-	receipts := make([]*api.MKVSReceipt, 0, n)
+	receipts := make([]*api.Receipt, 0, n)
 	for i := 0; i < n; i++ {
 		var response *grpcResponse
 		select {
@@ -321,7 +321,7 @@ func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(cont
 		// a list of storage receipts. However, a concrete storage backend,
 		// e.g. storage/leveldb, actually returns a single storage receipt in a
 		// list.
-		receiptInAList := make([]api.MKVSReceipt, 1)
+		receiptInAList := make([]api.Receipt, 1)
 		if err = cbor.Unmarshal(receiptsRaw, receiptInAList); err != nil {
 			b.logger.Error("failed to unmarshal receipt in a list from a storage node",
 				"node", response.node,
@@ -340,7 +340,7 @@ func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(cont
 		// TODO: After we switch to https://github.com/oasislabs/ed25519, use
 		// batch verification. This should be implemented as part of:
 		// https://github.com/oasislabs/ekiden/issues/1351.
-		var receiptBody api.MKVSReceiptBody
+		var receiptBody api.ReceiptBody
 		if err = receipt.Open(&receiptBody); err != nil {
 			b.logger.Error("failed to open receipt for a storage node",
 				"node", response.node,
@@ -381,7 +381,7 @@ func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(cont
 	return receipts, nil
 }
 
-func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.MKVSReceipt, error) {
+func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
 	var req storage.ApplyRequest
 	req.Root, _ = root.MarshalBinary()
 	req.ExpectedNewRoot, _ = expectedNewRoot.MarshalBinary()
@@ -403,7 +403,7 @@ func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expect
 	}, []hash.Hash{expectedNewRoot})
 }
 
-func (b *storageClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.MKVSReceipt, error) {
+func (b *storageClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.Receipt, error) {
 	var req storage.ApplyBatchRequest
 	req.Ops = make([]*storage.ApplyOp, 0, len(ops))
 	expectedNewRoots := make([]hash.Hash, 0, len(ops))
@@ -525,12 +525,12 @@ func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 	}
 	resp := respRaw.(*storage.GetNodeResponse)
 
-	node, err := urkel.NodeUnmarshalBinary(resp.GetNode())
+	n, err := urkelNode.UnmarshalBinary(resp.GetNode())
 	if err != nil {
 		return nil, errors.Wrap(err, "storage client: failed to unmarshal node")
 	}
 
-	return node, nil
+	return n, nil
 }
 
 func (b *storageClientBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {

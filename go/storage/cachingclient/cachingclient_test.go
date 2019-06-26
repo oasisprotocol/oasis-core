@@ -49,7 +49,7 @@ func TestSingleAndPersistence(t *testing.T) {
 
 	// Check the receipts and ensure they contain a new root that equals the
 	// expected new root.
-	var receiptBody api.MKVSReceiptBody
+	var receiptBody api.ReceiptBody
 	for _, receipt := range receipts {
 		err = receipt.Open(&receiptBody)
 		require.NoError(t, err, "receipt.Open() should not return an error")

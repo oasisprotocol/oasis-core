@@ -9,7 +9,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
 var (
@@ -35,7 +35,7 @@ func New(dirname string) (api.NodeDB, error) {
 	return &leveldbNodeDB{db: db}, nil
 }
 
-func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.Node, error) {
+func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error) {
 	if ptr == nil || !ptr.IsClean() {
 		panic("urkel/db/leveldb: attempted to get invalid pointer from node database")
 	}
@@ -48,7 +48,7 @@ func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal
 		return nil, err
 	}
 
-	return internal.NodeUnmarshalBinary(bytes)
+	return node.UnmarshalBinary(bytes)
 }
 
 func (d *leveldbNodeDB) GetValue(id hash.Hash) ([]byte, error) {
@@ -80,7 +80,7 @@ func (d *leveldbNodeDB) NewBatch() api.Batch {
 	}
 }
 
-func (b *leveldbBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *internal.Pointer) api.Subtree {
+func (b *leveldbBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *node.Pointer) api.Subtree {
 	if subtree == nil {
 		return &leveldbSubtree{batch: b}
 	}
@@ -105,23 +105,23 @@ type leveldbSubtree struct {
 	batch *leveldbBatch
 }
 
-func (s *leveldbSubtree) PutNode(depth uint8, ptr *internal.Pointer) error {
+func (s *leveldbSubtree) PutNode(depth uint8, ptr *node.Pointer) error {
 	data, err := ptr.Node.MarshalBinary()
 	if err != nil {
 		return err
 	}
 
 	switch n := ptr.Node.(type) {
-	case *internal.InternalNode:
+	case *node.InternalNode:
 		s.batch.bat.Put(append(nodeKeyPrefix, n.Hash[:]...), data)
-	case *internal.LeafNode:
+	case *node.LeafNode:
 		s.batch.bat.Put(append(valueKeyPrefix, n.Value.Hash[:]...), n.Value.Value)
 		s.batch.bat.Put(append(nodeKeyPrefix, n.Hash[:]...), data)
 	}
 	return nil
 }
 
-func (s *leveldbSubtree) VisitCleanNode(depth uint8, ptr *internal.Pointer) error {
+func (s *leveldbSubtree) VisitCleanNode(depth uint8, ptr *node.Pointer) error {
 	return nil
 }
 

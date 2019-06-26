@@ -1,5 +1,5 @@
-// Package internal defines Urkel tree internals.
-package internal
+// Package node defines Urkel tree nodes.
+package node
 
 import (
 	"bytes"
@@ -35,17 +35,17 @@ var (
 	_ encoding.BinaryUnmarshaler = (*Value)(nil)
 )
 
-// NodeID is a root-relative node identifier which uniquely identifies
+// ID is a root-relative node identifier which uniquely identifies
 // a node under a given root.
-type NodeID struct {
+type ID struct {
 	Path  hash.Hash
 	Depth uint8
 }
 
-// AtDepth returns a NodeID representing the same path at a specified
+// AtDepth returns a ID representing the same path at a specified
 // depth.
-func (n NodeID) AtDepth(d uint8) NodeID {
-	return NodeID{Path: n.Path, Depth: d}
+func (n ID) AtDepth(d uint8) ID {
+	return ID{Path: n.Path, Depth: d}
 }
 
 // Pointer is a pointer to another node.
@@ -131,7 +131,7 @@ type Node interface {
 }
 
 // InternalNode is an internal node with two children.
-type InternalNode struct { // nolint: golint
+type InternalNode struct {
 	Clean bool
 	Hash  hash.Hash
 	Left  *Pointer
@@ -484,8 +484,8 @@ func (v *Value) SizedUnmarshalBinary(data []byte) (int, error) {
 	return valueLen + 4, nil
 }
 
-// NodeUnmarshalBinary unmarshals a node of arbitrary type.
-func NodeUnmarshalBinary(bytes []byte) (Node, error) {
+// UnmarshalBinary unmarshals a node of arbitrary type.
+func UnmarshalBinary(bytes []byte) (Node, error) {
 	// Nodes can be either Internal or Leaf nodes.
 	// Check the first byte and deserialize appropriately.
 	var node Node

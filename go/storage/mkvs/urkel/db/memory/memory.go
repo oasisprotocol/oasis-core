@@ -6,7 +6,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
 var _ api.NodeDB = (*memoryNodeDB)(nil)
@@ -29,7 +29,7 @@ func New() (api.NodeDB, error) {
 	}, nil
 }
 
-func (d *memoryNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.Node, error) {
+func (d *memoryNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error) {
 	if ptr == nil || !ptr.IsClean() {
 		panic("urkel: attempted to get invalid pointer from node database")
 	}
@@ -42,7 +42,7 @@ func (d *memoryNodeDB) GetNode(root hash.Hash, ptr *internal.Pointer) (internal.
 		return nil, err
 	}
 
-	return item.(internal.Node), nil
+	return item.(node.Node), nil
 }
 
 func (d *memoryNodeDB) GetValue(id hash.Hash) ([]byte, error) {
@@ -96,7 +96,7 @@ func (d *memoryNodeDB) NewBatch() api.Batch {
 	}
 }
 
-func (b *memoryBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *internal.Pointer) api.Subtree {
+func (b *memoryBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *node.Pointer) api.Subtree {
 	if subtree == nil {
 		return &memorySubtree{batch: b}
 	}
@@ -125,13 +125,13 @@ type memorySubtree struct {
 	batch *memoryBatch
 }
 
-func (s *memorySubtree) PutNode(depth uint8, ptr *internal.Pointer) error {
+func (s *memorySubtree) PutNode(depth uint8, ptr *node.Pointer) error {
 	switch n := ptr.Node.(type) {
-	case *internal.InternalNode:
+	case *node.InternalNode:
 		s.batch.ops = append(s.batch.ops, func() error {
 			return s.batch.db.putLocked(n.Hash, ptr.Node)
 		})
-	case *internal.LeafNode:
+	case *node.LeafNode:
 		s.batch.ops = append(s.batch.ops, func() error {
 			_ = s.batch.db.putLocked(n.Value.Hash, n.Value.Value)
 			return s.batch.db.putLocked(n.Hash, ptr.Node)
@@ -140,7 +140,7 @@ func (s *memorySubtree) PutNode(depth uint8, ptr *internal.Pointer) error {
 	return nil
 }
 
-func (s *memorySubtree) VisitCleanNode(depth uint8, ptr *internal.Pointer) error {
+func (s *memorySubtree) VisitCleanNode(depth uint8, ptr *node.Pointer) error {
 	return nil
 }
 

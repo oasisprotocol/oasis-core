@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/internal"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
 const (
@@ -54,10 +54,10 @@ func (s *SubtreePointer) UnmarshalBinary(data []byte) error {
 // SizedUnmarshalBinary decodes a binary marshaled subtree pointer.
 func (s *SubtreePointer) SizedUnmarshalBinary(data []byte) (int, error) {
 	if len(data) < treePointerLen {
-		return 0, internal.ErrMalformed
+		return 0, node.ErrMalformed
 	}
 	if data[treeIndexLen] > 1 {
-		return 0, internal.ErrMalformed
+		return 0, node.ErrMalformed
 	}
 	s.Index = SubtreeIndex(binary.LittleEndian.Uint16(data[:treeIndexLen]))
 	s.Full = data[treeIndexLen] > 0
@@ -131,7 +131,7 @@ type Subtree struct {
 	Root SubtreePointer
 
 	Summaries []InternalNodeSummary
-	FullNodes []internal.Node
+	FullNodes []node.Node
 }
 
 func checkSubtreeIndex(idx int) (SubtreeIndex, error) {
@@ -153,7 +153,7 @@ func (s *Subtree) AddSummary(ns InternalNodeSummary) (SubtreeIndex, error) {
 }
 
 // AddFullNode adds a new full node to the subtree.
-func (s *Subtree) AddFullNode(n internal.Node) (SubtreeIndex, error) {
+func (s *Subtree) AddFullNode(n node.Node) (SubtreeIndex, error) {
 	idx, err := checkSubtreeIndex(len(s.FullNodes))
 	if err != nil {
 		return idx, err
@@ -165,7 +165,7 @@ func (s *Subtree) AddFullNode(n internal.Node) (SubtreeIndex, error) {
 // GetFullNodeAt retrieves a full node at a specific index.
 //
 // If the index has already been marked as used it returns an error.
-func (s *Subtree) GetFullNodeAt(idx SubtreeIndex) (internal.Node, error) {
+func (s *Subtree) GetFullNodeAt(idx SubtreeIndex) (node.Node, error) {
 	if idx == InvalidSubtreeIndex || int(idx) >= len(s.FullNodes) {
 		return nil, ErrInvalidSubtreeIndex
 	}
@@ -242,7 +242,7 @@ func (s *Subtree) UnmarshalBinary(data []byte) error {
 func (s *Subtree) SizedUnmarshalBinary(data []byte) (int, error) {
 	// Size is at least the root pointer and two array lengths.
 	if len(data) < treePointerLen+2*treeIndexLen {
-		return 0, internal.ErrMalformed
+		return 0, node.ErrMalformed
 	}
 
 	var rootPointer SubtreePointer
@@ -266,36 +266,36 @@ func (s *Subtree) SizedUnmarshalBinary(data []byte) (int, error) {
 	}
 
 	if len(data) < offset+treeIndexLen {
-		return 0, internal.ErrMalformed
+		return 0, node.ErrMalformed
 	}
 	nodeCount := binary.LittleEndian.Uint16(data[offset : offset+2])
 	offset += 2
-	nodes := make([]internal.Node, nodeCount)
+	nodes := make([]node.Node, nodeCount)
 	for i := uint16(0); i < nodeCount; i++ {
 		var nodeLen int
 		if len(data) <= offset {
-			return 0, internal.ErrMalformed
+			return 0, node.ErrMalformed
 		}
 		switch data[offset] {
-		case internal.PrefixNilNode:
+		case node.PrefixNilNode:
 			nodes[i] = nil
 			offset++
-		case internal.PrefixInternalNode:
-			node := &internal.InternalNode{}
+		case node.PrefixInternalNode:
+			node := &node.InternalNode{}
 			if nodeLen, err = node.SizedUnmarshalBinary(data[offset:]); err != nil {
 				return 0, err
 			}
 			offset += nodeLen
 			nodes[i] = node
-		case internal.PrefixLeafNode:
-			node := &internal.LeafNode{}
+		case node.PrefixLeafNode:
+			node := &node.LeafNode{}
 			if nodeLen, err = node.SizedUnmarshalBinary(data[offset:]); err != nil {
 				return 0, err
 			}
 			offset += nodeLen
 			nodes[i] = node
 		default:
-			return 0, internal.ErrMalformed
+			return 0, node.ErrMalformed
 		}
 	}
 
