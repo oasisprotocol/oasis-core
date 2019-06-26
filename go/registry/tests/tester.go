@@ -135,6 +135,20 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 				require.NoError(err, "GetNodeTransport")
 				require.EqualValues(v.Node.Committee.Addresses, tp.Addresses, "retrieved transport addresses")
 				require.EqualValues(v.Node.Committee.Certificate, tp.Certificate, "retrieved transport certificate")
+
+				err = backend.RegisterNode(context.Background(), v.SignedValidReRegistration)
+				require.NoError(err, "Re-registering a node with differnet address should work")
+
+				err = backend.RegisterNode(context.Background(), v.SignedInvalidReRegistration)
+				require.Error(err, "Re-registering a node with different runtimes should fail")
+
+				select {
+				case ev := <-nodeCh:
+					require.EqualValues(v.UpdatedNode, ev.Node, "updated node")
+					require.True(ev.IsRegistration, "event is registration")
+				case <-time.After(recvTimeout):
+					t.Fatalf("failed to receive node registration event")
+				}
 			}
 		}
 	})
@@ -144,7 +158,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		l := make([]*node.Node, 0, numNodes)
 		for _, vec := range nodes {
 			for _, v := range vec {
-				l = append(l, v.Node)
+				l = append(l, v.UpdatedNode)
 			}
 		}
 		api.SortNodeList(l)
@@ -187,7 +201,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		for _, v := range nodes[0] {
 			n, ok := deregisteredNodes[v.Node.ID.ToMapKey()]
 			require.True(ok, "got deregister event for node")
-			require.EqualValues(v.Node, n, "deregistered node")
+			require.EqualValues(v.UpdatedNode, n, "deregistered node")
 		}
 
 		// Remove the expired nodes from the test driver's view of
@@ -250,7 +264,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 			for _, v := range vec {
 				n, ok := deregisteredNodes[v.Node.ID.ToMapKey()]
 				require.True(ok, "got deregister event for node")
-				require.EqualValues(v.Node, n, "deregistered node")
+				require.EqualValues(v.UpdatedNode, n, "deregistered node")
 			}
 		}
 	})
@@ -342,10 +356,13 @@ type TestEntity struct {
 // TestNode is a testing Node and some common pre-generated/signed blobs
 // useful for testing.
 type TestNode struct {
-	Node   *node.Node
-	Signer signature.Signer
+	Node        *node.Node
+	UpdatedNode *node.Node
+	Signer      signature.Signer
 
-	SignedRegistration *node.SignedNode
+	SignedRegistration          *node.SignedNode
+	SignedValidReRegistration   *node.SignedNode
+	SignedInvalidReRegistration *node.SignedNode
 }
 
 // NewTestNodes returns the specified number of TestNodes, generated
@@ -403,6 +420,44 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 			return nil, err
 		}
 		nod.SignedRegistration = &node.SignedNode{Signed: *signed}
+
+		// Add another Re-Registration with differnet address field.
+		nod.UpdatedNode = &node.Node{
+			ID:               nod.Signer.Public(),
+			EntityID:         ent.Entity.ID,
+			Expiration:       uint64(expiration),
+			RegistrationTime: uint64(time.Now().Unix()) + 10, // Ensure greater than initial registration.
+			Runtimes:         nodeRts,
+			Roles:            role,
+		}
+		addr = node.Address{
+			TCPAddr: net.TCPAddr{
+				IP:   []byte{192, 0, 2, byte(i + 1)},
+				Port: 452,
+			},
+		}
+		nod.UpdatedNode.Committee.Addresses = append(nod.UpdatedNode.Committee.Addresses, addr)
+		signed, err = signature.SignSigned(ent.Signer, api.RegisterNodeSignatureContext, nod.UpdatedNode)
+		if err != nil {
+			return nil, err
+		}
+		nod.SignedValidReRegistration = &node.SignedNode{Signed: *signed}
+
+		// Add invalid Re-Registration with changed Roles field.
+		testRuntimeSigner := memorySigner.NewTestSigner("invalod-registration-runtime-seed")
+		newNode := &node.Node{
+			ID:               nod.Signer.Public(),
+			EntityID:         ent.Entity.ID,
+			Expiration:       uint64(expiration),
+			RegistrationTime: uint64(time.Now().Unix()),
+			Runtimes:         append(nodeRts, &node.Runtime{ID: testRuntimeSigner.Public()}),
+			Roles:            role,
+		}
+		signed, err = signature.SignSigned(ent.Signer, api.RegisterNodeSignatureContext, newNode)
+		if err != nil {
+			return nil, err
+		}
+		nod.SignedInvalidReRegistration = &node.SignedNode{Signed: *signed}
 
 		nodes = append(nodes, &nod)
 	}

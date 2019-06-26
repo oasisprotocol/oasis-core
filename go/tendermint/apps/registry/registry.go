@@ -380,16 +380,16 @@ func (app *registryApplication) registerNode(
 		return err
 	}
 
-	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain())
+	newNode, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain())
 	if err != nil {
 		return err
 	}
 
 	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
-		err = registry.VerifyTimestamp(node.RegistrationTime, uint64(ctx.Now().Unix()))
+		err = registry.VerifyTimestamp(newNode.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
 			app.logger.Error("RegisterNode: INVALID TIMESTAMP",
-				"node_timestamp", node.RegistrationTime,
+				"node_timestamp", newNode.RegistrationTime,
 				"now", uint64(ctx.Now().Unix()),
 			)
 			return err
@@ -399,10 +399,10 @@ func (app *registryApplication) registerNode(
 	// Re-check that the entity has at least sufficient stake to still be an
 	// entity.  The node thresholds should be enforced in the scheduler.
 	if !app.cfg.DebugBypassStake {
-		if err = stakingapp.EnsureSufficientStake(app.state, ctx, node.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+		if err = stakingapp.EnsureSufficientStake(app.state, ctx, newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
 			app.logger.Error("RegisterNode: Insufficent stake",
 				"err", err,
-				"id", node.EntityID,
+				"id", newNode.EntityID,
 			)
 			return err
 		}
@@ -413,28 +413,62 @@ func (app *registryApplication) registerNode(
 	if err != nil {
 		return err
 	}
-	if epochtime.EpochTime(node.Expiration) < epoch {
+	if epochtime.EpochTime(newNode.Expiration) < epoch {
 		return registry.ErrNodeExpired
 	}
 
-	err = state.createNode(node)
+	// Check if node exists
+	existingNode, err := state.GetNode(newNode.ID)
 	if err != nil {
-		app.logger.Error("RegisterNode: failed to create node",
-			"err", err,
-			"node", node,
-			"entity", node.EntityID,
-		)
-		return registry.ErrBadEntityForNode
+		if err == errNodeNotFound {
+			// Node doesn't exist. Create node.
+			err = state.createNode(newNode)
+			if err != nil {
+				app.logger.Error("RegisterNode: failed to create node",
+					"err", err,
+					"node", newNode,
+					"entity", newNode.EntityID,
+				)
+				return registry.ErrBadEntityForNode
+			}
+		} else {
+			app.logger.Error("RegisterNode: failed to register node",
+				"err", err,
+				"new_node", newNode,
+				"existing_node", existingNode,
+				"entity", newNode.EntityID,
+			)
+		}
+	} else {
+		err := registry.VerifyNodeUpdate(app.logger, existingNode, newNode)
+		if err != nil {
+			app.logger.Error("RegisterNode: failed to verify node update",
+				"err", err,
+				"new_node", newNode,
+				"existing_node", existingNode,
+				"entity", newNode.EntityID,
+			)
+			return err
+		}
+		err = state.createNode(newNode)
+		if err != nil {
+			app.logger.Error("RegisterNode: failed to update node",
+				"err", err,
+				"node", newNode,
+				"entity", newNode.EntityID,
+			)
+			return registry.ErrBadEntityForNode
+		}
 	}
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("RegisterNode: registered",
-			"node", node,
+			"node", newNode,
 		)
 
 		ctx.EmitData(&Output{
 			OutputRegisterNode: &OutputRegisterNode{
-				Node: *node,
+				Node: *newNode,
 			},
 		})
 	}

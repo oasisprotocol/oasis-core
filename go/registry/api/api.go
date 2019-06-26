@@ -84,6 +84,9 @@ var (
 	// ErrForbidden is the error returned when an operation is forbiden by
 	// policy.
 	ErrForbidden = errors.New("registry: forbidden by policy")
+
+	// ErrNodeUpdateNotAllowed is the error returned when trying to update an existing node with unallowed changes.
+	ErrNodeUpdateNotAllowed = errors.New("registry: node update not allowed")
 )
 
 // Backend is a registry implementation.
@@ -369,6 +372,88 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, en
 	}
 
 	return &n, nil
+}
+
+// sortRuntimeList sorts the given runtime list to ensure a canonical order.
+func sortRuntimeList(runtimes []*node.Runtime) {
+	sort.Slice(runtimes, func(i, j int) bool {
+		return bytes.Compare(runtimes[i].ID, runtimes[j].ID) == -1
+	})
+}
+
+// verifyNodeRuntimeChanges verifies node runtime changes.
+func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes []*node.Runtime, newRuntimes []*node.Runtime) bool {
+	sortRuntimeList(currentRuntimes)
+	sortRuntimeList(newRuntimes)
+	if len(currentRuntimes) != len(newRuntimes) {
+		logger.Error("RegisterNode: trying to update runtimes, length missmatch",
+			"current_runtimes", currentRuntimes,
+			"new_runtimes", newRuntimes,
+		)
+		return false
+	}
+	for i, currentRuntime := range currentRuntimes {
+		newRuntime := newRuntimes[i]
+		if !currentRuntime.ID.Equal(newRuntime.ID) {
+			logger.Error("RegisterNode: trying to update runtimes, runtime ID changed",
+				"current_runtime", currentRuntime,
+				"new_runtime", newRuntime,
+			)
+			return false
+		}
+		if currentRuntime.Capabilities != newRuntime.Capabilities {
+			logger.Error("RegisterNode: trying to update runtimes, runtime Capabilities changed",
+				"current_runtime", currentRuntime,
+				"new_runtime", newRuntime,
+			)
+			return false
+		}
+	}
+	return true
+}
+
+// VerifyNodeUpdate verifies changes while updating the node.
+func VerifyNodeUpdate(logger *logging.Logger, currentNode *node.Node, newNode *node.Node) error {
+	// XXX: In future we might want to allow updating some of these fields as well. But these updates
+	//      should only happen after the epoch transition.
+	//      For now, node should un-register and re-register to update any of these fields.
+	if !currentNode.ID.Equal(newNode.ID) {
+		logger.Error("RegisterNode: trying to update node ID",
+			"current_id", currentNode.ID.String(),
+			"new_id", newNode.ID.String(),
+		)
+		return ErrNodeUpdateNotAllowed
+	}
+	if !currentNode.EntityID.Equal(newNode.EntityID) {
+		logger.Error("RegisterNode: trying to update node entity ID",
+			"current_id", currentNode.ID,
+			"new_id", newNode.ID,
+		)
+		return ErrNodeUpdateNotAllowed
+	}
+	if !verifyNodeRuntimeChanges(logger, currentNode.Runtimes, newNode.Runtimes) {
+		logger.Error("RegisterNode: trying to update node runtimes",
+			"current_runtimes", currentNode.Runtimes,
+			"new_runtimes", newNode.Runtimes,
+		)
+		return ErrNodeUpdateNotAllowed
+	}
+	if currentNode.Roles != newNode.Roles {
+		logger.Error("RegisterNode: trying to update node roles",
+			"current_roles", currentNode.Roles,
+			"new_roles", newNode.Roles,
+		)
+		return ErrNodeUpdateNotAllowed
+	}
+	if currentNode.RegistrationTime >= newNode.RegistrationTime {
+		logger.Error("RegisterNode: current node registration time greater than new",
+			"current_registration_time", currentNode.RegistrationTime,
+			"new_registration_time", newNode.RegistrationTime,
+		)
+		return ErrNodeUpdateNotAllowed
+	}
+
+	return nil
 }
 
 // VerifyRegisterRuntimeArgs verifies arguments for RegisterRuntime.
