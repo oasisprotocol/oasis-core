@@ -35,6 +35,30 @@ func (q *Quantity) UnmarshalBinary(data []byte) error {
 	tmp.SetBytes(data)
 	q.inner.Set(&tmp)
 
+	if !q.IsValid() {
+		return ErrInvalidArgument
+	}
+
+	return nil
+}
+
+// MarshalText encodes a Quantity into text form.
+func (q *Quantity) MarshalText() ([]byte, error) {
+	return q.inner.MarshalText()
+}
+
+// UnmarshalText decodes a text slice into a Quantity.
+func (q *Quantity) UnmarshalText(text []byte) error {
+	var tmp big.Int
+	if err := tmp.UnmarshalText(text); err != nil {
+		return err
+	}
+	q.inner.Set(&tmp)
+
+	if !q.IsValid() {
+		return ErrInvalidArgument
+	}
+
 	return nil
 }
 

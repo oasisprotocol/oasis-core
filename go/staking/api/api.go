@@ -4,7 +4,6 @@ package api
 import (
 	"context"
 	"errors"
-	"math/big"
 
 	wrerr "github.com/pkg/errors"
 
@@ -418,13 +417,8 @@ func NewGenesis(m map[string]string) (*Genesis, error) {
 			return nil, wrerr.New("staking: redundant initial account")
 		}
 
-		var tmp big.Int
-		if err := tmp.UnmarshalText([]byte(v)); err != nil {
-			return nil, wrerr.Wrap(err, "staking: malformed initial balance")
-		}
-
 		var initialBalance Quantity
-		if err := initialBalance.FromBigInt(&tmp); err != nil {
+		if err := initialBalance.UnmarshalText([]byte(v)); err != nil {
 			return nil, wrerr.Wrap(err, "staking: invalid initial balance")
 		}
 
