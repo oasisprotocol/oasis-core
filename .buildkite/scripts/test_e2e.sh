@@ -78,8 +78,7 @@ scenario_compute_discrepancy() {
 assert_compute_discrepancy_scenario_works() {
     assert_no_panics
     assert_no_round_timeouts
-    # TODO: this will need to be fixed in #1748 anyway, so leverage that fix.
-    # assert_compute_discrepancies
+    assert_compute_discrepancies
 }
 
 scenario_merge_discrepancy() {
@@ -107,8 +106,7 @@ assert_merge_discrepancy_scenario_works() {
     assert_no_panics
     assert_no_round_timeouts
     assert_no_compute_discrepancies
-    # TODO: this will need to be fixed in #1748 anyway, so leverage that fix.
-    # assert_merge_discrepancies
+    assert_merge_discrepancies
 }
 
 run_client_km_restart() {
