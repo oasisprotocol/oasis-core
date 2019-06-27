@@ -83,7 +83,7 @@ func (t *Backend) WatchBeacons() (<-chan *api.GenerateEvent, *pubsub.Subscriptio
 // GetBeaconABCI gets the beacon for the provided epoch.
 func (t *Backend) GetBeaconABCI(ctx *abci.Context, tree *iavl.MutableTree, epoch epochtime.EpochTime) ([]byte, error) {
 	state := app.NewMutableState(tree)
-	return state.GetBeacon(epoch)
+	return state.GetBeacon()
 }
 
 func (t *Backend) getCached(epoch epochtime.EpochTime) []byte {

@@ -8,7 +8,6 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 
 	"github.com/tendermint/iavl"
 
@@ -25,12 +24,9 @@ const BackendName = "insecure"
 
 var (
 	_ api.Backend      = (*insecureDummy)(nil)
-	_ api.BlockBackend = (*insecureDummy)(nil)
 	_ tmbeacon.Backend = (*insecureDummy)(nil)
 
 	dummyContext = []byte("EkB-Dumm")
-
-	errIncompatibleBackend = errors.New("beacon/insecure: incompatible backend for block operations")
 )
 
 type insecureDummy struct {
@@ -52,7 +48,13 @@ func (r *insecureDummy) computeBeacon(epoch epochtime.EpochTime) [32]byte {
 	return sha512.Sum512_256(seed)
 }
 
-func (r *insecureDummy) GetBeacon(ctx context.Context, epoch epochtime.EpochTime) ([]byte, error) {
+func (r *insecureDummy) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
+	// Calling GetEpoch with height `0` will return the epoch of the latest block.
+	epoch, err := r.timeSource.GetEpoch(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
 	ret := r.computeBeacon(epoch)
 	return ret[:], nil
 }
@@ -63,20 +65,6 @@ func (r *insecureDummy) WatchBeacons() (<-chan *api.GenerateEvent, *pubsub.Subsc
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
-}
-
-func (r *insecureDummy) GetBlockBeacon(ctx context.Context, height int64) ([]byte, error) {
-	blockTimeSource, ok := r.timeSource.(epochtime.BlockBackend)
-	if !ok {
-		return nil, errIncompatibleBackend
-	}
-
-	epoch, err := blockTimeSource.GetBlockEpoch(ctx, height)
-	if err != nil {
-		return nil, err
-	}
-
-	return r.GetBeacon(ctx, epoch)
 }
 
 // GetBeaconABCI gets the beacon for the provided epoch.
@@ -104,7 +92,8 @@ func (r *insecureDummy) worker(ctx context.Context) {
 			continue
 		}
 
-		b, _ := r.GetBeacon(ctx, newEpoch)
+		beaconArray := r.computeBeacon(newEpoch)
+		b := beaconArray[:]
 
 		r.logger.Debug("worker: generated beacon",
 			"epoch", newEpoch,
