@@ -30,7 +30,7 @@ type beaconApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.BlockBackend
+	timeSource epochtime.Backend
 }
 
 func (app *beaconApplication) Name() string {
@@ -53,7 +53,7 @@ func (app *beaconApplication) OnRegister(state *abci.ApplicationState, queryRout
 	app.state = state
 
 	// Register query handlers.
-	queryRouter.AddRoute(QueryGetBeacon, api.QueryGetByEpochRequest{}, app.queryGetBeacon)
+	queryRouter.AddRoute(QueryGetBeacon, nil, app.queryGetBeacon)
 }
 
 func (app *beaconApplication) OnCleanup() {
@@ -104,9 +104,8 @@ func (app *beaconApplication) FireTimer(ctx *abci.Context, t *abci.Timer) {
 }
 
 func (app *beaconApplication) queryGetBeacon(s interface{}, r interface{}) ([]byte, error) {
-	request := r.(*api.QueryGetByEpochRequest)
 	state := s.(*immutableState)
-	return state.GetBeacon(request.Epoch)
+	return state.GetBeacon()
 }
 
 func (app *beaconApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
@@ -163,7 +162,7 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, event *beacon.Gener
 }
 
 // New constructs a new beacon application instance.
-func New(timeSource epochtime.BlockBackend) abci.Application {
+func New(timeSource epochtime.Backend) abci.Application {
 	return &beaconApplication{
 		logger:     logging.GetLogger("tendermint/beacon"),
 		timeSource: timeSource,

@@ -96,7 +96,8 @@ func testQueueCall(
 	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)
 
 	select {
-	case blk := <-blocksCh:
+	case annBlk := <-blocksCh:
+		blk := annBlk.Block
 		// Check that correct block was generated.
 		require.EqualValues(t, block.Normal, blk.Header.HeaderType)
 

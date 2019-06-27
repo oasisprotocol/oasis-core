@@ -48,8 +48,7 @@ var (
 		registryRuntimes,
 	}
 
-	_ api.Backend      = (*metricsWrapper)(nil)
-	_ api.BlockBackend = (*blockMetricsWrapper)(nil)
+	_ api.Backend = (*metricsWrapper)(nil)
 
 	metricsOnce sync.Once
 )
@@ -98,6 +97,14 @@ func (w *metricsWrapper) RegisterRuntime(ctx context.Context, sigCon *api.Signed
 	return nil
 }
 
+func (w *metricsWrapper) GetNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
+	return w.Backend.GetNodeList(ctx, height)
+}
+
+func (w *metricsWrapper) GetRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
+	return w.Backend.GetRuntimes(ctx, height)
+}
+
 func (w *metricsWrapper) Cleanup() {
 	w.closeOnce.Do(func() {
 		close(w.closeCh)
@@ -142,19 +149,6 @@ func (w *metricsWrapper) updatePeriodicMetrics(ctx context.Context) {
 	}
 }
 
-type blockMetricsWrapper struct {
-	*metricsWrapper
-	blockBackend api.BlockBackend
-}
-
-func (w *blockMetricsWrapper) GetBlockNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
-	return w.blockBackend.GetBlockNodeList(ctx, height)
-}
-
-func (w *blockMetricsWrapper) GetBlockRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
-	return w.blockBackend.GetBlockRuntimes(ctx, height)
-}
-
 func newMetricsWrapper(ctx context.Context, base api.Backend) api.Backend {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(registeryCollectors...)
@@ -171,14 +165,6 @@ func newMetricsWrapper(ctx context.Context, base api.Backend) api.Backend {
 
 	wrapper.updatePeriodicMetrics(ctx)
 	go wrapper.worker(ctx)
-
-	blockBackend, ok := base.(api.BlockBackend)
-	if ok {
-		return &blockMetricsWrapper{
-			metricsWrapper: wrapper,
-			blockBackend:   blockBackend,
-		}
-	}
 
 	return wrapper
 }

@@ -11,7 +11,6 @@ import (
 
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry/api"
-	"github.com/oasislabs/ekiden/go/registry/memory"
 	"github.com/oasislabs/ekiden/go/registry/tendermint"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
@@ -26,8 +25,6 @@ func New(ctx context.Context, timeSource epochtime.Backend, tmService service.Te
 	var err error
 
 	switch strings.ToLower(backend) {
-	case memory.BackendName:
-		impl = memory.New(ctx, timeSource)
 	case tendermint.BackendName:
 		impl, err = tendermint.New(ctx, timeSource, tmService)
 	default:
@@ -44,7 +41,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, tmService service.Te
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, memory.BackendName, "Registry backend")
+		cmd.Flags().String(cfgBackend, tendermint.BackendName, "Registry backend")
 	}
 
 	for _, v := range []string{

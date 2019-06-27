@@ -12,7 +12,6 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
-	tmbeacon "github.com/oasislabs/ekiden/go/beacon/tendermint"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -56,8 +55,8 @@ type rootHashApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.BlockBackend
-	scheduler  scheduler.BlockBackend
+	timeSource epochtime.Backend
+	scheduler  scheduler.Backend
 	beacon     beacon.Backend
 
 	roundTimeout time.Duration
@@ -176,18 +175,9 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		}
 	}
 
-	// Explicitly query the beacon for the epoch.
-	var getBeaconFn scheduler.GetBeaconFunc
-	switch app.beacon.(type) {
-	case *tmbeacon.Backend:
-		getBeaconFn = func() ([]byte, error) {
-			beaconState := beaconapp.NewMutableState(tree)
-			return beaconState.GetBeacon(epoch)
-		}
-	default:
-		getBeaconFn = func() ([]byte, error) {
-			return app.beacon.GetBeacon(app.ctx, epoch)
-		}
+	getBeaconFn := func() ([]byte, error) {
+		beaconState := beaconapp.NewMutableState(tree)
+		return beaconState.GetBeacon()
 	}
 
 	for _, rtState := range state.getRuntimes() {
@@ -200,7 +190,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			continue
 		}
 
-		committees, err := app.scheduler.GetBlockCommittees(app.ctx, rtID, app.state.BlockHeight(), getBeaconFn)
+		committees, err := app.scheduler.GetCommittees(app.ctx, rtID, app.state.BlockHeight(), getBeaconFn)
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get committees from scheduler",
 				"err", err,
@@ -800,8 +790,8 @@ func (app *rootHashApplication) tryFinalizeMerge(
 // New constructs a new roothash application instance.
 func New(
 	ctx context.Context,
-	timeSource epochtime.BlockBackend,
-	scheduler scheduler.BlockBackend,
+	timeSource epochtime.Backend,
+	scheduler scheduler.Backend,
 	beacon beacon.Backend,
 	roundTimeout time.Duration,
 ) abci.Application {

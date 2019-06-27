@@ -80,9 +80,9 @@ func (s *grpcServer) WatchBlocks(req *pbClient.WatchBlocksRequest, stream pbClie
 				return nil
 			}
 
-			blockHash := blk.Header.EncodedHash()
+			blockHash := blk.Block.Header.EncodedHash()
 			pbBlk := &pbClient.WatchBlocksResponse{
-				Block:     blk.MarshalCBOR(),
+				Block:     blk.Block.MarshalCBOR(),
 				BlockHash: blockHash[:],
 			}
 			if err := stream.Send(pbBlk); err != nil {

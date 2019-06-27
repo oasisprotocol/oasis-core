@@ -49,6 +49,7 @@ message RuntimeResponse {
 }
 
 message RuntimesRequest {
+    int64 height = 1;
 }
 
 message RuntimesResponse {

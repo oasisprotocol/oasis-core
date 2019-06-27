@@ -31,14 +31,17 @@ var (
 		rootHashBlockInterval,
 	}
 
-	_ api.Backend      = (*metricsWrapper)(nil)
-	_ api.BlockBackend = (*blockMetricsWrapper)(nil)
+	_ api.Backend = (*metricsWrapper)(nil)
 
 	metricsOnce sync.Once
 )
 
 type metricsWrapper struct {
 	api.Backend
+}
+
+func (w *metricsWrapper) WatchBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
+	return w.Backend.WatchBlocks(id)
 }
 
 func (w *metricsWrapper) worker() {
@@ -68,15 +71,6 @@ func (w *metricsWrapper) worker() {
 	}
 }
 
-type blockMetricsWrapper struct {
-	*metricsWrapper
-	blockBackend api.BlockBackend
-}
-
-func (w *blockMetricsWrapper) WatchAnnotatedBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
-	return w.blockBackend.WatchAnnotatedBlocks(id)
-}
-
 func newMetricsWrapper(base api.Backend) api.Backend {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(rootHashCollectors...)
@@ -84,14 +78,6 @@ func newMetricsWrapper(base api.Backend) api.Backend {
 
 	w := &metricsWrapper{Backend: base}
 	go w.worker()
-
-	blockBackend, ok := base.(api.BlockBackend)
-	if ok {
-		return &blockMetricsWrapper{
-			metricsWrapper: w,
-			blockBackend:   blockBackend,
-		}
-	}
 
 	return w
 }

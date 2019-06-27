@@ -89,10 +89,10 @@ func (s *Service) worker() {
 				)
 				continue
 			}
-		case blk := <-blocksCh:
+		case annBlk := <-blocksCh:
 			// New blocks to index.
 			var tags []runtime.Tag
-
+			blk := annBlk.Block
 			// Fetch tags from storage.
 			if !blk.Header.IORoot.IsEmpty() {
 				ctx, cancel := context.WithTimeout(context.TODO(), storageTimeout)

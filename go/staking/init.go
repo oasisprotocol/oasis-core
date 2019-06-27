@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/staking/api"
-	"github.com/oasislabs/ekiden/go/staking/memory"
 	"github.com/oasislabs/ekiden/go/staking/tendermint"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
@@ -38,8 +37,6 @@ func New(ctx context.Context, tmService service.TendermintService) (api.Backend,
 	}
 
 	switch strings.ToLower(backend) {
-	case memory.BackendName:
-		impl, err = memory.New(debugGenesisState)
 	case tendermint.BackendName:
 		impl, err = tendermint.New(ctx, debugGenesisState, tmService)
 	default:
@@ -52,7 +49,7 @@ func New(ctx context.Context, tmService service.TendermintService) (api.Backend,
 // RegisterFlags registers the configuration flags with the provided command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, memory.BackendName, "Staking backend")
+		cmd.Flags().String(cfgBackend, tendermint.BackendName, "Staking backend")
 
 		// cfgDebugGenesisState isn't for anything but test cases.
 		cmd.Flags().StringToString(cfgDebugGenesisState, nil, "(Debug only) Staking genesis state")

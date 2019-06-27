@@ -37,8 +37,7 @@ const (
 )
 
 var (
-	_ api.Backend      = (*tendermintBackend)(nil)
-	_ api.BlockBackend = (*tendermintBackend)(nil)
+	_ api.Backend = (*tendermintBackend)(nil)
 )
 
 type runtimeBrokers struct {
@@ -115,17 +114,7 @@ func (r *tendermintBackend) GetBlock(ctx context.Context, id signature.PublicKey
 	return r.getLatestBlockAt(id, height)
 }
 
-func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error) {
-	annCh, sub, err := r.WatchAnnotatedBlocks(id)
-	if err != nil {
-		return nil, nil, err
-	}
-	ch := api.MapAnnotatedBlockToBlock(annCh)
-
-	return ch, sub, nil
-}
-
-func (r *tendermintBackend) WatchAnnotatedBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
+func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
 	notifiers := r.getRuntimeNotifiers(id)
 
 	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
@@ -134,7 +123,6 @@ func (r *tendermintBackend) WatchAnnotatedBlocks(id signature.PublicKey) (<-chan
 		// WatchBlocksSince.
 		notifiers.Lock()
 		defer notifiers.Unlock()
-
 		if notifiers.lastBlock != nil {
 			ch.In() <- &api.AnnotatedBlock{
 				Height: notifiers.lastBlockHeight,
@@ -406,20 +394,8 @@ func New(
 	service service.TendermintService,
 	roundTimeout time.Duration,
 ) (api.Backend, error) {
-	// We can only work with a block-based epochtime.
-	blockTimeSource, ok := timeSource.(epochtime.BlockBackend)
-	if !ok {
-		return nil, errors.New("roothash/tendermint: need a block-based epochtime backend")
-	}
-
-	// We can only work with a block-based scheduler.
-	blockScheduler, ok := sched.(scheduler.BlockBackend)
-	if !ok {
-		return nil, errors.New("roothash/tendermint: need a block-based scheduler backend")
-	}
-
 	// Initialize and register the tendermint service component.
-	app := app.New(ctx, blockTimeSource, blockScheduler, beac, roundTimeout)
+	app := app.New(ctx, timeSource, sched, beac, roundTimeout)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

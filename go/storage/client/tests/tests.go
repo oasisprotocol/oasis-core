@@ -1,40 +1,41 @@
-package client
+package tests
 
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/ekiden/go/beacon/insecure"
+	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/epochtime/mock"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
-	"github.com/oasislabs/ekiden/go/registry/memory"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	registryTests "github.com/oasislabs/ekiden/go/registry/tests"
-	"github.com/oasislabs/ekiden/go/scheduler/trivial"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
+	"github.com/oasislabs/ekiden/go/storage/api"
+	storageClient "github.com/oasislabs/ekiden/go/storage/client"
 )
 
-func TestClientWorker(t *testing.T) {
+// ClientWorkerTests implements tests for client worker
+func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource epochtime.SetableBackend, registry registry.Backend, scheduler scheduler.Backend) {
 	ctx := context.Background()
 	require := require.New(t)
 	seed := []byte("StorageClientTests")
 
-	timeSource := mock.New()
-	beacon := insecure.New(ctx, timeSource)
-	registry := memory.New(ctx, timeSource)
-	scheduler := trivial.New(ctx, timeSource, registry, beacon, nil)
 	// Populate registry
 	rt, err := registryTests.NewTestRuntime(seed, nil)
 	require.NoError(err, "NewTestRuntime")
 	// Populate the registry with an entity and nodes.
 	nodes := rt.Populate(t, registry, rt, seed)
+
 	rt.MustRegister(t, registry)
 	// Initialize storage client
-	client, err := New(ctx, timeSource, scheduler, registry)
+	client, err := storageClient.New(ctx, scheduler, registry)
 	require.NoError(err, "NewStorageClient")
 	// Create mock root hash and id hash for GetValue().
 	var root, id hash.Hash
@@ -43,7 +44,7 @@ func TestClientWorker(t *testing.T) {
 
 	// Storage should not yet be available
 	r, err := client.GetValue(ctx, root, id)
-	require.EqualError(err, ErrStorageNotAvailable.Error(), "storage client get before initialization")
+	require.EqualError(err, storageClient.ErrStorageNotAvailable.Error(), "storage client get before initialization")
 	require.Nil(r, "result should be nil")
 
 	// Advance the epoch.
@@ -52,7 +53,10 @@ func TestClientWorker(t *testing.T) {
 	// Wait for initialization
 	<-client.Initialized()
 
-	connectedNodes := client.(*storageClientBackend).GetConnectedNodes()
+	// Need to wait a bit for client to update with newly populated nodes.
+	time.Sleep(5 * time.Second)
+
+	connectedNodes := client.(api.ClientBackend).GetConnectedNodes()
 	// NOTE: This number will change if the StorageGroupSize in
 	/// registryTests.NewTestRuntime() changes.
 	require.Equal(len(connectedNodes), 3, "storage client should be connected to all storage nodes")
@@ -71,4 +75,6 @@ func TestClientWorker(t *testing.T) {
 		}
 	}
 	require.ElementsMatch(scheduledStorageNodes, connectedNodes, "storage client should be connected to all scheduled storage nodes (and only to them)")
+
+	rt.Cleanup(t, registry)
 }

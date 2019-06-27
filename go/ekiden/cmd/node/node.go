@@ -145,7 +145,7 @@ func (n *Node) initBackends() error {
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Scheduler, "scheduler backend")
 
-	if n.Storage, err = storage.New(n.svcMgr.Ctx, dataDir, n.Epochtime, n.Scheduler, n.Registry, n.Identity.NodeKey); err != nil {
+	if n.Storage, err = storage.New(n.svcMgr.Ctx, dataDir, n.Scheduler, n.Registry, n.Identity.NodeKey); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")

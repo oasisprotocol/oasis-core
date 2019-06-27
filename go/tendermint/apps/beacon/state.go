@@ -6,11 +6,10 @@ import (
 	"github.com/tendermint/iavl"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
-const stateBeaconsMap = "beacon/beacons/%d"
+const stateBeacon = "beacon/beacon"
 
 type immutableState struct {
 	*abci.ImmutableState
@@ -26,8 +25,8 @@ func newImmutableState(state *abci.ApplicationState, version int64) (*immutableS
 }
 
 // GetBeacon gets the beacon for the node.
-func (s *immutableState) GetBeacon(epoch epochtime.EpochTime) ([]byte, error) {
-	_, b := s.Snapshot.Get([]byte(fmt.Sprintf(stateBeaconsMap, epoch)))
+func (s *immutableState) GetBeacon() ([]byte, error) {
+	_, b := s.Snapshot.Get([]byte(stateBeacon))
 	if b == nil {
 		return nil, beacon.ErrBeaconNotAvailable
 	}
@@ -47,13 +46,8 @@ func (s *MutableState) setBeacon(event *beacon.GenerateEvent) error {
 		return fmt.Errorf("tendermint/beacon: unexpected beacon size: %d", l)
 	}
 
-	// Keep a few beacons around.
-	if event.Epoch > 2 {
-		s.tree.Remove([]byte(fmt.Sprintf(stateBeaconsMap, event.Epoch-2)))
-	}
-
 	s.tree.Set(
-		[]byte(fmt.Sprintf(stateBeaconsMap, event.Epoch)),
+		[]byte(stateBeacon),
 		event.Beacon,
 	)
 

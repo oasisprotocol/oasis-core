@@ -5,13 +5,13 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
-
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
 
 var (
@@ -77,19 +77,19 @@ func (s *Receipt) UnmarshalCBOR(data []byte) error {
 
 // NodeID is a root-relative node identifier which uniquely identifies
 // a node under a given root.
-type NodeID = node.ID
+type NodeID = urkelNode.ID
 
 // Node is either an InternalNode or a LeafNode.
-type Node = node.Node
+type Node = urkelNode.Node
 
 // Pointer is a pointer to another node.
-type Pointer = node.Pointer
+type Pointer = urkelNode.Pointer
 
 // InternalNode is an internal node with two children.
-type InternalNode = node.InternalNode
+type InternalNode = urkelNode.InternalNode
 
 // LeafNode is a leaf node containing a key/value pair.
-type LeafNode = node.LeafNode
+type LeafNode = urkelNode.LeafNode
 
 // SubtreeIndex is a subtree index.
 type SubtreeIndex = syncer.SubtreeIndex
@@ -144,6 +144,14 @@ type Backend interface {
 	// Initialized returns a channel that will be closed when the
 	// backend is initialized and ready to service requests.
 	Initialized() <-chan struct{}
+}
+
+// ClientBackend is a storage client backend implementation.
+type ClientBackend interface {
+	Backend
+
+	// GetConnectedNodes returns currently connected storage nodes.
+	GetConnectedNodes() []*node.Node
 }
 
 // Genesis is the storage genesis state.
