@@ -154,7 +154,7 @@ type Backend interface {
 	// for querying the beacon for a given epoch/block height.
 	//
 	// Iff the callback is nil, `beacon.GetBlockBeacon` will be used.
-	GetCommittees(context.Context, signature.PublicKey, int64, GetBeaconFunc) ([]*Committee, error)
+	GetCommittees(context.Context, signature.PublicKey, int64) ([]*Committee, error)
 
 	// WatchCommittees returns a channel that produces a stream of
 	// Committee.
