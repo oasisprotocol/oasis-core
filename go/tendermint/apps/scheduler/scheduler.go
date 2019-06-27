@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -30,6 +31,8 @@ var (
 	rngContextStorage              = []byte("EkS-ABCI-Storage")
 	rngContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
 	rngContextMerge                = []byte("EkS-ABCI-Merge")
+
+	errUnexpectedTransaction = errors.New("scheduler: unexpected transaction")
 )
 
 type schedulerApplication struct {
@@ -71,7 +74,7 @@ func (app *schedulerApplication) SetOption(req types.RequestSetOption) types.Res
 }
 
 func (app *schedulerApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	return nil
+	return errUnexpectedTransaction
 }
 
 func (app *schedulerApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
@@ -127,7 +130,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 }
 
 func (app *schedulerApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
-	return nil
+	return errUnexpectedTransaction
 }
 
 func (app *schedulerApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
