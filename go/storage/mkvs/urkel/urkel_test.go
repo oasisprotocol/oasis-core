@@ -274,7 +274,7 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 
 	require.Equal(t, 0, stats.SubtreeFetches, "subtree fetches (no prefetch)")
 	require.Equal(t, 0, stats.NodeFetches, "node fetches (no prefetch)")
-	require.Equal(t, 1216, stats.PathFetches, "path fetches (no prefetch)")
+	require.Equal(t, 558, stats.PathFetches, "path fetches (no prefetch)")
 	require.Equal(t, 0, stats.ValueFetches, "value fetches (no prefetch)")
 
 	stats = syncer.NewStatsCollector(tree)
@@ -289,7 +289,7 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 
 	require.Equal(t, 1, stats.SubtreeFetches, "subtree fetches (with prefetch)")
 	require.Equal(t, 0, stats.NodeFetches, "node fetches (with prefetch)")
-	require.Equal(t, 710, stats.PathFetches, "path fetches (no prefetch)")
+	require.Equal(t, 416, stats.PathFetches, "path fetches (no prefetch)")
 	require.Equal(t, 0, stats.ValueFetches, "value fetches (with prefetch)")
 }
 
