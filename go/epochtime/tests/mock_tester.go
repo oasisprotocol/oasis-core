@@ -22,7 +22,7 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 	require.Implements((*api.SetableBackend)(nil), backend, "epoch time backend is mock")
 	timeSource := (backend).(api.SetableBackend)
 
-	epoch, err := timeSource.GetEpoch(context.Background())
+	epoch, err := timeSource.GetEpoch(context.Background(), 0)
 	require.NoError(err, "GetEpoch")
 
 	var e api.EpochTime
@@ -47,7 +47,7 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 		t.Fatalf("failed to receive epoch notification after transition")
 	}
 
-	e, err = timeSource.GetEpoch(context.Background())
+	e, err = timeSource.GetEpoch(context.Background(), 0)
 	require.NoError(err, "GetEpoch after set")
 	require.Equal(epoch, e, "GetEpoch after set, epoch")
 }
@@ -57,7 +57,7 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 func MustAdvanceEpoch(t *testing.T, backend api.SetableBackend, increment uint64) api.EpochTime {
 	require := require.New(t)
 
-	epoch, err := backend.GetEpoch(context.Background())
+	epoch, err := backend.GetEpoch(context.Background(), 0)
 	require.NoError(err, "GetEpoch")
 
 	epoch = epoch + api.EpochTime(increment)

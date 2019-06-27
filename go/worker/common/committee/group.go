@@ -198,11 +198,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	// Request committees from scheduler.
 	var committees []*scheduler.Committee
 	var err error
-	if sched, ok := g.scheduler.(scheduler.BlockBackend); ok {
-		committees, err = sched.GetBlockCommittees(ctx, g.runtimeID, height)
-	} else {
-		committees, err = g.scheduler.GetCommittees(ctx, g.runtimeID)
-	}
+	committees, err = g.scheduler.GetCommittees(ctx, g.runtimeID, height)
 	if err != nil {
 		return err
 	}

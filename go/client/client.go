@@ -269,7 +269,7 @@ func (c *Client) IsSynced(ctx context.Context) (bool, error) {
 }
 
 // WatchBlocks subscribes to blocks for the given runtime.
-func (c *Client) WatchBlocks(ctx context.Context, runtimeID signature.PublicKey) (<-chan *block.Block, *pubsub.Subscription, error) {
+func (c *Client) WatchBlocks(ctx context.Context, runtimeID signature.PublicKey) (<-chan *roothash.AnnotatedBlock, *pubsub.Subscription, error) {
 	return c.common.roothash.WatchBlocks(runtimeID)
 }
 

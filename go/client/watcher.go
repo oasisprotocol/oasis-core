@@ -7,10 +7,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/service"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
@@ -52,13 +50,7 @@ type blockWatcher struct {
 }
 
 func (w *blockWatcher) refreshCommittee(height int64) error {
-	var committees []*scheduler.Committee
-	var err error
-	if sched, ok := w.common.scheduler.(scheduler.BlockBackend); ok {
-		committees, err = sched.GetBlockCommittees(w.common.ctx, w.id, height)
-	} else {
-		committees, err = w.common.scheduler.GetCommittees(w.common.ctx, w.id)
-	}
+	committees, err := w.common.scheduler.GetCommittees(w.common.ctx, w.id, height)
 	if err != nil {
 		return err
 	}
@@ -166,21 +158,11 @@ func (w *blockWatcher) watch() {
 		w.BaseBackgroundService.Stop()
 	}()
 
-	// Start watching roothash blocks.
-	var blocksAnn <-chan *roothash.AnnotatedBlock
-	var blocksPlain <-chan *block.Block
-	var blocksSub *pubsub.Subscription
-	var err error
-
 	// If we were just started, refresh the committee information from any
 	// block, otherwise just from epoch transition blocks.
 	gotFirstBlock := false
-
-	if rh, ok := w.common.roothash.(roothash.BlockBackend); ok {
-		blocksAnn, blocksSub, err = rh.WatchAnnotatedBlocks(w.id)
-	} else {
-		blocksPlain, blocksSub, err = w.common.roothash.WatchBlocks(w.id)
-	}
+	// Start watching roothash blocks.
+	blocks, blocksSub, err := w.common.roothash.WatchBlocks(w.id)
 	if err != nil {
 		w.Logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
@@ -195,13 +177,9 @@ func (w *blockWatcher) watch() {
 
 		// Wait for stuff to happen.
 		select {
-		case blk := <-blocksAnn:
+		case blk := <-blocks:
 			current = blk.Block
 			height = blk.Height
-
-		case blk := <-blocksPlain:
-			current = blk
-			height = 0
 
 		case newWatch := <-w.newCh:
 			w.watched[*newWatch.id] = newWatch

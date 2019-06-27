@@ -26,6 +26,7 @@ import (
 	schedulerTests "github.com/oasislabs/ekiden/go/scheduler/tests"
 	stakingTests "github.com/oasislabs/ekiden/go/staking/tests"
 	storageClient "github.com/oasislabs/ekiden/go/storage/client"
+	storageClientTests "github.com/oasislabs/ekiden/go/storage/client/tests"
 	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
 	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
 	computeWorkerTests "github.com/oasislabs/ekiden/go/worker/compute/tests"
@@ -321,6 +322,10 @@ func testStorageClient(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 	ctx := context.Background()
 
+	// Storage client tests.
+	storageClientTests.ClientWorkerTests(t, node.Beacon, timeSource, node.Registry, node.Scheduler)
+
+	// Client storage implementation tests.
 	config := []struct {
 		key   string
 		value interface{}
@@ -331,10 +336,8 @@ func testStorageClient(t *testing.T, node *testNode) {
 	for _, kv := range config {
 		viper.Set(kv.key, kv.value)
 	}
-
-	debugClient, err := storageClient.New(ctx, timeSource, nil, nil)
+	debugClient, err := storageClient.New(ctx, nil, nil)
 	require.NoError(t, err, "NewDebugStorageClient")
-
 	storageTests.StorageImplementationTests(t, debugClient)
 }
 

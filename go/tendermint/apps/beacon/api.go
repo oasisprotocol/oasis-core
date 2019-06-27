@@ -3,7 +3,7 @@ package beacon
 import "github.com/oasislabs/ekiden/go/tendermint/api"
 
 const (
-	// TransactionTag is a unique byte used to identfy transactions
+	// TransactionTag is a unique byte used to identify transactions
 	// for the beacon application.
 	TransactionTag byte = 0x04
 

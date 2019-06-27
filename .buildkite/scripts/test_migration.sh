@@ -94,7 +94,7 @@ test_migration() {
     run_compute_node 1 ${runtime} &>/dev/null
     run_storage_node 1 clear_storage=0 &>/dev/null
     # Wait for all nodes to start: 1 compute + 1 storage + key manager.
-    wait_nodes 2
+    wait_nodes 3
 
     set_epoch 2
 

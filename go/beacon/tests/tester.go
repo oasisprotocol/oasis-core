@@ -20,7 +20,7 @@ const recvTimeout = 1 * time.Second
 func BeaconImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend) {
 	require := require.New(t)
 
-	epoch, err := epochtime.GetEpoch(context.Background())
+	epoch, err := epochtime.GetEpoch(context.Background(), 0)
 	require.NoError(err, "GetEpoch")
 
 	ch, sub := backend.WatchBeacons()
@@ -38,7 +38,7 @@ recvLoop:
 			require.Len(ev.Beacon, api.BeaconSize, "WatchBeacons - length")
 
 			var b []byte
-			b, err = backend.GetBeacon(context.Background(), epoch)
+			b, err = backend.GetBeacon(context.Background(), 0)
 			require.NoError(err, "GetBeacon")
 			require.Equal(b, ev.Beacon, "GetBeacon - beacon")
 			break recvLoop

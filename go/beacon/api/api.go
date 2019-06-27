@@ -18,24 +18,15 @@ const BeaconSize = 32
 
 // Backend is a random beacon implementation.
 type Backend interface {
-	// GetBeacon gets the beacon for the provided epoch.
-	GetBeacon(context.Context, epochtime.EpochTime) ([]byte, error)
+	// GetBeacon gets the beacon for the provided block height.
+	// Calling this method with height `0`, should return the
+	// beacon for latest known block.
+	GetBeacon(context.Context, int64) ([]byte, error)
 
 	// WatchBeacons returns a channel that produces a stream of
 	// GenerateEvent.  Upon subscription, the most recently generate
 	// beacon will be sent immediately if available.
 	WatchBeacons() (<-chan *GenerateEvent, *pubsub.Subscription)
-}
-
-// BlockBackend is a Backend that is backed by a blockchain.
-type BlockBackend interface {
-	Backend
-
-	// GetBlockBeacon gets the beacon for the provided block height
-	// iff it exists.  Calling this routine after the epoch
-	// notification when an appropriate timesource is used should
-	// be generally safe.
-	GetBlockBeacon(context.Context, int64) ([]byte, error)
 }
 
 // GenerateEvent is the event that is returned via WatchBeacons to

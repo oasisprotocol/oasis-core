@@ -763,7 +763,7 @@ func (s *ApplicationState) BlockHeight() int64 {
 	return s.blockHeight
 }
 
-// BlockHash returns the last commited block hash.
+// BlockHash returns the last committed block hash.
 func (s *ApplicationState) BlockHash() []byte {
 	s.blockLock.RLock()
 	defer s.blockLock.RUnlock()
@@ -788,20 +788,20 @@ func (s *ApplicationState) CheckTxTree() *iavl.MutableTree {
 // EpochChanged returns true iff the current epoch has changed since the
 // last block.  As a matter of convenience, the current epoch is returned
 // iff it has changed.
-func (s *ApplicationState) EpochChanged(timeSource epochtime.BlockBackend) (bool, epochtime.EpochTime) {
+func (s *ApplicationState) EpochChanged(timeSource epochtime.Backend) (bool, epochtime.EpochTime) {
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
 		return false, epochtime.EpochInvalid
 	}
 
-	previousEpoch, err := timeSource.GetBlockEpoch(s.ctx, blockHeight-1)
+	previousEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight-1)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get previous epoch",
 			"err", err,
 		)
 		return false, epochtime.EpochInvalid
 	}
-	currentEpoch, err := timeSource.GetBlockEpoch(s.ctx, blockHeight)
+	currentEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get current epoch",
 			"err", err,

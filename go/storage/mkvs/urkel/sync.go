@@ -140,7 +140,7 @@ func (t *Tree) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, start
 	}
 
 	st := &syncer.Subtree{}
-	rootPtr, err := t.doGetPath(ctx, subtreeRoot, startDepth, key, st)
+	rootPtr, err := t.doGetPath(ctx, subtreeRoot, startDepth, key, false, st)
 	if err != nil {
 		return nil, errors.Wrap(err, "urkel: failed to get path")
 	}
@@ -157,6 +157,7 @@ func (t *Tree) doGetPath(
 	ptr *node.Pointer,
 	depth uint8,
 	key hash.Hash,
+	offPath bool,
 	st *syncer.Subtree,
 ) (syncer.SubtreePointer, error) {
 	// Abort in case the context is cancelled.
@@ -174,7 +175,7 @@ func (t *Tree) doGetPath(
 		return syncer.SubtreePointer{Index: syncer.InvalidSubtreeIndex, Valid: true}, nil
 	}
 
-	if !getKeyBit(key, depth) {
+	if offPath {
 		// Off-path nodes are always full nodes.
 		idx, err := st.AddFullNode(nd.Extract())
 		if err != nil {
@@ -187,16 +188,18 @@ func (t *Tree) doGetPath(
 	case *node.InternalNode:
 		// Record internal node summary.
 		s := syncer.InternalNodeSummary{}
+		// Determine which subtree is off-path.
+		bit := getKeyBit(key, depth)
 
 		// Left subtree.
-		leftPtr, err := t.doGetPath(ctx, n.Left, depth+1, key, st)
+		leftPtr, err := t.doGetPath(ctx, n.Left, depth+1, key, bit, st)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
 		s.Left = leftPtr
 
 		// Right subtree.
-		rightPtr, err := t.doGetPath(ctx, n.Right, depth+1, key, st)
+		rightPtr, err := t.doGetPath(ctx, n.Right, depth+1, key, !bit, st)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}

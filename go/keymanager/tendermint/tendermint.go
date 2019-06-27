@@ -135,13 +135,7 @@ func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 // New constructs a new tendermint backed key manager management Backend
 // instance.
 func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
-	// We can only work with a block-based epochtime.
-	blockTimeSource, ok := timeSource.(epochtime.BlockBackend)
-	if !ok {
-		return nil, errors.New("keymanager/tendermint: need a block-based epochtime backend")
-	}
-
-	app := app.New(blockTimeSource)
+	app := app.New(timeSource)
 	if err := service.RegisterApplication(app, []string{registryapp.AppName}); err != nil {
 		return nil, errors.Wrap(err, "keymanager/tendermint: failed to register app")
 	}

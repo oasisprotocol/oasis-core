@@ -55,7 +55,7 @@ type rootHashApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.BlockBackend
+	timeSource epochtime.Backend
 	beacon     beacon.Backend
 
 	roundTimeout time.Duration
@@ -775,7 +775,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 // New constructs a new roothash application instance.
 func New(
 	ctx context.Context,
-	timeSource epochtime.BlockBackend,
+	timeSource epochtime.Backend,
 	beacon beacon.Backend,
 	roundTimeout time.Duration,
 ) abci.Application {

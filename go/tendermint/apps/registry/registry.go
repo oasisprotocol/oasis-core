@@ -31,7 +31,7 @@ type registryApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.BlockBackend
+	timeSource epochtime.Backend
 }
 
 func (app *registryApplication) Name() string {
@@ -347,7 +347,7 @@ func (app *registryApplication) registerNode(
 	}
 
 	// Ensure node is not expired.
-	epoch, err := app.timeSource.GetBlockEpoch(context.Background(), app.state.BlockHeight())
+	epoch, err := app.timeSource.GetEpoch(context.Background(), app.state.BlockHeight())
 	if err != nil {
 		return err
 	}
@@ -428,7 +428,7 @@ func (app *registryApplication) registerRuntime(
 }
 
 // New constructs a new registry application instance.
-func New(timeSource epochtime.BlockBackend) abci.Application {
+func New(timeSource epochtime.Backend) abci.Application {
 	return &registryApplication{
 		logger:     logging.GetLogger("tendermint/registry"),
 		timeSource: timeSource,
