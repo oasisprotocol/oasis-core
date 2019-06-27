@@ -33,6 +33,7 @@ var protoFiles = [][]string{
 	{"client/client.proto"},
 	{"enclaverpc/enclaverpc.proto"},
 	{"txnscheduler/txnscheduler.proto"},
+	{"staking/staking.proto"},
 }
 
 //
