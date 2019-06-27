@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/iavl"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
@@ -16,20 +15,15 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
-	tmbeacon "github.com/oasislabs/ekiden/go/tendermint/componentapis/beacon"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
 // BackendName is the name of this implementation.
 const BackendName = "tendermint"
 
-var (
-	_ api.Backend      = (*Backend)(nil)
-	_ tmbeacon.Backend = (*Backend)(nil)
-)
+var _ api.Backend = (*Backend)(nil)
 
 // Backend is a tendermint backed random beacon.
 type Backend struct {
@@ -78,12 +72,6 @@ func (t *Backend) WatchBeacons() (<-chan *api.GenerateEvent, *pubsub.Subscriptio
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
-}
-
-// GetBeaconABCI gets the beacon for the provided epoch.
-func (t *Backend) GetBeaconABCI(ctx *abci.Context, tree *iavl.MutableTree, epoch epochtime.EpochTime) ([]byte, error) {
-	state := app.NewMutableState(tree)
-	return state.GetBeacon()
 }
 
 func (t *Backend) getCached(epoch epochtime.EpochTime) []byte {
@@ -167,13 +155,13 @@ func (t *Backend) worker(ctx context.Context) {
 }
 
 // New constructs a new tendermint backed beacon Backend instance.
-func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService, debugDeterministic bool) (api.Backend, error) {
 	if err := service.ForceInitialize(); err != nil {
 		return nil, err
 	}
 
 	// Initialize and register the tendermint service component.
-	app := app.New(timeSource)
+	app := app.New(timeSource, debugDeterministic)
 	if err := service.RegisterApplication(app, nil); err != nil {
 		return nil, err
 	}
