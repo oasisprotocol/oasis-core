@@ -26,8 +26,7 @@ import (
 const BackendName = "tendermint"
 
 var (
-	_ api.Backend      = (*tendermintScheduler)(nil)
-	_ api.BlockBackend = (*tendermintScheduler)(nil)
+	_ api.Backend = (*tendermintScheduler)(nil)
 )
 
 type tendermintScheduler struct {
@@ -40,19 +39,7 @@ type tendermintScheduler struct {
 func (s *tendermintScheduler) Cleanup() {
 }
 
-func (s *tendermintScheduler) GetCommittees(ctx context.Context, id signature.PublicKey) ([]*api.Committee, error) {
-	return s.GetBlockCommittees(ctx, id, 0)
-}
-
-func (s *tendermintScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Subscription) {
-	typedCh := make(chan *api.Committee)
-	sub := s.notifier.Subscribe()
-	sub.Unwrap(typedCh)
-
-	return typedCh, sub
-}
-
-func (s *tendermintScheduler) GetBlockCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) {
+func (s *tendermintScheduler) GetCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) {
 	raw, err := s.service.Query(app.QueryAllCommittees, id, height)
 	if err != nil {
 		return nil, err
@@ -72,6 +59,14 @@ func (s *tendermintScheduler) GetBlockCommittees(ctx context.Context, id signatu
 	}
 
 	return runtimeCommittees, err
+}
+
+func (s *tendermintScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Subscription) {
+	typedCh := make(chan *api.Committee)
+	sub := s.notifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub
 }
 
 func (s *tendermintScheduler) getCurrentCommittees() ([]*api.Committee, error) {
@@ -173,12 +168,6 @@ func New(ctx context.Context,
 	beacon beacon.Backend,
 	service service.TendermintService,
 ) (api.Backend, error) {
-	// We can only work with a block-based epochtime.
-	blockTimeSource, ok := timeSource.(epochtime.BlockBackend)
-	if !ok {
-		return nil, errors.New("scheduler/tendermint: need a block-based epochtime backend")
-	}
-
 	// We can only work with an ABCI beacon.
 	abciBeacon, ok := beacon.(tmbeacon.Backend)
 	if !ok {
@@ -186,7 +175,7 @@ func New(ctx context.Context,
 	}
 
 	// Initialze and register the tendermint service component.
-	app := app.New(blockTimeSource, abciBeacon)
+	app := app.New(timeSource, abciBeacon)
 	if err := service.RegisterApplication(app, []string{registryapp.AppName}); err != nil {
 		return nil, err
 	}

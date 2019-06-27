@@ -39,7 +39,7 @@ type schedulerApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.BlockBackend
+	timeSource epochtime.Backend
 	beacon     tmbeacon.Backend
 }
 
@@ -356,7 +356,7 @@ func (app *schedulerApplication) electAll(ctx *abci.Context, request types.Reque
 
 // New constructs a new scheduler application instance.
 func New(
-	timeSource epochtime.BlockBackend,
+	timeSource epochtime.Backend,
 	beacon tmbeacon.Backend,
 ) abci.Application {
 	return &schedulerApplication{

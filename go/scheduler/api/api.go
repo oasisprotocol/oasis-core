@@ -166,6 +166,3 @@ type Backend interface {
 	// Cleanup cleans up the scheduler backend.
 	Cleanup()
 }
-
-// GetBeaconFunc is the callback used to query a beacon from a BlockBackend.
-type GetBeaconFunc func() ([]byte, error)
