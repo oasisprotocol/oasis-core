@@ -198,7 +198,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	// Request committees from scheduler.
 	var committees []*scheduler.Committee
 	var err error
-	committees, err = g.scheduler.GetCommittees(ctx, g.runtimeID, height, nil)
+	committees, err = g.scheduler.GetCommittees(ctx, g.runtimeID, height)
 	if err != nil {
 		return err
 	}

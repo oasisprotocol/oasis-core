@@ -172,6 +172,7 @@ func (app *epochTimeMockApplication) setEpoch(
 		"epoch", epoch,
 		"current_height", height,
 		"next_height", height+1,
+		"is_check_only", ctx.IsCheckOnly(),
 	)
 
 	return state.setFutureEpoch(epoch, height+1)

@@ -1,4 +1,4 @@
-// Package tendermint implements the mock (settable) tendermint backed epochtime backend.
+// Package tendermintmock implements the mock (settable) tendermint backed epochtime backend.
 package tendermintmock
 
 import (
@@ -107,7 +107,7 @@ func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTim
 }
 
 func (t *tendermintMockBackend) worker(ctx context.Context) {
-	// Subscribe to transactions which advance the epoch.
+	// Subscribe to blocks which advance the epoch.
 	sub, err := t.service.Subscribe("epochtime-worker", app.QueryApp)
 	if err != nil {
 		t.logger.Error("failed to subscribe",
@@ -202,7 +202,7 @@ func (t *tendermintMockBackend) updateCached(height int64, epoch api.EpochTime) 
 func New(ctx context.Context, service service.TendermintService) (api.SetableBackend, error) {
 	// Initialze and register the tendermint service component.
 	app := app.New()
-	if err := service.RegisterApplication(app); err != nil {
+	if err := service.RegisterApplication(app, nil); err != nil {
 		return nil, err
 	}
 

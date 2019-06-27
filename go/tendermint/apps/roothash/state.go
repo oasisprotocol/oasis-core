@@ -62,7 +62,7 @@ func (s *immutableState) getRuntimeState(id signature.PublicKey) (*runtimeState,
 func (s *immutableState) getRuntimes() []*runtimeState {
 	var runtimes []*runtimeState
 	s.Snapshot.IterateRangeInclusive(
-		[]byte(fmt.Sprintf(stateRuntimeMap, "")),
+		[]byte(fmt.Sprintf(stateRuntimeMap, abci.FirstID)),
 		[]byte(fmt.Sprintf(stateRuntimeMap, abci.LastID)),
 		true,
 		func(key, value []byte, version int64) bool {

@@ -456,7 +456,7 @@ func (r *tendermintBackend) workerPerEpochList(ctx context.Context) {
 		}
 
 		r.logger.Debug("worker: built node list",
-			"newEpoch", newEpoch,
+			"new_epoch", newEpoch,
 			"nodes_len", len(nl.Nodes),
 		)
 		r.nodeListNotifier.Broadcast(nl)
@@ -471,7 +471,7 @@ func (r *tendermintBackend) workerPerEpochList(ctx context.Context) {
 		}
 
 		r.logger.Debug("worker: built runtime list",
-			"newEpoch", newEpoch,
+			"new_epoch", newEpoch,
 			"runtimes_len", len(rl),
 		)
 
@@ -581,7 +581,7 @@ func (r *tendermintBackend) sweepCache(epoch epochtime.EpochTime) {
 func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
 	app := app.New(timeSource)
-	if err := service.RegisterApplication(app); err != nil {
+	if err := service.RegisterApplication(app, nil); err != nil {
 		return nil, err
 	}
 

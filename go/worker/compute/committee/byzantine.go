@@ -19,6 +19,8 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(ioRoot *hash.Hash, inputs runtime
 	}
 
 	// Update the I/O root as otherwise the runtime will complain.
+	var oldIoRoot hash.Hash
+	oldIoRoot.Empty()
 	ioTree := urkel.New(nil, nil)
 	err := ioTree.Insert(n.ctx, block.IoKeyInputs, inputs.MarshalCBOR())
 	if err != nil {
@@ -28,7 +30,15 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(ioRoot *hash.Hash, inputs runtime
 		return err
 	}
 
-	_, newIoRoot, err := ioTree.Commit(n.ctx)
+	writeLog, newIoRoot, err := ioTree.Commit(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to inject discrepancy",
+			"err", err,
+		)
+		return err
+	}
+
+	_, err = n.commonNode.Storage.Apply(n.ctx, oldIoRoot, newIoRoot, writeLog)
 	if err != nil {
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,

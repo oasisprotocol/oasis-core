@@ -18,20 +18,20 @@ const (
 )
 
 var (
-	// TagRuntimeRegistered is an ABCI transaction tag for new runtime
+	// TagRuntimeRegistered is an ABCI tag for new runtime
 	// registrations (value is runtime id).
 	TagRuntimeRegistered = []byte("registry.runtime.registered")
 
-	// TagEntityRegistered is an ABCI transaction tag for new entity
+	// TagEntityRegistered is an ABCI tag for new entity
 	// registrations (value is entity id).
 	TagEntityRegistered = []byte("registry.entity.registered")
 
-	// TagNodesExpired is an ABCI transaction tag for node deregistrations
+	// TagNodesExpired is an ABCI tag for node deregistrations
 	// due to expiration (value is a CBOR serialized vector of node
 	// descriptors).
 	TagNodesExpired = []byte("registry.nodes.expired")
 
-	// QueryApp is a query for filtering transactions processed by
+	// QueryApp is a query for filtering events processed by
 	// the registry application.
 	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
 )
@@ -43,16 +43,16 @@ const (
 	// QueryGetEntities is a path for GetEntities query.
 	QueryGetEntities = AppName + "/entities"
 
-	// QueryRegistryGetNode is a path for GetNode query.
+	// QueryGetNode is a path for GetNode query.
 	QueryGetNode = AppName + "/node"
 
-	// QueryRegistryGetNodes is a path for GetNodes query.
+	// QueryGetNodes is a path for GetNodes query.
 	QueryGetNodes = AppName + "/nodes"
 
-	// QueryRegistryGetRuntime is a path for GetRuntime query.
+	// QueryGetRuntime is a path for GetRuntime query.
 	QueryGetRuntime = AppName + "/runtime"
 
-	// QueryRegistryGetRuntimes is a path for GetRuntimes query.
+	// QueryGetRuntimes is a path for GetRuntimes query.
 	QueryGetRuntimes = AppName + "/runtimes"
 )
 

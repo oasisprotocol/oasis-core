@@ -42,7 +42,7 @@ func New(
 
 	switch strings.ToLower(backend) {
 	case tendermint.BackendName:
-		impl, err = tendermint.New(ctx, dataDir, timeSource, scheduler, beacon, tmService, roundTimeout)
+		impl, err = tendermint.New(ctx, dataDir, timeSource, beacon, tmService, roundTimeout)
 	default:
 		return nil, fmt.Errorf("roothash: unsupported backend: '%v'", backend)
 	}

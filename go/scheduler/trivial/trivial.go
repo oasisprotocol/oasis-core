@@ -410,7 +410,7 @@ func (s *trivialScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Sub
 	return typedCh, sub
 }
 
-func (s *trivialScheduler) GetCommittees(ctx context.Context, id signature.PublicKey, height int64, getBeaconFn api.GetBeaconFunc) ([]*api.Committee, error) { // nolint: gocyclo
+func (s *trivialScheduler) GetCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) { // nolint: gocyclo
 	epoch, err := s.timeSource.GetEpoch(ctx, height)
 	if err != nil {
 		return nil, err
@@ -437,12 +437,7 @@ func (s *trivialScheduler) GetCommittees(ctx context.Context, id signature.Publi
 
 	if b := s.state.beacons[epoch]; b == nil {
 		var newBeacon []byte
-		switch getBeaconFn {
-		case nil:
-			newBeacon, err = s.beacon.GetBeacon(ctx, height)
-		default:
-			newBeacon, err = getBeaconFn()
-		}
+		newBeacon, err = s.beacon.GetBeacon(ctx, height)
 		if err != nil {
 			return nil, err
 		}

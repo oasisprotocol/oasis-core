@@ -358,7 +358,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		fallthrough
 	case commitment.ErrInsufficientVotes:
 		// Discrepancy resolution failed.
-		logger.Warn("compute discrepancy detected, performing CC-Commit")
+		logger.Warn("insufficient votes, performing CC-Commit")
 
 		// Submit CC-Commit to BFT.
 		err = n.commonNode.Roothash.ComputeCommit(n.ctx, n.commonNode.RuntimeID, pool.GetComputeCommitments())

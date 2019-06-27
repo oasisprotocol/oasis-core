@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
+	"github.com/oasislabs/ekiden/go/beacon/insecure"
 	"github.com/oasislabs/ekiden/go/beacon/tendermint"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -21,6 +22,8 @@ const cfgBackend = "beacon.backend"
 func New(ctx context.Context, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
 	backend := viper.GetString(cfgBackend)
 	switch strings.ToLower(backend) {
+	case insecure.BackendName:
+		return insecure.New(ctx, timeSource), nil
 	case tendermint.BackendName:
 		return tendermint.New(ctx, timeSource, tmService)
 	default:

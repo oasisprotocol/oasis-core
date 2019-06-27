@@ -21,10 +21,10 @@ const (
 )
 
 var (
-	// TagEpoch is an ABCI transaction tag for specifying the set epoch.
+	// TagEpoch is an ABCI begin block tag for specifying the set epoch.
 	TagEpoch = []byte("epochtime_mock.epoch")
 
-	// QueryApp is a query for filtering transactions processed by
+	// QueryApp is a query for filtering events processed by
 	// the mock epochtime application.
 	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
 )

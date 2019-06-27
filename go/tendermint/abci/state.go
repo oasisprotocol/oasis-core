@@ -2,6 +2,9 @@ package abci
 
 import "github.com/tendermint/iavl"
 
+// FirstID is the lowest hex-encoded node/entity/runtime/etc identifier.
+const FirstID = "0000000000000000000000000000000000000000000000000000000000000000"
+
 // LastID is the highest hex-encoded node/entity/runtime/etc identifier.
 const LastID = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 

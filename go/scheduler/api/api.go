@@ -79,6 +79,9 @@ const (
 
 	// KindMerge is a merge committee.
 	KindMerge CommitteeKind = 3
+
+	// MaxCommitteeKind is a dummy value used for iterating all committee kinds.
+	MaxCommitteeKind = 4
 )
 
 // NeedsLeader returns if committee kind needs leader role.
@@ -120,7 +123,7 @@ type Committee struct {
 	Members []*CommitteeNode `codec:"members"`
 
 	// RuntimeID is the runtime ID that this committee is for.
-	RuntimeID signature.PublicKey `codec:"-"`
+	RuntimeID signature.PublicKey `codec:"runtime_id"`
 
 	// ValidFor is the epoch for which the committee is valid.
 	ValidFor epochtime.EpochTime `codec:"valid_for"`
@@ -151,7 +154,7 @@ type Backend interface {
 	// for querying the beacon for a given epoch/block height.
 	//
 	// Iff the callback is nil, `beacon.GetBlockBeacon` will be used.
-	GetCommittees(context.Context, signature.PublicKey, int64, GetBeaconFunc) ([]*Committee, error)
+	GetCommittees(context.Context, signature.PublicKey, int64) ([]*Committee, error)
 
 	// WatchCommittees returns a channel that produces a stream of
 	// Committee.
@@ -163,6 +166,3 @@ type Backend interface {
 	// Cleanup cleans up the scheduler backend.
 	Cleanup()
 }
-
-// GetBeaconFunc is the callback used to query a beacon from a BlockBackend.
-type GetBeaconFunc func() ([]byte, error)

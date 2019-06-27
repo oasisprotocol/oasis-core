@@ -8,18 +8,19 @@ const (
 	TransactionTag byte = 0x04
 
 	// AppName is the ABCI application name.
-	AppName string = "999_beacon"
+	// Run before the scheduler application.
+	AppName string = "100_beacon"
 
 	// QueryGetBeacon is a path for a Get query.
 	QueryGetBeacon string = AppName + "/beacon"
 )
 
 var (
-	// TagGenerated is an ABCI transaction tag for new beacons.
+	// TagGenerated is an ABCI begin block tag for new beacons.
 	// (value is a CBOR serialized beacon.GenerateEvent).
 	TagGenerated = []byte("beacon.generated")
 
-	// QueryApp is a query for filtering transactions processed by the
+	// QueryApp is a query for filtering events processed by the
 	// beacon application.
 	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
 )

@@ -193,13 +193,14 @@ func (a *ApplicationServer) Mux() types.Application {
 //
 // All registration must be done before Start is called.  ABCI operations
 // that act on every single app (InitChain, BeginBlock, EndBlock) will be
-// called in registration order.
-func (a *ApplicationServer) Register(app Application) error {
+// called in name lexicographic order. Checks that applications named in
+// deps are already registered.
+func (a *ApplicationServer) Register(app Application, deps []string) error {
 	if a.started {
 		return errors.New("mux: multiplexer already started")
 	}
 
-	return a.mux.doRegister(app)
+	return a.mux.doRegister(app, deps)
 }
 
 // RegisterGenesisHook registers a function to be called when the
@@ -636,10 +637,19 @@ func (mux *abciMux) doCleanup() {
 	}
 }
 
-func (mux *abciMux) doRegister(app Application) error {
+func (mux *abciMux) doRegister(app Application, deps []string) error {
 	name := app.Name()
 	if mux.appsByName[name] != nil {
 		return fmt.Errorf("mux: application already registered: '%s'", name)
+	}
+	var missingDeps []string
+	for _, dep := range deps {
+		if _, ok := mux.appsByName[dep]; !ok {
+			missingDeps = append(missingDeps, dep)
+		}
+	}
+	if missingDeps != nil {
+		return fmt.Errorf("mux: missing dependencies %v needed for %s", missingDeps, name)
 	}
 	if app.Blessed() {
 		// Enforce the 1 blessed app limitation.

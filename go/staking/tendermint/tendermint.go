@@ -300,7 +300,7 @@ func (b *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventD
 func New(ctx context.Context, debugGenesisState *api.Genesis, service service.TendermintService) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
 	app := app.New(debugGenesisState)
-	if err := service.RegisterApplication(app); err != nil {
+	if err := service.RegisterApplication(app, nil); err != nil {
 		return nil, err
 	}
 

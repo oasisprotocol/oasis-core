@@ -13,6 +13,7 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
+	"github.com/oasislabs/ekiden/go/scheduler/tendermint"
 	"github.com/oasislabs/ekiden/go/scheduler/trivial"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
@@ -25,6 +26,8 @@ func New(ctx context.Context, timeSource epochtime.Backend, reg registry.Backend
 	switch strings.ToLower(backend) {
 	case trivial.BackendName:
 		return trivial.New(ctx, timeSource, reg, beacon, service), nil
+	case tendermint.BackendName:
+		return tendermint.New(ctx, timeSource, beacon, service)
 	default:
 		return nil, fmt.Errorf("scheduler: unsupported backend: '%v'", backend)
 	}
@@ -34,7 +37,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, reg registry.Backend
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, trivial.BackendName, "Scheduler backend")
+		cmd.Flags().String(cfgBackend, tendermint.BackendName, "Scheduler backend")
 	}
 
 	for _, v := range []string{

@@ -166,7 +166,7 @@ run_backend_tendermint_committee() {
             --beacon.backend tendermint \
             --metrics.mode none \
             --storage.backend client \
-            --scheduler.backend trivial \
+            --scheduler.backend tendermint \
             --registry.backend tendermint \
             --roothash.backend tendermint \
             --keymanager.backend tendermint \
@@ -251,7 +251,7 @@ run_compute_node() {
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
         --metrics.mode none \
-        --scheduler.backend trivial \
+        --scheduler.backend tendermint \
         --registry.backend tendermint \
         --roothash.backend tendermint \
         --keymanager.backend tendermint \
@@ -326,7 +326,7 @@ run_storage_node() {
         --beacon.backend tendermint \
         --metrics.mode none \
         --storage.backend leveldb \
-        --scheduler.backend trivial \
+        --scheduler.backend tendermint \
         --registry.backend tendermint \
         --roothash.backend tendermint \
         --keymanager.backend tendermint \
@@ -387,7 +387,7 @@ run_client_node() {
         --metrics.mode none \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
-        --scheduler.backend trivial \
+        --scheduler.backend tendermint \
         --registry.backend tendermint \
         --roothash.backend tendermint \
         --roothash.tendermint.index_blocks \
@@ -469,7 +469,7 @@ run_keymanager_node() {
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
         --metrics.mode none \
-        --scheduler.backend trivial \
+        --scheduler.backend tendermint \
         --registry.backend tendermint \
         --roothash.backend tendermint \
         --keymanager.backend tendermint \
@@ -526,8 +526,8 @@ run_seed_node() {
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
-        --scheduler.backend trivial \
+        --beacon.backend insecure \
+        --scheduler.backend tendermint \
         --registry.backend tendermint \
         --roothash.backend tendermint \
         --keymanager.backend tendermint \

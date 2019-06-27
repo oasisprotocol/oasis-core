@@ -26,8 +26,8 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
-	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
+	schedulerapp "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
 )
 
 var (
@@ -56,7 +56,6 @@ type rootHashApplication struct {
 	state  *abci.ApplicationState
 
 	timeSource epochtime.Backend
-	scheduler  scheduler.Backend
 	beacon     beacon.Backend
 
 	roundTimeout time.Duration
@@ -175,11 +174,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		}
 	}
 
-	getBeaconFn := func() ([]byte, error) {
-		beaconState := beaconapp.NewMutableState(tree)
-		return beaconState.GetBeacon()
-	}
-
+	schedState := schedulerapp.NewMutableState(tree)
 	for _, rtState := range state.getRuntimes() {
 		rtID := rtState.Runtime.ID
 
@@ -190,86 +185,76 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			continue
 		}
 
-		committees, err := app.scheduler.GetCommittees(app.ctx, rtID, app.state.BlockHeight(), getBeaconFn)
+		// There will later be multiple compute committees.
+		computeCommittee, err := schedState.GetCommittee(scheduler.KindCompute, rtID)
 		if err != nil {
-			app.logger.Error("checkCommittees: failed to get committees from scheduler",
+			app.logger.Error("checkCommittees: failed to get compute committee from scheduler",
 				"err", err,
 				"runtime", rtID,
 			)
 			continue
 		}
-
-		// Generate the merge and compute commitments pools.
-		var mergePool *commitment.Pool
-		computePool := &commitment.MultiPool{
-			Committees: make(map[hash.Hash]*commitment.Pool),
-		}
-
-		tree := app.state.DeliverTxTree()
-		regState := registryapp.NewMutableState(tree)
-
-		for _, c := range committees {
-			switch c.Kind {
-			case scheduler.KindCompute:
-				// Compute committee. There can be multiple of these, so add each to the compute
-				// pool.
-				nodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
-				for idx, n := range c.Members {
-					var nodeRuntime *node.Runtime
-					node, err := regState.GetNode(n.PublicKey)
-					if err != nil {
-						return errors.Wrap(err, "checkCommittees: failed to query node")
-					}
-					for _, r := range node.Runtimes {
-						if !r.ID.Equal(rtID) {
-							continue
-						}
-						nodeRuntime = r
-						break
-					}
-					if nodeRuntime == nil {
-						// We currently prevent this case throughout the rest of the system.
-						// Still, it's prudent to check.
-						app.logger.Warn("checkCommittees: committee member not registered with this runtime",
-							"node", n.PublicKey,
-						)
-						continue
-					}
-					nodeInfo[n.PublicKey.ToMapKey()] = commitment.NodeInfo{
-						CommitteeNode: idx,
-						Runtime:       nodeRuntime,
-					}
-				}
-
-				committeeID := c.EncodedMembersHash()
-				computePool.Committees[committeeID] = &commitment.Pool{
-					Runtime:   rtState.Runtime,
-					Committee: c,
-					NodeInfo:  nodeInfo,
-				}
-			case scheduler.KindMerge:
-				// Merge committee.
-				nodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
-				for idx, n := range c.Members {
-					nodeInfo[n.PublicKey.ToMapKey()] = commitment.NodeInfo{
-						CommitteeNode: idx,
-					}
-				}
-
-				mergePool = &commitment.Pool{
-					Runtime:   rtState.Runtime,
-					Committee: c,
-					NodeInfo:  nodeInfo,
-				}
-			default:
-				// Skip other types of committees.
-			}
-		}
-		if len(computePool.Committees) == 0 || mergePool == nil {
-			app.logger.Error("checkCommittees: scheduler did not give us compute/merge committees",
+		if computeCommittee == nil {
+			app.logger.Warn("checkCommittees: no compute committee this epoch",
 				"runtime", rtID,
 			)
 			continue
+		}
+		computeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+		for idx, n := range computeCommittee.Members {
+			var nodeRuntime *node.Runtime
+			node, err1 := regState.GetNode(n.PublicKey)
+			if err1 != nil {
+				return errors.Wrap(err1, "checkCommittees: failed to query node")
+			}
+			for _, r := range node.Runtimes {
+				if !r.ID.Equal(rtID) {
+					continue
+				}
+				nodeRuntime = r
+				break
+			}
+			if nodeRuntime == nil {
+				// We currently prevent this case throughout the rest of the system.
+				// Still, it's prudent to check.
+				app.logger.Warn("checkCommittees: committee member not registered with this runtime",
+					"node", n.PublicKey,
+				)
+				continue
+			}
+			computeNodeInfo[n.PublicKey.ToMapKey()] = commitment.NodeInfo{
+				CommitteeNode: idx,
+				Runtime:       nodeRuntime,
+			}
+		}
+		computePool := &commitment.MultiPool{
+			Committees: map[hash.Hash]*commitment.Pool{
+				computeCommittee.EncodedMembersHash(): &commitment.Pool{
+					Runtime:   rtState.Runtime,
+					Committee: computeCommittee,
+					NodeInfo:  computeNodeInfo,
+				},
+			},
+		}
+
+		mergeCommittee, err := schedState.GetCommittee(scheduler.KindMerge, rtID)
+		if err != nil {
+			app.logger.Error("checkCommittees: failed to get merge committee from scheduler",
+				"err", err,
+				"runtime", rtID,
+			)
+			continue
+		}
+		mergeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+		for idx, n := range mergeCommittee.Members {
+			mergeNodeInfo[n.PublicKey.ToMapKey()] = commitment.NodeInfo{
+				CommitteeNode: idx,
+			}
+		}
+		mergePool := &commitment.Pool{
+			Runtime:   rtState.Runtime,
+			Committee: mergeCommittee,
+			NodeInfo:  mergeNodeInfo,
 		}
 
 		app.logger.Debug("checkCommittees: updating committee for runtime",
@@ -791,7 +776,6 @@ func (app *rootHashApplication) tryFinalizeMerge(
 func New(
 	ctx context.Context,
 	timeSource epochtime.Backend,
-	scheduler scheduler.Backend,
 	beacon beacon.Backend,
 	roundTimeout time.Duration,
 ) abci.Application {
@@ -799,7 +783,6 @@ func New(
 		ctx:          ctx,
 		logger:       logging.GetLogger("tendermint/roothash"),
 		timeSource:   timeSource,
-		scheduler:    scheduler,
 		beacon:       beacon,
 		roundTimeout: roundTimeout,
 	}
