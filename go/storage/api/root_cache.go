@@ -149,6 +149,10 @@ func (rc *RootCache) getApplyLock(root, expectedNewRoot Root) *sync.Mutex {
 	return &lock
 }
 
+func (rc *RootCache) HasRoot(root Root) bool {
+	return rc.localDB.HasRoot(root)
+}
+
 func NewRootCache(
 	localDB nodedb.NodeDB,
 	remoteSyncer syncer.ReadSyncer,

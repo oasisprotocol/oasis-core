@@ -3,61 +3,89 @@ package storage
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	bolt "github.com/etcd-io/bbolt"
+
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/grpc"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/ekiden/go/common/workerpool"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/storage"
-	storageApi "github.com/oasislabs/ekiden/go/storage/api"
+	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/registration"
+	"github.com/oasislabs/ekiden/go/worker/storage/committee"
 )
 
 const (
-	cfgWorkerStorageEnabled = "worker.storage.enabled"
+	cfgWorkerStorageEnabled      = "worker.storage.enabled"
+	cfgWorkerStorageFetcherCount = "worker.storage.fetcher_count"
 )
 
-// Storage is a worker handling storage operations.
-type Storage struct {
-	enabled      bool
-	storage      storageApi.Backend
-	grpc         *grpc.Server
+var (
+	workerStorageDBBucketName = []byte("worker/storage/watchers")
+)
+
+// Worker is a worker handling storage operations.
+type Worker struct {
+	enabled bool
+
+	commonWorker *workerCommon.Worker
+	logger       *logging.Logger
+
 	initCh       chan struct{}
 	quitCh       chan struct{}
-	logger       *logging.Logger
 	registration *registration.Registration
+
+	runtimes   map[signature.MapKey]*committee.Node
+	watchState *bolt.DB
+	fetchPool  *workerpool.Pool
 }
 
 // New constructs a new storage worker.
 func New(
-	epochtime epochtime.Backend,
-	sb storageApi.Backend,
-	g *grpc.Server,
-	r *registration.Registration,
-	consensus common.ConsensusBackend,
+	commonWorker *workerCommon.Worker,
+	registration *registration.Registration,
 	genesis genesis.Provider,
-) (*Storage, error) {
+	dataDir string,
+) (*Worker, error) {
 
-	s := &Storage{
+	s := &Worker{
 		enabled:      viper.GetBool(cfgWorkerStorageEnabled),
-		storage:      sb,
-		grpc:         g,
+		commonWorker: commonWorker,
+		logger:       logging.GetLogger("worker/storage"),
 		initCh:       make(chan struct{}),
 		quitCh:       make(chan struct{}),
-		logger:       logging.GetLogger("worker/storage"),
-		registration: r,
+		registration: registration,
+		runtimes:     make(map[signature.MapKey]*committee.Node),
 	}
 
 	if s.enabled {
+		s.fetchPool = workerpool.New("storage_fetch")
+		s.fetchPool.Resize(viper.GetUint(cfgWorkerStorageFetcherCount))
+
+		watchState, err := bolt.Open(filepath.Join(dataDir, "worker-storage-watchers.db"), 0600, nil)
+		if err != nil {
+			return nil, err
+		}
+		err = watchState.Update(func(tx *bolt.Tx) error {
+			_, berr := tx.CreateBucketIfNotExists(workerStorageDBBucketName)
+			return berr
+		})
+		if err != nil {
+			return nil, err
+		}
+		s.watchState = watchState
+
 		// Populate storage from genesis.
-		consensus.RegisterGenesisHook(func() {
+		s.commonWorker.Consensus.RegisterGenesisHook(func() {
 			doc, err := genesis.GetGenesisDocument()
 			if err != nil {
 				s.logger.Error("failed to get genesis document",
@@ -75,7 +103,7 @@ func New(
 		})
 
 		// Attach storage worker to gRPC server.
-		storage.NewGRPCServer(s.grpc.Server(), s.storage)
+		storage.NewGRPCServer(s.commonWorker.Grpc.Server(), s.commonWorker.Storage)
 
 		// Register storage worker role.
 		s.registration.RegisterRole(func(n *node.Node) error {
@@ -83,29 +111,47 @@ func New(
 
 			return nil
 		})
+
+		// Start storage node for every runtime.
+		for _, runtimeID := range s.commonWorker.GetConfig().Runtimes {
+			if err := s.registerRuntime(commonWorker.GetRuntime(runtimeID)); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return s, nil
 }
 
+func (s *Worker) registerRuntime(rt *workerCommon.Runtime) error {
+	commonNode := rt.GetNode()
+	node, err := committee.NewNode(commonNode, s.fetchPool, s.watchState, workerStorageDBBucketName)
+	if err != nil {
+		return err
+	}
+	commonNode.AddHooks(node)
+	s.runtimes[commonNode.RuntimeID.ToMapKey()] = node
+	return nil
+}
+
 // Name returns the service name.
-func (s *Storage) Name() string {
+func (s *Worker) Name() string {
 	return "storage worker"
 }
 
 // Enabled returns if worker is enabled.
-func (s *Storage) Enabled() bool {
+func (s *Worker) Enabled() bool {
 	return s.enabled
 }
 
 // Initialized returns a channel that will be closed when the storage worker
 // is initialized and ready to service requests.
-func (s *Storage) Initialized() <-chan struct{} {
+func (s *Worker) Initialized() <-chan struct{} {
 	return s.initCh
 }
 
 // Start starts the storage service.
-func (s *Storage) Start() error {
+func (s *Worker) Start() error {
 	if !s.enabled {
 		s.logger.Info("not starting storage worker as it is disabled")
 
@@ -120,6 +166,14 @@ func (s *Storage) Start() error {
 		s.logger.Info("starting storage worker, waiting for registration")
 		<-s.registration.InitialRegistrationCh()
 
+		s.logger.Info("starting per-runtime block watchers")
+		for _, r := range s.runtimes {
+			_ = r.Start()
+		}
+		for _, r := range s.runtimes {
+			<-r.Initialized()
+		}
+
 		s.logger.Info("storage worker started")
 
 		close(s.initCh)
@@ -129,20 +183,37 @@ func (s *Storage) Start() error {
 }
 
 // Stop halts the service.
-func (s *Storage) Stop() {
-	close(s.quitCh)
+func (s *Worker) Stop() {
+	go func() {
+		defer close(s.quitCh)
+		for _, r := range s.runtimes {
+			r.Stop()
+		}
+		if s.fetchPool != nil {
+			s.fetchPool.Stop()
+		}
+		for _, r := range s.runtimes {
+			<-r.Quit()
+		}
+		if s.fetchPool != nil {
+			<-s.fetchPool.Quit()
+		}
+		if s.watchState != nil {
+			s.watchState.Close()
+		}
+	}()
 }
 
 // Quit returns a channel that will be closed when the service terminates.
-func (s *Storage) Quit() <-chan struct{} {
+func (s *Worker) Quit() <-chan struct{} {
 	return s.quitCh
 }
 
 // Cleanup performs the service specific post-termination cleanup.
-func (s *Storage) Cleanup() {
+func (s *Worker) Cleanup() {
 }
 
-func (s *Storage) initGenesis(gen *genesis.Document) error {
+func (s *Worker) initGenesis(gen *genesis.Document) error {
 	ctx := context.Background()
 
 	s.logger.Info("initializing storage from genesis")
@@ -163,7 +234,7 @@ func (s *Storage) initGenesis(gen *genesis.Document) error {
 				var ns common.Namespace
 				copy(ns[:], rt.ID[:])
 
-				_, err = s.storage.Apply(ctx, ns, 0, emptyRoot, 0, rt.Genesis.StateRoot, rt.Genesis.State)
+				_, err = s.commonWorker.Storage.Apply(ctx, ns, 0, emptyRoot, 0, rt.Genesis.StateRoot, rt.Genesis.State)
 				if err != nil {
 					return err
 				}
@@ -181,9 +252,11 @@ func (s *Storage) initGenesis(gen *genesis.Document) error {
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().Bool(cfgWorkerStorageEnabled, false, "Enable storage worker")
+		cmd.Flags().Uint(cfgWorkerStorageFetcherCount, 4, "Number of concurrent storage diff fetchers")
 	}
 	for _, v := range []string{
 		cfgWorkerStorageEnabled,
+		cfgWorkerStorageFetcherCount,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}

@@ -214,6 +214,14 @@ type Backend interface {
 	Initialized() <-chan struct{}
 }
 
+// LocalBackend is a storage implementation with a local backing store.
+type LocalBackend interface {
+	Backend
+
+	// HasRoot checks if the storage backend contains the specified storage root.
+	HasRoot(Root) bool
+}
+
 // ClientBackend is a storage client backend implementation.
 type ClientBackend interface {
 	Backend

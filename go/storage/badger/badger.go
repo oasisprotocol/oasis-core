@@ -150,6 +150,10 @@ func (ba *badgerBackend) GetCheckpoint(ctx context.Context, root api.Root) (api.
 	return ba.nodedb.GetCheckpoint(ctx, root)
 }
 
+func (ba *badgerBackend) HasRoot(root api.Root) bool {
+	return ba.nodedb.HasRoot(root)
+}
+
 // NewLogAdapter returns a badger.Logger backed by an ekiden logger.
 func NewLogAdapter(logger *logging.Logger) badger.Logger {
 	return &badgerLogger{

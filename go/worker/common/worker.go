@@ -31,6 +31,11 @@ func (r *Runtime) GetNode() *committee.Node {
 	return r.node
 }
 
+// GetID returns the ID of this runtime.
+func (r *Runtime) GetID() signature.PublicKey {
+	return r.id
+}
+
 // Worker is a garbage bag with lower level services and common runtime objects.
 type Worker struct {
 	enabled bool

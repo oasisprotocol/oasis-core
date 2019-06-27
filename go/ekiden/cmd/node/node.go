@@ -97,7 +97,7 @@ type Node struct {
 
 	CommonWorker               *workerCommon.Worker
 	ComputeWorker              *compute.Worker
-	StorageWorker              *workerStorage.Storage
+	StorageWorker              *workerStorage.Worker
 	TransactionSchedulerWorker *txnscheduler.Worker
 	MergeWorker                *merge.Worker
 	P2P                        *p2p.P2P
@@ -231,12 +231,10 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 	// Initialize the storage worker.
 	n.StorageWorker, err = workerStorage.New(
-		n.Epochtime,
-		n.Storage,
-		n.CommonWorker.Grpc,
+		n.CommonWorker,
 		n.WorkerRegistration,
-		n.svcTmnt,
 		n.Genesis,
+		cmdCommon.DataDir(),
 	)
 	if err != nil {
 		return err

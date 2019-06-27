@@ -12,7 +12,7 @@ import (
 // WorkerImplementationTests runs the storage worker implementation tests.
 func WorkerImplementationTests(
 	t *testing.T,
-	worker *storage.Storage,
+	worker *storage.Worker,
 ) {
 	// Wait for storage worker to start and register.
 	<-worker.Initialized()
