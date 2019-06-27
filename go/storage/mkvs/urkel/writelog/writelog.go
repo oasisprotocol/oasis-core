@@ -1,4 +1,8 @@
-package urkel
+package writelog
+
+import (
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+)
 
 // WriteLog is a write log.
 //
@@ -28,4 +32,16 @@ func (k *LogEntry) Type() LogEntryType {
 	}
 
 	return LogInsert
+}
+
+// WriteLogAnnotations are extra metadata about write log entries.
+//
+// This should always be passed alongside a WriteLog.
+type WriteLogAnnotations []LogEntryAnnotation // nolint
+
+// LogEntryAnnotation is an annotation for a single write log entry.
+//
+// Entries in a WriteLogAnnotation correspond to WriteLog entries at their respective indexes.
+type LogEntryAnnotation struct {
+	InsertedNode *node.Pointer
 }

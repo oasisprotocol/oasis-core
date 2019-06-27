@@ -9,9 +9,10 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 var (
@@ -31,10 +32,13 @@ var (
 // WriteLog is a write log.
 //
 // The keys in the write log must be unique.
-type WriteLog = urkel.WriteLog
+type WriteLog = writelog.WriteLog
 
 // LogEntry is a write log entry.
-type LogEntry = urkel.LogEntry
+type LogEntry = writelog.LogEntry
+
+// WriteLogIterator iterates over write log entries.
+type WriteLogIterator = nodedb.WriteLogIterator
 
 // ReceiptBody is the body of a receipt.
 type ReceiptBody struct {
@@ -137,6 +141,10 @@ type Backend interface {
 	//
 	// See Apply for more details.
 	ApplyBatch(context.Context, []ApplyOp) ([]*Receipt, error)
+
+	// GetDiff returns an iterator of write log entries that must be applied
+	// to get from the first given hash to the second one.
+	GetDiff(context.Context, hash.Hash, hash.Hash) (WriteLogIterator, error)
 
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()

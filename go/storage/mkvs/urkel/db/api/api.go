@@ -2,18 +2,28 @@
 package api
 
 import (
+	"context"
 	"errors"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
-var ErrNodeNotFound = errors.New("urkel: node not found in node db")
+var (
+	// ErrNodeNotFound indicates that a node with the specified hash couldn't be found in the database.
+	ErrNodeNotFound = errors.New("urkel: node not found in node db")
+	// ErrWriteLogNotFound indicates that a write log for the specified storage hashes couldn't be found.
+	ErrWriteLogNotFound = errors.New("urkel: write log not found in node db")
+)
 
 // NodeDB is the persistence layer used for persisting the in-memory tree.
 type NodeDB interface {
 	// GetNode lookups up a node in the database.
 	GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error)
+
+	// GetWriteLog retrieves a write log between two storage instances from the database.
+	GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (WriteLogIterator, error)
 
 	// NewBatch starts a new batch.
 	NewBatch() Batch
@@ -47,6 +57,9 @@ type Batch interface {
 
 	// OnCommit registers a hook to run after a successful commit.
 	OnCommit(hook func())
+
+	// PutWriteLog stores the specified write log into the batch.
+	PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error
 
 	// Commit commits the batch.
 	Commit(root hash.Hash) error
@@ -86,6 +99,10 @@ func (d *nopNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error
 	return nil, ErrNodeNotFound
 }
 
+func (d *nopNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (WriteLogIterator, error) {
+	return nil, ErrWriteLogNotFound
+}
+
 // Close is a no-op.
 func (d *nopNodeDB) Close() {
 }
@@ -101,6 +118,10 @@ func (d *nopNodeDB) NewBatch() Batch {
 
 func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *node.Pointer) Subtree {
 	return &nopSubtree{}
+}
+
+func (b *nopBatch) PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error {
+	return nil
 }
 
 func (b *nopBatch) Reset() {

@@ -8,25 +8,45 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
-func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, depth uint8, key hash.Hash, val []byte) (*node.Pointer, bool, error) {
+type insertResult struct {
+	newRoot      *node.Pointer
+	insertedLeaf *node.Pointer
+	existed      bool
+}
+
+func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, depth uint8, key hash.Hash, val []byte) (insertResult, error) {
 	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, Depth: depth}, ptr, nil)
 	if err != nil {
-		return nil, false, err
+		return insertResult{}, err
 	}
 
 	switch n := nd.(type) {
 	case nil:
 		// Insert into nil node, create a new leaf node.
-		return t.cache.newLeafNode(key, val), false, nil
+		newLeaf := t.cache.newLeafNode(key, val)
+		result := insertResult{
+			newRoot:      newLeaf,
+			insertedLeaf: newLeaf,
+			existed:      false,
+		}
+		return result, nil
 	case *node.InternalNode:
-		var existed bool
-		if getKeyBit(key, depth) {
-			n.Right, existed, err = t.doInsert(ctx, n.Right, depth+1, key, val)
+		var result insertResult
+
+		goRight := getKeyBit(key, depth)
+		if goRight {
+			result, err = t.doInsert(ctx, n.Right, depth+1, key, val)
 		} else {
-			n.Left, existed, err = t.doInsert(ctx, n.Left, depth+1, key, val)
+			result, err = t.doInsert(ctx, n.Left, depth+1, key, val)
 		}
 		if err != nil {
-			return nil, false, err
+			return insertResult{}, err
+		}
+
+		if goRight {
+			n.Right = result.newRoot
+		} else {
+			n.Left = result.newRoot
 		}
 
 		if !n.Left.IsClean() || !n.Right.IsClean() {
@@ -36,12 +56,17 @@ func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, depth uint8, key
 			t.cache.rollbackNode(ptr)
 		}
 
-		return ptr, existed, nil
+		result.newRoot = ptr
+		return result, nil
 	case *node.LeafNode:
 		// If the key matches, we can just update the value.
 		if n.Key.Equal(&key) {
 			if n.Value.Equal(val) {
-				return ptr, true, nil
+				return insertResult{
+					newRoot:      ptr,
+					insertedLeaf: ptr,
+					existed:      true,
+				}, nil
 			}
 
 			t.cache.removeValue(n.Value)
@@ -50,38 +75,50 @@ func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, depth uint8, key
 			ptr.Clean = false
 			// No longer eligible for eviction as it is dirty.
 			t.cache.rollbackNode(ptr)
-			return ptr, true, nil
+			return insertResult{
+				newRoot:      ptr,
+				insertedLeaf: ptr,
+				existed:      true,
+			}, nil
 		}
 
 		existingBit := getKeyBit(n.Key, depth)
 		newBit := getKeyBit(key, depth)
 
 		var left, right *node.Pointer
+		var result insertResult
 		if existingBit != newBit {
 			// No bit collision at this depth, create an internal node with
 			// two leaves.
 			if existingBit {
 				left = t.cache.newLeafNode(key, val)
 				right = ptr
+				result.insertedLeaf = left
 			} else {
 				left = ptr
 				right = t.cache.newLeafNode(key, val)
+				result.insertedLeaf = right
 			}
 		} else {
 			// Bit collision at this depth.
+			result, err = t.doInsert(ctx, ptr, depth+1, key, val)
 			if existingBit {
 				left = nil
-				right, _, err = t.doInsert(ctx, ptr, depth+1, key, val)
+				right = result.newRoot
 			} else {
-				left, _, err = t.doInsert(ctx, ptr, depth+1, key, val)
+				left = result.newRoot
 				right = nil
 			}
 			if err != nil {
-				return nil, false, err
+				return insertResult{}, err
 			}
 		}
 
-		return t.cache.newInternalNode(left, right), false, nil
+		return insertResult{
+			newRoot:      t.cache.newInternalNode(left, right),
+			insertedLeaf: result.insertedLeaf,
+			existed:      false,
+		}, nil
 	default:
 		panic(fmt.Sprintf("urkel: unknown node type: %+v", n))
 	}

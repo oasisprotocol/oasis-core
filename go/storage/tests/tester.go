@@ -2,7 +2,9 @@
 package tests
 
 import (
+	"bytes"
 	"context"
+	"sort"
 	"strconv"
 	"testing"
 
@@ -18,6 +20,16 @@ var testValues = [][]byte{
 	[]byte("The Slayer Time, Ancient of Days, come hither to consume;"),
 	[]byte("Excepting thee, of all these hosts of hostile chiefs arrayed,"),
 	[]byte("There shines not one shall leave alive the battlefield!"),
+}
+
+func makeWriteLogLess(wl api.WriteLog) func(i, j int) bool {
+	return func(i, j int) bool {
+		result := bytes.Compare(wl[i].Key, wl[j].Key)
+		if result == 0 {
+			return bytes.Compare(wl[i].Value, wl[j].Value) < 0
+		}
+		return result < 0
+	}
 }
 
 func prepareWriteLog(values [][]byte) api.WriteLog {
@@ -110,6 +122,28 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	n, err := backend.GetNode(context.Background(), receiptBody.Roots[0], api.NodeID{Path: emptyPath, Depth: 0})
 	require.NoError(t, err, "GetNode()")
 	require.NotNil(t, n)
+
+	// Get the write log, it should be the same as what we stuffed in.
+	var getDiffWl api.WriteLog
+	it, err := backend.GetDiff(context.Background(), root, expectedNewRoot)
+	require.NoError(t, err, "GetDiff()")
+	for {
+		var more bool
+		var val api.LogEntry
+		more, err = it.Next()
+		require.NoError(t, err, "it.Next()")
+		if !more {
+			break
+		}
+		val, err = it.Value()
+		require.NoError(t, err, "it.Value()")
+		getDiffWl = append(getDiffWl, val)
+	}
+	originalWl := make(api.WriteLog, len(wl))
+	copy(originalWl, wl)
+	sort.Slice(originalWl, makeWriteLogLess(originalWl))
+	sort.Slice(getDiffWl, makeWriteLogLess(getDiffWl))
+	require.Equal(t, getDiffWl, originalWl)
 
 	// Now try applying the same operations again, we should get the same root.
 	receipts, err = backend.Apply(context.Background(), root, receiptBody.Roots[0], wl)

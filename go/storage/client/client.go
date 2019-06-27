@@ -8,6 +8,7 @@ import (
 	"context"
 	cryptorand "crypto/rand"
 	"crypto/x509"
+	"io"
 	"math/rand"
 	"sync"
 
@@ -29,6 +30,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
+	urkelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
@@ -486,6 +488,51 @@ func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 	}
 
 	return n, nil
+}
+
+func (b *storageClientBackend) GetDiff(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+	var req storage.GetDiffRequest
+	req.StartHash, _ = startHash.MarshalBinary()
+	req.EndHash, _ = endHash.MarshalBinary()
+
+	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+		return c.GetDiff(ctx, &req)
+	})
+	if err != nil {
+		return nil, err
+	}
+	respClient := respRaw.(storage.Storage_GetDiffClient)
+
+	pipe := urkelDb.NewPipeWriteLogIterator(ctx)
+
+	go func() {
+		defer pipe.Close()
+		for {
+			diffResp, err := respClient.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				_ = pipe.PutError(err)
+			}
+
+			for _, entry := range diffResp.GetLog() {
+				entry := api.LogEntry{
+					Key:   entry.Key,
+					Value: entry.Value,
+				}
+				if err := pipe.Put(&entry); err != nil {
+					_ = pipe.PutError(err)
+				}
+			}
+
+			if diffResp.GetFinal() {
+				break
+			}
+		}
+	}()
+
+	return &pipe, nil
 }
 
 func (b *storageClientBackend) Cleanup() {

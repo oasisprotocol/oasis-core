@@ -12,6 +12,7 @@ import (
 	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 // ErrClosed is the error returned when methods are used after Close is called.
@@ -39,13 +40,16 @@ type Tree struct {
 	cache cache
 
 	// NOTE: This can be a map as updates are commutative.
-	pendingWriteLog map[hash.Hash]*pendingLogEntry
+	pendingWriteLog map[hash.Hash]*pendingEntry
 }
 
-type pendingLogEntry struct {
+type pendingEntry struct {
 	key     []byte
 	value   []byte
 	existed bool
+
+	insertedLeaf *node.Pointer
+	hashedKey    hash.Hash // TODO this should go away once internal keys are the same as api keys (PR#1743)
 }
 
 // Option is a configuration option used when instantiating the tree.
@@ -113,7 +117,7 @@ func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) *Tree {
 
 	t := &Tree{
 		cache:           newCache(ndb, rs),
-		pendingWriteLog: make(map[hash.Hash]*pendingLogEntry),
+		pendingWriteLog: make(map[hash.Hash]*pendingEntry),
 	}
 
 	for _, v := range options {
@@ -169,8 +173,8 @@ func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
 	}
 
 	hkey := hashKey(key)
-	var existed bool
-	newRoot, existed, err := t.doInsert(ctx, t.cache.pendingRoot, 0, hkey, value)
+	var result insertResult
+	result, err := t.doInsert(ctx, t.cache.pendingRoot, 0, hkey, value)
 	if err != nil {
 		return err
 	}
@@ -178,12 +182,18 @@ func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
 	// Update the pending write log.
 	entry := t.pendingWriteLog[hkey]
 	if entry == nil {
-		t.pendingWriteLog[hkey] = &pendingLogEntry{key, value, existed}
+		t.pendingWriteLog[hkey] = &pendingEntry{
+			key:          key,
+			value:        value,
+			existed:      result.existed,
+			insertedLeaf: result.insertedLeaf,
+			hashedKey:    hkey,
+		}
 	} else {
 		entry.value = value
 	}
 
-	t.cache.setPendingRoot(newRoot)
+	t.cache.setPendingRoot(result.newRoot)
 	return nil
 }
 
@@ -206,7 +216,7 @@ func (t *Tree) Remove(ctx context.Context, key []byte) error {
 	// Update the pending write log.
 	entry := t.pendingWriteLog[hkey]
 	if entry == nil {
-		t.pendingWriteLog[hkey] = &pendingLogEntry{key, nil, changed}
+		t.pendingWriteLog[hkey] = &pendingEntry{key, nil, changed, nil, hkey}
 	} else {
 		entry.value = nil
 	}
@@ -264,7 +274,7 @@ func (t *Tree) Stats(ctx context.Context, maxDepth uint8) Stats {
 
 // Commit commits tree updates to the underlying database and returns
 // the write log and new merkle root.
-func (t *Tree) Commit(ctx context.Context) (WriteLog, hash.Hash, error) {
+func (t *Tree) Commit(ctx context.Context) (writelog.WriteLog, hash.Hash, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -285,11 +295,8 @@ func (t *Tree) Commit(ctx context.Context) (WriteLog, hash.Hash, error) {
 		return nil, hash.Hash{}, err
 	}
 
-	if err := batch.Commit(root); err != nil {
-		return nil, hash.Hash{}, err
-	}
-
-	var log WriteLog
+	var log writelog.WriteLog
+	var logAnns writelog.WriteLogAnnotations
 	for _, entry := range t.pendingWriteLog {
 		// Skip all entries that do not exist after all the updates and
 		// did not exist before.
@@ -297,9 +304,23 @@ func (t *Tree) Commit(ctx context.Context) (WriteLog, hash.Hash, error) {
 			continue
 		}
 
-		log = append(log, LogEntry{Key: entry.key, Value: entry.value})
+		log = append(log, writelog.LogEntry{Key: entry.key, Value: entry.value})
+		if len(entry.value) == 0 {
+			logAnns = append(logAnns, writelog.LogEntryAnnotation{InsertedNode: nil})
+		} else {
+			logAnns = append(logAnns, writelog.LogEntryAnnotation{InsertedNode: entry.insertedLeaf})
+		}
 	}
-	t.pendingWriteLog = make(map[hash.Hash]*pendingLogEntry)
+
+	if err := batch.PutWriteLog(t.cache.getSyncRoot(), root, log, logAnns); err != nil {
+		return nil, hash.Hash{}, err
+	}
+
+	if err := batch.Commit(root); err != nil {
+		return nil, hash.Hash{}, err
+	}
+
+	t.pendingWriteLog = make(map[hash.Hash]*pendingEntry)
 	t.cache.setSyncRoot(root)
 
 	return log, root, nil
