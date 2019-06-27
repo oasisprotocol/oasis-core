@@ -16,7 +16,7 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 	pk, err := signature.NewPrivateKey(rand.Reader)
 	require.NoError(t, err, "NewPrivateKey()")
 
-	memoryBackend := memory.New(&pk)
+	memoryBackend := memory.New(&pk, false)
 	backend := newCrashingWrapper(memoryBackend)
 
 	crash.Config(map[string]float64{

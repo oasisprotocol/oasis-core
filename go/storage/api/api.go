@@ -25,6 +25,10 @@ var (
 	// not contain any roots.
 	ErrNoRoots = errors.New("storage: no roots to generate receipt for")
 
+	// ErrExpectedRootMismatch is the error returned when the expected root
+	// does not match the computed root.
+	ErrExpectedRootMismatch = errors.New("storage: expected root mismatch")
+
 	// ReceiptSignatureContext is the signature context used for verifying MKVS receipts.
 	ReceiptSignatureContext = []byte("EkStrRct")
 

@@ -35,7 +35,13 @@ type badgerBackend struct {
 }
 
 // New constructs a new Badger backed storage Backend instance.
-func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLockLRUSlots uint64) (api.Backend, error) {
+func New(
+	dbDir string,
+	signingKey *signature.PrivateKey,
+	lruSizeInBytes uint64,
+	applyLockLRUSlots uint64,
+	insecureSkipChecks bool,
+) (api.Backend, error) {
 	logger := logging.GetLogger("storage/badger")
 
 	opts := badger.DefaultOptions(dbDir)
@@ -46,7 +52,7 @@ func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLo
 		return nil, errors.Wrap(err, "storage/badger: failed to open node database")
 	}
 
-	rootCache, err := api.NewRootCache(ndb, nil, lruSizeInBytes, applyLockLRUSlots)
+	rootCache, err := api.NewRootCache(ndb, nil, lruSizeInBytes, applyLockLRUSlots, insecureSkipChecks)
 	if err != nil {
 		ndb.Close()
 		return nil, errors.Wrap(err, "storage/badger: failed to create root cache")

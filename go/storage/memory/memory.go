@@ -28,7 +28,8 @@ type memoryBackend struct {
 	logger *logging.Logger
 	nodedb nodedb.NodeDB
 
-	signingKey *signature.PrivateKey
+	insecureSkipChecks bool
+	signingKey         *signature.PrivateKey
 }
 
 func (b *memoryBackend) apply(
@@ -80,11 +81,19 @@ func (b *memoryBackend) apply(
 			}
 		}
 
-		// TODO: Validate root against expected new root and error on mismatch.
-		//       (This will break ekiden/cmd/storage/benchmark.)
-
-		_, r, err = tree.Commit(ctx, ns, dstRound)
-		if err != nil {
+		if !b.insecureSkipChecks {
+			_, err = tree.CommitKnown(ctx, expectedNewRoot)
+		} else {
+			// Skip known root checks -- only for use in benchmarks.
+			_, r, err = tree.Commit(ctx, ns, dstRound)
+			dstRoot = r
+		}
+		switch err {
+		case nil:
+			r = dstRoot
+		case urkel.ErrKnownRootMismatch:
+			return nil, api.ErrExpectedRootMismatch
+		default:
 			return nil, err
 		}
 	}
@@ -170,13 +179,14 @@ func (b *memoryBackend) Initialized() <-chan struct{} {
 }
 
 // New constructs a new memory backed storage Backend instance.
-func New(signingKey *signature.PrivateKey) api.Backend {
+func New(signingKey *signature.PrivateKey, insecureSkipChecks bool) api.Backend {
 	ndb, _ := memoryNodedb.New()
 
 	b := &memoryBackend{
-		logger:     logging.GetLogger("storage/memory"),
-		signingKey: signingKey,
-		nodedb:     ndb,
+		logger:             logging.GetLogger("storage/memory"),
+		insecureSkipChecks: insecureSkipChecks,
+		signingKey:         signingKey,
+		nodedb:             ndb,
 	}
 
 	return b

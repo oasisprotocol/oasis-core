@@ -21,7 +21,7 @@ func TestStorageBadger(t *testing.T) {
 	pk, err := signature.NewPrivateKey(rand.Reader)
 	require.NoError(t, err, "NewPrivateKey()")
 
-	backend, err := New(filepath.Join(tmpDir, DBFile), &pk, 32*1024*1024, 100)
+	backend, err := New(filepath.Join(tmpDir, DBFile), &pk, 32*1024*1024, 100, false)
 	require.NoError(t, err, "New()")
 	defer backend.Cleanup()
 

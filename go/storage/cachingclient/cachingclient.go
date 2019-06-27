@@ -109,7 +109,7 @@ func (b *cachingClientBackend) Initialized() <-chan struct{} {
 	return b.remote.Initialized()
 }
 
-func New(remote api.Backend) (api.Backend, error) {
+func New(remote api.Backend, insecureSkipChecks bool) (api.Backend, error) {
 	lruCacheSizeInBytes := uint64(viper.GetSizeInBytes(cfgCacheSize))
 	lruFile := viper.GetString(cfgCacheFile)
 
@@ -118,7 +118,7 @@ func New(remote api.Backend) (api.Backend, error) {
 		return nil, err
 	}
 
-	rootCache, err := api.NewRootCache(local, remote, lruCacheSizeInBytes/8, 1000)
+	rootCache, err := api.NewRootCache(local, remote, lruCacheSizeInBytes/8, 1000, insecureSkipChecks)
 	if err != nil {
 		local.Close()
 		return nil, err

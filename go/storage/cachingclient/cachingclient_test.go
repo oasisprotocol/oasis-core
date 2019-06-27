@@ -34,7 +34,7 @@ func TestCachingClient(t *testing.T) {
 	var sk signature.PrivateKey
 	sk, err = signature.NewPrivateKey(rand.Reader)
 	require.NoError(t, err, "failed to generate dummy receipt signing key")
-	remote := memory.New(&sk)
+	remote := memory.New(&sk, false)
 	client, cacheDir := requireNewClient(t, remote)
 	defer func() {
 		os.RemoveAll(cacheDir)
@@ -78,8 +78,8 @@ func TestCachingClient(t *testing.T) {
 
 	// Test the persistence.
 	client.Cleanup()
-	remote = memory.New(&sk)
-	_, err = New(remote)
+	remote = memory.New(&sk, false)
+	_, err = New(remote, false)
 	require.NoError(t, err, "New - reopen")
 
 	// Check if the values are still fetchable.
@@ -101,7 +101,7 @@ func requireNewClient(t *testing.T, remote api.Backend) (api.Backend, string) {
 	viper.Set(cfgCacheFile, filepath.Join(cacheDir, "db"))
 	viper.Set(cfgCacheSize, 1024768)
 
-	client, err := New(remote)
+	client, err := New(remote, false)
 	if err != nil {
 		os.RemoveAll(cacheDir)
 	}

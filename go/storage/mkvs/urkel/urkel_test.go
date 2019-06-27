@@ -149,6 +149,22 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, log, writelog.WriteLog{writelog.LogEntry{Key: keyOne, Value: nil}})
 	require.Equal(t, log[0].Type(), writelog.LogDelete)
 
+	_, err = tree.CommitKnown(ctx, node.Root{
+		Namespace: testNs,
+		Round:     0,
+		Hash:      root,
+	})
+	require.NoError(t, err, "CommitKnown")
+
+	var bogusRoot hash.Hash
+	bogusRoot.FromBytes([]byte("bogus root"))
+	_, err = tree.CommitKnown(ctx, node.Root{
+		Namespace: testNs,
+		Round:     0,
+		Hash:      bogusRoot,
+	})
+	require.Error(t, err, "CommitKnown")
+
 	// Test close.
 	tree.Close()
 

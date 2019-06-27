@@ -77,6 +77,9 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		return
 	}
 
+	// Disable expected root checks.
+	viper.Set("storage.debug.insecure_skip_checks", true)
+
 	storage, err := storage.New(context.Background(), dataDir, nil, nil, &pk)
 	if err != nil {
 		logger.Error("failed to initialize storage",

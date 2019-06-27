@@ -19,6 +19,10 @@ import (
 // ErrClosed is the error returned when methods are used after Close is called.
 var ErrClosed = errors.New("urkel: tree is closed")
 
+// ErrKnownRootMismatch is the error returned by CommitKnown when the known
+// root mismatches.
+var ErrKnownRootMismatch = errors.New("urkel: known root mismatch")
+
 type Stats struct {
 	MaxDepth          uint8
 	InternalNodeCount uint64
@@ -274,9 +278,35 @@ func (t *Tree) Stats(ctx context.Context, maxDepth uint8) Stats {
 	return *stats
 }
 
+// CommitKnown checks that the computed root matches a known root and
+// if so, commits tree updates to the underlying database and returns
+// the write log.
+//
+// In case the computed root doesn't match the known root, the update
+// is NOT committed and ErrKnownRootMismatch is returned.
+func (t *Tree) CommitKnown(ctx context.Context, root node.Root) (writelog.WriteLog, error) {
+	writeLog, _, err := t.commitWithHooks(ctx, root.Namespace, root.Round, func(rootHash hash.Hash) error {
+		if !rootHash.Equal(&root.Hash) {
+			return ErrKnownRootMismatch
+		}
+
+		return nil
+	})
+	return writeLog, err
+}
+
 // Commit commits tree updates to the underlying database and returns
 // the write log and new merkle root.
 func (t *Tree) Commit(ctx context.Context, namespace common.Namespace, round uint64) (writelog.WriteLog, hash.Hash, error) {
+	return t.commitWithHooks(ctx, namespace, round, nil)
+}
+
+func (t *Tree) commitWithHooks(
+	ctx context.Context,
+	namespace common.Namespace,
+	round uint64,
+	beforeDbCommit func(hash.Hash) error,
+) (writelog.WriteLog, hash.Hash, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -326,6 +356,12 @@ func (t *Tree) Commit(ctx context.Context, namespace common.Namespace, round uin
 	}
 	if err := batch.PutWriteLog(oldRoot, root, log, logAnns); err != nil {
 		return nil, hash.Hash{}, err
+	}
+
+	if beforeDbCommit != nil {
+		if err := beforeDbCommit(rootHash); err != nil {
+			return nil, hash.Hash{}, err
+		}
 	}
 
 	if err := batch.Commit(root); err != nil {

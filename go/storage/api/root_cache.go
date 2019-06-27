@@ -19,6 +19,8 @@ type RootCache struct {
 	localDB      nodedb.NodeDB
 	remoteSyncer syncer.ReadSyncer
 
+	insecureSkipChecks bool
+
 	rootCache       *lru.Cache
 	applyLocks      *lru.Cache
 	applyLocksGuard sync.Mutex
@@ -100,14 +102,22 @@ func (rc *RootCache) Apply(
 			}
 		}
 
-		// TODO: Validate root against expected new root and error on mismatch.
-		//       (This will break ekiden/cmd/storage/benchmark.)
-
-		_, r, err = tree.Commit(ctx, ns, dstRound)
-		if err != nil {
+		if !rc.insecureSkipChecks {
+			_, err = tree.CommitKnown(ctx, expectedNewRoot)
+		} else {
+			// Skip known root checks -- only for use in benchmarks.
+			_, r, err = tree.Commit(ctx, ns, dstRound)
+			dstRoot = r
+			expectedNewRoot.Hash = r
+		}
+		switch err {
+		case nil:
+			r = dstRoot
+		case urkel.ErrKnownRootMismatch:
+			return nil, ErrExpectedRootMismatch
+		default:
 			return nil, err
 		}
-		expectedNewRoot.Hash = r
 
 		// Also save tree root in local LRU cache.
 		_ = rc.rootCache.Put(expectedNewRoot.EncodedHash(), tree)
@@ -135,7 +145,13 @@ func (rc *RootCache) getApplyLock(root, expectedNewRoot Root) *sync.Mutex {
 	return &lock
 }
 
-func NewRootCache(localDB nodedb.NodeDB, remoteSyncer syncer.ReadSyncer, lruSizeInBytes, applyLockLRUSlots uint64) (*RootCache, error) {
+func NewRootCache(
+	localDB nodedb.NodeDB,
+	remoteSyncer syncer.ReadSyncer,
+	lruSizeInBytes uint64,
+	applyLockLRUSlots uint64,
+	insecureSkipChecks bool,
+) (*RootCache, error) {
 	rootCache, err := lru.New(lru.Capacity(lruSizeInBytes, true))
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/rootcache: failed to create rootCache")
@@ -151,10 +167,11 @@ func NewRootCache(localDB nodedb.NodeDB, remoteSyncer syncer.ReadSyncer, lruSize
 	persistEverything := urkel.PersistEverythingFromSyncer(remoteSyncer != nil)
 
 	return &RootCache{
-		localDB:           localDB,
-		remoteSyncer:      remoteSyncer,
-		rootCache:         rootCache,
-		applyLocks:        applyLocks,
-		persistEverything: persistEverything,
+		localDB:            localDB,
+		remoteSyncer:       remoteSyncer,
+		insecureSkipChecks: insecureSkipChecks,
+		rootCache:          rootCache,
+		applyLocks:         applyLocks,
+		persistEverything:  persistEverything,
 	}, nil
 }
