@@ -285,6 +285,16 @@ func (b *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.
 				}
 
 				b.escrowNotifier.Broadcast(&e)
+			} else if bytes.Equal(pair.GetKey(), app.TagTransfer) {
+				var e api.TransferEvent
+				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
+					b.logger.Error("worker: failed to get transfer event from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				b.transferNotifier.Broadcast(&e)
 			}
 		}
 	}

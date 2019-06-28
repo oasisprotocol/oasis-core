@@ -3,6 +3,7 @@ package staking
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -23,7 +24,7 @@ type ledgerEntry struct {
 	EscrowBalance  staking.Quantity `codec:"escrow_balance"`
 	Nonce          uint64           `codec:"nonce"`
 
-	Approvals map[signature.MapKey]*staking.Quantity `codec:"approvals"` // XXX; Separate?
+	Approvals map[signature.MapKey]*staking.Quantity `codec:"approvals"`
 }
 
 func (ent *ledgerEntry) getAllowance(id signature.PublicKey) *staking.Quantity {
@@ -68,7 +69,8 @@ func (s *immutableState) rawTotalSupply() ([]byte, error) {
 	return cbor.Marshal(q), nil
 }
 
-func (s *immutableState) commonPool() (*staking.Quantity, error) {
+// CommonPool returns the balance of the global common pool.
+func (s *immutableState) CommonPool() (*staking.Quantity, error) {
 	_, value := s.Snapshot.Get(stateCommonPool)
 	if value == nil {
 		return &staking.Quantity{}, nil
@@ -83,7 +85,7 @@ func (s *immutableState) commonPool() (*staking.Quantity, error) {
 }
 
 func (s *immutableState) rawCommonPool() ([]byte, error) {
-	q, err := s.commonPool()
+	q, err := s.CommonPool()
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +145,12 @@ func (s *immutableState) account(id signature.PublicKey) *ledgerEntry {
 	return &ent
 }
 
+// EscrowBalance returns the escrow balance for the ID.
+func (s *immutableState) EscrowBalance(id signature.PublicKey) *staking.Quantity {
+	account := s.account(id)
+	return account.EscrowBalance.Clone()
+}
+
 func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -169,6 +177,106 @@ func (s *MutableState) setTotalSupply(q *staking.Quantity) {
 
 func (s *MutableState) setCommonPool(q *staking.Quantity) {
 	s.tree.Set(stateCommonPool, cbor.Marshal(q))
+}
+
+// SlashEscrow slashes up to the amount from the escrow balance of the account,
+// transfering it to the global common pool, returning true iff the amount
+// actually slashed is > 0.
+//
+// WARNING: This is an internal routine to be used to implement staking policy,
+// and MUST NOT be exposed outside of backend implementations.
+func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey, amount *staking.Quantity) (bool, error) {
+	commonPool, err := s.CommonPool()
+	if err != nil {
+		return false, errors.Wrap(err, "staking: failed to query common pool for slash ")
+	}
+
+	from := s.account(fromID)
+	slashed, err := staking.MoveUpTo(commonPool, &from.EscrowBalance, amount)
+	if err != nil {
+		return false, errors.Wrap(err, "staking: failed to slash")
+	}
+
+	ret := !slashed.IsZero()
+	if ret {
+		s.setCommonPool(commonPool)
+		s.setAccount(fromID, from)
+
+		if !ctx.IsCheckOnly() {
+			ev := cbor.Marshal(&staking.TakeEscrowEvent{
+				Owner:  fromID,
+				Tokens: *slashed,
+			})
+			ctx.EmitTag(TagTakeEscrow, ev)
+		}
+	}
+
+	return ret, nil
+}
+
+// ReleaseEscrow releases up to the amount from the escrow balance of the
+// account, shifting the released amount to the general balance, returning true
+// iff the amount released is > 0.
+//
+// WARNING: This is an internal routine to be used to implement staking policy,
+// and MUST NOT be exposed outside of backend implementations.
+func (s *MutableState) ReleaseEscrow(ctx *abci.Context, toID signature.PublicKey, amount *staking.Quantity) (bool, error) {
+	to := s.account(toID)
+	released, err := staking.MoveUpTo(&to.GeneralBalance, &to.EscrowBalance, amount)
+	if err != nil {
+		return false, errors.Wrap(err, "staking: failed to release")
+	}
+
+	ret := !released.IsZero()
+	if ret {
+		s.setAccount(toID, to)
+
+		if !ctx.IsCheckOnly() {
+			ev := cbor.Marshal(&staking.ReleaseEscrowEvent{
+				Owner:  toID,
+				Tokens: *released,
+			})
+			ctx.EmitTag(TagReleaseEscrow, ev)
+		}
+	}
+
+	return ret, nil
+}
+
+// TransferFromCommon transfers up to the amount from the global common pool
+// to the general balance of the account, returning true iff the
+// amount transfered is > 0.
+//
+// WARNING: This is an internal routine to be used to implement incentivization
+// policy, and MUST NOT be exposed outside of backend implementations.
+func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.PublicKey, amount *staking.Quantity) (bool, error) {
+	commonPool, err := s.CommonPool()
+	if err != nil {
+		return false, errors.Wrap(err, "staking: failed to query common pool for transfer")
+	}
+
+	to := s.account(toID)
+	transfered, err := staking.MoveUpTo(&to.GeneralBalance, commonPool, amount)
+	if err != nil {
+		return false, errors.Wrap(err, "staking: failed to transfer from common pool")
+	}
+
+	ret := !transfered.IsZero()
+	if ret {
+		s.setCommonPool(commonPool)
+		s.setAccount(toID, to)
+
+		if !ctx.IsCheckOnly() {
+			ev := cbor.Marshal(&staking.TransferEvent{
+				// XXX: Reserve an id for the common pool?
+				To:     toID,
+				Tokens: *transfered,
+			})
+			ctx.EmitTag(TagTransfer, ev)
+		}
+	}
+
+	return ret, nil
 }
 
 // NewMutableState creates a new mutable staking state wrapper.

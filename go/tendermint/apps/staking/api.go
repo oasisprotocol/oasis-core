@@ -24,6 +24,10 @@ var (
 	// calls (value is an app.ReleaseEscrowEvent).
 	TagReleaseEscrow = []byte("staking.release_escrow")
 
+	// TagTransfer is an ABCI transaction tag for Transfers that happen
+	// in a non-staking app (value is an app.TransferEvent).
+	TagTransfer = []byte("staking.transfer")
+
 	// QueryApp is a query for filtering transactions processed by
 	// the staking application.
 	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
