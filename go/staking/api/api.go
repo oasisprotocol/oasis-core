@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 
-	wrerr "github.com/pkg/errors"
-
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
@@ -399,34 +397,16 @@ func MoveUpTo(dst, src, n *Quantity) (*Quantity, error) {
 // Genesis is the initial ledger balances at genesis for use in the genesis
 // block and test cases.
 type Genesis struct {
-	Ledger map[signature.MapKey]*Quantity `codec:"ledger"`
+	TotalSupply Quantity `codec:"total_supply"`
+	CommonPool  Quantity `codec:"common_pool"`
+
+	Ledger map[signature.MapKey]*GenesisLedgerEntry `codec:"ledger"`
 }
 
-// NewGenesis constructs a initial ledger from a hex public key to initial
-// balance map.
-func NewGenesis(m map[string]string) (*Genesis, error) {
-	s := &Genesis{
-		Ledger: make(map[signature.MapKey]*Quantity),
-	}
-
-	for k, v := range m {
-		var id signature.PublicKey
-		if err := id.UnmarshalHex(k); err != nil {
-			return nil, wrerr.Wrap(err, "staking: malformed account ID")
-		}
-
-		mk := id.ToMapKey()
-		if s.Ledger[mk] != nil {
-			return nil, wrerr.New("staking: redundant initial account")
-		}
-
-		var initialBalance Quantity
-		if err := initialBalance.UnmarshalText([]byte(v)); err != nil {
-			return nil, wrerr.Wrap(err, "staking: invalid initial balance")
-		}
-
-		s.Ledger[mk] = &initialBalance
-	}
-
-	return s, nil
+// GenesisLedgerEntry is the per-account ledger entry for the genesis block.
+type GenesisLedgerEntry struct {
+	GeneralBalance Quantity                       `codec:"general_balance"`
+	EscrowBalance  Quantity                       `codec:"escrow_balance"`
+	Nonce          uint64                         `codec:"nonce"`
+	Allowances     map[signature.MapKey]*Quantity `codec:"allowances,omitempty"`
 }

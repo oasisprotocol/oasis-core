@@ -94,28 +94,83 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		state       = NewMutableState(app.state.DeliverTxTree())
 		totalSupply staking.Quantity
 	)
+
+	if !st.CommonPool.IsValid() {
+		return errors.New("staking: invalid genesis state CommonPool")
+	}
+	if err := totalSupply.Add(&st.CommonPool); err != nil {
+		app.logger.Error("InitChain: failed to add common pool",
+			"err", err,
+		)
+		return errors.Wrap(err, "staking: failed to add common pool")
+	}
+
 	for k, v := range st.Ledger {
 		var id signature.PublicKey
 		_ = id.UnmarshalBinary(k[:])
 
+		if !v.GeneralBalance.IsValid() {
+			app.logger.Error("InitChain: invalid genesis general balance",
+				"id", id,
+				"general_balance", v.GeneralBalance,
+			)
+			return errors.New("staking: invalid genesis general balance")
+		}
+		if !v.EscrowBalance.IsValid() {
+			app.logger.Error("InitChain: invalid genesis escrow balance",
+				"id", id,
+				"escrow_balance", v.EscrowBalance,
+			)
+			return errors.New("staking: invalid genesis escrow balance")
+		}
+
 		account := &ledgerEntry{
-			GeneralBalance: *v,
-			// TODO: Extend the genesis state to support importing.
+			GeneralBalance: v.GeneralBalance,
+			EscrowBalance:  v.EscrowBalance,
+			Nonce:          v.Nonce,
+		}
+		for spender, qty := range v.Allowances {
+			var spenderID signature.PublicKey
+			_ = spenderID.UnmarshalBinary(spender[:])
+			if !qty.IsValid() {
+				app.logger.Error("InitChain: invalid genesis allowance",
+					"id", id,
+					"spender_id", spenderID,
+					"quantity", qty,
+				)
+				return errors.New("staking: invalid genesis allowance")
+			}
+			account.setAllowance(spenderID, qty)
 		}
 
 		state.setAccount(id, account)
 		if err := totalSupply.Add(&account.GeneralBalance); err != nil {
-			app.logger.Error("InitChain: invalid general balance",
-				"id",
-				"generalBalance", account.GeneralBalance,
+			app.logger.Error("InitChain: failed to add general balance",
+				"err", err,
 			)
-			return errors.Wrap(err, "staking: invalid general balance")
+			return errors.Wrap(err, "staking: failed to add general balance")
+		}
+		if err := totalSupply.Add(&account.EscrowBalance); err != nil {
+			app.logger.Error("InitChain: failed to add escrow balance",
+				"err", err,
+			)
+			return errors.Wrap(err, "staking: failed to add escrow balance")
 		}
 	}
+
+	if totalSupply.Cmp(&st.TotalSupply) != 0 {
+		app.logger.Error("InitChain: total supply mismatch",
+			"expected", st.TotalSupply,
+			"actual", st.TotalSupply,
+		)
+	}
+
+	state.setCommonPool(&st.CommonPool)
 	state.setTotalSupply(&totalSupply)
 
-	app.logger.Debug("InitChain: setting total supply",
-		"totalSupply", totalSupply,
+	app.logger.Debug("InitChain: allocations complete",
+		"common_pool", st.CommonPool,
+		"total_supply", totalSupply,
 	)
 
 	return nil

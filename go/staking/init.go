@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/staking/tendermint"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -30,10 +31,12 @@ func New(ctx context.Context, tmService service.TendermintService) (api.Backend,
 
 	// Pull in the debug genesis state if configured.
 	var debugGenesisState *api.Genesis
-	if m := viper.GetStringMapString(cfgDebugGenesisState); len(m) > 0 {
-		if debugGenesisState, err = api.NewGenesis(m); err != nil {
+	if strGenesis := viper.GetString(cfgDebugGenesisState); strGenesis != "" {
+		var tmp api.Genesis
+		if err = json.Unmarshal([]byte(strGenesis), &tmp); err != nil {
 			return nil, err
 		}
+		debugGenesisState = &tmp
 	}
 
 	switch strings.ToLower(backend) {
@@ -52,7 +55,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgBackend, tendermint.BackendName, "Staking backend")
 
 		// cfgDebugGenesisState isn't for anything but test cases.
-		cmd.Flags().StringToString(cfgDebugGenesisState, nil, "(Debug only) Staking genesis state")
+		cmd.Flags().String(cfgDebugGenesisState, "", "(Debug only) Staking genesis state")
 		_ = cmd.Flags().MarkHidden(cfgDebugGenesisState)
 	}
 
