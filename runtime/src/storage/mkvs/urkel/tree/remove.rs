@@ -139,6 +139,10 @@ impl UrkelTree {
                         int.clean = false;
                     }
                     ptr.borrow_mut().clean = false;
+                    // No longer eligible for eviction as it is dirty.
+                    self.cache
+                        .borrow_mut()
+                        .rollback_node(ptr.clone(), NodeKind::Internal);
                 }
 
                 return Ok((ptr.clone(), changed, old_val));
