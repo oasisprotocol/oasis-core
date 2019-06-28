@@ -114,6 +114,34 @@ func TestLRUCapacityBytes(t *testing.T) {
 	require.False(ok, "Put - expected entry evicted")
 }
 
+func TestLRURemoval(t *testing.T) {
+	require := require.New(t)
+
+	const cacheSize = 5
+
+	cache, err := New(
+		Capacity(uint64(cacheSize*sha256.Size), true),
+	)
+	require.NoError(err, "New")
+
+	entries := makeEntries(cacheSize)
+	for _, ent := range entries {
+		err = cache.Put(ent.key, ent)
+		require.NoError(err, "Put")
+	}
+
+	sizeBeforeRemoval := cache.Size()
+
+	existed := cache.Remove(entries[0].key)
+	require.True(existed, "Remove - expected entry to exist")
+
+	sizeAfterRemoval := cache.Size()
+
+	_, ok := cache.Peek(entries[0].key)
+	require.False(ok, "Peek - expected entry to not exist after removal")
+	require.Equal(sizeBeforeRemoval-entries[0].Size(), sizeAfterRemoval, "Size - expected size to reduce by entry size after removal")
+}
+
 type testEntry struct {
 	key   string
 	value []byte

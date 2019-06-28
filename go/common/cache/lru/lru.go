@@ -93,6 +93,21 @@ func (c *Cache) Peek(key interface{}) (interface{}, bool) {
 	return c.getEntry(key, true)
 }
 
+// Remove removes the key from the cache and returns true if the key existed, otherwise false.
+func (c *Cache) Remove(key interface{}) bool {
+	c.Lock()
+	defer c.Unlock()
+
+	elem, ok := c.entries[key]
+	if ok {
+		c.lru.Remove(elem)
+		delete(c.entries, key)
+		c.size -= c.getValueSize(elem.Value.(*cacheEntry).value)
+	}
+
+	return ok
+}
+
 // Keys returns the keys for every entry in the cache, from the least-recently-used
 // to the most-recently-used.
 func (c *Cache) Keys() []interface{} {

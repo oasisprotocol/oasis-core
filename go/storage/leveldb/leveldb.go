@@ -129,7 +129,7 @@ func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes uint64, 
 		return nil, err
 	}
 
-	rootCache, err := api.NewRootCache(ndb, lruSizeInBytes, applyLockLRUSlots)
+	rootCache, err := api.NewRootCache(ndb, nil, lruSizeInBytes, applyLockLRUSlots)
 	if err != nil {
 		ndb.Close()
 		return nil, err

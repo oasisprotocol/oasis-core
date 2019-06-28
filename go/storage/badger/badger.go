@@ -45,7 +45,7 @@ func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLo
 		return nil, errors.Wrap(err, "storage/badger: failed to open node database")
 	}
 
-	rootCache, err := api.NewRootCache(ndb, lruSizeInBytes, applyLockLRUSlots)
+	rootCache, err := api.NewRootCache(ndb, nil, lruSizeInBytes, applyLockLRUSlots)
 	if err != nil {
 		ndb.Close()
 		return nil, errors.Wrap(err, "storage/badger: failed to create root cache")
