@@ -50,6 +50,7 @@ func (app *stakingApplication) OnRegister(state *abci.ApplicationState, queryRou
 
 	// Register the query handlers.
 	queryRouter.AddRoute(QueryTotalSupply, nil, app.queryTotalSupply)
+	queryRouter.AddRoute(QueryCommonPool, nil, app.queryCommonPool)
 	queryRouter.AddRoute(QueryAccounts, nil, app.queryAccounts)
 	queryRouter.AddRoute(QueryAccountInfo, api.QueryGetByIDRequest{}, app.queryAccountInfo)
 	queryRouter.AddRoute(QueryAllowance, QueryAllowanceRequest{}, app.queryAllowance)
@@ -151,6 +152,11 @@ func (app *stakingApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {
 func (app *stakingApplication) queryTotalSupply(s, r interface{}) ([]byte, error) {
 	state := s.(*immutableState)
 	return state.rawTotalSupply()
+}
+
+func (app *stakingApplication) queryCommonPool(s, r interface{}) ([]byte, error) {
+	state := s.(*immutableState)
+	return state.rawCommonPool()
 }
 
 func (app *stakingApplication) queryAccounts(s, r interface{}) ([]byte, error) {

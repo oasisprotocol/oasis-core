@@ -72,6 +72,9 @@ type Backend interface {
 	// TotalSupply returns the total nmber of tokens.
 	TotalSupply(ctx context.Context) (*Quantity, error)
 
+	// CommonPool returns the common pool balance.
+	CommonPool(ctx context.Context) (*Quantity, error)
+
 	// Accounts returns the IDs of all accounts with a non-zero general
 	// or escrow balance.
 	Accounts(ctx context.Context) ([]signature.PublicKey, error)

@@ -69,6 +69,10 @@ func testInitialEnv(t *testing.T, backend api.Backend) {
 	require.Equal(&testTotalSupply, generalBalance, "src: generalBalance")
 	require.True(escrowBalance.IsZero(), "src: escrowBalance")
 	require.EqualValues(0, nonce, "src: nonce")
+
+	commonPool, err := backend.CommonPool(context.Background())
+	require.NoError(err, "CommonPool")
+	require.True(commonPool.IsZero(), "CommonPool - initial value")
 }
 
 func testTransfer(t *testing.T, backend api.Backend) {

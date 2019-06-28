@@ -59,6 +59,20 @@ func (b *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, err
 	return &data, nil
 }
 
+func (b *tendermintBackend) CommonPool(ctx context.Context) (*api.Quantity, error) {
+	response, err := b.service.Query(app.QueryCommonPool, nil, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "staking: common pool query failed")
+	}
+
+	var data api.Quantity
+	if err := cbor.Unmarshal(response, &data); err != nil {
+		return nil, errors.Wrap(err, "staking: common pool malformed response")
+	}
+
+	return &data, nil
+}
+
 func (b *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey, error) {
 	response, err := b.service.Query(app.QueryAccounts, nil, 0)
 	if err != nil {

@@ -42,6 +42,18 @@ func (s *grpcServer) GetTotalSupply(ctx context.Context, req *pb.GetTotalSupplyR
 	return &resp, nil
 }
 
+func (s *grpcServer) GetCommonPool(ctx context.Context, req *pb.GetCommonPoolRequest) (*pb.GetCommonPoolResponse, error) {
+	commonPool, err := s.backend.CommonPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp pb.GetCommonPoolResponse
+	resp.CommonPool, _ = commonPool.MarshalBinary()
+
+	return &resp, nil
+}
+
 func (s *grpcServer) GetAccounts(ctx context.Context, req *pb.GetAccountsRequest) (*pb.GetAccountsResponse, error) {
 	accounts, err := s.backend.Accounts(ctx)
 	if err != nil {

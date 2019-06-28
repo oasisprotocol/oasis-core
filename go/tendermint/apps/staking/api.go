@@ -33,6 +33,9 @@ const (
 	// QueryTotalSupply is the path for a TotalSupply query.
 	QueryTotalSupply = AppName + "/total_supply"
 
+	// QueryCommonPool is the path for a CommonPool query.
+	QueryCommonPool = AppName + "/common_pool"
+
 	// QueryAccounts is the path for an Accounts query.
 	QueryAccounts = AppName + "/accounts"
 

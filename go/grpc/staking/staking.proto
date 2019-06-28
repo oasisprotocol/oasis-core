@@ -8,6 +8,7 @@ service Staking {
 	rpc GetName(GetNameRequest) returns (GetNameResponse) {}
 	rpc GetSymbol(GetSymbolRequest) returns (GetSymbolResponse) {}
 	rpc GetTotalSupply(GetTotalSupplyRequest) returns (GetTotalSupplyResponse) {}
+	rpc GetCommonPool(GetCommonPoolRequest) returns (GetCommonPoolResponse) {}
 	rpc GetAccounts(GetAccountsRequest) returns (GetAccountsResponse) {} // TODO: Stream this?
 	rpc GetAccountInfo(GetAccountInfoRequest) returns (GetAccountInfoResponse) {}
 	rpc GetAllowance(GetAllowanceRequest) returns (GetAllowanceResponse) {}
@@ -42,6 +43,12 @@ message GetTotalSupplyRequest {}
 
 message GetTotalSupplyResponse {
 	bytes total_supply = 1;
+}
+
+message GetCommonPoolRequest {}
+
+message GetCommonPoolResponse {
+	bytes common_pool = 1;
 }
 
 message GetAccountsRequest {}

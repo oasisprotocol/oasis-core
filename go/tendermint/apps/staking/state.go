@@ -13,7 +13,10 @@ import (
 
 const stateAccountsMap = "staking/accounts/%s"
 
-var stateTotalSupply = []byte("staking/total_supply")
+var (
+	stateTotalSupply = []byte("staking/total_supply")
+	stateCommonPool  = []byte("staking/common_pool")
+)
 
 type ledgerEntry struct {
 	GeneralBalance staking.Quantity `codec:"general_balance"`
@@ -58,6 +61,29 @@ func (s *immutableState) totalSupply() (*staking.Quantity, error) {
 
 func (s *immutableState) rawTotalSupply() ([]byte, error) {
 	q, err := s.totalSupply()
+	if err != nil {
+		return nil, err
+	}
+
+	return cbor.Marshal(q), nil
+}
+
+func (s *immutableState) commonPool() (*staking.Quantity, error) {
+	_, value := s.Snapshot.Get(stateCommonPool)
+	if value == nil {
+		return &staking.Quantity{}, nil
+	}
+
+	var q staking.Quantity
+	if err := cbor.Unmarshal(value, &q); err != nil {
+		return nil, err
+	}
+
+	return &q, nil
+}
+
+func (s *immutableState) rawCommonPool() ([]byte, error) {
+	q, err := s.commonPool()
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +165,10 @@ func (s *MutableState) setAccount(id signature.PublicKey, account *ledgerEntry) 
 
 func (s *MutableState) setTotalSupply(q *staking.Quantity) {
 	s.tree.Set(stateTotalSupply, cbor.Marshal(q))
+}
+
+func (s *MutableState) setCommonPool(q *staking.Quantity) {
+	s.tree.Set(stateCommonPool, cbor.Marshal(q))
 }
 
 // NewMutableState creates a new mutable staking state wrapper.
