@@ -82,15 +82,6 @@ func (b *cachingClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 	return tree.GetNode(ctx, root, id)
 }
 
-func (b *cachingClientBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	tree, err := b.rootCache.GetTree(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
-	return tree.GetValue(ctx, root, id)
-}
-
 func (b *cachingClientBackend) Cleanup() {
 	b.remote.Cleanup()
 	b.local.Close()

@@ -177,26 +177,6 @@ func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.G
 	return &pb.GetNodeResponse{Node: serializedNode}, nil
 }
 
-func (s *grpcServer) GetValue(ctx context.Context, req *pb.GetValueRequest) (*pb.GetValueResponse, error) {
-	var root hash.Hash
-	if err := root.UnmarshalBinary(req.GetRoot()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
-	}
-
-	var id hash.Hash
-	if err := id.UnmarshalBinary(req.GetId()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal id")
-	}
-
-	<-s.backend.Initialized()
-	value, err := s.backend.GetValue(ctx, root, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return &pb.GetValueResponse{Value: value}, nil
-}
-
 // NewGRPCServer intializes and registers a grpc storage server backed
 // by the provided Backend.
 func NewGRPCServer(srv *grpc.Server, b api.Backend) {

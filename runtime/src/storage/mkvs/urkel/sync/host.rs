@@ -90,16 +90,4 @@ impl ReadSync for HostReadSyncer {
             Err(error) => Err(error),
         }
     }
-
-    fn get_value(&mut self, ctx: Context, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
-        let req = Body::HostStorageSyncGetValueRequest {
-            root_hash: root_hash,
-            value_id: id,
-        };
-        match self.protocol.make_request(ctx, req) {
-            Ok(Body::HostStorageSyncSerializedResponse { serialized }) => Ok(Some(serialized)),
-            Ok(_) => Err(ProtocolError::InvalidResponse.into()),
-            Err(error) => Err(error),
-        }
-    }
 }

@@ -1,4 +1,4 @@
-use std::{any::Any, cell::RefCell, rc::Rc, sync::Arc};
+use std::{any::Any, sync::Arc};
 
 use failure::{Error, Fallible};
 use io_context::Context;
@@ -100,24 +100,6 @@ impl ReadSync for UrkelTree {
                 .deref_node_ptr(&ctx, id, ptr, None)
                 .map_err(|_| Error::from(SyncerError::NodeNotFound))?;
             Ok(node.unwrap().borrow().extract())
-        }
-    }
-
-    fn get_value(&mut self, ctx: Context, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
-        let ctx = ctx.freeze();
-        if root_hash != self.cache.borrow().get_pending_root().borrow().hash {
-            Err(SyncerError::InvalidRoot.into())
-        } else if !self.cache.borrow().get_pending_root().borrow().clean {
-            Err(SyncerError::DirtyRoot.into())
-        } else {
-            self.cache.borrow_mut().deref_value_ptr(
-                &ctx,
-                Rc::new(RefCell::new(ValuePointer {
-                    clean: true,
-                    hash: id,
-                    ..Default::default()
-                })),
-            )
         }
     }
 }

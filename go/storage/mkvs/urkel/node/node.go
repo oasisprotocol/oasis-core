@@ -82,11 +82,17 @@ func (p *Pointer) IsClean() bool {
 
 // Extract makes a copy of the pointer containing only hash references.
 func (p *Pointer) Extract() *Pointer {
+	if !p.IsClean() {
+		panic("urkel: extract called on dirty pointer")
+	}
+	return p.ExtractUnchecked()
+}
+
+// Extract makes a copy of the pointer containing only hash references
+// without checking the dirty flag.
+func (p *Pointer) ExtractUnchecked() *Pointer {
 	if p == nil {
 		return nil
-	}
-	if !p.Clean {
-		panic("urkel: extract called on dirty pointer")
 	}
 
 	return &Pointer{
@@ -118,6 +124,10 @@ type Node interface {
 
 	// Extract makes a copy of the node containing only hash references.
 	Extract() Node
+
+	// ExtractUnchecked makes a copy of the node containing only hash
+	// references without checking the dirty flag.
+	ExtractUnchecked() Node
 
 	// Validate that the node is internally consistent with the given
 	// node hash. This does NOT verify that the whole subtree is
@@ -158,12 +168,17 @@ func (n *InternalNode) Extract() Node {
 	if !n.Clean {
 		panic("urkel: extract called on dirty node")
 	}
+	return n.ExtractUnchecked()
+}
 
+// Extract makes a copy of the node containing only hash references
+// without checking the dirty flag.
+func (n *InternalNode) ExtractUnchecked() Node {
 	return &InternalNode{
 		Clean: true,
 		Hash:  n.Hash,
-		Left:  n.Left.Extract(),
-		Right: n.Right.Extract(),
+		Left:  n.Left.ExtractUnchecked(),
+		Right: n.Right.ExtractUnchecked(),
 	}
 }
 
@@ -285,12 +300,17 @@ func (n *LeafNode) Extract() Node {
 	if !n.Clean {
 		panic("urkel: extract called on dirty node")
 	}
+	return n.ExtractUnchecked()
+}
 
+// Extract makes a copy of the node containing only hash references
+// without checking the dirty flag.
+func (n *LeafNode) ExtractUnchecked() Node {
 	return &LeafNode{
 		Clean: true,
 		Hash:  n.Hash,
 		Key:   n.Key,
-		Value: n.Value.Extract(),
+		Value: n.Value.ExtractUnchecked(),
 	}
 }
 
@@ -428,7 +448,12 @@ func (v *Value) Extract() *Value {
 	if !v.Clean {
 		panic("urkel: extract called on dirty value")
 	}
+	return v.ExtractUnchecked()
+}
 
+// Extract makes a copy of the value containing only hash references
+// without checking the dirty flag.
+func (v *Value) ExtractUnchecked() *Value {
 	return &Value{
 		Clean: true,
 		Hash:  v.Hash,

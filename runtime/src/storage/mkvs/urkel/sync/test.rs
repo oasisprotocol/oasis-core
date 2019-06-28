@@ -83,10 +83,6 @@ impl ReadSync for DummySerialSyncer {
         new_node.unmarshal_binary(bytes.as_ref())?;
         Ok(Rc::new(RefCell::new(new_node)))
     }
-
-    fn get_value(&mut self, ctx: Context, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
-        self.backing.get_value(ctx, root_hash, id)
-    }
 }
 
 #[test]

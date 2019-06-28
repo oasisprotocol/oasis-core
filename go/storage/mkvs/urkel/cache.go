@@ -324,8 +324,14 @@ func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer,
 	}
 
 	if ptr.Node != nil {
-		c.useNode(ptr)
-		return ptr.Node, nil
+		// If this is a leaf node, check if the value has been evicted. In this case
+		// treat it as if we need to re-fetch the node.
+		if n, ok := ptr.Node.(*node.LeafNode); ok && n.Value.Value == nil {
+			c.removeNode(ptr)
+		} else {
+			c.useNode(ptr)
+			return ptr.Node, nil
+		}
 	}
 
 	if !ptr.Clean || ptr.Hash.IsEmpty() {
@@ -397,34 +403,7 @@ func (c *cache) derefValue(ctx context.Context, v *node.Value) ([]byte, error) {
 		return nil, nil
 	}
 
-	val, err := c.db.GetValue(v.Hash)
-	switch err {
-	case nil:
-		v.Value = val
-	case db.ErrNodeNotFound:
-		// Value not found in local node database, try the syncer.
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.syncerGetNodeTimeout)
-		defer cancel()
-
-		var value []byte
-		if value, err = c.rs.GetValue(ctx, c.syncRoot, v.Hash); err != nil {
-			return nil, err
-		}
-
-		v.Value = value
-
-		if err = v.Validate(v.Hash); err != nil {
-			return nil, err
-		}
-	default:
-		return nil, err
-	}
-
-	// Value was fetched, be sure to treat it as committed.
-	c.commitValue(v)
-
-	return v.Value, nil
+	return nil, errors.New("urkel: leaf node does not contain value")
 }
 
 // prefetch prefetches a given subtree up to the configured prefetch depth.

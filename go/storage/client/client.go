@@ -488,22 +488,6 @@ func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 	return n, nil
 }
 
-func (b *storageClientBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	var req storage.GetValueRequest
-	req.Root, _ = root.MarshalBinary()
-	req.Id, _ = id.MarshalBinary()
-
-	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
-		return c.GetValue(ctx, &req)
-	})
-	if err != nil {
-		return nil, err
-	}
-	resp := respRaw.(*storage.GetValueResponse)
-
-	return resp.GetValue(), nil
-}
-
 func (b *storageClientBackend) Cleanup() {
 	b.connectedNodesState.Lock()
 	defer b.connectedNodesState.Unlock()

@@ -80,10 +80,6 @@ func (s *dummySerialSyncer) GetNode(ctx context.Context, root hash.Hash, id node
 	return node.UnmarshalBinary(bytes)
 }
 
-func (s *dummySerialSyncer) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	return s.backing.GetValue(ctx, root, id)
-}
-
 func testBasic(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
 	tree := New(nil, ndb)

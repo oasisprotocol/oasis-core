@@ -131,15 +131,6 @@ func (b *memoryBackend) GetNode(ctx context.Context, root hash.Hash, id api.Node
 	return tree.GetNode(ctx, root, id)
 }
 
-func (b *memoryBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
-	if err != nil {
-		return nil, err
-	}
-
-	return tree.GetValue(ctx, root, id)
-}
-
 func (b *memoryBackend) Cleanup() {
 	b.nodedb.Close()
 }

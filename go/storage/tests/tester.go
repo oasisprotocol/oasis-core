@@ -111,15 +111,6 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	require.NoError(t, err, "GetNode()")
 	require.NotNil(t, n)
 
-	// Get the value using its hash.
-	origValue := testValues[2]
-	var hash hash.Hash
-	hash.FromBytes(origValue)
-	value, err := backend.GetValue(context.Background(), receiptBody.Roots[0], hash)
-	require.NoError(t, err, "GetValue() should not return an error")
-	require.NotNil(t, value, "GetValue() should return a value")
-	require.Equal(t, value, origValue, "GetValue()'s returned value should equal the original value")
-
 	// Now try applying the same operations again, we should get the same root.
 	receipts, err = backend.Apply(context.Background(), root, receiptBody.Roots[0], wl)
 	require.NoError(t, err, "Apply() should not return an error")

@@ -99,15 +99,6 @@ func (b *leveldbBackend) GetNode(ctx context.Context, root hash.Hash, id api.Nod
 	return tree.GetNode(ctx, root, id)
 }
 
-func (b *leveldbBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	tree, err := b.rootCache.GetTree(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
-	return tree.GetValue(ctx, root, id)
-}
-
 func (b *leveldbBackend) Cleanup() {
 	b.closeOnce.Do(func() {
 		b.nodedb.Close()

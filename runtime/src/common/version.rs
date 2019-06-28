@@ -21,6 +21,6 @@ impl Into<u64> for Version {
 // the worker host.
 pub const PROTOCOL_VERSION: Version = Version {
     major: 0,
-    minor: 1,
+    minor: 2,
     patch: 0,
 };

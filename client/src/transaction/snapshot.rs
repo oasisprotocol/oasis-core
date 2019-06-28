@@ -7,7 +7,7 @@ use ekiden_runtime::{
         mkvs::{
             urkel::{
                 marshal::Marshal,
-                sync::{NodeBox, NodeID, NodeRef, ReadSync, Subtree, Value},
+                sync::{NodeBox, NodeID, NodeRef, ReadSync, Subtree},
             },
             UrkelTree, WriteLog,
         },
@@ -200,23 +200,5 @@ impl ReadSync for RemoteReadSync {
         let mut node = NodeBox::default();
         node.unmarshal_binary(response.get_node())?;
         Ok(Rc::new(RefCell::new(node)))
-    }
-
-    fn get_value(&mut self, _ctx: Context, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
-        let mut request = api::storage::GetValueRequest::new();
-        request.set_root(root_hash.as_ref().to_vec());
-        request.set_id(id.as_ref().to_vec());
-
-        let mut response = self
-            .0
-            .get_value(&request)
-            .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?;
-
-        let value = response.take_value();
-        if value.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(value))
-        }
     }
 }

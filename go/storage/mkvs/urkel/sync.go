@@ -250,26 +250,3 @@ func (t *Tree) GetNode(ctx context.Context, root hash.Hash, id node.ID) (node.No
 	}
 	return nd.Extract(), nil
 }
-
-// GetValue retrieves a specific value under the given root.
-//
-// It is the responsibility of the caller to validate that the value
-// is consistent.
-func (t *Tree) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	t.cache.Lock()
-	defer t.cache.Unlock()
-
-	if !root.Equal(&t.cache.pendingRoot.Hash) {
-		return nil, syncer.ErrInvalidRoot
-	}
-	if !t.cache.pendingRoot.IsClean() {
-		return nil, syncer.ErrDirtyRoot
-	}
-
-	val, err := t.cache.derefValue(ctx, &node.Value{Clean: true, Hash: id})
-	if err != nil {
-		return nil, syncer.ErrValueNotFound
-	}
-
-	return val, nil
-}

@@ -379,14 +379,29 @@ impl Cache for LRUCache {
         ptr: NodePtrRef,
         key: Option<Hash>,
     ) -> Fallible<Option<NodeRef>> {
-        let mut ptr = ptr.borrow_mut();
+        let ptr_ref = ptr;
+        let ptr = ptr_ref.borrow();
         if let Some(ref node) = &ptr.node {
-            return Ok(Some(node.clone()));
+            // If this is a leaf node, check if the value has been evicted. In this case
+            // treat it as if we need to re-fetch the node.
+            if let NodeBox::Leaf(ref n) = *node.borrow() {
+                if n.value.borrow().value == None {
+                    self.remove_node(ptr_ref.clone());
+                } else {
+                    self.use_node(ptr_ref.clone());
+                    return Ok(Some(node.clone()));
+                }
+            } else {
+                self.use_node(ptr_ref.clone());
+                return Ok(Some(node.clone()));
+            }
         }
         if !ptr.clean || ptr.is_null() {
             return Ok(None);
         }
+        drop(ptr);
 
+        let mut ptr = ptr_ref.borrow_mut();
         match key {
             None => {
                 let node_ref = self.read_syncer.get_node(
@@ -421,27 +436,21 @@ impl Cache for LRUCache {
         Ok(ptr.node.clone())
     }
 
-    fn deref_value_ptr(&mut self, ctx: &Arc<Context>, val: ValuePtrRef) -> Fallible<Option<Value>> {
+    fn deref_value_ptr(
+        &mut self,
+        _ctx: &Arc<Context>,
+        val: ValuePtrRef,
+    ) -> Fallible<Option<Value>> {
         if self.use_value(val.clone()) || val.borrow().value != None {
             return Ok(val.borrow().value.clone());
         }
 
-        {
-            let mut val = val.borrow_mut();
-            if !val.clean {
-                return Ok(None);
-            }
-
-            let value =
-                self.read_syncer
-                    .get_value(Context::create_child(ctx), self.sync_root, val.hash)?;
-            val.value = value;
-            let hash = val.hash;
-            val.validate(hash)?;
+        if !val.borrow().clean {
+            return Ok(None);
         }
-        self.commit_value(val.clone());
 
-        Ok(val.borrow().value.clone())
+        // A leaf node should always also contain a value.
+        panic!("urkel: leaf node does not contain value");
     }
 
     fn commit_node(&mut self, ptr: NodePtrRef) {

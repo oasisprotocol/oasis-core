@@ -46,10 +46,4 @@ pub trait ReadSync {
     /// is consistent. The node's cached hash should be considered invalid
     /// and must be recomputed locally.
     fn get_node(&mut self, ctx: Context, root_hash: Hash, id: NodeID) -> Fallible<NodeRef>;
-
-    /// Retrieve a specific value under the given root.
-    ///
-    /// It is the responsibility of the caller to validate that the value
-    /// is consistent.
-    fn get_value(&mut self, ctx: Context, root_hash: Hash, id: Hash) -> Fallible<Option<Value>>;
 }
