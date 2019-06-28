@@ -5,10 +5,8 @@ import (
 	"context"
 
 	"github.com/eapache/channels"
-	"github.com/pkg/errors"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -18,7 +16,6 @@ import (
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
-	tmbeacon "github.com/oasislabs/ekiden/go/tendermint/componentapis/beacon"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -165,17 +162,10 @@ func (s *tendermintScheduler) onEventDataNewBlock(ctx context.Context, ev tmtype
 // New constracts a new tendermint-based scheduler Backend instance.
 func New(ctx context.Context,
 	timeSource epochtime.Backend,
-	beacon beacon.Backend,
 	service service.TendermintService,
 ) (api.Backend, error) {
-	// We can only work with an ABCI beacon.
-	abciBeacon, ok := beacon.(tmbeacon.Backend)
-	if !ok {
-		return nil, errors.New("scheduler/tendermint: need an ABCI beacon backend")
-	}
-
 	// Initialze and register the tendermint service component.
-	app := app.New(timeSource, abciBeacon)
+	app := app.New(timeSource)
 	if err := service.RegisterApplication(app, []string{registryapp.AppName}); err != nil {
 		return nil, err
 	}

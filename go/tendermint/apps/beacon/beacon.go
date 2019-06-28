@@ -21,7 +21,8 @@ import (
 var (
 	errUnexpectedTransaction = errors.New("beacon: unexpected transaction")
 
-	entropyCtx = []byte("EkB-tmnt")
+	prodEntropyCtx  = []byte("EkB-tmnt")
+	debugEntropyCtx = []byte("Ekb-Dumm")
 
 	_ abci.Application = (*beaconApplication)(nil)
 )
@@ -31,6 +32,8 @@ type beaconApplication struct {
 	state  *abci.ApplicationState
 
 	timeSource epochtime.Backend
+
+	debugDeterministic bool
 }
 
 func (app *beaconApplication) Name() string {
@@ -109,31 +112,39 @@ func (app *beaconApplication) queryGetBeacon(s interface{}, r interface{}) ([]by
 }
 
 func (app *beaconApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
-	var entropy []byte
+	var entropyCtx, entropy []byte
 
-	height := app.state.BlockHeight()
-	if height <= 1 {
-		// No meaningful previous commit, use the block hash.  This isn't
-		// fantastic, but it's only for one epoch.
-		app.logger.Debug("onEpochChange: using block hash as entropy")
-		entropy = req.Hash
-	} else {
-		// Use the previous commit hash as the entropy input, under the theory
-		// that the merkle root of all the commits that went into the last
-		// block is harder for any single validator to game than the block
-		// hash.
-		//
-		// TODO: This still isn't ideal, and an entirely different beacon
-		// entropy source should be written, be it based around SCRAPE,
-		// a VDF, naive commit-reveal, or even just calling an SGX enclave.
-		app.logger.Debug("onEpochChange: using commit hash as entropy")
-		entropy = req.Header.GetLastCommitHash()
-	}
-	if len(entropy) == 0 {
-		return errors.New("onEpochChange: failed to obtain entropy")
+	switch app.debugDeterministic {
+	case false:
+		entropyCtx = prodEntropyCtx
+
+		height := app.state.BlockHeight()
+		if height <= 1 {
+			// No meaningful previous commit, use the block hash.  This isn't
+			// fantastic, but it's only for one epoch.
+			app.logger.Debug("onEpochChange: using block hash as entropy")
+			entropy = req.Hash
+		} else {
+			// Use the previous commit hash as the entropy input, under the theory
+			// that the merkle root of all the commits that went into the last
+			// block is harder for any single validator to game than the block
+			// hash.
+			//
+			// TODO: This still isn't ideal, and an entirely different beacon
+			// entropy source should be written, be it based around SCRAPE,
+			// a VDF, naive commit-reveal, or even just calling an SGX enclave.
+			app.logger.Debug("onEpochChange: using commit hash as entropy")
+			entropy = req.Header.GetLastCommitHash()
+		}
+		if len(entropy) == 0 {
+			return errors.New("onEpochChange: failed to obtain entropy")
+		}
+	case true:
+		// UNSAFE/DEBUG - Deterministic beacon.
+		entropyCtx = debugEntropyCtx
 	}
 
-	b := getBeacon(epoch, entropy)
+	b := getBeacon(epoch, entropyCtx, entropy)
 
 	app.logger.Debug("onEpochChange: generated beacon",
 		"epoch", epoch,
@@ -162,14 +173,20 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, event *beacon.Gener
 }
 
 // New constructs a new beacon application instance.
-func New(timeSource epochtime.Backend) abci.Application {
-	return &beaconApplication{
-		logger:     logging.GetLogger("tendermint/beacon"),
-		timeSource: timeSource,
+func New(timeSource epochtime.Backend, debugDeterministic bool) abci.Application {
+	app := &beaconApplication{
+		logger:             logging.GetLogger("tendermint/beacon"),
+		timeSource:         timeSource,
+		debugDeterministic: debugDeterministic,
 	}
+	if app.debugDeterministic {
+		app.logger.Warn("Determistic beacon entropy is NOT FOR PRODUCTION USE")
+	}
+
+	return app
 }
 
-func getBeacon(epoch epochtime.EpochTime, entropy []byte) []byte {
+func getBeacon(epoch epochtime.EpochTime, entropyCtx []byte, entropy []byte) []byte {
 	var tmp [8]byte
 	binary.LittleEndian.PutUint64(tmp[:], uint64(epoch))
 
