@@ -164,6 +164,7 @@ run_backend_tendermint_committee() {
             --epochtime.backend ${epochtime_backend} \
             --epochtime.tendermint.interval 30 \
             --beacon.backend tendermint \
+            ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
             --metrics.mode none \
             --storage.backend client \
             --scheduler.backend tendermint \
@@ -250,6 +251,7 @@ run_compute_node() {
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
+        ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
         --scheduler.backend tendermint \
         --registry.backend tendermint \
@@ -324,6 +326,7 @@ run_storage_node() {
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
+        ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
         --storage.backend leveldb \
         --scheduler.backend tendermint \
@@ -384,6 +387,7 @@ run_client_node() {
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
+        ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
@@ -468,6 +472,7 @@ run_keymanager_node() {
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
+        ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
         --scheduler.backend tendermint \
         --registry.backend tendermint \
@@ -527,6 +532,7 @@ run_seed_node() {
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
         --beacon.backend tendermint \
+        ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --scheduler.backend tendermint \
         --registry.backend tendermint \
         --roothash.backend tendermint \
@@ -624,8 +630,12 @@ run_test() {
     local on_success_hook="assert_basic_success"
     local client_runner=run_basic_client
     local client="none"
+    local beacon_deterministic=""
     # Load named arguments that override defaults.
     local "${@}"
+
+    # Export EKIDEN_BEACON_DETERMINISTIC setting.
+    EKIDEN_BEACON_DETERMINISTIC=${beacon_deterministic}
 
     # Check if we should run this test.
     if [[ "${TEST_FILTER:-}" == "" ]]; then
