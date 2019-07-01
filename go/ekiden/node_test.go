@@ -56,7 +56,7 @@ var (
 		{"storage.backend", "leveldb"},
 		{"storage.debug.mock_signing_key", true},
 		{"staking.backend", "tendermint"},
-		{"staking.debug.genesis_state", stakingTests.InitialBalancesArg},
+		{"staking.debug.genesis_state", stakingTests.DebugGenesisState},
 		{"tendermint.consensus.timeout_commit", 1 * time.Millisecond},
 		{"tendermint.consensus.skip_timeout_commit", true},
 		{"worker.compute.enabled", true},

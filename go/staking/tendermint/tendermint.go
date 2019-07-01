@@ -59,6 +59,20 @@ func (b *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, err
 	return &data, nil
 }
 
+func (b *tendermintBackend) CommonPool(ctx context.Context) (*api.Quantity, error) {
+	response, err := b.service.Query(app.QueryCommonPool, nil, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "staking: common pool query failed")
+	}
+
+	var data api.Quantity
+	if err := cbor.Unmarshal(response, &data); err != nil {
+		return nil, errors.Wrap(err, "staking: common pool malformed response")
+	}
+
+	return &data, nil
+}
+
 func (b *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey, error) {
 	response, err := b.service.Query(app.QueryAccounts, nil, 0)
 	if err != nil {
@@ -271,6 +285,16 @@ func (b *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.
 				}
 
 				b.escrowNotifier.Broadcast(&e)
+			} else if bytes.Equal(pair.GetKey(), app.TagTransfer) {
+				var e api.TransferEvent
+				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
+					b.logger.Error("worker: failed to get transfer event from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				b.transferNotifier.Broadcast(&e)
 			}
 		}
 	}

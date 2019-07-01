@@ -12,19 +12,24 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/staking/api"
 )
 
 const recvTimeout = 1 * time.Second
 
 var (
-	// InitialBalancesArg is a viper.Set compatible representation of
-	// of the genesis state that the backend MUST be populated with
-	// for the tests to pass.
-	InitialBalancesArg = buildInitialBalancesArg()
+	// DebugGenesisState is the string representation of the initial
+	// genesis state that the backend MUST be populated with.
+	DebugGenesisState = string(json.Marshal(debugGenesisState))
 
-	initialBalances = map[signature.MapKey]*big.Int{
-		srcID.ToMapKey(): testTotalSupply.ToBigInt(),
+	debugGenesisState = api.Genesis{
+		TotalSupply: testTotalSupply,
+		Ledger: map[signature.MapKey]*api.GenesisLedgerEntry{
+			srcID.ToMapKey(): &api.GenesisLedgerEntry{
+				GeneralBalance: testTotalSupply,
+			},
+		},
 	}
 
 	testTotalSupply = qtyFromInt(math.MaxInt64)
@@ -69,6 +74,10 @@ func testInitialEnv(t *testing.T, backend api.Backend) {
 	require.Equal(&testTotalSupply, generalBalance, "src: generalBalance")
 	require.True(escrowBalance.IsZero(), "src: escrowBalance")
 	require.EqualValues(0, nonce, "src: nonce")
+
+	commonPool, err := backend.CommonPool(context.Background())
+	require.NoError(err, "CommonPool")
+	require.True(commonPool.IsZero(), "CommonPool - initial value")
 }
 
 func testTransfer(t *testing.T, backend api.Backend) {
@@ -323,15 +332,6 @@ func mustGeneratePrivateKey() signature.PrivateKey {
 	}
 
 	return k
-}
-
-func buildInitialBalancesArg() map[string]string {
-	m := make(map[string]string)
-	for k, v := range initialBalances {
-		m[k.String()] = v.String()
-	}
-
-	return m
 }
 
 func qtyFromInt(n int) api.Quantity {

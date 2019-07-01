@@ -4,6 +4,7 @@ package genesis
 import (
 	"errors"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	staking "github.com/oasislabs/ekiden/go/staking/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
@@ -30,6 +32,7 @@ const (
 	cfgRuntime     = "runtime"
 	cfgRootHash    = "roothash"
 	cfgKeyManager  = "keymanager"
+	cfgStaking     = "staking"
 	cfgStorage     = "storage"
 	cfgValidator   = "validator"
 )
@@ -130,6 +133,14 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	staking := viper.GetString(cfgStaking)
+	if err := AppendStakingState(doc, staking, logger); err != nil {
+		logger.Error("failed to parse staking genesis state",
+			"err", err,
+		)
+		return
+	}
+
 	storage := viper.GetStringSlice(cfgStorage)
 	if err := AppendStorageState(doc, storage, logger); err != nil {
 		logger.Error("failed to parse storage genesis state",
@@ -137,6 +148,8 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		)
 		return
 	}
+
+	// TODO: Ensure consistency/sanity.
 
 	b := json.Marshal(doc)
 	if err := ioutil.WriteFile(f, b, 0600); err != nil {
@@ -179,6 +192,8 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes []string, l *
 		regSt.Entities = append(regSt.Entities, &entity)
 	}
 	if flags.DebugTestEntity() {
+		l.Warn("registering debug test entity")
+
 		ent, privKey, err := entity.TestEntity()
 		if err != nil {
 			l.Error("failed to retrive test entity",
@@ -309,10 +324,71 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 	return nil
 }
 
+// AppendStakingState appens the staking gensis state given a state file name.
+func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) error {
+	stakingSt := staking.Genesis{
+		Ledger: make(map[signature.MapKey]*staking.GenesisLedgerEntry),
+	}
+
+	if state != "" {
+		b, err := ioutil.ReadFile(state)
+		if err != nil {
+			l.Error("failed to load genesis staking status",
+				"err", err,
+				"filename", state,
+			)
+			return err
+		}
+
+		if err = json.Unmarshal(b, &stakingSt); err != nil {
+			l.Error("failed to parse genesis staking status",
+				"err", err,
+				"filename", state,
+			)
+			return err
+		}
+	}
+	if flags.DebugTestEntity() {
+		l.Warn("granting stake to the debug test entity")
+
+		ent, _, err := entity.TestEntity()
+		if err != nil {
+			l.Error("failed to retrive test entity",
+				"err", err,
+			)
+			return err
+		}
+
+		// Ok then, we hold the world ransom for One Hundred Billion Dollars.
+		var q staking.Quantity
+		if err = q.FromBigInt(big.NewInt(100000000000)); err != nil {
+			l.Error("failed to allocate test stake",
+				"err", err,
+			)
+			return err
+		}
+
+		stakingSt.Ledger[ent.ID.ToMapKey()] = &staking.GenesisLedgerEntry{
+			GeneralBalance: q,
+			EscrowBalance:  q,
+			Nonce:          0,
+		}
+
+		// Inflate the TotalSupply to account for the account's general and
+		// escrow balances.
+		_ = stakingSt.TotalSupply.Add(&q)
+		_ = stakingSt.TotalSupply.Add(&q)
+	}
+
+	doc.Staking = stakingSt
+
+	return nil
+}
+
 // AppendStorageState appends the storage genesis state given a vector
 // of state filenames.
 func AppendStorageState(doc *genesis.Document, states []string, l *logging.Logger) error {
-	storageSt := storage.Genesis{}
+	var storageSt storage.Genesis
 
 	for _, v := range states {
 		b, err := ioutil.ReadFile(v)
@@ -347,6 +423,7 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 		cmd.Flags().StringSlice(cfgEntity, nil, "path to entity registration file")
 		cmd.Flags().StringSlice(cfgRuntime, nil, "path to runtime registration file")
 		cmd.Flags().StringSlice(cfgRootHash, nil, "path to roothash genesis blocks file")
+		cmd.Flags().String(cfgStaking, "", "path to staking genesis file")
 		cmd.Flags().StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
 		cmd.Flags().StringSlice(cfgStorage, nil, "path to storage genesis state file")
 		cmd.Flags().StringSlice(cfgValidator, nil, "path to validator file")
@@ -358,6 +435,7 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 		cfgRuntime,
 		cfgRootHash,
 		cfgKeyManager,
+		cfgStaking,
 		cfgStorage,
 		cfgValidator,
 	} {

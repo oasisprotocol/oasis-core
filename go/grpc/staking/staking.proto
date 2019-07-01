@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package staking;
+option go_package = "github.com/oasislabs/ekiden/go/grpc/staking";
+
+service Staking {
+	// Calls that query.
+	rpc GetName(GetNameRequest) returns (GetNameResponse) {}
+	rpc GetSymbol(GetSymbolRequest) returns (GetSymbolResponse) {}
+	rpc GetTotalSupply(GetTotalSupplyRequest) returns (GetTotalSupplyResponse) {}
+	rpc GetCommonPool(GetCommonPoolRequest) returns (GetCommonPoolResponse) {}
+	rpc GetAccounts(GetAccountsRequest) returns (GetAccountsResponse) {} // TODO: Stream this?
+	rpc GetAccountInfo(GetAccountInfoRequest) returns (GetAccountInfoResponse) {}
+	rpc GetAllowance(GetAllowanceRequest) returns (GetAllowanceResponse) {}
+
+	// Calls that mutate state.
+	rpc Transfer(TransferRequest) returns (TransferResponse) {}
+	rpc Approve(ApproveRequest) returns (ApproveResponse) {}
+	rpc Withdraw(WithdrawRequest) returns (WithdrawResponse) {}
+	rpc Burn(BurnRequest) returns (BurnResponse) {}
+	rpc AddEscrow(AddEscrowRequest) returns (AddEscrowResponse) {}
+
+	// Calls that watch events.
+	rpc WatchTransfers (WatchTransfersRequest) returns (stream WatchTransfersResponse) {}
+	rpc WatchApprovals (WatchApprovalsRequest) returns (stream WatchApprovalsResponse) {}
+	rpc WatchBurns (WatchBurnsRequest) returns (stream WatchBurnsResponse) {}
+	rpc WatchEscrows (WatchEscrowsRequest) returns (stream WatchEscrowsResponse) {}
+}
+
+message GetNameRequest {}
+
+message GetNameResponse {
+	string name = 1;
+}
+
+message GetSymbolRequest {}
+
+message GetSymbolResponse {
+	string symbol = 1;
+}
+
+message GetTotalSupplyRequest {}
+
+message GetTotalSupplyResponse {
+	bytes total_supply = 1;
+}
+
+message GetCommonPoolRequest {}
+
+message GetCommonPoolResponse {
+	bytes common_pool = 1;
+}
+
+message GetAccountsRequest {}
+
+message GetAccountsResponse {
+	repeated bytes ids = 1;
+}
+
+message GetAccountInfoRequest {
+	bytes id = 1;
+}
+
+message GetAccountInfoResponse {
+	bytes general_balance = 1;
+	bytes escrow_balance = 2;
+	uint64 nonce = 3;
+}
+
+message GetAllowanceRequest {
+	bytes owner = 1;
+	bytes spender = 2;
+}
+
+message GetAllowanceResponse {
+	bytes allowance = 1;
+}
+
+message TransferRequest {
+	bytes signed_transfer = 1;
+}
+
+message TransferResponse {}
+
+message ApproveRequest {
+	bytes signed_approval = 1;
+}
+
+message ApproveResponse {}
+
+message WithdrawRequest {
+	bytes signed_withdrawal = 1;
+}
+
+message WithdrawResponse {}
+
+message BurnRequest {
+	bytes signed_burn = 1;
+}
+
+message BurnResponse {}
+
+message AddEscrowRequest {
+	bytes signed_escrow = 1;
+}
+
+message AddEscrowResponse {}
+
+message WatchTransfersRequest {}
+
+message WatchTransfersResponse {
+	bytes event = 1;
+}
+
+message WatchApprovalsRequest {}
+
+message WatchApprovalsResponse {
+	bytes event = 1;
+}
+
+message WatchBurnsRequest {}
+
+message WatchBurnsResponse {
+	bytes event = 1;
+}
+
+message WatchEscrowsRequest {}
+
+message WatchEscrowsResponse {
+	enum EventType {
+		ADD = 0;
+		TAKE = 1;
+		RELEASE = 2;
+	}
+	EventType event_type = 1;
+	bytes event = 2;
+}

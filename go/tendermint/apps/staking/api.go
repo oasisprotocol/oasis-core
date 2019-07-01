@@ -12,7 +12,7 @@ const (
 	TransactionTag byte = 0x05
 
 	// AppName is the ABCI application name.
-	AppName string = "999_staking"
+	AppName string = "100_staking"
 )
 
 var (
@@ -24,6 +24,10 @@ var (
 	// calls (value is an app.ReleaseEscrowEvent).
 	TagReleaseEscrow = []byte("staking.release_escrow")
 
+	// TagTransfer is an ABCI transaction tag for Transfers that happen
+	// in a non-staking app (value is an app.TransferEvent).
+	TagTransfer = []byte("staking.transfer")
+
 	// QueryApp is a query for filtering transactions processed by
 	// the staking application.
 	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
@@ -32,6 +36,9 @@ var (
 const (
 	// QueryTotalSupply is the path for a TotalSupply query.
 	QueryTotalSupply = AppName + "/total_supply"
+
+	// QueryCommonPool is the path for a CommonPool query.
+	QueryCommonPool = AppName + "/common_pool"
 
 	// QueryAccounts is the path for an Accounts query.
 	QueryAccounts = AppName + "/accounts"
