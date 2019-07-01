@@ -30,14 +30,16 @@ func (t *Tree) doRemove(ctx context.Context, ptr *node.Pointer, depth uint8, key
 			return nil, false, err
 		}
 
-		lrID := node.ID{Path: key, Depth: depth + 1}
-		if nd, err = t.cache.derefNodePtr(ctx, lrID, n.Left, nil); err != nil {
+		leftID := node.ID{Path: setKeyBit(key, depth, false), Depth: depth + 1}
+		rightID := node.ID{Path: setKeyBit(key, depth, true), Depth: depth + 1}
+
+		if nd, err = t.cache.derefNodePtr(ctx, leftID, n.Left, nil); err != nil {
 			return nil, false, err
 		}
 
 		switch nd.(type) {
 		case nil:
-			if nd, err = t.cache.derefNodePtr(ctx, lrID, n.Right, nil); err != nil {
+			if nd, err = t.cache.derefNodePtr(ctx, rightID, n.Right, nil); err != nil {
 				return nil, false, err
 			}
 
@@ -54,7 +56,7 @@ func (t *Tree) doRemove(ctx context.Context, ptr *node.Pointer, depth uint8, key
 				return right, true, nil
 			}
 		case *node.LeafNode:
-			if nd, err = t.cache.derefNodePtr(ctx, lrID, n.Right, nil); err != nil {
+			if nd, err = t.cache.derefNodePtr(ctx, rightID, n.Right, nil); err != nil {
 				return nil, false, err
 			}
 

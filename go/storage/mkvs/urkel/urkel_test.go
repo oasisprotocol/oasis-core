@@ -338,6 +338,59 @@ func testSyncerGetPath(t *testing.T, ndb db.NodeDB) {
 	})
 }
 
+func testSyncerRemove(t *testing.T, ndb db.NodeDB) {
+	ctx := context.Background()
+	tree := New(nil, ndb)
+
+	var roots []hash.Hash
+	keys, values := generateKeyValuePairs()
+	for i := 0; i < len(keys); i++ {
+		err := tree.Insert(ctx, keys[i], values[i])
+		require.NoError(t, err, "Insert")
+
+		_, root, err := tree.Commit(ctx)
+		require.NoError(t, err, "Commit")
+		roots = append(roots, root)
+	}
+
+	require.Equal(t, allItemsRoot, roots[len(roots)-1].String())
+
+	remoteTree, err := NewWithRoot(ctx, tree, nil, roots[len(roots)-1])
+	require.NoError(t, err, "NewWithRoot")
+
+	for i := len(keys) - 1; i >= 0; i-- {
+		err = remoteTree.Remove(ctx, keys[i])
+		require.NoError(t, err, "Remove")
+	}
+
+	_, rootHash, err := remoteTree.Commit(ctx)
+	require.NoError(t, err, "Commit")
+	require.True(t, rootHash.IsEmpty())
+}
+
+func testSyncerInsert(t *testing.T, ndb db.NodeDB) {
+	ctx := context.Background()
+	tree := New(nil, ndb)
+
+	keys, values := generateKeyValuePairsEx("foo", 100)
+	for i := 0; i < len(keys); i++ {
+		err := tree.Insert(ctx, keys[i], values[i])
+		require.NoError(t, err, "Insert")
+	}
+
+	_, rootHash, err := tree.Commit(ctx)
+	require.NoError(t, err, "Commit")
+
+	remoteTree, err := NewWithRoot(ctx, tree, nil, rootHash)
+	require.NoError(t, err, "NewWithRoot")
+
+	keys, values = generateKeyValuePairsEx("bar", 100)
+	for i := 0; i < len(keys); i++ {
+		err = remoteTree.Insert(ctx, keys[i], values[i])
+		require.NoError(t, err, "Insert")
+	}
+}
+
 func testSyncerNilNodes(t *testing.T, ndb db.NodeDB) {
 	var err error
 
@@ -537,6 +590,16 @@ func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interf
 		backend, custom := initBackend(t)
 		defer finiBackend(t, backend, custom)
 		testSyncerGetPath(t, backend)
+	})
+	t.Run("SyncerRemove", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testSyncerRemove(t, backend)
+	})
+	t.Run("SyncerInsert", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testSyncerInsert(t, backend)
 	})
 	t.Run("SyncerNilNodes", func(t *testing.T) {
 		backend, custom := initBackend(t)

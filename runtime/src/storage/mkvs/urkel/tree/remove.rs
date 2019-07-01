@@ -5,7 +5,11 @@ use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, tree::*, utils::*},
+    storage::mkvs::urkel::{
+        cache::*,
+        tree::*,
+        utils::{self, *},
+    },
 };
 
 impl UrkelTree {
@@ -82,22 +86,24 @@ impl UrkelTree {
                     noderef_as!(node_ref, Internal).right.clone(),
                 );
 
-                let lr_id = NodeID {
-                    path: key,
+                let left_id = NodeID {
+                    path: utils::set_key_bit(&key, depth, false),
+                    depth: depth + 1,
+                };
+                let right_id = NodeID {
+                    path: utils::set_key_bit(&key, depth, true),
                     depth: depth + 1,
                 };
 
-                let left_ref = self.cache.borrow_mut().deref_node_ptr(
-                    ctx,
-                    lr_id.clone(),
-                    int_left.clone(),
-                    None,
-                )?;
+                let left_ref =
+                    self.cache
+                        .borrow_mut()
+                        .deref_node_ptr(ctx, left_id, int_left.clone(), None)?;
                 match left_ref {
                     None => {
                         let right_ref = self.cache.borrow_mut().deref_node_ptr(
                             ctx,
-                            lr_id,
+                            right_id,
                             int_right.clone(),
                             None,
                         )?;
@@ -120,7 +126,7 @@ impl UrkelTree {
                         if let NodeBox::Leaf(_) = *left_ref.borrow() {
                             let right_ref = self.cache.borrow_mut().deref_node_ptr(
                                 ctx,
-                                lr_id,
+                                right_id,
                                 int_right.clone(),
                                 None,
                             )?;
