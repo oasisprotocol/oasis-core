@@ -159,16 +159,6 @@ func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root 
 	return t, nil
 }
 
-// TODO: Move this to NodeDB.
-// HasRoot checks the given NodeDB to see if the given root exists.
-func HasRoot(ndb db.NodeDB, root node.Root) bool {
-	_, err := ndb.GetNode(root, &node.Pointer{
-		Clean: true,
-		Hash:  root.Hash,
-	})
-	return err != db.ErrNodeNotFound
-}
-
 // Insert inserts a key/value pair into the tree.
 func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
 	t.cache.Lock()

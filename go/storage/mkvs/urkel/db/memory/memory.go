@@ -91,6 +91,14 @@ func (d *memoryNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 	return api.NewStaticWriteLogIterator(writeLog), nil
 }
 
+func (d *memoryNodeDB) HasRoot(root node.Root) bool {
+	_, err := d.GetNode(root, &node.Pointer{
+		Clean: true,
+		Hash:  root.Hash,
+	})
+	return err != api.ErrNodeNotFound
+}
+
 func (d *memoryNodeDB) Close() {
 }
 

@@ -83,6 +83,14 @@ func (d *leveldbNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, en
 	})
 }
 
+func (d *leveldbNodeDB) HasRoot(root node.Root) bool {
+	_, err := d.GetNode(root, &node.Pointer{
+		Clean: true,
+		Hash:  root.Hash,
+	})
+	return err != api.ErrNodeNotFound
+}
+
 func (d *leveldbNodeDB) Close() {
 	d.closeOnce.Do(func() {
 		_ = d.db.Close()

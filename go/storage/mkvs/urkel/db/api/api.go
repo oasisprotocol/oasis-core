@@ -27,6 +27,9 @@ type NodeDB interface {
 	// NewBatch starts a new batch.
 	NewBatch() Batch
 
+	// HasRoot checks whether the given root exists.
+	HasRoot(root node.Root) bool
+
 	// Close closes the database.
 	Close()
 }
@@ -105,6 +108,10 @@ func (d *nopNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error
 
 func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (WriteLogIterator, error) {
 	return nil, ErrWriteLogNotFound
+}
+
+func (d *nopNodeDB) HasRoot(root node.Root) bool {
+	return false
 }
 
 // Close is a no-op.

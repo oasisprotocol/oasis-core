@@ -88,6 +88,14 @@ func (d *lruNodeDB) GetWriteLog(ctx context.Context, startRoot urkel.Root, endRo
 	return nil, api.ErrWriteLogNotFound
 }
 
+func (d *lruNodeDB) HasRoot(root urkel.Root) bool {
+	_, err := d.GetNode(root, &urkel.Pointer{
+		Clean: true,
+		Hash:  root.Hash,
+	})
+	return err != api.ErrNodeNotFound
+}
+
 func (d *lruNodeDB) Close() {
 	_ = d.save()
 }

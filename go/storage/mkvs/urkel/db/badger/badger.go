@@ -133,6 +133,14 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 	})
 }
 
+func (d *badgerNodeDB) HasRoot(root node.Root) bool {
+	_, err := d.GetNode(root, &node.Pointer{
+		Clean: true,
+		Hash:  root.Hash,
+	})
+	return err != api.ErrNodeNotFound
+}
+
 func (d *badgerNodeDB) NewBatch() api.Batch {
 	// WARNING: There is a maximum batch size and maximum batch entry count.
 	// Both of these things are derived from the MaxTableSize option.

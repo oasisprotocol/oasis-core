@@ -60,7 +60,7 @@ func (b *memoryBackend) apply(
 	var r hash.Hash
 
 	// Check if we already have the expected new root in our local DB.
-	if urkel.HasRoot(b.nodedb, expectedNewRoot) {
+	if b.nodedb.HasRoot(expectedNewRoot) {
 		// We do, don't apply anything.
 		r = dstRoot
 	} else {
