@@ -19,7 +19,7 @@ func setKeyBit(key hash.Hash, bit uint8, val bool) hash.Hash {
 	if val {
 		h[bit/8] |= mask
 	} else {
-		h[bit/8] &= mask
+		h[bit/8] &^= mask
 	}
 	return h
 }

@@ -44,8 +44,8 @@ pub struct InternalNodeSummary {
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct Subtree {
     pub root: SubtreePointer,
-    summaries: Vec<InternalNodeSummary>,
-    full_nodes: Vec<Option<NodeRef>>,
+    pub summaries: Vec<InternalNodeSummary>,
+    pub full_nodes: Vec<Option<NodeRef>>,
 }
 
 impl Subtree {

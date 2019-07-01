@@ -74,7 +74,16 @@ impl ReadSync for UrkelTree {
             .map_err(|_| Error::from(SyncerError::NodeNotFound))?;
 
         let mut subtree = Subtree::new();
-        subtree.root = self._get_path(&ctx, subtree_root, start_depth, key, &mut subtree)?;
+        // We can use key as path as all the bits up to start_depth must match key. We
+        // could clear all of the bits after start_depth, but there is no reason to do so.
+        subtree.root = self._get_path(
+            &ctx,
+            subtree_root,
+            start_depth,
+            key,
+            Some(key),
+            &mut subtree,
+        )?;
         if !subtree.root.valid {
             Err(SyncerError::InvalidRoot.into())
         } else {
@@ -191,17 +200,15 @@ impl UrkelTree {
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
         depth: u8,
-        key: Hash,
+        path: Hash,
+        key: Option<Hash>,
         st: &mut Subtree,
     ) -> Fallible<SubtreePointer> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
-            NodeID {
-                path: key,
-                depth: depth,
-            },
+            NodeID { path, depth },
             ptr.clone(),
-            Some(key),
+            key,
         )?;
         let node_ref = match node_ref {
             None => {
@@ -214,7 +221,7 @@ impl UrkelTree {
             Some(node_ref) => node_ref,
         };
 
-        if !utils::get_key_bit(&key, depth) {
+        if key.is_none() {
             // Off-path nodes are always full nodes.
             let idx = st.add_full_node(node_ref.borrow().extract())?;
             return Ok(SubtreePointer {
@@ -223,10 +230,21 @@ impl UrkelTree {
                 valid: true,
             });
         }
+        let key = key.expect("key is not none");
 
         match classify_noderef!(node_ref) {
             NodeKind::None => unreachable!(),
             NodeKind::Internal => {
+                // Determine which subtree is off-path.
+                let (mut left_key, mut right_key) = (None, None);
+                if utils::get_key_bit(&key, depth) {
+                    // Left subtree is off-path.
+                    right_key = Some(key)
+                } else {
+                    // Right subtree is off-path.
+                    left_key = Some(key)
+                }
+
                 let mut summary = InternalNodeSummary {
                     ..Default::default()
                 };
@@ -235,14 +253,16 @@ impl UrkelTree {
                     ctx,
                     noderef_as!(node_ref, Internal).left.clone(),
                     depth + 1,
-                    key,
+                    utils::set_key_bit(&path, depth, false),
+                    left_key,
                     st,
                 )?;
                 summary.right = self._get_path(
                     ctx,
                     noderef_as!(node_ref, Internal).right.clone(),
                     depth + 1,
-                    key,
+                    utils::set_key_bit(&path, depth, true),
+                    right_key,
                     st,
                 )?;
 
