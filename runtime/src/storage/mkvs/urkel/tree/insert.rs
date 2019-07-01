@@ -86,6 +86,10 @@ impl UrkelTree {
                     if !int.left.borrow().clean || !int.right.borrow().clean {
                         int.clean = false;
                         ptr.borrow_mut().clean = false;
+                        // No longer eligible for eviction as it is dirty.
+                        self.cache
+                            .borrow_mut()
+                            .rollback_node(ptr.clone(), NodeKind::Internal);
                     }
                 }
                 return Ok((ptr.clone(), old_val));
@@ -109,6 +113,10 @@ impl UrkelTree {
                         leaf.value = self.cache.borrow_mut().new_value(val);
                         leaf.clean = false;
                         ptr.borrow_mut().clean = false;
+                        // No longer eligible for eviction as it is dirty.
+                        self.cache
+                            .borrow_mut()
+                            .rollback_node(ptr.clone(), NodeKind::Leaf);
                         return Ok((ptr.clone(), old_val));
                     }
                 }

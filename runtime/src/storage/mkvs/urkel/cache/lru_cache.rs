@@ -492,6 +492,23 @@ impl Cache for LRUCache {
         self.lru_values.add_to_front(ptr.clone());
     }
 
+    fn rollback_node(&mut self, ptr: NodePtrRef, kind: NodeKind) {
+        if ptr.borrow().get_cache_extra().is_none() {
+            // Node has not yet been committed to cache.
+            return;
+        }
+
+        self.lru_nodes.remove(ptr.clone());
+
+        match kind {
+            NodeKind::Internal => self.internal_node_count -= 1,
+            NodeKind::Leaf => self.leaf_node_count -= 1,
+            _ => panic!("lru_cache: rollback works only for Internal and Leaf nodes!"),
+        };
+
+        ptr.borrow_mut().set_cache_extra(None);
+    }
+
     fn reconstruct_subtree(
         &mut self,
         ctx: &Arc<Context>,

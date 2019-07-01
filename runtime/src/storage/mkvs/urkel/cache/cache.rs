@@ -81,6 +81,10 @@ pub trait Cache {
     /// for the one being committed.
     fn commit_value(&mut self, ptr: ValuePtrRef);
 
+    // Mark a tree node as no longer being eligible for eviction
+    // due to it becoming dirty.
+    fn rollback_node(&mut self, ptr: NodePtrRef, kind: NodeKind);
+
     /// Reconstruct a subtree of nodes and return a pointer to its root.
     ///
     /// Call this to resurrect a subtree summary as returned by a read syncer.
