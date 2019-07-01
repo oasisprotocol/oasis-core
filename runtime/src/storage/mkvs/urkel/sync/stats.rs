@@ -66,9 +66,4 @@ impl ReadSync for StatsCollector {
         self.node_fetches += 1;
         self.rs.get_node(ctx, root_hash, id)
     }
-
-    fn get_value(&mut self, ctx: Context, root_hash: Hash, id: Hash) -> Fallible<Option<Value>> {
-        self.value_fetches += 1;
-        self.rs.get_value(ctx, root_hash, id)
-    }
 }

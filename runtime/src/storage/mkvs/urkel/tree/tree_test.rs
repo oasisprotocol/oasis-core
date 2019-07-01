@@ -349,7 +349,7 @@ fn test_syncer_basic_no_prefetch() {
             .expect("stats");
         assert_eq!(0, stats.subtree_fetches, "subtree fetches (no prefetch)");
         assert_eq!(0, stats.node_fetches, "node fetches (no prefetch)");
-        assert_eq!(12056, stats.path_fetches, "path fetches (no prefetch)");
+        assert_eq!(5529, stats.path_fetches, "path fetches (no prefetch)");
         assert_eq!(0, stats.value_fetches, "value fetches (no prefetch)");
     }
 }
@@ -403,8 +403,69 @@ fn test_syncer_basic_with_prefetch() {
             .expect("stats");
         assert_eq!(1, stats.subtree_fetches, "subtree fetches (with prefetch)");
         assert_eq!(0, stats.node_fetches, "node fetches (with prefetch)");
-        assert_eq!(12158, stats.path_fetches, "path fetches (with prefetch)");
+        assert_eq!(5505, stats.path_fetches, "path fetches (with prefetch)");
         assert_eq!(0, stats.value_fetches, "value fetches (with prefetch)");
+    }
+}
+
+#[test]
+fn test_syncer_get_path() {
+    let mut tree = UrkelTree::make()
+        .with_capacity(0, 0)
+        .new(Context::background(), Box::new(NoopReadSyncer {}))
+        .expect("new_tree");
+
+    let (keys, values) = generate_key_value_pairs();
+    for i in 0..keys.len() {
+        tree.insert(
+            Context::background(),
+            keys[i].as_slice(),
+            values[i].as_slice(),
+        )
+        .expect("insert");
+    }
+
+    let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+
+    // Test with a remote tree via the read-syncer interface.
+    let mut remote_tree = UrkelTree::make()
+        .with_capacity(0, 0)
+        .with_root(hash)
+        .with_prefetch_depth(10)
+        .new(Context::background(), Box::new(tree))
+        .expect("with_root");
+
+    for i in 0..keys.len() {
+        let hkey = Hash::digest_bytes(&keys[i]);
+        let st = remote_tree
+            .get_path(Context::background(), hash, hkey, 0)
+            .expect("get_path");
+
+        // Reconstructed subtree should contain key as leaf node.
+        let mut found_leaf = false;
+        for n in st.full_nodes {
+            match classify_noderef!(?n) {
+                NodeKind::Leaf => {
+                    let n = n.unwrap();
+                    if noderef_as!(n, Leaf).key == hkey {
+                        assert_eq!(
+                            values[i],
+                            noderef_as!(n, Leaf)
+                                .value
+                                .borrow()
+                                .value
+                                .as_ref()
+                                .unwrap()
+                                .as_slice()
+                        );
+                        found_leaf = true;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(true, found_leaf, "subtree should contain target leaf");
     }
 }
 

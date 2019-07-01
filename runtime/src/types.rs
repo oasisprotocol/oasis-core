@@ -162,10 +162,6 @@ pub enum Body {
         node_path: Hash,
         node_depth: u8,
     },
-    HostStorageSyncGetValueRequest {
-        root_hash: Hash,
-        value_id: Hash,
-    },
     HostStorageSyncSerializedResponse {
         #[serde(with = "serde_bytes")]
         serialized: Vec<u8>,

@@ -13,7 +13,7 @@ var _ api.NodeDB = (*memoryNodeDB)(nil)
 
 type memoryItem struct {
 	refs  int
-	value interface{}
+	value []byte
 }
 
 type memoryNodeDB struct {
@@ -37,30 +37,18 @@ func (d *memoryNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, er
 	d.RLock()
 	defer d.RUnlock()
 
-	item, err := d.getLocked(ptr.Hash)
+	raw, err := d.getLocked(ptr.Hash)
 	if err != nil {
 		return nil, err
 	}
 
-	return item.(node.Node), nil
-}
-
-func (d *memoryNodeDB) GetValue(id hash.Hash) ([]byte, error) {
-	d.RLock()
-	defer d.RUnlock()
-
-	item, err := d.getLocked(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return item.([]byte), nil
+	return node.UnmarshalBinary(raw)
 }
 
 func (d *memoryNodeDB) Close() {
 }
 
-func (d *memoryNodeDB) putLocked(id hash.Hash, item interface{}) error {
+func (d *memoryNodeDB) putLocked(id hash.Hash, item []byte) error {
 	n := d.items[id]
 	if n == nil {
 		n = new(memoryItem)
@@ -73,7 +61,7 @@ func (d *memoryNodeDB) putLocked(id hash.Hash, item interface{}) error {
 	return nil
 }
 
-func (d *memoryNodeDB) getLocked(id hash.Hash) (interface{}, error) {
+func (d *memoryNodeDB) getLocked(id hash.Hash) ([]byte, error) {
 	item := d.items[id]
 	if item == nil {
 		return nil, api.ErrNodeNotFound
@@ -126,17 +114,14 @@ type memorySubtree struct {
 }
 
 func (s *memorySubtree) PutNode(depth uint8, ptr *node.Pointer) error {
-	switch n := ptr.Node.(type) {
-	case *node.InternalNode:
-		s.batch.ops = append(s.batch.ops, func() error {
-			return s.batch.db.putLocked(n.Hash, ptr.Node)
-		})
-	case *node.LeafNode:
-		s.batch.ops = append(s.batch.ops, func() error {
-			_ = s.batch.db.putLocked(n.Value.Hash, n.Value.Value)
-			return s.batch.db.putLocked(n.Hash, ptr.Node)
-		})
+	data, err := ptr.Node.MarshalBinary()
+	if err != nil {
+		return err
 	}
+
+	s.batch.ops = append(s.batch.ops, func() error {
+		return s.batch.db.putLocked(ptr.Node.GetHash(), data)
+	})
 	return nil
 }
 

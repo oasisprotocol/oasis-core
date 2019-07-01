@@ -2,7 +2,6 @@
 package benchmark
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"fmt"
@@ -152,35 +151,6 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 			logger.Error("failed to Apply()", "err", err)
 		} else {
 			logger.Info("Apply",
-				"sz", sz,
-				"ns_per_op", res.NsPerOp(),
-			)
-		}
-
-		// GetValue.
-		var valueHash hash.Hash
-		valueHash.FromBytes(buf)
-		res = testing.Benchmark(func(b *testing.B) {
-			b.SetBytes(int64(sz))
-			for i := 0; i < b.N; i++ {
-				var tmp []byte
-				tmp, err = storage.GetValue(context.Background(), newRoot, valueHash)
-				if err != nil {
-					b.Fatalf("failed to GetValue(): %v", err)
-				}
-
-				b.StopTimer()
-				if !bytes.Equal(tmp, buf) {
-					err = fmt.Errorf("bytes mismatch")
-					b.Fatalf("bytes mismatch")
-				}
-				b.StartTimer()
-			}
-		})
-		if err != nil {
-			logger.Error("failed to GetValue()", "err", err)
-		} else {
-			logger.Info("GetValue",
 				"sz", sz,
 				"ns_per_op", res.NsPerOp(),
 			)

@@ -10,7 +10,6 @@ service Storage {
     rpc GetSubtree(GetSubtreeRequest) returns (GetSubtreeResponse) {}
     rpc GetPath(GetPathRequest) returns (GetPathResponse) {}
     rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {}
-    rpc GetValue(GetValueRequest) returns (GetValueResponse) {}
 }
 
 message LogEntry {
@@ -76,13 +75,4 @@ message GetNodeRequest {
 
 message GetNodeResponse {
     bytes node = 1;  // serialized to binary
-}
-
-message GetValueRequest {
-    bytes root = 1;
-    bytes id = 2;
-}
-
-message GetValueResponse {
-    bytes value = 1;
 }

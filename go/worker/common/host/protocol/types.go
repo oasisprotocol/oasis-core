@@ -82,7 +82,6 @@ type Body struct {
 	HostStorageSyncGetSubtreeRequest  *HostStorageSyncGetSubtreeRequest
 	HostStorageSyncGetPathRequest     *HostStorageSyncGetPathRequest
 	HostStorageSyncGetNodeRequest     *HostStorageSyncGetNodeRequest
-	HostStorageSyncGetValueRequest    *HostStorageSyncGetValueRequest
 	HostStorageSyncSerializedResponse *HostStorageSyncSerializedResponse
 	HostLocalStorageGetRequest        *HostLocalStorageGetRequest
 	HostLocalStorageGetResponse       *HostLocalStorageGetResponse
@@ -239,12 +238,6 @@ type HostStorageSyncGetNodeRequest struct {
 	RootHash  hash.Hash `codec:"root_hash"`
 	NodePath  hash.Hash `codec:"node_path"`
 	NodeDepth uint8     `codec:"node_depth"`
-}
-
-// HostStorageSyncGetValueRequest is a host storage read syncer get value message body.
-type HostStorageSyncGetValueRequest struct {
-	RootHash hash.Hash `codec:"root_hash"`
-	ValueID  hash.Hash `codec:"value_id"`
 }
 
 // HostStorageSyncSerializedResponse is a host storage read syncer response body containing serialized data.

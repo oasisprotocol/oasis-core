@@ -80,10 +80,6 @@ func (s *dummySerialSyncer) GetNode(ctx context.Context, root hash.Hash, id node
 	return node.UnmarshalBinary(bytes)
 }
 
-func (s *dummySerialSyncer) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	return s.backing.GetValue(ctx, root, id)
-}
-
 func testBasic(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
@@ -294,6 +290,54 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, 0, stats.ValueFetches, "value fetches (with prefetch)")
 }
 
+func testSyncerGetPath(t *testing.T, ndb db.NodeDB) {
+	ctx := context.Background()
+	keys, values := generateKeyValuePairs()
+
+	testGetPath := func(t *testing.T, tree *Tree, root hash.Hash) {
+		for i := 0; i < len(keys); i++ {
+			key := hashKey(keys[i])
+			st, err := tree.GetPath(ctx, root, key, 0)
+			require.NoErrorf(t, err, "GetPath")
+
+			// Reconstructed subtree should contain key as leaf node.
+			var foundLeaf bool
+			for _, n := range st.FullNodes {
+				if ln, ok := n.(*node.LeafNode); ok {
+					if ln.Key.Equal(&key) {
+						require.EqualValues(t, values[i], ln.Value.Value, "leaf value should be equal")
+						foundLeaf = true
+						break
+					}
+				}
+			}
+			require.Truef(t, foundLeaf, "subtree should contain target leaf")
+		}
+	}
+
+	// Test with the base tree.
+	tree := New(nil, ndb)
+	for i := 0; i < len(keys); i++ {
+		err := tree.Insert(ctx, keys[i], values[i])
+		require.NoError(t, err, "Insert")
+	}
+
+	_, root, err := tree.Commit(ctx)
+	require.NoError(t, err, "Commit")
+
+	t.Run("Base", func(t *testing.T) {
+		testGetPath(t, tree, root)
+	})
+
+	// Test with a remote tree via the read-syncer interface.
+	t.Run("Remote", func(t *testing.T) {
+		remoteTree, err := NewWithRoot(ctx, tree, nil, root)
+		require.NoError(t, err, "NewWithRoot")
+
+		testGetPath(t, remoteTree, root)
+	})
+}
+
 func testSyncerNilNodes(t *testing.T, ndb db.NodeDB) {
 	var err error
 
@@ -488,6 +532,11 @@ func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interf
 		backend, custom := initBackend(t)
 		defer finiBackend(t, backend, custom)
 		testSyncerBasic(t, backend)
+	})
+	t.Run("SyncerGetPath", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testSyncerGetPath(t, backend)
 	})
 	t.Run("SyncerNilNodes", func(t *testing.T) {
 		backend, custom := initBackend(t)

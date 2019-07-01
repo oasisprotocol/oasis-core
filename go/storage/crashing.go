@@ -49,13 +49,6 @@ func (w *crashingWrapper) GetNode(ctx context.Context, root hash.Hash, id api.No
 	return res, err
 }
 
-func (w *crashingWrapper) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	crash.Here(crashPointReadBefore)
-	res, err := w.Backend.GetValue(ctx, root, id)
-	crash.Here(crashPointReadAfter)
-	return res, err
-}
-
 func (w *crashingWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
 	crash.Here(crashPointWriteBefore)
 	res, err := w.Backend.Apply(ctx, root, expectedNewRoot, log)

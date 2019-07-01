@@ -122,15 +122,6 @@ func (ba *badgerBackend) GetNode(ctx context.Context, root hash.Hash, id api.Nod
 	return tree.GetNode(ctx, root, id)
 }
 
-func (ba *badgerBackend) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	tree, err := ba.rootCache.GetTree(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
-	return tree.GetValue(ctx, root, id)
-}
-
 func (ba *badgerBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.Receipt, error) {
 	receiptBody := api.ReceiptBody{
 		Version: 1,

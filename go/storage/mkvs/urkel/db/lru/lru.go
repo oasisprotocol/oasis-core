@@ -20,7 +20,6 @@ import (
 
 var (
 	_ api.NodeDB        = (*lruNodeDB)(nil)
-	_ lruCache.Sizeable = (*valueCacheItem)(nil)
 	_ lruCache.Sizeable = (*nodeCacheItem)(nil)
 )
 
@@ -31,20 +30,19 @@ type lruNodeDB struct {
 	fname string
 }
 
-type valueCacheItem struct {
-	v []byte
-}
-
-func (vci *valueCacheItem) Size() uint64 {
-	return uint64(len(vci.v))
-}
-
 type nodeCacheItem struct {
 	n urkel.Node
 }
 
 func (nci *nodeCacheItem) Size() uint64 {
-	return uint64(unsafe.Sizeof(nci.n))
+	switch n := nci.n.(type) {
+	case *urkel.InternalNode:
+		return uint64(unsafe.Sizeof(n))
+	case *urkel.LeafNode:
+		return uint64(unsafe.Sizeof(n)) + uint64(len(n.Value.Value))
+	default:
+		return uint64(unsafe.Sizeof(nci.n))
+	}
 }
 
 // New creates a new in-memory node database with LRU replacement policy based on given size.
@@ -76,19 +74,8 @@ func (d *lruNodeDB) GetNode(root hash.Hash, ptr *urkel.Pointer) (urkel.Node, err
 		return nil, err
 	}
 
-	return item.(*nodeCacheItem).n, nil
-}
-
-func (d *lruNodeDB) GetValue(id hash.Hash) ([]byte, error) {
-	d.RLock()
-	defer d.RUnlock()
-
-	item, err := d.getLocked(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return item.(*valueCacheItem).v, nil
+	node := item.(*nodeCacheItem).n
+	return node.Extract(), nil
 }
 
 func (d *lruNodeDB) Close() {
@@ -117,22 +104,14 @@ func (d *lruNodeDB) save() error {
 			key := k.(hash.Hash)
 			bytes := append([]byte{'K'}, key[:]...)
 
-			switch item := item.(type) {
-			case *valueCacheItem:
-				// Serialize value.
-				bytes = append(bytes, []byte{'V'}...)
-				bytes = append(bytes, item.v...)
-			case *nodeCacheItem:
-				// Serialize node.
-				nodeBytes, nerr := item.n.MarshalBinary()
-				if nerr != nil {
-					continue
-				}
-				bytes = append(bytes, []byte{'N'}...)
-				bytes = append(bytes, nodeBytes...)
-			default:
+			// Serialize node.
+			ni := item.(*nodeCacheItem)
+			nodeBytes, nerr := ni.n.MarshalBinary()
+			if nerr != nil {
 				continue
 			}
+			bytes = append(bytes, []byte{'N'}...)
+			bytes = append(bytes, nodeBytes...)
 
 			ch <- bytes
 		}
@@ -177,9 +156,6 @@ func (d *lruNodeDB) load() error {
 			}
 
 			switch v[1+hash.Size] {
-			case 'V':
-				// Deserialize value.
-				_ = d.putLocked(key, &valueCacheItem{v: v[1+hash.Size+1:]})
 			case 'N':
 				// Deserialize node.
 				node, nerr := urkel.UnmarshalBinary(v[1+hash.Size+1:])
@@ -263,17 +239,13 @@ type memorySubtree struct {
 }
 
 func (s *memorySubtree) PutNode(depth uint8, ptr *urkel.Pointer) error {
-	switch n := ptr.Node.(type) {
-	case *urkel.InternalNode:
-		s.batch.ops = append(s.batch.ops, func() error {
-			return s.batch.db.putLocked(n.Hash, &nodeCacheItem{n: ptr.Node})
-		})
-	case *urkel.LeafNode:
-		s.batch.ops = append(s.batch.ops, func() error {
-			_ = s.batch.db.putLocked(n.Value.Hash, &valueCacheItem{v: n.Value.Value})
-			return s.batch.db.putLocked(n.Hash, &nodeCacheItem{n: ptr.Node})
-		})
-	}
+	// We must use the unchecked version here as the node has not yet been
+	// committed so it is still considered dirty even though the hash has
+	// already been updated.
+	node := ptr.Node.ExtractUnchecked()
+	s.batch.ops = append(s.batch.ops, func() error {
+		return s.batch.db.putLocked(node.GetHash(), &nodeCacheItem{n: node})
+	})
 	return nil
 }
 

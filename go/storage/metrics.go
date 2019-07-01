@@ -53,7 +53,6 @@ var (
 	labelGetSubtree = prometheus.Labels{"call": "get_subtree"}
 	labelGetPath    = prometheus.Labels{"call": "get_path"}
 	labelGetNode    = prometheus.Labels{"call": "get_node"}
-	labelGetValue   = prometheus.Labels{"call": "get_value"}
 
 	_ api.Backend = (*metricsWrapper)(nil)
 
@@ -141,20 +140,6 @@ func (w *metricsWrapper) GetNode(ctx context.Context, root hash.Hash, id api.Nod
 
 	storageCalls.With(labelGetNode).Inc()
 	return node, err
-}
-
-func (w *metricsWrapper) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	start := time.Now()
-	value, err := w.Backend.GetValue(ctx, root, id)
-	storageLatency.With(labelGetValue).Observe(time.Since(start).Seconds())
-	storageValueSize.With(labelGetValue).Observe(float64(len(value)))
-	if err != nil {
-		storageFailures.With(labelGetValue).Inc()
-		return nil, err
-	}
-
-	storageCalls.With(labelGetValue).Inc()
-	return value, err
 }
 
 func newMetricsWrapper(base api.Backend) api.Backend {

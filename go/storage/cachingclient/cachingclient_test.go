@@ -18,6 +18,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/memory"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
@@ -55,11 +56,12 @@ func TestCachingClient(t *testing.T) {
 	}
 
 	// Check if the values match.
+	tree, err := urkel.NewWithRoot(context.Background(), client, nil, expectedNewRoot)
+	require.NoError(t, err, "NewWithRoot")
 	for i, kv := range wl {
-		var h hash.Hash
-		h.FromBytes(kv.Value)
-		v, e := client.GetValue(context.Background(), expectedNewRoot, h)
-		require.NoError(t, e, "Get1")
+		var v []byte
+		v, err = tree.Get(context.Background(), kv.Key)
+		require.NoError(t, err, "Get1")
 		require.EqualValues(t, kv.Value, v, "Get1 - value: %d", i)
 	}
 
@@ -70,11 +72,12 @@ func TestCachingClient(t *testing.T) {
 	require.NoError(t, err, "New - reopen")
 
 	// Check if the values are still fetchable.
+	tree, err = urkel.NewWithRoot(context.Background(), client, nil, expectedNewRoot)
+	require.NoError(t, err, "NewWithRoot")
 	for i, kv := range wl {
-		var h hash.Hash
-		h.FromBytes(kv.Value)
-		v, e := client.GetValue(context.Background(), expectedNewRoot, h)
-		require.NoError(t, e, "Get2")
+		var v []byte
+		v, err = tree.Get(context.Background(), kv.Key)
+		require.NoError(t, err, "Get2")
 		require.EqualValues(t, kv.Value, v, "Get2 - value: %d", i)
 	}
 }

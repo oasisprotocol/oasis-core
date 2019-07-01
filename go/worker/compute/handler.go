@@ -118,20 +118,6 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 
 		return &protocol.Body{HostStorageSyncSerializedResponse: &protocol.HostStorageSyncSerializedResponse{Serialized: serialized}}, nil
 	}
-	if body.HostStorageSyncGetValueRequest != nil {
-		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetValue(root_hash, value_id)",
-			opentracing.Tag{Key: "root_hash", Value: body.HostStorageSyncGetValueRequest.RootHash},
-			opentracing.Tag{Key: "value_id", Value: body.HostStorageSyncGetValueRequest.ValueID},
-		)
-		defer span.Finish()
-
-		value, err := h.storage.GetValue(sctx, body.HostStorageSyncGetValueRequest.RootHash, body.HostStorageSyncGetValueRequest.ValueID)
-		if err != nil {
-			return nil, err
-		}
-
-		return &protocol.Body{HostStorageSyncSerializedResponse: &protocol.HostStorageSyncSerializedResponse{Serialized: cbor.FixSliceForSerde(value)}}, nil
-	}
 	// Local storage.
 	if body.HostLocalStorageGetRequest != nil {
 		value, err := h.localStorage.Get(h.runtimeID, body.HostLocalStorageGetRequest.Key)

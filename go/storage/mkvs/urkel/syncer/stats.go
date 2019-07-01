@@ -40,9 +40,3 @@ func (c *StatsCollector) GetNode(ctx context.Context, root hash.Hash, id node.ID
 	c.NodeFetches++
 	return c.rs.GetNode(ctx, root, id)
 }
-
-// GetValue retrieves a specific value under the given root.
-func (c *StatsCollector) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	c.ValueFetches++
-	return c.rs.GetValue(ctx, root, id)
-}

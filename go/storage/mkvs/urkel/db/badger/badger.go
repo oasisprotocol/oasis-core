@@ -12,8 +12,7 @@ import (
 )
 
 var (
-	nodeKeyPrefix  = []byte{'N'}
-	valueKeyPrefix = []byte{'V'}
+	nodeKeyPrefix = []byte{'N'}
 )
 
 // New creates a new BadgerDB-backed node database.
@@ -68,29 +67,6 @@ func (d *badgerNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, er
 	}
 
 	return n, nil
-}
-
-func (d *badgerNodeDB) GetValue(id hash.Hash) ([]byte, error) {
-	tx := d.db.NewTransaction(false)
-	defer tx.Discard()
-	item, err := tx.Get(append(valueKeyPrefix, id[:]...))
-	if err != nil {
-		d.logger.Error("failed to Get value from backing store",
-			"err", err,
-			"id", id,
-		)
-		return nil, errors.Wrap(err, "urkel/db/badger: failed to Get value from backing store")
-	}
-
-	v, err := item.ValueCopy(nil)
-	if err != nil {
-		d.logger.Error("failed to copy value from value log",
-			"err", err,
-		)
-		return nil, errors.Wrap(err, "urkel/db/badger: failed to copy value from value log")
-	}
-
-	return v, nil
 }
 
 func (d *badgerNodeDB) NewBatch() api.Batch {
@@ -149,18 +125,9 @@ func (s *badgerSubtree) PutNode(depth uint8, ptr *node.Pointer) error {
 		return err
 	}
 
-	switch n := ptr.Node.(type) {
-	case *node.InternalNode:
-		if err = s.batch.bat.Set(append(nodeKeyPrefix, n.Hash[:]...), data); err != nil {
-			return err
-		}
-	case *node.LeafNode:
-		if err = s.batch.bat.Set(append(valueKeyPrefix, n.Value.Hash[:]...), n.Value.Value); err != nil {
-			return err
-		}
-		if err = s.batch.bat.Set(append(nodeKeyPrefix, n.Hash[:]...), data); err != nil {
-			return err
-		}
+	h := ptr.Node.GetHash()
+	if err = s.batch.bat.Set(append(nodeKeyPrefix, h[:]...), data); err != nil {
+		return err
 	}
 	return nil
 }

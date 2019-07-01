@@ -15,9 +15,6 @@ type NodeDB interface {
 	// GetNode lookups up a node in the database.
 	GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error)
 
-	// GetValue lookups up a value in the database.
-	GetValue(id hash.Hash) ([]byte, error)
-
 	// NewBatch starts a new batch.
 	NewBatch() Batch
 
@@ -86,11 +83,6 @@ func NewNopNodeDB() (NodeDB, error) {
 
 // GetNode returns an ErrNodeNotFound error.
 func (d *nopNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error) {
-	return nil, ErrNodeNotFound
-}
-
-// GetValue returns an ErrNodeNotFound error.
-func (d *nopNodeDB) GetValue(id hash.Hash) ([]byte, error) {
 	return nil, ErrNodeNotFound
 }
 

@@ -43,7 +43,7 @@ func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource epochtime
 	id.FromBytes([]byte("key"))
 
 	// Storage should not yet be available
-	r, err := client.GetValue(ctx, root, id)
+	r, err := client.GetPath(ctx, root, id, 0)
 	require.EqualError(err, storageClient.ErrStorageNotAvailable.Error(), "storage client get before initialization")
 	require.Nil(r, "result should be nil")
 
@@ -62,7 +62,7 @@ func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource epochtime
 	require.Equal(len(connectedNodes), 3, "storage client should be connected to all storage nodes")
 
 	// TimeOut is expected, as test nodes do not actually start storage worker.
-	r, err = client.GetValue(ctx, root, id)
+	r, err = client.GetPath(ctx, root, id, 0)
 	require.Error(err, "storage client should error")
 	require.Equal(codes.Unavailable, status.Code(err), "storage client should timeout")
 	require.Nil(r, "result should be nil")

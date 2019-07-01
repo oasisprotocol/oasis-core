@@ -39,8 +39,4 @@ impl ReadSync for NoopReadSyncer {
     fn get_node(&mut self, _ctx: Context, _root_hash: Hash, _id: NodeID) -> Fallible<NodeRef> {
         Err(SyncerError::Unsupported.into())
     }
-
-    fn get_value(&mut self, _ctx: Context, _root_hash: Hash, _id: Hash) -> Fallible<Option<Value>> {
-        Err(SyncerError::Unsupported.into())
-    }
 }

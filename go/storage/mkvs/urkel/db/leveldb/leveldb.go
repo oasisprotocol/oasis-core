@@ -15,8 +15,7 @@ import (
 var (
 	_ api.NodeDB = (*leveldbNodeDB)(nil)
 
-	nodeKeyPrefix  = []byte{'N'}
-	valueKeyPrefix = []byte{'V'}
+	nodeKeyPrefix = []byte{'N'}
 )
 
 type leveldbNodeDB struct {
@@ -49,15 +48,6 @@ func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, e
 	}
 
 	return node.UnmarshalBinary(bytes)
-}
-
-func (d *leveldbNodeDB) GetValue(id hash.Hash) ([]byte, error) {
-	bytes, err := d.db.Get(append(valueKeyPrefix, id[:]...), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return bytes, nil
 }
 
 func (d *leveldbNodeDB) Close() {
@@ -111,13 +101,8 @@ func (s *leveldbSubtree) PutNode(depth uint8, ptr *node.Pointer) error {
 		return err
 	}
 
-	switch n := ptr.Node.(type) {
-	case *node.InternalNode:
-		s.batch.bat.Put(append(nodeKeyPrefix, n.Hash[:]...), data)
-	case *node.LeafNode:
-		s.batch.bat.Put(append(valueKeyPrefix, n.Value.Hash[:]...), n.Value.Value)
-		s.batch.bat.Put(append(nodeKeyPrefix, n.Hash[:]...), data)
-	}
+	h := ptr.Node.GetHash()
+	s.batch.bat.Put(append(nodeKeyPrefix, h[:]...), data)
 	return nil
 }
 

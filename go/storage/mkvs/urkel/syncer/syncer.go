@@ -10,11 +10,10 @@ import (
 )
 
 var (
-	ErrDirtyRoot     = errors.New("urkel: root is dirty")
-	ErrInvalidRoot   = errors.New("urkel: invalid root")
-	ErrNodeNotFound  = errors.New("urkel: node not found during sync")
-	ErrValueNotFound = errors.New("urkel: value not found during sync")
-	ErrUnsupported   = errors.New("urkel: method not supported")
+	ErrDirtyRoot    = errors.New("urkel: root is dirty")
+	ErrInvalidRoot  = errors.New("urkel: invalid root")
+	ErrNodeNotFound = errors.New("urkel: node not found during sync")
+	ErrUnsupported  = errors.New("urkel: method not supported")
 )
 
 // ReadSyncer is the interface for synchronizing the in-memory cache
@@ -40,12 +39,6 @@ type ReadSyncer interface {
 	// is consistent. The node's cached hash should be considered invalid
 	// and must be recomputed locally.
 	GetNode(ctx context.Context, root hash.Hash, id node.ID) (node.Node, error)
-
-	// GetValue retrieves a specific value under the given root.
-	//
-	// It is the responsibility of the caller to validate that the value
-	// is consistent.
-	GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error)
 }
 
 // nopReadSyncer is a no-op read syncer.
@@ -66,8 +59,4 @@ func (r *nopReadSyncer) GetPath(ctx context.Context, root hash.Hash, key hash.Ha
 
 func (r *nopReadSyncer) GetNode(ctx context.Context, root hash.Hash, id node.ID) (node.Node, error) {
 	return nil, ErrNodeNotFound
-}
-
-func (r *nopReadSyncer) GetValue(ctx context.Context, root hash.Hash, id hash.Hash) ([]byte, error) {
-	return nil, ErrValueNotFound
 }
