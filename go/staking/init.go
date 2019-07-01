@@ -10,14 +10,13 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/json"
+	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/staking/tendermint"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
 const (
-	cfgBackend = "staking.backend"
-
 	cfgDebugGenesisState = "staking.debug.genesis_state"
 )
 
@@ -26,7 +25,7 @@ func New(ctx context.Context, tmService service.TendermintService) (api.Backend,
 	var (
 		impl    api.Backend
 		err     error
-		backend = viper.GetString(cfgBackend)
+		backend = commonFlags.ConsensusBackend()
 	)
 
 	// Pull in the debug genesis state if configured.
@@ -52,15 +51,12 @@ func New(ctx context.Context, tmService service.TendermintService) (api.Backend,
 // RegisterFlags registers the configuration flags with the provided command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, tendermint.BackendName, "Staking backend")
-
 		// cfgDebugGenesisState isn't for anything but test cases.
 		cmd.Flags().String(cfgDebugGenesisState, "", "(Debug only) Staking genesis state")
 		_ = cmd.Flags().MarkHidden(cfgDebugGenesisState)
 	}
 
 	for _, v := range []string{
-		cfgBackend,
 		cfgDebugGenesisState,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))

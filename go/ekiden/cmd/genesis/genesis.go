@@ -443,6 +443,7 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 	}
 
 	flags.RegisterDebugTestEntity(cmd)
+	flags.RegisterConsensusBackend(cmd)
 }
 
 // Register registers the genesis sub-command and all of it's children.

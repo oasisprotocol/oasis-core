@@ -3,14 +3,21 @@
 package flags
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 )
 
 const (
 	cfgVerbose = "verbose"
 	cfgForce   = "force"
 	cfgRetries = "retries"
+
+	cfgConsensusBackend = "consensus.backend"
 
 	cfgDebugTestEntity = "debug.test_entity"
 )
@@ -55,6 +62,27 @@ func RegisterRetries(cmd *cobra.Command) {
 	}
 
 	_ = viper.BindPFlag(cfgRetries, cmd.Flags().Lookup(cfgRetries))
+}
+
+// ConsensusBackend returns the set consensus backend.
+func ConsensusBackend() string {
+	backend := viper.GetString(cfgConsensusBackend)
+
+	switch strings.ToLower(backend) {
+	case tmapi.BackendName:
+		return tmapi.BackendName
+	default:
+		panic(fmt.Sprintf("consensus: unsupported backend: '%v'", backend))
+	}
+}
+
+// RegisterConsensusBackend registers the consensus backend flag for the provided command.
+func RegisterConsensusBackend(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgConsensusBackend, tmapi.BackendName, "force")
+	}
+
+	_ = viper.BindPFlag(cfgConsensusBackend, cmd.Flags().Lookup(cfgConsensusBackend))
 }
 
 // DebugTestEntity returns true iff the test entity enable flag is set.

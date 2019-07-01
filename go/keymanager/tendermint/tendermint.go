@@ -23,7 +23,7 @@ import (
 )
 
 // BackendName is the name of the backend.
-const BackendName = "tendermint"
+const BackendName = tmapi.BackendName
 
 type tendermintBackend struct {
 	logger *logging.Logger

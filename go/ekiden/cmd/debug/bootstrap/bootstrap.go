@@ -144,6 +144,7 @@ func registerBootstrapFlags(cmd *cobra.Command) {
 	}
 
 	flags.RegisterDebugTestEntity(cmd)
+	flags.RegisterConsensusBackend(cmd)
 }
 
 // Register registers the bootstrap sub-command and all of it's children.

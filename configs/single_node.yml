@@ -66,6 +66,10 @@ worker:
       binary: target/debug/ekiden-keymanager-runtime
       loader: target/debug/ekiden-runtime-loader
 
+# Consensus backend.
+consensus:
+  backend: tendermint
+
 # Epochtime backend.
 epochtime:
   backend: tendermint
@@ -73,27 +77,14 @@ epochtime:
     # This makes each epoch last for 30 tendermint blocks.
     interval: 30
 
-# Random beacon backend.
-beacon:
-  backend: tendermint
-
 # Storage backend.
 storage:
   backend: leveldb
   debug:
     mock_signing_key: true
 
-# Scheduler backend.
-scheduler:
-  backend: tendermint
-
-# Registry backend.
-registry:
-  backend: tendermint
-
 # Roothash backend.
 roothash:
-  backend: tendermint
   tendermint:
     index_blocks: true
 
@@ -101,10 +92,6 @@ roothash:
 tendermint:
   consensus:
     timeout_commit: 1s
-
-# Key manager backend configuration.
-keymanager:
-  backend: tendermint
 
 # Client configuration.
 client:

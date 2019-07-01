@@ -7,25 +7,20 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
+	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/scheduler/tendermint"
-	"github.com/oasislabs/ekiden/go/scheduler/trivial"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
-const cfgBackend = "scheduler.backend"
-
 // New constructs a new Backend based on the configuration flags.
 func New(ctx context.Context, timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend, service service.TendermintService) (api.Backend, error) {
-	backend := viper.GetString(cfgBackend)
+	backend := commonFlags.ConsensusBackend()
 	switch strings.ToLower(backend) {
-	case trivial.BackendName:
-		return trivial.New(ctx, timeSource, reg, beacon, service), nil
 	case tendermint.BackendName:
 		return tendermint.New(ctx, timeSource, service)
 	default:
@@ -36,13 +31,4 @@ func New(ctx context.Context, timeSource epochtime.Backend, reg registry.Backend
 // RegisterFlags registers the configuration flags with the provided
 // command.
 func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, tendermint.BackendName, "Scheduler backend")
-	}
-
-	for _, v := range []string{
-		cfgBackend,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
-	}
 }

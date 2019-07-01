@@ -163,14 +163,10 @@ run_backend_tendermint_committee() {
             --grpc.debug.port ${grpc_debug_port} \
             --epochtime.backend ${epochtime_backend} \
             --epochtime.tendermint.interval 30 \
-            --beacon.backend tendermint \
             ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
             --metrics.mode none \
             --storage.backend client \
-            --scheduler.backend tendermint \
-            --registry.backend tendermint \
-            --roothash.backend tendermint \
-            --keymanager.backend tendermint \
+            --consensus.backend tendermint \
             --genesis.file ${genesis_file} \
             --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
             --tendermint.consensus.timeout_commit 250ms \
@@ -250,13 +246,9 @@ run_compute_node() {
         --storage.cachingclient.file ${data_dir}/storage-cache \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
         ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
-        --scheduler.backend tendermint \
-        --registry.backend tendermint \
-        --roothash.backend tendermint \
-        --keymanager.backend tendermint \
+        --consensus.backend tendermint \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
@@ -325,14 +317,10 @@ run_storage_node() {
         --grpc.log.verbose_debug \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
         ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
         --storage.backend leveldb \
-        --scheduler.backend tendermint \
-        --registry.backend tendermint \
-        --roothash.backend tendermint \
-        --keymanager.backend tendermint \
+        --consensus.backend tendermint \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
@@ -386,16 +374,12 @@ run_client_node() {
         --grpc.log.verbose_debug \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
         ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
-        --scheduler.backend tendermint \
-        --registry.backend tendermint \
-        --roothash.backend tendermint \
+        --consensus.backend tendermint \
         --roothash.tendermint.index_blocks \
-        --keymanager.backend tendermint \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
@@ -471,13 +455,9 @@ run_keymanager_node() {
         --storage.cachingclient.file ${data_dir}/storage-cache \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
         ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
-        --scheduler.backend tendermint \
-        --registry.backend tendermint \
-        --roothash.backend tendermint \
-        --keymanager.backend tendermint \
+        --consensus.backend tendermint \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
@@ -531,12 +511,8 @@ run_seed_node() {
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
         --epochtime.tendermint.interval 30 \
-        --beacon.backend tendermint \
         ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
-        --scheduler.backend tendermint \
-        --registry.backend tendermint \
-        --roothash.backend tendermint \
-        --keymanager.backend tendermint \
+        --consensus.backend tendermint \
         --tendermint.core.listen_address tcp://0.0.0.0:${EKIDEN_SEED_NODE_PORT} \
         --tendermint.seed_mode \
         --tendermint.debug.addr_book_lenient \

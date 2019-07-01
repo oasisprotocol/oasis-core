@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
+	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
@@ -20,7 +21,6 @@ import (
 )
 
 const (
-	cfgBackend      = "roothash.backend"
 	cfgRoundTimeout = "roothash.round_timeout"
 )
 
@@ -34,7 +34,7 @@ func New(
 	beacon beacon.Backend,
 	tmService service.TendermintService,
 ) (api.Backend, error) {
-	backend := viper.GetString(cfgBackend)
+	backend := commonFlags.ConsensusBackend()
 	roundTimeout := viper.GetDuration(cfgRoundTimeout)
 
 	var impl api.Backend
@@ -57,12 +57,10 @@ func New(
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, tendermint.BackendName, "Root hash backend")
 		cmd.Flags().Duration(cfgRoundTimeout, 10*time.Second, "Root hash round timeout")
 	}
 
 	for _, v := range []string{
-		cfgBackend,
 		cfgRoundTimeout,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
