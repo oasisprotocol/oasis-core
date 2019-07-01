@@ -20,7 +20,7 @@ import (
 )
 
 // BackendName is the name of this implementation.
-const BackendName = "tendermint"
+const BackendName = tmapi.BackendName
 
 var (
 	_ api.Backend = (*tendermintScheduler)(nil)

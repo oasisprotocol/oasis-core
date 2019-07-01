@@ -59,6 +59,7 @@ var (
 		Short: "initialize a runtime for genesis",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			cmdFlags.RegisterDebugTestEntity(cmd)
+			cmdFlags.RegisterConsensusBackend(cmd)
 			registerRuntimeFlags(cmd)
 			registerOutputFlag(cmd)
 		},
@@ -71,6 +72,7 @@ var (
 		PreRun: func(cmd *cobra.Command, args []string) {
 			cmdGrpc.RegisterClientFlags(cmd, false)
 			cmdFlags.RegisterDebugTestEntity(cmd)
+			cmdFlags.RegisterConsensusBackend(cmd)
 			cmdFlags.RegisterRetries(cmd)
 			registerRuntimeFlags(cmd)
 		},
@@ -437,6 +439,7 @@ func Register(parentCmd *cobra.Command) {
 		registerCmd,
 	} {
 		cmdFlags.RegisterDebugTestEntity(v)
+		cmdFlags.RegisterConsensusBackend(v)
 	}
 
 	registerRuntimeFlags(initGenesisCmd)

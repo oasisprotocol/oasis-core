@@ -31,7 +31,7 @@ import (
 
 const (
 	// BackendName is the name of this implementation.
-	BackendName = "tendermint"
+	BackendName = tmapi.BackendName
 
 	cfgIndexBlocks = "roothash.tendermint.index_blocks"
 )

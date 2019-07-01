@@ -11,12 +11,13 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/epochtime/api"
+	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
 const (
 	// BackendName is the name of this implementation.
-	BackendName = "tendermint"
+	BackendName = tmapi.BackendName
 )
 
 var _ api.Backend = (*tendermintBackend)(nil)

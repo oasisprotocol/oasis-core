@@ -13,6 +13,9 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 )
 
+// Conesnus Backend Name
+const BackendName = "tendermint"
+
 // Code is a status code for ABCI requests.
 type Code uint32
 

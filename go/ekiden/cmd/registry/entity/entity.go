@@ -324,6 +324,7 @@ func Register(parentCmd *cobra.Command) {
 		deregisterCmd,
 	} {
 		cmdFlags.RegisterDebugTestEntity(v)
+		cmdFlags.RegisterConsensusBackend(v)
 	}
 
 	for _, v := range []*cobra.Command{

@@ -584,4 +584,5 @@ func RegisterFlags(cmd *cobra.Command) {
 	}
 
 	flags.RegisterDebugTestEntity(cmd)
+	flags.RegisterConsensusBackend(cmd)
 }
