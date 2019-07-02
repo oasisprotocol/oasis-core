@@ -64,7 +64,7 @@ func (s *grpcServer) GetThreshold(ctx context.Context, req *pb.GetThresholdReque
 	case pb.GetThresholdRequest_STORAGE:
 		kind = api.KindStorage
 	default:
-		return nil, fmt.Errorf("staking/grpc: invalid threshold kind: ", req.GetThresholdKind())
+		return nil, fmt.Errorf("staking/grpc: invalid threshold kind: %v", req.GetThresholdKind())
 	}
 
 	qty, err := s.backend.Threshold(ctx, kind)

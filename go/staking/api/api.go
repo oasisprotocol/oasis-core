@@ -10,6 +10,14 @@ import (
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 )
 
+const (
+	// TokenName is the name of the staking token.
+	TokenName = "Buffycoin"
+
+	// TokenSymbol is the symbol of the staking token.
+	TokenSymbol = "BUF"
+)
+
 var (
 	// TransferSignatureContext is the context used for transfers.
 	TransferSignatureContext = []byte("EkStaXfr")

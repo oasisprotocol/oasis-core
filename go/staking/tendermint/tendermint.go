@@ -38,11 +38,11 @@ type tendermintBackend struct {
 }
 
 func (b *tendermintBackend) Name() string {
-	return "Buffycoin"
+	return api.TokenName
 }
 
 func (b *tendermintBackend) Symbol() string {
-	return "BUF"
+	return api.TokenSymbol
 }
 
 func (b *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, error) {
