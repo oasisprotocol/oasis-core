@@ -131,10 +131,16 @@ func testQueueCall(
 }
 
 func waitForNodeTransition(t *testing.T, stateCh <-chan committee.NodeState, expectedState committee.StateName) {
-	select {
-	case newState := <-stateCh:
-		require.EqualValues(t, expectedState, newState.Name())
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive transition to %s state", expectedState)
+	timeout := time.After(recvTimeout)
+	for {
+		select {
+		case newState := <-stateCh:
+			if expectedState == newState.Name() {
+				return
+			}
+		case <-timeout:
+			t.Fatalf("failed to receive transition to %s state", expectedState)
+			return
+		}
 	}
 }
