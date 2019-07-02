@@ -215,9 +215,3 @@ type ClientBackend interface {
 	// GetConnectedNodes returns currently connected storage nodes.
 	GetConnectedNodes() []*node.Node
 }
-
-// Genesis is the storage genesis state.
-type Genesis struct {
-	// State is the genesis state for the merklized key-value store.
-	State map[common.Namespace]WriteLog `codec:"state"`
-}

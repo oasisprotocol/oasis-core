@@ -126,7 +126,6 @@ func TestBootstrapGenesis(t *testing.T) {
 		require.Equal(t, numValidators, len(genDoc.Validators), "incorrect number of validators")
 		require.EqualValues(t, template.Registry, genDoc.Registry, "invalid genesis document content (registry)")
 		require.EqualValues(t, template.RootHash, genDoc.RootHash, "invalid genesis document content (root hash)")
-		require.EqualValues(t, template.Storage, genDoc.Storage, "invalid genesis document content (storage)")
 		require.EqualValues(t, template.Staking, genDoc.Staking, "invalid genesis document content (staking)")
 		require.EqualValues(t, template.ExtraData, genDoc.ExtraData, "invalid genesis document content (extra data)")
 

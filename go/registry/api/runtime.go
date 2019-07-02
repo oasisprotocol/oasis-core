@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
 	pbRegistry "github.com/oasislabs/ekiden/go/grpc/registry"
+	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
 var (
@@ -188,6 +189,11 @@ type RuntimeGenesis struct {
 	// empty hash.
 	StateRoot hash.Hash `codec:"state_root"`
 
-	// StorageReceipt is the storage receipt for the state root.
+	// State is the state identified by the StateRoot. It may be empty iff
+	// the StorageReceipt is not invalid or StateRoot is an empty hash.
+	State storage.WriteLog `codec:"state"`
+
+	// StorageReceipt is the storage receipt for the state root. It may be
+	// invalid iff the State is non-empty or StateRoot is an empty hash.
 	StorageReceipt signature.Signature `codec:"storage_receipt"`
 }

@@ -337,7 +337,9 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 			)
 			return nil, nil, err
 		}
+
 		gen.StateRoot = newRoot
+		gen.State = log
 	}
 
 	return &registry.Runtime{

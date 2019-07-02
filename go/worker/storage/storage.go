@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -13,6 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/storage"
 	storageApi "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/registration"
@@ -64,7 +66,7 @@ func New(
 				panic("failed to get genesis document")
 			}
 
-			if err = s.initGenesis(&doc.Storage); err != nil {
+			if err = s.initGenesis(doc); err != nil {
 				s.logger.Error("failed to initialize storage from genesis",
 					"err", err,
 				)
@@ -140,17 +142,34 @@ func (s *Storage) Quit() <-chan struct{} {
 func (s *Storage) Cleanup() {
 }
 
-func (s *Storage) initGenesis(gen *storageApi.Genesis) error {
+func (s *Storage) initGenesis(gen *genesis.Document) error {
 	ctx := context.Background()
 
 	s.logger.Info("initializing storage from genesis")
 
-	var emptyRoot hash.Hash
-	emptyRoot.Empty()
+	// Iterate through all runtimes and see if any specify non-empty state. Initialize
+	// storage for those runtimes.
+	if gen.Registry.Runtimes != nil {
+		var emptyRoot hash.Hash
+		emptyRoot.Empty()
 
-	for ns, state := range gen.State {
-		if _, err := s.storage.Apply(ctx, ns, 0, emptyRoot, 0, emptyRoot, state); err != nil {
-			return err
+		for _, sigRt := range gen.Registry.Runtimes {
+			rt, err := registry.VerifyRegisterRuntimeArgs(s.logger, sigRt, true)
+			if err != nil {
+				return err
+			}
+
+			if rt.Genesis.State != nil {
+				var ns common.Namespace
+				copy(ns[:], rt.ID[:])
+
+				_, err = s.storage.Apply(ctx, ns, 0, emptyRoot, 0, rt.Genesis.StateRoot, rt.Genesis.State)
+				if err != nil {
+					return err
+				}
+			} else if !rt.Genesis.StateRoot.IsEmpty() {
+				return fmt.Errorf("storage: runtime %s has non-empty state root and nil state", rt.ID)
+			}
 		}
 	}
 
