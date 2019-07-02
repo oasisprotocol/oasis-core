@@ -14,6 +14,7 @@ import (
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
+	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -166,7 +167,7 @@ func New(ctx context.Context,
 ) (api.Backend, error) {
 	// Initialze and register the tendermint service component.
 	app := app.New(timeSource)
-	if err := service.RegisterApplication(app, []string{registryapp.AppName}); err != nil {
+	if err := service.RegisterApplication(app, []string{beaconapp.AppName, registryapp.AppName}); err != nil {
 		return nil, err
 	}
 
