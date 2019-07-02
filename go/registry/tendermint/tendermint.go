@@ -21,6 +21,7 @@ import (
 	"github.com/oasislabs/ekiden/go/registry/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
+	stakingapp "github.com/oasislabs/ekiden/go/tendermint/apps/staking"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -587,7 +588,7 @@ func (r *tendermintBackend) sweepCache(epoch epochtime.EpochTime) {
 func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService, cfg *api.Config) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
 	app := app.New(timeSource, cfg)
-	if err := service.RegisterApplication(app, nil); err != nil {
+	if err := service.RegisterApplication(app, []string{stakingapp.AppName}); err != nil {
 		return nil, err
 	}
 

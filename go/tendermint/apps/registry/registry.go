@@ -12,20 +12,19 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
+	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	staking "github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
-
-	"github.com/oasislabs/ekiden/go/common/json"
+	stakingapp "github.com/oasislabs/ekiden/go/tendermint/apps/staking"
 )
 
-var (
-	_ abci.Application = (*registryApplication)(nil)
-)
+var _ abci.Application = (*registryApplication)(nil)
 
 type registryApplication struct {
 	logger *logging.Logger
@@ -266,6 +265,16 @@ func (app *registryApplication) registerEntity(
 			app.logger.Error("RegisterEntity: INVALID TIMESTAMP",
 				"entity_timestamp", ent.RegistrationTime,
 				"now", uint64(ctx.Now().Unix()),
+			)
+			return err
+		}
+	}
+
+	if !app.cfg.DebugBypassStake {
+		if err = stakingapp.EnsureSufficientStake(app.state, ctx, ent.ID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+			app.logger.Error("RegisterEntity: Insufficent stake",
+				"err", err,
+				"id", ent.ID,
 			)
 			return err
 		}

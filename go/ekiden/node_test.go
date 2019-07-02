@@ -49,6 +49,7 @@ var (
 		{"epochtime.backend", "tendermint_mock"},
 		{"consensus.backend", "tendermint"},
 		{"registry.debug.allow_runtime_registration", true},
+		{"registry.debug.bypass_stake", true},
 		{"roothash.tendermint.index_blocks", true},
 		{"storage.backend", "leveldb"},
 		{"storage.debug.mock_signing_key", true},

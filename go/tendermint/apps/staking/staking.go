@@ -71,7 +71,7 @@ func (app *stakingApplication) CheckTx(ctx *abci.Context, tx []byte) error {
 			"err", err,
 			"tx", hex.EncodeToString(tx),
 		)
-		return errors.Wrap(err, "staking: failed to unmarshal tx")
+		return errors.Wrap(err, "staking/tendermint: failed to unmarshal tx")
 	}
 
 	return app.executeTx(ctx, app.state.CheckTxTree(), request)
@@ -86,7 +86,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	if app.debugGenesisState != nil {
 		if len(st.Ledger) > 0 {
 			app.logger.Error("InitChain: debug genesis state and actual genesis state provided")
-			return errors.New("staking: multiple genesis states specified")
+			return errors.New("staking/tendermint: multiple genesis states specified")
 		}
 		st = app.debugGenesisState
 	}
@@ -103,20 +103,20 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 					"threshold", k,
 					"quantity", v,
 				)
-				return errors.New("staking: invalid genesis threshold")
+				return errors.New("staking/tendermint: invalid genesis threshold")
 			}
 			state.setThreshold(k, &v)
 		}
 	}
 
 	if !st.CommonPool.IsValid() {
-		return errors.New("staking: invalid genesis state CommonPool")
+		return errors.New("staking/tendermint: invalid genesis state CommonPool")
 	}
 	if err := totalSupply.Add(&st.CommonPool); err != nil {
 		app.logger.Error("InitChain: failed to add common pool",
 			"err", err,
 		)
-		return errors.Wrap(err, "staking: failed to add common pool")
+		return errors.Wrap(err, "staking/tendermint: failed to add common pool")
 	}
 
 	for k, v := range st.Ledger {
@@ -128,14 +128,14 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 				"id", id,
 				"general_balance", v.GeneralBalance,
 			)
-			return errors.New("staking: invalid genesis general balance")
+			return errors.New("staking/tendermint: invalid genesis general balance")
 		}
 		if !v.EscrowBalance.IsValid() {
 			app.logger.Error("InitChain: invalid genesis escrow balance",
 				"id", id,
 				"escrow_balance", v.EscrowBalance,
 			)
-			return errors.New("staking: invalid genesis escrow balance")
+			return errors.New("staking/tendermint: invalid genesis escrow balance")
 		}
 
 		account := &ledgerEntry{
@@ -152,7 +152,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 					"spender_id", spenderID,
 					"quantity", qty,
 				)
-				return errors.New("staking: invalid genesis allowance")
+				return errors.New("staking/tendermint: invalid genesis allowance")
 			}
 			account.setAllowance(spenderID, qty)
 		}
@@ -162,13 +162,13 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 			app.logger.Error("InitChain: failed to add general balance",
 				"err", err,
 			)
-			return errors.Wrap(err, "staking: failed to add general balance")
+			return errors.Wrap(err, "staking/tendermint: failed to add general balance")
 		}
 		if err := totalSupply.Add(&account.EscrowBalance); err != nil {
 			app.logger.Error("InitChain: failed to add escrow balance",
 				"err", err,
 			)
-			return errors.Wrap(err, "staking: failed to add escrow balance")
+			return errors.Wrap(err, "staking/tendermint: failed to add escrow balance")
 		}
 	}
 
@@ -201,7 +201,7 @@ func (app *stakingApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
 			"err", err,
 			"tx", hex.EncodeToString(tx),
 		)
-		return errors.Wrap(err, "staking: failed to unmarshal tx")
+		return errors.Wrap(err, "staking/tendermint: failed to unmarshal tx")
 	}
 
 	return app.executeTx(ctx, app.state.DeliverTxTree(), request)
@@ -479,8 +479,7 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *MutableState, sign
 	if err := from.GeneralBalance.Sub(&burn.Tokens); err != nil {
 		app.logger.Error("Burn: failed to burn tokens",
 			"err", err,
-			"from", id,
-			"amount", burn.Tokens,
+			"from", id, "amount", burn.Tokens,
 		)
 		return err
 	}
@@ -554,6 +553,39 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 				Tokens: escrow.Tokens,
 			},
 		})
+	}
+
+	return nil
+}
+
+// EnsureSufficientStake ensures that the account owned by id has sufficient
+// stake to meet the sum of the thresholds specified.  The thresholds vector
+// can have multiple instances of the same threshold kind specified, in which
+// case it will be factored in repeatedly.
+func EnsureSufficientStake(appState *abci.ApplicationState, ctx *abci.Context, id signature.PublicKey, thresholds []staking.ThresholdKind) error {
+	var state *MutableState
+	if ctx.IsCheckOnly() {
+		state = NewMutableState(appState.CheckTxTree())
+	} else {
+		state = NewMutableState(appState.DeliverTxTree())
+	}
+
+	m, err := state.Thresholds()
+	if err != nil {
+		return errors.Wrap(err, "staking/tendermint: failed to query thresholds")
+	}
+	escrowBalance := state.EscrowBalance(id)
+
+	var targetThreshold staking.Quantity
+	for _, v := range thresholds {
+		qty := m[v]
+		if err = targetThreshold.Add(&qty); err != nil {
+			return errors.Wrap(err, "staking/tenderming: failed to accumulate threshold")
+		}
+	}
+
+	if escrowBalance.Cmp(&targetThreshold) < 0 {
+		return staking.ErrInsufficientStake
 	}
 
 	return nil

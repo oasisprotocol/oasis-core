@@ -392,4 +392,8 @@ type Config struct {
 	// DebugAllowRuntimeRegistration is true iff runtime registration should be
 	// allowed outside of the genesis block.
 	DebugAllowRuntimeRegistration bool
+
+	// DebugBypassStake is true iff the registry should bypass all of the staking
+	// related checks and operations.
+	DebugBypassStake bool
 }

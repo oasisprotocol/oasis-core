@@ -18,6 +18,7 @@ import (
 
 const (
 	cfgDebugAllowRuntimeRegistration = "registry.debug.allow_runtime_registration"
+	cfgDebugBypassStake              = "registry.debug.bypass_stake" // nolint: gosec
 )
 
 // New constructs a new Backend based on the configuration flags.
@@ -43,6 +44,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, tmService service.Te
 func flagsToConfig() *api.Config {
 	return &api.Config{
 		DebugAllowRuntimeRegistration: viper.GetBool(cfgDebugAllowRuntimeRegistration),
+		DebugBypassStake:              viper.GetBool(cfgDebugBypassStake),
 	}
 }
 
@@ -51,6 +53,7 @@ func flagsToConfig() *api.Config {
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().Bool(cfgDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
+		cmd.Flags().Bool(cfgDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	}
 
 	for _, v := range []string{

@@ -55,6 +55,10 @@ var (
 	// ErrInvalidNonce is the error returned when a nonce is invalid.
 	ErrInvalidNonce = errors.New("staking: invalid nonce")
 
+	// ErrInsufficientStake is the error returned when an operation fails
+	// due to insufficient stake.
+	ErrInsufficientStake = errors.New("registry: insufficient stake")
+
 	_ cbor.Marshaler   = (*Transfer)(nil)
 	_ cbor.Unmarshaler = (*Transfer)(nil)
 	_ cbor.Marshaler   = (*Approval)(nil)
