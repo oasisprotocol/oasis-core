@@ -470,6 +470,45 @@ fn test_syncer_get_path() {
 }
 
 #[test]
+fn test_syncer_remove() {
+    let mut tree = UrkelTree::make()
+        .with_capacity(0, 0)
+        .new(Context::background(), Box::new(NoopReadSyncer {}))
+        .expect("new_tree");
+    let mut roots: Vec<Hash> = Vec::new();
+
+    let (keys, values) = generate_key_value_pairs();
+    for i in 0..keys.len() {
+        tree.insert(
+            Context::background(),
+            keys[i].as_slice(),
+            values[i].as_slice(),
+        )
+        .expect("insert");
+
+        let (_, hash) = UrkelTree::commit(&mut tree, Context::background()).expect("commit");
+        roots.push(hash);
+    }
+
+    assert_eq!(format!("{:?}", roots[roots.len() - 1]), ALL_ITEMS_ROOT);
+
+    let mut remote_tree = UrkelTree::make()
+        .with_capacity(0, 0)
+        .with_root(roots[roots.len() - 1])
+        .new(Context::background(), Box::new(tree))
+        .expect("with_root");
+
+    for i in (0..keys.len()).rev() {
+        remote_tree
+            .remove(Context::background(), keys[i].as_slice())
+            .expect("remove");
+    }
+
+    let (_, hash) = UrkelTree::commit(&mut remote_tree, Context::background()).expect("commit");
+    assert_eq!(hash, Hash::empty_hash());
+}
+
+#[test]
 fn test_value_eviction() {
     let mut tree = UrkelTree::make()
         .with_capacity(0, 1024)
