@@ -51,6 +51,7 @@ func (app *stakingApplication) OnRegister(state *abci.ApplicationState, queryRou
 	// Register the query handlers.
 	queryRouter.AddRoute(QueryTotalSupply, nil, app.queryTotalSupply)
 	queryRouter.AddRoute(QueryCommonPool, nil, app.queryCommonPool)
+	queryRouter.AddRoute(QueryThresholds, nil, app.queryThresholds)
 	queryRouter.AddRoute(QueryAccounts, nil, app.queryAccounts)
 	queryRouter.AddRoute(QueryAccountInfo, api.QueryGetByIDRequest{}, app.queryAccountInfo)
 	queryRouter.AddRoute(QueryAllowance, QueryAllowanceRequest{}, app.queryAllowance)
@@ -94,6 +95,19 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		state       = NewMutableState(app.state.DeliverTxTree())
 		totalSupply staking.Quantity
 	)
+
+	if st.Thresholds != nil {
+		for k, v := range st.Thresholds {
+			if !v.IsValid() {
+				app.logger.Error("InitChain: invalid threshold",
+					"threshold", k,
+					"quantity", v,
+				)
+				return errors.New("staking: invalid genesis threshold")
+			}
+			state.setThreshold(k, &v)
+		}
+	}
 
 	if !st.CommonPool.IsValid() {
 		return errors.New("staking: invalid genesis state CommonPool")
@@ -212,6 +226,16 @@ func (app *stakingApplication) queryTotalSupply(s, r interface{}) ([]byte, error
 func (app *stakingApplication) queryCommonPool(s, r interface{}) ([]byte, error) {
 	state := s.(*immutableState)
 	return state.rawCommonPool()
+}
+
+func (app *stakingApplication) queryThresholds(s, r interface{}) ([]byte, error) {
+	state := s.(*immutableState)
+
+	thresholds, err := state.Thresholds()
+	if err != nil {
+		return nil, err
+	}
+	return cbor.Marshal(thresholds), nil
 }
 
 func (app *stakingApplication) queryAccounts(s, r interface{}) ([]byte, error) {

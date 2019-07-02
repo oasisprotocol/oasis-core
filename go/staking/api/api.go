@@ -73,6 +73,9 @@ type Backend interface {
 	// CommonPool returns the common pool balance.
 	CommonPool(ctx context.Context) (*Quantity, error)
 
+	// Threshold returns the specific staking threshold by kind.
+	Threshold(ctx context.Context, kind ThresholdKind) (*Quantity, error)
+
 	// Accounts returns the IDs of all accounts with a non-zero general
 	// or escrow balance.
 	Accounts(ctx context.Context) ([]signature.PublicKey, error)
@@ -394,11 +397,40 @@ func MoveUpTo(dst, src, n *Quantity) (*Quantity, error) {
 	return amount, nil
 }
 
+// ThresholdKind is the kind of staking threshold.
+type ThresholdKind int
+
+const (
+	KindEntity    ThresholdKind = 0
+	KindValidator ThresholdKind = 1
+	KindCompute   ThresholdKind = 2
+	KindStorage   ThresholdKind = 3
+
+	KindMax = KindStorage
+)
+
+// String returns the string representation of a ThresholdKind.
+func (k ThresholdKind) String() string {
+	switch k {
+	case KindEntity:
+		return "entity"
+	case KindValidator:
+		return "validator"
+	case KindCompute:
+		return "compute"
+	case KindStorage:
+		return "storage"
+	default:
+		return "[unknown]"
+	}
+}
+
 // Genesis is the initial ledger balances at genesis for use in the genesis
 // block and test cases.
 type Genesis struct {
-	TotalSupply Quantity `codec:"total_supply"`
-	CommonPool  Quantity `codec:"common_pool"`
+	TotalSupply Quantity                   `codec:"total_supply"`
+	CommonPool  Quantity                   `codec:"common_pool"`
+	Thresholds  map[ThresholdKind]Quantity `codec:"thresholds,omitempty"`
 
 	Ledger map[signature.MapKey]*GenesisLedgerEntry `codec:"ledger"`
 }

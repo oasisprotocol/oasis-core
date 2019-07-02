@@ -40,6 +40,9 @@ const (
 	// QueryCommonPool is the path for a CommonPool query.
 	QueryCommonPool = AppName + "/common_pool"
 
+	// QueryThresholds is the path for a Thresholds query.
+	QueryThresholds = AppName + "/thresholds"
+
 	// QueryAccounts is the path for an Accounts query.
 	QueryAccounts = AppName + "/accounts"
 

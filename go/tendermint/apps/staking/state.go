@@ -12,7 +12,10 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
-const stateAccountsMap = "staking/accounts/%s"
+const (
+	stateAccountsMap   = "staking/accounts/%s"
+	stateThresholdsMap = "staking/thresholds/%d"
+)
 
 var (
 	stateTotalSupply = []byte("staking/total_supply")
@@ -91,6 +94,33 @@ func (s *immutableState) rawCommonPool() ([]byte, error) {
 	}
 
 	return cbor.Marshal(q), nil
+}
+
+// Thresholds returns the currently configured thresholds if any.
+func (s *immutableState) Thresholds() (map[staking.ThresholdKind]staking.Quantity, error) {
+	m := make(map[staking.ThresholdKind]staking.Quantity)
+	s.Snapshot.IterateRangeInclusive(
+		[]byte(fmt.Sprintf(stateThresholdsMap, staking.KindValidator)),
+		[]byte(fmt.Sprintf(stateThresholdsMap, staking.KindMax)),
+		true,
+		func(key, value []byte, version int64) bool {
+			var k staking.ThresholdKind
+			if _, err := fmt.Sscanf(string(key), stateThresholdsMap, &k); err != nil {
+				panic("staking: corrupt key: " + err.Error())
+			}
+
+			var q staking.Quantity
+			if err := cbor.Unmarshal(value, &q); err != nil {
+				panic("staking: corrput state: " + err.Error())
+			}
+
+			m[k] = q
+
+			return false
+		},
+	)
+
+	return m, nil
 }
 
 func (s *immutableState) accounts() ([]signature.PublicKey, error) {
@@ -177,6 +207,10 @@ func (s *MutableState) setTotalSupply(q *staking.Quantity) {
 
 func (s *MutableState) setCommonPool(q *staking.Quantity) {
 	s.tree.Set(stateCommonPool, cbor.Marshal(q))
+}
+
+func (s *MutableState) setThreshold(kind staking.ThresholdKind, q *staking.Quantity) {
+	s.tree.Set([]byte(fmt.Sprintf(stateThresholdsMap, kind)), cbor.Marshal(q))
 }
 
 // SlashEscrow slashes up to the amount from the escrow balance of the account,

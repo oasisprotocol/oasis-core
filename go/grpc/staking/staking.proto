@@ -9,6 +9,7 @@ service Staking {
 	rpc GetSymbol(GetSymbolRequest) returns (GetSymbolResponse) {}
 	rpc GetTotalSupply(GetTotalSupplyRequest) returns (GetTotalSupplyResponse) {}
 	rpc GetCommonPool(GetCommonPoolRequest) returns (GetCommonPoolResponse) {}
+	rpc GetThreshold(GetThresholdRequest) returns (GetThresholdResponse) {}
 	rpc GetAccounts(GetAccountsRequest) returns (GetAccountsResponse) {} // TODO: Stream this?
 	rpc GetAccountInfo(GetAccountInfoRequest) returns (GetAccountInfoResponse) {}
 	rpc GetAllowance(GetAllowanceRequest) returns (GetAllowanceResponse) {}
@@ -49,6 +50,19 @@ message GetCommonPoolRequest {}
 
 message GetCommonPoolResponse {
 	bytes common_pool = 1;
+}
+
+message GetThresholdRequest {
+	enum ThresholdKind {
+		VALIDATOR = 0;
+		COMPUTE = 1;
+		STORAGE = 2;
+	}
+	ThresholdKind threshold_kind = 1;
+}
+
+message GetThresholdResponse {
+	bytes threshold = 1;
 }
 
 message GetAccountsRequest {}

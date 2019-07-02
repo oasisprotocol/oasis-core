@@ -54,6 +54,30 @@ func (s *grpcServer) GetCommonPool(ctx context.Context, req *pb.GetCommonPoolReq
 	return &resp, nil
 }
 
+func (s *grpcServer) GetThreshold(ctx context.Context, req *pb.GetThresholdRequest) (*pb.GetThresholdResponse, error) {
+	var kind api.ThresholdKind
+	switch req.GetThresholdKind() {
+	case pb.GetThresholdRequest_VALIDATOR:
+		kind = api.KindValidator
+	case pb.GetThresholdRequest_COMPUTE:
+		kind = api.KindCompute
+	case pb.GetThresholdRequest_STORAGE:
+		kind = api.KindStorage
+	default:
+		return nil, fmt.Errorf("staking/grpc: invalid threshold kind: ", req.GetThresholdKind())
+	}
+
+	qty, err := s.backend.Threshold(ctx, kind)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp pb.GetThresholdResponse
+	resp.Threshold, _ = qty.MarshalBinary()
+
+	return &resp, nil
+}
+
 func (s *grpcServer) GetAccounts(ctx context.Context, req *pb.GetAccountsRequest) (*pb.GetAccountsResponse, error) {
 	accounts, err := s.backend.Accounts(ctx)
 	if err != nil {

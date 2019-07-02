@@ -30,6 +30,12 @@ var (
 				GeneralBalance: testTotalSupply,
 			},
 		},
+		Thresholds: map[api.ThresholdKind]api.Quantity{
+			api.KindEntity:    qtyFromInt(1),
+			api.KindValidator: qtyFromInt(2),
+			api.KindCompute:   qtyFromInt(3),
+			api.KindStorage:   qtyFromInt(4),
+		},
 	}
 
 	testTotalSupply = qtyFromInt(math.MaxInt64)
@@ -78,6 +84,17 @@ func testInitialEnv(t *testing.T, backend api.Backend) {
 	commonPool, err := backend.CommonPool(context.Background())
 	require.NoError(err, "CommonPool")
 	require.True(commonPool.IsZero(), "CommonPool - initial value")
+
+	for _, kind := range []api.ThresholdKind{
+		api.KindValidator,
+		api.KindCompute,
+		api.KindStorage,
+	} {
+		qty, err := backend.Threshold(context.Background(), kind)
+		require.NoError(err, "Threshold")
+		require.NotNil(qty, "Threshold != nil")
+		require.Equal(debugGenesisState.Thresholds[kind], *qty, "Threshold - value")
+	}
 }
 
 func testTransfer(t *testing.T, backend api.Backend) {

@@ -52,7 +52,7 @@ func (b *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, err
 	}
 
 	var data api.Quantity
-	if err := cbor.Unmarshal(response, &data); err != nil {
+	if err = cbor.Unmarshal(response, &data); err != nil {
 		return nil, errors.Wrap(err, "staking: total supply malformed response")
 	}
 
@@ -66,11 +66,26 @@ func (b *tendermintBackend) CommonPool(ctx context.Context) (*api.Quantity, erro
 	}
 
 	var data api.Quantity
-	if err := cbor.Unmarshal(response, &data); err != nil {
+	if err = cbor.Unmarshal(response, &data); err != nil {
 		return nil, errors.Wrap(err, "staking: common pool malformed response")
 	}
 
 	return &data, nil
+}
+
+func (b *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKind) (*api.Quantity, error) {
+	response, err := b.service.Query(app.QueryThresholds, nil, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "staking: thresholds query failed")
+	}
+
+	data := make(map[api.ThresholdKind]api.Quantity)
+	if err = cbor.Unmarshal(response, &data); err != nil {
+		return nil, errors.Wrap(err, "staking: thresholds malformed response")
+	}
+	qty := data[kind]
+
+	return &qty, nil
 }
 
 func (b *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey, error) {
@@ -80,7 +95,7 @@ func (b *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey
 	}
 
 	var data []signature.PublicKey
-	if err := cbor.Unmarshal(response, &data); err != nil {
+	if err = cbor.Unmarshal(response, &data); err != nil {
 		return nil, errors.Wrap(err, "staking: accounts query malformed response")
 	}
 
