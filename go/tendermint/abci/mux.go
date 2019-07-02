@@ -25,10 +25,11 @@ import (
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/version"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/db"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 const (
@@ -217,12 +218,12 @@ func (a *ApplicationServer) Pruner() StatePruner {
 
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
-func NewApplicationServer(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*ApplicationServer, error) {
+func NewApplicationServer(ctx context.Context, dataDir string, pruneCfg *PruneConfig, epochInterval uint64) (*ApplicationServer, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(abciCollectors...)
 	})
 
-	mux, err := newABCIMux(ctx, dataDir, pruneCfg)
+	mux, err := newABCIMux(ctx, dataDir, pruneCfg, epochInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -713,8 +714,8 @@ func (mux *abciMux) extractAppFromTx(tx []byte) (Application, error) {
 	return app, nil
 }
 
-func newABCIMux(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*abciMux, error) {
-	state, err := newApplicationState(ctx, dataDir, pruneCfg)
+func newABCIMux(ctx context.Context, dataDir string, pruneCfg *PruneConfig, epochInterval uint64) (*abciMux, error) {
+	state, err := newApplicationState(ctx, dataDir, pruneCfg, epochInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -746,6 +747,7 @@ type ApplicationState struct {
 	deliverTxTree *iavl.MutableTree
 	checkTxTree   *iavl.MutableTree
 	statePruner   StatePruner
+	epochInterval uint64
 
 	blockLock   sync.RWMutex
 	blockHash   []byte
@@ -785,32 +787,49 @@ func (s *ApplicationState) CheckTxTree() *iavl.MutableTree {
 	return s.checkTxTree
 }
 
+// GetEpoch returns the current scheduling epoch.
+func (s *ApplicationState) GetEpoch(timeSource ticker.Backend) (scheduler.EpochTime, error) {
+	blockHeight := s.BlockHeight()
+	if blockHeight == 0 {
+		return scheduler.EpochInvalid, errors.New("no epoch in initial blockheight")
+	}
+	currentEpoch, err := timeSource.GetTick(s.ctx, blockHeight, s.epochInterval)
+	if err != nil {
+		s.logger.Error("GetEpoch: failed to get current epoch",
+			"err", err,
+		)
+		return scheduler.EpochInvalid, err
+	}
+
+	return scheduler.EpochTime(currentEpoch), nil
+}
+
 // EpochChanged returns true iff the current epoch has changed since the
 // last block.  As a matter of convenience, the current epoch is returned
 // iff it has changed.
-func (s *ApplicationState) EpochChanged(timeSource epochtime.Backend) (bool, epochtime.EpochTime) {
+func (s *ApplicationState) EpochChanged(timeSource ticker.Backend) (bool, scheduler.EpochTime) {
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
-		return false, epochtime.EpochInvalid
+		return false, scheduler.EpochInvalid
 	}
 
-	previousEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight-1)
+	previousEpoch, err := timeSource.GetTick(s.ctx, blockHeight-1, s.epochInterval)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get previous epoch",
 			"err", err,
 		)
-		return false, epochtime.EpochInvalid
+		return false, scheduler.EpochInvalid
 	}
-	currentEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight)
+	currentEpoch, err := timeSource.GetTick(s.ctx, blockHeight, s.epochInterval)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get current epoch",
 			"err", err,
 		)
-		return false, epochtime.EpochInvalid
+		return false, scheduler.EpochInvalid
 	}
 
 	if previousEpoch == currentEpoch {
-		return false, epochtime.EpochInvalid
+		return false, scheduler.EpochInvalid
 	}
 
 	s.logger.Debug("EpochChanged: epoch transition detected",
@@ -818,7 +837,7 @@ func (s *ApplicationState) EpochChanged(timeSource epochtime.Backend) (bool, epo
 		"epoch", currentEpoch,
 	)
 
-	return true, currentEpoch
+	return true, scheduler.EpochTime(currentEpoch)
 }
 
 // Genesis returns the ABCI genesis state.
@@ -942,7 +961,7 @@ func (s *ApplicationState) metricsWorker() {
 	}
 }
 
-func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*ApplicationState, error) {
+func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneConfig, epochInterval uint64) (*ApplicationState, error) {
 	db, err := db.New(filepath.Join(dataDir, "abci-mux-state"), false)
 	if err != nil {
 		return nil, err
@@ -983,6 +1002,7 @@ func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneCon
 		deliverTxTree:   deliverTxTree,
 		checkTxTree:     checkTxTree,
 		statePruner:     statePruner,
+		epochInterval:   epochInterval,
 		blockHash:       blockHash,
 		blockHeight:     blockHeight,
 		metricsCloseCh:  make(chan struct{}),

@@ -11,10 +11,11 @@ import (
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/logging"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 var (
@@ -30,7 +31,7 @@ type beaconApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.Backend
+	timeSource ticker.Backend
 
 	cfg *beacon.Config
 }
@@ -110,7 +111,7 @@ func (app *beaconApplication) queryGetBeacon(s interface{}, r interface{}) ([]by
 	return state.GetBeacon()
 }
 
-func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
+func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch scheduler.EpochTime, req types.RequestBeginBlock) error {
 	var entropyCtx, entropy []byte
 
 	switch app.cfg.DebugDeterministic {
@@ -172,7 +173,7 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) erro
 }
 
 // New constructs a new beacon application instance.
-func New(timeSource epochtime.Backend, cfg *beacon.Config) abci.Application {
+func New(timeSource ticker.Backend, cfg *beacon.Config) abci.Application {
 	app := &beaconApplication{
 		logger:     logging.GetLogger("tendermint/beacon"),
 		timeSource: timeSource,
@@ -185,7 +186,7 @@ func New(timeSource epochtime.Backend, cfg *beacon.Config) abci.Application {
 	return app
 }
 
-func getBeacon(beaconEpoch epochtime.EpochTime, entropyCtx []byte, entropy []byte) []byte {
+func getBeacon(beaconEpoch scheduler.EpochTime, entropyCtx []byte, entropy []byte) []byte {
 	var tmp [8]byte
 	binary.LittleEndian.PutUint64(tmp[:], uint64(beaconEpoch))
 

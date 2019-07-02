@@ -10,10 +10,10 @@ import (
 	"github.com/spf13/viper"
 
 	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/registry/tendermint"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 )
 
 // New constructs a new Backend based on the configuration flags.
-func New(ctx context.Context, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, timeSource ticker.Backend, tmService service.TendermintService) (api.Backend, error) {
 	backend := commonFlags.ConsensusBackend()
 
 	var impl api.Backend

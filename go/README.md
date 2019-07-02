@@ -35,7 +35,7 @@ node, development, and debugging.
 All sub-commands have online documentation that can be accessed via the
 `--help` parameter, for example:
 ```
-ekiden debug dummy set-epoch --help
+ekiden debug dummy advance-epoch --help
 ```
 
 ### `debug dummy` - Control the dummy (centralized) node during tests
@@ -43,9 +43,9 @@ ekiden debug dummy set-epoch --help
 The `debug dummy` sub-command provides faclities for controlling the centralized
 node during tests.
 
-#### `debug dummy set-epoch` - Set the Oasis epoch
+#### `debug dummy advance-epoch` - Set the Oasis epoch
 
-The `dummy set-epoch` sub-command allows the node's Oasis epoch to be
+The `dummy advance-epoch` sub-command allows the node's Oasis epoch to be
 set to an arbitrary value, provided a compatible epochtime backend is
 being used (`mock`, `tendermint_mock`).
 

@@ -14,12 +14,12 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/keymanager/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/keymanager"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 // BackendName is the name of the backend.
@@ -134,7 +134,7 @@ func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 
 // New constructs a new tendermint backed key manager management Backend
 // instance.
-func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, timeSource ticker.Backend, service service.TendermintService) (api.Backend, error) {
 	app := app.New(timeSource)
 	if err := service.RegisterApplication(app, []string{registryapp.AppName}); err != nil {
 		return nil, errors.Wrap(err, "keymanager/tendermint: failed to register app")

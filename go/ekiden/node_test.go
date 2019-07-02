@@ -19,8 +19,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/entity"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	registryTests "github.com/oasislabs/ekiden/go/registry/tests"
 	roothashTests "github.com/oasislabs/ekiden/go/roothash/tests"
@@ -29,6 +27,8 @@ import (
 	storageClient "github.com/oasislabs/ekiden/go/storage/client"
 	storageClientTests "github.com/oasislabs/ekiden/go/storage/client/tests"
 	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
+	tickerTests "github.com/oasislabs/ekiden/go/ticker/tests"
 	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
 	computeWorkerTests "github.com/oasislabs/ekiden/go/worker/compute/tests"
 	storageWorkerTests "github.com/oasislabs/ekiden/go/worker/storage/tests"
@@ -47,7 +47,7 @@ var (
 		value interface{}
 	}{
 		{"log.level.default", "DEBUG"},
-		{"epochtime.backend", "tendermint_mock"},
+		{"ticker.debug.settable", true},
 		{"consensus.backend", "tendermint"},
 		{"registry.debug.allow_runtime_registration", true},
 		{"registry.debug.bypass_stake", true},
@@ -184,7 +184,7 @@ func TestNode(t *testing.T) {
 		// Clean up and ensure the registry is empty for the following tests.
 		{"DeregisterTestEntityRuntime", testDeregisterEntityRuntime},
 
-		{"EpochTime", testEpochTime},
+		{"Ticker", testTicker},
 		{"Beacon", testBeacon},
 		{"Storage", testStorage},
 		{"Registry", testRegistry},
@@ -260,14 +260,14 @@ func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
 	registryTests.EnsureRegistryEmpty(t, node.Node.Registry)
 }
 
-func testEpochTime(t *testing.T, node *testNode) {
-	epochtimeTests.EpochtimeSetableImplementationTest(t, node.Epochtime)
+func testTicker(t *testing.T, node *testNode) {
+	tickerTests.TickerSetableImplementationTest(t, node.Ticker)
 }
 
 func testBeacon(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	timeSource := (node.Ticker).(ticker.SetableBackend)
 
-	beaconTests.BeaconImplementationTests(t, node.Beacon, timeSource)
+	beaconTests.BeaconImplementationTests(t, node.Beacon, timeSource, node.Scheduler)
 }
 
 func testStorage(t *testing.T, node *testNode) {
@@ -275,13 +275,13 @@ func testStorage(t *testing.T, node *testNode) {
 }
 
 func testRegistry(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	timeSource := (node.Ticker).(ticker.SetableBackend)
 
-	registryTests.RegistryImplementationTests(t, node.Registry, timeSource)
+	registryTests.RegistryImplementationTests(t, node.Registry, timeSource, node.Scheduler)
 }
 
 func testScheduler(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	timeSource := (node.Ticker).(ticker.SetableBackend)
 
 	schedulerTests.SchedulerImplementationTests(t, node.Scheduler, timeSource, node.Registry)
 }
@@ -291,16 +291,16 @@ func testStaking(t *testing.T, node *testNode) {
 }
 
 func testRootHash(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	timeSource := (node.Ticker).(ticker.SetableBackend)
 
 	roothashTests.RootHashImplementationTests(t, node.RootHash, timeSource, node.Scheduler, node.Storage, node.Registry)
 }
 
 func testComputeWorker(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	timeSource := (node.Ticker).(ticker.SetableBackend)
 
 	require.NotNil(t, node.computeCommitteeNode)
-	computeWorkerTests.WorkerImplementationTests(t, node.ComputeWorker, node.runtimeID, node.computeCommitteeNode, timeSource)
+	computeWorkerTests.WorkerImplementationTests(t, node.ComputeWorker, node.runtimeID, node.computeCommitteeNode, timeSource, node.Scheduler)
 }
 
 func testStorageWorker(t *testing.T, node *testNode) {
@@ -308,10 +308,10 @@ func testStorageWorker(t *testing.T, node *testNode) {
 }
 
 func testTransactionSchedulerWorker(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	timeSource := (node.Ticker).(ticker.SetableBackend)
 
 	require.NotNil(t, node.txnschedulerCommitteeNode)
-	txnschedulerWorkerTests.WorkerImplementationTests(t, node.TransactionSchedulerWorker, node.runtimeID, node.txnschedulerCommitteeNode, timeSource, node.RootHash, node.Storage)
+	txnschedulerWorkerTests.WorkerImplementationTests(t, node.TransactionSchedulerWorker, node.runtimeID, node.txnschedulerCommitteeNode, timeSource, node.RootHash, node.Storage, node.Scheduler)
 }
 
 func testClient(t *testing.T, node *testNode) {
@@ -319,7 +319,7 @@ func testClient(t *testing.T, node *testNode) {
 }
 
 func testStorageClient(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	timeSource := (node.Ticker).(ticker.SetableBackend)
 	ctx := context.Background()
 
 	// Storage client tests.

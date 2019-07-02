@@ -4,18 +4,15 @@ package dummy_debug;
 option go_package = "github.com/oasislabs/ekiden/go/grpc/dummydebug";
 
 service DummyDebug {
-    // Manually set the epoch and notify subscribers.
-    rpc SetEpoch (SetEpochRequest) returns (SetEpochResponse) {}
+    // Manually do a tick and notify subscribers.
+    rpc AdvanceEpoch (AdvanceEpochRequest) returns (AdvanceEpochResponse) {}
     // Watch the registry and wait for given number of compute nodes.
     rpc WaitNodes (WaitNodesRequest) returns (WaitNodesResponse) {}
 }
 
-message SetEpochRequest {
-    // The new epoch.
-    uint64 epoch = 1;
-}
+message AdvanceEpochRequest {}
 
-message SetEpochResponse {}
+message AdvanceEpochResponse {}
 
 message WaitNodesRequest {
     // Number of nodes to wait for.

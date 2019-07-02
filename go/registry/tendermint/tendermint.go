@@ -16,12 +16,12 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/registry/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	stakingapp "github.com/oasislabs/ekiden/go/tendermint/apps/staking"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 // BackendName is the name of this implementation.
@@ -432,7 +432,7 @@ func (r *tendermintBackend) getNodeList(ctx context.Context, height int64) (*api
 }
 
 // New constructs a new tendermint backed registry Backend instance.
-func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService, cfg *api.Config) (api.Backend, error) {
+func New(ctx context.Context, timeSource ticker.Backend, service service.TendermintService, cfg *api.Config) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
 	app := app.New(timeSource, cfg)
 	if err := service.RegisterApplication(app, []string{stakingapp.AppName}); err != nil {

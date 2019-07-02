@@ -12,7 +12,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/storage"
@@ -37,7 +36,6 @@ type Storage struct {
 
 // New constructs a new storage worker.
 func New(
-	epochtime epochtime.Backend,
 	sb storageApi.Backend,
 	g *grpc.Server,
 	r *registration.Registration,

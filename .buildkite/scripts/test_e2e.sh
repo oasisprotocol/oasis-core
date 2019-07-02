@@ -52,7 +52,7 @@ scenario_basic() {
     wait_nodes 6
 
     # Advance epoch to elect a new committee.
-    set_epoch 1
+    advance_epoch
 }
 
 scenario_compute_discrepancy() {
@@ -72,7 +72,7 @@ scenario_compute_discrepancy() {
     wait_nodes 6
 
     # Advance epoch to elect a new committee.
-    set_epoch 1
+    advance_epoch
 }
 
 assert_compute_discrepancy_scenario_works() {
@@ -98,7 +98,7 @@ scenario_merge_discrepancy() {
     wait_nodes 6
 
     # Advance epoch to elect a new committee.
-    set_epoch 1
+    advance_epoch
 }
 
 assert_merge_discrepancy_scenario_works() {

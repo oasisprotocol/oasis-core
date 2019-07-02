@@ -2,7 +2,6 @@
 package registry
 
 import (
-	"context"
 	"encoding/hex"
 
 	"github.com/pkg/errors"
@@ -15,13 +14,14 @@ import (
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	staking "github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	stakingapp "github.com/oasislabs/ekiden/go/tendermint/apps/staking"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 var _ abci.Application = (*registryApplication)(nil)
@@ -30,7 +30,7 @@ type registryApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.Backend
+	timeSource ticker.Backend
 
 	cfg *registry.Config
 }
@@ -206,7 +206,7 @@ func (app *registryApplication) EndBlock(request types.RequestEndBlock) (types.R
 func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) {
 }
 
-func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, registryEpoch epochtime.EpochTime) error {
+func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, registryEpoch scheduler.EpochTime) error {
 	state := NewMutableState(app.state.DeliverTxTree())
 
 	nodes, err := state.GetNodes()
@@ -219,7 +219,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 
 	var expiredNodes []*node.Node
 	for _, node := range nodes {
-		if epochtime.EpochTime(node.Expiration) >= registryEpoch {
+		if scheduler.EpochTime(node.Expiration) >= registryEpoch {
 			continue
 		}
 		expiredNodes = append(expiredNodes, node)
@@ -391,11 +391,15 @@ func (app *registryApplication) registerNode(
 	}
 
 	// Ensure node is not expired.
-	epoch, err := app.timeSource.GetEpoch(context.Background(), app.state.BlockHeight())
+	epoch, err := app.state.GetEpoch(app.timeSource)
 	if err != nil {
 		return err
 	}
-	if epochtime.EpochTime(node.Expiration) < epoch {
+	if node.Expiration == 0 {
+		// If Expiration == 0, register for next epoch.
+		node.Expiration = uint64(epoch) + 2
+	}
+	if scheduler.EpochTime(node.Expiration) < epoch {
 		return registry.ErrNodeExpired
 	}
 
@@ -472,7 +476,7 @@ func (app *registryApplication) registerRuntime(
 }
 
 // New constructs a new registry application instance.
-func New(timeSource epochtime.Backend, cfg *registry.Config) abci.Application {
+func New(timeSource ticker.Backend, cfg *registry.Config) abci.Application {
 	return &registryApplication{
 		logger:     logging.GetLogger("tendermint/registry"),
 		timeSource: timeSource,

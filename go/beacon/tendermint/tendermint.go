@@ -8,10 +8,10 @@ import (
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/logging"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 // BackendName is the name of this implementation.
@@ -36,7 +36,7 @@ func (t *Backend) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
 }
 
 // New constructs a new tendermint backed beacon Backend instance.
-func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService, cfg *api.Config) (api.Backend, error) {
+func New(ctx context.Context, timeSource ticker.Backend, service service.TendermintService, cfg *api.Config) (api.Backend, error) {
 	if err := service.ForceInitialize(); err != nil {
 		return nil, err
 	}

@@ -11,12 +11,13 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/runtime"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
+	tickerTests "github.com/oasislabs/ekiden/go/ticker/tests"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
 )
@@ -33,9 +34,10 @@ func WorkerImplementationTests(
 	worker *txnscheduler.Worker,
 	runtimeID signature.PublicKey,
 	rtNode *committee.Node,
-	epochtime epochtime.SetableBackend,
+	ticker ticker.SetableBackend,
 	roothash roothash.Backend,
 	storage storage.Backend,
+	scheduler scheduler.Backend,
 ) {
 	// Wait for worker to start and register.
 	<-worker.Initialized()
@@ -46,7 +48,7 @@ func WorkerImplementationTests(
 
 	// Run the various test cases. (Ordering matters.)
 	t.Run("InitialEpochTransition", func(t *testing.T) {
-		testInitialEpochTransition(t, stateCh, epochtime)
+		testInitialEpochTransition(t, stateCh, ticker, scheduler)
 	})
 
 	t.Run("QueueCall", func(t *testing.T) {
@@ -56,9 +58,9 @@ func WorkerImplementationTests(
 	// TODO: Add more tests.
 }
 
-func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, epochtime epochtime.SetableBackend) {
+func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, ticker ticker.SetableBackend, scheduler scheduler.Backend) {
 	// Perform an epoch transition, so that the node gets elected leader.
-	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	tickerTests.MustAdvanceEpoch(t, ticker, scheduler)
 
 	// Node should transition to WaitingForBatch state.
 	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)

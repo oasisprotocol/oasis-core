@@ -24,14 +24,13 @@ EKIDEN_KM_RUNTIME_ID=${EKIDEN_KM_RUNTIME_ID:-"ffffffffffffffffffffffffffffffffff
 #   EKIDEN_COMMITTEE_DIR
 #   EKIDEN_GENESIS_FILE
 #   EKIDEN_IAS_PROXY_PORT
-#   EKIDEN_EPOCHTIME_BACKEND
 #   EKIDEN_VALIDATOR_SOCKET
 #   EKIDEN_CLIENT_SOCKET
 #   EKIDEN_ENTITY_PRIVATE_KEY
 #
 # Optional named arguments:
 #
-#   epochtime_backend - epochtime backend (default: tendermint)
+#   ekiden_ticker_settable - settable ticker (default: 1)
 #   id - commitee identifier (default: 1)
 #   replica_group_size - runtime replica group size (default: 2)
 #   replica_group_backup_size - runtime replica group backup size (default: 1)
@@ -39,7 +38,7 @@ EKIDEN_KM_RUNTIME_ID=${EKIDEN_KM_RUNTIME_ID:-"ffffffffffffffffffffffffffffffffff
 #
 run_backend_tendermint_committee() {
     # Optional arguments with default values.
-    local epochtime_backend="tendermint"
+    local ekiden_ticker_settable=1
     local id=1
     local replica_group_size=2
     local replica_group_backup_size=1
@@ -140,7 +139,7 @@ run_backend_tendermint_committee() {
     EKIDEN_VALIDATOR_SOCKET=${base_datadir}-1/internal.sock
     EKIDEN_IAS_PROXY_PORT=${ias_proxy_port}
     EKIDEN_GENESIS_FILE=${genesis_file}
-    EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
+    EKIDEN_TICKER_SETTABLE=${ekiden_ticker_settable}
     EKIDEN_ENTITY_PRIVATE_KEY=${entity_dir}/entity.pem
 
     # Run the seed node.
@@ -161,12 +160,13 @@ run_backend_tendermint_committee() {
             --log.file ${committee_dir}/validator-${idx}.log \
             --grpc.log.verbose_debug \
             --grpc.debug.port ${grpc_debug_port} \
-            --epochtime.backend ${epochtime_backend} \
-            --epochtime.tendermint.interval 30 \
+            --ticker.interval 5 \
+            ${EKIDEN_TICKER_SETTABLE:+--ticker.debug.settable} \
             ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
             --metrics.mode none \
             --storage.backend client \
             --consensus.backend tendermint \
+            --tendermint.abci.epoch_interval 5 \
             --genesis.file ${genesis_file} \
             --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
             --tendermint.consensus.timeout_commit 250ms \
@@ -244,11 +244,12 @@ run_compute_node() {
         --grpc.log.verbose_debug \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
-        --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
-        --epochtime.tendermint.interval 30 \
+        ${EKIDEN_TICKER_SETTABLE:+--ticker.debug.settable} \
+        --ticker.interval 5 \
         ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
         --consensus.backend tendermint \
+        --tendermint.abci.epoch_interval 5 \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
@@ -315,12 +316,13 @@ run_storage_node() {
         --log.level debug \
         --log.file ${log_file} \
         --grpc.log.verbose_debug \
-        --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
-        --epochtime.tendermint.interval 30 \
+        ${EKIDEN_TICKER_SETTABLE:+--ticker.debug.settable} \
+        --ticker.interval 5 \
         ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
         --storage.backend leveldb \
         --consensus.backend tendermint \
+        --tendermint.abci.epoch_interval 5 \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
@@ -372,13 +374,14 @@ run_client_node() {
         --log.level debug \
         --log.file ${log_file} \
         --grpc.log.verbose_debug \
-        --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
-        --epochtime.tendermint.interval 30 \
+        ${EKIDEN_TICKER_SETTABLE:+--ticker.debug.settable} \
+        --ticker.interval 5 \
         ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
         --consensus.backend tendermint \
+        --tendermint.abci.epoch_interval 5 \
         --roothash.tendermint.index_blocks \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
@@ -408,16 +411,11 @@ wait_nodes() {
         --nodes $nodes
 }
 
-# Set epoch.
+# Advances epoch.
 #
-# Arguments:
-#   epoch - epoch to set
-set_epoch() {
-    local epoch=$1
-
-    ${EKIDEN_NODE} debug dummy set-epoch \
-        --address unix:${EKIDEN_VALIDATOR_SOCKET} \
-        --epoch $epoch
+advance_epoch() {
+    ${EKIDEN_NODE} debug dummy advance-epoch \
+        --address unix:${EKIDEN_VALIDATOR_SOCKET}
 }
 
 # Run a key manager node.
@@ -453,11 +451,12 @@ run_keymanager_node() {
         --grpc.log.verbose_debug \
         --storage.backend cachingclient \
         --storage.cachingclient.file ${data_dir}/storage-cache \
-        --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
-        --epochtime.tendermint.interval 30 \
+        ${EKIDEN_TICKER_SETTABLE:+--ticker.debug.settable} \
+        --ticker.interval 5 \
         ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --metrics.mode none \
         --consensus.backend tendermint \
+        --tendermint.abci.epoch_interval 5 \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
@@ -509,10 +508,11 @@ run_seed_node() {
         --log.file ${log_file} \
         --metrics.mode none \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
-        --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
-        --epochtime.tendermint.interval 30 \
+        ${EKIDEN_TICKER_SETTABLE:+--ticker.debug.settable} \
+        --ticker.interval 5 \
         ${EKIDEN_BEACON_DETERMINISTIC:+--beacon.debug.deterministic} \
         --consensus.backend tendermint \
+        --tendermint.abci.epoch_interval 5 \
         --tendermint.core.listen_address tcp://0.0.0.0:${EKIDEN_SEED_NODE_PORT} \
         --tendermint.seed_mode \
         --tendermint.debug.addr_book_lenient \

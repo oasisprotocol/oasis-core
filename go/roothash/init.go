@@ -12,12 +12,12 @@ import (
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/tendermint"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 func New(
 	ctx context.Context,
 	dataDir string,
-	timeSource epochtime.Backend,
+	timeSource ticker.Backend,
 	scheduler scheduler.Backend,
 	registry registry.Backend,
 	beacon beacon.Backend,

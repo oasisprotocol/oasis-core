@@ -17,6 +17,9 @@ const (
 
 	// QueryKindsCommittees is a query path for getting the committees of given kinds.
 	QueryKindsCommittees = AppName + "/kinds-committees"
+
+	// QueryGetEpoch is a query path for getting current scheduler epoch.
+	QueryGetEpoch = AppName + "/epoch"
 )
 
 var (

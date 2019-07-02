@@ -13,13 +13,14 @@ import (
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	"github.com/oasislabs/ekiden/go/keymanager/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 var emptyHashSha3 = sha3.Sum256(nil)
@@ -28,7 +29,7 @@ type keymanagerApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.Backend
+	timeSource ticker.Backend
 }
 
 func (app *keymanagerApplication) Name() string {
@@ -167,7 +168,7 @@ func (app *keymanagerApplication) queryGetStatuses(s interface{}, r interface{})
 	return cbor.Marshal(statuses), nil
 }
 
-func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error {
+func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch scheduler.EpochTime) error {
 	tree := app.state.DeliverTxTree()
 
 	// Query the runtime and node lists.
@@ -350,7 +351,7 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 	return status
 }
 
-func New(timeSource epochtime.Backend) abci.Application {
+func New(timeSource ticker.Backend) abci.Application {
 	return &keymanagerApplication{
 		logger:     logging.GetLogger("tendermint/keymanager"),
 		timeSource: timeSource,

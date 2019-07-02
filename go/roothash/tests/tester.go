@@ -12,8 +12,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	registryTests "github.com/oasislabs/ekiden/go/registry/tests"
 	"github.com/oasislabs/ekiden/go/roothash/api"
@@ -22,6 +20,8 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
+	tickerTests "github.com/oasislabs/ekiden/go/ticker/tests"
 )
 
 const (
@@ -40,7 +40,7 @@ type runtimeState struct {
 
 // RootHashImplementationTests exercises the basic functionality of a
 // roothash backend.
-func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, storage storage.Backend, registry registry.Backend) {
+func RootHashImplementationTests(t *testing.T, backend api.Backend, timeSource ticker.SetableBackend, scheduler scheduler.Backend, storage storage.Backend, registry registry.Backend) {
 	seedBase := []byte("RootHashImplementationTests")
 
 	require := require.New(t)
@@ -85,7 +85,7 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 		})
 	}
 	t.Run("EpochTransitionBlock", func(t *testing.T) {
-		testEpochTransitionBlock(t, backend, epochtime, scheduler, rtStates)
+		testEpochTransitionBlock(t, backend, timeSource, scheduler, rtStates)
 	})
 	t.Run("SucessfulRound", func(t *testing.T) {
 		testSucessfulRound(t, backend, storage, rtStates)
@@ -130,7 +130,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	require.EqualValues(genesisBlock, blk, "retreived block is genesis block")
 }
 
-func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, states []*runtimeState) {
+func testEpochTransitionBlock(t *testing.T, backend api.Backend, timeSource ticker.SetableBackend, scheduler scheduler.Backend, states []*runtimeState) {
 	require := require.New(t)
 
 	// Before an epoch transition there should just be a genesis block.
@@ -142,8 +142,8 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 		v.genesisBlock = genesisBlock
 	}
 
-	// Advance the epoch, get the committee.
-	epoch, err := epochtime.GetEpoch(context.Background(), 0)
+	// GetEpoch.
+	epoch, err := scheduler.GetEpoch(context.Background(), 0)
 	require.NoError(err, "GetEpoch")
 
 	// Subscribe to blocks for all of the runtimes.
@@ -158,7 +158,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	}
 
 	// Advance the epoch.
-	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	tickerTests.MustAdvanceEpoch(t, timeSource, scheduler)
 
 	// Check for the expected post-epoch transition events.
 	for i, state := range states {
@@ -167,7 +167,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	}
 }
 
-func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler scheduler.Backend, epoch epochtime.EpochTime, ch <-chan *api.AnnotatedBlock) {
+func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler scheduler.Backend, epoch uint64, ch <-chan *api.AnnotatedBlock) {
 	require := require.New(t)
 
 	nodes := make(map[signature.MapKey]*registryTests.TestNode)
@@ -349,7 +349,7 @@ type testCommittee struct {
 func mustGetCommittee(
 	t *testing.T,
 	rt *registryTests.TestRuntime,
-	epoch epochtime.EpochTime,
+	epoch uint64,
 	sched scheduler.Backend,
 	nodes map[signature.MapKey]*registryTests.TestNode,
 ) (computeCommittee *testCommittee, mergeCommittee *testCommittee) {
@@ -361,7 +361,7 @@ func mustGetCommittee(
 	for {
 		select {
 		case committee := <-ch:
-			if committee.ValidFor < epoch {
+			if uint64(committee.ValidFor) < epoch {
 				continue
 			}
 			if !rt.Runtime.ID.Equal(committee.RuntimeID) {

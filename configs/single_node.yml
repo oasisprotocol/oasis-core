@@ -70,12 +70,10 @@ worker:
 consensus:
   backend: tendermint
 
-# Epochtime backend.
-epochtime:
-  backend: tendermint
-  tendermint:
-    # This makes each epoch last for 30 tendermint blocks.
-    interval: 30
+# Ticker backend.
+ticker:
+  # This makes tick happen every 5 blocks.
+  interval: 5
 
 # Storage backend.
 storage:

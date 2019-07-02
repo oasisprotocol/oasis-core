@@ -44,7 +44,7 @@ test_migration() {
 
     # Start the first network.
     run_backend_tendermint_committee \
-        epochtime_backend=tendermint_mock \
+        ekiden_ticker_settable=1 \
         id=1 \
         replica_group_size=1 \
         replica_group_backup_size=0 \
@@ -56,7 +56,7 @@ test_migration() {
     # Wait for all nodes to start: 1 compute + 1 storage + key manager.
     wait_nodes 3
 
-    set_epoch 1
+    advance_epoch
     sleep 1
 
     # Start client and do the state mutations.
@@ -83,7 +83,7 @@ test_migration() {
 
     # Start the second network.
     run_backend_tendermint_committee \
-        epochtime_backend=tendermint_mock \
+        ekiden_ticker_settable=1 \
         id=2 \
         replica_group_size=1 \
         replica_group_backup_size=0 \
@@ -96,7 +96,7 @@ test_migration() {
     # Wait for all nodes to start: 1 compute + 1 storage + key manager.
     wait_nodes 3
 
-    set_epoch 2
+    advance_epoch
 
     # Start client and do state verification, checking that migration succeeded.
     ${CLIENT} \

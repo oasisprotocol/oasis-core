@@ -18,7 +18,6 @@ import (
 )
 
 var (
-	epoch uint64
 	nodes uint64
 
 	dummyCmd = &cobra.Command{
@@ -26,10 +25,10 @@ var (
 		Short: "control dummy node during tests",
 	}
 
-	dummySetEpochCmd = &cobra.Command{
-		Use:   "set-epoch",
-		Short: "set mock epochtime",
-		Run:   doSetEpoch,
+	dummyAdvanceEpochCmd = &cobra.Command{
+		Use:   "advance-epoch",
+		Short: "advance an epoch",
+		Run:   advanceEpoch,
 	}
 
 	dummyWaitNodesCmd = &cobra.Command{
@@ -59,18 +58,16 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, dummydebug.DummyDebugClien
 	return conn, client
 }
 
-func doSetEpoch(cmd *cobra.Command, args []string) {
+func advanceEpoch(cmd *cobra.Command, args []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
-	logger.Info("setting epoch",
-		"epoch", epoch,
-	)
+	logger.Info("advancing epoch")
 
 	// Use background context to block until mock epoch transition is done.
-	_, err := client.SetEpoch(context.Background(), &dummydebug.SetEpochRequest{Epoch: epoch})
+	_, err := client.AdvanceEpoch(context.Background(), &dummydebug.AdvanceEpochRequest{})
 	if err != nil {
-		logger.Error("failed to set epoch",
+		logger.Error("failed to do tick",
 			"err", err,
 		)
 	}
@@ -111,10 +108,9 @@ func doWaitNodes(cmd *cobra.Command, args []string) {
 // Register registers the dummy sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	cmdGrpc.RegisterClientFlags(dummyCmd, true)
-	dummySetEpochCmd.Flags().Uint64VarP(&epoch, "epoch", "e", 0, "set epoch to given value")
 	dummyWaitNodesCmd.Flags().Uint64VarP(&nodes, "nodes", "n", 1, "number of nodes to wait for")
 
-	dummyCmd.AddCommand(dummySetEpochCmd)
+	dummyCmd.AddCommand(dummyAdvanceEpochCmd)
 	dummyCmd.AddCommand(dummyWaitNodesCmd)
 	parentCmd.AddCommand(dummyCmd)
 }

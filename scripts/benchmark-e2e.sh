@@ -12,7 +12,7 @@ run_dummy_node_storage_dummy() {
         --log.level info \
         --grpc.port 42261 \
         --consensus.backend tendermint \
-        --epochtime.backend tendermint_mock \
+        --ticker.debug.settable \
         --storage.backend memory \
         --datadir ${datadir} \
         >${LOGDIR}/dummy.log &
@@ -26,7 +26,7 @@ run_dummy_node_storage_persistent() {
         --log.level info \
         --grpc.port 42261 \
         --consensus.backend tendermint \
-        --epochtime.backend tendermint_mock \
+        --ticker.debug.settable \
         --storage.backend leveldb \
         --datadir ${datadir} \
         >${LOGDIR}/dummy.log &
@@ -40,7 +40,7 @@ run_dummy_node_tendermint() {
         --log.level info \
         --grpc.port 42261 \
         --consensus.backend tendermint \
-        --epochtime.backend tendermint_mock \
+        --ticker.debug.settable \
         --storage.backend memory \
         --tendermint.consensus.timeout_commit 250ms \
         --datadir ${datadir} \
@@ -130,7 +130,7 @@ run_benchmark() {
     # Advance epoch to elect a new committee.
     for epoch in $(seq $epochs); do
         sleep 2
-        ${WORKDIR}/go/ekiden/ekiden debug dummy set-epoch --epoch $epoch
+        ${WORKDIR}/go/ekiden/ekiden debug dummy advance-epoch
     done
 
     # Run the client.

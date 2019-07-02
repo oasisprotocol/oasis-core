@@ -10,7 +10,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
 var (
@@ -20,6 +19,14 @@ var (
 	// ErrInvalidRole is the error returned when a role is invalid.
 	ErrInvalidRole = errors.New("scheduler: invalid role")
 )
+
+// EpochTime is the number of scheduler intervals (epochs) since a fixed instant
+// in time (epoch date).
+// TODO: there will be one per committee.
+type EpochTime uint64
+
+// EpochInvalid is the placeholder invalid epoch.
+const EpochInvalid EpochTime = 0xffffffffffffffff // ~50 quadrillion years away.
 
 // Role is the role a given node plays in a committee.
 type Role uint8
@@ -126,7 +133,7 @@ type Committee struct {
 	RuntimeID signature.PublicKey `codec:"runtime_id"`
 
 	// ValidFor is the epoch for which the committee is valid.
-	ValidFor epochtime.EpochTime `codec:"valid_for"`
+	ValidFor EpochTime `codec:"valid_for"`
 }
 
 // String returns a string representation of a Committee.
@@ -162,6 +169,9 @@ type Backend interface {
 	// Upon subscription, all committees for the current epoch will
 	// be sent immediately.
 	WatchCommittees() (<-chan *Committee, *pubsub.Subscription)
+
+	// GetEpoch returns the current epoch.
+	GetEpoch(context.Context, int64) (uint64, error)
 
 	// Cleanup cleans up the scheduler backend.
 	Cleanup()

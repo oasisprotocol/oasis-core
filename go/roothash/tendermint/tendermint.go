@@ -19,7 +19,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
@@ -27,6 +26,7 @@ import (
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/roothash"
 	schedulerapp "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 const (
@@ -388,7 +388,7 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 func New(
 	ctx context.Context,
 	dataDir string,
-	timeSource epochtime.Backend,
+	timeSource ticker.Backend,
 	beac beacon.Backend,
 	service service.TendermintService,
 	roundTimeout time.Duration,

@@ -11,18 +11,18 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	registryTests "github.com/oasislabs/ekiden/go/registry/tests"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
+	tickerTests "github.com/oasislabs/ekiden/go/ticker/tests"
 )
 
 const recvTimeout = 1 * time.Second
 
 // SchedulerImplementationTests exercises the basic functionality of a
 // scheduler backend.
-func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, registry registry.Backend) {
+func SchedulerImplementationTests(t *testing.T, backend api.Backend, timeSource ticker.SetableBackend, registry registry.Backend) {
 	seed := []byte("SchedulerImplementationTests")
 
 	require := require.New(t)
@@ -38,7 +38,7 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 	defer sub.Close()
 
 	// Advance the epoch.
-	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	epoch := tickerTests.MustAdvanceEpoch(t, timeSource, backend)
 
 	ensureValidCommittees := func(expectedCompute, expectedStorage, expectedTransactionScheduler int) {
 		var compute, storage, transactionScheduler *api.Committee
@@ -46,9 +46,10 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 		for seen < 3 {
 			select {
 			case committee := <-ch:
-				if committee.ValidFor < epoch {
+				if uint64(committee.ValidFor) < epoch {
 					continue
 				}
+
 				if !rt.Runtime.ID.Equal(committee.RuntimeID) {
 					continue
 				}
@@ -70,7 +71,7 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 
 				requireValidCommitteeMembers(t, committee, rt.Runtime, nodes)
 				require.Equal(rt.Runtime.ID, committee.RuntimeID, "committee is for the correct runtime") // Redundant
-				require.Equal(epoch, committee.ValidFor, "committee is for current epoch")
+				require.Equal(epoch, uint64(committee.ValidFor), "committee is for current epoch")
 
 				seen++
 			case <-time.After(recvTimeout):
@@ -116,7 +117,7 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 	rt.Runtime.StorageGroupSize = 1
 	rt.MustRegister(t, registry)
 
-	epoch = epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	epoch = tickerTests.MustAdvanceEpoch(t, timeSource, backend)
 
 	ensureValidCommittees(3, 1, int(rt.Runtime.TransactionSchedulerGroupSize))
 

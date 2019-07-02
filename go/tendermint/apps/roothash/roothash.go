@@ -17,7 +17,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
@@ -28,6 +27,7 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	schedulerapp "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 var (
@@ -55,7 +55,7 @@ type rootHashApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.Backend
+	timeSource ticker.Backend
 	beacon     beacon.Backend
 
 	roundTimeout time.Duration
@@ -160,7 +160,7 @@ func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.Requ
 	return nil
 }
 
-func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error { // nolint: gocyclo
+func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch scheduler.EpochTime) error { // nolint: gocyclo
 	tree := app.state.DeliverTxTree()
 	state := newMutableState(tree)
 
@@ -775,7 +775,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 // New constructs a new roothash application instance.
 func New(
 	ctx context.Context,
-	timeSource epochtime.Backend,
+	timeSource ticker.Backend,
 	beacon beacon.Backend,
 	roundTimeout time.Duration,
 ) abci.Application {

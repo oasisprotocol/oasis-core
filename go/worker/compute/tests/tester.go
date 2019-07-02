@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
+	tickerTests "github.com/oasislabs/ekiden/go/ticker/tests"
 	"github.com/oasislabs/ekiden/go/worker/compute"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 )
@@ -24,7 +25,8 @@ func WorkerImplementationTests(
 	worker *compute.Worker,
 	runtimeID signature.PublicKey,
 	rtNode *committee.Node,
-	epochtime epochtime.SetableBackend,
+	timeSource ticker.SetableBackend,
+	scheduler scheduler.Backend,
 ) {
 	// Wait for worker to start and register.
 	<-worker.Initialized()
@@ -35,15 +37,15 @@ func WorkerImplementationTests(
 
 	// Run the various test cases. (Ordering matters.)
 	t.Run("InitialEpochTransition", func(t *testing.T) {
-		testInitialEpochTransition(t, stateCh, epochtime)
+		testInitialEpochTransition(t, stateCh, timeSource, scheduler)
 	})
 
 	// TODO: Add more tests.
 }
 
-func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, epochtime epochtime.SetableBackend) {
+func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, timeSource ticker.SetableBackend, scheduler scheduler.Backend) {
 	// Perform an epoch transition, so that the node gets elected leader.
-	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	tickerTests.MustAdvanceEpoch(t, timeSource, scheduler)
 
 	// Node should transition to WaitingForBatch state.
 	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)

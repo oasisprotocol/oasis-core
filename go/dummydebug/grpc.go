@@ -7,14 +7,15 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 
 	dbgPB "github.com/oasislabs/ekiden/go/grpc/dummydebug"
 )
 
 var (
-	errIncompatibleBackend = errors.New("epochtime/grpc: incompatible backend for call")
+	errIncompatibleBackend = errors.New("ticker/grpc: incompatible backend for call")
 
 	_ dbgPB.DummyDebugServer = (*grpcServer)(nil)
 )
@@ -22,23 +23,44 @@ var (
 type grpcServer struct {
 	logger *logging.Logger
 
-	timeSource epochtime.Backend
+	timeSource ticker.Backend
 	registry   registry.Backend
+	scheduler  scheduler.Backend
 }
 
-func (s *grpcServer) SetEpoch(ctx context.Context, req *dbgPB.SetEpochRequest) (*dbgPB.SetEpochResponse, error) {
-	mockTS, ok := s.timeSource.(epochtime.SetableBackend)
+func (s *grpcServer) AdvanceEpoch(ctx context.Context, req *dbgPB.AdvanceEpochRequest) (*dbgPB.AdvanceEpochResponse, error) {
+	mockTS, ok := s.timeSource.(ticker.SetableBackend)
 	if !ok {
 		return nil, errIncompatibleBackend
 	}
 
-	epoch := epochtime.EpochTime(req.GetEpoch())
-	err := mockTS.SetEpoch(ctx, epoch)
+	epoch, err := s.scheduler.GetEpoch(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	return &dbgPB.SetEpochResponse{}, nil
+	// TODO: make it not get stuck
+	for {
+		err := mockTS.DoTick(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		newEpoch, nerr := s.scheduler.GetEpoch(ctx, 0)
+		if nerr != nil {
+			return nil, nerr
+		}
+		if epoch != newEpoch {
+			// After epoch changed, do one more tick.
+			err = mockTS.DoTick(ctx)
+			if err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
+
+	return &dbgPB.AdvanceEpochResponse{}, nil
 }
 
 func (s *grpcServer) WaitNodes(ctx context.Context, req *dbgPB.WaitNodesRequest) (*dbgPB.WaitNodesResponse, error) {
@@ -81,11 +103,12 @@ Loop:
 
 // NewGRPCServer initializes and registers a gRPC dummydebug server
 // backed by the provided backends.
-func NewGRPCServer(srv *grpc.Server, timeSource epochtime.Backend, registry registry.Backend) {
+func NewGRPCServer(srv *grpc.Server, timeSource ticker.Backend, registry registry.Backend, scheduler scheduler.Backend) {
 	s := &grpcServer{
 		logger:     logging.GetLogger("dummydebug/grpc"),
 		timeSource: timeSource,
 		registry:   registry,
+		scheduler:  scheduler,
 	}
 	dbgPB.RegisterDummyDebugServer(srv, s)
 }

@@ -27,8 +27,6 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/pprof"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
-	"github.com/oasislabs/ekiden/go/epochtime"
-	epochtimeAPI "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
 	genesisAPI "github.com/oasislabs/ekiden/go/genesis/api"
 	"github.com/oasislabs/ekiden/go/ias"
@@ -47,6 +45,8 @@ import (
 	storageAPI "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	tmService "github.com/oasislabs/ekiden/go/tendermint/service"
+	"github.com/oasislabs/ekiden/go/ticker"
+	tickerAPI "github.com/oasislabs/ekiden/go/ticker/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	"github.com/oasislabs/ekiden/go/worker/compute"
@@ -83,7 +83,7 @@ type Node struct {
 	Genesis   genesisAPI.Provider
 	Identity  *identity.Identity
 	Beacon    beaconAPI.Backend
-	Epochtime epochtimeAPI.Backend
+	Ticker    tickerAPI.Backend
 	Registry  registryAPI.Backend
 	RootHash  roothashAPI.Backend
 	Scheduler schedulerAPI.Backend
@@ -126,24 +126,24 @@ func (n *Node) initBackends() error {
 	var err error
 
 	// Initialize the various backends.
-	if n.Epochtime, err = epochtime.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
+	if n.Ticker, err = ticker.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
 		return err
 	}
-	if n.Beacon, err = beacon.New(n.svcMgr.Ctx, n.Epochtime, n.svcTmnt); err != nil {
+	if n.Beacon, err = beacon.New(n.svcMgr.Ctx, n.Ticker, n.svcTmnt); err != nil {
 		return err
 	}
 	if n.Staking, err = staking.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
 		return err
 	}
-	if n.Registry, err = registry.New(n.svcMgr.Ctx, n.Epochtime, n.svcTmnt); err != nil {
+	if n.Registry, err = registry.New(n.svcMgr.Ctx, n.Ticker, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Registry, "registry backend")
-	if n.KeyManager, err = keymanager.New(n.svcMgr.Ctx, n.Epochtime, n.Registry, n.svcTmnt); err != nil {
+	if n.KeyManager, err = keymanager.New(n.svcMgr.Ctx, n.Ticker, n.Registry, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Staking, "staking backend")
-	if n.Scheduler, err = scheduler.New(n.svcMgr.Ctx, n.Epochtime, n.Registry, n.Beacon, n.svcTmnt); err != nil {
+	if n.Scheduler, err = scheduler.New(n.svcMgr.Ctx, n.Ticker, n.Registry, n.Beacon, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Scheduler, "scheduler backend")
@@ -152,7 +152,7 @@ func (n *Node) initBackends() error {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")
-	if n.RootHash, err = roothash.New(n.svcMgr.Ctx, dataDir, n.Epochtime, n.Scheduler, n.Registry, n.Beacon, n.svcTmnt); err != nil {
+	if n.RootHash, err = roothash.New(n.svcMgr.Ctx, dataDir, n.Ticker, n.Scheduler, n.Registry, n.Beacon, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.RootHash, "roothash backend")
@@ -162,7 +162,7 @@ func (n *Node) initBackends() error {
 	registry.NewGRPCServer(grpcSrv, n.Registry)
 	staking.NewGRPCServer(grpcSrv, n.Staking)
 	storage.NewGRPCServer(grpcSrv, n.Storage)
-	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
+	dummydebug.NewGRPCServer(grpcSrv, n.Ticker, n.Registry, n.Scheduler)
 
 	cmdCommon.Logger().Debug("backends initialized")
 
@@ -203,7 +203,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	workerCommonCfg := n.CommonWorker.GetConfig()
 	n.WorkerRegistration, err = registration.New(
 		dataDir,
-		n.Epochtime,
+		n.Ticker,
 		n.Registry,
 		n.Identity,
 		n.svcTmnt,
@@ -231,7 +231,6 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 	// Initialize the storage worker.
 	n.StorageWorker, err = workerStorage.New(
-		n.Epochtime,
 		n.Storage,
 		n.CommonWorker.Grpc,
 		n.WorkerRegistration,
@@ -564,7 +563,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		pprof.RegisterFlags,
 		genesis.RegisterFlags,
 		beacon.RegisterFlags,
-		epochtime.RegisterFlags,
+		ticker.RegisterFlags,
 		registry.RegisterFlags,
 		roothash.RegisterFlags,
 		scheduler.RegisterFlags,

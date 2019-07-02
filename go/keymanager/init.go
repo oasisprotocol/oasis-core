@@ -9,17 +9,17 @@ import (
 	"github.com/spf13/cobra"
 
 	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/keymanager/api"
 	"github.com/oasislabs/ekiden/go/keymanager/tendermint"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 // New constructs a new Backend based on the configuration flags.
 func New(
 	ctx context.Context,
-	timeSource epochtime.Backend,
+	timeSource ticker.Backend,
 	registry registry.Backend,
 	service service.TendermintService,
 ) (api.Backend, error) {

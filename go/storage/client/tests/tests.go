@@ -13,17 +13,17 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	registryTests "github.com/oasislabs/ekiden/go/registry/tests"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	storageClient "github.com/oasislabs/ekiden/go/storage/client"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
+	tickerTests "github.com/oasislabs/ekiden/go/ticker/tests"
 )
 
 // ClientWorkerTests implements tests for client worker
-func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource epochtime.SetableBackend, registry registry.Backend, scheduler scheduler.Backend) {
+func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource ticker.SetableBackend, registry registry.Backend, scheduler scheduler.Backend) {
 	ctx := context.Background()
 	require := require.New(t)
 	seed := []byte("StorageClientTests")
@@ -56,7 +56,7 @@ func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource epochtime
 	require.Nil(r, "result should be nil")
 
 	// Advance the epoch.
-	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+	tickerTests.MustAdvanceEpoch(t, timeSource, scheduler)
 
 	// Wait for initialization
 	<-client.Initialized()

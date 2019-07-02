@@ -15,9 +15,10 @@ import (
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	"github.com/oasislabs/ekiden/go/registry/api"
+	schedulerApi "github.com/oasislabs/ekiden/go/scheduler/api"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
+	tickerTests "github.com/oasislabs/ekiden/go/ticker/tests"
 )
 
 const recvTimeout = 1 * time.Second
@@ -27,10 +28,10 @@ const recvTimeout = 1 * time.Second
 //
 // WARNING: This assumes that the registry is empty, and will leave
 // a Runtime registered.
-func RegistryImplementationTests(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
+func RegistryImplementationTests(t *testing.T, backend api.Backend, timeSource ticker.SetableBackend, scheduler schedulerApi.Backend) {
 	EnsureRegistryEmpty(t, backend)
 
-	testRegistryEntityNodes(t, backend, timeSource)
+	testRegistryEntityNodes(t, backend, timeSource, scheduler)
 
 	// Runtime registry tests are after the entity/node tests to avoid
 	// interacting with the scheduler as much as possible.
@@ -39,12 +40,12 @@ func RegistryImplementationTests(t *testing.T, backend api.Backend, timeSource e
 	})
 }
 
-func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) { // nolint: gocyclo
+func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource ticker.SetableBackend, scheduler schedulerApi.Backend) { // nolint: gocyclo
 	// Generate the entities used for the test cases.
 	entities, err := NewTestEntities([]byte("testRegistryEntityNodes"), 3)
 	require.NoError(t, err, "NewTestEntities")
 
-	epoch, err := timeSource.GetEpoch(context.Background(), 0)
+	epoch, err := scheduler.GetEpoch(context.Background(), 0)
 	require.NoError(t, err, "GetEpoch")
 
 	// All of these tests are combined because the Entity and Node structures
@@ -100,7 +101,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 	nodes := make([][]*TestNode, 0, len(entities))
 	for i, v := range entities {
 		// Stagger the expirations so that it's possible to test it.
-		entityNodes, err := v.NewTestNodes(i+1, 1, nil, epoch+epochtime.EpochTime(i)+1)
+		entityNodes, err := v.NewTestNodes(i+1, 1, nil, schedulerApi.EpochTime(epoch+uint64(i)+1))
 		require.NoError(t, err, "NewTestNodes")
 
 		nodes = append(nodes, entityNodes)
@@ -155,7 +156,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		require := require.New(t)
 
 		expectedNodeList := getExpectedNodeList()
-		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+		tickerTests.MustAdvanceEpoch(t, timeSource, scheduler)
 
 		registeredNodes, nerr := backend.GetNodes(context.Background())
 		require.NoError(nerr, "GetNodes")
@@ -170,7 +171,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		expectedDeregEvents := len(nodes[0])
 		deregisteredNodes := make(map[signature.MapKey]*node.Node)
 
-		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+		tickerTests.MustAdvanceEpoch(t, timeSource, scheduler)
 
 		for i := 0; i < expectedDeregEvents; i++ {
 			select {
@@ -341,7 +342,7 @@ type TestNode struct {
 
 // NewTestNodes returns the specified number of TestNodes, generated
 // deterministically using the entity's public key as the seed.
-func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*TestRuntime, expiration epochtime.EpochTime) ([]*TestNode, error) {
+func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*TestRuntime, expiration schedulerApi.EpochTime) ([]*TestNode, error) {
 	if nCompute <= 0 || nStorage <= 0 || nCompute > 254 || nStorage > 254 {
 		return nil, errors.New("registry/tests: test node count out of bounds")
 	}
@@ -533,7 +534,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, runtimes []*TestRuntime, se
 
 	numCompute := int(runtimes[0].Runtime.ReplicaGroupSize + runtimes[0].Runtime.ReplicaGroupBackupSize)
 	numStorage := int(runtimes[0].Runtime.StorageGroupSize)
-	nodes, err := entity.NewTestNodes(numCompute, numStorage, runtimes, epochtime.EpochInvalid)
+	nodes, err := entity.NewTestNodes(numCompute, numStorage, runtimes, schedulerApi.EpochInvalid)
 	require.NoError(err, "NewTestNodes")
 
 	ret := make([]*node.Node, 0, numCompute+numStorage)

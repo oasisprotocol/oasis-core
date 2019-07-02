@@ -17,7 +17,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -27,6 +26,7 @@ import (
 	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	stakingapp "github.com/oasislabs/ekiden/go/tendermint/apps/staking"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 var (
@@ -92,7 +92,7 @@ type schedulerApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.Backend
+	timeSource ticker.Backend
 
 	cfg *scheduler.Config
 }
@@ -119,6 +119,7 @@ func (app *schedulerApplication) OnRegister(state *abci.ApplicationState, queryR
 	// Register query handlers.
 	queryRouter.AddRoute(QueryAllCommittees, nil, app.queryAllCommittees)
 	queryRouter.AddRoute(QueryKindsCommittees, []scheduler.CommitteeKind{}, app.queryKindsCommittees)
+	queryRouter.AddRoute(QueryGetEpoch, nil, app.queryGetEpoch)
 }
 
 func (app *schedulerApplication) OnCleanup() {}
@@ -238,6 +239,14 @@ func (app *schedulerApplication) queryAllCommittees(s interface{}, r interface{}
 	return cbor.Marshal(committees), nil
 }
 
+func (app *schedulerApplication) queryGetEpoch(s interface{}, r interface{}) ([]byte, error) {
+	epoch, err := app.state.GetEpoch(app.timeSource)
+	if err != nil {
+		return nil, err
+	}
+	return cbor.Marshal(epoch), nil
+}
+
 func (app *schedulerApplication) queryKindsCommittees(s interface{}, r interface{}) ([]byte, error) {
 	state := s.(*immutableState)
 	request := *r.(*[]scheduler.CommitteeKind)
@@ -317,7 +326,7 @@ func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registr
 // Operates on consensus connection.
 // Return error if node should crash.
 // For non-fatal problems, save a problem condition to the state and return successfully.
-func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
+func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestBeginBlock, epoch scheduler.EpochTime, beacon []byte, entityStake *stakeAccumulator, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
 	if !rt.IsCompute() && kind != scheduler.KindCompute {
 		return nil
@@ -443,7 +452,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 }
 
 // Operates on consensus connection.
-func (app *schedulerApplication) electAll(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
+func (app *schedulerApplication) electAll(ctx *abci.Context, request types.RequestBeginBlock, epoch scheduler.EpochTime, beacon []byte, entityStake *stakeAccumulator, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	for _, runtime := range runtimes {
 		if err := app.elect(ctx, request, epoch, beacon, entityStake, runtime, nodes, kind); err != nil {
 			return err
@@ -454,7 +463,7 @@ func (app *schedulerApplication) electAll(ctx *abci.Context, request types.Reque
 
 // New constructs a new scheduler application instance.
 func New(
-	timeSource epochtime.Backend,
+	timeSource ticker.Backend,
 	cfg *scheduler.Config,
 ) abci.Application {
 	return &schedulerApplication{

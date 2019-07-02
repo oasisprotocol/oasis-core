@@ -8,20 +8,21 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
+	tickerTests "github.com/oasislabs/ekiden/go/ticker/tests"
 )
 
 // BeaconImplementationTests exercises the basic functionality of a
 // beacon backend.
-func BeaconImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend) {
+func BeaconImplementationTests(t *testing.T, backend api.Backend, ticker ticker.SetableBackend, scheduler scheduler.Backend) {
 	require := require.New(t)
 
 	beacon, err := backend.GetBeacon(context.Background(), 0)
 	require.NoError(err, "GetBeacon")
 	require.Len(beacon, api.BeaconSize, "GetBeacon - length")
 
-	_ = epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	tickerTests.MustAdvanceEpoch(t, ticker, scheduler)
 
 	newBeacon, err := backend.GetBeacon(context.Background(), 0)
 	require.NoError(err, "GetBeacon")

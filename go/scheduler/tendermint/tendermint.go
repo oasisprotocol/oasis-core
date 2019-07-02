@@ -11,7 +11,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/scheduler/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
@@ -19,6 +18,7 @@ import (
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
 	stakingapp "github.com/oasislabs/ekiden/go/tendermint/apps/staking"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 )
 
 // BackendName is the name of this implementation.
@@ -36,6 +36,21 @@ type tendermintScheduler struct {
 }
 
 func (s *tendermintScheduler) Cleanup() {
+}
+
+func (s *tendermintScheduler) GetEpoch(ctx context.Context, height int64) (uint64, error) {
+	raw, err := s.service.Query(app.QueryGetEpoch, nil, height)
+	if err != nil {
+		return 0, err
+	}
+
+	var epoch uint64
+	err = cbor.Unmarshal(raw, &epoch)
+	if err != nil {
+		return 0, err
+	}
+
+	return epoch, nil
 }
 
 func (s *tendermintScheduler) GetCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) {
@@ -163,7 +178,7 @@ func (s *tendermintScheduler) onEventDataNewBlock(ctx context.Context, ev tmtype
 
 // New constracts a new tendermint-based scheduler Backend instance.
 func New(ctx context.Context,
-	timeSource epochtime.Backend,
+	timeSource ticker.Backend,
 	service service.TendermintService,
 	cfg *api.Config,
 ) (api.Backend, error) {

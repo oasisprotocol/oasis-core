@@ -17,8 +17,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	ticker "github.com/oasislabs/ekiden/go/ticker/api"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 )
@@ -27,18 +27,22 @@ const (
 	cfgEntityPrivateKey = "worker.entity_private_key"
 )
 
+// TODO: this needs to be less than all epoch intervals.
+const registrationTickInterval = 10
+
 // Registration is a service handling worker node registration.
 type Registration struct {
 	sync.Mutex
 
 	workerCommonCfg *workerCommon.Config
 
-	epochtime    epochtime.Backend
+	timeSource   ticker.Backend
 	registry     registry.Backend
 	identity     *identity.Identity
 	p2p          *p2p.P2P
 	entitySigner signature.Signer
 	ctx          context.Context
+
 	// Bandaid: Idempotent Stop for testing.
 	stopped   bool
 	quitCh    chan struct{}
@@ -59,13 +63,12 @@ func (r *Registration) doNodeRegistration() {
 		}
 	}
 
-	// (re-)register the node on each epoch transition. This doesn't
-	// need to be strict block-epoch time, since it just serves to
-	// extend the node's expiration.
-	ch, sub := r.epochtime.WatchEpochs()
+	// (re-)register the node periodically. This just serves
+	// to extend the node's expiration.
+	ch, sub := r.timeSource.WatchTicks(registrationTickInterval)
 	defer sub.Close()
 
-	regFn := func(epoch epochtime.EpochTime, retry bool) error {
+	regFn := func(tick ticker.TickTime, retry bool) error {
 		var off backoff.BackOff
 
 		switch retry {
@@ -85,22 +88,22 @@ func (r *Registration) doNodeRegistration() {
 		// but it's entirely possible to sit around in an infinite
 		// retry loop with no hope of success.
 		return backoff.Retry(func() error {
-			// Update the epoch if it happens to change while retrying.
+			// Update the tick if it happens to change while retrying.
 			var ok bool
 			select {
-			case epoch, ok = <-ch:
+			case tick, ok = <-ch:
 				if !ok {
 					return context.Canceled
 				}
 			default:
 			}
 
-			return r.registerNode(epoch)
+			return r.registerNode(tick)
 		}, off)
 	}
 
-	epoch := <-ch
-	err := regFn(epoch, true)
+	tick := <-ch
+	err := regFn(tick, true)
 	close(r.regCh)
 	if err != nil {
 		// This by definition is a cancellation.
@@ -111,8 +114,8 @@ func (r *Registration) doNodeRegistration() {
 		select {
 		case <-r.quitCh:
 			return
-		case epoch = <-ch:
-			if err := regFn(epoch, false); err != nil {
+		case tick = <-ch:
+			if err := regFn(tick, false); err != nil {
 				r.logger.Error("failed to re-register node",
 					"err", err,
 				)
@@ -137,9 +140,9 @@ func (r *Registration) RegisterRole(hook func(*node.Node) error) {
 	r.roleHooks = append(r.roleHooks, hook)
 }
 
-func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
+func (r *Registration) registerNode(tick ticker.TickTime) error {
 	r.logger.Info("performing node (re-)registration",
-		"epoch", epoch,
+		"tick", tick,
 	)
 
 	addresses, err := r.workerCommonCfg.GetNodeAddresses()
@@ -151,10 +154,9 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 	}
 	identityPublic := r.identity.NodeSigner.Public()
 	nodeDesc := node.Node{
-		ID:         identityPublic,
-		EntityID:   r.entitySigner.Public(),
-		Expiration: uint64(epoch) + 2,
-		P2P:        r.p2p.Info(),
+		ID:       identityPublic,
+		EntityID: r.entitySigner.Public(),
+		P2P:      r.p2p.Info(),
 		Certificate: &node.Certificate{
 			DER: r.identity.TLSCertificate.Certificate[0],
 		},
@@ -228,7 +230,7 @@ func getEntitySigner(dataDir string) (signature.Signer, error) {
 // New constructs a new worker node registration service.
 func New(
 	dataDir string,
-	epochtime epochtime.Backend,
+	timeSource ticker.Backend,
 	registry registry.Backend,
 	identity *identity.Identity,
 	consensus common.ConsensusBackend,
@@ -245,7 +247,7 @@ func New(
 
 	r := &Registration{
 		workerCommonCfg: workerCommonCfg,
-		epochtime:       epochtime,
+		timeSource:      timeSource,
 		registry:        registry,
 		identity:        identity,
 		entitySigner:    entitySigner,

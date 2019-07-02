@@ -50,6 +50,13 @@ const (
 	cfgConsensusSkipTimeoutCommit  = "tendermint.consensus.skip_timeout_commit"
 	cfgConsensusEmptyBlockInterval = "tendermint.consensus.empty_block_interval"
 
+	// TODO: add support for different epoch intervals:
+	//  - different scheduling intervals, beacon epoch interval, registry epoch interval
+	//  - some invariants need to hold between intervals:
+	//     - beacon & registry epoch intervals should be the shortest scheduling interval (=txscheduler?)
+	//     - the shortest scheduling interval should probably be the GCD of all intervals?
+	cfgABCIEpochInterval = "tendermint.abci.epoch_interval"
+
 	cfgABCIPruneStrategy = "tendermint.abci.prune.strategy"
 	cfgABCIPruneNumKept  = "tendermint.abci.prune.num_kept"
 
@@ -336,7 +343,8 @@ func (t *tendermintService) lazyInit() error {
 	pruneNumKept := int64(viper.GetInt(cfgABCIPruneNumKept))
 	pruneCfg.NumKept = pruneNumKept
 
-	t.mux, err = abci.NewApplicationServer(t.ctx, t.dataDir, &pruneCfg)
+	epochInterval := uint64(viper.GetInt(cfgABCIEpochInterval))
+	t.mux, err = abci.NewApplicationServer(t.ctx, t.dataDir, &pruneCfg, epochInterval)
 	if err != nil {
 		return err
 	}
@@ -836,6 +844,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
 		cmd.Flags().String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 		cmd.Flags().Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
+		cmd.Flags().Int64(cfgABCIEpochInterval, 20, "ABCI epoch interval")
 		cmd.Flags().Bool(cfgP2PSeedMode, false, "run the tendermint node in seed mode")
 		cmd.Flags().String(cfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
 		cmd.Flags().Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
@@ -852,6 +861,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgConsensusEmptyBlockInterval,
 		cfgABCIPruneStrategy,
 		cfgABCIPruneNumKept,
+		cfgABCIEpochInterval,
 		cfgP2PSeedMode,
 		cfgP2PSeeds,
 		cfgLogDebug,
