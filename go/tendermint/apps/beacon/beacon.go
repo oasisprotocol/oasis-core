@@ -9,6 +9,7 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/crypto/sha3"
 
+	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
@@ -31,7 +32,7 @@ type beaconApplication struct {
 
 	timeSource epochtime.Backend
 
-	debugDeterministic bool
+	cfg *beacon.Config
 }
 
 func (app *beaconApplication) Name() string {
@@ -112,7 +113,7 @@ func (app *beaconApplication) queryGetBeacon(s interface{}, r interface{}) ([]by
 func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
 	var entropyCtx, entropy []byte
 
-	switch app.debugDeterministic {
+	switch app.cfg.DebugDeterministic {
 	case false:
 		entropyCtx = prodEntropyCtx
 
@@ -171,13 +172,13 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) erro
 }
 
 // New constructs a new beacon application instance.
-func New(timeSource epochtime.Backend, debugDeterministic bool) abci.Application {
+func New(timeSource epochtime.Backend, cfg *beacon.Config) abci.Application {
 	app := &beaconApplication{
-		logger:             logging.GetLogger("tendermint/beacon"),
-		timeSource:         timeSource,
-		debugDeterministic: debugDeterministic,
+		logger:     logging.GetLogger("tendermint/beacon"),
+		timeSource: timeSource,
+		cfg:        cfg,
 	}
-	if app.debugDeterministic {
+	if cfg.DebugDeterministic {
 		app.logger.Warn("Determistic beacon entropy is NOT FOR PRODUCTION USE")
 	}
 
