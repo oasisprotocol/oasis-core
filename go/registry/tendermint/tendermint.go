@@ -37,6 +37,8 @@ type tendermintBackend struct {
 	timeSource epochtime.Backend
 	service    service.TendermintService
 
+	cfg *api.Config
+
 	entityNotifier   *pubsub.Broker
 	nodeNotifier     *pubsub.Broker
 	nodeListNotifier *pubsub.Broker
@@ -201,6 +203,10 @@ func (r *tendermintBackend) WatchNodeList() (<-chan *api.NodeList, *pubsub.Subsc
 }
 
 func (r *tendermintBackend) RegisterRuntime(ctx context.Context, sigCon *api.SignedRuntime) error {
+	if !r.cfg.DebugAllowRuntimeRegistration {
+		return api.ErrForbidden
+	}
+
 	tx := app.Tx{
 		TxRegisterRuntime: &app.TxRegisterRuntime{
 			Runtime: *sigCon,
@@ -578,9 +584,9 @@ func (r *tendermintBackend) sweepCache(epoch epochtime.EpochTime) {
 }
 
 // New constructs a new tendermint backed registry Backend instance.
-func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService, cfg *api.Config) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
-	app := app.New(timeSource)
+	app := app.New(timeSource, cfg)
 	if err := service.RegisterApplication(app, nil); err != nil {
 		return nil, err
 	}
@@ -589,6 +595,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 		logger:           logging.GetLogger("registry/tendermint"),
 		timeSource:       timeSource,
 		service:          service,
+		cfg:              cfg,
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),

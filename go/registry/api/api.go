@@ -77,6 +77,10 @@ var (
 
 	// ErrNodeExpired is the error returned when a node is expired.
 	ErrNodeExpired = errors.New("registry: node expired")
+
+	// ErrForbidden is the error returned when an operation is forbiden by
+	// policy.
+	ErrForbidden = errors.New("registry: forbidden by policy")
 )
 
 // Backend is a registry implementation.
@@ -381,4 +385,11 @@ type Genesis struct {
 
 	// Runtimes is the initial list of runtimes.
 	Runtimes []*SignedRuntime `codec:"runtimes,omit_empty"`
+}
+
+// Config is the per-backend common configuration.
+type Config struct {
+	// DebugAllowRuntimeRegistration is true iff runtime registration should be
+	// allowed outside of the genesis block.
+	DebugAllowRuntimeRegistration bool
 }

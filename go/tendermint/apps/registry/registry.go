@@ -32,6 +32,8 @@ type registryApplication struct {
 	state  *abci.ApplicationState
 
 	timeSource epochtime.Backend
+
+	cfg *registry.Config
 }
 
 func (app *registryApplication) Name() string {
@@ -238,6 +240,9 @@ func (app *registryApplication) executeTx(
 	} else if tx.TxRegisterNode != nil {
 		return app.registerNode(ctx, state, &tx.TxRegisterNode.Node)
 	} else if tx.TxRegisterRuntime != nil {
+		if !app.cfg.DebugAllowRuntimeRegistration {
+			return registry.ErrForbidden
+		}
 		return app.registerRuntime(ctx, state, &tx.TxRegisterRuntime.Runtime)
 	} else {
 		return registry.ErrInvalidArgument
@@ -428,9 +433,10 @@ func (app *registryApplication) registerRuntime(
 }
 
 // New constructs a new registry application instance.
-func New(timeSource epochtime.Backend) abci.Application {
+func New(timeSource epochtime.Backend, cfg *registry.Config) abci.Application {
 	return &registryApplication{
 		logger:     logging.GetLogger("tendermint/registry"),
 		timeSource: timeSource,
+		cfg:        cfg,
 	}
 }

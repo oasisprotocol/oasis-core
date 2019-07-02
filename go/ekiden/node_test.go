@@ -48,6 +48,7 @@ var (
 		{"log.level.default", "DEBUG"},
 		{"epochtime.backend", "tendermint_mock"},
 		{"consensus.backend", "tendermint"},
+		{"registry.debug.allow_runtime_registration", true},
 		{"roothash.tendermint.index_blocks", true},
 		{"storage.backend", "leveldb"},
 		{"storage.debug.mock_signing_key", true},
