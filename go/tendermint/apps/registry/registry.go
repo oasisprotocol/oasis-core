@@ -360,6 +360,18 @@ func (app *registryApplication) registerNode(
 		}
 	}
 
+	// Re-check that the entity has at least sufficient stake to still be an
+	// entity.  The node thresholds should be enforced in the scheduler.
+	if !app.cfg.DebugBypassStake {
+		if err = stakingapp.EnsureSufficientStake(app.state, ctx, node.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+			app.logger.Error("RegisterNode: Insufficent stake",
+				"err", err,
+				"id", node.EntityID,
+			)
+			return err
+		}
+	}
+
 	// Ensure node is not expired.
 	epoch, err := app.timeSource.GetEpoch(context.Background(), app.state.BlockHeight())
 	if err != nil {
