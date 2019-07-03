@@ -463,6 +463,7 @@ func (c *cache) reconstructSubtree(ctx context.Context, rootHash hash.Hash, st *
 		d = c.db
 	}
 	batch := d.NewBatch()
+	defer batch.Reset()
 	subtree := batch.MaybeStartSubtree(nil, depth, ptr)
 
 	syncRootHash, err := doCommit(ctx, c, batch, subtree, depth, ptr)
