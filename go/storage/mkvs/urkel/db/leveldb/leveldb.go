@@ -21,6 +21,12 @@ var (
 
 	nodeKeyPrefix     = []byte{'N'}
 	writeLogKeyPrefix = []byte{'L'}
+
+	batchPool = sync.Pool{
+		New: func() interface{} {
+			return new(leveldb.Batch)
+		},
+	}
 )
 
 func makeWriteLogKey(startRoot node.Root, endRoot node.Root) []byte {
@@ -107,7 +113,7 @@ type leveldbBatch struct {
 func (d *leveldbNodeDB) NewBatch() api.Batch {
 	return &leveldbBatch{
 		db:  d,
-		bat: new(leveldb.Batch),
+		bat: batchPool.Get().(*leveldb.Batch),
 	}
 }
 
@@ -145,7 +151,13 @@ func (b *leveldbBatch) Commit(root node.Root) error {
 }
 
 func (b *leveldbBatch) Reset() {
+	if b.bat == nil {
+		return
+	}
+
 	b.bat.Reset()
+	batchPool.Put(b.bat)
+	b.bat = nil
 }
 
 type leveldbSubtree struct {
