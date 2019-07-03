@@ -13,6 +13,8 @@ dst=$1
 
 EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1
 export EKIDEN_UNSAFE_SKIP_AVR_VERIFY
+EKIDEN_UNSAFE_SKIP_KM_POLICY=1
+export EKIDEN_UNSAFE_SKIP_KM_POLICY
 
 # Install ekiden-tools
 cargo install --force --path tools
