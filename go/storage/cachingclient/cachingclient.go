@@ -82,6 +82,10 @@ func (b *cachingClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 	return tree.GetNode(ctx, root, id)
 }
 
+func (b *cachingClientBackend) GetDiff(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+	return b.remote.GetDiff(ctx, startHash, endHash)
+}
+
 func (b *cachingClientBackend) Cleanup() {
 	b.remote.Cleanup()
 	b.local.Close()

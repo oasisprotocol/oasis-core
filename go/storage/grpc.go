@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/pkg/errors"
@@ -11,6 +12,12 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/api"
 
 	pb "github.com/oasislabs/ekiden/go/grpc/storage"
+)
+
+const (
+	// GetDiffChunkEntryCount defines the maximum number of write log entries
+	// that go into a single GetDiff response chunk.
+	GetDiffChunkEntryCount int = 10
 )
 
 var _ pb.StorageServer = (*grpcServer)(nil)
@@ -175,6 +182,87 @@ func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.G
 	}
 
 	return &pb.GetNodeResponse{Node: serializedNode}, nil
+}
+
+func (s *grpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffServer) error {
+	var startHash hash.Hash
+	if err := startHash.UnmarshalBinary(req.GetStartHash()); err != nil {
+		return errors.Wrap(err, "storage: failed to unmarshal start hash")
+	}
+
+	var endHash hash.Hash
+	if err := endHash.UnmarshalBinary(req.GetEndHash()); err != nil {
+		return errors.Wrap(err, "storage: failed to unmarshal end hash")
+	}
+
+	syncOptions := req.GetOpts()
+
+	<-s.backend.Initialized()
+
+	it, err := s.backend.GetDiff(stream.Context(), startHash, endHash)
+	if err != nil {
+		return err
+	}
+
+	var totalSent uint64
+	skipping := true
+	final := false
+	done := false
+	totalSent = 0
+
+	if len(syncOptions.GetOffsetKey()) == 0 {
+		skipping = false
+	}
+
+	for {
+		var entryArray []*pb.LogEntry
+		for {
+			more, err := it.Next()
+			if err != nil {
+				return err
+			}
+			if !more {
+				final = true
+				break
+			}
+
+			entry, err := it.Value()
+			if err != nil {
+				return err
+			}
+
+			if skipping {
+				if bytes.Equal(entry.Key, syncOptions.GetOffsetKey()) {
+					skipping = false
+				}
+				continue
+			}
+
+			entryArray = append(entryArray, &pb.LogEntry{
+				Key:   entry.Key,
+				Value: entry.Value,
+			})
+			totalSent++
+			if (syncOptions.GetLimit() > 0 && totalSent >= syncOptions.GetLimit()) || len(entryArray) >= GetDiffChunkEntryCount {
+				done = true
+				break
+			}
+		}
+		resp := &pb.GetDiffResponse{
+			Final: final,
+			Log:   entryArray,
+		}
+
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+
+		if done || final {
+			break
+		}
+	}
+
+	return nil
 }
 
 // NewGRPCServer intializes and registers a grpc storage server backed

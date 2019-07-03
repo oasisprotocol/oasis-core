@@ -131,6 +131,10 @@ func (b *memoryBackend) GetNode(ctx context.Context, root hash.Hash, id api.Node
 	return tree.GetNode(ctx, root, id)
 }
 
+func (b *memoryBackend) GetDiff(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+	return b.nodedb.GetWriteLog(ctx, startHash, endHash)
+}
+
 func (b *memoryBackend) Cleanup() {
 	b.nodedb.Close()
 }

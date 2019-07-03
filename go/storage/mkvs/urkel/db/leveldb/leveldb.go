@@ -2,21 +2,29 @@
 package leveldb
 
 import (
+	"context"
 	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 var (
 	_ api.NodeDB = (*leveldbNodeDB)(nil)
 
-	nodeKeyPrefix = []byte{'N'}
+	nodeKeyPrefix     = []byte{'N'}
+	writeLogKeyPrefix = []byte{'L'}
 )
+
+func makeWriteLogKey(startHash hash.Hash, endHash hash.Hash) []byte {
+	return append(append(writeLogKeyPrefix, startHash[:]...), endHash[:]...)
+}
 
 type leveldbNodeDB struct {
 	db *leveldb.DB
@@ -50,6 +58,26 @@ func (d *leveldbNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, e
 	return node.UnmarshalBinary(bytes)
 }
 
+func (d *leveldbNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+	bytes, err := d.db.Get(makeWriteLogKey(startHash, endHash), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var log api.HashedDBWriteLog
+	if err := cbor.Unmarshal(bytes, &log); err != nil {
+		return nil, err
+	}
+
+	return api.ReviveHashedDBWriteLog(ctx, log, func(h hash.Hash) (*node.LeafNode, error) {
+		leaf, err := d.GetNode(endHash, &node.Pointer{Hash: h, Clean: true})
+		if err != nil {
+			return nil, err
+		}
+		return leaf.(*node.LeafNode), nil
+	})
+}
+
 func (d *leveldbNodeDB) Close() {
 	d.closeOnce.Do(func() {
 		_ = d.db.Close()
@@ -75,6 +103,13 @@ func (b *leveldbBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtr
 		return &leveldbSubtree{batch: b}
 	}
 	return subtree
+}
+
+func (b *leveldbBatch) PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, annotations writelog.WriteLogAnnotations) error {
+	log := api.MakeHashedDBWriteLog(writeLog, annotations)
+	bytes := cbor.Marshal(log)
+	b.bat.Put(makeWriteLogKey(startHash, endHash), bytes)
+	return nil
 }
 
 func (b *leveldbBatch) Commit(root hash.Hash) error {

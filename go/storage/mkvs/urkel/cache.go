@@ -87,6 +87,10 @@ func (c *cache) isClosed() bool {
 	return c.db == nil
 }
 
+func (c *cache) getSyncRoot() hash.Hash {
+	return c.syncRoot
+}
+
 func (c *cache) setSyncRoot(root hash.Hash) {
 	c.syncRoot = root
 }

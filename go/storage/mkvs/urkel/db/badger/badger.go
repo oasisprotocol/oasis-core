@@ -2,18 +2,27 @@
 package badger
 
 import (
+	"context"
+
 	"github.com/dgraph-io/badger"
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 var (
-	nodeKeyPrefix = []byte{'N'}
+	nodeKeyPrefix     = []byte{'N'}
+	writeLogKeyPrefix = []byte{'L'}
 )
+
+func makeWriteLogKey(startHash hash.Hash, endHash hash.Hash) []byte {
+	return append(append(writeLogKeyPrefix, startHash[:]...), endHash[:]...)
+}
 
 // New creates a new BadgerDB-backed node database.
 func New(opts badger.Options) (api.NodeDB, error) {
@@ -69,6 +78,43 @@ func (d *badgerNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, er
 	return n, nil
 }
 
+func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+	tx := d.db.NewTransaction(false)
+	defer tx.Discard()
+	item, err := tx.Get(makeWriteLogKey(startHash, endHash))
+	if err != nil {
+		d.logger.Error("failed to Get write log from backing store",
+			"err", err,
+			"start_hash", startHash,
+			"end_hash", endHash,
+		)
+		return nil, errors.Wrap(err, "urkel/db/badger: failed to Get write log from backing store")
+	}
+	bytes, err := item.ValueCopy(nil)
+	if err != nil {
+		d.logger.Error("failed to copy bytes from write log value",
+			"err", err,
+		)
+		return nil, errors.Wrap(err, "urkel/db/badger: failed to copy bytes from write log value")
+	}
+
+	var dbLog api.HashedDBWriteLog
+	if err := cbor.Unmarshal(bytes, &dbLog); err != nil {
+		d.logger.Error("failed to unmarshal write log",
+			"err", err,
+		)
+		return nil, errors.Wrap(err, "urkel/db/badger: failed to unmarshal write log")
+	}
+
+	return api.ReviveHashedDBWriteLog(ctx, dbLog, func(h hash.Hash) (*node.LeafNode, error) {
+		leaf, err := d.GetNode(endHash, &node.Pointer{Hash: h, Clean: true})
+		if err != nil {
+			return nil, err
+		}
+		return leaf.(*node.LeafNode), nil
+	})
+}
+
 func (d *badgerNodeDB) NewBatch() api.Batch {
 	// WARNING: There is a maximum batch size and maximum batch entry count.
 	// Both of these things are derived from the MaxTableSize option.
@@ -101,6 +147,15 @@ func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtr
 		return &badgerSubtree{batch: ba}
 	}
 	return subtree
+}
+
+func (ba *badgerBatch) PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, annotations writelog.WriteLogAnnotations) error {
+	log := api.MakeHashedDBWriteLog(writeLog, annotations)
+	bytes := cbor.Marshal(log)
+	if err := ba.bat.Set(makeWriteLogKey(startHash, endHash), bytes); err != nil {
+		return errors.Wrap(err, "urkel/db/badger: set returned error")
+	}
+	return nil
 }
 
 func (ba *badgerBatch) Commit(root hash.Hash) error {

@@ -3,6 +3,7 @@ package lru
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"os"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	urkel "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 var (
@@ -76,6 +78,10 @@ func (d *lruNodeDB) GetNode(root hash.Hash, ptr *urkel.Pointer) (urkel.Node, err
 
 	node := item.(*nodeCacheItem).n
 	return node.Extract(), nil
+}
+
+func (d *lruNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+	return nil, api.ErrWriteLogNotFound
 }
 
 func (d *lruNodeDB) Close() {
@@ -214,6 +220,10 @@ func (b *memoryBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtre
 		return &memorySubtree{batch: b}
 	}
 	return subtree
+}
+
+func (b *memoryBatch) PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error {
+	return nil
 }
 
 func (b *memoryBatch) Commit(root hash.Hash) error {

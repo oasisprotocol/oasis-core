@@ -122,6 +122,10 @@ func (ba *badgerBackend) GetNode(ctx context.Context, root hash.Hash, id api.Nod
 	return tree.GetNode(ctx, root, id)
 }
 
+func (ba *badgerBackend) GetDiff(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+	return ba.nodedb.GetWriteLog(ctx, startHash, endHash)
+}
+
 func (ba *badgerBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.Receipt, error) {
 	receiptBody := api.ReceiptBody{
 		Version: 1,

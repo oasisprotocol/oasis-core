@@ -10,6 +10,7 @@ service Storage {
     rpc GetSubtree(GetSubtreeRequest) returns (GetSubtreeResponse) {}
     rpc GetPath(GetPathRequest) returns (GetPathResponse) {}
     rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {}
+    rpc GetDiff(GetDiffRequest) returns (stream GetDiffResponse) {}
 }
 
 message LogEntry {
@@ -75,4 +76,20 @@ message GetNodeRequest {
 
 message GetNodeResponse {
     bytes node = 1;  // serialized to binary
+}
+
+message GetDiffRequest {
+    message SyncOptions {
+        bytes offset_key = 1;
+        uint64 limit = 2;
+    }
+
+    bytes start_hash = 1;
+    bytes end_hash = 2;
+    SyncOptions opts = 3;
+}
+
+message GetDiffResponse {
+    bool final = 1;
+    repeated LogEntry log = 2;
 }

@@ -99,6 +99,10 @@ func (b *leveldbBackend) GetNode(ctx context.Context, root hash.Hash, id api.Nod
 	return tree.GetNode(ctx, root, id)
 }
 
+func (b *leveldbBackend) GetDiff(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+	return b.nodedb.GetWriteLog(ctx, startHash, endHash)
+}
+
 func (b *leveldbBackend) Cleanup() {
 	b.closeOnce.Do(func() {
 		b.nodedb.Close()

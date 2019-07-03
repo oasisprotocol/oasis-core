@@ -2,30 +2,48 @@
 package memory
 
 import (
+	"context"
 	"sync"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 var _ api.NodeDB = (*memoryNodeDB)(nil)
+
+type doubleHash [2 * hash.Size]byte
 
 type memoryItem struct {
 	refs  int
 	value []byte
 }
 
+type writeLogDigest []logEntryDigest
+
+type logEntryDigest struct {
+	key  []byte
+	leaf *node.LeafNode
+}
+
 type memoryNodeDB struct {
 	sync.RWMutex
 
-	items map[hash.Hash]*memoryItem
+	items     map[hash.Hash]*memoryItem
+	writeLogs map[doubleHash]writeLogDigest
+}
+
+func (h doubleHash) fromHashes(startHash hash.Hash, endHash hash.Hash) {
+	copy(h[:hash.Size], startHash[:])
+	copy(h[hash.Size:], endHash[:])
 }
 
 // New creates a new in-memory node database.
 func New() (api.NodeDB, error) {
 	return &memoryNodeDB{
-		items: make(map[hash.Hash]*memoryItem),
+		items:     make(map[hash.Hash]*memoryItem),
+		writeLogs: make(map[doubleHash]writeLogDigest),
 	}, nil
 }
 
@@ -43,6 +61,29 @@ func (d *memoryNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, er
 	}
 
 	return node.UnmarshalBinary(raw)
+}
+
+func (d *memoryNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+	d.RLock()
+	defer d.RUnlock()
+
+	var key doubleHash
+	key.fromHashes(startHash, endHash)
+
+	log, ok := d.writeLogs[key]
+	if !ok {
+		return nil, api.ErrWriteLogNotFound
+	}
+
+	writeLog := make(writelog.WriteLog, len(log))
+	for idx, entry := range log {
+		writeLog[idx] = writelog.LogEntry{
+			Key:   entry.key,
+			Value: entry.leaf.Value.Value,
+		}
+	}
+
+	return api.NewStaticWriteLogIterator(writeLog), nil
 }
 
 func (d *memoryNodeDB) Close() {
@@ -89,6 +130,32 @@ func (b *memoryBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtre
 		return &memorySubtree{batch: b}
 	}
 	return subtree
+}
+
+func (b *memoryBatch) PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, annotations writelog.WriteLogAnnotations) error {
+	var key doubleHash
+	key.fromHashes(startHash, endHash)
+
+	b.db.Lock()
+	defer b.db.Unlock()
+
+	digest := make(writeLogDigest, len(writeLog))
+	for idx, entry := range writeLog {
+		if annotations[idx].InsertedNode != nil {
+			digest[idx] = logEntryDigest{
+				key:  entry.Key,
+				leaf: annotations[idx].InsertedNode.Node.(*node.LeafNode),
+			}
+		} else {
+			digest[idx] = logEntryDigest{
+				key:  entry.Key,
+				leaf: nil,
+			}
+		}
+	}
+
+	b.db.writeLogs[key] = digest
+	return nil
 }
 
 func (b *memoryBatch) Commit(root hash.Hash) error {
