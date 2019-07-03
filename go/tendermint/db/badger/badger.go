@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/golang/snappy"
@@ -23,6 +25,9 @@ const (
 
 	dbVersion = 1
 	dbSuffix  = ".badger.db"
+
+	gcInterval     = 5 * time.Minute
+	gcDiscardRatio = 0.5
 )
 
 var (
@@ -42,6 +47,10 @@ type badgerDBImpl struct {
 	logger *logging.Logger
 
 	db *badger.DB
+
+	closeOnce sync.Once
+	closeCh   chan struct{}
+	closedCh  chan struct{}
 }
 
 // New constructs a new tendermint DB, backed by a Badger database at
@@ -65,10 +74,15 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 		return nil, errors.Wrap(err, "tendermint/db/badger: failed to open database")
 	}
 
-	return &badgerDBImpl{
-		logger: logger,
-		db:     db,
-	}, nil
+	impl := &badgerDBImpl{
+		logger:   logger,
+		db:       db,
+		closeCh:  make(chan struct{}),
+		closedCh: make(chan struct{}),
+	}
+	go impl.gcWorker()
+
+	return impl, nil
 }
 
 func (d *badgerDBImpl) Get(key []byte) []byte {
@@ -188,12 +202,17 @@ func (d *badgerDBImpl) ReverseIterator(start, end []byte) dbm.Iterator {
 }
 
 func (d *badgerDBImpl) Close() {
-	if err := d.db.Close(); err != nil {
-		d.logger.Error("Close failed",
-			"err", err,
-		)
-		// Log but ignore the error.
-	}
+	d.closeOnce.Do(func() {
+		close(d.closeCh)
+		<-d.closedCh
+
+		if err := d.db.Close(); err != nil {
+			d.logger.Error("Close failed",
+				"err", err,
+			)
+			// Log but ignore the error.
+		}
+	})
 }
 
 func (d *badgerDBImpl) NewBatch() dbm.Batch {
@@ -377,6 +396,39 @@ func (it *badgerDBIterator) Close() {
 		it.current.item = nil
 	}
 	it.isValid = false
+}
+
+func (d *badgerDBImpl) gcWorker() {
+	defer close(d.closedCh)
+
+	ticker := time.NewTicker(gcInterval)
+	defer ticker.Stop()
+
+	doGC := func() error {
+		for {
+			if err := d.db.RunValueLogGC(gcDiscardRatio); err != nil {
+				return err
+			}
+		}
+	}
+
+	for {
+		select {
+		case <-d.closeCh:
+			return
+		case <-ticker.C:
+		}
+
+		// Run the value log GC.
+		err := doGC()
+		switch err {
+		case nil, badger.ErrNoRewrite:
+		default:
+			d.logger.Error("failed to GC value log",
+				"err", err,
+			)
+		}
+	}
 }
 
 type setDeleter interface {

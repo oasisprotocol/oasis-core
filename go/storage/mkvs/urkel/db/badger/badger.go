@@ -3,6 +3,8 @@ package badger
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/pkg/errors"
@@ -13,6 +15,11 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
+)
+
+const (
+	gcInterval     = 5 * time.Minute
+	gcDiscardRatio = 0.5
 )
 
 var (
@@ -27,13 +34,16 @@ func makeWriteLogKey(startHash hash.Hash, endHash hash.Hash) []byte {
 // New creates a new BadgerDB-backed node database.
 func New(opts badger.Options) (api.NodeDB, error) {
 	db := &badgerNodeDB{
-		logger: logging.GetLogger("urkel/db/badger"),
+		logger:   logging.GetLogger("urkel/db/badger"),
+		closeCh:  make(chan struct{}),
+		closedCh: make(chan struct{}),
 	}
 
 	var err error
 	if db.db, err = badger.Open(opts); err != nil {
 		return nil, errors.Wrap(err, "urkel/db/badger: failed to open database")
 	}
+	go db.gcWorker()
 
 	return db, nil
 }
@@ -42,6 +52,10 @@ type badgerNodeDB struct {
 	logger *logging.Logger
 
 	db *badger.DB
+
+	closeOnce sync.Once
+	closeCh   chan struct{}
+	closedCh  chan struct{}
 }
 
 func (d *badgerNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error) {
@@ -129,10 +143,48 @@ func (d *badgerNodeDB) NewBatch() api.Batch {
 }
 
 func (d *badgerNodeDB) Close() {
-	if err := d.db.Close(); err != nil {
-		d.logger.Error("close returned error",
-			"err", err,
-		)
+	d.closeOnce.Do(func() {
+		close(d.closeCh)
+		<-d.closedCh
+
+		if err := d.db.Close(); err != nil {
+			d.logger.Error("close returned error",
+				"err", err,
+			)
+		}
+	})
+}
+
+func (d *badgerNodeDB) gcWorker() {
+	defer close(d.closedCh)
+
+	ticker := time.NewTicker(gcInterval)
+	defer ticker.Stop()
+
+	doGC := func() error {
+		for {
+			if err := d.db.RunValueLogGC(gcDiscardRatio); err != nil {
+				return err
+			}
+		}
+	}
+
+	for {
+		select {
+		case <-d.closeCh:
+			return
+		case <-ticker.C:
+		}
+
+		// Run the value log GC.
+		err := doGC()
+		switch err {
+		case nil, badger.ErrNoRewrite:
+		default:
+			d.logger.Error("failed to GC value log",
+				"err", err,
+			)
+		}
 	}
 }
 
