@@ -240,11 +240,15 @@ func (d *badgerDBImpl) Stats() map[string]string {
 func (d *badgerDBImpl) newIterator(start, end []byte, isForward bool) dbm.Iterator {
 	opts := badger.DefaultIteratorOptions
 	opts.Reverse = !isForward
+
+	// While prefetching values should be a win, the iavl access patterns
+	// result in out of control CPU usage.  Of note is a staggering 20% of
+	// CPU being spent in `nodeDB.getPreviousVersion` under profiling.
+	opts.PrefetchValues = false
+
 	// TODO/perf:
 	//  * opts.Prefix is likely worth setting, but maybe the tendermint
 	//    semantics can't be implemented.
-	//  * Depending on if iter.Value() is called frequently or not,
-	//    mess with the pre-fetch settings.
 
 	tx := d.db.NewTransaction(false)
 	it := &badgerDBIterator{
