@@ -29,6 +29,10 @@ var (
 	}
 )
 
+// maxBatchSize is the maximum number of nodes stored in a batch before
+// the batch will be flushed to the database (without fsync).
+const maxBatchSize = 100
+
 func makeWriteLogKey(startRoot node.Root, endRoot node.Root) []byte {
 	return append(append(writeLogKeyPrefix, startRoot.Hash[:]...), endRoot.Hash[:]...)
 }
@@ -108,6 +112,8 @@ type leveldbBatch struct {
 
 	db  *leveldbNodeDB
 	bat *leveldb.Batch
+
+	nodes int
 }
 
 func (d *leveldbNodeDB) NewBatch() api.Batch {
@@ -158,6 +164,7 @@ func (b *leveldbBatch) Reset() {
 	b.bat.Reset()
 	batchPool.Put(b.bat)
 	b.bat = nil
+	b.nodes = 0
 }
 
 type leveldbSubtree struct {
@@ -172,6 +179,16 @@ func (s *leveldbSubtree) PutNode(depth uint8, ptr *node.Pointer) error {
 
 	h := ptr.Node.GetHash()
 	s.batch.bat.Put(append(nodeKeyPrefix, h[:]...), data)
+	s.batch.nodes++
+	if s.batch.nodes >= maxBatchSize {
+		// If we reach the maximum batch size, commit early.
+		if err := s.batch.db.db.Write(s.batch.bat, &opt.WriteOptions{Sync: false}); err != nil {
+			return err
+		}
+		s.batch.bat.Reset()
+		s.batch.nodes = 0
+	}
+
 	return nil
 }
 
