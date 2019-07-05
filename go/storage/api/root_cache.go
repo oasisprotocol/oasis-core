@@ -152,7 +152,13 @@ func NewRootCache(
 	applyLockLRUSlots uint64,
 	insecureSkipChecks bool,
 ) (*RootCache, error) {
-	rootCache, err := lru.New(lru.Capacity(lruSizeInBytes, true))
+	rootCache, err := lru.New(
+		lru.Capacity(lruSizeInBytes, true),
+		lru.OnEvict(func(key, value interface{}) {
+			// Close the tree when evicted from cache.
+			value.(*urkel.Tree).Close()
+		}),
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/rootcache: failed to create rootCache")
 	}
