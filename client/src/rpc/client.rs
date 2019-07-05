@@ -14,10 +14,10 @@ use futures::{
 use grpcio::Channel;
 use io_context::Context;
 use serde::{de::DeserializeOwned, Serialize};
-use serde_cbor;
 use tokio_executor::spawn;
 
 use ekiden_runtime::{
+    common::cbor,
     protocol::Protocol,
     rpc::{
         session::{Builder, Session},
@@ -61,7 +61,7 @@ trait Transport: Send + Sync {
             payload: data,
         };
 
-        self.write_message_impl(ctx, serde_cbor::to_vec(&frame).unwrap())
+        self.write_message_impl(ctx, cbor::to_vec(&frame))
     }
 
     fn write_message_impl(&self, ctx: Context, data: Vec<u8>) -> BoxFuture<Vec<u8>>;
@@ -197,16 +197,13 @@ impl RpcClient {
     {
         let request = types::Request {
             method: method.to_owned(),
-            args: match serde_cbor::to_value(args) {
-                Ok(args) => args,
-                Err(error) => return Box::new(future::err(error.into())),
-            },
+            args: cbor::to_value(args),
         };
 
         Box::new(
             self.execute_call(ctx, request)
                 .and_then(|response| match response.body {
-                    types::Body::Success(value) => Ok(serde_cbor::from_value(value)?),
+                    types::Body::Success(value) => Ok(cbor::from_value(value)?),
                     types::Body::Error(error) => Err(RpcClientError::CallFailed(error).into()),
                 }),
         )

@@ -4,10 +4,12 @@
 //!
 //! This **MUST** be kept in sync with go/roothash/api/block.
 //!
-use serde_cbor;
 use serde_derive::{Deserialize, Serialize};
 
-use super::crypto::{hash::Hash, signature::SignatureBundle};
+use super::{
+    cbor,
+    crypto::{hash::Hash, signature::SignatureBundle},
+};
 
 /// The key holding inputs in the I/O tree.
 pub const IO_KEY_INPUTS: &'static [u8] = b"i";
@@ -51,7 +53,7 @@ pub struct Header {
 impl Header {
     /// Returns a hash of an encoded header.
     pub fn encoded_hash(&self) -> Hash {
-        Hash::digest_bytes(&serde_cbor::to_vec(&self).unwrap())
+        Hash::digest_bytes(&cbor::to_vec(&self))
     }
 }
 

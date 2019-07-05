@@ -12,11 +12,10 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crossbeam::channel;
 use failure::Fallible;
 use io_context::Context;
-use serde_cbor::{self, SerializerOptions};
 use slog::Logger;
 
 use crate::{
-    common::logger::get_logger,
+    common::{cbor, logger::get_logger},
     dispatcher::Dispatcher,
     rak::RAK,
     storage::KeyValue,
@@ -146,21 +145,14 @@ impl Protocol {
         let mut buffer = vec![0; length];
         reader.read_exact(&mut buffer)?;
 
-        Ok(serde_cbor::from_slice(&buffer)?)
+        Ok(cbor::from_slice(&buffer)?)
     }
 
     fn encode_message(&self, message: Message) -> Fallible<()> {
         let _guard = self.outgoing_mutex.lock().unwrap();
         let mut writer = BufWriter::new(&self.stream);
 
-        let buffer = serde_cbor::to_vec_with_options(
-            &message,
-            &SerializerOptions {
-                packed: false,
-                enum_as_map: true,
-                self_describe: false,
-            },
-        )?;
+        let buffer = cbor::to_vec(&message);
         if buffer.len() > MAX_MESSAGE_SIZE {
             return Err(ProtocolError::MessageTooLarge.into());
         }

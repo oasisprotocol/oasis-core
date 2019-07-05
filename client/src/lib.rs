@@ -11,7 +11,6 @@ extern crate rustracing;
 extern crate rustracing_jaeger;
 extern crate serde;
 extern crate serde_bytes;
-extern crate serde_cbor;
 extern crate serde_derive;
 #[macro_use]
 extern crate failure;

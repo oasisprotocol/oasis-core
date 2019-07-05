@@ -7,10 +7,9 @@ use grpcio::{Channel, Error::RpcFailure, RpcStatus, RpcStatusCode};
 use rustracing::{sampler::AllSampler, tag};
 use rustracing_jaeger::{span::Span, Tracer};
 use serde::{de::DeserializeOwned, Serialize};
-use serde_cbor;
 
 use ekiden_runtime::{
-    common::{crypto::hash::Hash, runtime::RuntimeId},
+    common::{cbor, crypto::hash::Hash, runtime::RuntimeId},
     transaction::types::{TxnBatch, TxnCall, TxnOutput},
 };
 
@@ -67,10 +66,7 @@ impl TxnClient {
     {
         let call = TxnCall {
             method: method.to_owned(),
-            args: match serde_cbor::to_value(args) {
-                Ok(args) => args,
-                Err(error) => return Box::new(future::err(error.into())),
-            },
+            args: cbor::to_value(args),
         };
 
         Box::new(
@@ -88,10 +84,7 @@ impl TxnClient {
 
         let mut request = api::client::SubmitTxRequest::new();
         request.set_runtime_id(self.runtime_id.as_ref().to_vec());
-        match serde_cbor::to_vec(&call) {
-            Ok(data) => request.set_data(data),
-            Err(error) => return Box::new(future::err(error.into())),
-        }
+        request.set_data(cbor::to_vec(&call));
 
         match self.client.submit_tx_async_opt(&request, options) {
             Ok(resp) => Box::new(
@@ -165,7 +158,7 @@ impl TxnClient {
                                 .and_then(move |rsp| {
                                     Ok(BlockSnapshot::new(
                                         storage_client.clone(),
-                                        serde_cbor::from_slice(&rsp.block)?,
+                                        cbor::from_slice(&rsp.block)?,
                                         Hash::from(rsp.block_hash),
                                     ))
                                 }),
@@ -204,7 +197,7 @@ impl TxnClient {
                         Err(error) => Err(TxnClientError::CallFailed(format!("{}", error)).into()),
                         Ok(rsp) => Ok(Some(BlockSnapshot::new(
                             storage_client,
-                            serde_cbor::from_slice(&rsp.block)?,
+                            cbor::from_slice(&rsp.block)?,
                             Hash::from(rsp.block_hash),
                         ))),
                     }))
@@ -236,7 +229,7 @@ impl TxnClient {
                         })) => Ok(None),
                         Err(error) => Err(TxnClientError::CallFailed(format!("{}", error)).into()),
                         Ok(rsp) => {
-                            let rsp: TxnResult = serde_cbor::from_slice(&rsp.result)?;
+                            let rsp: TxnResult = cbor::from_slice(&rsp.result)?;
                             Ok(Some(TransactionSnapshot::new(
                                 storage_client,
                                 rsp.block,
@@ -281,7 +274,7 @@ impl TxnClient {
                     })) => Ok(None),
                     Err(error) => Err(TxnClientError::CallFailed(format!("{}", error)).into()),
                     Ok(rsp) => {
-                        let rsp: TxnResult = serde_cbor::from_slice(&rsp.result)?;
+                        let rsp: TxnResult = cbor::from_slice(&rsp.result)?;
                         Ok(Some(TransactionSnapshot::new(
                             storage_client,
                             rsp.block,
@@ -347,7 +340,7 @@ impl TxnClient {
                         Err(error) => Err(TxnClientError::CallFailed(format!("{}", error)).into()),
                         Ok(rsp) => Ok(Some(BlockSnapshot::new(
                             storage_client,
-                            serde_cbor::from_slice(&rsp.block)?,
+                            cbor::from_slice(&rsp.block)?,
                             Hash::from(rsp.block_hash),
                         ))),
                     }))
@@ -383,7 +376,7 @@ impl TxnClient {
                         })) => Ok(None),
                         Err(error) => Err(TxnClientError::CallFailed(format!("{}", error)).into()),
                         Ok(rsp) => {
-                            let rsp: TxnResult = serde_cbor::from_slice(&rsp.result)?;
+                            let rsp: TxnResult = cbor::from_slice(&rsp.result)?;
                             Ok(Some(TransactionSnapshot::new(
                                 storage_client,
                                 rsp.block,
@@ -408,10 +401,7 @@ impl TxnClient {
         let (span, options) = self.prepare_options("TxnClient::query_txn");
         let mut request = api::client::QueryTxnsRequest::new();
         request.set_runtime_id(self.runtime_id.as_ref().to_vec());
-        match serde_cbor::to_vec(&query) {
-            Ok(query) => request.set_query(query),
-            Err(error) => return Box::new(future::err(error.into())),
-        }
+        request.set_query(cbor::to_vec(&query));
 
         let result: BoxFuture<Vec<TransactionSnapshot>> = match self
             .client
@@ -422,7 +412,7 @@ impl TxnClient {
                 Box::new(
                     resp.map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into())
                         .and_then(move |rsp| {
-                            let rsp: Vec<TxnResult> = serde_cbor::from_slice(&rsp.results)?;
+                            let rsp: Vec<TxnResult> = cbor::from_slice(&rsp.results)?;
                             rsp.into_iter()
                                 .map(|tx| {
                                     TransactionSnapshot::new(
@@ -493,9 +483,9 @@ pub fn parse_call_output<O>(output: Vec<u8>) -> Fallible<O>
 where
     O: DeserializeOwned,
 {
-    let output: TxnOutput = serde_cbor::from_slice(&output)?;
+    let output: TxnOutput = cbor::from_slice(&output)?;
     match output {
-        TxnOutput::Success(data) => Ok(serde_cbor::from_value(data)?),
+        TxnOutput::Success(data) => Ok(cbor::from_value(data)?),
         TxnOutput::Error(error) => Err(TxnClientError::TxnFailed(error).into()),
     }
 }

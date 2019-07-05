@@ -6,7 +6,6 @@ use io_context::Context as IoContext;
 use lazy_static::lazy_static;
 use lru::LruCache;
 use rand::{rngs::OsRng, Rng};
-use serde_cbor;
 use sgx_isa::Keypolicy;
 use sp800_185::{CShake, KMac};
 use tiny_keccak::sha3_256;
@@ -21,6 +20,7 @@ use ekiden_keymanager_api::{
 use ekiden_keymanager_client::{KeyManagerClient, RemoteClient};
 use ekiden_runtime::{
     common::{
+        cbor,
         crypto::{
             mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
             signature,
@@ -288,7 +288,7 @@ impl Kdf {
             policy_checksum,
         };
 
-        let body = serde_cbor::to_vec(&init_response)?;
+        let body = cbor::to_vec(&init_response);
         let signature = inner
             .signer
             .as_ref()

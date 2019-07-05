@@ -3,14 +3,13 @@ use std::collections::HashMap;
 
 use failure::{Fallible, ResultExt};
 use serde::{de::DeserializeOwned, Serialize};
-use serde_cbor::{self, SerializerOptions, Value};
 
 use super::{
     context::Context,
     types::{TxnBatch, TxnCall, TxnOutput},
 };
 use crate::{
-    common::crypto::hash::Hash,
+    common::{cbor, crypto::hash::Hash},
     types::{Tag, TAG_TXN_INDEX_BLOCK},
 };
 
@@ -104,7 +103,7 @@ pub trait MethodHandlerDispatch {
     fn get_descriptor(&self) -> &MethodDescriptor;
 
     /// Dispatches the given raw call.
-    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<Value>;
+    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<cbor::Value>;
 }
 
 struct MethodHandlerDispatchImpl<Call, Output> {
@@ -123,11 +122,11 @@ where
         &self.descriptor
     }
 
-    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<Value> {
-        let call = serde_cbor::from_value(call.args).context("unable to parse call arguments")?;
+    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<cbor::Value> {
+        let call = cbor::from_value(call.args).context("unable to parse call arguments")?;
         let response = self.handler.handle(&call, ctx)?;
 
-        Ok(serde_cbor::to_value(response)?)
+        Ok(cbor::to_value(response))
     }
 }
 
@@ -159,7 +158,7 @@ impl Method {
     }
 
     /// Dispatch method call.
-    pub fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<Value> {
+    pub fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<cbor::Value> {
         self.dispatcher.dispatch(call, ctx)
     }
 }
@@ -264,26 +263,18 @@ impl Dispatcher {
             Ok(response) => TxnOutput::Success(response),
             Err(error) => {
                 if let Some(check_msg) = error.downcast_ref::<CheckOnlySuccess>() {
-                    TxnOutput::Success(serde_cbor::Value::String(format!("{}", check_msg)))
+                    TxnOutput::Success(cbor::Value::Text(format!("{}", check_msg)))
                 } else {
                     TxnOutput::Error(format!("{}", error))
                 }
             }
         };
 
-        serde_cbor::to_vec_with_options(
-            &rsp,
-            &SerializerOptions {
-                packed: false,
-                enum_as_map: true,
-                self_describe: false,
-            },
-        )
-        .unwrap()
+        cbor::to_vec(&rsp)
     }
 
-    fn dispatch_fallible(&self, call: &Vec<u8>, ctx: &mut Context) -> Fallible<Value> {
-        let call: TxnCall = serde_cbor::from_slice(call).context("unable to parse call")?;
+    fn dispatch_fallible(&self, call: &Vec<u8>, ctx: &mut Context) -> Fallible<cbor::Value> {
+        let call: TxnCall = cbor::from_slice(call).context("unable to parse call")?;
 
         match self.methods.get(&call.method) {
             Some(dispatcher) => dispatcher.dispatch(call, ctx),
@@ -305,10 +296,9 @@ impl Dispatcher {
 #[cfg(test)]
 mod tests {
     use io_context::Context as IoContext;
-    use serde_cbor;
     use serde_derive::{Deserialize, Serialize};
 
-    use crate::common::roothash::Header;
+    use crate::common::{cbor, roothash::Header};
 
     use super::*;
 
@@ -346,13 +336,12 @@ mod tests {
         // Prepare a dummy call.
         let call = TxnCall {
             method: "dummy".to_owned(),
-            args: serde_cbor::to_value(Complex {
+            args: cbor::to_value(Complex {
                 text: "hello".to_owned(),
                 number: 21,
-            })
-            .unwrap(),
+            }),
         };
-        let call_encoded = serde_cbor::to_vec(&call).unwrap();
+        let call_encoded = cbor::to_vec(&call);
 
         let header = Header {
             timestamp: TEST_TIMESTAMP,
@@ -364,10 +353,10 @@ mod tests {
         let result = dispatcher.dispatch(&call_encoded, &mut ctx);
 
         // Decode result.
-        let result_decoded: TxnOutput = serde_cbor::from_slice(&result).unwrap();
+        let result_decoded: TxnOutput = cbor::from_slice(&result).unwrap();
         match result_decoded {
             TxnOutput::Success(value) => {
-                let value: Complex = serde_cbor::from_value(value).unwrap();
+                let value: Complex = cbor::from_value(value).unwrap();
 
                 assert_eq!(
                     value,
