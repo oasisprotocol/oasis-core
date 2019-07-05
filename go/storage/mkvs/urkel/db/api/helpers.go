@@ -23,7 +23,7 @@ func MakeHashedDBWriteLog(writeLog writelog.WriteLog, annotations writelog.Write
 	for idx, entry := range writeLog {
 		var h *hash.Hash
 		if annotations[idx].InsertedNode != nil {
-			h = &annotations[idx].InsertedNode.Node.(*node.LeafNode).Hash
+			h = &annotations[idx].InsertedNode.Hash
 		}
 		log[idx] = HashedDBLogEntry{
 			Key:          entry.Key,
