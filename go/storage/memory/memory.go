@@ -71,6 +71,10 @@ func (b *memoryBackend) apply(
 		}
 
 		for _, entry := range writeLog {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+
 			if len(entry.Value) == 0 {
 				err = tree.Remove(ctx, entry.Key)
 			} else {
