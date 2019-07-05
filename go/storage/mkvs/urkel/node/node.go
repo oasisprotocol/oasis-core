@@ -7,6 +7,7 @@ import (
 	"encoding"
 	"encoding/binary"
 	"fmt"
+	"unsafe"
 
 	"github.com/pkg/errors"
 
@@ -26,6 +27,15 @@ const (
 	PrefixInternalNode byte = 0x01
 	// Prefix used to mark a nil pointer in a subtree serialization.
 	PrefixNilNode byte = 0x02
+
+	// PointerSize is the size of a node pointer in memory.
+	PointerSize = uint64(unsafe.Sizeof(Pointer{}))
+	// InternalNodeSize is the size of an internal node in memory.
+	InternalNodeSize = uint64(unsafe.Sizeof(InternalNode{})) + 2*PointerSize
+	// ValueSize is the size of an empty value node in memory.
+	ValueSize = uint64(unsafe.Sizeof(Value{}))
+	// LeafNodeSize is the size of a leaf node in memory.
+	LeafNodeSize = uint64(unsafe.Sizeof(LeafNode{})) + ValueSize
 )
 
 var (
