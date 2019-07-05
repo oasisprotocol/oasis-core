@@ -302,10 +302,11 @@ impl TxnClient {
     }
 
     // Retrieve transactions at specific root.
-    pub fn get_transactions(&self, root: Hash) -> BoxFuture<TxnBatch> {
+    pub fn get_transactions(&self, round: u64, root: Hash) -> BoxFuture<TxnBatch> {
         let (span, options) = self.prepare_options("TxnClient::get_transactions");
         let mut request = api::client::GetTransactionsRequest::new();
         request.set_runtime_id(self.runtime_id.as_ref().to_vec());
+        request.set_round(round);
         request.set_root(root.as_ref().to_vec());
 
         let result: BoxFuture<TxnBatch> =

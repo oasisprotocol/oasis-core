@@ -28,6 +28,7 @@ const (
 	cfgCrashEnabled        = "storage.crash.enabled"
 	cfgLRUSize             = "storage.root_cache.lru_size"
 	cfgLRUSlots            = "storage.root_cache.apply_lock_lru_slots"
+	cfgInsecureSkipChecks  = "storage.debug.insecure_skip_checks"
 )
 
 // New constructs a new Backend based on the configuration flags.
@@ -47,16 +48,17 @@ func New(ctx context.Context, dataDir string, schedulerBackend scheduler.Backend
 	backend := viper.GetString(cfgBackend)
 	lruSize := uint64(viper.GetSizeInBytes(cfgLRUSize))
 	applyLockLRUSlots := uint64(viper.GetInt(cfgLRUSlots))
+	insecureSkipChecks := viper.GetBool(cfgInsecureSkipChecks)
 
 	switch strings.ToLower(backend) {
 	case memory.BackendName:
-		impl = memory.New(signingKey)
+		impl = memory.New(signingKey, insecureSkipChecks)
 	case badger.BackendName:
 		dbDir := filepath.Join(dataDir, badger.DBFile)
-		impl, err = badger.New(dbDir, signingKey, lruSize, applyLockLRUSlots)
+		impl, err = badger.New(dbDir, signingKey, lruSize, applyLockLRUSlots, insecureSkipChecks)
 	case leveldb.BackendName:
 		dbDir := filepath.Join(dataDir, leveldb.DBFile)
-		impl, err = leveldb.New(dbDir, signingKey, lruSize, applyLockLRUSlots)
+		impl, err = leveldb.New(dbDir, signingKey, lruSize, applyLockLRUSlots, insecureSkipChecks)
 	case client.BackendName:
 		impl, err = client.New(ctx, schedulerBackend, registryBackend)
 	case cachingclient.BackendName:
@@ -65,7 +67,7 @@ func New(ctx context.Context, dataDir string, schedulerBackend scheduler.Backend
 		if err != nil {
 			return nil, err
 		}
-		impl, err = cachingclient.New(remote)
+		impl, err = cachingclient.New(remote, insecureSkipChecks)
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", backend)
 	}
@@ -91,11 +93,18 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
 		cmd.Flags().String(cfgLRUSize, "128m", "Maximum LRU size in bytes to use in the MKVS tree root cache")
 		cmd.Flags().Int(cfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
+
+		cmd.Flags().Bool(cfgInsecureSkipChecks, false, "INSECURE: Skip known root checks")
+		_ = cmd.Flags().MarkHidden(cfgInsecureSkipChecks)
 	}
 
 	for _, v := range []string{
 		cfgBackend,
 		cfgDebugMockSigningKey,
+		cfgCrashEnabled,
+		cfgLRUSize,
+		cfgLRUSlots,
+		cfgInsecureSkipChecks,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
 	}

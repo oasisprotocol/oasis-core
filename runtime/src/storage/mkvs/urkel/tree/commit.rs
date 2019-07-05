@@ -4,7 +4,7 @@ use failure::Fallible;
 use io_context::Context;
 
 use crate::{
-    common::crypto::hash::Hash,
+    common::{crypto::hash::Hash, roothash::Namespace},
     storage::mkvs::{
         urkel::{cache::*, tree::*},
         LogEntry, WriteLog,
@@ -14,7 +14,12 @@ use crate::{
 impl UrkelTree {
     /// Commit tree updates to the underlying database and return
     /// the write log and new merkle root.
-    pub fn commit(&mut self, ctx: Context) -> Fallible<(WriteLog, Hash)> {
+    pub fn commit(
+        &mut self,
+        ctx: Context,
+        namespace: Namespace,
+        round: u64,
+    ) -> Fallible<(WriteLog, Hash)> {
         let ctx = ctx.freeze();
         let mut update_list: UpdateList<LRUCache> = UpdateList::new();
         let pending_root = self.cache.borrow().get_pending_root();
@@ -35,7 +40,11 @@ impl UrkelTree {
             });
         }
         self.pending_write_log.clear();
-        self.cache.borrow_mut().set_sync_root(new_hash);
+        self.cache.borrow_mut().set_sync_root(Root {
+            namespace,
+            round,
+            hash: new_hash,
+        });
 
         Ok((log, new_hash))
     }

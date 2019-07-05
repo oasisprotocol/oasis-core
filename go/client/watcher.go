@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
+	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
@@ -101,7 +102,13 @@ func (w *blockWatcher) checkBlock(blk *block.Block) {
 		return
 	}
 
-	tree, err := urkel.NewWithRoot(w.common.ctx, w.common.storage, nil, blk.Header.IORoot)
+	ioRoot := storage.Root{
+		Namespace: blk.Header.Namespace,
+		Round:     blk.Header.Round,
+		Hash:      blk.Header.IORoot,
+	}
+
+	tree, err := urkel.NewWithRoot(w.common.ctx, w.common.storage, nil, ioRoot)
 	if err != nil {
 		w.Logger.Error("can't get block I/O from storage", "err", err)
 		return

@@ -241,6 +241,8 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 		return errNoBlocks
 	}
 
+	lastHeader := n.commonNode.CurrentBlock.Header
+
 	// Leader node opens a new parent span for batch processing.
 	batchSpan := opentracing.StartSpan("TakeBatchFromQueue(batch)",
 		opentracing.Tag{Key: "batch", Value: batch},
@@ -258,7 +260,7 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 		return err
 	}
 
-	ioWriteLog, ioRoot, err := ioTree.Commit(n.ctx)
+	ioWriteLog, ioRoot, err := ioTree.Commit(n.ctx, lastHeader.Namespace, lastHeader.Round+1)
 	if err != nil {
 		n.logger.Error("failed to create I/O tree",
 			"err", err,
@@ -274,7 +276,15 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 
-	ioReceipts, err := n.commonNode.Storage.Apply(ctx, emptyRoot, ioRoot, ioWriteLog)
+	ioReceipts, err := n.commonNode.Storage.Apply(
+		ctx,
+		lastHeader.Namespace,
+		lastHeader.Round+1,
+		emptyRoot,
+		lastHeader.Round+1,
+		ioRoot,
+		ioWriteLog,
+	)
 	if err != nil {
 		spanInsert.Finish()
 		n.logger.Error("failed to commit I/O tree to storage",

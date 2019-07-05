@@ -9,6 +9,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -34,7 +35,13 @@ type badgerBackend struct {
 }
 
 // New constructs a new Badger backed storage Backend instance.
-func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLockLRUSlots uint64) (api.Backend, error) {
+func New(
+	dbDir string,
+	signingKey *signature.PrivateKey,
+	lruSizeInBytes uint64,
+	applyLockLRUSlots uint64,
+	insecureSkipChecks bool,
+) (api.Backend, error) {
 	logger := logging.GetLogger("storage/badger")
 
 	opts := badger.DefaultOptions(dbDir)
@@ -45,7 +52,7 @@ func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLo
 		return nil, errors.Wrap(err, "storage/badger: failed to open node database")
 	}
 
-	rootCache, err := api.NewRootCache(ndb, nil, lruSizeInBytes, applyLockLRUSlots)
+	rootCache, err := api.NewRootCache(ndb, nil, lruSizeInBytes, applyLockLRUSlots, insecureSkipChecks)
 	if err != nil {
 		ndb.Close()
 		return nil, errors.Wrap(err, "storage/badger: failed to create root cache")
@@ -63,27 +70,40 @@ func New(dbDir string, signingKey *signature.PrivateKey, lruSizeInBytes, applyLo
 	}, nil
 }
 
-func (ba *badgerBackend) Apply(ctx context.Context, root, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
-	newRoot, err := ba.rootCache.Apply(ctx, root, expectedNewRoot, log)
+func (ba *badgerBackend) Apply(
+	ctx context.Context,
+	ns common.Namespace,
+	srcRound uint64,
+	srcRoot hash.Hash,
+	dstRound uint64,
+	dstRoot hash.Hash,
+	writeLog api.WriteLog,
+) ([]*api.Receipt, error) {
+	newRoot, err := ba.rootCache.Apply(ctx, ns, srcRound, srcRoot, dstRound, dstRoot, writeLog)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/badger: failed to Apply")
 	}
 
-	receipt, err := ba.signReceipt(ctx, []hash.Hash{*newRoot})
+	receipt, err := api.SignReceipt(ba.signingKey, ns, dstRound, []hash.Hash{*newRoot})
 	return []*api.Receipt{receipt}, err
 }
 
-func (ba *badgerBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.Receipt, error) {
+func (ba *badgerBackend) ApplyBatch(
+	ctx context.Context,
+	ns common.Namespace,
+	dstRound uint64,
+	ops []api.ApplyOp,
+) ([]*api.Receipt, error) {
 	newRoots := make([]hash.Hash, 0, len(ops))
 	for _, op := range ops {
-		newRoot, err := ba.rootCache.Apply(ctx, op.Root, op.ExpectedNewRoot, op.WriteLog)
+		newRoot, err := ba.rootCache.Apply(ctx, ns, op.SrcRound, op.SrcRoot, dstRound, op.DstRoot, op.WriteLog)
 		if err != nil {
 			return nil, errors.Wrap(err, "storage/badger: failed to Apply, op")
 		}
 		newRoots = append(newRoots, *newRoot)
 	}
 
-	receipt, err := ba.signReceipt(ctx, newRoots)
+	receipt, err := api.SignReceipt(ba.signingKey, ns, dstRound, newRoots)
 	return []*api.Receipt{receipt}, err
 }
 
@@ -95,7 +115,7 @@ func (ba *badgerBackend) Initialized() <-chan struct{} {
 	return ba.initCh
 }
 
-func (ba *badgerBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (ba *badgerBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
 	tree, err := ba.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err
@@ -104,7 +124,7 @@ func (ba *badgerBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (ba *badgerBackend) GetPath(ctx context.Context, root, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (ba *badgerBackend) GetPath(ctx context.Context, root api.Root, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
 	tree, err := ba.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err
@@ -113,7 +133,7 @@ func (ba *badgerBackend) GetPath(ctx context.Context, root, key hash.Hash, start
 	return tree.GetPath(ctx, root, key, startDepth)
 }
 
-func (ba *badgerBackend) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
+func (ba *badgerBackend) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {
 	tree, err := ba.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err
@@ -122,23 +142,8 @@ func (ba *badgerBackend) GetNode(ctx context.Context, root hash.Hash, id api.Nod
 	return tree.GetNode(ctx, root, id)
 }
 
-func (ba *badgerBackend) GetDiff(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
-	return ba.nodedb.GetWriteLog(ctx, startHash, endHash)
-}
-
-func (ba *badgerBackend) signReceipt(ctx context.Context, roots []hash.Hash) (*api.Receipt, error) {
-	receiptBody := api.ReceiptBody{
-		Version: 1,
-		Roots:   roots,
-	}
-	signed, err := signature.SignSigned(*ba.signingKey, api.ReceiptSignatureContext, &receiptBody)
-	if err != nil {
-		return nil, errors.Wrap(err, "storage/badger: failed to sign receipt")
-	}
-
-	return &api.Receipt{
-		Signed: *signed,
-	}, nil
+func (ba *badgerBackend) GetDiff(ctx context.Context, startRoot api.Root, endRoot api.Root) (api.WriteLogIterator, error) {
+	return ba.nodedb.GetWriteLog(ctx, startRoot, endRoot)
 }
 
 // NewLogAdapter returns a badger.Logger backed by an ekiden logger.

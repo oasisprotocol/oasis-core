@@ -141,7 +141,7 @@ func testQuery(
 	require.EqualValues(t, []byte("hello world"), tx.Output)
 
 	// Transactions (check the mock worker for content).
-	txns, err := c.GetTransactions(ctx, runtimeID, blk.Header.IORoot)
+	txns, err := c.GetTransactions(ctx, runtimeID, blk.Header.Round, blk.Header.IORoot)
 	require.NoError(t, err, "GetTransactions")
 	require.Len(t, txns, 1)
 	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall

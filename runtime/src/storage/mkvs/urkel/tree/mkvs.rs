@@ -2,7 +2,7 @@ use failure::Fallible;
 use io_context::Context;
 
 use crate::{
-    common::crypto::hash::Hash,
+    common::{crypto::hash::Hash, roothash::Namespace},
     storage::mkvs::{urkel::tree::*, WriteLog, MKVS},
 };
 
@@ -29,10 +29,15 @@ impl MKVS for UrkelTree {
         self.remove(ctx, key).unwrap()
     }
 
-    fn commit(&mut self, ctx: Context) -> Fallible<(WriteLog, Hash)> {
+    fn commit(
+        &mut self,
+        ctx: Context,
+        namespace: Namespace,
+        round: u64,
+    ) -> Fallible<(WriteLog, Hash)> {
         let lock = self.lock.clone();
         let _guard = lock.lock().unwrap();
-        UrkelTree::commit(self, ctx)
+        UrkelTree::commit(self, ctx, namespace, round)
     }
 
     fn rollback(&mut self) {

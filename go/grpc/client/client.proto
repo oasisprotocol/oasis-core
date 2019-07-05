@@ -110,8 +110,10 @@ message GetTxnByBlockHashResponse {
 message GetTransactionsRequest {
     // Runtime identifier.
     bytes runtime_id = 1;
+    // Round.
+    uint64 round = 2;
     // Transaction root.
-    bytes root = 2;
+    bytes root = 3;
 }
 
 message GetTransactionsResponse {

@@ -12,7 +12,7 @@ use crate::{
         roothash::{Block, ComputeResultsHeader},
         sgx::avr::AVR,
     },
-    storage::mkvs::WriteLog,
+    storage::mkvs::{urkel::sync::Root, WriteLog},
     transaction::types::TxnBatch,
 };
 
@@ -147,18 +147,18 @@ pub enum Body {
         response: Vec<u8>,
     },
     HostStorageSyncGetSubtreeRequest {
-        root_hash: Hash,
+        root: Root,
         node_path: Hash,
         node_depth: u8,
         max_depth: u8,
     },
     HostStorageSyncGetPathRequest {
-        root_hash: Hash,
+        root: Root,
         key: Hash,
         start_depth: u8,
     },
     HostStorageSyncGetNodeRequest {
-        root_hash: Hash,
+        root: Root,
         node_path: Hash,
         node_depth: u8,
     },

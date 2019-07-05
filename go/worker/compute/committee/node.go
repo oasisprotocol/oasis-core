@@ -201,7 +201,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 func (n *Node) queueBatchBlocking(
 	ctx context.Context,
 	committeeID hash.Hash,
-	ioRoot hash.Hash,
+	ioRootHash hash.Hash,
 	storageSignatures []signature.Signature,
 	hdr block.Header,
 ) error {
@@ -218,8 +218,10 @@ func (n *Node) queueBatchBlocking(
 
 	// Verify storage receipt signatures.
 	receiptBody := storage.ReceiptBody{
-		Version: 1,
-		Roots:   []hash.Hash{ioRoot},
+		Version:   1,
+		Namespace: hdr.Namespace,
+		Round:     hdr.Round + 1,
+		Roots:     []hash.Hash{ioRootHash},
 	}
 	receipt := storage.Receipt{}
 	receipt.Signed.Blob = receiptBody.MarshalCBOR()
@@ -236,6 +238,11 @@ func (n *Node) queueBatchBlocking(
 	}
 
 	// Fetch inputs from storage.
+	ioRoot := storage.Root{
+		Namespace: hdr.Namespace,
+		Round:     hdr.Round + 1,
+		Hash:      ioRootHash,
+	}
 	ioTree, err := urkel.NewWithRoot(ctx, n.commonNode.Storage, nil, ioRoot)
 	if err != nil {
 		n.logger.Error("failed to fetch inputs from storage",
@@ -268,7 +275,7 @@ func (n *Node) queueBatchBlocking(
 
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
-	return n.handleExternalBatchLocked(committeeID, ioRoot, batch, batchSpanCtx, hdr)
+	return n.handleExternalBatchLocked(committeeID, ioRootHash, batch, batchSpanCtx, hdr)
 }
 
 // HandleBatchFromTransactionSchedulerLocked processes a batch from the transaction scheduler.
@@ -562,23 +569,27 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		ctx, cancel := context.WithTimeout(ctx, n.cfg.StorageCommitTimeout)
 		defer cancel()
 
+		lastHeader := n.commonNode.CurrentBlock.Header
+
 		// NOTE: Order is important for verifying the receipt.
 		applyOps := []storage.ApplyOp{
 			// I/O root.
 			storage.ApplyOp{
-				Root:            state.ioRoot,
-				ExpectedNewRoot: batch.Header.IORoot,
-				WriteLog:        batch.IOWriteLog,
+				SrcRound: lastHeader.Round + 1,
+				SrcRoot:  state.ioRoot,
+				DstRoot:  batch.Header.IORoot,
+				WriteLog: batch.IOWriteLog,
 			},
 			// State root.
 			storage.ApplyOp{
-				Root:            n.commonNode.CurrentBlock.Header.StateRoot,
-				ExpectedNewRoot: batch.Header.StateRoot,
-				WriteLog:        batch.StateWriteLog,
+				SrcRound: lastHeader.Round,
+				SrcRoot:  lastHeader.StateRoot,
+				DstRoot:  batch.Header.StateRoot,
+				WriteLog: batch.StateWriteLog,
 			},
 		}
 
-		receipts, err := n.commonNode.Storage.ApplyBatch(ctx, applyOps)
+		receipts, err := n.commonNode.Storage.ApplyBatch(ctx, lastHeader.Namespace, lastHeader.Round+1, applyOps)
 		if err != nil {
 			n.logger.Error("failed to apply to storage",
 				"err", err,
@@ -598,7 +609,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 				)
 				return err
 			}
-			if err = proposedResults.VerifyStorageReceipt(&receiptBody); err != nil {
+			if err = proposedResults.VerifyStorageReceipt(lastHeader.Namespace, lastHeader.Round+1, &receiptBody); err != nil {
 				n.logger.Error("failed to validate receipt body",
 					"receipt body", receiptBody,
 					"err", err,

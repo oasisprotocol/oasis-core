@@ -43,27 +43,27 @@ impl ReadSync for StatsCollector {
     fn get_subtree(
         &mut self,
         ctx: Context,
-        root_hash: Hash,
+        root: Root,
         id: NodeID,
         max_depth: u8,
     ) -> Fallible<Subtree> {
         self.subtree_fetches += 1;
-        self.rs.get_subtree(ctx, root_hash, id, max_depth)
+        self.rs.get_subtree(ctx, root, id, max_depth)
     }
 
     fn get_path(
         &mut self,
         ctx: Context,
-        root_hash: Hash,
+        root: Root,
         key: Hash,
         start_depth: u8,
     ) -> Fallible<Subtree> {
         self.path_fetches += 1;
-        self.rs.get_path(ctx, root_hash, key, start_depth)
+        self.rs.get_path(ctx, root, key, start_depth)
     }
 
-    fn get_node(&mut self, ctx: Context, root_hash: Hash, id: NodeID) -> Fallible<NodeRef> {
+    fn get_node(&mut self, ctx: Context, root: Root, id: NodeID) -> Fallible<NodeRef> {
         self.node_fetches += 1;
-        self.rs.get_node(ctx, root_hash, id)
+        self.rs.get_node(ctx, root, id)
     }
 }

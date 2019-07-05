@@ -36,7 +36,7 @@ var (
 	// the runtime.
 	//
 	// NOTE: This version must be synced with runtime/src/common/version.rs.
-	RuntimeProtocol = Version{Major: 0, Minor: 2, Patch: 0}
+	RuntimeProtocol = Version{Major: 0, Minor: 3, Patch: 0}
 
 	// CommitteeProtocol versions the P2P protocol used by the
 	// committee members.
@@ -47,7 +47,7 @@ var (
 	//
 	// NOTE: Any change in the major or minor versions are considered
 	//       breaking changes for the protocol.
-	BackendProtocol = Version{Major: 0, Minor: 2, Patch: 0}
+	BackendProtocol = Version{Major: 0, Minor: 3, Patch: 0}
 
 	// Tendermint exposes the tendermint core version.
 	Tendermint = parseSemVerStr(version.TMCoreSemVer)

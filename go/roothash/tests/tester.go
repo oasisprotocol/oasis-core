@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -225,7 +226,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	require.NoError(err, "tree.Insert")
 	err = tree.Insert(ctx, block.IoKeyTags, []byte("testTagSet"))
 	require.NoError(err, "tree.Insert")
-	ioWriteLog, ioRoot, err := tree.Commit(ctx)
+	ioWriteLog, ioRoot, err := tree.Commit(ctx, child.Header.Namespace, child.Header.Round+1)
 	require.NoError(err, "tree.Commit")
 
 	var emptyRoot hash.Hash
@@ -245,11 +246,17 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 		},
 	}
 	require.True(parent.Header.IsParentOf(&child.Header), "parent is parent of child")
-	parent.Header.StorageSignatures = mustStore(t, storageBackend, []storage.ApplyOp{
-		storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: ioRoot, WriteLog: ioWriteLog},
-		// NOTE: Twice to get a receipt over both roots which we set to the same value.
-		storage.ApplyOp{Root: emptyRoot, ExpectedNewRoot: ioRoot, WriteLog: ioWriteLog},
-	})
+	parent.Header.StorageSignatures = mustStore(
+		t,
+		storageBackend,
+		child.Header.Namespace,
+		child.Header.Round+1,
+		[]storage.ApplyOp{
+			storage.ApplyOp{SrcRound: child.Header.Round + 1, SrcRoot: emptyRoot, DstRoot: ioRoot, WriteLog: ioWriteLog},
+			// NOTE: Twice to get a receipt over both roots which we set to the same value.
+			storage.ApplyOp{SrcRound: child.Header.Round, SrcRoot: emptyRoot, DstRoot: ioRoot, WriteLog: ioWriteLog},
+		},
+	)
 
 	// Generate all the compute commitments.
 	var toCommit []*registryTests.TestNode
@@ -406,10 +413,10 @@ func mustGetCommittee(
 	}
 }
 
-func mustStore(t *testing.T, store storage.Backend, ops []storage.ApplyOp) []signature.Signature {
+func mustStore(t *testing.T, store storage.Backend, ns common.Namespace, round uint64, ops []storage.ApplyOp) []signature.Signature {
 	require := require.New(t)
 
-	receipts, err := store.ApplyBatch(context.Background(), ops)
+	receipts, err := store.ApplyBatch(context.Background(), ns, round, ops)
 	require.NoError(err, "Apply")
 
 	signatures := []signature.Signature{}

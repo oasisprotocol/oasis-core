@@ -48,20 +48,21 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 	}
 	// Storage.
 	if body.HostStorageSyncGetSubtreeRequest != nil {
+		rq := body.HostStorageSyncGetSubtreeRequest
 		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetSubtree(root_hash, node_path, node_depth, max_depth)",
-			opentracing.Tag{Key: "root_hash", Value: body.HostStorageSyncGetSubtreeRequest.RootHash},
-			opentracing.Tag{Key: "node_path", Value: body.HostStorageSyncGetSubtreeRequest.NodePath},
-			opentracing.Tag{Key: "node_depth", Value: body.HostStorageSyncGetSubtreeRequest.NodeDepth},
-			opentracing.Tag{Key: "max_depth", Value: body.HostStorageSyncGetSubtreeRequest.MaxDepth},
+			opentracing.Tag{Key: "root_hash", Value: rq.Root.Hash},
+			opentracing.Tag{Key: "node_path", Value: rq.NodePath},
+			opentracing.Tag{Key: "node_depth", Value: rq.NodeDepth},
+			opentracing.Tag{Key: "max_depth", Value: rq.MaxDepth},
 		)
 		defer span.Finish()
 
 		nodeID := storage.NodeID{
-			Path:  body.HostStorageSyncGetSubtreeRequest.NodePath,
-			Depth: body.HostStorageSyncGetSubtreeRequest.NodeDepth,
+			Path:  rq.NodePath,
+			Depth: rq.NodeDepth,
 		}
 
-		subtree, err := h.storage.GetSubtree(sctx, body.HostStorageSyncGetSubtreeRequest.RootHash, nodeID, body.HostStorageSyncGetSubtreeRequest.MaxDepth)
+		subtree, err := h.storage.GetSubtree(sctx, rq.Root, nodeID, rq.MaxDepth)
 		if err != nil {
 			return nil, err
 		}
@@ -74,14 +75,15 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		return &protocol.Body{HostStorageSyncSerializedResponse: &protocol.HostStorageSyncSerializedResponse{Serialized: serialized}}, nil
 	}
 	if body.HostStorageSyncGetPathRequest != nil {
+		rq := body.HostStorageSyncGetPathRequest
 		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetPath(root_hash, key, start_depth)",
-			opentracing.Tag{Key: "root_hash", Value: body.HostStorageSyncGetPathRequest.RootHash},
-			opentracing.Tag{Key: "key", Value: body.HostStorageSyncGetPathRequest.Key},
-			opentracing.Tag{Key: "start_depth", Value: body.HostStorageSyncGetPathRequest.StartDepth},
+			opentracing.Tag{Key: "root_hash", Value: rq.Root.Hash},
+			opentracing.Tag{Key: "key", Value: rq.Key},
+			opentracing.Tag{Key: "start_depth", Value: rq.StartDepth},
 		)
 		defer span.Finish()
 
-		subtree, err := h.storage.GetPath(sctx, body.HostStorageSyncGetPathRequest.RootHash, body.HostStorageSyncGetPathRequest.Key, body.HostStorageSyncGetPathRequest.StartDepth)
+		subtree, err := h.storage.GetPath(sctx, rq.Root, rq.Key, rq.StartDepth)
 		if err != nil {
 			return nil, err
 		}
@@ -94,19 +96,20 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		return &protocol.Body{HostStorageSyncSerializedResponse: &protocol.HostStorageSyncSerializedResponse{Serialized: serialized}}, nil
 	}
 	if body.HostStorageSyncGetNodeRequest != nil {
+		rq := body.HostStorageSyncGetNodeRequest
 		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetNode(root_hash, node_path, node_depth)",
-			opentracing.Tag{Key: "root_hash", Value: body.HostStorageSyncGetNodeRequest.RootHash},
-			opentracing.Tag{Key: "node_path", Value: body.HostStorageSyncGetNodeRequest.NodePath},
-			opentracing.Tag{Key: "node_depth", Value: body.HostStorageSyncGetNodeRequest.NodeDepth},
+			opentracing.Tag{Key: "root_hash", Value: rq.Root.Hash},
+			opentracing.Tag{Key: "node_path", Value: rq.NodePath},
+			opentracing.Tag{Key: "node_depth", Value: rq.NodeDepth},
 		)
 		defer span.Finish()
 
 		nodeID := storage.NodeID{
-			Path:  body.HostStorageSyncGetNodeRequest.NodePath,
-			Depth: body.HostStorageSyncGetNodeRequest.NodeDepth,
+			Path:  rq.NodePath,
+			Depth: rq.NodeDepth,
 		}
 
-		node, err := h.storage.GetNode(sctx, body.HostStorageSyncGetNodeRequest.RootHash, nodeID)
+		node, err := h.storage.GetNode(sctx, rq.Root, nodeID)
 		if err != nil {
 			return nil, err
 		}

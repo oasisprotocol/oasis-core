@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
@@ -229,7 +230,13 @@ type grpcResponse struct {
 	node *node.Node
 }
 
-func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(context.Context, storage.StorageClient, *node.Node, chan<- *grpcResponse), expectedNewRoots []hash.Hash) ([]*api.Receipt, error) {
+func (b *storageClientBackend) writeWithClient(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	fn func(context.Context, storage.StorageClient, *node.Node, chan<- *grpcResponse),
+	expectedNewRoots []hash.Hash,
+) ([]*api.Receipt, error) {
 	b.connectedNodesState.RLock()
 	defer b.connectedNodesState.RUnlock()
 
@@ -307,12 +314,19 @@ func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(cont
 		}
 		// Check that obtained root(s) equal the expected new root(s).
 		equal := true
+		if !receiptBody.Namespace.Equal(&ns) {
+			equal = false
+		}
+		if receiptBody.Round != round {
+			equal = false
+		}
 		if len(receiptBody.Roots) != len(expectedNewRoots) {
 			equal = false
 		}
 		for i := range receiptBody.Roots {
 			if receiptBody.Roots[i] != expectedNewRoots[i] {
 				equal = false
+				break
 			}
 		}
 		if !equal {
@@ -338,36 +352,61 @@ func (b *storageClientBackend) writeWithClient(ctx context.Context, fn func(cont
 	return receipts, nil
 }
 
-func (b *storageClientBackend) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
+func (b *storageClientBackend) Apply(
+	ctx context.Context,
+	ns common.Namespace,
+	srcRound uint64,
+	srcRoot hash.Hash,
+	dstRound uint64,
+	dstRoot hash.Hash,
+	writeLog api.WriteLog,
+) ([]*api.Receipt, error) {
 	var req storage.ApplyRequest
-	req.Root, _ = root.MarshalBinary()
-	req.ExpectedNewRoot, _ = expectedNewRoot.MarshalBinary()
-	req.Log = make([]*storage.LogEntry, 0, len(log))
-	for _, e := range log {
+	req.Namespace, _ = ns.MarshalBinary()
+	req.SrcRound = srcRound
+	req.SrcRoot, _ = srcRoot.MarshalBinary()
+	req.DstRound = dstRound
+	req.DstRoot, _ = dstRoot.MarshalBinary()
+	req.Log = make([]*storage.LogEntry, 0, len(writeLog))
+	for _, e := range writeLog {
 		req.Log = append(req.Log, &storage.LogEntry{
 			Key:   e.Key,
 			Value: e.Value,
 		})
 	}
 
-	return b.writeWithClient(ctx, func(ctx context.Context, c storage.StorageClient, node *node.Node, ch chan<- *grpcResponse) {
-		resp, err := c.Apply(ctx, &req)
-		ch <- &grpcResponse{
-			resp: resp,
-			err:  err,
-			node: node,
-		}
-	}, []hash.Hash{expectedNewRoot})
+	return b.writeWithClient(
+		ctx,
+		ns,
+		dstRound,
+		func(ctx context.Context, c storage.StorageClient, node *node.Node, ch chan<- *grpcResponse) {
+			resp, err := c.Apply(ctx, &req)
+			ch <- &grpcResponse{
+				resp: resp,
+				err:  err,
+				node: node,
+			}
+		},
+		[]hash.Hash{dstRoot},
+	)
 }
 
-func (b *storageClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.Receipt, error) {
+func (b *storageClientBackend) ApplyBatch(
+	ctx context.Context,
+	ns common.Namespace,
+	dstRound uint64,
+	ops []api.ApplyOp,
+) ([]*api.Receipt, error) {
 	var req storage.ApplyBatchRequest
+	req.Namespace, _ = ns.MarshalBinary()
+	req.DstRound = dstRound
 	req.Ops = make([]*storage.ApplyOp, 0, len(ops))
 	expectedNewRoots := make([]hash.Hash, 0, len(ops))
 	for _, op := range ops {
 		var pOp storage.ApplyOp
-		pOp.Root, _ = op.Root.MarshalBinary()
-		pOp.ExpectedNewRoot, _ = op.ExpectedNewRoot.MarshalBinary()
+		pOp.SrcRound = op.SrcRound
+		pOp.SrcRoot, _ = op.SrcRoot.MarshalBinary()
+		pOp.DstRoot, _ = op.DstRoot.MarshalBinary()
 		pOp.Log = make([]*storage.LogEntry, 0, len(op.WriteLog))
 		for _, e := range op.WriteLog {
 			pOp.Log = append(pOp.Log, &storage.LogEntry{
@@ -376,17 +415,23 @@ func (b *storageClientBackend) ApplyBatch(ctx context.Context, ops []api.ApplyOp
 			})
 		}
 		req.Ops = append(req.Ops, &pOp)
-		expectedNewRoots = append(expectedNewRoots, op.ExpectedNewRoot)
+		expectedNewRoots = append(expectedNewRoots, op.DstRoot)
 	}
 
-	return b.writeWithClient(ctx, func(ctx context.Context, c storage.StorageClient, node *node.Node, ch chan<- *grpcResponse) {
-		resp, err := c.ApplyBatch(ctx, &req)
-		ch <- &grpcResponse{
-			resp: resp,
-			err:  err,
-			node: node,
-		}
-	}, expectedNewRoots)
+	return b.writeWithClient(
+		ctx,
+		ns,
+		dstRound,
+		func(ctx context.Context, c storage.StorageClient, node *node.Node, ch chan<- *grpcResponse) {
+			resp, err := c.ApplyBatch(ctx, &req)
+			ch <- &grpcResponse{
+				resp: resp,
+				err:  err,
+				node: node,
+			}
+		},
+		expectedNewRoots,
+	)
 }
 
 func (b *storageClientBackend) readWithClient(ctx context.Context, fn func(context.Context, storage.StorageClient) (interface{}, error)) (interface{}, error) {
@@ -423,9 +468,9 @@ func (b *storageClientBackend) readWithClient(ctx context.Context, fn func(conte
 	return nil, err
 }
 
-func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (b *storageClientBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
 	var req storage.GetSubtreeRequest
-	req.Root, _ = root.MarshalBinary()
+	req.Root = root.MarshalCBOR()
 	req.MaxDepth = uint32(maxDepth)
 	req.Id = &storage.NodeID{Depth: uint32(id.Depth)}
 	req.Id.Path, _ = id.Path.MarshalBinary()
@@ -446,9 +491,9 @@ func (b *storageClientBackend) GetSubtree(ctx context.Context, root hash.Hash, i
 	return &subtree, nil
 }
 
-func (b *storageClientBackend) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (b *storageClientBackend) GetPath(ctx context.Context, root api.Root, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
 	var req storage.GetPathRequest
-	req.Root, _ = root.MarshalBinary()
+	req.Root = root.MarshalCBOR()
 	req.Key, _ = key.MarshalBinary()
 	req.StartDepth = uint32(startDepth)
 
@@ -468,9 +513,9 @@ func (b *storageClientBackend) GetPath(ctx context.Context, root hash.Hash, key 
 	return &subtree, nil
 }
 
-func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
+func (b *storageClientBackend) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {
 	var req storage.GetNodeRequest
-	req.Root, _ = root.MarshalBinary()
+	req.Root = root.MarshalCBOR()
 	req.Id = &storage.NodeID{Depth: uint32(id.Depth)}
 	req.Id.Path, _ = id.Path.MarshalBinary()
 
@@ -490,10 +535,10 @@ func (b *storageClientBackend) GetNode(ctx context.Context, root hash.Hash, id a
 	return n, nil
 }
 
-func (b *storageClientBackend) GetDiff(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+func (b *storageClientBackend) GetDiff(ctx context.Context, startRoot api.Root, endRoot api.Root) (api.WriteLogIterator, error) {
 	var req storage.GetDiffRequest
-	req.StartHash, _ = startHash.MarshalBinary()
-	req.EndHash, _ = endHash.MarshalBinary()
+	req.StartRoot = startRoot.MarshalCBOR()
+	req.EndRoot = endRoot.MarshalCBOR()
 
 	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
 		return c.GetDiff(ctx, &req)

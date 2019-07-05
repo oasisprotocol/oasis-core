@@ -10,10 +10,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
+
+var testNs common.Namespace
 
 var testValues = [][]byte{
 	[]byte("Thou seest Me as Time who kills, Time who brings all to doom,"),
@@ -47,7 +50,7 @@ func CalculateExpectedNewRoot(t *testing.T, wl api.WriteLog) hash.Hash {
 		err := tree.Insert(context.Background(), logEntry.Key, logEntry.Value)
 		require.NoError(t, err, "error inserting writeLog entry into Urkel tree")
 	}
-	_, expectedNewRoot, err := tree.Commit(context.Background())
+	_, expectedNewRoot, err := tree.Commit(context.Background(), testNs, 0)
 	require.NoError(t, err, "error calculating mkvs' expectedNewRoot")
 	return expectedNewRoot
 }
@@ -58,8 +61,8 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	<-backend.Initialized()
 
 	// Test MKVS storage.
-	var root hash.Hash
-	root.Empty()
+	var rootHash hash.Hash
+	rootHash.Empty()
 	wl := prepareWriteLog(testValues)
 	expectedNewRoot := CalculateExpectedNewRoot(t, wl)
 	var receipts []*api.Receipt
@@ -67,7 +70,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	var err error
 
 	// Apply write log to an empty root.
-	receipts, err = backend.Apply(context.Background(), root, expectedNewRoot, wl)
+	receipts, err = backend.Apply(context.Background(), testNs, 0, rootHash, 1, expectedNewRoot, wl)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -77,6 +80,8 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 		err = receipt.Open(&receiptBody)
 		require.NoError(t, err, "receipt.Open() should not return an error")
 		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
+		require.Equal(t, testNs, receiptBody.Namespace, "receiptBody should contain correct namespace")
+		require.EqualValues(t, 1, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
 	}
@@ -85,12 +90,12 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	wl2 := prepareWriteLog(testValues[0:2])
 	expectedNewRoot2 := CalculateExpectedNewRoot(t, wl2)
 	applyOps := []api.ApplyOp{
-		api.ApplyOp{Root: root, ExpectedNewRoot: expectedNewRoot, WriteLog: wl},
-		api.ApplyOp{Root: root, ExpectedNewRoot: expectedNewRoot2, WriteLog: wl2},
+		api.ApplyOp{SrcRound: 0, SrcRoot: rootHash, DstRoot: expectedNewRoot, WriteLog: wl},
+		api.ApplyOp{SrcRound: 0, SrcRoot: rootHash, DstRoot: expectedNewRoot2, WriteLog: wl2},
 	}
 
 	// Apply a batch of operations against the MKVS.
-	receipts, err = backend.ApplyBatch(context.Background(), applyOps)
+	receipts, err = backend.ApplyBatch(context.Background(), testNs, 1, applyOps)
 	require.NoError(t, err, "ApplyBatch() should not return an error")
 	require.NotNil(t, receipts, "ApplyBatch() should return receipts")
 
@@ -100,32 +105,45 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 		err = receipt.Open(&receiptBody)
 		require.NoError(t, err, "receipt.Open() should not return an error")
 		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
+		require.Equal(t, testNs, receiptBody.Namespace, "receiptBody should contain correct namespace")
+		require.EqualValues(t, 1, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, len(applyOps), len(receiptBody.Roots), "receiptBody should contain as many roots as there were applyOps")
 		for i, applyOp := range applyOps {
-			require.EqualValues(t, applyOp.ExpectedNewRoot, receiptBody.Roots[i], "receiptBody root for an applyOp should equal the expected new root")
+			require.EqualValues(t, applyOp.DstRoot, receiptBody.Roots[i], "receiptBody root for an applyOp should equal the expected new root")
 		}
 	}
 
 	var emptyPath hash.Hash
 
+	newRoot := api.Root{
+		Namespace: testNs,
+		Round:     1,
+		Hash:      receiptBody.Roots[0],
+	}
+
 	// Get a subtree summary of the new root.
-	st, err := backend.GetSubtree(context.Background(), receiptBody.Roots[0], api.NodeID{Path: emptyPath, Depth: 0}, 10)
+	st, err := backend.GetSubtree(context.Background(), newRoot, api.NodeID{Path: emptyPath, Depth: 0}, 10)
 	require.NoError(t, err, "GetSubtree()")
 	require.NotNil(t, st, "subtree returned by GetSubtree()")
 
 	// Get a path summary of the new root.
-	st, err = backend.GetPath(context.Background(), receiptBody.Roots[0], emptyPath, 0)
+	st, err = backend.GetPath(context.Background(), newRoot, emptyPath, 0)
 	require.NoError(t, err, "GetPath()")
 	require.NotNil(t, st, "subtree returned by GetPath()")
 
 	// Get the root node.
-	n, err := backend.GetNode(context.Background(), receiptBody.Roots[0], api.NodeID{Path: emptyPath, Depth: 0})
+	n, err := backend.GetNode(context.Background(), newRoot, api.NodeID{Path: emptyPath, Depth: 0})
 	require.NoError(t, err, "GetNode()")
 	require.NotNil(t, n)
 
 	// Get the write log, it should be the same as what we stuffed in.
+	root := api.Root{
+		Namespace: testNs,
+		Round:     0,
+		Hash:      rootHash,
+	}
 	var getDiffWl api.WriteLog
-	it, err := backend.GetDiff(context.Background(), root, expectedNewRoot)
+	it, err := backend.GetDiff(context.Background(), root, newRoot)
 	require.NoError(t, err, "GetDiff()")
 	for {
 		var more bool
@@ -146,7 +164,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	require.Equal(t, getDiffWl, originalWl)
 
 	// Now try applying the same operations again, we should get the same root.
-	receipts, err = backend.Apply(context.Background(), root, receiptBody.Roots[0], wl)
+	receipts, err = backend.Apply(context.Background(), testNs, 0, rootHash, 1, receiptBody.Roots[0], wl)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -156,7 +174,15 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 		err = receipt.Open(&receiptBody)
 		require.NoError(t, err, "receipt.Open() should not return an error")
 		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
+		require.Equal(t, testNs, receiptBody.Namespace, "receiptBody should contain correct namespace")
+		require.EqualValues(t, 1, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
 	}
+}
+
+func init() {
+	var ns hash.Hash
+	ns.FromBytes([]byte("ekiden storage test ns"))
+	copy(testNs[:], ns[:])
 }

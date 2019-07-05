@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
@@ -20,13 +19,16 @@ var (
 // NodeDB is the persistence layer used for persisting the in-memory tree.
 type NodeDB interface {
 	// GetNode lookups up a node in the database.
-	GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error)
+	GetNode(root node.Root, ptr *node.Pointer) (node.Node, error)
 
 	// GetWriteLog retrieves a write log between two storage instances from the database.
-	GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (WriteLogIterator, error)
+	GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (WriteLogIterator, error)
 
 	// NewBatch starts a new batch.
 	NewBatch() Batch
+
+	// HasRoot checks whether the given root exists.
+	HasRoot(root node.Root) bool
 
 	// Close closes the database.
 	Close()
@@ -59,10 +61,15 @@ type Batch interface {
 	OnCommit(hook func())
 
 	// PutWriteLog stores the specified write log into the batch.
-	PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error
+	PutWriteLog(
+		startRoot node.Root,
+		endRoot node.Root,
+		writeLog writelog.WriteLog,
+		logAnnotations writelog.WriteLogAnnotations,
+	) error
 
 	// Commit commits the batch.
-	Commit(root hash.Hash) error
+	Commit(root node.Root) error
 
 	// Reset resets the batch for another use.
 	Reset()
@@ -78,7 +85,7 @@ func (b *BaseBatch) OnCommit(hook func()) {
 	b.onCommitHooks = append(b.onCommitHooks, hook)
 }
 
-func (b *BaseBatch) Commit(root hash.Hash) error {
+func (b *BaseBatch) Commit(root node.Root) error {
 	for _, hook := range b.onCommitHooks {
 		hook()
 	}
@@ -95,12 +102,16 @@ func NewNopNodeDB() (NodeDB, error) {
 }
 
 // GetNode returns an ErrNodeNotFound error.
-func (d *nopNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error) {
+func (d *nopNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
 	return nil, ErrNodeNotFound
 }
 
-func (d *nopNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (WriteLogIterator, error) {
+func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (WriteLogIterator, error) {
 	return nil, ErrWriteLogNotFound
+}
+
+func (d *nopNodeDB) HasRoot(root node.Root) bool {
+	return false
 }
 
 // Close is a no-op.
@@ -120,7 +131,12 @@ func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *
 	return &nopSubtree{}
 }
 
-func (b *nopBatch) PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error {
+func (b *nopBatch) PutWriteLog(
+	startRoot node.Root,
+	endRoot node.Root,
+	writeLog writelog.WriteLog,
+	logAnnotations writelog.WriteLogAnnotations,
+) error {
 	return nil
 }
 

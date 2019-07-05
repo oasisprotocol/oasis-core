@@ -8,6 +8,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
@@ -17,6 +18,10 @@ import (
 
 // ErrClosed is the error returned when methods are used after Close is called.
 var ErrClosed = errors.New("urkel: tree is closed")
+
+// ErrKnownRootMismatch is the error returned by CommitKnown when the known
+// root mismatches.
+var ErrKnownRootMismatch = errors.New("urkel: known root mismatch")
 
 type Stats struct {
 	MaxDepth          uint8
@@ -37,7 +42,7 @@ type Stats struct {
 
 // Tree is an Urkel tree.
 type Tree struct {
-	cache cache
+	cache *cache
 
 	// NOTE: This can be a map as updates are commutative.
 	pendingWriteLog map[hash.Hash]*pendingEntry
@@ -129,11 +134,11 @@ func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) *Tree {
 
 // NewWithRoot creates a new Urkel tree with an existing root, backed by
 // the given node database.
-func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root hash.Hash, options ...Option) (*Tree, error) {
+func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root node.Root, options ...Option) (*Tree, error) {
 	t := New(rs, ndb, options...)
 	t.cache.setPendingRoot(&node.Pointer{
 		Clean: true,
-		Hash:  root,
+		Hash:  root.Hash,
 	})
 	t.cache.setSyncRoot(root)
 
@@ -143,7 +148,7 @@ func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root 
 	// Try to prefetch the subtree at the root.
 	// NOTE: Path can be anything here as the depth is 0 so it is actually ignored.
 	var path hash.Hash
-	ptr, err := t.cache.prefetch(ctx, root, path, 0)
+	ptr, err := t.cache.prefetch(ctx, root.Hash, path, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -152,15 +157,6 @@ func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root 
 	}
 
 	return t, nil
-}
-
-// HasRoot checks the given NodeDB to see if the given root exists.
-func HasRoot(ndb db.NodeDB, root hash.Hash) bool {
-	_, err := ndb.GetNode(root, &node.Pointer{
-		Clean: true,
-		Hash:  root,
-	})
-	return err != db.ErrNodeNotFound
 }
 
 // Insert inserts a key/value pair into the tree.
@@ -272,9 +268,35 @@ func (t *Tree) Stats(ctx context.Context, maxDepth uint8) Stats {
 	return *stats
 }
 
+// CommitKnown checks that the computed root matches a known root and
+// if so, commits tree updates to the underlying database and returns
+// the write log.
+//
+// In case the computed root doesn't match the known root, the update
+// is NOT committed and ErrKnownRootMismatch is returned.
+func (t *Tree) CommitKnown(ctx context.Context, root node.Root) (writelog.WriteLog, error) {
+	writeLog, _, err := t.commitWithHooks(ctx, root.Namespace, root.Round, func(rootHash hash.Hash) error {
+		if !rootHash.Equal(&root.Hash) {
+			return ErrKnownRootMismatch
+		}
+
+		return nil
+	})
+	return writeLog, err
+}
+
 // Commit commits tree updates to the underlying database and returns
 // the write log and new merkle root.
-func (t *Tree) Commit(ctx context.Context) (writelog.WriteLog, hash.Hash, error) {
+func (t *Tree) Commit(ctx context.Context, namespace common.Namespace, round uint64) (writelog.WriteLog, hash.Hash, error) {
+	return t.commitWithHooks(ctx, namespace, round, nil)
+}
+
+func (t *Tree) commitWithHooks(
+	ctx context.Context,
+	namespace common.Namespace,
+	round uint64,
+	beforeDbCommit func(hash.Hash) error,
+) (writelog.WriteLog, hash.Hash, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -287,7 +309,7 @@ func (t *Tree) Commit(ctx context.Context) (writelog.WriteLog, hash.Hash, error)
 
 	subtree := batch.MaybeStartSubtree(nil, 0, t.cache.pendingRoot)
 
-	root, err := doCommit(ctx, &t.cache, batch, subtree, 0, t.cache.pendingRoot)
+	rootHash, err := doCommit(ctx, t.cache, batch, subtree, 0, t.cache.pendingRoot)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
@@ -312,8 +334,24 @@ func (t *Tree) Commit(ctx context.Context) (writelog.WriteLog, hash.Hash, error)
 		}
 	}
 
-	if err := batch.PutWriteLog(t.cache.getSyncRoot(), root, log, logAnns); err != nil {
+	oldRoot := t.cache.getSyncRoot()
+	if oldRoot.IsEmpty() {
+		oldRoot.Namespace = namespace
+		oldRoot.Round = round
+	}
+	root := node.Root{
+		Namespace: namespace,
+		Round:     round,
+		Hash:      rootHash,
+	}
+	if err := batch.PutWriteLog(oldRoot, root, log, logAnns); err != nil {
 		return nil, hash.Hash{}, err
+	}
+
+	if beforeDbCommit != nil {
+		if err := beforeDbCommit(rootHash); err != nil {
+			return nil, hash.Hash{}, err
+		}
 	}
 
 	if err := batch.Commit(root); err != nil {
@@ -323,7 +361,7 @@ func (t *Tree) Commit(ctx context.Context) (writelog.WriteLog, hash.Hash, error)
 	t.pendingWriteLog = make(map[hash.Hash]*pendingEntry)
 	t.cache.setSyncRoot(root)
 
-	return log, root, nil
+	return log, rootHash, nil
 }
 
 // Close releases resources associated with this tree. After calling this

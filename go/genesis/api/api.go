@@ -10,7 +10,6 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	staking "github.com/oasislabs/ekiden/go/staking/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
 var (
@@ -26,8 +25,6 @@ type Document struct {
 	Registry registry.Genesis `codec:"registry"`
 	// RootHash is the roothash genesis state.
 	RootHash roothash.Genesis `codec:"roothash"`
-	// Storage is the storage genesis state.
-	Storage storage.Genesis `codec:"storage"`
 	// Staking is the staking genesis state.
 	Staking staking.Genesis `codec:"staking"`
 	// KeyManager is the key manager genesis state.

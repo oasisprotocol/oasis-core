@@ -1,9 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
 use failure::Fallible;
+use serde_derive::{Deserialize, Serialize};
 
 use crate::{
-    common::crypto::hash::Hash,
+    common::{crypto::hash::Hash, roothash::Namespace},
     storage::mkvs::urkel::{cache::*, tree::*},
 };
 
@@ -19,6 +20,18 @@ pub trait Node {
     fn validate(&mut self, h: Hash) -> Fallible<()>;
     /// Duplicate the node but include only hash references.
     fn extract(&self) -> NodeRef;
+}
+
+/// Storage root.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Root {
+    /// Chain namespace.
+    #[serde(rename = "ns")]
+    pub namespace: Namespace,
+    /// Round number.
+    pub round: u64,
+    /// Root hash.
+    pub hash: Hash,
 }
 
 /// `NodeID` is a root-relative identifier which uniquely identifies a node

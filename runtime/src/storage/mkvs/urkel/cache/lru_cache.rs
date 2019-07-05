@@ -122,7 +122,7 @@ pub struct LRUCache {
     read_syncer: Box<dyn ReadSync>,
 
     pending_root: NodePtrRef,
-    sync_root: Hash,
+    sync_root: Root,
 
     internal_node_count: u64,
     leaf_node_count: u64,
@@ -153,7 +153,7 @@ impl LRUCache {
                 node: None,
                 ..Default::default()
             })),
-            sync_root: Hash::default(),
+            sync_root: Root::default(),
 
             internal_node_count: 0,
             leaf_node_count: 0,
@@ -277,8 +277,12 @@ impl Cache for LRUCache {
         self.pending_root = new_root.clone();
     }
 
-    fn set_sync_root(&mut self, new_hash: Hash) {
-        self.sync_root = new_hash;
+    fn get_sync_root(&self) -> Root {
+        self.sync_root.clone()
+    }
+
+    fn set_sync_root(&mut self, root: Root) {
+        self.sync_root = root;
     }
 
     fn set_prefetch_depth(&mut self, depth: u8) {

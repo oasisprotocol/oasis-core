@@ -13,14 +13,18 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/memory"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/tests"
 )
+
+var testNs common.Namespace
 
 const cacheSize = 10
 
@@ -30,7 +34,7 @@ func TestCachingClient(t *testing.T) {
 	var sk signature.PrivateKey
 	sk, err = signature.NewPrivateKey(rand.Reader)
 	require.NoError(t, err, "failed to generate dummy receipt signing key")
-	remote := memory.New(&sk)
+	remote := memory.New(&sk, false)
 	client, cacheDir := requireNewClient(t, remote)
 	defer func() {
 		os.RemoveAll(cacheDir)
@@ -41,7 +45,7 @@ func TestCachingClient(t *testing.T) {
 
 	var root hash.Hash
 	root.Empty()
-	receipts, err := client.Apply(context.Background(), root, expectedNewRoot, wl)
+	receipts, err := client.Apply(context.Background(), testNs, 0, root, 1, expectedNewRoot, wl)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -51,12 +55,19 @@ func TestCachingClient(t *testing.T) {
 	for _, receipt := range receipts {
 		err = receipt.Open(&receiptBody)
 		require.NoError(t, err, "receipt.Open() should not return an error")
+		require.Equal(t, testNs, receiptBody.Namespace, "receiptBody should contain correct namespace")
+		require.EqualValues(t, 1, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
 	}
 
 	// Check if the values match.
-	tree, err := urkel.NewWithRoot(context.Background(), client, nil, expectedNewRoot)
+	r := node.Root{
+		Namespace: testNs,
+		Round:     0,
+		Hash:      expectedNewRoot,
+	}
+	tree, err := urkel.NewWithRoot(context.Background(), client, nil, r)
 	require.NoError(t, err, "NewWithRoot")
 	for i, kv := range wl {
 		var v []byte
@@ -67,12 +78,12 @@ func TestCachingClient(t *testing.T) {
 
 	// Test the persistence.
 	client.Cleanup()
-	remote = memory.New(&sk)
-	_, err = New(remote)
+	remote = memory.New(&sk, false)
+	_, err = New(remote, false)
 	require.NoError(t, err, "New - reopen")
 
 	// Check if the values are still fetchable.
-	tree, err = urkel.NewWithRoot(context.Background(), client, nil, expectedNewRoot)
+	tree, err = urkel.NewWithRoot(context.Background(), client, nil, r)
 	require.NoError(t, err, "NewWithRoot")
 	for i, kv := range wl {
 		var v []byte
@@ -90,7 +101,7 @@ func requireNewClient(t *testing.T, remote api.Backend) (api.Backend, string) {
 	viper.Set(cfgCacheFile, filepath.Join(cacheDir, "db"))
 	viper.Set(cfgCacheSize, 1024768)
 
-	client, err := New(remote)
+	client, err := New(remote, false)
 	if err != nil {
 		os.RemoveAll(cacheDir)
 	}
@@ -118,4 +129,10 @@ func makeTestWriteLog(seed []byte, n int) api.WriteLog {
 	}
 
 	return wl
+}
+
+func init() {
+	var ns hash.Hash
+	ns.FromBytes([]byte("ekiden storage cachingclient test ns"))
+	copy(testNs[:], ns[:])
 }

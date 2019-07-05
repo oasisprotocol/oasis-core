@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 )
 
@@ -22,7 +23,7 @@ func TestConsistentHash(t *testing.T) {
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 
-	var ns Namespace
+	var ns common.Namespace
 	_ = ns.UnmarshalBinary(emptyRoot[:])
 
 	populated := Header{

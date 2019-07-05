@@ -17,11 +17,11 @@ var _ syncer.ReadSyncer = (*Tree)(nil)
 //
 // It is the responsibility of the caller to validate that the subtree
 // is correct and consistent.
-func (t *Tree) GetSubtree(ctx context.Context, root hash.Hash, id node.ID, maxDepth uint8) (*syncer.Subtree, error) {
+func (t *Tree) GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDepth uint8) (*syncer.Subtree, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
-	if !root.Equal(&t.cache.pendingRoot.Hash) {
+	if !root.Equal(&t.cache.syncRoot) {
 		return nil, syncer.ErrInvalidRoot
 	}
 	if !t.cache.pendingRoot.IsClean() {
@@ -123,11 +123,11 @@ func (t *Tree) doGetSubtree(
 //
 // It is the responsibility of the caller to validate that the subtree
 // is correct and consistent.
-func (t *Tree) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*syncer.Subtree, error) {
+func (t *Tree) GetPath(ctx context.Context, root node.Root, key hash.Hash, startDepth uint8) (*syncer.Subtree, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
-	if !root.Equal(&t.cache.pendingRoot.Hash) {
+	if !root.Equal(&t.cache.syncRoot) {
 		return nil, syncer.ErrInvalidRoot
 	}
 	if !t.cache.pendingRoot.IsClean() {
@@ -238,11 +238,11 @@ func (t *Tree) doGetPath(
 // It is the responsibility of the caller to validate that the node
 // is consistent. The node's cached hash should be considered invalid
 // and must be recomputed locally.
-func (t *Tree) GetNode(ctx context.Context, root hash.Hash, id node.ID) (node.Node, error) {
+func (t *Tree) GetNode(ctx context.Context, root node.Root, id node.ID) (node.Node, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
-	if !root.Equal(&t.cache.pendingRoot.Hash) {
+	if !root.Equal(&t.cache.syncRoot) {
 		return nil, syncer.ErrInvalidRoot
 	}
 	if !t.cache.pendingRoot.IsClean() {

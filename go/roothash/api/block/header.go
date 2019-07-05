@@ -2,28 +2,18 @@ package block
 
 import (
 	"bytes"
-	"encoding"
-	"encoding/hex"
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
-const (
-	// NamespaceSize is the size of a chain namespace identifier in bytes.
-	NamespaceSize = 32
-)
-
 var (
 	// ErrInvalidVersion is the error returned when a version is invalid.
 	ErrInvalidVersion = errors.New("roothash: invalid version")
-
-	// ErrMalformedNamespace is the error returned when a namespace
-	// identifier is malformed.
-	ErrMalformedNamespace = errors.New("roothash: malformed namespace")
 
 	// IoKeyInputs is the key holding inputs in the I/O tree.
 	IoKeyInputs = []byte("i")
@@ -32,36 +22,9 @@ var (
 	// IoKeyTags is the key holding tags in the I/O tree.
 	IoKeyTags = []byte("t")
 
-	_ encoding.BinaryMarshaler   = (*Namespace)(nil)
-	_ encoding.BinaryUnmarshaler = (*Namespace)(nil)
-	_ cbor.Marshaler             = (*Header)(nil)
-	_ cbor.Unmarshaler           = (*Header)(nil)
+	_ cbor.Marshaler   = (*Header)(nil)
+	_ cbor.Unmarshaler = (*Header)(nil)
 )
-
-// Namespace is a chain namespace identifier.
-type Namespace [NamespaceSize]byte
-
-// MarshalBinary encodes a namespace identifier into binary form.
-func (n *Namespace) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, n[:]...)
-	return
-}
-
-// UnmarshalBinary decodes a binary marshaled namespace identifier.
-func (n *Namespace) UnmarshalBinary(data []byte) error {
-	if len(data) != NamespaceSize {
-		return ErrMalformedNamespace
-	}
-
-	copy(n[:], data)
-
-	return nil
-}
-
-// String returns the string representation of a chain namespace identifier.
-func (n *Namespace) String() string {
-	return hex.EncodeToString(n[:])
-}
 
 // HeaderType is the type of header.
 type HeaderType uint8
@@ -89,7 +52,7 @@ type Header struct { // nolint: maligned
 	Version uint16 `codec:"version"`
 
 	// Namespace is the header's chain namespace.
-	Namespace Namespace `codec:"namespace"`
+	Namespace common.Namespace `codec:"namespace"`
 
 	// Round is the block round.
 	Round uint64 `codec:"round"`
@@ -170,8 +133,10 @@ func (h *Header) RootsForStorageReceipt() []hash.Hash {
 // https://github.com/oasislabs/ekiden/issues/1351.
 func (h *Header) VerifyStorageReceiptSignatures() error {
 	receiptBody := storage.ReceiptBody{
-		Version: 1,
-		Roots:   h.RootsForStorageReceipt(),
+		Version:   1,
+		Namespace: h.Namespace,
+		Round:     h.Round,
+		Roots:     h.RootsForStorageReceipt(),
 	}
 	receipt := storage.Receipt{}
 	receipt.Signed.Blob = receiptBody.MarshalCBOR()
@@ -188,6 +153,14 @@ func (h *Header) VerifyStorageReceiptSignatures() error {
 // VerifyStorageReceipt validates that the provided storage receipt
 // matches the header.
 func (h *Header) VerifyStorageReceipt(receipt *storage.ReceiptBody) error {
+	if !receipt.Namespace.Equal(&h.Namespace) {
+		return errors.New("roothash: receipt has unexpected namespace")
+	}
+
+	if receipt.Round != h.Round {
+		return errors.New("roothash: receipt has unexpected round")
+	}
+
 	roots := h.RootsForStorageReceipt()
 	if len(receipt.Roots) != len(roots) {
 		return errors.New("roothash: receipt has unexpected number of roots")

@@ -26,7 +26,7 @@ type cache struct {
 	pendingRoot *node.Pointer
 	// syncRoot is the root at which all node database and syncer cache
 	// lookups will be done.
-	syncRoot hash.Hash
+	syncRoot node.Root
 
 	// Current size of leaf values.
 	valueSize uint64
@@ -52,8 +52,8 @@ type cache struct {
 	lruValues *list.List
 }
 
-func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) cache {
-	return cache{
+func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) *cache {
+	c := &cache{
 		db:                          ndb,
 		rs:                          rs,
 		lruNodes:                    list.New(),
@@ -64,6 +64,10 @@ func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) cache {
 		valueCapacity:               16 * 1024 * 1024,
 		nodeCapacity:                5000,
 	}
+	// By default the sync root is an empty root.
+	c.syncRoot.Empty()
+
+	return c
 }
 
 func (c *cache) close() {
@@ -75,7 +79,7 @@ func (c *cache) close() {
 	c.lruValues = nil
 
 	// Reset sync root.
-	c.syncRoot.Empty()
+	c.syncRoot = node.Root{}
 
 	// Reset statistics.
 	c.valueSize = 0
@@ -87,11 +91,11 @@ func (c *cache) isClosed() bool {
 	return c.db == nil
 }
 
-func (c *cache) getSyncRoot() hash.Hash {
+func (c *cache) getSyncRoot() node.Root {
 	return c.syncRoot
 }
 
-func (c *cache) setSyncRoot(root hash.Hash) {
+func (c *cache) setSyncRoot(root node.Root) {
 	c.syncRoot = root
 }
 
@@ -438,7 +442,7 @@ func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath
 
 // reconstructSubtree reconstructs a tree summary received through a
 // remote syncer.
-func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *syncer.Subtree, depth, maxDepth uint8) (*node.Pointer, error) {
+func (c *cache) reconstructSubtree(ctx context.Context, rootHash hash.Hash, st *syncer.Subtree, depth, maxDepth uint8) (*node.Pointer, error) {
 	ptr, err := c.doReconstructSummary(st, st.Root, depth, maxDepth)
 	if err != nil {
 		return nil, err
@@ -459,16 +463,17 @@ func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *sync
 		d = c.db
 	}
 	batch := d.NewBatch()
+	defer batch.Reset()
 	subtree := batch.MaybeStartSubtree(nil, depth, ptr)
 
-	syncRoot, err := doCommit(ctx, c, batch, subtree, depth, ptr)
+	syncRootHash, err := doCommit(ctx, c, batch, subtree, depth, ptr)
 	if err != nil {
 		return nil, err
 	}
-	if !syncRoot.Equal(&root) {
+	if !syncRootHash.Equal(&rootHash) {
 		return nil, fmt.Errorf("urkel: syncer returned bad root (expected: %s got: %s)",
-			root,
-			syncRoot,
+			rootHash,
+			syncRootHash,
 		)
 	}
 	if err := subtree.Commit(); err != nil {
@@ -476,6 +481,11 @@ func (c *cache) reconstructSubtree(ctx context.Context, root hash.Hash, st *sync
 	}
 	// We must commit even though this is a no-op database in order to fire
 	// the on-commit hooks.
+	root := node.Root{
+		Namespace: c.syncRoot.Namespace,
+		Round:     c.syncRoot.Round,
+		Hash:      rootHash,
+	}
 	if err := batch.Commit(root); err != nil {
 		return nil, err
 	}

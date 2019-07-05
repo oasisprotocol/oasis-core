@@ -294,7 +294,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		childBlk, _, body := generateComputeBody(t, committee)
+		childBlk, parentBlk, body := generateComputeBody(t, committee)
 
 		commit1, err := SignComputeCommitment(sk1, &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -306,13 +306,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 
 		// Update state root and fix the storage receipt.
 		body.Header.StateRoot.FromBytes([]byte("discrepancy"))
-		receiptBody := storage.ReceiptBody{
-			Version: 1,
-			Roots:   body.RootsForStorageReceipt(),
-		}
-		signed, err := signature.SignSigned(sk1, storage.ReceiptSignatureContext, &receiptBody)
-		require.NoError(t, err, "SignSigned")
-		body.StorageSignatures = []signature.Signature{signed.Signature}
+		body.StorageSignatures = []signature.Signature{generateStorageReceiptSignature(t, parentBlk, &body)}
 
 		commit2, err := SignComputeCommitment(sk2, &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -697,7 +691,7 @@ func TestMultiPool(t *testing.T) {
 
 		// Generate commitments.
 		childBlk, _, body1 := generateComputeBody(t, committee1)
-		_, _, body2 := generateComputeBody(t, committee2)
+		_, parentBlk, body2 := generateComputeBody(t, committee2)
 
 		// First committee.
 		c1commit1, err := SignComputeCommitment(sks1[0], &body1)
@@ -712,13 +706,7 @@ func TestMultiPool(t *testing.T) {
 
 		// Update state root and fix the storage receipt.
 		body2.Header.StateRoot.FromBytes([]byte("discrepancy"))
-		receiptBody := storage.ReceiptBody{
-			Version: 1,
-			Roots:   body2.RootsForStorageReceipt(),
-		}
-		signed, err := signature.SignSigned(sks1[0], storage.ReceiptSignatureContext, &receiptBody)
-		require.NoError(t, err, "SignSigned")
-		body2.StorageSignatures = []signature.Signature{signed.Signature}
+		body2.StorageSignatures = []signature.Signature{generateStorageReceiptSignature(t, parentBlk, &body2)}
 
 		c2commit2, err := SignComputeCommitment(sks2[1], &body2)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -827,7 +815,7 @@ func TestTryFinalize(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		childBlk, _, body := generateComputeBody(t, committee)
+		childBlk, parentBlk, body := generateComputeBody(t, committee)
 
 		commit1, err := SignComputeCommitment(sk1, &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -839,13 +827,7 @@ func TestTryFinalize(t *testing.T) {
 
 		// Update state root and fix the storage receipt.
 		body.Header.StateRoot.FromBytes([]byte("discrepancy"))
-		receiptBody := storage.ReceiptBody{
-			Version: 1,
-			Roots:   body.RootsForStorageReceipt(),
-		}
-		signed, err := signature.SignSigned(sk1, storage.ReceiptSignatureContext, &receiptBody)
-		require.NoError(t, err, "SignSigned")
-		body.StorageSignatures = []signature.Signature{signed.Signature}
+		body.StorageSignatures = []signature.Signature{generateStorageReceiptSignature(t, parentBlk, &body)}
 
 		commit2, err := SignComputeCommitment(sk2, &body)
 		require.NoError(t, err, "SignComputeCommitment")
@@ -1022,20 +1004,22 @@ func generateComputeBody(t *testing.T, committee *scheduler.Committee) (*block.B
 	}
 
 	// Generate dummy storage receipt signature.
-	sig := generateStorageReceiptSignature(t, &body)
+	sig := generateStorageReceiptSignature(t, parentBlk, &body)
 	body.StorageSignatures = []signature.Signature{sig}
 	parentBlk.Header.StorageSignatures = []signature.Signature{sig}
 
 	return childBlk, parentBlk, body
 }
 
-func generateStorageReceiptSignature(t *testing.T, body *ComputeBody) signature.Signature {
+func generateStorageReceiptSignature(t *testing.T, blk *block.Block, body *ComputeBody) signature.Signature {
 	sk, err := signature.NewPrivateKey(rand.Reader)
 	require.NoError(t, err, "NewPrivateKey")
 
 	receiptBody := storage.ReceiptBody{
-		Version: 1,
-		Roots:   body.RootsForStorageReceipt(),
+		Version:   1,
+		Namespace: blk.Header.Namespace,
+		Round:     blk.Header.Round,
+		Roots:     body.RootsForStorageReceipt(),
 	}
 	signed, err := signature.SignSigned(sk, storage.ReceiptSignatureContext, &receiptBody)
 	require.NoError(t, err, "SignSigned")

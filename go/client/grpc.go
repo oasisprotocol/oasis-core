@@ -168,7 +168,7 @@ func (s *grpcServer) GetTransactions(ctx context.Context, req *pbClient.GetTrans
 		return nil, err
 	}
 
-	txns, err := s.client.GetTransactions(ctx, id, root)
+	txns, err := s.client.GetTransactions(ctx, id, req.GetRound(), root)
 	if err != nil {
 		return nil, err
 	}

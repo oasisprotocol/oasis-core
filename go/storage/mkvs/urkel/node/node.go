@@ -10,6 +10,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 )
 
@@ -33,7 +35,89 @@ var (
 	_ encoding.BinaryUnmarshaler = (*LeafNode)(nil)
 	_ encoding.BinaryMarshaler   = (*Value)(nil)
 	_ encoding.BinaryUnmarshaler = (*Value)(nil)
+	_ cbor.Marshaler             = (*Root)(nil)
+	_ cbor.Unmarshaler           = (*Root)(nil)
 )
+
+// Root is a storage root.
+type Root struct {
+	// Namespace is the chain namespace under which the root is stored.
+	Namespace common.Namespace `codec:"ns"`
+	// Round is the chain round in which the root is stored.
+	Round uint64 `codec:"round"`
+	// Hash is the merkle root hash.
+	Hash hash.Hash `codec:"hash"`
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (r *Root) MarshalCBOR() []byte {
+	return cbor.Marshal(r)
+}
+
+// UnmarshalCBOR decodes a CBOR marshaled root.
+func (r *Root) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, r)
+}
+
+// Empty sets the storage root to an empty root.
+func (r *Root) Empty() {
+	var emptyNs common.Namespace
+	r.Namespace = emptyNs
+	r.Round = 0
+	r.Hash.Empty()
+}
+
+// IsEmpty checks whether the storage root is empty.
+func (r *Root) IsEmpty() bool {
+	var emptyNs common.Namespace
+	if !r.Namespace.Equal(&emptyNs) {
+		return false
+	}
+
+	if r.Round != 0 {
+		return false
+	}
+
+	return r.Hash.IsEmpty()
+}
+
+// Equal compares against another root for equality.
+func (r *Root) Equal(other *Root) bool {
+	if !r.Namespace.Equal(&other.Namespace) {
+		return false
+	}
+
+	if r.Round != other.Round {
+		return false
+	}
+
+	return r.Hash.Equal(&other.Hash)
+}
+
+// Follows checks if another root follows the given root. A root follows
+// another iff the namespace matches and the round is either equal or
+// exactly one higher.
+//
+// It is the responsibility of the caller to check if the merkle roots
+// follow each other.
+func (r *Root) Follows(other *Root) bool {
+	if !r.Namespace.Equal(&other.Namespace) {
+		return false
+	}
+
+	if r.Round != other.Round && r.Round != other.Round+1 {
+		return false
+	}
+
+	return true
+}
+
+// EncodedHash returns the encoded cryptographic hash of the storage root.
+func (r *Root) EncodedHash() hash.Hash {
+	var hh hash.Hash
+	hh.From(r)
+	return hh
+}
 
 // ID is a root-relative node identifier which uniquely identifies
 // a node under a given root.

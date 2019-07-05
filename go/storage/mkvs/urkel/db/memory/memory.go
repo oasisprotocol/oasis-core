@@ -3,6 +3,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -34,9 +35,9 @@ type memoryNodeDB struct {
 	writeLogs map[doubleHash]writeLogDigest
 }
 
-func (h doubleHash) fromHashes(startHash hash.Hash, endHash hash.Hash) {
-	copy(h[:hash.Size], startHash[:])
-	copy(h[hash.Size:], endHash[:])
+func (h doubleHash) fromRoots(startRoot node.Root, endRoot node.Root) {
+	copy(h[:hash.Size], startRoot.Hash[:])
+	copy(h[hash.Size:], endRoot.Hash[:])
 }
 
 // New creates a new in-memory node database.
@@ -47,7 +48,7 @@ func New() (api.NodeDB, error) {
 	}, nil
 }
 
-func (d *memoryNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, error) {
+func (d *memoryNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
 	if ptr == nil || !ptr.IsClean() {
 		panic("urkel: attempted to get invalid pointer from node database")
 	}
@@ -63,12 +64,16 @@ func (d *memoryNodeDB) GetNode(root hash.Hash, ptr *node.Pointer) (node.Node, er
 	return node.UnmarshalBinary(raw)
 }
 
-func (d *memoryNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, endHash hash.Hash) (api.WriteLogIterator, error) {
+func (d *memoryNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (api.WriteLogIterator, error) {
+	if !endRoot.Follows(&startRoot) {
+		return nil, errors.New("urkel/db/memory: end root must follow start root")
+	}
+
 	d.RLock()
 	defer d.RUnlock()
 
 	var key doubleHash
-	key.fromHashes(startHash, endHash)
+	key.fromRoots(startRoot, endRoot)
 
 	log, ok := d.writeLogs[key]
 	if !ok {
@@ -84,6 +89,14 @@ func (d *memoryNodeDB) GetWriteLog(ctx context.Context, startHash hash.Hash, end
 	}
 
 	return api.NewStaticWriteLogIterator(writeLog), nil
+}
+
+func (d *memoryNodeDB) HasRoot(root node.Root) bool {
+	_, err := d.GetNode(root, &node.Pointer{
+		Clean: true,
+		Hash:  root.Hash,
+	})
+	return err != api.ErrNodeNotFound
 }
 
 func (d *memoryNodeDB) Close() {
@@ -132,9 +145,18 @@ func (b *memoryBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtre
 	return subtree
 }
 
-func (b *memoryBatch) PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeLog writelog.WriteLog, annotations writelog.WriteLogAnnotations) error {
+func (b *memoryBatch) PutWriteLog(
+	startRoot node.Root,
+	endRoot node.Root,
+	writeLog writelog.WriteLog,
+	annotations writelog.WriteLogAnnotations,
+) error {
+	if !endRoot.Follows(&startRoot) {
+		return errors.New("urkel/db/lru: end root must follow start root")
+	}
+
 	var key doubleHash
-	key.fromHashes(startHash, endHash)
+	key.fromRoots(startRoot, endRoot)
 
 	b.db.Lock()
 	defer b.db.Unlock()
@@ -158,7 +180,7 @@ func (b *memoryBatch) PutWriteLog(startHash hash.Hash, endHash hash.Hash, writeL
 	return nil
 }
 
-func (b *memoryBatch) Commit(root hash.Hash) error {
+func (b *memoryBatch) Commit(root node.Root) error {
 	b.db.Lock()
 	defer b.db.Unlock()
 

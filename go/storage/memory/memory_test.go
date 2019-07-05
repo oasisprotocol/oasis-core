@@ -14,7 +14,7 @@ func TestStorageMemory(t *testing.T) {
 	pk, err := signature.NewPrivateKey(rand.Reader)
 	require.NoError(t, err, "NewPrivateKey()")
 
-	backend := New(&pk)
+	backend := New(&pk, false)
 	defer backend.Cleanup()
 
 	tests.StorageImplementationTests(t, backend)

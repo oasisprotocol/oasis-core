@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -38,9 +39,16 @@ func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource epochtime
 	client, err := storageClient.New(ctx, scheduler, registry)
 	require.NoError(err, "NewStorageClient")
 	// Create mock root hash and id hash for GetValue().
-	var root, id hash.Hash
-	root.FromBytes([]byte("non-existing"))
+	var ns common.Namespace
+	var rootHash, id hash.Hash
+	rootHash.FromBytes([]byte("non-existing"))
 	id.FromBytes([]byte("key"))
+
+	root := api.Root{
+		Namespace: ns,
+		Round:     0,
+		Hash:      rootHash,
+	}
 
 	// Storage should not yet be available
 	r, err := client.GetPath(ctx, root, id, 0)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/api"
 )
@@ -63,13 +64,21 @@ type metricsWrapper struct {
 	api.Backend
 }
 
-func (w *metricsWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewRoot hash.Hash, log api.WriteLog) ([]*api.Receipt, error) {
+func (w *metricsWrapper) Apply(
+	ctx context.Context,
+	ns common.Namespace,
+	srcRound uint64,
+	srcRoot hash.Hash,
+	dstRound uint64,
+	dstRoot hash.Hash,
+	writeLog api.WriteLog,
+) ([]*api.Receipt, error) {
 	start := time.Now()
-	receipts, err := w.Backend.Apply(ctx, root, expectedNewRoot, log)
+	receipts, err := w.Backend.Apply(ctx, ns, srcRound, srcRoot, dstRound, dstRoot, writeLog)
 	storageLatency.With(labelApply).Observe(time.Since(start).Seconds())
 
 	var size int
-	for _, entry := range log {
+	for _, entry := range writeLog {
 		size += len(entry.Key) + len(entry.Value)
 	}
 	storageValueSize.With(labelApply).Observe(float64(size))
@@ -82,9 +91,14 @@ func (w *metricsWrapper) Apply(ctx context.Context, root hash.Hash, expectedNewR
 	return receipts, err
 }
 
-func (w *metricsWrapper) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*api.Receipt, error) {
+func (w *metricsWrapper) ApplyBatch(
+	ctx context.Context,
+	ns common.Namespace,
+	dstRound uint64,
+	ops []api.ApplyOp,
+) ([]*api.Receipt, error) {
 	start := time.Now()
-	receipts, err := w.Backend.ApplyBatch(ctx, ops)
+	receipts, err := w.Backend.ApplyBatch(ctx, ns, dstRound, ops)
 	storageLatency.With(labelApplyBatch).Observe(time.Since(start).Seconds())
 
 	var size int
@@ -103,7 +117,7 @@ func (w *metricsWrapper) ApplyBatch(ctx context.Context, ops []api.ApplyOp) ([]*
 	return receipts, err
 }
 
-func (w *metricsWrapper) GetSubtree(ctx context.Context, root hash.Hash, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (w *metricsWrapper) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
 	start := time.Now()
 	st, err := w.Backend.GetSubtree(ctx, root, id, maxDepth)
 	storageLatency.With(labelGetSubtree).Observe(time.Since(start).Seconds())
@@ -116,7 +130,7 @@ func (w *metricsWrapper) GetSubtree(ctx context.Context, root hash.Hash, id api.
 	return st, err
 }
 
-func (w *metricsWrapper) GetPath(ctx context.Context, root hash.Hash, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (w *metricsWrapper) GetPath(ctx context.Context, root api.Root, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
 	start := time.Now()
 	st, err := w.Backend.GetPath(ctx, root, key, startDepth)
 	storageLatency.With(labelGetPath).Observe(time.Since(start).Seconds())
@@ -129,7 +143,7 @@ func (w *metricsWrapper) GetPath(ctx context.Context, root hash.Hash, key hash.H
 	return st, err
 }
 
-func (w *metricsWrapper) GetNode(ctx context.Context, root hash.Hash, id api.NodeID) (api.Node, error) {
+func (w *metricsWrapper) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {
 	start := time.Now()
 	node, err := w.Backend.GetNode(ctx, root, id)
 	storageLatency.With(labelGetNode).Observe(time.Since(start).Seconds())

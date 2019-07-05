@@ -112,7 +112,6 @@ run_backend_tendermint_committee() {
         --runtime ${entity_dir}/keymanager_genesis.json \
         --runtime ${entity_dir}/runtime_genesis.json \
         ${roothash_genesis_blocks:+--roothash ${roothash_genesis_blocks}} \
-        ${runtime_genesis:+--storage ${runtime_genesis}} \
         ${validator_files}
 
 

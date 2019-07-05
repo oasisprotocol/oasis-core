@@ -31,8 +31,10 @@ pub trait Cache {
     fn get_pending_root(&self) -> NodePtrRef;
     /// Set the root node for the tree to the given pointer.
     fn set_pending_root(&mut self, new_root: NodePtrRef);
-    /// Set the root hash of the tree after committing.
-    fn set_sync_root(&mut self, new_hash: Hash);
+    /// Get the root of the tree used for syncing.
+    fn get_sync_root(&self) -> Root;
+    /// Set the root of the tree after committing.
+    fn set_sync_root(&mut self, root: Root);
 
     /// Set the maximum depth for subtree prefetch.
     fn set_prefetch_depth(&mut self, depth: u8);

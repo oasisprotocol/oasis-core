@@ -181,7 +181,7 @@ fn main() {
         .block_on(
             kv_client
                 .txn_client()
-                .get_transactions(snapshot.block.header.io_root),
+                .get_transactions(snapshot.block.header.round, snapshot.block.header.io_root),
         )
         .expect("get transactions");
     println!("Found transactions: {:?}", txns);

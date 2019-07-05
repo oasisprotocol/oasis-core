@@ -6,10 +6,10 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
 )
 
 var (
@@ -53,7 +53,7 @@ func (w *metricsWrapper) worker() {
 	ch, sub := backend.WatchAllBlocks()
 	defer sub.Close()
 
-	lastBlockTime := make(map[block.Namespace]time.Time)
+	lastBlockTime := make(map[common.Namespace]time.Time)
 	for {
 		blk, ok := <-ch
 		if !ok {

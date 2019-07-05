@@ -23,7 +23,6 @@ import (
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	staking "github.com/oasislabs/ekiden/go/staking/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
 const (
@@ -33,7 +32,6 @@ const (
 	cfgRootHash    = "roothash"
 	cfgKeyManager  = "keymanager"
 	cfgStaking     = "staking"
-	cfgStorage     = "storage"
 	cfgValidator   = "validator"
 )
 
@@ -136,14 +134,6 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	staking := viper.GetString(cfgStaking)
 	if err := AppendStakingState(doc, staking, logger); err != nil {
 		logger.Error("failed to parse staking genesis state",
-			"err", err,
-		)
-		return
-	}
-
-	storage := viper.GetStringSlice(cfgStorage)
-	if err := AppendStorageState(doc, storage, logger); err != nil {
-		logger.Error("failed to parse storage genesis state",
 			"err", err,
 		)
 		return
@@ -385,38 +375,6 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 	return nil
 }
 
-// AppendStorageState appends the storage genesis state given a vector
-// of state filenames.
-func AppendStorageState(doc *genesis.Document, states []string, l *logging.Logger) error {
-	var storageSt storage.Genesis
-
-	for _, v := range states {
-		b, err := ioutil.ReadFile(v)
-		if err != nil {
-			l.Error("failed to load genesis storage state",
-				"err", err,
-				"filename", v,
-			)
-			return err
-		}
-
-		var log storage.WriteLog
-		if err = json.Unmarshal(b, &log); err != nil {
-			l.Error("failed to parse genesis storage state",
-				"err", err,
-				"filename", v,
-			)
-			return err
-		}
-
-		storageSt.State = append(storageSt.State, log...)
-	}
-
-	doc.Storage = storageSt
-
-	return nil
-}
-
 func registerInitGenesisFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgGenesisFile, "genesis.json", "path to created genesis document")
@@ -425,7 +383,6 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 		cmd.Flags().StringSlice(cfgRootHash, nil, "path to roothash genesis blocks file")
 		cmd.Flags().String(cfgStaking, "", "path to staking genesis file")
 		cmd.Flags().StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
-		cmd.Flags().StringSlice(cfgStorage, nil, "path to storage genesis state file")
 		cmd.Flags().StringSlice(cfgValidator, nil, "path to validator file")
 	}
 
@@ -436,7 +393,6 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 		cfgRootHash,
 		cfgKeyManager,
 		cfgStaking,
-		cfgStorage,
 		cfgValidator,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))

@@ -143,7 +143,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, openCom *OpenComputeCo
 	// Check if the header refers to merkle roots in storage.
 	// TODO: Actually check that the storage receipt signatures were made by
 	// the storage nodes.
-	if err := body.VerifyStorageReceiptSignatures(); err != nil {
+	if err := body.VerifyStorageReceiptSignatures(blk.Header.Namespace, blk.Header.Round+1); err != nil {
 		return err
 	}
 
