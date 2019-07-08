@@ -235,7 +235,11 @@ func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (
 
 	// XXX/yawning: As far as I can tell just blocking here is safe as
 	// ever single consumer of the API subscribes from a go routine.
-	<-t.startedCh
+	select {
+	case <-t.startedCh:
+	case <-t.ctx.Done():
+		return nil, t.ctx.Err()
+	}
 
 	return subFn()
 }
