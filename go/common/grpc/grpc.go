@@ -349,7 +349,7 @@ func NewServerTCP(name string, port uint16, cert *tls.Certificate, customOptions
 		network: "tcp",
 		address: ":" + strconv.Itoa(int(port)),
 	}
-	return newServer(name, []listenerConfig{cfg}, cert, false, customOptions)
+	return newServer(name, []listenerConfig{cfg}, cert, false, tls.RequestClientCert, customOptions)
 }
 
 // NewServerLocal constructs a new gRPC server service listening on
@@ -381,7 +381,7 @@ func NewServerLocal(name, path string, debugPort uint16, customOptions []grpc.Se
 		}
 		cfgs = append(cfgs, cfg)
 	}
-	srv, err := newServer(name, cfgs, nil, debugPort != 0, customOptions)
+	srv, err := newServer(name, cfgs, nil, debugPort != 0, tls.NoClientCert, customOptions)
 
 	return srv, err
 }
@@ -391,6 +391,7 @@ func newServer(
 	listenerParams []listenerConfig,
 	cert *tls.Certificate,
 	unsafeDebug bool,
+	clientAuthType tls.ClientAuthType,
 	customOptions []grpc.ServerOption,
 ) (*Server, error) {
 	grpcMetricsOnce.Do(func() {
@@ -410,7 +411,11 @@ func newServer(
 	sOpts = append(sOpts, customOptions...)
 
 	if cert != nil {
-		sOpts = append(sOpts, grpc.Creds(credentials.NewServerTLSFromCert(cert)))
+		tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{*cert},
+			ClientAuth:   clientAuthType,
+		}
+		sOpts = append(sOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}
 
 	return &Server{
