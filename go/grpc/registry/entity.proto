@@ -116,6 +116,5 @@ message WatchNodeListRequest {
 }
 
 message WatchNodeListResponse {
-    uint64 epoch = 1;
-    repeated common.Node node = 2;
+    repeated common.Node node = 1;
 }

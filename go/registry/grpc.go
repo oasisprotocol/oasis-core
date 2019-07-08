@@ -253,8 +253,7 @@ func (s *grpcServer) WatchNodeList(req *pb.WatchNodeListRequest, stream pb.Entit
 			nodes = append(nodes, n.ToProto())
 		}
 		resp := &pb.WatchNodeListResponse{
-			Epoch: uint64(nl.Epoch),
-			Node:  nodes,
+			Node: nodes,
 		}
 		if err := stream.Send(resp); err != nil {
 			return err

@@ -27,10 +27,10 @@ const recvTimeout = 1 * time.Second
 //
 // WARNING: This assumes that the registry is empty, and will leave
 // a Runtime registered.
-func RegistryImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend) {
+func RegistryImplementationTests(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
 	EnsureRegistryEmpty(t, backend)
 
-	testRegistryEntityNodes(t, backend, epochtime)
+	testRegistryEntityNodes(t, backend, timeSource)
 
 	// Runtime registry tests are after the entity/node tests to avoid
 	// interacting with the scheduler as much as possible.
@@ -155,27 +155,11 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		require := require.New(t)
 
 		expectedNodeList := getExpectedNodeList()
-		ch, sub := backend.WatchNodeList()
-		defer sub.Close()
-
 		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
-	recvLoop:
-		for {
-			select {
-			case ev := <-ch:
-				// Skip the old node list.
-				if ev.Epoch < epoch {
-					continue
-				}
-
-				require.Equal(epoch, ev.Epoch, "node list epoch")
-				require.EqualValues(expectedNodeList, ev.Nodes, "node list")
-				break recvLoop
-			case <-time.After(recvTimeout):
-				t.Fatalf("failed to recevive node list event")
-			}
-		}
+		registeredNodes, nerr := backend.GetNodes(context.Background())
+		require.NoError(nerr, "GetNodes")
+		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 	})
 
 	t.Run("NodeExpiration", func(t *testing.T) {
@@ -185,9 +169,6 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		// being deregistered due to expiration.
 		expectedDeregEvents := len(nodes[0])
 		deregisteredNodes := make(map[signature.MapKey]*node.Node)
-
-		ch, sub := backend.WatchNodeList()
-		defer sub.Close()
 
 		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
@@ -216,21 +197,9 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 
 		// Ensure the node list doesn't have the expired nodes.
 		expectedNodeList := getExpectedNodeList()
-	recvLoop:
-		for {
-			select {
-			case ev := <-ch:
-				if ev.Epoch < epoch {
-					continue
-				}
-
-				require.Equal(epoch, ev.Epoch, "node list epoch")
-				require.EqualValues(expectedNodeList, ev.Nodes, "node list")
-				break recvLoop
-			case <-time.After(recvTimeout):
-				t.Fatalf("failed to recevive node list event")
-			}
-		}
+		registeredNodes, nerr := backend.GetNodes(context.Background())
+		require.NoError(nerr, "GetNodes")
+		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 
 		// Ensure that registering an expired node will fail.
 		err := backend.RegisterNode(context.Background(), expiredNode.SignedRegistration)
