@@ -30,7 +30,7 @@ const (
 // make sure you initialize the global tracer before calling this.
 func NewServerTCP() (*cmnGrpc.Server, error) {
 	port := uint16(viper.GetInt(cfgGRPCPort))
-	return cmnGrpc.NewServerTCP("internal", port, nil)
+	return cmnGrpc.NewServerTCP("internal", port, nil, nil)
 }
 
 // NewServerLocal constructs a new gRPC server service listening on
@@ -47,7 +47,7 @@ func NewServerLocal() (*cmnGrpc.Server, error) {
 	debugPort := uint16(viper.GetInt(cfgDebugPort))
 
 	path := filepath.Join(dataDir, localSocketFilename)
-	return cmnGrpc.NewServerLocal("internal", path, debugPort)
+	return cmnGrpc.NewServerLocal("internal", path, debugPort, nil)
 }
 
 // RegisterServerTCPFlags registers the flags used by the gRPC server.
