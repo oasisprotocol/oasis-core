@@ -102,6 +102,10 @@ func (b *leveldbBackend) GetDiff(ctx context.Context, startRoot api.Root, endRoo
 	return b.nodedb.GetWriteLog(ctx, startRoot, endRoot)
 }
 
+func (b *leveldbBackend) GetCheckpoint(ctx context.Context, root api.Root) (api.WriteLogIterator, error) {
+	return b.nodedb.GetCheckpoint(ctx, root)
+}
+
 func (b *leveldbBackend) Cleanup() {
 	b.closeOnce.Do(func() {
 		b.nodedb.Close()

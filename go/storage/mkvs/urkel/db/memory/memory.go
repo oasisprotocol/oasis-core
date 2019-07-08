@@ -29,6 +29,8 @@ type logEntryDigest struct {
 }
 
 type memoryNodeDB struct {
+	api.CheckpointableDB
+
 	sync.RWMutex
 
 	items     map[hash.Hash]*memoryItem
@@ -42,10 +44,12 @@ func (h doubleHash) fromRoots(startRoot node.Root, endRoot node.Root) {
 
 // New creates a new in-memory node database.
 func New() (api.NodeDB, error) {
-	return &memoryNodeDB{
+	db := &memoryNodeDB{
 		items:     make(map[hash.Hash]*memoryItem),
 		writeLogs: make(map[doubleHash]writeLogDigest),
-	}, nil
+	}
+	db.CheckpointableDB = api.NewCheckpointableDB(db)
+	return db, nil
 }
 
 func (d *memoryNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {

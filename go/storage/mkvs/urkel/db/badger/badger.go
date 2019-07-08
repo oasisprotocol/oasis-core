@@ -38,6 +38,7 @@ func New(opts badger.Options) (api.NodeDB, error) {
 		closeCh:  make(chan struct{}),
 		closedCh: make(chan struct{}),
 	}
+	db.CheckpointableDB = api.NewCheckpointableDB(db)
 
 	var err error
 	if db.db, err = badger.Open(opts); err != nil {
@@ -49,6 +50,8 @@ func New(opts badger.Options) (api.NodeDB, error) {
 }
 
 type badgerNodeDB struct {
+	api.CheckpointableDB
+
 	logger *logging.Logger
 
 	db *badger.DB

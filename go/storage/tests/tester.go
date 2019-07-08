@@ -55,6 +55,40 @@ func CalculateExpectedNewRoot(t *testing.T, wl api.WriteLog) hash.Hash {
 	return expectedNewRoot
 }
 
+// XXX: until (PR#1743), hashed keys are returned by the GetCheckpoints.
+func calculateExpectedNewRootRaw(t *testing.T, wl api.WriteLog) hash.Hash {
+	// Use in-memory Urkel tree to calculate the expected new root.
+	tree := urkel.New(nil, nil)
+	for _, logEntry := range wl {
+		var h hash.Hash
+		err := h.UnmarshalBinary(logEntry.Key)
+		require.NoError(t, err, "error unmarshaling logEntry.Key")
+		err = tree.InsertRaw(context.Background(), []byte{}, h, logEntry.Value)
+		require.NoError(t, err, "error inserting writeLog entry into Urkel tree")
+	}
+	_, expectedNewRoot, err := tree.Commit(context.Background(), testNs, 0)
+	require.NoError(t, err, "error calculating mkvs' expectedNewRoot")
+	return expectedNewRoot
+}
+
+func foldWriteLogIterator(t *testing.T, w api.WriteLogIterator) api.WriteLog {
+	writeLog := api.WriteLog{}
+
+	for {
+		more, err := w.Next()
+		require.NoError(t, err, "error iterating over WriteLogIterator")
+		if !more {
+			break
+		}
+
+		val, err := w.Value()
+		require.NoError(t, err, "error iterating over WriteLogIterator")
+		writeLog = append(writeLog, val)
+	}
+
+	return writeLog
+}
+
 // StorageImplementationTests exercises the basic functionality of a storage
 // backend.
 func StorageImplementationTests(t *testing.T, backend api.Backend) {
@@ -142,21 +176,9 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 		Round:     0,
 		Hash:      rootHash,
 	}
-	var getDiffWl api.WriteLog
 	it, err := backend.GetDiff(context.Background(), root, newRoot)
 	require.NoError(t, err, "GetDiff()")
-	for {
-		var more bool
-		var val api.LogEntry
-		more, err = it.Next()
-		require.NoError(t, err, "it.Next()")
-		if !more {
-			break
-		}
-		val, err = it.Value()
-		require.NoError(t, err, "it.Value()")
-		getDiffWl = append(getDiffWl, val)
-	}
+	getDiffWl := foldWriteLogIterator(t, it)
 	originalWl := make(api.WriteLog, len(wl))
 	copy(originalWl, wl)
 	sort.Slice(originalWl, makeWriteLogLess(originalWl))
@@ -179,6 +201,41 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
 	}
+
+	// Test GetCheckpoint.
+	logsIter, err := backend.GetCheckpoint(context.Background(), newRoot)
+	require.NoError(t, err, "GetCheckpoint()")
+	logs := foldWriteLogIterator(t, logsIter)
+	// Applying the writeLog RAW should return same root.
+	logsRootHash := calculateExpectedNewRootRaw(t, logs)
+	require.EqualValues(t, logsRootHash, receiptBody.Roots[0])
+
+	// Single node tree.
+	root.Empty()
+	wl3 := prepareWriteLog([][]byte{testValues[0]})
+	expectedNewRoot3 := CalculateExpectedNewRoot(t, wl3)
+
+	receipts, err = backend.Apply(context.Background(), testNs, 0, rootHash, 1, expectedNewRoot3, wl3)
+	require.NoError(t, err, "Apply() should not return an error")
+	require.NotNil(t, receipts, "Apply() should return a receipts")
+
+	for i, receipt := range receipts {
+		err = receipt.Open(&receiptBody)
+		require.NoError(t, err, "receipts.Open() should not return an error")
+		require.Equal(t, uint16(1), receiptBody.Version, "mkvs receipt version should be 1")
+		require.Equal(t, 1, len(receiptBody.Roots), "mkvs receipt should contain 1 root")
+		require.EqualValues(t, expectedNewRoot3, receiptBody.Roots[0], "mkvs receipt root should equal the expected new root")
+		if i == 0 {
+			newRoot.Hash = receiptBody.Roots[0]
+		}
+	}
+
+	logsIter, err = backend.GetCheckpoint(context.Background(), newRoot)
+	require.NoError(t, err, "GetCheckpoint()")
+	logs = foldWriteLogIterator(t, logsIter)
+	// Applying the writeLog RAW should return same root.
+	logsRootHash = calculateExpectedNewRootRaw(t, logs)
+	require.EqualValues(t, logsRootHash, newRoot.Hash)
 }
 
 func init() {

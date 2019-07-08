@@ -172,6 +172,10 @@ func (b *memoryBackend) GetDiff(ctx context.Context, startRoot api.Root, endRoot
 	return b.nodedb.GetWriteLog(ctx, startRoot, endRoot)
 }
 
+func (b *memoryBackend) GetCheckpoint(ctx context.Context, root api.Root) (api.WriteLogIterator, error) {
+	return b.nodedb.GetCheckpoint(ctx, root)
+}
+
 func (b *memoryBackend) Cleanup() {
 	b.nodedb.Close()
 }
