@@ -155,8 +155,20 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 			return errors.Wrap(err, "registry: genesis runtime registration failure")
 		}
 	}
+	for _, v := range st.Nodes {
+		app.logger.Debug("InitChain: Registring genesis node",
+			"node_owner", v.Signature.PublicKey,
+		)
+		if err := app.registerNode(ctx, state, v); err != nil {
+			app.logger.Error("InitChain: failed to register node",
+				"err", err,
+				"node", v,
+			)
+			return errors.Wrap(err, "registry: genesis node registration failure")
+		}
+	}
 
-	if len(st.Entities) > 0 || len(st.Runtimes) > 0 {
+	if len(st.Entities) > 0 || len(st.Runtimes) > 0 || len(st.Nodes) > 0 {
 		ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 	}
 
@@ -344,12 +356,12 @@ func (app *registryApplication) registerNode(
 	state *MutableState,
 	sigNode *node.SignedNode,
 ) error {
-	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, ctx.Now())
+	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, ctx.Now(), ctx.IsInitChain())
 	if err != nil {
 		return err
 	}
 
-	if !ctx.IsCheckOnly() {
+	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
 		err = registry.VerifyTimestamp(node.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
 			app.logger.Error("RegisterNode: INVALID TIMESTAMP",
