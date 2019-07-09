@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"sync"
 
 	"github.com/pkg/errors"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -29,32 +28,11 @@ var _ api.Backend = (*Backend)(nil)
 type Backend struct {
 	logger *logging.Logger
 
-	timeSource epochtime.Backend
-	service    service.TendermintService
-	notifier   *pubsub.Broker
-
-	cached struct {
-		sync.RWMutex
-
-		epoch  epochtime.EpochTime
-		beacon []byte
-	}
+	service  service.TendermintService
+	notifier *pubsub.Broker
 }
 
-// GetBeacon gets the beacon for the provided block height.
-// Calling this method with height `0`, should return the
-// beacon for latest known block.
 func (t *Backend) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
-	// Calling GetEpoch with height `0` will return the epoch of the latest block.
-	beaconEpoch, err := t.timeSource.GetEpoch(ctx, height)
-	if err != nil {
-		return nil, err
-	}
-
-	if beacon := t.getCached(beaconEpoch); beacon != nil {
-		return beacon, nil
-	}
-
 	resp, err := t.service.Query(app.QueryGetBeacon, nil, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "beacon: failed to query beacon")
@@ -63,34 +41,12 @@ func (t *Backend) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
 	return resp, nil
 }
 
-// WatchBeacons returns a channel that produces a stream of api.GenerateEvent.
-// Upon subscription, the most recently generate beacon will be sent
-// immediately if available.
 func (t *Backend) WatchBeacons() (<-chan *api.GenerateEvent, *pubsub.Subscription) {
 	typedCh := make(chan *api.GenerateEvent)
 	sub := t.notifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
-}
-
-func (t *Backend) getCached(epoch epochtime.EpochTime) []byte {
-	t.cached.RLock()
-	defer t.cached.RUnlock()
-
-	if t.cached.epoch != epoch || t.cached.beacon == nil {
-		return nil
-	}
-
-	return t.cached.beacon
-}
-
-func (t *Backend) setCached(ev *api.GenerateEvent) {
-	t.cached.Lock()
-	defer t.cached.Unlock()
-
-	t.cached.epoch = ev.Epoch
-	t.cached.beacon = append([]byte{}, ev.Beacon...)
 }
 
 func (t *Backend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
@@ -112,11 +68,9 @@ func (t *Backend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataN
 				}
 
 				t.logger.Debug("worker: got new beacon",
-					"epoch", genEv.Epoch,
 					"beacon", hex.EncodeToString(genEv.Beacon),
 				)
 
-				t.setCached(&genEv)
 				t.notifier.Broadcast(&genEv)
 			}
 		}
@@ -167,10 +121,9 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 	}
 
 	t := &Backend{
-		logger:     logging.GetLogger("beacon/tendermint"),
-		timeSource: timeSource,
-		service:    service,
-		notifier:   pubsub.NewBroker(true),
+		logger:   logging.GetLogger("beacon/tendermint"),
+		service:  service,
+		notifier: pubsub.NewBroker(true),
 	}
 
 	go t.worker(ctx)
