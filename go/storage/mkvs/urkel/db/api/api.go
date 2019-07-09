@@ -204,6 +204,7 @@ func (b *CheckpointableDB) getNodeWriteLog(ctx context.Context, pipe *PipeWriteL
 	nod, err := b.db.GetNode(root, ptr)
 	if err != nil {
 		_ = pipe.PutError(err)
+		return
 	}
 	switch n := nod.(type) {
 	case *node.LeafNode:
