@@ -8,7 +8,6 @@ replace (
 
 require (
 	git.schwanenlied.me/yawning/dynlib.git v0.0.0-20181128103533-74a62abb5524
-	github.com/Netflix/go-expect v0.0.0-20180928190340-9d1f4485533b // indirect
 	github.com/RoaringBitmap/roaring v0.4.18 // indirect
 	github.com/blevesearch/bleve v0.7.1-0.20190531184658-92623347bffc
 	github.com/blevesearch/blevex v0.0.0-20180227211930-4b158bb555a3 // indirect
@@ -37,16 +36,8 @@ require (
 	github.com/golang/snappy v0.0.1
 	github.com/gopherjs/gopherjs v0.0.0-20190430165422-3e4dfb77656c // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.0
-	github.com/hinshun/vt10x v0.0.0-20180809195222-d55458df857c // indirect
-	github.com/kr/pty v1.1.5 // indirect
 	github.com/libp2p/go-libp2p v0.1.1
 	github.com/libp2p/go-libp2p-core v0.0.3
-	github.com/libp2p/go-libp2p-crypto v0.1.0
-	github.com/libp2p/go-libp2p-host v0.1.0
-	github.com/libp2p/go-libp2p-net v0.1.0
-	github.com/libp2p/go-libp2p-peer v0.2.0
-	github.com/libp2p/go-libp2p-peerstore v0.1.0
-	github.com/libp2p/go-libp2p-protocol v0.1.0
 	github.com/libp2p/go-msgio v0.0.3 // indirect
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/mattn/go-colorable v0.1.2 // indirect
@@ -86,5 +77,4 @@ require (
 	google.golang.org/appengine v1.4.0 // indirect
 	google.golang.org/genproto v0.0.0-20190611190212-a7e196e89fd3 // indirect
 	google.golang.org/grpc v1.21.1
-	gopkg.in/AlecAivazis/survey.v1 v1.8.5
 )

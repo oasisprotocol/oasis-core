@@ -1,3 +1,4 @@
+// Package genesis defines the Ekiden genesis block.
 package genesis
 
 import (
@@ -5,6 +6,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/ekiden/go/genesis/api"
 	"github.com/oasislabs/ekiden/go/genesis/bootstrap"
 )
 
@@ -15,7 +17,7 @@ const (
 )
 
 // New creates a new genesis document provider.
-func New(identity *identity.Identity) (Provider, error) {
+func New(identity *identity.Identity) (api.Provider, error) {
 	filename := viper.GetString(cfgGenesisFile)
 	bootstrapAddress := viper.GetString(cfgDebugBootstrapAddress)
 

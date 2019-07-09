@@ -28,6 +28,7 @@ import (
 	"github.com/oasislabs/ekiden/go/epochtime"
 	epochtimeAPI "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
+	genesisAPI "github.com/oasislabs/ekiden/go/genesis/api"
 	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/keymanager"
 	keymanagerAPI "github.com/oasislabs/ekiden/go/keymanager/api"
@@ -77,7 +78,7 @@ type Node struct {
 	grpcInternal *grpc.Server
 	svcTmnt      tmService.TendermintService
 
-	Genesis   genesis.Provider
+	Genesis   genesisAPI.Provider
 	Identity  *identity.Identity
 	Beacon    beaconAPI.Backend
 	Epochtime epochtimeAPI.Backend

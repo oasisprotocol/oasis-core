@@ -13,8 +13,12 @@ import (
 )
 
 var (
+	validatorSignatureContext = []byte("EkValGen")
+
 	_ cbor.Marshaler   = (*Document)(nil)
 	_ cbor.Unmarshaler = (*Document)(nil)
+	_ cbor.Marshaler   = (*Validator)(nil)
+	_ cbor.Unmarshaler = (*Validator)(nil)
 )
 
 // Document is a genesis document.
@@ -30,7 +34,7 @@ type Document struct {
 	// KeyManager is the key manager genesis state.
 	KeyManager keymanager.Genesis `codec:"keymanager"`
 	// Validators is the list of validators at genesis.
-	Validators []*Validator `codec:"validators"`
+	Validators []*SignedValidator `codec:"validators"`
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by Ekiden.
 	ExtraData map[string][]byte `codec:"extra_data"`
@@ -48,10 +52,47 @@ func (d *Document) UnmarshalCBOR(data []byte) error {
 
 // Validator is an ekiden validator.
 type Validator struct {
+	EntityID    signature.PublicKey `codec:"entity_id"`
 	PubKey      signature.PublicKey `codec:"pub_key"`
 	Name        string              `codec:"name"`
 	Power       int64               `codec:"power"`
 	CoreAddress string              `codec:"core_address"`
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (v *Validator) MarshalCBOR() []byte {
+	return cbor.Marshal(v)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
+func (v *Validator) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, v)
+}
+
+// SignedValidator is a signed ekiden validator.
+type SignedValidator struct {
+	signature.Signed
+}
+
+// Open first verifies the blob signature and then unmarshals the blob.
+func (s *SignedValidator) Open(validator *Validator) error {
+	if err := s.Signed.Open(validatorSignatureContext, validator); err != nil {
+		return err
+	}
+
+	return s.Signed.Signature.SanityCheck(validator.EntityID)
+}
+
+// SignValidator serializes the Validator and signs the result.
+func SignValidator(privateKey signature.PrivateKey, validator *Validator) (*SignedValidator, error) {
+	signed, err := signature.SignSigned(privateKey, validatorSignatureContext, validator)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SignedValidator{
+		Signed: *signed,
+	}, nil
 }
 
 // Provider is a genesis document provider.
