@@ -23,6 +23,14 @@ var testValues = [][]byte{
 	[]byte("The Slayer Time, Ancient of Days, come hither to consume;"),
 	[]byte("Excepting thee, of all these hosts of hostile chiefs arrayed,"),
 	[]byte("There shines not one shall leave alive the battlefield!"),
+	[]byte("Thou seest Me as Time who kills, Time who brings all to doom,"),
+	[]byte("The Slayer Time, Ancient of Days, come hither to consume;"),
+	[]byte("Excepting thee, of all these hosts of hostile chiefs arrayed,"),
+	[]byte("There shines not one shall leave alive the battlefield!"),
+	[]byte("Thou seest Me as Time who kills, Time who brings all to doom,"),
+	[]byte("The Slayer Time, Ancient of Days, come hither to consume;"),
+	[]byte("Excepting thee, of all these hosts of hostile chiefs arrayed,"),
+	[]byte("There shines not one shall leave alive the battlefield!"),
 }
 
 func makeWriteLogLess(wl api.WriteLog) func(i, j int) bool {
@@ -85,7 +93,6 @@ func foldWriteLogIterator(t *testing.T, w api.WriteLogIterator) api.WriteLog {
 		require.NoError(t, err, "error iterating over WriteLogIterator")
 		writeLog = append(writeLog, val)
 	}
-
 	return writeLog
 }
 
