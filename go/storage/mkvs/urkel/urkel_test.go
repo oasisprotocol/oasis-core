@@ -988,6 +988,32 @@ func testDebugStats(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, 8890, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
+func testVisit(t *testing.T, ndb db.NodeDB) {
+	ctx := context.Background()
+	tree := urkel.New(nil, ndb)
+
+	keys, values := generateKeyValuePairsEx("", 100)
+	for i := 0; i < len(keys); i++ {
+		err := tree.Insert(ctx, keys[i], values[i])
+		require.NoError(t, err, "Insert")
+	}
+
+	visitedValues := make(map[string]bool)
+	tree.Visit(ctx, func(ctx context.Context, n node.Node) bool {
+		switch nd := n.(type) {
+		case *node.LeafNode:
+			visitedValues[string(nd.Value.Value)] = true
+		}
+
+		return true
+	})
+
+	// Check that we have visited all values.
+	for _, value := range values {
+		require.Contains(t, visitedValues, string(value))
+	}
+}
+
 func testOnCommitHooks(t *testing.T, ndb db.NodeDB) {
 	batch := ndb.NewBatch()
 	defer batch.Reset()
@@ -1061,6 +1087,11 @@ func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interf
 		backend, custom := initBackend(t)
 		defer finiBackend(t, backend, custom)
 		testRemove(t, backend)
+	})
+	t.Run("Visit", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testVisit(t, backend)
 	})
 	t.Run("SyncerBasic", func(t *testing.T) {
 		backend, custom := initBackend(t)

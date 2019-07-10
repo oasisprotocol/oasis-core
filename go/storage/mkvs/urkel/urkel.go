@@ -268,6 +268,20 @@ func (t *Tree) Stats(ctx context.Context, maxDepth node.Depth) Stats {
 	return *stats
 }
 
+// Visit traverses the tree in DFS order using the passed visitor. The
+// traversal is a pre-order DFS where the node is visited first, then its
+// leaf (if any) and then its children (first left then right).
+func (t *Tree) Visit(ctx context.Context, visitor NodeVisitor) error {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
+	if t.cache.isClosed() {
+		return ErrClosed
+	}
+
+	return t.doVisit(ctx, visitor, t.cache.pendingRoot, 0, node.Key{})
+}
+
 // CommitKnown checks that the computed root matches a known root and
 // if so, commits tree updates to the underlying database and returns
 // the write log.
