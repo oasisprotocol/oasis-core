@@ -40,7 +40,7 @@ var (
 
 	// CommitteeProtocol versions the P2P protocol used by the
 	// committee members.
-	CommitteeProtocol = Version{Major: 0, Minor: 2, Patch: 0}
+	CommitteeProtocol = Version{Major: 0, Minor: 3, Patch: 0}
 
 	// BackendProtocol versions all data structures and processing used by
 	// the epochtime, beacon, registry, roothash, etc.

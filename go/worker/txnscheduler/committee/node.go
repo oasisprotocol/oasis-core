@@ -222,7 +222,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 }
 
-// Dispatch dispatches a bach to the compute committee.
+// Dispatch dispatches a batch to the compute committee.
 func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()

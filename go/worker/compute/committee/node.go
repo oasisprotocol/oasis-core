@@ -185,11 +185,18 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 
 // HandlePeerMessage implements NodeHooks.
 func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (bool, error) {
-	if message.TxnSchedulerBatchDispatch != nil {
+	if message.SignedTxnSchedulerBatchDispatch != nil {
 		crash.Here(crashPointBatchReceiveAfter)
 
-		bd := message.TxnSchedulerBatchDispatch
-		err := n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageSignatures, bd.Header)
+		sbd := message.SignedTxnSchedulerBatchDispatch
+
+		var bd p2p.TxnSchedulerBatchDispatch
+		err := sbd.Open(&bd)
+		if err != nil {
+			return false, err
+		}
+
+		err = n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageSignatures, bd.Header)
 		if err != nil {
 			return false, err
 		}

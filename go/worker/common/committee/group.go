@@ -503,16 +503,23 @@ func (g *Group) PublishScheduledBatch(
 		return errors.New("group: invalid compute committee")
 	}
 
+	dispatchMsg := &p2p.TxnSchedulerBatchDispatch{
+		CommitteeID:       committeeID,
+		IORoot:            ioRoot,
+		StorageSignatures: storageSignatures,
+		Header:            hdr,
+	}
+
+	signedDispatchMsg, err := p2p.SignTxnSchedulerBatchDispatch(g.identity.NodeSigner, dispatchMsg)
+	if err != nil {
+		return errors.Wrap(err, "group: unable to sign txn scheduler batch dispatch msg")
+	}
+
 	return g.publishLocked(
 		spanCtx,
 		cc,
 		&p2p.Message{
-			TxnSchedulerBatchDispatch: &p2p.TxnSchedulerBatchDispatch{
-				CommitteeID:       committeeID,
-				IORoot:            ioRoot,
-				StorageSignatures: storageSignatures,
-				Header:            hdr,
-			},
+			SignedTxnSchedulerBatchDispatch: signedDispatchMsg,
 		},
 	)
 }
