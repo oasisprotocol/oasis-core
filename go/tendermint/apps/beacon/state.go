@@ -41,14 +41,14 @@ type MutableState struct {
 	tree *iavl.MutableTree
 }
 
-func (s *MutableState) setBeacon(event *beacon.GenerateEvent) error {
-	if l := len(event.Beacon); l != beacon.BeaconSize {
+func (s *MutableState) setBeacon(newBeacon []byte) error {
+	if l := len(newBeacon); l != beacon.BeaconSize {
 		return fmt.Errorf("tendermint/beacon: unexpected beacon size: %d", l)
 	}
 
 	s.tree.Set(
 		[]byte(stateBeacon),
-		event.Beacon,
+		newBeacon,
 	)
 
 	return nil

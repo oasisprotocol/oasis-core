@@ -9,8 +9,6 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/crypto/sha3"
 
-	beacon "github.com/oasislabs/ekiden/go/beacon/api"
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
@@ -153,13 +151,13 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 		"height", app.state.BlockHeight(),
 	)
 
-	return app.onNewBeacon(ctx, &beacon.GenerateEvent{Beacon: b})
+	return app.onNewBeacon(ctx, b)
 }
 
-func (app *beaconApplication) onNewBeacon(ctx *abci.Context, event *beacon.GenerateEvent) error {
+func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) error {
 	state := NewMutableState(app.state.DeliverTxTree())
 
-	if err := state.setBeacon(event); err != nil {
+	if err := state.setBeacon(beacon); err != nil {
 		app.logger.Error("onNewBeacon: failed to set beacon",
 			"err", err,
 		)
@@ -167,7 +165,7 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, event *beacon.Gener
 	}
 
 	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
-	ctx.EmitTag(TagGenerated, cbor.Marshal(event))
+	ctx.EmitTag(TagGenerated, beacon)
 
 	return nil
 }
