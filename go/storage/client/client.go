@@ -24,6 +24,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -95,7 +96,8 @@ type backendState struct {
 
 	logger *logging.Logger
 
-	storageNodeList []*node.Node
+	storageNodeList      []*node.Node
+	storageCommitteeKeys []signature.PublicKey
 }
 
 // GetConnectedNodes returns registry node information about the connected
@@ -107,13 +109,27 @@ func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
 	return b.connectedNodesState.nodes
 }
 
+func (s *backendState) nodeIsInCommitteeLocked(node *node.Node) bool {
+	for _, k := range s.storageCommitteeKeys {
+		if k.ToMapKey() == node.ID.ToMapKey() {
+			return true
+		}
+	}
+	return false
+}
+
 func (b *storageClientBackend) updateNodeConnections() {
 	b.state.RLock()
 	defer b.state.RUnlock()
 
 	b.logger.Debug("updating connections to nodes")
 
-	nodeList := b.state.storageNodeList
+	nodeList := []*node.Node{}
+	for _, node := range b.state.storageNodeList {
+		if b.state.nodeIsInCommitteeLocked(node) {
+			nodeList = append(nodeList, node)
+		}
+	}
 
 	// TODO: Should we only update connections if keys or addresses have
 	// changed?
@@ -219,6 +235,21 @@ func (s *backendState) updateStorageNodeList(ctx context.Context, nodes []*node.
 	s.Lock()
 	defer s.Unlock()
 	s.storageNodeList = storageNodes
+
+	return nil
+}
+
+func (s *backendState) updateStorageCommitteeList(ctx context.Context, nodes []*scheduler.CommitteeNode) error {
+	storageCommitteeKeys := []signature.PublicKey{}
+	for _, n := range nodes {
+		if n.Role == scheduler.Worker {
+			storageCommitteeKeys = append(storageCommitteeKeys, n.PublicKey)
+		}
+	}
+
+	s.Lock()
+	defer s.Unlock()
+	s.storageCommitteeKeys = storageCommitteeKeys
 
 	return nil
 }
@@ -687,6 +718,13 @@ func (b *storageClientBackend) watcher(ctx context.Context) {
 				continue
 			}
 
+			if err := b.state.updateStorageCommitteeList(ctx, committee.Members); err != nil {
+				b.logger.Error("worker: failed to update storage committee list",
+					"err", err,
+				)
+				continue
+			}
+
 			// Update storage node connection.
 			b.updateNodeConnections()
 
@@ -756,8 +794,9 @@ func New(ctx context.Context, schedulerBackend scheduler.Backend, registryBacken
 			clientStates: []*clientState{},
 		},
 		state: &backendState{
-			logger:          logger,
-			storageNodeList: []*node.Node{},
+			logger:               logger,
+			storageNodeList:      []*node.Node{},
+			storageCommitteeKeys: []signature.PublicKey{},
 		},
 		initCh: make(chan struct{}),
 	}

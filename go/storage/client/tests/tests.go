@@ -22,13 +22,13 @@ import (
 	storageClient "github.com/oasislabs/ekiden/go/storage/client"
 )
 
-// ClientWorkerTests implements tests for client worker
+// ClientWorkerTests implements tests for client worker.
 func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource epochtime.SetableBackend, registry registry.Backend, scheduler scheduler.Backend) {
 	ctx := context.Background()
 	require := require.New(t)
 	seed := []byte("StorageClientTests")
 
-	// Populate registry
+	// Populate registry.
 	rt, err := registryTests.NewTestRuntime(seed, nil)
 	require.NoError(err, "NewTestRuntime")
 	// Populate the registry with an entity and nodes.
@@ -50,7 +50,7 @@ func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource epochtime
 		Hash:      rootHash,
 	}
 
-	// Storage should not yet be available
+	// Storage should not yet be available.
 	r, err := client.GetPath(ctx, root, id, 0)
 	require.EqualError(err, storageClient.ErrStorageNotAvailable.Error(), "storage client get before initialization")
 	require.Nil(r, "result should be nil")
@@ -58,7 +58,7 @@ func ClientWorkerTests(t *testing.T, beacon beacon.Backend, timeSource epochtime
 	// Advance the epoch.
 	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
-	// Wait for initialization
+	// Wait for initialization.
 	<-client.Initialized()
 
 	// Need to wait a bit for client to update with newly populated nodes.
