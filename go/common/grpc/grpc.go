@@ -344,12 +344,12 @@ func (s *Server) Server() *grpc.Server {
 //
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
-func NewServerTCP(name string, port uint16, cert *tls.Certificate) (*Server, error) {
+func NewServerTCP(name string, port uint16, cert *tls.Certificate, customOptions []grpc.ServerOption) (*Server, error) {
 	cfg := listenerConfig{
 		network: "tcp",
 		address: ":" + strconv.Itoa(int(port)),
 	}
-	return newServer(name, []listenerConfig{cfg}, cert, false)
+	return newServer(name, []listenerConfig{cfg}, cert, false, tls.RequestClientCert, customOptions)
 }
 
 // NewServerLocal constructs a new gRPC server service listening on
@@ -358,7 +358,7 @@ func NewServerTCP(name string, port uint16, cert *tls.Certificate) (*Server, err
 //
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
-func NewServerLocal(name, path string, debugPort uint16) (*Server, error) {
+func NewServerLocal(name, path string, debugPort uint16, customOptions []grpc.ServerOption) (*Server, error) {
 	// Remove any existing socket files first.
 	_ = os.Remove(path)
 
@@ -381,12 +381,19 @@ func NewServerLocal(name, path string, debugPort uint16) (*Server, error) {
 		}
 		cfgs = append(cfgs, cfg)
 	}
-	srv, err := newServer(name, cfgs, nil, debugPort != 0)
+	srv, err := newServer(name, cfgs, nil, debugPort != 0, tls.NoClientCert, customOptions)
 
 	return srv, err
 }
 
-func newServer(name string, listenerParams []listenerConfig, cert *tls.Certificate, unsafeDebug bool) (*Server, error) {
+func newServer(
+	name string,
+	listenerParams []listenerConfig,
+	cert *tls.Certificate,
+	unsafeDebug bool,
+	clientAuthType tls.ClientAuthType,
+	customOptions []grpc.ServerOption,
+) (*Server, error) {
 	grpcMetricsOnce.Do(func() {
 		prometheus.MustRegister(grpcCollectors...)
 	})
@@ -401,9 +408,14 @@ func newServer(name string, listenerParams []listenerConfig, cert *tls.Certifica
 	sOpts = append(sOpts, grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(logAdapter.streamLogger, grpc_opentracing.StreamServerInterceptor())))
 	sOpts = append(sOpts, grpc.MaxRecvMsgSize(maxRecvMsgSize))
 	sOpts = append(sOpts, grpc.MaxSendMsgSize(maxSendMsgSize))
+	sOpts = append(sOpts, customOptions...)
 
 	if cert != nil {
-		sOpts = append(sOpts, grpc.Creds(credentials.NewServerTLSFromCert(cert)))
+		tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{*cert},
+			ClientAuth:   clientAuthType,
+		}
+		sOpts = append(sOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}
 
 	return &Server{
