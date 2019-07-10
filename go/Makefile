@@ -28,4 +28,8 @@ lint:
 test: generate
 	@env -u GOPATH $(EKIDEN_GO) test -race -v ./...
 
-.PHONY: all generate build lint test
+# Clean.
+clean:
+	@env -u GOPATH $(EKIDEN_GO) clean
+
+.PHONY: all generate build lint test clean
