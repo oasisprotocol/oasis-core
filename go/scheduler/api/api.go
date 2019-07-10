@@ -166,3 +166,10 @@ type Backend interface {
 	// Cleanup cleans up the scheduler backend.
 	Cleanup()
 }
+
+// Config is the per-backend common configuration.
+type Config struct {
+	// DebugBypassStake is true iff the scheduler should bypass all of the staking
+	// related checks and operations.
+	DebugBypassStake bool
+}

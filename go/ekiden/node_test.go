@@ -51,6 +51,7 @@ var (
 		{"registry.debug.allow_runtime_registration", true},
 		{"registry.debug.bypass_stake", true},
 		{"roothash.tendermint.index_blocks", true},
+		{"scheduler.debug.bypass_stake", true},
 		{"storage.backend", "leveldb"},
 		{"storage.debug.mock_signing_key", true},
 		{"staking.debug.genesis_state", stakingTests.DebugGenesisState},

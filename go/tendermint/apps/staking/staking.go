@@ -580,7 +580,7 @@ func EnsureSufficientStake(appState *abci.ApplicationState, ctx *abci.Context, i
 	for _, v := range thresholds {
 		qty := m[v]
 		if err = targetThreshold.Add(&qty); err != nil {
-			return errors.Wrap(err, "staking/tenderming: failed to accumulate threshold")
+			return errors.Wrap(err, "staking/tendermint: failed to accumulate threshold")
 		}
 	}
 
@@ -589,6 +589,72 @@ func EnsureSufficientStake(appState *abci.ApplicationState, ctx *abci.Context, i
 	}
 
 	return nil
+}
+
+// Snapshot is a snapshot of the escrow balances and thresholds that can be
+// used in lieu of repeated queries to `EnsureSufficientStake` at a given
+// height.  This should be favored when repeated queries are going to
+// be made.
+type Snapshot struct {
+	thresholds map[staking.ThresholdKind]staking.Quantity
+	balances   map[signature.MapKey]*staking.Quantity
+}
+
+// EnsureSufficientStake ensures that the account owned by id has sufficient
+// stake to meet the sum of the thresholds specified.  The thresholds vector
+// can have multiple instances of the same threshold kind specified, in which
+// case it will be factored in repeatedly.
+func (snap *Snapshot) EnsureSufficientStake(id signature.PublicKey, thresholds []staking.ThresholdKind) error {
+	escrowBalance := snap.balances[id.ToMapKey()]
+	if escrowBalance == nil {
+		escrowBalance = staking.NewQuantity()
+	}
+
+	var targetThreshold staking.Quantity
+	for _, v := range thresholds {
+		qty := snap.thresholds[v]
+		if err := targetThreshold.Add(&qty); err != nil {
+			return errors.Wrap(err, "staking/tendermint: failed to accumulate threshold")
+		}
+	}
+
+	if escrowBalance.Cmp(&targetThreshold) < 0 {
+		return staking.ErrInsufficientStake
+	}
+
+	return nil
+}
+
+// NewSnapshot creates a new staking snapshot.
+func NewSnapshot(appState *abci.ApplicationState, ctx *abci.Context) (*Snapshot, error) {
+	var state *MutableState
+	if ctx.IsCheckOnly() {
+		state = NewMutableState(appState.CheckTxTree())
+	} else {
+		state = NewMutableState(appState.DeliverTxTree())
+	}
+
+	thresholds, err := state.Thresholds()
+	if err != nil {
+		return nil, errors.Wrap(err, "staking/tendermint: failed to query thresholds")
+	}
+
+	accounts, err := state.accounts()
+	if err != nil {
+		return nil, errors.Wrap(err, "staking/tendermint: failed to query accounts")
+	}
+
+	balances := make(map[signature.MapKey]*staking.Quantity)
+	for _, v := range accounts {
+		if balance := state.EscrowBalance(v); !balance.IsZero() {
+			balances[v.ToMapKey()] = balance
+		}
+	}
+
+	return &Snapshot{
+		thresholds: thresholds,
+		balances:   balances,
+	}, nil
 }
 
 // New constructs a new staking application instance.

@@ -58,6 +58,7 @@ func RegisterFlags(cmd *cobra.Command) {
 
 	for _, v := range []string{
 		cfgDebugAllowRuntimeRegistration,
+		cfgDebugBypassStake,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
