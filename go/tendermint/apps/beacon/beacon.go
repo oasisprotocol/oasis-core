@@ -9,8 +9,6 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/crypto/sha3"
 
-	beacon "github.com/oasislabs/ekiden/go/beacon/api"
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
@@ -85,8 +83,8 @@ func (app *beaconApplication) InitChain(ctx *abci.Context, req types.RequestInit
 }
 
 func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeginBlock) error {
-	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
-		return app.onEpochChange(ctx, epoch, req)
+	if changed, beaconEpoch := app.state.EpochChanged(app.timeSource); changed {
+		return app.onBeaconEpochChange(ctx, beaconEpoch, req)
 	}
 	return nil
 }
@@ -111,7 +109,7 @@ func (app *beaconApplication) queryGetBeacon(s interface{}, r interface{}) ([]by
 	return state.GetBeacon()
 }
 
-func (app *beaconApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
+func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
 	var entropyCtx, entropy []byte
 
 	switch app.debugDeterministic {
@@ -122,7 +120,7 @@ func (app *beaconApplication) onEpochChange(ctx *abci.Context, epoch epochtime.E
 		if height <= 1 {
 			// No meaningful previous commit, use the block hash.  This isn't
 			// fantastic, but it's only for one epoch.
-			app.logger.Debug("onEpochChange: using block hash as entropy")
+			app.logger.Debug("onBeaconEpochChange: using block hash as entropy")
 			entropy = req.Hash
 		} else {
 			// Use the previous commit hash as the entropy input, under the theory
@@ -133,11 +131,11 @@ func (app *beaconApplication) onEpochChange(ctx *abci.Context, epoch epochtime.E
 			// TODO: This still isn't ideal, and an entirely different beacon
 			// entropy source should be written, be it based around SCRAPE,
 			// a VDF, naive commit-reveal, or even just calling an SGX enclave.
-			app.logger.Debug("onEpochChange: using commit hash as entropy")
+			app.logger.Debug("onBeaconEpochChange: using commit hash as entropy")
 			entropy = req.Header.GetLastCommitHash()
 		}
 		if len(entropy) == 0 {
-			return errors.New("onEpochChange: failed to obtain entropy")
+			return errors.New("onBeaconEpochChange: failed to obtain entropy")
 		}
 	case true:
 		// UNSAFE/DEBUG - Deterministic beacon.
@@ -146,20 +144,20 @@ func (app *beaconApplication) onEpochChange(ctx *abci.Context, epoch epochtime.E
 
 	b := getBeacon(epoch, entropyCtx, entropy)
 
-	app.logger.Debug("onEpochChange: generated beacon",
+	app.logger.Debug("onBeaconEpochChange: generated beacon",
 		"epoch", epoch,
 		"beacon", hex.EncodeToString(b),
 		"block_hash", hex.EncodeToString(entropy),
 		"height", app.state.BlockHeight(),
 	)
 
-	return app.onNewBeacon(ctx, &beacon.GenerateEvent{Epoch: epoch, Beacon: b})
+	return app.onNewBeacon(ctx, b)
 }
 
-func (app *beaconApplication) onNewBeacon(ctx *abci.Context, event *beacon.GenerateEvent) error {
+func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) error {
 	state := NewMutableState(app.state.DeliverTxTree())
 
-	if err := state.setBeacon(event); err != nil {
+	if err := state.setBeacon(beacon); err != nil {
 		app.logger.Error("onNewBeacon: failed to set beacon",
 			"err", err,
 		)
@@ -167,7 +165,7 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, event *beacon.Gener
 	}
 
 	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
-	ctx.EmitTag(TagGenerated, cbor.Marshal(event))
+	ctx.EmitTag(TagGenerated, beacon)
 
 	return nil
 }
@@ -186,9 +184,9 @@ func New(timeSource epochtime.Backend, debugDeterministic bool) abci.Application
 	return app
 }
 
-func getBeacon(epoch epochtime.EpochTime, entropyCtx []byte, entropy []byte) []byte {
+func getBeacon(beaconEpoch epochtime.EpochTime, entropyCtx []byte, entropy []byte) []byte {
 	var tmp [8]byte
-	binary.LittleEndian.PutUint64(tmp[:], uint64(epoch))
+	binary.LittleEndian.PutUint64(tmp[:], uint64(beaconEpoch))
 
 	h := sha3.New256()
 	_, _ = h.Write(entropyCtx)
