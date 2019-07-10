@@ -14,5 +14,6 @@ set -euxo pipefail
 #############
 # Run gitlint
 #############
+git fetch origin master
 echo "Linting from $(git rev-parse origin/master)"
 gitlint --commits origin/master...HEAD
