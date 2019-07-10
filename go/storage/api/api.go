@@ -228,4 +228,7 @@ type ClientBackend interface {
 
 	// GetConnectedNodes returns currently connected storage nodes.
 	GetConnectedNodes() []*node.Node
+
+	// WatchRuntime adds a runtime that storage client should watch.
+	WatchRuntime(signature.PublicKey) error
 }

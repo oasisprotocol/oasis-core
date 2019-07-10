@@ -5,6 +5,8 @@ import (
 	"encoding"
 	"encoding/hex"
 	"errors"
+
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 )
 
 const (
@@ -52,4 +54,17 @@ func (n *Namespace) Equal(cmp *Namespace) bool {
 // String returns the string representation of a chain namespace identifier.
 func (n Namespace) String() string {
 	return hex.EncodeToString(n[:])
+}
+
+// ToRuntimeID derives a RuntimeID from the namespace.
+// Storage client requires that RuntimeID is derivable from namespace.
+// TODO: there's probably a nicer? way to do this.
+func (n *Namespace) ToRuntimeID() (pk signature.PublicKey, err error) {
+	var raw []byte
+	raw, err = n.MarshalBinary()
+	if err != nil {
+		return
+	}
+	err = pk.UnmarshalBinary(raw)
+	return
 }

@@ -208,7 +208,7 @@ func (w *Worker) registerRuntime(cfg *Config, id signature.PublicKey) error {
 func newWorker(
 	enabled bool,
 	identity *identity.Identity,
-	storage storage.Backend,
+	storageBackend storage.Backend,
 	roothash roothash.Backend,
 	registryInst registry.Backend,
 	scheduler scheduler.Backend,
@@ -221,7 +221,7 @@ func newWorker(
 		enabled:   enabled,
 		cfg:       cfg,
 		Identity:  identity,
-		Storage:   storage,
+		Storage:   storageBackend,
 		Roothash:  roothash,
 		Registry:  registryInst,
 		Scheduler: scheduler,
@@ -239,10 +239,20 @@ func newWorker(
 			return nil, fmt.Errorf("common/worker: no runtimes configured")
 		}
 
-		// Register all configured runtimes.
 		for _, id := range cfg.Runtimes {
+			// Register all configured runtimes.
 			if err := w.registerRuntime(&cfg, id); err != nil {
 				return nil, err
+			}
+			// If using a storage client, it should watch the configured runtimes.
+			if storageClient, ok := w.Storage.(storage.ClientBackend); ok {
+				if err := storageClient.WatchRuntime(id); err != nil {
+					w.logger.Warn("common/worker: error watching storage runtime, expected if using cachingclient with local backend",
+						"err", err,
+					)
+				}
+			} else {
+				w.logger.Info("not watching storage runtime since not using a storage client backend")
 			}
 		}
 	}
