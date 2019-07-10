@@ -35,7 +35,7 @@ var (
 	rngContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
 	rngContextMerge                = []byte("EkS-ABCI-Merge")
 
-	errUnexpectedTransaction = errors.New("scheduler: unexpected transaction")
+	errUnexpectedTransaction = errors.New("tendermint/scheduler: unexpected transaction")
 )
 
 type stakeAccumulator struct {
@@ -143,27 +143,27 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		beaconState := beaconapp.NewMutableState(app.state.DeliverTxTree())
 		beacon, err := beaconState.GetBeacon()
 		if err != nil {
-			return fmt.Errorf("couldn't get beacon: %s", err.Error())
+			return errors.Wrap(err, "tendermint/scheduler: couldn't get beacon")
 		}
 
 		regState := registryapp.NewMutableState(app.state.DeliverTxTree())
 		runtimes, err := regState.GetRuntimes()
 		if err != nil {
-			return fmt.Errorf("couldn't get runtimes: %s", err.Error())
+			return errors.Wrap(err, "tendermint/scheduler: couldn't get runtimes")
 		}
 		nodes, err := regState.GetNodes()
 		if err != nil {
-			return fmt.Errorf("couldn't get nodes: %s", err.Error())
+			return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
 		}
 
 		entityStake, err := newStakeAccumulator(app.state, ctx, app.cfg.DebugBypassStake)
 		if err != nil {
-			return fmt.Errorf("cound't get stake snapshot: %s", err.Error())
+			return errors.Wrap(err, "tendermint/scheduler: couldn't get stake snapshot")
 		}
 		kinds := []scheduler.CommitteeKind{scheduler.KindCompute, scheduler.KindStorage, scheduler.KindTransactionScheduler, scheduler.KindMerge}
 		for _, kind := range kinds {
 			if err := app.electAll(ctx, request, epoch, beacon, entityStake, runtimes, nodes, kind); err != nil {
-				return fmt.Errorf("couldn't elect %s committees: %s", kind, err.Error())
+				return errors.Wrap(err, fmt.Sprintf("tendermint/scheduler: couldn't elect %s committees", kind))
 			}
 		}
 		ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
@@ -349,7 +349,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		rngCtx = rngContextMerge
 	default:
 		// This is a problem with this code. Don't try to handle it at runtime.
-		return fmt.Errorf("scheduler: invalid committee type: %v", kind)
+		return fmt.Errorf("tendermint/scheduler: invalid committee type: %v", kind)
 	}
 	nrNodes := len(nodeList)
 
@@ -375,7 +375,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 
 	drbg, err := drbg.New(crypto.SHA512, beacon, rt.ID[:], rngCtx)
 	if err != nil {
-		return fmt.Errorf("scheduler: couldn't instantiate DRBG: %s", err.Error())
+		return fmt.Errorf("tendermint/scheduler: couldn't instantiate DRBG: %s", err.Error())
 	}
 	rngSrc := mathrand.New(drbg)
 	rng := rand.New(rngSrc)
