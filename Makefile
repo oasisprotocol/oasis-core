@@ -32,7 +32,7 @@ ECHO = echo
 endif
 
 
-.PHONY: all tools runtimes rust go clean fmt test test-unit test-e2e regenerate-single-node
+.PHONY: all tools runtimes rust go clean clean-runtimes clean-go fmt test test-unit test-e2e regenerate-single-node
 
 all: tools runtimes rust go
 	@$(ECHO) "$(CYAN)*** Everything built successfully!$(OFF)"
@@ -82,7 +82,18 @@ test-e2e:
 	@$(ECHO) "$(CYAN)*** Running E2E migration tests...$(OFF)"
 	@.buildkite/scripts/test_migration.sh
 
-clean:
+clean-runtimes:
+	@$(ECHO) "$(CYAN)*** Cleaning up runtimes...$(OFF)"
+	@for e in $(RUNTIMES); do \
+		export KM_ENCLAVE_PATH=$(KM_ENCLAVE_PATH) && \
+		(cd $$e && cargo clean) || exit 1; \
+	done
+
+clean-go:
+	@$(ECHO) "$(CYAN)*** Cleaning up Go node...$(OFF)"
+	@$(MAKE) -C go clean
+
+clean: clean-go clean-runtimes
 	@$(ECHO) "$(CYAN)*** Cleaning up...$(OFF)"
 	@cargo clean
 
