@@ -24,6 +24,9 @@ type NodeDB interface {
 	// GetWriteLog retrieves a write log between two storage instances from the database.
 	GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (WriteLogIterator, error)
 
+	// GetCheckpoint retrieves a write log of entries in root.
+	GetCheckpoint(ctx context.Context, root node.Root) (WriteLogIterator, error)
+
 	// NewBatch starts a new batch.
 	NewBatch() Batch
 
@@ -114,6 +117,10 @@ func (d *nopNodeDB) HasRoot(root node.Root) bool {
 	return false
 }
 
+func (d *nopNodeDB) GetCheckpoint(ctx context.Context, root node.Root) (WriteLogIterator, error) {
+	return nil, ErrWriteLogNotFound
+}
+
 // Close is a no-op.
 func (d *nopNodeDB) Close() {
 }
@@ -156,4 +163,66 @@ func (s *nopSubtree) VisitCleanNode(depth uint8, ptr *node.Pointer) error {
 
 func (s *nopSubtree) Commit() error {
 	return nil
+}
+
+// CheckpointableDB encapsulates functionality of getting a checkpoint.
+type CheckpointableDB struct {
+	db NodeDB
+}
+
+// NewCheckpointableDB creates a new instance of CheckpoitableDb.
+func NewCheckpointableDB(db NodeDB) CheckpointableDB {
+	return CheckpointableDB{db: db}
+}
+
+// GetCheckpoint returns an iterator of write log entries in the provided
+func (b *CheckpointableDB) GetCheckpoint(ctx context.Context, root node.Root) (WriteLogIterator, error) {
+	if !b.db.HasRoot(root) {
+		return nil, ErrNodeNotFound
+	}
+	ptr := &node.Pointer{
+		Clean: true,
+		Hash:  root.Hash,
+	}
+	pipe := NewPipeWriteLogIterator(ctx)
+	go func() {
+		defer pipe.Close()
+
+		b.getNodeWriteLog(ctx, &pipe, root, ptr)
+	}()
+
+	return &pipe, nil
+}
+
+func (b *CheckpointableDB) getNodeWriteLog(ctx context.Context, pipe *PipeWriteLogIterator, root node.Root, ptr *node.Pointer) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
+	nod, err := b.db.GetNode(root, ptr)
+	if err != nil {
+		_ = pipe.PutError(err)
+		return
+	}
+	switch n := nod.(type) {
+	case *node.LeafNode:
+		entry := writelog.LogEntry{
+			Key:   n.Key[:],
+			Value: n.Value.Value[:],
+		}
+		if err := pipe.Put(&entry); err != nil {
+			_ = pipe.PutError(err)
+		}
+	case *node.InternalNode:
+		if n.Left != nil {
+			b.getNodeWriteLog(ctx, pipe, root, n.Left)
+		}
+		if n.Right != nil {
+			b.getNodeWriteLog(ctx, pipe, root, n.Right)
+		}
+	default:
+		panic("urkel/db/CheckpoitableDB: invalid root node type")
+	}
 }

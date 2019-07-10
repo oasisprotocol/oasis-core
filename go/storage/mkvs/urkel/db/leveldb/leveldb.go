@@ -38,6 +38,8 @@ func makeWriteLogKey(startRoot node.Root, endRoot node.Root) []byte {
 }
 
 type leveldbNodeDB struct {
+	api.CheckpointableDB
+
 	db *leveldb.DB
 
 	closeOnce sync.Once
@@ -49,8 +51,9 @@ func New(dirname string) (api.NodeDB, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	return &leveldbNodeDB{db: db}, nil
+	levelNDb := &leveldbNodeDB{db: db}
+	levelNDb.CheckpointableDB = api.NewCheckpointableDB(levelNDb)
+	return levelNDb, nil
 }
 
 func (d *leveldbNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {

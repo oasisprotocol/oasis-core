@@ -10,7 +10,8 @@ service Storage {
     rpc GetSubtree(GetSubtreeRequest) returns (GetSubtreeResponse) {}
     rpc GetPath(GetPathRequest) returns (GetPathResponse) {}
     rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {}
-    rpc GetDiff(GetDiffRequest) returns (stream GetDiffResponse) {}
+    rpc GetDiff(GetDiffRequest) returns (stream WriteLogResponse) {}
+    rpc GetCheckpoint(GetCheckpointRequest) returns (stream WriteLogResponse) {}
 }
 
 message LogEntry {
@@ -84,18 +85,25 @@ message GetNodeResponse {
     bytes node = 1;  // serialized to binary
 }
 
-message GetDiffRequest {
-    message SyncOptions {
-        bytes offset_key = 1;
-        uint64 limit = 2;
-    }
+// SyncOptions are shared options for GetDiff and GetCheckpoint services.
+message SyncOptions {
+    bytes offset_key = 1;
+    uint64 limit = 2;
+}
 
+// WriteLogResponse is shared response type for GetDiff and GetCheckpoint services.
+message WriteLogResponse {
+    bool final = 1;
+    repeated LogEntry log = 2;
+}
+
+message GetDiffRequest {
     bytes start_root = 1;
     bytes end_root = 2;
     SyncOptions opts = 3;
 }
 
-message GetDiffResponse {
-    bool final = 1;
-    repeated LogEntry log = 2;
+message GetCheckpointRequest {
+    bytes root = 1;
+    SyncOptions opts = 2;
 }

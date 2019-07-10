@@ -197,8 +197,14 @@ type Backend interface {
 	) ([]*Receipt, error)
 
 	// GetDiff returns an iterator of write log entries that must be applied
-	// to get from the first given hash to the second one.
+	// to get from the first given root to the second one.
 	GetDiff(context.Context, Root, Root) (WriteLogIterator, error)
+
+	// GetCheckpoint returns an iterator of write log entries in the provided
+	// root.
+	// XXX: until (PR#1743), hashed keys are actually returned, therefore
+	// use `InsertRaw` when inserting the keys.
+	GetCheckpoint(context.Context, Root) (WriteLogIterator, error)
 
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()

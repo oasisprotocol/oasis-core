@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	// GetDiffChunkEntryCount defines the maximum number of write log entries
-	// that go into a single GetDiff response chunk.
-	GetDiffChunkEntryCount int = 10
+	// WriteLogIteratorChunkSize defines the chunk size of write log entries
+	// for GetCheckpoint and GetDiff methods.
+	WriteLogIteratorChunkSize int = 10
 )
 
 var _ pb.StorageServer = (*grpcServer)(nil)
@@ -192,38 +192,28 @@ func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.G
 	return &pb.GetNodeResponse{Node: serializedNode}, nil
 }
 
-func (s *grpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffServer) error {
-	var startRoot, endRoot api.Root
-	if err := startRoot.UnmarshalCBOR(req.GetStartRoot()); err != nil {
-		return errors.Wrap(err, "storage: failed to unmarshal start root")
-	}
-	if err := endRoot.UnmarshalCBOR(req.GetEndRoot()); err != nil {
-		return errors.Wrap(err, "storage: failed to unmarshal end root")
-	}
+// writeLogService implements sending write log iterator for GetDiff and GetCheckpoint methods.
+type writeLogService struct {
+	opts     *pb.SyncOptions
+	iterator api.WriteLogIterator
+	send     func(*pb.WriteLogResponse) error
+}
 
-	syncOptions := req.GetOpts()
-
-	<-s.backend.Initialized()
-
-	it, err := s.backend.GetDiff(stream.Context(), startRoot, endRoot)
-	if err != nil {
-		return err
-	}
-
+func (s *writeLogService) SendWriteLogIterator() error {
 	var totalSent uint64
 	skipping := true
 	final := false
 	done := false
 	totalSent = 0
 
-	if len(syncOptions.GetOffsetKey()) == 0 {
+	if len(s.opts.GetOffsetKey()) == 0 {
 		skipping = false
 	}
 
 	for {
 		var entryArray []*pb.LogEntry
 		for {
-			more, err := it.Next()
+			more, err := s.iterator.Next()
 			if err != nil {
 				return err
 			}
@@ -232,13 +222,13 @@ func (s *grpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffSe
 				break
 			}
 
-			entry, err := it.Value()
+			entry, err := s.iterator.Value()
 			if err != nil {
 				return err
 			}
 
 			if skipping {
-				if bytes.Equal(entry.Key, syncOptions.GetOffsetKey()) {
+				if bytes.Equal(entry.Key, s.opts.GetOffsetKey()) {
 					skipping = false
 				}
 				continue
@@ -249,17 +239,20 @@ func (s *grpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffSe
 				Value: entry.Value,
 			})
 			totalSent++
-			if (syncOptions.GetLimit() > 0 && totalSent >= syncOptions.GetLimit()) || len(entryArray) >= GetDiffChunkEntryCount {
+			if len(entryArray) >= WriteLogIteratorChunkSize {
+				break
+			}
+			if s.opts.GetLimit() > 0 && totalSent >= s.opts.GetLimit() {
 				done = true
 				break
 			}
 		}
-		resp := &pb.GetDiffResponse{
+		resp := &pb.WriteLogResponse{
 			Final: final,
 			Log:   entryArray,
 		}
 
-		if err := stream.Send(resp); err != nil {
+		if err := s.send(resp); err != nil {
 			return err
 		}
 
@@ -269,6 +262,53 @@ func (s *grpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffSe
 	}
 
 	return nil
+}
+
+func (s *grpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffServer) error {
+	var startRoot, endRoot api.Root
+	if err := startRoot.UnmarshalCBOR(req.GetStartRoot()); err != nil {
+		return errors.Wrap(err, "storage: failed to unmarshal start root")
+	}
+	if err := endRoot.UnmarshalCBOR(req.GetEndRoot()); err != nil {
+		return errors.Wrap(err, "storage: failed to unmarshal end root")
+	}
+
+	<-s.backend.Initialized()
+
+	it, err := s.backend.GetDiff(stream.Context(), startRoot, endRoot)
+	if err != nil {
+		return err
+	}
+
+	svc := &writeLogService{
+		opts:     req.GetOpts(),
+		iterator: it,
+		send:     func(resp *pb.WriteLogResponse) error { return stream.Send(resp) },
+	}
+
+	return svc.SendWriteLogIterator()
+}
+
+func (s *grpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Storage_GetCheckpointServer) error {
+	var root api.Root
+	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
+		return errors.Wrap(err, "storage: failed to unmarshal root")
+	}
+
+	<-s.backend.Initialized()
+
+	it, err := s.backend.GetCheckpoint(stream.Context(), root)
+	if err != nil {
+		return err
+	}
+
+	svc := &writeLogService{
+		opts:     req.GetOpts(),
+		iterator: it,
+		send:     func(resp *pb.WriteLogResponse) error { return stream.Send(resp) },
+	}
+
+	return svc.SendWriteLogIterator()
 }
 
 // NewGRPCServer intializes and registers a grpc storage server backed

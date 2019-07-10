@@ -580,6 +580,52 @@ func (b *storageClientBackend) GetDiff(ctx context.Context, startRoot api.Root, 
 	return &pipe, nil
 }
 
+func (b *storageClientBackend) GetCheckpoint(ctx context.Context, root api.Root) (api.WriteLogIterator, error) {
+	var req storage.GetCheckpointRequest
+	req.Root = root.MarshalCBOR()
+
+	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+		return c.GetCheckpoint(ctx, &req)
+	})
+	if err != nil {
+		return nil, err
+	}
+	respClient := respRaw.(storage.Storage_GetCheckpointClient)
+
+	pipe := urkelDb.NewPipeWriteLogIterator(ctx)
+
+	go func() {
+		defer pipe.Close()
+		for {
+			checkpointResp, err := respClient.Recv()
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				b.logger.Error("storage client GetCheckpoint error",
+					"err", err)
+				_ = pipe.PutError(err)
+			}
+
+			for _, entry := range checkpointResp.GetLog() {
+				entry := api.LogEntry{
+					Key:   entry.Key,
+					Value: entry.Value,
+				}
+				if err := pipe.Put(&entry); err != nil {
+					_ = pipe.PutError(err)
+				}
+			}
+
+			if checkpointResp.GetFinal() {
+				return
+			}
+		}
+	}()
+
+	return &pipe, nil
+}
+
 func (b *storageClientBackend) Cleanup() {
 	b.connectedNodesState.Lock()
 	defer b.connectedNodesState.Unlock()

@@ -146,6 +146,10 @@ func (ba *badgerBackend) GetDiff(ctx context.Context, startRoot api.Root, endRoo
 	return ba.nodedb.GetWriteLog(ctx, startRoot, endRoot)
 }
 
+func (ba *badgerBackend) GetCheckpoint(ctx context.Context, root api.Root) (api.WriteLogIterator, error) {
+	return ba.nodedb.GetCheckpoint(ctx, root)
+}
+
 // NewLogAdapter returns a badger.Logger backed by an ekiden logger.
 func NewLogAdapter(logger *logging.Logger) badger.Logger {
 	return &badgerLogger{

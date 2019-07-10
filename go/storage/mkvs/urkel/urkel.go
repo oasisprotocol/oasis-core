@@ -161,6 +161,13 @@ func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root 
 
 // Insert inserts a key/value pair into the tree.
 func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
+	hkey := hashKey(key)
+	return t.InsertRaw(ctx, key, hkey, value)
+}
+
+// InsertRaw inserts keys without hashing.
+// XXX: until (PR#1743), this is needed for Checkpoints as hashed keys are returned by the GetCheckpoints.
+func (t *Tree) InsertRaw(ctx context.Context, key []byte, hkey hash.Hash, value []byte) error {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -168,7 +175,6 @@ func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
 		return ErrClosed
 	}
 
-	hkey := hashKey(key)
 	var result insertResult
 	result, err := t.doInsert(ctx, t.cache.pendingRoot, 0, hkey, value)
 	if err != nil {

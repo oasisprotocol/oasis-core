@@ -100,6 +100,10 @@ func (b *cachingClientBackend) GetDiff(ctx context.Context, startRoot api.Root, 
 	return b.remote.GetDiff(ctx, startRoot, endRoot)
 }
 
+func (b *cachingClientBackend) GetCheckpoint(ctx context.Context, root api.Root) (api.WriteLogIterator, error) {
+	return b.remote.GetCheckpoint(ctx, root)
+}
+
 func (b *cachingClientBackend) Cleanup() {
 	b.remote.Cleanup()
 	b.local.Close()
