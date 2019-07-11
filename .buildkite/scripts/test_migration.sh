@@ -62,7 +62,7 @@ test_migration() {
     # Start client and do the state mutations.
     ${CLIENT} \
         --mode part1 \
-        --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
+        --node-address unix:${EKIDEN_CLIENT_SOCKET} \
         --runtime-id "$RUNTIME_ID"
 
     # Stop the compute nodes.
@@ -101,7 +101,7 @@ test_migration() {
     # Start client and do state verification, checking that migration succeeded.
     ${CLIENT} \
         --mode part2 \
-        --node-address unix:${EKIDEN_VALIDATOR_SOCKET} \
+        --node-address unix:${EKIDEN_CLIENT_SOCKET} \
         --runtime-id "$RUNTIME_ID"
 
     # Cleanup.
