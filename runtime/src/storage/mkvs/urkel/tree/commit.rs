@@ -23,7 +23,7 @@ impl UrkelTree {
         let ctx = ctx.freeze();
         let mut update_list: UpdateList<LRUCache> = UpdateList::new();
         let pending_root = self.cache.borrow().get_pending_root();
-        let new_hash = _commit(&ctx, pending_root.clone(), &mut update_list)?;
+        let new_hash = _commit(&ctx, pending_root.clone(), &mut update_list, Some(round))?;
 
         update_list.commit(&mut self.cache.borrow_mut());
 
@@ -54,6 +54,7 @@ pub fn _commit<C: Cache>(
     ctx: &Arc<Context>,
     ptr: NodePtrRef,
     update_list: &mut UpdateList<C>,
+    round: Option<u64>,
 ) -> Fallible<Hash> {
     if ptr.borrow().clean {
         return Ok(ptr.borrow().hash);
@@ -72,10 +73,13 @@ pub fn _commit<C: Cache>(
                 let int_left = noderef_as!(some_node_ref, Internal).left.clone();
                 let int_right = noderef_as!(some_node_ref, Internal).right.clone();
 
-                _commit(ctx, int_leaf_node.clone(), update_list)?;
-                _commit(ctx, int_left.clone(), update_list)?;
-                _commit(ctx, int_right.clone(), update_list)?;
+                _commit(ctx, int_leaf_node.clone(), update_list, round)?;
+                _commit(ctx, int_left.clone(), update_list, round)?;
+                _commit(ctx, int_right.clone(), update_list, round)?;
 
+                if let Some(round) = round {
+                    noderef_as_mut!(some_node_ref, Internal).round = round;
+                }
                 some_node_ref.borrow_mut().update_hash();
                 ptr.borrow_mut().hash = some_node_ref.borrow().get_hash();
 
@@ -101,6 +105,9 @@ pub fn _commit<C: Cache>(
                     }));
                 }
 
+                if let Some(round) = round {
+                    noderef_as_mut!(node_ref, Leaf).round = round;
+                }
                 node_ref.borrow_mut().update_hash();
                 ptr.borrow_mut().hash = node_ref.borrow().get_hash();
 

@@ -46,6 +46,10 @@ type Tree struct {
 
 	// NOTE: This can be a map as updates are commutative.
 	pendingWriteLog map[string]*pendingEntry
+	// pendingRemovedNodes are the nodes that have been removed from the
+	// in-memory tree and should be marked for garbage collection if this
+	// tree is committed to the node database.
+	pendingRemovedNodes []node.Node
 }
 
 type pendingEntry struct {
@@ -318,12 +322,18 @@ func (t *Tree) commitWithHooks(
 		return nil, hash.Hash{}, ErrClosed
 	}
 
-	batch := t.cache.db.NewBatch()
+	oldRoot := t.cache.getSyncRoot()
+	if oldRoot.IsEmpty() {
+		oldRoot.Namespace = namespace
+		oldRoot.Round = round
+	}
+
+	batch := t.cache.db.NewBatch(namespace, round, oldRoot)
 	defer batch.Reset()
 
 	subtree := batch.MaybeStartSubtree(nil, 0, t.cache.pendingRoot)
 
-	rootHash, err := doCommit(ctx, t.cache, batch, subtree, 0, t.cache.pendingRoot)
+	rootHash, err := doCommit(ctx, t.cache, batch, subtree, 0, t.cache.pendingRoot, &round)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
@@ -331,6 +341,14 @@ func (t *Tree) commitWithHooks(
 		return nil, hash.Hash{}, err
 	}
 
+	// Perform pre-commit validation if configured.
+	if beforeDbCommit != nil {
+		if err := beforeDbCommit(rootHash); err != nil {
+			return nil, hash.Hash{}, err
+		}
+	}
+
+	// Store write log summaries.
 	var log writelog.WriteLog
 	var logAnns writelog.WriteLogAnnotations
 	for _, entry := range t.pendingWriteLog {
@@ -348,31 +366,27 @@ func (t *Tree) commitWithHooks(
 		}
 	}
 
-	oldRoot := t.cache.getSyncRoot()
-	if oldRoot.IsEmpty() {
-		oldRoot.Namespace = namespace
-		oldRoot.Round = round
-	}
 	root := node.Root{
 		Namespace: namespace,
 		Round:     round,
 		Hash:      rootHash,
 	}
-	if err := batch.PutWriteLog(oldRoot, root, log, logAnns); err != nil {
+	if err := batch.PutWriteLog(log, logAnns); err != nil {
 		return nil, hash.Hash{}, err
 	}
 
-	if beforeDbCommit != nil {
-		if err := beforeDbCommit(rootHash); err != nil {
-			return nil, hash.Hash{}, err
-		}
+	// Store removed nodes.
+	if err := batch.RemoveNodes(t.pendingRemovedNodes); err != nil {
+		return nil, hash.Hash{}, err
 	}
 
+	// And finally commit to the database.
 	if err := batch.Commit(root); err != nil {
 		return nil, hash.Hash{}, err
 	}
 
 	t.pendingWriteLog = make(map[string]*pendingEntry)
+	t.pendingRemovedNodes = nil
 	t.cache.setSyncRoot(root)
 
 	return log, rootHash, nil

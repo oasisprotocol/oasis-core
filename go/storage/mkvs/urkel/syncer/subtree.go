@@ -18,6 +18,7 @@ const (
 var (
 	ErrTooManyFullNodes    = errors.New("urkel: too many full nodes")
 	ErrInvalidSubtreeIndex = errors.New("urkel: invalid subtree index")
+	ErrInvalidRound        = errors.New("urkel: invalid round")
 )
 
 // SubtreeIndex is a subtree index.
@@ -74,7 +75,9 @@ func (s *SubtreePointer) Equal(other *SubtreePointer) bool {
 // InternalNodeSummary is a compressed (index-only) representation of an
 // internal node.
 type InternalNodeSummary struct {
-	Label    node.Key
+	Label node.Key
+	Round uint64
+
 	LeafNode SubtreePointer
 	Left     SubtreePointer
 	Right    SubtreePointer
@@ -99,9 +102,17 @@ func (s *InternalNodeSummary) MarshalBinary() (data []byte, err error) {
 	if right, err = s.Right.MarshalBinary(); err != nil {
 		return
 	}
-	data = make([]byte, node.DepthSize+len(s.Label)+len(leafNode)+len(left)+len(right))
+
+	// TODO: Consider using a sync.Pool for varint buffers.
+	round := make([]byte, binary.MaxVarintLen64)
+	roundLen := binary.PutUvarint(round, s.Round)
+
+	data = make([]byte, roundLen+node.DepthSize+len(s.Label)+len(leafNode)+len(left)+len(right))
 
 	pos := 0
+	copy(data[pos:pos+roundLen], round[:roundLen])
+	pos += roundLen
+
 	copy(data[pos:pos+node.DepthSize], s.LabelBitLength.MarshalBinary()[:])
 	pos += node.DepthSize
 
@@ -131,10 +142,17 @@ func (s *InternalNodeSummary) SizedUnmarshalBinary(data []byte) (int, error) {
 	var leafNodeLen int
 	var leftLen int
 	var rightLen int
+	var roundLen int
 	var err error
 
-	ds := 0
 	pos := 0
+	s.Round, roundLen = binary.Uvarint(data[pos:])
+	if roundLen <= 0 {
+		return 0, ErrInvalidRound
+	}
+	pos += roundLen
+
+	var ds int
 	if ds, err = s.LabelBitLength.UnmarshalBinary(data[pos:]); err != nil {
 		return 0, err
 	}
@@ -172,7 +190,7 @@ func (s *InternalNodeSummary) SizedUnmarshalBinary(data []byte) (int, error) {
 
 // Equal compares a node summary with some other node summary.
 func (s *InternalNodeSummary) Equal(other *InternalNodeSummary) bool {
-	return s.LeafNode.Equal(&other.LeafNode) && s.Left.Equal(&other.Left) && s.Right.Equal(&other.Right)
+	return s.Round == other.Round && s.LeafNode.Equal(&other.LeafNode) && s.Left.Equal(&other.Left) && s.Right.Equal(&other.Right)
 }
 
 // Subtree is a compressed representation of a subtree.

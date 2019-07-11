@@ -41,6 +41,9 @@ const (
 	ValueSize = uint64(unsafe.Sizeof(Value{}))
 	// LeafNodeSize is the minimum size of a leaf node in memory.
 	LeafNodeSize = uint64(unsafe.Sizeof(LeafNode{}))
+
+	// RoundSize is the size of the encoded round.
+	RoundSize = int(unsafe.Sizeof(uint64(0)))
 )
 
 var (
@@ -275,6 +278,9 @@ type Node interface {
 	// GetHash returns the node's cached hash.
 	GetHash() hash.Hash
 
+	// GetCreatedRound returns the round in which the node has been created.
+	GetCreatedRound() uint64
+
 	// UpdateHash updates the node's cached hash by recomputing it.
 	//
 	// Does not mark the node as clean.
@@ -306,13 +312,18 @@ type Node interface {
 // Note that Label and LabelBitLength can only be empty iff the internal
 // node is the root of the tree.
 type InternalNode struct {
-	Hash           hash.Hash
-	Label          Key   // label on the incoming edge
-	LabelBitLength Depth // length of the label in bits
+	// Round is the round in which the node has been created.
+	Round uint64
+	Hash  hash.Hash
+	// Label is the label on the incoming edge.
+	Label Key
+	// LabelBitLength is the length of the label in bits.
+	LabelBitLength Depth
 	Clean          bool
-	LeafNode       *Pointer // for the key ending at this depth
-	Left           *Pointer
-	Right          *Pointer
+	// LeafNode is for the key ending at this depth.
+	LeafNode *Pointer
+	Left     *Pointer
+	Right    *Pointer
 }
 
 // Size returns the size of this internal node in bytes.
@@ -327,6 +338,9 @@ func (n *InternalNode) Size() uint64 {
 //
 // Does not mark the node as clean.
 func (n *InternalNode) UpdateHash() {
+	var round [8]byte
+	binary.LittleEndian.PutUint64(round[:], n.Round)
+
 	leafNodeHash := n.LeafNode.GetHash()
 	leftHash := n.Left.GetHash()
 	rightHash := n.Right.GetHash()
@@ -334,6 +348,7 @@ func (n *InternalNode) UpdateHash() {
 
 	n.Hash.FromBytes(
 		[]byte{PrefixInternalNode},
+		round[:],
 		labelBitLength,
 		n.Label[:],
 		leafNodeHash[:],
@@ -347,6 +362,11 @@ func (n *InternalNode) GetHash() hash.Hash {
 	return n.Hash
 }
 
+// GetCreatedRound returns the round in which the node has been created.
+func (n *InternalNode) GetCreatedRound() uint64 {
+	return n.Round
+}
+
 // Extract makes a copy of the node containing only hash references.
 //
 // For LeafNode, it makes a deep copy so that the parent internal node always
@@ -358,6 +378,7 @@ func (n *InternalNode) Extract() Node {
 	}
 	return &InternalNode{
 		Clean:          true,
+		Round:          n.Round,
 		Hash:           n.Hash,
 		Label:          n.Label,
 		LabelBitLength: n.LabelBitLength,
@@ -377,6 +398,7 @@ func (n *InternalNode) Extract() Node {
 func (n *InternalNode) ExtractUnchecked() Node {
 	return &InternalNode{
 		Clean:          true,
+		Round:          n.Round,
 		Hash:           n.Hash,
 		Label:          n.Label,
 		LabelBitLength: n.LabelBitLength,
@@ -425,10 +447,12 @@ func (n *InternalNode) MarshalBinary() (data []byte, err error) {
 	leftHash := n.Left.GetHash()
 	rightHash := n.Right.GetHash()
 
-	data = make([]byte, 1+DepthSize+len(n.Label)+len(leafNodeBinary)+hash.Size*2)
+	data = make([]byte, 1+RoundSize+DepthSize+len(n.Label)+len(leafNodeBinary)+hash.Size*2)
 	pos := 0
 	data[pos] = PrefixInternalNode
 	pos++
+	binary.LittleEndian.PutUint64(data[pos:pos+RoundSize], n.Round)
+	pos += RoundSize
 	copy(data[pos:pos+DepthSize], n.LabelBitLength.MarshalBinary()[:])
 	pos += DepthSize
 	copy(data[pos:pos+len(n.Label)], n.Label)
@@ -449,7 +473,7 @@ func (n *InternalNode) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled internal node.
 func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 1+DepthSize+1+hash.Size*2 {
+	if len(data) < 1+RoundSize+DepthSize+1+hash.Size*2 {
 		return 0, ErrMalformedNode
 	}
 
@@ -458,6 +482,9 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 		return 0, ErrMalformedNode
 	}
 	pos++
+
+	n.Round = binary.LittleEndian.Uint64(data[pos : pos+RoundSize])
+	pos += RoundSize
 
 	if _, err := n.LabelBitLength.UnmarshalBinary(data[pos:]); err != nil {
 		return 0, errors.Wrap(err, "urkel: failed to unmarshal LabelBitLength")
@@ -523,9 +550,9 @@ func (n *InternalNode) Equal(other Node) bool {
 	}
 	if other, ok := other.(*InternalNode); ok {
 		if n.Clean && other.Clean {
-			return n.Hash.Equal(&other.Hash) && n.LabelBitLength == other.LabelBitLength && bytes.Equal(n.Label, other.Label)
+			return n.Hash.Equal(&other.Hash)
 		}
-		return n.LeafNode.Equal(other.LeafNode) && n.Left.Equal(other.Left) && n.Right.Equal(other.Right) && n.LabelBitLength == other.LabelBitLength && bytes.Equal(n.Label, other.Label)
+		return n.Round == other.Round && n.LeafNode.Equal(other.LeafNode) && n.Left.Equal(other.Left) && n.Right.Equal(other.Right) && n.LabelBitLength == other.LabelBitLength && bytes.Equal(n.Label, other.Label)
 	}
 	return false
 }
@@ -533,6 +560,8 @@ func (n *InternalNode) Equal(other Node) bool {
 // LeafNode is a leaf node containing a key/value pair.
 type LeafNode struct {
 	Clean bool
+	// Round is the round in which the node has been created.
+	Round uint64
 	Hash  hash.Hash
 	Key   Key
 	Value *Value
@@ -551,11 +580,19 @@ func (n *LeafNode) GetHash() hash.Hash {
 	return n.Hash
 }
 
+// GetCreatedRound returns the round in which the node has been created.
+func (n *LeafNode) GetCreatedRound() uint64 {
+	return n.Round
+}
+
 // UpdateHash updates the node's cached hash by recomputing it.
 //
 // Does not mark the node as clean.
 func (n *LeafNode) UpdateHash() {
-	n.Hash.FromBytes([]byte{PrefixLeafNode}, n.Key[:], n.Value.Hash[:])
+	var round [RoundSize]byte
+	binary.LittleEndian.PutUint64(round[:], n.Round)
+
+	n.Hash.FromBytes([]byte{PrefixLeafNode}, round[:], n.Key[:], n.Value.Hash[:])
 }
 
 // Extract makes a copy of the node containing only hash references.
@@ -571,6 +608,7 @@ func (n *LeafNode) Extract() Node {
 func (n *LeafNode) ExtractUnchecked() Node {
 	return &LeafNode{
 		Clean: true,
+		Round: n.Round,
 		Hash:  n.Hash,
 		Key:   n.Key,
 		Value: n.Value.ExtractUnchecked(),
@@ -610,10 +648,15 @@ func (n *LeafNode) MarshalBinary() (data []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	data = make([]byte, 1+len(keyData)+len(valueData))
-	data[0] = PrefixLeafNode
-	copy(data[1:1+len(keyData)], keyData)
-	copy(data[1+len(keyData):], valueData)
+	data = make([]byte, 1+RoundSize+len(keyData)+len(valueData))
+	pos := 0
+	data[pos] = PrefixLeafNode
+	pos++
+	binary.LittleEndian.PutUint64(data[pos:pos+RoundSize], n.Round)
+	pos += RoundSize
+	copy(data[pos:pos+len(keyData)], keyData)
+	pos += len(keyData)
+	copy(data[pos:], valueData)
 	return
 }
 
@@ -625,29 +668,35 @@ func (n *LeafNode) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled leaf node.
 func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 1+DepthSize || data[0] != PrefixLeafNode {
+	if len(data) < 1+RoundSize+DepthSize || data[0] != PrefixLeafNode {
 		return 0, ErrMalformedNode
 	}
 
-	key := Key{}
-	keySize, err := key.SizedUnmarshalBinary(data[1:])
-	if err != nil {
-		return 0, err
-	}
+	pos := 1
+	n.Round = binary.LittleEndian.Uint64(data[pos : pos+RoundSize])
+	pos += RoundSize
 
-	value := &Value{}
-	valueSize, err := value.SizedUnmarshalBinary(data[1+keySize:])
+	var key Key
+	keySize, err := key.SizedUnmarshalBinary(data[pos:])
 	if err != nil {
 		return 0, err
 	}
+	pos += keySize
+
+	var value Value
+	valueSize, err := value.SizedUnmarshalBinary(data[pos:])
+	if err != nil {
+		return 0, err
+	}
+	pos += valueSize
 
 	n.Clean = true
 	n.Key = key
-	n.Value = value
+	n.Value = &value
 
 	n.UpdateHash()
 
-	return 1 + keySize + valueSize, nil
+	return pos, nil
 }
 
 // Equal compares a node with some other node.
@@ -662,7 +711,7 @@ func (n *LeafNode) Equal(other Node) bool {
 		if n.Clean && other.Clean {
 			return n.Hash.Equal(&other.Hash)
 		}
-		return n.Key.Equal(other.Key) && n.Value.EqualPointer(other.Value)
+		return n.Round == other.Round && n.Key.Equal(other.Key) && n.Value.EqualPointer(other.Value)
 	}
 	return false
 }

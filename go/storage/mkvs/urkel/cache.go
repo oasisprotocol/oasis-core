@@ -527,11 +527,17 @@ func (c *cache) reconstructSubtree(ctx context.Context, rootHash hash.Hash, st *
 		// This is used in the cachingclient, for example.
 		d = c.db
 	}
-	batch := d.NewBatch()
+
+	root := node.Root{
+		Namespace: c.syncRoot.Namespace,
+		Round:     c.syncRoot.Round,
+		Hash:      rootHash,
+	}
+	batch := d.NewBatch(c.syncRoot.Namespace, c.syncRoot.Round, root)
 	defer batch.Reset()
 	subtree := batch.MaybeStartSubtree(nil, depth, ptr)
 
-	syncRootHash, err := doCommit(ctx, c, batch, subtree, depth, ptr)
+	syncRootHash, err := doCommit(ctx, c, batch, subtree, depth, ptr, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -546,11 +552,6 @@ func (c *cache) reconstructSubtree(ctx context.Context, rootHash hash.Hash, st *
 	}
 	// We must commit even though this is a no-op database in order to fire
 	// the on-commit hooks.
-	root := node.Root{
-		Namespace: c.syncRoot.Namespace,
-		Round:     c.syncRoot.Round,
-		Hash:      rootHash,
-	}
 	if err := batch.Commit(root); err != nil {
 		return nil, err
 	}
@@ -642,5 +643,7 @@ func (c *cache) doReconstructSummary(
 		return nil, err
 	}
 
-	return c.newInternalNode(s.Label, s.LabelBitLength, leafNode, left, right), nil
+	intNode := c.newInternalNode(s.Label, s.LabelBitLength, leafNode, left, right)
+	intNode.Node.(*node.InternalNode).Round = s.Round
+	return intNode, nil
 }

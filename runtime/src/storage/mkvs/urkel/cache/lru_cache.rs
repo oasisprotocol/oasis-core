@@ -617,7 +617,7 @@ impl Cache for LRUCache {
         }
 
         let mut update_list: UpdateList<LRUCache> = UpdateList::new();
-        let new_root = _commit(ctx, ptr.clone(), &mut update_list)?;
+        let new_root = _commit(ctx, ptr.clone(), &mut update_list, None)?;
         if new_root != root {
             Err(CacheError::SyncerBadRoot {
                 expected_root: root,

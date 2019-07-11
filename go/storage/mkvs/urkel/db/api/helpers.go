@@ -64,3 +64,61 @@ func ReviveHashedDBWriteLog(ctx context.Context, hlog HashedDBWriteLog, getter f
 	}()
 	return &pipe, nil
 }
+
+// NodeVisitor is a function that visits a given node and returns true to continue
+// traversal of child nodes or false to stop.
+type NodeVisitor func(context.Context, node.Node) bool
+
+// Visit traverses the tree in DFS order using the passed visitor. The traversal is
+// a pre-order DFS where the node is visited first, then its leaf (if any) and then
+// its children (first left then right).
+//
+// Different to the Visit method in the Urkel tree, this uses the NodeDB API directly
+// to traverse the tree to avoid the overhead of keeping the cache.
+func Visit(ctx context.Context, ndb NodeDB, root node.Root, visitor NodeVisitor) error {
+	ptr := &node.Pointer{
+		Clean: true,
+		Hash:  root.Hash,
+	}
+	return doVisit(ctx, ndb, root, visitor, ptr)
+}
+
+func doVisit(ctx context.Context, ndb NodeDB, root node.Root, visitor NodeVisitor, ptr *node.Pointer) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	nd, err := ndb.GetNode(root, ptr)
+	if err != nil {
+		return err
+	}
+
+	if !visitor(ctx, nd) {
+		return nil
+	}
+
+	if n, ok := nd.(*node.InternalNode); ok {
+		if n.LeafNode != nil {
+			err = doVisit(ctx, ndb, root, visitor, n.LeafNode)
+			if err != nil {
+				return err
+			}
+		}
+		if n.Left != nil {
+			err = doVisit(ctx, ndb, root, visitor, n.Left)
+			if err != nil {
+				return err
+			}
+		}
+		if n.Right != nil {
+			err = doVisit(ctx, ndb, root, visitor, n.Right)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}

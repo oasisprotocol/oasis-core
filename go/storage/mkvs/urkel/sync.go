@@ -94,7 +94,9 @@ func (t *Tree) doGetSubtree(
 	switch n := nd.(type) {
 	case *node.InternalNode:
 		// Record internal node summary.
-		s := syncer.InternalNodeSummary{}
+		s := syncer.InternalNodeSummary{
+			Round: n.Round,
+		}
 
 		// To traverse subtrees resize path bit vector, if needed.
 		path = path.Merge(bitDepth, n.Label, n.LabelBitLength)

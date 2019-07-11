@@ -38,7 +38,7 @@ func TestCachingClient(t *testing.T) {
 	}()
 
 	wl := makeTestWriteLog([]byte("TestSingle"), cacheSize)
-	expectedNewRoot := tests.CalculateExpectedNewRoot(t, wl, testNs)
+	expectedNewRoot := tests.CalculateExpectedNewRoot(t, wl, testNs, 1)
 
 	var root hash.Hash
 	root.Empty()
@@ -61,7 +61,7 @@ func TestCachingClient(t *testing.T) {
 	// Check if the values match.
 	r := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Round:     1,
 		Hash:      expectedNewRoot,
 	}
 	tree, err := urkel.NewWithRoot(context.Background(), client, nil, r)

@@ -14,7 +14,8 @@ func TestSerializationLeafNode(t *testing.T) {
 	valueHash.FromBytes([]byte("value"))
 
 	leafNode := &LeafNode{
-		Key: key,
+		Round: 0xDEADBEEF,
+		Key:   key,
 		Value: &Value{
 			Clean: true,
 			Hash:  valueHash,
@@ -30,6 +31,7 @@ func TestSerializationLeafNode(t *testing.T) {
 	require.NoError(t, err, "UnmarshalBinary")
 
 	require.True(t, decodedLeafNode.Clean)
+	require.Equal(t, leafNode.Round, decodedLeafNode.Round)
 	require.Equal(t, leafNode.Key, decodedLeafNode.Key)
 	require.True(t, decodedLeafNode.Value.Clean)
 	require.Equal(t, leafNode.Value.Value, decodedLeafNode.Value.Value)
@@ -57,6 +59,7 @@ func TestSerializationInternalNode(t *testing.T) {
 	var labelBitLength = Depth(24)
 
 	intNode := &InternalNode{
+		Round:          0xDEADBEEF,
 		Label:          label,
 		LabelBitLength: labelBitLength,
 		LeafNode:       &Pointer{Clean: true, Node: leafNode, Hash: leafNode.Hash},
@@ -72,6 +75,7 @@ func TestSerializationInternalNode(t *testing.T) {
 	require.NoError(t, err, "UnmarshalBinary")
 
 	require.True(t, decodedIntNode.Clean)
+	require.Equal(t, intNode.Round, decodedIntNode.Round)
 	require.Equal(t, intNode.Label, decodedIntNode.Label)
 	require.Equal(t, intNode.LabelBitLength, decodedIntNode.LabelBitLength)
 	require.Equal(t, intNode.LeafNode.Hash, decodedIntNode.LeafNode.Hash)
@@ -91,7 +95,8 @@ func TestHashLeafNode(t *testing.T) {
 	valueHash.FromBytes([]byte("value"))
 
 	leafNode := &LeafNode{
-		Key: key,
+		Round: 0xDEADBEEF,
+		Key:   key,
 		Value: &Value{
 			Clean: true,
 			Hash:  valueHash,
@@ -101,7 +106,7 @@ func TestHashLeafNode(t *testing.T) {
 
 	leafNode.UpdateHash()
 
-	require.Equal(t, leafNode.Hash.String(), "1736c1ac9fe17539c40e8b4c4d73c5c5a4a6e808c0b8247ebf4b1802ceace4d2")
+	require.Equal(t, leafNode.Hash.String(), "7fc8d2e9142d15de712757dba87f6efd82a04a4ed1488e21ee95e3a7ec7a5fce")
 }
 
 func TestHashInternalNode(t *testing.T) {
@@ -113,6 +118,7 @@ func TestHashInternalNode(t *testing.T) {
 	rightHash.FromBytes([]byte("everyone move to the right"))
 
 	intNode := &InternalNode{
+		Round:          0xDEADBEEF,
 		Label:          Key("abc"),
 		LabelBitLength: 23,
 		LeafNode:       &Pointer{Clean: true, Hash: leafNodeHash},
@@ -122,7 +128,7 @@ func TestHashInternalNode(t *testing.T) {
 
 	intNode.UpdateHash()
 
-	require.Equal(t, "75c37c67c265e2c836f76dec35173fa336e976938ea46f088390a983e46efced", intNode.Hash.String())
+	require.Equal(t, "e760353e9796f41b3bb2cfa2cf45f7e00ca687b6b84dc658e0ecadc906d5d21e", intNode.Hash.String())
 }
 
 func TestExtractLeafNode(t *testing.T) {
@@ -132,6 +138,7 @@ func TestExtractLeafNode(t *testing.T) {
 
 	leafNode := &LeafNode{
 		Clean: true,
+		Round: 0xDEADBEEF,
 		Key:   key,
 		Value: &Value{
 			Clean: true,
@@ -145,6 +152,7 @@ func TestExtractLeafNode(t *testing.T) {
 	require.False(t, leafNode == exLeafNode, "extracted node must have a different address")
 	require.False(t, leafNode.Value == exLeafNode.Value, "extracted value must have a different address")
 	require.Equal(t, true, exLeafNode.Clean, "extracted leaf must be clean")
+	require.Equal(t, leafNode.Round, exLeafNode.Round, "extracted leaf must have the same round")
 	require.Equal(t, key, exLeafNode.Key, "extracted leaf must have the same key")
 	require.Equal(t, true, exLeafNode.Value.Clean, "extracted leaf must have clean value")
 	require.Equal(t, valueHash, exLeafNode.Value.Hash, "extracted leaf's value must have the same hash")
@@ -159,6 +167,7 @@ func TestExtractInternalNode(t *testing.T) {
 
 	intNode := &InternalNode{
 		Clean: true,
+		Round: 0xDEADBEEF,
 		Left:  &Pointer{Clean: true, Hash: leftHash},
 		Right: &Pointer{Clean: true, Hash: rightHash},
 	}
@@ -169,6 +178,7 @@ func TestExtractInternalNode(t *testing.T) {
 	require.False(t, intNode.Left == exIntNode.Left, "extracted left pointer must have a different address")
 	require.False(t, intNode.Right == exIntNode.Right, "extracted right pointer must have a different address")
 	require.Equal(t, true, exIntNode.Clean, "extracted internal node must be clean")
+	require.Equal(t, intNode.Round, exIntNode.Round, "extracted internal node must have the same round")
 	require.Equal(t, leftHash, exIntNode.Left.Hash, "extracted left pointer must have the same hash")
 	require.Equal(t, true, exIntNode.Left.Clean, "extracted left pointer must be clean")
 	require.Equal(t, rightHash, exIntNode.Right.Hash, "extracted right pointer must have the same hash")

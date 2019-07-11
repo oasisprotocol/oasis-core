@@ -119,6 +119,7 @@ fn test_hash_leaf() {
     let value_hash = Hash::digest_bytes(b"value");
 
     let mut leaf_node = LeafNode {
+        round: 0xDEADBEEF,
         key: key,
         value: Rc::new(RefCell::new(ValuePointer {
             clean: true,
@@ -132,7 +133,7 @@ fn test_hash_leaf() {
     leaf_node.update_hash();
     assert_eq!(
         leaf_node.hash,
-        Hash::from_str("1736c1ac9fe17539c40e8b4c4d73c5c5a4a6e808c0b8247ebf4b1802ceace4d2").unwrap()
+        Hash::from_str("7fc8d2e9142d15de712757dba87f6efd82a04a4ed1488e21ee95e3a7ec7a5fce").unwrap()
     );
 }
 
@@ -143,6 +144,7 @@ fn test_hash_internal() {
     let right_hash = Hash::digest_bytes(b"everyone move to the right");
 
     let mut int_node = InternalNode {
+        round: 0xDEADBEEF,
         label: b"abc".to_vec(),
         label_bit_length: 23,
         leaf_node: Rc::new(RefCell::new(NodePointer {
@@ -166,7 +168,7 @@ fn test_hash_internal() {
     int_node.update_hash();
     assert_eq!(
         int_node.hash,
-        Hash::from_str("75c37c67c265e2c836f76dec35173fa336e976938ea46f088390a983e46efced").unwrap()
+        Hash::from_str("e760353e9796f41b3bb2cfa2cf45f7e00ca687b6b84dc658e0ecadc906d5d21e").unwrap()
     );
 }
 
