@@ -2,13 +2,15 @@
 use std::{collections::HashMap, io::Write, sync::Arc, time::SystemTime};
 
 use failure::Fallible;
-use serde_cbor;
 
 use super::{
     session::{Builder, Session, SessionInfo},
     types::{Frame, Message, SessionID},
 };
-use crate::{common::time::insecure_posix_system_time, rak::RAK};
+use crate::{
+    common::{cbor, time::insecure_posix_system_time},
+    rak::RAK,
+};
 
 /// Maximum concurrent EnclaveRPC sessions.
 const DEFAULT_MAX_CONCURRENT_SESSIONS: usize = 100;
@@ -89,7 +91,7 @@ impl Demux {
         data: Vec<u8>,
         writer: W,
     ) -> Fallible<Option<SessionMessage>> {
-        let frame: Frame = serde_cbor::from_slice(&data)?;
+        let frame: Frame = cbor::from_slice(&data)?;
         let id = frame.session.clone();
 
         if let Some(enriched_session) = self.sessions.get_mut(&id) {

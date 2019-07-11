@@ -3,6 +3,7 @@ use std::{any::Any, cell::RefCell, rc::Rc};
 
 use ekiden_runtime::{
     common::{
+        cbor,
         crypto::hash::Hash,
         roothash::{Block, Namespace},
     },
@@ -20,7 +21,6 @@ use ekiden_runtime::{
 };
 use failure::{Fallible, ResultExt};
 use io_context::Context;
-use serde_cbor;
 
 use super::{api, client::TxnClientError};
 
@@ -49,8 +49,8 @@ impl TransactionSnapshot {
         Ok(Self {
             block_snapshot: BlockSnapshot::new(storage_client, block, block_hash),
             index,
-            input: serde_cbor::from_slice(&input).context("input is malformed")?,
-            output: serde_cbor::from_slice(&output).context("output is malformed")?,
+            input: cbor::from_slice(&input).context("input is malformed")?,
+            output: cbor::from_slice(&output).context("output is malformed")?,
         })
     }
 }
@@ -157,7 +157,7 @@ impl ReadSync for RemoteReadSync {
         max_depth: u8,
     ) -> Fallible<Subtree> {
         let mut request = api::storage::GetSubtreeRequest::new();
-        request.set_root(serde_cbor::to_vec(&root).unwrap());
+        request.set_root(cbor::to_vec(&root));
         request.set_id({
             let mut nid = api::storage::NodeID::new();
             nid.set_path(id.path.as_ref().to_vec());
@@ -184,7 +184,7 @@ impl ReadSync for RemoteReadSync {
         start_depth: u8,
     ) -> Fallible<Subtree> {
         let mut request = api::storage::GetPathRequest::new();
-        request.set_root(serde_cbor::to_vec(&root).unwrap());
+        request.set_root(cbor::to_vec(&root));
         request.set_key(key.as_ref().to_vec());
         request.set_start_depth(start_depth.into());
 
@@ -200,7 +200,7 @@ impl ReadSync for RemoteReadSync {
 
     fn get_node(&mut self, _ctx: Context, root: Root, id: NodeID) -> Fallible<NodeRef> {
         let mut request = api::storage::GetNodeRequest::new();
-        request.set_root(serde_cbor::to_vec(&root).unwrap());
+        request.set_root(cbor::to_vec(&root));
         request.set_id({
             let mut nid = api::storage::NodeID::new();
             nid.set_path(id.path.as_ref().to_vec());

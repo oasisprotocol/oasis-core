@@ -308,23 +308,15 @@ func (w *worker) onProcessStart(proto *protocol.Protocol, tee *node.CapabilityTE
 }
 
 func extractMessageResponsePayload(raw []byte) ([]byte, error) {
-	// Because of how serde_cbor serializes unit enums, simply de-serializing
-	// the response into a struct is not possible.  Do this the hard way.
-	//
-	// This could alternatively be done by changing the rust side, or maybe
-	// this should be a general protocol helper, but this is probably the
-	// only place that will need such a thing.
-	//
-	// See: runtime/src/rcp/types.rs
+	// See: runtime/src/rpc/types.rs
 	type MessageResponseBody struct {
-		Status string      `codec:""`
-		Value  interface{} `codec:""`
+		Success interface{}
+		Error   *string
 	}
 	type MessageResponse struct {
-		Type  string `codec:""`
-		Inner struct {
+		Response *struct {
 			Body MessageResponseBody `codec:"body"`
-		} `codec:""`
+		}
 	}
 
 	var msg MessageResponse
@@ -332,26 +324,19 @@ func extractMessageResponsePayload(raw []byte) ([]byte, error) {
 		return nil, errors.Wrap(err, "malformed message envelope")
 	}
 
-	if mType := msg.Type; mType != "Response" {
-		return nil, fmt.Errorf("message is not a response: '%s'", mType)
+	if msg.Response == nil {
+		return nil, fmt.Errorf("message is not a response: '%s'", hex.EncodeToString(raw))
 	}
 
-	switch msg.Inner.Body.Status {
-	case "Success":
-	case "Error":
-		if msg.Inner.Body.Value == nil {
-			return nil, fmt.Errorf("unknown rpc response failure (nil)")
-		}
-		mErr, ok := msg.Inner.Body.Value.(string)
-		if !ok {
-			return nil, fmt.Errorf("unknown rpc response failure (%T)", msg.Inner.Body.Value)
-		}
-		return nil, fmt.Errorf("rpc failure: '%s'", mErr)
+	switch {
+	case msg.Response.Body.Success != nil:
+	case msg.Response.Body.Error != nil:
+		return nil, fmt.Errorf("rpc failure: '%s'", *msg.Response.Body.Error)
 	default:
-		return nil, fmt.Errorf("unknown rpc response status: '%s'", msg.Inner.Body.Status)
+		return nil, fmt.Errorf("unknown rpc response status: '%s'", hex.EncodeToString(raw))
 	}
 
-	return cbor.Marshal(msg.Inner.Body.Value), nil
+	return cbor.Marshal(msg.Response.Body.Success), nil
 }
 
 func (w *worker) onNodeRegistration(n *node.Node) error {

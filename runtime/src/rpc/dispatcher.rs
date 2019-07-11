@@ -3,12 +3,12 @@ use std::collections::HashMap;
 
 use failure::Fallible;
 use serde::{de::DeserializeOwned, Serialize};
-use serde_cbor;
 
 use super::{
     context::Context,
     types::{Body, Request, Response},
 };
+use crate::common::cbor;
 
 /// Dispatch error.
 #[derive(Debug, Fail)]
@@ -82,11 +82,11 @@ where
     }
 
     fn dispatch(&self, request: Request, ctx: &mut Context) -> Fallible<Response> {
-        let request = serde_cbor::from_value(request.args)?;
+        let request = cbor::from_value(request.args)?;
         let response = self.handler.handle(&request, ctx)?;
 
         Ok(Response {
-            body: Body::Success(serde_cbor::to_value(response)?),
+            body: Body::Success(cbor::to_value(response)),
         })
     }
 }

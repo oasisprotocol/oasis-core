@@ -6,7 +6,6 @@ extern crate io_context;
 extern crate lazy_static;
 extern crate lru;
 extern crate rand;
-extern crate serde_cbor;
 extern crate sp800_185;
 extern crate tiny_keccak;
 extern crate x25519_dalek;

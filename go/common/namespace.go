@@ -50,6 +50,6 @@ func (n *Namespace) Equal(cmp *Namespace) bool {
 }
 
 // String returns the string representation of a chain namespace identifier.
-func (n *Namespace) String() string {
+func (n Namespace) String() string {
 	return hex.EncodeToString(n[:])
 }

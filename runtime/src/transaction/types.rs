@@ -4,8 +4,9 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use serde_cbor::Value;
 use serde_derive::{Deserialize, Serialize};
+
+use crate::common::cbor::Value;
 
 /// Transaction call.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -92,5 +93,22 @@ impl Into<Vec<Vec<u8>>> for TxnBatch {
 impl Into<VecDeque<Vec<u8>>> for TxnBatch {
     fn into(self) -> VecDeque<Vec<u8>> {
         self.0.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::common::{cbor, crypto::hash::Hash};
+
+    #[test]
+    fn test_consistent_hash() {
+        let batch = TxnBatch(vec![b"foo".to_vec(), b"bar".to_vec(), b"aaa".to_vec()]);
+        let h = Hash::digest_bytes(&cbor::to_vec(&batch));
+        assert_eq!(
+            h,
+            Hash::from("c451dd4fd065b815e784aac6b300e479b2167408f0eebbb95a8bd36b9e71e34d")
+        );
     }
 }

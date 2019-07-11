@@ -11,6 +11,7 @@ use slog::Logger;
 
 use crate::{
     common::{
+        cbor,
         crypto::{
             hash::Hash,
             signature::{Signature, Signer},
@@ -310,7 +311,7 @@ impl Dispatcher {
                 .insert(
                     Context::create_child(&ctx),
                     IO_KEY_INPUTS,
-                    &serde_cbor::to_vec(&inputs).unwrap(),
+                    &cbor::to_vec(&inputs),
                 )
                 .expect("input insert must succeed");
             let (_, old_io_root) = io_mkvs
@@ -331,14 +332,14 @@ impl Dispatcher {
                 .insert(
                     Context::create_child(&ctx),
                     IO_KEY_OUTPUTS,
-                    &serde_cbor::to_vec(&outputs).unwrap(),
+                    &cbor::to_vec(&outputs),
                 )
                 .expect("output insert must succeed");
             io_mkvs
                 .insert(
                     Context::create_child(&ctx),
                     IO_KEY_TAGS,
-                    &serde_cbor::to_vec(&tags).unwrap(),
+                    &cbor::to_vec(&tags),
                 )
                 .expect("tag insert must succeed");
             let (io_write_log, io_root) = io_mkvs
@@ -363,10 +364,7 @@ impl Dispatcher {
 
             let rak_sig = if self.rak.public_key().is_some() {
                 self.rak
-                    .sign(
-                        &COMPUTE_RESULTS_HEADER_CONTEXT,
-                        &serde_cbor::to_vec(&header).unwrap(),
-                    )
+                    .sign(&COMPUTE_RESULTS_HEADER_CONTEXT, &cbor::to_vec(&header))
                     .unwrap()
             } else {
                 Signature::default()
@@ -522,7 +520,7 @@ impl Dispatcher {
     ) {
         debug!(self.logger, "Received local RPC call request"; "state_root" => ?state_root);
 
-        let req: RpcRequest = serde_cbor::from_slice(&request).unwrap();
+        let req: RpcRequest = cbor::from_slice(&request).unwrap();
 
         // Request, dispatch.
         let ctx = ctx.freeze();
@@ -548,7 +546,7 @@ impl Dispatcher {
 
         debug!(self.logger, "Local RPC call dispatch complete");
 
-        let response = serde_cbor::to_vec(&response).unwrap();
+        let response = cbor::to_vec(&response);
         let protocol_response = Body::WorkerLocalRPCCallResponse { response };
 
         protocol.send_response(id, protocol_response).unwrap();

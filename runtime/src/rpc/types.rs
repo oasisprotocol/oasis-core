@@ -1,7 +1,8 @@
 //! RPC protocol types.
 use ring::rand::{SecureRandom, SystemRandom};
-use serde_cbor::Value;
 use serde_derive::{Deserialize, Serialize};
+
+use crate::common::cbor::Value;
 
 impl_bytes!(
     SessionID,

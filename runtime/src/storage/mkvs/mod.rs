@@ -94,3 +94,23 @@ pub trait MKVS: Send + Sync {
 
 // Re-exports.
 pub use self::urkel::UrkelTree;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::common::cbor;
+
+    #[test]
+    fn test_write_log_serialization() {
+        let write_log = vec![LogEntry {
+            key: b"foo".to_vec(),
+            value: b"bar".to_vec(),
+        }];
+
+        let raw = cbor::to_vec(&write_log);
+        let deserialized: WriteLog = cbor::from_slice(&raw).unwrap();
+
+        assert_eq!(write_log, deserialized);
+    }
+}

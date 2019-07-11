@@ -7,7 +7,6 @@ use std::{
 use failure::Fallible;
 use lazy_static::lazy_static;
 use rand::{rngs::OsRng, Rng};
-use serde_cbor;
 use sgx_isa::Keypolicy;
 use tiny_keccak::sha3_256;
 use zeroize::Zeroize;
@@ -15,6 +14,7 @@ use zeroize::Zeroize;
 use ekiden_keymanager_api::*;
 use ekiden_runtime::{
     common::{
+        cbor,
         crypto::{
             mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
             signature::{PrivateKey, PublicKey},
@@ -259,10 +259,10 @@ struct CachedPolicy {
 impl CachedPolicy {
     fn parse(raw: &Vec<u8>) -> Fallible<Self> {
         // Parse out the signed policy.
-        let untrusted_policy: SignedPolicySGX = serde_cbor::from_slice(&raw)?;
+        let untrusted_policy: SignedPolicySGX = cbor::from_slice(&raw)?;
 
         // Verify the signatures.
-        let untrusted_policy_raw = serde_cbor::to_vec(&untrusted_policy.policy)?;
+        let untrusted_policy_raw = cbor::to_vec(&untrusted_policy.policy);
         let mut signers: HashSet<PublicKey> = HashSet::new();
         for sig in untrusted_policy.signatures {
             let public_key = match sig.public_key {

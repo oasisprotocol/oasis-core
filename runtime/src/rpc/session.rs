@@ -2,13 +2,13 @@
 use std::{collections::HashSet, io::Write, sync::Arc};
 
 use failure::Fallible;
-use serde_cbor;
 use serde_derive::{Deserialize, Serialize};
 use snow;
 
 use super::types::Message;
 use crate::{
     common::{
+        cbor,
         crypto::signature::{PublicKey, Signature, Signer},
         sgx::avr,
     },
@@ -142,7 +142,7 @@ impl Session {
             State::Transport => {
                 // TODO: Restore session in case of errors.
                 let len = session.read_message(&data, &mut self.buf)?;
-                let msg = serde_cbor::from_slice(&self.buf[..len])?;
+                let msg = cbor::from_slice(&self.buf[..len])?;
 
                 self.session = Some(session);
                 return Ok(Some(msg));
@@ -166,7 +166,7 @@ impl Session {
 
         let session = self.session.as_mut().ok_or(SessionError::Closed)?;
 
-        let msg = serde_cbor::to_vec(&msg)?;
+        let msg = cbor::to_vec(&msg);
         let len = session.write_message(&msg, &mut self.buf)?;
         writer.write_all(&self.buf[..len])?;
 
@@ -198,7 +198,7 @@ impl Session {
                         .unwrap(),
                 };
 
-                serde_cbor::to_vec(&rak_binding).unwrap()
+                cbor::to_vec(&rak_binding)
             }
             None => vec![],
         }
@@ -218,7 +218,7 @@ impl Session {
             return Ok(None);
         }
 
-        let rak_binding: RAKBinding = serde_cbor::from_slice(rak_binding)?;
+        let rak_binding: RAKBinding = cbor::from_slice(rak_binding)?;
         let authenticated_avr = avr::verify(&rak_binding.avr)?;
 
         // Verify MRSIGNER/MRENCLAVE.

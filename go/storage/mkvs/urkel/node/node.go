@@ -59,6 +59,11 @@ type Root struct {
 	Hash hash.Hash `codec:"hash"`
 }
 
+// String returns the string representation of a storage root.
+func (r Root) String() string {
+	return fmt.Sprintf("<Root ns=%s round=%d hash=%s>", r.Namespace, r.Round, r.Hash)
+}
+
 // MarshalCBOR serializes the type into a CBOR byte vector.
 func (r *Root) MarshalCBOR() []byte {
 	return cbor.Marshal(r)
