@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	commonGrpc "github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/storage/api"
 
 	pb "github.com/oasislabs/ekiden/go/grpc/storage"
@@ -21,13 +22,14 @@ const (
 	WriteLogIteratorChunkSize int = 10
 )
 
-var _ pb.StorageServer = (*grpcServer)(nil)
+var _ pb.StorageServer = (*GrpcServer)(nil)
 
-type grpcServer struct {
+type GrpcServer struct {
 	backend api.Backend
+	commonGrpc.RuntimePolicyChecker
 }
 
-func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.ApplyResponse, error) {
+func (s *GrpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.ApplyResponse, error) {
 	var ns common.Namespace
 	if err := ns.UnmarshalBinary(req.GetNamespace()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
@@ -59,7 +61,7 @@ func (s *grpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 	return &pb.ApplyResponse{Receipts: cbor.Marshal(receipts)}, nil
 }
 
-func (s *grpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) (*pb.ApplyBatchResponse, error) {
+func (s *GrpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) (*pb.ApplyBatchResponse, error) {
 	var ns common.Namespace
 	if err := ns.UnmarshalBinary(req.GetNamespace()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
@@ -101,7 +103,7 @@ func (s *grpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) 
 	return &pb.ApplyBatchResponse{Receipts: cbor.Marshal(receipts)}, nil
 }
 
-func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) (*pb.GetSubtreeResponse, error) {
+func (s *GrpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) (*pb.GetSubtreeResponse, error) {
 	var root api.Root
 	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
@@ -134,7 +136,7 @@ func (s *grpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) 
 	return &pb.GetSubtreeResponse{Subtree: serializedSubtree}, nil
 }
 
-func (s *grpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.GetPathResponse, error) {
+func (s *GrpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.GetPathResponse, error) {
 	var root api.Root
 	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
@@ -161,7 +163,7 @@ func (s *grpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.G
 	return &pb.GetPathResponse{Subtree: serializedSubtree}, nil
 }
 
-func (s *grpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.GetNodeResponse, error) {
+func (s *GrpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.GetNodeResponse, error) {
 	var root api.Root
 	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
@@ -264,7 +266,7 @@ func (s *writeLogService) SendWriteLogIterator() error {
 	return nil
 }
 
-func (s *grpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffServer) error {
+func (s *GrpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffServer) error {
 	var startRoot, endRoot api.Root
 	if err := startRoot.UnmarshalCBOR(req.GetStartRoot()); err != nil {
 		return errors.Wrap(err, "storage: failed to unmarshal start root")
@@ -289,7 +291,7 @@ func (s *grpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffSe
 	return svc.SendWriteLogIterator()
 }
 
-func (s *grpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Storage_GetCheckpointServer) error {
+func (s *GrpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Storage_GetCheckpointServer) error {
 	var root api.Root
 	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
 		return errors.Wrap(err, "storage: failed to unmarshal root")
@@ -311,12 +313,15 @@ func (s *grpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Stora
 	return svc.SendWriteLogIterator()
 }
 
-// NewGRPCServer intializes and registers a grpc storage server backed
+// NewGRPCServer initializes and registers a gRPC storage server backend.
 // by the provided Backend.
-func NewGRPCServer(srv *grpc.Server, b api.Backend) {
-	s := &grpcServer{
-		backend: b,
+func NewGRPCServer(srv *grpc.Server, b api.Backend) *GrpcServer {
+	s := &GrpcServer{
+		backend:              b,
+		RuntimePolicyChecker: commonGrpc.NewRuntimePolicyChecker(),
 	}
 
 	pb.RegisterStorageServer(srv, s)
+
+	return s
 }
