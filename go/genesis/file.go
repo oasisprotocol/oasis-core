@@ -7,21 +7,23 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/genesis/api"
 )
 
 type fileProvider struct {
-	document *Document
+	document *api.Document
 }
 
-func (p *fileProvider) GetGenesisDocument() (*Document, error) {
+func (p *fileProvider) GetGenesisDocument() (*api.Document, error) {
 	return p.document, nil
 }
 
 // NewFileProvider creates a new local file genesis provider.
-func NewFileProvider(filename string, identity *identity.Identity) (Provider, error) {
+func NewFileProvider(filename string, identity *identity.Identity) (api.Provider, error) {
 	logger := logging.GetLogger("genesis/file")
 
 	raw, err := ioutil.ReadFile(filename)
@@ -32,23 +34,30 @@ func NewFileProvider(filename string, identity *identity.Identity) (Provider, er
 				"filename", filename,
 			)
 
+			entity, privateKey, _ := entity.TestEntity()
+			validator := &api.Validator{
+				EntityID: entity.ID,
+				PubKey:   identity.NodeKey.Public(),
+				Name:     "ekiden-dummy",
+				Power:    10,
+			}
+
+			signedValidator, sigErr := api.SignValidator(*privateKey, validator)
+			if sigErr != nil {
+				return nil, sigErr
+			}
+
 			return &fileProvider{
-				document: &Document{
-					Time: time.Now(),
-					Validators: []*Validator{
-						{
-							PubKey: identity.NodeKey.Public(),
-							Name:   "ekiden-dummy",
-							Power:  10,
-						},
-					},
+				document: &api.Document{
+					Time:       time.Now(),
+					Validators: []*api.SignedValidator{signedValidator},
 				},
 			}, nil
 		}
 		return nil, err
 	}
 
-	var doc Document
+	var doc api.Document
 	if err = json.Unmarshal(raw, &doc); err != nil {
 		return nil, errors.Wrap(err, "genesis: malformed genesis file")
 	}

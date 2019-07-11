@@ -54,6 +54,14 @@ run_backend_tendermint_committee() {
     local base_datadir=${committee_dir}/committee-data
     local validator_files=""
 
+    # Provision the entity for everything.
+    local entity_dir=${committee_dir}/entity
+    rm -Rf ${entity_dir}
+
+    ${EKIDEN_NODE} \
+        registry entity init \
+        --datadir ${entity_dir}
+
     # Provision the validators.
     for idx in $(seq 1 $nodes); do
         local datadir=${base_datadir}-${idx}
@@ -65,17 +73,10 @@ run_backend_tendermint_committee() {
             --datadir ${datadir} \
             --node_addr 127.0.0.1:${port} \
             --node_name ekiden-committee-node-${idx} \
+            --entity ${entity_dir} \
             --validator_file ${datadir}/validator.json
         validator_files="$validator_files --validator=${datadir}/validator.json"
     done
-
-    # Provision the entity for all the workers.
-    local entity_dir=${committee_dir}/entity
-    rm -Rf ${entity_dir}
-
-    ${EKIDEN_NODE} \
-        registry entity init \
-        --datadir ${entity_dir}
 
     # Provision the key manager runtime.
     ${EKIDEN_NODE} \

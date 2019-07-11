@@ -36,13 +36,13 @@ func (t *Backend) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
 }
 
 // New constructs a new tendermint backed beacon Backend instance.
-func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService, debugDeterministic bool) (api.Backend, error) {
+func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService, cfg *api.Config) (api.Backend, error) {
 	if err := service.ForceInitialize(); err != nil {
 		return nil, err
 	}
 
 	// Initialize and register the tendermint service component.
-	app := app.New(timeSource, debugDeterministic)
+	app := app.New(timeSource, cfg)
 	if err := service.RegisterApplication(app, nil); err != nil {
 		return nil, err
 	}

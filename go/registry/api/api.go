@@ -41,6 +41,10 @@ var (
 	// registration.
 	RegisterNodeSignatureContext = []byte("EkNodReg")
 
+	// RegisterGenesisNodeSignatureContext is the context used for
+	/// node registration in the genesis document.
+	RegisterGenesisNodeSignatureContext = []byte("EkNodReg")
+
 	// RegisterRuntimeSignatureContext is the context used for runtime
 	// registration.
 	RegisterRuntimeSignatureContext = []byte("EkRunReg")
@@ -77,6 +81,10 @@ var (
 
 	// ErrNodeExpired is the error returned when a node is expired.
 	ErrNodeExpired = errors.New("registry: node expired")
+
+	// ErrForbidden is the error returned when an operation is forbiden by
+	// policy.
+	ErrForbidden = errors.New("registry: forbidden by policy")
 )
 
 // Backend is a registry implementation.
@@ -242,13 +250,22 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
-func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, now time.Time) (*node.Node, error) {
+func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, now time.Time, isGenesis bool) (*node.Node, error) {
 	// XXX: Ensure node is well-formed.
 	var n node.Node
 	if sigNode == nil {
 		return nil, ErrInvalidArgument
 	}
-	if err := sigNode.Open(RegisterNodeSignatureContext, &n); err != nil {
+
+	var ctx []byte
+	switch isGenesis {
+	case true:
+		ctx = RegisterGenesisNodeSignatureContext
+	case false:
+		ctx = RegisterNodeSignatureContext
+	}
+
+	if err := sigNode.Open(ctx, &n); err != nil {
 		logger.Error("RegisterNode: invalid signature",
 			"signed_node", sigNode,
 		)
@@ -381,4 +398,18 @@ type Genesis struct {
 
 	// Runtimes is the initial list of runtimes.
 	Runtimes []*SignedRuntime `codec:"runtimes,omit_empty"`
+
+	// Nodes is the initial list of nodes.
+	Nodes []*node.SignedNode `codec:"nodes,omit_empty"`
+}
+
+// Config is the per-backend common configuration.
+type Config struct {
+	// DebugAllowRuntimeRegistration is true iff runtime registration should be
+	// allowed outside of the genesis block.
+	DebugAllowRuntimeRegistration bool
+
+	// DebugBypassStake is true iff the registry should bypass all of the staking
+	// related checks and operations.
+	DebugBypassStake bool
 }

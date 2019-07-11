@@ -12,26 +12,27 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
+	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/genesis"
+	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	staking "github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
-
-	"github.com/oasislabs/ekiden/go/common/json"
+	stakingapp "github.com/oasislabs/ekiden/go/tendermint/apps/staking"
 )
 
-var (
-	_ abci.Application = (*registryApplication)(nil)
-)
+var _ abci.Application = (*registryApplication)(nil)
 
 type registryApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
 	timeSource epochtime.Backend
+
+	cfg *registry.Config
 }
 
 func (app *registryApplication) Name() string {
@@ -154,8 +155,20 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 			return errors.Wrap(err, "registry: genesis runtime registration failure")
 		}
 	}
+	for _, v := range st.Nodes {
+		app.logger.Debug("InitChain: Registring genesis node",
+			"node_owner", v.Signature.PublicKey,
+		)
+		if err := app.registerNode(ctx, state, v); err != nil {
+			app.logger.Error("InitChain: failed to register node",
+				"err", err,
+				"node", v,
+			)
+			return errors.Wrap(err, "registry: genesis node registration failure")
+		}
+	}
 
-	if len(st.Entities) > 0 || len(st.Runtimes) > 0 {
+	if len(st.Entities) > 0 || len(st.Runtimes) > 0 || len(st.Nodes) > 0 {
 		ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 	}
 
@@ -238,6 +251,9 @@ func (app *registryApplication) executeTx(
 	} else if tx.TxRegisterNode != nil {
 		return app.registerNode(ctx, state, &tx.TxRegisterNode.Node)
 	} else if tx.TxRegisterRuntime != nil {
+		if !app.cfg.DebugAllowRuntimeRegistration {
+			return registry.ErrForbidden
+		}
 		return app.registerRuntime(ctx, state, &tx.TxRegisterRuntime.Runtime)
 	} else {
 		return registry.ErrInvalidArgument
@@ -261,6 +277,16 @@ func (app *registryApplication) registerEntity(
 			app.logger.Error("RegisterEntity: INVALID TIMESTAMP",
 				"entity_timestamp", ent.RegistrationTime,
 				"now", uint64(ctx.Now().Unix()),
+			)
+			return err
+		}
+	}
+
+	if !app.cfg.DebugBypassStake {
+		if err = stakingapp.EnsureSufficientStake(app.state, ctx, ent.ID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+			app.logger.Error("RegisterEntity: Insufficent stake",
+				"err", err,
+				"id", ent.ID,
 			)
 			return err
 		}
@@ -330,17 +356,29 @@ func (app *registryApplication) registerNode(
 	state *MutableState,
 	sigNode *node.SignedNode,
 ) error {
-	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, ctx.Now())
+	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, ctx.Now(), ctx.IsInitChain())
 	if err != nil {
 		return err
 	}
 
-	if !ctx.IsCheckOnly() {
+	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
 		err = registry.VerifyTimestamp(node.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
 			app.logger.Error("RegisterNode: INVALID TIMESTAMP",
 				"node_timestamp", node.RegistrationTime,
 				"now", uint64(ctx.Now().Unix()),
+			)
+			return err
+		}
+	}
+
+	// Re-check that the entity has at least sufficient stake to still be an
+	// entity.  The node thresholds should be enforced in the scheduler.
+	if !app.cfg.DebugBypassStake {
+		if err = stakingapp.EnsureSufficientStake(app.state, ctx, node.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+			app.logger.Error("RegisterNode: Insufficent stake",
+				"err", err,
+				"id", node.EntityID,
 			)
 			return err
 		}
@@ -428,9 +466,10 @@ func (app *registryApplication) registerRuntime(
 }
 
 // New constructs a new registry application instance.
-func New(timeSource epochtime.Backend) abci.Application {
+func New(timeSource epochtime.Backend, cfg *registry.Config) abci.Application {
 	return &registryApplication{
 		logger:     logging.GetLogger("tendermint/registry"),
 		timeSource: timeSource,
+		cfg:        cfg,
 	}
 }

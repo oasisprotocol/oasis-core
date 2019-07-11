@@ -11,7 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	cmdGenesis "github.com/oasislabs/ekiden/go/ekiden/cmd/genesis"
-	"github.com/oasislabs/ekiden/go/genesis"
+	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	"github.com/oasislabs/ekiden/go/genesis/bootstrap"
 )
 

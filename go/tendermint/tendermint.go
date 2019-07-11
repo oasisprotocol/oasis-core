@@ -31,7 +31,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	cmservice "github.com/oasislabs/ekiden/go/common/service"
-	"github.com/oasislabs/ekiden/go/genesis"
+	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	"github.com/oasislabs/ekiden/go/genesis/bootstrap"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
@@ -442,12 +442,17 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 
 	var tmValidators []tmtypes.GenesisValidator
 	for _, v := range d.Validators {
-		pk := crypto.PublicKeyToTendermint(&v.PubKey)
+		var openedValidator genesis.Validator
+		if err := v.Open(&openedValidator); err != nil {
+			return nil, errors.Wrap(err, "tendermint: failed to verify validator")
+		}
+
+		pk := crypto.PublicKeyToTendermint(&openedValidator.PubKey)
 		validator := tmtypes.GenesisValidator{
 			Address: pk.Address(),
 			PubKey:  pk,
-			Power:   v.Power,
-			Name:    v.Name,
+			Power:   openedValidator.Power,
+			Name:    openedValidator.Name,
 		}
 		tmValidators = append(tmValidators, validator)
 	}
@@ -547,14 +552,19 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		// sensitive string comparision to validate public keys.
 		var addrs []*tmp2p.NetAddress
 		for _, v := range doc.Validators {
-			vPubKey := crypto.PublicKeyToTendermint(&v.PubKey)
-			vPkAddrHex := strings.ToLower(vPubKey.Address().String())
-			vAddr := vPkAddrHex + "@" + v.CoreAddress
+			var openedValidator genesis.Validator
+			if err = v.Open(&openedValidator); err != nil {
+				return nil, errors.Wrap(err, "tendermint: failed to verify validator")
+			}
 
-			if v.PubKey.Equal(t.nodeKey.Public()) {
+			vPubKey := crypto.PublicKeyToTendermint(&openedValidator.PubKey)
+			vPkAddrHex := strings.ToLower(vPubKey.Address().String())
+			vAddr := vPkAddrHex + "@" + openedValidator.CoreAddress
+
+			if openedValidator.PubKey.Equal(t.nodeKey.Public()) {
 				// This validator entry is the current node, set the
 				// node name to that specified in the genesis document.
-				tenderConfig.Moniker = v.Name
+				tenderConfig.Moniker = openedValidator.Name
 				continue
 			}
 

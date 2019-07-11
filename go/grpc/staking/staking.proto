@@ -9,6 +9,7 @@ service Staking {
 	rpc GetSymbol(GetSymbolRequest) returns (GetSymbolResponse) {}
 	rpc GetTotalSupply(GetTotalSupplyRequest) returns (GetTotalSupplyResponse) {}
 	rpc GetCommonPool(GetCommonPoolRequest) returns (GetCommonPoolResponse) {}
+	rpc GetThreshold(GetThresholdRequest) returns (GetThresholdResponse) {}
 	rpc GetAccounts(GetAccountsRequest) returns (GetAccountsResponse) {} // TODO: Stream this?
 	rpc GetAccountInfo(GetAccountInfoRequest) returns (GetAccountInfoResponse) {}
 	rpc GetAllowance(GetAllowanceRequest) returns (GetAllowanceResponse) {}
@@ -19,6 +20,7 @@ service Staking {
 	rpc Withdraw(WithdrawRequest) returns (WithdrawResponse) {}
 	rpc Burn(BurnRequest) returns (BurnResponse) {}
 	rpc AddEscrow(AddEscrowRequest) returns (AddEscrowResponse) {}
+	rpc ReclaimEscrow(ReclaimEscrowRequest) returns (ReclaimEscrowResponse) {}
 
 	// Calls that watch events.
 	rpc WatchTransfers (WatchTransfersRequest) returns (stream WatchTransfersResponse) {}
@@ -51,6 +53,19 @@ message GetCommonPoolResponse {
 	bytes common_pool = 1;
 }
 
+message GetThresholdRequest {
+	enum ThresholdKind {
+		VALIDATOR = 0;
+		COMPUTE = 1;
+		STORAGE = 2;
+	}
+	ThresholdKind threshold_kind = 1;
+}
+
+message GetThresholdResponse {
+	bytes threshold = 1;
+}
+
 message GetAccountsRequest {}
 
 message GetAccountsResponse {
@@ -64,7 +79,8 @@ message GetAccountInfoRequest {
 message GetAccountInfoResponse {
 	bytes general_balance = 1;
 	bytes escrow_balance = 2;
-	uint64 nonce = 3;
+	uint64 debond_start_time = 3;
+	uint64 nonce = 4;
 }
 
 message GetAllowanceRequest {
@@ -106,6 +122,12 @@ message AddEscrowRequest {
 
 message AddEscrowResponse {}
 
+message ReclaimEscrowRequest {
+	bytes signed_reclaim = 1;
+}
+
+message ReclaimEscrowResponse {}
+
 message WatchTransfersRequest {}
 
 message WatchTransfersResponse {
@@ -130,7 +152,7 @@ message WatchEscrowsResponse {
 	enum EventType {
 		ADD = 0;
 		TAKE = 1;
-		RELEASE = 2;
+		RECLAIM = 2;
 	}
 	EventType event_type = 1;
 	bytes event = 2;

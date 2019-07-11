@@ -30,6 +30,12 @@ var (
 				GeneralBalance: testTotalSupply,
 			},
 		},
+		Thresholds: map[api.ThresholdKind]api.Quantity{
+			api.KindEntity:    qtyFromInt(1),
+			api.KindValidator: qtyFromInt(2),
+			api.KindCompute:   qtyFromInt(3),
+			api.KindStorage:   qtyFromInt(4),
+		},
 	}
 
 	testTotalSupply = qtyFromInt(math.MaxInt64)
@@ -69,26 +75,38 @@ func testInitialEnv(t *testing.T, backend api.Backend) {
 	require.Len(accounts, 1, "Accounts - nr entries")
 	require.Equal(srcID, accounts[0], "Accounts[0] == testID")
 
-	generalBalance, escrowBalance, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	generalBalance, escrowBalance, debond, nonce, err := backend.AccountInfo(context.Background(), srcID)
 	require.NoError(err, "src: AccountInfo")
 	require.Equal(&testTotalSupply, generalBalance, "src: generalBalance")
 	require.True(escrowBalance.IsZero(), "src: escrowBalance")
+	require.EqualValues(0, debond, "src: debond start time")
 	require.EqualValues(0, nonce, "src: nonce")
 
 	commonPool, err := backend.CommonPool(context.Background())
 	require.NoError(err, "CommonPool")
 	require.True(commonPool.IsZero(), "CommonPool - initial value")
+
+	for _, kind := range []api.ThresholdKind{
+		api.KindValidator,
+		api.KindCompute,
+		api.KindStorage,
+	} {
+		qty, err := backend.Threshold(context.Background(), kind)
+		require.NoError(err, "Threshold")
+		require.NotNil(qty, "Threshold != nil")
+		require.Equal(debugGenesisState.Thresholds[kind], *qty, "Threshold - value")
+	}
 }
 
 func testTransfer(t *testing.T, backend api.Backend) {
 	require := require.New(t)
 
-	destBalance, _, nonce, err := backend.AccountInfo(context.Background(), destID)
+	destBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), destID)
 	require.NoError(err, "dest: AccountInfo")
 	require.True(destBalance.IsZero(), "dest: generalBalance - before")
 	require.EqualValues(0, nonce, "dest: nonce - before")
 
-	srcBalance, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
 	require.NoError(err, "src: AccountInfo - before")
 
 	ch, sub := backend.WatchTransfers()
@@ -115,12 +133,12 @@ func testTransfer(t *testing.T, backend api.Backend) {
 	}
 
 	_ = srcBalance.Sub(&xfer.Tokens)
-	newSrcBalance, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
 	require.NoError(err, "src: AccountInfo - after")
 	require.Equal(srcBalance, newSrcBalance, "src: generalBalance")
 	require.Equal(xfer.Nonce+1, nonce, "src: nonce")
 
-	destBalance, _, nonce, err = backend.AccountInfo(context.Background(), destID)
+	destBalance, _, _, nonce, err = backend.AccountInfo(context.Background(), destID)
 	require.NoError(err, "dest: AccountInfo - after")
 	require.Equal(&xfer.Tokens, destBalance, "dest: generalBalance - after")
 	require.EqualValues(0, nonce, "dest: nonce - after")
@@ -129,7 +147,7 @@ func testTransfer(t *testing.T, backend api.Backend) {
 func testAllowance(t *testing.T, backend api.Backend) {
 	require := require.New(t)
 
-	srcBalance, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
 	require.NoError(err, "src: AccountInfo - before")
 
 	appCh, appSub := backend.WatchApprovals()
@@ -162,7 +180,7 @@ func testAllowance(t *testing.T, backend api.Backend) {
 	xferCh, xferSub := backend.WatchTransfers()
 	defer xferSub.Close()
 
-	destBalance, _, _, err := backend.AccountInfo(context.Background(), destID)
+	destBalance, _, _, _, err := backend.AccountInfo(context.Background(), destID)
 	require.NoError(err, "dest: AccountInfo - before")
 
 	withdrawal := &api.Withdrawal{
@@ -190,13 +208,13 @@ func testAllowance(t *testing.T, backend api.Backend) {
 	require.True(allowance.IsZero(), "allowance is zero")
 
 	_ = srcBalance.Sub(&withdrawal.Tokens)
-	balance, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	balance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
 	require.NoError(err, "src: AccountInfo - after")
 	require.Equal(srcBalance, balance, "src: balance - after")
 	require.Equal(withdrawal.Nonce+1, nonce, "src: nonce - after")
 
 	_ = destBalance.Add(&withdrawal.Tokens)
-	balance, _, _, err = backend.AccountInfo(context.Background(), destID)
+	balance, _, _, _, err = backend.AccountInfo(context.Background(), destID)
 	require.NoError(err, "dest: AccountInfo - after")
 	require.Equal(destBalance, balance, "dest: balance - after")
 }
@@ -207,7 +225,7 @@ func testBurn(t *testing.T, backend api.Backend) {
 	totalSupply, err := backend.TotalSupply(context.Background())
 	require.NoError(err, "TotalSupply - before")
 
-	srcBalance, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
 	require.NoError(err, "src: AccountInfo")
 
 	ch, sub := backend.WatchBurns()
@@ -237,7 +255,7 @@ func testBurn(t *testing.T, backend api.Backend) {
 	require.Equal(totalSupply, newTotalSupply, "totalSupply is reduced by burn")
 
 	_ = srcBalance.Sub(&burn.Tokens)
-	newSrcBalance, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
 	require.NoError(err, "src: AccountInfo")
 	require.Equal(srcBalance, newSrcBalance, "src: generalBalance - after")
 	require.EqualValues(burn.Nonce+1, nonce, "src: nonce - after")
@@ -246,7 +264,7 @@ func testBurn(t *testing.T, backend api.Backend) {
 func testEscrow(t *testing.T, backend api.Backend) {
 	require := require.New(t)
 
-	generalBalance, escrowBalance, nonce, err := backend.AccountInfo(context.Background(), destID)
+	generalBalance, escrowBalance, _, nonce, err := backend.AccountInfo(context.Background(), destID)
 	require.NoError(err, "AccountInfo - before")
 	require.False(generalBalance.IsZero(), "dest: generalBalance != 0")
 	require.True(escrowBalance.IsZero(), "dest: escrowBalance == 0")
@@ -275,10 +293,34 @@ func testEscrow(t *testing.T, backend api.Backend) {
 
 	tmpBalance := generalBalance
 
-	generalBalance, escrowBalance, _, err = backend.AccountInfo(context.Background(), destID)
+	generalBalance, escrowBalance, _, _, err = backend.AccountInfo(context.Background(), destID)
 	require.NoError(err, "AccountInfo - escrowed")
 	require.True(generalBalance.IsZero(), "dest: generalBalance == 0")
 	require.Equal(tmpBalance, escrowBalance, "dest: escrowBalance == oldGeneralBalance")
+
+	reclaim := &api.ReclaimEscrow{
+		Nonce:  nonce + 1,
+		Tokens: *escrowBalance,
+	}
+	signedReclaim, err := api.SignReclaimEscrow(destPrivateKey, reclaim)
+	require.NoError(err, "Sign ReclaimEscrow")
+
+	err = backend.ReclaimEscrow(context.Background(), signedReclaim)
+	require.NoError(err, "ReclaimEscrow")
+
+	select {
+	case rawEv := <-ch:
+		ev := rawEv.(*api.ReclaimEscrowEvent)
+		require.Equal(destID, ev.Owner, "Event: owner")
+		require.Equal(reclaim.Tokens, ev.Tokens, "Event: tokens")
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive escrow event")
+	}
+
+	generalBalance, escrowBalance, _, _, err = backend.AccountInfo(context.Background(), destID)
+	require.NoError(err, "AccountInfo - escrowed")
+	require.Equal(tmpBalance, generalBalance, "dest: generalBalance == oldGeneralBalance")
+	require.True(escrowBalance.IsZero(), "dest: escrowBalance == 0")
 
 	escrowBackend, ok := backend.(api.EscrowBackend)
 	if !ok {
@@ -287,42 +329,8 @@ func testEscrow(t *testing.T, backend api.Backend) {
 		return
 	}
 
-	toSlash := qtyFromInt(math.MaxUint8)
-	err = escrowBackend.TakeEscrow(context.Background(), destID, &toSlash)
-	require.NoError(err, "TakeEscrow")
-
-	select {
-	case rawEv := <-ch:
-		ev := rawEv.(*api.TakeEscrowEvent)
-		require.Equal(destID, ev.Owner, "Event: owner")
-		require.Equal(toSlash, ev.Tokens, "Event: tokens")
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive take escrow event")
-	}
-
-	tmpBalance = escrowBalance
-	_ = tmpBalance.Sub(&toSlash)
-
-	_, escrowBalance, _, err = backend.AccountInfo(context.Background(), destID)
-	require.NoError(err, "AccountInfo - take escrowed")
-	require.Equal(tmpBalance, escrowBalance, "dest: escrowBalance was decreased")
-
-	err = escrowBackend.ReleaseEscrow(context.Background(), destID)
-	require.NoError(err, "ReleaseEscrow")
-
-	select {
-	case rawEv := <-ch:
-		ev := rawEv.(*api.ReleaseEscrowEvent)
-		require.Equal(destID, ev.Owner, "Event: owner")
-		require.Equal(tmpBalance, &ev.Tokens, "Event: tokens")
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive release escrow event")
-	}
-
-	generalBalance, escrowBalance, _, err = backend.AccountInfo(context.Background(), destID)
-	require.NoError(err, "AccountInfo - release escrowed")
-	require.Equal(tmpBalance, generalBalance, "dest: generalBalance - released")
-	require.True(escrowBalance.IsZero(), "dest: escrowBalance == 0 - released")
+	// Nothing implements EscrowBackend, punt on running tests for now.
+	_ = escrowBackend
 }
 
 func mustGeneratePrivateKey() signature.PrivateKey {

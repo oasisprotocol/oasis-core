@@ -54,6 +54,30 @@ func (s *grpcServer) GetCommonPool(ctx context.Context, req *pb.GetCommonPoolReq
 	return &resp, nil
 }
 
+func (s *grpcServer) GetThreshold(ctx context.Context, req *pb.GetThresholdRequest) (*pb.GetThresholdResponse, error) {
+	var kind api.ThresholdKind
+	switch req.GetThresholdKind() {
+	case pb.GetThresholdRequest_VALIDATOR:
+		kind = api.KindValidator
+	case pb.GetThresholdRequest_COMPUTE:
+		kind = api.KindCompute
+	case pb.GetThresholdRequest_STORAGE:
+		kind = api.KindStorage
+	default:
+		return nil, fmt.Errorf("staking/grpc: invalid threshold kind: %v", req.GetThresholdKind())
+	}
+
+	qty, err := s.backend.Threshold(ctx, kind)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp pb.GetThresholdResponse
+	resp.Threshold, _ = qty.MarshalBinary()
+
+	return &resp, nil
+}
+
 func (s *grpcServer) GetAccounts(ctx context.Context, req *pb.GetAccountsRequest) (*pb.GetAccountsResponse, error) {
 	accounts, err := s.backend.Accounts(ctx)
 	if err != nil {
@@ -75,7 +99,7 @@ func (s *grpcServer) GetAccountInfo(ctx context.Context, req *pb.GetAccountInfoR
 		return nil, err
 	}
 
-	general, escrow, nonce, err := s.backend.AccountInfo(ctx, id)
+	general, escrow, debondStart, nonce, err := s.backend.AccountInfo(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +107,7 @@ func (s *grpcServer) GetAccountInfo(ctx context.Context, req *pb.GetAccountInfoR
 	var resp pb.GetAccountInfoResponse
 	resp.GeneralBalance, _ = general.MarshalBinary()
 	resp.EscrowBalance, _ = escrow.MarshalBinary()
+	resp.DebondStartTime = debondStart
 	resp.Nonce = nonce
 
 	return &resp, nil
@@ -171,6 +196,19 @@ func (s *grpcServer) AddEscrow(ctx context.Context, req *pb.AddEscrowRequest) (*
 	}
 
 	return &pb.AddEscrowResponse{}, nil
+}
+
+func (s *grpcServer) ReclaimEscrow(ctx context.Context, req *pb.ReclaimEscrowRequest) (*pb.ReclaimEscrowResponse, error) {
+	var signedReclaim api.SignedReclaimEscrow
+	if err := cbor.Unmarshal(req.GetSignedReclaim(), &signedReclaim); err != nil {
+		return nil, err
+	}
+
+	if err := s.backend.ReclaimEscrow(ctx, &signedReclaim); err != nil {
+		return nil, err
+	}
+
+	return &pb.ReclaimEscrowResponse{}, nil
 }
 
 func (s *grpcServer) WatchTransfers(req *pb.WatchTransfersRequest, stream pb.Staking_WatchTransfersServer) error {
@@ -286,8 +324,8 @@ func (s *grpcServer) WatchEscrows(req *pb.WatchEscrowsRequest, stream pb.Staking
 			resp.EventType = pb.WatchEscrowsResponse_ADD
 		case *api.TakeEscrowEvent:
 			resp.EventType = pb.WatchEscrowsResponse_TAKE
-		case *api.ReleaseEscrowEvent:
-			resp.EventType = pb.WatchEscrowsResponse_RELEASE
+		case *api.ReclaimEscrowEvent:
+			resp.EventType = pb.WatchEscrowsResponse_RECLAIM
 		default:
 			return fmt.Errorf("staking/grpc: unsupported escrow event type: '%T'", ev)
 		}

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/genesis/api"
 )
 
@@ -26,10 +27,12 @@ func generateServerAddress() string {
 }
 
 func generateValidator(t *testing.T, index int) *api.Validator {
+	entity, _, _ := entity.TestEntity()
 	privKey, err := signature.NewPrivateKey(rand.Reader)
 	require.NoError(t, err, "NewPrivateKey")
 
 	return &api.Validator{
+		EntityID:    entity.ID,
 		PubKey:      privKey.Public(),
 		Name:        fmt.Sprintf("validator-%d", index),
 		Power:       10,
@@ -48,6 +51,10 @@ func generateSeed(t *testing.T, index int) *SeedNode {
 }
 
 func TestBootstrapGenesis(t *testing.T) {
+	// The bootstrap server only works with insecure test keys enabled.
+	signature.BuildPublicKeyBlacklist(true)
+	defer signature.BuildPublicKeyBlacklist(false)
+
 	testServer1Address := generateServerAddress()
 	testServer2Address := generateServerAddress()
 
@@ -129,14 +136,23 @@ func TestBootstrapGenesis(t *testing.T) {
 		require.EqualValues(t, template.Staking, genDoc.Staking, "invalid genesis document content (staking)")
 		require.EqualValues(t, template.ExtraData, genDoc.ExtraData, "invalid genesis document content (extra data)")
 
+		entity, _, _ := entity.TestEntity()
+
 		for _, v := range genDoc.Validators {
-			vd := validators[v.PubKey.ToMapKey()]
+			var openedValidator api.Validator
+			err = v.Open(&openedValidator)
+			require.NoError(t, err, "invalid validator signature")
+
+			require.True(t, entity.ID.Equal(v.Signature.PublicKey), "incorrect validator signature public key")
+			require.True(t, entity.ID.Equal(openedValidator.EntityID), "incorrect validator owning entity")
+
+			vd := validators[openedValidator.PubKey.ToMapKey()]
 			require.NotNil(t, vd, "incorrect validator")
 
-			require.True(t, v.PubKey.Equal(vd.PubKey), "incorrect validator public key")
-			require.EqualValues(t, v.Name, vd.Name)
-			require.EqualValues(t, v.Power, vd.Power)
-			require.EqualValues(t, v.CoreAddress, vd.CoreAddress)
+			require.True(t, openedValidator.PubKey.Equal(vd.PubKey), "incorrect validator public key")
+			require.EqualValues(t, openedValidator.Name, vd.Name)
+			require.EqualValues(t, openedValidator.Power, vd.Power)
+			require.EqualValues(t, openedValidator.CoreAddress, vd.CoreAddress)
 		}
 	}
 

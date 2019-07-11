@@ -33,6 +33,7 @@ message Node {
     uint64 registration_time = 6;
     repeated NodeRuntime runtimes = 7;
     uint32 roles = 8;
+    Address consensus_address = 9;
 }
 
 message NodeRuntime {

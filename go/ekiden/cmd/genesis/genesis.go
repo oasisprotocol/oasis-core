@@ -17,7 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
-	"github.com/oasislabs/ekiden/go/genesis"
+	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	keymanager "github.com/oasislabs/ekiden/go/keymanager/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
@@ -77,7 +77,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	validators := make([]*genesis.Validator, 0, len(validatorFiles))
+	validators := make([]*genesis.SignedValidator, 0, len(validatorFiles))
 	for _, v := range validatorFiles {
 		b, err := ioutil.ReadFile(v)
 		if err != nil {
@@ -88,7 +88,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		var validator genesis.Validator
+		var validator genesis.SignedValidator
 		if err := json.Unmarshal(b, &validator); err != nil {
 			logger.Error("failed to parse genesis validator",
 				"err", err,
@@ -96,7 +96,6 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			)
 			return
 		}
-		validator.Power = 10 // TODO: Make this configurable.
 
 		validators = append(validators, &validator)
 	}

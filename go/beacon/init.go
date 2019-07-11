@@ -22,14 +22,18 @@ const (
 
 // New constructs a new Backend based on the configuration flags.
 func New(ctx context.Context, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
-	debugDeterministic := viper.GetBool(cfgDebugDeterministic)
-
 	backend := commonFlags.ConsensusBackend()
 	switch strings.ToLower(backend) {
 	case tendermint.BackendName:
-		return tendermint.New(ctx, timeSource, tmService, debugDeterministic)
+		return tendermint.New(ctx, timeSource, tmService, flagsToConfig())
 	default:
 		return nil, fmt.Errorf("beacon: unsupported backend: '%v'", backend)
+	}
+}
+
+func flagsToConfig() *api.Config {
+	return &api.Config{
+		DebugDeterministic: viper.GetBool(cfgDebugDeterministic),
 	}
 }
 

@@ -38,11 +38,11 @@ type tendermintBackend struct {
 }
 
 func (b *tendermintBackend) Name() string {
-	return "Buffycoin"
+	return api.TokenName
 }
 
 func (b *tendermintBackend) Symbol() string {
-	return "BUF"
+	return api.TokenSymbol
 }
 
 func (b *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, error) {
@@ -52,7 +52,7 @@ func (b *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, err
 	}
 
 	var data api.Quantity
-	if err := cbor.Unmarshal(response, &data); err != nil {
+	if err = cbor.Unmarshal(response, &data); err != nil {
 		return nil, errors.Wrap(err, "staking: total supply malformed response")
 	}
 
@@ -66,11 +66,26 @@ func (b *tendermintBackend) CommonPool(ctx context.Context) (*api.Quantity, erro
 	}
 
 	var data api.Quantity
-	if err := cbor.Unmarshal(response, &data); err != nil {
+	if err = cbor.Unmarshal(response, &data); err != nil {
 		return nil, errors.Wrap(err, "staking: common pool malformed response")
 	}
 
 	return &data, nil
+}
+
+func (b *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKind) (*api.Quantity, error) {
+	response, err := b.service.Query(app.QueryThresholds, nil, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "staking: thresholds query failed")
+	}
+
+	data := make(map[api.ThresholdKind]api.Quantity)
+	if err = cbor.Unmarshal(response, &data); err != nil {
+		return nil, errors.Wrap(err, "staking: thresholds malformed response")
+	}
+	qty := data[kind]
+
+	return &qty, nil
 }
 
 func (b *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey, error) {
@@ -80,28 +95,28 @@ func (b *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey
 	}
 
 	var data []signature.PublicKey
-	if err := cbor.Unmarshal(response, &data); err != nil {
+	if err = cbor.Unmarshal(response, &data); err != nil {
 		return nil, errors.Wrap(err, "staking: accounts query malformed response")
 	}
 
 	return data, nil
 }
 
-func (b *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey) (*api.Quantity, *api.Quantity, uint64, error) {
+func (b *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey) (*api.Quantity, *api.Quantity, uint64, uint64, error) {
 	query := tmapi.QueryGetByIDRequest{
 		ID: owner,
 	}
 	response, err := b.service.Query(app.QueryAccountInfo, query, 0)
 	if err != nil {
-		return nil, nil, 0, errors.Wrap(err, "staking: account info query failed")
+		return nil, nil, 0, 0, errors.Wrap(err, "staking: account info query failed")
 	}
 
 	var data app.QueryAccountInfoResponse
 	if err := cbor.Unmarshal(response, &data); err != nil {
-		return nil, nil, 0, errors.Wrap(err, "staking: account info query malformed response")
+		return nil, nil, 0, 0, errors.Wrap(err, "staking: account info query malformed response")
 	}
 
-	return &data.GeneralBalance, &data.EscrowBalance, data.Nonce, nil
+	return &data.GeneralBalance, &data.EscrowBalance, data.DebondStartTime, data.Nonce, nil
 }
 
 func (b *tendermintBackend) Transfer(ctx context.Context, signedXfer *api.SignedTransfer) error {
@@ -182,6 +197,19 @@ func (b *tendermintBackend) AddEscrow(ctx context.Context, signedEscrow *api.Sig
 	}
 	if err := b.service.BroadcastTx(app.TransactionTag, tx); err != nil {
 		return errors.Wrap(err, "staking: add escrow transaction failed")
+	}
+
+	return nil
+}
+
+func (b *tendermintBackend) ReclaimEscrow(ctx context.Context, signedReclaim *api.SignedReclaimEscrow) error {
+	tx := app.Tx{
+		TxReclaimEscrow: &app.TxReclaimEscrow{
+			SignedReclaimEscrow: *signedReclaim,
+		},
+	}
+	if err := b.service.BroadcastTx(app.TransactionTag, tx); err != nil {
+		return errors.Wrap(err, "staking: reclaim escrow transaction failed")
 	}
 
 	return nil
@@ -275,16 +303,6 @@ func (b *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.
 				}
 
 				b.escrowNotifier.Broadcast(&e)
-			} else if bytes.Equal(pair.GetKey(), app.TagReleaseEscrow) {
-				var e api.ReleaseEscrowEvent
-				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
-					b.logger.Error("worker: failed to get release escrow event from tag",
-						"err", err,
-					)
-					continue
-				}
-
-				b.escrowNotifier.Broadcast(&e)
 			} else if bytes.Equal(pair.GetKey(), app.TagTransfer) {
 				var e api.TransferEvent
 				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
@@ -316,6 +334,8 @@ func (b *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventD
 	} else if e := output.OutputBurn; e != nil {
 		b.burnNotifier.Broadcast(e)
 	} else if e := output.OutputAddEscrow; e != nil {
+		b.escrowNotifier.Broadcast(e)
+	} else if e := output.OutputReclaimEscrow; e != nil {
 		b.escrowNotifier.Broadcast(e)
 	}
 }

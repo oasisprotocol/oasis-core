@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/service"
@@ -93,6 +94,14 @@ func (s *server) handleValidator(w http.ResponseWriter, req *http.Request) {
 	var validator genesis.Validator
 	if err = json.Unmarshal(b, &validator); err != nil {
 		http.Error(w, "malformed validator: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// To prevent the proliferation of this stupidity beyond the test network(s),
+	// require that the validators use the test entity.
+	entity, _, _ := entity.TestEntity()
+	if !validator.EntityID.Equal(entity.ID) {
+		http.Error(w, "unexpected validator entity", http.StatusBadRequest)
 		return
 	}
 
@@ -280,8 +289,23 @@ func (s *server) buildGenesis() {
 
 	// Build a genesis document from a template.
 	doc := *s.template
-	doc.Validators = s.validators
 	doc.Time = time.Now()
+
+	// Since this whole thing is a nasty hack, just sign all the validators
+	// with the test entity.
+	_, privateKey, _ := entity.TestEntity()
+	signedValidators := make([]*genesis.SignedValidator, 0, len(s.validators))
+	for _, v := range s.validators {
+		signed, err := genesis.SignValidator(*privateKey, v)
+		if err != nil {
+			s.logger.Error("failed to sign validator",
+				"err", err,
+			)
+			return
+		}
+		signedValidators = append(signedValidators, signed)
+	}
+	doc.Validators = signedValidators
 
 	if s.genesisDoc == nil {
 		s.genesisTime = doc.Time
@@ -339,8 +363,25 @@ func NewServer(addr string, numValidators int, numSeeds int, template *genesis.D
 
 				s.genesisDoc = b
 				s.genesisTime = doc.Time
-				s.validators = doc.Validators
 				s.template = &doc
+
+				entity, _, _ := entity.TestEntity()
+				validators := make([]*genesis.Validator, 0, len(doc.Validators))
+				for _, v := range doc.Validators {
+					var validator genesis.Validator
+					if err = v.Open(&validator); err != nil {
+						s.logger.Error("failed to verify existing validator signature",
+							"err", err,
+						)
+						return nil, err
+					}
+					if !validator.EntityID.Equal(entity.ID) {
+						s.logger.Error("existing validator has invalid entity")
+						return nil, fmt.Errorf("tendermint/bootstrap: invalid validator entity")
+					}
+					validators = append(validators, &validator)
+				}
+				s.validators = validators
 				close(s.genesisBootstrapChan)
 			}
 		}

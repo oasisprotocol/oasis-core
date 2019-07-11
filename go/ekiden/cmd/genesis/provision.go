@@ -1,25 +1,24 @@
 package genesis
 
 import (
-	"errors"
 	"io/ioutil"
-	"net"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"gopkg.in/AlecAivazis/survey.v1"
 
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
-	"github.com/oasislabs/ekiden/go/genesis"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
+	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 )
 
 const (
-	cfgInteractive   = "interactive"
 	cfgNodeName      = "node_name"
 	cfgNodeAddr      = "node_addr"
 	cfgValidatorFile = "validator_file"
@@ -34,34 +33,6 @@ var (
 		},
 		Run: doProvisionValidator,
 	}
-
-	errNotString = errors.New("input is not a string")
-
-	nodeNameValidator = survey.ComposeValidators(
-		survey.Required,
-		survey.MinLength(1),
-		survey.MaxLength(255),
-		func(ans interface{}) error {
-			s, ok := ans.(string)
-			if !ok {
-				return errNotString
-			}
-
-			return common.IsFQDN(s)
-		},
-	)
-
-	coreAddressValidator = survey.ComposeValidators(
-		survey.Required,
-		func(ans interface{}) error {
-			s, ok := ans.(string)
-			if !ok {
-				return errNotString
-			}
-
-			return common.IsAddrPort(s)
-		},
-	)
 )
 
 func doProvisionValidator(cmd *cobra.Command, args []string) {
@@ -83,41 +54,50 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	validator := genesis.Validator{
-		PubKey: id.NodeKey.Public(),
+	ent, privKey, err := loadEntity(viper.GetString(cfgEntity))
+	if err != nil {
+		logger.Error("failed to load owning entity",
+			"err", err,
+		)
+		os.Exit(1)
 	}
 
-	// Interactively prompt if requested.
-	if viper.GetBool(cfgInteractive) {
-		if err = provisionInteractive(&validator); err != nil {
-			logger.Error("failed to determine node parameters",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-	} else {
-		// Validate the command line args.
-		nodeName := viper.GetString(cfgNodeName)
-		if err = nodeNameValidator(nodeName); err != nil {
-			logger.Error("malformed node name",
-				"err", err,
-				"node_name", nodeName,
-			)
-			os.Exit(1)
-		}
+	validator := genesis.Validator{
+		EntityID: ent.ID,
+		PubKey:   id.NodeKey.Public(),
+		Power:    10,
+	}
 
-		nodeAddr := viper.GetString(cfgNodeAddr)
-		if err = coreAddressValidator(nodeAddr); err != nil {
-			logger.Error("malformed node address",
-				"err", err,
-				"node_addr", nodeAddr,
-			)
-			os.Exit(1)
-		}
+	// Validate the command line args.
+	nodeName := viper.GetString(cfgNodeName)
+	if err = common.IsFQDN(nodeName); err != nil {
+		logger.Error("malformed node name",
+			"err", err,
+			"node_name", nodeName,
+		)
+		os.Exit(1)
+	}
 
-		// Populate the validator struct.
-		validator.CoreAddress = nodeAddr
-		validator.Name = common.NormalizeFQDN(nodeName)
+	nodeAddr := viper.GetString(cfgNodeAddr)
+	if err = common.IsAddrPort(nodeAddr); err != nil {
+		logger.Error("malformed node address",
+			"err", err,
+			"node_addr", nodeAddr,
+		)
+		os.Exit(1)
+	}
+
+	// Populate the validator struct.
+	validator.CoreAddress = nodeAddr
+	validator.Name = common.NormalizeFQDN(nodeName)
+
+	// Sign the validator.
+	signedValidator, err := genesis.SignValidator(*privKey, &validator)
+	if err != nil {
+		logger.Error("failed to sign entity",
+			"err", err,
+		)
+		os.Exit(1)
 	}
 
 	// Write out the validator json to disk.
@@ -128,7 +108,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	if !filepath.IsAbs(f) {
 		f = filepath.Join(dataDir, f)
 	}
-	b := json.Marshal(validator)
+	b := json.Marshal(signedValidator)
 	if err = ioutil.WriteFile(f, b, 0600); err != nil {
 		logger.Error("failed to write validator identity file",
 			"err", err,
@@ -137,54 +117,27 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	}
 }
 
-func provisionInteractive(validator *genesis.Validator) error {
-	var qs []*survey.Question
-
-	nodeName := viper.GetString(cfgNodeName)
-	if nodeName == "" || common.IsFQDN(nodeName) != nil {
-		nodeName, _ = os.Hostname()
+func loadEntity(dataDir string) (*entity.Entity, *signature.PrivateKey, error) {
+	if flags.DebugTestEntity() {
+		return entity.TestEntity()
 	}
-	qs = append(qs, &survey.Question{
-		Name: "Name",
-		Prompt: &survey.Input{
-			Message: "Node name:",
-			Default: nodeName,
-		},
-		Validate:  nodeNameValidator,
-		Transform: survey.TransformString(common.NormalizeFQDN),
-	})
 
-	nodeAddr := viper.GetString(cfgNodeAddr)
-	if nodeAddr == "" || common.IsAddrPort(nodeAddr) != nil {
-		if addr := common.GuessExternalAddress(); addr != nil {
-			nodeAddr = net.JoinHostPort(addr.String(), "26656")
-		}
-	}
-	qs = append(qs, &survey.Question{
-		Name: "CoreAddress",
-		Prompt: &survey.Input{
-			Message: "Tendermint core address:",
-			Default: nodeAddr,
-		},
-		Validate: coreAddressValidator,
-	})
-
-	return survey.Ask(qs, validator)
+	return entity.Load(dataDir)
 }
 
 func registerProvisionValidatorFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().BoolP(cfgInteractive, "i", false, "interactive")
 		cmd.Flags().String(cfgNodeName, "", "validator node name")
 		cmd.Flags().String(cfgNodeAddr, "", "validator node core address")
 		cmd.Flags().String(cfgValidatorFile, "", "validator identity file")
+		cmd.Flags().String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
 	}
 
 	for _, v := range []string{
-		cfgInteractive,
 		cfgNodeAddr,
 		cfgNodeName,
 		cfgValidatorFile,
+		cfgEntity,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
@@ -192,6 +145,7 @@ func registerProvisionValidatorFlags(cmd *cobra.Command) {
 
 func initProvisionValidatorCmd(parentCmd *cobra.Command) {
 	registerProvisionValidatorFlags(provisionValidatorCmd)
+	flags.RegisterDebugTestEntity(provisionValidatorCmd)
 
 	parentCmd.AddCommand(provisionValidatorCmd)
 }

@@ -1,9 +1,11 @@
 package scheduler
 
 import (
+	"bytes"
 	"crypto"
 	"fmt"
 	"math/rand"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -12,16 +14,19 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/genesis"
+	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
+	staking "github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
+	stakingapp "github.com/oasislabs/ekiden/go/tendermint/apps/staking"
 )
 
 var (
@@ -32,14 +37,64 @@ var (
 	rngContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
 	rngContextMerge                = []byte("EkS-ABCI-Merge")
 
-	errUnexpectedTransaction = errors.New("scheduler: unexpected transaction")
+	errUnexpectedTransaction = errors.New("tendermint/scheduler: unexpected transaction")
 )
+
+type stakeAccumulator struct {
+	snapshot       *stakingapp.Snapshot
+	perEntityStake map[signature.MapKey][]staking.ThresholdKind
+
+	unsafeBypass bool
+}
+
+func (acc *stakeAccumulator) checkAndAccumulate(id signature.PublicKey, kind staking.ThresholdKind) error {
+	if acc.unsafeBypass {
+		return nil
+	}
+
+	mk := id.ToMapKey()
+
+	// The staking balance is per-entity.  Each entity can have multiple nodes,
+	// that each can serve multiple roles.  Check the entity's balance to see
+	// that it has sufficient stake for the current roles and the additional
+	// role.
+	kinds := make([]staking.ThresholdKind, 0, 1)
+	if existing, ok := acc.perEntityStake[mk]; ok && len(existing) > 0 {
+		kinds = append(kinds, existing...)
+	}
+	kinds = append(kinds, kind)
+
+	if err := acc.snapshot.EnsureSufficientStake(id, kinds); err != nil {
+		return err
+	}
+
+	// The entity has sufficient stake to qualify for the additional role,
+	// update the accumulated roles.
+	acc.perEntityStake[mk] = kinds
+
+	return nil
+}
+
+func newStakeAccumulator(appState *abci.ApplicationState, ctx *abci.Context, unsafeBypass bool) (*stakeAccumulator, error) {
+	snapshot, err := stakingapp.NewSnapshot(appState, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &stakeAccumulator{
+		snapshot:       snapshot,
+		perEntityStake: make(map[signature.MapKey][]staking.ThresholdKind),
+		unsafeBypass:   unsafeBypass,
+	}, nil
+}
 
 type schedulerApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
 	timeSource epochtime.Backend
+
+	cfg *scheduler.Config
 }
 
 func (app *schedulerApplication) Name() string {
@@ -90,27 +145,58 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		beaconState := beaconapp.NewMutableState(app.state.DeliverTxTree())
 		beacon, err := beaconState.GetBeacon()
 		if err != nil {
-			return fmt.Errorf("couldn't get beacon: %s", err.Error())
+			return errors.Wrap(err, "tendermint/scheduler: couldn't get beacon")
 		}
 
 		regState := registryapp.NewMutableState(app.state.DeliverTxTree())
 		runtimes, err := regState.GetRuntimes()
 		if err != nil {
-			return fmt.Errorf("couldn't get runtimes: %s", err.Error())
+			return errors.Wrap(err, "tendermint/scheduler: couldn't get runtimes")
 		}
 		nodes, err := regState.GetNodes()
 		if err != nil {
-			return fmt.Errorf("couldn't get nodes: %s", err.Error())
+			return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
 		}
 
+		entityStake, err := newStakeAccumulator(app.state, ctx, app.cfg.DebugBypassStake)
+		if err != nil {
+			return errors.Wrap(err, "tendermint/scheduler: couldn't get stake snapshot")
+		}
 		kinds := []scheduler.CommitteeKind{scheduler.KindCompute, scheduler.KindStorage, scheduler.KindTransactionScheduler, scheduler.KindMerge}
 		for _, kind := range kinds {
-			if err := app.electAll(ctx, request, epoch, beacon, runtimes, nodes, kind); err != nil {
-				return fmt.Errorf("couldn't elect %s committees: %s", kind, err.Error())
+			if err := app.electAll(ctx, request, epoch, beacon, entityStake, runtimes, nodes, kind); err != nil {
+				return errors.Wrap(err, fmt.Sprintf("tendermint/scheduler: couldn't elect %s committees", kind))
 			}
 		}
 		ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 		ctx.EmitTag(TagElected, cbor.Marshal(kinds))
+
+		// Set the debonding period start time for all of the entities that
+		// have nodes scheduled.
+		if !app.cfg.DebugBypassStake {
+			stakingState := stakingapp.NewMutableState(app.state.DeliverTxTree())
+			now := uint64(ctx.Now().Unix())
+
+			toUpdate := make([]signature.PublicKey, 0, len(entityStake.perEntityStake))
+			for k, v := range entityStake.perEntityStake {
+				if len(v) == 0 {
+					continue
+				}
+
+				var id signature.PublicKey
+				_ = id.UnmarshalBinary(k[:])
+				toUpdate = append(toUpdate, id)
+			}
+
+			sort.Slice(toUpdate, func(i, j int) bool {
+				return bytes.Compare(toUpdate[i], toUpdate[j]) == -1
+			})
+
+			for _, v := range toUpdate {
+				stakingState.SetDebondStartTime(v, now)
+			}
+
+		}
 
 		var kindNames []string
 		for _, kind := range kinds {
@@ -231,7 +317,7 @@ func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registr
 // Operates on consensus connection.
 // Return error if node should crash.
 // For non-fatal problems, save a problem condition to the state and return successfully.
-func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
+func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
 	if !rt.IsCompute() && kind != scheduler.KindCompute {
 		return nil
@@ -243,6 +329,9 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 	switch kind {
 	case scheduler.KindCompute:
 		for _, n := range nodes {
+			if err := entityStake.checkAndAccumulate(n.EntityID, staking.KindCompute); err != nil {
+				continue
+			}
 			if app.isSuitableComputeWorker(n, rt, request.Header.Time) {
 				nodeList = append(nodeList, n)
 			}
@@ -252,6 +341,9 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		rngCtx = rngContextCompute
 	case scheduler.KindStorage:
 		for _, n := range nodes {
+			if err := entityStake.checkAndAccumulate(n.EntityID, staking.KindStorage); err != nil {
+				continue
+			}
 			if app.isSuitableStorageWorker(n) {
 				nodeList = append(nodeList, n)
 			}
@@ -261,6 +353,9 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		rngCtx = rngContextStorage
 	case scheduler.KindTransactionScheduler:
 		for _, n := range nodes {
+			if err := entityStake.checkAndAccumulate(n.EntityID, staking.KindCompute); err != nil {
+				continue
+			}
 			if app.isSuitableTransactionScheduler(n, rt) {
 				nodeList = append(nodeList, n)
 			}
@@ -270,6 +365,9 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		rngCtx = rngContextTransactionScheduler
 	case scheduler.KindMerge:
 		for _, n := range nodes {
+			if err := entityStake.checkAndAccumulate(n.EntityID, staking.KindCompute); err != nil {
+				continue
+			}
 			if app.isSuitableMergeWorker(n, rt) {
 				nodeList = append(nodeList, n)
 			}
@@ -280,7 +378,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 		rngCtx = rngContextMerge
 	default:
 		// This is a problem with this code. Don't try to handle it at runtime.
-		return fmt.Errorf("scheduler: invalid committee type: %v", kind)
+		return fmt.Errorf("tendermint/scheduler: invalid committee type: %v", kind)
 	}
 	nrNodes := len(nodeList)
 
@@ -306,7 +404,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 
 	drbg, err := drbg.New(crypto.SHA512, beacon, rt.ID[:], rngCtx)
 	if err != nil {
-		return fmt.Errorf("scheduler: couldn't instantiate DRBG: %s", err.Error())
+		return fmt.Errorf("tendermint/scheduler: couldn't instantiate DRBG: %s", err.Error())
 	}
 	rngSrc := mathrand.New(drbg)
 	rng := rand.New(rngSrc)
@@ -345,9 +443,9 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 }
 
 // Operates on consensus connection.
-func (app *schedulerApplication) electAll(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
+func (app *schedulerApplication) electAll(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	for _, runtime := range runtimes {
-		if err := app.elect(ctx, request, epoch, beacon, runtime, nodes, kind); err != nil {
+		if err := app.elect(ctx, request, epoch, beacon, entityStake, runtime, nodes, kind); err != nil {
 			return err
 		}
 	}
@@ -357,9 +455,11 @@ func (app *schedulerApplication) electAll(ctx *abci.Context, request types.Reque
 // New constructs a new scheduler application instance.
 func New(
 	timeSource epochtime.Backend,
+	cfg *scheduler.Config,
 ) abci.Application {
 	return &schedulerApplication{
 		logger:     logging.GetLogger("tendermint/scheduler"),
 		timeSource: timeSource,
+		cfg:        cfg,
 	}
 }

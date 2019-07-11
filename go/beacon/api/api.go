@@ -20,3 +20,9 @@ type Backend interface {
 	// beacon for latest finalized block.
 	GetBeacon(context.Context, int64) ([]byte, error)
 }
+
+// Config is the per-backend common configuration.
+type Config struct {
+	// DebugDeterministic is true iff the output should be deterministic.
+	DebugDeterministic bool
+}
