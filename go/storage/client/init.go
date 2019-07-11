@@ -9,16 +9,27 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/grpc/storage"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
 )
 
+const (
+	// BackendName is the name of this implementation.
+	BackendName = "client"
+
+	// Address to connect to with the storage client.
+	cfgDebugClientAddress = "storage.debug.client.address"
+
+	// Path to certificate file for grpc.
+	cfgDebugClientTLSCertFile = "storage.debug.client.tls"
+)
+
 // In debug mode, we connect to the provided node and save it to the fake runtime.
-const debugModeFakeRuntime = "12345678987654321"
+const debugModeFakeRuntimeSeed = "ekiden storage client debug runtime"
 
 // New creates a new storage client.
 func New(ctx context.Context, schedulerBackend scheduler.Backend, registryBackend registry.Backend) (api.Backend, error) {
@@ -53,46 +64,35 @@ func New(ctx context.Context, schedulerBackend scheduler.Backend, registryBacken
 		}
 		client := storage.NewStorageClient(conn)
 
-		debugRuntimePK := signature.NewTestPrivateKey(debugModeFakeRuntime)
+		testRuntimeSigner := memorySigner.NewTestSigner(debugModeFakeRuntimeSeed)
 		b := &storageClientBackend{
-			logger:         logger,
-			scheduler:      schedulerBackend,
-			registry:       registryBackend,
-			debugRuntimeID: debugRuntimePK.Public(),
-			watcherState: &watcherState{
-				initCh:                      make(chan struct{}),
-				logger:                      logger,
-				registeredStorageNodes:      []*node.Node{},
-				perRuntimeScheduledNodeKeys: make(map[signature.MapKey][]signature.PublicKey),
-				perRuntimeClientStates:      make(map[signature.MapKey][]*clientState),
-			},
+			ctx:             ctx,
+			initCh:          make(chan struct{}),
+			logger:          logger,
+			debugRuntimeID:  testRuntimeSigner.Public(),
+			scheduler:       schedulerBackend,
+			registry:        registryBackend,
+			runtimeWatchers: make(map[signature.MapKey]storageWatcher),
 		}
-
-		b.watcherState.perRuntimeClientStates[b.debugRuntimeID.ToMapKey()] = []*clientState{&clientState{
+		state := &clientState{
 			client: client,
 			conn:   conn,
-		}}
-		close(b.watcherState.initCh)
-
+		}
+		close(b.initCh)
+		b.runtimeWatchers[b.debugRuntimeID.ToMapKey()] = newDebugWatcher(state)
 		return b, nil
 	}
 
 	b := &storageClientBackend{
-		logger:    logger,
-		scheduler: schedulerBackend,
-		registry:  registryBackend,
-		watcherState: &watcherState{
-			initCh:                      make(chan struct{}),
-			logger:                      logger,
-			registeredStorageNodes:      []*node.Node{},
-			perRuntimeScheduledNodeKeys: make(map[signature.MapKey][]signature.PublicKey),
-			perRuntimeClientStates:      make(map[signature.MapKey][]*clientState),
-		},
+		ctx:             ctx,
+		initCh:          make(chan struct{}),
+		logger:          logger,
+		scheduler:       schedulerBackend,
+		registry:        registryBackend,
+		runtimeWatchers: make(map[signature.MapKey]storageWatcher),
 	}
 
 	b.haltCtx, b.cancelFn = context.WithCancel(ctx)
-
-	go b.watcher(ctx)
 
 	return b, nil
 }

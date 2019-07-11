@@ -30,8 +30,10 @@ const (
 	cfgCacheSize = "storage.cachingclient.cache_size"
 )
 
-var _ api.Backend = (*cachingClientBackend)(nil)
-var _ api.ClientBackend = (*cachingClientBackend)(nil)
+var (
+	_ api.Backend       = (*cachingClientBackend)(nil)
+	_ api.ClientBackend = (*cachingClientBackend)(nil)
+)
 
 type cachingClientBackend struct {
 	logger *logging.Logger
@@ -52,8 +54,10 @@ func (b *cachingClientBackend) WatchRuntime(id signature.PublicKey) error {
 	if clientBackend, ok := b.remote.(api.ClientBackend); ok {
 		return clientBackend.WatchRuntime(id)
 	}
-	b.logger.Warn("cachingclient not watching runtime since remote is not ClientBackend")
-	return errors.New("storage/cachingclient: remote note ClientBackend")
+	b.logger.Warn("cachingclient not watching runtime since remote is not ClientBackend",
+		"runtime_id", id,
+	)
+	return errors.New("storage/cachingclient: remote not ClientBackend")
 }
 
 func (b *cachingClientBackend) Apply(

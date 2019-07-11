@@ -245,14 +245,17 @@ func newWorker(
 				return nil, err
 			}
 			// If using a storage client, it should watch the configured runtimes.
-			if storageClient, ok := w.Storage.(storage.ClientBackend); ok {
+			if storageClient, ok := storageBackend.(storage.ClientBackend); ok {
 				if err := storageClient.WatchRuntime(id); err != nil {
 					w.logger.Warn("common/worker: error watching storage runtime, expected if using cachingclient with local backend",
 						"err", err,
+						"runtime_id", id,
 					)
 				}
 			} else {
-				w.logger.Info("not watching storage runtime since not using a storage client backend")
+				w.logger.Info("not watching storage runtime since not using a storage client backend",
+					"runtime_id", id,
+				)
 			}
 		}
 	}

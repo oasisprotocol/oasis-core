@@ -26,10 +26,8 @@ import (
 const recvTimeout = 5 * time.Second
 
 func runtimeIDToNamespace(t *testing.T, runtimeID signature.PublicKey) (ns common.Namespace) {
-	raw, err := runtimeID.MarshalBinary()
-	require.NoError(t, err, "runtimeID.MarshalBinary")
-	nerr := ns.UnmarshalBinary(raw)
-	require.NoError(t, nerr, "namespace.UnmarshalBinary")
+	err := ns.UnmarshalBinary(runtimeID[:])
+	require.NoError(t, err, "runtimeIDToNamespace")
 	return
 }
 

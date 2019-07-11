@@ -49,6 +49,20 @@ type Service struct {
 func (s *Service) worker() {
 	defer s.BaseBackgroundService.Stop()
 
+	logger := s.Logger.With("runtime_id", s.runtimeID.String())
+	logger.Info("started indexer for runtime")
+
+	// If using a storage client, it should watch the configured runtimes.
+	if storageClient, ok := s.storage.(storage.ClientBackend); ok {
+		if err := storageClient.WatchRuntime(s.runtimeID); err != nil {
+			logger.Warn("indexer: error watching storage runtime, expected if using cachingclient/metricswrapper with local backend",
+				"err", err,
+			)
+		}
+	} else {
+		logger.Info("not watching storage runtime since not using a storage client backend")
+	}
+
 	// Start watching roothash blocks.
 	blocksCh, blocksSub, err := s.roothash.WatchBlocks(s.runtimeID)
 	if err != nil {
@@ -68,9 +82,6 @@ func (s *Service) worker() {
 		return
 	}
 	defer pruneSub.Close()
-
-	logger := s.Logger.With("runtime_id", s.runtimeID.String())
-	logger.Info("started indexer for runtime")
 
 	for {
 		select {

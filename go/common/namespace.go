@@ -57,14 +57,8 @@ func (n Namespace) String() string {
 }
 
 // ToRuntimeID derives a RuntimeID from the namespace.
-// Storage client requires that RuntimeID is derivable from namespace.
-// TODO: there's probably a nicer? way to do this.
+// XXX: In future we might be using namespaces directly for runtime IDs.
 func (n *Namespace) ToRuntimeID() (pk signature.PublicKey, err error) {
-	var raw []byte
-	raw, err = n.MarshalBinary()
-	if err != nil {
-		return
-	}
-	err = pk.UnmarshalBinary(raw)
+	err = pk.UnmarshalBinary(n[:])
 	return
 }

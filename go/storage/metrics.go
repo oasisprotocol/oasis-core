@@ -5,10 +5,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/storage/api"
 )
 
@@ -56,13 +60,28 @@ var (
 	labelGetNode    = prometheus.Labels{"call": "get_node"}
 	labelHasRoot    = prometheus.Labels{"call": "has_root"}
 
-	_ api.LocalBackend = (*metricsWrapper)(nil)
+	_ api.LocalBackend  = (*metricsWrapper)(nil)
+	_ api.ClientBackend = (*metricsWrapper)(nil)
 
 	metricsOnce sync.Once
 )
 
 type metricsWrapper struct {
 	api.Backend
+}
+
+func (w *metricsWrapper) GetConnectedNodes() []*node.Node {
+	if clientBackend, ok := w.Backend.(api.ClientBackend); ok {
+		return clientBackend.GetConnectedNodes()
+	}
+	return []*node.Node{}
+}
+
+func (w *metricsWrapper) WatchRuntime(id signature.PublicKey) error {
+	if clientBackend, ok := w.Backend.(api.ClientBackend); ok {
+		return clientBackend.WatchRuntime(id)
+	}
+	return errors.New("storage/metricswrapper: backend not ClientBackend")
 }
 
 func (w *metricsWrapper) Apply(

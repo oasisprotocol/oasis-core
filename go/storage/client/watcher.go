@@ -10,34 +10,64 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/grpc/storage"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 )
 
-// TODO: Consider to refactoring to a watcher per runtime?
+type storageWatcher interface {
+	getConnectedNodes() []*node.Node
+	getClientStates() []clientState
+	cleanup()
+	initialized() <-chan struct{}
+}
 
-var (
-	// ErrNoRuntimeState is an error when runtime state is missing.
-	ErrNoRuntimeState = errors.New("storage/client/watcher: no runtime state")
-	// ErrNoRuntimeConnectedNodes is an error when there are no connected storage nodes for a runtime.
-	ErrNoRuntimeConnectedNodes = errors.New("storage/client/watcher: no connected nodes for runtime")
-)
+// debugWatcherState is a state with a fixed storage node.
+type debugWatcherState struct {
+	clientState *clientState
+	initCh      chan struct{}
+}
 
-// watcherState contains watcher state.
+func (w *debugWatcherState) getConnectedNodes() []*node.Node {
+	return []*node.Node{}
+}
+
+func (w *debugWatcherState) getClientStates() []clientState {
+	return []clientState{*w.clientState}
+}
+func (w *debugWatcherState) cleanup() {
+}
+func (w *debugWatcherState) initialized() <-chan struct{} {
+	return w.initCh
+}
+
+func newDebugWatcher(state *clientState) storageWatcher {
+	initCh := make(chan struct{})
+	close(initCh)
+	return &debugWatcherState{
+		initCh:      initCh,
+		clientState: state,
+	}
+}
+
+// watcherState contains storage watcher state.
 type watcherState struct {
 	sync.RWMutex
 
 	logger *logging.Logger
 
-	registeredStorageNodes      []*node.Node
-	perRuntimeScheduledNodeKeys map[signature.MapKey][]signature.PublicKey
-	perRuntimeClientStates      map[signature.MapKey][]*clientState
+	scheduler scheduler.Backend
+	registry  registry.Backend
+
+	runtimeID signature.MapKey
+
+	registeredStorageNodes []*node.Node
+	scheduledNodes         map[signature.MapKey]bool
+	clientStates           []*clientState
 
 	initCh       chan struct{}
 	signaledInit bool
@@ -51,39 +81,22 @@ type clientState struct {
 	resolverCleanupCb func()
 }
 
-func (w *watcherState) Cleanup() {
+func (w *watcherState) cleanup() {
 	w.Lock()
 	defer w.Unlock()
 
-	for _, states := range w.perRuntimeClientStates {
-		for _, clientState := range states {
-			if callBack := clientState.resolverCleanupCb; callBack != nil {
-				callBack()
-			}
-			if clientState.conn != nil {
-				clientState.conn.Close()
-			}
+	for _, clientState := range w.clientStates {
+		if callBack := clientState.resolverCleanupCb; callBack != nil {
+			callBack()
+		}
+		if clientState.conn != nil {
+			clientState.conn.Close()
 		}
 	}
 }
 
-func (w *watcherState) getRuntimeClientStatesLocked(runtimeID signature.MapKey) ([]*clientState, error) {
-	clientStates := w.perRuntimeClientStates[runtimeID]
-	if clientStates == nil {
-		w.logger.Error("writeWithClient: no state for runtime",
-			"runtime", runtimeID,
-		)
-		return nil, ErrNoRuntimeState
-	}
-	n := len(clientStates)
-	if n == 0 {
-		w.logger.Error("writeWithClient: no connected nodes for runtime",
-			"runtime", runtimeID,
-		)
-		return nil, ErrNoRuntimeConnectedNodes
-	}
-
-	return clientStates, nil
+func (w *watcherState) initialized() <-chan struct{} {
+	return w.initCh
 }
 
 func (w *watcherState) getConnectedNodes() []*node.Node {
@@ -91,91 +104,39 @@ func (w *watcherState) getConnectedNodes() []*node.Node {
 	defer w.RUnlock()
 
 	connectedNodes := []*node.Node{}
-	for _, states := range w.perRuntimeClientStates {
-		for _, state := range states {
-			connectedNodes = append(connectedNodes, state.node)
-		}
+	for _, state := range w.clientStates {
+		connectedNodes = append(connectedNodes, state.node)
 	}
 	return connectedNodes
 }
 
-func (w *watcherState) watchRuntime(id signature.PublicKey) {
-	w.logger.Debug("worker storage: watching runtime",
-		"runtime_id", id,
-	)
-	w.RLock()
-	state := w.perRuntimeClientStates[id.ToMapKey()]
-	if state != nil {
-		w.RUnlock()
-		// Nothing to do, already watching the runtime.
-		return
-	}
-	w.RUnlock()
-	// XXX: This lock blocks all requests.
-	w.Lock()
-	defer w.Unlock()
-	w.perRuntimeClientStates[id.ToMapKey()] = []*clientState{}
-	w.perRuntimeScheduledNodeKeys[id.ToMapKey()] = []signature.PublicKey{}
-}
-
-func (w *watcherState) isWatchingRuntime(runtimeID signature.MapKey) bool {
+func (w *watcherState) getClientStates() []clientState {
 	w.RLock()
 	defer w.RUnlock()
-
-	for watchedRuntimeID := range w.perRuntimeClientStates {
-		if watchedRuntimeID == runtimeID {
-			return true
-		}
+	clientStates := []clientState{}
+	for _, state := range w.clientStates {
+		clientStates = append(clientStates, *state)
 	}
-	return false
+	return clientStates
 }
-
-func (w *watcherState) nodeIsInCommitteeLocked(runtimeID signature.MapKey, node *node.Node) bool {
-	scheduledNodeKeys := w.perRuntimeScheduledNodeKeys[runtimeID]
-	for _, k := range scheduledNodeKeys {
-		if k.ToMapKey() == node.ID.ToMapKey() {
-			return true
-		}
-	}
-	return false
-}
-
-func (w *watcherState) updateAllStorageNodeConnections() {
-	for runtimeID := range w.perRuntimeClientStates {
-		w.updateStorageNodeConnections(runtimeID)
-	}
-}
-
-func (w *watcherState) updateStorageNodeConnections(runtimeID signature.MapKey) {
-	// XXX: This lock blocks requests to nodes in all runtimes.
-	// Could add separate per runtime-locks, change this to a RLock, but would still
-	// need to lock the map when updating it at the end.
+func (w *watcherState) updateStorageNodeConnections() {
+	// XXX: This lock blocks requests to nodes for this runtime.
 	w.Lock()
 	defer w.Unlock()
 
-	w.logger.Debug("updating connections to storage nodes",
-		"runtime_id", runtimeID,
-	)
+	w.logger.Debug("updating connections to storage nodes")
 
 	nodeList := []*node.Node{}
 	for _, node := range w.registeredStorageNodes {
-		if w.nodeIsInCommitteeLocked(runtimeID, node) {
+		if w.scheduledNodes[node.ID.ToMapKey()] {
 			nodeList = append(nodeList, node)
 		}
 	}
 
-	// TODO: Should we only update connections if keys or addresses have
-	// changed?
+	// TODO: Should we only update connections if keys or addresses have changed?
 
 	// Clean-up previous resolvers.
-	clientStates := w.perRuntimeClientStates[runtimeID]
-	if clientStates == nil {
-		w.logger.Error("failed to update storage node connection, invalid runtimeID",
-			"runtime_id", runtimeID,
-		)
-		return
-	}
-	for _, states := range clientStates {
+	for _, states := range w.clientStates {
 		if cleanup := states.resolverCleanupCb; cleanup != nil {
 			cleanup()
 		}
@@ -188,14 +149,11 @@ func (w *watcherState) updateStorageNodeConnections(runtimeID signature.MapKey) 
 	for _, node := range nodeList {
 		var opts grpc.DialOption
 		if node.Certificate == nil {
-			// NOTE: This should only happen in tests, where nodes register
-			// without a certificate.
-			// TODO: This can be rejected once node_tests register with a
-			// certificate.
+			// NOTE: This should only happen in tests, where nodes register without a certificate.
+			// TODO: This can be rejected once node_tests register with a certificate.
 			opts = grpc.WithInsecure()
 			w.logger.Warn("storage committee member registered without certificate, using insecure connection!",
-				"member", node,
-			)
+				"member", node)
 		} else {
 			nodeCert, err := node.Certificate.Parse()
 			if err != nil {
@@ -257,10 +215,10 @@ func (w *watcherState) updateStorageNodeConnections(runtimeID signature.MapKey) 
 	}
 
 	// Update client state.
-	w.perRuntimeClientStates[runtimeID] = connClientStates
+	w.clientStates = connClientStates
 }
 
-func (w *watcherState) updateStorageNodeList(ctx context.Context, nodes []*node.Node) error {
+func (w *watcherState) updateRegisteredStorageNodes(nodes []*node.Node) {
 	storageNodes := []*node.Node{}
 	for _, n := range nodes {
 		if n.HasRoles(node.RoleStorageWorker) {
@@ -268,89 +226,94 @@ func (w *watcherState) updateStorageNodeList(ctx context.Context, nodes []*node.
 		}
 	}
 
-	// XXX: This lock blocks all requests.
-	// Could have a separate lock `registeredStorageNodes` list.
 	w.Lock()
 	defer w.Unlock()
 	w.registeredStorageNodes = storageNodes
-
-	return nil
 }
 
-func (w *watcherState) updateStorageCommitteeList(ctx context.Context, runtimeID signature.PublicKey, nodes []*scheduler.CommitteeNode) error {
-	scheduledStorageNodeKeys := []signature.PublicKey{}
+func (w *watcherState) updateScheduledNodes(nodes []*scheduler.CommitteeNode) {
+	scheduledStorageNodes := make(map[signature.MapKey]bool)
 	for _, n := range nodes {
 		if n.Role == scheduler.Worker {
-			scheduledStorageNodeKeys = append(scheduledStorageNodeKeys, n.PublicKey)
+			scheduledStorageNodes[n.PublicKey.ToMapKey()] = true
 		}
 	}
 
-	// XXX: This lock blocks all requests.
 	w.Lock()
 	defer w.Unlock()
-	w.perRuntimeScheduledNodeKeys[runtimeID.ToMapKey()] = scheduledStorageNodeKeys
-
-	return nil
+	w.scheduledNodes = scheduledStorageNodes
 }
 
-func (b *storageClientBackend) watcher(ctx context.Context) {
-	schedCh, sub := b.scheduler.WatchCommittees()
+func (w *watcherState) watch(ctx context.Context) {
+	committeeCh, sub := w.scheduler.WatchCommittees()
 	defer sub.Close()
 
-	nodeListCh, sub := b.registry.WatchNodeList()
+	nodeListCh, sub := w.registry.WatchNodeList()
 	defer sub.Close()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case ev := <-nodeListCh:
-			if ev == nil {
+		case nl := <-nodeListCh:
+			if nl == nil {
 				continue
 			}
-			b.logger.Debug("got new storage node list")
-			if err := b.watcherState.updateStorageNodeList(ctx, ev.Nodes); err != nil {
-				b.logger.Error("worker: failed to update storage list",
-					"err", err,
-				)
-				continue
-			}
-			// Update storage node connections for all runtimes.
-			b.watcherState.updateAllStorageNodeConnections()
+			w.logger.Debug("got new storage node list",
+				"nodes", nl.Nodes,
+			)
 
-			b.logger.Debug("updated connections to all nodes")
-		case committee := <-schedCh:
-			b.logger.Debug("worker: scheduler committee for epoch",
+			w.updateRegisteredStorageNodes(nl.Nodes)
+
+			// Update storage node connections for the runtime.
+			w.updateStorageNodeConnections()
+
+			w.logger.Debug("updated connections to all nodes")
+		case committee := <-committeeCh:
+			if committee.RuntimeID.ToMapKey() != w.runtimeID {
+				continue
+			}
+			if committee.Kind != scheduler.KindStorage {
+				continue
+			}
+
+			w.logger.Debug("worker: storage committee for epoch",
 				"committee", committee,
 				"epoch", committee.ValidFor,
 				"kind", committee.Kind,
 			)
 
-			if committee.Kind != scheduler.KindStorage {
-				continue
-			}
-
 			if len(committee.Members) == 0 {
-				b.logger.Warn("worker: received empty storage committee")
+				w.logger.Warn("worker: received empty storage committee")
 				continue
 			}
 
-			// Update connection if wattching the runtime.
-			if b.watcherState.isWatchingRuntime(committee.RuntimeID.ToMapKey()) {
-				if err := b.watcherState.updateStorageCommitteeList(ctx, committee.RuntimeID, committee.Members); err != nil {
-					b.logger.Error("worker: failed to update storage committee list",
-						"err", err,
-					)
-					continue
-				}
+			// Update connection if watching the runtime.
+			w.updateScheduledNodes(committee.Members)
 
-				// Update storage node connections for the runtime.
-				b.watcherState.updateStorageNodeConnections(committee.RuntimeID.ToMapKey())
+			// Update storage node connections for the runtime.
+			w.updateStorageNodeConnections()
 
-				b.logger.Debug("updated connections to nodes",
-					"runtime", committee.RuntimeID,
-				)
-			}
+			w.logger.Debug("updated connections to nodes")
 		}
 	}
+}
+
+func newWatcher(ctx context.Context, runtimeID signature.PublicKey, schedulerBackend scheduler.Backend, registryBackend registry.Backend) storageWatcher {
+	logger := logging.GetLogger("storage/client/watcher").With("runtime_id", runtimeID.String())
+
+	watcher := &watcherState{
+		initCh:                 make(chan struct{}),
+		logger:                 logger,
+		runtimeID:              runtimeID.ToMapKey(),
+		scheduler:              schedulerBackend,
+		registry:               registryBackend,
+		registeredStorageNodes: []*node.Node{},
+		scheduledNodes:         make(map[signature.MapKey]bool),
+		clientStates:           []*clientState{},
+	}
+
+	go watcher.watch(ctx)
+
+	return watcher
 }

@@ -26,17 +26,6 @@ import (
 	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
-const (
-	// BackendName is the name of this implementation.
-	BackendName = "client"
-
-	// Address to connect to with the storage client.
-	cfgDebugClientAddress = "storage.debug.client.address"
-
-	// Path to certificate file for grpc
-	cfgDebugClientTLSCertFile = "storage.debug.client.tls"
-)
-
 var (
 	_ api.Backend       = (*storageClientBackend)(nil)
 	_ api.ClientBackend = (*storageClientBackend)(nil)
@@ -45,8 +34,7 @@ var (
 var (
 	// ErrNoWatcher is an error when watcher for runtime is missing.
 	ErrNoWatcher = errors.New("storage/client: no watcher for runtime")
-	// ErrStorageNotAvailable is the error returned when a storage is not
-	// available.
+	// ErrStorageNotAvailable is the error returned when no storage node is available.
 	ErrStorageNotAvailable = errors.New("storage/client: storage not available")
 )
 
@@ -101,24 +89,20 @@ func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
 }
 
 func (b *storageClientBackend) WatchRuntime(id signature.PublicKey) error {
-	b.runtimeWatchersLock.RLock()
-	watcher := b.runtimeWatchers[id.ToMapKey()]
-	if watcher != nil {
-		// Already watching, nothing to do.
-		b.runtimeWatchersLock.RUnlock()
-		return nil
-	}
-	b.runtimeWatchersLock.RUnlock()
-
-	// Watcher doesn't exist. Start new watcher.
-	watcher = newWatcher(b.ctx, id, b.scheduler, b.registry)
-
 	b.runtimeWatchersLock.Lock()
 	defer b.runtimeWatchersLock.Unlock()
 
+	watcher := b.runtimeWatchers[id.ToMapKey()]
+	if watcher != nil {
+		// Already watching, nothing to do.
+		return nil
+	}
+
+	// Watcher doesn't exist. Start new watcher.
+	watcher = newWatcher(b.ctx, id, b.scheduler, b.registry)
 	b.runtimeWatchers[id.ToMapKey()] = watcher
 
-	// Signal init when first runtime is initialized.
+	// Signal init when the first registered runtime is initialized.
 	if !b.signaledInit {
 		b.signaledInit = true
 		go func() {
@@ -178,8 +162,6 @@ func (b *storageClientBackend) writeWithClient(
 		return nil, ErrStorageNotAvailable
 	}
 
-	watcher.rLockClientStates()
-	defer watcher.rUnlockClientStates()
 	clientStates := watcher.getClientStates()
 	n := len(clientStates)
 	if n == 0 {
@@ -399,8 +381,6 @@ func (b *storageClientBackend) readWithClient(ctx context.Context, ns common.Nam
 		return nil, ErrStorageNotAvailable
 	}
 
-	watcher.rLockClientStates()
-	defer watcher.rUnlockClientStates()
 	clientStates := watcher.getClientStates()
 	n := len(clientStates)
 	if n == 0 {
@@ -417,14 +397,14 @@ func (b *storageClientBackend) readWithClient(ctx context.Context, ns common.Nam
 
 	var resp interface{}
 	for _, randIndex := range rng.Perm(n) {
-		clientState := clientStates[randIndex]
-		resp, err = fn(ctx, clientState.client)
+		state := clientStates[randIndex]
+		resp, err = fn(ctx, state.client)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 		if err != nil {
 			b.logger.Error("failed to get response from a storage node",
-				"node", clientState.node,
+				"node", state.node,
 				"err", err,
 				"runtime_id", runtimeID,
 			)
