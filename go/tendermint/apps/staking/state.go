@@ -1,6 +1,7 @@
 package staking
 
 import (
+	"encoding/binary"
 	"fmt"
 
 	"github.com/pkg/errors"
@@ -18,14 +19,16 @@ const (
 )
 
 var (
-	stateTotalSupply = []byte("staking/total_supply")
-	stateCommonPool  = []byte("staking/common_pool")
+	stateTotalSupply       = []byte("staking/total_supply")
+	stateCommonPool        = []byte("staking/common_pool")
+	stateDebondingInterval = []byte("staking/debonding_interval")
 )
 
 type ledgerEntry struct {
-	GeneralBalance staking.Quantity `codec:"general_balance"`
-	EscrowBalance  staking.Quantity `codec:"escrow_balance"`
-	Nonce          uint64           `codec:"nonce"`
+	GeneralBalance  staking.Quantity `codec:"general_balance"`
+	EscrowBalance   staking.Quantity `codec:"escrow_balance"`
+	DebondStartTime uint64           `codec:"debond_start_time"`
+	Nonce           uint64           `codec:"nonce"`
 
 	Approvals map[signature.MapKey]*staking.Quantity `codec:"approvals"`
 }
@@ -94,6 +97,15 @@ func (s *immutableState) rawCommonPool() ([]byte, error) {
 	}
 
 	return cbor.Marshal(q), nil
+}
+
+func (s *immutableState) debondingInterval() (uint64, error) {
+	_, value := s.Snapshot.Get(stateDebondingInterval)
+	if len(value) != 8 {
+		return 0, fmt.Errorf("staking: corrupt debonding interval")
+	}
+
+	return binary.LittleEndian.Uint64(value), nil
 }
 
 // Thresholds returns the currently configured thresholds if any.
@@ -201,12 +213,25 @@ func (s *MutableState) setAccount(id signature.PublicKey, account *ledgerEntry) 
 	s.tree.Set([]byte(fmt.Sprintf(stateAccountsMap, id)), cbor.Marshal(account))
 }
 
+// SetDebondStartTime sets the debonding start time of an account to ts.
+func (s *MutableState) SetDebondStartTime(id signature.PublicKey, ts uint64) {
+	account := s.account(id)
+	account.DebondStartTime = ts
+	s.setAccount(id, account)
+}
+
 func (s *MutableState) setTotalSupply(q *staking.Quantity) {
 	s.tree.Set(stateTotalSupply, cbor.Marshal(q))
 }
 
 func (s *MutableState) setCommonPool(q *staking.Quantity) {
 	s.tree.Set(stateCommonPool, cbor.Marshal(q))
+}
+
+func (s *MutableState) setDebondingInterval(interval uint64) {
+	var tmp [8]byte
+	binary.LittleEndian.PutUint64(tmp[:], interval)
+	s.tree.Set(stateDebondingInterval, tmp[:])
 }
 
 func (s *MutableState) setThreshold(kind staking.ThresholdKind, q *staking.Quantity) {
@@ -242,35 +267,6 @@ func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey
 				Tokens: *slashed,
 			})
 			ctx.EmitTag(TagTakeEscrow, ev)
-		}
-	}
-
-	return ret, nil
-}
-
-// ReleaseEscrow releases up to the amount from the escrow balance of the
-// account, shifting the released amount to the general balance, returning true
-// iff the amount released is > 0.
-//
-// WARNING: This is an internal routine to be used to implement staking policy,
-// and MUST NOT be exposed outside of backend implementations.
-func (s *MutableState) ReleaseEscrow(ctx *abci.Context, toID signature.PublicKey, amount *staking.Quantity) (bool, error) {
-	to := s.account(toID)
-	released, err := staking.MoveUpTo(&to.GeneralBalance, &to.EscrowBalance, amount)
-	if err != nil {
-		return false, errors.Wrap(err, "staking: failed to release")
-	}
-
-	ret := !released.IsZero()
-	if ret {
-		s.setAccount(toID, to)
-
-		if !ctx.IsCheckOnly() {
-			ev := cbor.Marshal(&staking.ReleaseEscrowEvent{
-				Owner:  toID,
-				Tokens: *released,
-			})
-			ctx.EmitTag(TagReleaseEscrow, ev)
 		}
 	}
 

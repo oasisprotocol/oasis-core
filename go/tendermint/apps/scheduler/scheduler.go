@@ -1,9 +1,11 @@
 package scheduler
 
 import (
+	"bytes"
 	"crypto"
 	"fmt"
 	"math/rand"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -168,6 +170,33 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		}
 		ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 		ctx.EmitTag(TagElected, cbor.Marshal(kinds))
+
+		// Set the debonding period start time for all of the entities that
+		// have nodes scheduled.
+		if !app.cfg.DebugBypassStake {
+			stakingState := stakingapp.NewMutableState(app.state.DeliverTxTree())
+			now := uint64(ctx.Now().Unix())
+
+			toUpdate := make([]signature.PublicKey, 0, len(entityStake.perEntityStake))
+			for k, v := range entityStake.perEntityStake {
+				if len(v) == 0 {
+					continue
+				}
+
+				var id signature.PublicKey
+				_ = id.UnmarshalBinary(k[:])
+				toUpdate = append(toUpdate, id)
+			}
+
+			sort.Slice(toUpdate, func(i, j int) bool {
+				return bytes.Compare(toUpdate[i], toUpdate[j]) == -1
+			})
+
+			for _, v := range toUpdate {
+				stakingState.SetDebondStartTime(v, now)
+			}
+
+		}
 
 		var kindNames []string
 		for _, kind := range kinds {

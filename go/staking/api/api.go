@@ -34,6 +34,9 @@ var (
 	// EscrowSignatureContext is the context used for escrows.
 	EscrowSignatureContext = []byte("EkStaEsc")
 
+	// ReclaimEscrowSignatureContext is the context used for escrow reclimation.
+	ReclaimEscrowSignatureContext = []byte("EkStaRec")
+
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New("staking: invalid argument")
 
@@ -57,7 +60,11 @@ var (
 
 	// ErrInsufficientStake is the error returned when an operation fails
 	// due to insufficient stake.
-	ErrInsufficientStake = errors.New("registry: insufficient stake")
+	ErrInsufficientStake = errors.New("staking: insufficient stake")
+
+	// ErrDebonding is the error returned when an operation fails due
+	// to the debonding period.
+	ErrDebonding = errors.New("staking: in debonding period")
 
 	_ cbor.Marshaler   = (*Transfer)(nil)
 	_ cbor.Unmarshaler = (*Transfer)(nil)
@@ -92,9 +99,9 @@ type Backend interface {
 	// or escrow balance.
 	Accounts(ctx context.Context) ([]signature.PublicKey, error)
 
-	// AccountInfo returns the general balance, escrow balance and account nonce
-	// for the specified account.
-	AccountInfo(ctx context.Context, owner signature.PublicKey) (*Quantity, *Quantity, uint64, error)
+	// AccountInfo returns the general balance, escrow balance, debond
+	// start time, and account nonce for the specified account.
+	AccountInfo(ctx context.Context, owner signature.PublicKey) (*Quantity, *Quantity, uint64, uint64, error)
 
 	// Transfer executes a SignedTransfer.
 	Transfer(ctx context.Context, signedXfer *SignedTransfer) error
@@ -123,6 +130,10 @@ type Backend interface {
 	// AddEscrow escrows the amount of tokens from the signer's balance.
 	AddEscrow(ctx context.Context, signedEscrow *SignedEscrow) error
 
+	// ReclaimEscrow releases the quantity of the owner's escrow balance
+	// back into the owner's general balance.
+	ReclaimEscrow(ctx context.Context, signedReclaim *SignedReclaimEscrow) error
+
 	// WatchTransfers returns a channel that produces a stream of TranserEvent
 	// on all balance transfers.
 	WatchTransfers() (<-chan *TransferEvent, *pubsub.Subscription)
@@ -146,7 +157,7 @@ type Backend interface {
 }
 
 // EscrowBackend is the interface implemented by implementations that have a
-// Take/ReleaseEscrow implementation that are not tightly coupled with the BFT
+// TakeEscrow implementation that is not tightly coupled with the BFT
 // consensus.
 type EscrowBackend interface {
 	// TakeEscrow deducts up to the amount of tokens from the owner's escrow
@@ -155,13 +166,6 @@ type EscrowBackend interface {
 	// This should only be called by the roothash (?) committee to penalize
 	// a misbehaving entity.
 	TakeEscrow(ctx context.Context, owner signature.PublicKey, tokens *Quantity) error
-
-	// ReleaseEscrow releases the entirity of the owner's escrow balance
-	// back into the owner's general balance.
-	//
-	// This should only be called by the registry committee (?) when
-	// de-bonding an entity.
-	ReleaseEscrow(ctx context.Context, owner signature.PublicKey) error
 }
 
 // TransferEvent is the event emitted when a balance is transfered, either by
@@ -200,9 +204,9 @@ type TakeEscrowEvent struct {
 	Tokens Quantity            `codec:"tokens"`
 }
 
-// ReleaseEscrowEvent is the event emitted when tokens are released from a
+// ReclaimEscrowEvent is the event emitted when tokens are relaimed from a
 // escrow balance back into the entitie's general balance.
-type ReleaseEscrowEvent struct {
+type ReclaimEscrowEvent struct {
 	Owner  signature.PublicKey `codec:"owner"`
 	Tokens Quantity            `codec:"tokens"`
 }
@@ -295,6 +299,23 @@ func (e *Escrow) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, e)
 }
 
+// ReclaimEscrow is a token escrow reclimation.
+type ReclaimEscrow struct {
+	Nonce uint64 `codec:"nonce"`
+
+	Tokens Quantity `codec:"reclaim_tokens"`
+}
+
+// MarshalCBOR serializes the type into a CBOR byte vector.
+func (r *ReclaimEscrow) MarshalCBOR() []byte {
+	return cbor.Marshal(r)
+}
+
+// UnmarshalCBOR deserializes a CBOR byte vector into given type.
+func (r *ReclaimEscrow) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, r)
+}
+
 // SignedTransfer is a Transfer, signed by the owner (source) entity.
 type SignedTransfer struct {
 	signature.Signed
@@ -380,6 +401,23 @@ func SignEscrow(privateKey signature.PrivateKey, escrow *Escrow) (*SignedEscrow,
 	}, nil
 }
 
+// SignedReclaimEscrow is a ReclaimEscrow, signed by the owner entity.
+type SignedReclaimEscrow struct {
+	signature.Signed
+}
+
+// SignReclaimEscrow serializes the Reclaim and signs the result.
+func SignReclaimEscrow(privateKey signature.PrivateKey, reclaim *ReclaimEscrow) (*SignedReclaimEscrow, error) {
+	signed, err := signature.SignSigned(privateKey, ReclaimEscrowSignatureContext, reclaim)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SignedReclaimEscrow{
+		Signed: *signed,
+	}, nil
+}
+
 // Move moves exactly n from src to dst.  On failures neither src nor dst
 // are altered.
 func Move(dst, src, n *Quantity) error {
@@ -440,17 +478,19 @@ func (k ThresholdKind) String() string {
 // Genesis is the initial ledger balances at genesis for use in the genesis
 // block and test cases.
 type Genesis struct {
-	TotalSupply Quantity                   `codec:"total_supply"`
-	CommonPool  Quantity                   `codec:"common_pool"`
-	Thresholds  map[ThresholdKind]Quantity `codec:"thresholds,omitempty"`
+	TotalSupply       Quantity                   `codec:"total_supply"`
+	CommonPool        Quantity                   `codec:"common_pool"`
+	Thresholds        map[ThresholdKind]Quantity `codec:"thresholds,omitempty"`
+	DebondingInterval uint64                     `codec:"debonding_interval"`
 
 	Ledger map[signature.MapKey]*GenesisLedgerEntry `codec:"ledger"`
 }
 
 // GenesisLedgerEntry is the per-account ledger entry for the genesis block.
 type GenesisLedgerEntry struct {
-	GeneralBalance Quantity                       `codec:"general_balance"`
-	EscrowBalance  Quantity                       `codec:"escrow_balance"`
-	Nonce          uint64                         `codec:"nonce"`
-	Allowances     map[signature.MapKey]*Quantity `codec:"allowances,omitempty"`
+	GeneralBalance  Quantity                       `codec:"general_balance"`
+	EscrowBalance   Quantity                       `codec:"escrow_balance"`
+	DebondStartTime uint64                         `codec:"debond_start"`
+	Nonce           uint64                         `codec:"nonce"`
+	Allowances      map[signature.MapKey]*Quantity `codec:"allowances,omitempty"`
 }

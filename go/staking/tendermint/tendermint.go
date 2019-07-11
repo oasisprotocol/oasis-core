@@ -102,21 +102,21 @@ func (b *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey
 	return data, nil
 }
 
-func (b *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey) (*api.Quantity, *api.Quantity, uint64, error) {
+func (b *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey) (*api.Quantity, *api.Quantity, uint64, uint64, error) {
 	query := tmapi.QueryGetByIDRequest{
 		ID: owner,
 	}
 	response, err := b.service.Query(app.QueryAccountInfo, query, 0)
 	if err != nil {
-		return nil, nil, 0, errors.Wrap(err, "staking: account info query failed")
+		return nil, nil, 0, 0, errors.Wrap(err, "staking: account info query failed")
 	}
 
 	var data app.QueryAccountInfoResponse
 	if err := cbor.Unmarshal(response, &data); err != nil {
-		return nil, nil, 0, errors.Wrap(err, "staking: account info query malformed response")
+		return nil, nil, 0, 0, errors.Wrap(err, "staking: account info query malformed response")
 	}
 
-	return &data.GeneralBalance, &data.EscrowBalance, data.Nonce, nil
+	return &data.GeneralBalance, &data.EscrowBalance, data.DebondStartTime, data.Nonce, nil
 }
 
 func (b *tendermintBackend) Transfer(ctx context.Context, signedXfer *api.SignedTransfer) error {
@@ -197,6 +197,19 @@ func (b *tendermintBackend) AddEscrow(ctx context.Context, signedEscrow *api.Sig
 	}
 	if err := b.service.BroadcastTx(app.TransactionTag, tx); err != nil {
 		return errors.Wrap(err, "staking: add escrow transaction failed")
+	}
+
+	return nil
+}
+
+func (b *tendermintBackend) ReclaimEscrow(ctx context.Context, signedReclaim *api.SignedReclaimEscrow) error {
+	tx := app.Tx{
+		TxReclaimEscrow: &app.TxReclaimEscrow{
+			SignedReclaimEscrow: *signedReclaim,
+		},
+	}
+	if err := b.service.BroadcastTx(app.TransactionTag, tx); err != nil {
+		return errors.Wrap(err, "staking: reclaim escrow transaction failed")
 	}
 
 	return nil
@@ -290,16 +303,6 @@ func (b *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.
 				}
 
 				b.escrowNotifier.Broadcast(&e)
-			} else if bytes.Equal(pair.GetKey(), app.TagReleaseEscrow) {
-				var e api.ReleaseEscrowEvent
-				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
-					b.logger.Error("worker: failed to get release escrow event from tag",
-						"err", err,
-					)
-					continue
-				}
-
-				b.escrowNotifier.Broadcast(&e)
 			} else if bytes.Equal(pair.GetKey(), app.TagTransfer) {
 				var e api.TransferEvent
 				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
@@ -331,6 +334,8 @@ func (b *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventD
 	} else if e := output.OutputBurn; e != nil {
 		b.burnNotifier.Broadcast(e)
 	} else if e := output.OutputAddEscrow; e != nil {
+		b.escrowNotifier.Broadcast(e)
+	} else if e := output.OutputReclaimEscrow; e != nil {
 		b.escrowNotifier.Broadcast(e)
 	}
 }

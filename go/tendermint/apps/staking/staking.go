@@ -96,6 +96,8 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		totalSupply staking.Quantity
 	)
 
+	state.setDebondingInterval(st.DebondingInterval)
+
 	if st.Thresholds != nil {
 		for k, v := range st.Thresholds {
 			if !v.IsValid() {
@@ -139,9 +141,10 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		}
 
 		account := &ledgerEntry{
-			GeneralBalance: v.GeneralBalance,
-			EscrowBalance:  v.EscrowBalance,
-			Nonce:          v.Nonce,
+			GeneralBalance:  v.GeneralBalance,
+			EscrowBalance:   v.EscrowBalance,
+			DebondStartTime: v.DebondStartTime,
+			Nonce:           v.Nonce,
 		}
 		for spender, qty := range v.Allowances {
 			var spenderID signature.PublicKey
@@ -183,6 +186,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	state.setTotalSupply(&totalSupply)
 
 	app.logger.Debug("InitChain: allocations complete",
+		"debonding_interval", st.DebondingInterval,
 		"common_pool", st.CommonPool,
 		"total_supply", totalSupply,
 	)
@@ -249,9 +253,10 @@ func (app *stakingApplication) queryAccountInfo(s, r interface{}) ([]byte, error
 
 	ent := state.account(request.ID)
 	resp := QueryAccountInfoResponse{
-		GeneralBalance: ent.GeneralBalance,
-		EscrowBalance:  ent.EscrowBalance,
-		Nonce:          ent.Nonce,
+		GeneralBalance:  ent.GeneralBalance,
+		EscrowBalance:   ent.EscrowBalance,
+		DebondStartTime: ent.DebondStartTime,
+		Nonce:           ent.Nonce,
 	}
 	return cbor.Marshal(resp), nil
 }
@@ -277,6 +282,8 @@ func (app *stakingApplication) executeTx(ctx *abci.Context, tree *iavl.MutableTr
 		return app.burn(ctx, state, &tx.TxBurn.SignedBurn)
 	} else if tx.TxAddEscrow != nil {
 		return app.addEscrow(ctx, state, &tx.TxAddEscrow.SignedEscrow)
+	} else if tx.TxReclaimEscrow != nil {
+		return app.reclaimEscrow(ctx, state, &tx.TxReclaimEscrow.SignedReclaimEscrow)
 	} else {
 		return staking.ErrInvalidArgument
 	}
@@ -551,6 +558,75 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 			OutputAddEscrow: &staking.EscrowEvent{
 				Owner:  signedEscrow.Signature.PublicKey,
 				Tokens: escrow.Tokens,
+			},
+		})
+	}
+
+	return nil
+}
+
+func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *MutableState, signedReclaim *staking.SignedReclaimEscrow) error {
+	var reclaim staking.ReclaimEscrow
+	if err := signedReclaim.Open(staking.ReclaimEscrowSignatureContext, &reclaim); err != nil {
+		app.logger.Error("ReclaimEscrow: invalid signature",
+			"signed_reclaim", signedReclaim,
+		)
+		return staking.ErrInvalidSignature
+	}
+
+	id := signedReclaim.Signature.PublicKey
+	from := state.account(id)
+	if from.Nonce != reclaim.Nonce {
+		app.logger.Error("ReclaimEscrow: invalid account nonce",
+			"from", id,
+			"account_nonce", from.Nonce,
+			"reclaim_nonce", reclaim.Nonce,
+		)
+		return staking.ErrInvalidNonce
+	}
+
+	debondingInterval, err := state.debondingInterval()
+	if err != nil {
+		app.logger.Error("ReclaimEscrow: failed to query debonding interval",
+			"err", err,
+		)
+		return err
+	}
+	var (
+		now      = uint64(ctx.Now().Unix())
+		debondAt = from.DebondStartTime + debondingInterval
+	)
+	if now < debondAt {
+		app.logger.Error("ReclaimEscrow: in debonding interval",
+			"from", id,
+			"now", now,
+			"debond_at", debondAt,
+		)
+		return staking.ErrDebonding
+	}
+
+	if err := staking.Move(&from.GeneralBalance, &from.EscrowBalance, &reclaim.Tokens); err != nil {
+		app.logger.Error("ReclaimEscrow: failed to release tokens",
+			"err", err,
+			"from", id,
+			"amount", reclaim.Tokens,
+		)
+		return err
+	}
+
+	from.Nonce++
+	state.setAccount(id, from)
+
+	if !ctx.IsCheckOnly() {
+		app.logger.Debug("ReleaseEscrow: released tokens",
+			"from", id,
+			"amount", reclaim.Tokens,
+		)
+
+		ctx.EmitData(&Output{
+			OutputReclaimEscrow: &staking.ReclaimEscrowEvent{
+				Owner:  signedReclaim.Signature.PublicKey,
+				Tokens: reclaim.Tokens,
 			},
 		})
 	}

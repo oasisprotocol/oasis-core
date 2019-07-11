@@ -20,6 +20,7 @@ service Staking {
 	rpc Withdraw(WithdrawRequest) returns (WithdrawResponse) {}
 	rpc Burn(BurnRequest) returns (BurnResponse) {}
 	rpc AddEscrow(AddEscrowRequest) returns (AddEscrowResponse) {}
+	rpc ReclaimEscrow(ReclaimEscrowRequest) returns (ReclaimEscrowResponse) {}
 
 	// Calls that watch events.
 	rpc WatchTransfers (WatchTransfersRequest) returns (stream WatchTransfersResponse) {}
@@ -78,7 +79,8 @@ message GetAccountInfoRequest {
 message GetAccountInfoResponse {
 	bytes general_balance = 1;
 	bytes escrow_balance = 2;
-	uint64 nonce = 3;
+	uint64 debond_start_time = 3;
+	uint64 nonce = 4;
 }
 
 message GetAllowanceRequest {
@@ -120,6 +122,12 @@ message AddEscrowRequest {
 
 message AddEscrowResponse {}
 
+message ReclaimEscrowRequest {
+	bytes signed_reclaim = 1;
+}
+
+message ReclaimEscrowResponse {}
+
 message WatchTransfersRequest {}
 
 message WatchTransfersResponse {
@@ -144,7 +152,7 @@ message WatchEscrowsResponse {
 	enum EventType {
 		ADD = 0;
 		TAKE = 1;
-		RELEASE = 2;
+		RECLAIM = 2;
 	}
 	EventType event_type = 1;
 	bytes event = 2;
