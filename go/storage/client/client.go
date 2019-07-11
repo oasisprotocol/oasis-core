@@ -5,6 +5,7 @@ package client
 import (
 	"context"
 	cryptorand "crypto/rand"
+	"crypto/tls"
 	"io"
 	"math/rand"
 	"sync"
@@ -57,6 +58,8 @@ type storageClientBackend struct {
 	runtimeWatchersLock sync.RWMutex
 	runtimeWatchers     map[signature.MapKey]storageWatcher
 
+	tlsCertificate *tls.Certificate
+
 	haltCtx  context.Context
 	cancelFn context.CancelFunc
 }
@@ -99,7 +102,7 @@ func (b *storageClientBackend) WatchRuntime(id signature.PublicKey) error {
 	}
 
 	// Watcher doesn't exist. Start new watcher.
-	watcher = newWatcher(b.ctx, id, b.scheduler, b.registry)
+	watcher = newWatcher(b.ctx, id, b.tlsCertificate, b.scheduler, b.registry)
 	b.runtimeWatchers[id.ToMapKey()] = watcher
 
 	// Signal init when the first registered runtime is initialized.

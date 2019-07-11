@@ -330,7 +330,7 @@ func testStorageClient(t *testing.T, node *testNode) {
 	ctx := context.Background()
 
 	// Storage client tests.
-	storageClientTests.ClientWorkerTests(t, node.Beacon, timeSource, node.Registry, node.Scheduler)
+	storageClientTests.ClientWorkerTests(t, node.Identity.TLSCertificate, node.Beacon, timeSource, node.Registry, node.Scheduler)
 
 	// Client storage implementation tests.
 	config := []struct {
@@ -343,7 +343,7 @@ func testStorageClient(t *testing.T, node *testNode) {
 	for _, kv := range config {
 		viper.Set(kv.key, kv.value)
 	}
-	debugClient, err := storageClient.New(ctx, nil, nil)
+	debugClient, err := storageClient.New(ctx, node.Identity.TLSCertificate, nil, nil)
 	require.NoError(t, err, "NewDebugStorageClient")
 	storageTests.StorageImplementationTests(t, debugClient)
 }

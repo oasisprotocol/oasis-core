@@ -173,7 +173,7 @@ func NewNode(
 
 	node.ctx, node.ctxCancel = context.WithCancel(context.Background())
 
-	scl, err := client.New(node.ctx, node.commonNode.Scheduler, node.commonNode.Registry)
+	scl, err := client.New(node.ctx, node.commonNode.Identity.TLSCertificate, node.commonNode.Scheduler, node.commonNode.Registry)
 	if err != nil {
 		return nil, err
 	}

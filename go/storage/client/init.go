@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
+	commonGrpc "github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/grpc/storage"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
@@ -32,7 +34,12 @@ const (
 const debugModeFakeRuntimeSeed = "ekiden storage client debug runtime"
 
 // New creates a new storage client.
-func New(ctx context.Context, schedulerBackend scheduler.Backend, registryBackend registry.Backend) (api.Backend, error) {
+func New(
+	ctx context.Context,
+	tlsCertificate *tls.Certificate,
+	schedulerBackend scheduler.Backend,
+	registryBackend registry.Backend,
+) (api.Backend, error) {
 	logger := logging.GetLogger("storage/client")
 
 	if viper.GetString(cfgDebugClientAddress) != "" {
@@ -42,15 +49,17 @@ func New(ctx context.Context, schedulerBackend scheduler.Backend, registryBacken
 
 		var opts grpc.DialOption
 		if viper.GetString(cfgDebugClientTLSCertFile) != "" {
-			creds, err := credentials.NewClientTLSFromFile(viper.GetString(cfgDebugClientTLSCertFile), "ekiden-node")
+			tlsConfig, err := commonGrpc.NewClientTLSConfigFromFile(viper.GetString(cfgDebugClientTLSCertFile), "ekiden-node")
 			if err != nil {
-				logger.Error("failed creating grpc tls client from file",
+				logger.Error("failed creating client tls config from file",
 					"file", viper.GetString(cfgDebugClientTLSCertFile),
 					"error", err,
 				)
 				return nil, err
 			}
-			opts = grpc.WithTransportCredentials(creds)
+			// Set client certificate.
+			tlsConfig.Certificates = []tls.Certificate{*tlsCertificate}
+			opts = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
 		} else {
 			opts = grpc.WithInsecure()
 		}
@@ -73,6 +82,7 @@ func New(ctx context.Context, schedulerBackend scheduler.Backend, registryBacken
 			scheduler:       schedulerBackend,
 			registry:        registryBackend,
 			runtimeWatchers: make(map[signature.MapKey]storageWatcher),
+			tlsCertificate:  tlsCertificate,
 		}
 		state := &clientState{
 			client: client,
@@ -90,6 +100,7 @@ func New(ctx context.Context, schedulerBackend scheduler.Backend, registryBacken
 		scheduler:       schedulerBackend,
 		registry:        registryBackend,
 		runtimeWatchers: make(map[signature.MapKey]storageWatcher),
+		tlsCertificate:  tlsCertificate,
 	}
 
 	b.haltCtx, b.cancelFn = context.WithCancel(ctx)

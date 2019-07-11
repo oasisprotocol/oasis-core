@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"sync"
 
@@ -64,6 +65,8 @@ type watcherState struct {
 	registry  registry.Backend
 
 	runtimeID signature.MapKey
+
+	tlsCertificate *tls.Certificate
 
 	registeredStorageNodes []*node.Node
 	scheduledNodes         map[signature.MapKey]bool
@@ -164,7 +167,11 @@ func (w *watcherState) updateStorageNodeConnections() {
 			}
 			certPool := x509.NewCertPool()
 			certPool.AddCert(nodeCert)
-			creds := credentials.NewClientTLSFromCert(certPool, "ekiden-node")
+			creds := credentials.NewTLS(&tls.Config{
+				Certificates: []tls.Certificate{*w.tlsCertificate},
+				RootCAs:      certPool,
+				ServerName:   "ekiden-node",
+			})
 			opts = grpc.WithTransportCredentials(creds)
 		}
 
@@ -299,13 +306,20 @@ func (w *watcherState) watch(ctx context.Context) {
 	}
 }
 
-func newWatcher(ctx context.Context, runtimeID signature.PublicKey, schedulerBackend scheduler.Backend, registryBackend registry.Backend) storageWatcher {
+func newWatcher(
+	ctx context.Context,
+	runtimeID signature.PublicKey,
+	tlsCertificate *tls.Certificate,
+	schedulerBackend scheduler.Backend,
+	registryBackend registry.Backend,
+) storageWatcher {
 	logger := logging.GetLogger("storage/client/watcher").With("runtime_id", runtimeID.String())
 
 	watcher := &watcherState{
 		initCh:                 make(chan struct{}),
 		logger:                 logger,
 		runtimeID:              runtimeID.ToMapKey(),
+		tlsCertificate:         tlsCertificate,
 		scheduler:              schedulerBackend,
 		registry:               registryBackend,
 		registeredStorageNodes: []*node.Node{},
