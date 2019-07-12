@@ -110,7 +110,7 @@ func (s *IAS) VerifyEvidence(ctx context.Context, quote, pseManifest []byte, non
 		PSEManifest: pseManifest,
 		Nonce:       nonce,
 	}
-	se, err := signature.SignSigned(*s.identity.NodeKey, ias.EvidenceSignatureContext, &evidence)
+	se, err := signature.SignSigned(s.identity.NodeSigner, ias.EvidenceSignatureContext, &evidence)
 	if err != nil {
 		return
 	}

@@ -630,7 +630,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 	}
 
 	// Commit.
-	commit, err := commitment.SignComputeCommitment(*n.commonNode.Identity.NodeKey, proposedResults)
+	commit, err := commitment.SignComputeCommitment(n.commonNode.Identity.NodeSigner, proposedResults)
 	if err != nil {
 		n.logger.Error("failed to sign commitment",
 			"err", err,

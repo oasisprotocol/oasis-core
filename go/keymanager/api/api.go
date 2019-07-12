@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
@@ -130,9 +131,9 @@ func init() {
 		"ekiden key manager test multisig key 1",
 		"ekiden key manager test multisig key 2",
 	} {
-		tmpPrivateKey := signature.NewTestPrivateKey(v)
+		tmpSigner := memorySigner.NewTestSigner(v)
 		if idx == 0 {
-			TestPublicKey = tmpPrivateKey.Public()
+			TestPublicKey = tmpSigner.Public()
 		}
 	}
 }

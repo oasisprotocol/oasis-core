@@ -146,11 +146,14 @@ func (pv *privVal) save() error {
 	return nil
 }
 
-// LoadOrGeneratePrivVal loads or generates a tendermint PrivValidator for an ekiden private key.
-func LoadOrGeneratePrivVal(baseDir string, privateKey *signature.PrivateKey) (tmtypes.PrivValidator, error) {
+// LoadOrGeneratePrivVal loads or generates a tendermint PrivValidator for an
+// ekiden signature signer.
+func LoadOrGeneratePrivVal(baseDir string, signer signature.Signer) (tmtypes.PrivValidator, error) {
 	fn := filepath.Join(baseDir, privValFileName)
 
 	var pv privVal
+
+	// TODO/hsm: Use signature.Signer instead of doing key conversion.
 
 	b, err := ioutil.ReadFile(fn)
 	if err == nil {
@@ -159,16 +162,16 @@ func LoadOrGeneratePrivVal(baseDir string, privateKey *signature.PrivateKey) (tm
 		}
 
 		// Tendermint doesn't do this, but it's cheap insurance.
-		if !privateKey.Public().Equal(pv.PublicKey) {
+		if !signer.Public().Equal(pv.PublicKey) {
 			return nil, errors.Wrap(err, "tendermint/crypto: public key mismatch, state corruption?")
 		}
 
 		pv.filePath = fn
-		pv.privateKey = PrivateKeyToTendermint(privateKey)
+		pv.privateKey = UnsafeSignerToTendermint(signer)
 	} else if os.IsNotExist(err) {
 		pv.filePath = fn
-		pv.privateKey = PrivateKeyToTendermint(privateKey)
-		pv.PublicKey = privateKey.Public()
+		pv.privateKey = UnsafeSignerToTendermint(signer)
+		pv.PublicKey = signer.Public()
 
 		if err = pv.save(); err != nil {
 			return nil, err

@@ -494,8 +494,8 @@ func (s *SignedNode) Open(context []byte, node *Node) error { // nolint: interfa
 }
 
 // SignNode serializes the Node and signs the result.
-func SignNode(privateKey signature.PrivateKey, context []byte, node *Node) (*SignedNode, error) {
-	signed, err := signature.SignSigned(privateKey, context, node)
+func SignNode(signer signature.Signer, context []byte, node *Node) (*SignedNode, error) {
+	signed, err := signature.SignSigned(signer, context, node)
 	if err != nil {
 		return nil, err
 	}

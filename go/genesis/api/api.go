@@ -84,8 +84,8 @@ func (s *SignedValidator) Open(validator *Validator) error {
 }
 
 // SignValidator serializes the Validator and signs the result.
-func SignValidator(privateKey signature.PrivateKey, validator *Validator) (*SignedValidator, error) {
-	signed, err := signature.SignSigned(privateKey, validatorSignatureContext, validator)
+func SignValidator(signer signature.Signer, validator *Validator) (*SignedValidator, error) {
+	signed, err := signature.SignSigned(signer, validatorSignatureContext, validator)
 	if err != nil {
 		return nil, err
 	}

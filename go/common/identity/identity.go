@@ -10,7 +10,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
-	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -46,8 +45,8 @@ var tlsTemplate = x509.Certificate{
 
 // Identity is a node identity.
 type Identity struct {
-	// NodeKey is a node private key.
-	NodeKey *signature.PrivateKey
+	// NodeSigner is a node identity key signer.
+	NodeSigner signature.Signer
 	// TLSKey is a private key used for TLS connections.
 	TLSKey *ecdsa.PrivateKey
 	// TLSCertificate is a certificate that can be used for TLS.
@@ -55,28 +54,39 @@ type Identity struct {
 }
 
 // Load loads an identity.
-func Load(dataDir string) (*Identity, error) {
-	return doLoadOrGenerate(dataDir, false)
+func Load(dataDir string, signerFactory signature.SignerFactory) (*Identity, error) {
+	return doLoadOrGenerate(dataDir, signerFactory, false)
 }
 
 // LoadOrGenerate loads or generates an identity.
-func LoadOrGenerate(dataDir string) (*Identity, error) {
-	return doLoadOrGenerate(dataDir, true)
+func LoadOrGenerate(dataDir string, signerFactory signature.SignerFactory) (*Identity, error) {
+	return doLoadOrGenerate(dataDir, signerFactory, true)
 }
 
-func doLoadOrGenerate(dataDir string, shouldGenerate bool) (*Identity, error) {
-	var rng io.Reader
-	if shouldGenerate {
-		rng = rand.Reader
-	}
-
-	// Node key.
-	var nodeKey signature.PrivateKey
-	if err := nodeKey.LoadPEM(filepath.Join(dataDir, nodeKeyPrivFilename), rng); err != nil {
+func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, shouldGenerate bool) (*Identity, error) {
+	if err := signerFactory.EnsureRole(signature.SignerNode); err != nil {
 		return nil, err
 	}
+
+	// Node signer.
+	keyID := filepath.Join(dataDir, nodeKeyPrivFilename)
+	nodeSigner, err := signerFactory.Load(keyID)
+	switch err {
+	case nil:
+	case signature.ErrNotExist:
+		if !shouldGenerate {
+			return nil, err
+		}
+		if nodeSigner, err = signerFactory.Generate(keyID, rand.Reader); err != nil {
+			return nil, err
+		}
+	default:
+
+		return nil, err
+	}
+
 	var nodePub signature.PublicKey
-	if err := nodePub.LoadPEM(filepath.Join(dataDir, NodeKeyPubFilename), &nodeKey); err != nil {
+	if err = nodePub.LoadPEM(filepath.Join(dataDir, NodeKeyPubFilename), nodeSigner); err != nil {
 		return nil, err
 	}
 
@@ -97,7 +107,7 @@ func doLoadOrGenerate(dataDir string, shouldGenerate bool) (*Identity, error) {
 	}
 
 	return &Identity{
-		NodeKey:        &nodeKey,
+		NodeSigner:     nodeSigner,
 		TLSKey:         tlsCert.PrivateKey.(*ecdsa.PrivateKey),
 		TLSCertificate: tlsCert,
 	}, nil

@@ -16,7 +16,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/memory"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
@@ -29,12 +29,9 @@ var testNs common.Namespace
 const cacheSize = 10
 
 func TestCachingClient(t *testing.T) {
-	var err error
-
-	var sk signature.PrivateKey
-	sk, err = signature.NewPrivateKey(rand.Reader)
+	signer, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "failed to generate dummy receipt signing key")
-	remote := memory.New(&sk, false)
+	remote := memory.New(signer, false)
 	client, cacheDir := requireNewClient(t, remote)
 	defer func() {
 		os.RemoveAll(cacheDir)
@@ -78,7 +75,7 @@ func TestCachingClient(t *testing.T) {
 
 	// Test the persistence.
 	client.Cleanup()
-	remote = memory.New(&sk, false)
+	remote = memory.New(signer, false)
 	_, err = New(remote, false)
 	require.NoError(t, err, "New - reopen")
 

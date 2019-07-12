@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/oasislabs/ekiden/go/common/accessctl"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/identity"
 )
 
@@ -30,7 +31,7 @@ func CreateCertificate(t *testing.T) (*tls.Certificate, *x509.Certificate) {
 	require.NoError(err, "Failed to create a temporary directory")
 	defer os.RemoveAll(dataDir)
 
-	ident, err := identity.LoadOrGenerate(dataDir)
+	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory())
 	require.NoError(err, "Failed to generate a new identity")
 	require.Len(ident.TLSCertificate.Certificate, 1, "The generated identity contains more than 1 TLS certificate in the chain")
 

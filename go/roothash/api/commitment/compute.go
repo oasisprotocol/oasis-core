@@ -194,8 +194,8 @@ func (c *ComputeCommitment) Open() (*OpenComputeCommitment, error) {
 }
 
 // SignComputeCommitment serializes the message and signs the commitment.
-func SignComputeCommitment(privateKey signature.PrivateKey, body *ComputeBody) (*ComputeCommitment, error) {
-	signed, err := signature.SignSigned(privateKey, ComputeSignatureContext, body)
+func SignComputeCommitment(signer signature.Signer, body *ComputeBody) (*ComputeCommitment, error) {
+	signed, err := signature.SignSigned(signer, ComputeSignatureContext, body)
 	if err != nil {
 		return nil, err
 	}

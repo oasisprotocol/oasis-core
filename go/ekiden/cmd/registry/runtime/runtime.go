@@ -16,6 +16,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -120,12 +121,12 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	rt, privKey, err := runtimeFromFlags()
+	rt, signer, err := runtimeFromFlags()
 	if err != nil {
 		os.Exit(1)
 	}
 
-	signed, err := signForRegistration(rt, privKey, true)
+	signed, err := signForRegistration(rt, signer, true)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -149,14 +150,14 @@ func doRegister(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	rt, privKey, err := runtimeFromFlags()
+	rt, signer, err := runtimeFromFlags()
 	if err != nil {
 		os.Exit(1)
 	}
 
 	nrRetries := cmdFlags.Retries()
 	for i := 0; i <= nrRetries; {
-		if err := actuallyRegister(cmd, rt, privKey); err == nil {
+		if err := actuallyRegister(cmd, rt, signer); err == nil {
 			return
 		}
 
@@ -169,11 +170,11 @@ func doRegister(cmd *cobra.Command, args []string) {
 	}
 }
 
-func actuallyRegister(cmd *cobra.Command, rt *registry.Runtime, privKey *signature.PrivateKey) error {
+func actuallyRegister(cmd *cobra.Command, rt *registry.Runtime, signer signature.Signer) error {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
-	signed, err := signForRegistration(rt, privKey, false)
+	signed, err := signForRegistration(rt, signer, false)
 	if err != nil {
 		return err
 	}
@@ -233,7 +234,7 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
+func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 	var id signature.PublicKey
 	if err := id.UnmarshalHex(viper.GetString(cfgID)); err != nil {
 		logger.Error("failed to parse runtime ID",
@@ -255,7 +256,7 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	ent, privKey, err := loadEntity(viper.GetString(cfgEntity))
+	ent, signer, err := loadEntity(viper.GetString(cfgEntity))
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
@@ -354,10 +355,10 @@ func runtimeFromFlags() (*registry.Runtime, *signature.PrivateKey, error) {
 		KeyManager:                    kmID,
 		Kind:                          kind,
 		RegistrationTime:              ent.RegistrationTime,
-	}, privKey, nil
+	}, signer, nil
 }
 
-func signForRegistration(rt *registry.Runtime, privKey *signature.PrivateKey, isGenesis bool) (*registry.SignedRuntime, error) {
+func signForRegistration(rt *registry.Runtime, signer signature.Signer, isGenesis bool) (*registry.SignedRuntime, error) {
 	var ctx []byte
 	switch isGenesis {
 	case false:
@@ -367,7 +368,7 @@ func signForRegistration(rt *registry.Runtime, privKey *signature.PrivateKey, is
 		ctx = registry.RegisterGenesisRuntimeSignatureContext
 	}
 
-	signed, err := registry.SignRuntime(*privKey, ctx, rt)
+	signed, err := registry.SignRuntime(signer, ctx, rt)
 	if err != nil {
 		logger.Error("failed to sign runtime descriptor",
 			"err", err,
@@ -378,12 +379,14 @@ func signForRegistration(rt *registry.Runtime, privKey *signature.PrivateKey, is
 	return signed, err
 }
 
-func loadEntity(dataDir string) (*entity.Entity, *signature.PrivateKey, error) {
+func loadEntity(dataDir string) (*entity.Entity, signature.Signer, error) {
 	if cmdFlags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
 
-	return entity.Load(dataDir)
+	// TODO/hsm: Configure factory dynamically.
+	entitySignerFactory := fileSigner.NewFactory(signature.SignerEntity)
+	return entity.Load(dataDir, entitySignerFactory)
 }
 
 func registerOutputFlag(cmd *cobra.Command) {

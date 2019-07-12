@@ -7,16 +7,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common/crash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/storage/memory"
 	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
 func TestCrashingBackendDoNotInterfere(t *testing.T) {
-	pk, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey()")
+	signer, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner()")
 
-	memoryBackend := memory.New(&pk, false)
+	memoryBackend := memory.New(signer, false)
 	backend := newCrashingWrapper(memoryBackend)
 
 	crash.Config(map[string]float64{

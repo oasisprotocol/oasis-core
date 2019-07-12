@@ -11,6 +11,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -32,12 +33,12 @@ type Registration struct {
 
 	workerCommonCfg *workerCommon.Config
 
-	epochtime     epochtime.Backend
-	registry      registry.Backend
-	identity      *identity.Identity
-	p2p           *p2p.P2P
-	entityPrivKey *signature.PrivateKey
-	ctx           context.Context
+	epochtime    epochtime.Backend
+	registry     registry.Backend
+	identity     *identity.Identity
+	p2p          *p2p.P2P
+	entitySigner signature.Signer
+	ctx          context.Context
 	// Bandaid: Idempotent Stop for testing.
 	stopped   bool
 	quitCh    chan struct{}
@@ -148,10 +149,10 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 		)
 		return err
 	}
-	identityPublic := r.identity.NodeKey.Public()
+	identityPublic := r.identity.NodeSigner.Public()
 	nodeDesc := node.Node{
 		ID:         identityPublic,
-		EntityID:   r.entityPrivKey.Public(),
+		EntityID:   r.entitySigner.Public(),
 		Expiration: uint64(epoch) + 2,
 		P2P:        r.p2p.Info(),
 		Certificate: &node.Certificate{
@@ -179,7 +180,7 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 
 	// Only register node if hooks exist.
 	if len(r.roleHooks) > 0 {
-		signedNode, err := node.SignNode(*r.entityPrivKey, registry.RegisterNodeSignatureContext, &nodeDesc)
+		signedNode, err := node.SignNode(r.entitySigner, registry.RegisterNodeSignatureContext, &nodeDesc)
 		if err != nil {
 			r.logger.Error("failed to register node: unable to sign node descriptor",
 				"err", err,
@@ -201,27 +202,27 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 	return nil
 }
 
-func getEntityPrivKey(dataDir string) (*signature.PrivateKey, error) {
+func getEntitySigner(dataDir string) (signature.Signer, error) {
 	var (
-		entityPrivKey *signature.PrivateKey
-		err           error
+		entitySigner signature.Signer
+		err          error
 	)
 
+	// TODO/hsm: This should take a factory from somewhere.
+	factory := fileSigner.NewFactory(signature.SignerEntity)
+
 	if flags.DebugTestEntity() {
-		_, entityPrivKey, err = entity.TestEntity()
+		_, entitySigner, err = entity.TestEntity()
 	} else if f := viper.GetString(cfgEntityPrivateKey); f != "" {
 		// Load PEM.
-		entityPrivKey = new(signature.PrivateKey)
-		if err = entityPrivKey.LoadPEM(f, nil); err != nil {
-			entityPrivKey = nil
-		}
+		entitySigner, err = factory.Load(f)
 	} else {
 		// Load or generate in the data dir.  If this generates,
 		// the entity will NOT be in the registry.
-		_, entityPrivKey, err = entity.LoadOrGenerate(dataDir)
+		_, entitySigner, err = entity.LoadOrGenerate(dataDir, factory)
 	}
 
-	return entityPrivKey, err
+	return entitySigner, err
 }
 
 // New constructs a new worker node registration service.
@@ -236,8 +237,8 @@ func New(
 ) (*Registration, error) {
 	ctx := context.Background()
 
-	// Load the entity private key used for node registration.
-	entityPrivKey, err := getEntityPrivKey(dataDir)
+	// Load the entity signer used for node registration.
+	entitySigner, err := getEntitySigner(dataDir)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +248,7 @@ func New(
 		epochtime:       epochtime,
 		registry:        registry,
 		identity:        identity,
-		entityPrivKey:   entityPrivKey,
+		entitySigner:    entitySigner,
 		quitCh:          make(chan struct{}),
 		regCh:           make(chan struct{}),
 		ctx:             ctx,

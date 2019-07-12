@@ -93,8 +93,8 @@ func (s *Receipt) UnmarshalCBOR(data []byte) error {
 }
 
 // SignReceipt signs a storage receipt for the given roots.
-func SignReceipt(sk *signature.PrivateKey, ns common.Namespace, round uint64, roots []hash.Hash) (*Receipt, error) {
-	if sk == nil {
+func SignReceipt(signer signature.Signer, ns common.Namespace, round uint64, roots []hash.Hash) (*Receipt, error) {
+	if signer == nil {
 		return nil, ErrCantProve
 	}
 	if len(roots) == 0 {
@@ -106,7 +106,7 @@ func SignReceipt(sk *signature.PrivateKey, ns common.Namespace, round uint64, ro
 		Round:     round,
 		Roots:     roots,
 	}
-	signed, err := signature.SignSigned(*sk, ReceiptSignatureContext, &receipt)
+	signed, err := signature.SignSigned(signer, ReceiptSignatureContext, &receipt)
 	if err != nil {
 		return nil, err
 	}

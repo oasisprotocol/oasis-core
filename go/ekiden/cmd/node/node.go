@@ -13,6 +13,8 @@ import (
 	beaconAPI "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/client"
 	"github.com/oasislabs/ekiden/go/common/crash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -146,7 +148,7 @@ func (n *Node) initBackends() error {
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Scheduler, "scheduler backend")
 
-	if n.Storage, err = storage.New(n.svcMgr.Ctx, dataDir, n.Scheduler, n.Registry, n.Identity.NodeKey); err != nil {
+	if n.Storage, err = storage.New(n.svcMgr.Ctx, dataDir, n.Scheduler, n.Registry, n.Identity.NodeSigner); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")
@@ -361,7 +363,9 @@ func NewNode() (*Node, error) {
 	var err error
 
 	// Generate/Load the node identity.
-	node.Identity, err = identity.LoadOrGenerate(dataDir)
+	// TODO/hsm: Configure factory dynamically.
+	signerFactory := fileSigner.NewFactory(signature.SignerNode)
+	node.Identity, err = identity.LoadOrGenerate(dataDir, signerFactory)
 	if err != nil {
 		logger.Error("failed to load/generate identity",
 			"err", err,
@@ -370,7 +374,7 @@ func NewNode() (*Node, error) {
 	}
 
 	logger.Info("loaded/generated node identity",
-		"public_key", node.Identity.NodeKey.Public(),
+		"public_key", node.Identity.NodeSigner.Public(),
 	)
 
 	// Initialize the tracing client.

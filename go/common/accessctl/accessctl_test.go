@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/identity"
 )
 
@@ -48,7 +49,7 @@ func TestSubjectFromCertificate(t *testing.T) {
 	require.NoError(err, "Failed to create a temporary directory")
 	defer os.RemoveAll(dataDir)
 
-	ident, err := identity.LoadOrGenerate(dataDir)
+	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory())
 	require.NoError(err, "Failed to generate a new identity")
 	require.Len(ident.TLSCertificate.Certificate, 1, "The generated identity contains more than 1 certificate in the chain")
 

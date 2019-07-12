@@ -79,7 +79,7 @@ type tendermintService struct {
 	blockNotifier *pubsub.Broker
 
 	genesis                  genesis.Provider
-	nodeKey                  *signature.PrivateKey
+	nodeSigner               signature.Signer
 	dataDir                  string
 	isInitialized, isStarted bool
 	startedCh                chan struct{}
@@ -316,7 +316,7 @@ func (t *tendermintService) WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscr
 }
 
 func (t *tendermintService) NodeKey() *signature.PublicKey {
-	pk := t.nodeKey.Public()
+	pk := t.nodeSigner.Public()
 	return &pk
 }
 
@@ -374,7 +374,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.P2P.AddrBookStrict = !viper.GetBool(cfgDebugP2PAddrBookLenient)
 	tenderConfig.RPC.ListenAddress = ""
 
-	tendermintPV, err := crypto.LoadOrGeneratePrivVal(tendermintDataDir, t.nodeKey)
+	tendermintPV, err := crypto.LoadOrGeneratePrivVal(tendermintDataDir, t.nodeSigner)
 	if err != nil {
 		return err
 	}
@@ -408,7 +408,8 @@ func (t *tendermintService) lazyInit() error {
 	t.startFn = func() error {
 		t.node, err = tmnode.NewNode(tenderConfig,
 			tendermintPV,
-			&tmp2p.NodeKey{PrivKey: crypto.PrivateKeyToTendermint(t.nodeKey)},
+			// TODO/hsm: This needs to use a separte key.
+			&tmp2p.NodeKey{PrivKey: crypto.UnsafeSignerToTendermint(t.nodeSigner)},
 			tmproxy.NewLocalClientCreator(t.mux.Mux()),
 			tenderminGenesisProvider,
 			dbProvider,
@@ -487,7 +488,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 			}
 
 			validator := &genesis.Validator{
-				PubKey:      t.nodeKey.Public(),
+				PubKey:      t.nodeSigner.Public(),
 				Name:        common.NormalizeFQDN(nodeName),
 				CoreAddress: nodeAddr,
 			}
@@ -507,7 +508,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 			}
 
 			seed := &bootstrap.SeedNode{
-				PubKey:      t.nodeKey.Public(),
+				PubKey:      t.nodeSigner.Public(),
 				CoreAddress: nodeAddr,
 			}
 			if err = bs.RegisterSeed(seed); err != nil {
@@ -561,7 +562,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 			vPkAddrHex := strings.ToLower(vPubKey.Address().String())
 			vAddr := vPkAddrHex + "@" + openedValidator.CoreAddress
 
-			if openedValidator.PubKey.Equal(t.nodeKey.Public()) {
+			if openedValidator.PubKey.Equal(t.nodeSigner.Public()) {
 				// This validator entry is the current node, set the
 				// node name to that specified in the genesis document.
 				tenderConfig.Moniker = openedValidator.Name
@@ -594,7 +595,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		// nodes.  This is somewhat silly, but there isn't any error-checking
 		// done with AddOurAddress, so using the P2P ListenAddress as the IP/port
 		// is totally fine.
-		valPubKey := t.nodeKey.Public()
+		valPubKey := t.nodeSigner.Public()
 		ourPubKey := crypto.PublicKeyToTendermint(&valPubKey)
 		ourLaddr, err := common.GetHostPort(tenderConfig.P2P.ListenAddress)
 		if err != nil {
@@ -690,7 +691,7 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
-		nodeKey:               identity.NodeKey,
+		nodeSigner:            identity.NodeSigner,
 		genesis:               genesis,
 		ctx:                   ctx,
 		dataDir:               dataDir,

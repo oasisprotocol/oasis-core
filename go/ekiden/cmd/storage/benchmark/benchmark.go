@@ -18,7 +18,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/storage"
@@ -69,7 +69,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	}
 
 	// Initialize the various backends.
-	pk, err := signature.NewPrivateKey(rand.Reader)
+	signer, err := memorySigner.NewSigner(rand.Reader)
 	if err != nil {
 		logger.Error("failed to generate new private key",
 			"err", err,
@@ -80,7 +80,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	// Disable expected root checks.
 	viper.Set("storage.debug.insecure_skip_checks", true)
 
-	storage, err := storage.New(context.Background(), dataDir, nil, nil, &pk)
+	storage, err := storage.New(context.Background(), dataDir, nil, nil, signer)
 	if err != nil {
 		logger.Error("failed to initialize storage",
 			"err", err,

@@ -78,8 +78,8 @@ func (c *MergeCommitment) Open() (*OpenMergeCommitment, error) {
 }
 
 // SignMergeCommitment serializes the message and signs the commitment.
-func SignMergeCommitment(privateKey signature.PrivateKey, body *MergeBody) (*MergeCommitment, error) {
-	signed, err := signature.SignSigned(privateKey, MergeSignatureContext, body)
+func SignMergeCommitment(signer signature.Signer, body *MergeBody) (*MergeCommitment, error) {
+	signed, err := signature.SignSigned(signer, MergeSignatureContext, body)
 	if err != nil {
 		return nil, err
 	}

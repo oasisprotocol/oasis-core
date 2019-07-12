@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/genesis/api"
 )
@@ -28,12 +29,12 @@ func generateServerAddress() string {
 
 func generateValidator(t *testing.T, index int) *api.Validator {
 	entity, _, _ := entity.TestEntity()
-	privKey, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
+	signer, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
 
 	return &api.Validator{
 		EntityID:    entity.ID,
-		PubKey:      privKey.Public(),
+		PubKey:      signer.Public(),
 		Name:        fmt.Sprintf("validator-%d", index),
 		Power:       10,
 		CoreAddress: fmt.Sprintf("127.0.0.1:%d", 1000+index),
@@ -41,11 +42,11 @@ func generateValidator(t *testing.T, index int) *api.Validator {
 }
 
 func generateSeed(t *testing.T, index int) *SeedNode {
-	privKey, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
+	signer, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
 
 	return &SeedNode{
-		PubKey:      privKey.Public(),
+		PubKey:      signer.Public(),
 		CoreAddress: fmt.Sprintf("127.0.0.1:%d", 1000+index),
 	}
 }

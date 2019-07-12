@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -106,7 +107,7 @@ func doInit(cmd *cobra.Command, args []string) {
 
 	// Loosely check to see if there is an existing entity.  This isn't
 	// perfect, just "oopsie" avoidance.
-	if _, _, err = entity.Load(dataDir); err == nil {
+	if _, _, err = loadOrGenerateEntity(dataDir, false); err == nil {
 		switch cmdFlags.Force() {
 		case true:
 			logger.Warn("overwriting existing entity")
@@ -117,7 +118,7 @@ func doInit(cmd *cobra.Command, args []string) {
 	}
 
 	// Generate a new entity.
-	ent, privKey, err := loadOrGenerateEntity(dataDir, true)
+	ent, signer, err := loadOrGenerateEntity(dataDir, true)
 	if err != nil {
 		logger.Error("failed to generate entity",
 			"err", err,
@@ -126,7 +127,7 @@ func doInit(cmd *cobra.Command, args []string) {
 	}
 
 	// Sign the entity registration for use in a genesis document.
-	signed, err := entity.SignEntity(*privKey, registry.RegisterGenesisEntitySignatureContext, ent)
+	signed, err := entity.SignEntity(signer, registry.RegisterGenesisEntitySignatureContext, ent)
 	if err != nil {
 		logger.Error("failed to sign entity for genesis registration",
 			"err", err,
@@ -198,9 +199,9 @@ func doRegisterOrDeregister(cmd *cobra.Command, args []string) {
 	os.Exit(1)
 }
 
-func doRegister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, privKey *signature.PrivateKey) error {
+func doRegister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, signer signature.Signer) error {
 	ent.RegistrationTime = uint64(time.Now().Unix())
-	signed, err := entity.SignEntity(*privKey, registry.RegisterEntitySignatureContext, ent)
+	signed, err := entity.SignEntity(signer, registry.RegisterEntitySignatureContext, ent)
 	if err != nil {
 		logger.Error("failed to sign entity",
 			"err", err,
@@ -219,15 +220,15 @@ func doRegister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, pr
 	}
 
 	logger.Info("registered entity",
-		"entity", privKey.Public(),
+		"entity", signer.Public(),
 	)
 
 	return nil
 }
 
-func doDeregister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, privKey *signature.PrivateKey) error {
+func doDeregister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, signer signature.Signer) error {
 	ts := registry.Timestamp(time.Now().Unix())
-	signed, err := signature.SignSigned(*privKey, registry.DeregisterEntitySignatureContext, &ts)
+	signed, err := signature.SignSigned(signer, registry.DeregisterEntitySignatureContext, &ts)
 	if err != nil {
 		logger.Error("failed to sign deregistration",
 			"err", err,
@@ -246,7 +247,7 @@ func doDeregister(client grpcRegistry.EntityRegistryClient, ent *entity.Entity, 
 	}
 
 	logger.Info("deregistered entity",
-		"entity", privKey.Public(),
+		"entity", signer.Public(),
 	)
 
 	return nil
@@ -290,16 +291,18 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, *signature.PrivateKey, error) {
+func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signature.Signer, error) {
 	if cmdFlags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
 
+	// TODO/hsm: Configure factory dynamically.
+	entitySignerFactory := fileSigner.NewFactory(signature.SignerEntity)
 	if generate {
-		return entity.Generate(dataDir)
+		return entity.Generate(dataDir, entitySignerFactory)
 	}
 
-	return entity.Load(dataDir)
+	return entity.Load(dataDir, entitySignerFactory)
 }
 
 // Register registers the entity sub-command and all of it's children.

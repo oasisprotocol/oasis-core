@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/json"
 	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
 )
@@ -30,8 +31,8 @@ var (
 	_ cbor.Marshaler   = (*Entity)(nil)
 	_ cbor.Unmarshaler = (*Entity)(nil)
 
-	testEntity           Entity
-	testEntityPrivateKey signature.PrivateKey
+	testEntity       Entity
+	testEntitySigner signature.Signer
 )
 
 // Entity represents an entity that controls one or more Nodes and or
@@ -96,28 +97,27 @@ func (e *Entity) UnmarshalCBOR(data []byte) error {
 }
 
 // LoadOrGenerate loads or generates an entity (to/on disk).
-func LoadOrGenerate(baseDir string) (*Entity, *signature.PrivateKey, error) {
-	ent, privKey, err := Load(baseDir)
+func LoadOrGenerate(baseDir string, signerFactory signature.SignerFactory) (*Entity, signature.Signer, error) {
+	ent, signer, err := Load(baseDir, signerFactory)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !os.IsNotExist(err) && err != signature.ErrNotExist {
 			return nil, nil, err
 		}
-		ent, privKey, err = Generate(baseDir)
+		ent, signer, err = Generate(baseDir, signerFactory)
 	}
-	return ent, privKey, err
+	return ent, signer, err
 }
 
 // Load loads an existing entity from disk.
-func Load(baseDir string) (*Entity, *signature.PrivateKey, error) {
+func Load(baseDir string, signerFactory signature.SignerFactory) (*Entity, signature.Signer, error) {
 	entityPath, privKeyPath := getPaths(baseDir)
 
-	rawPriv, err := ioutil.ReadFile(privKeyPath)
-	if err != nil {
+	// Load the entity signer.
+	if err := signerFactory.EnsureRole(signature.SignerEntity); err != nil {
 		return nil, nil, err
 	}
-
-	var privKey signature.PrivateKey
-	if err = privKey.UnmarshalPEM(rawPriv); err != nil {
+	signer, err := signerFactory.Load(privKeyPath)
+	if err != nil {
 		return nil, nil, err
 	}
 
@@ -131,38 +131,37 @@ func Load(baseDir string) (*Entity, *signature.PrivateKey, error) {
 		return nil, nil, err
 	}
 
-	return &ent, &privKey, nil
+	return &ent, signer, nil
 }
 
 // Generate generates a new entity and serializes it to disk.
-func Generate(baseDir string) (*Entity, *signature.PrivateKey, error) {
+func Generate(baseDir string, signerFactory signature.SignerFactory) (*Entity, signature.Signer, error) {
 	entityPath, privKeyPath := getPaths(baseDir)
 
 	// Generate a new entity.
-	privKey, err := signature.NewPrivateKey(rand.Reader)
+	if err := signerFactory.EnsureRole(signature.SignerEntity); err != nil {
+		return nil, nil, err
+	}
+	signer, err := signerFactory.Generate(privKeyPath, rand.Reader)
 	if err != nil {
 		return nil, nil, err
 	}
 	ent := &Entity{
-		ID:               privKey.Public(),
+		ID:               signer.Public(),
 		RegistrationTime: uint64(time.Now().Unix()),
 	}
 
 	// Write to disk.
-	b, _ := privKey.MarshalPEM()
-	if err = ioutil.WriteFile(privKeyPath, b, fileMode); err != nil {
-		return nil, nil, err
-	}
 	if err = ioutil.WriteFile(entityPath, json.Marshal(ent), fileMode); err != nil {
 		return nil, nil, err
 	}
 
-	return ent, &privKey, nil
+	return ent, signer, nil
 }
 
-// TestEntity returns the built-in test entity and private key.
-func TestEntity() (*Entity, *signature.PrivateKey, error) {
-	return &testEntity, &testEntityPrivateKey, nil
+// TestEntity returns the built-in test entity and signer.
+func TestEntity() (*Entity, signature.Signer, error) {
+	return &testEntity, testEntitySigner, nil
 }
 
 func getPaths(baseDir string) (string, string) {
@@ -180,8 +179,8 @@ func (s *SignedEntity) Open(context []byte, entity *Entity) error { // nolint: i
 }
 
 // SignEntity serializes the Entity and signs the result.
-func SignEntity(privateKey signature.PrivateKey, context []byte, entity *Entity) (*SignedEntity, error) {
-	signed, err := signature.SignSigned(privateKey, context, entity)
+func SignEntity(signer signature.Signer, context []byte, entity *Entity) (*SignedEntity, error) {
+	signed, err := signature.SignSigned(signer, context, entity)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +191,7 @@ func SignEntity(privateKey signature.PrivateKey, context []byte, entity *Entity)
 }
 
 func init() {
-	testEntityPrivateKey = signature.NewTestPrivateKey("ekiden test entity key seed")
-	testEntity.ID = testEntityPrivateKey.Public()
+	testEntitySigner = memorySigner.NewTestSigner("ekiden test entity key seed")
+	testEntity.ID = testEntitySigner.Public()
 	testEntity.RegistrationTime = uint64(time.Date(2019, 6, 1, 0, 0, 0, 0, time.UTC).Unix())
 }

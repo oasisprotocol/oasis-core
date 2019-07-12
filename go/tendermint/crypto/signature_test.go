@@ -7,22 +7,19 @@ import (
 	"github.com/stretchr/testify/require"
 	tmed "github.com/tendermint/tendermint/crypto/ed25519"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 )
 
 func TestSignatureConversions(t *testing.T) {
-	sk, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey()")
+	signer, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner()")
 
-	tmSk := PrivateKeyToTendermint(&sk)
-	require.Equal(t, []byte(sk[:]), tmSk[:], "Private key: ToTendermint")
+	tmSk := UnsafeSignerToTendermint(signer)
+	require.Equal(t, signer.UnsafeBytes(), tmSk[:], "Private key: ToTendermint")
 
-	pk := sk.Public()
+	pk := signer.Public()
 	tmPk := tmSk.PubKey().(tmed.PubKeyEd25519)
 	require.Equal(t, []byte(pk[:]), tmPk[:], "Private key: Public keys")
-
-	sk2 := PrivateKeyFromTendermint(&tmSk)
-	require.Equal(t, []byte(sk[:]), []byte(sk2[:]), "Private key: FromTendermint")
 
 	tmPk = PublicKeyToTendermint(&pk)
 	require.Equal(t, []byte(pk[:]), tmPk[:], "Public key: ToTendermint")
