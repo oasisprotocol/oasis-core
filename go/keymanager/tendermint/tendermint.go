@@ -18,7 +18,6 @@ import (
 	"github.com/oasislabs/ekiden/go/keymanager/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	app "github.com/oasislabs/ekiden/go/tendermint/apps/keymanager"
-	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
@@ -136,7 +135,7 @@ func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 // instance.
 func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
 	app := app.New(timeSource)
-	if err := service.RegisterApplication(app, []string{registryapp.AppName}); err != nil {
+	if err := service.RegisterApplication(app); err != nil {
 		return nil, errors.Wrap(err, "keymanager/tendermint: failed to register app")
 	}
 

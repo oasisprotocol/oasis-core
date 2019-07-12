@@ -47,6 +47,10 @@ func (app *registryApplication) Blessed() bool {
 	return false
 }
 
+func (app *registryApplication) Dependencies() []string {
+	return []string{stakingapp.AppName}
+}
+
 func (app *registryApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
 	app.state = state
 

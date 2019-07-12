@@ -109,6 +109,10 @@ func (app *schedulerApplication) Blessed() bool {
 	return false
 }
 
+func (app *schedulerApplication) Dependencies() []string {
+	return []string{beaconapp.AppName, registryapp.AppName, stakingapp.AppName}
+}
+
 func (app *schedulerApplication) GetState(height int64) (interface{}, error) {
 	return newImmutableState(app.state, height)
 }

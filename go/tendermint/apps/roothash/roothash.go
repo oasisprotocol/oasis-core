@@ -73,6 +73,10 @@ func (app *rootHashApplication) Blessed() bool {
 	return false
 }
 
+func (app *rootHashApplication) Dependencies() []string {
+	return []string{schedulerapp.AppName}
+}
+
 func (app *rootHashApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
 	app.state = state
 

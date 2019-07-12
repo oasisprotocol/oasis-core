@@ -81,6 +81,10 @@ type Application interface {
 	// instance.
 	Blessed() bool
 
+	// Dependencies returns the names of applications that the application
+	// depends on.
+	Dependencies() []string
+
 	// GetState returns an application-specific state structure for the
 	// given block height.
 	GetState(int64) (interface{}, error)
@@ -195,12 +199,12 @@ func (a *ApplicationServer) Mux() types.Application {
 // that act on every single app (InitChain, BeginBlock, EndBlock) will be
 // called in name lexicographic order. Checks that applications named in
 // deps are already registered.
-func (a *ApplicationServer) Register(app Application, deps []string) error {
+func (a *ApplicationServer) Register(app Application) error {
 	if a.started {
 		return errors.New("mux: multiplexer already started")
 	}
 
-	return a.mux.doRegister(app, deps)
+	return a.mux.doRegister(app)
 }
 
 // RegisterGenesisHook registers a function to be called when the
@@ -637,13 +641,13 @@ func (mux *abciMux) doCleanup() {
 	}
 }
 
-func (mux *abciMux) doRegister(app Application, deps []string) error {
+func (mux *abciMux) doRegister(app Application) error {
 	name := app.Name()
 	if mux.appsByName[name] != nil {
 		return fmt.Errorf("mux: application already registered: '%s'", name)
 	}
 	var missingDeps []string
-	for _, dep := range deps {
+	for _, dep := range app.Dependencies() {
 		if _, ok := mux.appsByName[dep]; !ok {
 			missingDeps = append(missingDeps, dep)
 		}

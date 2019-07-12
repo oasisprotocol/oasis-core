@@ -47,6 +47,10 @@ func (app *beaconApplication) Blessed() bool {
 	return false
 }
 
+func (app *beaconApplication) Dependencies() []string {
+	return nil
+}
+
 func (app *beaconApplication) GetState(height int64) (interface{}, error) {
 	return newImmutableState(app.state, height)
 }
