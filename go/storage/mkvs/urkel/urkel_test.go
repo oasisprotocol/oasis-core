@@ -527,6 +527,29 @@ func testNodeEviction(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, 676, stats.Cache.LeafValueSize, "Cache.LeafValueSize")
 }
 
+func testDoubleInsertWithEviction(t *testing.T, ndb db.NodeDB) {
+	ctx := context.Background()
+	tree := New(nil, ndb, Capacity(128, 0))
+
+	keys, values := generateKeyValuePairs()
+	for i := 0; i < len(keys); i++ {
+		err := tree.Insert(ctx, keys[i], values[i])
+		require.NoError(t, err, "Insert")
+	}
+
+	_, _, err := tree.Commit(ctx, testNs, 0)
+	require.NoError(t, err, "Commit")
+
+	keys, values = generateKeyValuePairs()
+	for i := 0; i < len(keys); i++ {
+		err = tree.Insert(ctx, keys[i], values[i])
+		require.NoError(t, err, "Insert")
+	}
+
+	_, _, err = tree.Commit(ctx, testNs, 0)
+	require.NoError(t, err, "Commit")
+}
+
 func testDebugDump(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
@@ -669,6 +692,11 @@ func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interf
 		backend, custom := initBackend(t)
 		defer finiBackend(t, backend, custom)
 		testNodeEviction(t, backend)
+	})
+	t.Run("DoubleInsertWithEviction", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testDoubleInsertWithEviction(t, backend)
 	})
 	t.Run("DebugDump", func(t *testing.T) {
 		backend, custom := initBackend(t)

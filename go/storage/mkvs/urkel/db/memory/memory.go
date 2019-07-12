@@ -168,9 +168,21 @@ func (b *memoryBatch) PutWriteLog(
 	digest := make(writeLogDigest, len(writeLog))
 	for idx, entry := range writeLog {
 		if annotations[idx].InsertedNode != nil {
+			nd := annotations[idx].InsertedNode.Node
+			if nd == nil {
+				raw, err := b.db.getLocked(annotations[idx].InsertedNode.Hash)
+				if err != nil {
+					return err
+				}
+
+				nd, err = node.UnmarshalBinary(raw)
+				if err != nil {
+					return err
+				}
+			}
 			digest[idx] = logEntryDigest{
 				key:  entry.Key,
-				leaf: annotations[idx].InsertedNode.Node.(*node.LeafNode),
+				leaf: nd.(*node.LeafNode),
 			}
 		} else {
 			digest[idx] = logEntryDigest{
