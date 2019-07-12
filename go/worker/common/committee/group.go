@@ -484,23 +484,24 @@ func (g *Group) publishLocked(
 }
 
 // PublishScheduledBatch publishes a batch to all members in the compute committee.
+// Returns the transaction scheduler's signature for this batch.
 func (g *Group) PublishScheduledBatch(
 	spanCtx opentracing.SpanContext,
 	committeeID hash.Hash,
 	ioRoot hash.Hash,
 	storageSignatures []signature.Signature,
 	hdr block.Header,
-) error {
+) (*signature.Signature, error) {
 	g.RLock()
 	defer g.RUnlock()
 
 	if g.activeEpoch == nil || g.activeEpoch.txnSchedulerCommittee.Role != scheduler.Leader {
-		return errors.New("group: not leader of txn scheduler committee")
+		return nil, errors.New("group: not leader of txn scheduler committee")
 	}
 
 	cc := g.activeEpoch.computeCommittees[committeeID]
 	if cc == nil {
-		return errors.New("group: invalid compute committee")
+		return nil, errors.New("group: invalid compute committee")
 	}
 
 	dispatchMsg := &p2p.TxnSchedulerBatchDispatch{
@@ -512,10 +513,10 @@ func (g *Group) PublishScheduledBatch(
 
 	signedDispatchMsg, err := p2p.SignTxnSchedulerBatchDispatch(g.identity.NodeSigner, dispatchMsg)
 	if err != nil {
-		return errors.Wrap(err, "group: unable to sign txn scheduler batch dispatch msg")
+		return nil, errors.Wrap(err, "group: unable to sign txn scheduler batch dispatch msg")
 	}
 
-	return g.publishLocked(
+	return &signedDispatchMsg.Signature, g.publishLocked(
 		spanCtx,
 		cc,
 		&p2p.Message{

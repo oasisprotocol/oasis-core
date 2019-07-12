@@ -304,7 +304,7 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 	for _, receipt := range ioReceipts {
 		ioReceiptSignatures = append(ioReceiptSignatures, receipt.Signature)
 	}
-	err = n.commonNode.Group.PublishScheduledBatch(
+	txnSchedSig, err := n.commonNode.Group.PublishScheduledBatch(
 		batchSpanCtx,
 		committeeID,
 		ioRoot,
@@ -327,7 +327,7 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 		if n.computeNode == nil {
 			n.logger.Error("scheduler says we are a compute worker, but we are not")
 		} else {
-			n.computeNode.HandleBatchFromTransactionSchedulerLocked(batchSpanCtx, committeeID, ioRoot, batch)
+			n.computeNode.HandleBatchFromTransactionSchedulerLocked(batchSpanCtx, committeeID, ioRoot, batch, *txnSchedSig)
 		}
 	}
 

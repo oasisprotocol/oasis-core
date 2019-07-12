@@ -131,7 +131,7 @@ pub struct Dispatcher {
     /// Registered local RPC methods.
     local_methods: HashMap<String, Method>,
     /// Registered context initializer.
-    ctx_initializer: Option<Box<ContextInitializer>>,
+    ctx_initializer: Option<Box<dyn ContextInitializer>>,
 }
 
 impl Dispatcher {

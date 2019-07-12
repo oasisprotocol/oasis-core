@@ -68,6 +68,7 @@ type ComputeBody struct {
 	Header            ComputeResultsHeader   `codec:"header"`
 	StorageSignatures []signature.Signature  `codec:"storage_signatures"`
 	RakSig            signature.RawSignature `codec:"rak_sig"`
+	TxnSchedSig       signature.Signature    `codec:"txn_sched_sig"`
 }
 
 // RootsForStorageReceipt gets the merkle roots that must be part of
