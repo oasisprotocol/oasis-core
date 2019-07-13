@@ -250,8 +250,8 @@ func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
 	}
 	port := uint16(viper.GetInt(cfgP2pPort))
 
-	// TODO: Should we use a separate key for authenticating P2P communication?
-	p2pKey, err := libp2pCrypto.UnmarshalEd25519PrivateKey((*identity.NodeKey)[:])
+	// TODO/hsm: Use a separate key for authenticating P2P communication.
+	p2pKey, err := libp2pCrypto.UnmarshalEd25519PrivateKey(identity.NodeSigner.UnsafeBytes())
 	if err != nil {
 		return nil, err
 	}

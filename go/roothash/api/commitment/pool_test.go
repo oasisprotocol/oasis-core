@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/node"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -19,8 +20,8 @@ import (
 
 func TestPoolDefault(t *testing.T) {
 	// Generate a commitment.
-	sk, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
+	sk, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
 
 	var id signature.PublicKey
 	blk := block.NewGenesisBlock(id, 0)
@@ -61,8 +62,8 @@ func TestPoolSingleCommitment(t *testing.T) {
 	}
 
 	// Generate a commitment signing key.
-	sk, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
+	sk, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
 
 	// Generate a committee.
 	cID := sk.Public().ToMapKey()
@@ -140,12 +141,12 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	}
 
 	// Generate a commitment signing key.
-	sk, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
+	sk, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
 
 	// Generate a dummy RAK.
-	skRAK, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
+	skRAK, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
 
 	// Generate a committee.
 	cID := sk.Public().ToMapKey()
@@ -372,8 +373,8 @@ func TestPoolSerialization(t *testing.T) {
 	}
 
 	// Generate a commitment signing key.
-	sk, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
+	sk, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
 
 	// Generate a committee.
 	cID := sk.Public().ToMapKey()
@@ -923,7 +924,7 @@ func TestTryFinalize(t *testing.T) {
 
 func generateMockCommittee(t *testing.T) (
 	rt *registry.Runtime,
-	sks []signature.PrivateKey,
+	sks []signature.Signer,
 	committee *scheduler.Committee,
 	nodeInfo map[signature.MapKey]NodeInfo,
 ) {
@@ -937,12 +938,12 @@ func generateMockCommittee(t *testing.T) (
 	}
 
 	// Generate commitment signing keys.
-	sk1, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
-	sk2, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
-	sk3, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
+	sk1, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
+	sk2, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
+	sk3, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
 	sks = append(sks, sk1, sk2, sk3)
 
 	// Generate a committee.
@@ -1012,8 +1013,8 @@ func generateComputeBody(t *testing.T, committee *scheduler.Committee) (*block.B
 }
 
 func generateStorageReceiptSignature(t *testing.T, blk *block.Block, body *ComputeBody) signature.Signature {
-	sk, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey")
+	sk, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
 
 	receiptBody := storage.ReceiptBody{
 		Version:   1,

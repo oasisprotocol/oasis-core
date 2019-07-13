@@ -6,15 +6,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
 func TestStorageMemory(t *testing.T) {
-	pk, err := signature.NewPrivateKey(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey()")
+	signer, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner()")
 
-	backend := New(&pk, false)
+	backend := New(signer, false)
 	defer backend.Cleanup()
 
 	tests.StorageImplementationTests(t, backend)

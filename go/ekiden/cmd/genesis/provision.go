@@ -10,6 +10,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/json"
@@ -46,7 +47,9 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	id, err := identity.LoadOrGenerate(dataDir)
+	// TODO/hsm: Configure factory dynamically.
+	nodeSignerFactory := fileSigner.NewFactory(signature.SignerNode)
+	id, err := identity.LoadOrGenerate(dataDir, nodeSignerFactory)
 	if err != nil {
 		logger.Error("failed to load or generate node identity",
 			"err", err,
@@ -54,7 +57,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	ent, privKey, err := loadEntity(viper.GetString(cfgEntity))
+	ent, signer, err := loadEntity(viper.GetString(cfgEntity))
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
@@ -64,7 +67,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 
 	validator := genesis.Validator{
 		EntityID: ent.ID,
-		PubKey:   id.NodeKey.Public(),
+		PubKey:   id.NodeSigner.Public(),
 		Power:    10,
 	}
 
@@ -92,7 +95,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	validator.Name = common.NormalizeFQDN(nodeName)
 
 	// Sign the validator.
-	signedValidator, err := genesis.SignValidator(*privKey, &validator)
+	signedValidator, err := genesis.SignValidator(signer, &validator)
 	if err != nil {
 		logger.Error("failed to sign entity",
 			"err", err,
@@ -103,7 +106,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	// Write out the validator json to disk.
 	f := viper.GetString(cfgValidatorFile)
 	if f == "" {
-		f = "validator-" + id.NodeKey.Public().String() + ".json"
+		f = "validator-" + id.NodeSigner.Public().String() + ".json"
 	}
 	if !filepath.IsAbs(f) {
 		f = filepath.Join(dataDir, f)
@@ -117,12 +120,14 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	}
 }
 
-func loadEntity(dataDir string) (*entity.Entity, *signature.PrivateKey, error) {
+func loadEntity(dataDir string) (*entity.Entity, signature.Signer, error) {
 	if flags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
 
-	return entity.Load(dataDir)
+	// TODO/hsm: Configure factory dynamically.
+	entitySignerFactory := fileSigner.NewFactory(signature.SignerEntity)
+	return entity.Load(dataDir, entitySignerFactory)
 }
 
 func registerProvisionValidatorFlags(cmd *cobra.Command) {

@@ -293,10 +293,10 @@ func (s *server) buildGenesis() {
 
 	// Since this whole thing is a nasty hack, just sign all the validators
 	// with the test entity.
-	_, privateKey, _ := entity.TestEntity()
+	_, signer, _ := entity.TestEntity()
 	signedValidators := make([]*genesis.SignedValidator, 0, len(s.validators))
 	for _, v := range s.validators {
-		signed, err := genesis.SignValidator(*privateKey, v)
+		signed, err := genesis.SignValidator(signer, v)
 		if err != nil {
 			s.logger.Error("failed to sign validator",
 				"err", err,

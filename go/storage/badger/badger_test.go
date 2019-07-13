@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
@@ -18,10 +18,10 @@ func TestStorageBadger(t *testing.T) {
 	require.NoError(t, err, "TempDir()")
 	defer os.RemoveAll(tmpDir)
 
-	pk, err := signature.NewPrivateKey(rand.Reader)
+	signer, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "NewPrivateKey()")
 
-	backend, err := New(filepath.Join(tmpDir, DBFile), &pk, 32*1024*1024, 100, false)
+	backend, err := New(filepath.Join(tmpDir, DBFile), signer, 32*1024*1024, 100, false)
 	require.NoError(t, err, "New()")
 	defer backend.Cleanup()
 

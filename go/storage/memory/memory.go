@@ -28,8 +28,8 @@ type memoryBackend struct {
 	logger *logging.Logger
 	nodedb nodedb.NodeDB
 
+	signer             signature.Signer
 	insecureSkipChecks bool
-	signingKey         *signature.PrivateKey
 }
 
 func (b *memoryBackend) apply(
@@ -120,7 +120,7 @@ func (b *memoryBackend) ApplyBatch(
 		roots = append(roots, *r)
 	}
 
-	receipt, err := api.SignReceipt(b.signingKey, ns, dstRound, roots)
+	receipt, err := api.SignReceipt(b.signer, ns, dstRound, roots)
 	return []*api.Receipt{receipt}, err
 }
 
@@ -137,7 +137,7 @@ func (b *memoryBackend) Apply(
 	if err != nil {
 		return nil, err
 	}
-	receipt, err := api.SignReceipt(b.signingKey, ns, dstRound, []hash.Hash{*r})
+	receipt, err := api.SignReceipt(b.signer, ns, dstRound, []hash.Hash{*r})
 	return []*api.Receipt{receipt}, err
 }
 
@@ -187,14 +187,14 @@ func (b *memoryBackend) Initialized() <-chan struct{} {
 }
 
 // New constructs a new memory backed storage Backend instance.
-func New(signingKey *signature.PrivateKey, insecureSkipChecks bool) api.Backend {
+func New(signer signature.Signer, insecureSkipChecks bool) api.Backend {
 	ndb, _ := memoryNodedb.New()
 
 	b := &memoryBackend{
 		logger:             logging.GetLogger("storage/memory"),
-		insecureSkipChecks: insecureSkipChecks,
-		signingKey:         signingKey,
 		nodedb:             ndb,
+		signer:             signer,
+		insecureSkipChecks: insecureSkipChecks,
 	}
 
 	return b

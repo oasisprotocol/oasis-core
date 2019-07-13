@@ -34,15 +34,15 @@ func NewFileProvider(filename string, identity *identity.Identity) (api.Provider
 				"filename", filename,
 			)
 
-			entity, privateKey, _ := entity.TestEntity()
+			entity, signer, _ := entity.TestEntity()
 			validator := &api.Validator{
 				EntityID: entity.ID,
-				PubKey:   identity.NodeKey.Public(),
+				PubKey:   identity.NodeSigner.Public(),
 				Name:     "ekiden-dummy",
 				Power:    10,
 			}
 
-			signedValidator, sigErr := api.SignValidator(*privateKey, validator)
+			signedValidator, sigErr := api.SignValidator(signer, validator)
 			if sigErr != nil {
 				return nil, sigErr
 			}

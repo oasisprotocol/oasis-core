@@ -490,7 +490,7 @@ func (n *Node) proposeHeaderLocked(result *commitment.MergeBody) {
 	)
 
 	// Submit MC-Commit to BFT for DD and finalization.
-	mc, err := commitment.SignMergeCommitment(*n.commonNode.Identity.NodeKey, result)
+	mc, err := commitment.SignMergeCommitment(n.commonNode.Identity.NodeSigner, result)
 	if err != nil {
 		n.logger.Error("failed to sign merge commitment",
 			"err", err,

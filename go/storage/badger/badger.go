@@ -30,14 +30,14 @@ type badgerBackend struct {
 	nodedb    nodedb.NodeDB
 	rootCache *api.RootCache
 
-	signingKey *signature.PrivateKey
-	initCh     chan struct{}
+	signer signature.Signer
+	initCh chan struct{}
 }
 
 // New constructs a new Badger backed storage Backend instance.
 func New(
 	dbDir string,
-	signingKey *signature.PrivateKey,
+	signer signature.Signer,
 	lruSizeInBytes uint64,
 	applyLockLRUSlots uint64,
 	insecureSkipChecks bool,
@@ -63,10 +63,10 @@ func New(
 	close(initCh)
 
 	return &badgerBackend{
-		nodedb:     ndb,
-		rootCache:  rootCache,
-		signingKey: signingKey,
-		initCh:     initCh,
+		nodedb:    ndb,
+		rootCache: rootCache,
+		signer:    signer,
+		initCh:    initCh,
 	}, nil
 }
 
@@ -84,7 +84,7 @@ func (ba *badgerBackend) Apply(
 		return nil, errors.Wrap(err, "storage/badger: failed to Apply")
 	}
 
-	receipt, err := api.SignReceipt(ba.signingKey, ns, dstRound, []hash.Hash{*newRoot})
+	receipt, err := api.SignReceipt(ba.signer, ns, dstRound, []hash.Hash{*newRoot})
 	return []*api.Receipt{receipt}, err
 }
 
@@ -103,7 +103,7 @@ func (ba *badgerBackend) ApplyBatch(
 		newRoots = append(newRoots, *newRoot)
 	}
 
-	receipt, err := api.SignReceipt(ba.signingKey, ns, dstRound, newRoots)
+	receipt, err := api.SignReceipt(ba.signer, ns, dstRound, newRoots)
 	return []*api.Receipt{receipt}, err
 }
 

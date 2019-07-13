@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/staking/api"
 )
@@ -40,10 +41,10 @@ var (
 
 	testTotalSupply = qtyFromInt(math.MaxInt64)
 
-	srcPrivateKey  = mustGeneratePrivateKey()
-	srcID          = srcPrivateKey.Public()
-	destPrivateKey = mustGeneratePrivateKey()
-	destID         = destPrivateKey.Public()
+	srcSigner  = mustGenerateSigner()
+	srcID      = srcSigner.Public()
+	destSigner = mustGenerateSigner()
+	destID     = destSigner.Public()
 )
 
 // StakingImplementationTests exercises the basic functionality of a
@@ -117,7 +118,7 @@ func testTransfer(t *testing.T, backend api.Backend) {
 		To:     destID,
 		Tokens: qtyFromInt(math.MaxUint8),
 	}
-	signed, err := api.SignTransfer(srcPrivateKey, xfer)
+	signed, err := api.SignTransfer(srcSigner, xfer)
 	require.NoError(err, "Sign xfer")
 
 	err = backend.Transfer(context.Background(), signed)
@@ -158,7 +159,7 @@ func testAllowance(t *testing.T, backend api.Backend) {
 		Spender: destID,
 		Tokens:  qtyFromInt(math.MaxUint16),
 	}
-	signed, err := api.SignApproval(srcPrivateKey, approval)
+	signed, err := api.SignApproval(srcSigner, approval)
 	require.NoError(err, "Sign approval")
 
 	err = backend.Approve(context.Background(), signed)
@@ -188,7 +189,7 @@ func testAllowance(t *testing.T, backend api.Backend) {
 		From:   srcID,
 		Tokens: approval.Tokens,
 	}
-	signedW, err := api.SignWithdrawal(destPrivateKey, withdrawal)
+	signedW, err := api.SignWithdrawal(destSigner, withdrawal)
 	require.NoError(err, "Sign withdrawal")
 
 	err = backend.Withdraw(context.Background(), signedW)
@@ -235,7 +236,7 @@ func testBurn(t *testing.T, backend api.Backend) {
 		Nonce:  nonce,
 		Tokens: qtyFromInt(math.MaxUint32),
 	}
-	signed, err := api.SignBurn(srcPrivateKey, burn)
+	signed, err := api.SignBurn(srcSigner, burn)
 	require.NoError(err, "Sign burn")
 
 	err = backend.Burn(context.Background(), signed)
@@ -276,7 +277,7 @@ func testEscrow(t *testing.T, backend api.Backend) {
 		Nonce:  nonce,
 		Tokens: *generalBalance,
 	}
-	signed, err := api.SignEscrow(destPrivateKey, escrow)
+	signed, err := api.SignEscrow(destSigner, escrow)
 	require.NoError(err, "Sign escrow")
 
 	err = backend.AddEscrow(context.Background(), signed)
@@ -302,7 +303,7 @@ func testEscrow(t *testing.T, backend api.Backend) {
 		Nonce:  nonce + 1,
 		Tokens: *escrowBalance,
 	}
-	signedReclaim, err := api.SignReclaimEscrow(destPrivateKey, reclaim)
+	signedReclaim, err := api.SignReclaimEscrow(destSigner, reclaim)
 	require.NoError(err, "Sign ReclaimEscrow")
 
 	err = backend.ReclaimEscrow(context.Background(), signedReclaim)
@@ -333,8 +334,8 @@ func testEscrow(t *testing.T, backend api.Backend) {
 	_ = escrowBackend
 }
 
-func mustGeneratePrivateKey() signature.PrivateKey {
-	k, err := signature.NewPrivateKey(rand.Reader)
+func mustGenerateSigner() signature.Signer {
+	k, err := memorySigner.NewSigner(rand.Reader)
 	if err != nil {
 		panic(err)
 	}

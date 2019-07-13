@@ -170,8 +170,8 @@ func (s *SignedRuntime) Open(context []byte, runtime *Runtime) error { // nolint
 }
 
 // SignRuntime serializes the Runtime and signs the result.
-func SignRuntime(privateKey signature.PrivateKey, context []byte, runtime *Runtime) (*SignedRuntime, error) {
-	signed, err := signature.SignSigned(privateKey, context, runtime)
+func SignRuntime(signer signature.Signer, context []byte, runtime *Runtime) (*SignedRuntime, error) {
+	signed, err := signature.SignSigned(signer, context, runtime)
 	if err != nil {
 		return nil, err
 	}

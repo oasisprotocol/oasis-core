@@ -183,7 +183,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes []string, l *
 	if flags.DebugTestEntity() {
 		l.Warn("registering debug test entity")
 
-		ent, privKey, err := entity.TestEntity()
+		ent, signer, err := entity.TestEntity()
 		if err != nil {
 			l.Error("failed to retrive test entity",
 				"err", err,
@@ -191,7 +191,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes []string, l *
 			return err
 		}
 
-		signed, err := entity.SignEntity(*privKey, registry.RegisterGenesisEntitySignatureContext, ent)
+		signed, err := entity.SignEntity(signer, registry.RegisterGenesisEntitySignatureContext, ent)
 		if err != nil {
 			l.Error("failed to sign test entity",
 				"err", err,

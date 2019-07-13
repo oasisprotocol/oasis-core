@@ -12,6 +12,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -353,8 +354,8 @@ func EnsureRegistryEmpty(t *testing.T, backend api.Backend) {
 // TestEntity is a testing Entity and some common pre-generated/signed
 // blobs useful for testing.
 type TestEntity struct {
-	Entity     *entity.Entity
-	PrivateKey signature.PrivateKey
+	Entity *entity.Entity
+	Signer signature.Signer
 
 	SignedRegistration   *entity.SignedEntity
 	SignedDeregistration *signature.Signed
@@ -363,8 +364,8 @@ type TestEntity struct {
 // TestNode is a testing Node and some common pre-generated/signed blobs
 // useful for testing.
 type TestNode struct {
-	Node       *node.Node
-	PrivateKey signature.PrivateKey
+	Node   *node.Node
+	Signer signature.Signer
 
 	SignedRegistration *node.SignedNode
 }
@@ -392,7 +393,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 	nodes := make([]*TestNode, 0, n)
 	for i := 0; i < n; i++ {
 		var nod TestNode
-		if nod.PrivateKey, err = signature.NewPrivateKey(rng); err != nil {
+		if nod.Signer, err = memorySigner.NewSigner(rng); err != nil {
 			return nil, err
 		}
 
@@ -404,7 +405,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 		}
 
 		nod.Node = &node.Node{
-			ID:               nod.PrivateKey.Public(),
+			ID:               nod.Signer.Public(),
 			EntityID:         ent.Entity.ID,
 			Expiration:       uint64(expiration),
 			RegistrationTime: uint64(time.Now().Unix()),
@@ -417,7 +418,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 		}
 		nod.Node.Addresses = append(nod.Node.Addresses, *addr)
 
-		signed, err := signature.SignSigned(ent.PrivateKey, api.RegisterNodeSignatureContext, nod.Node)
+		signed, err := signature.SignSigned(ent.Signer, api.RegisterNodeSignatureContext, nod.Node)
 		if err != nil {
 			return nil, err
 		}
@@ -440,22 +441,22 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 	entities := make([]*TestEntity, 0, n)
 	for i := 0; i < n; i++ {
 		var ent TestEntity
-		if ent.PrivateKey, err = signature.NewPrivateKey(rng); err != nil {
+		if ent.Signer, err = memorySigner.NewSigner(rng); err != nil {
 			return nil, err
 		}
 		ent.Entity = &entity.Entity{
-			ID:               ent.PrivateKey.Public(),
+			ID:               ent.Signer.Public(),
 			RegistrationTime: uint64(time.Now().Unix()),
 		}
 
-		signed, err := signature.SignSigned(ent.PrivateKey, api.RegisterEntitySignatureContext, ent.Entity)
+		signed, err := signature.SignSigned(ent.Signer, api.RegisterEntitySignatureContext, ent.Entity)
 		if err != nil {
 			return nil, err
 		}
 		ent.SignedRegistration = &entity.SignedEntity{Signed: *signed}
 
 		ts := api.Timestamp(uint64(time.Now().Unix()))
-		signed, err = signature.SignSigned(ent.PrivateKey, api.DeregisterEntitySignatureContext, &ts)
+		signed, err = signature.SignSigned(ent.Signer, api.DeregisterEntitySignatureContext, &ts)
 		if err != nil {
 			return nil, err
 		}
@@ -470,8 +471,8 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 // TestRuntime is a testing Runtime and some common pre-generated/signed
 // blobs useful for testing.
 type TestRuntime struct {
-	Runtime    *api.Runtime
-	PrivateKey signature.PrivateKey
+	Runtime *api.Runtime
+	Signer  signature.Signer
 
 	entity *TestEntity
 	nodes  []*TestNode
@@ -487,7 +488,7 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend) {
 	defer sub.Close()
 
 	rt.Runtime.RegistrationTime = uint64(time.Now().Unix())
-	signed, err := signature.SignSigned(rt.PrivateKey, api.RegisterRuntimeSignatureContext, rt.Runtime)
+	signed, err := signature.SignSigned(rt.Signer, api.RegisterRuntimeSignatureContext, rt.Runtime)
 	require.NoError(err, "signed runtime descriptor")
 
 	err = backend.RegisterRuntime(context.Background(), &api.SignedRuntime{Signed: *signed})
@@ -552,7 +553,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, runtimes []*TestRuntime, se
 	}
 
 	for _, v := range runtimes {
-		v.PrivateKey = entity.PrivateKey
+		v.Signer = entity.Signer
 	}
 
 	// For the sake of simplicity, require that all runtimes have the same
@@ -644,12 +645,12 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 	}
 
 	var rt TestRuntime
-	if rt.PrivateKey, err = signature.NewPrivateKey(rng); err != nil {
+	if rt.Signer, err = memorySigner.NewSigner(rng); err != nil {
 		return nil, err
 	}
 
 	rt.Runtime = &api.Runtime{
-		ID:                            rt.PrivateKey.Public(),
+		ID:                            rt.Signer.Public(),
 		ReplicaGroupSize:              3,
 		ReplicaGroupBackupSize:        5,
 		ReplicaAllowedStragglers:      1,
@@ -657,7 +658,7 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 		TransactionSchedulerGroupSize: 3,
 	}
 	if entity != nil {
-		rt.PrivateKey = entity.PrivateKey
+		rt.Signer = entity.Signer
 	}
 
 	// TODO: Test with non-empty state root when enabled.

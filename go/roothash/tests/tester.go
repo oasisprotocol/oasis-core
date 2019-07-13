@@ -273,7 +273,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			StorageSignatures: parent.Header.StorageSignatures,
 		}
 		// `err` shadows outside.
-		commit, err := commitment.SignComputeCommitment(node.PrivateKey, &commitBody) // nolint: vetshadow
+		commit, err := commitment.SignComputeCommitment(node.Signer, &commitBody) // nolint: vetshadow
 		require.NoError(err, "SignSigned")
 
 		computeCommits = append(computeCommits, *commit)
@@ -289,7 +289,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			Header:         parent.Header,
 		}
 		// `err` shadows outside.
-		commit, err := commitment.SignMergeCommitment(node.PrivateKey, &commitBody) // nolint: vetshadow
+		commit, err := commitment.SignMergeCommitment(node.Signer, &commitBody) // nolint: vetshadow
 		require.NoError(err, "SignSigned")
 
 		mergeCommits = append(mergeCommits, *commit)

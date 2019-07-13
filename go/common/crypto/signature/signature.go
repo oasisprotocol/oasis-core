@@ -3,13 +3,9 @@ package signature
 
 import (
 	"bytes"
-	"crypto/sha512"
 	"encoding"
 	"encoding/hex"
-	"encoding/pem"
 	"errors"
-	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -17,6 +13,7 @@ import (
 	"golang.org/x/crypto/ed25519"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/pem"
 	"github.com/oasislabs/ekiden/go/grpc/common"
 )
 
@@ -24,19 +21,11 @@ const (
 	// PublicKeySize is the size of a public key in bytes.
 	PublicKeySize = ed25519.PublicKeySize
 
-	// PrivateKeySize is the size of a private key in bytes.
-	PrivateKeySize = ed25519.PrivateKeySize
-
 	// SignatureSize is the size of a signature in bytes.
 	SignatureSize = ed25519.SignatureSize
 
-	// ContextSize is the size of a signature context in bytes
-	ContextSize = 8
-
-	privPEMType = "ED25519 PRIVATE KEY"
-	pubPEMType  = "ED25519 PUBLIC KEY"
-
-	filePerm = 0600
+	pubPEMType = "ED25519 PUBLIC KEY"
+	filePerm   = 0600
 )
 
 var (
@@ -47,10 +36,6 @@ var (
 	// ErrMalformedSignature is the error returned when a signature is
 	// malformed.
 	ErrMalformedSignature = errors.New("signature: malformed signature")
-
-	// ErrMalformedPrivateKey is the error returned when a private key is
-	// malformed.
-	ErrMalformedPrivateKey = errors.New("signature: malformed private key")
 
 	// ErrPublicKeyMismatch is the error returned when a signature was
 	// not produced by the expected public key.
@@ -63,12 +48,6 @@ var (
 	// fails when opening a signed blob.
 	ErrVerifyFailed = errors.New("signed: signature verification failed")
 
-	errMalformedContext = errors.New("signature: malformed context")
-
-	errNilPEM          = errors.New("signature: PEM data missing blocks")
-	errTrailingGarbage = errors.New("signature: PEM data has trailing garbage")
-	errMalformedPEM    = errors.New("signature: malformed PEM")
-
 	errKeyMismatch = errors.New("signature: public key PEM is not for private key")
 
 	_ cbor.Marshaler             = PublicKey{}
@@ -79,7 +58,6 @@ var (
 	_ encoding.BinaryUnmarshaler = (*PublicKey)(nil)
 	_ encoding.BinaryMarshaler   = RawSignature{}
 	_ encoding.BinaryUnmarshaler = (*RawSignature)(nil)
-	_ encoding.BinaryUnmarshaler = (*PrivateKey)(nil)
 
 	testPublicKeys        sync.Map
 	blacklistedPublicKeys sync.Map
@@ -113,7 +91,7 @@ func (k PublicKey) Verify(context, message, sig []byte) bool {
 		return false
 	}
 
-	data, err := digest(context, message)
+	data, err := PrepareSignerMessage(context, message)
 	if err != nil {
 		return false
 	}
@@ -154,7 +132,7 @@ func (k *PublicKey) UnmarshalCBOR(data []byte) error {
 
 // UnmarshalPEM decodes a PEM marshaled PublicKey.
 func (k *PublicKey) UnmarshalPEM(data []byte) error {
-	b, err := unmarshalPEM(pubPEMType, data)
+	b, err := pem.Unmarshal(pubPEMType, data)
 	if err != nil {
 		return err
 	}
@@ -164,7 +142,7 @@ func (k *PublicKey) UnmarshalPEM(data []byte) error {
 
 // MarshalPEM encodes a PublicKey into PEM form.
 func (k PublicKey) MarshalPEM() (data []byte, err error) {
-	return marshalPEM(pubPEMType, k[:])
+	return pem.Marshal(pubPEMType, k[:])
 }
 
 // UnmarshalHex deserializes a hexadecimal text string into the given type.
@@ -206,13 +184,13 @@ func (k PublicKey) ToMapKey() MapKey {
 }
 
 // LoadPEM loads a public key from a PEM file on disk.  Iff the public key
-// is missing and a private key is provided, the private key's corresponding
+// is missing and a Signer is provided, the Signer's corresponding
 // public key will be written and loaded.
-func (k *PublicKey) LoadPEM(fn string, priv *PrivateKey) error {
+func (k *PublicKey) LoadPEM(fn string, signer Signer) error {
 	f, err := os.Open(fn) // nolint: gosec
 	if err != nil {
-		if os.IsNotExist(err) && priv != nil {
-			pubKey := priv.Public()
+		if os.IsNotExist(err) && signer != nil {
+			pubKey := signer.Public()
 
 			var buf []byte
 			if buf, err = pubKey.MarshalPEM(); err != nil {
@@ -236,7 +214,7 @@ func (k *PublicKey) LoadPEM(fn string, priv *PrivateKey) error {
 		return err
 	}
 
-	if priv != nil && !k.Equal(priv.Public()) {
+	if signer != nil && !k.Equal(signer.Public()) {
 		return errKeyMismatch
 	}
 
@@ -263,147 +241,6 @@ func (r *RawSignature) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-// PrivateKey is a private key used for signing.
-type PrivateKey ed25519.PrivateKey
-
-// Sign generates a signature with the private key over the context and
-// message.
-func (k PrivateKey) Sign(context, message []byte) ([]byte, error) {
-	data, err := digest(context, message)
-	if err != nil {
-		return nil, err
-	}
-
-	return ed25519.Sign(ed25519.PrivateKey(k), data), nil
-}
-
-// Public returns the PublicKey corresponding to k.
-func (k PrivateKey) Public() PublicKey {
-	return PublicKey(ed25519.PrivateKey(k).Public().(ed25519.PublicKey))
-}
-
-// String returns the string representation of a PrivateKey.
-func (k PrivateKey) String() string {
-	// There is close to zero reason to ever serialize a PrivateKey
-	// to a string in this manner.  This method exists as a safeguard
-	// against inadvertently trying to do so (eg: misguided attempts
-	// at logging).
-	return "[redacted private key]"
-}
-
-// UnmarshalBinary decodes a binary marshaled private key.
-func (k *PrivateKey) UnmarshalBinary(data []byte) error {
-	if len(data) != PrivateKeySize {
-		return ErrMalformedPrivateKey
-	}
-
-	if len(*k) != PrivateKeySize {
-		keybuf := make([]byte, PrivateKeySize)
-		*k = keybuf
-	}
-	copy((*k)[:], data)
-
-	return nil
-}
-
-// UnmarshalSeed decodes a RFC 8032 seed into a private key.
-func (k *PrivateKey) UnmarshalSeed(seed []byte) error {
-	nk := ed25519.NewKeyFromSeed(seed)
-	return k.UnmarshalBinary(nk[:])
-}
-
-// UnmarshalPEM decodes a PEM marshaled PrivateKey.
-func (k *PrivateKey) UnmarshalPEM(data []byte) error {
-	b, err := unmarshalPEM(privPEMType, data)
-	if err != nil {
-		return err
-	}
-
-	return k.UnmarshalBinary(b)
-}
-
-// MarshalPEM encodes a PrivateKey into PEM form.
-func (k PrivateKey) MarshalPEM() (data []byte, err error) {
-	return marshalPEM(privPEMType, k[:])
-}
-
-// LoadPEM loads a private key from a PEM file on disk.  Iff the private
-// key is missing and an entropy source is provided, a new private key
-// will be generated and written.
-func (k *PrivateKey) LoadPEM(fn string, rng io.Reader) error {
-	f, err := os.Open(fn) // nolint: gosec
-	if err != nil {
-		if os.IsNotExist(err) && rng != nil {
-			if err = k.generate(rng); err != nil {
-				return err
-			}
-
-			var buf []byte
-			buf, err = k.MarshalPEM()
-			if err != nil {
-				return err
-			}
-
-			return ioutil.WriteFile(fn, buf, filePerm)
-		}
-		return err
-	}
-	defer f.Close() // nolint: errcheck
-
-	fi, err := f.Stat()
-	if err != nil {
-		return err
-	}
-
-	fm := fi.Mode()
-	if fm.Perm() != filePerm {
-		return fmt.Errorf("signature: file '%s' has invalid permissions: %v", fn, fm.Perm())
-	}
-
-	buf, err := ioutil.ReadAll(f)
-	if err != nil {
-		return err
-	}
-
-	return k.UnmarshalPEM(buf)
-}
-
-func (k *PrivateKey) generate(rng io.Reader) error {
-	seed := make([]byte, ed25519.SeedSize)
-	if _, err := io.ReadFull(rng, seed); err != nil {
-		return err
-	}
-
-	nk := ed25519.NewKeyFromSeed(seed)
-	_ = k.UnmarshalBinary(nk[:])
-
-	return nil
-}
-
-// NewPrivateKey generates a new private key via the provided
-// entropy source.
-func NewPrivateKey(rng io.Reader) (k PrivateKey, err error) {
-	err = k.generate(rng)
-	return
-}
-
-// NewTestPrivateKey generates a new private key deterministically from
-// a test key name string, registers it as a test key, and returns
-// the private key.
-//
-// This routine will panic on failure.
-func NewTestPrivateKey(name string) PrivateKey {
-	seed := sha512.Sum512_256([]byte(name))
-
-	var k PrivateKey
-	if err := k.UnmarshalSeed(seed[:]); err != nil {
-		panic("signature: failed to unmarshal test key seed")
-	}
-	RegisterTestPublicKey(k.Public())
-
-	return k
-}
-
 // Signature is a signature, bundled with the signing public key.
 type Signature struct {
 	// PublicKey is the public key that produced the signature.
@@ -415,8 +252,8 @@ type Signature struct {
 
 // Sign generates a signature with the private key over the context and
 // message.
-func Sign(privateKey PrivateKey, context, message []byte) (*Signature, error) {
-	signature, err := privateKey.Sign(context, message)
+func Sign(signer Signer, context, message []byte) (*Signature, error) {
+	signature, err := signer.ContextSign(context, message)
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +263,7 @@ func Sign(privateKey PrivateKey, context, message []byte) (*Signature, error) {
 		return nil, err
 	}
 
-	return &Signature{PublicKey: privateKey.Public(), Signature: rawSignature}, nil
+	return &Signature{PublicKey: signer.Public(), Signature: rawSignature}, nil
 }
 
 // Verify returns true iff the signature is valid over the given
@@ -484,11 +321,11 @@ type Signed struct {
 	Signature Signature `codec:"signature"`
 }
 
-// SignSigned generates a Signed with the private key over the context and
+// SignSigned generates a Signed with the Signer over the context and
 // CBOR-serialized message.
-func SignSigned(privateKey PrivateKey, context []byte, src cbor.Marshaler) (*Signed, error) {
+func SignSigned(signer Signer, context []byte, src cbor.Marshaler) (*Signed, error) {
 	data := src.MarshalCBOR()
-	signature, err := Sign(privateKey, context, data)
+	signature, err := Sign(signer, context, data)
 	if err != nil {
 		return nil, err
 	}
@@ -560,46 +397,4 @@ func BuildPublicKeyBlacklist(allowTestKeys bool) {
 	}
 
 	// Explicitly forbid other keys here.
-}
-
-func digest(context, message []byte) ([]byte, error) {
-	if len(context) != ContextSize {
-		return nil, errMalformedContext
-	}
-
-	h := sha512.New512_256()
-	_, _ = h.Write(context)
-	_, _ = h.Write(message)
-	sum := h.Sum(nil)
-
-	return sum[:], nil
-}
-
-func unmarshalPEM(pemType string, data []byte) ([]byte, error) {
-	blk, rest := pem.Decode(data)
-	if blk == nil {
-		return nil, errNilPEM
-	}
-	if len(rest) != 0 {
-		return nil, errTrailingGarbage
-	}
-	if blk.Type != pemType {
-		return nil, errMalformedPEM
-	}
-
-	return blk.Bytes, nil
-}
-
-func marshalPEM(pemType string, data []byte) ([]byte, error) {
-	blk := &pem.Block{
-		Type:  pemType,
-		Bytes: data,
-	}
-
-	var buf bytes.Buffer
-	if err := pem.Encode(&buf, blk); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
 }

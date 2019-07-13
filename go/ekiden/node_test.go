@@ -15,6 +15,7 @@ import (
 	beaconTests "github.com/oasislabs/ekiden/go/beacon/tests"
 	clientTests "github.com/oasislabs/ekiden/go/client/tests"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/node"
@@ -86,8 +87,8 @@ type testNode struct {
 	computeCommitteeNode      *computeCommittee.Node
 	txnschedulerCommitteeNode *txnschedulerCommittee.Node
 
-	entity        *entity.Entity
-	entityPrivKey *signature.PrivateKey
+	entity       *entity.Entity
+	entitySigner signature.Signer
 
 	dataDir string
 	start   time.Time
@@ -118,7 +119,8 @@ func newTestNode(t *testing.T) *testNode {
 	dataDir, err := ioutil.TempDir("", "ekiden-node-test_")
 	require.NoError(err, "create data dir")
 
-	entity, entityPriv, err := entity.LoadOrGenerate(dataDir)
+	signerFactory := fileSigner.NewFactory(signature.SignerEntity)
+	entity, entitySigner, err := entity.LoadOrGenerate(dataDir, signerFactory)
 	require.NoError(err, "create test entity")
 
 	viper.Set("datadir", dataDir)
@@ -128,11 +130,11 @@ func newTestNode(t *testing.T) *testNode {
 	}
 
 	n := &testNode{
-		runtimeID:     testRuntime.ID,
-		dataDir:       dataDir,
-		entity:        entity,
-		entityPrivKey: entityPriv,
-		start:         time.Now(),
+		runtimeID:    testRuntime.ID,
+		dataDir:      dataDir,
+		entity:       entity,
+		entitySigner: entitySigner,
+		start:        time.Now(),
 	}
 	t.Logf("starting node, data directory: %v", dataDir)
 	n.Node, err = node.NewNode()
@@ -204,14 +206,14 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 
 	// Register node entity.
 	node.entity.RegistrationTime = uint64(time.Now().Unix())
-	signedEnt, err := entity.SignEntity(*node.entityPrivKey, registry.RegisterEntitySignatureContext, node.entity)
+	signedEnt, err := entity.SignEntity(node.entitySigner, registry.RegisterEntitySignatureContext, node.entity)
 	require.NoError(err, "sign node entity")
 	err = node.Node.Registry.RegisterEntity(context.Background(), signedEnt)
 	require.NoError(err, "register test entity")
 
 	// Register the test runtime.
 	testRuntime.RegistrationTime = uint64(time.Now().Unix())
-	signedRt, err := registry.SignRuntime(*node.entityPrivKey, registry.RegisterRuntimeSignatureContext, testRuntime)
+	signedRt, err := registry.SignRuntime(node.entitySigner, registry.RegisterRuntimeSignatureContext, testRuntime)
 	require.NoError(err, "sign runtime descriptor")
 	err = node.Node.Registry.RegisterRuntime(context.Background(), signedRt)
 	require.NoError(err, "register test runtime")
@@ -238,7 +240,7 @@ func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
 
 	// Deregister the entity which should also deregister the node.
 	ts := registry.Timestamp(uint64(time.Now().Unix()))
-	signed, err := signature.SignSigned(*node.entityPrivKey, registry.DeregisterEntitySignatureContext, &ts)
+	signed, err := signature.SignSigned(node.entitySigner, registry.DeregisterEntitySignatureContext, &ts)
 	require.NoError(t, err, "SignSigned")
 
 	// Subscribe to entity deregistration event.

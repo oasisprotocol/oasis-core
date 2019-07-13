@@ -23,18 +23,12 @@ func PublicKeyFromTendermint(tk *tmed.PubKeyEd25519) signature.PublicKey {
 	return k
 }
 
-// PrivateKeyToTendermint converts a signature.PrivateKey to the
-// tendermint equivalent.
-func PrivateKeyToTendermint(k *signature.PrivateKey) tmed.PrivKeyEd25519 {
+// UnsafeSignerToTendermint coverts a signature.Signer to the tendermint
+// equivalent.
+//
+// TODO/hsm: Remove this.
+func UnsafeSignerToTendermint(signer signature.Signer) tmed.PrivKeyEd25519 {
 	var tk tmed.PrivKeyEd25519
-	copy(tk[:], (*k)[:])
+	copy(tk[:], signer.UnsafeBytes())
 	return tk
-}
-
-// PrivateKeyFromTendermint converts a tendermint private key to a
-// signature.PrivateKey
-func PrivateKeyFromTendermint(tk *tmed.PrivKeyEd25519) signature.PrivateKey {
-	var k signature.PrivateKey
-	_ = k.UnmarshalBinary(tk[:])
-	return k
 }

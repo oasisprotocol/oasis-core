@@ -30,8 +30,8 @@ type leveldbBackend struct {
 	nodedb    nodedb.NodeDB
 	rootCache *api.RootCache
 
-	signingKey *signature.PrivateKey
-	closeOnce  sync.Once
+	signer    signature.Signer
+	closeOnce sync.Once
 }
 
 func (b *leveldbBackend) ApplyBatch(
@@ -49,7 +49,7 @@ func (b *leveldbBackend) ApplyBatch(
 		newRoots = append(newRoots, *newRoot)
 	}
 
-	receipt, err := api.SignReceipt(b.signingKey, ns, dstRound, newRoots)
+	receipt, err := api.SignReceipt(b.signer, ns, dstRound, newRoots)
 	return []*api.Receipt{receipt}, err
 }
 
@@ -67,7 +67,7 @@ func (b *leveldbBackend) Apply(
 		return nil, err
 	}
 
-	receipt, err := api.SignReceipt(b.signingKey, ns, dstRound, []hash.Hash{*newRoot})
+	receipt, err := api.SignReceipt(b.signer, ns, dstRound, []hash.Hash{*newRoot})
 	return []*api.Receipt{receipt}, err
 }
 
@@ -122,7 +122,7 @@ func (b *leveldbBackend) Initialized() <-chan struct{} {
 // the provided path for the database.
 func New(
 	dbDir string,
-	signingKey *signature.PrivateKey,
+	signer signature.Signer,
 	lruSizeInBytes uint64,
 	applyLockLRUSlots uint64,
 	insecureSkipChecks bool,
@@ -140,10 +140,10 @@ func New(
 	}
 
 	b := &leveldbBackend{
-		logger:     logging.GetLogger("storage/leveldb"),
-		nodedb:     ndb,
-		rootCache:  rootCache,
-		signingKey: signingKey,
+		logger:    logging.GetLogger("storage/leveldb"),
+		nodedb:    ndb,
+		rootCache: rootCache,
+		signer:    signer,
 	}
 
 	return b, nil

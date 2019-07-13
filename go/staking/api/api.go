@@ -322,8 +322,8 @@ type SignedTransfer struct {
 }
 
 // SignTransfer serializes the Transfer and signs the result.
-func SignTransfer(privateKey signature.PrivateKey, xfer *Transfer) (*SignedTransfer, error) {
-	signed, err := signature.SignSigned(privateKey, TransferSignatureContext, xfer)
+func SignTransfer(signer signature.Signer, xfer *Transfer) (*SignedTransfer, error) {
+	signed, err := signature.SignSigned(signer, TransferSignatureContext, xfer)
 	if err != nil {
 		return nil, err
 	}
@@ -339,8 +339,8 @@ type SignedApproval struct {
 }
 
 // SignApproval serializes the Approval and signs the result.
-func SignApproval(privateKey signature.PrivateKey, approval *Approval) (*SignedApproval, error) {
-	signed, err := signature.SignSigned(privateKey, ApproveSignatureContext, approval)
+func SignApproval(signer signature.Signer, approval *Approval) (*SignedApproval, error) {
+	signed, err := signature.SignSigned(signer, ApproveSignatureContext, approval)
 	if err != nil {
 		return nil, err
 	}
@@ -356,8 +356,8 @@ type SignedWithdrawal struct {
 }
 
 // SignWithdrawal serializes the Withdrawal and signs the result.
-func SignWithdrawal(privateKey signature.PrivateKey, withdrawal *Withdrawal) (*SignedWithdrawal, error) {
-	signed, err := signature.SignSigned(privateKey, WithdrawSignatureContext, withdrawal)
+func SignWithdrawal(signer signature.Signer, withdrawal *Withdrawal) (*SignedWithdrawal, error) {
+	signed, err := signature.SignSigned(signer, WithdrawSignatureContext, withdrawal)
 	if err != nil {
 		return nil, err
 	}
@@ -373,8 +373,8 @@ type SignedBurn struct {
 }
 
 // SignBurn serializes the Burn and signs the result.
-func SignBurn(privateKey signature.PrivateKey, burn *Burn) (*SignedBurn, error) {
-	signed, err := signature.SignSigned(privateKey, BurnSignatureContext, burn)
+func SignBurn(signer signature.Signer, burn *Burn) (*SignedBurn, error) {
+	signed, err := signature.SignSigned(signer, BurnSignatureContext, burn)
 	if err != nil {
 		return nil, err
 	}
@@ -390,8 +390,8 @@ type SignedEscrow struct {
 }
 
 // SignEscrow serializes the Escrow and signs the result.
-func SignEscrow(privateKey signature.PrivateKey, escrow *Escrow) (*SignedEscrow, error) {
-	signed, err := signature.SignSigned(privateKey, EscrowSignatureContext, escrow)
+func SignEscrow(signer signature.Signer, escrow *Escrow) (*SignedEscrow, error) {
+	signed, err := signature.SignSigned(signer, EscrowSignatureContext, escrow)
 	if err != nil {
 		return nil, err
 	}
@@ -407,8 +407,8 @@ type SignedReclaimEscrow struct {
 }
 
 // SignReclaimEscrow serializes the Reclaim and signs the result.
-func SignReclaimEscrow(privateKey signature.PrivateKey, reclaim *ReclaimEscrow) (*SignedReclaimEscrow, error) {
-	signed, err := signature.SignSigned(privateKey, ReclaimEscrowSignatureContext, reclaim)
+func SignReclaimEscrow(signer signature.Signer, reclaim *ReclaimEscrow) (*SignedReclaimEscrow, error) {
+	signed, err := signature.SignSigned(signer, ReclaimEscrowSignatureContext, reclaim)
 	if err != nil {
 		return nil, err
 	}

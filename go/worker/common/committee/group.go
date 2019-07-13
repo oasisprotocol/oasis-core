@@ -203,7 +203,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		return err
 	}
 
-	publicIdentity := g.identity.NodeKey.Public()
+	publicIdentity := g.identity.NodeSigner.Public()
 
 	determineRole := func(c *scheduler.Committee) (nodes []*node.Node, leader int, role scheduler.Role, err error) {
 		leader = -1
@@ -430,7 +430,7 @@ func (g *Group) publishLocked(
 	msg.SpanContext = scBinary
 
 	// Publish batch to given committee.
-	publicIdentity := g.identity.NodeKey.Public()
+	publicIdentity := g.identity.NodeSigner.Public()
 	for index, member := range ci.Committee.Members {
 		if member.PublicKey.Equal(publicIdentity) {
 			// Do not publish to self.
