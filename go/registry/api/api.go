@@ -14,7 +14,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
 const (
@@ -155,7 +154,7 @@ type Backend interface {
 	// all runtimes will be sent immediately.
 	WatchRuntimes() (<-chan *Runtime, *pubsub.Subscription)
 
-	// Cleanup cleans up the regsitry backend.
+	// Cleanup cleans up the registry backend.
 	Cleanup()
 }
 
@@ -182,7 +181,6 @@ type NodeEvent struct {
 
 // NodeList is a per-epoch immutable node list.
 type NodeList struct {
-	Epoch epochtime.EpochTime
 	Nodes []*node.Node
 }
 

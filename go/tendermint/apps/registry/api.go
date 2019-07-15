@@ -31,6 +31,9 @@ var (
 	// descriptors).
 	TagNodesExpired = []byte("registry.nodes.expired")
 
+	// TagRegistryNodeListEpoch is an ABCI tag for registry epochs.
+	TagRegistryNodeListEpoch = []byte("registry.nodes.epoch")
+
 	// QueryApp is a query for filtering events processed by
 	// the registry application.
 	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)

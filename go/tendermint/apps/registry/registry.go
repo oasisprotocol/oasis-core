@@ -176,8 +176,9 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 }
 
 func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
-	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
-		return app.onEpochChange(ctx, epoch)
+	// XXX: With PR#1889 this can be a differnet interval.
+	if changed, registryEpoch := app.state.EpochChanged(app.timeSource); changed {
+		return app.onRegistryEpochChanged(ctx, registryEpoch)
 	}
 	return nil
 }
@@ -205,32 +206,37 @@ func (app *registryApplication) EndBlock(request types.RequestEndBlock) (types.R
 func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) {
 }
 
-func (app *registryApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error {
+func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, registryEpoch epochtime.EpochTime) error {
 	state := NewMutableState(app.state.DeliverTxTree())
 
 	nodes, err := state.GetNodes()
 	if err != nil {
-		app.logger.Error("onEpochChange: failed to get nodes",
+		app.logger.Error("onRegistryEpochChanged: failed to get nodes",
 			"err", err,
 		)
-		return errors.Wrap(err, "registry: onEpochChange: failed to get nodes")
+		return errors.Wrap(err, "registry: onRegistryEpochChanged: failed to get nodes")
 	}
 
 	var expiredNodes []*node.Node
 	for _, node := range nodes {
-		if epochtime.EpochTime(node.Expiration) >= epoch {
+		if epochtime.EpochTime(node.Expiration) >= registryEpoch {
 			continue
 		}
 		expiredNodes = append(expiredNodes, node)
 		state.removeNode(node)
 	}
+
+	// Emit the TagRegistryNodeListEpoch notification.
+	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
+	// Dummy value, should be ignored.
+	ctx.EmitTag(TagRegistryNodeListEpoch, []byte("1"))
+
 	if len(expiredNodes) == 0 {
 		return nil
 	}
 
 	// Iff any nodes have expired, force-emit the application tag so
 	// the change is picked up.
-	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 	ctx.EmitTag(TagNodesExpired, cbor.Marshal(expiredNodes))
 
 	return nil

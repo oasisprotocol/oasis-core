@@ -660,13 +660,18 @@ func (b *storageClientBackend) watcher(ctx context.Context) {
 			if ev == nil {
 				continue
 			}
-			b.logger.Debug("got new storage node list")
+			b.logger.Debug("got new storage node list", ev.Nodes)
 			if err := b.state.updateStorageNodeList(ctx, ev.Nodes); err != nil {
 				b.logger.Error("worker: failed to update storage list",
 					"err", err,
 				)
 				continue
 			}
+			// Update storage node connection.
+			b.updateNodeConnections()
+
+			b.logger.Debug("updated connections to nodes")
+
 		case committee := <-schedCh:
 			b.logger.Debug("worker: scheduler committee for epoch",
 				"committee", committee,
