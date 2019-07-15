@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/accessctl"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	commonGrpc "github.com/oasislabs/ekiden/go/common/grpc"
@@ -33,6 +34,9 @@ func (s *GrpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 	var ns common.Namespace
 	if err := ns.UnmarshalBinary(req.GetNamespace()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
+	}
+	if err := s.CheckAccessAllowed(ctx, accessctl.Action("Apply"), ns); err != nil {
+		return nil, errors.Wrap(err, "storage: access policy forbade access")
 	}
 
 	var srcRoot, dstRoot hash.Hash
@@ -65,6 +69,9 @@ func (s *GrpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) 
 	var ns common.Namespace
 	if err := ns.UnmarshalBinary(req.GetNamespace()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
+	}
+	if err := s.CheckAccessAllowed(ctx, accessctl.Action("ApplyBatch"), ns); err != nil {
+		return nil, errors.Wrap(err, "storage: access policy forbade access")
 	}
 
 	var ops []api.ApplyOp
@@ -275,6 +282,10 @@ func (s *GrpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffSe
 		return errors.Wrap(err, "storage: failed to unmarshal end root")
 	}
 
+	if err := s.CheckAccessAllowed(stream.Context(), accessctl.Action("GetDiff"), startRoot.Namespace); err != nil {
+		return errors.Wrap(err, "storage: access policy forbade access")
+	}
+
 	<-s.backend.Initialized()
 
 	it, err := s.backend.GetDiff(stream.Context(), startRoot, endRoot)
@@ -295,6 +306,10 @@ func (s *GrpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Stora
 	var root api.Root
 	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
 		return errors.Wrap(err, "storage: failed to unmarshal root")
+	}
+
+	if err := s.CheckAccessAllowed(stream.Context(), accessctl.Action("GetCheckpoint"), root.Namespace); err != nil {
+		return errors.Wrap(err, "storage: access policy forbade access")
 	}
 
 	<-s.backend.Initialized()
