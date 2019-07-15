@@ -11,11 +11,16 @@ import (
 type Subject string
 
 // SubjectFromX509Certificate returns a Subject from the given X.509
-// certificate. To do so, it computes the hash of the certificate's ASN.1 DER
-// representation.
+// certificate.
 func SubjectFromX509Certificate(cert *x509.Certificate) Subject {
+	return SubjectFromDER(cert.Raw)
+}
+
+// SubjectFromDER returns a Subject from the given certificate's ASN.1 DER
+// representation. To do so, it computes the hash of the DER representation.
+func SubjectFromDER(der []byte) Subject {
 	var h = hash.Hash{}
-	h.FromBytes(cert.Raw)
+	h.FromBytes(der)
 	return Subject(h.String())
 }
 
