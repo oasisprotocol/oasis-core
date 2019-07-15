@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 
 	"golang.org/x/crypto/ed25519"
 
@@ -23,34 +24,50 @@ var (
 	_ signature.SignerFactoryCtor = NewFactory
 	_ signature.SignerFactory     = (*Factory)(nil)
 	_ signature.Signer            = (*Signer)(nil)
+
+	rolePEMFiles = map[signature.SignerRole]string{
+		signature.SignerEntity: "entity.pem",
+		signature.SignerNode:   "identity.pem",
+		signature.SignerP2P:    "p2p.pem",
+	}
 )
 
-// NewFactory creates a new factory with the specified role.
-func NewFactory(role signature.SignerRole) signature.SignerFactory {
+// NewFactory creates a new factory with the specified roles, with the
+// specified dataDir.
+func NewFactory(dataDir string, roles ...signature.SignerRole) signature.SignerFactory {
 	return &Factory{
-		role: role,
+		roles:   append([]signature.SignerRole{}, roles...),
+		dataDir: dataDir,
 	}
 }
 
 // Factory is a PEM file backed SignerFactory.
 type Factory struct {
-	role signature.SignerRole
+	roles   []signature.SignerRole
+	dataDir string
 }
 
 // EnsureRole ensures that the SignerFactory is configured for the given
 // role.
 func (fac *Factory) EnsureRole(role signature.SignerRole) error {
-	if fac.role != role {
-		return signature.ErrRoleMismatch
+	for _, v := range fac.roles {
+		if v == role {
+			return nil
+		}
 	}
-	return nil
+	return signature.ErrRoleMismatch
 }
 
-// Generate will generate and persist a new private key to a PEM file at the
-// path `id`, and return a Signer ready for use, using entropy from `rng`.
-func (fac *Factory) Generate(id string, rng io.Reader) (signature.Signer, error) {
+// Generate will generate and persist a new private key corresponding to the
+// role, and return a Signer ready for use, using entropy from `rng`.
+func (fac *Factory) Generate(role signature.SignerRole, rng io.Reader) (signature.Signer, error) {
+	if err := fac.EnsureRole(role); err != nil {
+		return nil, err
+	}
 	// Ensure that we aren't trying to overrwrite an existing key.
-	f, err := os.Open(id) // nolint: gosec
+	fn := rolePEMFiles[role]
+	fn = filepath.Join(fac.dataDir, fn)
+	f, err := os.Open(fn)
 	if err == nil {
 		f.Close()
 		return nil, errors.New("signature/signer/file: key already exists")
@@ -73,17 +90,31 @@ func (fac *Factory) Generate(id string, rng io.Reader) (signature.Signer, error)
 	if err != nil {
 		return nil, err
 	}
-	if err = ioutil.WriteFile(id, buf, filePerm); err != nil {
+	if err = ioutil.WriteFile(fn, buf, filePerm); err != nil {
 		return nil, err
 	}
 
 	return signer, nil
 }
 
-// Load will load the private key corresonding to id, and return a Signer ready
-// for use.
-func (fac *Factory) Load(id string) (signature.Signer, error) {
-	f, err := os.Open(id) // nolint: gosec
+// Load will load the private key corresonding to the role, and return a Signer
+// ready for use.
+func (fac *Factory) Load(role signature.SignerRole) (signature.Signer, error) {
+	if err := fac.EnsureRole(role); err != nil {
+		return nil, err
+	}
+	fn := rolePEMFiles[role]
+	return fac.doLoad(filepath.Join(fac.dataDir, fn))
+}
+
+// ForceLoad is evil and should be destroyed, howeverr that requires
+// fixing deployment, and the entity key for node registration mess.
+func (fac *Factory) ForceLoad(fn string) (signature.Signer, error) {
+	return fac.doLoad(fn)
+}
+
+func (fac *Factory) doLoad(fn string) (signature.Signer, error) {
+	f, err := os.Open(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, signature.ErrNotExist

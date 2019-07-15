@@ -10,7 +10,6 @@ import (
 	"github.com/cenkalti/backoff"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core"
-	libp2pCrypto "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/viper"
@@ -250,11 +249,7 @@ func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
 	}
 	port := uint16(viper.GetInt(cfgP2pPort))
 
-	// TODO/hsm: Use a separate key for authenticating P2P communication.
-	p2pKey, err := libp2pCrypto.UnmarshalEd25519PrivateKey(identity.NodeSigner.UnsafeBytes())
-	if err != nil {
-		return nil, err
-	}
+	p2pKey := signerToPrivKey(identity.P2PSigner)
 
 	var registerAddresses []multiaddr.Multiaddr
 	for _, addr := range addresses {

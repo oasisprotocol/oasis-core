@@ -18,8 +18,7 @@ import (
 )
 
 const (
-	entityFilename  = "entity.json"
-	privKeyFilename = "entity.pem"
+	entityFilename = "entity.json"
 
 	fileMode = 0600
 )
@@ -110,13 +109,10 @@ func LoadOrGenerate(baseDir string, signerFactory signature.SignerFactory) (*Ent
 
 // Load loads an existing entity from disk.
 func Load(baseDir string, signerFactory signature.SignerFactory) (*Entity, signature.Signer, error) {
-	entityPath, privKeyPath := getPaths(baseDir)
+	entityPath := filepath.Join(baseDir, entityFilename)
 
 	// Load the entity signer.
-	if err := signerFactory.EnsureRole(signature.SignerEntity); err != nil {
-		return nil, nil, err
-	}
-	signer, err := signerFactory.Load(privKeyPath)
+	signer, err := signerFactory.Load(signature.SignerEntity)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -136,13 +132,10 @@ func Load(baseDir string, signerFactory signature.SignerFactory) (*Entity, signa
 
 // Generate generates a new entity and serializes it to disk.
 func Generate(baseDir string, signerFactory signature.SignerFactory) (*Entity, signature.Signer, error) {
-	entityPath, privKeyPath := getPaths(baseDir)
+	entityPath := filepath.Join(baseDir, entityFilename)
 
 	// Generate a new entity.
-	if err := signerFactory.EnsureRole(signature.SignerEntity); err != nil {
-		return nil, nil, err
-	}
-	signer, err := signerFactory.Generate(privKeyPath, rand.Reader)
+	signer, err := signerFactory.Generate(signature.SignerEntity, rand.Reader)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -162,10 +155,6 @@ func Generate(baseDir string, signerFactory signature.SignerFactory) (*Entity, s
 // TestEntity returns the built-in test entity and signer.
 func TestEntity() (*Entity, signature.Signer, error) {
 	return &testEntity, testEntitySigner, nil
-}
-
-func getPaths(baseDir string) (string, string) {
-	return filepath.Join(baseDir, entityFilename), filepath.Join(baseDir, privKeyFilename)
 }
 
 // SignedEntity is a signed blob containing a CBOR-serialized Entity.
