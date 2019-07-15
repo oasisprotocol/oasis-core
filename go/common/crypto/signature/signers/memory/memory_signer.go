@@ -30,7 +30,7 @@ func (fac *Factory) EnsureRole(role signature.SignerRole) error {
 
 // Generate will generate a new private key and return a Signer ready for use,
 // using entropy from `rng`.
-func (fac *Factory) Generate(id string, rng io.Reader) (signature.Signer, error) {
+func (fac *Factory) Generate(role signature.SignerRole, rng io.Reader) (signature.Signer, error) {
 	// Generate a new private key.
 	_, privateKey, err := ed25519.GenerateKey(rng)
 	if err != nil {
@@ -43,7 +43,7 @@ func (fac *Factory) Generate(id string, rng io.Reader) (signature.Signer, error)
 }
 
 // Load will return an error, as the factory does not support persistence.
-func (fac *Factory) Load(id string) (signature.Signer, error) {
+func (fac *Factory) Load(role signature.SignerRole) (signature.Signer, error) {
 	return nil, signature.ErrNotExist
 }
 
@@ -94,7 +94,7 @@ func (s *Signer) UnsafeBytes() []byte {
 // NewSigner creates a new signer.
 func NewSigner(entropy io.Reader) (signature.Signer, error) {
 	var factory Factory
-	return factory.Generate("", entropy)
+	return factory.Generate(signature.SignerUnknown, entropy)
 }
 
 // NewTestSigner generates a new signer deterministically from

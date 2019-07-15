@@ -48,7 +48,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	}
 
 	// TODO/hsm: Configure factory dynamically.
-	nodeSignerFactory := fileSigner.NewFactory(signature.SignerNode)
+	nodeSignerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode)
 	id, err := identity.LoadOrGenerate(dataDir, nodeSignerFactory)
 	if err != nil {
 		logger.Error("failed to load or generate node identity",
@@ -126,7 +126,7 @@ func loadEntity(dataDir string) (*entity.Entity, signature.Signer, error) {
 	}
 
 	// TODO/hsm: Configure factory dynamically.
-	entitySignerFactory := fileSigner.NewFactory(signature.SignerEntity)
+	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
 	return entity.Load(dataDir, entitySignerFactory)
 }
 

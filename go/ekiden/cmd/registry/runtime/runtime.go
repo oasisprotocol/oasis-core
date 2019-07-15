@@ -385,7 +385,7 @@ func loadEntity(dataDir string) (*entity.Entity, signature.Signer, error) {
 	}
 
 	// TODO/hsm: Configure factory dynamically.
-	entitySignerFactory := fileSigner.NewFactory(signature.SignerEntity)
+	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
 	return entity.Load(dataDir, entitySignerFactory)
 }
 

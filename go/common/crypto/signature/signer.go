@@ -32,10 +32,11 @@ const (
 	SignerUnknown SignerRole = iota
 	SignerEntity
 	SignerNode
+	SignerP2P
 )
 
 // SignerFactoryCtor is an SignerFactory constructor.
-type SignerFactoryCtor func(SignerRole) SignerFactory
+type SignerFactoryCtor func(string, ...SignerRole) SignerFactory
 
 // SignerFactory is the opaque factory interface for Signers.
 type SignerFactory interface {
@@ -44,13 +45,13 @@ type SignerFactory interface {
 	EnsureRole(role SignerRole) error
 
 	// Generate will generate and persist an new private key corresponding to
-	// id, and return a Signer ready for use.  Certain implementations require
-	// an entropy source to be provided.
-	Generate(id string, rng io.Reader) (Signer, error)
+	// the provided role, and return a Signer ready for use.  Certain
+	// implementations require an entropy source to be provided.
+	Generate(role SignerRole, rng io.Reader) (Signer, error)
 
-	// Load will load the private key corresonding to id, and return
-	// a Signer ready for use.
-	Load(id string) (Signer, error)
+	// Load will load the private key corresonding to the provided role, and
+	// return a Signer ready for use.
+	Load(role SignerRole) (Signer, error)
 }
 
 // Signer is an opaque interface for private keys that is capable of producing

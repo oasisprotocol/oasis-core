@@ -297,7 +297,7 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 	}
 
 	// TODO/hsm: Configure factory dynamically.
-	entitySignerFactory := fileSigner.NewFactory(signature.SignerEntity)
+	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
 	if generate {
 		return entity.Generate(dataDir, entitySignerFactory)
 	}

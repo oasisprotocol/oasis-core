@@ -23,8 +23,6 @@ const (
 	// NodeKeyPubFilename is the filename of the PEM encoded node public key.
 	NodeKeyPubFilename = "identity_pub.pem"
 
-	nodeKeyPrivFilename = "identity.pem"
-
 	tlsKeyFilename  = "tls_identity.pem"
 	tlsCertFilename = "tls_identity_cert.pem"
 	tlsKeyPEMType   = "EC PRIVATE KEY"
@@ -64,20 +62,15 @@ func LoadOrGenerate(dataDir string, signerFactory signature.SignerFactory) (*Ide
 }
 
 func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, shouldGenerate bool) (*Identity, error) {
-	if err := signerFactory.EnsureRole(signature.SignerNode); err != nil {
-		return nil, err
-	}
-
 	// Node signer.
-	keyID := filepath.Join(dataDir, nodeKeyPrivFilename)
-	nodeSigner, err := signerFactory.Load(keyID)
+	nodeSigner, err := signerFactory.Load(signature.SignerNode)
 	switch err {
 	case nil:
 	case signature.ErrNotExist:
 		if !shouldGenerate {
 			return nil, err
 		}
-		if nodeSigner, err = signerFactory.Generate(keyID, rand.Reader); err != nil {
+		if nodeSigner, err = signerFactory.Generate(signature.SignerNode, rand.Reader); err != nil {
 			return nil, err
 		}
 	default:

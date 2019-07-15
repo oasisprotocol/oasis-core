@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,18 +21,17 @@ func TestFileSigner(t *testing.T) {
 	require.NoError(err, "TempDir()")
 	defer os.RemoveAll(tmpDir)
 
-	fn := filepath.Join(tmpDir, "private.pem")
-
-	factory := NewFactory(signature.SignerUnknown)
+	rolePEMFiles[signature.SignerUnknown] = "unit_test.pem"
+	factory := NewFactory(tmpDir, signature.SignerUnknown)
 
 	// Missing, no generate.
-	_, err = factory.Load(fn)
+	_, err = factory.Load(signature.SignerUnknown)
 	require.Error(err, "Load(fn), missing")
 
 	// Generate.
 	var signer signature.Signer
-	signer, err = factory.Generate(fn, rand.Reader)
-	require.NoError(err, "Generate(fn, rand.Reader)")
+	signer, err = factory.Generate(signature.SignerUnknown, rand.Reader)
+	require.NoError(err, "Generate(SignerUnknown, rand.Reader)")
 	require.NotEqual(zeroSigner, signer, "PrivateKey is random")
 	require.NotEqual(zeroPubKey, signer.Public(), "PublicKey is sensible")
 
@@ -48,7 +46,7 @@ func TestFileSigner(t *testing.T) {
 	require.Equal(actualSigner, &actualSigner2, "PEM round trip")
 
 	// Exists.
-	signer2, err := factory.Load(fn)
+	signer2, err := factory.Load(signature.SignerUnknown)
 	require.NoError(err, "LoadPEM(fn, nil), exists")
 	require.Equal(signer, signer2, "Generated = Loaded")
 }
