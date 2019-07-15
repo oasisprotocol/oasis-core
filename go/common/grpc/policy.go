@@ -65,7 +65,7 @@ func (c *RuntimePolicyChecker) CheckAccessAllowed(
 		return fmt.Errorf("grpc: unexpected number of peer certificates: %d", nPeerCerts)
 	}
 	peerCert := tlsAuth.State.PeerCertificates[0]
-	subject := accessctl.SubjectFromCertificate(peerCert)
+	subject := accessctl.SubjectFromX509Certificate(peerCert)
 	policy := c.accessPolicies[runtimeID.ToMapKey()]
 	if policy == nil || !policy.IsAllowed(subject, method) {
 		return fmt.Errorf("grpc: calling %v method for runtime %v not allowed for client %v", method, runtimeID, peerCert.Subject)

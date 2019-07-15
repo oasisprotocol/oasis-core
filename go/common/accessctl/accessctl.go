@@ -10,9 +10,10 @@ import (
 // Subject is an access control subject.
 type Subject string
 
-// SubjectFromPublicKey returns a Subject from the given X.509 certificate.
-// To do so, it computes the hash of the certificate's ASN.1 DER representation.
-func SubjectFromCertificate(cert *x509.Certificate) Subject {
+// SubjectFromX509Certificate returns a Subject from the given X.509
+// certificate. To do so, it computes the hash of the certificate's ASN.1 DER
+// representation.
+func SubjectFromX509Certificate(cert *x509.Certificate) Subject {
 	var h = hash.Hash{}
 	h.FromBytes(cert.Raw)
 	return Subject(h.String())

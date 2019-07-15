@@ -56,7 +56,7 @@ func TestSubjectFromCertificate(t *testing.T) {
 	x509Cert, err := x509.ParseCertificate(ident.TLSCertificate.Certificate[0])
 	require.NoError(err, "Failed to parse X.509 certificate from TLS certificate")
 
-	sub := SubjectFromCertificate(x509Cert)
+	sub := SubjectFromX509Certificate(x509Cert)
 	require.IsTypef(Subject(""), sub, "Subject %v should of of type Subject")
 
 	policy := NewPolicy()

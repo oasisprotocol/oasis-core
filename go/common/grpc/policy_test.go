@@ -207,7 +207,7 @@ func TestAccessPolicy(t *testing.T) {
 	)
 
 	// Add a policy rule to allow the client to call Ping.
-	subject := accessctl.SubjectFromCertificate(clientX509Cert)
+	subject := accessctl.SubjectFromX509Certificate(clientX509Cert)
 	policy.Allow(subject, "Ping")
 
 	res, err := client.Ping(ctx, &PingQuery{testNs})
