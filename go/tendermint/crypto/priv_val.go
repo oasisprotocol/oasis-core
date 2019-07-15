@@ -55,12 +55,12 @@ type privVal struct {
 	privval.FilePVLastSignState
 	PublicKey signature.PublicKey `codec:"public_key"`
 
-	filePath   string
-	privateKey tmcrypto.PrivKey
+	filePath string
+	signer   signature.Signer
 }
 
 func (pv *privVal) GetPubKey() tmcrypto.PubKey {
-	return pv.privateKey.PubKey()
+	return PublicKeyToTendermint(&pv.PublicKey)
 }
 
 func (pv *privVal) SignVote(chainID string, vote *tmtypes.Vote) error {
@@ -84,7 +84,7 @@ func (pv *privVal) SignVote(chainID string, vote *tmtypes.Vote) error {
 		return err
 	}
 
-	sig, err := pv.privateKey.Sign(signBytes)
+	sig, err := pv.signer.Sign(signBytes)
 	if err != nil {
 		return errors.Wrap(err, "tendermint/crypto: failed to sign vote")
 	}
@@ -117,7 +117,7 @@ func (pv *privVal) SignProposal(chainID string, proposal *tmtypes.Proposal) erro
 		return err
 	}
 
-	sig, err := pv.privateKey.Sign(signBytes)
+	sig, err := pv.signer.Sign(signBytes)
 	if err != nil {
 		return errors.Wrap(err, "tendermint/crypto: failed to sign proposal")
 	}
@@ -151,9 +151,10 @@ func (pv *privVal) save() error {
 func LoadOrGeneratePrivVal(baseDir string, signer signature.Signer) (tmtypes.PrivValidator, error) {
 	fn := filepath.Join(baseDir, privValFileName)
 
-	var pv privVal
-
-	// TODO/hsm: Use signature.Signer instead of doing key conversion.
+	pv := &privVal{
+		filePath: fn,
+		signer:   signer,
+	}
 
 	b, err := ioutil.ReadFile(fn)
 	if err == nil {
@@ -165,12 +166,7 @@ func LoadOrGeneratePrivVal(baseDir string, signer signature.Signer) (tmtypes.Pri
 		if !signer.Public().Equal(pv.PublicKey) {
 			return nil, errors.Wrap(err, "tendermint/crypto: public key mismatch, state corruption?")
 		}
-
-		pv.filePath = fn
-		pv.privateKey = UnsafeSignerToTendermint(signer)
 	} else if os.IsNotExist(err) {
-		pv.filePath = fn
-		pv.privateKey = UnsafeSignerToTendermint(signer)
 		pv.PublicKey = signer.Public()
 
 		if err = pv.save(); err != nil {
@@ -180,5 +176,5 @@ func LoadOrGeneratePrivVal(baseDir string, signer signature.Signer) (tmtypes.Pri
 		return nil, errors.Wrap(err, "tendermint/crypto: failed to load private validator file")
 	}
 
-	return &pv, nil
+	return pv, nil
 }
