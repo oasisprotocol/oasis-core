@@ -167,7 +167,7 @@ type ApplicationServer struct {
 
 // Start starts the ApplicationServer.
 func (a *ApplicationServer) Start() error {
-	return nil
+	return a.mux.checkDependencies()
 }
 
 // Stop stops the ApplicationServer.
@@ -646,15 +646,6 @@ func (mux *abciMux) doRegister(app Application) error {
 	if mux.appsByName[name] != nil {
 		return fmt.Errorf("mux: application already registered: '%s'", name)
 	}
-	var missingDeps []string
-	for _, dep := range app.Dependencies() {
-		if _, ok := mux.appsByName[dep]; !ok {
-			missingDeps = append(missingDeps, dep)
-		}
-	}
-	if missingDeps != nil {
-		return fmt.Errorf("mux: missing dependencies %v needed for %s", missingDeps, name)
-	}
 	if app.Blessed() {
 		// Enforce the 1 blessed app limitation.
 		if mux.appBlessed != nil {
@@ -687,6 +678,21 @@ func (mux *abciMux) rebuildAppLexOrdering() {
 	for _, name := range appOrder {
 		mux.appsByLexOrder = append(mux.appsByLexOrder, mux.appsByName[name])
 	}
+}
+
+func (mux *abciMux) checkDependencies() error {
+	var missingDeps [][2]string
+	for neededFor, app := range mux.appsByName {
+		for _, dep := range app.Dependencies() {
+			if _, ok := mux.appsByName[dep]; !ok {
+				missingDeps = append(missingDeps, [2]string{dep, neededFor})
+			}
+		}
+	}
+	if missingDeps != nil {
+		return fmt.Errorf("mux: missing dependencies %v", missingDeps)
+	}
+	return nil
 }
 
 func (mux *abciMux) extractAppFromKeyPath(s string) (Application, error) {
