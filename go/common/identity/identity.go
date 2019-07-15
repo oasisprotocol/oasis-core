@@ -23,6 +23,9 @@ const (
 	// NodeKeyPubFilename is the filename of the PEM encoded node public key.
 	NodeKeyPubFilename = "identity_pub.pem"
 
+	// P2PKeyPubFilename is the filename of the PEM encoded p2p public key.
+	P2PKeyPubFilename = "p2p_pub.pem"
+
 	tlsKeyFilename  = "tls_identity.pem"
 	tlsCertFilename = "tls_identity_cert.pem"
 	tlsKeyPEMType   = "EC PRIVATE KEY"
@@ -45,6 +48,8 @@ var tlsTemplate = x509.Certificate{
 type Identity struct {
 	// NodeSigner is a node identity key signer.
 	NodeSigner signature.Signer
+	// P2PSigner is a node P2P link key signer.
+	P2PSigner signature.Signer
 	// TLSKey is a private key used for TLS connections.
 	TLSKey *ecdsa.PrivateKey
 	// TLSCertificate is a certificate that can be used for TLS.
@@ -62,25 +67,34 @@ func LoadOrGenerate(dataDir string, signerFactory signature.SignerFactory) (*Ide
 }
 
 func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, shouldGenerate bool) (*Identity, error) {
-	// Node signer.
-	nodeSigner, err := signerFactory.Load(signature.SignerNode)
-	switch err {
-	case nil:
-	case signature.ErrNotExist:
-		if !shouldGenerate {
+	var signers []signature.Signer
+	for _, v := range []struct {
+		role  signature.SignerRole
+		pubFn string
+	}{
+		{signature.SignerNode, NodeKeyPubFilename},
+		{signature.SignerP2P, P2PKeyPubFilename},
+	} {
+		signer, err := signerFactory.Load(v.role)
+		switch err {
+		case nil:
+		case signature.ErrNotExist:
+			if !shouldGenerate {
+				return nil, err
+			}
+			if signer, err = signerFactory.Generate(v.role, rand.Reader); err != nil {
+				return nil, err
+			}
+		default:
 			return nil, err
 		}
-		if nodeSigner, err = signerFactory.Generate(signature.SignerNode, rand.Reader); err != nil {
+
+		var checkPub signature.PublicKey
+		if err = checkPub.LoadPEM(filepath.Join(dataDir, v.pubFn), signer); err != nil {
 			return nil, err
 		}
-	default:
 
-		return nil, err
-	}
-
-	var nodePub signature.PublicKey
-	if err = nodePub.LoadPEM(filepath.Join(dataDir, NodeKeyPubFilename), nodeSigner); err != nil {
-		return nil, err
+		signers = append(signers, signer)
 	}
 
 	// TLS certificate.
@@ -100,7 +114,8 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 	}
 
 	return &Identity{
-		NodeSigner:     nodeSigner,
+		NodeSigner:     signers[0],
+		P2PSigner:      signers[1],
 		TLSKey:         tlsCert.PrivateKey.(*ecdsa.PrivateKey),
 		TLSCertificate: tlsCert,
 	}, nil
