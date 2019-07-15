@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/workerpool"
 	roothashApi "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/storage"
 	storageApi "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/client"
 	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
@@ -101,9 +102,10 @@ type Node struct {
 
 	logger *logging.Logger
 
-	localStorage   storageApi.LocalBackend
-	storageClient  storageApi.ClientBackend
-	undefinedRound uint64
+	localStorage      storageApi.LocalBackend
+	storageClient     storageApi.ClientBackend
+	storageGrpcServer *storage.GrpcServer
+	undefinedRound    uint64
 
 	fetchPool *workerpool.Pool
 
@@ -125,6 +127,7 @@ type Node struct {
 
 func NewNode(
 	commonNode *committee.Node,
+	storageGrpcServer *storage.GrpcServer,
 	fetchPool *workerpool.Pool,
 	db *bolt.DB,
 	bucket []byte,
@@ -139,7 +142,8 @@ func NewNode(
 
 		logger: logging.GetLogger("worker/storage/committee").With("runtime_id", commonNode.RuntimeID),
 
-		localStorage: localStorage,
+		localStorage:      localStorage,
+		storageGrpcServer: storageGrpcServer,
 
 		fetchPool: fetchPool,
 
