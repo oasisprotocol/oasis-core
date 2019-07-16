@@ -31,6 +31,7 @@ import (
 	storageTests "github.com/oasislabs/ekiden/go/storage/tests"
 	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
 	computeWorkerTests "github.com/oasislabs/ekiden/go/worker/compute/tests"
+	registrationWorker "github.com/oasislabs/ekiden/go/worker/registration"
 	storageWorkerTests "github.com/oasislabs/ekiden/go/worker/storage/tests"
 	txnschedulerCommittee "github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
 	txnschedulerWorkerTests "github.com/oasislabs/ekiden/go/worker/txnscheduler/tests"
@@ -120,8 +121,12 @@ func newTestNode(t *testing.T) *testNode {
 	require.NoError(err, "create data dir")
 
 	signerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity, signature.SignerEntityNodeRegistration)
-	entity, entitySigner, _, err := entity.LoadOrGenerate(dataDir, signerFactory)
+	ent, entitySigner, subkeySigners, err := entity.LoadOrGenerate(dataDir, signerFactory)
 	require.NoError(err, "create test entity")
+	registrationWorker.SetDebugUnitTestConfig(&registrationWorker.DebugUnitTestConfig{
+		Entity:                 ent.ID,
+		NodeRegistrationSigner: subkeySigners[entity.SubkeyNodeRegistration],
+	})
 
 	viper.Set("datadir", dataDir)
 	viper.Set("log.file", filepath.Join(dataDir, "test-node.log"))
@@ -132,7 +137,7 @@ func newTestNode(t *testing.T) *testNode {
 	n := &testNode{
 		runtimeID:    testRuntime.ID,
 		dataDir:      dataDir,
-		entity:       entity,
+		entity:       ent,
 		entitySigner: entitySigner,
 		start:        time.Now(),
 	}

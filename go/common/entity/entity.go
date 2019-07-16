@@ -75,7 +75,7 @@ type Entity struct {
 	ID signature.PublicKey `codec:"id"`
 
 	// Subkeys containts the subsidiary signing keys for the entity.
-	Subkeys map[SubkeyRole]signature.PublicKey `codec:"subkeys"`
+	Subkeys map[SubkeyRole]*signature.PublicKey `codec:"subkeys"`
 
 	// Time of registration.
 	RegistrationTime uint64 `codec:"registration_time"`
@@ -90,7 +90,7 @@ func (e *Entity) String() string {
 func (e *Entity) Clone() common.Cloneable {
 	entityCopy := &Entity{
 		ID:               e.ID,
-		Subkeys:          make(map[SubkeyRole]signature.PublicKey),
+		Subkeys:          make(map[SubkeyRole]*signature.PublicKey),
 		RegistrationTime: e.RegistrationTime,
 	}
 	for k, v := range e.Subkeys {
@@ -109,13 +109,13 @@ func (e *Entity) FromProto(pb *pbCommon.Entity) error {
 	if err := e.ID.UnmarshalBinary(pb.GetId()); err != nil {
 		return err
 	}
-	e.Subkeys = make(map[SubkeyRole]signature.PublicKey)
+	e.Subkeys = make(map[SubkeyRole]*signature.PublicKey)
 	for k, v := range e.Subkeys {
 		var subPublic signature.PublicKey
-		if err := subPublic.UnmarshalBinary(v); err != nil {
+		if err := subPublic.UnmarshalBinary(*v); err != nil {
 			return err
 		}
-		e.Subkeys[k] = subPublic
+		e.Subkeys[k] = &subPublic
 	}
 	e.RegistrationTime = pb.GetRegistrationTime()
 
@@ -150,6 +150,18 @@ func (e *Entity) MarshalCBOR() []byte {
 // UnmarshalCBOR deserializes a CBOR byte vector into given type.
 func (e *Entity) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, e)
+}
+
+// GetSubkey gets the specifed subkey.
+func (e *Entity) GetSubkey(r SubkeyRole) signature.PublicKey {
+	if e.Subkeys == nil {
+		return nil
+	}
+	subkey, ok := e.Subkeys[r]
+	if !ok {
+		return nil
+	}
+	return *subkey
 }
 
 // LoadOrGenerate loads or generates an entity (to/on disk).
@@ -236,7 +248,7 @@ func Generate(baseDir string, signerFactory signature.SignerFactory) (*Entity, s
 
 	ent := &Entity{
 		ID:               signer.Public(),
-		Subkeys:          make(map[SubkeyRole]signature.PublicKey),
+		Subkeys:          make(map[SubkeyRole]*signature.PublicKey),
 		RegistrationTime: uint64(time.Now().Unix()),
 	}
 
@@ -247,7 +259,8 @@ func Generate(baseDir string, signerFactory signature.SignerFactory) (*Entity, s
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		ent.Subkeys[v] = subSigner.Public()
+		subPublic := subSigner.Public()
+		ent.Subkeys[v] = &subPublic
 		subSigners[v] = subSigner
 	}
 
@@ -316,12 +329,13 @@ func init() {
 	testEntity.RegistrationTime = uint64(time.Date(2019, 6, 1, 0, 0, 0, 0, time.UTC).Unix())
 
 	// Deal with the test subkeys.
-	testEntity.Subkeys = make(map[SubkeyRole]signature.PublicKey)
+	testEntity.Subkeys = make(map[SubkeyRole]*signature.PublicKey)
 	testEntitySubSigners = make(map[SubkeyRole]signature.Signer)
 
 	for _, v := range allSubkeyRoles {
 		signer := memorySigner.NewTestSigner("ekiden test entity " + v.String())
-		testEntity.Subkeys[v] = signer.Public()
+		subPublic := signer.Public()
+		testEntity.Subkeys[v] = &subPublic
 		testEntitySubSigners[v] = signer
 	}
 }

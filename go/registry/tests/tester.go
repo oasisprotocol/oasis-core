@@ -323,8 +323,9 @@ func EnsureRegistryEmpty(t *testing.T, backend api.Backend) {
 // TestEntity is a testing Entity and some common pre-generated/signed
 // blobs useful for testing.
 type TestEntity struct {
-	Entity *entity.Entity
-	Signer signature.Signer
+	Entity        *entity.Entity
+	Signer        signature.Signer
+	SubkeySigners map[entity.SubkeyRole]signature.Signer
 
 	SignedRegistration   *entity.SignedEntity
 	SignedDeregistration *signature.Signed
@@ -387,7 +388,8 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 		}
 		nod.Node.Addresses = append(nod.Node.Addresses, *addr)
 
-		signed, err := signature.SignSigned(ent.Signer, api.RegisterNodeSignatureContext, nod.Node)
+		nodeRegSigner := ent.SubkeySigners[entity.SubkeyNodeRegistration]
+		signed, err := signature.SignSigned(nodeRegSigner, api.RegisterNodeSignatureContext, nod.Node)
 		if err != nil {
 			return nil, err
 		}
@@ -413,10 +415,16 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 		if ent.Signer, err = memorySigner.NewSigner(rng); err != nil {
 			return nil, err
 		}
+		ent.SubkeySigners = make(map[entity.SubkeyRole]signature.Signer)
+		nodeRegSigner, _ := memorySigner.NewSigner(rng)
+		ent.SubkeySigners[entity.SubkeyNodeRegistration] = nodeRegSigner
 		ent.Entity = &entity.Entity{
 			ID:               ent.Signer.Public(),
+			Subkeys:          make(map[entity.SubkeyRole]*signature.PublicKey),
 			RegistrationTime: uint64(time.Now().Unix()),
 		}
+		nodeRegPublic := nodeRegSigner.Public()
+		ent.Entity.Subkeys[entity.SubkeyNodeRegistration] = &nodeRegPublic
 
 		signed, err := signature.SignSigned(ent.Signer, api.RegisterEntitySignatureContext, ent.Entity)
 		if err != nil {

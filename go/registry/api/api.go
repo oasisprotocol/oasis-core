@@ -248,7 +248,7 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
-func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, now time.Time, isGenesis bool) (*node.Node, error) {
+func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, nodeEntity *entity.Entity, now time.Time, isGenesis bool) (*node.Node, error) {
 	// XXX: Ensure node is well-formed.
 	var n node.Node
 	if sigNode == nil {
@@ -269,8 +269,24 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, no
 		)
 		return nil, ErrInvalidSignature
 	}
-	if sigNode.Signed.Signature.SanityCheck(n.EntityID) != nil {
-		logger.Error("RegisterNode: not signed by entity",
+	if !nodeEntity.ID.Equal(n.EntityID) {
+		logger.Error("RegisterNode: BUG: node entity does not match provided entity",
+			"node", n,
+			"entity", nodeEntity,
+		)
+		return nil, ErrInvalidArgument
+	}
+
+	nodeRegKey := nodeEntity.GetSubkey(entity.SubkeyNodeRegistration)
+	if nodeRegKey == nil {
+		logger.Error("RegisterNode: entity lacks node registration subkey",
+			"node", n,
+			"entity", nodeEntity,
+		)
+		return nil, ErrInvalidArgument
+	}
+	if sigNode.Signed.Signature.SanityCheck(nodeRegKey) != nil {
+		logger.Error("RegisterNode: not signed by entity node registration subkey",
 			"signed_node", sigNode,
 			"node", n,
 		)

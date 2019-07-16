@@ -362,7 +362,17 @@ func (app *registryApplication) registerNode(
 	state *MutableState,
 	sigNode *node.SignedNode,
 ) error {
-	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, ctx.Now(), ctx.IsInitChain())
+	// Reach into the node to figure out the owning entity.
+	var untrustedNode node.Node
+	if err := untrustedNode.UnmarshalCBOR(sigNode.Blob); err != nil {
+		return err
+	}
+	untrustedEntity, err := state.getEntity(untrustedNode.EntityID)
+	if err != nil {
+		return nil
+	}
+
+	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain())
 	if err != nil {
 		return err
 	}
