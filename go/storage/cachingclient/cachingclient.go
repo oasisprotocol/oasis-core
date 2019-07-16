@@ -5,12 +5,15 @@ package cachingclient
 import (
 	"context"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	lrudb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/lru"
@@ -27,7 +30,10 @@ const (
 	cfgCacheSize = "storage.cachingclient.cache_size"
 )
 
-var _ api.Backend = (*cachingClientBackend)(nil)
+var (
+	_ api.Backend       = (*cachingClientBackend)(nil)
+	_ api.ClientBackend = (*cachingClientBackend)(nil)
+)
 
 type cachingClientBackend struct {
 	logger *logging.Logger
@@ -35,6 +41,23 @@ type cachingClientBackend struct {
 	remote    api.Backend
 	local     nodedb.NodeDB
 	rootCache *api.RootCache
+}
+
+func (b *cachingClientBackend) GetConnectedNodes() []*node.Node {
+	if clientBackend, ok := b.remote.(api.ClientBackend); ok {
+		return clientBackend.GetConnectedNodes()
+	}
+	return []*node.Node{}
+}
+
+func (b *cachingClientBackend) WatchRuntime(id signature.PublicKey) error {
+	if clientBackend, ok := b.remote.(api.ClientBackend); ok {
+		return clientBackend.WatchRuntime(id)
+	}
+	b.logger.Warn("cachingclient not watching runtime since remote is not ClientBackend",
+		"runtime_id", id,
+	)
+	return errors.New("storage/cachingclient: remote not ClientBackend")
 }
 
 func (b *cachingClientBackend) Apply(

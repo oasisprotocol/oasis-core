@@ -1,30 +1,21 @@
 // Package client implements a client for Ekiden storage nodes.
 // The client obtains storage info by following scheduler committees.
-// NOTE: The client assumes committees for all runtimes share the same
-// storage committee.
 package client
 
 import (
 	"context"
 	cryptorand "crypto/rand"
-	"crypto/x509"
 	"io"
 	"math/rand"
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/resolver"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
-	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/grpc/storage"
@@ -35,190 +26,94 @@ import (
 	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
-const (
-	// BackendName is the name of this implementation.
-	BackendName = "client"
-
-	// Address to connect to with the storage client.
-	cfgDebugClientAddress = "storage.debug.client.address"
-
-	// Path to certificate file for grpc
-	cfgDebugClientTLSCertFile = "storage.debug.client.tls"
-)
-
 var (
 	_ api.Backend       = (*storageClientBackend)(nil)
 	_ api.ClientBackend = (*storageClientBackend)(nil)
 )
 
-// ErrStorageNotAvailable is the error returned when a storage is not
-// available.
-var ErrStorageNotAvailable = errors.New("storage client: storage not available")
+var (
+	// ErrNoWatcher is an error when watcher for runtime is missing.
+	ErrNoWatcher = errors.New("storage/client: no watcher for runtime")
+	// ErrStorageNotAvailable is the error returned when no storage node is available.
+	ErrStorageNotAvailable = errors.New("storage/client: storage not available")
+)
 
 // storageClientBackend contains all information about the client storage API
 // backend, including the backend state and the connected storage committee
 // nodes' state.
 type storageClientBackend struct {
+	ctx context.Context
+
 	logger *logging.Logger
+
+	initCh       chan struct{}
+	signaledInit bool
+
+	debugRuntimeID signature.PublicKey
 
 	scheduler scheduler.Backend
 	registry  registry.Backend
 
-	state               *backendState
-	connectedNodesState *connectedNodesState
+	runtimeWatchersLock sync.RWMutex
+	runtimeWatchers     map[signature.MapKey]storageWatcher
 
-	haltCtx      context.Context
-	cancelFn     context.CancelFunc
-	initCh       chan struct{}
-	signaledInit bool
+	haltCtx  context.Context
+	cancelFn context.CancelFunc
 }
 
-// connectedNodesState contains information about the latest connected storage
-// committee nodes and their corresponding client states.
-type connectedNodesState struct {
-	sync.RWMutex
+func (b *storageClientBackend) getStorageWatcher(runtimeID signature.MapKey) (storageWatcher, error) {
+	b.runtimeWatchersLock.RLock()
+	defer b.runtimeWatchersLock.RUnlock()
 
-	nodes        []*node.Node
-	clientStates []*clientState
+	watcher := b.runtimeWatchers[runtimeID]
+	if watcher == nil {
+		b.logger.Error("worker/storage/client: no watcher for runtime",
+			"runtime_id", runtimeID,
+		)
+		return nil, ErrNoWatcher
+	}
+	return watcher, nil
 }
 
-// clientState contains information about a connected storage node.
-type clientState struct {
-	client            storage.StorageClient
-	conn              *grpc.ClientConn
-	resolverCleanupCb func()
-}
-
-// backendState contains the most recent list of scheduled storage committees.
-type backendState struct {
-	sync.RWMutex
-
-	logger *logging.Logger
-
-	storageNodeList []*node.Node
-}
-
-// GetConnectedNodes returns registry node information about the connected
+// GetConnectedNodes returns registry node information about all connected
 // storage nodes.
 func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
-	b.connectedNodesState.RLock()
-	defer b.connectedNodesState.RUnlock()
+	b.runtimeWatchersLock.RLock()
+	defer b.runtimeWatchersLock.RUnlock()
 
-	return b.connectedNodesState.nodes
+	nodes := []*node.Node{}
+	for _, watcher := range b.runtimeWatchers {
+		nodes = append(nodes, watcher.getConnectedNodes()...)
+	}
+	return nodes
 }
 
-func (b *storageClientBackend) updateNodeConnections() {
-	b.state.RLock()
-	defer b.state.RUnlock()
+func (b *storageClientBackend) WatchRuntime(id signature.PublicKey) error {
+	b.runtimeWatchersLock.Lock()
+	defer b.runtimeWatchersLock.Unlock()
 
-	b.logger.Debug("updating connections to nodes")
-
-	nodeList := b.state.storageNodeList
-
-	// TODO: Should we only update connections if keys or addresses have
-	// changed?
-	b.connectedNodesState.Lock()
-	defer b.connectedNodesState.Unlock()
-
-	connNodes := []*node.Node{}
-	connClientStates := []*clientState{}
-	numConnNodes := 0
-
-	// Clean-up previous resolvers.
-	for _, clientState := range b.connectedNodesState.clientStates {
-		if cleanup := clientState.resolverCleanupCb; cleanup != nil {
-			cleanup()
-		}
+	watcher := b.runtimeWatchers[id.ToMapKey()]
+	if watcher != nil {
+		// Already watching, nothing to do.
+		return nil
 	}
 
-	for _, node := range nodeList {
-		var opts grpc.DialOption
-		if node.Certificate == nil {
-			// NOTE: This should only happen in tests, where nodes register
-			// without a certificate.
-			// TODO: This can be rejected once node_tests register with a
-			// certificate.
-			opts = grpc.WithInsecure()
-			b.logger.Warn("storage committee member registered without certificate, using insecure connection!",
-				"member", node,
-			)
-		} else {
-			nodeCert, err := node.Certificate.Parse()
-			if err != nil {
-				b.logger.Error("failed to parse storage committee member's certificate",
-					"member", node,
-				)
-				continue
-			}
-			certPool := x509.NewCertPool()
-			certPool.AddCert(nodeCert)
-			creds := credentials.NewClientTLSFromCert(certPool, "ekiden-node")
-			opts = grpc.WithTransportCredentials(creds)
-		}
+	// Watcher doesn't exist. Start new watcher.
+	watcher = newWatcher(b.ctx, id, b.scheduler, b.registry)
+	b.runtimeWatchers[id.ToMapKey()] = watcher
 
-		if len(node.Addresses) == 0 {
-			b.logger.Error("cannot update connection, storage committee member does not have any addresses",
-				"member", node,
-			)
-			continue
-		}
-
-		manualResolver, address, cleanupCb := manual.NewManualResolver()
-
-		conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name))
-		if err != nil {
-			b.logger.Error("cannot update connection, failed dialing storage node",
-				"node", node,
-				"err", err,
-			)
-			continue
-		}
-		var resolverState resolver.State
-		for _, addr := range node.Addresses {
-			resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
-		}
-		manualResolver.UpdateState(resolverState)
-
-		numConnNodes++
-		connNodes = append(connNodes, node)
-		connClientStates = append(connClientStates, &clientState{
-			client:            storage.NewStorageClient(conn),
-			conn:              conn,
-			resolverCleanupCb: cleanupCb,
-		})
-		b.logger.Debug("storage node connection updated",
-			"node", node,
-		)
-	}
-	if numConnNodes == 0 {
-		b.logger.Error("failed to connect to any of the storage committee members",
-			"members", nodeList,
-		)
-		return
-	}
-
+	// Signal init when the first registered runtime is initialized.
 	if !b.signaledInit {
 		b.signaledInit = true
-		close(b.initCh)
+		go func() {
+			select {
+			case <-watcher.initialized():
+			case <-b.ctx.Done():
+				return
+			}
+			close(b.initCh)
+		}()
 	}
-
-	// TODO: Stop in-flight storage requests and retry them after new committee
-	// is known.
-	b.connectedNodesState.nodes = connNodes
-	b.connectedNodesState.clientStates = connClientStates
-}
-
-func (s *backendState) updateStorageNodeList(ctx context.Context, nodes []*node.Node) error {
-	storageNodes := []*node.Node{}
-	for _, n := range nodes {
-		if n.HasRoles(node.RoleStorageWorker) {
-			storageNodes = append(storageNodes, n)
-		}
-	}
-
-	s.Lock()
-	defer s.Unlock()
-	s.storageNodeList = storageNodes
 
 	return nil
 }
@@ -230,6 +125,17 @@ type grpcResponse struct {
 	node *node.Node
 }
 
+func (b *storageClientBackend) getRequestRuntime(ns common.Namespace) (runtimeID signature.PublicKey, err error) {
+	// In debug mode always connect to the debug watcher.
+	if b.debugRuntimeID != nil {
+		runtimeID = b.debugRuntimeID
+	} else {
+		// Otherwise, determine runtime from request namsepace.
+		return ns.ToRuntimeID()
+	}
+	return
+}
+
 func (b *storageClientBackend) writeWithClient(
 	ctx context.Context,
 	ns common.Namespace,
@@ -237,18 +143,39 @@ func (b *storageClientBackend) writeWithClient(
 	fn func(context.Context, storage.StorageClient, *node.Node, chan<- *grpcResponse),
 	expectedNewRoots []hash.Hash,
 ) ([]*api.Receipt, error) {
-	b.connectedNodesState.RLock()
-	defer b.connectedNodesState.RUnlock()
-
-	n := len(b.connectedNodesState.nodes)
-	if n == 0 {
+	runtimeID, err := b.getRequestRuntime(ns)
+	if err != nil {
+		b.logger.Error("writeWithClient: failure when deriving runtimeID from storage namespace",
+			"namespace", ns,
+			"err", err,
+		)
 		return nil, ErrStorageNotAvailable
 	}
+
+	// Get watcher for runtime.
+	watcher, err := b.getStorageWatcher(runtimeID.ToMapKey())
+	if err != nil {
+		b.logger.Error("writeWithClient: cannot get watcher for runtime",
+			"runtime_id", runtimeID,
+			"err", err,
+		)
+		return nil, ErrStorageNotAvailable
+	}
+
+	clientStates := watcher.getClientStates()
+	n := len(clientStates)
+	if n == 0 {
+		b.logger.Error("writeWithClient: no connected nodes for runtime",
+			"runtime_id", runtimeID,
+		)
+		return nil, ErrStorageNotAvailable
+	}
+
 	// Use a buffered channel to allow all "write" goroutines to return as soon
 	// as they are finished.
 	ch := make(chan *grpcResponse, n)
-	for i, clientState := range b.connectedNodesState.clientStates {
-		go fn(ctx, clientState.client, b.connectedNodesState.nodes[i], ch)
+	for _, clientState := range clientStates {
+		go fn(ctx, clientState.client, clientState.node, ch)
 	}
 	successes := 0
 	receipts := make([]*api.Receipt, 0, n)
@@ -434,32 +361,52 @@ func (b *storageClientBackend) ApplyBatch(
 	)
 }
 
-func (b *storageClientBackend) readWithClient(ctx context.Context, fn func(context.Context, storage.StorageClient) (interface{}, error)) (interface{}, error) {
-	b.connectedNodesState.RLock()
-	defer b.connectedNodesState.RUnlock()
-
-	n := len(b.connectedNodesState.nodes)
-
-	if n == 0 {
+func (b *storageClientBackend) readWithClient(ctx context.Context, ns common.Namespace, fn func(context.Context, storage.StorageClient) (interface{}, error)) (interface{}, error) {
+	runtimeID, err := b.getRequestRuntime(ns)
+	if err != nil {
+		b.logger.Error("readWithClient: failure when deriving runtimeID from storage namespace",
+			"namespace", ns,
+			"err", err,
+		)
 		return nil, ErrStorageNotAvailable
 	}
+
+	// Get watcher for runtime.
+	watcher, err := b.getStorageWatcher(runtimeID.ToMapKey())
+	if err != nil {
+		b.logger.Error("readWithClient: cannot get watcher for runtime",
+			"runtime_id", runtimeID,
+			"err", err,
+		)
+		return nil, ErrStorageNotAvailable
+	}
+
+	clientStates := watcher.getClientStates()
+	n := len(clientStates)
+	if n == 0 {
+		b.logger.Error("readWithClient: no connected nodes for runtime",
+			"runtime_id", runtimeID,
+		)
+		return nil, ErrStorageNotAvailable
+	}
+
 	// TODO: Use a more clever approach to choose the order in which to read
 	// from the connected nodes:
 	// https://github.com/oasislabs/ekiden/issues/1815.
 	rng := rand.New(mathrand.New(cryptorand.Reader))
 
-	var err error
 	var resp interface{}
 	for _, randIndex := range rng.Perm(n) {
-		clientState := b.connectedNodesState.clientStates[randIndex]
-		resp, err = fn(ctx, clientState.client)
+		state := clientStates[randIndex]
+		resp, err = fn(ctx, state.client)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 		if err != nil {
 			b.logger.Error("failed to get response from a storage node",
-				"node", b.connectedNodesState.nodes[randIndex],
+				"node", state.node,
 				"err", err,
+				"runtime_id", runtimeID,
 			)
 			continue
 		}
@@ -475,7 +422,7 @@ func (b *storageClientBackend) GetSubtree(ctx context.Context, root api.Root, id
 	req.Id = &storage.NodeID{Depth: uint32(id.Depth)}
 	req.Id.Path, _ = id.Path.MarshalBinary()
 
-	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+	respRaw, err := b.readWithClient(ctx, root.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
 		return c.GetSubtree(ctx, &req)
 	})
 	if err != nil {
@@ -497,7 +444,7 @@ func (b *storageClientBackend) GetPath(ctx context.Context, root api.Root, key h
 	req.Key, _ = key.MarshalBinary()
 	req.StartDepth = uint32(startDepth)
 
-	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+	respRaw, err := b.readWithClient(ctx, root.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
 		return c.GetPath(ctx, &req)
 	})
 	if err != nil {
@@ -519,7 +466,7 @@ func (b *storageClientBackend) GetNode(ctx context.Context, root api.Root, id ap
 	req.Id = &storage.NodeID{Depth: uint32(id.Depth)}
 	req.Id.Path, _ = id.Path.MarshalBinary()
 
-	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+	respRaw, err := b.readWithClient(ctx, root.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
 		return c.GetNode(ctx, &req)
 	})
 	if err != nil {
@@ -540,7 +487,7 @@ func (b *storageClientBackend) GetDiff(ctx context.Context, startRoot api.Root, 
 	req.StartRoot = startRoot.MarshalCBOR()
 	req.EndRoot = endRoot.MarshalCBOR()
 
-	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+	respRaw, err := b.readWithClient(ctx, startRoot.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
 		return c.GetDiff(ctx, &req)
 	})
 	if err != nil {
@@ -584,7 +531,7 @@ func (b *storageClientBackend) GetCheckpoint(ctx context.Context, root api.Root)
 	var req storage.GetCheckpointRequest
 	req.Root = root.MarshalCBOR()
 
-	respRaw, err := b.readWithClient(ctx, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+	respRaw, err := b.readWithClient(ctx, root.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
 		return c.GetCheckpoint(ctx, &req)
 	})
 	if err != nil {
@@ -627,160 +574,15 @@ func (b *storageClientBackend) GetCheckpoint(ctx context.Context, root api.Root)
 }
 
 func (b *storageClientBackend) Cleanup() {
-	b.connectedNodesState.Lock()
-	defer b.connectedNodesState.Unlock()
-
 	b.cancelFn()
-	for _, clientState := range b.connectedNodesState.clientStates {
-		if callBack := clientState.resolverCleanupCb; callBack != nil {
-			callBack()
-		}
-		if clientState.conn != nil {
-			clientState.conn.Close()
-		}
+
+	b.runtimeWatchersLock.Lock()
+	defer b.runtimeWatchersLock.Unlock()
+	for _, watcher := range b.runtimeWatchers {
+		watcher.cleanup()
 	}
 }
 
 func (b *storageClientBackend) Initialized() <-chan struct{} {
 	return b.initCh
-}
-
-func (b *storageClientBackend) watcher(ctx context.Context) {
-	schedCh, sub := b.scheduler.WatchCommittees()
-	defer sub.Close()
-
-	nodeListCh, sub := b.registry.WatchNodeList()
-	defer sub.Close()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case ev := <-nodeListCh:
-			if ev == nil {
-				continue
-			}
-			b.logger.Debug("got new storage node list", ev.Nodes)
-			if err := b.state.updateStorageNodeList(ctx, ev.Nodes); err != nil {
-				b.logger.Error("worker: failed to update storage list",
-					"err", err,
-				)
-				continue
-			}
-			// Update storage node connection.
-			b.updateNodeConnections()
-
-			b.logger.Debug("updated connections to nodes")
-
-		case committee := <-schedCh:
-			b.logger.Debug("worker: scheduler committee for epoch",
-				"committee", committee,
-				"epoch", committee.ValidFor,
-				"kind", committee.Kind)
-
-			if committee.Kind != scheduler.KindStorage {
-				continue
-			}
-
-			if len(committee.Members) == 0 {
-				b.logger.Warn("worker: received empty storage committee")
-				continue
-			}
-
-			// Update storage node connection.
-			b.updateNodeConnections()
-
-			b.logger.Debug("updated connections to nodes")
-		}
-	}
-}
-
-// New creates a new client
-func New(ctx context.Context, schedulerBackend scheduler.Backend, registryBackend registry.Backend) (api.Backend, error) {
-	logger := logging.GetLogger("storage/client")
-
-	if viper.GetString(cfgDebugClientAddress) != "" {
-		logger.Warn("Storage client in debug mode, connecting to provided client",
-			"address", cfgDebugClientAddress,
-		)
-
-		var opts grpc.DialOption
-		if viper.GetString(cfgDebugClientTLSCertFile) != "" {
-			creds, err := credentials.NewClientTLSFromFile(viper.GetString(cfgDebugClientTLSCertFile), "ekiden-node")
-			if err != nil {
-				logger.Error("failed creating grpc tls client from file",
-					"file", viper.GetString(cfgDebugClientTLSCertFile),
-					"error", err,
-				)
-				return nil, err
-			}
-			opts = grpc.WithTransportCredentials(creds)
-		} else {
-			opts = grpc.WithInsecure()
-		}
-
-		conn, err := grpc.Dial(viper.GetString(cfgDebugClientAddress), opts)
-		if err != nil {
-			logger.Error("unable to dial debug client",
-				"error", err,
-			)
-			return nil, err
-		}
-		client := storage.NewStorageClient(conn)
-
-		b := &storageClientBackend{
-			logger:    logger,
-			scheduler: schedulerBackend,
-			registry:  registryBackend,
-			connectedNodesState: &connectedNodesState{
-				nodes: []*node.Node{&node.Node{}},
-				clientStates: []*clientState{&clientState{
-					client: client,
-					conn:   conn,
-				}},
-			},
-			state:  &backendState{},
-			initCh: make(chan struct{}),
-		}
-		close(b.initCh)
-
-		return b, nil
-	}
-
-	b := &storageClientBackend{
-		logger:    logger,
-		scheduler: schedulerBackend,
-		registry:  registryBackend,
-		connectedNodesState: &connectedNodesState{
-			nodes:        []*node.Node{},
-			clientStates: []*clientState{},
-		},
-		state: &backendState{
-			logger:          logger,
-			storageNodeList: []*node.Node{},
-		},
-		initCh: make(chan struct{}),
-	}
-
-	b.haltCtx, b.cancelFn = context.WithCancel(ctx)
-
-	go b.watcher(ctx)
-
-	return b, nil
-}
-
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgDebugClientAddress, "", "Address of node to connect to with the storage client")
-		cmd.Flags().String(cfgDebugClientTLSCertFile, "", "Path to tls certificate for grpc")
-	}
-
-	for _, v := range []string{
-		cfgDebugClientAddress,
-		cfgDebugClientTLSCertFile,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
 }
