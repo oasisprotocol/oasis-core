@@ -180,6 +180,14 @@ func (b *memoryBackend) HasRoot(root api.Root) bool {
 	return b.nodedb.HasRoot(root)
 }
 
+func (b *memoryBackend) Finalize(ctx context.Context, namespace common.Namespace, round uint64, roots []hash.Hash) error {
+	return b.nodedb.Finalize(ctx, namespace, round, roots)
+}
+
+func (b *memoryBackend) Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error) {
+	return b.nodedb.Prune(ctx, namespace, round)
+}
+
 func (b *memoryBackend) Cleanup() {
 	b.nodedb.Close()
 }

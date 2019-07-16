@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/workerpool"
 	roothashApi "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
@@ -176,11 +177,18 @@ func NewNode(
 
 	node.ctx, node.ctxCancel = context.WithCancel(context.Background())
 
+	// Create a new storage client that will be used for remote sync.
 	scl, err := client.New(node.ctx, node.commonNode.Identity.TLSCertificate, node.commonNode.Scheduler, node.commonNode.Registry)
 	if err != nil {
 		return nil, err
 	}
 	node.storageClient = scl.(storageApi.ClientBackend)
+	if err := node.storageClient.WatchRuntime(commonNode.RuntimeID); err != nil {
+		node.logger.Error("error watching storage runtime",
+			"err", err,
+		)
+		return nil, err
+	}
 
 	return node, nil
 }
@@ -283,26 +291,41 @@ func (n *Node) GetLastSynced() (uint64, hash.Hash, hash.Hash) {
 
 func (n *Node) fetchDiff(round uint64, prevRoot *urkelNode.Root, thisRoot *urkelNode.Root) error {
 	var writeLog storageApi.WriteLog
+	// Check if the new root doesn't already exist.
 	if !n.localStorage.HasRoot(*thisRoot) {
-		n.logger.Debug("calling GetDiff", "previous_root", prevRoot, "root", thisRoot)
-		it, err := n.storageClient.GetDiff(n.ctx, *prevRoot, *thisRoot)
-		if err != nil {
-			return err
-		}
-		for {
-			more, err := it.Next()
-			if err != nil {
-				return err
-			}
-			if !more {
-				break
-			}
+		if thisRoot.Hash.Equal(&prevRoot.Hash) {
+			// Even if HasRoot returns false the root can still exist if it is equal
+			// to the previous root and the root was emitted by the consensus committee
+			// directly (e.g., during an epoch transition). In this case we need to
+			// still apply the (empty) write log.
+			writeLog = storageApi.WriteLog{}
+		} else {
+			// New root does not yet exist in storage and we need to fetch it from a
+			// remote node.
+			n.logger.Debug("calling GetDiff",
+				"previous_root", prevRoot,
+				"root", thisRoot,
+			)
 
-			chunk, err := it.Value()
+			it, err := n.storageClient.GetDiff(n.ctx, *prevRoot, *thisRoot)
 			if err != nil {
 				return err
 			}
-			writeLog = append(writeLog, chunk)
+			for {
+				more, err := it.Next()
+				if err != nil {
+					return err
+				}
+				if !more {
+					break
+				}
+
+				chunk, err := it.Value()
+				if err != nil {
+					return err
+				}
+				writeLog = append(writeLog, chunk)
+			}
 		}
 	}
 	n.diffCh <- &fetchedDiff{
@@ -318,7 +341,7 @@ type inFlight struct {
 	outstanding int
 }
 
-func (n *Node) worker() {
+func (n *Node) worker() { // nolint: gocyclo
 	defer close(n.quitCh)
 	defer close(n.diffCh)
 
@@ -338,9 +361,19 @@ func (n *Node) worker() {
 	genesisBlock, err := n.commonNode.Roothash.GetGenesisBlock(n.ctx, n.commonNode.RuntimeID)
 	if err != nil {
 		n.logger.Error("can't retrieve genesis block", "err", err)
-		panic("can't retrieve genesis block")
+		return
 	}
 	n.undefinedRound = genesisBlock.Header.Round - 1
+
+	// Subscribe to pruned roothash blocks.
+	var pruneCh <-chan *roothashApi.PrunedBlock
+	var pruneSub *pubsub.Subscription
+	pruneCh, pruneSub, err = n.commonNode.Roothash.WatchPrunedBlocks()
+	if err != nil {
+		n.logger.Error("failed to watch pruned blocks", "err", err)
+		return
+	}
+	defer pruneSub.Close()
 
 	var fetcherGroup sync.WaitGroup
 
@@ -368,14 +401,18 @@ mainLoop:
 	for {
 		if len(*outOfOrderDone) > 0 && cachedLastRound+1 == (*outOfOrderDone)[0].round {
 			lastDiff := heap.Pop(outOfOrderDone).(*fetchedDiff)
-			// Check if we already had the writelog and apply it if not.
+			// Apply the write log if one exists.
 			if lastDiff.writeLog != nil {
 				_, err := n.localStorage.Apply(n.ctx, lastDiff.thisRoot.Namespace,
 					lastDiff.prevRoot.Round, lastDiff.prevRoot.Hash,
 					lastDiff.thisRoot.Round, lastDiff.thisRoot.Hash,
 					lastDiff.writeLog)
 				if err != nil {
-					n.logger.Error("can't apply write log", "err", err)
+					n.logger.Error("can't apply write log",
+						"err", err,
+						"prev_root", lastDiff.prevRoot,
+						"root", lastDiff.thisRoot,
+					)
 				}
 			}
 
@@ -388,11 +425,34 @@ mainLoop:
 				summary := hashCache[lastDiff.round]
 				delete(hashCache, lastDiff.round-1)
 
+				// Finalize storage for this round.
+				err := n.localStorage.Finalize(n.ctx, lastDiff.thisRoot.Namespace, lastDiff.round, []hash.Hash{
+					summary.IORoot.Hash,
+					summary.StateRoot.Hash,
+				})
+				switch err {
+				case nil:
+					n.logger.Debug("storage round finalized",
+						"round", lastDiff.round,
+					)
+				case storageApi.ErrAlreadyFinalized:
+					// This can happen if we are restoring after a roothash migration or if
+					// we crashed before updating the sync state.
+					n.logger.Warn("storage round already finalized",
+						"round", lastDiff.round,
+					)
+				default:
+					n.logger.Error("failed to finalize storage round",
+						"err", err,
+						"round", lastDiff.round,
+					)
+				}
+
 				n.syncedLock.Lock()
 				n.syncedState.LastBlock.Round = lastDiff.round
 				n.syncedState.LastBlock.IORoot = summary.IORoot
 				n.syncedState.LastBlock.StateRoot = summary.StateRoot
-				err := n.stateStore.Update(func(tx *bolt.Tx) error {
+				err = n.stateStore.Update(func(tx *bolt.Tx) error {
 					bkt := tx.Bucket(n.bucketName)
 					bytes := cbor.Marshal(&n.syncedState)
 					return bkt.Put(n.commonNode.RuntimeID[:], bytes)
@@ -408,6 +468,19 @@ mainLoop:
 		}
 
 		select {
+		case prunedBlk := <-pruneCh:
+			n.logger.Debug("pruning storage for round", "round", prunedBlk.Round)
+
+			// Prune given block.
+			var ns common.Namespace
+			copy(ns[:], prunedBlk.RuntimeID[:])
+
+			if _, err := n.localStorage.Prune(n.ctx, ns, prunedBlk.Round); err != nil {
+				n.logger.Error("failed to prune block",
+					"err", err,
+				)
+				continue mainLoop
+			}
 		case inBlk := <-n.blockCh.Out():
 			blk := inBlk.(*block.Block)
 			n.logger.Debug("incoming block",
@@ -418,10 +491,12 @@ mainLoop:
 			if _, ok := hashCache[cachedLastRound]; !ok && cachedLastRound == n.undefinedRound {
 				dummy := blockSummary{
 					Namespace: blk.Header.Namespace,
-					Round:     cachedLastRound,
+					Round:     cachedLastRound + 1,
 				}
 				dummy.IORoot.Empty()
+				dummy.IORoot.Round = cachedLastRound + 1
 				dummy.StateRoot.Empty()
+				dummy.StateRoot.Round = cachedLastRound + 1
 				hashCache[cachedLastRound] = &dummy
 			}
 			for i := cachedLastRound; i < blk.Header.Round; i++ {

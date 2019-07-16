@@ -20,14 +20,41 @@ var (
 	// ErrCantProve is the error returned when the backend is incapable
 	// of generating proofs (unsupported, no key, etc).
 	ErrCantProve = errors.New("storage: unable to provide proofs")
-
 	// ErrNoRoots is the error returned when the generated receipt would
 	// not contain any roots.
 	ErrNoRoots = errors.New("storage: no roots to generate receipt for")
-
 	// ErrExpectedRootMismatch is the error returned when the expected root
 	// does not match the computed root.
 	ErrExpectedRootMismatch = errors.New("storage: expected root mismatch")
+	// ErrUnsupported is the error returned when the called method is not
+	// supported by the given backend.
+	ErrUnsupported = errors.New("storage: method not supported by backend")
+
+	// The following errors are reimports from NodeDB.
+
+	// ErrNodeNotFound indicates that a node with the specified hash couldn't be found
+	// in the database.
+	ErrNodeNotFound = nodedb.ErrNodeNotFound
+	// ErrWriteLogNotFound indicates that a write log for the specified storage hashes
+	// couldn't be found.
+	ErrWriteLogNotFound = nodedb.ErrWriteLogNotFound
+	// ErrNotFinalized indicates that the operation requires a round to be finalized
+	// but the round is not yet finalized.
+	ErrNotFinalized = nodedb.ErrNotFinalized
+	// ErrAlreadyFinalized indicates that the given round has already been finalized.
+	ErrAlreadyFinalized = nodedb.ErrAlreadyFinalized
+	// ErrRoundNotFound indicates that the given round cannot be found.
+	ErrRoundNotFound = nodedb.ErrRoundNotFound
+	// ErrPreviousRoundMismatch indicates that the round given for the old root does
+	// not match the previous round.
+	ErrPreviousRoundMismatch = nodedb.ErrPreviousRoundMismatch
+	// ErrRoundWentBackwards indicates that the new round is earlier than an already
+	// inserted round.
+	ErrRoundWentBackwards = nodedb.ErrRoundWentBackwards
+	// ErrRootNotFound indicates that the given root cannot be found.
+	ErrRootNotFound = nodedb.ErrRootNotFound
+	// ErrRootMustFollowOld indicates that the passed new root does not follow old root.
+	ErrRootMustFollowOld = nodedb.ErrRootMustFollowOld
 
 	// ReceiptSignatureContext is the signature context used for verifying MKVS receipts.
 	ReceiptSignatureContext = []byte("EkStrRct")
@@ -224,7 +251,17 @@ type LocalBackend interface {
 	Backend
 
 	// HasRoot checks if the storage backend contains the specified storage root.
-	HasRoot(Root) bool
+	HasRoot(root Root) bool
+
+	// Finalize finalizes the specified round. The passed list of roots are the
+	// roots within the round that have been finalized. All non-finalized roots
+	// can be discarded.
+	Finalize(ctx context.Context, namespace common.Namespace, round uint64, roots []hash.Hash) error
+
+	// Prune removes all roots recorded under the given namespace and round.
+	//
+	// Returns the number of pruned nodes.
+	Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error)
 }
 
 // ClientBackend is a storage client backend implementation.
