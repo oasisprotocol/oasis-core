@@ -51,7 +51,7 @@ type runtimeBrokers struct {
 }
 
 type tendermintBackend struct {
-	sync.Mutex
+	sync.RWMutex
 
 	ctx    context.Context
 	logger *logging.Logger
@@ -62,6 +62,7 @@ type tendermintBackend struct {
 	allBlockNotifier *pubsub.Broker
 	pruneNotifier    *pubsub.Broker
 	runtimeNotifiers map[signature.MapKey]*runtimeBrokers
+	genesisBlocks    map[signature.MapKey]*block.Block
 	blockIndex       *blockIndexer
 
 	closeOnce sync.Once
@@ -75,6 +76,38 @@ func (r *tendermintBackend) Info() api.Info {
 		ComputeRoundTimeout: r.roundTimeout,
 		MergeRoundTimeout:   r.roundTimeout,
 	}
+}
+
+func (r *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
+	// First check if we have the genesis blocks cached. They are immutable so easy
+	// to cache to avoid repeated requests to the Tendermint app.
+	r.RLock()
+	if blk := r.genesisBlocks[id.ToMapKey()]; blk != nil {
+		r.RUnlock()
+		return blk, nil
+	}
+	r.RUnlock()
+
+	query := tmapi.QueryGetByIDRequest{
+		ID: id,
+	}
+
+	response, err := r.service.Query(app.QueryGetGenesisBlock, query, 0)
+	if err != nil {
+		return nil, errors.Wrapf(err, "roothash: get genesis block query failed")
+	}
+
+	var blk block.Block
+	if err := cbor.Unmarshal(response, &blk); err != nil {
+		return nil, errors.Wrapf(err, "roothash: get genesis block malformed response")
+	}
+
+	// Update the genesis block cache.
+	r.Lock()
+	r.genesisBlocks[id.ToMapKey()] = &blk
+	r.Unlock()
+
+	return &blk, nil
 }
 
 func (r *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
@@ -406,6 +439,7 @@ func New(
 		allBlockNotifier: pubsub.NewBroker(false),
 		pruneNotifier:    pubsub.NewBroker(false),
 		runtimeNotifiers: make(map[signature.MapKey]*runtimeBrokers),
+		genesisBlocks:    make(map[signature.MapKey]*block.Block),
 		closedCh:         make(chan struct{}),
 		roundTimeout:     roundTimeout,
 	}

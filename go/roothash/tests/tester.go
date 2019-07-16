@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
@@ -128,6 +129,10 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	blk, err = backend.GetBlock(context.Background(), id, 0)
 	require.NoError(err, "GetBlock")
 	require.EqualValues(genesisBlock, blk, "retreived block is genesis block")
+
+	blk, err = backend.GetGenesisBlock(context.Background(), id)
+	require.NoError(err, "GetGenesisBlock")
+	require.EqualValues(genesisBlock, blk, "retrieved block is genesis block")
 }
 
 func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, states []*runtimeState) {
@@ -150,7 +155,9 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	var blkChannels []<-chan *api.AnnotatedBlock
 	for i := range states {
 		v := states[i]
-		ch, sub, err := backend.WatchBlocks(v.rt.Runtime.ID)
+		var ch <-chan *api.AnnotatedBlock
+		var sub *pubsub.Subscription
+		ch, sub, err = backend.WatchBlocks(v.rt.Runtime.ID)
 		require.NoError(err, "WatchBlocks")
 		defer sub.Close()
 
@@ -164,6 +171,14 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	for i, state := range states {
 		blkCh := blkChannels[i]
 		state.testEpochTransitionBlock(t, scheduler, epoch, blkCh)
+	}
+
+	// Check if GetGenesisBlock still returns the correct genesis block.
+	for i := range states {
+		var blk *block.Block
+		blk, err = backend.GetGenesisBlock(context.Background(), states[i].rt.Runtime.ID)
+		require.NoError(err, "GetGenesisBlock")
+		require.EqualValues(0, blk.Header.Round, "retrieved block is genesis block")
 	}
 }
 

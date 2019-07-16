@@ -78,6 +78,7 @@ func (app *rootHashApplication) OnRegister(state *abci.ApplicationState, queryRo
 
 	// Register query handlers.
 	queryRouter.AddRoute(QueryGetLatestBlock, api.QueryGetByIDRequest{}, app.queryGetLatestBlock)
+	queryRouter.AddRoute(QueryGetGenesisBlock, api.QueryGetByIDRequest{}, app.queryGetGenesisBlock)
 }
 
 func (app *rootHashApplication) OnCleanup() {
@@ -104,6 +105,23 @@ func (app *rootHashApplication) queryGetLatestBlock(s interface{}, r interface{}
 	}
 
 	block := runtime.CurrentBlock.MarshalCBOR()
+
+	return block, nil
+}
+
+func (app *rootHashApplication) queryGetGenesisBlock(s interface{}, r interface{}) ([]byte, error) {
+	request := r.(*api.QueryGetByIDRequest)
+	state := s.(*immutableState)
+
+	runtime, err := state.getRuntimeState(request.ID)
+	if err != nil {
+		return nil, err
+	}
+	if runtime == nil {
+		return nil, errNoSuchRuntime
+	}
+
+	block := runtime.GenesisBlock.MarshalCBOR()
 
 	return block, nil
 }
@@ -416,6 +434,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 	state.updateRuntimeState(&runtimeState{
 		Runtime:      runtime,
 		CurrentBlock: genesisBlock,
+		GenesisBlock: genesisBlock,
 		Timer:        *abci.NewTimer(ctx, app, "round-"+runtime.ID.String(), timerCtx.MarshalCBOR()),
 	})
 
