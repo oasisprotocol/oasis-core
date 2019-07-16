@@ -348,6 +348,7 @@ mainLoop:
 		select {
 		case inBlk := <-n.blockCh.Out():
 			blk := inBlk.(*block.Block)
+			n.logger.Debug("incoming block", "round", blk.Header.Round)
 
 			if _, ok := hashCache[cachedLastRound]; !ok && cachedLastRound == undefinedRound {
 				dummy := blockSummary{
@@ -364,7 +365,7 @@ mainLoop:
 				}
 				oldBlock, err := n.commonNode.Roothash.GetBlock(n.ctx, n.commonNode.RuntimeID, i)
 				if err != nil {
-					n.logger.Error("can't get block for round", "err", err, "round", i)
+					n.logger.Error("can't get block for round", "err", err, "round", i, "current_round", blk.Header.Round)
 					panic("can't get block in storage worker")
 				}
 				hashCache[i] = summaryFromBlock(oldBlock)

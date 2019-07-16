@@ -68,30 +68,32 @@ func New(
 
 	// Setup runtimes.
 	var runtimes []RuntimeConfig
-	runtimeBinaries := viper.GetStringSlice(cfgRuntimeBinary)
-	if len(runtimeBinaries) != len(commonWorker.GetConfig().Runtimes) {
-		return nil, fmt.Errorf("runtime binary/id count mismatch")
-	}
-
-	sgxRuntimeIDs, err := getSGXRuntimeIDs()
-	if err != nil {
-		return nil, err
-	}
-
-	for idx, runtimeBinary := range runtimeBinaries {
-		runtimeID := commonWorker.GetConfig().Runtimes[idx]
-
-		var teeHardware node.TEEHardware
-		if sgxRuntimeIDs[runtimeID.ToMapKey()] {
-			teeHardware = node.TEEHardwareIntelSGX
+	if Enabled() {
+		runtimeBinaries := viper.GetStringSlice(cfgRuntimeBinary)
+		if len(runtimeBinaries) != len(commonWorker.GetConfig().Runtimes) {
+			return nil, fmt.Errorf("runtime binary/id count mismatch")
 		}
 
-		runtimes = append(runtimes, RuntimeConfig{
-			ID:     runtimeID,
-			Binary: runtimeBinary,
-			// XXX: This is needed till the code can watch the registry for runtimes.
-			TEEHardware: teeHardware,
-		})
+		sgxRuntimeIDs, err := getSGXRuntimeIDs()
+		if err != nil {
+			return nil, err
+		}
+
+		for idx, runtimeBinary := range runtimeBinaries {
+			runtimeID := commonWorker.GetConfig().Runtimes[idx]
+
+			var teeHardware node.TEEHardware
+			if sgxRuntimeIDs[runtimeID.ToMapKey()] {
+				teeHardware = node.TEEHardwareIntelSGX
+			}
+
+			runtimes = append(runtimes, RuntimeConfig{
+				ID:     runtimeID,
+				Binary: runtimeBinary,
+				// XXX: This is needed till the code can watch the registry for runtimes.
+				TEEHardware: teeHardware,
+			})
+		}
 	}
 
 	cfg := Config{
