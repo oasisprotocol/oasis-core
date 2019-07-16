@@ -106,6 +106,10 @@ func (b *leveldbBackend) GetCheckpoint(ctx context.Context, root api.Root) (api.
 	return b.nodedb.GetCheckpoint(ctx, root)
 }
 
+func (b *leveldbBackend) HasRoot(root api.Root) bool {
+	return b.nodedb.HasRoot(root)
+}
+
 func (b *leveldbBackend) Cleanup() {
 	b.closeOnce.Do(func() {
 		b.nodedb.Close()

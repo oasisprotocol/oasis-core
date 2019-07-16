@@ -104,6 +104,10 @@ func (b *cachingClientBackend) GetCheckpoint(ctx context.Context, root api.Root)
 	return b.remote.GetCheckpoint(ctx, root)
 }
 
+func (b *cachingClientBackend) HasRoot(root api.Root) bool {
+	return b.rootCache.HasRoot(root)
+}
+
 func (b *cachingClientBackend) Cleanup() {
 	b.remote.Cleanup()
 	b.local.Close()

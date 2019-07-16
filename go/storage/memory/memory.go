@@ -176,6 +176,10 @@ func (b *memoryBackend) GetCheckpoint(ctx context.Context, root api.Root) (api.W
 	return b.nodedb.GetCheckpoint(ctx, root)
 }
 
+func (b *memoryBackend) HasRoot(root api.Root) bool {
+	return b.nodedb.HasRoot(root)
+}
+
 func (b *memoryBackend) Cleanup() {
 	b.nodedb.Close()
 }
