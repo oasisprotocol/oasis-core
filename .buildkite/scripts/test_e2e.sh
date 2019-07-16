@@ -142,6 +142,46 @@ scenario_storage_sync() {
         ${EKIDEN_RUNTIME_ID}
 }
 
+scenario_byzantine_compute_honest() {
+    local runtime=$1
+
+    # Initialize compute nodes.
+    run_compute_node 1 ${runtime}
+    run_compute_node 2 ${runtime}
+    run_compute_node 3 ${runtime}
+
+    # Use fixed identity to ensure deterministic committees.
+    mkdir -p ${EKIDEN_COMMITTEE_DIR}/byzantine
+    chmod 700 ${EKIDEN_COMMITTEE_DIR}/byzantine
+    cp ${WORKDIR}/tests/identities/byzantine.pem ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
+    chmod 600 ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
+
+    ${EKIDEN_NODE} debug byzantine compute-honest \
+        --log.level debug \
+        --log.format JSON \
+        --genesis.file ${EKIDEN_GENESIS_FILE} \
+        --tendermint.core.listen_address tcp://0.0.0.0:13004 \
+        --tendermint.consensus.timeout_commit 250ms \
+        --tendermint.debug.addr_book_lenient \
+        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
+        --worker.p2p.port 12004 \
+        --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
+        --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
+        --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
+        --debug.allow_test_keys \
+        2>&1 | sed "s/^/[byzantine] /" &
+
+    # Initialize storage nodes.
+    run_storage_node 1
+    run_storage_node 2
+
+    # Wait for all nodes to start: 3 compute + 1 byzantine + 2 storage + key manager + 3 validator.
+    wait_nodes 10
+
+    # Advance epoch to elect a new committee.
+    set_epoch 1
+}
+
 run_client_km_restart() {
     local runtime=$1
     local client=$2
@@ -241,6 +281,18 @@ test_suite() {
         runtime=simple-keyvalue \
         client=simple-keyvalue
 
+    # Byzantine node scenarios.
+    # Reenable these as part of https://github.com/oasislabs/ekiden/issues/2074.
+    if [[ ${EKIDEN_TEE_HARDWARE} != "intel-sgx" ]]; then
+        run_test \
+            scenario=scenario_byzantine_compute_honest \
+            name="e2e-${backend_name}-byzantine-compute-honest" \
+            backend_runner=$backend_runner \
+            runtime=simple-keyvalue \
+            client=simple-keyvalue-ops \
+            client_extra_args="set hello_key hello_value" \
+            beacon_deterministic=1
+    fi
 }
 
 ##########################################
