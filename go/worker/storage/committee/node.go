@@ -230,16 +230,9 @@ func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
 // Guarded by CrossNode.
 func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	select {
+	case n.blockCh.In() <- blk:
 	case <-n.ctx.Done():
-		return
-	default:
 	}
-	go func() {
-		select {
-		case n.blockCh.In() <- blk:
-		case <-n.ctx.Done():
-		}
-	}()
 }
 
 // Guarded by CrossNode.
