@@ -26,9 +26,10 @@ var (
 	_ signature.Signer            = (*Signer)(nil)
 
 	rolePEMFiles = map[signature.SignerRole]string{
-		signature.SignerEntity: "entity.pem",
-		signature.SignerNode:   "identity.pem",
-		signature.SignerP2P:    "p2p.pem",
+		signature.SignerEntity:                 "entity.pem",
+		signature.SignerEntityNodeRegistration: "entity_node_registration.pem",
+		signature.SignerNode:                   "identity.pem",
+		signature.SignerP2P:                    "p2p.pem",
 	}
 )
 

@@ -21,7 +21,8 @@ message Certificate {
 
 message Entity {
     bytes id = 1;
-    uint64 registration_time = 2;
+    map<uint32, bytes> subkeys = 2;
+    uint64 registration_time = 3;
 }
 
 message Node {

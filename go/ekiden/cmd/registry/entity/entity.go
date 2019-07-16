@@ -107,7 +107,7 @@ func doInit(cmd *cobra.Command, args []string) {
 
 	// Loosely check to see if there is an existing entity.  This isn't
 	// perfect, just "oopsie" avoidance.
-	if _, _, err = loadOrGenerateEntity(dataDir, false); err == nil {
+	if _, _, _, err = loadOrGenerateEntity(dataDir, false); err == nil {
 		switch cmdFlags.Force() {
 		case true:
 			logger.Warn("overwriting existing entity")
@@ -118,7 +118,7 @@ func doInit(cmd *cobra.Command, args []string) {
 	}
 
 	// Generate a new entity.
-	ent, signer, err := loadOrGenerateEntity(dataDir, true)
+	ent, signer, _, err := loadOrGenerateEntity(dataDir, true)
 	if err != nil {
 		logger.Error("failed to generate entity",
 			"err", err,
@@ -162,7 +162,7 @@ func doRegisterOrDeregister(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	ent, privKey, err := loadOrGenerateEntity(dataDir, false)
+	ent, privKey, _, err := loadOrGenerateEntity(dataDir, false)
 	if err != nil {
 		logger.Error("failed to load entity",
 			"err", err,
@@ -291,13 +291,13 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signature.Signer, error) {
+func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signature.Signer, map[entity.SubkeyRole]signature.Signer, error) {
 	if cmdFlags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
 
 	// TODO/hsm: Configure factory dynamically.
-	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
+	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity, signature.SignerEntityNodeRegistration)
 	if generate {
 		return entity.Generate(dataDir, entitySignerFactory)
 	}

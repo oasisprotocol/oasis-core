@@ -99,7 +99,7 @@ func (s *server) handleValidator(w http.ResponseWriter, req *http.Request) {
 
 	// To prevent the proliferation of this stupidity beyond the test network(s),
 	// require that the validators use the test entity.
-	entity, _, _ := entity.TestEntity()
+	entity, _, _, _ := entity.TestEntity()
 	if !validator.EntityID.Equal(entity.ID) {
 		http.Error(w, "unexpected validator entity", http.StatusBadRequest)
 		return
@@ -293,9 +293,10 @@ func (s *server) buildGenesis() {
 
 	// Since this whole thing is a nasty hack, just sign all the validators
 	// with the test entity.
-	_, signer, _ := entity.TestEntity()
+	_, signer, _, _ := entity.TestEntity()
 	signedValidators := make([]*genesis.SignedValidator, 0, len(s.validators))
 	for _, v := range s.validators {
+		// TODO: This should use subSigners[entity.SubkeyNodeRegistration]
 		signed, err := genesis.SignValidator(signer, v)
 		if err != nil {
 			s.logger.Error("failed to sign validator",
@@ -365,7 +366,7 @@ func NewServer(addr string, numValidators int, numSeeds int, template *genesis.D
 				s.genesisTime = doc.Time
 				s.template = &doc
 
-				entity, _, _ := entity.TestEntity()
+				entity, _, _, _ := entity.TestEntity()
 				validators := make([]*genesis.Validator, 0, len(doc.Validators))
 				for _, v := range doc.Validators {
 					var validator genesis.Validator
@@ -375,6 +376,8 @@ func NewServer(addr string, numValidators int, numSeeds int, template *genesis.D
 						)
 						return nil, err
 					}
+					// XXX: This probably should check which public key signed
+					// the validator, but this code doesn't matter.
 					if !validator.EntityID.Equal(entity.ID) {
 						s.logger.Error("existing validator has invalid entity")
 						return nil, fmt.Errorf("tendermint/bootstrap: invalid validator entity")

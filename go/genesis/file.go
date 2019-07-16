@@ -34,7 +34,7 @@ func NewFileProvider(filename string, identity *identity.Identity) (api.Provider
 				"filename", filename,
 			)
 
-			entity, signer, _ := entity.TestEntity()
+			entity, signer, _, _ := entity.TestEntity()
 			validator := &api.Validator{
 				EntityID: entity.ID,
 				PubKey:   identity.NodeSigner.Public(),
@@ -42,6 +42,7 @@ func NewFileProvider(filename string, identity *identity.Identity) (api.Provider
 				Power:    10,
 			}
 
+			// TODO: This should use subSigners[entity.SubkeyNodeRegistration]
 			signedValidator, sigErr := api.SignValidator(signer, validator)
 			if sigErr != nil {
 				return nil, sigErr

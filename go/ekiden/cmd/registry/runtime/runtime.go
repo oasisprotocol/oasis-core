@@ -256,7 +256,8 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	ent, signer, err := loadEntity(viper.GetString(cfgEntity))
+	// TODO: Should runtime registration use a entity subkey?
+	ent, signer, _, err := loadEntity(viper.GetString(cfgEntity))
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
@@ -379,13 +380,13 @@ func signForRegistration(rt *registry.Runtime, signer signature.Signer, isGenesi
 	return signed, err
 }
 
-func loadEntity(dataDir string) (*entity.Entity, signature.Signer, error) {
+func loadEntity(dataDir string) (*entity.Entity, signature.Signer, map[entity.SubkeyRole]signature.Signer, error) {
 	if cmdFlags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
 
 	// TODO/hsm: Configure factory dynamically.
-	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
+	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity, signature.SignerEntityNodeRegistration)
 	return entity.Load(dataDir, entitySignerFactory)
 }
 

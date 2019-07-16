@@ -28,7 +28,7 @@ func generateServerAddress() string {
 }
 
 func generateValidator(t *testing.T, index int) *api.Validator {
-	entity, _, _ := entity.TestEntity()
+	entity, _, _, _ := entity.TestEntity()
 	signer, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "NewSigner")
 
@@ -137,7 +137,7 @@ func TestBootstrapGenesis(t *testing.T) {
 		require.EqualValues(t, template.Staking, genDoc.Staking, "invalid genesis document content (staking)")
 		require.EqualValues(t, template.ExtraData, genDoc.ExtraData, "invalid genesis document content (extra data)")
 
-		entity, _, _ := entity.TestEntity()
+		entity, _, _, _ := entity.TestEntity()
 
 		for _, v := range genDoc.Validators {
 			var openedValidator api.Validator

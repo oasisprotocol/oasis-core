@@ -210,10 +210,12 @@ func getEntitySigner(dataDir string) (signature.Signer, error) {
 
 	// TODO/hsm: This should go away entirely, the entity signing key has
 	// no business being part of node registration.
-	factory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
+	factory := fileSigner.NewFactory(dataDir, signature.SignerEntity, signature.SignerEntityNodeRegistration)
+
+	// TODO: This should use the node registration entity sub-key.
 
 	if flags.DebugTestEntity() {
-		_, entitySigner, err = entity.TestEntity()
+		_, entitySigner, _, err = entity.TestEntity()
 	} else if f := viper.GetString(cfgEntityPrivateKey); f != "" {
 		fileFactory := factory.(*fileSigner.Factory)
 		// Load PEM.
@@ -221,7 +223,7 @@ func getEntitySigner(dataDir string) (signature.Signer, error) {
 	} else {
 		// Load or generate in the data dir.  If this generates,
 		// the entity will NOT be in the registry.
-		_, entitySigner, err = entity.LoadOrGenerate(dataDir, factory)
+		_, entitySigner, _, err = entity.LoadOrGenerate(dataDir, factory)
 	}
 
 	return entitySigner, err

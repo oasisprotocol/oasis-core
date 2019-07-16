@@ -31,6 +31,7 @@ type SignerRole int
 const (
 	SignerUnknown SignerRole = iota
 	SignerEntity
+	SignerEntityNodeRegistration
 	SignerNode
 	SignerP2P
 )

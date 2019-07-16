@@ -119,8 +119,8 @@ func newTestNode(t *testing.T) *testNode {
 	dataDir, err := ioutil.TempDir("", "ekiden-node-test_")
 	require.NoError(err, "create data dir")
 
-	signerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
-	entity, entitySigner, err := entity.LoadOrGenerate(dataDir, signerFactory)
+	signerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity, signature.SignerEntityNodeRegistration)
+	entity, entitySigner, _, err := entity.LoadOrGenerate(dataDir, signerFactory)
 	require.NoError(err, "create test entity")
 
 	viper.Set("datadir", dataDir)

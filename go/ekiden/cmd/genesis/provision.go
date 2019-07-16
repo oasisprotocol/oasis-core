@@ -57,7 +57,7 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	ent, signer, err := loadEntity(viper.GetString(cfgEntity))
+	ent, signer, _, err := loadEntity(viper.GetString(cfgEntity))
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
@@ -95,9 +95,10 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	validator.Name = common.NormalizeFQDN(nodeName)
 
 	// Sign the validator.
+	// TODO: This should use subSigners[entity.SubkeyNodeRegistration]
 	signedValidator, err := genesis.SignValidator(signer, &validator)
 	if err != nil {
-		logger.Error("failed to sign entity",
+		logger.Error("failed to sign validator",
 			"err", err,
 		)
 		os.Exit(1)
@@ -120,13 +121,13 @@ func doProvisionValidator(cmd *cobra.Command, args []string) {
 	}
 }
 
-func loadEntity(dataDir string) (*entity.Entity, signature.Signer, error) {
+func loadEntity(dataDir string) (*entity.Entity, signature.Signer, map[entity.SubkeyRole]signature.Signer, error) {
 	if flags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
 
 	// TODO/hsm: Configure factory dynamically.
-	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
+	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity, signature.SignerEntityNodeRegistration)
 	return entity.Load(dataDir, entitySignerFactory)
 }
 

@@ -362,7 +362,7 @@ func NewNode() (*Node, error) {
 
 	// Generate/Load the node identity.
 	// TODO/hsm: Configure factory dynamically.
-	signerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerEntity)
+	signerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P)
 	node.Identity, err = identity.LoadOrGenerate(dataDir, signerFactory)
 	if err != nil {
 		logger.Error("failed to load/generate identity",

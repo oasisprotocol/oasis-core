@@ -183,7 +183,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes []string, l *
 	if flags.DebugTestEntity() {
 		l.Warn("registering debug test entity")
 
-		ent, signer, err := entity.TestEntity()
+		ent, signer, _, err := entity.TestEntity()
 		if err != nil {
 			l.Error("failed to retrive test entity",
 				"err", err,
@@ -340,7 +340,7 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 	if flags.DebugTestEntity() {
 		l.Warn("granting stake to the debug test entity")
 
-		ent, _, err := entity.TestEntity()
+		ent, _, _, err := entity.TestEntity()
 		if err != nil {
 			l.Error("failed to retrive test entity",
 				"err", err,
