@@ -322,6 +322,7 @@ run_storage_node() {
         --storage.backend leveldb \
         --consensus.backend tendermint \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
+        --roothash.tendermint.index_blocks \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
@@ -330,6 +331,7 @@ run_storage_node() {
         --worker.client.port ${client_port} \
         --worker.p2p.port ${p2p_port} \
         --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
+        --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
         --datadir ${data_dir} \
         --debug.allow_test_keys \
         2>&1 | sed "s/^/[storage-node-${id}] /" &
