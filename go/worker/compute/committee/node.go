@@ -38,6 +38,7 @@ var (
 	errStorageFailed      = errors.New("compute: failed to fetch from storage")
 	errIncorrectRole      = errors.New("compute: incorrect role")
 	errIncorrectState     = errors.New("compute: incorrect state")
+	errMsgFromNonTxnSched = errors.New("compute: received txn sched dispatch msg from non-current txn sched")
 )
 
 var (
@@ -190,13 +191,29 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 
 		sbd := message.SignedTxnSchedulerBatchDispatch
 
+		// Before opening the signed dispatch message, verify that it was
+		// actually signed by the current transaction scheduler.
+		epoch := n.commonNode.Group.GetEpochSnapshot()
+		txsc := epoch.GetTransactionSchedulerCommittee()
+		signedByCurrentTxnSched := false
+		for _, txscNode := range txsc.Nodes {
+			if sbd.Signature.PublicKey.Equal(txscNode.ID) {
+				signedByCurrentTxnSched = true
+				break
+			}
+		}
+		if !signedByCurrentTxnSched {
+			return false, errMsgFromNonTxnSched
+		}
+
+		// Transaction scheduler checks out, open the signed dispatch message
+		// and add it to the queue.
 		var bd p2p.TxnSchedulerBatchDispatch
-		err := sbd.Open(&bd)
-		if err != nil {
+		if err := sbd.Open(&bd); err != nil {
 			return false, err
 		}
 
-		err = n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageSignatures, bd.Header, sbd.Signature)
+		err := n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageSignatures, bd.Header, sbd.Signature)
 		if err != nil {
 			return false, err
 		}
