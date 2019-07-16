@@ -105,6 +105,25 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 
 	// TODO: Check for signs of double signing (#1804).
 
+	// Go through existing commitments and check if the txn scheduler signed
+	// different batches for the same committee.
+	cID := p.GetCommitteeID()
+	for _, c := range p.Commitments {
+		com := c.(OpenComputeCommitment)
+		cb := com.Body
+		if cID.Equal(&cb.CommitteeID) {
+			existingTxnSchedSig := cb.TxnSchedSig
+			currentTxnSchedSig := openCom.Body.TxnSchedSig
+			if currentTxnSchedSig.PublicKey.Equal(existingTxnSchedSig.PublicKey) && currentTxnSchedSig.Signature != existingTxnSchedSig.Signature {
+				// Same committe, same txn sched, but txn sched signatures
+				// don't match -- txn sched is malicious!
+				// TODO: Slash stake!
+				logger.Warn("txn sched signed two different batches for the same committee ID",
+					"committee_id", cb.CommitteeID)
+			}
+		}
+	}
+
 	// Ensure the node did not already submit a commitment.
 	if _, ok := p.Commitments[id]; ok {
 		return ErrAlreadyCommitted
@@ -126,7 +145,6 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 	}
 
 	// Verify that this is for the correct committee.
-	cID := p.GetCommitteeID()
 	if !cID.Equal(&body.CommitteeID) {
 		logger.Debug("compute commitment has invalid committee ID",
 			"expected_committee_id", cID,
