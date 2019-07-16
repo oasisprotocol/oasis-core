@@ -124,6 +124,14 @@ make
 This will build all the required parts (build tools, Ekiden node, runtime libraries,
 runtime loader, key manager and test runtimes).
 
+If you set any of the following environment variables:
+```
+EKIDEN_UNSAFE_SKIP_AVR_VERIFY
+EKIDEN_UNSAFE_SKIP_KM_POLICY
+```
+you need to run `make clean` before running `make` since the tools won't detect
+and perform this automatically.
+
 ## Running an Ekiden node (non-SGX)
 
 These instructions specify how to run a single-node "network" for development
@@ -209,6 +217,14 @@ make test-unit
 To run end-to-end tests:
 ```
 make test-e2e
+```
+
+_NOTE: To run end-to-end tests locally without SGX, make sure the following
+environment variables are set before building the code (for more details, see
+[Building](#building)):_
+```
+EKIDEN_UNSAFE_SKIP_AVR_VERIFY="1"
+EKIDEN_UNSAFE_SKIP_KM_POLICY="1"
 ```
 
 To run all tests:
