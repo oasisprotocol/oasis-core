@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -26,6 +27,8 @@ import (
 
 const (
 	cmdRegister = "register"
+
+	cfgAllowEntitySignedNodes = "entity.debug.allow_entity_signed_nodes"
 
 	entityGenesisFilename = "entity_genesis.json"
 )
@@ -299,14 +302,36 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 	// TODO/hsm: Configure factory dynamically.
 	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
 	if generate {
-		return entity.Generate(dataDir, entitySignerFactory)
+		template := &entity.Entity{
+			AllowEntitySignedNodes: viper.GetBool(cfgAllowEntitySignedNodes),
+		}
+
+		return entity.Generate(dataDir, entitySignerFactory, template)
 	}
 
 	return entity.Load(dataDir, entitySignerFactory)
 }
 
+func registerEntityFlags(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().Bool(cfgAllowEntitySignedNodes, false, "Entity signing key may be used for node registration (UNSAFE)")
+	}
+
+	for _, v := range []string{
+		cfgAllowEntitySignedNodes,
+	} {
+		_ = viper.BindPFlag(v, initCmd.Flags().Lookup(v))
+	}
+}
+
 // Register registers the entity sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
+	for _, v := range []*cobra.Command{
+		initCmd,
+	} {
+		registerEntityFlags(v)
+	}
+
 	for _, v := range []*cobra.Command{
 		initCmd,
 		registerCmd,

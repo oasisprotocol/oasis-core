@@ -414,8 +414,9 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 			return nil, err
 		}
 		ent.Entity = &entity.Entity{
-			ID:               ent.Signer.Public(),
-			RegistrationTime: uint64(time.Now().Unix()),
+			ID:                     ent.Signer.Public(),
+			RegistrationTime:       uint64(time.Now().Unix()),
+			AllowEntitySignedNodes: true,
 		}
 
 		signed, err := signature.SignSigned(ent.Signer, api.RegisterEntitySignatureContext, ent.Entity)

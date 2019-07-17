@@ -27,6 +27,7 @@ EKIDEN_KM_RUNTIME_ID=${EKIDEN_KM_RUNTIME_ID:-"ffffffffffffffffffffffffffffffffff
 #   EKIDEN_EPOCHTIME_BACKEND
 #   EKIDEN_VALIDATOR_SOCKET
 #   EKIDEN_CLIENT_SOCKET
+#   EKIDEN_ENTITY_DESCRIPTOR
 #   EKIDEN_ENTITY_PRIVATE_KEY
 #
 # Optional named arguments:
@@ -60,6 +61,7 @@ run_backend_tendermint_committee() {
 
     ${EKIDEN_NODE} \
         registry entity init \
+        --entity.debug.allow_entity_signed_nodes \
         --datadir ${entity_dir}
 
     # Provision the validators.
@@ -141,6 +143,7 @@ run_backend_tendermint_committee() {
     EKIDEN_IAS_PROXY_PORT=${ias_proxy_port}
     EKIDEN_GENESIS_FILE=${genesis_file}
     EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
+    EKIDEN_ENTITY_DESCRIPTOR=${entity_dir}/entity.json
     EKIDEN_ENTITY_PRIVATE_KEY=${entity_dir}/entity.pem
 
     # Run the seed node.
@@ -265,7 +268,8 @@ run_compute_node() {
         --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
         --worker.client.port ${client_port} \
         --worker.p2p.port ${p2p_port} \
-        --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
+        --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
+        --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
         --debug.allow_test_keys \
@@ -330,7 +334,8 @@ run_storage_node() {
         --worker.storage.enabled \
         --worker.client.port ${client_port} \
         --worker.p2p.port ${p2p_port} \
-        --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
+        --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
+        --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
         --datadir ${data_dir} \
         --debug.allow_test_keys \
@@ -466,7 +471,8 @@ run_keymanager_node() {
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
         ${EKIDEN_TEE_HARDWARE:+--worker.keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
-        --worker.entity_private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
+        --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
+        --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --worker.client.port 9003 \
         --worker.keymanager.enabled \
         --worker.keymanager.runtime.loader ${EKIDEN_RUNTIME_LOADER} \

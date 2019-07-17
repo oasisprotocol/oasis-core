@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -24,7 +25,8 @@ import (
 )
 
 const (
-	cfgEntityPrivateKey = "worker.entity_private_key"
+	cfgRegistrationEntity     = "worker.registration.entity"
+	cfgRegistrationPrivateKey = "worker.registration.private_key"
 )
 
 // Registration is a service handling worker node registration.
@@ -33,12 +35,14 @@ type Registration struct {
 
 	workerCommonCfg *workerCommon.Config
 
-	epochtime    epochtime.Backend
-	registry     registry.Backend
-	identity     *identity.Identity
-	p2p          *p2p.P2P
-	entitySigner signature.Signer
-	ctx          context.Context
+	entityID           signature.PublicKey
+	registrationSigner signature.Signer
+
+	epochtime epochtime.Backend
+	registry  registry.Backend
+	identity  *identity.Identity
+	p2p       *p2p.P2P
+	ctx       context.Context
 	// Bandaid: Idempotent Stop for testing.
 	stopped   bool
 	quitCh    chan struct{}
@@ -152,7 +156,7 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 	identityPublic := r.identity.NodeSigner.Public()
 	nodeDesc := node.Node{
 		ID:         identityPublic,
-		EntityID:   r.entitySigner.Public(),
+		EntityID:   r.entityID,
 		Expiration: uint64(epoch) + 2,
 		P2P:        r.p2p.Info(),
 		Certificate: &node.Certificate{
@@ -180,7 +184,7 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 
 	// Only register node if hooks exist.
 	if len(r.roleHooks) > 0 {
-		signedNode, err := node.SignNode(r.entitySigner, registry.RegisterNodeSignatureContext, &nodeDesc)
+		signedNode, err := node.SignNode(r.registrationSigner, registry.RegisterNodeSignatureContext, &nodeDesc)
 		if err != nil {
 			r.logger.Error("failed to register node: unable to sign node descriptor",
 				"err", err,
@@ -202,29 +206,50 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 	return nil
 }
 
-func getEntitySigner(dataDir string) (signature.Signer, error) {
-	var (
-		entitySigner signature.Signer
-		err          error
-	)
-
-	// TODO/hsm: This should go away entirely, the entity signing key has
-	// no business being part of node registration.
-	factory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
-
+func getRegistrationSigner(logger *logging.Logger, dataDir string, identity *identity.Identity) (signature.PublicKey, signature.Signer, error) {
+	// If the test entity is enabled, use the entity signing key for signing
+	// registrations.
 	if flags.DebugTestEntity() {
-		_, entitySigner, err = entity.TestEntity()
-	} else if f := viper.GetString(cfgEntityPrivateKey); f != "" {
-		fileFactory := factory.(*fileSigner.Factory)
-		// Load PEM.
-		entitySigner, err = fileFactory.ForceLoad(f)
-	} else {
-		// Load or generate in the data dir.  If this generates,
-		// the entity will NOT be in the registry.
-		_, entitySigner, err = entity.LoadOrGenerate(dataDir, factory)
+		testEntity, testSigner, _ := entity.TestEntity()
+		return testEntity.ID, testSigner, nil
 	}
 
-	return entitySigner, err
+	// Load the registration entity descriptor.
+	f := viper.GetString(cfgRegistrationEntity)
+	if f == "" {
+		// TODO: There are certain configurations (eg: the test client) that
+		// spin up workers, which require a registration worker, but don't
+		// need it, and do not have an owning entity.  The registration worker
+		// should not be initialized in this case.
+		return nil, nil, nil
+	}
+
+	// Attempt to load the entity descriptor.
+	entity, err := entity.LoadDescriptor(f)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "worker/registration: failed to load entity descriptor")
+	}
+	if !entity.AllowEntitySignedNodes {
+		return entity.ID, identity.NodeSigner, nil
+	}
+
+	logger.Warn("using the entity signing key for node registration")
+
+	// The entity allows self-signed nodes, try to load the entity private key.
+	f = viper.GetString(cfgRegistrationPrivateKey)
+	if f == "" {
+		// No suitable signer with which to sign node registrations.
+		return nil, nil, errors.New("worker/registration: no suitable signing key for node registration")
+	}
+
+	factory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
+	fileFactory := factory.(*fileSigner.Factory)
+	entitySigner, err := fileFactory.ForceLoad(f)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "worker/registration: failed to load entity signing key")
+	}
+
+	return entity.ID, entitySigner, nil
 }
 
 // New constructs a new worker node registration service.
@@ -237,27 +262,27 @@ func New(
 	p2p *p2p.P2P,
 	workerCommonCfg *workerCommon.Config,
 ) (*Registration, error) {
-	ctx := context.Background()
+	logger := logging.GetLogger("worker/registration")
 
-	// Load the entity signer used for node registration.
-	entitySigner, err := getEntitySigner(dataDir)
+	entityID, registrationSigner, err := getRegistrationSigner(logger, dataDir, identity)
 	if err != nil {
 		return nil, err
 	}
 
 	r := &Registration{
-		workerCommonCfg: workerCommonCfg,
-		epochtime:       epochtime,
-		registry:        registry,
-		identity:        identity,
-		entitySigner:    entitySigner,
-		quitCh:          make(chan struct{}),
-		regCh:           make(chan struct{}),
-		ctx:             ctx,
-		logger:          logging.GetLogger("worker/registration"),
-		consensus:       consensus,
-		p2p:             p2p,
-		roleHooks:       []func(*node.Node) error{},
+		workerCommonCfg:    workerCommonCfg,
+		entityID:           entityID,
+		registrationSigner: registrationSigner,
+		epochtime:          epochtime,
+		registry:           registry,
+		identity:           identity,
+		quitCh:             make(chan struct{}),
+		regCh:              make(chan struct{}),
+		ctx:                context.Background(),
+		logger:             logger,
+		consensus:          consensus,
+		p2p:                p2p,
+		roleHooks:          []func(*node.Node) error{},
 	}
 
 	return r, nil
@@ -271,6 +296,12 @@ func (r *Registration) Name() string {
 // Start starts the registration service.
 func (r *Registration) Start() error {
 	r.logger.Info("starting node registration service")
+
+	// HACK: This can be ok in certain configurations.
+	if r.entityID == nil || r.registrationSigner == nil {
+		r.logger.Warn("no entity/signer for this node, registration will NEVER succeed")
+		return nil
+	}
 
 	go r.doNodeRegistration()
 
@@ -299,10 +330,12 @@ func (r *Registration) Cleanup() {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgEntityPrivateKey, "", "Private key to use to sign node registrations")
+		cmd.Flags().String(cfgRegistrationEntity, "", "Entity to use as the node owner in registrations")
+		cmd.Flags().String(cfgRegistrationPrivateKey, "", "Private key to use to sign node registrations")
 	}
 	for _, v := range []string{
-		cfgEntityPrivateKey,
+		cfgRegistrationEntity,
+		cfgRegistrationPrivateKey,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}

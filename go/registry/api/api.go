@@ -226,6 +226,19 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 		return nil, ErrInvalidArgument
 	}
 
+	// Ensure the node list has no duplicates.
+	nodesMap := make(map[signature.MapKey]bool)
+	for _, v := range ent.Nodes {
+		mk := v.ToMapKey()
+		if nodesMap[mk] {
+			logger.Error("RegisterEntity: duplicate entries in node list",
+				"entity", ent,
+			)
+			return nil, ErrInvalidArgument
+		}
+		nodesMap[mk] = true
+	}
+
 	return &ent, nil
 }
 
@@ -248,7 +261,7 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
-func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, now time.Time, isGenesis bool) (*node.Node, error) {
+func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool) (*node.Node, error) {
 	// XXX: Ensure node is well-formed.
 	var n node.Node
 	if sigNode == nil {
@@ -269,10 +282,44 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, no
 		)
 		return nil, ErrInvalidSignature
 	}
-	if sigNode.Signed.Signature.SanityCheck(n.EntityID) != nil {
-		logger.Error("RegisterNode: not signed by entity",
+
+	// This should never happen, unless there's a bug in the caller.
+	if !entity.ID.Equal(n.EntityID) {
+		logger.Error("RegisterNode: node entity ID does not match expected entity",
+			"node", n,
+			"entity", entity,
+		)
+		return nil, ErrInvalidArgument
+	}
+
+	// Determine which key should be expected to have signed the node descriptor.
+	var inEntityNodeList bool
+	for _, v := range entity.Nodes {
+		if n.ID.Equal(v) {
+			inEntityNodeList = true
+			break
+		}
+	}
+
+	var expectedSigner signature.PublicKey
+	if inEntityNodeList {
+		expectedSigner = n.ID
+	} else if entity.AllowEntitySignedNodes {
+		expectedSigner = entity.ID
+	} else {
+		logger.Error("RegisterNode: node registration has no valid signer",
+			"node", n,
+			"entity", entity,
+		)
+		return nil, ErrInvalidArgument
+	}
+
+	// Validate that the node is signed by the correct signer.
+	if sigNode.Signed.Signature.SanityCheck(expectedSigner) != nil {
+		logger.Error("RegisterNode: not signed by expected signer",
 			"signed_node", sigNode,
 			"node", n,
+			"entity", entity,
 		)
 		return nil, ErrInvalidArgument
 	}

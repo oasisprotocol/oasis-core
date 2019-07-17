@@ -362,7 +362,25 @@ func (app *registryApplication) registerNode(
 	state *MutableState,
 	sigNode *node.SignedNode,
 ) error {
-	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, ctx.Now(), ctx.IsInitChain())
+	// Peek into the to-be-verified node to pull out the owning entity ID.
+	var untrustedNode node.Node
+	if err := untrustedNode.UnmarshalCBOR(sigNode.Blob); err != nil {
+		app.logger.Error("RegisterNode: failed to extract entity",
+			"err", err,
+			"signed_node", sigNode,
+		)
+		return err
+	}
+	untrustedEntity, err := state.getEntity(untrustedNode.EntityID)
+	if err != nil {
+		app.logger.Error("RegisterNode: failed to query owning entity",
+			"err", err,
+			"signed_node", sigNode,
+		)
+		return err
+	}
+
+	node, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain())
 	if err != nil {
 		return err
 	}
