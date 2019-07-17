@@ -25,13 +25,18 @@ import (
 )
 
 const (
-	cfgWorkerStorageEnabled      = "worker.storage.enabled"
-	cfgWorkerStorageFetcherCount = "worker.storage.fetcher_count"
+	cfgWorkerEnabled      = "worker.storage.enabled"
+	cfgWorkerFetcherCount = "worker.storage.fetcher_count"
 )
 
 var (
 	workerStorageDBBucketName = []byte("worker/storage/watchers")
 )
+
+// Enabled reads our enabled flag from viper.
+func Enabled() bool {
+	return viper.GetBool(cfgWorkerEnabled)
+}
 
 // Worker is a worker handling storage operations.
 type Worker struct {
@@ -58,7 +63,7 @@ func New(
 ) (*Worker, error) {
 
 	s := &Worker{
-		enabled:      viper.GetBool(cfgWorkerStorageEnabled),
+		enabled:      viper.GetBool(cfgWorkerEnabled),
 		commonWorker: commonWorker,
 		logger:       logging.GetLogger("worker/storage"),
 		initCh:       make(chan struct{}),
@@ -69,7 +74,7 @@ func New(
 
 	if s.enabled {
 		s.fetchPool = workerpool.New("storage_fetch")
-		s.fetchPool.Resize(viper.GetUint(cfgWorkerStorageFetcherCount))
+		s.fetchPool.Resize(viper.GetUint(cfgWorkerFetcherCount))
 
 		watchState, err := bolt.Open(filepath.Join(dataDir, "worker-storage-watchers.db"), 0600, nil)
 		if err != nil {
@@ -251,12 +256,12 @@ func (s *Worker) initGenesis(gen *genesis.Document) error {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgWorkerStorageEnabled, false, "Enable storage worker")
-		cmd.Flags().Uint(cfgWorkerStorageFetcherCount, 4, "Number of concurrent storage diff fetchers")
+		cmd.Flags().Bool(cfgWorkerEnabled, false, "Enable storage worker")
+		cmd.Flags().Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
 	}
 	for _, v := range []string{
-		cfgWorkerStorageEnabled,
-		cfgWorkerStorageFetcherCount,
+		cfgWorkerEnabled,
+		cfgWorkerFetcherCount,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
