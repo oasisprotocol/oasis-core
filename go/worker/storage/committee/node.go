@@ -32,7 +32,7 @@ var (
 )
 
 const (
-	undefinedRound = ^uint64(0)
+	defaultUndefinedRound = ^uint64(0)
 )
 
 // Syncing task context and support functions for container/heap.
@@ -101,8 +101,9 @@ type Node struct {
 
 	logger *logging.Logger
 
-	localStorage  storageApi.LocalBackend
-	storageClient storageApi.ClientBackend
+	localStorage   storageApi.LocalBackend
+	storageClient  storageApi.ClientBackend
+	undefinedRound uint64
 
 	fetchPool *workerpool.Pool
 
@@ -152,7 +153,7 @@ func NewNode(
 		initCh: make(chan struct{}),
 	}
 
-	node.syncedState.lastBlock.round = undefinedRound
+	node.syncedState.lastBlock.round = defaultUndefinedRound
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(bucket)
 
@@ -291,11 +292,21 @@ func (n *Node) worker() {
 	defer close(n.quitCh)
 	defer close(n.diffCh)
 
+	genesisBlock, err := n.commonNode.Roothash.GetGenesisBlock(n.ctx, n.commonNode.RuntimeID)
+	if err != nil {
+		n.logger.Error("can't retrieve genesis block", "err", err)
+		panic("can't retrieve genesis block")
+	}
+	n.undefinedRound = genesisBlock.Header.Round - 1
+
 	var fetcherGroup sync.WaitGroup
 
 	n.syncedLock.RLock()
 	cachedLastRound := n.syncedState.lastBlock.round
 	n.syncedLock.RUnlock()
+	if cachedLastRound == defaultUndefinedRound {
+		cachedLastRound = n.undefinedRound
+	}
 
 	outOfOrderDone := &outOfOrderQueue{}
 	syncingRounds := make(map[uint64]*inFlight)
@@ -350,7 +361,7 @@ mainLoop:
 			blk := inBlk.(*block.Block)
 			n.logger.Debug("incoming block", "round", blk.Header.Round)
 
-			if _, ok := hashCache[cachedLastRound]; !ok && cachedLastRound == undefinedRound {
+			if _, ok := hashCache[cachedLastRound]; !ok && cachedLastRound == n.undefinedRound {
 				dummy := blockSummary{
 					namespace: blk.Header.Namespace,
 					round:     cachedLastRound,
