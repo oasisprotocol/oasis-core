@@ -23,6 +23,7 @@ var (
 type runtimeState struct {
 	Runtime      *registry.Runtime `codec:"runtime"`
 	CurrentBlock *block.Block      `codec:"current_block"`
+	GenesisBlock *block.Block      `codec:"genesis_block"`
 	Round        *round            `codec:"round"`
 	Timer        abci.Timer        `codec:"timer"`
 }

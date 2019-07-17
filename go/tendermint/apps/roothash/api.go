@@ -48,6 +48,9 @@ var (
 const (
 	// QueryGetLatestBlock is a path for GetLatestBlock query.
 	QueryGetLatestBlock = AppName + "/block"
+
+	// QueryGetGenesisBlock is a path for GetGenesisBlock query.
+	QueryGetGenesisBlock = AppName + "/genesis_block"
 )
 
 // Tx is a transaction to be accepted by the roothash app.

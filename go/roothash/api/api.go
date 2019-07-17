@@ -48,6 +48,9 @@ type Backend interface {
 	// Info returns information about a root hash backend.
 	Info() Info
 
+	// GetGenesisBlock returns the genesis block.
+	GetGenesisBlock(context.Context, signature.PublicKey) (*block.Block, error)
+
 	// GetLatestBlock returns the latest block.
 	//
 	// The metadata contained in this block can be further used to get
