@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -40,8 +39,17 @@ type Entity struct {
 	// ID is the public key identifying the entity.
 	ID signature.PublicKey `codec:"id"`
 
+	// Nodes is the vector of node identity keys owned by this entity, that
+	// will sign the descriptor with the node signing key rather than the
+	// entity signing key.
+	Nodes []signature.PublicKey `codec:"nodes"`
+
 	// Time of registration.
 	RegistrationTime uint64 `codec:"registration_time"`
+
+	// AllowEntitySignedNodes is true iff nodes belonging to this entity
+	// may be signed with the entity signing key.
+	AllowEntitySignedNodes bool `codec:"allow_entity_signed_nodes"`
 }
 
 // String returns a string representation of itself.
@@ -65,7 +73,17 @@ func (e *Entity) FromProto(pb *pbCommon.Entity) error {
 		return err
 	}
 
+	e.Nodes = nil
+	for _, v := range pb.GetNodes() {
+		var nodeID signature.PublicKey
+		if err := nodeID.UnmarshalBinary(v); err != nil {
+			return err
+		}
+		e.Nodes = append(e.Nodes, nodeID)
+	}
+
 	e.RegistrationTime = pb.GetRegistrationTime()
+	e.AllowEntitySignedNodes = pb.GetAllowEntitySignedNodes()
 
 	return nil
 }
@@ -76,6 +94,14 @@ func (e *Entity) ToProto() *pbCommon.Entity {
 
 	pb.Id, _ = e.ID.MarshalBinary()
 	pb.RegistrationTime = e.RegistrationTime
+	pb.AllowEntitySignedNodes = e.AllowEntitySignedNodes
+
+	var pbNodes [][]byte
+	for _, v := range e.Nodes {
+		rawNodeID, _ := v.MarshalBinary()
+		pbNodes = append(pbNodes, rawNodeID)
+	}
+	pb.Nodes = pbNodes
 
 	return pb
 }
@@ -95,18 +121,6 @@ func (e *Entity) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, e)
 }
 
-// LoadOrGenerate loads or generates an entity (to/on disk).
-func LoadOrGenerate(baseDir string, signerFactory signature.SignerFactory) (*Entity, signature.Signer, error) {
-	ent, signer, err := Load(baseDir, signerFactory)
-	if err != nil {
-		if !os.IsNotExist(err) && err != signature.ErrNotExist {
-			return nil, nil, err
-		}
-		ent, signer, err = Generate(baseDir, signerFactory)
-	}
-	return ent, signer, err
-}
-
 // Load loads an existing entity from disk.
 func Load(baseDir string, signerFactory signature.SignerFactory) (*Entity, signature.Signer, error) {
 	entityPath := filepath.Join(baseDir, entityFilename)
@@ -117,21 +131,33 @@ func Load(baseDir string, signerFactory signature.SignerFactory) (*Entity, signa
 		return nil, nil, err
 	}
 
-	rawEnt, err := ioutil.ReadFile(entityPath)
+	ent, err := LoadDescriptor(entityPath)
 	if err != nil {
+		signer.Reset()
 		return nil, nil, err
+	}
+
+	return ent, signer, nil
+}
+
+// LoadDescriptor loads an existing entity from disk, without loading the signer.
+// Note: This takes the path to the descriptor rather than a base directory.
+func LoadDescriptor(f string) (*Entity, error) {
+	rawEnt, err := ioutil.ReadFile(f)
+	if err != nil {
+		return nil, err
 	}
 
 	var ent Entity
 	if err = json.Unmarshal(rawEnt, &ent); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return &ent, signer, nil
+	return &ent, nil
 }
 
 // Generate generates a new entity and serializes it to disk.
-func Generate(baseDir string, signerFactory signature.SignerFactory) (*Entity, signature.Signer, error) {
+func Generate(baseDir string, signerFactory signature.SignerFactory, template *Entity) (*Entity, signature.Signer, error) {
 	entityPath := filepath.Join(baseDir, entityFilename)
 
 	// Generate a new entity.
@@ -142,6 +168,10 @@ func Generate(baseDir string, signerFactory signature.SignerFactory) (*Entity, s
 	ent := &Entity{
 		ID:               signer.Public(),
 		RegistrationTime: uint64(time.Now().Unix()),
+	}
+	if template != nil {
+		ent.Nodes = template.Nodes
+		ent.AllowEntitySignedNodes = template.AllowEntitySignedNodes
 	}
 
 	// Write to disk.
@@ -181,6 +211,8 @@ func SignEntity(signer signature.Signer, context []byte, entity *Entity) (*Signe
 
 func init() {
 	testEntitySigner = memorySigner.NewTestSigner("ekiden test entity key seed")
+
 	testEntity.ID = testEntitySigner.Public()
 	testEntity.RegistrationTime = uint64(time.Date(2019, 6, 1, 0, 0, 0, 0, time.UTC).Unix())
+	testEntity.AllowEntitySignedNodes = true
 }

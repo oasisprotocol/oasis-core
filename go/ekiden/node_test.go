@@ -120,11 +120,12 @@ func newTestNode(t *testing.T) *testNode {
 	require.NoError(err, "create data dir")
 
 	signerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
-	entity, entitySigner, err := entity.LoadOrGenerate(dataDir, signerFactory)
+	entity, entitySigner, err := entity.Generate(dataDir, signerFactory, nil)
 	require.NoError(err, "create test entity")
 
 	viper.Set("datadir", dataDir)
 	viper.Set("log.file", filepath.Join(dataDir, "test-node.log"))
+	viper.Set("worker.registration.entity", filepath.Join(dataDir, "entity.json"))
 	for _, kv := range testNodeConfig {
 		viper.Set(kv.key, kv.value)
 	}
@@ -139,6 +140,12 @@ func newTestNode(t *testing.T) *testNode {
 	t.Logf("starting node, data directory: %v", dataDir)
 	n.Node, err = node.NewNode()
 	require.NoError(err, "start node")
+
+	// Add the testNode to the newly generated entity's list of nodes
+	// that can self-certify.
+	n.entity.Nodes = []signature.PublicKey{
+		n.Node.Identity.NodeSigner.Public(),
+	}
 
 	return n
 }

@@ -41,6 +41,19 @@ func (s *immutableState) getEntityRaw(id signature.PublicKey) ([]byte, error) {
 	return s.getByID(stateEntityMap, id.String())
 }
 
+func (s *immutableState) getEntity(id signature.PublicKey) (*entity.Entity, error) {
+	entityRaw, err := s.getEntityRaw(id)
+	if err != nil || entityRaw == nil {
+		return nil, errEntityNotFound
+	}
+
+	var entity entity.Entity
+	if err = cbor.Unmarshal(entityRaw, &entity); err != nil {
+		return nil, err
+	}
+	return &entity, nil
+}
+
 func (s *immutableState) getEntities() ([]*entity.Entity, error) {
 	items, err := s.getAll(stateEntityMap, &entity.Entity{})
 	if err != nil {

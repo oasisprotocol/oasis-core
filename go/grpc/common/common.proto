@@ -21,7 +21,9 @@ message Certificate {
 
 message Entity {
     bytes id = 1;
-    uint64 registration_time = 2;
+    repeated bytes nodes = 2;
+    uint64 registration_time = 3;
+    bool allow_entity_signed_nodes = 4;
 }
 
 message Node {
