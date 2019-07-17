@@ -3,6 +3,7 @@ package accessctl
 
 import (
 	"crypto/x509"
+	"fmt"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 )
@@ -61,4 +62,9 @@ func (p Policy) IsAllowed(sub Subject, act Action) bool {
 		return false
 	}
 	return p[act][sub]
+}
+
+// String returns the string representation of the policy.
+func (p Policy) String() string {
+	return fmt.Sprintf("%#v", p)
 }
