@@ -14,7 +14,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/accessctl"
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/identity"
 )
@@ -22,6 +24,8 @@ import (
 var (
 	_ PingServer = (*pingServer)(nil)
 	_ PingClient = (*pingClient)(nil)
+
+	testNs common.Namespace
 )
 
 func CreateCertificate(t *testing.T) (*tls.Certificate, *x509.Certificate) {
@@ -59,6 +63,7 @@ func connectToGrpcServer(
 }
 
 type PingQuery struct {
+	common.Namespace
 }
 
 type PingResponse struct {
@@ -69,11 +74,11 @@ type PingServer interface {
 }
 
 type pingServer struct {
-	policy accessctl.Policy
+	RuntimePolicyChecker
 }
 
 func (s *pingServer) Ping(ctx context.Context, query *PingQuery) (*PingResponse, error) {
-	if err := CheckAllowed(ctx, s.policy, "Ping"); err != nil {
+	if err := s.CheckAccessAllowed(ctx, "Ping", query.Namespace); err != nil {
 		return nil, errors.Wrap(err, "ping: access policy forbade access")
 	}
 	return &PingResponse{}, nil
@@ -147,9 +152,19 @@ func TestAccessPolicy(t *testing.T) {
 	// Create a new gRPC server.
 	grpcServer, err := NewServerTCP(host, port, serverTLSCert, []grpc.ServerOption{grpc.CustomCodec(&CBORCodec{})})
 	require.NoErrorf(err, "Failed to create a new gRPC server: %v", err)
-	// Create an empty access control policy and register it with the ping service.
+
 	policy := accessctl.NewPolicy()
-	grpcServer.Server().RegisterService(&serviceDesc, &pingServer{policy: policy})
+
+	runtimeID, err := testNs.ToRuntimeID()
+	require.NoErrorf(err, "Failed to obtain runtime ID from namespace: %v", testNs)
+
+	// Create a new pingServer with a new RuntimePolicyChecker.
+	server := &pingServer{NewRuntimePolicyChecker()}
+	server.SetAccessPolicy(&policy, runtimeID)
+
+	// Register the pingServer with the PingService.
+	grpcServer.Server().RegisterService(&serviceDesc, server)
+
 	// Start gRPC server in a separate goroutine.
 	err = grpcServer.Start()
 	require.NoErrorf(err, "Failed to start the gRPC server: %v", err)
@@ -184,11 +199,10 @@ func TestAccessPolicy(t *testing.T) {
 	// Create a new ping client.
 	client = &pingClient{conn}
 
-	_, err = client.Ping(ctx, &PingQuery{})
-	require.Error(err, "Calling Ping with an empty access policy should not be allowed")
-	require.Contains(
-		err.Error(),
-		"rpc error: code = Unknown desc = ping: access policy forbade access: grpc: calling Ping method not allowed for client",
+	_, err = client.Ping(ctx, &PingQuery{testNs})
+	require.EqualError(
+		err,
+		"rpc error: code = Unknown desc = ping: access policy forbade access: grpc: calling Ping method for runtime 832b5e638ea386ece9b747d25fedd5f559af6e2049db1998212b187a64303798 not allowed for client CN=ekiden-node",
 		"Calling Ping with an empty access policy should not be allowed",
 	)
 
@@ -196,7 +210,13 @@ func TestAccessPolicy(t *testing.T) {
 	subject := accessctl.SubjectFromCertificate(clientX509Cert)
 	policy.Allow(subject, "Ping")
 
-	res, err := client.Ping(ctx, &PingQuery{})
+	res, err := client.Ping(ctx, &PingQuery{testNs})
 	require.NoError(err, "Calling Ping with proper access policy set should succeed")
 	require.IsType(&PingResponse{}, res, "Calling Ping should return a response of the correct type")
+}
+
+func init() {
+	var ns hash.Hash
+	ns.FromBytes([]byte("ekiden common grpc policy test ns"))
+	copy(testNs[:], ns[:])
 }
