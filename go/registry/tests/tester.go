@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto"
 	"errors"
+	"net"
 	"testing"
 	"time"
 
@@ -381,11 +382,13 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 			Runtimes:         nodeRts,
 			Roles:            role,
 		}
-		addr, err := node.NewAddress(node.AddressFamilyIPv4, []byte{192, 0, 2, byte(i + 1)}, 451)
-		if err != nil {
-			return nil, err
+		addr := node.Address{
+			TCPAddr: net.TCPAddr{
+				IP:   []byte{192, 0, 2, byte(i + 1)},
+				Port: 451,
+			},
 		}
-		nod.Node.Addresses = append(nod.Node.Addresses, *addr)
+		nod.Node.Addresses = append(nod.Node.Addresses, addr)
 
 		signed, err := signature.SignSigned(ent.Signer, api.RegisterNodeSignatureContext, nod.Node)
 		if err != nil {

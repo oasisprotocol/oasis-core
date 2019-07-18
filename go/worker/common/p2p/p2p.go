@@ -12,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p-core"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/multiformats/go-multiaddr-net"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -65,9 +66,14 @@ func (p *P2P) Info() node.P2PInfo {
 		addrs = p.registerAddresses
 	}
 
-	var addresses [][]byte
-	for _, addr := range addrs {
-		addresses = append(addresses, addr.Bytes())
+	var addresses []node.Address
+	for _, v := range addrs {
+		netAddr, err := manet.ToNetAddr(v)
+		if err != nil {
+			panic(err)
+		}
+		tcpAddr := (netAddr).(*net.TCPAddr)
+		addresses = append(addresses, node.Address{TCPAddr: *tcpAddr})
 	}
 
 	id, _ := p.host.ID().Marshal()
@@ -78,19 +84,19 @@ func (p *P2P) Info() node.P2PInfo {
 	}
 }
 
-func (p *P2P) addPeerInfo(peerID core.PeerID, addresses [][]byte) error {
+func (p *P2P) addPeerInfo(peerID core.PeerID, addresses []node.Address) error {
 	if addresses == nil {
 		return errors.New("nil address list")
 	}
 
 	var addrs []multiaddr.Multiaddr
-	for _, rawAddr := range addresses {
-		addr, err := multiaddr.NewMultiaddrBytes(rawAddr)
+	for _, nodeAddr := range addresses {
+		mAddr, err := manet.FromNetAddr(&nodeAddr.TCPAddr)
 		if err != nil {
 			return err
 		}
 
-		addrs = append(addrs, addr)
+		addrs = append(addrs, mAddr)
 	}
 
 	ps := p.host.Peerstore()
@@ -253,22 +259,12 @@ func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
 
 	var registerAddresses []multiaddr.Multiaddr
 	for _, addr := range addresses {
-		maFamily := "ip4"
-		ip := net.IP(addr.Tuple.IP)
-
-		switch addr.Family {
-		case node.AddressFamilyIPv4:
-			maFamily = "ip4"
-		case node.AddressFamilyIPv6:
-			maFamily = "ip6"
-		default:
-			panic("unsupported address family")
+		var mAddr multiaddr.Multiaddr
+		mAddr, err = manet.FromNetAddr(&addr.TCPAddr)
+		if err != nil {
+			return nil, err
 		}
-
-		ma, _ := multiaddr.NewMultiaddr(
-			fmt.Sprintf("/%s/%s/tcp/%d", maFamily, ip, addr.Tuple.Port),
-		)
-		registerAddresses = append(registerAddresses, ma)
+		registerAddresses = append(registerAddresses, mAddr)
 	}
 
 	sourceMultiAddr, _ := multiaddr.NewMultiaddr(
