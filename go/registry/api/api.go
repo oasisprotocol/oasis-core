@@ -162,7 +162,7 @@ type Backend interface {
 // establish a secure connection with the node.
 type NodeTransport struct {
 	Addresses   []node.Address
-	Certificate *node.Certificate
+	Certificate []byte
 }
 
 // EntityEvent is the event that is returned via WatchEntities to signify

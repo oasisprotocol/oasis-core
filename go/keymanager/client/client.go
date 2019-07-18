@@ -187,7 +187,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 			continue
 		}
 
-		cert, err := n.Certificate.Parse()
+		cert, err := n.ParseCertificate()
 		if err != nil {
 			c.logger.Error("failed to parse key manager certificate",
 				"id", n.ID,

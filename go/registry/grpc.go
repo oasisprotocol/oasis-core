@@ -193,9 +193,7 @@ func (s *grpcServer) GetNodeTransport(ctx context.Context, req *pb.NodeRequest) 
 		resp.Addresses = node.ToProtoAddresses(transport.Addresses)
 	}
 	if transport.Certificate != nil {
-		resp.Certificate = &commonPB.Certificate{
-			Der: append([]byte{}, transport.Certificate.DER...),
-		}
+		resp.Certificate = transport.Certificate
 	}
 
 	return &resp, nil

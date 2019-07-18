@@ -155,7 +155,7 @@ func (w *watcherState) updateStorageNodeConnections() {
 			w.logger.Warn("storage committee member registered without certificate, using insecure connection!",
 				"member", node)
 		} else {
-			nodeCert, err := node.Certificate.Parse()
+			nodeCert, err := node.ParseCertificate()
 			if err != nil {
 				w.logger.Error("failed to parse storage committee member's certificate",
 					"member", node,

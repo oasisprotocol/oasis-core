@@ -95,7 +95,7 @@ type Client struct {
 func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.SubmitTxRequest, nodeMeta *node.Node, resultCh chan error) {
 	defer close(submitCtx.closeCh)
 
-	nodeCert, err := nodeMeta.Certificate.Parse()
+	nodeCert, err := nodeMeta.ParseCertificate()
 	if err != nil {
 		resultCh <- err
 		return

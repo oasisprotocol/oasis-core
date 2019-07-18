@@ -15,10 +15,6 @@ message Address {
     uint32 port = 3;
 }
 
-message Certificate {
-    bytes der = 1;
-}
-
 message Entity {
     bytes id = 1;
     repeated bytes nodes = 2;
@@ -31,7 +27,7 @@ message Node {
     bytes entity_id = 2;
     uint64 expiration = 3;
     repeated Address addresses = 4;
-    Certificate certificate = 5;
+    bytes certificate = 5;
     uint64 registration_time = 6;
     repeated NodeRuntime runtimes = 7;
     uint32 roles = 8;

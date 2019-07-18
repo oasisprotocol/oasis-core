@@ -97,7 +97,7 @@ message EntityNodesResponse {
 
 message NodeTransportResponse {
     repeated common.Address addresses = 1;
-    common.Certificate certificate = 2;
+    bytes certificate = 2;
 }
 
 message WatchNodeRequest {

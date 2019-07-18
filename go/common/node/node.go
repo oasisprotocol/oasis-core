@@ -53,7 +53,7 @@ type Node struct {
 	P2P P2PInfo `codec:"p2p"`
 
 	// Certificate is the certificate for establishing TLS connections.
-	Certificate *Certificate `codec:"certificate"`
+	Certificate []byte `codec:"certificate"`
 
 	// Time of registration.
 	RegistrationTime uint64 `codec:"registration_time"`
@@ -142,17 +142,6 @@ type P2PInfo struct {
 
 	// Addresses is the list of addresses at which the node can be reached.
 	Addresses []Address `codec:"addresses"`
-}
-
-// Certificate represents a X.509 certificate.
-type Certificate struct {
-	// DER is the DER encoding of a X.509 certificate.
-	DER []byte `codec:"der"`
-}
-
-// Parse parses the DER encoded payload and returns the certificate.
-func (c *Certificate) Parse() (*x509.Certificate, error) {
-	return x509.ParseCertificate(c.DER)
 }
 
 // Capabilities represents a node's capabilities.
@@ -311,6 +300,11 @@ func (n *Node) Clone() common.Cloneable {
 	return &nodeCopy
 }
 
+// ParseCertificate returns the parsed x509 certificate.
+func (n *Node) ParseCertificate() (*x509.Certificate, error) {
+	return x509.ParseCertificate(n.Certificate)
+}
+
 // FromProto deserializes a protobuf into a Node.
 func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 	if pb == nil {
@@ -338,11 +332,7 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 		}
 	}
 
-	if pbCert := pb.GetCertificate(); pbCert != nil {
-		n.Certificate = &Certificate{
-			DER: append([]byte{}, pbCert.GetDer()...),
-		}
-	}
+	n.Certificate = pb.GetCertificate()
 
 	n.RegistrationTime = pb.GetRegistrationTime()
 
@@ -370,11 +360,7 @@ func (n *Node) ToProto() *pbCommon.Node {
 	pb.EntityId, _ = n.EntityID.MarshalBinary()
 	pb.Expiration = n.Expiration
 	pb.Addresses = ToProtoAddresses(n.Addresses)
-	if n.Certificate != nil {
-		pb.Certificate = &pbCommon.Certificate{
-			Der: append([]byte{}, n.Certificate.DER...),
-		}
-	}
+	pb.Certificate = n.Certificate
 	pb.RegistrationTime = n.RegistrationTime
 	if n.Runtimes != nil {
 		pb.Runtimes = make([]*pbCommon.NodeRuntime, 0, len(n.Runtimes))
