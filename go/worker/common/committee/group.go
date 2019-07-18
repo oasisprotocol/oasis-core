@@ -1,7 +1,6 @@
 package committee
 
 import (
-	"bytes"
 	"context"
 	"sync"
 
@@ -51,14 +50,14 @@ type epoch struct {
 	computeCommitteeID hash.Hash
 	// computeCommittees are all compute committees.
 	computeCommittees map[hash.Hash]*CommitteeInfo
-	// computeCommitteesByPeer is a set of P2P peer IDs of compute committee
+	// computeCommitteesByPeer is a set of P2P public keys of compute committee
 	// members.
-	computeCommitteesByPeer map[string]bool
+	computeCommitteesByPeer map[signature.MapKey]bool
 
 	// txnSchedulerCommitee is the txn scheduler committee we are a member of.
 	txnSchedulerCommittee *CommitteeInfo
-	// txnSchedulerLeaderPeerID is the P2P peer ID of txn scheduler leader.
-	txnSchedulerLeaderPeerID []byte
+	// txnSchedulerLeaderPeerID is the P2P public key of txn scheduler leader.
+	txnSchedulerLeaderPeerID signature.PublicKey
 
 	// mergeCommittee is the merge committee we are a member of.
 	mergeCommittee *CommitteeInfo
@@ -230,10 +229,10 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 	// Find the current committees.
 	computeCommittees := make(map[hash.Hash]*CommitteeInfo)
-	computeCommitteesByPeer := make(map[string]bool)
+	computeCommitteesByPeer := make(map[signature.MapKey]bool)
 	var computeCommittee, txnSchedulerCommittee, mergeCommittee *CommitteeInfo
 	var computeCommitteeID hash.Hash
-	var txnSchedulerLeaderPeerID []byte
+	var txnSchedulerLeaderPeerID signature.PublicKey
 	for _, cm := range committees {
 		nodes, leader, role, rerr := determineRole(cm)
 		if rerr != nil {
@@ -261,7 +260,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			}
 
 			for _, n := range nodes {
-				computeCommitteesByPeer[string(n.P2P.ID)] = true
+				computeCommitteesByPeer[n.P2P.ID.ToMapKey()] = true
 			}
 		case scheduler.KindTransactionScheduler:
 			txnSchedulerCommittee = ci
@@ -351,7 +350,7 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 
 // IsPeerAuthorized returns true if a given peer should be allowed to send
 // messages to us.
-func (g *Group) IsPeerAuthorized(peerID []byte) bool {
+func (g *Group) IsPeerAuthorized(peerID signature.PublicKey) bool {
 	g.RLock()
 	defer g.RUnlock()
 
@@ -365,12 +364,12 @@ func (g *Group) IsPeerAuthorized(peerID []byte) bool {
 	// If we are in the compute committee, we accept messages from the transaction
 	// scheduler committee leader.
 	if g.activeEpoch.computeCommittee != nil && g.activeEpoch.txnSchedulerLeaderPeerID != nil {
-		authorized = authorized || bytes.Equal(peerID, g.activeEpoch.txnSchedulerLeaderPeerID)
+		authorized = authorized || peerID.Equal(g.activeEpoch.txnSchedulerLeaderPeerID)
 	}
 
 	// If we are in the merge committee, we accept messages from any compute committee member.
 	if g.activeEpoch.mergeCommittee.Role != scheduler.Invalid {
-		_, ok := g.activeEpoch.computeCommitteesByPeer[string(peerID)]
+		_, ok := g.activeEpoch.computeCommitteesByPeer[peerID.ToMapKey()]
 		authorized = authorized || ok
 	}
 
@@ -378,7 +377,7 @@ func (g *Group) IsPeerAuthorized(peerID []byte) bool {
 }
 
 // HandlePeerMessage handles an incoming message from a peer.
-func (g *Group) HandlePeerMessage(peerID []byte, message *p2p.Message) error {
+func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, message *p2p.Message) error {
 	// Perform some checks on the incoming message. We make sure to release the
 	// lock before running the handler.
 	ctx, err := func() (context.Context, error) {

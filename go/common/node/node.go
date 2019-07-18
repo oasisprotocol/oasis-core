@@ -138,7 +138,7 @@ func (r *Runtime) toProto() *pbCommon.NodeRuntime {
 // P2PInfo contains information for connecting to this node via P2P transport.
 type P2PInfo struct {
 	// ID is the unique identifier of the node on the P2P transport.
-	ID []byte `codec:"id"`
+	ID signature.PublicKey `codec:"id"`
 
 	// Addresses is the list of addresses at which the node can be reached.
 	Addresses []Address `codec:"addresses"`

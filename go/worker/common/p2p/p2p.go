@@ -10,6 +10,7 @@ import (
 	"github.com/cenkalti/backoff"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multiaddr-net"
@@ -29,10 +30,10 @@ var protocolName = core.ProtocolID("/p2p/oasislabs.com/committee/" + version.Com
 type Handler interface {
 	// IsPeerAuthorized returns true if a given peer should be allowed
 	// to send messages to us.
-	IsPeerAuthorized(peerID []byte) bool
+	IsPeerAuthorized(peerID signature.PublicKey) bool
 
 	// HandlePeerMessage handles an incoming message from a peer.
-	HandlePeerMessage(peerID []byte, msg *Message) error
+	HandlePeerMessage(peerID signature.PublicKey, msg *Message) error
 }
 
 // P2P is a peer-to-peer node using libp2p.
@@ -47,10 +48,28 @@ type P2P struct {
 	logger *logging.Logger
 }
 
-func bytesToPeerID(raw []byte) (core.PeerID, error) {
-	var id core.PeerID
-	if err := id.Unmarshal(raw); err != nil {
+func publicKeyToPeerID(pk signature.PublicKey) (core.PeerID, error) {
+	pubKey, err := publicKeyToPubKey(pk)
+	if err != nil {
 		return "", err
+	}
+
+	id, err := peer.IDFromPublicKey(pubKey)
+	if err != nil {
+		return "", err
+	}
+
+	return id, nil
+}
+
+func peerIDToPublicKey(peerID core.PeerID) (signature.PublicKey, error) {
+	pk, err := peerID.ExtractPublicKey()
+	if err != nil {
+		return nil, err
+	}
+	id, err := pubKeyToPublicKey(pk)
+	if err != nil {
+		return nil, err
 	}
 
 	return id, nil
@@ -76,7 +95,10 @@ func (p *P2P) Info() node.P2PInfo {
 		addresses = append(addresses, node.Address{TCPAddr: *tcpAddr})
 	}
 
-	id, _ := p.host.ID().Marshal()
+	id, err := peerIDToPublicKey(p.host.ID())
+	if err != nil {
+		panic(err)
+	}
 
 	return node.P2PInfo{
 		ID:        id,
@@ -107,7 +129,7 @@ func (p *P2P) addPeerInfo(peerID core.PeerID, addresses []node.Address) error {
 }
 
 func (p *P2P) publishImpl(ctx context.Context, node *node.Node, msg *Message) error {
-	peerID, err := bytesToPeerID(node.P2P.ID)
+	peerID, err := publicKeyToPeerID(node.P2P.ID)
 	if err != nil {
 		return backoff.Permanent(err)
 	}
@@ -185,12 +207,19 @@ func (p *P2P) handleStreamMessages(stream *Stream) {
 	}()
 
 	peerID := stream.Conn().RemotePeer()
-	rawPeerID, _ := peerID.Marshal()
+	id, err := peerIDToPublicKey(peerID)
+	if err != nil {
+		p.logger.Error("error while extracting public key from peer ID",
+			"err", err,
+			"peer_id", peerID,
+		)
+		return
+	}
 
 	// Currently the protocol is very simple and only supports a single
 	// request/response in a stream.
 	var message Message
-	if err := stream.Read(&message); err != nil {
+	if err = stream.Read(&message); err != nil {
 		p.logger.Error("error while receiving message from peer",
 			"err", err,
 			"peer_id", peerID,
@@ -211,7 +240,7 @@ func (p *P2P) handleStreamMessages(stream *Stream) {
 	}
 
 	// Check if peer is authorized to send messages.
-	if !handler.IsPeerAuthorized(rawPeerID) {
+	if !handler.IsPeerAuthorized(id) {
 		p.logger.Error("dropping stream from unauthorized peer",
 			"runtime_id", message.RuntimeID,
 			"peer_id", peerID,
@@ -221,7 +250,7 @@ func (p *P2P) handleStreamMessages(stream *Stream) {
 		return
 	}
 
-	err := handler.HandlePeerMessage(rawPeerID, &message)
+	err = handler.HandlePeerMessage(id, &message)
 	response := &Message{
 		RuntimeID:    message.RuntimeID,
 		GroupVersion: message.GroupVersion,
