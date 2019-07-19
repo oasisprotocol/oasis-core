@@ -95,38 +95,48 @@ func testQueueCall(
 	// finalized containing our batch.
 	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)
 
-	select {
-	case annBlk := <-blocksCh:
-		blk := annBlk.Block
-		// Check that correct block was generated.
-		require.EqualValues(t, block.Normal, blk.Header.HeaderType)
+blockLoop:
+	for {
+		select {
+		case annBlk := <-blocksCh:
+			blk := annBlk.Block
+			// Epoch transitions can happen????
+			if blk.Header.HeaderType == block.EpochTransition {
+				t.Logf("Got epoch transition block, skipping")
+				continue
+			}
 
-		ctx := context.Background()
-		tree, err := urkel.NewWithRoot(ctx, st, nil, storage.Root{
-			Namespace: blk.Header.Namespace,
-			Round:     blk.Header.Round,
-			Hash:      blk.Header.IORoot,
-		})
-		require.NoError(t, err, "NewWithRoot")
+			// Check that correct block was generated.
+			require.EqualValues(t, block.Normal, blk.Header.HeaderType)
 
-		rawInputs, err := tree.Get(ctx, block.IoKeyInputs)
-		require.NoError(t, err, "Get(inputs)")
-		rawOutputs, err := tree.Get(ctx, block.IoKeyOutputs)
-		require.NoError(t, err, "Get(outputs)")
+			ctx := context.Background()
+			tree, err := urkel.NewWithRoot(ctx, st, nil, storage.Root{
+				Namespace: blk.Header.Namespace,
+				Round:     blk.Header.Round,
+				Hash:      blk.Header.IORoot,
+			})
+			require.NoError(t, err, "NewWithRoot")
 
-		batch := runtime.Batch([][]byte{testCall})
-		rawBatch := batch.MarshalCBOR()
+			rawInputs, err := tree.Get(ctx, block.IoKeyInputs)
+			require.NoError(t, err, "Get(inputs)")
+			rawOutputs, err := tree.Get(ctx, block.IoKeyOutputs)
+			require.NoError(t, err, "Get(outputs)")
 
-		require.EqualValues(t, rawBatch, rawInputs)
-		// NOTE: Mock host produces output equal to input.
-		require.EqualValues(t, rawBatch, rawOutputs)
+			batch := runtime.Batch([][]byte{testCall})
+			rawBatch := batch.MarshalCBOR()
 
-		// NOTE: Mock host produces an empty state root.
-		var stateRoot hash.Hash
-		stateRoot.Empty()
-		require.EqualValues(t, stateRoot, blk.Header.StateRoot)
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive block")
+			require.EqualValues(t, rawBatch, rawInputs)
+			// NOTE: Mock host produces output equal to input.
+			require.EqualValues(t, rawBatch, rawOutputs)
+
+			// NOTE: Mock host produces an empty state root.
+			var stateRoot hash.Hash
+			stateRoot.Empty()
+			require.EqualValues(t, stateRoot, blk.Header.StateRoot)
+			break blockLoop
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive block")
+		}
 	}
 }
 

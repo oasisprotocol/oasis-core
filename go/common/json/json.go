@@ -29,6 +29,12 @@ func Marshal(src interface{}) []byte {
 
 // Unmarshal deserializes a JSON byte vector into a given type.
 func Unmarshal(data []byte, dst interface{}) error {
+	// NewDecoderBytes will fail to correctly initialize the decoder
+	// if data is nil.
+	if data == nil {
+		return nil
+	}
+
 	dec := codec.NewDecoderBytes(data, Handle)
 	defer dec.Release()
 	if err := dec.Decode(dst); err != nil {

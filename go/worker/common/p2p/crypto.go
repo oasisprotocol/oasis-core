@@ -36,8 +36,7 @@ func (s *p2pSigner) Sign(msg []byte) ([]byte, error) {
 }
 
 func (s *p2pSigner) GetPublic() libp2pCrypto.PubKey {
-	signerPub := s.signer.Public()
-	pubKey, err := libp2pCrypto.UnmarshalEd25519PublicKey(signerPub[:])
+	pubKey, err := publicKeyToPubKey(s.signer.Public())
 	if err != nil {
 		panic(err)
 	}
@@ -49,4 +48,31 @@ func signerToPrivKey(signer signature.Signer) libp2pCrypto.PrivKey {
 	return &p2pSigner{
 		signer: signer,
 	}
+}
+
+func pubKeyToPublicKey(pubKey libp2pCrypto.PubKey) (signature.PublicKey, error) {
+	if pubKey.Type() != libp2pCrypto.Ed25519 {
+		return nil, errCryptoNotSupported
+	}
+
+	raw, err := pubKey.Raw()
+	if err != nil {
+		return nil, err
+	}
+
+	var pk signature.PublicKey
+	if err = pk.UnmarshalBinary(raw); err != nil {
+		return nil, err
+	}
+
+	return pk, nil
+}
+
+func publicKeyToPubKey(pk signature.PublicKey) (libp2pCrypto.PubKey, error) {
+	pubKey, err := libp2pCrypto.UnmarshalEd25519PublicKey(pk[:])
+	if err != nil {
+		return nil, err
+	}
+
+	return pubKey, nil
 }

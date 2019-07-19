@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const recvTimeout = 1 * time.Second
+const recvTimeout = 5 * time.Second
 
 func TestPubSub(t *testing.T) {
 	t.Run("Basic", testBasic)

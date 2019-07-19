@@ -148,14 +148,14 @@ func (w *watcherState) updateStorageNodeConnections() {
 	// Connect to nodes.
 	for _, node := range nodeList {
 		var opts grpc.DialOption
-		if node.Certificate == nil {
+		if node.Committee.Certificate == nil {
 			// NOTE: This should only happen in tests, where nodes register without a certificate.
 			// TODO: This can be rejected once node_tests register with a certificate.
 			opts = grpc.WithInsecure()
 			w.logger.Warn("storage committee member registered without certificate, using insecure connection!",
 				"member", node)
 		} else {
-			nodeCert, err := node.Certificate.Parse()
+			nodeCert, err := node.Committee.ParseCertificate()
 			if err != nil {
 				w.logger.Error("failed to parse storage committee member's certificate",
 					"member", node,
@@ -168,7 +168,7 @@ func (w *watcherState) updateStorageNodeConnections() {
 			opts = grpc.WithTransportCredentials(creds)
 		}
 
-		if len(node.Addresses) == 0 {
+		if len(node.Committee.Addresses) == 0 {
 			w.logger.Error("cannot update connection, storage committee member does not have any addresses",
 				"member", node,
 			)
@@ -186,7 +186,7 @@ func (w *watcherState) updateStorageNodeConnections() {
 			continue
 		}
 		var resolverState resolver.State
-		for _, addr := range node.Addresses {
+		for _, addr := range node.Committee.Addresses {
 			resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
 		}
 		manualResolver.UpdateState(resolverState)

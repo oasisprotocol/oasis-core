@@ -6,9 +6,6 @@ package node
 import (
 	"crypto/x509"
 	"errors"
-	"math"
-	"net"
-	"strconv"
 	"time"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -20,10 +17,6 @@ import (
 )
 
 var (
-	// ErrInvalidAddress is the error returned when a transport address
-	// is invalid.
-	ErrInvalidAddress = errors.New("node: invalid transport address")
-
 	// ErrInvalidTEEHardware is the error returned when a TEE hardware
 	// implementation is invalid.
 	ErrInvalidTEEHardware = errors.New("node: invalid TEE implementation")
@@ -53,14 +46,12 @@ type Node struct {
 	// Expiration is the epoch in which this node's commitment expires.
 	Expiration uint64 `codec:"expiration"`
 
-	// Addresses is the list of addresses at which the node can be reached.
-	Addresses []Address `codec:"addresses"`
+	// Committee contains information for connecting to this node as a committee
+	// member.
+	Committee CommitteeInfo `codec:"committee"`
 
 	// P2P contains information for connecting to this node via P2P transport.
 	P2P P2PInfo `codec:"p2p"`
-
-	// Certificate is the certificate for establishing TLS connections.
-	Certificate *Certificate `codec:"certificate"`
 
 	// Time of registration.
 	RegistrationTime uint64 `codec:"registration_time"`
@@ -142,95 +133,90 @@ func (r *Runtime) toProto() *pbCommon.NodeRuntime {
 	return pb
 }
 
-// P2PInfo contains information for connecting to this node via P2P transport.
-type P2PInfo struct {
-	// ID is the unique identifier of the node on the P2P transport.
-	ID []byte `codec:"id"`
+// CommitteInfo contains information for connecting to this node as a
+// committee member.
+type CommitteeInfo struct {
+	// Certificate is the certificate for establishing TLS connections.
+	Certificate []byte `codec:"certificate"`
 
-	// Addresses is the list of multiaddrs at which the node can be reached.
-	Addresses [][]byte `codec:"addresses"`
+	// Addresses is the list of addresses at which the node can be reached.
+	Addresses []Address `codec:"addresses"`
 }
 
-// Address families.
-const (
-	AddressFamilyIPv4 = "V4"
-	AddressFamilyIPv6 = "V6"
-)
-
-// Address is an IP address.
-//
-// This structure format is compatible with Rust's SocketAddr serialization.
-type Address struct {
-	_struct struct{} `codec:",toarray"` // nolint
-
-	// Family is an address family.
-	Family string
-
-	// Tuple is a (ip, port) tuple.
-	Tuple AddressTuple
+// ParseCertificate returns the parsed x509 certificate.
+func (info *CommitteeInfo) ParseCertificate() (*x509.Certificate, error) {
+	return x509.ParseCertificate(info.Certificate)
 }
 
-// NewAddress creates a new address.
-func NewAddress(family string, ip []byte, port uint16) (*Address, error) {
-	return &Address{
-		Family: family,
-		Tuple: AddressTuple{
-			IP:   ip,
-			Port: port,
-		},
-	}, nil
+func (info *CommitteeInfo) toProto() *pbCommon.CommitteeInfo {
+	pb := new(pbCommon.CommitteeInfo)
+
+	pb.Certificate = info.Certificate
+	pb.Addresses = ToProtoAddresses(info.Addresses)
+
+	return pb
 }
 
-// FromIP populates the address from a net.IP and port.
-func (a *Address) FromIP(ip net.IP, port uint16) error {
-	if ipv4 := ip.To4(); ipv4 != nil {
-		a.Family = AddressFamilyIPv4
-		a.Tuple.IP = ipv4
-	} else if ipv6 := ip.To16(); ipv6 != nil {
-		a.Family = AddressFamilyIPv6
-		a.Tuple.IP = ipv6
-	} else {
-		return errors.New("unknown address family")
+func (info *CommitteeInfo) fromProto(pb *pbCommon.CommitteeInfo) error {
+	if pb == nil {
+		return ErrNilProtobuf
 	}
 
-	a.Tuple.Port = port
+	info.Certificate = pb.GetCertificate()
+
+	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
+		info.Addresses = make([]Address, 0, len(pbAddresses))
+		for _, v := range pbAddresses {
+			addr, err := parseProtoAddress(v)
+			if err != nil {
+				return err
+			}
+			info.Addresses = append(info.Addresses, *addr)
+		}
+	}
 
 	return nil
 }
 
-// String renders the address into a string containing the IP and port.
-func (a *Address) String() string {
-	netIP := make(net.IP, len(a.Tuple.IP))
-	copy(netIP, a.Tuple.IP)
-	stringIP := netIP.String()
+// P2PInfo contains information for connecting to this node via P2P transport.
+type P2PInfo struct {
+	// ID is the unique identifier of the node on the P2P transport.
+	ID signature.PublicKey `codec:"id"`
 
-	stringPort := strconv.Itoa(int(a.Tuple.Port))
-
-	return net.JoinHostPort(stringIP, stringPort)
+	// Addresses is the list of addresses at which the node can be reached.
+	Addresses []Address `codec:"addresses"`
 }
 
-// AddressTuple is an (ip, port) tuple.
-//
-// This structure format is compatible with Rust's SocketAddr serialization.
-type AddressTuple struct {
-	_struct struct{} `codec:",toarray"` // nolint
+func (info *P2PInfo) toProto() *pbCommon.P2PInfo {
+	pb := new(pbCommon.P2PInfo)
 
-	// IP address.
-	IP []byte
+	pb.Id, _ = info.ID.MarshalBinary()
+	pb.Addresses = ToProtoAddresses(info.Addresses)
 
-	// Port.
-	Port uint16
+	return pb
 }
 
-// Certificate represents a X.509 certificate.
-type Certificate struct {
-	// DER is the DER encoding of a X.509 certificate.
-	DER []byte `codec:"der"`
-}
+func (info *P2PInfo) fromProto(pb *pbCommon.P2PInfo) error {
+	if pb == nil {
+		return ErrNilProtobuf
+	}
 
-// Parse parses the DER encoded payload and returns the certificate.
-func (c *Certificate) Parse() (*x509.Certificate, error) {
-	return x509.ParseCertificate(c.DER)
+	if err := info.ID.UnmarshalBinary(pb.GetId()); err != nil {
+		return err
+	}
+
+	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
+		info.Addresses = make([]Address, 0, len(pbAddresses))
+		for _, v := range pbAddresses {
+			addr, err := parseProtoAddress(v)
+			if err != nil {
+				return err
+			}
+			info.Addresses = append(info.Addresses, *addr)
+		}
+	}
+
+	return nil
 }
 
 // Capabilities represents a node's capabilities.
@@ -405,21 +391,12 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 
 	n.Expiration = pb.GetExpiration()
 
-	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
-		n.Addresses = make([]Address, 0, len(pbAddresses))
-		for _, v := range pbAddresses {
-			addr, err := parseProtoAddress(v)
-			if err != nil {
-				return err
-			}
-			n.Addresses = append(n.Addresses, *addr)
-		}
+	if err := n.Committee.fromProto(pb.GetCommittee()); err != nil {
+		return err
 	}
 
-	if pbCert := pb.GetCertificate(); pbCert != nil {
-		n.Certificate = &Certificate{
-			DER: append([]byte{}, pbCert.GetDer()...),
-		}
+	if err := n.P2P.fromProto(pb.GetP2P()); err != nil {
+		return err
 	}
 
 	n.RegistrationTime = pb.GetRegistrationTime()
@@ -447,14 +424,8 @@ func (n *Node) ToProto() *pbCommon.Node {
 	pb.Id, _ = n.ID.MarshalBinary()
 	pb.EntityId, _ = n.EntityID.MarshalBinary()
 	pb.Expiration = n.Expiration
-	if n.Addresses != nil {
-		pb.Addresses = ToProtoAddresses(n.Addresses)
-	}
-	if n.Certificate != nil {
-		pb.Certificate = &pbCommon.Certificate{
-			Der: append([]byte{}, n.Certificate.DER...),
-		}
-	}
+	pb.Committee = n.Committee.toProto()
+	pb.P2P = n.P2P.toProto()
 	pb.RegistrationTime = n.RegistrationTime
 	if n.Runtimes != nil {
 		pb.Runtimes = make([]*pbCommon.NodeRuntime, 0, len(n.Runtimes))
@@ -503,55 +474,4 @@ func SignNode(signer signature.Signer, context []byte, node *Node) (*SignedNode,
 	return &SignedNode{
 		Signed: *signed,
 	}, nil
-}
-
-func parseProtoAddress(pb *pbCommon.Address) (*Address, error) {
-	var ipLen int
-	var family string
-	switch pb.GetTransport() {
-	case pbCommon.Address_TCPv4:
-		ipLen = 4
-		family = AddressFamilyIPv4
-	case pbCommon.Address_TCPv6:
-		ipLen = 16
-		family = AddressFamilyIPv6
-	default:
-		return nil, ErrInvalidAddress
-	}
-	rawIP := pb.GetAddress()
-	if len(rawIP) != ipLen {
-		return nil, ErrInvalidAddress
-	}
-
-	rawPort := pb.GetPort()
-	if rawPort > math.MaxUint16 {
-		return nil, ErrInvalidAddress
-	}
-
-	return NewAddress(family, rawIP, uint16(rawPort))
-}
-
-func toProtoAddress(addr Address) *pbCommon.Address {
-	pbAddr := new(pbCommon.Address)
-	switch addr.Family {
-	case AddressFamilyIPv4:
-		pbAddr.Transport = pbCommon.Address_TCPv4
-	case AddressFamilyIPv6:
-		pbAddr.Transport = pbCommon.Address_TCPv6
-	default:
-		panic("Address is neither IPv4 nor IPv6")
-	}
-	pbAddr.Address = append([]byte{}, addr.Tuple.IP...)
-	pbAddr.Port = uint32(addr.Tuple.Port)
-
-	return pbAddr
-}
-
-// ToProtoAddresses converts a list of Addresses to protocol buffers.
-func ToProtoAddresses(addrs []Address) []*pbCommon.Address {
-	var pbAddrs []*pbCommon.Address
-	for _, addr := range addrs {
-		pbAddrs = append(pbAddrs, toProtoAddress(addr))
-	}
-	return pbAddrs
 }

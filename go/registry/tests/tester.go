@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto"
 	"errors"
+	"net"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ import (
 	"github.com/oasislabs/ekiden/go/registry/api"
 )
 
-const recvTimeout = 1 * time.Second
+const recvTimeout = 5 * time.Second
 
 // RegistryImplementationTests exercises the basic functionality of a
 // registry backend.
@@ -132,8 +133,8 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 
 				tp, err := backend.GetNodeTransport(context.Background(), v.Node.ID)
 				require.NoError(err, "GetNodeTransport")
-				require.EqualValues(v.Node.Addresses, tp.Addresses, "retrieved transport addresses")
-				require.EqualValues(v.Node.Certificate, tp.Certificate, "retrieved transport certificate")
+				require.EqualValues(v.Node.Committee.Addresses, tp.Addresses, "retrieved transport addresses")
+				require.EqualValues(v.Node.Committee.Certificate, tp.Certificate, "retrieved transport certificate")
 			}
 		}
 	})
@@ -381,11 +382,13 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 			Runtimes:         nodeRts,
 			Roles:            role,
 		}
-		addr, err := node.NewAddress(node.AddressFamilyIPv4, []byte{192, 0, 2, byte(i + 1)}, 451)
-		if err != nil {
-			return nil, err
+		addr := node.Address{
+			TCPAddr: net.TCPAddr{
+				IP:   []byte{192, 0, 2, byte(i + 1)},
+				Port: 451,
+			},
 		}
-		nod.Node.Addresses = append(nod.Node.Addresses, *addr)
+		nod.Node.Committee.Addresses = append(nod.Node.Committee.Addresses, addr)
 
 		signed, err := signature.SignSigned(ent.Signer, api.RegisterNodeSignatureContext, nod.Node)
 		if err != nil {

@@ -11,7 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/epochtime/api"
 )
 
-const recvTimeout = 1 * time.Second
+const recvTimeout = 5 * time.Second
 
 // EpochtimeSetableImplementationTest exercises the basic functionality of
 // a setable (mock) epochtime backend.

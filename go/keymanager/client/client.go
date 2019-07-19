@@ -187,7 +187,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 			continue
 		}
 
-		cert, err := n.Certificate.Parse()
+		cert, err := n.Committee.ParseCertificate()
 		if err != nil {
 			c.logger.Error("failed to parse key manager certificate",
 				"id", n.ID,
@@ -197,7 +197,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 		}
 		certPool.AddCert(cert)
 
-		for _, addr := range n.Addresses {
+		for _, addr := range n.Committee.Addresses {
 			resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
 		}
 	}
