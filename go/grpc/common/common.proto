@@ -26,11 +26,21 @@ message Node {
     bytes id = 1;
     bytes entity_id = 2;
     uint64 expiration = 3;
-    repeated Address addresses = 4;
-    bytes certificate = 5;
+    CommitteeInfo committee = 4;
+    P2PInfo p2p = 5;
     uint64 registration_time = 6;
     repeated NodeRuntime runtimes = 7;
     uint32 roles = 8;
+}
+
+message CommitteeInfo {
+    bytes certificate = 1;
+    repeated Address addresses = 2;
+}
+
+message P2PInfo {
+    bytes id = 1;
+    repeated Address addresses = 2;
 }
 
 message NodeRuntime {

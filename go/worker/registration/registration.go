@@ -155,13 +155,15 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 	}
 	identityPublic := r.identity.NodeSigner.Public()
 	nodeDesc := node.Node{
-		ID:               identityPublic,
-		EntityID:         r.entityID,
-		Expiration:       uint64(epoch) + 2,
+		ID:         identityPublic,
+		EntityID:   r.entityID,
+		Expiration: uint64(epoch) + 2,
+		Committee: node.CommitteeInfo{
+			Certificate: r.identity.TLSCertificate.Certificate[0],
+			Addresses:   addresses,
+		},
 		P2P:              r.p2p.Info(),
-		Certificate:      r.identity.TLSCertificate.Certificate[0],
 		RegistrationTime: uint64(time.Now().Unix()),
-		Addresses:        addresses,
 	}
 	for _, runtime := range r.workerCommonCfg.Runtimes {
 		nodeDesc.Runtimes = append(nodeDesc.Runtimes, &node.Runtime{

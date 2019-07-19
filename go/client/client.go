@@ -95,7 +95,7 @@ type Client struct {
 func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.SubmitTxRequest, nodeMeta *node.Node, resultCh chan error) {
 	defer close(submitCtx.closeCh)
 
-	nodeCert, err := nodeMeta.ParseCertificate()
+	nodeCert, err := nodeMeta.Committee.ParseCertificate()
 	if err != nil {
 		resultCh <- err
 		return
@@ -117,7 +117,7 @@ func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.
 	client := txnscheduler.NewTransactionSchedulerClient(conn)
 
 	var resolverState resolver.State
-	for _, addr := range nodeMeta.Addresses {
+	for _, addr := range nodeMeta.Committee.Addresses {
 		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
 	}
 	manualResolver.UpdateState(resolverState)

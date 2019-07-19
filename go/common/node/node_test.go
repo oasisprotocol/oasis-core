@@ -11,8 +11,14 @@ import (
 func TestSerialization(t *testing.T) {
 	key, _, _ := ed25519.GenerateKey(nil)
 	n := Node{
-		ID:         signature.PublicKey(key),
-		EntityID:   signature.PublicKey(key),
+		ID:       signature.PublicKey(key),
+		EntityID: signature.PublicKey(key),
+		Committee: CommitteeInfo{
+			Certificate: []byte("I moon o'er you, Inis Mona, As long as I breathe, I'll call you my home"),
+		},
+		P2P: P2PInfo{
+			ID: signature.PublicKey(key),
+		},
 		Expiration: 42,
 		Roles:      RoleComputeWorker,
 	}

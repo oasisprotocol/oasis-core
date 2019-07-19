@@ -170,8 +170,8 @@ func (r *tendermintBackend) GetNodeTransport(ctx context.Context, id signature.P
 	}
 
 	return &api.NodeTransport{
-		Addresses:   node.Addresses,
-		Certificate: node.Certificate,
+		Certificate: node.Committee.Certificate,
+		Addresses:   node.Committee.Addresses,
 	}, nil
 }
 

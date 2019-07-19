@@ -133,8 +133,8 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 
 				tp, err := backend.GetNodeTransport(context.Background(), v.Node.ID)
 				require.NoError(err, "GetNodeTransport")
-				require.EqualValues(v.Node.Addresses, tp.Addresses, "retrieved transport addresses")
-				require.EqualValues(v.Node.Certificate, tp.Certificate, "retrieved transport certificate")
+				require.EqualValues(v.Node.Committee.Addresses, tp.Addresses, "retrieved transport addresses")
+				require.EqualValues(v.Node.Committee.Certificate, tp.Certificate, "retrieved transport certificate")
 			}
 		}
 	})
@@ -388,7 +388,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 				Port: 451,
 			},
 		}
-		nod.Node.Addresses = append(nod.Node.Addresses, addr)
+		nod.Node.Committee.Addresses = append(nod.Node.Committee.Addresses, addr)
 
 		signed, err := signature.SignSigned(ent.Signer, api.RegisterNodeSignatureContext, nod.Node)
 		if err != nil {

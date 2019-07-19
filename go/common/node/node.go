@@ -46,14 +46,12 @@ type Node struct {
 	// Expiration is the epoch in which this node's commitment expires.
 	Expiration uint64 `codec:"expiration"`
 
-	// Addresses is the list of addresses at which the node can be reached.
-	Addresses []Address `codec:"addresses"`
+	// Committee contains information for connecting to this node as a committee
+	// member.
+	Committee CommitteeInfo `codec:"committee"`
 
 	// P2P contains information for connecting to this node via P2P transport.
 	P2P P2PInfo `codec:"p2p"`
-
-	// Certificate is the certificate for establishing TLS connections.
-	Certificate []byte `codec:"certificate"`
 
 	// Time of registration.
 	RegistrationTime uint64 `codec:"registration_time"`
@@ -135,6 +133,51 @@ func (r *Runtime) toProto() *pbCommon.NodeRuntime {
 	return pb
 }
 
+// CommitteInfo contains information for connecting to this node as a
+// committee member.
+type CommitteeInfo struct {
+	// Certificate is the certificate for establishing TLS connections.
+	Certificate []byte `codec:"certificate"`
+
+	// Addresses is the list of addresses at which the node can be reached.
+	Addresses []Address `codec:"addresses"`
+}
+
+// ParseCertificate returns the parsed x509 certificate.
+func (info *CommitteeInfo) ParseCertificate() (*x509.Certificate, error) {
+	return x509.ParseCertificate(info.Certificate)
+}
+
+func (info *CommitteeInfo) toProto() *pbCommon.CommitteeInfo {
+	pb := new(pbCommon.CommitteeInfo)
+
+	pb.Certificate = info.Certificate
+	pb.Addresses = ToProtoAddresses(info.Addresses)
+
+	return pb
+}
+
+func (info *CommitteeInfo) fromProto(pb *pbCommon.CommitteeInfo) error {
+	if pb == nil {
+		return ErrNilProtobuf
+	}
+
+	info.Certificate = pb.GetCertificate()
+
+	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
+		info.Addresses = make([]Address, 0, len(pbAddresses))
+		for _, v := range pbAddresses {
+			addr, err := parseProtoAddress(v)
+			if err != nil {
+				return err
+			}
+			info.Addresses = append(info.Addresses, *addr)
+		}
+	}
+
+	return nil
+}
+
 // P2PInfo contains information for connecting to this node via P2P transport.
 type P2PInfo struct {
 	// ID is the unique identifier of the node on the P2P transport.
@@ -142,6 +185,38 @@ type P2PInfo struct {
 
 	// Addresses is the list of addresses at which the node can be reached.
 	Addresses []Address `codec:"addresses"`
+}
+
+func (info *P2PInfo) toProto() *pbCommon.P2PInfo {
+	pb := new(pbCommon.P2PInfo)
+
+	pb.Id, _ = info.ID.MarshalBinary()
+	pb.Addresses = ToProtoAddresses(info.Addresses)
+
+	return pb
+}
+
+func (info *P2PInfo) fromProto(pb *pbCommon.P2PInfo) error {
+	if pb == nil {
+		return ErrNilProtobuf
+	}
+
+	if err := info.ID.UnmarshalBinary(pb.GetId()); err != nil {
+		return err
+	}
+
+	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
+		info.Addresses = make([]Address, 0, len(pbAddresses))
+		for _, v := range pbAddresses {
+			addr, err := parseProtoAddress(v)
+			if err != nil {
+				return err
+			}
+			info.Addresses = append(info.Addresses, *addr)
+		}
+	}
+
+	return nil
 }
 
 // Capabilities represents a node's capabilities.
@@ -300,11 +375,6 @@ func (n *Node) Clone() common.Cloneable {
 	return &nodeCopy
 }
 
-// ParseCertificate returns the parsed x509 certificate.
-func (n *Node) ParseCertificate() (*x509.Certificate, error) {
-	return x509.ParseCertificate(n.Certificate)
-}
-
 // FromProto deserializes a protobuf into a Node.
 func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 	if pb == nil {
@@ -321,18 +391,13 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 
 	n.Expiration = pb.GetExpiration()
 
-	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
-		n.Addresses = make([]Address, 0, len(pbAddresses))
-		for _, v := range pbAddresses {
-			addr, err := parseProtoAddress(v)
-			if err != nil {
-				return err
-			}
-			n.Addresses = append(n.Addresses, *addr)
-		}
+	if err := n.Committee.fromProto(pb.GetCommittee()); err != nil {
+		return err
 	}
 
-	n.Certificate = pb.GetCertificate()
+	if err := n.P2P.fromProto(pb.GetP2P()); err != nil {
+		return err
+	}
 
 	n.RegistrationTime = pb.GetRegistrationTime()
 
@@ -359,8 +424,8 @@ func (n *Node) ToProto() *pbCommon.Node {
 	pb.Id, _ = n.ID.MarshalBinary()
 	pb.EntityId, _ = n.EntityID.MarshalBinary()
 	pb.Expiration = n.Expiration
-	pb.Addresses = ToProtoAddresses(n.Addresses)
-	pb.Certificate = n.Certificate
+	pb.Committee = n.Committee.toProto()
+	pb.P2P = n.P2P.toProto()
 	pb.RegistrationTime = n.RegistrationTime
 	if n.Runtimes != nil {
 		pb.Runtimes = make([]*pbCommon.NodeRuntime, 0, len(n.Runtimes))
