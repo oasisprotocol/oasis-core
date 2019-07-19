@@ -286,7 +286,15 @@ func testRegistryRuntime(t *testing.T, backend api.Backend) {
 	//       tests that run before this register their own runtime and this runtime
 	//       cannot be deregistered.
 	require.Len(registeredRuntimes, len(existingRuntimes)+1, "registry has one new runtime")
-	require.EqualValues(rt.Runtime, registeredRuntimes[len(registeredRuntimes)-1], "expected runtime is registered")
+	rtFound := false
+	for _, regRuntime := range registeredRuntimes {
+		if regRuntime.ID.Equal(rt.Runtime.ID) {
+			rtFound = true
+			require.EqualValues(rt.Runtime, regRuntime, "expected runtime is registered")
+			break
+		}
+	}
+	require.Equal(true, rtFound, "newly registered runtime not found")
 
 	// Subscribe to entity deregistration event.
 	ch, sub := backend.WatchEntities()
