@@ -21,7 +21,7 @@ import (
 	"github.com/oasislabs/ekiden/go/registry/api"
 )
 
-const recvTimeout = 1 * time.Second
+const recvTimeout = 5 * time.Second
 
 // RegistryImplementationTests exercises the basic functionality of a
 // registry backend.

@@ -17,7 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/staking/api"
 )
 
-const recvTimeout = 1 * time.Second
+const recvTimeout = 5 * time.Second
 
 var (
 	// DebugGenesisState is the string representation of the initial

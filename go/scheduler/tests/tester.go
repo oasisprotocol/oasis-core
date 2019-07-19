@@ -18,7 +18,7 @@ import (
 	"github.com/oasislabs/ekiden/go/scheduler/api"
 )
 
-const recvTimeout = 1 * time.Second
+const recvTimeout = 5 * time.Second
 
 // SchedulerImplementationTests exercises the basic functionality of a
 // scheduler backend.
