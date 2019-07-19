@@ -802,6 +802,17 @@ func (s *ApplicationState) EpochChanged(timeSource epochtime.Backend) (bool, epo
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
 		return false, epochtime.EpochInvalid
+	} else if blockHeight == 1 {
+		// There is no block before the first block. For historic reasons, this is defined as not
+		// having had a transition.
+		currentEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight)
+		if err != nil {
+			s.logger.Error("EpochChanged: failed to get current epoch",
+				"err", err,
+			)
+			return false, epochtime.EpochInvalid
+		}
+		return false, currentEpoch
 	}
 
 	previousEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight-1)
