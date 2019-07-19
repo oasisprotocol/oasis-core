@@ -504,7 +504,7 @@ func (g *Group) PublishScheduledBatch(
 		return nil, errors.New("group: invalid compute committee")
 	}
 
-	dispatchMsg := &p2p.TxnSchedulerBatchDispatch{
+	dispatchMsg := &commitment.TxnSchedulerBatchDispatch{
 		CommitteeID:       committeeID,
 		IORoot:            ioRoot,
 		StorageSignatures: storageSignatures,

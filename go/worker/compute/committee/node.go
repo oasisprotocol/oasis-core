@@ -208,7 +208,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 
 		// Transaction scheduler checks out, open the signed dispatch message
 		// and add it to the queue.
-		var bd p2p.TxnSchedulerBatchDispatch
+		var bd commitment.TxnSchedulerBatchDispatch
 		if err := sbd.Open(&bd); err != nil {
 			return false, err
 		}
@@ -305,7 +305,7 @@ func (n *Node) queueBatchBlocking(
 
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
-	return n.handleExternalBatchLocked(committeeID, ioRootHash, batch, batchSpanCtx, hdr, txnSchedSig)
+	return n.handleExternalBatchLocked(committeeID, ioRootHash, batch, batchSpanCtx, hdr, txnSchedSig, storageSignatures)
 }
 
 // HandleBatchFromTransactionSchedulerLocked processes a batch from the transaction scheduler.
@@ -316,6 +316,7 @@ func (n *Node) HandleBatchFromTransactionSchedulerLocked(
 	ioRoot hash.Hash,
 	batch runtime.Batch,
 	txnSchedSig signature.Signature,
+	storageSigs []signature.Signature,
 ) {
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 	expectedID := epoch.GetComputeCommitteeID()
@@ -323,7 +324,7 @@ func (n *Node) HandleBatchFromTransactionSchedulerLocked(
 		return
 	}
 
-	n.maybeStartProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig)
+	n.maybeStartProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig, storageSigs)
 }
 
 func (n *Node) bumpReselect() {
@@ -392,7 +393,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 		// Check if this was the block we were waiting for.
 		if header.MostlyEqual(state.header) {
 			n.logger.Info("received block needed for batch processing")
-			n.maybeStartProcessingBatchLocked(state.ioRoot, state.batch, state.batchSpanCtx, state.txnSchedSig)
+			n.maybeStartProcessingBatchLocked(state.ioRoot, state.batch, state.batchSpanCtx, state.txnSchedSig, state.storageSigs)
 			break
 		}
 
@@ -433,13 +434,13 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext, txnSchedSig signature.Signature) {
+func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext, txnSchedSig signature.Signature, storageSigs []signature.Signature) {
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	switch {
 	case epoch.IsComputeWorker():
 		// Worker, start processing immediately.
-		n.startProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig)
+		n.startProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig, storageSigs)
 	case epoch.IsComputeBackupWorker():
 		// Backup worker, wait for discrepancy event.
 		n.transitionLocked(StateWaitingForEvent{
@@ -447,6 +448,7 @@ func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.B
 			batch:        batch,
 			batchSpanCtx: batchSpanCtx,
 			txnSchedSig:  txnSchedSig,
+			storageSigs:  storageSigs,
 		})
 	default:
 		// Currently not a member of a compute committee, log.
@@ -455,7 +457,7 @@ func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.B
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext, txnSchedSig signature.Signature) {
+func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext, txnSchedSig signature.Signature, storageSigs []signature.Signature) {
 	if n.commonNode.CurrentBlock == nil {
 		panic("attempted to start processing batch with a nil block")
 	}
@@ -483,7 +485,7 @@ func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch,
 
 	batchStartTime := time.Now()
 	batchSize.With(n.getMetricLabels()).Observe(float64(len(batch)))
-	n.transitionLocked(StateProcessingBatch{ioRoot, batch, batchSpanCtx, batchStartTime, cancel, done, txnSchedSig})
+	n.transitionLocked(StateProcessingBatch{ioRoot, batch, batchSpanCtx, batchStartTime, cancel, done, txnSchedSig, storageSigs})
 
 	// Request the worker host to process a batch. This is done in a separate
 	// goroutine so that the committee node can continue processing blocks.
@@ -585,10 +587,12 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 
 	// Generate proposed compute results.
 	proposedResults := &commitment.ComputeBody{
-		CommitteeID: epoch.GetComputeCommitteeID(),
-		Header:      batch.Header,
-		RakSig:      batch.RakSig,
-		TxnSchedSig: state.txnSchedSig,
+		CommitteeID:      epoch.GetComputeCommitteeID(),
+		Header:           batch.Header,
+		RakSig:           batch.RakSig,
+		TxnSchedSig:      state.txnSchedSig,
+		InputRoot:        state.ioRoot,
+		InputStorageSigs: state.storageSigs,
 	}
 
 	// Commit I/O and state write logs to storage.
@@ -752,7 +756,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 
 	// Backup worker, start processing a batch.
 	n.logger.Info("backup worker activating and processing batch")
-	n.startProcessingBatchLocked(state.ioRoot, state.batch, state.batchSpanCtx, state.txnSchedSig)
+	n.startProcessingBatchLocked(state.ioRoot, state.batch, state.batchSpanCtx, state.txnSchedSig, state.storageSigs)
 }
 
 // Guarded by n.commonNode.CrossNode.
@@ -763,6 +767,7 @@ func (n *Node) handleExternalBatchLocked(
 	batchSpanCtx opentracing.SpanContext,
 	hdr block.Header,
 	txnSchedSig signature.Signature,
+	storageSigs []signature.Signature,
 ) error {
 	// If we are not waiting for a batch, don't do anything.
 	if _, ok := n.state.(StateWaitingForBatch); !ok {
@@ -789,7 +794,7 @@ func (n *Node) handleExternalBatchLocked(
 
 	// Check if we have the correct block -- in this case, start processing the batch.
 	if n.commonNode.CurrentBlock.Header.MostlyEqual(&hdr) {
-		n.maybeStartProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig)
+		n.maybeStartProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig, storageSigs)
 		return nil
 	}
 
@@ -811,6 +816,7 @@ func (n *Node) handleExternalBatchLocked(
 		batchSpanCtx: batchSpanCtx,
 		header:       &hdr,
 		txnSchedSig:  txnSchedSig,
+		storageSigs:  storageSigs,
 	})
 
 	return nil

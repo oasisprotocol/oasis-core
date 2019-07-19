@@ -137,6 +137,8 @@ type StateWaitingForBlock struct {
 	header *block.Header
 	// Transaction scheduler's signature.
 	txnSchedSig signature.Signature
+	// Storage signatures for the I/O root containing the inputs.
+	storageSigs []signature.Signature
 }
 
 // Name returns the name of the state.
@@ -159,6 +161,8 @@ type StateWaitingForEvent struct {
 	batchSpanCtx opentracing.SpanContext
 	// Transaction scheduler's signature.
 	txnSchedSig signature.Signature
+	// Storage signatures for the I/O root containing the inputs.
+	storageSigs []signature.Signature
 }
 
 // Name returns the name of the state.
@@ -187,6 +191,8 @@ type StateProcessingBatch struct {
 	done chan *protocol.ComputedBatch
 	// Transaction scheduler's signature.
 	txnSchedSig signature.Signature
+	// Storage signatures for the I/O root containing the inputs.
+	storageSigs []signature.Signature
 }
 
 // Name returns the name of the state.

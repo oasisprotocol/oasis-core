@@ -26,6 +26,7 @@ var (
 	ErrInsufficientVotes      = errors.New("roothash/commitment: insufficient votes to finalize discrepancy resolution round")
 	ErrBadComputeCommits      = errors.New("roothash/commitment: bad compute commitments")
 	ErrInvalidCommitteeID     = errors.New("roothash/commitment: invalid committee ID")
+	ErrTxnSchedSigInvalid     = errors.New("roothash/commitment: txn sched signature invalid")
 )
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
@@ -105,25 +106,6 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 
 	// TODO: Check for signs of double signing (#1804).
 
-	// Go through existing commitments and check if the txn scheduler signed
-	// different batches for the same committee.
-	cID := p.GetCommitteeID()
-	for _, c := range p.Commitments {
-		com := c.(OpenComputeCommitment)
-		cb := com.Body
-		if cID.Equal(&cb.CommitteeID) {
-			existingTxnSchedSig := cb.TxnSchedSig
-			currentTxnSchedSig := openCom.Body.TxnSchedSig
-			if currentTxnSchedSig.PublicKey.Equal(existingTxnSchedSig.PublicKey) && currentTxnSchedSig.Signature != existingTxnSchedSig.Signature {
-				// Same committe, same txn sched, but txn sched signatures
-				// don't match -- txn sched is malicious!
-				// TODO: Slash stake!
-				logger.Warn("txn sched signed two different batches for the same committee ID",
-					"committee_id", cb.CommitteeID)
-			}
-		}
-	}
-
 	// Ensure the node did not already submit a commitment.
 	if _, ok := p.Commitments[id]; ok {
 		return ErrAlreadyCommitted
@@ -136,6 +118,12 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 		return ErrNoRuntime
 	}
 
+	// Verify that the txn scheduler signature for current commitment is valid.
+	currentTxnSchedSig := body.TxnSchedSig
+	if ok := body.VerifyTxnSchedSignature(blk.Header); !ok {
+		return ErrTxnSchedSigInvalid
+	}
+
 	// Verify RAK-attestation.
 	if p.Runtime.TEEHardware != node.TEEHardwareInvalid {
 		rak := p.NodeInfo[id].Runtime.Capabilities.TEE.RAK
@@ -145,6 +133,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 	}
 
 	// Verify that this is for the correct committee.
+	cID := p.GetCommitteeID()
 	if !cID.Equal(&body.CommitteeID) {
 		logger.Debug("compute commitment has invalid committee ID",
 			"expected_committee_id", cID,
@@ -181,6 +170,23 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 			"err", err,
 		)
 		return err
+	}
+
+	// Go through existing commitments and check if the txn scheduler signed
+	// different batches for the same committee.
+	for _, c := range p.Commitments {
+		com := c.(OpenComputeCommitment)
+		cb := com.Body
+		if cID.Equal(&cb.CommitteeID) {
+			existingTxnSchedSig := cb.TxnSchedSig
+			if currentTxnSchedSig.PublicKey.Equal(existingTxnSchedSig.PublicKey) && currentTxnSchedSig.Signature != existingTxnSchedSig.Signature {
+				// Same committe, same txn sched, but txn sched signatures
+				// don't match -- txn sched is malicious!
+				// TODO: Slash stake! (issue #1931)
+				logger.Warn("txn sched signed two different batches for the same committee ID",
+					"committee_id", cb.CommitteeID)
+			}
+		}
 	}
 
 	if p.Commitments == nil {

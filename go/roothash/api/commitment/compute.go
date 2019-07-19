@@ -69,6 +69,22 @@ type ComputeBody struct {
 	StorageSignatures []signature.Signature  `codec:"storage_signatures"`
 	RakSig            signature.RawSignature `codec:"rak_sig"`
 	TxnSchedSig       signature.Signature    `codec:"txn_sched_sig"`
+	InputRoot         hash.Hash              `codec:"input_root"`
+	InputStorageSigs  []signature.Signature  `codec:"input_storage_sigs"`
+}
+
+// VerifyTxnSchedSignature rebuilds the batch dispatch message from the data
+// in the ComputeBody struct and verifies if the txn scheduler signature
+// matches what we're seeing.
+func (m *ComputeBody) VerifyTxnSchedSignature(header block.Header) bool {
+	dispatch := &TxnSchedulerBatchDispatch{
+		CommitteeID:       m.CommitteeID,
+		IORoot:            m.InputRoot,
+		StorageSignatures: m.InputStorageSigs,
+		Header:            header,
+	}
+
+	return m.TxnSchedSig.Verify(TxnSchedulerBatchDispatchSigCtx, dispatch.MarshalCBOR())
 }
 
 // RootsForStorageReceipt gets the merkle roots that must be part of

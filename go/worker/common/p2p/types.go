@@ -1,16 +1,9 @@
 package p2p
 
 import (
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 )
-
-// TxnSchedulerBatchDispatchSigCtx is the context used for signing
-// transaction scheduler batch dispatch messages.
-var TxnSchedulerBatchDispatchSigCtx = []byte("EkTscBat")
 
 // NOTE: Bump CommitteeProtocol version in go/common/version if you
 //       change any of the structures below.
@@ -40,51 +33,21 @@ type Message struct {
 	ComputeWorkerFinished           *ComputeWorkerFinished
 }
 
-// TxnSchedulerBatchDispatch is the message sent from the transaction
-// scheduler to compute workers after a batch is ready to be computed.
-type TxnSchedulerBatchDispatch struct {
-	// TODO: Txn scheduler should explicitly sign the message (#1790).
-
-	// CommitteeID is the committee ID of the target compute committee.
-	CommitteeID hash.Hash `codec:"cid"`
-
-	// IORoot is the I/O root containing the inputs (transactions) that
-	// the compute node should use.
-	IORoot hash.Hash `codec:"io_root"`
-
-	// StorageSignatures are the storage receipt signatures for the I/O root.
-	StorageSignatures []signature.Signature `codec:"storage_signatures"`
-
-	// Header is the block header on which the batch should be
-	// based.
-	Header roothash.Header `codec:"header"`
-}
-
 // SignedTxnSchedulerBatchDispatch is a TxnSchedulerBatchDispatch, signed by
 // the transaction scheduler.
 type SignedTxnSchedulerBatchDispatch struct {
 	signature.Signed
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (t *TxnSchedulerBatchDispatch) MarshalCBOR() []byte {
-	return cbor.Marshal(t)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (t *TxnSchedulerBatchDispatch) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, t)
-}
-
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedTxnSchedulerBatchDispatch) Open(tsbd *TxnSchedulerBatchDispatch) error {
-	return s.Signed.Open(TxnSchedulerBatchDispatchSigCtx, tsbd)
+func (s *SignedTxnSchedulerBatchDispatch) Open(tsbd *commitment.TxnSchedulerBatchDispatch) error {
+	return s.Signed.Open(commitment.TxnSchedulerBatchDispatchSigCtx, tsbd)
 }
 
 // SignTxnSchedulerBatchDispatch signs a TxnSchedulerBatchDispatch struct
 // using the given signer.
-func SignTxnSchedulerBatchDispatch(signer signature.Signer, tsbd *TxnSchedulerBatchDispatch) (*SignedTxnSchedulerBatchDispatch, error) {
-	signed, err := signature.SignSigned(signer, TxnSchedulerBatchDispatchSigCtx, tsbd)
+func SignTxnSchedulerBatchDispatch(signer signature.Signer, tsbd *commitment.TxnSchedulerBatchDispatch) (*SignedTxnSchedulerBatchDispatch, error) {
+	signed, err := signature.SignSigned(signer, commitment.TxnSchedulerBatchDispatchSigCtx, tsbd)
 	if err != nil {
 		return nil, err
 	}
