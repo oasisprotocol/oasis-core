@@ -284,7 +284,7 @@ func testBeacon(t *testing.T, node *testNode) {
 }
 
 func testStorage(t *testing.T, node *testNode) {
-	storageTests.StorageImplementationTests(t, node.Storage)
+	storageTests.StorageImplementationTests(t, node.Storage, testNamespace)
 }
 
 func testRegistry(t *testing.T, node *testNode) {
@@ -351,7 +351,7 @@ func testStorageClient(t *testing.T, node *testNode) {
 	}
 	debugClient, err := storageClient.New(ctx, node.Identity.TLSCertificate, nil, nil)
 	require.NoError(t, err, "NewDebugStorageClient")
-	storageTests.StorageImplementationTests(t, debugClient)
+	storageTests.StorageImplementationTests(t, debugClient, testNamespace)
 }
 
 func init() {

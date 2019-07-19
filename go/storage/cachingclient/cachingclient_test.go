@@ -38,7 +38,7 @@ func TestCachingClient(t *testing.T) {
 	}()
 
 	wl := makeTestWriteLog([]byte("TestSingle"), cacheSize)
-	expectedNewRoot := tests.CalculateExpectedNewRoot(t, wl)
+	expectedNewRoot := tests.CalculateExpectedNewRoot(t, wl, testNs)
 
 	var root hash.Hash
 	root.Empty()
