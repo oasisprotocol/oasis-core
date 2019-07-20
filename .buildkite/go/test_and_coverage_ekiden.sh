@@ -27,9 +27,18 @@ export EKIDEN_TEST_WORKER_HOST_RUNTIME_BINARY=$(pwd)/target/debug/simple-keyvalu
 ######################
 pushd go
   make generate
-  env -u GOPATH go test -race -coverprofile=coverage.txt -covermode=atomic -v `go list ./... | grep -v github.com/oasislabs/ekiden/go/ekiden`
+  # We need to do multiple test passes for different parts to get correct coverage.
+  env -u GOPATH go test -race -coverprofile=coverage.txt -covermode=atomic -v \
+    $(go list ./... | \
+        grep -v github.com/oasislabs/ekiden/go/ekiden | \
+        grep -v github.com/oasislabs/ekiden/go/storage/mkvs/urkel )
+  # Ekiden node tests.
   pushd ekiden
     env -u GOPATH go test -race -coverpkg ../... -coverprofile=coverage.txt -covermode=atomic -v
+  popd
+  # Urkel tree tests.
+  pushd storage/mkvs/urkel
+    env -u GOPATH go test -race -coverpkg ./... -coverprofile=coverage.txt -covermode=atomic -v
   popd
 popd
 
