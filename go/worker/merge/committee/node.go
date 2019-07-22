@@ -300,7 +300,9 @@ func (n *Node) handleResultsLocked(ctx context.Context, commit *commitment.Compu
 
 	n.logger.Debug("received new compute commitment")
 
-	sp, err := state.pool.AddComputeCommitment(n.commonNode.CurrentBlock, commit)
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+
+	sp, err := state.pool.AddComputeCommitment(n.commonNode.CurrentBlock, epoch, commit)
 	if err != nil {
 		return err
 	}

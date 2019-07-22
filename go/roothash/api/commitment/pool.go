@@ -30,6 +30,13 @@ var (
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
 
+// StorageVerifier is an interface for verifying storage receipt signatures.
+type StorageVerifier interface {
+	// VerifyStorageCommittee verifies that the given signatures come from the
+	// current storage committee members.
+	VerifyStorageCommittee(sigs []signature.Signature) error
+}
+
 // NodeInfo contains information about a node that is member of a committee.
 type NodeInfo struct {
 	// CommitteeNode is an index into the Committee.Members structure.
@@ -78,7 +85,7 @@ func (p *Pool) ResetCommitments() {
 	p.NextTimeout = time.Time{}
 }
 
-func (p *Pool) addOpenComputeCommitment(blk *block.Block, openCom *OpenComputeCommitment) error {
+func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, openCom *OpenComputeCommitment) error {
 	if p.Committee == nil || p.NodeInfo == nil {
 		return ErrNoCommittee
 	}
@@ -141,9 +148,20 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, openCom *OpenComputeCo
 	}
 
 	// Check if the header refers to merkle roots in storage.
-	// TODO: Actually check that the storage receipt signatures were made by
-	// the storage nodes.
+	if err := sv.VerifyStorageCommittee(body.StorageSignatures); err != nil {
+		logger.Debug("compute commitment has bad storage receipt signers",
+			"committee_id", cID,
+			"node_id", id,
+			"err", err,
+		)
+		return err
+	}
 	if err := body.VerifyStorageReceiptSignatures(blk.Header.Namespace, blk.Header.Round+1); err != nil {
+		logger.Debug("compute commitment has bad storage receipt signatures",
+			"committee_id", cID,
+			"node_id", id,
+			"err", err,
+		)
 		return err
 	}
 
@@ -156,14 +174,14 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, openCom *OpenComputeCo
 }
 
 // AddComputeCommitment verifies and adds a new compute commitment to the pool.
-func (p *Pool) AddComputeCommitment(blk *block.Block, commitment *ComputeCommitment) error {
+func (p *Pool) AddComputeCommitment(blk *block.Block, sv StorageVerifier, commitment *ComputeCommitment) error {
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
 		return err
 	}
 
-	return p.addOpenComputeCommitment(blk, openCom)
+	return p.addOpenComputeCommitment(blk, sv, openCom)
 }
 
 // CheckEnoughCommitments checks if there are enough commitments in the pool to be
@@ -362,6 +380,7 @@ func (p *Pool) TryFinalize(now time.Time, roundTimeout time.Duration, didTimeout
 // Any compute commitments are added to the provided pool.
 func (p *Pool) AddMergeCommitment(
 	blk *block.Block,
+	sv StorageVerifier,
 	commitment *MergeCommitment,
 	ccPool *MultiPool,
 ) error {
@@ -410,7 +429,7 @@ func (p *Pool) AddMergeCommitment(
 	// check this.
 	var hasError bool
 	for _, cc := range body.ComputeCommits {
-		_, err = ccPool.AddComputeCommitment(blk, &cc)
+		_, err = ccPool.AddComputeCommitment(blk, sv, &cc)
 		switch err {
 		case nil:
 		case ErrAlreadyCommitted:
@@ -458,9 +477,18 @@ func (p *Pool) AddMergeCommitment(
 	}
 
 	// Check if the header refers to merkle roots in storage.
-	// TODO: Actually check that the storage receipt signatures were made by
-	// the storage nodes.
+	if err = sv.VerifyStorageCommittee(header.StorageSignatures); err != nil {
+		logger.Debug("merge commitment has bad storage receipt signers",
+			"node_id", id,
+			"err", err,
+		)
+		return err
+	}
 	if err = header.VerifyStorageReceiptSignatures(); err != nil {
+		logger.Debug("merge commitment has bad storage receipt signatures",
+			"node_id", id,
+			"err", err,
+		)
 		return err
 	}
 
@@ -505,7 +533,7 @@ type MultiPool struct {
 }
 
 // AddComputeCommitment verifies and adds a new compute commitment to the pool.
-func (m *MultiPool) AddComputeCommitment(blk *block.Block, commitment *ComputeCommitment) (*Pool, error) {
+func (m *MultiPool) AddComputeCommitment(blk *block.Block, sv StorageVerifier, commitment *ComputeCommitment) (*Pool, error) {
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
@@ -517,7 +545,7 @@ func (m *MultiPool) AddComputeCommitment(blk *block.Block, commitment *ComputeCo
 		return nil, ErrInvalidCommitteeID
 	}
 
-	return p, p.addOpenComputeCommitment(blk, openCom)
+	return p, p.addOpenComputeCommitment(blk, sv, openCom)
 }
 
 // CheckEnoughCommitments checks if there are enough commitments in the pool to be

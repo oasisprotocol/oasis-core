@@ -37,6 +37,7 @@ type runtimeState struct {
 
 	computeCommittee *testCommittee
 	mergeCommittee   *testCommittee
+	storageCommittee *testCommittee
 }
 
 // RootHashImplementationTests exercises the basic functionality of a
@@ -190,7 +191,7 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 		nodes[node.Node.ID.ToMapKey()] = node
 	}
 
-	s.computeCommittee, s.mergeCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
+	s.computeCommittee, s.mergeCommittee, s.storageCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
 
 	// Wait to receive an epoch transition block.
 	for {
@@ -264,6 +265,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	parent.Header.StorageSignatures = mustStore(
 		t,
 		storageBackend,
+		s.storageCommittee,
 		child.Header.Namespace,
 		child.Header.Round+1,
 		[]storage.ApplyOp{
@@ -367,7 +369,7 @@ func mustGetCommittee(
 	epoch epochtime.EpochTime,
 	sched scheduler.Backend,
 	nodes map[signature.MapKey]*registryTests.TestNode,
-) (computeCommittee *testCommittee, mergeCommittee *testCommittee) {
+) (computeCommittee *testCommittee, mergeCommittee *testCommittee, storageCommittee *testCommittee) {
 	require := require.New(t)
 
 	ch, sub := sched.WatchCommittees()
@@ -382,7 +384,7 @@ func mustGetCommittee(
 			if !rt.Runtime.ID.Equal(committee.RuntimeID) {
 				continue
 			}
-			if committee.Kind != scheduler.KindCompute && committee.Kind != scheduler.KindMerge {
+			if committee.Kind != scheduler.KindCompute && committee.Kind != scheduler.KindMerge && committee.Kind != scheduler.KindStorage {
 				continue
 			}
 
@@ -401,23 +403,36 @@ func mustGetCommittee(
 				}
 			}
 
+			var groupSize, groupBackupSize int
+			switch committee.Kind {
+			case scheduler.KindCompute:
+				fallthrough
+			case scheduler.KindMerge:
+				groupSize = int(rt.Runtime.ReplicaGroupSize)
+				groupBackupSize = int(rt.Runtime.ReplicaGroupBackupSize)
+			case scheduler.KindStorage:
+				groupSize = int(rt.Runtime.StorageGroupSize)
+			}
+
 			if committee.Kind.NeedsLeader() {
-				require.Len(ret.workers, int(rt.Runtime.ReplicaGroupSize)-1, "workers exist")
+				require.Len(ret.workers, groupSize-1, "workers exist")
 				require.NotNil(ret.leader, "leader exist")
 			} else {
-				require.Len(ret.workers, int(rt.Runtime.ReplicaGroupSize), "workers exist")
+				require.Len(ret.workers, groupSize, "workers exist")
 				require.Nil(ret.leader, "no leader")
 			}
-			require.Len(ret.backupWorkers, int(rt.Runtime.ReplicaGroupBackupSize), "workers exist")
+			require.Len(ret.backupWorkers, groupBackupSize, "backup workers exist")
 
 			switch committee.Kind {
 			case scheduler.KindCompute:
 				computeCommittee = &ret
 			case scheduler.KindMerge:
 				mergeCommittee = &ret
+			case scheduler.KindStorage:
+				storageCommittee = &ret
 			}
 
-			if computeCommittee == nil || mergeCommittee == nil {
+			if computeCommittee == nil || mergeCommittee == nil || storageCommittee == nil {
 				continue
 			}
 
@@ -428,14 +443,33 @@ func mustGetCommittee(
 	}
 }
 
-func mustStore(t *testing.T, store storage.Backend, ns common.Namespace, round uint64, ops []storage.ApplyOp) []signature.Signature {
+func mustStore(
+	t *testing.T,
+	store storage.Backend,
+	committee *testCommittee,
+	ns common.Namespace,
+	round uint64,
+	ops []storage.ApplyOp,
+) []signature.Signature {
 	require := require.New(t)
 
 	receipts, err := store.ApplyBatch(context.Background(), ns, round, ops)
-	require.NoError(err, "Apply")
+	require.NoError(err, "ApplyBatch")
+	require.NotEmpty(receipts, "ApplyBatch must return some storage receipts")
 
-	signatures := []signature.Signature{}
-	for _, receipt := range receipts {
+	// We need to fake the storage signatures as the storage committee under test
+	// does not contain the key of the actual storage backend.
+
+	var body storage.ReceiptBody
+	err = receipts[0].Open(&body)
+	require.NoError(err, "Open")
+
+	var signatures []signature.Signature
+	for _, node := range committee.workers {
+		var receipt *storage.Receipt
+		receipt, err = storage.SignReceipt(node.Signer, ns, round, body.Roots)
+		require.NoError(err, "SignReceipt")
+
 		signatures = append(signatures, receipt.Signed.Signature)
 	}
 	return signatures

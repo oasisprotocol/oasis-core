@@ -213,10 +213,15 @@ func (n *Node) queueBatchBlocking(
 		return errIncompatibleHeader
 	}
 
-	// TODO: Actually check that the storage receipts were signed by storage
-	// nodes: https://github.com/oasislabs/ekiden/issues/1809.
-
 	// Verify storage receipt signatures.
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+	if err := epoch.VerifyStorageCommittee(storageSignatures); err != nil {
+		n.logger.Warn("received bad storage signature",
+			"err", err,
+		)
+		return errInvalidReceipt
+	}
+
 	receiptBody := storage.ReceiptBody{
 		Version:   1,
 		Namespace: hdr.Namespace,
@@ -597,8 +602,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 			return err
 		}
 
-		// TODO: Ensure that all receipts are actually signed by storage nodes.
-		// For now accept a signature from anyone.
+		// Verify storage receipts.
 		signatures := []signature.Signature{}
 		for _, receipt := range receipts {
 			var receiptBody storage.ReceiptBody
@@ -617,6 +621,12 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 				return err
 			}
 			signatures = append(signatures, receipt.Signature)
+		}
+		if err := epoch.VerifyStorageCommittee(signatures); err != nil {
+			n.logger.Error("failed to validate receipt signer",
+				"err", err,
+			)
+			return err
 		}
 		proposedResults.StorageSignatures = signatures
 
