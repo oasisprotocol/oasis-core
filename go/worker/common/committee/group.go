@@ -62,6 +62,9 @@ type epoch struct {
 	// mergeCommittee is the merge committee we are a member of.
 	mergeCommittee *CommitteeInfo
 
+	// storageCommittee is the storage committee we are a member of.
+	storageCommittee *CommitteeInfo
+
 	runtime *registry.Runtime
 }
 
@@ -75,7 +78,10 @@ type EpochSnapshot struct {
 
 	runtime *registry.Runtime
 
-	computeCommittees map[hash.Hash]*CommitteeInfo
+	computeCommittees     map[hash.Hash]*CommitteeInfo
+	txnSchedulerCommittee *CommitteeInfo
+	mergeCommittee        *CommitteeInfo
+	storageCommittee      *CommitteeInfo
 }
 
 // GetRuntime returns the current runtime descriptor.
@@ -114,10 +120,20 @@ func (e *EpochSnapshot) IsComputeBackupWorker() bool {
 	return e.computeRole == scheduler.BackupWorker
 }
 
+// GetTransactionSchedulerCommittee returns the current txn scheduler committee.
+func (e *EpochSnapshot) GetTransactionSchedulerCommittee() *CommitteeInfo {
+	return e.txnSchedulerCommittee
+}
+
 // IsTransactionSchedulerLeader checks if the current node is a leader of the transaction scheduler committee
 // in the current epoch.
 func (e *EpochSnapshot) IsTransactionSchedulerLeader() bool {
 	return e.txnSchedulerRole == scheduler.Leader
+}
+
+// GetMergeCommittee returns the current merge committee.
+func (e *EpochSnapshot) GetMergeCommittee() *CommitteeInfo {
+	return e.mergeCommittee
 }
 
 // IsMergeMember checks if the current node is a member of the merge committee
@@ -136,6 +152,11 @@ func (e *EpochSnapshot) IsMergeWorker() bool {
 // the current epoch.
 func (e *EpochSnapshot) IsMergeBackupWorker() bool {
 	return e.mergeRole == scheduler.BackupWorker
+}
+
+// GetStorageCommittee returns the current storage committee.
+func (e *EpochSnapshot) GetStorageCommittee() *CommitteeInfo {
+	return e.storageCommittee
 }
 
 // Group encapsulates communication with a group of nodes in the
@@ -230,7 +251,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	// Find the current committees.
 	computeCommittees := make(map[hash.Hash]*CommitteeInfo)
 	computeCommitteesByPeer := make(map[signature.MapKey]bool)
-	var computeCommittee, txnSchedulerCommittee, mergeCommittee *CommitteeInfo
+	var computeCommittee, txnSchedulerCommittee, mergeCommittee, storageCommittee *CommitteeInfo
 	var computeCommitteeID hash.Hash
 	var txnSchedulerLeaderPeerID signature.PublicKey
 	for _, cm := range committees {
@@ -269,6 +290,8 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			}
 		case scheduler.KindMerge:
 			mergeCommittee = ci
+		case scheduler.KindStorage:
+			storageCommittee = ci
 		}
 	}
 	if len(computeCommittees) == 0 {
@@ -279,6 +302,9 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	}
 	if mergeCommittee == nil {
 		return errors.New("no merge committee")
+	}
+	if storageCommittee == nil {
+		return errors.New("no storage committee")
 	}
 
 	// Fetch current runtime descriptor.
@@ -302,6 +328,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		txnSchedulerCommittee,
 		txnSchedulerLeaderPeerID,
 		mergeCommittee,
+		storageCommittee,
 		runtime,
 	}
 
@@ -332,10 +359,13 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 
 	s := &EpochSnapshot{
 		// NOTE: Transaction scheduler and merge committees are always set.
-		txnSchedulerRole:  g.activeEpoch.txnSchedulerCommittee.Role,
-		mergeRole:         g.activeEpoch.mergeCommittee.Role,
-		runtime:           g.activeEpoch.runtime,
-		computeCommittees: g.activeEpoch.computeCommittees,
+		txnSchedulerRole:      g.activeEpoch.txnSchedulerCommittee.Role,
+		mergeRole:             g.activeEpoch.mergeCommittee.Role,
+		runtime:               g.activeEpoch.runtime,
+		computeCommittees:     g.activeEpoch.computeCommittees,
+		txnSchedulerCommittee: g.activeEpoch.txnSchedulerCommittee,
+		mergeCommittee:        g.activeEpoch.mergeCommittee,
+		storageCommittee:      g.activeEpoch.storageCommittee,
 	}
 
 	// Compute committee may be nil in case we are not a member of any committee.

@@ -16,8 +16,6 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
-var testNs common.Namespace
-
 var testValues = [][]byte{
 	[]byte("Thou seest Me as Time who kills, Time who brings all to doom,"),
 	[]byte("The Slayer Time, Ancient of Days, come hither to consume;"),
@@ -51,20 +49,20 @@ func prepareWriteLog(values [][]byte) api.WriteLog {
 	return wl
 }
 
-func CalculateExpectedNewRoot(t *testing.T, wl api.WriteLog) hash.Hash {
+func CalculateExpectedNewRoot(t *testing.T, wl api.WriteLog, namespace common.Namespace) hash.Hash {
 	// Use in-memory Urkel tree to calculate the expected new root.
 	tree := urkel.New(nil, nil)
 	for _, logEntry := range wl {
 		err := tree.Insert(context.Background(), logEntry.Key, logEntry.Value)
 		require.NoError(t, err, "error inserting writeLog entry into Urkel tree")
 	}
-	_, expectedNewRoot, err := tree.Commit(context.Background(), testNs, 0)
+	_, expectedNewRoot, err := tree.Commit(context.Background(), namespace, 0)
 	require.NoError(t, err, "error calculating mkvs' expectedNewRoot")
 	return expectedNewRoot
 }
 
 // XXX: until (PR#1743), hashed keys are returned by the GetCheckpoints.
-func calculateExpectedNewRootRaw(t *testing.T, wl api.WriteLog) hash.Hash {
+func calculateExpectedNewRootRaw(t *testing.T, wl api.WriteLog, namespace common.Namespace) hash.Hash {
 	// Use in-memory Urkel tree to calculate the expected new root.
 	tree := urkel.New(nil, nil)
 	for _, logEntry := range wl {
@@ -74,7 +72,7 @@ func calculateExpectedNewRootRaw(t *testing.T, wl api.WriteLog) hash.Hash {
 		err = tree.InsertRaw(context.Background(), []byte{}, h, logEntry.Value)
 		require.NoError(t, err, "error inserting writeLog entry into Urkel tree")
 	}
-	_, expectedNewRoot, err := tree.Commit(context.Background(), testNs, 0)
+	_, expectedNewRoot, err := tree.Commit(context.Background(), namespace, 0)
 	require.NoError(t, err, "error calculating mkvs' expectedNewRoot")
 	return expectedNewRoot
 }
@@ -98,20 +96,20 @@ func foldWriteLogIterator(t *testing.T, w api.WriteLogIterator) api.WriteLog {
 
 // StorageImplementationTests exercises the basic functionality of a storage
 // backend.
-func StorageImplementationTests(t *testing.T, backend api.Backend) {
+func StorageImplementationTests(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	<-backend.Initialized()
 
 	// Test MKVS storage.
 	var rootHash hash.Hash
 	rootHash.Empty()
 	wl := prepareWriteLog(testValues)
-	expectedNewRoot := CalculateExpectedNewRoot(t, wl)
+	expectedNewRoot := CalculateExpectedNewRoot(t, wl, namespace)
 	var receipts []*api.Receipt
 	var receiptBody api.ReceiptBody
 	var err error
 
 	// Apply write log to an empty root.
-	receipts, err = backend.Apply(context.Background(), testNs, 0, rootHash, 1, expectedNewRoot, wl)
+	receipts, err = backend.Apply(context.Background(), namespace, 0, rootHash, 1, expectedNewRoot, wl)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -121,7 +119,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 		err = receipt.Open(&receiptBody)
 		require.NoError(t, err, "receipt.Open() should not return an error")
 		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
-		require.Equal(t, testNs, receiptBody.Namespace, "receiptBody should contain correct namespace")
+		require.Equal(t, namespace, receiptBody.Namespace, "receiptBody should contain correct namespace")
 		require.EqualValues(t, 1, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
@@ -129,14 +127,14 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 
 	// Prepare another write log and form a set of apply operations.
 	wl2 := prepareWriteLog(testValues[0:2])
-	expectedNewRoot2 := CalculateExpectedNewRoot(t, wl2)
+	expectedNewRoot2 := CalculateExpectedNewRoot(t, wl2, namespace)
 	applyOps := []api.ApplyOp{
 		api.ApplyOp{SrcRound: 0, SrcRoot: rootHash, DstRoot: expectedNewRoot, WriteLog: wl},
 		api.ApplyOp{SrcRound: 0, SrcRoot: rootHash, DstRoot: expectedNewRoot2, WriteLog: wl2},
 	}
 
 	// Apply a batch of operations against the MKVS.
-	receipts, err = backend.ApplyBatch(context.Background(), testNs, 1, applyOps)
+	receipts, err = backend.ApplyBatch(context.Background(), namespace, 1, applyOps)
 	require.NoError(t, err, "ApplyBatch() should not return an error")
 	require.NotNil(t, receipts, "ApplyBatch() should return receipts")
 
@@ -146,7 +144,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 		err = receipt.Open(&receiptBody)
 		require.NoError(t, err, "receipt.Open() should not return an error")
 		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
-		require.Equal(t, testNs, receiptBody.Namespace, "receiptBody should contain correct namespace")
+		require.Equal(t, namespace, receiptBody.Namespace, "receiptBody should contain correct namespace")
 		require.EqualValues(t, 1, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, len(applyOps), len(receiptBody.Roots), "receiptBody should contain as many roots as there were applyOps")
 		for i, applyOp := range applyOps {
@@ -157,7 +155,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	var emptyPath hash.Hash
 
 	newRoot := api.Root{
-		Namespace: testNs,
+		Namespace: namespace,
 		Round:     1,
 		Hash:      receiptBody.Roots[0],
 	}
@@ -179,7 +177,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 
 	// Get the write log, it should be the same as what we stuffed in.
 	root := api.Root{
-		Namespace: testNs,
+		Namespace: namespace,
 		Round:     0,
 		Hash:      rootHash,
 	}
@@ -193,7 +191,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	require.Equal(t, getDiffWl, originalWl)
 
 	// Now try applying the same operations again, we should get the same root.
-	receipts, err = backend.Apply(context.Background(), testNs, 0, rootHash, 1, receiptBody.Roots[0], wl)
+	receipts, err = backend.Apply(context.Background(), namespace, 0, rootHash, 1, receiptBody.Roots[0], wl)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -203,7 +201,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 		err = receipt.Open(&receiptBody)
 		require.NoError(t, err, "receipt.Open() should not return an error")
 		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
-		require.Equal(t, testNs, receiptBody.Namespace, "receiptBody should contain correct namespace")
+		require.Equal(t, namespace, receiptBody.Namespace, "receiptBody should contain correct namespace")
 		require.EqualValues(t, 1, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
@@ -214,15 +212,15 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	require.NoError(t, err, "GetCheckpoint()")
 	logs := foldWriteLogIterator(t, logsIter)
 	// Applying the writeLog RAW should return same root.
-	logsRootHash := calculateExpectedNewRootRaw(t, logs)
+	logsRootHash := calculateExpectedNewRootRaw(t, logs, namespace)
 	require.EqualValues(t, logsRootHash, receiptBody.Roots[0])
 
 	// Single node tree.
 	root.Empty()
 	wl3 := prepareWriteLog([][]byte{testValues[0]})
-	expectedNewRoot3 := CalculateExpectedNewRoot(t, wl3)
+	expectedNewRoot3 := CalculateExpectedNewRoot(t, wl3, namespace)
 
-	receipts, err = backend.Apply(context.Background(), testNs, 0, rootHash, 1, expectedNewRoot3, wl3)
+	receipts, err = backend.Apply(context.Background(), namespace, 0, rootHash, 1, expectedNewRoot3, wl3)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return a receipts")
 
@@ -241,12 +239,6 @@ func StorageImplementationTests(t *testing.T, backend api.Backend) {
 	require.NoError(t, err, "GetCheckpoint()")
 	logs = foldWriteLogIterator(t, logsIter)
 	// Applying the writeLog RAW should return same root.
-	logsRootHash = calculateExpectedNewRootRaw(t, logs)
+	logsRootHash = calculateExpectedNewRootRaw(t, logs, namespace)
 	require.EqualValues(t, logsRootHash, newRoot.Hash)
-}
-
-func init() {
-	var ns hash.Hash
-	ns.FromBytes([]byte("ekiden storage test ns"))
-	copy(testNs[:], ns[:])
 }

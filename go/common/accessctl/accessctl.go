@@ -3,6 +3,7 @@ package accessctl
 
 import (
 	"crypto/x509"
+	"fmt"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 )
@@ -10,11 +11,17 @@ import (
 // Subject is an access control subject.
 type Subject string
 
-// SubjectFromPublicKey returns a Subject from the given X.509 certificate.
-// To do so, it computes the hash of the certificate's ASN.1 DER representation.
-func SubjectFromCertificate(cert *x509.Certificate) Subject {
+// SubjectFromX509Certificate returns a Subject from the given X.509
+// certificate.
+func SubjectFromX509Certificate(cert *x509.Certificate) Subject {
+	return SubjectFromDER(cert.Raw)
+}
+
+// SubjectFromDER returns a Subject from the given certificate's ASN.1 DER
+// representation. To do so, it computes the hash of the DER representation.
+func SubjectFromDER(der []byte) Subject {
 	var h = hash.Hash{}
-	h.FromBytes(cert.Raw)
+	h.FromBytes(der)
 	return Subject(h.String())
 }
 
@@ -55,4 +62,9 @@ func (p Policy) IsAllowed(sub Subject, act Action) bool {
 		return false
 	}
 	return p[act][sub]
+}
+
+// String returns the string representation of the policy.
+func (p Policy) String() string {
+	return fmt.Sprintf("%#v", p)
 }

@@ -14,6 +14,8 @@ import (
 
 	beaconTests "github.com/oasislabs/ekiden/go/beacon/tests"
 	clientTests "github.com/oasislabs/ekiden/go/client/tests"
+	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/entity"
@@ -37,12 +39,13 @@ import (
 )
 
 const (
-	testRuntimeID    = "0000000000000000000000000000000000000000000000000000000000000000"
 	workerClientPort = "9010"
 )
 
 var (
-	testNodeConfig = []struct {
+	// NOTE: Configuration option that can't be set statically will be
+	// configured directly in newTestNode().
+	testNodeStaticConfig = []struct {
 		key   string
 		value interface{}
 	}{
@@ -61,12 +64,10 @@ var (
 		{"worker.compute.enabled", true},
 		{"worker.compute.backend", "mock"},
 		{"worker.compute.runtime.binary", "mock-runtime"},
-		{"worker.runtime.id", testRuntimeID},
 		{"worker.storage.enabled", true},
 		{"worker.client.port", workerClientPort},
 		{"worker.txnscheduler.enabled", true},
 		{"worker.merge.enabled", true},
-		{"client.indexer.runtimes", []string{testRuntimeID}},
 		{"debug.allow_test_keys", true},
 	}
 
@@ -76,6 +77,9 @@ var (
 		StorageGroupSize:              1,
 		TransactionSchedulerGroupSize: 1,
 	}
+
+	testNamespace common.Namespace
+	testRuntimeID signature.PublicKey
 
 	initConfigOnce sync.Once
 )
@@ -125,8 +129,10 @@ func newTestNode(t *testing.T) *testNode {
 
 	viper.Set("datadir", dataDir)
 	viper.Set("log.file", filepath.Join(dataDir, "test-node.log"))
+	viper.Set("worker.runtime.id", testRuntimeID.String())
+	viper.Set("client.indexer.runtimes", []string{testRuntimeID.String()})
 	viper.Set("worker.registration.entity", filepath.Join(dataDir, "entity.json"))
-	for _, kv := range testNodeConfig {
+	for _, kv := range testNodeStaticConfig {
 		viper.Set(kv.key, kv.value)
 	}
 
@@ -278,7 +284,7 @@ func testBeacon(t *testing.T, node *testNode) {
 }
 
 func testStorage(t *testing.T, node *testNode) {
-	storageTests.StorageImplementationTests(t, node.Storage)
+	storageTests.StorageImplementationTests(t, node.Storage, testNamespace)
 }
 
 func testRegistry(t *testing.T, node *testNode) {
@@ -330,7 +336,7 @@ func testStorageClient(t *testing.T, node *testNode) {
 	ctx := context.Background()
 
 	// Storage client tests.
-	storageClientTests.ClientWorkerTests(t, node.Beacon, timeSource, node.Registry, node.Scheduler)
+	storageClientTests.ClientWorkerTests(t, node.Identity.TLSCertificate, node.Beacon, timeSource, node.Registry, node.Scheduler)
 
 	// Client storage implementation tests.
 	config := []struct {
@@ -343,12 +349,22 @@ func testStorageClient(t *testing.T, node *testNode) {
 	for _, kv := range config {
 		viper.Set(kv.key, kv.value)
 	}
-	debugClient, err := storageClient.New(ctx, nil, nil)
+	debugClient, err := storageClient.New(ctx, node.Identity.TLSCertificate, nil, nil)
 	require.NoError(t, err, "NewDebugStorageClient")
-	storageTests.StorageImplementationTests(t, debugClient)
+	storageTests.StorageImplementationTests(t, debugClient, testNamespace)
 }
 
 func init() {
-	_ = testRuntime.ID.UnmarshalHex(testRuntimeID)
+	var ns hash.Hash
+	ns.FromBytes([]byte("ekiden node test namespace"))
+	copy(testNamespace[:], ns[:])
+
+	var err error
+	testRuntimeID, err = testNamespace.ToRuntimeID()
+	if err != nil {
+		panic("Unable to convert namespace to runtime ID")
+	}
+	testRuntime.ID = testRuntimeID
+
 	testRuntime.Genesis.StateRoot.Empty()
 }

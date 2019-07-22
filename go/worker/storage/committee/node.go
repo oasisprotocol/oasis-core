@@ -11,12 +11,15 @@ import (
 	bolt "github.com/etcd-io/bbolt"
 
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/accessctl"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/workerpool"
 	roothashApi "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/storage"
 	storageApi "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/client"
 	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
@@ -101,9 +104,10 @@ type Node struct {
 
 	logger *logging.Logger
 
-	localStorage   storageApi.LocalBackend
-	storageClient  storageApi.ClientBackend
-	undefinedRound uint64
+	localStorage      storageApi.LocalBackend
+	storageClient     storageApi.ClientBackend
+	storageGrpcServer *storage.GrpcServer
+	undefinedRound    uint64
 
 	fetchPool *workerpool.Pool
 
@@ -125,6 +129,7 @@ type Node struct {
 
 func NewNode(
 	commonNode *committee.Node,
+	storageGrpcServer *storage.GrpcServer,
 	fetchPool *workerpool.Pool,
 	db *bolt.DB,
 	bucket []byte,
@@ -139,7 +144,8 @@ func NewNode(
 
 		logger: logging.GetLogger("worker/storage/committee").With("runtime_id", commonNode.RuntimeID),
 
-		localStorage: localStorage,
+		localStorage:      localStorage,
+		storageGrpcServer: storageGrpcServer,
 
 		fetchPool: fetchPool,
 
@@ -169,7 +175,7 @@ func NewNode(
 
 	node.ctx, node.ctxCancel = context.WithCancel(context.Background())
 
-	scl, err := client.New(node.ctx, node.commonNode.Scheduler, node.commonNode.Registry)
+	scl, err := client.New(node.ctx, node.commonNode.Identity.TLSCertificate, node.commonNode.Scheduler, node.commonNode.Registry)
 	if err != nil {
 		return nil, err
 	}
@@ -219,8 +225,31 @@ func (n *Node) HandlePeerMessage(context.Context, *p2p.Message) (bool, error) {
 }
 
 // Guarded by CrossNode.
-func (n *Node) HandleEpochTransitionLocked(*committee.EpochSnapshot) {
-	// Nothing to do here.
+func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
+	// Create new storage gRPC access policy for the current runtime.
+	policy := make(accessctl.Policy)
+	for _, cc := range snapshot.GetComputeCommittees() {
+		if cc != nil {
+			computeCommitteePolicy.AddRulesForCommittee(&policy, cc)
+		}
+	}
+	if tsc := snapshot.GetTransactionSchedulerCommittee(); tsc != nil {
+		txnSchedulerCommitteePolicy.AddRulesForCommittee(&policy, tsc)
+	}
+	if mc := snapshot.GetMergeCommittee(); mc != nil {
+		mergeCommitteePolicy.AddRulesForCommittee(&policy, mc)
+	}
+	// TODO: Query registry only for storage nodes after
+	// https://github.com/oasislabs/ekiden/issues/1923 is implemented.
+	nodes, err := n.commonNode.Registry.GetNodes(context.Background())
+	if nodes != nil {
+		storageNodesPolicy.AddRulesForNodeRoles(&policy, nodes, node.RoleStorageWorker)
+	} else {
+		n.logger.Error("couldn't get nodes from registry", "err", err)
+	}
+	// Update storage gRPC access policy for the current runtime.
+	n.storageGrpcServer.SetAccessPolicy(&policy, n.commonNode.RuntimeID)
+	n.logger.Debug("set new storage gRPC access policy", "policy", policy)
 }
 
 // Guarded by CrossNode.

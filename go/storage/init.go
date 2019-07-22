@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
@@ -33,17 +33,24 @@ const (
 )
 
 // New constructs a new Backend based on the configuration flags.
-func New(ctx context.Context, dataDir string, schedulerBackend scheduler.Backend,
-	registryBackend registry.Backend, signer signature.Signer) (api.Backend, error) {
+func New(
+	ctx context.Context,
+	dataDir string,
+	identity *identity.Identity,
+	schedulerBackend scheduler.Backend,
+	registryBackend registry.Backend,
+) (api.Backend, error) {
 	var impl api.Backend
 	var err error
 
+	signer := identity.NodeSigner
 	if viper.GetBool(cfgDebugMockSigningKey) {
 		signer, err = memorySigner.NewSigner(rand.Reader)
 		if err != nil {
 			return nil, err
 		}
 	}
+	tlsCert := identity.TLSCertificate
 
 	backend := viper.GetString(cfgBackend)
 	lruSize := uint64(viper.GetSizeInBytes(cfgLRUSize))
@@ -60,10 +67,10 @@ func New(ctx context.Context, dataDir string, schedulerBackend scheduler.Backend
 		dbDir := filepath.Join(dataDir, leveldb.DBFile)
 		impl, err = leveldb.New(dbDir, signer, lruSize, applyLockLRUSlots, insecureSkipChecks)
 	case client.BackendName:
-		impl, err = client.New(ctx, schedulerBackend, registryBackend)
+		impl, err = client.New(ctx, tlsCert, schedulerBackend, registryBackend)
 	case cachingclient.BackendName:
 		var remote api.Backend
-		remote, err = client.New(ctx, schedulerBackend, registryBackend)
+		remote, err = client.New(ctx, tlsCert, schedulerBackend, registryBackend)
 		if err != nil {
 			return nil, err
 		}
