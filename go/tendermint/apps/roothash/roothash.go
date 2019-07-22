@@ -531,15 +531,45 @@ func (app *rootHashApplication) executeTx(
 	state := newMutableState(tree)
 
 	if tx.TxMergeCommit != nil {
-		return app.commit(ctx, state, tx.TxMergeCommit.ID, tx)
+		return app.commit(ctx, tree, state, tx.TxMergeCommit.ID, tx)
 	} else if tx.TxComputeCommit != nil {
-		return app.commit(ctx, state, tx.TxComputeCommit.ID, tx)
+		return app.commit(ctx, tree, state, tx.TxComputeCommit.ID, tx)
 	}
 	return roothash.ErrInvalidArgument
 }
 
+type roothashStorageVerifier struct {
+	runtimeID signature.PublicKey
+	scheduler *schedulerapp.MutableState
+}
+
+// VerifyStorageCommittee verifies that the given signatures come from the
+// current storage committee members.
+//
+// Implements commitment.StorageVerifier.
+func (sv *roothashStorageVerifier) VerifyStorageCommittee(sigs []signature.Signature) error {
+	committee, err := sv.scheduler.GetCommittee(scheduler.KindStorage, sv.runtimeID)
+	if err != nil {
+		return err
+	}
+
+	// TODO: Consider caching this set?
+	pks := make(map[signature.MapKey]bool)
+	for _, m := range committee.Members {
+		pks[m.PublicKey.ToMapKey()] = true
+	}
+
+	for _, sig := range sigs {
+		if !pks[sig.PublicKey.ToMapKey()] {
+			return errors.New("roothash: signature is not from a valid storage node")
+		}
+	}
+	return nil
+}
+
 func (app *rootHashApplication) commit(
 	ctx *abci.Context,
+	tree *iavl.MutableTree,
 	state *mutableState,
 	id signature.PublicKey,
 	tx *Tx,
@@ -552,6 +582,8 @@ func (app *rootHashApplication) commit(
 		return errNoSuchRuntime
 	}
 	runtime := rtState.Runtime
+
+	// TODO: Validate transaction.
 
 	if ctx.IsCheckOnly() {
 		// If we are within CheckTx then we cannot do any further checks as epoch
@@ -580,10 +612,16 @@ func (app *rootHashApplication) commit(
 		rtState.Round.transition(latestBlock)
 	}
 
+	// Create storage signature verifier.
+	sv := &roothashStorageVerifier{
+		runtimeID: id,
+		scheduler: schedulerapp.NewMutableState(tree),
+	}
+
 	// Add the commitments.
 	if tx.TxMergeCommit != nil {
 		for _, commit := range tx.TxMergeCommit.Commits {
-			if err = rtState.Round.addMergeCommitment(&commit); err != nil {
+			if err = rtState.Round.addMergeCommitment(&commit, sv); err != nil {
 				app.logger.Error("failed to add merge commitment to round",
 					"err", err,
 					"round", blockNr,
@@ -598,7 +636,7 @@ func (app *rootHashApplication) commit(
 		pools := make(map[*commitment.Pool]bool)
 		for _, commit := range tx.TxComputeCommit.Commits {
 			var pool *commitment.Pool
-			if pool, err = rtState.Round.addComputeCommitment(&commit); err != nil {
+			if pool, err = rtState.Round.addComputeCommitment(&commit, sv); err != nil {
 				app.logger.Error("failed to add compute commitment to round",
 					"err", err,
 					"round", blockNr,

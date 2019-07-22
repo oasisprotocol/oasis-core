@@ -80,8 +80,6 @@ epochtime:
 # Storage backend.
 storage:
   backend: leveldb
-  debug:
-    mock_signing_key: true
 
 # Roothash backend.
 roothash:

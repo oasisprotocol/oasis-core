@@ -31,9 +31,10 @@ type MessageHandler interface {
 
 // CommitteeInfo contains information about a committee of nodes.
 type CommitteeInfo struct { // nolint: golint
-	Role      scheduler.Role
-	Committee *scheduler.Committee
-	Nodes     []*node.Node
+	Role       scheduler.Role
+	Committee  *scheduler.Committee
+	Nodes      []*node.Node
+	PublicKeys map[signature.MapKey]bool
 }
 
 type epoch struct {
@@ -159,6 +160,19 @@ func (e *EpochSnapshot) GetStorageCommittee() *CommitteeInfo {
 	return e.storageCommittee
 }
 
+// VerifyStorageCommittee verifies that the given signatures come from the
+// current storage committee members.
+//
+// Implements commitment.StorageVerifier.
+func (e *EpochSnapshot) VerifyStorageCommittee(sigs []signature.Signature) error {
+	for _, sig := range sigs {
+		if !e.storageCommittee.PublicKeys[sig.PublicKey.ToMapKey()] {
+			return errors.New("epoch: signature is not from a valid storage node")
+		}
+	}
+	return nil
+}
+
 // Group encapsulates communication with a group of nodes in the
 // compute committee.
 type Group struct {
@@ -225,29 +239,6 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 	publicIdentity := g.identity.NodeSigner.Public()
 
-	determineRole := func(c *scheduler.Committee) (nodes []*node.Node, leader int, role scheduler.Role, err error) {
-		leader = -1
-
-		for idx, node := range c.Members {
-			if node.PublicKey.Equal(publicIdentity) {
-				role = node.Role
-			}
-
-			// Fetch peer node information from the registry.
-			n, err := g.registry.GetNode(ctx, node.PublicKey)
-			if err != nil {
-				return nil, -1, scheduler.Invalid, errors.Wrap(err, "failed to fetch node info")
-			}
-
-			nodes = append(nodes, n)
-
-			if node.Role == scheduler.Leader {
-				leader = idx
-			}
-		}
-		return
-	}
-
 	// Find the current committees.
 	computeCommittees := make(map[hash.Hash]*CommitteeInfo)
 	computeCommitteesByPeer := make(map[signature.MapKey]bool)
@@ -255,15 +246,35 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	var computeCommitteeID hash.Hash
 	var txnSchedulerLeaderPeerID signature.PublicKey
 	for _, cm := range committees {
-		nodes, leader, role, rerr := determineRole(cm)
-		if rerr != nil {
-			return rerr
+		var nodes []*node.Node
+		var role scheduler.Role
+		publicKeys := make(map[signature.MapKey]bool)
+		leader := -1
+		for idx, member := range cm.Members {
+			publicKeys[member.PublicKey.ToMapKey()] = true
+			if member.PublicKey.Equal(publicIdentity) {
+				role = member.Role
+			}
+
+			// Fetch peer node information from the registry.
+			var n *node.Node
+			n, err = g.registry.GetNode(ctx, member.PublicKey)
+			if err != nil {
+				return errors.Wrap(err, "group: failed to fetch node info")
+			}
+
+			nodes = append(nodes, n)
+
+			if member.Role == scheduler.Leader {
+				leader = idx
+			}
 		}
 
 		ci := &CommitteeInfo{
-			Role:      role,
-			Committee: cm,
-			Nodes:     nodes,
+			Role:       role,
+			Committee:  cm,
+			Nodes:      nodes,
+			PublicKeys: publicKeys,
 		}
 
 		switch cm.Kind {

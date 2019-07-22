@@ -57,7 +57,6 @@ var (
 		{"roothash.tendermint.index_blocks", true},
 		{"scheduler.debug.bypass_stake", true},
 		{"storage.backend", "leveldb"},
-		{"storage.debug.mock_signing_key", true},
 		{"staking.debug.genesis_state", stakingTests.DebugGenesisState},
 		{"tendermint.consensus.timeout_commit", 1 * time.Millisecond},
 		{"tendermint.consensus.skip_timeout_commit", true},
