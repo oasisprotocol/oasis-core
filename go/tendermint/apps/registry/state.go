@@ -31,6 +31,8 @@ const (
 var (
 	// errEntityNotFound is the error returned when an entity is not found.
 	errEntityNotFound = errors.New("registry state: entity not found")
+	// errNodeNotFound is the error returned when node is not found.
+	errNodeNotFound = errors.New("registry state: node not found")
 )
 
 type immutableState struct {
@@ -86,6 +88,9 @@ func (s *immutableState) GetNode(id signature.PublicKey) (*node.Node, error) {
 	nodeRaw, err := s.getNodeRaw(id)
 	if err != nil {
 		return nil, err
+	}
+	if nodeRaw == nil {
+		return nil, errNodeNotFound
 	}
 	node := node.Node{}
 	err = cbor.Unmarshal(nodeRaw, &node)
