@@ -261,6 +261,7 @@ run_backend_tendermint_committee() {
 
         ${EKIDEN_NODE} \
             --log.level debug \
+            --log.format JSON \
             --log.file ${committee_dir}/validator-${idx}.log \
             --grpc.log.verbose_debug \
             --grpc.debug.port ${grpc_debug_port} \
@@ -368,6 +369,7 @@ run_compute_node() {
 
     ${EKIDEN_NODE} \
         --log.level debug \
+        --log.format JSON \
         --log.file ${log_file} \
         --grpc.log.verbose_debug \
         --storage.backend cachingclient \
@@ -444,6 +446,7 @@ run_byzantine_node() {
 
     ${EKIDEN_NODE} debug byzantine ${script_name} \
         --log.level debug \
+        --log.format JSON \
         --log.file ${log_file} \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
@@ -566,6 +569,7 @@ run_client_node() {
 
     ${EKIDEN_NODE} \
         --log.level debug \
+        --log.format JSON \
         --log.file ${log_file} \
         --grpc.log.verbose_debug \
         --epochtime.backend ${EKIDEN_EPOCHTIME_BACKEND} \
@@ -659,6 +663,7 @@ run_keymanager_node() {
 
     ${EKIDEN_NODE} \
         --log.level debug \
+        --log.format JSON \
         --log.file ${log_file} \
         --grpc.log.verbose_debug \
         --storage.backend cachingclient \
@@ -723,6 +728,7 @@ run_seed_node() {
 
     ${EKIDEN_NODE} \
         --log.level info \
+        --log.format JSON \
         --log.file ${log_file} \
         --metrics.mode none \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
