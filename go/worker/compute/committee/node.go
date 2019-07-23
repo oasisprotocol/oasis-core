@@ -466,11 +466,6 @@ func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch,
 		"batch", batch,
 	)
 
-	if err := n.byzantineMaybeInjectDiscrepancy(&ioRoot, batch); err != nil {
-		n.abortBatchLocked(err)
-		return
-	}
-
 	// Create batch processing context and channel for receiving the response.
 	ctx, cancel := context.WithCancel(n.ctx)
 	done := make(chan *protocol.ComputedBatch, 1)
@@ -504,6 +499,18 @@ func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch,
 			batchRuntimeProcessingTime.With(n.getMetricLabels()).Observe(time.Since(rtStartTime).Seconds())
 		}()
 
+		// Maybe inject discrepancy.
+		disWriteLog, disIoRoot, err := n.byzantineMaybeInjectDiscrepancy(rq.WorkerExecuteTxBatchRequest.Inputs)
+		if err != nil {
+			n.logger.Error("error while injecting discrepancy",
+				"err", err,
+			)
+			return
+		}
+		if disWriteLog != nil {
+			rq.WorkerExecuteTxBatchRequest.IORoot = disIoRoot
+		}
+
 		ch, err := n.workerHost.MakeRequest(ctx, rq)
 		if err != nil {
 			n.logger.Error("error while sending batch processing request to worker host",
@@ -526,6 +533,11 @@ func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch,
 					"response", response,
 				)
 				return
+			}
+
+			// Maybe inject discrepancy.
+			if disWriteLog != nil {
+				rsp.Batch.IOWriteLog = append(rsp.Batch.IOWriteLog, disWriteLog...)
 			}
 
 			done <- &rsp.Batch
