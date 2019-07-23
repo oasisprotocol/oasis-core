@@ -1,9 +1,7 @@
 package p2p
 
 import (
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 )
 
@@ -31,28 +29,8 @@ type Message struct {
 	Ack   *Ack
 	Error *Error
 
-	TxnSchedulerBatchDispatch *TxnSchedulerBatchDispatch
-	ComputeWorkerFinished     *ComputeWorkerFinished
-}
-
-// TxnSchedulerBatchDispatch is the message sent from the transaction
-// scheduler to compute workers after a batch is ready to be computed.
-type TxnSchedulerBatchDispatch struct {
-	// TODO: Txn scheduler should explicitly sign the message (#1790).
-
-	// CommitteeID is the committee ID of the target compute committee.
-	CommitteeID hash.Hash `codec:"cid"`
-
-	// IORoot is the I/O root containing the inputs (transactions) that
-	// the compute node should use.
-	IORoot hash.Hash `codec:"io_root"`
-
-	// StorageSignatures are the storage receipt signatures for the I/O root.
-	StorageSignatures []signature.Signature `codec:"storage_signatures"`
-
-	// Header is the block header on which the batch should be
-	// based.
-	Header roothash.Header `codec:"header"`
+	SignedTxnSchedulerBatchDispatch *commitment.SignedTxnSchedulerBatchDispatch
+	ComputeWorkerFinished           *ComputeWorkerFinished
 }
 
 // ComputeWorkerFinished is the message sent from the compute workers to

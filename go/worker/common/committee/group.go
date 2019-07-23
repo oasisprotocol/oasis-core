@@ -484,35 +484,43 @@ func (g *Group) publishLocked(
 }
 
 // PublishScheduledBatch publishes a batch to all members in the compute committee.
+// Returns the transaction scheduler's signature for this batch.
 func (g *Group) PublishScheduledBatch(
 	spanCtx opentracing.SpanContext,
 	committeeID hash.Hash,
 	ioRoot hash.Hash,
 	storageSignatures []signature.Signature,
 	hdr block.Header,
-) error {
+) (*signature.Signature, error) {
 	g.RLock()
 	defer g.RUnlock()
 
 	if g.activeEpoch == nil || g.activeEpoch.txnSchedulerCommittee.Role != scheduler.Leader {
-		return errors.New("group: not leader of txn scheduler committee")
+		return nil, errors.New("group: not leader of txn scheduler committee")
 	}
 
 	cc := g.activeEpoch.computeCommittees[committeeID]
 	if cc == nil {
-		return errors.New("group: invalid compute committee")
+		return nil, errors.New("group: invalid compute committee")
 	}
 
-	return g.publishLocked(
+	dispatchMsg := &commitment.TxnSchedulerBatchDispatch{
+		CommitteeID:       committeeID,
+		IORoot:            ioRoot,
+		StorageSignatures: storageSignatures,
+		Header:            hdr,
+	}
+
+	signedDispatchMsg, err := commitment.SignTxnSchedulerBatchDispatch(g.identity.NodeSigner, dispatchMsg)
+	if err != nil {
+		return nil, errors.Wrap(err, "group: unable to sign txn scheduler batch dispatch msg")
+	}
+
+	return &signedDispatchMsg.Signature, g.publishLocked(
 		spanCtx,
 		cc,
 		&p2p.Message{
-			TxnSchedulerBatchDispatch: &p2p.TxnSchedulerBatchDispatch{
-				CommitteeID:       committeeID,
-				IORoot:            ioRoot,
-				StorageSignatures: storageSignatures,
-				Header:            hdr,
-			},
+			SignedTxnSchedulerBatchDispatch: signedDispatchMsg,
 		},
 	)
 }

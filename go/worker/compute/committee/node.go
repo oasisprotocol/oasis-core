@@ -38,6 +38,7 @@ var (
 	errStorageFailed      = errors.New("compute: failed to fetch from storage")
 	errIncorrectRole      = errors.New("compute: incorrect role")
 	errIncorrectState     = errors.New("compute: incorrect state")
+	errMsgFromNonTxnSched = errors.New("compute: received txn scheduler dispatch msg from non-txn scheduler")
 )
 
 var (
@@ -185,11 +186,28 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 
 // HandlePeerMessage implements NodeHooks.
 func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (bool, error) {
-	if message.TxnSchedulerBatchDispatch != nil {
+	if message.SignedTxnSchedulerBatchDispatch != nil {
 		crash.Here(crashPointBatchReceiveAfter)
 
-		bd := message.TxnSchedulerBatchDispatch
-		err := n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageSignatures, bd.Header)
+		sbd := message.SignedTxnSchedulerBatchDispatch
+
+		// Before opening the signed dispatch message, verify that it was
+		// actually signed by the current transaction scheduler.
+		epoch := n.commonNode.Group.GetEpochSnapshot()
+		txsc := epoch.GetTransactionSchedulerCommittee()
+		if !txsc.PublicKeys[sbd.Signature.PublicKey.ToMapKey()] {
+			// Not signed by a current txn scheduler!
+			return false, errMsgFromNonTxnSched
+		}
+
+		// Transaction scheduler checks out, open the signed dispatch message
+		// and add it to the queue.
+		var bd commitment.TxnSchedulerBatchDispatch
+		if err := sbd.Open(&bd); err != nil {
+			return false, err
+		}
+
+		err := n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageSignatures, bd.Header, sbd.Signature)
 		if err != nil {
 			return false, err
 		}
@@ -204,6 +222,7 @@ func (n *Node) queueBatchBlocking(
 	ioRootHash hash.Hash,
 	storageSignatures []signature.Signature,
 	hdr block.Header,
+	txnSchedSig signature.Signature,
 ) error {
 	// Quick check to see if header is compatible.
 	if !bytes.Equal(hdr.Namespace[:], n.commonNode.RuntimeID) {
@@ -280,7 +299,7 @@ func (n *Node) queueBatchBlocking(
 
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
-	return n.handleExternalBatchLocked(committeeID, ioRootHash, batch, batchSpanCtx, hdr)
+	return n.handleExternalBatchLocked(committeeID, ioRootHash, batch, batchSpanCtx, hdr, txnSchedSig, storageSignatures)
 }
 
 // HandleBatchFromTransactionSchedulerLocked processes a batch from the transaction scheduler.
@@ -290,6 +309,8 @@ func (n *Node) HandleBatchFromTransactionSchedulerLocked(
 	committeeID hash.Hash,
 	ioRoot hash.Hash,
 	batch runtime.Batch,
+	txnSchedSig signature.Signature,
+	inputStorageSigs []signature.Signature,
 ) {
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 	expectedID := epoch.GetComputeCommitteeID()
@@ -297,7 +318,7 @@ func (n *Node) HandleBatchFromTransactionSchedulerLocked(
 		return
 	}
 
-	n.maybeStartProcessingBatchLocked(ioRoot, batch, batchSpanCtx)
+	n.maybeStartProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig, inputStorageSigs)
 }
 
 func (n *Node) bumpReselect() {
@@ -366,7 +387,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 		// Check if this was the block we were waiting for.
 		if header.MostlyEqual(state.header) {
 			n.logger.Info("received block needed for batch processing")
-			n.maybeStartProcessingBatchLocked(state.ioRoot, state.batch, state.batchSpanCtx)
+			n.maybeStartProcessingBatchLocked(state.ioRoot, state.batch, state.batchSpanCtx, state.txnSchedSig, state.inputStorageSigs)
 			break
 		}
 
@@ -407,19 +428,21 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext) {
+func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext, txnSchedSig signature.Signature, inputStorageSigs []signature.Signature) {
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	switch {
 	case epoch.IsComputeWorker():
 		// Worker, start processing immediately.
-		n.startProcessingBatchLocked(ioRoot, batch, batchSpanCtx)
+		n.startProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig, inputStorageSigs)
 	case epoch.IsComputeBackupWorker():
 		// Backup worker, wait for discrepancy event.
 		n.transitionLocked(StateWaitingForEvent{
-			ioRoot:       ioRoot,
-			batch:        batch,
-			batchSpanCtx: batchSpanCtx,
+			ioRoot:           ioRoot,
+			batch:            batch,
+			batchSpanCtx:     batchSpanCtx,
+			txnSchedSig:      txnSchedSig,
+			inputStorageSigs: inputStorageSigs,
 		})
 	default:
 		// Currently not a member of a compute committee, log.
@@ -428,7 +451,7 @@ func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.B
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext) {
+func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext, txnSchedSig signature.Signature, inputStorageSigs []signature.Signature) {
 	if n.commonNode.CurrentBlock == nil {
 		panic("attempted to start processing batch with a nil block")
 	}
@@ -436,11 +459,6 @@ func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch,
 	n.logger.Debug("processing batch",
 		"batch", batch,
 	)
-
-	if err := n.byzantineMaybeInjectDiscrepancy(&ioRoot, batch); err != nil {
-		n.abortBatchLocked(err)
-		return
-	}
 
 	// Create batch processing context and channel for receiving the response.
 	ctx, cancel := context.WithCancel(n.ctx)
@@ -456,7 +474,7 @@ func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch,
 
 	batchStartTime := time.Now()
 	batchSize.With(n.getMetricLabels()).Observe(float64(len(batch)))
-	n.transitionLocked(StateProcessingBatch{ioRoot, batch, batchSpanCtx, batchStartTime, cancel, done})
+	n.transitionLocked(StateProcessingBatch{ioRoot, batch, batchSpanCtx, batchStartTime, cancel, done, txnSchedSig, inputStorageSigs})
 
 	// Request the worker host to process a batch. This is done in a separate
 	// goroutine so that the committee node can continue processing blocks.
@@ -474,6 +492,18 @@ func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch,
 		defer func() {
 			batchRuntimeProcessingTime.With(n.getMetricLabels()).Observe(time.Since(rtStartTime).Seconds())
 		}()
+
+		// Maybe inject discrepancy.
+		disWriteLog, disIoRoot, err := n.byzantineMaybeInjectDiscrepancy(rq.WorkerExecuteTxBatchRequest.Inputs)
+		if err != nil {
+			n.logger.Error("error while injecting discrepancy",
+				"err", err,
+			)
+			return
+		}
+		if disWriteLog != nil {
+			rq.WorkerExecuteTxBatchRequest.IORoot = disIoRoot
+		}
 
 		ch, err := n.workerHost.MakeRequest(ctx, rq)
 		if err != nil {
@@ -497,6 +527,11 @@ func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch,
 					"response", response,
 				)
 				return
+			}
+
+			// Maybe inject discrepancy.
+			if disWriteLog != nil {
+				rsp.Batch.IOWriteLog = append(rsp.Batch.IOWriteLog, disWriteLog...)
 			}
 
 			done <- &rsp.Batch
@@ -558,9 +593,12 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 
 	// Generate proposed compute results.
 	proposedResults := &commitment.ComputeBody{
-		CommitteeID: epoch.GetComputeCommitteeID(),
-		Header:      batch.Header,
-		RakSig:      batch.RakSig,
+		CommitteeID:      epoch.GetComputeCommitteeID(),
+		Header:           batch.Header,
+		RakSig:           batch.RakSig,
+		TxnSchedSig:      state.txnSchedSig,
+		InputRoot:        state.ioRoot,
+		InputStorageSigs: state.inputStorageSigs,
 	}
 
 	// Commit I/O and state write logs to storage.
@@ -724,7 +762,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 
 	// Backup worker, start processing a batch.
 	n.logger.Info("backup worker activating and processing batch")
-	n.startProcessingBatchLocked(state.ioRoot, state.batch, state.batchSpanCtx)
+	n.startProcessingBatchLocked(state.ioRoot, state.batch, state.batchSpanCtx, state.txnSchedSig, state.inputStorageSigs)
 }
 
 // Guarded by n.commonNode.CrossNode.
@@ -734,6 +772,8 @@ func (n *Node) handleExternalBatchLocked(
 	batch runtime.Batch,
 	batchSpanCtx opentracing.SpanContext,
 	hdr block.Header,
+	txnSchedSig signature.Signature,
+	inputStorageSigs []signature.Signature,
 ) error {
 	// If we are not waiting for a batch, don't do anything.
 	if _, ok := n.state.(StateWaitingForBatch); !ok {
@@ -760,7 +800,7 @@ func (n *Node) handleExternalBatchLocked(
 
 	// Check if we have the correct block -- in this case, start processing the batch.
 	if n.commonNode.CurrentBlock.Header.MostlyEqual(&hdr) {
-		n.maybeStartProcessingBatchLocked(ioRoot, batch, batchSpanCtx)
+		n.maybeStartProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig, inputStorageSigs)
 		return nil
 	}
 
@@ -777,10 +817,12 @@ func (n *Node) handleExternalBatchLocked(
 
 	// Wait for the correct block to arrive.
 	n.transitionLocked(StateWaitingForBlock{
-		ioRoot:       ioRoot,
-		batch:        batch,
-		batchSpanCtx: batchSpanCtx,
-		header:       &hdr,
+		ioRoot:           ioRoot,
+		batch:            batch,
+		batchSpanCtx:     batchSpanCtx,
+		header:           &hdr,
+		txnSchedSig:      txnSchedSig,
+		inputStorageSigs: inputStorageSigs,
 	})
 
 	return nil

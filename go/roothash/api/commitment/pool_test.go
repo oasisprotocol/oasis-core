@@ -1044,6 +1044,21 @@ func generateComputeBody(t *testing.T, committee *scheduler.Committee) (*block.B
 	body.StorageSignatures = []signature.Signature{sig}
 	parentBlk.Header.StorageSignatures = []signature.Signature{sig}
 
+	// Generate dummy txn scheduler signature.
+	body.InputRoot = hash.Hash{}
+	body.InputStorageSigs = []signature.Signature{}
+	dispatch := &TxnSchedulerBatchDispatch{
+		CommitteeID:       body.CommitteeID,
+		IORoot:            body.InputRoot,
+		StorageSignatures: body.InputStorageSigs,
+		Header:            childBlk.Header,
+	}
+	sk, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
+	signedDispatch, err := signature.SignSigned(sk, TxnSchedulerBatchDispatchSigCtx, dispatch)
+	require.NoError(t, err, "SignSigned")
+	body.TxnSchedSig = signedDispatch.Signature
+
 	return childBlk, parentBlk, body
 }
 

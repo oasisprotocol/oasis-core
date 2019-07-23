@@ -26,6 +26,7 @@ var (
 	ErrInsufficientVotes      = errors.New("roothash/commitment: insufficient votes to finalize discrepancy resolution round")
 	ErrBadComputeCommits      = errors.New("roothash/commitment: bad compute commitments")
 	ErrInvalidCommitteeID     = errors.New("roothash/commitment: invalid committee ID")
+	ErrTxnSchedSigInvalid     = errors.New("roothash/commitment: txn scheduler signature invalid")
 )
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
@@ -147,6 +148,14 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 		return ErrNotBasedOnCorrectBlock
 	}
 
+	// Verify that the txn scheduler signature for current commitment is valid.
+	// TODO: Also verify that the signature actually comes from a transaction
+	// scheduler (similar to StorageVerifier).
+	currentTxnSchedSig := body.TxnSchedSig
+	if ok := body.VerifyTxnSchedSignature(blk.Header); !ok {
+		return ErrTxnSchedSigInvalid
+	}
+
 	// Check if the header refers to merkle roots in storage.
 	if err := sv.VerifyStorageCommittee(body.StorageSignatures); err != nil {
 		logger.Debug("compute commitment has bad storage receipt signers",
@@ -163,6 +172,24 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 			"err", err,
 		)
 		return err
+	}
+
+	// Go through existing commitments and check if the txn scheduler signed
+	// different batches for the same committee.
+	for _, c := range p.Commitments {
+		com := c.(OpenComputeCommitment)
+		cb := com.Body
+		if cID.Equal(&cb.CommitteeID) {
+			existingTxnSchedSig := cb.TxnSchedSig
+			if currentTxnSchedSig.PublicKey.Equal(existingTxnSchedSig.PublicKey) && currentTxnSchedSig.Signature != existingTxnSchedSig.Signature {
+				// Same committe, same txn sched, but txn sched signatures
+				// don't match -- txn sched is malicious!
+				// TODO: Slash stake! (issue #1931)
+				logger.Warn("txn sched signed two different batches for the same committee ID",
+					"committee_id", cb.CommitteeID,
+				)
+			}
+		}
 	}
 
 	if p.Commitments == nil {

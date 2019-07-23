@@ -7,6 +7,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
@@ -134,6 +135,10 @@ type StateWaitingForBlock struct {
 	batchSpanCtx opentracing.SpanContext
 	// Header of the block we are waiting for.
 	header *block.Header
+	// Transaction scheduler's signature.
+	txnSchedSig signature.Signature
+	// Storage signatures for the I/O root containing the inputs.
+	inputStorageSigs []signature.Signature
 }
 
 // Name returns the name of the state.
@@ -154,6 +159,10 @@ type StateWaitingForEvent struct {
 	batch runtime.Batch
 	// Tracing for this batch.
 	batchSpanCtx opentracing.SpanContext
+	// Transaction scheduler's signature.
+	txnSchedSig signature.Signature
+	// Storage signatures for the I/O root containing the inputs.
+	inputStorageSigs []signature.Signature
 }
 
 // Name returns the name of the state.
@@ -180,6 +189,10 @@ type StateProcessingBatch struct {
 	cancelFn context.CancelFunc
 	// Channel which will provide the result.
 	done chan *protocol.ComputedBatch
+	// Transaction scheduler's signature.
+	txnSchedSig signature.Signature
+	// Storage signatures for the I/O root containing the inputs.
+	inputStorageSigs []signature.Signature
 }
 
 // Name returns the name of the state.

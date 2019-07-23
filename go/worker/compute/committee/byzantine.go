@@ -5,11 +5,12 @@ import (
 	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
-func (n *Node) byzantineMaybeInjectDiscrepancy(ioRoot *hash.Hash, inputs runtime.Batch) error {
+func (n *Node) byzantineMaybeInjectDiscrepancy(inputs runtime.Batch) (writelog.WriteLog, hash.Hash, error) {
 	if !n.cfg.ByzantineInjectDiscrepancies {
-		return nil
+		return nil, hash.Hash{}, nil
 	}
 
 	n.logger.Error("BYZANTINE MODE: injecting discrepancy into batch")
@@ -27,35 +28,9 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(ioRoot *hash.Hash, inputs runtime
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,
 		)
-		return err
+		return nil, hash.Hash{}, err
 	}
 
 	header := n.commonNode.CurrentBlock.Header
-	writeLog, newIoRoot, err := ioTree.Commit(n.ctx, header.Namespace, header.Round+1)
-	if err != nil {
-		n.logger.Error("failed to inject discrepancy",
-			"err", err,
-		)
-		return err
-	}
-
-	_, err = n.commonNode.Storage.Apply(
-		n.ctx,
-		header.Namespace,
-		header.Round+1,
-		oldIoRoot,
-		header.Round+1,
-		newIoRoot,
-		writeLog,
-	)
-	if err != nil {
-		n.logger.Error("failed to inject discrepancy",
-			"err", err,
-		)
-		return err
-	}
-
-	*ioRoot = newIoRoot
-
-	return nil
+	return ioTree.Commit(n.ctx, header.Namespace, header.Round+1)
 }
