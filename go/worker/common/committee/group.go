@@ -511,7 +511,7 @@ func (g *Group) PublishScheduledBatch(
 		Header:            hdr,
 	}
 
-	signedDispatchMsg, err := p2p.SignTxnSchedulerBatchDispatch(g.identity.NodeSigner, dispatchMsg)
+	signedDispatchMsg, err := commitment.SignTxnSchedulerBatchDispatch(g.identity.NodeSigner, dispatchMsg)
 	if err != nil {
 		return nil, errors.Wrap(err, "group: unable to sign txn scheduler batch dispatch msg")
 	}

@@ -26,7 +26,7 @@ var (
 	ErrInsufficientVotes      = errors.New("roothash/commitment: insufficient votes to finalize discrepancy resolution round")
 	ErrBadComputeCommits      = errors.New("roothash/commitment: bad compute commitments")
 	ErrInvalidCommitteeID     = errors.New("roothash/commitment: invalid committee ID")
-	ErrTxnSchedSigInvalid     = errors.New("roothash/commitment: txn sched signature invalid")
+	ErrTxnSchedSigInvalid     = errors.New("roothash/commitment: txn scheduler signature invalid")
 )
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
@@ -149,6 +149,8 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 	}
 
 	// Verify that the txn scheduler signature for current commitment is valid.
+	// TODO: Also verify that the signature actually comes from a transaction
+	// scheduler (similar to StorageVerifier).
 	currentTxnSchedSig := body.TxnSchedSig
 	if ok := body.VerifyTxnSchedSignature(blk.Header); !ok {
 		return ErrTxnSchedSigInvalid
@@ -184,7 +186,8 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 				// don't match -- txn sched is malicious!
 				// TODO: Slash stake! (issue #1931)
 				logger.Warn("txn sched signed two different batches for the same committee ID",
-					"committee_id", cb.CommitteeID)
+					"committee_id", cb.CommitteeID,
+				)
 			}
 		}
 	}

@@ -294,7 +294,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			InputStorageSigs:  []signature.Signature{},
 		}
 
-		// Fake txn sched signature.
+		// Fake txn scheduler signature.
 		dispatch := &commitment.TxnSchedulerBatchDispatch{
 			CommitteeID:       commitBody.CommitteeID,
 			IORoot:            commitBody.InputRoot,

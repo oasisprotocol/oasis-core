@@ -138,7 +138,7 @@ type StateWaitingForBlock struct {
 	// Transaction scheduler's signature.
 	txnSchedSig signature.Signature
 	// Storage signatures for the I/O root containing the inputs.
-	storageSigs []signature.Signature
+	inputStorageSigs []signature.Signature
 }
 
 // Name returns the name of the state.
@@ -162,7 +162,7 @@ type StateWaitingForEvent struct {
 	// Transaction scheduler's signature.
 	txnSchedSig signature.Signature
 	// Storage signatures for the I/O root containing the inputs.
-	storageSigs []signature.Signature
+	inputStorageSigs []signature.Signature
 }
 
 // Name returns the name of the state.
@@ -192,7 +192,7 @@ type StateProcessingBatch struct {
 	// Transaction scheduler's signature.
 	txnSchedSig signature.Signature
 	// Storage signatures for the I/O root containing the inputs.
-	storageSigs []signature.Signature
+	inputStorageSigs []signature.Signature
 }
 
 // Name returns the name of the state.

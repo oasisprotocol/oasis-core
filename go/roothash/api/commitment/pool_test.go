@@ -1044,7 +1044,7 @@ func generateComputeBody(t *testing.T, committee *scheduler.Committee) (*block.B
 	body.StorageSignatures = []signature.Signature{sig}
 	parentBlk.Header.StorageSignatures = []signature.Signature{sig}
 
-	// Generate dummy txn sched signature.
+	// Generate dummy txn scheduler signature.
 	body.InputRoot = hash.Hash{}
 	body.InputStorageSigs = []signature.Signature{}
 	dispatch := &TxnSchedulerBatchDispatch{

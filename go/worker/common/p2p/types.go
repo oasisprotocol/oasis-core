@@ -29,32 +29,8 @@ type Message struct {
 	Ack   *Ack
 	Error *Error
 
-	SignedTxnSchedulerBatchDispatch *SignedTxnSchedulerBatchDispatch
+	SignedTxnSchedulerBatchDispatch *commitment.SignedTxnSchedulerBatchDispatch
 	ComputeWorkerFinished           *ComputeWorkerFinished
-}
-
-// SignedTxnSchedulerBatchDispatch is a TxnSchedulerBatchDispatch, signed by
-// the transaction scheduler.
-type SignedTxnSchedulerBatchDispatch struct {
-	signature.Signed
-}
-
-// Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedTxnSchedulerBatchDispatch) Open(tsbd *commitment.TxnSchedulerBatchDispatch) error {
-	return s.Signed.Open(commitment.TxnSchedulerBatchDispatchSigCtx, tsbd)
-}
-
-// SignTxnSchedulerBatchDispatch signs a TxnSchedulerBatchDispatch struct
-// using the given signer.
-func SignTxnSchedulerBatchDispatch(signer signature.Signer, tsbd *commitment.TxnSchedulerBatchDispatch) (*SignedTxnSchedulerBatchDispatch, error) {
-	signed, err := signature.SignSigned(signer, commitment.TxnSchedulerBatchDispatchSigCtx, tsbd)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SignedTxnSchedulerBatchDispatch{
-		Signed: *signed,
-	}, nil
 }
 
 // ComputeWorkerFinished is the message sent from the compute workers to

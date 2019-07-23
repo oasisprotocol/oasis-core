@@ -1,4 +1,3 @@
-// Package commitment defines a roothash commitment.
 package commitment
 
 import (
@@ -28,8 +27,7 @@ type TxnSchedulerBatchDispatch struct {
 	// StorageSignatures are the storage receipt signatures for the I/O root.
 	StorageSignatures []signature.Signature `codec:"storage_signatures"`
 
-	// Header is the block header on which the batch should be
-	// based.
+	// Header is the block header on which the batch should be based.
 	Header block.Header `codec:"header"`
 }
 
@@ -41,4 +39,28 @@ func (t *TxnSchedulerBatchDispatch) MarshalCBOR() []byte {
 // UnmarshalCBOR deserializes a CBOR byte vector into given type.
 func (t *TxnSchedulerBatchDispatch) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, t)
+}
+
+// SignedTxnSchedulerBatchDispatch is a TxnSchedulerBatchDispatch, signed by
+// the transaction scheduler.
+type SignedTxnSchedulerBatchDispatch struct {
+	signature.Signed
+}
+
+// Open first verifies the blob signature and then unmarshals the blob.
+func (s *SignedTxnSchedulerBatchDispatch) Open(tsbd *TxnSchedulerBatchDispatch) error {
+	return s.Signed.Open(TxnSchedulerBatchDispatchSigCtx, tsbd)
+}
+
+// SignTxnSchedulerBatchDispatch signs a TxnSchedulerBatchDispatch struct
+// using the given signer.
+func SignTxnSchedulerBatchDispatch(signer signature.Signer, tsbd *TxnSchedulerBatchDispatch) (*SignedTxnSchedulerBatchDispatch, error) {
+	signed, err := signature.SignSigned(signer, TxnSchedulerBatchDispatchSigCtx, tsbd)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SignedTxnSchedulerBatchDispatch{
+		Signed: *signed,
+	}, nil
 }

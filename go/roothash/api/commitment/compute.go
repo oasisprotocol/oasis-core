@@ -68,9 +68,10 @@ type ComputeBody struct {
 	Header            ComputeResultsHeader   `codec:"header"`
 	StorageSignatures []signature.Signature  `codec:"storage_signatures"`
 	RakSig            signature.RawSignature `codec:"rak_sig"`
-	TxnSchedSig       signature.Signature    `codec:"txn_sched_sig"`
-	InputRoot         hash.Hash              `codec:"input_root"`
-	InputStorageSigs  []signature.Signature  `codec:"input_storage_sigs"`
+
+	TxnSchedSig      signature.Signature   `codec:"txn_sched_sig"`
+	InputRoot        hash.Hash             `codec:"input_root"`
+	InputStorageSigs []signature.Signature `codec:"input_storage_sigs"`
 }
 
 // VerifyTxnSchedSignature rebuilds the batch dispatch message from the data
