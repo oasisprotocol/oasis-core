@@ -3,6 +3,7 @@ package tests
 
 import (
 	"context"
+	"crypto/rand"
 	"strconv"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
@@ -288,7 +290,23 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 				StateRoot:    parent.Header.StateRoot,
 			},
 			StorageSignatures: parent.Header.StorageSignatures,
+			InputRoot:         hash.Hash{},
+			InputStorageSigs:  []signature.Signature{},
 		}
+
+		// Fake txn sched signature.
+		dispatch := &commitment.TxnSchedulerBatchDispatch{
+			CommitteeID:       commitBody.CommitteeID,
+			IORoot:            commitBody.InputRoot,
+			StorageSignatures: commitBody.InputStorageSigs,
+			Header:            child.Header,
+		}
+		sk, err := memorySigner.NewSigner(rand.Reader) // nolint: vetshadow
+		require.NoError(err, "NewSigner")
+		signedDispatch, err := signature.SignSigned(sk, commitment.TxnSchedulerBatchDispatchSigCtx, dispatch)
+		require.NoError(err, "SignSigned")
+		commitBody.TxnSchedSig = signedDispatch.Signature
+
 		// `err` shadows outside.
 		commit, err := commitment.SignComputeCommitment(node.Signer, &commitBody) // nolint: vetshadow
 		require.NoError(err, "SignSigned")

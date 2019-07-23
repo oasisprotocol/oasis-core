@@ -118,12 +118,6 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 		return ErrNoRuntime
 	}
 
-	// Verify that the txn scheduler signature for current commitment is valid.
-	currentTxnSchedSig := body.TxnSchedSig
-	if ok := body.VerifyTxnSchedSignature(blk.Header); !ok {
-		return ErrTxnSchedSigInvalid
-	}
-
 	// Verify RAK-attestation.
 	if p.Runtime.TEEHardware != node.TEEHardwareInvalid {
 		rak := p.NodeInfo[id].Runtime.Capabilities.TEE.RAK
@@ -152,6 +146,12 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 			"previous_hash", header.PreviousHash,
 		)
 		return ErrNotBasedOnCorrectBlock
+	}
+
+	// Verify that the txn scheduler signature for current commitment is valid.
+	currentTxnSchedSig := body.TxnSchedSig
+	if ok := body.VerifyTxnSchedSignature(blk.Header); !ok {
+		return ErrTxnSchedSigInvalid
 	}
 
 	// Check if the header refers to merkle roots in storage.
