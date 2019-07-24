@@ -538,17 +538,17 @@ func (app *rootHashApplication) executeTx(
 	return roothash.ErrInvalidArgument
 }
 
-type roothashStorageVerifier struct {
+type roothashSignatureVerifier struct {
 	runtimeID signature.PublicKey
 	scheduler *schedulerapp.MutableState
 }
 
-// VerifyStorageCommittee verifies that the given signatures come from the
-// current storage committee members.
+// VerifyCommitteeSignatures verifies that the given signatures come from
+// the current committee members of the given kind.
 //
-// Implements commitment.StorageVerifier.
-func (sv *roothashStorageVerifier) VerifyStorageCommittee(sigs []signature.Signature) error {
-	committee, err := sv.scheduler.GetCommittee(scheduler.KindStorage, sv.runtimeID)
+// Implements commitment.SignatureVerifier.
+func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error {
+	committee, err := sv.scheduler.GetCommittee(kind, sv.runtimeID)
 	if err != nil {
 		return err
 	}
@@ -561,7 +561,7 @@ func (sv *roothashStorageVerifier) VerifyStorageCommittee(sigs []signature.Signa
 
 	for _, sig := range sigs {
 		if !pks[sig.PublicKey.ToMapKey()] {
-			return errors.New("roothash: signature is not from a valid storage node")
+			return errors.New("roothash: signature is not from a valid committee member")
 		}
 	}
 	return nil
@@ -613,7 +613,7 @@ func (app *rootHashApplication) commit(
 	}
 
 	// Create storage signature verifier.
-	sv := &roothashStorageVerifier{
+	sv := &roothashSignatureVerifier{
 		runtimeID: id,
 		scheduler: schedulerapp.NewMutableState(tree),
 	}

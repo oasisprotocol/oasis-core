@@ -3,7 +3,6 @@ package tests
 
 import (
 	"context"
-	"crypto/rand"
 	"strconv"
 	"testing"
 	"time"
@@ -13,7 +12,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
@@ -37,9 +35,10 @@ type runtimeState struct {
 	rt           *registryTests.TestRuntime
 	genesisBlock *block.Block
 
-	computeCommittee *testCommittee
-	mergeCommittee   *testCommittee
-	storageCommittee *testCommittee
+	computeCommittee  *testCommittee
+	mergeCommittee    *testCommittee
+	storageCommittee  *testCommittee
+	txnSchedCommittee *testCommittee
 }
 
 // RootHashImplementationTests exercises the basic functionality of a
@@ -88,12 +87,17 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 			testGenesisBlock(t, backend, v)
 		})
 	}
-	t.Run("EpochTransitionBlock", func(t *testing.T) {
+	success := t.Run("EpochTransitionBlock", func(t *testing.T) {
 		testEpochTransitionBlock(t, backend, epochtime, scheduler, rtStates)
 	})
-	t.Run("SucessfulRound", func(t *testing.T) {
-		testSucessfulRound(t, backend, storage, rtStates)
-	})
+	if success {
+		// It only makes sense to run the SuccessfulRound test in case the
+		// EpochTransitionBlock was successful. Otherwise this may leave the
+		// committees set to nil and cause a crash.
+		t.Run("SucessfulRound", func(t *testing.T) {
+			testSucessfulRound(t, backend, storage, rtStates)
+		})
+	}
 
 	// TODO: Test the various failures.
 }
@@ -193,7 +197,7 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 		nodes[node.Node.ID.ToMapKey()] = node
 	}
 
-	s.computeCommittee, s.mergeCommittee, s.storageCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
+	s.computeCommittee, s.mergeCommittee, s.storageCommittee, s.txnSchedCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
 
 	// Wait to receive an epoch transition block.
 	for {
@@ -301,9 +305,9 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			StorageSignatures: commitBody.InputStorageSigs,
 			Header:            child.Header,
 		}
-		sk, err := memorySigner.NewSigner(rand.Reader) // nolint: vetshadow
-		require.NoError(err, "NewSigner")
-		signedDispatch, err := signature.SignSigned(sk, commitment.TxnSchedulerBatchDispatchSigCtx, dispatch)
+		signer := s.txnSchedCommittee.leader.Signer
+		var signedDispatch *signature.Signed
+		signedDispatch, err = signature.SignSigned(signer, commitment.TxnSchedulerBatchDispatchSigCtx, dispatch)
 		require.NoError(err, "SignSigned")
 		commitBody.TxnSchedSig = signedDispatch.Signature
 
@@ -387,7 +391,12 @@ func mustGetCommittee(
 	epoch epochtime.EpochTime,
 	sched scheduler.Backend,
 	nodes map[signature.MapKey]*registryTests.TestNode,
-) (computeCommittee *testCommittee, mergeCommittee *testCommittee, storageCommittee *testCommittee) {
+) (
+	computeCommittee *testCommittee,
+	mergeCommittee *testCommittee,
+	storageCommittee *testCommittee,
+	txnSchedCommittee *testCommittee,
+) {
 	require := require.New(t)
 
 	ch, sub := sched.WatchCommittees()
@@ -400,9 +409,6 @@ func mustGetCommittee(
 				continue
 			}
 			if !rt.Runtime.ID.Equal(committee.RuntimeID) {
-				continue
-			}
-			if committee.Kind != scheduler.KindCompute && committee.Kind != scheduler.KindMerge && committee.Kind != scheduler.KindStorage {
 				continue
 			}
 
@@ -423,6 +429,9 @@ func mustGetCommittee(
 
 			var groupSize, groupBackupSize int
 			switch committee.Kind {
+			case scheduler.KindTransactionScheduler:
+				groupSize = int(rt.Runtime.ReplicaGroupSize)
+				groupBackupSize = 0
 			case scheduler.KindCompute:
 				fallthrough
 			case scheduler.KindMerge:
@@ -442,6 +451,8 @@ func mustGetCommittee(
 			require.Len(ret.backupWorkers, groupBackupSize, "backup workers exist")
 
 			switch committee.Kind {
+			case scheduler.KindTransactionScheduler:
+				txnSchedCommittee = &ret
 			case scheduler.KindCompute:
 				computeCommittee = &ret
 			case scheduler.KindMerge:
@@ -450,7 +461,7 @@ func mustGetCommittee(
 				storageCommittee = &ret
 			}
 
-			if computeCommittee == nil || mergeCommittee == nil || storageCommittee == nil {
+			if computeCommittee == nil || mergeCommittee == nil || storageCommittee == nil || txnSchedCommittee == nil {
 				continue
 			}
 

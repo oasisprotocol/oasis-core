@@ -21,6 +21,7 @@ import (
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
@@ -234,7 +235,7 @@ func (n *Node) queueBatchBlocking(
 
 	// Verify storage receipt signatures.
 	epoch := n.commonNode.Group.GetEpochSnapshot()
-	if err := epoch.VerifyStorageCommittee(storageSignatures); err != nil {
+	if err := epoch.VerifyCommitteeSignatures(scheduler.KindStorage, storageSignatures); err != nil {
 		n.logger.Warn("received bad storage signature",
 			"err", err,
 		)
@@ -660,7 +661,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 			}
 			signatures = append(signatures, receipt.Signature)
 		}
-		if err := epoch.VerifyStorageCommittee(signatures); err != nil {
+		if err := epoch.VerifyCommitteeSignatures(scheduler.KindStorage, signatures); err != nil {
 			n.logger.Error("failed to validate receipt signer",
 				"err", err,
 			)
