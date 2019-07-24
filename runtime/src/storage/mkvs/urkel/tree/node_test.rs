@@ -166,7 +166,7 @@ fn test_hash_internal() {
     int_node.update_hash();
     assert_eq!(
         int_node.hash,
-        Hash::from_str("aa31d03fdf2fddf6ada5db43ccba0f137cb6f696110a71ac59f8936d1bef2bf8").unwrap()
+        Hash::from_str("75c37c67c265e2c836f76dec35173fa336e976938ea46f088390a983e46efced").unwrap()
     );
 }
 

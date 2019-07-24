@@ -10,12 +10,12 @@ use crate::{
 };
 
 const INSERT_ITEMS: usize = 1000;
-const ALL_ITEMS_ROOT: &str = "ba5abbff59303163a97872669961f826d0f18d97d3c14781d29b8551d6199ffe";
+const ALL_ITEMS_ROOT: &str = "67774198b787b4846f67f1cfd1715b4e94d1a75f6caeda08635f8a03932f3413";
 
 const LONG_KEY: &str = "Unlock the potential of your data without compromising security or privacy";
 const LONG_VALUE: &str = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance.";
 const ALL_LONG_ITEMS_ROOT: &str =
-    "6478927992bf805fd95bed0b5c28ebab4b2c8a3f81f5d5c9b3aba2b2ddfdc3d2";
+    "0a80a0cf285f9eedec0339372c0ae25190ed75809a0799ab75a593d783ddef00";
 
 fn generate_key_value_pairs_ex(prefix: String, count: usize) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
     let mut keys: Vec<Vec<u8>> = Vec::with_capacity(count);
@@ -182,7 +182,7 @@ fn test_basic() {
         UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(
         format!("{:?}", hash),
-        "e0cc7ad73816cf11cc4157aaae220c7cdc70ad6557115cc3bebf54c9081b695a"
+        "573e3d24a5e6cf48a390910c31c7166aa40414037380bc77d648b3967b1e124f"
     );
     // Order of transactions in writelog is arbitrary.
     assert_eq!(

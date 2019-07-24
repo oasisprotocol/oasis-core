@@ -47,7 +47,12 @@ func doCommit(
 			panic("urkel: non-clean pointer has clean node")
 		}
 
-		for _, subNode := range []*node.Pointer{n.LeafNode, n.Left, n.Right} {
+		// Commit internal leaf (considered to be on the same depth as the internal node).
+		if _, err = doCommit(ctx, cache, batch, subtree, depth, n.LeafNode); err != nil {
+			return
+		}
+
+		for _, subNode := range []*node.Pointer{n.Left, n.Right} {
 			newSubtree := batch.MaybeStartSubtree(subtree, depth+1, subNode)
 			if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, subNode); err != nil {
 				return
@@ -81,6 +86,7 @@ func doCommit(
 
 			batch.OnCommit(func() {
 				n.Value.Clean = true
+				// Make value eligible for eviction.
 				cache.commitValue(n.Value)
 			})
 		}
@@ -100,6 +106,7 @@ func doCommit(
 
 	batch.OnCommit(func() {
 		ptr.Clean = true
+		// Make node eligible for eviction.
 		cache.commitNode(ptr)
 	})
 	h = ptr.Hash

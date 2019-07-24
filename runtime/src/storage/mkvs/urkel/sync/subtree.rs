@@ -38,6 +38,7 @@ pub struct InternalNodeSummary {
     pub right: SubtreePointer,
 
     pub label_bit_length: Depth,
+
     pub invalid: bool,
 }
 

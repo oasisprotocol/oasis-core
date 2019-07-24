@@ -7,7 +7,13 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
-func (t *Tree) doRemove(ctx context.Context, ptr *node.Pointer, bitDepth node.Depth, key node.Key, depth node.Depth) (*node.Pointer, bool, error) {
+func (t *Tree) doRemove(
+	ctx context.Context,
+	ptr *node.Pointer,
+	bitDepth node.Depth,
+	key node.Key,
+	depth node.Depth,
+) (*node.Pointer, bool, error) {
 	// NB: bitDepth is the bit depth of parent of ptr, so add one bit to fetch the
 	// node corresponding to key.
 	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth + 1}, ptr, key)
@@ -22,29 +28,41 @@ func (t *Tree) doRemove(ctx context.Context, ptr *node.Pointer, bitDepth node.De
 	case *node.InternalNode:
 		// Remove from internal node and recursively collapse the branch, if
 		// needed.
+		bitLength := bitDepth + n.LabelBitLength
+
 		var changed bool
-		if key.BitLength() == bitDepth+n.LabelBitLength {
-			n.LeafNode, changed, err = t.doRemove(ctx, n.LeafNode, bitDepth+n.LabelBitLength, key, depth)
-		} else if key.GetBit(bitDepth + n.LabelBitLength) {
-			n.Right, changed, err = t.doRemove(ctx, n.Right, bitDepth+n.LabelBitLength, key, depth+1)
+		if key.BitLength() == bitLength {
+			n.LeafNode, changed, err = t.doRemove(ctx, n.LeafNode, bitLength, key, depth)
+		} else if key.GetBit(bitLength) {
+			n.Right, changed, err = t.doRemove(ctx, n.Right, bitLength, key, depth+1)
 		} else {
-			n.Left, changed, err = t.doRemove(ctx, n.Left, bitDepth+n.LabelBitLength, key, depth+1)
+			n.Left, changed, err = t.doRemove(ctx, n.Left, bitLength, key, depth+1)
 		}
 		if err != nil {
 			return nil, false, err
 		}
 
 		// Fetch and check the remaining children.
-		remainingLeaf, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth + n.LabelBitLength}, n.LeafNode, nil)
+		remainingLeaf, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitLength}, n.LeafNode, nil)
 		if err != nil {
 			return nil, false, err
 		}
-		keyPrefix, _ := key.Split(bitDepth+n.LabelBitLength, key.BitLength())
-		remainingLeft, err := t.cache.derefNodePtr(ctx, node.ID{Path: keyPrefix.AppendBit(bitDepth+n.LabelBitLength, false), BitDepth: bitDepth + n.LabelBitLength + 1}, n.Left, nil)
+		keyPrefix, _ := key.Split(bitLength, key.BitLength())
+		remainingLeft, err := t.cache.derefNodePtr(
+			ctx,
+			node.ID{Path: keyPrefix.AppendBit(bitLength, false), BitDepth: bitLength + 1},
+			n.Left,
+			nil,
+		)
 		if err != nil {
 			return nil, false, err
 		}
-		remainingRight, err := t.cache.derefNodePtr(ctx, node.ID{Path: keyPrefix.AppendBit(bitDepth+n.LabelBitLength, true), BitDepth: bitDepth + n.LabelBitLength + 1}, n.Right, nil)
+		remainingRight, err := t.cache.derefNodePtr(
+			ctx,
+			node.ID{Path: keyPrefix.AppendBit(bitLength, true), BitDepth: bitLength + 1},
+			n.Right,
+			nil,
+		)
 		if err != nil {
 			return nil, false, err
 		}
@@ -75,6 +93,8 @@ func (t *Tree) doRemove(ctx context.Context, ptr *node.Pointer, bitDepth node.De
 				inode.LabelBitLength += n.LabelBitLength
 				inode.Clean = false
 				nodePtr.Clean = false
+				// No longer eligible for eviction as it is dirty.
+				t.cache.rollbackNode(nodePtr)
 			}
 
 			t.cache.removeNode(ptr)

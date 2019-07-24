@@ -40,12 +40,16 @@ type NodeDB interface {
 // Subtree is a NodeDB-specific subtree implementation.
 type Subtree interface {
 	// PutNode persists a node in the NodeDB.
+	//
+	// Depth is the node depth not bit depth.
 	PutNode(depth node.Depth, ptr *node.Pointer) error
 
 	// VisitCleanNode is called for any clean node encountered during commit
 	// for which no further processing will be done (as it is marked clean).
 	//
 	// The specific NodeDB implementation may wish to do further processing.
+	//
+	// Depth is the node depth not bit depth.
 	VisitCleanNode(depth node.Depth, ptr *node.Pointer) error
 
 	// Commit marks the subtree as complete.

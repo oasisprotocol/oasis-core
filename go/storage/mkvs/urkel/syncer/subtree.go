@@ -79,7 +79,8 @@ type InternalNodeSummary struct {
 	Right    SubtreePointer
 
 	LabelBitLength node.Depth
-	invalid        bool
+
+	invalid bool
 }
 
 // MarshalBinary encodes an internal node summary into binary form.

@@ -38,25 +38,27 @@ func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, bitDepth node.De
 		var result insertResult
 
 		if cpLength == n.LabelBitLength {
+			bitLength := bitDepth + n.LabelBitLength
+
 			// The current part of key matched the node's Label. Do recursion.
-			if key.BitLength() == bitDepth+n.LabelBitLength {
+			if key.BitLength() == bitLength {
 				// Key to insert ends exactly at this node. Add it to the
 				// existing internal node as LeafNode.
-				result, err = t.doInsert(ctx, n.LeafNode, bitDepth+n.LabelBitLength, key, val, depth)
-			} else if key.GetBit(bitDepth + n.LabelBitLength) {
+				result, err = t.doInsert(ctx, n.LeafNode, bitLength, key, val, depth)
+			} else if key.GetBit(bitLength) {
 				// Insert recursively based on the bit value.
-				result, err = t.doInsert(ctx, n.Right, bitDepth+n.LabelBitLength, key, val, depth+1)
+				result, err = t.doInsert(ctx, n.Right, bitLength, key, val, depth+1)
 			} else {
-				result, err = t.doInsert(ctx, n.Left, bitDepth+n.LabelBitLength, key, val, depth+1)
+				result, err = t.doInsert(ctx, n.Left, bitLength, key, val, depth+1)
 			}
 
 			if err != nil {
-				return result, err
+				return insertResult{}, err
 			}
 
-			if key.BitLength() == bitDepth+n.LabelBitLength {
+			if key.BitLength() == bitLength {
 				n.LeafNode = result.newRoot
-			} else if key.GetBit(bitDepth + n.LabelBitLength) {
+			} else if key.GetBit(bitLength) {
 				n.Right = result.newRoot
 			} else {
 				n.Left = result.newRoot

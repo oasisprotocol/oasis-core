@@ -303,7 +303,7 @@ func (c *cache) evictNodes(targetCapacity uint64) {
 		elem := c.lruNodes.Back()
 		n := elem.Value.(*node.Pointer)
 		if !n.Clean {
-			panic(fmt.Errorf("urkel: evictNodes called on dirty node %v", n))
+			panic(fmt.Errorf("urkel: tried to evict dirty node %v", n))
 		}
 		c.removeNode(n)
 	}
@@ -387,11 +387,25 @@ func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer,
 	}
 
 	if ptr.Node != nil {
-		// If this is a leaf node, check if the value has been evicted. In this case
-		// treat it as if we need to re-fetch the node.
-		if n, ok := ptr.Node.(*node.LeafNode); ok && n.Value.Value == nil {
-			c.removeNode(ptr)
-		} else {
+		var refetch bool
+		switch n := ptr.Node.(type) {
+		case *node.InternalNode:
+			// If this is an internal node, check if the leaf node or its value has been
+			// evicted. In this case treat it as if we need to re-fetch the node.
+			if n.LeafNode != nil && (n.LeafNode.Node == nil || n.LeafNode.Node.(*node.LeafNode).Value == nil) {
+				c.removeNode(ptr)
+				refetch = true
+			}
+		case *node.LeafNode:
+			// If this is a leaf node, check if the value has been evicted. In this case
+			// treat it as if we need to re-fetch the node.
+			if n.Value.Value == nil {
+				c.removeNode(ptr)
+				refetch = true
+			}
+		}
+
+		if !refetch {
 			c.useNode(ptr)
 			return ptr.Node, nil
 		}

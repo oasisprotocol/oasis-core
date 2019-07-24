@@ -250,13 +250,11 @@ impl Node for InternalNode {
         let leaf_node_hash = self.leaf_node.borrow().hash;
         let left_hash = self.left.borrow().hash;
         let right_hash = self.right.borrow().hash;
-        let mut l = self.label_bit_length.marshal_binary().unwrap();
-        l.extend_from_slice(&self.label[..]);
-        let label_hash = Hash::digest_bytes(&l[..]);
 
         self.hash = Hash::digest_bytes_list(&[
             &[NodeKind::Internal as u8],
-            label_hash.as_ref(),
+            &self.label_bit_length.marshal_binary().unwrap(),
+            self.label.as_ref(),
             leaf_node_hash.as_ref(),
             left_hash.as_ref(),
             right_hash.as_ref(),

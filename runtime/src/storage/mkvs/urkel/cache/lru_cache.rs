@@ -455,24 +455,43 @@ impl Cache for LRUCache {
         let ptr_ref = ptr;
         let ptr = ptr_ref.borrow();
         if let Some(ref node) = &ptr.node {
-            // If this is a leaf node, check if the value has been evicted. In this case
-            // treat it as if we need to re-fetch the node.
-            if let NodeBox::Leaf(ref n) = *node.borrow() {
-                if n.value.borrow().value == None {
-                    self.remove_node(ptr_ref.clone());
-                } else {
-                    self.use_node(ptr_ref.clone());
-                    return Ok(Some(node.clone()));
+            let refetch = match *node.borrow() {
+                NodeBox::Internal(ref n) => {
+                    // If this is an internal node, check if the leaf node or its value has been
+                    // evicted. In this case treat it as if we need to re-fetch the node.
+                    let leaf_ptr = n.leaf_node.borrow();
+                    if leaf_ptr.is_null() {
+                        false
+                    } else if let Some(ref int_leaf_node) = &leaf_ptr.node {
+                        if let NodeBox::Leaf(ref int_leaf) = *int_leaf_node.borrow() {
+                            int_leaf.value.borrow().value.is_none()
+                        } else {
+                            panic!("internal leaf node is not a leaf");
+                        }
+                    } else {
+                        true
+                    }
                 }
+                NodeBox::Leaf(ref n) => {
+                    // If this is a leaf node, check if the value has been evicted. In this case
+                    // treat it as if we need to re-fetch the node.
+                    n.value.borrow().value.is_none()
+                }
+            };
+
+            if refetch {
+                drop(ptr);
+                self.remove_node(ptr_ref.clone());
             } else {
                 self.use_node(ptr_ref.clone());
                 return Ok(Some(node.clone()));
             }
+        } else {
+            if !ptr.clean || ptr.is_null() {
+                return Ok(None);
+            }
+            drop(ptr);
         }
-        if !ptr.clean || ptr.is_null() {
-            return Ok(None);
-        }
-        drop(ptr);
 
         let mut ptr = ptr_ref.borrow_mut();
         match key {

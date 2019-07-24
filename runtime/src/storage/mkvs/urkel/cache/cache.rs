@@ -78,8 +78,7 @@ pub trait Cache {
     ) -> Fallible<(NodePtrRef, Depth)>;
     /// Dereference a node pointer into a concrete node object.
     ///
-    /// This may result in node database accesses or remote syncing if the node
-    /// is not available locally.
+    /// Calling this method may invoke the underlying read syncer.
     fn deref_node_ptr(
         &mut self,
         ctx: &Arc<Context>,

@@ -60,8 +60,8 @@ func ClientWorkerTests(
 
 	// Create mock root hash and id hash for GetValue().
 	var rootHash hash.Hash
-	id := api.Key("key")
 	rootHash.FromBytes([]byte("non-existing"))
+	id := api.Key("key")
 
 	root := api.Root{
 		Namespace: runtimeIDToNamespace(t, rt.Runtime.ID),

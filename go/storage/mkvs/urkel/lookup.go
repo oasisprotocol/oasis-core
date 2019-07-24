@@ -21,22 +21,24 @@ func (t *Tree) doGet(ctx context.Context, ptr *node.Pointer, bitDepth node.Depth
 		return nil, nil
 	case *node.InternalNode:
 		// Internal node.
+		bitLength := bitDepth + n.LabelBitLength
+
 		// Does lookup key end here? Look into LeafNode.
-		if key.BitLength() == bitDepth+n.LabelBitLength {
-			return t.doGet(ctx, n.LeafNode, bitDepth+n.LabelBitLength, key, depth)
+		if key.BitLength() == bitLength {
+			return t.doGet(ctx, n.LeafNode, bitLength, key, depth)
 		}
 
 		// Lookup key is too short for the current n.Label. It's not stored.
-		if key.BitLength() < bitDepth+n.LabelBitLength {
+		if key.BitLength() < bitLength {
 			return nil, nil
 		}
 
 		// Continue recursively based on a bit value.
 		if key.GetBit(bitDepth + n.LabelBitLength) {
-			return t.doGet(ctx, n.Right, bitDepth+n.LabelBitLength, key, depth+1)
+			return t.doGet(ctx, n.Right, bitLength, key, depth+1)
 		}
 
-		return t.doGet(ctx, n.Left, bitDepth+n.LabelBitLength, key, depth+1)
+		return t.doGet(ctx, n.Left, bitLength, key, depth+1)
 	case *node.LeafNode:
 		// Reached a leaf node, check if key matches.
 		if n.Key.Equal(key) {

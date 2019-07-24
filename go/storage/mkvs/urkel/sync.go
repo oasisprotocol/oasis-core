@@ -98,23 +98,25 @@ func (t *Tree) doGetSubtree(
 		s.Label = n.Label
 		s.LabelBitLength = n.LabelBitLength
 
+		bitLength := bitDepth + n.LabelBitLength
 		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
+
 		// Leaf node.
-		leafNodePtr, err := t.doGetSubtree(ctx, n.LeafNode, bitDepth+n.LabelBitLength, newPath, st, depth, maxDepth, false)
+		leafNodePtr, err := t.doGetSubtree(ctx, n.LeafNode, bitLength, newPath, st, depth, maxDepth, false)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
 		s.LeafNode = leafNodePtr
 
 		// Left subtree.
-		leftPtr, err := t.doGetSubtree(ctx, n.Left, bitDepth+n.LabelBitLength, newPath, st, depth+1, maxDepth, false)
+		leftPtr, err := t.doGetSubtree(ctx, n.Left, bitLength, newPath, st, depth+1, maxDepth, false)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
 		s.Left = leftPtr
 
 		// Right subtree.
-		rightPtr, err := t.doGetSubtree(ctx, n.Right, bitDepth+n.LabelBitLength, newPath, st, depth+1, maxDepth, true)
+		rightPtr, err := t.doGetSubtree(ctx, n.Right, bitLength, newPath, st, depth+1, maxDepth, true)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
@@ -233,23 +235,25 @@ func (t *Tree) doGetPath(
 		s.Label = n.Label
 		s.LabelBitLength = n.LabelBitLength
 
+		bitLength := bitDepth + n.LabelBitLength
 		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
+
 		// Leaf node.
-		leafNodePtr, err := t.doGetPath(ctx, n.LeafNode, bitDepth+n.LabelBitLength, newPath, &newPath, st, false)
+		leafNodePtr, err := t.doGetPath(ctx, n.LeafNode, bitLength, newPath, &newPath, st, false)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
 		s.LeafNode = leafNodePtr
 
 		// Left subtree.
-		leftPtr, err := t.doGetPath(ctx, n.Left, bitDepth+n.LabelBitLength, newPath, leftKey, st, false)
+		leftPtr, err := t.doGetPath(ctx, n.Left, bitLength, newPath, leftKey, st, false)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
 		s.Left = leftPtr
 
 		// Right subtree.
-		rightPtr, err := t.doGetPath(ctx, n.Right, bitDepth+n.LabelBitLength, newPath, rightKey, st, true)
+		rightPtr, err := t.doGetPath(ctx, n.Right, bitLength, newPath, rightKey, st, true)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}

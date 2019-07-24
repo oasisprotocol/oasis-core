@@ -96,6 +96,7 @@ pub fn _commit<C: Cache>(
                     let closure_value = noderef_as!(node_ref, Leaf).value.clone();
                     update_list.push(Box::new(move |cache| {
                         closure_value.borrow_mut().clean = true;
+                        // Make value eligible for eviction.
                         cache.commit_value(closure_value.clone());
                     }));
                 }
@@ -114,6 +115,7 @@ pub fn _commit<C: Cache>(
     let closure_ptr = ptr.clone();
     update_list.push(Box::new(move |cache| {
         closure_ptr.borrow_mut().clean = true;
+        // Make node eligible for eviction.
         cache.commit_node(closure_ptr.clone());
     }));
 

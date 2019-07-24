@@ -25,11 +25,11 @@ import (
 
 const (
 	insertItems  = 1000
-	allItemsRoot = "ba5abbff59303163a97872669961f826d0f18d97d3c14781d29b8551d6199ffe"
+	allItemsRoot = "67774198b787b4846f67f1cfd1715b4e94d1a75f6caeda08635f8a03932f3413"
 
 	longKey          = "Unlock the potential of your data without compromising security or privacy"
 	longValue        = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance."
-	allLongItemsRoot = "6478927992bf805fd95bed0b5c28ebab4b2c8a3f81f5d5c9b3aba2b2ddfdc3d2"
+	allLongItemsRoot = "0a80a0cf285f9eedec0339372c0ae25190ed75809a0799ab75a593d783ddef00"
 )
 
 var (
@@ -168,7 +168,7 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 	// Tree now has key_zero and key_one and should hash as if the mangling didn't happen.
 	log, root, err = tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
-	require.Equal(t, "e0cc7ad73816cf11cc4157aaae220c7cdc70ad6557115cc3bebf54c9081b695a", root.String())
+	require.Equal(t, "573e3d24a5e6cf48a390910c31c7166aa40414037380bc77d648b3967b1e124f", root.String())
 	require.Equal(t, writeLogToMap(writelog.WriteLog{writelog.LogEntry{Key: keyOne, Value: valueOne}, writelog.LogEntry{Key: keyZero, Value: valueZero}}), writeLogToMap(log))
 	require.Equal(t, writelog.LogInsert, log[0].Type())
 	require.Equal(t, writelog.LogInsert, log[1].Type())
