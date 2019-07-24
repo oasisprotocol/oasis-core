@@ -325,10 +325,10 @@ func (s *GrpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Stora
 
 // NewGRPCServer initializes and registers a gRPC storage server backend.
 // by the provided Backend.
-func NewGRPCServer(srv *grpc.Server, b api.Backend) *GrpcServer {
+func NewGRPCServer(srv *grpc.Server, b api.Backend, policy commonGrpc.RuntimePolicyChecker) *GrpcServer {
 	s := &GrpcServer{
 		backend:              b,
-		RuntimePolicyChecker: commonGrpc.NewRuntimePolicyChecker(),
+		RuntimePolicyChecker: policy,
 	}
 
 	pb.RegisterStorageServer(srv, s)

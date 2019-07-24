@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/workerpool"
@@ -53,7 +54,7 @@ type Worker struct {
 	watchState *bolt.DB
 	fetchPool  *workerpool.Pool
 
-	grpcServer *storage.GrpcServer
+	grpcPolicy *grpc.DynamicRuntimePolicyChecker
 }
 
 // New constructs a new storage worker.
@@ -110,7 +111,8 @@ func New(
 		})
 
 		// Attach storage worker to gRPC server.
-		s.grpcServer = storage.NewGRPCServer(s.commonWorker.Grpc.Server(), s.commonWorker.Storage)
+		s.grpcPolicy = grpc.NewDynamicRuntimePolicyChecker()
+		storage.NewGRPCServer(s.commonWorker.Grpc.Server(), s.commonWorker.Storage, s.grpcPolicy)
 
 		// Register storage worker role.
 		s.registration.RegisterRole(func(n *node.Node) error {
@@ -132,7 +134,7 @@ func New(
 
 func (s *Worker) registerRuntime(rt *workerCommon.Runtime) error {
 	commonNode := rt.GetNode()
-	node, err := committee.NewNode(commonNode, s.grpcServer, s.fetchPool, s.watchState, workerStorageDBBucketName)
+	node, err := committee.NewNode(commonNode, s.grpcPolicy, s.fetchPool, s.watchState, workerStorageDBBucketName)
 	if err != nil {
 		return err
 	}

@@ -14,12 +14,12 @@ import (
 	"github.com/oasislabs/ekiden/go/common/accessctl"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/workerpool"
 	roothashApi "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/storage"
 	storageApi "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/client"
 	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
@@ -104,10 +104,10 @@ type Node struct {
 
 	logger *logging.Logger
 
-	localStorage      storageApi.LocalBackend
-	storageClient     storageApi.ClientBackend
-	storageGrpcServer *storage.GrpcServer
-	undefinedRound    uint64
+	localStorage   storageApi.LocalBackend
+	storageClient  storageApi.ClientBackend
+	grpcPolicy     *grpc.DynamicRuntimePolicyChecker
+	undefinedRound uint64
 
 	fetchPool *workerpool.Pool
 
@@ -129,7 +129,7 @@ type Node struct {
 
 func NewNode(
 	commonNode *committee.Node,
-	storageGrpcServer *storage.GrpcServer,
+	grpcPolicy *grpc.DynamicRuntimePolicyChecker,
 	fetchPool *workerpool.Pool,
 	db *bolt.DB,
 	bucket []byte,
@@ -144,8 +144,8 @@ func NewNode(
 
 		logger: logging.GetLogger("worker/storage/committee").With("runtime_id", commonNode.RuntimeID),
 
-		localStorage:      localStorage,
-		storageGrpcServer: storageGrpcServer,
+		localStorage: localStorage,
+		grpcPolicy:   grpcPolicy,
 
 		fetchPool: fetchPool,
 
@@ -227,7 +227,7 @@ func (n *Node) HandlePeerMessage(context.Context, *p2p.Message) (bool, error) {
 // Guarded by CrossNode.
 func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
 	// Create new storage gRPC access policy for the current runtime.
-	policy := make(accessctl.Policy)
+	policy := accessctl.NewPolicy()
 	for _, cc := range snapshot.GetComputeCommittees() {
 		if cc != nil {
 			computeCommitteePolicy.AddRulesForCommittee(&policy, cc)
@@ -248,7 +248,7 @@ func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
 		n.logger.Error("couldn't get nodes from registry", "err", err)
 	}
 	// Update storage gRPC access policy for the current runtime.
-	n.storageGrpcServer.SetAccessPolicy(&policy, n.commonNode.RuntimeID)
+	n.grpcPolicy.SetAccessPolicy(policy, n.commonNode.RuntimeID)
 	n.logger.Debug("set new storage gRPC access policy", "policy", policy)
 }
 

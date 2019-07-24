@@ -30,6 +30,8 @@ type Action string
 
 // Policy maps from Actions to a mapping from Subjects to booleans indicating
 // whether the given subject is allowed to perform the given action or not.
+//
+// The policy is not safe for concurrent use.
 type Policy map[Action]map[Subject]bool
 
 // NewPolicy returns an empty policy.
