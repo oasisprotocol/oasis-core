@@ -116,17 +116,12 @@ func (s *GrpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) 
 		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
 	}
 
-	maxDepth := uint8(req.GetMaxDepth())
+	maxDepth := api.Depth(req.GetMaxDepth())
 
 	nid := req.GetId()
-	var path hash.Hash
-	if err := path.UnmarshalBinary(nid.GetPath()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal id")
-	}
-
 	nodeID := api.NodeID{
-		Path:  path,
-		Depth: uint8(nid.GetDepth()),
+		Path:     api.Key(nid.GetPath()),
+		BitDepth: api.Depth(nid.GetBitDepth()),
 	}
 
 	<-s.backend.Initialized()
@@ -149,15 +144,15 @@ func (s *GrpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.G
 		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
 	}
 
-	var key hash.Hash
+	var key api.Key
 	if err := key.UnmarshalBinary(req.GetKey()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal key")
 	}
 
-	startDepth := uint8(req.GetStartDepth())
+	startBitDepth := api.Depth(req.GetStartBitDepth())
 
 	<-s.backend.Initialized()
-	subtree, err := s.backend.GetPath(ctx, root, key, startDepth)
+	subtree, err := s.backend.GetPath(ctx, root, key, startBitDepth)
 	if err != nil {
 		return nil, err
 	}
@@ -177,14 +172,14 @@ func (s *GrpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.G
 	}
 
 	nid := req.GetId()
-	var path hash.Hash
+	var path api.Key
 	if err := path.UnmarshalBinary(nid.GetPath()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal id")
 	}
 
 	nodeID := api.NodeID{
-		Path:  path,
-		Depth: uint8(nid.GetDepth()),
+		Path:     path,
+		BitDepth: api.Depth(nid.GetBitDepth()),
 	}
 
 	<-s.backend.Initialized()
@@ -330,10 +325,10 @@ func (s *GrpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Stora
 
 // NewGRPCServer initializes and registers a gRPC storage server backend.
 // by the provided Backend.
-func NewGRPCServer(srv *grpc.Server, b api.Backend) *GrpcServer {
+func NewGRPCServer(srv *grpc.Server, b api.Backend, policy commonGrpc.RuntimePolicyChecker) *GrpcServer {
 	s := &GrpcServer{
 		backend:              b,
-		RuntimePolicyChecker: commonGrpc.NewRuntimePolicyChecker(),
+		RuntimePolicyChecker: policy,
 	}
 
 	pb.RegisterStorageServer(srv, s)

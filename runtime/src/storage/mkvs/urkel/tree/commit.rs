@@ -68,9 +68,11 @@ pub fn _commit<C: Cache>(
             if some_node_ref.borrow().is_clean() {
                 ptr.borrow_mut().hash = some_node_ref.borrow().get_hash();
             } else {
+                let int_leaf_node = noderef_as!(some_node_ref, Internal).leaf_node.clone();
                 let int_left = noderef_as!(some_node_ref, Internal).left.clone();
                 let int_right = noderef_as!(some_node_ref, Internal).right.clone();
 
+                _commit(ctx, int_leaf_node.clone(), update_list)?;
                 _commit(ctx, int_left.clone(), update_list)?;
                 _commit(ctx, int_right.clone(), update_list)?;
 
@@ -94,6 +96,7 @@ pub fn _commit<C: Cache>(
                     let closure_value = noderef_as!(node_ref, Leaf).value.clone();
                     update_list.push(Box::new(move |cache| {
                         closure_value.borrow_mut().clean = true;
+                        // Make value eligible for eviction.
                         cache.commit_value(closure_value.clone());
                     }));
                 }
@@ -112,6 +115,7 @@ pub fn _commit<C: Cache>(
     let closure_ptr = ptr.clone();
     update_list.push(Box::new(move |cache| {
         closure_ptr.borrow_mut().clean = true;
+        // Make node eligible for eviction.
         cache.commit_node(closure_ptr.clone());
     }));
 

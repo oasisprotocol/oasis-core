@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
@@ -17,7 +16,7 @@ var _ syncer.ReadSyncer = (*Tree)(nil)
 //
 // It is the responsibility of the caller to validate that the subtree
 // is correct and consistent.
-func (t *Tree) GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDepth uint8) (*syncer.Subtree, error) {
+func (t *Tree) GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDepth node.Depth) (*syncer.Subtree, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -29,14 +28,20 @@ func (t *Tree) GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDe
 	}
 
 	// Extract the node that is at the root of the subtree.
-	subtreeRoot, err := t.cache.derefNodeID(ctx, id)
+	subtreeRoot, bd, err := t.cache.derefNodeID(ctx, id)
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
-	path := hash.Hash{}
+
+	// path corresponds to already navigated prefix of the key up to bd bits.
+	path, _ := id.Path.Split(bd, id.Path.BitLength())
 
 	st := &syncer.Subtree{}
-	rootPtr, err := t.doGetSubtree(ctx, subtreeRoot, 0, path, st, maxDepth)
+	right := false
+	if len(id.Path) > 0 {
+		right = id.Path.GetBit(bd)
+	}
+	rootPtr, err := t.doGetSubtree(ctx, subtreeRoot, bd, path, st, 0, maxDepth, right)
 	if err != nil {
 		return nil, errors.Wrap(err, "urkel: failed to get subtree")
 	}
@@ -51,10 +56,12 @@ func (t *Tree) GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDe
 func (t *Tree) doGetSubtree(
 	ctx context.Context,
 	ptr *node.Pointer,
-	depth uint8,
-	path hash.Hash,
+	bitDepth node.Depth,
+	path node.Key,
 	st *syncer.Subtree,
-	maxDepth uint8,
+	depth node.Depth,
+	maxDepth node.Depth,
+	right bool,
 ) (syncer.SubtreePointer, error) {
 	// Abort in case the context is cancelled.
 	select {
@@ -63,7 +70,7 @@ func (t *Tree) doGetSubtree(
 	default:
 	}
 
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path, Depth: depth}, ptr, nil)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path.AppendBit(bitDepth, right), BitDepth: bitDepth + 1}, ptr, nil)
 	if err != nil {
 		return syncer.SubtreePointer{}, err
 	}
@@ -85,15 +92,31 @@ func (t *Tree) doGetSubtree(
 		// Record internal node summary.
 		s := syncer.InternalNodeSummary{}
 
+		// To traverse subtrees resize path bit vector, if needed.
+		path = path.Merge(bitDepth, n.Label, n.LabelBitLength)
+
+		s.Label = n.Label
+		s.LabelBitLength = n.LabelBitLength
+
+		bitLength := bitDepth + n.LabelBitLength
+		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
+
+		// Leaf node.
+		leafNodePtr, err := t.doGetSubtree(ctx, n.LeafNode, bitLength, newPath, st, depth, maxDepth, false)
+		if err != nil {
+			return syncer.SubtreePointer{}, err
+		}
+		s.LeafNode = leafNodePtr
+
 		// Left subtree.
-		leftPtr, err := t.doGetSubtree(ctx, n.Left, depth+1, setKeyBit(path, depth, false), st, maxDepth)
+		leftPtr, err := t.doGetSubtree(ctx, n.Left, bitLength, newPath, st, depth+1, maxDepth, false)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
 		s.Left = leftPtr
 
 		// Right subtree.
-		rightPtr, err := t.doGetSubtree(ctx, n.Right, depth+1, setKeyBit(path, depth, true), st, maxDepth)
+		rightPtr, err := t.doGetSubtree(ctx, n.Right, bitLength, newPath, st, depth+1, maxDepth, true)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
@@ -119,11 +142,11 @@ func (t *Tree) doGetSubtree(
 }
 
 // GetPath retrieves a compressed path summary for the given key under
-// the given root, starting at the given depth.
+// the given root, starting at the given bit depth.
 //
 // It is the responsibility of the caller to validate that the subtree
 // is correct and consistent.
-func (t *Tree) GetPath(ctx context.Context, root node.Root, key hash.Hash, startDepth uint8) (*syncer.Subtree, error) {
+func (t *Tree) GetPath(ctx context.Context, root node.Root, key node.Key, startBitDepth node.Depth) (*syncer.Subtree, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -134,15 +157,20 @@ func (t *Tree) GetPath(ctx context.Context, root node.Root, key hash.Hash, start
 		return nil, syncer.ErrDirtyRoot
 	}
 
-	subtreeRoot, err := t.cache.derefNodeID(ctx, node.ID{Path: key, Depth: startDepth})
+	subtreeRoot, bd, err := t.cache.derefNodeID(ctx, node.ID{Path: key, BitDepth: startBitDepth})
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
 
 	st := &syncer.Subtree{}
-	// We can use key as path as all the bits up to startDepth must match key. We
-	// could clear all of the bits after startDepth, but there is no reason to do so.
-	rootPtr, err := t.doGetPath(ctx, subtreeRoot, startDepth, key, &key, st)
+	right := false
+	if len(key) > 0 {
+		right = key.GetBit(bd)
+	}
+
+	// path corresponds to already navigated prefix of the key up to bd bits.
+	path, _ := key.Split(bd, key.BitLength())
+	rootPtr, err := t.doGetPath(ctx, subtreeRoot, bd, path, &key, st, right)
 	if err != nil {
 		return nil, errors.Wrap(err, "urkel: failed to get path")
 	}
@@ -157,10 +185,11 @@ func (t *Tree) GetPath(ctx context.Context, root node.Root, key hash.Hash, start
 func (t *Tree) doGetPath(
 	ctx context.Context,
 	ptr *node.Pointer,
-	depth uint8,
-	path hash.Hash,
-	key *hash.Hash,
+	bitDepth node.Depth,
+	path node.Key,
+	key *node.Key,
 	st *syncer.Subtree,
+	right bool,
 ) (syncer.SubtreePointer, error) {
 	// Abort in case the context is cancelled.
 	select {
@@ -169,7 +198,8 @@ func (t *Tree) doGetPath(
 	default:
 	}
 
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path, Depth: depth}, ptr, key)
+	extPath := path.AppendBit(bitDepth, right)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: extPath, BitDepth: bitDepth + 1}, ptr, extPath)
 	if err != nil {
 		return syncer.SubtreePointer{}, err
 	}
@@ -191,24 +221,39 @@ func (t *Tree) doGetPath(
 		// Record internal node summary.
 		s := syncer.InternalNodeSummary{}
 		// Determine which subtree is off-path.
-		var leftKey, rightKey *hash.Hash
-		if getKeyBit(*key, depth) {
-			// Left subtree is off-path.
-			rightKey = key
-		} else {
-			// Right subtree is off-path.
-			leftKey = key
+		var leftKey, rightKey *node.Key
+		if bitDepth+n.LabelBitLength < key.BitLength() {
+			if key.GetBit(bitDepth + n.LabelBitLength) {
+				// Left subtree is off-path.
+				rightKey = key
+			} else {
+				// Right subtree is off-path.
+				leftKey = key
+			}
 		}
 
+		s.Label = n.Label
+		s.LabelBitLength = n.LabelBitLength
+
+		bitLength := bitDepth + n.LabelBitLength
+		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
+
+		// Leaf node.
+		leafNodePtr, err := t.doGetPath(ctx, n.LeafNode, bitLength, newPath, &newPath, st, false)
+		if err != nil {
+			return syncer.SubtreePointer{}, err
+		}
+		s.LeafNode = leafNodePtr
+
 		// Left subtree.
-		leftPtr, err := t.doGetPath(ctx, n.Left, depth+1, setKeyBit(path, depth, false), leftKey, st)
+		leftPtr, err := t.doGetPath(ctx, n.Left, bitLength, newPath, leftKey, st, false)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
 		s.Left = leftPtr
 
 		// Right subtree.
-		rightPtr, err := t.doGetPath(ctx, n.Right, depth+1, setKeyBit(path, depth, true), rightKey, st)
+		rightPtr, err := t.doGetPath(ctx, n.Right, bitLength, newPath, rightKey, st, true)
 		if err != nil {
 			return syncer.SubtreePointer{}, err
 		}
@@ -248,8 +293,7 @@ func (t *Tree) GetNode(ctx context.Context, root node.Root, id node.ID) (node.No
 	if !t.cache.pendingRoot.IsClean() {
 		return nil, syncer.ErrDirtyRoot
 	}
-
-	ptr, err := t.cache.derefNodeID(ctx, id)
+	ptr, _, err := t.cache.derefNodeID(ctx, id)
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
@@ -257,5 +301,6 @@ func (t *Tree) GetNode(ctx context.Context, root node.Root, id node.ID) (node.No
 	if err != nil {
 		return nil, syncer.ErrNodeNotFound
 	}
+
 	return nd.Extract(), nil
 }

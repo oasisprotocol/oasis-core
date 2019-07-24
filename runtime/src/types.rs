@@ -12,7 +12,10 @@ use crate::{
         roothash::{Block, ComputeResultsHeader},
         sgx::avr::AVR,
     },
-    storage::mkvs::{urkel::sync::Root, WriteLog},
+    storage::mkvs::{
+        urkel::{sync::Root, Depth, Key},
+        WriteLog,
+    },
     transaction::types::TxnBatch,
 };
 
@@ -148,19 +151,19 @@ pub enum Body {
     },
     HostStorageSyncGetSubtreeRequest {
         root: Root,
-        node_path: Hash,
-        node_depth: u8,
-        max_depth: u8,
+        node_path: Key,
+        node_bit_depth: Depth,
+        max_depth: Depth,
     },
     HostStorageSyncGetPathRequest {
         root: Root,
-        key: Hash,
-        start_depth: u8,
+        key: Key,
+        start_bit_depth: Depth,
     },
     HostStorageSyncGetNodeRequest {
         root: Root,
-        node_path: Hash,
-        node_depth: u8,
+        node_path: Key,
+        node_bit_depth: Depth,
     },
     HostStorageSyncSerializedResponse {
         #[serde(with = "serde_bytes")]

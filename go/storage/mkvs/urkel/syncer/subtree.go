@@ -54,10 +54,10 @@ func (s *SubtreePointer) UnmarshalBinary(data []byte) error {
 // SizedUnmarshalBinary decodes a binary marshaled subtree pointer.
 func (s *SubtreePointer) SizedUnmarshalBinary(data []byte) (int, error) {
 	if len(data) < treePointerLen {
-		return 0, node.ErrMalformed
+		return 0, node.ErrMalformedNode
 	}
 	if data[treeIndexLen] > 1 {
-		return 0, node.ErrMalformed
+		return 0, node.ErrMalformedNode
 	}
 	s.Index = SubtreeIndex(binary.LittleEndian.Uint16(data[:treeIndexLen]))
 	s.Full = data[treeIndexLen] > 0
@@ -73,26 +73,48 @@ func (s *SubtreePointer) Equal(other *SubtreePointer) bool {
 // InternalNodeSummary is a compressed (index-only) representation of an
 // internal node.
 type InternalNodeSummary struct {
-	invalid bool
+	Label    node.Key
+	LeafNode SubtreePointer
+	Left     SubtreePointer
+	Right    SubtreePointer
 
-	Left  SubtreePointer
-	Right SubtreePointer
+	LabelBitLength node.Depth
+
+	invalid bool
 }
 
 // MarshalBinary encodes an internal node summary into binary form.
 func (s *InternalNodeSummary) MarshalBinary() (data []byte, err error) {
+	var leafNode []byte
 	var left []byte
 	var right []byte
 
+	if leafNode, err = s.LeafNode.MarshalBinary(); err != nil {
+		return
+	}
 	if left, err = s.Left.MarshalBinary(); err != nil {
 		return
 	}
 	if right, err = s.Right.MarshalBinary(); err != nil {
 		return
 	}
-	data = make([]byte, len(left)+len(right))
-	copy(data[:len(left)], left)
-	copy(data[len(left):], right)
+	data = make([]byte, node.DepthSize+len(s.Label)+len(leafNode)+len(left)+len(right))
+
+	pos := 0
+	copy(data[pos:pos+node.DepthSize], s.LabelBitLength.MarshalBinary()[:])
+	pos += node.DepthSize
+
+	copy(data[pos:pos+len(s.Label)], s.Label)
+	pos += len(s.Label)
+
+	copy(data[pos:pos+len(leafNode)], leafNode)
+	pos += len(leafNode)
+
+	copy(data[pos:pos+len(left)], left)
+	pos += len(left)
+
+	copy(data[pos:], right)
+
 	return
 }
 
@@ -104,26 +126,52 @@ func (s *InternalNodeSummary) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled internal node summary.
 func (s *InternalNodeSummary) SizedUnmarshalBinary(data []byte) (int, error) {
-	left := SubtreePointer{}
+	var labelLen int
+	var leafNodeLen int
 	var leftLen int
 	var rightLen int
 	var err error
-	if leftLen, err = left.SizedUnmarshalBinary(data); err != nil {
+
+	ds := 0
+	pos := 0
+	if ds, err = s.LabelBitLength.UnmarshalBinary(data[pos:]); err != nil {
 		return 0, err
 	}
+	labelLen = s.LabelBitLength.ToBytes()
+	pos += ds
+
+	s.Label = make(node.Key, labelLen)
+	copy(s.Label, data[pos:pos+labelLen])
+	pos += labelLen
+
+	leafNode := SubtreePointer{}
+	if leafNodeLen, err = leafNode.SizedUnmarshalBinary(data[pos:]); err != nil {
+		return 0, err
+	}
+	pos += leafNodeLen
+
+	left := SubtreePointer{}
+	if leftLen, err = left.SizedUnmarshalBinary(data[pos:]); err != nil {
+		return 0, err
+	}
+	pos += leftLen
+
 	right := SubtreePointer{}
-	if rightLen, err = right.SizedUnmarshalBinary(data[leftLen:]); err != nil {
+	if rightLen, err = right.SizedUnmarshalBinary(data[pos:]); err != nil {
 		return 0, err
 	}
+	pos += rightLen
+
+	s.LeafNode = leafNode
 	s.Left = left
 	s.Right = right
 	s.invalid = false
-	return leftLen + rightLen, nil
+	return pos, nil
 }
 
 // Equal compares a node summary with some other node summary.
 func (s *InternalNodeSummary) Equal(other *InternalNodeSummary) bool {
-	return s.Left.Equal(&other.Left) && s.Right.Equal(&other.Right)
+	return s.LeafNode.Equal(&other.LeafNode) && s.Left.Equal(&other.Left) && s.Right.Equal(&other.Right)
 }
 
 // Subtree is a compressed representation of a subtree.
@@ -242,7 +290,7 @@ func (s *Subtree) UnmarshalBinary(data []byte) error {
 func (s *Subtree) SizedUnmarshalBinary(data []byte) (int, error) {
 	// Size is at least the root pointer and two array lengths.
 	if len(data) < treePointerLen+2*treeIndexLen {
-		return 0, node.ErrMalformed
+		return 0, node.ErrMalformedNode
 	}
 
 	var rootPointer SubtreePointer
@@ -266,7 +314,7 @@ func (s *Subtree) SizedUnmarshalBinary(data []byte) (int, error) {
 	}
 
 	if len(data) < offset+treeIndexLen {
-		return 0, node.ErrMalformed
+		return 0, node.ErrMalformedNode
 	}
 	nodeCount := binary.LittleEndian.Uint16(data[offset : offset+2])
 	offset += 2
@@ -274,7 +322,7 @@ func (s *Subtree) SizedUnmarshalBinary(data []byte) (int, error) {
 	for i := uint16(0); i < nodeCount; i++ {
 		var nodeLen int
 		if len(data) <= offset {
-			return 0, node.ErrMalformed
+			return 0, node.ErrMalformedNode
 		}
 		switch data[offset] {
 		case node.PrefixNilNode:
@@ -295,7 +343,7 @@ func (s *Subtree) SizedUnmarshalBinary(data []byte) (int, error) {
 			offset += nodeLen
 			nodes[i] = node
 		default:
-			return 0, node.ErrMalformed
+			return 0, node.ErrMalformedNode
 		}
 	}
 

@@ -3,29 +3,22 @@ use std::sync::Arc;
 use failure::Fallible;
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{
-        cache::*,
-        tree::*,
-        utils::{self, *},
-    },
-};
+use crate::storage::mkvs::urkel::{cache::*, tree::*};
 
 impl UrkelTree {
     /// Remove a key from the tree and return true if the tree was modified.
     pub fn remove(&mut self, ctx: Context, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
         let ctx = ctx.freeze();
-        let hkey = Hash::digest_bytes(key);
+        let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
 
-        let (new_root, changed, old_val) = self._remove(&ctx, pending_root, 0, hkey)?;
-        match self.pending_write_log.get_mut(&hkey) {
+        let (new_root, changed, old_val) = self._remove(&ctx, pending_root, 0, &boxed_key, 0)?;
+        match self.pending_write_log.get_mut(&boxed_key) {
             None => {
                 self.pending_write_log.insert(
-                    hkey,
+                    boxed_key.clone(),
                     PendingLogEntry {
-                        key: key.to_vec(),
+                        key: boxed_key,
                         value: None,
                         existed: changed,
                     },
@@ -44,14 +37,15 @@ impl UrkelTree {
         &mut self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        depth: u8,
-        key: Hash,
+        bit_depth: Depth,
+        key: &Key,
+        depth: Depth,
     ) -> Fallible<(NodePtrRef, bool, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
             NodeID {
                 path: key,
-                depth: depth,
+                bit_depth: bit_depth + 1,
             },
             ptr.clone(),
             Some(key),
@@ -59,91 +53,166 @@ impl UrkelTree {
 
         match classify_noderef!(?node_ref) {
             NodeKind::None => {
+                // Remove from nil node.
                 return Ok((NodePointer::null_ptr(), false, None));
             }
             NodeKind::Internal => {
+                // Remove from internal node and recursively collapse the path, if needed.
                 let node_ref = node_ref.unwrap();
-                let (changed, old_val) = {
-                    let go_right = get_key_bit(&key, depth);
-
-                    let child = if go_right {
-                        noderef_as!(node_ref, Internal).right.clone()
+                let (changed, old_val): (bool, Option<Value>);
+                let (remaining_leaf, remaining_left, remaining_right): (
+                    Option<NodeRef>,
+                    Option<NodeRef>,
+                    Option<NodeRef>,
+                );
+                if let NodeBox::Internal(ref mut n) = *node_ref.borrow_mut() {
+                    // Remove from internal node and recursively collapse the branch, if
+                    // needed.
+                    let (new_child, c, o) = if key.bit_length() == bit_depth + n.label_bit_length {
+                        self._remove(ctx, n.leaf_node.clone(), bit_depth, key, depth)?
+                    } else if key.get_bit(bit_depth + n.label_bit_length) {
+                        self._remove(
+                            ctx,
+                            n.right.clone(),
+                            bit_depth + n.label_bit_length,
+                            key,
+                            depth + 1,
+                        )?
                     } else {
-                        noderef_as!(node_ref, Internal).left.clone()
+                        self._remove(
+                            ctx,
+                            n.left.clone(),
+                            bit_depth + n.label_bit_length,
+                            key,
+                            depth + 1,
+                        )?
                     };
 
-                    let (child, changed, old_val) = self._remove(ctx, child, depth + 1, key)?;
+                    changed = c;
+                    old_val = o;
 
-                    if go_right {
-                        noderef_as_mut!(node_ref, Internal).right = child;
+                    if key.bit_length() == bit_depth + n.label_bit_length {
+                        n.leaf_node = new_child;
+                    } else if key.get_bit(bit_depth + n.label_bit_length) {
+                        n.right = new_child;
                     } else {
-                        noderef_as_mut!(node_ref, Internal).left = child;
+                        n.left = new_child;
                     }
-                    (changed, old_val)
-                };
-                let (int_left, int_right) = (
-                    noderef_as!(node_ref, Internal).left.clone(),
-                    noderef_as!(node_ref, Internal).right.clone(),
-                );
 
-                let left_id = NodeID {
-                    path: utils::set_key_bit(&key, depth, false),
-                    depth: depth + 1,
-                };
-                let right_id = NodeID {
-                    path: utils::set_key_bit(&key, depth, true),
-                    depth: depth + 1,
-                };
+                    // Fetch and check the remaining children.
+                    remaining_leaf = self.cache.borrow_mut().deref_node_ptr(
+                        ctx,
+                        NodeID {
+                            path: &key,
+                            bit_depth: bit_depth,
+                        },
+                        n.leaf_node.clone(),
+                        None,
+                    )?;
+                    let (key_prefix, _) =
+                        key.split(bit_depth + n.label_bit_length, key.bit_length());
+                    remaining_left = self.cache.borrow_mut().deref_node_ptr(
+                        ctx,
+                        NodeID {
+                            path: &key_prefix.append_bit(bit_depth + n.label_bit_length, false),
+                            bit_depth: bit_depth + n.label_bit_length + 1,
+                        },
+                        n.left.clone(),
+                        None,
+                    )?;
+                    remaining_right = self.cache.borrow_mut().deref_node_ptr(
+                        ctx,
+                        NodeID {
+                            path: &key_prefix.append_bit(bit_depth + n.label_bit_length, true),
+                            bit_depth: bit_depth + n.label_bit_length + 1,
+                        },
+                        n.right.clone(),
+                        None,
+                    )?;
+                } else {
+                    return Err(format_err!(
+                        "remove.rs: unknown internal node_ref {:?}",
+                        node_ref
+                    ));
+                }
 
-                let left_ref =
-                    self.cache
-                        .borrow_mut()
-                        .deref_node_ptr(ctx, left_id, int_left.clone(), None)?;
-                match left_ref {
-                    None => {
-                        let right_ref = self.cache.borrow_mut().deref_node_ptr(
-                            ctx,
-                            right_id,
-                            int_right.clone(),
-                            None,
-                        )?;
-                        let right_ref = match right_ref {
+                // If exactly one child including LeafNode remains, collapse it.
+                match remaining_leaf {
+                    Some(_) => match remaining_left {
+                        Some(_) => (),
+                        None => match remaining_right {
                             None => {
-                                // No more children, delete the internal node as well.
+                                let nd_leaf = noderef_as!(node_ref, Internal).leaf_node.clone();
+                                noderef_as_mut!(node_ref, Internal).leaf_node =
+                                    NodePointer::null_ptr();
                                 self.cache.borrow_mut().remove_node(ptr.clone());
-                                return Ok((NodePointer::null_ptr(), true, old_val));
+                                return Ok((nd_leaf, true, old_val));
                             }
-                            Some(node_ref) => node_ref,
-                        };
-                        if let NodeBox::Leaf(_) = *right_ref.borrow() {
-                            // Left is None, right is a leaf, merge nodes back.
-                            noderef_as_mut!(node_ref, Internal).right = NodePointer::null_ptr();
+                            Some(_) => (),
+                        },
+                    },
+                    None => {
+                        let mut nd_child: Option<NodeRef> = None;
+                        let mut node_ptr: NodePtrRef = NodePointer::null_ptr();
+                        let mut both_children = true;
+                        match remaining_left {
+                            Some(_) => match remaining_right {
+                                None => {
+                                    node_ptr = noderef_as!(node_ref, Internal).left.clone();
+                                    noderef_as_mut!(node_ref, Internal).left =
+                                        NodePointer::null_ptr();
+                                    nd_child = remaining_left;
+                                    both_children = false;
+                                }
+                                Some(_) => (),
+                            },
+                            None => match remaining_right {
+                                None => (),
+                                Some(_) => {
+                                    node_ptr = noderef_as!(node_ref, Internal).right.clone();
+                                    noderef_as_mut!(node_ref, Internal).right =
+                                        NodePointer::null_ptr();
+                                    nd_child = remaining_right;
+                                    both_children = false;
+                                }
+                            },
+                        }
+
+                        if !both_children {
+                            // If child is an internal node, also fix the label.
+                            match nd_child {
+                                Some(_) => match classify_noderef!(?nd_child) {
+                                    NodeKind::Internal => {
+                                        if let NodeBox::Internal(ref mut inode) =
+                                            *nd_child.unwrap().borrow_mut()
+                                        {
+                                            inode.label =
+                                                noderef_as!(node_ref, Internal).label.merge(
+                                                    noderef_as!(node_ref, Internal)
+                                                        .label_bit_length,
+                                                    &inode.label,
+                                                    inode.label_bit_length,
+                                                );
+                                            inode.label_bit_length +=
+                                                noderef_as!(node_ref, Internal).label_bit_length;
+                                            inode.clean = false;
+                                            node_ptr.borrow_mut().clean = false;
+                                        }
+                                    }
+                                    _ => (),
+                                },
+                                _ => (),
+                            }
+
                             self.cache.borrow_mut().remove_node(ptr.clone());
-                            return Ok((int_right.clone(), true, old_val));
-                        };
-                    }
-                    Some(left_ref) => {
-                        if let NodeBox::Leaf(_) = *left_ref.borrow() {
-                            let right_ref = self.cache.borrow_mut().deref_node_ptr(
-                                ctx,
-                                right_id,
-                                int_right.clone(),
-                                None,
-                            )?;
-                            if let None = right_ref {
-                                // Right is None, left is a leaf, merge nodes back.
-                                noderef_as_mut!(node_ref, Internal).left = NodePointer::null_ptr();
-                                self.cache.borrow_mut().remove_node(ptr.clone());
-                                return Ok((int_left.clone(), true, old_val));
-                            };
+                            return Ok((node_ptr, true, old_val));
                         }
                     }
                 };
 
+                // Two or more children including leaf_node remain, just mark dirty bit.
                 if changed {
-                    if let NodeBox::Internal(ref mut int) = *node_ref.borrow_mut() {
-                        int.clean = false;
-                    }
+                    noderef_as_mut!(node_ref, Internal).clean = false;
                     ptr.borrow_mut().clean = false;
                     // No longer eligible for eviction as it is dirty.
                     self.cache
@@ -156,11 +225,12 @@ impl UrkelTree {
             NodeKind::Leaf => {
                 // Remove from leaf node.
                 let node_ref = node_ref.unwrap();
-                if noderef_as!(node_ref, Leaf).key == key {
+                if noderef_as!(node_ref, Leaf).key == *key {
                     let old_val = noderef_as!(node_ref, Leaf).value.borrow().value.clone();
                     self.cache.borrow_mut().remove_node(ptr.clone());
                     return Ok((NodePointer::null_ptr(), true, old_val));
                 }
+
                 return Ok((ptr.clone(), false, None));
             }
         };

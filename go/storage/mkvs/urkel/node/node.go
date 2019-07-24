@@ -17,7 +17,12 @@ import (
 )
 
 var (
-	ErrMalformed = errors.New("urkel: malformed node")
+	// ErrMalformedNode is the error when a malformed node is encountered
+	// during deserialization.
+	ErrMalformedNode = errors.New("urkel: malformed node")
+	// ErrMalformedKey is the error when a malformed key is encountered
+	// during deserialization.
+	ErrMalformedKey = errors.New("urkel: malformed key")
 )
 
 const (
@@ -136,15 +141,21 @@ func (r *Root) EncodedHash() hash.Hash {
 
 // ID is a root-relative node identifier which uniquely identifies
 // a node under a given root.
+//
+// BitDepth is a sum of bits on the path from the root to the node in compressed
+// urkel tree.
+//
+// If there exist InternalNode and LeafNode having the same Key and BitDepth,
+// ID represents the InternalNode.
 type ID struct {
-	Path  hash.Hash
-	Depth uint8
+	Path     Key
+	BitDepth Depth
 }
 
-// AtDepth returns a ID representing the same path at a specified
-// depth.
-func (n ID) AtDepth(d uint8) ID {
-	return ID{Path: n.Path, Depth: d}
+// AtBitDepth returns a ID representing the same path at a specified
+// bit depth.
+func (n ID) AtBitDepth(bd Depth) ID {
+	return ID{Path: n.Path, BitDepth: bd}
 }
 
 // Pointer is a pointer to another node.
@@ -200,8 +211,32 @@ func (p *Pointer) ExtractUnchecked() *Pointer {
 	}
 }
 
+// ExtractWithNode makes a copy of the pointer containing hash references
+// and an extracted copy of the node pointed to.
+func (p *Pointer) ExtractWithNode() *Pointer {
+	if !p.IsClean() {
+		panic("urkel: extract with node called on dirty pointer")
+	}
+	return p.ExtractWithNodeUnchecked()
+}
+
+// ExtractWithNodeUnchecked makes a copy of the pointer containing hash references
+// and an extracted copy of the node pointed to without checking the dirty flag.
+func (p *Pointer) ExtractWithNodeUnchecked() *Pointer {
+	ptr := p.ExtractUnchecked()
+	if ptr == nil {
+		return nil
+	}
+
+	ptr.Node = p.Node.ExtractUnchecked()
+	return ptr
+}
+
 // Equal compares two pointers for equality.
 func (p *Pointer) Equal(other *Pointer) bool {
+	if (p == nil || other == nil) && p != other {
+		return false
+	}
 	if p.Clean && other.Clean {
 		return p.Hash.Equal(&other.Hash)
 	}
@@ -239,22 +274,34 @@ type Node interface {
 	Equal(other Node) bool
 }
 
-// InternalNode is an internal node with two children.
+// InternalNode is an internal node with two children and possibly a leaf.
 type InternalNode struct {
-	Clean bool
-	Hash  hash.Hash
-	Left  *Pointer
-	Right *Pointer
+	Hash           hash.Hash
+	Label          Key   // label on the incoming edge
+	LabelBitLength Depth // length of the label in bits
+	Clean          bool
+	LeafNode       *Pointer // for the key ending at this depth
+	Left           *Pointer
+	Right          *Pointer
 }
 
 // UpdateHash updates the node's cached hash by recomputing it.
 //
 // Does not mark the node as clean.
 func (n *InternalNode) UpdateHash() {
+	leafNodeHash := n.LeafNode.GetHash()
 	leftHash := n.Left.GetHash()
 	rightHash := n.Right.GetHash()
+	labelBitLength := n.LabelBitLength.MarshalBinary()
 
-	n.Hash.FromBytes([]byte{PrefixInternalNode}, leftHash[:], rightHash[:])
+	n.Hash.FromBytes(
+		[]byte{PrefixInternalNode},
+		labelBitLength,
+		n.Label[:],
+		leafNodeHash[:],
+		leftHash[:],
+		rightHash[:],
+	)
 }
 
 // GetHash returns the node's cached hash.
@@ -263,21 +310,42 @@ func (n *InternalNode) GetHash() hash.Hash {
 }
 
 // Extract makes a copy of the node containing only hash references.
+//
+// For LeafNode, it makes a deep copy so that the parent internal node always
+// ships it since we cannot address the LeafNode uniquely with NodeID (both the
+// internal node and LeafNode have the same path and bit depth).
 func (n *InternalNode) Extract() Node {
 	if !n.Clean {
 		panic("urkel: extract called on dirty node")
 	}
-	return n.ExtractUnchecked()
+	return &InternalNode{
+		Clean:          true,
+		Hash:           n.Hash,
+		Label:          n.Label,
+		LabelBitLength: n.LabelBitLength,
+		// LeafNode is always contained in internal node.
+		LeafNode: n.LeafNode.ExtractWithNode(),
+		Left:     n.Left.Extract(),
+		Right:    n.Right.Extract(),
+	}
 }
 
-// Extract makes a copy of the node containing only hash references
-// without checking the dirty flag.
+// Extract makes a copy of the node containing only hash references without
+// checking the dirty flag.
+//
+// For LeafNode, it makes a deep copy so that the parent internal node always
+// ships it since we cannot address the LeafNode uniquely with NodeID (both the
+// internal node and LeafNode have the same path and bit depth).
 func (n *InternalNode) ExtractUnchecked() Node {
 	return &InternalNode{
-		Clean: true,
-		Hash:  n.Hash,
-		Left:  n.Left.ExtractUnchecked(),
-		Right: n.Right.ExtractUnchecked(),
+		Clean:          true,
+		Hash:           n.Hash,
+		Label:          n.Label,
+		LabelBitLength: n.LabelBitLength,
+		// LeafNode is always contained in internal node.
+		LeafNode: n.LeafNode.ExtractWithNodeUnchecked(),
+		Left:     n.Left.ExtractUnchecked(),
+		Right:    n.Right.ExtractUnchecked(),
 	}
 }
 
@@ -287,7 +355,7 @@ func (n *InternalNode) ExtractUnchecked() Node {
 //
 // Calling this on a dirty node will return an error.
 func (n *InternalNode) Validate(h hash.Hash) error {
-	if !n.Left.IsClean() || !n.Right.IsClean() {
+	if !n.LeafNode.IsClean() || !n.Left.IsClean() || !n.Right.IsClean() {
 		return errors.New("urkel: node has dirty pointers")
 	}
 
@@ -305,13 +373,33 @@ func (n *InternalNode) Validate(h hash.Hash) error {
 
 // MarshalBinary encodes an internal node into binary form.
 func (n *InternalNode) MarshalBinary() (data []byte, err error) {
+	// Internal node's LeafNode is always marshaled along the internal node.
+	var leafNodeBinary []byte
+	if n.LeafNode == nil {
+		leafNodeBinary = make([]byte, 1)
+		leafNodeBinary[0] = PrefixNilNode
+	} else {
+		if leafNodeBinary, err = n.LeafNode.Node.MarshalBinary(); err != nil {
+			return nil, errors.Wrap(err, "urkel: failed to marshal leaf node")
+		}
+	}
+
 	leftHash := n.Left.GetHash()
 	rightHash := n.Right.GetHash()
 
-	data = make([]byte, 1+hash.Size*2)
-	data[0] = PrefixInternalNode
-	copy(data[1:1+hash.Size], leftHash[:])
-	copy(data[1+hash.Size:], rightHash[:])
+	data = make([]byte, 1+DepthSize+len(n.Label)+len(leafNodeBinary)+hash.Size*2)
+	pos := 0
+	data[pos] = PrefixInternalNode
+	pos++
+	copy(data[pos:pos+DepthSize], n.LabelBitLength.MarshalBinary()[:])
+	pos += DepthSize
+	copy(data[pos:pos+len(n.Label)], n.Label)
+	pos += len(n.Label)
+	copy(data[pos:pos+len(leafNodeBinary)], leafNodeBinary[:])
+	pos += len(leafNodeBinary)
+	copy(data[pos:pos+hash.Size], leftHash[:])
+	pos += hash.Size
+	copy(data[pos:], rightHash[:])
 	return
 }
 
@@ -323,23 +411,53 @@ func (n *InternalNode) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled internal node.
 func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 1+hash.Size*2 {
-		return 0, ErrMalformed
+	if len(data) < 1+DepthSize+1+hash.Size*2 {
+		return 0, ErrMalformedNode
 	}
-	if data[0] != PrefixInternalNode {
-		return 0, ErrMalformed
+
+	pos := 0
+	if data[pos] != PrefixInternalNode {
+		return 0, ErrMalformedNode
+	}
+	pos++
+
+	if _, err := n.LabelBitLength.UnmarshalBinary(data[pos:]); err != nil {
+		return 0, errors.Wrap(err, "urkel: failed to unmarshal LabelBitLength")
+	}
+	labelLen := n.LabelBitLength.ToBytes()
+	pos += DepthSize
+
+	n.Label = make(Key, labelLen)
+	copy(n.Label, data[pos:pos+labelLen])
+	pos += labelLen
+
+	if data[pos] == PrefixNilNode {
+		n.LeafNode = nil
+		pos++
+	} else {
+		leafNode := LeafNode{}
+		var leafNodeBinarySize int
+		var err error
+		if leafNodeBinarySize, err = leafNode.SizedUnmarshalBinary(data[pos:]); err != nil {
+			return 0, errors.Wrap(err, "urkel: failed to unmarshal leaf node")
+		}
+		n.LeafNode = &Pointer{Clean: true, Hash: leafNode.Hash, Node: &leafNode}
+		pos += leafNodeBinarySize
 	}
 
 	var leftHash hash.Hash
-	if err := leftHash.UnmarshalBinary(data[1 : 1+hash.Size]); err != nil {
+	if err := leftHash.UnmarshalBinary(data[pos : pos+hash.Size]); err != nil {
 		return 0, errors.Wrap(err, "urkel: failed to unmarshal left hash")
 	}
+	pos += hash.Size
 	var rightHash hash.Hash
-	if err := rightHash.UnmarshalBinary(data[1+hash.Size : 1+hash.Size*2]); err != nil {
+	if err := rightHash.UnmarshalBinary(data[pos : pos+hash.Size]); err != nil {
 		return 0, errors.Wrapf(err, "urkel: failed to unmarshal right hash")
 	}
+	pos += hash.Size
 
 	n.Clean = true
+
 	if leftHash.IsEmpty() {
 		n.Left = nil
 	} else {
@@ -354,7 +472,7 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 
 	n.UpdateHash()
 
-	return 1 + hash.Size*2, nil
+	return pos, nil
 }
 
 // Equal compares a node with some other node.
@@ -367,9 +485,9 @@ func (n *InternalNode) Equal(other Node) bool {
 	}
 	if other, ok := other.(*InternalNode); ok {
 		if n.Clean && other.Clean {
-			return n.Hash.Equal(&other.Hash)
+			return n.Hash.Equal(&other.Hash) && n.LabelBitLength == other.LabelBitLength && bytes.Equal(n.Label, other.Label)
 		}
-		return n.Left.Equal(other.Left) && n.Right.Equal(other.Right)
+		return n.LeafNode.Equal(other.LeafNode) && n.Left.Equal(other.Left) && n.Right.Equal(other.Right) && n.LabelBitLength == other.LabelBitLength && bytes.Equal(n.Label, other.Label)
 	}
 	return false
 }
@@ -378,7 +496,7 @@ func (n *InternalNode) Equal(other Node) bool {
 type LeafNode struct {
 	Clean bool
 	Hash  hash.Hash
-	Key   hash.Hash
+	Key   Key
 	Value *Value
 }
 
@@ -437,14 +555,19 @@ func (n *LeafNode) Validate(h hash.Hash) error {
 
 // MarshalBinary encodes a leaf node into binary form.
 func (n *LeafNode) MarshalBinary() (data []byte, err error) {
+	keyData, err := n.Key.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
 	valueData, err := n.Value.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
-	data = make([]byte, 1+hash.Size+len(valueData))
+	data = make([]byte, 1+len(keyData)+len(valueData))
 	data[0] = PrefixLeafNode
-	copy(data[1:1+hash.Size], n.Key[:])
-	copy(data[1+hash.Size:], valueData)
+	copy(data[1:1+len(keyData)], keyData)
+	copy(data[1+len(keyData):], valueData)
 	return
 }
 
@@ -456,20 +579,18 @@ func (n *LeafNode) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled leaf node.
 func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 1+hash.Size {
-		return 0, ErrMalformed
-	}
-	if data[0] != PrefixLeafNode {
-		return 0, ErrMalformed
+	if len(data) < 1+DepthSize || data[0] != PrefixLeafNode {
+		return 0, ErrMalformedNode
 	}
 
-	var key hash.Hash
-	if err := key.UnmarshalBinary(data[1 : 1+hash.Size]); err != nil {
-		return 0, errors.Wrap(err, "urkel: failed to unmarshal hash")
+	key := Key{}
+	keySize, err := key.SizedUnmarshalBinary(data[1:])
+	if err != nil {
+		return 0, err
 	}
 
 	value := &Value{}
-	valueSize, err := value.SizedUnmarshalBinary(data[1+hash.Size:])
+	valueSize, err := value.SizedUnmarshalBinary(data[1+keySize:])
 	if err != nil {
 		return 0, err
 	}
@@ -480,7 +601,7 @@ func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
 
 	n.UpdateHash()
 
-	return 1 + hash.Size + valueSize, nil
+	return 1 + keySize + valueSize, nil
 }
 
 // Equal compares a node with some other node.
@@ -495,7 +616,7 @@ func (n *LeafNode) Equal(other Node) bool {
 		if n.Clean && other.Clean {
 			return n.Hash.Equal(&other.Hash)
 		}
-		return n.Key.Equal(&other.Key) && n.Value.EqualPointer(other.Value)
+		return n.Key.Equal(other.Key) && n.Value.EqualPointer(other.Value)
 	}
 	return false
 }
@@ -594,7 +715,7 @@ func (v *Value) UnmarshalBinary(data []byte) error {
 // SizedUnmarshalBinary decodes a binary marshaled value.
 func (v *Value) SizedUnmarshalBinary(data []byte) (int, error) {
 	if len(data) < 4 {
-		return 0, ErrMalformed
+		return 0, ErrMalformedNode
 	}
 
 	valueLen := int(binary.LittleEndian.Uint32(data[:4]))
@@ -628,10 +749,10 @@ func UnmarshalBinary(bytes []byte) (Node, error) {
 			}
 			node = Node(&inode)
 		default:
-			return nil, ErrMalformed
+			return nil, ErrMalformedNode
 		}
 	} else {
-		return nil, ErrMalformed
+		return nil, ErrMalformedNode
 	}
 	return node, nil
 }

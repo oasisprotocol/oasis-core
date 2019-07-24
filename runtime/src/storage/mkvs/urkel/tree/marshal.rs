@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, mem::size_of, rc::Rc};
 
 use failure::Fallible;
 
@@ -69,8 +69,19 @@ impl Marshal for NodeKind {
 
 impl Marshal for InternalNode {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
-        let mut result: Vec<u8> = Vec::with_capacity(1 + 2 * Hash::len());
+        let leaf_node_binary: Vec<u8>;
+        if self.leaf_node.borrow().is_null() {
+            leaf_node_binary = vec![NodeKind::None as u8];
+        } else {
+            leaf_node_binary =
+                noderef_as!(self.leaf_node.borrow().get_node(), Leaf).marshal_binary()?;
+        }
+
+        let mut result: Vec<u8> = Vec::with_capacity(1 + leaf_node_binary.len() + 2 * Hash::len());
         result.push(NodeKind::Internal as u8);
+        result.append(&mut self.label_bit_length.marshal_binary()?);
+        result.extend_from_slice(&self.label);
+        result.extend_from_slice(leaf_node_binary.as_ref());
         result.extend_from_slice(self.left.borrow().hash.as_ref());
         result.extend_from_slice(self.right.borrow().hash.as_ref());
 
@@ -78,14 +89,43 @@ impl Marshal for InternalNode {
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1 + 2 * Hash::len() || data[0] != NodeKind::Internal as u8 {
+        let mut pos = 0;
+        if data.len() < 1 + size_of::<Depth>() + 1 + 2 * Hash::len()
+            || data[pos] != NodeKind::Internal as u8
+        {
             return Err(TreeError::MalformedNode.into());
         }
+        pos += 1;
 
-        let left_hash = Hash::from(&data[1..(1 + Hash::len())]);
-        let right_hash = Hash::from(&data[(1 + Hash::len())..(1 + 2 * Hash::len())]);
+        pos += self.label_bit_length.unmarshal_binary(&data[pos..])?;
+        self.label = vec![0; self.label_bit_length.to_bytes()];
+        self.label
+            .clone_from_slice(&data[pos..pos + self.label_bit_length.to_bytes()]);
+        pos += self.label_bit_length.to_bytes();
+
+        if data[pos] == NodeKind::None as u8 {
+            self.leaf_node = NodePointer::null_ptr();
+            pos += 1;
+        } else {
+            let mut leaf_node = LeafNode {
+                ..Default::default()
+            };
+            pos += leaf_node.unmarshal_binary(&data[pos..])?;
+            self.leaf_node = Rc::new(RefCell::new(NodePointer {
+                clean: true,
+                hash: leaf_node.get_hash(),
+                node: Some(Rc::new(RefCell::new(NodeBox::Leaf(leaf_node)))),
+                ..Default::default()
+            }));
+        };
+
+        let left_hash = Hash::from(&data[pos..pos + Hash::len()]);
+        pos += Hash::len();
+        let right_hash = Hash::from(&data[pos..pos + Hash::len()]);
+        pos += Hash::len();
 
         self.clean = true;
+
         if left_hash.is_empty() {
             self.left = NodePointer::null_ptr();
         } else {
@@ -109,38 +149,63 @@ impl Marshal for InternalNode {
 
         self.update_hash();
 
-        Ok(1 + 2 * Hash::len())
+        Ok(pos)
     }
 }
 
 impl Marshal for LeafNode {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
-        let mut result: Vec<u8> = Vec::with_capacity(1 + 2 * Hash::len());
+        let mut result: Vec<u8> = Vec::with_capacity(1 + 3 * Hash::len());
         result.push(NodeKind::Leaf as u8);
-        result.extend_from_slice(self.key.as_ref());
+        result.append(&mut self.key.marshal_binary()?);
         result.append(&mut self.value.borrow().marshal_binary()?);
 
         Ok(result)
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1 + Hash::len() || data[0] != NodeKind::Leaf as u8 {
+        if data.len() < 1 + size_of::<Depth>() || data[0] != NodeKind::Leaf as u8 {
             return Err(TreeError::MalformedNode.into());
         }
 
         self.clean = true;
-        self.key = Hash::from(&data[1..(1 + Hash::len())]);
+        self.key = Key::new();
+        let key_len = self.key.unmarshal_binary(&data[1..])?;
+
         self.value = Rc::new(RefCell::new(ValuePointer {
             ..Default::default()
         }));
         let value_len = self
             .value
             .borrow_mut()
-            .unmarshal_binary(&data[(1 + Hash::len())..])?;
+            .unmarshal_binary(&data[(1 + key_len)..])?;
 
         self.update_hash();
 
-        Ok(1 + Hash::len() + value_len)
+        Ok(1 + key_len + value_len)
+    }
+}
+
+impl Marshal for Key {
+    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
+        let mut result: Vec<u8> = Vec::new();
+        result.append(&mut (self.len() as Depth).marshal_binary()?);
+        result.extend_from_slice(self);
+        Ok(result)
+    }
+    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
+        if data.len() < size_of::<Depth>() {
+            return Err(TreeError::MalformedKey.into());
+        }
+        let mut key_len: Depth = 0;
+        key_len.unmarshal_binary(data)?;
+
+        if data.len() < size_of::<Depth>() + key_len as usize {
+            return Err(TreeError::MalformedKey.into());
+        }
+
+        self.extend_from_slice(&data[size_of::<Depth>()..(size_of::<Depth>() + key_len as usize)]);
+        Ok(size_of::<Depth>() + key_len as usize)
     }
 }
 

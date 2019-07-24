@@ -5,7 +5,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::{
     common::{crypto::hash::Hash, roothash::Namespace},
-    storage::mkvs::urkel::{cache::*, tree::*},
+    storage::mkvs::urkel::{cache::*, marshal::*, tree::*},
 };
 
 /// Common interface for node-like objects in the tree.
@@ -36,18 +36,21 @@ pub struct Root {
 
 /// `NodeID` is a root-relative identifier which uniquely identifies a node
 /// under a given root.
+///
+/// bit_depth is a sum of bits on the path from the root to the node in compressed
+/// urkel tree.
 #[derive(Clone, Copy, Debug)]
-pub struct NodeID {
-    pub path: Hash,
-    pub depth: u8,
+pub struct NodeID<'a> {
+    pub path: &'a Key,
+    pub bit_depth: Depth,
 }
 
-impl NodeID {
+impl<'a> NodeID<'a> {
     /// Return a copy of this `NodeID` with a different depth.
-    pub fn at_depth(&self, depth: u8) -> NodeID {
+    pub fn at_bit_depth(&self, bit_depth: Depth) -> NodeID {
         NodeID {
             path: self.path,
-            depth: depth,
+            bit_depth: bit_depth,
         }
     }
 }
@@ -170,6 +173,30 @@ impl NodePointer {
             ..Default::default()
         }))
     }
+
+    // Make deep copy of the Pointer to LeafNode excluding LRU and DBInternal.
+    //
+    // Panics, if it's called on non-leaf node pointer.
+    fn copy_leaf_ptr(&self) -> NodePtrRef {
+        if !self.has_node() {
+            return NodePointer::null_ptr();
+        }
+
+        if !self.clean {
+            panic!("urkel: copy_leaf_ptr called on dirty pointer");
+        }
+        if let Some(ref some_node) = self.node {
+            let nyoo = noderef_as!(some_node, Leaf).copy();
+            Rc::new(RefCell::new(NodePointer {
+                clean: true,
+                hash: self.hash,
+                node: Some(Rc::new(RefCell::new(NodeBox::Leaf(nyoo)))),
+                ..Default::default()
+            }))
+        } else {
+            panic!("urkel: copy_leaf_ptr called on a non-leaf pointer");
+        }
+    }
 }
 
 impl CacheItem for NodePointer {
@@ -198,11 +225,14 @@ impl PartialEq for NodePointer {
 
 impl Eq for NodePointer {}
 
-/// An internal tree node with two children.
+/// An internal tree node with two children and possibly a leaf.
 #[derive(Debug, Default)]
 pub struct InternalNode {
     pub clean: bool,
     pub hash: Hash,
+    pub label: Key,              // label on the incoming edge
+    pub label_bit_length: Depth, // length of the label in bits
+    pub leaf_node: NodePtrRef,   // for the key ending at this depth
     pub left: NodePtrRef,
     pub right: NodePtrRef,
 }
@@ -217,17 +247,23 @@ impl Node for InternalNode {
     }
 
     fn update_hash(&mut self) {
-        let hash_left = self.left.borrow().hash;
-        let hash_right = self.right.borrow().hash;
+        let leaf_node_hash = self.leaf_node.borrow().hash;
+        let left_hash = self.left.borrow().hash;
+        let right_hash = self.right.borrow().hash;
+
         self.hash = Hash::digest_bytes_list(&[
             &[NodeKind::Internal as u8],
-            hash_left.as_ref(),
-            hash_right.as_ref(),
+            &self.label_bit_length.marshal_binary().unwrap(),
+            self.label.as_ref(),
+            leaf_node_hash.as_ref(),
+            left_hash.as_ref(),
+            right_hash.as_ref(),
         ]);
     }
 
     fn validate(&mut self, h: Hash) -> Fallible<()> {
-        if !self.left.borrow().clean || !self.right.borrow().clean {
+        if !self.leaf_node.borrow().clean || !self.left.borrow().clean || !self.right.borrow().clean
+        {
             Err(TreeError::DirtyPointers.into())
         } else {
             self.update_hash();
@@ -251,6 +287,9 @@ impl Node for InternalNode {
         Rc::new(RefCell::new(NodeBox::Internal(InternalNode {
             clean: true,
             hash: self.hash,
+            label: self.label.clone(),
+            label_bit_length: self.label_bit_length,
+            leaf_node: self.leaf_node.borrow().copy_leaf_ptr(),
             left: self.left.borrow().extract(),
             right: self.right.borrow().extract(),
         })))
@@ -262,7 +301,9 @@ impl PartialEq for InternalNode {
         if self.clean && other.clean {
             self.hash == other.hash
         } else {
-            self.left == other.left && self.right == other.right
+            self.leaf_node == other.leaf_node
+                && self.left == other.left
+                && self.right == other.right
         }
     }
 }
@@ -274,8 +315,21 @@ impl Eq for InternalNode {}
 pub struct LeafNode {
     pub clean: bool,
     pub hash: Hash,
-    pub key: Hash,
+    pub key: Key,
     pub value: ValuePtrRef,
+}
+
+impl LeafNode {
+    pub fn copy(&self) -> LeafNode {
+        let node = LeafNode {
+            clean: self.clean,
+            hash: self.hash.clone(),
+            key: self.key.to_owned(),
+            value: self.value.borrow().copy(),
+        };
+
+        return node;
+    }
 }
 
 impl Node for LeafNode {
@@ -320,7 +374,7 @@ impl Node for LeafNode {
         Rc::new(RefCell::new(NodeBox::Leaf(LeafNode {
             clean: true,
             hash: self.hash,
-            key: self.key,
+            key: self.key.clone(),
             value: self.value.borrow().extract(),
         })))
     }
@@ -337,6 +391,176 @@ impl PartialEq for LeafNode {
 }
 
 impl Eq for LeafNode {}
+
+// Depth determines the maximum length of the key in bits.
+//
+// max length = 2^size_of(Depth)*8
+pub type Depth = u16;
+
+pub trait DepthTrait {
+    // Returns the number of bytes needed to fit given bits.
+    fn to_bytes(&self) -> usize;
+}
+
+impl DepthTrait for Depth {
+    fn to_bytes(&self) -> usize {
+        let size = self / 8;
+        if self % 8 != 0 {
+            (size + 1) as usize
+        } else {
+            size as usize
+        }
+    }
+}
+
+// Key holds variable-length key.
+pub type Key = Vec<u8>;
+
+pub trait KeyTrait {
+    /// Get a single bit from the given hash.
+    fn get_bit(&self, bit: Depth) -> bool;
+    /// Set a single bit in the given hash and return the result. If bit>self, it resizes new Key.
+    fn set_bit(&self, bit: Depth, val: bool) -> Key;
+    /// Returns the length of the key in bits.
+    fn bit_length(&self) -> Depth;
+    /// Bit-wise splits of the key.
+    fn split(&self, split_point: Depth, key_len: Depth) -> (Key, Key);
+    /// Bit-wise merges key of given length with another key of given length.
+    fn merge(&self, key_len: Depth, k2: &Key, k2_len: Depth) -> Key;
+    /// Appends the given bit to the key.
+    fn append_bit(&self, key_len: Depth, bit: bool) -> Key;
+    /// Computes length of common prefix of k and k2 with given bit lengths.
+    fn common_prefix_len(&self, key_len: Depth, k2: &Key, k2_len: Depth) -> Depth;
+}
+
+impl KeyTrait for Key {
+    fn get_bit(&self, bit: Depth) -> bool {
+        (self[(bit / 8) as usize] & (1 << (7 - (bit % 8)))) != 0
+    }
+
+    fn set_bit(&self, bit: Depth, val: bool) -> Key {
+        let mut k: Key;
+        if bit as usize >= self.len() * 8 {
+            k = vec![0; bit as usize / 8 + 1];
+            k[0..self.len()].clone_from_slice(&self);
+        } else {
+            k = self.clone();
+        }
+
+        let mask = (1 << (7 - (bit % 8))) as u8;
+        if val {
+            k[(bit / 8) as usize] |= mask;
+        } else {
+            k[(bit / 8) as usize] &= !mask;
+        }
+        k
+    }
+
+    fn bit_length(&self) -> Depth {
+        (self.len() * 8) as Depth
+    }
+
+    fn split(&self, split_point: Depth, key_len: Depth) -> (Key, Key) {
+        if split_point > key_len {
+            panic!(
+                "urkel: split_point {} greater than key_len {}",
+                split_point, key_len
+            );
+        }
+
+        let prefix_len = split_point.to_bytes();
+        let suffix_len = (key_len - split_point).to_bytes();
+        let mut prefix: Key = vec![0; prefix_len];
+        let mut suffix: Key = vec![0; suffix_len];
+
+        prefix.clone_from_slice(&self[0..split_point.to_bytes()]);
+
+        // Clean the remainder of the byte.
+        if split_point % 8 != 0 {
+            prefix[prefix_len - 1] &= 0xff << (8 - split_point % 8)
+        }
+
+        for i in 0..suffix_len {
+            // First set the left chunk of the byte
+            suffix[i] = self[i + split_point as usize / 8] << (split_point % 8);
+            // ...and the right chunk, if we haven't reached the end of k yet.
+            if split_point % 8 != 0 && i + split_point as usize / 8 + 1 != self.len() {
+                suffix[i] |=
+                    self[i + split_point as usize / 8 + 1] >> (8 - split_point as usize % 8);
+            }
+        }
+
+        (prefix, suffix)
+    }
+
+    fn merge(&self, key_len: Depth, k2: &Key, k2_len: Depth) -> Key {
+        let mut new_key: Key = vec![0; (key_len + k2_len).to_bytes()];
+        new_key[..self.len()].clone_from_slice(self);
+
+        for i in 0..k2.len() as usize {
+            // First set the right chunk of the previous byte
+            if key_len % 8 != 0 && self.len() > 0 {
+                new_key[self.len() + i - 1] |= k2[i] >> (key_len % 8);
+            }
+            // ...and the next left chunk, if we haven't reached the end of newKey
+            // yet.
+            if self.len() + i < new_key.len() {
+                // another mod 8 to prevent bit shifting for 8 bits
+                new_key[self.len() + i] |= k2[i] << ((8 - key_len % 8) % 8);
+            }
+        }
+
+        new_key
+    }
+
+    fn append_bit(&self, key_len: Depth, val: bool) -> Key {
+        let mut new_key: Key = vec![0; (key_len + 1).to_bytes()];
+        new_key[..self.len()].clone_from_slice(self);
+
+        if val {
+            new_key[key_len as usize / 8] |= 0x80 >> (key_len % 8)
+        } else {
+            new_key[key_len as usize / 8] &= !(0x80 >> (key_len % 8))
+        }
+
+        new_key
+    }
+
+    fn common_prefix_len(&self, key_bit_len: Depth, k2: &Key, k2_bit_len: Depth) -> Depth {
+        let min_key_len = if k2.len() < self.len() {
+            k2.len()
+        } else {
+            self.len()
+        };
+
+        // Compute the common prefix byte-wise.
+        let mut i: usize = 0;
+        while i < min_key_len {
+            if self[i] != k2[i] {
+                break;
+            }
+            i += 1;
+        }
+
+        // Prefixes match i bytes and maybe some more bits below.
+        let mut bit_length = (i * 8) as Depth;
+
+        if i != self.len() && i != k2.len() {
+            // We got a mismatch somewhere along the way. We need to compute how
+            // many additional bits in i-th byte match.
+            bit_length += (self[i] ^ k2[i]).leading_zeros() as Depth;
+        }
+
+        // In any case, bit_length should never exceed length of the shorter key.
+        if bit_length > key_bit_len {
+            bit_length = key_bit_len;
+        }
+        if bit_length > k2_bit_len {
+            bit_length = k2_bit_len;
+        };
+        bit_length
+    }
+}
 
 pub type Value = Vec<u8>;
 /// A reference-counted value pointer.
@@ -384,6 +608,16 @@ impl ValuePointer {
             ..Default::default()
         }))
     }
+
+    // Makes a deep copy of the Value.
+    pub fn copy(&self) -> ValuePtrRef {
+        Rc::new(RefCell::new(ValuePointer {
+            clean: true,
+            hash: self.hash.clone(),
+            value: self.value.clone().to_owned(),
+            ..Default::default()
+        }))
+    }
 }
 
 impl CacheItem for ValuePointer {
@@ -414,42 +648,3 @@ impl PartialEq for ValuePointer {
 }
 
 impl Eq for ValuePointer {}
-
-#[macro_export]
-macro_rules! classify_noderef {
-    (? $e:expr) => {{
-        let kind = match $e {
-            None => NodeKind::None,
-            Some(ref node) => classify_noderef!(node),
-        };
-        kind
-    }};
-    ($e:expr) => {{
-        // Ensure references don't leak outside this macro.
-        let kind = match *$e.borrow() {
-            NodeBox::Internal(_) => NodeKind::Internal,
-            NodeBox::Leaf(_) => NodeKind::Leaf,
-        };
-        kind
-    }};
-}
-
-#[macro_export]
-macro_rules! noderef_as {
-    ($ref:expr, $type:ident) => {
-        match *$ref.borrow() {
-            NodeBox::$type(ref deref) => deref,
-            _ => unreachable!(),
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! noderef_as_mut {
-    ($ref:expr, $type:ident) => {
-        match *$ref.borrow_mut() {
-            NodeBox::$type(ref mut deref) => deref,
-            _ => unreachable!(),
-        }
-    };
-}

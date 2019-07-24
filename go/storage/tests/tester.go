@@ -61,22 +61,6 @@ func CalculateExpectedNewRoot(t *testing.T, wl api.WriteLog, namespace common.Na
 	return expectedNewRoot
 }
 
-// XXX: until (PR#1743), hashed keys are returned by the GetCheckpoints.
-func calculateExpectedNewRootRaw(t *testing.T, wl api.WriteLog, namespace common.Namespace) hash.Hash {
-	// Use in-memory Urkel tree to calculate the expected new root.
-	tree := urkel.New(nil, nil)
-	for _, logEntry := range wl {
-		var h hash.Hash
-		err := h.UnmarshalBinary(logEntry.Key)
-		require.NoError(t, err, "error unmarshaling logEntry.Key")
-		err = tree.InsertRaw(context.Background(), []byte{}, h, logEntry.Value)
-		require.NoError(t, err, "error inserting writeLog entry into Urkel tree")
-	}
-	_, expectedNewRoot, err := tree.Commit(context.Background(), namespace, 0)
-	require.NoError(t, err, "error calculating mkvs' expectedNewRoot")
-	return expectedNewRoot
-}
-
 func foldWriteLogIterator(t *testing.T, w api.WriteLogIterator) api.WriteLog {
 	writeLog := api.WriteLog{}
 
@@ -102,6 +86,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 	// Test MKVS storage.
 	var rootHash hash.Hash
 	rootHash.Empty()
+
 	wl := prepareWriteLog(testValues)
 	expectedNewRoot := CalculateExpectedNewRoot(t, wl, namespace)
 	var receipts []*api.Receipt
@@ -152,7 +137,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 		}
 	}
 
-	var emptyPath hash.Hash
+	emptyPath := api.Key{}
 
 	newRoot := api.Root{
 		Namespace: namespace,
@@ -161,7 +146,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 	}
 
 	// Get a subtree summary of the new root.
-	st, err := backend.GetSubtree(context.Background(), newRoot, api.NodeID{Path: emptyPath, Depth: 0}, 10)
+	st, err := backend.GetSubtree(context.Background(), newRoot, api.NodeID{Path: emptyPath, BitDepth: 0}, 10)
 	require.NoError(t, err, "GetSubtree()")
 	require.NotNil(t, st, "subtree returned by GetSubtree()")
 
@@ -171,7 +156,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 	require.NotNil(t, st, "subtree returned by GetPath()")
 
 	// Get the root node.
-	n, err := backend.GetNode(context.Background(), newRoot, api.NodeID{Path: emptyPath, Depth: 0})
+	n, err := backend.GetNode(context.Background(), newRoot, api.NodeID{Path: emptyPath, BitDepth: 0})
 	require.NoError(t, err, "GetNode()")
 	require.NotNil(t, n)
 
@@ -211,8 +196,8 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 	logsIter, err := backend.GetCheckpoint(context.Background(), newRoot)
 	require.NoError(t, err, "GetCheckpoint()")
 	logs := foldWriteLogIterator(t, logsIter)
-	// Applying the writeLog RAW should return same root.
-	logsRootHash := calculateExpectedNewRootRaw(t, logs, namespace)
+	// Applying the writeLog should return same root.
+	logsRootHash := CalculateExpectedNewRoot(t, logs, namespace)
 	require.EqualValues(t, logsRootHash, receiptBody.Roots[0])
 
 	// Single node tree.
@@ -238,7 +223,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 	logsIter, err = backend.GetCheckpoint(context.Background(), newRoot)
 	require.NoError(t, err, "GetCheckpoint()")
 	logs = foldWriteLogIterator(t, logsIter)
-	// Applying the writeLog RAW should return same root.
-	logsRootHash = calculateExpectedNewRootRaw(t, logs, namespace)
+	// Applying the writeLog should return same root.
+	logsRootHash = CalculateExpectedNewRoot(t, logs, namespace)
 	require.EqualValues(t, logsRootHash, newRoot.Hash)
 }

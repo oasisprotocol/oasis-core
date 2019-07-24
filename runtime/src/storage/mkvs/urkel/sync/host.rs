@@ -4,7 +4,6 @@ use failure::Fallible;
 use io_context::Context;
 
 use crate::{
-    common::crypto::hash::Hash,
     protocol::{Protocol, ProtocolError},
     storage::mkvs::urkel::{marshal::*, sync::*, tree::*},
     types::Body,
@@ -32,12 +31,12 @@ impl ReadSync for HostReadSyncer {
         ctx: Context,
         root: Root,
         id: NodeID,
-        max_depth: u8,
+        max_depth: Depth,
     ) -> Fallible<Subtree> {
         let req = Body::HostStorageSyncGetSubtreeRequest {
             root: root,
-            node_path: id.path,
-            node_depth: id.depth,
+            node_path: id.path.clone(),
+            node_bit_depth: id.bit_depth,
             max_depth: max_depth,
         };
         match self.protocol.make_request(ctx, req) {
@@ -55,13 +54,13 @@ impl ReadSync for HostReadSyncer {
         &mut self,
         ctx: Context,
         root: Root,
-        key: Hash,
-        start_depth: u8,
+        key: &Key,
+        start_bit_depth: Depth,
     ) -> Fallible<Subtree> {
         let req = Body::HostStorageSyncGetPathRequest {
             root: root,
-            key: key,
-            start_depth: start_depth,
+            key: key.clone(),
+            start_bit_depth: start_bit_depth,
         };
         match self.protocol.make_request(ctx, req) {
             Ok(Body::HostStorageSyncSerializedResponse { serialized }) => {
@@ -77,8 +76,8 @@ impl ReadSync for HostReadSyncer {
     fn get_node(&mut self, ctx: Context, root: Root, id: NodeID) -> Fallible<NodeRef> {
         let req = Body::HostStorageSyncGetNodeRequest {
             root: root,
-            node_path: id.path,
-            node_depth: id.depth,
+            node_path: id.path.clone(),
+            node_bit_depth: id.bit_depth,
         };
         match self.protocol.make_request(ctx, req) {
             Ok(Body::HostStorageSyncSerializedResponse { serialized }) => {

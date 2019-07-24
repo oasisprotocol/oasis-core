@@ -71,7 +71,7 @@ func (b *leveldbBackend) Apply(
 	return []*api.Receipt{receipt}, err
 }
 
-func (b *leveldbBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth uint8) (*api.Subtree, error) {
+func (b *leveldbBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth api.Depth) (*api.Subtree, error) {
 	tree, err := b.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func (b *leveldbBackend) GetSubtree(ctx context.Context, root api.Root, id api.N
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (b *leveldbBackend) GetPath(ctx context.Context, root api.Root, key hash.Hash, startDepth uint8) (*api.Subtree, error) {
+func (b *leveldbBackend) GetPath(ctx context.Context, root api.Root, key api.Key, startDepth api.Depth) (*api.Subtree, error) {
 	tree, err := b.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err

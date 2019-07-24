@@ -24,14 +24,14 @@ var ErrClosed = errors.New("urkel: tree is closed")
 var ErrKnownRootMismatch = errors.New("urkel: known root mismatch")
 
 type Stats struct {
-	MaxDepth          uint8
+	MaxDepth          node.Depth
 	InternalNodeCount uint64
 	LeafNodeCount     uint64
 	LeafValueSize     uint64
 	DeadNodeCount     uint64
 
-	LeftSubtreeMaxDepths  map[uint8]uint8
-	RightSubtreeMaxDepths map[uint8]uint8
+	LeftSubtreeMaxDepths  map[node.Depth]node.Depth
+	RightSubtreeMaxDepths map[node.Depth]node.Depth
 
 	Cache struct {
 		InternalNodeCount uint64
@@ -45,7 +45,7 @@ type Tree struct {
 	cache *cache
 
 	// NOTE: This can be a map as updates are commutative.
-	pendingWriteLog map[hash.Hash]*pendingEntry
+	pendingWriteLog map[string]*pendingEntry
 }
 
 type pendingEntry struct {
@@ -54,7 +54,6 @@ type pendingEntry struct {
 	existed bool
 
 	insertedLeaf *node.Pointer
-	hashedKey    hash.Hash // TODO this should go away once internal keys are the same as api keys (PR#1743)
 }
 
 // Option is a configuration option used when instantiating the tree.
@@ -63,7 +62,7 @@ type Option func(t *Tree)
 // PrefetchDepth sets the depth of subtree prefetching.
 //
 // If no prefetch depth is specified, no prefetching will be done.
-func PrefetchDepth(depth uint8) Option {
+func PrefetchDepth(depth node.Depth) Option {
 	return func(t *Tree) {
 		t.cache.prefetchDepth = depth
 	}
@@ -122,7 +121,7 @@ func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) *Tree {
 
 	t := &Tree{
 		cache:           newCache(ndb, rs),
-		pendingWriteLog: make(map[hash.Hash]*pendingEntry),
+		pendingWriteLog: make(map[string]*pendingEntry),
 	}
 
 	for _, v := range options {
@@ -147,7 +146,7 @@ func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root 
 
 	// Try to prefetch the subtree at the root.
 	// NOTE: Path can be anything here as the depth is 0 so it is actually ignored.
-	var path hash.Hash
+	var path = node.Key{}
 	ptr, err := t.cache.prefetch(ctx, root.Hash, path, 0)
 	if err != nil {
 		return nil, err
@@ -161,13 +160,6 @@ func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root 
 
 // Insert inserts a key/value pair into the tree.
 func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
-	hkey := hashKey(key)
-	return t.InsertRaw(ctx, key, hkey, value)
-}
-
-// InsertRaw inserts keys without hashing.
-// XXX: until (PR#1743), this is needed for Checkpoints as hashed keys are returned by the GetCheckpoints.
-func (t *Tree) InsertRaw(ctx context.Context, key []byte, hkey hash.Hash, value []byte) error {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -176,20 +168,19 @@ func (t *Tree) InsertRaw(ctx context.Context, key []byte, hkey hash.Hash, value 
 	}
 
 	var result insertResult
-	result, err := t.doInsert(ctx, t.cache.pendingRoot, 0, hkey, value)
+	result, err := t.doInsert(ctx, t.cache.pendingRoot, 0, key, value, 0)
 	if err != nil {
 		return err
 	}
 
 	// Update the pending write log.
-	entry := t.pendingWriteLog[hkey]
+	entry := t.pendingWriteLog[node.ToMapKey(key)]
 	if entry == nil {
-		t.pendingWriteLog[hkey] = &pendingEntry{
+		t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{
 			key:          key,
 			value:        value,
 			existed:      result.existed,
 			insertedLeaf: result.insertedLeaf,
-			hashedKey:    hkey,
 		}
 	} else {
 		entry.value = value
@@ -208,17 +199,16 @@ func (t *Tree) Remove(ctx context.Context, key []byte) error {
 		return ErrClosed
 	}
 
-	hkey := hashKey(key)
 	var changed bool
-	newRoot, changed, err := t.doRemove(ctx, t.cache.pendingRoot, 0, hkey)
+	newRoot, changed, err := t.doRemove(ctx, t.cache.pendingRoot, 0, key, 0)
 	if err != nil {
 		return err
 	}
 
 	// Update the pending write log.
-	entry := t.pendingWriteLog[hkey]
+	entry := t.pendingWriteLog[node.ToMapKey(key)]
 	if entry == nil {
-		t.pendingWriteLog[hkey] = &pendingEntry{key, nil, changed, nil, hkey}
+		t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{key, nil, changed, nil}
 	} else {
 		entry.value = nil
 	}
@@ -236,8 +226,7 @@ func (t *Tree) Get(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, ErrClosed
 	}
 
-	hkey := hashKey(key)
-	return t.doGet(ctx, t.cache.pendingRoot, 0, hkey)
+	return t.doGet(ctx, t.cache.pendingRoot, 0, key, 0)
 }
 
 // Dump dumps the tree into the given writer.
@@ -249,12 +238,17 @@ func (t *Tree) Dump(ctx context.Context, w io.Writer) {
 		return
 	}
 
-	t.doDump(ctx, w, t.cache.pendingRoot, hash.Hash{}, 0)
+	t.doDump(ctx, w, t.cache.pendingRoot, 0, node.Key{}, 0, false)
 	fmt.Fprintln(w, "")
 }
 
+// DumpLocal dumps the tree in the local memory into the given writer.
+func (t *Tree) DumpLocal(ctx context.Context, w io.Writer) {
+	t.doDumpLocal(ctx, w, t.cache.pendingRoot, 0, node.Key{}, 0, false)
+}
+
 // Stats traverses the tree and dumps some statistics.
-func (t *Tree) Stats(ctx context.Context, maxDepth uint8) Stats {
+func (t *Tree) Stats(ctx context.Context, maxDepth node.Depth) Stats {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -263,14 +257,14 @@ func (t *Tree) Stats(ctx context.Context, maxDepth uint8) Stats {
 	}
 
 	stats := &Stats{
-		LeftSubtreeMaxDepths:  make(map[uint8]uint8),
-		RightSubtreeMaxDepths: make(map[uint8]uint8),
+		LeftSubtreeMaxDepths:  make(map[node.Depth]node.Depth),
+		RightSubtreeMaxDepths: make(map[node.Depth]node.Depth),
 	}
 	stats.Cache.InternalNodeCount = t.cache.internalNodeCount
 	stats.Cache.LeafNodeCount = t.cache.leafNodeCount
 	stats.Cache.LeafValueSize = t.cache.valueSize
 
-	t.doStats(ctx, stats, t.cache.pendingRoot, hash.Hash{}, 0, maxDepth)
+	t.doStats(ctx, stats, t.cache.pendingRoot, 0, node.Key{}, 0, maxDepth, false)
 	return *stats
 }
 
@@ -364,7 +358,7 @@ func (t *Tree) commitWithHooks(
 		return nil, hash.Hash{}, err
 	}
 
-	t.pendingWriteLog = make(map[hash.Hash]*pendingEntry)
+	t.pendingWriteLog = make(map[string]*pendingEntry)
 	t.cache.setSyncRoot(root)
 
 	return log, rootHash, nil

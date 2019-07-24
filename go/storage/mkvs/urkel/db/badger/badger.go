@@ -209,7 +209,7 @@ type badgerBatch struct {
 	bat *badger.WriteBatch
 }
 
-func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, depth uint8, subtreeRoot *node.Pointer) api.Subtree {
+func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, depth node.Depth, subtreeRoot *node.Pointer) api.Subtree {
 	if subtree == nil {
 		return &badgerSubtree{batch: ba}
 	}
@@ -250,7 +250,7 @@ type badgerSubtree struct {
 	batch *badgerBatch
 }
 
-func (s *badgerSubtree) PutNode(depth uint8, ptr *node.Pointer) error {
+func (s *badgerSubtree) PutNode(depth node.Depth, ptr *node.Pointer) error {
 	data, err := ptr.Node.MarshalBinary()
 	if err != nil {
 		return err
@@ -263,7 +263,7 @@ func (s *badgerSubtree) PutNode(depth uint8, ptr *node.Pointer) error {
 	return nil
 }
 
-func (s *badgerSubtree) VisitCleanNode(depth uint8, ptr *node.Pointer) error {
+func (s *badgerSubtree) VisitCleanNode(depth node.Depth, ptr *node.Pointer) error {
 	return nil
 }
 

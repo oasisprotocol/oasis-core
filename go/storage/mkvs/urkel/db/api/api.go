@@ -40,13 +40,17 @@ type NodeDB interface {
 // Subtree is a NodeDB-specific subtree implementation.
 type Subtree interface {
 	// PutNode persists a node in the NodeDB.
-	PutNode(depth uint8, ptr *node.Pointer) error
+	//
+	// Depth is the node depth not bit depth.
+	PutNode(depth node.Depth, ptr *node.Pointer) error
 
 	// VisitCleanNode is called for any clean node encountered during commit
 	// for which no further processing will be done (as it is marked clean).
 	//
 	// The specific NodeDB implementation may wish to do further processing.
-	VisitCleanNode(depth uint8, ptr *node.Pointer) error
+	//
+	// Depth is the node depth not bit depth.
+	VisitCleanNode(depth node.Depth, ptr *node.Pointer) error
 
 	// Commit marks the subtree as complete.
 	Commit() error
@@ -58,7 +62,7 @@ type Batch interface {
 	// persisting nodes under a given root.
 	//
 	// Depth is the depth of the node that subtreeRoot points to.
-	MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *node.Pointer) Subtree
+	MaybeStartSubtree(subtree Subtree, depth node.Depth, subtreeRoot *node.Pointer) Subtree
 
 	// OnCommit registers a hook to run after a successful commit.
 	OnCommit(hook func())
@@ -134,7 +138,7 @@ func (d *nopNodeDB) NewBatch() Batch {
 	return &nopBatch{}
 }
 
-func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth uint8, subtreeRoot *node.Pointer) Subtree {
+func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth node.Depth, subtreeRoot *node.Pointer) Subtree {
 	return &nopSubtree{}
 }
 
@@ -153,11 +157,11 @@ func (b *nopBatch) Reset() {
 // nopSubtree is a no-op subtree.
 type nopSubtree struct{}
 
-func (s *nopSubtree) PutNode(depth uint8, ptr *node.Pointer) error {
+func (s *nopSubtree) PutNode(depth node.Depth, ptr *node.Pointer) error {
 	return nil
 }
 
-func (s *nopSubtree) VisitCleanNode(depth uint8, ptr *node.Pointer) error {
+func (s *nopSubtree) VisitCleanNode(depth node.Depth, ptr *node.Pointer) error {
 	return nil
 }
 
@@ -216,6 +220,9 @@ func (b *CheckpointableDB) getNodeWriteLog(ctx context.Context, pipe *PipeWriteL
 			_ = pipe.PutError(err)
 		}
 	case *node.InternalNode:
+		if n.LeafNode != nil {
+			b.getNodeWriteLog(ctx, pipe, root, n.LeafNode)
+		}
 		if n.Left != nil {
 			b.getNodeWriteLog(ctx, pipe, root, n.Left)
 		}

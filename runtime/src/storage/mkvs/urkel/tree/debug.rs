@@ -2,14 +2,11 @@ use std::{cmp::max, collections::BTreeMap, iter::repeat, sync::Arc};
 
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, tree::*, utils::*},
-};
+use crate::storage::mkvs::urkel::{cache::*, tree::*};
 
 impl UrkelTree {
     /// Traverse the tree and return some statistics about it.
-    pub fn stats(&mut self, ctx: Context, max_depth: u8) -> UrkelStats {
+    pub fn stats(&mut self, ctx: Context, max_depth: Depth) -> UrkelStats {
         let ctx = ctx.freeze();
         let mut stats = UrkelStats {
             left_subtree_max_depths: BTreeMap::new(),
@@ -22,9 +19,11 @@ impl UrkelTree {
             &ctx,
             &mut stats,
             pending_root,
-            Hash::empty_hash(),
+            0,
+            Key::new(),
             0,
             max_depth,
+            false,
         );
         stats
     }
@@ -34,10 +33,12 @@ impl UrkelTree {
         ctx: &Arc<Context>,
         stats: &mut UrkelStats,
         ptr: NodePtrRef,
-        path: Hash,
-        depth: u8,
-        max_depth: u8,
-    ) -> u8 {
+        bit_depth: Depth,
+        path: Key,
+        depth: Depth,
+        max_depth: Depth,
+        right: bool,
+    ) -> Depth {
         if max_depth > 0 && depth > max_depth {
             return depth;
         }
@@ -52,8 +53,8 @@ impl UrkelTree {
             .deref_node_ptr(
                 ctx,
                 NodeID {
-                    path: path,
-                    depth: depth,
+                    path: &path.append_bit(bit_depth, right),
+                    bit_depth: bit_depth + 1,
                 },
                 ptr,
                 None,
@@ -73,9 +74,15 @@ impl UrkelTree {
                     ctx,
                     stats,
                     noderef_as!(node_ref, Internal).left.clone(),
-                    set_key_bit(&path, depth, false),
+                    bit_depth + noderef_as!(node_ref, Internal).label_bit_length,
+                    path.merge(
+                        bit_depth,
+                        &noderef_as!(node_ref, Internal).label,
+                        noderef_as!(node_ref, Internal).label_bit_length,
+                    ),
                     depth + 1,
                     max_depth,
+                    false,
                 );
                 if left_depth - depth > *stats.left_subtree_max_depths.get(&depth).unwrap_or(&0) {
                     stats
@@ -87,9 +94,15 @@ impl UrkelTree {
                     ctx,
                     stats,
                     noderef_as!(node_ref, Internal).right.clone(),
-                    set_key_bit(&path, depth, true),
+                    bit_depth + noderef_as!(node_ref, Internal).label_bit_length,
+                    path.merge(
+                        bit_depth,
+                        &noderef_as!(node_ref, Internal).label,
+                        noderef_as!(node_ref, Internal).label_bit_length,
+                    ),
                     depth + 1,
                     max_depth,
+                    true,
                 );
                 if right_depth - depth > *stats.right_subtree_max_depths.get(&depth).unwrap_or(&0) {
                     stats
@@ -129,7 +142,7 @@ impl UrkelTree {
     pub fn dump(&mut self, ctx: Context, w: &mut impl ::std::io::Write) -> ::std::io::Result<()> {
         let ctx = ctx.freeze();
         let pending_root = self.cache.borrow().get_pending_root();
-        self._dump(&ctx, w, pending_root, Hash::empty_hash(), 0)?;
+        self._dump(&ctx, w, pending_root, 0, Key::new(), 0, false)?;
         writeln!(w, "")
     }
 
@@ -138,8 +151,10 @@ impl UrkelTree {
         ctx: &Arc<Context>,
         w: &mut impl ::std::io::Write,
         ptr: NodePtrRef,
-        path: Hash,
-        depth: u8,
+        bit_depth: Depth,
+        path: Key,
+        depth: Depth,
+        right: bool,
     ) -> ::std::io::Result<()> {
         let prefix = repeat(" ").take(depth as usize * 2).collect::<String>();
 
@@ -149,8 +164,8 @@ impl UrkelTree {
             .deref_node_ptr(
                 ctx,
                 NodeID {
-                    path: path,
-                    depth: depth,
+                    path: &path.append_bit(bit_depth, right),
+                    bit_depth: bit_depth + 1,
                 },
                 ptr,
                 None,
@@ -167,25 +182,55 @@ impl UrkelTree {
                 };
                 write!(
                     w,
-                    "{}+ [{}/{:?}]: {{\n",
+                    "{}+ [{}/{:?}({})/{:?}]: {{\n",
                     prefix,
                     noderef_as!(some_node_ref, Internal).clean,
+                    noderef_as!(some_node_ref, Internal).label,
+                    noderef_as!(some_node_ref, Internal).label_bit_length,
                     noderef_as!(some_node_ref, Internal).hash
                 )?;
+
+                self._dump(
+                    ctx,
+                    w,
+                    noderef_as!(some_node_ref, Internal).leaf_node.clone(),
+                    bit_depth + noderef_as!(some_node_ref, Internal).label_bit_length,
+                    path.merge(
+                        bit_depth,
+                        &noderef_as!(some_node_ref, Internal).label,
+                        noderef_as!(some_node_ref, Internal).label_bit_length,
+                    ),
+                    // NB: depth+1 for LeafNode is purely for nicer indents. LeafNode should have the same depth as parent though.
+                    depth + 1,
+                    false,
+                )?;
+                writeln!(w, ",")?;
                 self._dump(
                     ctx,
                     w,
                     noderef_as!(some_node_ref, Internal).left.clone(),
-                    set_key_bit(&path, depth, false),
+                    bit_depth + noderef_as!(some_node_ref, Internal).label_bit_length,
+                    path.merge(
+                        bit_depth,
+                        &noderef_as!(some_node_ref, Internal).label,
+                        noderef_as!(some_node_ref, Internal).label_bit_length,
+                    ),
                     depth + 1,
+                    false,
                 )?;
                 writeln!(w, ",")?;
                 self._dump(
                     ctx,
                     w,
                     noderef_as!(some_node_ref, Internal).right.clone(),
-                    set_key_bit(&path, depth, true),
+                    bit_depth + noderef_as!(some_node_ref, Internal).label_bit_length,
+                    path.merge(
+                        bit_depth,
+                        &noderef_as!(some_node_ref, Internal).label,
+                        noderef_as!(some_node_ref, Internal).label_bit_length,
+                    ),
                     depth + 1,
+                    true,
                 )?;
                 writeln!(w, "")?;
                 write!(w, "{}}}", prefix)

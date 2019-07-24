@@ -3,7 +3,6 @@ package syncer
 import (
 	"context"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
@@ -25,12 +24,12 @@ func NewStatsCollector(rs ReadSyncer) *StatsCollector {
 }
 
 // GetSubtree retrieves a compressed subtree summary of the given root.
-func (c *StatsCollector) GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDepth uint8) (*Subtree, error) {
+func (c *StatsCollector) GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDepth node.Depth) (*Subtree, error) {
 	c.SubtreeFetches++
 	return c.rs.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (c *StatsCollector) GetPath(ctx context.Context, root node.Root, key hash.Hash, startDepth uint8) (*Subtree, error) {
+func (c *StatsCollector) GetPath(ctx context.Context, root node.Root, key node.Key, startDepth node.Depth) (*Subtree, error) {
 	c.PathFetches++
 	return c.rs.GetPath(ctx, root, key, startDepth)
 }

@@ -123,6 +123,13 @@ type Root = urkelNode.Root
 // a node under a given root.
 type NodeID = urkelNode.ID
 
+// Key is a node's key spelled out from the root to the node.
+type Key = urkelNode.Key
+
+// Depth determines the node's (bit) depth in the tree. It is also used for
+// storing the Key length in bits.
+type Depth = urkelNode.Depth
+
 // Node is either an InternalNode or a LeafNode.
 type Node = urkelNode.Node
 
@@ -202,8 +209,6 @@ type Backend interface {
 
 	// GetCheckpoint returns an iterator of write log entries in the provided
 	// root.
-	// XXX: until (PR#1743), hashed keys are actually returned, therefore
-	// use `InsertRaw` when inserting the keys.
 	GetCheckpoint(context.Context, Root) (WriteLogIterator, error)
 
 	// Cleanup closes/cleans up the storage backend.

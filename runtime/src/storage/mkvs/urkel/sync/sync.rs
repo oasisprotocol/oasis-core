@@ -3,10 +3,7 @@ use std::any::Any;
 use failure::Fallible;
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{sync::*, tree::*},
-};
+use crate::storage::mkvs::urkel::{sync::*, tree::*};
 
 /// ReadSync is the interface for synchronizing the in-memory cache
 /// with another (potentially untrusted) MKVS.
@@ -24,7 +21,7 @@ pub trait ReadSync {
         ctx: Context,
         root: Root,
         id: NodeID,
-        max_depth: u8,
+        max_depth: Depth,
     ) -> Fallible<Subtree>;
 
     /// Retrieve a compressed path summary for the given key under
@@ -36,8 +33,8 @@ pub trait ReadSync {
         &mut self,
         ctx: Context,
         root: Root,
-        key: Hash,
-        start_depth: u8,
+        key: &Key,
+        start_depth: Depth,
     ) -> Fallible<Subtree>;
 
     /// Retrieve a specific node under the given root.

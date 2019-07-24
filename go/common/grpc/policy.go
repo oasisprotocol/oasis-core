@@ -14,34 +14,48 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 )
 
+var (
+	_ RuntimePolicyChecker = (*AllowAllRuntimePolicyChecker)(nil)
+	_ RuntimePolicyChecker = (*DynamicRuntimePolicyChecker)(nil)
+)
+
 // RuntimePolicyChecker is used for setting and checking the gRPC server's access control policy
 // for different runtimes.
-type RuntimePolicyChecker struct {
+type RuntimePolicyChecker interface {
+	// CheckAccessAllowed checks if the connected peer is allowed access to a server method according
+	// to the set access policy.
+	CheckAccessAllowed(ctx context.Context, method accessctl.Action, namespace common.Namespace) error
+}
+
+// AllowAllRuntimePolicyChecker is a RuntimePolicyChecker that allows all access.
+type AllowAllRuntimePolicyChecker struct{}
+
+func (c *AllowAllRuntimePolicyChecker) CheckAccessAllowed(ctx context.Context, method accessctl.Action, namespace common.Namespace) error {
+	return nil
+}
+
+// DynamicRuntimePolicyChecker is a RuntimePolicyChecker that allows a dynamic policy to be
+// specified and modified.
+type DynamicRuntimePolicyChecker struct {
 	sync.RWMutex
 
 	// Map from runtime IDs to corresponding access control policies.
-	accessPolicies map[signature.MapKey]*accessctl.Policy
+	accessPolicies map[signature.MapKey]accessctl.Policy
 }
 
 // SetAccessPolicy sets the PolicyChecker's access policy.
-func (c *RuntimePolicyChecker) SetAccessPolicy(policy *accessctl.Policy, runtimeID signature.PublicKey) {
+//
+// After this method is called the passed policy must not be used anymore.
+func (c *DynamicRuntimePolicyChecker) SetAccessPolicy(policy accessctl.Policy, runtimeID signature.PublicKey) {
 	c.Lock()
 	defer c.Unlock()
 
 	c.accessPolicies[runtimeID.ToMapKey()] = policy
 }
 
-// GetAccessPolicy returns the PolicyChecker's current access policy.
-func (c *RuntimePolicyChecker) GetAccessPolicy(runtimeID signature.PublicKey) *accessctl.Policy {
-	c.RLock()
-	defer c.RUnlock()
-
-	return c.accessPolicies[runtimeID.ToMapKey()]
-}
-
 // CheckAccessAllowed checks if the connected peer is allowed access to a server method according
 // to the set access policy.
-func (c *RuntimePolicyChecker) CheckAccessAllowed(
+func (c *DynamicRuntimePolicyChecker) CheckAccessAllowed(
 	ctx context.Context,
 	method accessctl.Action,
 	namespace common.Namespace,
@@ -73,8 +87,9 @@ func (c *RuntimePolicyChecker) CheckAccessAllowed(
 	return nil
 }
 
-func NewRuntimePolicyChecker() RuntimePolicyChecker {
-	return RuntimePolicyChecker{
-		accessPolicies: make(map[signature.MapKey]*accessctl.Policy),
+// NewDynamicRuntimePolicyChecker creates a new dynamic runtime policy checker instance.
+func NewDynamicRuntimePolicyChecker() *DynamicRuntimePolicyChecker {
+	return &DynamicRuntimePolicyChecker{
+		accessPolicies: make(map[signature.MapKey]accessctl.Policy),
 	}
 }
