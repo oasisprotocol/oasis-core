@@ -45,7 +45,7 @@ impl UrkelTree {
             ctx,
             NodeID {
                 path: key,
-                bit_depth: bit_depth + 1,
+                bit_depth: bit_depth,
             },
             ptr.clone(),
             Some(key),
@@ -115,7 +115,7 @@ impl UrkelTree {
                         ctx,
                         NodeID {
                             path: &key_prefix.append_bit(bit_depth + n.label_bit_length, false),
-                            bit_depth: bit_depth + n.label_bit_length + 1,
+                            bit_depth: bit_depth + n.label_bit_length,
                         },
                         n.left.clone(),
                         None,
@@ -124,7 +124,7 @@ impl UrkelTree {
                         ctx,
                         NodeID {
                             path: &key_prefix.append_bit(bit_depth + n.label_bit_length, true),
-                            bit_depth: bit_depth + n.label_bit_length + 1,
+                            bit_depth: bit_depth + n.label_bit_length,
                         },
                         n.right.clone(),
                         None,

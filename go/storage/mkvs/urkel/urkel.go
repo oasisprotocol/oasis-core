@@ -226,7 +226,7 @@ func (t *Tree) Get(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, ErrClosed
 	}
 
-	return t.doGet(ctx, t.cache.pendingRoot, 0, key, 0)
+	return t.doGet(ctx, t.cache.pendingRoot, 0, key)
 }
 
 // Dump dumps the tree into the given writer.
@@ -243,8 +243,8 @@ func (t *Tree) Dump(ctx context.Context, w io.Writer) {
 }
 
 // DumpLocal dumps the tree in the local memory into the given writer.
-func (t *Tree) DumpLocal(ctx context.Context, w io.Writer) {
-	t.doDumpLocal(ctx, w, t.cache.pendingRoot, 0, node.Key{}, 0, false)
+func (t *Tree) DumpLocal(ctx context.Context, w io.Writer, maxDepth node.Depth) {
+	t.doDumpLocal(ctx, w, t.cache.pendingRoot, 0, maxDepth)
 }
 
 // Stats traverses the tree and dumps some statistics.

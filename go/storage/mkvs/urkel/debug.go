@@ -11,7 +11,7 @@ import (
 
 func (t *Tree) doDump(ctx context.Context, w io.Writer, ptr *node.Pointer, bitDepth node.Depth, path node.Key, depth node.Depth, right bool) {
 	prefix := strings.Repeat(" ", int(depth)*2)
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path.AppendBit(bitDepth, right), BitDepth: bitDepth + 1}, ptr, nil)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path.AppendBit(bitDepth, right), BitDepth: bitDepth}, ptr, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -49,7 +49,7 @@ func (t *Tree) doStats(ctx context.Context, s *Stats, ptr *node.Pointer, bitDept
 		s.MaxDepth = depth
 	}
 
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path.AppendBit(bitDepth, right), BitDepth: bitDepth + 1}, ptr, nil)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path.AppendBit(bitDepth, right), BitDepth: bitDepth}, ptr, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -87,10 +87,15 @@ func (t *Tree) doStats(ctx context.Context, s *Stats, ptr *node.Pointer, bitDept
 	return depth
 }
 
-func (t *Tree) doDumpLocal(ctx context.Context, w io.Writer, ptr *node.Pointer, bitDepth node.Depth, path node.Key, depth node.Depth, right bool) {
+func (t *Tree) doDumpLocal(ctx context.Context, w io.Writer, ptr *node.Pointer, depth node.Depth, maxDepth node.Depth) {
 	prefix := strings.Repeat(" ", int(depth)*2)
 	if ptr == nil {
 		fmt.Fprint(w, prefix+"<nil>")
+		return
+	}
+
+	if maxDepth > 0 && depth > maxDepth {
+		fmt.Fprint(w, prefix+"<...>")
 		return
 	}
 
@@ -98,21 +103,21 @@ func (t *Tree) doDumpLocal(ctx context.Context, w io.Writer, ptr *node.Pointer, 
 
 	switch n := nd.(type) {
 	case nil:
-		fmt.Fprint(w, prefix+"<nil>")
+		fmt.Fprintf(w, prefix+"<nil> [%v/%s]", ptr.Clean, ptr.Hash)
 	case *node.InternalNode:
-		fmt.Fprintf(w, prefix+"* [%v/%q(%d)/%s]: {\n", n.Clean, n.Label, n.LabelBitLength, n.Hash.String())
+		fmt.Fprintf(w, prefix+"* [%v/%q(%d)/%s]: {\n", n.Clean, n.Label, n.LabelBitLength, n.Hash)
 		// NB: depth+1 for LeafNode is purely for nicer indents. LeafNode should have the same depth as parent though.
-		t.doDumpLocal(ctx, w, n.LeafNode, bitDepth+n.LabelBitLength, path.Merge(bitDepth, n.Label, n.LabelBitLength), depth+1, false)
+		t.doDumpLocal(ctx, w, n.LeafNode, depth+1, maxDepth)
 		fmt.Fprintln(w, ",")
-		t.doDumpLocal(ctx, w, n.Left, bitDepth+n.LabelBitLength, path.Merge(bitDepth, n.Label, n.LabelBitLength), depth+1, false)
+		t.doDumpLocal(ctx, w, n.Left, depth+1, maxDepth)
 		fmt.Fprintln(w, ",")
-		t.doDumpLocal(ctx, w, n.Right, bitDepth+n.LabelBitLength, path.Merge(bitDepth, n.Label, n.LabelBitLength), depth+1, true)
+		t.doDumpLocal(ctx, w, n.Right, depth+1, maxDepth)
 		fmt.Fprintln(w, "")
 		fmt.Fprint(w, prefix+"}")
 	case *node.LeafNode:
 		value := n.Value
 
-		fmt.Fprintf(w, "%s- %s -> %v [%v/%s]", prefix, n.Key, value, n.Clean, n.Hash.String())
+		fmt.Fprintf(w, "%s- %s -> %v [%v/%s]", prefix, n.Key, value, n.Clean, n.Hash)
 	default:
 		fmt.Fprintf(w, prefix+"<UNKNOWN>")
 	}

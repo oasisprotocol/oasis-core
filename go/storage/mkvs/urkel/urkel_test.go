@@ -603,12 +603,6 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 		value, err = remoteTree.Get(ctx, keys[i])
 		require.NoError(t, err, "Get")
 		require.Equal(t, values[i], value)
-		_, err = remoteTree.GetPath(ctx, node.Root{
-			Namespace: testNs,
-			Round:     0,
-			Hash:      root,
-		}, keys[i], 0)
-		require.NoErrorf(t, err, "GetPath")
 	}
 
 	require.Equal(t, 0, stats.SubtreeFetches, "subtree fetches (no prefetch)")
@@ -644,12 +638,20 @@ func testSyncerGetPath(t *testing.T, ndb db.NodeDB) {
 			// Reconstructed subtree should contain key as leaf node.
 			var foundLeaf bool
 			for _, n := range st.FullNodes {
-				if ln, ok := n.(*node.LeafNode); ok {
-					if ln.Key.Equal(keys[i]) {
-						require.EqualValues(t, values[i], ln.Value.Value, "leaf value should be equal")
-						foundLeaf = true
-						break
+				var leaf *node.LeafNode
+				switch nd := n.(type) {
+				case *node.InternalNode:
+					if nd.LeafNode != nil {
+						leaf = nd.LeafNode.Node.(*node.LeafNode)
 					}
+				case *node.LeafNode:
+					leaf = nd
+				}
+
+				if leaf != nil && leaf.Key.Equal(keys[i]) {
+					require.EqualValues(t, values[i], leaf.Value.Value, "leaf value should be equal")
+					foundLeaf = true
+					break
 				}
 			}
 			require.Truef(t, foundLeaf, "subtree should contain target leaf")
@@ -699,8 +701,6 @@ func testSyncerRemove(t *testing.T, ndb db.NodeDB) {
 		require.NoError(t, err, "Commit")
 		roots = append(roots, root)
 	}
-
-	//	require.Equal(t, allItemsRoot, roots[len(roots)-1].String())
 
 	root := node.Root{
 		Namespace: testNs,
@@ -879,7 +879,7 @@ func testDebugDump(t *testing.T, ndb db.NodeDB) {
 	require.True(t, len(buffer.Bytes()) > 0)
 
 	buffer = &bytes.Buffer{}
-	tree.DumpLocal(ctx, buffer)
+	tree.DumpLocal(ctx, buffer, 0)
 	require.True(t, len(buffer.Bytes()) > 0)
 }
 

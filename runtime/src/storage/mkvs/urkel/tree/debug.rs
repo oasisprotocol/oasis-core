@@ -54,7 +54,7 @@ impl UrkelTree {
                 ctx,
                 NodeID {
                     path: &path.append_bit(bit_depth, right),
-                    bit_depth: bit_depth + 1,
+                    bit_depth: bit_depth,
                 },
                 ptr,
                 None,
@@ -165,7 +165,7 @@ impl UrkelTree {
                 ctx,
                 NodeID {
                     path: &path.append_bit(bit_depth, right),
-                    bit_depth: bit_depth + 1,
+                    bit_depth: bit_depth,
                 },
                 ptr,
                 None,

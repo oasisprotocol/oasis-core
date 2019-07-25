@@ -7,10 +7,8 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
-func (t *Tree) doGet(ctx context.Context, ptr *node.Pointer, bitDepth node.Depth, key node.Key, depth node.Depth) ([]byte, error) {
-	// NB: bitDepth is the bit depth of parent of ptr, so add one bit to fetch
-	// the node corresponding to key.
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth + 1}, ptr, key)
+func (t *Tree) doGet(ctx context.Context, ptr *node.Pointer, bitDepth node.Depth, key node.Key) ([]byte, error) {
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth}, ptr, key)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +23,7 @@ func (t *Tree) doGet(ctx context.Context, ptr *node.Pointer, bitDepth node.Depth
 
 		// Does lookup key end here? Look into LeafNode.
 		if key.BitLength() == bitLength {
-			return t.doGet(ctx, n.LeafNode, bitLength, key, depth)
+			return t.doGet(ctx, n.LeafNode, bitLength, key)
 		}
 
 		// Lookup key is too short for the current n.Label. It's not stored.
@@ -34,11 +32,11 @@ func (t *Tree) doGet(ctx context.Context, ptr *node.Pointer, bitDepth node.Depth
 		}
 
 		// Continue recursively based on a bit value.
-		if key.GetBit(bitDepth + n.LabelBitLength) {
-			return t.doGet(ctx, n.Right, bitLength, key, depth+1)
+		if key.GetBit(bitLength) {
+			return t.doGet(ctx, n.Right, bitLength, key)
 		}
 
-		return t.doGet(ctx, n.Left, bitLength, key, depth+1)
+		return t.doGet(ctx, n.Left, bitLength, key)
 	case *node.LeafNode:
 		// Reached a leaf node, check if key matches.
 		if n.Key.Equal(key) {

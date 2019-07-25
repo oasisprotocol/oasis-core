@@ -328,27 +328,13 @@ func (c *cache) derefNodeID(ctx context.Context, id node.ID) (*node.Pointer, nod
 	if id.BitDepth == 0 {
 		return curPtr, 0, nil
 	}
-
-	// There is a border case when id.BitDepth==1. In this case, we check the
-	// corresponding root separately.
-	if id.BitDepth == 1 && curPtr != nil && curPtr.Node != nil {
-		switch n := curPtr.Node.(type) {
-		case *node.InternalNode:
-			if n.LabelBitLength == 0 {
-				if id.Path.GetBit(0) {
-					curPtr = n.Right
-				} else {
-					curPtr = n.Left
-				}
-				bd = 1
-			}
-		}
-	}
+	// Add 1 for the discriminator bit.
+	id.BitDepth++
 
 Loop:
-	for bd < id.BitDepth-1 {
-		// bd is the parent's BitDepth. Add 1 for discriminator bit.
-		nd, err := c.derefNodePtr(ctx, node.ID{Path: id.Path, BitDepth: bd + 1}, curPtr, nil)
+	for bd < id.BitDepth {
+		// bd is the parent's BitDepth.
+		nd, err := c.derefNodePtr(ctx, node.ID{Path: id.Path, BitDepth: bd}, curPtr, nil)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -429,8 +415,7 @@ func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer,
 		defer cancel()
 
 		if key == nil {
-
-			// Target key is not known, we need to prefetch the node.
+			// Target key is not known, we need to fetch the node.
 			if n, err = c.rs.GetNode(ctx, c.syncRoot, id); err != nil {
 				return nil, err
 			}
@@ -449,6 +434,8 @@ func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer,
 			if st, err = c.rs.GetPath(ctx, c.syncRoot, key, id.BitDepth); err != nil {
 				return nil, err
 			}
+			// Build full node index.
+			st.BuildFullNodeIndex()
 
 			// reconstructSubtree commits nodes to cache so a separate commitNode
 			// is not needed.
@@ -502,6 +489,8 @@ func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath
 	default:
 		return nil, err
 	}
+	// Build full node index.
+	st.BuildFullNodeIndex()
 
 	ptr, err := c.reconstructSubtree(ctx, subtreeRoot, st, 0, c.prefetchDepth)
 	if err != nil {
@@ -593,8 +582,25 @@ func (c *cache) doReconstructSummary(
 		var ptr *node.Pointer
 		switch n := nd.(type) {
 		case *node.InternalNode:
-			// Internal node.
+			// Internal node, check if we also have full nodes for left/right.
 			n.Clean = false
+
+			for _, child := range []**node.Pointer{&n.Left, &n.Right} {
+				if *child == nil {
+					continue
+				}
+
+				if p := st.GetFullNodePointer((*child).Hash); p.Valid {
+					var rp *node.Pointer
+					rp, err = c.doReconstructSummary(st, p, depth+1, maxDepth)
+					if err != nil {
+						return nil, err
+					}
+
+					*child = rp
+				}
+			}
+
 			ptr = c.newInternalNodePtr(n)
 		case *node.LeafNode:
 			// Leaf node.

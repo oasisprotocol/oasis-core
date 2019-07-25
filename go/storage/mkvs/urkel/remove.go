@@ -7,6 +7,9 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
+// TODO: Optimize this so that we submit a GetPath query that fetches the required nodes.
+//       Currently removals require GetNode fetches.
+
 func (t *Tree) doRemove(
 	ctx context.Context,
 	ptr *node.Pointer,
@@ -14,9 +17,7 @@ func (t *Tree) doRemove(
 	key node.Key,
 	depth node.Depth,
 ) (*node.Pointer, bool, error) {
-	// NB: bitDepth is the bit depth of parent of ptr, so add one bit to fetch the
-	// node corresponding to key.
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth + 1}, ptr, key)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth}, ptr, key)
 	if err != nil {
 		return nil, false, err
 	}
@@ -50,7 +51,7 @@ func (t *Tree) doRemove(
 		keyPrefix, _ := key.Split(bitLength, key.BitLength())
 		remainingLeft, err := t.cache.derefNodePtr(
 			ctx,
-			node.ID{Path: keyPrefix.AppendBit(bitLength, false), BitDepth: bitLength + 1},
+			node.ID{Path: keyPrefix.AppendBit(bitLength, false), BitDepth: bitLength},
 			n.Left,
 			nil,
 		)
@@ -59,7 +60,7 @@ func (t *Tree) doRemove(
 		}
 		remainingRight, err := t.cache.derefNodePtr(
 			ctx,
-			node.ID{Path: keyPrefix.AppendBit(bitLength, true), BitDepth: bitLength + 1},
+			node.ID{Path: keyPrefix.AppendBit(bitLength, true), BitDepth: bitLength},
 			n.Right,
 			nil,
 		)

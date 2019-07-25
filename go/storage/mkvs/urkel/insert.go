@@ -14,9 +14,7 @@ type insertResult struct {
 }
 
 func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, bitDepth node.Depth, key node.Key, val []byte, depth node.Depth) (insertResult, error) {
-	// NB: bitDepth is the bit depth of parent of ptr, so add one bit to fetch
-	// the node corresponding to key.
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth + 1}, ptr, nil)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth}, ptr, nil)
 	if err != nil {
 		return insertResult{}, err
 	}
