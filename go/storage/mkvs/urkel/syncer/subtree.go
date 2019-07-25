@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
@@ -180,6 +181,8 @@ type Subtree struct {
 
 	Summaries []InternalNodeSummary
 	FullNodes []node.Node
+
+	fullNodeIndex map[hash.Hash]SubtreeIndex
 }
 
 func checkSubtreeIndex(idx int) (SubtreeIndex, error) {
@@ -188,6 +191,34 @@ func checkSubtreeIndex(idx int) (SubtreeIndex, error) {
 	}
 
 	return SubtreeIndex(idx), nil
+}
+
+// BuildFullNodeIndex builds an index to enable GetFullNodePointer queries.
+func (s *Subtree) BuildFullNodeIndex() {
+	if s.fullNodeIndex != nil {
+		return
+	}
+
+	s.fullNodeIndex = make(map[hash.Hash]SubtreeIndex, len(s.FullNodes))
+	for idx, n := range s.FullNodes {
+		s.fullNodeIndex[n.GetHash()] = SubtreeIndex(idx)
+	}
+}
+
+// GetFullNodePointer looks up a full node pointer by node hash.
+//
+// The BuildFullNodeIndex must have been called before to make this return
+// useful results.
+func (s *Subtree) GetFullNodePointer(h hash.Hash) SubtreePointer {
+	if h.IsEmpty() {
+		return SubtreePointer{Index: InvalidSubtreeIndex, Valid: true}
+	}
+
+	idx, ok := s.fullNodeIndex[h]
+	if !ok {
+		return SubtreePointer{}
+	}
+	return SubtreePointer{Index: idx, Full: true, Valid: true}
 }
 
 // AddSummary adds a new internal node summary to the subtree.
@@ -350,6 +381,9 @@ func (s *Subtree) SizedUnmarshalBinary(data []byte) (int, error) {
 	s.Root = rootPointer
 	s.Summaries = summaries
 	s.FullNodes = nodes
+
+	// Build full node index.
+	s.BuildFullNodeIndex()
 
 	return offset, nil
 }

@@ -1,8 +1,11 @@
-use std::{cell::RefCell, mem::size_of, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, mem::size_of, rc::Rc};
 
 use failure::Fallible;
 
-use crate::storage::mkvs::urkel::{marshal::*, sync::*, tree::*};
+use crate::{
+    common::crypto::hash::Hash,
+    storage::mkvs::urkel::{marshal::*, sync::*, tree::*},
+};
 
 /// A subtree index.
 pub type SubtreeIndex = u16;
@@ -43,11 +46,13 @@ pub struct InternalNodeSummary {
 }
 
 /// A compressed representation of a subtree.
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default)]
 pub struct Subtree {
     pub root: SubtreePointer,
     pub summaries: Vec<InternalNodeSummary>,
     pub full_nodes: Vec<Option<NodeRef>>,
+
+    full_node_index: HashMap<Hash, SubtreeIndex>,
 }
 
 impl Subtree {
@@ -78,6 +83,43 @@ impl Subtree {
         let sidx = self.check_subtree_index(self.full_nodes.len())?;
         self.full_nodes.push(Some(node.clone()));
         Ok(sidx)
+    }
+
+    /// Build an index to enable get_full_node_pointer queries.
+    pub fn build_full_node_index(&mut self) {
+        if self.full_nodes.len() == self.full_node_index.len() {
+            return;
+        }
+
+        for (idx, node) in self.full_nodes.iter().enumerate() {
+            self.full_node_index.insert(
+                node.as_ref().unwrap().borrow().get_hash(),
+                idx as SubtreeIndex,
+            );
+        }
+    }
+
+    /// Look up a full node pointer by node hash.
+    ///
+    /// The `build_full_node_index` must have been called before to make this return
+    /// useful results.
+    pub fn get_full_node_pointer(&self, hash: Hash) -> SubtreePointer {
+        if hash.is_empty() {
+            return SubtreePointer {
+                index: INVALID_SUBTREE_INDEX,
+                full: false,
+                valid: false,
+            };
+        }
+
+        match self.full_node_index.get(&hash) {
+            None => SubtreePointer::default(),
+            Some(index) => SubtreePointer {
+                index: *index,
+                full: true,
+                valid: true,
+            },
+        }
     }
 
     /// Retrieve a full node at a specific index.
@@ -239,6 +281,10 @@ impl Marshal for Subtree {
                     self.full_nodes.push(Some(Rc::new(RefCell::new(item))));
                 }
             }
+
+            // Build full node index.
+            self.build_full_node_index();
+
             Ok(offset)
         }
     }

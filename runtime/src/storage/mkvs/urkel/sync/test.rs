@@ -37,7 +37,10 @@ fn test_simple() {
     let binary = st.marshal_binary().expect("marshal");
     let mut new_st = Subtree::new();
     new_st.unmarshal_binary(binary.as_ref()).expect("unmarshal");
-    assert_eq!(st, new_st);
+
+    assert_eq!(st.root, new_st.root);
+    assert_eq!(st.summaries, new_st.summaries);
+    assert_eq!(st.full_nodes, new_st.full_nodes);
 }
 
 struct DummySerialSyncer {

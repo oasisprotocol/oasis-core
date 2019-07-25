@@ -235,6 +235,20 @@ impl LRUCache {
             return match *node_ref.borrow_mut() {
                 NodeBox::Internal(ref mut int) => {
                     int.clean = false;
+
+                    // Internal node, check if we also have full nodes for left/right.
+                    let left_ptr = st.get_full_node_pointer(int.left.borrow().hash);
+                    if left_ptr.valid {
+                        int.left =
+                            self._reconstruct_summary(st, &left_ptr, depth + 1, max_depth)?;
+                    }
+
+                    let right_ptr = st.get_full_node_pointer(int.right.borrow().hash);
+                    if right_ptr.valid {
+                        int.right =
+                            self._reconstruct_summary(st, &right_ptr, depth + 1, max_depth)?;
+                    }
+
                     Ok(self.new_internal_node_ptr(Some(node_ref.clone())))
                 }
                 NodeBox::Leaf(ref mut leaf) => {
@@ -504,12 +518,14 @@ impl Cache for LRUCache {
                 ptr.node = Some(node_ref.clone());
             }
             Some(key) => {
-                let st = self.read_syncer.get_path(
+                let mut st = self.read_syncer.get_path(
                     Context::create_child(ctx),
                     self.sync_root,
                     key,
                     id.bit_depth,
                 )?;
+                // Build full node index.
+                st.build_full_node_index();
                 // TODO: Call reconstructSubtree with actual node depth of st! -Matevz
                 let new_ptr =
                     self.reconstruct_subtree(ctx, ptr.hash, &st, 0, MAX_PREFETCH_DEPTH)?;
@@ -634,7 +650,7 @@ impl Cache for LRUCache {
             return Ok(NodePointer::null_ptr());
         }
 
-        let result = self.read_syncer.get_subtree(
+        let mut result = self.read_syncer.get_subtree(
             Context::create_child(ctx),
             self.sync_root,
             NodeID {
@@ -653,8 +669,11 @@ impl Cache for LRUCache {
                 }
                 return Err(err);
             }
-            Ok(ref st) => st,
+            Ok(ref mut st) => st,
         };
+        // Build full node index.
+        st.build_full_node_index();
+
         self.reconstruct_subtree(ctx, subtree_root, st, 0, self.prefetch_depth)
     }
 }

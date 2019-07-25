@@ -7,6 +7,9 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
+// TODO: Optimize this so that we submit a GetPath query that fetches the required nodes.
+//       Currently removals require GetNode fetches.
+
 func (t *Tree) doRemove(
 	ctx context.Context,
 	ptr *node.Pointer,

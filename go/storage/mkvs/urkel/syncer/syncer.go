@@ -15,6 +15,14 @@ var (
 	ErrUnsupported  = errors.New("urkel: method not supported")
 )
 
+// PathOptions are the options for GetPath queries.
+type PathOptions struct {
+	// IncludeSiblings specifies whether the subtree should also include
+	// off-path siblings. This is useful when the caller knows that it
+	// will also need full sibling information during the local operation.
+	IncludeSiblings bool `codec:"include_siblings"`
+}
+
 // ReadSyncer is the interface for synchronizing the in-memory cache
 // with another (potentially untrusted) MKVS.
 type ReadSyncer interface {

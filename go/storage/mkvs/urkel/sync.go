@@ -169,14 +169,12 @@ func (t *Tree) GetPath(ctx context.Context, root node.Root, key node.Key, startB
 	}
 
 	st := &syncer.Subtree{}
-	right := false
-	if len(key) > 0 {
-		right = key.GetBit(bd)
-	}
 
-	// path corresponds to already navigated prefix of the key up to bd bits.
-	path, _ := key.Split(bd, key.BitLength())
-	rootPtr, err := t.doGetPath(ctx, subtreeRoot, bd, path, &key, st, right)
+	// TODO: Make this a GetPath argument.
+	opts := syncer.PathOptions{
+		IncludeSiblings: true,
+	}
+	rootPtr, err := t.doGetPath(ctx, subtreeRoot, bd, key, false, opts, st)
 	if err != nil {
 		return nil, errors.Wrap(err, "urkel: failed to get path")
 	}
@@ -192,10 +190,10 @@ func (t *Tree) doGetPath(
 	ctx context.Context,
 	ptr *node.Pointer,
 	bitDepth node.Depth,
-	path node.Key,
-	key *node.Key,
+	key node.Key,
+	stop bool,
+	opts syncer.PathOptions,
 	st *syncer.Subtree,
-	right bool,
 ) (syncer.SubtreePointer, error) {
 	// Abort in case the context is cancelled.
 	select {
@@ -204,8 +202,7 @@ func (t *Tree) doGetPath(
 	default:
 	}
 
-	extPath := path.AppendBit(bitDepth, right)
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: extPath, BitDepth: bitDepth + 1}, ptr, extPath)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth + 1}, ptr, key)
 	if err != nil {
 		return syncer.SubtreePointer{}, err
 	}
@@ -213,75 +210,63 @@ func (t *Tree) doGetPath(
 		return syncer.SubtreePointer{Index: syncer.InvalidSubtreeIndex, Valid: true}, nil
 	}
 
-	if key == nil {
-		// Off-path nodes are always full nodes.
-		idx, err := st.AddFullNode(nd.Extract())
-		if err != nil {
-			return syncer.SubtreePointer{}, err
-		}
-		return syncer.SubtreePointer{Index: idx, Full: true, Valid: true}, nil
+	// All nodes on the path are always full nodes.
+	idx, err := st.AddFullNode(nd.Extract())
+	if err != nil {
+		return syncer.SubtreePointer{}, err
 	}
 
-	switch n := nd.(type) {
-	case *node.InternalNode:
-		// Record internal node summary.
-		s := syncer.InternalNodeSummary{}
-		// Determine which subtree is off-path.
-		var leftKey, rightKey *node.Key
-		if bitDepth+n.LabelBitLength < key.BitLength() {
-			if key.GetBit(bitDepth + n.LabelBitLength) {
-				// Left subtree is off-path.
-				rightKey = key
+	if !stop {
+		switch n := nd.(type) {
+		case *node.InternalNode:
+			bitLength := bitDepth + n.LabelBitLength
+
+			// If lookup key ends at this node, we don't need to do anything more as
+			// the full internal node already includes the leaf.
+			if key.BitLength() <= bitLength {
+				if opts.IncludeSiblings {
+					_, err = t.doGetPath(ctx, n.Left, bitLength, key.AppendBit(bitLength, false), true, opts, st)
+					if err != nil {
+						return syncer.SubtreePointer{}, err
+					}
+
+					_, err = t.doGetPath(ctx, n.Right, bitLength, key.AppendBit(bitLength, true), true, opts, st)
+					if err != nil {
+						return syncer.SubtreePointer{}, err
+					}
+				}
+				break
+			}
+
+			// Continue recursively based on a bit value.
+			if key.GetBit(bitLength) {
+				_, err = t.doGetPath(ctx, n.Right, bitLength, key, false, opts, st)
+				if err != nil {
+					return syncer.SubtreePointer{}, err
+				}
+
+				if opts.IncludeSiblings {
+					ckey, _ := key.Split(bitLength, key.BitLength())
+					_, err = t.doGetPath(ctx, n.Left, bitLength, ckey.AppendBit(bitLength, false), true, opts, st)
+				}
 			} else {
-				// Right subtree is off-path.
-				leftKey = key
+				_, err = t.doGetPath(ctx, n.Left, bitLength, key, false, opts, st)
+				if err != nil {
+					return syncer.SubtreePointer{}, err
+				}
+
+				if opts.IncludeSiblings {
+					ckey, _ := key.Split(bitLength, key.BitLength())
+					_, err = t.doGetPath(ctx, n.Right, bitLength, ckey.AppendBit(bitLength, true), true, opts, st)
+				}
+			}
+			if err != nil {
+				return syncer.SubtreePointer{}, err
 			}
 		}
-
-		s.Label = n.Label
-		s.LabelBitLength = n.LabelBitLength
-
-		bitLength := bitDepth + n.LabelBitLength
-		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
-
-		// Leaf node.
-		leafNodePtr, err := t.doGetPath(ctx, n.LeafNode, bitLength, newPath, &newPath, st, false)
-		if err != nil {
-			return syncer.SubtreePointer{}, err
-		}
-		s.LeafNode = leafNodePtr
-
-		// Left subtree.
-		leftPtr, err := t.doGetPath(ctx, n.Left, bitLength, newPath, leftKey, st, false)
-		if err != nil {
-			return syncer.SubtreePointer{}, err
-		}
-		s.Left = leftPtr
-
-		// Right subtree.
-		rightPtr, err := t.doGetPath(ctx, n.Right, bitLength, newPath, rightKey, st, true)
-		if err != nil {
-			return syncer.SubtreePointer{}, err
-		}
-		s.Right = rightPtr
-
-		idx, err := st.AddSummary(s)
-		if err != nil {
-			return syncer.SubtreePointer{}, err
-		}
-
-		return syncer.SubtreePointer{Index: idx, Full: false, Valid: true}, nil
-	case *node.LeafNode:
-		// All encountered leaves are always full nodes.
-		idx, err := st.AddFullNode(nd.Extract())
-		if err != nil {
-			return syncer.SubtreePointer{}, err
-		}
-
-		return syncer.SubtreePointer{Index: idx, Full: true, Valid: true}, nil
-	default:
-		panic("urkel: invalid node type")
 	}
+
+	return syncer.SubtreePointer{Index: idx, Full: true, Valid: true}, nil
 }
 
 // GetNode retrieves a specific node under the given root.

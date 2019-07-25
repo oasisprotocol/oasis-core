@@ -429,8 +429,7 @@ func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer,
 		defer cancel()
 
 		if key == nil {
-
-			// Target key is not known, we need to prefetch the node.
+			// Target key is not known, we need to fetch the node.
 			if n, err = c.rs.GetNode(ctx, c.syncRoot, id); err != nil {
 				return nil, err
 			}
@@ -449,6 +448,8 @@ func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer,
 			if st, err = c.rs.GetPath(ctx, c.syncRoot, key, id.BitDepth); err != nil {
 				return nil, err
 			}
+			// Build full node index.
+			st.BuildFullNodeIndex()
 
 			// reconstructSubtree commits nodes to cache so a separate commitNode
 			// is not needed.
@@ -502,6 +503,8 @@ func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath
 	default:
 		return nil, err
 	}
+	// Build full node index.
+	st.BuildFullNodeIndex()
 
 	ptr, err := c.reconstructSubtree(ctx, subtreeRoot, st, 0, c.prefetchDepth)
 	if err != nil {
@@ -593,8 +596,25 @@ func (c *cache) doReconstructSummary(
 		var ptr *node.Pointer
 		switch n := nd.(type) {
 		case *node.InternalNode:
-			// Internal node.
+			// Internal node, check if we also have full nodes for left/right.
 			n.Clean = false
+
+			for _, child := range []**node.Pointer{&n.Left, &n.Right} {
+				if *child == nil {
+					continue
+				}
+
+				if p := st.GetFullNodePointer((*child).Hash); p.Valid {
+					var rp *node.Pointer
+					rp, err = c.doReconstructSummary(st, p, depth+1, maxDepth)
+					if err != nil {
+						return nil, err
+					}
+
+					*child = rp
+				}
+			}
+
 			ptr = c.newInternalNodePtr(n)
 		case *node.LeafNode:
 			// Leaf node.
