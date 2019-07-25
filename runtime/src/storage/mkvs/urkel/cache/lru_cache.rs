@@ -390,41 +390,27 @@ impl Cache for LRUCache {
         self.lru_values.remove(ptr);
     }
 
-    fn deref_node_id(&mut self, ctx: &Arc<Context>, id: NodeID) -> Fallible<(NodePtrRef, Depth)> {
+    fn deref_node_id(
+        &mut self,
+        ctx: &Arc<Context>,
+        mut id: NodeID,
+    ) -> Fallible<(NodePtrRef, Depth)> {
         let mut cur_ptr = self.pending_root.clone();
         let mut bd: Depth = 0;
 
         if id.bit_depth == 0 {
             return Ok((cur_ptr, 0));
         }
+        // Add 1 for the discriminator bit.
+        id.bit_depth += 1;
 
-        // There is a border case when id.bit_depth==1. In this case, we check the
-        // corresponding root separately.
-        if id.bit_depth == 1 && !cur_ptr.borrow().is_null() && !cur_ptr.borrow().node.is_some() {
-            let some_node = match cur_ptr.borrow().node {
-                Some(ref nd) => nd.clone(),
-                None => unreachable!(),
-            };
-
-            if let NodeBox::Internal(ref n) = *some_node.borrow() {
-                if n.label_bit_length == 0 {
-                    if id.path.get_bit(0) {
-                        cur_ptr = n.right.clone();
-                    } else {
-                        cur_ptr = n.left.clone();
-                    }
-                    bd = 1;
-                }
-            };
-        }
-
-        while bd < id.bit_depth - 1 {
+        while bd < id.bit_depth {
             // bd is the parent's BitDepth. Add 1 for discriminator bit.
             let nd = self.deref_node_ptr(
                 ctx,
                 NodeID {
                     path: id.path,
-                    bit_depth: bd + 1,
+                    bit_depth: bd,
                 },
                 cur_ptr.clone(),
                 None,

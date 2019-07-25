@@ -11,7 +11,7 @@ import (
 
 func (t *Tree) doDump(ctx context.Context, w io.Writer, ptr *node.Pointer, bitDepth node.Depth, path node.Key, depth node.Depth, right bool) {
 	prefix := strings.Repeat(" ", int(depth)*2)
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path.AppendBit(bitDepth, right), BitDepth: bitDepth + 1}, ptr, nil)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path.AppendBit(bitDepth, right), BitDepth: bitDepth}, ptr, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -49,7 +49,7 @@ func (t *Tree) doStats(ctx context.Context, s *Stats, ptr *node.Pointer, bitDept
 		s.MaxDepth = depth
 	}
 
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path.AppendBit(bitDepth, right), BitDepth: bitDepth + 1}, ptr, nil)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path.AppendBit(bitDepth, right), BitDepth: bitDepth}, ptr, nil)
 	if err != nil {
 		panic(err)
 	}

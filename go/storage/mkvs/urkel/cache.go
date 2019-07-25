@@ -328,27 +328,13 @@ func (c *cache) derefNodeID(ctx context.Context, id node.ID) (*node.Pointer, nod
 	if id.BitDepth == 0 {
 		return curPtr, 0, nil
 	}
-
-	// There is a border case when id.BitDepth==1. In this case, we check the
-	// corresponding root separately.
-	if id.BitDepth == 1 && curPtr != nil && curPtr.Node != nil {
-		switch n := curPtr.Node.(type) {
-		case *node.InternalNode:
-			if n.LabelBitLength == 0 {
-				if id.Path.GetBit(0) {
-					curPtr = n.Right
-				} else {
-					curPtr = n.Left
-				}
-				bd = 1
-			}
-		}
-	}
+	// Add 1 for the discriminator bit.
+	id.BitDepth++
 
 Loop:
-	for bd < id.BitDepth-1 {
-		// bd is the parent's BitDepth. Add 1 for discriminator bit.
-		nd, err := c.derefNodePtr(ctx, node.ID{Path: id.Path, BitDepth: bd + 1}, curPtr, nil)
+	for bd < id.BitDepth {
+		// bd is the parent's BitDepth.
+		nd, err := c.derefNodePtr(ctx, node.ID{Path: id.Path, BitDepth: bd}, curPtr, nil)
 		if err != nil {
 			return nil, 0, err
 		}

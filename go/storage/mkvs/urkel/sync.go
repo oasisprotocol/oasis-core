@@ -73,7 +73,7 @@ func (t *Tree) doGetSubtree(
 	default:
 	}
 
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path.AppendBit(bitDepth, right), BitDepth: bitDepth + 1}, ptr, nil)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: path.AppendBit(bitDepth, right), BitDepth: bitDepth}, ptr, nil)
 	if err != nil {
 		return syncer.SubtreePointer{}, err
 	}
@@ -202,7 +202,7 @@ func (t *Tree) doGetPath(
 	default:
 	}
 
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth + 1}, ptr, key)
+	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth}, ptr, key)
 	if err != nil {
 		return syncer.SubtreePointer{}, err
 	}

@@ -226,7 +226,7 @@ func (t *Tree) Get(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, ErrClosed
 	}
 
-	return t.doGet(ctx, t.cache.pendingRoot, 0, key, 0)
+	return t.doGet(ctx, t.cache.pendingRoot, 0, key)
 }
 
 // Dump dumps the tree into the given writer.

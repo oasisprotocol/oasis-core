@@ -26,7 +26,7 @@ impl UrkelTree {
             ctx,
             NodeID {
                 path: &key,
-                bit_depth: bit_depth + 1,
+                bit_depth: bit_depth,
             },
             ptr,
             Some(&key),
