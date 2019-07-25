@@ -20,6 +20,9 @@ func (t *Tree) GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDe
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
+	if t.cache.isClosed() {
+		return nil, ErrClosed
+	}
 	if !root.Equal(&t.cache.syncRoot) {
 		return nil, syncer.ErrInvalidRoot
 	}
@@ -150,6 +153,9 @@ func (t *Tree) GetPath(ctx context.Context, root node.Root, key node.Key, startB
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
+	if t.cache.isClosed() {
+		return nil, ErrClosed
+	}
 	if !root.Equal(&t.cache.syncRoot) {
 		return nil, syncer.ErrInvalidRoot
 	}
@@ -287,6 +293,9 @@ func (t *Tree) GetNode(ctx context.Context, root node.Root, id node.ID) (node.No
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
+	if t.cache.isClosed() {
+		return nil, ErrClosed
+	}
 	if !root.Equal(&t.cache.syncRoot) {
 		return nil, syncer.ErrInvalidRoot
 	}
