@@ -243,8 +243,8 @@ func (t *Tree) Dump(ctx context.Context, w io.Writer) {
 }
 
 // DumpLocal dumps the tree in the local memory into the given writer.
-func (t *Tree) DumpLocal(ctx context.Context, w io.Writer) {
-	t.doDumpLocal(ctx, w, t.cache.pendingRoot, 0, node.Key{}, 0, false)
+func (t *Tree) DumpLocal(ctx context.Context, w io.Writer, maxDepth node.Depth) {
+	t.doDumpLocal(ctx, w, t.cache.pendingRoot, 0, maxDepth)
 }
 
 // Stats traverses the tree and dumps some statistics.

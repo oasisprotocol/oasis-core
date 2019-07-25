@@ -879,7 +879,7 @@ func testDebugDump(t *testing.T, ndb db.NodeDB) {
 	require.True(t, len(buffer.Bytes()) > 0)
 
 	buffer = &bytes.Buffer{}
-	tree.DumpLocal(ctx, buffer)
+	tree.DumpLocal(ctx, buffer, 0)
 	require.True(t, len(buffer.Bytes()) > 0)
 }
 
