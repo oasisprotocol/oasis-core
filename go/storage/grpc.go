@@ -120,8 +120,10 @@ func (s *GrpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) 
 
 	nid := req.GetId()
 	nodeID := api.NodeID{
-		Path:     api.Key(nid.GetPath()),
 		BitDepth: api.Depth(nid.GetBitDepth()),
+	}
+	if err := nodeID.Path.UnmarshalBinary(nid.GetPath()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal id path")
 	}
 
 	<-s.backend.Initialized()
@@ -146,8 +148,10 @@ func (s *GrpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.G
 
 	nid := req.GetId()
 	nodeID := api.NodeID{
-		Path:     api.Key(nid.GetPath()),
 		BitDepth: api.Depth(nid.GetBitDepth()),
+	}
+	if err := nodeID.Path.UnmarshalBinary(nid.GetPath()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal id path")
 	}
 
 	var key api.Key
@@ -176,14 +180,11 @@ func (s *GrpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.G
 	}
 
 	nid := req.GetId()
-	var path api.Key
-	if err := path.UnmarshalBinary(nid.GetPath()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal id")
-	}
-
 	nodeID := api.NodeID{
-		Path:     path,
 		BitDepth: api.Depth(nid.GetBitDepth()),
+	}
+	if err := nodeID.Path.UnmarshalBinary(nid.GetPath()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal id path")
 	}
 
 	<-s.backend.Initialized()

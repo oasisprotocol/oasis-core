@@ -161,7 +161,7 @@ impl ReadSync for RemoteReadSync {
         request.set_root(cbor::to_vec(&root));
         request.set_id({
             let mut nid = api::storage::NodeID::new();
-            nid.set_path(id.path.clone());
+            nid.set_path(id.path.marshal_binary()?.to_vec());
             nid.set_bit_depth(id.bit_depth.into());
             nid
         });
@@ -182,7 +182,7 @@ impl ReadSync for RemoteReadSync {
         request.set_root(cbor::to_vec(&root));
         request.set_id({
             let mut nid = api::storage::NodeID::new();
-            nid.set_path(id.path.clone());
+            nid.set_path(id.path.marshal_binary()?.to_vec());
             nid.set_bit_depth(id.bit_depth.into());
             nid
         });
@@ -203,7 +203,7 @@ impl ReadSync for RemoteReadSync {
         request.set_root(cbor::to_vec(&root));
         request.set_id({
             let mut nid = api::storage::NodeID::new();
-            nid.set_path(id.path.clone());
+            nid.set_path(id.path.marshal_binary()?.to_vec());
             nid.set_bit_depth(id.bit_depth.into());
             nid
         });

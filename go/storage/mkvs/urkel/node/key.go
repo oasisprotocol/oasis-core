@@ -3,12 +3,18 @@ package node
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/bits"
 )
 
 // Key holds variable-length key.
 type Key []byte
+
+// String returns a string representation of the key.
+func (k Key) String() string {
+	return hex.EncodeToString(k[:])
+}
 
 // MarshalBinary encodes a key length in bytes + key into binary form.
 func (k Key) MarshalBinary() (data []byte, err error) {
