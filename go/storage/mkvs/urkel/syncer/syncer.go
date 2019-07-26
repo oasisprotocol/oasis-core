@@ -26,19 +26,21 @@ type PathOptions struct {
 // ReadSyncer is the interface for synchronizing the in-memory cache
 // with another (potentially untrusted) MKVS.
 type ReadSyncer interface {
-	// GetSubtree retrieves a compressed subtree summary of the given node
-	// under the given root up to the specified depth.
+	// GetSubtree retrieves a subtree rooted at the node uniquely identified
+	// by the passed node ID. The maxDepth specifies the maximum node depth
+	// up to which the subtree will be traversed.
 	//
 	// It is the responsibility of the caller to validate that the subtree
 	// is correct and consistent.
 	GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDepth node.Depth) (*Subtree, error)
 
-	// GetPath retrieves a compressed path summary for the given key under
-	// the given root, starting at the given depth.
+	// GetPath retrieves a path of nodes rooted at the node uniquely
+	// identified by the passed node ID and advancing towards the specified
+	// key.
 	//
 	// It is the responsibility of the caller to validate that the subtree
 	// is correct and consistent.
-	GetPath(ctx context.Context, root node.Root, key node.Key, startBitDepth node.Depth) (*Subtree, error)
+	GetPath(ctx context.Context, root node.Root, id node.ID, key node.Key) (*Subtree, error)
 
 	// GetNode retrieves a specific node under the given root.
 	//
@@ -60,7 +62,7 @@ func (r *nopReadSyncer) GetSubtree(ctx context.Context, root node.Root, id node.
 	return nil, ErrUnsupported
 }
 
-func (r *nopReadSyncer) GetPath(ctx context.Context, root node.Root, key node.Key, startDepth node.Depth) (*Subtree, error) {
+func (r *nopReadSyncer) GetPath(ctx context.Context, root node.Root, id node.ID, key node.Key) (*Subtree, error) {
 	return nil, ErrNodeNotFound
 }
 

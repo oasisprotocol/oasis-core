@@ -36,9 +36,9 @@ func (w *crashingWrapper) GetSubtree(ctx context.Context, root api.Root, id api.
 	return res, err
 }
 
-func (w *crashingWrapper) GetPath(ctx context.Context, root api.Root, key api.Key, startDepth api.Depth) (*api.Subtree, error) {
+func (w *crashingWrapper) GetPath(ctx context.Context, root api.Root, id api.NodeID, key api.Key) (*api.Subtree, error) {
 	crash.Here(crashPointReadBefore)
-	res, err := w.Backend.GetPath(ctx, root, key, startDepth)
+	res, err := w.Backend.GetPath(ctx, root, id, key)
 	crash.Here(crashPointReadAfter)
 	return res, err
 }

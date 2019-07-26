@@ -66,14 +66,8 @@ impl ReadSync for DummySerialSyncer {
         Ok(new_st)
     }
 
-    fn get_path(
-        &mut self,
-        ctx: Context,
-        root: Root,
-        key: &Key,
-        start_depth: Depth,
-    ) -> Fallible<Subtree> {
-        let obj = self.backing.get_path(ctx, root, key, start_depth)?;
+    fn get_path(&mut self, ctx: Context, root: Root, id: NodeID, key: &Key) -> Fallible<Subtree> {
+        let obj = self.backing.get_path(ctx, root, id, key)?;
         let bytes = obj.marshal_binary()?;
         let mut new_st = Subtree::new();
         new_st.unmarshal_binary(bytes.as_ref())?;

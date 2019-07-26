@@ -57,13 +57,7 @@ impl ReadSync for UrkelTree {
         }
     }
 
-    fn get_path(
-        &mut self,
-        ctx: Context,
-        root: Root,
-        key: &Key,
-        start_bit_depth: Depth,
-    ) -> Fallible<Subtree> {
+    fn get_path(&mut self, ctx: Context, root: Root, id: NodeID, key: &Key) -> Fallible<Subtree> {
         let ctx = ctx.freeze();
         if root != self.cache.borrow().get_sync_root() {
             return Err(SyncerError::InvalidRoot.into());
@@ -75,13 +69,7 @@ impl ReadSync for UrkelTree {
         let (subtree_root, bd) = self
             .cache
             .borrow_mut()
-            .deref_node_id(
-                &ctx,
-                NodeID {
-                    path: key,
-                    bit_depth: start_bit_depth,
-                },
-            )
+            .deref_node_id(&ctx, id)
             .map_err(|_| Error::from(SyncerError::NodeNotFound))?;
 
         let mut subtree = Subtree::new();

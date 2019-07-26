@@ -150,9 +150,9 @@ func (w *metricsWrapper) GetSubtree(ctx context.Context, root api.Root, id api.N
 	return st, err
 }
 
-func (w *metricsWrapper) GetPath(ctx context.Context, root api.Root, key api.Key, startDepth api.Depth) (*api.Subtree, error) {
+func (w *metricsWrapper) GetPath(ctx context.Context, root api.Root, id api.NodeID, key api.Key) (*api.Subtree, error) {
 	start := time.Now()
-	st, err := w.Backend.GetPath(ctx, root, key, startDepth)
+	st, err := w.Backend.GetPath(ctx, root, id, key)
 	storageLatency.With(labelGetPath).Observe(time.Since(start).Seconds())
 	if err != nil {
 		storageFailures.With(labelGetPath).Inc()

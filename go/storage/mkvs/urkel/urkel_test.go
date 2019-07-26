@@ -69,8 +69,8 @@ func (s *dummySerialSyncer) GetSubtree(ctx context.Context, root node.Root, id n
 	return st, nil
 }
 
-func (s *dummySerialSyncer) GetPath(ctx context.Context, root node.Root, key node.Key, startDepth node.Depth) (*syncer.Subtree, error) {
-	obj, err := s.backing.GetPath(ctx, root, key, startDepth)
+func (s *dummySerialSyncer) GetPath(ctx context.Context, root node.Root, id node.ID, key node.Key) (*syncer.Subtree, error) {
+	obj, err := s.backing.GetPath(ctx, root, id, key)
 	if err != nil {
 		return nil, err
 	}
@@ -632,7 +632,11 @@ func testSyncerGetPath(t *testing.T, ndb db.NodeDB) {
 
 	testGetPath := func(t *testing.T, tree *Tree, root node.Root) {
 		for i := 0; i < len(keys); i++ {
-			st, err := tree.GetPath(ctx, root, keys[i], 0)
+			// TODO: Test with different bit depths.
+			var id node.ID
+			id.Root()
+
+			st, err := tree.GetPath(ctx, root, id, keys[i])
 			require.NoErrorf(t, err, "GetPath")
 
 			// Reconstructed subtree should contain key as leaf node.

@@ -11,8 +11,9 @@ pub trait ReadSync {
     /// Return `self` as an `Any` object, useful for downcasting.
     fn as_any(&self) -> &dyn Any;
 
-    /// Retrieve a compressed subtree summary of the given node
-    /// under the given root up to the specified depth.
+    /// Retrieve a subtree rooted at the node uniquely identified by the
+    /// passed node ID. The maxDepth specifies the maximum node depth up
+    /// to which the subtree will be traversed.
     ///
     /// It is the responsibility of the caller to validate that the subtree
     /// is correct and consistent.
@@ -24,18 +25,12 @@ pub trait ReadSync {
         max_depth: Depth,
     ) -> Fallible<Subtree>;
 
-    /// Retrieve a compressed path summary for the given key under
-    /// the given root, starting at the given depth.
+    /// Retrieve a path of nodes rooted at the node uniquely identified by
+    /// the passed node ID and advancing towards the specified key.
     ///
     /// It is the responsibility of the caller to validate that the subtree
     /// is correct and consistent.
-    fn get_path(
-        &mut self,
-        ctx: Context,
-        root: Root,
-        key: &Key,
-        start_depth: Depth,
-    ) -> Fallible<Subtree>;
+    fn get_path(&mut self, ctx: Context, root: Root, id: NodeID, key: &Key) -> Fallible<Subtree>;
 
     /// Retrieve a specific node under the given root.
     ///

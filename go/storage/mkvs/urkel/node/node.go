@@ -148,13 +148,24 @@ func (r *Root) EncodedHash() hash.Hash {
 // If there exist InternalNode and LeafNode having the same Key and BitDepth,
 // ID represents the InternalNode.
 type ID struct {
-	Path     Key
-	BitDepth Depth
+	Path     Key   `codec:"path"`
+	BitDepth Depth `codec:"bit_depth"`
+}
+
+// Root sets the ID to that of the tree root.
+func (n *ID) Root() {
+	n.Path = nil
+	n.BitDepth = 0
+}
+
+// IsRoot checks whether the ID is that of a tree root.
+func (n *ID) IsRoot() bool {
+	return n.BitDepth == 0 && len(n.Path) == 0
 }
 
 // AtBitDepth returns a ID representing the same path at a specified
 // bit depth.
-func (n ID) AtBitDepth(bd Depth) ID {
+func (n *ID) AtBitDepth(bd Depth) ID {
 	return ID{Path: n.Path, BitDepth: bd}
 }
 
@@ -275,6 +286,9 @@ type Node interface {
 }
 
 // InternalNode is an internal node with two children and possibly a leaf.
+//
+// Note that Label and LabelBitLength can only be empty iff the internal
+// node is the root of the tree.
 type InternalNode struct {
 	Hash           hash.Hash
 	Label          Key   // label on the incoming edge

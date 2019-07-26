@@ -50,17 +50,12 @@ impl ReadSync for HostReadSyncer {
         }
     }
 
-    fn get_path(
-        &mut self,
-        ctx: Context,
-        root: Root,
-        key: &Key,
-        start_bit_depth: Depth,
-    ) -> Fallible<Subtree> {
+    fn get_path(&mut self, ctx: Context, root: Root, id: NodeID, key: &Key) -> Fallible<Subtree> {
         let req = Body::HostStorageSyncGetPathRequest {
             root: root,
+            node_path: id.path.clone(),
+            node_bit_depth: id.bit_depth,
             key: key.clone(),
-            start_bit_depth: start_bit_depth,
         };
         match self.protocol.make_request(ctx, req) {
             Ok(Body::HostStorageSyncSerializedResponse { serialized }) => {

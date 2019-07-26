@@ -144,15 +144,19 @@ func (s *GrpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.G
 		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
 	}
 
+	nid := req.GetId()
+	nodeID := api.NodeID{
+		Path:     api.Key(nid.GetPath()),
+		BitDepth: api.Depth(nid.GetBitDepth()),
+	}
+
 	var key api.Key
 	if err := key.UnmarshalBinary(req.GetKey()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal key")
 	}
 
-	startBitDepth := api.Depth(req.GetStartBitDepth())
-
 	<-s.backend.Initialized()
-	subtree, err := s.backend.GetPath(ctx, root, key, startBitDepth)
+	subtree, err := s.backend.GetPath(ctx, root, nodeID, key)
 	if err != nil {
 		return nil, err
 	}

@@ -441,11 +441,12 @@ func (b *storageClientBackend) GetSubtree(ctx context.Context, root api.Root, id
 	return &subtree, nil
 }
 
-func (b *storageClientBackend) GetPath(ctx context.Context, root api.Root, key api.Key, startBitDepth api.Depth) (*api.Subtree, error) {
+func (b *storageClientBackend) GetPath(ctx context.Context, root api.Root, id api.NodeID, key api.Key) (*api.Subtree, error) {
 	var req storage.GetPathRequest
 	req.Root = root.MarshalCBOR()
+	req.Id = &storage.NodeID{BitDepth: uint32(id.BitDepth)}
+	req.Id.Path, _ = id.Path.MarshalBinary()
 	req.Key, _ = key.MarshalBinary()
-	req.StartBitDepth = uint32(startBitDepth)
 
 	respRaw, err := b.readWithClient(ctx, root.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
 		return c.GetPath(ctx, &req)

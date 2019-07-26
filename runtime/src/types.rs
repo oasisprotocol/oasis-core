@@ -157,8 +157,9 @@ pub enum Body {
     },
     HostStorageSyncGetPathRequest {
         root: Root,
+        node_path: Key,
+        node_bit_depth: Depth,
         key: Key,
-        start_bit_depth: Depth,
     },
     HostStorageSyncGetNodeRequest {
         root: Root,

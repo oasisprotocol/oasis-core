@@ -70,7 +70,7 @@ func ClientWorkerTests(
 	}
 
 	// Storage should not yet be available
-	r, err := client.GetPath(ctx, root, id, 0)
+	r, err := client.GetPath(ctx, root, api.NodeID{}, id)
 	require.EqualError(err, storageClient.ErrStorageNotAvailable.Error(), "storage client get before initialization")
 	require.Nil(r, "result should be nil")
 
@@ -115,7 +115,7 @@ recvLoop:
 
 	// Try getting path.
 	// TimeOut is expected, as test nodes do not actually start storage worker.
-	r, err = client.GetPath(ctx, root, id, 0)
+	r, err = client.GetPath(ctx, root, api.NodeID{}, id)
 	require.Error(err, "storage client should error")
 	require.Equal(codes.Unavailable, status.Code(err), "storage client should timeout")
 	require.Nil(r, "result should be nil")

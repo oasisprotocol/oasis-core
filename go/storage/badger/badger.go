@@ -124,13 +124,13 @@ func (ba *badgerBackend) GetSubtree(ctx context.Context, root api.Root, id api.N
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (ba *badgerBackend) GetPath(ctx context.Context, root api.Root, key api.Key, startDepth api.Depth) (*api.Subtree, error) {
+func (ba *badgerBackend) GetPath(ctx context.Context, root api.Root, id api.NodeID, key api.Key) (*api.Subtree, error) {
 	tree, err := ba.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 
-	return tree.GetPath(ctx, root, key, startDepth)
+	return tree.GetPath(ctx, root, id, key)
 }
 
 func (ba *badgerBackend) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {

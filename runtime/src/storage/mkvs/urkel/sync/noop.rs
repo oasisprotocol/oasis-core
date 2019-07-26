@@ -27,8 +27,8 @@ impl ReadSync for NoopReadSyncer {
         &mut self,
         _ctx: Context,
         _root: Root,
+        _id: NodeID,
         _key: &Key,
-        _start_depth: Depth,
     ) -> Fallible<Subtree> {
         Err(SyncerError::Unsupported.into())
     }
