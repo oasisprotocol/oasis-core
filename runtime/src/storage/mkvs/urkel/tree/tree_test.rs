@@ -704,8 +704,8 @@ fn test_syncer_get_path() {
                     hash,
                     ..Default::default()
                 },
+                NodeID::root(),
                 &keys[i],
-                0,
             )
             .expect("get_path");
 

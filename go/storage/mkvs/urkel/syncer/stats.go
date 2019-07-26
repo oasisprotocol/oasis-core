@@ -29,9 +29,9 @@ func (c *StatsCollector) GetSubtree(ctx context.Context, root node.Root, id node
 	return c.rs.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (c *StatsCollector) GetPath(ctx context.Context, root node.Root, key node.Key, startDepth node.Depth) (*Subtree, error) {
+func (c *StatsCollector) GetPath(ctx context.Context, root node.Root, id node.ID, key node.Key) (*Subtree, error) {
 	c.PathFetches++
-	return c.rs.GetPath(ctx, root, key, startDepth)
+	return c.rs.GetPath(ctx, root, id, key)
 }
 
 // GetNode retrieves a specific node under the given root.

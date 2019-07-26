@@ -69,8 +69,8 @@ message GetSubtreeResponse {
 
 message GetPathRequest {
     bytes root = 1;
-    bytes key = 2;
-    uint32 start_bit_depth = 3;  // Depth
+    NodeID id = 2;
+    bytes key = 3;
 }
 
 message GetPathResponse {

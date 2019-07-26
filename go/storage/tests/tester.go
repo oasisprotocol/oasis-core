@@ -151,7 +151,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 	require.NotNil(t, st, "subtree returned by GetSubtree()")
 
 	// Get a path summary of the new root.
-	st, err = backend.GetPath(context.Background(), newRoot, emptyPath, 0)
+	st, err = backend.GetPath(context.Background(), newRoot, api.NodeID{Path: emptyPath, BitDepth: 0}, emptyPath)
 	require.NoError(t, err, "GetPath()")
 	require.NotNil(t, st, "subtree returned by GetPath()")
 

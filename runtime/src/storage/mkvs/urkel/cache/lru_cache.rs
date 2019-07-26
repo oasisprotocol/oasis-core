@@ -398,7 +398,7 @@ impl Cache for LRUCache {
         let mut cur_ptr = self.pending_root.clone();
         let mut bd: Depth = 0;
 
-        if id.bit_depth == 0 {
+        if id.is_root() {
             return Ok((cur_ptr, 0));
         }
         // Add 1 for the discriminator bit.
@@ -448,7 +448,7 @@ impl Cache for LRUCache {
     fn deref_node_ptr(
         &mut self,
         ctx: &Arc<Context>,
-        id: NodeID,
+        mut id: NodeID,
         ptr: NodePtrRef,
         key: Option<&Key>,
     ) -> Fallible<Option<NodeRef>> {
@@ -493,6 +493,11 @@ impl Cache for LRUCache {
             drop(ptr);
         }
 
+        // Make sure that the ID is that of the root in case we are dereferencing the root.
+        if ptr_ref == self.pending_root {
+            id = NodeID::root();
+        }
+
         let mut ptr = ptr_ref.borrow_mut();
         match key {
             None => {
@@ -507,8 +512,8 @@ impl Cache for LRUCache {
                 let mut st = self.read_syncer.get_path(
                     Context::create_child(ctx),
                     self.sync_root,
+                    id,
                     key,
-                    id.bit_depth,
                 )?;
                 // Build full node index.
                 st.build_full_node_index();

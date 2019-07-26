@@ -325,7 +325,7 @@ func (c *cache) derefNodeID(ctx context.Context, id node.ID) (*node.Pointer, nod
 	curPtr := c.pendingRoot
 	bd := node.Depth(0)
 
-	if id.BitDepth == 0 {
+	if id.IsRoot() {
 		return curPtr, 0, nil
 	}
 	// Add 1 for the discriminator bit.
@@ -401,6 +401,11 @@ func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer,
 		return nil, nil
 	}
 
+	// Make sure that the ID is that of the root in case we are dereferencing the root.
+	if ptr == c.pendingRoot {
+		id.Root()
+	}
+
 	// First, attempt to fetch from the local node database.
 	n, err := c.db.GetNode(c.syncRoot, ptr)
 	switch err {
@@ -431,7 +436,7 @@ func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer,
 			// If target key is known, we can try prefetching the whole path
 			// instead of one node at a time.
 			var st *syncer.Subtree
-			if st, err = c.rs.GetPath(ctx, c.syncRoot, key, id.BitDepth); err != nil {
+			if st, err = c.rs.GetPath(ctx, c.syncRoot, id, key); err != nil {
 				return nil, err
 			}
 			// Build full node index.

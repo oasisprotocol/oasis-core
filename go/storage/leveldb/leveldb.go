@@ -80,13 +80,13 @@ func (b *leveldbBackend) GetSubtree(ctx context.Context, root api.Root, id api.N
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (b *leveldbBackend) GetPath(ctx context.Context, root api.Root, key api.Key, startDepth api.Depth) (*api.Subtree, error) {
+func (b *leveldbBackend) GetPath(ctx context.Context, root api.Root, id api.NodeID, key api.Key) (*api.Subtree, error) {
 	tree, err := b.rootCache.GetTree(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 
-	return tree.GetPath(ctx, root, key, startDepth)
+	return tree.GetPath(ctx, root, id, key)
 }
 
 func (b *leveldbBackend) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {

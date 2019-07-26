@@ -83,7 +83,12 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		)
 		defer span.Finish()
 
-		subtree, err := h.storage.GetPath(sctx, rq.Root, rq.Key, rq.StartBitDepth)
+		nodeID := storage.NodeID{
+			Path:     rq.NodePath,
+			BitDepth: rq.NodeBitDepth,
+		}
+
+		subtree, err := h.storage.GetPath(sctx, rq.Root, nodeID, rq.Key)
 		if err != nil {
 			return nil, err
 		}

@@ -150,13 +150,13 @@ func (b *memoryBackend) GetSubtree(ctx context.Context, root api.Root, id api.No
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
 
-func (b *memoryBackend) GetPath(ctx context.Context, root api.Root, key api.Key, startDepth api.Depth) (*api.Subtree, error) {
+func (b *memoryBackend) GetPath(ctx context.Context, root api.Root, id api.NodeID, key api.Key) (*api.Subtree, error) {
 	tree, err := urkel.NewWithRoot(ctx, nil, b.nodedb, root)
 	if err != nil {
 		return nil, err
 	}
 
-	return tree.GetPath(ctx, root, key, startDepth)
+	return tree.GetPath(ctx, root, id, key)
 }
 
 func (b *memoryBackend) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {

@@ -69,8 +69,8 @@ func (s *dummySerialSyncer) GetSubtree(ctx context.Context, root node.Root, id n
 	return st, nil
 }
 
-func (s *dummySerialSyncer) GetPath(ctx context.Context, root node.Root, key node.Key, startDepth node.Depth) (*syncer.Subtree, error) {
-	obj, err := s.backing.GetPath(ctx, root, key, startDepth)
+func (s *dummySerialSyncer) GetPath(ctx context.Context, root node.Root, id node.ID, key node.Key) (*syncer.Subtree, error) {
+	obj, err := s.backing.GetPath(ctx, root, id, key)
 	if err != nil {
 		return nil, err
 	}
@@ -632,7 +632,11 @@ func testSyncerGetPath(t *testing.T, ndb db.NodeDB) {
 
 	testGetPath := func(t *testing.T, tree *Tree, root node.Root) {
 		for i := 0; i < len(keys); i++ {
-			st, err := tree.GetPath(ctx, root, keys[i], 0)
+			// TODO: Test with different bit depths.
+			var id node.ID
+			id.Root()
+
+			st, err := tree.GetPath(ctx, root, id, keys[i])
 			require.NoErrorf(t, err, "GetPath")
 
 			// Reconstructed subtree should contain key as leaf node.
@@ -684,6 +688,69 @@ func testSyncerGetPath(t *testing.T, ndb db.NodeDB) {
 		require.NoError(t, err, "NewWithRoot")
 
 		testGetPath(t, remoteTree, r)
+	})
+}
+
+func testSyncerRootEmptyLabelNeedsDeref(t *testing.T, ndb db.NodeDB) {
+	ctx := context.Background()
+	tree := New(nil, ndb)
+
+	// Add two keys that differ in the first bit so the root will have
+	// an empty label.
+	err := tree.Insert(ctx, []byte{0xFF}, []byte("foo"))
+	require.NoError(t, err, "Insert")
+	err = tree.Insert(ctx, []byte{0x00}, []byte("bar"))
+	require.NoError(t, err, "Insert")
+
+	_, rootHash, err := tree.Commit(ctx, testNs, 0)
+	require.NoError(t, err, "Commit")
+
+	root := node.Root{
+		Namespace: testNs,
+		Round:     0,
+		Hash:      rootHash,
+	}
+
+	testGet := func(t *testing.T, tree *Tree) {
+		value, err := tree.Get(ctx, []byte{0xFF})
+		require.NoError(t, err, "Get")
+		require.EqualValues(t, value, []byte("foo"))
+
+		value, err = tree.Get(ctx, []byte{0x00})
+		require.NoError(t, err, "Get")
+		require.EqualValues(t, value, []byte("bar"))
+	}
+	testRemove := func(t *testing.T, tree *Tree) {
+		err := tree.Remove(ctx, []byte{0xFF})
+		require.NoError(t, err, "Remove")
+		err = tree.Remove(ctx, []byte{0x00})
+		require.NoError(t, err, "Remove")
+	}
+	testInsert := func(t *testing.T, tree *Tree) {
+		err := tree.Insert(ctx, []byte{0xFF, 0xFF}, []byte("foo"))
+		require.NoError(t, err, "Insert")
+		err = tree.Insert(ctx, []byte{0x00, 0x00}, []byte("bar"))
+		require.NoError(t, err, "Insert")
+	}
+
+	// Create a remote tree so we will need to deref.
+
+	t.Run("Get", func(t *testing.T) {
+		remoteTree, err := NewWithRoot(ctx, tree, nil, root)
+		require.NoError(t, err, "NewWithRoot")
+		testGet(t, remoteTree)
+	})
+
+	t.Run("Remove", func(t *testing.T) {
+		remoteTree, err := NewWithRoot(ctx, tree, nil, root)
+		require.NoError(t, err, "NewWithRoot")
+		testRemove(t, remoteTree)
+	})
+
+	t.Run("Insert", func(t *testing.T) {
+		remoteTree, err := NewWithRoot(ctx, tree, nil, root)
+		require.NoError(t, err, "NewWithRoot")
+		testInsert(t, remoteTree)
 	})
 }
 
@@ -994,6 +1061,11 @@ func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interf
 		backend, custom := initBackend(t)
 		defer finiBackend(t, backend, custom)
 		testSyncerGetPath(t, backend)
+	})
+	t.Run("SyncerRootEmptyLabelNeedsDeref", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testSyncerRootEmptyLabelNeedsDeref(t, backend)
 	})
 	t.Run("SyncerRemove", func(t *testing.T) {
 		backend, custom := initBackend(t)

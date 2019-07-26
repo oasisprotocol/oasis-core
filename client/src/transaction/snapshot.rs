@@ -161,7 +161,7 @@ impl ReadSync for RemoteReadSync {
         request.set_root(cbor::to_vec(&root));
         request.set_id({
             let mut nid = api::storage::NodeID::new();
-            nid.set_path(id.path.clone());
+            nid.set_path(id.path.marshal_binary()?.to_vec());
             nid.set_bit_depth(id.bit_depth.into());
             nid
         });
@@ -177,17 +177,16 @@ impl ReadSync for RemoteReadSync {
         Ok(st)
     }
 
-    fn get_path(
-        &mut self,
-        _ctx: Context,
-        root: Root,
-        key: &Key,
-        start_bit_depth: Depth,
-    ) -> Fallible<Subtree> {
+    fn get_path(&mut self, _ctx: Context, root: Root, id: NodeID, key: &Key) -> Fallible<Subtree> {
         let mut request = api::storage::GetPathRequest::new();
         request.set_root(cbor::to_vec(&root));
+        request.set_id({
+            let mut nid = api::storage::NodeID::new();
+            nid.set_path(id.path.marshal_binary()?.to_vec());
+            nid.set_bit_depth(id.bit_depth.into());
+            nid
+        });
         request.set_key(key.marshal_binary()?.to_vec());
-        request.set_start_bit_depth(start_bit_depth.into());
 
         let response = self
             .0
@@ -204,7 +203,7 @@ impl ReadSync for RemoteReadSync {
         request.set_root(cbor::to_vec(&root));
         request.set_id({
             let mut nid = api::storage::NodeID::new();
-            nid.set_path(id.path.clone());
+            nid.set_path(id.path.marshal_binary()?.to_vec());
             nid.set_bit_depth(id.bit_depth.into());
             nid
         });

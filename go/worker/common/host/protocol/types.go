@@ -227,8 +227,10 @@ type HostStorageSyncGetSubtreeRequest struct {
 }
 
 // HostStorageSyncGetPathRequest is a host storage read syncer get path request message body.
-type HostStorageSyncGetPathRequest struct {
+type HostStorageSyncGetPathRequest struct { // nolint: maligned
 	Root          storage.Root  `codec:"root"`
+	NodePath      []byte        `codec:"node_path"`
+	NodeBitDepth  storage.Depth `codec:"node_bit_depth"`
 	Key           []byte        `codec:"key"`
 	StartBitDepth storage.Depth `codec:"start_bit_depth"`
 }

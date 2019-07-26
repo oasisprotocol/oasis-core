@@ -3,12 +3,18 @@ package node
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/bits"
 )
 
 // Key holds variable-length key.
 type Key []byte
+
+// String returns a string representation of the key.
+func (k Key) String() string {
+	return hex.EncodeToString(k[:])
+}
 
 // MarshalBinary encodes a key length in bytes + key into binary form.
 func (k Key) MarshalBinary() (data []byte, err error) {
@@ -40,6 +46,10 @@ func (k *Key) SizedUnmarshalBinary(data []byte) (int, error) {
 	if keyLen > 0 {
 		*k = make([]byte, keyLen)
 		copy(*k, data[DepthSize:DepthSize+int(keyLen)])
+	} else if k != nil {
+		// If the key we are unmarshaling into is not nil, make sure that
+		// it is at least of size zero.
+		*k = []byte{}
 	}
 	return DepthSize + int(keyLen), nil
 }

@@ -46,6 +46,21 @@ pub struct NodeID<'a> {
 }
 
 impl<'a> NodeID<'a> {
+    // Return the ID that identifies the tree root.
+    pub fn root() -> NodeID<'static> {
+        const EMPTY_KEY: &'static Key = &Key::new();
+
+        NodeID {
+            path: EMPTY_KEY,
+            bit_depth: 0,
+        }
+    }
+
+    /// Check whether the ID is that of a tree root.
+    pub fn is_root(&self) -> bool {
+        self.bit_depth == 0 && self.path.len() == 0
+    }
+
     /// Return a copy of this `NodeID` with a different depth.
     pub fn at_bit_depth(&self, bit_depth: Depth) -> NodeID {
         NodeID {
