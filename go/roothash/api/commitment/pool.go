@@ -31,11 +31,12 @@ var (
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
 
-// StorageVerifier is an interface for verifying storage receipt signatures.
-type StorageVerifier interface {
-	// VerifyStorageCommittee verifies that the given signatures come from the
-	// current storage committee members.
-	VerifyStorageCommittee(sigs []signature.Signature) error
+// SignatureVerifier is an interface for verifying storage and transaction
+// scheduler signatures against the active committees.
+type SignatureVerifier interface {
+	// VerifyCommitteeSignatures verifies that the given signatures come from
+	// the current committee members of the given kind.
+	VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error
 }
 
 // NodeInfo contains information about a node that is member of a committee.
@@ -86,7 +87,7 @@ func (p *Pool) ResetCommitments() {
 	p.NextTimeout = time.Time{}
 }
 
-func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, openCom *OpenComputeCommitment) error {
+func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, openCom *OpenComputeCommitment) error {
 	if p.Committee == nil || p.NodeInfo == nil {
 		return ErrNoCommittee
 	}
@@ -149,15 +150,21 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 	}
 
 	// Verify that the txn scheduler signature for current commitment is valid.
-	// TODO: Also verify that the signature actually comes from a transaction
-	// scheduler (similar to StorageVerifier).
 	currentTxnSchedSig := body.TxnSchedSig
+	if err := sv.VerifyCommitteeSignatures(scheduler.KindTransactionScheduler, []signature.Signature{body.TxnSchedSig}); err != nil {
+		logger.Debug("compute commitment has bad transaction scheduler signers",
+			"committee_id", cID,
+			"node_id", id,
+			"err", err,
+		)
+		return err
+	}
 	if ok := body.VerifyTxnSchedSignature(blk.Header); !ok {
 		return ErrTxnSchedSigInvalid
 	}
 
 	// Check if the header refers to merkle roots in storage.
-	if err := sv.VerifyStorageCommittee(body.StorageSignatures); err != nil {
+	if err := sv.VerifyCommitteeSignatures(scheduler.KindStorage, body.StorageSignatures); err != nil {
 		logger.Debug("compute commitment has bad storage receipt signers",
 			"committee_id", cID,
 			"node_id", id,
@@ -201,7 +208,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv StorageVerifier, op
 }
 
 // AddComputeCommitment verifies and adds a new compute commitment to the pool.
-func (p *Pool) AddComputeCommitment(blk *block.Block, sv StorageVerifier, commitment *ComputeCommitment) error {
+func (p *Pool) AddComputeCommitment(blk *block.Block, sv SignatureVerifier, commitment *ComputeCommitment) error {
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
@@ -407,7 +414,7 @@ func (p *Pool) TryFinalize(now time.Time, roundTimeout time.Duration, didTimeout
 // Any compute commitments are added to the provided pool.
 func (p *Pool) AddMergeCommitment(
 	blk *block.Block,
-	sv StorageVerifier,
+	sv SignatureVerifier,
 	commitment *MergeCommitment,
 	ccPool *MultiPool,
 ) error {
@@ -504,7 +511,7 @@ func (p *Pool) AddMergeCommitment(
 	}
 
 	// Check if the header refers to merkle roots in storage.
-	if err = sv.VerifyStorageCommittee(header.StorageSignatures); err != nil {
+	if err = sv.VerifyCommitteeSignatures(scheduler.KindStorage, header.StorageSignatures); err != nil {
 		logger.Debug("merge commitment has bad storage receipt signers",
 			"node_id", id,
 			"err", err,
@@ -560,7 +567,7 @@ type MultiPool struct {
 }
 
 // AddComputeCommitment verifies and adds a new compute commitment to the pool.
-func (m *MultiPool) AddComputeCommitment(blk *block.Block, sv StorageVerifier, commitment *ComputeCommitment) (*Pool, error) {
+func (m *MultiPool) AddComputeCommitment(blk *block.Block, sv SignatureVerifier, commitment *ComputeCommitment) (*Pool, error) {
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {

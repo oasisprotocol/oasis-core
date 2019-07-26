@@ -19,21 +19,34 @@ import (
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
-// nopStorageVerifier is a no-op storage verifier.
-type nopStorageVerifier struct{}
+var nopSV = &nopSignatureVerifier{}
 
-func (n *nopStorageVerifier) VerifyStorageCommittee(sigs []signature.Signature) error {
+// nopSignatureVerifier is a no-op storage verifier.
+type nopSignatureVerifier struct{}
+
+func (n *nopSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error {
 	return nil
 }
 
-type staticStorageVerifier struct {
-	publicKey signature.PublicKey
+type staticSignatureVerifier struct {
+	storagePublicKey      signature.PublicKey
+	txnSchedulerPublicKey signature.PublicKey
 }
 
-func (n *staticStorageVerifier) VerifyStorageCommittee(sigs []signature.Signature) error {
+func (n *staticSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error {
+	var pk signature.PublicKey
+	switch kind {
+	case scheduler.KindStorage:
+		pk = n.storagePublicKey
+	case scheduler.KindTransactionScheduler:
+		pk = n.txnSchedulerPublicKey
+	default:
+		return errors.New("unsupported committee kind")
+	}
+
 	for _, sig := range sigs {
-		if !sig.PublicKey.Equal(n.publicKey) {
-			return errors.New("unknown storage receipt public key")
+		if !sig.PublicKey.Equal(pk) {
+			return errors.New("unknown public key")
 		}
 	}
 	return nil
@@ -59,7 +72,7 @@ func TestPoolDefault(t *testing.T) {
 
 	// An empty pool should work but should always error.
 	pool := Pool{}
-	err = pool.AddComputeCommitment(blk, &nopStorageVerifier{}, commit)
+	err = pool.AddComputeCommitment(blk, nopSV, commit)
 	require.Error(t, err, "AddComputeCommitment")
 	err = pool.CheckEnoughCommitments(false)
 	require.Error(t, err, "CheckEnoughCommitments")
@@ -119,8 +132,9 @@ func TestPoolSingleCommitment(t *testing.T) {
 	commit, err := SignComputeCommitment(sk, &body)
 	require.NoError(t, err, "SignComputeCommitment")
 
-	sv := &staticStorageVerifier{
-		publicKey: body.StorageSignatures[0].PublicKey,
+	sv := &staticSignatureVerifier{
+		storagePublicKey:      body.StorageSignatures[0].PublicKey,
+		txnSchedulerPublicKey: body.TxnSchedSig.PublicKey,
 	}
 
 	// Adding a commitment not based on correct block should fail.
@@ -141,6 +155,16 @@ func TestPoolSingleCommitment(t *testing.T) {
 	// This generates a new signing key so verification should fail.
 	bodyIncorrectStorageSig.StorageSignatures[0] = generateStorageReceiptSignature(t, parentBlk, &bodyIncorrectStorageSig)
 	incorrectCommit, err := SignComputeCommitment(sk, &bodyIncorrectStorageSig)
+	require.NoError(t, err, "SignComputeCommitment")
+	err = pool.AddComputeCommitment(childBlk, sv, incorrectCommit)
+	require.Error(t, err, "AddComputeCommitment")
+
+	// Adding a commitment having txn scheduler inputs signed with an incorrect
+	// public key should fail.
+	bodyIncorrectTxnSchedSig := body
+	// This generates a new signing key so verification should fail.
+	bodyIncorrectTxnSchedSig.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, &bodyIncorrectTxnSchedSig)
+	incorrectCommit, err = SignComputeCommitment(sk, &bodyIncorrectTxnSchedSig)
 	require.NoError(t, err, "SignComputeCommitment")
 	err = pool.AddComputeCommitment(childBlk, sv, incorrectCommit)
 	require.Error(t, err, "AddComputeCommitment")
@@ -227,7 +251,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	require.NoError(t, err, "SignComputeCommitment")
 
 	// Adding a commitment not based on correct block should fail.
-	err = pool.AddComputeCommitment(parentBlk, &nopStorageVerifier{}, commit)
+	err = pool.AddComputeCommitment(parentBlk, nopSV, commit)
 	require.Error(t, err, "AddComputeCommitment")
 
 	// There should not be enough compute commitments.
@@ -239,11 +263,11 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 	// Adding a commitment should succeed.
-	err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit)
+	err = pool.AddComputeCommitment(childBlk, nopSV, commit)
 	require.NoError(t, err, "AddComputeCommitment")
 
 	// Adding a commitment twice for the same node should fail.
-	err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit)
+	err = pool.AddComputeCommitment(childBlk, nopSV, commit)
 	require.Error(t, err, "AddComputeCommitment(duplicate)")
 
 	// There should be enough compute commitments.
@@ -289,12 +313,12 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.NoError(t, err, "SignComputeCommitment")
 
 		// Adding a commitment for an invalid committee should fail.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, cInvalidCommit)
+		err = pool.AddComputeCommitment(childBlk, nopSV, cInvalidCommit)
 		require.Error(t, err, "AddComputeCommitment")
 		require.Equal(t, ErrInvalidCommitteeID, err, "AddComputeCommitment")
 
 		// Adding commitment 1 should succeed.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit1)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit1)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		// There should not be enough compute commitments.
@@ -306,7 +330,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 2 should succeed.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit2)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit2)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		// There should be enough compute commitments.
@@ -348,7 +372,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.NoError(t, err, "SignComputeCommitment")
 
 		// Adding commitment 1 should succeed.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit1)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit1)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		// There should not be enough compute commitments.
@@ -360,7 +384,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 2 should succeed.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit2)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit2)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		// There should be enough compute commitments.
@@ -379,7 +403,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Resolve discrepancy with commit from backup worker.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit3)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit3)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		// There should be enough compute commitments from backup workers.
@@ -445,7 +469,7 @@ func TestPoolSerialization(t *testing.T) {
 	require.NoError(t, err, "SignComputeCommitment")
 
 	// Adding a commitment should succeed.
-	err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit)
+	err = pool.AddComputeCommitment(childBlk, nopSV, commit)
 	require.NoError(t, err, "AddComputeCommitment")
 
 	m := cbor.Marshal(pool)
@@ -506,22 +530,22 @@ func TestMultiPoolSerialization(t *testing.T) {
 	require.NoError(t, err, "SignComputeCommitment")
 
 	// Adding commitment 1 should succeed.
-	sp, err := pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c1commit1)
+	sp, err := pool.AddComputeCommitment(childBlk, nopSV, c1commit1)
 	require.NoError(t, err, "AddComputeCommitment")
 	require.Equal(t, pool.Committees[com1ID], sp, "AddComputeCommitment")
 
 	// Adding commitment 2 should succeed.
-	sp, err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c1commit2)
+	sp, err = pool.AddComputeCommitment(childBlk, nopSV, c1commit2)
 	require.NoError(t, err, "AddComputeCommitment")
 	require.Equal(t, pool.Committees[com1ID], sp, "AddComputeCommitment")
 
 	// Adding commitment 3 should succeed.
-	sp, err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c2commit1)
+	sp, err = pool.AddComputeCommitment(childBlk, nopSV, c2commit1)
 	require.NoError(t, err, "AddComputeCommitment")
 	require.Equal(t, pool.Committees[com2ID], sp, "AddComputeCommitment")
 
 	// Adding commitment 4 should succeed.
-	sp, err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c2commit2)
+	sp, err = pool.AddComputeCommitment(childBlk, nopSV, c2commit2)
 	require.NoError(t, err, "AddComputeCommitment")
 	require.Equal(t, pool.Committees[com2ID], sp, "AddComputeCommitment")
 
@@ -582,7 +606,7 @@ func TestPoolMergeCommitment(t *testing.T) {
 		require.NoError(t, err, "SignMergeCommitment")
 
 		// Adding commitment 1 should succeed.
-		err = mergePool.AddMergeCommitment(childBlk, &nopStorageVerifier{}, mergeCommit1, &computePool)
+		err = mergePool.AddMergeCommitment(childBlk, nopSV, mergeCommit1, &computePool)
 		require.NoError(t, err, "AddMergeCommitment")
 
 		// There should not be enough merge commitments.
@@ -594,7 +618,7 @@ func TestPoolMergeCommitment(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 2 should succeed.
-		err = mergePool.AddMergeCommitment(childBlk, &nopStorageVerifier{}, mergeCommit2, &computePool)
+		err = mergePool.AddMergeCommitment(childBlk, nopSV, mergeCommit2, &computePool)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		m := cbor.Marshal(computePool)
@@ -664,12 +688,12 @@ func TestMultiPool(t *testing.T) {
 		require.NoError(t, err, "SignComputeCommitment")
 
 		// Adding a commitment for an invalid committee should fail.
-		_, err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, cInvalidCommit)
+		_, err = pool.AddComputeCommitment(childBlk, nopSV, cInvalidCommit)
 		require.Error(t, err, "AddComputeCommitment")
 		require.Equal(t, ErrInvalidCommitteeID, err, "AddComputeCommitment")
 
 		// Adding commitment 1 should succeed.
-		sp, err := pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c1commit1)
+		sp, err := pool.AddComputeCommitment(childBlk, nopSV, c1commit1)
 		require.NoError(t, err, "AddComputeCommitment")
 		require.Equal(t, pool.Committees[com1ID], sp, "AddComputeCommitment")
 
@@ -679,7 +703,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 2 should succeed.
-		sp, err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c1commit2)
+		sp, err = pool.AddComputeCommitment(childBlk, nopSV, c1commit2)
 		require.NoError(t, err, "AddComputeCommitment")
 		require.Equal(t, pool.Committees[com1ID], sp, "AddComputeCommitment")
 
@@ -689,7 +713,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 3 should succeed.
-		sp, err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c2commit1)
+		sp, err = pool.AddComputeCommitment(childBlk, nopSV, c2commit1)
 		require.NoError(t, err, "AddComputeCommitment")
 		require.Equal(t, pool.Committees[com2ID], sp, "AddComputeCommitment")
 
@@ -699,7 +723,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 4 should succeed.
-		sp, err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c2commit2)
+		sp, err = pool.AddComputeCommitment(childBlk, nopSV, c2commit2)
 		require.NoError(t, err, "AddComputeCommitment")
 		require.Equal(t, pool.Committees[com2ID], sp, "AddComputeCommitment")
 
@@ -748,7 +772,7 @@ func TestMultiPool(t *testing.T) {
 		require.NoError(t, err, "SignComputeCommitment")
 
 		// Adding commitment 1 should succeed.
-		_, err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c1commit1)
+		_, err = pool.AddComputeCommitment(childBlk, nopSV, c1commit1)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		// There should not be enough compute commitments.
@@ -757,7 +781,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 2 should succeed.
-		_, err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c1commit2)
+		_, err = pool.AddComputeCommitment(childBlk, nopSV, c1commit2)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		// There should not be enough compute commitments.
@@ -766,7 +790,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 3 should succeed.
-		_, err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c2commit1)
+		_, err = pool.AddComputeCommitment(childBlk, nopSV, c2commit1)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		// There should not be enough compute commitments.
@@ -775,7 +799,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 4 should succeed.
-		_, err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, c2commit2)
+		_, err = pool.AddComputeCommitment(childBlk, nopSV, c2commit2)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		// There should be enough compute commitments.
@@ -818,12 +842,12 @@ func TestTryFinalize(t *testing.T) {
 		require.NoError(t, err, "SignComputeCommitment")
 
 		// Adding a commitment for an invalid committee should fail.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, cInvalidCommit)
+		err = pool.AddComputeCommitment(childBlk, nopSV, cInvalidCommit)
 		require.Error(t, err, "AddComputeCommitment")
 		require.Equal(t, ErrInvalidCommitteeID, err, "AddComputeCommitment")
 
 		// Adding commitment 1 should succeed.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit1)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit1)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		_, err = pool.TryFinalize(now, roundTimeout, false)
@@ -832,7 +856,7 @@ func TestTryFinalize(t *testing.T) {
 		require.EqualValues(t, now.Add(roundTimeout).Round(time.Second), pool.NextTimeout, "NextTimeout should be set")
 
 		// Adding commitment 2 should succeed.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit2)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit2)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		dc, err := pool.TryFinalize(now, roundTimeout, false)
@@ -869,7 +893,7 @@ func TestTryFinalize(t *testing.T) {
 		require.NoError(t, err, "SignComputeCommitment")
 
 		// Adding commitment 1 should succeed.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit1)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit1)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		_, err = pool.TryFinalize(now, roundTimeout, false)
@@ -878,7 +902,7 @@ func TestTryFinalize(t *testing.T) {
 		require.EqualValues(t, now.Add(roundTimeout).Round(time.Second), pool.NextTimeout, "NextTimeout should be set")
 
 		// Adding commitment 2 should succeed.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit2)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit2)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		// There should be a discrepancy.
@@ -893,7 +917,7 @@ func TestTryFinalize(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err)
 
 		// Resolve discrepancy with commit from backup worker.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit3)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit3)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		dc, err := pool.TryFinalize(now, roundTimeout, false)
@@ -923,7 +947,7 @@ func TestTryFinalize(t *testing.T) {
 		correctHeader := body.Header
 
 		// Adding commitment 1 should succeed.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit1)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit1)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		_, err = pool.TryFinalize(now, roundTimeout, false)
@@ -946,7 +970,7 @@ func TestTryFinalize(t *testing.T) {
 		require.EqualValues(t, nowAfterTimeout.Add(roundTimeout).Round(time.Second), pool.NextTimeout, "NextTimeout should be set")
 
 		// Resolve discrepancy with commit from backup worker.
-		err = pool.AddComputeCommitment(childBlk, &nopStorageVerifier{}, commit3)
+		err = pool.AddComputeCommitment(childBlk, nopSV, commit3)
 		require.NoError(t, err, "AddComputeCommitment")
 
 		dc, err := pool.TryFinalize(now, roundTimeout, false)
@@ -1045,19 +1069,7 @@ func generateComputeBody(t *testing.T, committee *scheduler.Committee) (*block.B
 	parentBlk.Header.StorageSignatures = []signature.Signature{sig}
 
 	// Generate dummy txn scheduler signature.
-	body.InputRoot = hash.Hash{}
-	body.InputStorageSigs = []signature.Signature{}
-	dispatch := &TxnSchedulerBatchDispatch{
-		CommitteeID:       body.CommitteeID,
-		IORoot:            body.InputRoot,
-		StorageSignatures: body.InputStorageSigs,
-		Header:            childBlk.Header,
-	}
-	sk, err := memorySigner.NewSigner(rand.Reader)
-	require.NoError(t, err, "NewSigner")
-	signedDispatch, err := signature.SignSigned(sk, TxnSchedulerBatchDispatchSigCtx, dispatch)
-	require.NoError(t, err, "SignSigned")
-	body.TxnSchedSig = signedDispatch.Signature
+	body.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, &body)
 
 	return childBlk, parentBlk, body
 }
@@ -1076,4 +1088,21 @@ func generateStorageReceiptSignature(t *testing.T, blk *block.Block, body *Compu
 	require.NoError(t, err, "SignSigned")
 
 	return signed.Signature
+}
+
+func generateTxnSchedulerSignature(t *testing.T, childBlk *block.Block, body *ComputeBody) signature.Signature {
+	body.InputRoot = hash.Hash{}
+	body.InputStorageSigs = []signature.Signature{}
+	dispatch := &TxnSchedulerBatchDispatch{
+		CommitteeID:       body.CommitteeID,
+		IORoot:            body.InputRoot,
+		StorageSignatures: body.InputStorageSigs,
+		Header:            childBlk.Header,
+	}
+	sk, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(t, err, "NewSigner")
+	signedDispatch, err := signature.SignSigned(sk, TxnSchedulerBatchDispatchSigCtx, dispatch)
+	require.NoError(t, err, "SignSigned")
+
+	return signedDispatch.Signature
 }

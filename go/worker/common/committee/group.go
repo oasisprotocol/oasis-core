@@ -160,14 +160,24 @@ func (e *EpochSnapshot) GetStorageCommittee() *CommitteeInfo {
 	return e.storageCommittee
 }
 
-// VerifyStorageCommittee verifies that the given signatures come from the
-// current storage committee members.
+// VerifyCommitteeSignatures verifies that the given signatures come from
+// the current committee members of the given kind.
 //
-// Implements commitment.StorageVerifier.
-func (e *EpochSnapshot) VerifyStorageCommittee(sigs []signature.Signature) error {
+// Implements commitment.SignatureVerifier.
+func (e *EpochSnapshot) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error {
+	var committee *CommitteeInfo
+	switch kind {
+	case scheduler.KindStorage:
+		committee = e.storageCommittee
+	case scheduler.KindTransactionScheduler:
+		committee = e.txnSchedulerCommittee
+	default:
+		return errors.Errorf("epoch: unsupported committee kind: %s", kind)
+	}
+
 	for _, sig := range sigs {
-		if !e.storageCommittee.PublicKeys[sig.PublicKey.ToMapKey()] {
-			return errors.New("epoch: signature is not from a valid storage node")
+		if !committee.PublicKeys[sig.PublicKey.ToMapKey()] {
+			return errors.New("epoch: signature is not from a valid committee member")
 		}
 	}
 	return nil
