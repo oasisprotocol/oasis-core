@@ -26,6 +26,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -487,7 +488,11 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 				return nil, errors.Wrap(err, "tendermint: malformed bootstrap validator node name")
 			}
 
+			// Since the bootstrap server is a nasty hack, just use the test entity for
+			// all the validators.
+			testEntity, _, _ := entity.TestEntity()
 			validator := &genesis.Validator{
+				EntityID:    testEntity.ID,
 				PubKey:      t.nodeSigner.Public(),
 				Name:        common.NormalizeFQDN(nodeName),
 				CoreAddress: nodeAddr,
