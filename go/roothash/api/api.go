@@ -17,6 +17,17 @@ import (
 const (
 	// HashSize is the size of the various hashes in bytes.
 	HashSize = 32
+
+	// LogEventComputeDiscrepancyDetected is a log event value that signals
+	// a compute discrepancy has been detected.
+	LogEventComputeDiscrepancyDetected = "roothash/compute_discrepancy_detected"
+	// LogEventMergeDiscrepancyDetected is a log event value that signals
+	// a compute discrepancy has been detected.
+	LogEventMergeDiscrepancyDetected = "roothash/merge_discrepancy_detected"
+	// LogEventTimerFired is a log event value that signals a timer has fired.
+	LogEventTimerFired = "roothash/timer_fired"
+	// LogEventRoundFailed is a log event value that signals a round has failed.
+	LogEventRoundFailed = "roothash/round_failed"
 )
 
 var (

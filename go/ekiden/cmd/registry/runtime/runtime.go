@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -48,9 +47,6 @@ const (
 	cfgOutput                        = "runtime.genesis.file"
 	cfgVersion                       = "runtime.version"
 	cfgVersionEnclave                = "runtime.version.enclave"
-
-	optKindCompute    = "compute"
-	optKindKeyManager = "keymanager"
 
 	runtimeGenesisFilename = "runtime_genesis.json"
 )
@@ -237,11 +233,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 
 	var teeHardware node.TEEHardware
 	s := viper.GetString(cfgTEEHardware)
-	switch strings.ToLower(s) {
-	case "invalid":
-	case "intel-sgx":
-		teeHardware = node.TEEHardwareIntelSGX
-	default:
+	if err := teeHardware.FromString(s); err != nil {
 		logger.Error("invalid TEE hardware",
 			cfgTEEHardware, s,
 		)
@@ -261,24 +253,23 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		kind registry.RuntimeKind
 	)
 	s = viper.GetString(cfgKind)
-	switch strings.ToLower(s) {
-	case optKindCompute:
+	if err = kind.FromString(s); err != nil {
+		logger.Error("invalid runtime kind",
+			cfgKind, s,
+		)
+		return nil, nil, fmt.Errorf("invalid runtime kind")
+	}
+	switch kind {
+	case registry.KindCompute:
 		if err = kmID.UnmarshalHex(viper.GetString(cfgKeyManager)); err != nil {
 			logger.Error("failed to parse key manager ID",
 				"err", err,
 			)
 			return nil, nil, err
 		}
-	case optKindKeyManager:
-		kind = registry.KindKeyManager
-
+	case registry.KindKeyManager:
 		// Key managers don't have their own key manager.
 		kmID = id
-	default:
-		logger.Error("invalid runtime kind",
-			cfgKind, s,
-		)
-		return nil, nil, fmt.Errorf("invalid runtime Kind")
 	}
 
 	// TODO: Support root upload when registering.
@@ -445,7 +436,7 @@ func init() {
 	runtimeFlags.Uint64(cfgTransactionSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
 	runtimeFlags.String(cfgGenesisState, "", "Runtime state at genesis")
 	runtimeFlags.String(cfgKeyManager, "", "Key Manager Runtime ID")
-	runtimeFlags.String(cfgKind, optKindCompute, "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
+	runtimeFlags.String(cfgKind, "compute", "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
 	runtimeFlags.String(cfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")
 	runtimeFlags.StringSlice(cfgVersionEnclave, nil, "Runtime TEE enclave version(s)")
 	_ = viper.BindPFlags(runtimeFlags)

@@ -65,7 +65,9 @@ type proxyEnv struct {
 	grpcSrv *grpc.Server
 }
 
-func tlsCertPaths(dataDir string) (string, string) {
+// TLSCertPaths returns the TLS certificate and private key paths for
+// the IAS proxy, based on the passed in data directory.
+func TLSCertPaths(dataDir string) (string, string) {
 	var (
 		certPath = filepath.Join(dataDir, tlsCertFilename)
 		keyPath  = filepath.Join(dataDir, tlsKeyFilename)
@@ -97,7 +99,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	tlsCertPath, tlsKeyPath := tlsCertPaths(dataDir)
+	tlsCertPath, tlsKeyPath := TLSCertPaths(dataDir)
 	cert, err := tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, ias.CommonName)
 	if err != nil {
 		logger.Error("failed to load or generate TLS cert",

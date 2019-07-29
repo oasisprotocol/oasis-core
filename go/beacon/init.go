@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	cfgDebugDeterministic = "beacon.debug.deterministic"
+	// CfgDebugDeterministic is the enable deterministic beacon output flag.
+	CfgDebugDeterministic = "beacon.debug.deterministic"
 )
 
 // Flags has the configuration flags.
@@ -36,12 +37,12 @@ func New(ctx context.Context, timeSource epochtime.Backend, tmService service.Te
 
 func flagsToConfig() *api.Config {
 	return &api.Config{
-		DebugDeterministic: viper.GetBool(cfgDebugDeterministic),
+		DebugDeterministic: viper.GetBool(CfgDebugDeterministic),
 	}
 }
 
 func init() {
-	Flags.Bool(cfgDebugDeterministic, false, "enable deterministic beacon output (UNSAFE)")
+	Flags.Bool(CfgDebugDeterministic, false, "enable deterministic beacon output (UNSAFE)")
 
 	_ = viper.BindPFlags(Flags)
 }

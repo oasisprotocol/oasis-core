@@ -36,7 +36,8 @@ const (
 
 	crashPointBlockBeforeIndex = "roothash.before_index"
 
-	cfgIndexBlocks = "roothash.tendermint.index_blocks"
+	// CfgIndexBlocks enables the block indexer.
+	CfgIndexBlocks = "roothash.tendermint.index_blocks"
 )
 
 var (
@@ -572,7 +573,7 @@ func New(
 	}
 
 	// Check if we need to index roothash blocks.
-	if viper.GetBool(cfgIndexBlocks) {
+	if viper.GetBool(CfgIndexBlocks) {
 		var err error
 		r.blockIndex, err = newBlockIndex(dataDir)
 		if err != nil {
@@ -586,7 +587,7 @@ func New(
 }
 
 func init() {
-	Flags.Bool(cfgIndexBlocks, false, "Should the roothash blocks be indexed")
+	Flags.Bool(CfgIndexBlocks, false, "Should the roothash blocks be indexed")
 
 	_ = viper.BindPFlags(Flags)
 

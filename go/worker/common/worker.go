@@ -20,6 +20,9 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 )
 
+// LocalStorageFile is the filename of the worker's local storage database.
+const LocalStorageFile = "worker-local-storage.bolt.db"
+
 // Runtime is a single runtime.
 type Runtime struct {
 	id      signature.PublicKey
@@ -297,7 +300,7 @@ func newWorker(
 	if enabled {
 		// Open the local storage.
 		var err error
-		if w.LocalStorage, err = host.NewLocalStorage(dataDir, "worker-local-storage.bolt.db"); err != nil {
+		if w.LocalStorage, err = host.NewLocalStorage(dataDir, LocalStorageFile); err != nil {
 			return nil, err
 		}
 

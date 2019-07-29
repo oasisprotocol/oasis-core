@@ -15,6 +15,8 @@ generate:
 build: generate
 	@echo "Building Ekiden node"
 	@env -u GOPATH $(EKIDEN_GO) build -v -o ./ekiden/ekiden ./ekiden
+	@echo "Building Ekiden test harness"
+	@env -u GOPATH $(EKIDEN_GO) build -v -o ./ekiden-test-runner/ekiden-test-runner ./ekiden-test-runner
 
 # Run go fmt.
 fmt:

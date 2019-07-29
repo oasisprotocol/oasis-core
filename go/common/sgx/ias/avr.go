@@ -65,6 +65,11 @@ var (
 
 	mrsignerBlacklist = make(map[sgx.Mrsigner]bool)
 
+	// FortanixTestMrSigner is the MRSIGNER value corresponding to the Fortanix
+	// test signing key that is used by default if no other signing key is
+	// specified.
+	FortanixTestMrSigner sgx.Mrsigner
+
 	_ cbor.Marshaler   = (*AVRBundle)(nil)
 	_ cbor.Unmarshaler = (*AVRBundle)(nil)
 )
@@ -401,7 +406,7 @@ func SetSkipVerify() {
 func BuildMrsignerBlacklist(allowTestKeys bool) {
 	if !allowTestKeys {
 		for _, v := range []string{
-			"9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a", // Fortanix test key
+			FortanixTestMrSigner.String(),
 		} {
 			var signer sgx.Mrsigner
 			if err := signer.UnmarshalHex(v); err != nil {
@@ -413,6 +418,9 @@ func BuildMrsignerBlacklist(allowTestKeys bool) {
 }
 
 func init() {
+	// Fortanix test key.
+	_ = FortanixTestMrSigner.UnmarshalHex("9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a")
+
 	for k, v := range isvQuoteFwdMap {
 		isvQuoteRevMap[v] = k
 	}

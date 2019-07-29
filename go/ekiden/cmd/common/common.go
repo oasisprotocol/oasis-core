@@ -21,9 +21,12 @@ import (
 )
 
 const (
-	cfgConfigFile    = "config"
-	cfgDataDir       = "datadir"
-	cfgAllowTestKeys = "debug.allow_test_keys"
+	// CfgDebugAllowTestKeys is the command line flag to enable the debug test
+	// keys.
+	CfgDebugAllowTestKeys = "debug.allow_test_keys"
+
+	cfgConfigFile = "config"
+	cfgDataDir    = "datadir"
 )
 
 var (
@@ -89,7 +92,7 @@ func init() {
 	initLoggingFlags()
 	RootFlags.StringVar(&cfgFile, cfgConfigFile, "", "config file")
 	RootFlags.String(cfgDataDir, "", "data directory")
-	RootFlags.Bool(cfgAllowTestKeys, false, "Allow test keys (UNSAFE)")
+	RootFlags.Bool(CfgDebugAllowTestKeys, false, "Allow test keys (UNSAFE)")
 	_ = viper.BindPFlags(RootFlags)
 	RootFlags.AddFlagSet(loggingFlags)
 }
@@ -148,7 +151,7 @@ func normalizePath(f string) string {
 }
 
 func initPublicKeyBlacklist() error {
-	allowTestKeys := viper.GetBool(cfgAllowTestKeys)
+	allowTestKeys := viper.GetBool(CfgDebugAllowTestKeys)
 	signature.BuildPublicKeyBlacklist(allowTestKeys)
 	ias.BuildMrsignerBlacklist(allowTestKeys)
 	return nil

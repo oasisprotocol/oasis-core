@@ -96,7 +96,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 	cfg := config.DefaultP2PConfig()
 	cfg.AllowDuplicateIP = true
 	cfg.SeedMode = true
-	cfg.AddrBookStrict = !viper.GetBool(cfgDebugP2PAddrBookLenient)
+	cfg.AddrBookStrict = !viper.GetBool(CfgDebugP2PAddrBookLenient)
 	// MaxNumInboundPeers/MaxNumOutboundPeers
 
 	nodeKey := &p2p.NodeKey{
@@ -110,7 +110,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 			0,
 		),
 		ID_:        nodeKey.ID(),
-		ListenAddr: viper.GetString(cfgCoreListenAddress),
+		ListenAddr: viper.GetString(CfgCoreListenAddress),
 		Network:    defaultChainID,
 		Version:    "0.0.1",
 		Channels:   []byte{pex.PexChannel},

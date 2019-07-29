@@ -24,8 +24,10 @@ import (
 )
 
 const (
-	cfgFakeSGX       = "fake_sgx"
-	cfgMockEpochTime = "mock_epochtime"
+	// CfgFakeSGX configures registering with SGX capability.
+	CfgFakeSGX = "fake_sgx"
+	// CfgMockEpochtime configures the mock epochtime backend.
+	CfgMockEpochtime = "mock_epochtime"
 )
 
 var (
@@ -83,7 +85,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
+	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
 	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
@@ -105,7 +107,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 	}()
 
 	var capabilities *node.Capabilities
-	if viper.GetBool(cfgFakeSGX) {
+	if viper.GetBool(CfgFakeSGX) {
 		capabilities = &fakeCapabilitiesSGX
 	}
 	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
@@ -180,7 +182,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 	}
 
 	var rak signature.Signer
-	if viper.GetBool(cfgFakeSGX) {
+	if viper.GetBool(CfgFakeSGX) {
 		rak = fakeRAK
 	}
 	if err = cbc.createCommitment(defaultIdentity, rak, computeCommittee.EncodedMembersHash()); err != nil {
@@ -203,7 +205,7 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
+	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
 	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
@@ -225,7 +227,7 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 	}()
 
 	var capabilities *node.Capabilities
-	if viper.GetBool(cfgFakeSGX) {
+	if viper.GetBool(CfgFakeSGX) {
 		capabilities = &fakeCapabilitiesSGX
 	}
 	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
@@ -300,7 +302,7 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 	}
 
 	var rak signature.Signer
-	if viper.GetBool(cfgFakeSGX) {
+	if viper.GetBool(CfgFakeSGX) {
 		rak = fakeRAK
 	}
 	if err = cbc.createCommitment(defaultIdentity, rak, computeCommittee.EncodedMembersHash()); err != nil {
@@ -323,7 +325,7 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
+	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
 	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
@@ -345,7 +347,7 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 	}()
 
 	var capabilities *node.Capabilities
-	if viper.GetBool(cfgFakeSGX) {
+	if viper.GetBool(CfgFakeSGX) {
 		capabilities = &fakeCapabilitiesSGX
 	}
 	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
@@ -385,7 +387,7 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
+	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
 	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
@@ -476,7 +478,7 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
+	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
 	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
@@ -591,7 +593,7 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
+	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
 	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
@@ -653,12 +655,13 @@ func Register(parentCmd *cobra.Command) {
 
 func init() {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	fs.Bool(cfgFakeSGX, false, "register with SGX capability")
-	fs.Bool(cfgMockEpochTime, false, "use the mock epochtime backend")
+	fs.Bool(CfgFakeSGX, false, "register with SGX capability")
+	fs.Bool(CfgMockEpochtime, false, "use the mock epochtime backend")
 	_ = viper.BindPFlags(fs)
 	byzantineCmd.PersistentFlags().AddFlagSet(fs)
 
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.GenesisFileFlags)
+	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugTestEntityFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(p2p.Flags)
 	byzantineCmd.PersistentFlags().AddFlagSet(tendermint.Flags)
 	byzantineCmd.PersistentFlags().AddFlagSet(registration.Flags)

@@ -14,6 +14,7 @@ source .buildkite/scripts/common.sh
 
 # Ekiden node, worker and compute node.
 download_artifact ekiden go/ekiden 755
+download_artifact ekiden-test-runner go/ekiden-test-runner 755
 download_artifact ekiden-runtime-loader target/debug 755
 
 # Key manager runtime.

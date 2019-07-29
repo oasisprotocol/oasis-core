@@ -306,7 +306,7 @@ func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
 	if err != nil {
 		return nil, err
 	}
-	port := uint16(viper.GetInt(cfgP2pPort))
+	port := uint16(viper.GetInt(CfgP2pPort))
 
 	p2pKey := signerToPrivKey(identity.P2PSigner)
 
