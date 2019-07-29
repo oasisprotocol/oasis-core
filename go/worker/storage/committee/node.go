@@ -314,7 +314,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot *urkelNode.Root, thisRoot *urkel
 }
 
 type inFlight struct {
-	outstanding map[hash.Hash]struct{}
+	outstanding int
 }
 
 func (n *Node) worker() {
@@ -360,8 +360,9 @@ mainLoop:
 				}
 			}
 
-			delete(syncingRounds[lastDiff.round].outstanding, lastDiff.thisRoot.Hash)
-			if len(syncingRounds[lastDiff.round].outstanding) == 0 {
+			// Check if we have synced the given round.
+			syncingRounds[lastDiff.round].outstanding--
+			if syncingRounds[lastDiff.round].outstanding == 0 {
 				delete(syncingRounds, lastDiff.round)
 				summary := hashCache[lastDiff.round]
 				delete(hashCache, lastDiff.round-1)
@@ -419,13 +420,10 @@ mainLoop:
 					continue
 				}
 
-				newSync := &inFlight{
-					outstanding: make(map[hash.Hash]struct{}),
+				syncingRounds[i] = &inFlight{
+					// We are syncing two roots, I/O root and state root.
+					outstanding: 2,
 				}
-				hashes := hashCache[i]
-				newSync.outstanding[hashes.ioRoot.Hash] = struct{}{}
-				newSync.outstanding[hashes.stateRoot.Hash] = struct{}{}
-				syncingRounds[i] = newSync
 
 				prev := hashCache[i-1] // Closures take refs, so they need new variables here.
 				this := hashCache[i]
