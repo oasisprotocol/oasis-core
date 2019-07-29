@@ -236,11 +236,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 
 	var teeHardware node.TEEHardware
 	s := viper.GetString(cfgTEEHardware)
-	switch strings.ToLower(s) {
-	case "invalid":
-	case "intel-sgx":
-		teeHardware = node.TEEHardwareIntelSGX
-	default:
+	if err := teeHardware.FromString(s); err != nil {
 		logger.Error("invalid TEE hardware",
 			cfgTEEHardware, s,
 		)

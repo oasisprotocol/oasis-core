@@ -326,7 +326,36 @@ const (
 	// TEEHardwareReserved is the first reserved hardware implementation
 	// identifier. All equal or greater identifiers are reserved.
 	TEEHardwareReserved TEEHardware = TEEHardwareIntelSGX + 1
+
+	teeInvalid  = "invalid"
+	teeIntelSGX = "intel-sgx"
 )
+
+// String returns the string representation of a TEEHardware.
+func (h TEEHardware) String() string {
+	switch h {
+	case TEEHardwareInvalid:
+		return teeInvalid
+	case TEEHardwareIntelSGX:
+		return teeIntelSGX
+	default:
+		return "[unsupported TEEHardware]"
+	}
+}
+
+// FromString deserializes a string into a TEEHardware.
+func (h *TEEHardware) FromString(str string) error {
+	switch strings.ToLower(str) {
+	case "", teeInvalid:
+		*h = TEEHardwareInvalid
+	case teeIntelSGX:
+		*h = TEEHardwareIntelSGX
+	default:
+		return ErrInvalidTEEHardware
+	}
+
+	return nil
+}
 
 // FromProto deserializes a protobuf into a TEEHardware.
 func (h *TEEHardware) FromProto(pb pbCommon.CapabilitiesTEE_Hardware) error {

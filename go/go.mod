@@ -30,6 +30,7 @@ require (
 	github.com/golang/snappy v0.0.1
 	github.com/gopherjs/gopherjs v0.0.0-20190430165422-3e4dfb77656c // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.0
+	github.com/hpcloud/tail v1.0.0
 	github.com/libp2p/go-libp2p v0.1.1
 	github.com/libp2p/go-libp2p-core v0.0.3
 	github.com/libp2p/go-msgio v0.0.3 // indirect

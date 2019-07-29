@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -60,11 +59,8 @@ func TestSandboxedHost(t *testing.T) {
 
 	// Initialize sandboxed host.
 	var tee node.TEEHardware
-	switch strings.ToLower(envWorkerHostTEE) {
-	case "intel-sgx":
-		tee = node.TEEHardwareIntelSGX
-	default:
-	}
+	err := tee.FromString(envWorkerHostTEE)
+	require.NoError(t, err, "tee.FromString")
 
 	ias, err := ias.New(nil)
 	require.NoError(t, err, "ias.New")

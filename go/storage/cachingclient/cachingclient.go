@@ -23,8 +23,8 @@ const (
 	// BackendName is the name of this implementation.
 	BackendName = "cachingclient"
 
-	// Path to file for persistent cache storage.
-	cfgCacheFile = "storage.cachingclient.file"
+	// CfgCacheFile configures the path to file for persistent cache storage.
+	CfgCacheFile = "storage.cachingclient.file"
 
 	// Size of the cache in bytes.
 	cfgCacheSize = "storage.cachingclient.cache_size"
@@ -178,7 +178,7 @@ func (b *cachingClientBackend) Initialized() <-chan struct{} {
 
 func New(remote api.Backend, insecureSkipChecks bool) (api.Backend, error) {
 	lruCacheSizeInBytes := uint64(viper.GetSizeInBytes(cfgCacheSize))
-	lruFile := viper.GetString(cfgCacheFile)
+	lruFile := viper.GetString(CfgCacheFile)
 
 	local, err := lrudb.New(lruCacheSizeInBytes, lruFile)
 	if err != nil {
@@ -202,7 +202,7 @@ func New(remote api.Backend, insecureSkipChecks bool) (api.Backend, error) {
 }
 
 func init() {
-	Flags.String(cfgCacheFile, "cachingclient.storage.file", "Path to file for persistent cache storage")
+	Flags.String(CfgCacheFile, "cachingclient.storage.file", "Path to file for persistent cache storage")
 	Flags.String(cfgCacheSize, "512mb", "Cache size (bytes)")
 
 	_ = viper.BindPFlags(Flags)

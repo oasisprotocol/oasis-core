@@ -25,8 +25,10 @@ import (
 )
 
 const (
-	cfgRegistrationEntity     = "worker.registration.entity"
-	cfgRegistrationPrivateKey = "worker.registration.private_key"
+	// CfgRegistrationEntity configures the registration worker entity.
+	CfgRegistrationEntity = "worker.registration.entity"
+	// CfgRegistrationPrivateKey configures the registration worker private key.
+	CfgRegistrationPrivateKey = "worker.registration.private_key"
 )
 
 // Flags has the configuration flags.
@@ -232,7 +234,7 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 	}
 
 	// Load the registration entity descriptor.
-	f := viper.GetString(cfgRegistrationEntity)
+	f := viper.GetString(CfgRegistrationEntity)
 	if f == "" {
 		// TODO: There are certain configurations (eg: the test client) that
 		// spin up workers, which require a registration worker, but don't
@@ -269,7 +271,7 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 	// given a entity ID.
 
 	// The entity allows self-signed nodes, try to load the entity private key.
-	f = viper.GetString(cfgRegistrationPrivateKey)
+	f = viper.GetString(CfgRegistrationPrivateKey)
 	if f == "" {
 		// If the private key is not provided, try using a node-signed
 		// registration, the local copy of the entity descriptor may
@@ -372,8 +374,8 @@ func (r *Registration) Cleanup() {
 }
 
 func init() {
-	Flags.String(cfgRegistrationEntity, "", "Entity to use as the node owner in registrations")
-	Flags.String(cfgRegistrationPrivateKey, "", "Private key to use to sign node registrations")
+	Flags.String(CfgRegistrationEntity, "", "Entity to use as the node owner in registrations")
+	Flags.String(CfgRegistrationPrivateKey, "", "Private key to use to sign node registrations")
 
 	_ = viper.BindPFlags(Flags)
 }

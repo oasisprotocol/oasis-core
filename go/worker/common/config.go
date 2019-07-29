@@ -12,10 +12,13 @@ import (
 )
 
 var (
-	cfgClientPort      = "worker.client.port"
+	// CfgClientPort configures the worker client port.
+	CfgClientPort = "worker.client.port"
+
 	cfgClientAddresses = "worker.client.addresses"
 
-	cfgRuntimeID = "worker.runtime.id"
+	// CfgRuntimeID configures the worker runtime ID(s).
+	CfgRuntimeID = "worker.runtime.id"
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -62,13 +65,13 @@ func newConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	runtimes, err := configparser.GetRuntimes(viper.GetStringSlice(cfgRuntimeID))
+	runtimes, err := configparser.GetRuntimes(viper.GetStringSlice(CfgRuntimeID))
 	if err != nil {
 		return nil, err
 	}
 
 	return &Config{
-		ClientPort:      uint16(viper.GetInt(cfgClientPort)),
+		ClientPort:      uint16(viper.GetInt(CfgClientPort)),
 		ClientAddresses: clientAddresses,
 		Runtimes:        runtimes,
 		logger:          logging.GetLogger("worker/config"),
@@ -76,10 +79,10 @@ func newConfig() (*Config, error) {
 }
 
 func init() {
-	Flags.Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
+	Flags.Uint16(CfgClientPort, 9100, "Port to use for incoming gRPC client connections")
 	Flags.StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 
-	Flags.StringSlice(cfgRuntimeID, []string{}, "List of IDs (hex) of runtimes that this node will participate in")
+	Flags.StringSlice(CfgRuntimeID, []string{}, "List of IDs (hex) of runtimes that this node will participate in")
 
 	_ = viper.BindPFlags(Flags)
 }

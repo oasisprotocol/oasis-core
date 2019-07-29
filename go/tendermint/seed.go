@@ -110,7 +110,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 			0,
 		),
 		ID_:        nodeKey.ID(),
-		ListenAddr: viper.GetString(cfgCoreListenAddress),
+		ListenAddr: viper.GetString(CfgCoreListenAddress),
 		Network:    defaultChainID,
 		Version:    "0.0.1",
 		Channels:   []byte{pex.PexChannel},

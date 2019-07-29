@@ -12,7 +12,9 @@ import (
 )
 
 const (
-	cfgWorkerEnabled                = "worker.merge.enabled"
+	// CfgWorkerEnabled enables the merge worker.
+	CfgWorkerEnabled = "worker.merge.enabled"
+
 	cfgStorageCommitTimeout         = "worker.merge.storage_commit_timeout"
 	cfgByzantineInjectDiscrepancies = "worker.merge.byzantine.inject_discrepancies"
 )
@@ -22,7 +24,7 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Enabled reads our enabled flag from viper.
 func Enabled() bool {
-	return viper.GetBool(cfgWorkerEnabled)
+	return viper.GetBool(CfgWorkerEnabled)
 }
 
 // New creates a new worker.
@@ -41,7 +43,7 @@ func New(
 }
 
 func init() {
-	Flags.Bool(cfgWorkerEnabled, false, "Enable merge worker process")
+	Flags.Bool(CfgWorkerEnabled, false, "Enable merge worker process")
 	Flags.Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 
 	Flags.Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies")

@@ -18,16 +18,21 @@ import (
 )
 
 const (
-	cfgWorkerEnabled = "worker.compute.enabled"
+	// CfgWorkerEnabled enables the compute worker.
+	CfgWorkerEnabled = "worker.compute.enabled"
 
-	cfgWorkerBackend = "worker.compute.backend"
+	// CfgWorkerBackend configures the worker backend.
+	CfgWorkerBackend = "worker.compute.backend"
 
-	cfgWorkerRuntimeLoader = "worker.compute.runtime_loader"
+	// CfgWorkerRuntimeLoader configures the worker runtime loader.
+	CfgWorkerRuntimeLoader = "worker.compute.runtime_loader"
 
-	cfgRuntimeBinary = "worker.compute.runtime.binary"
+	// CfgRuntimeBinary configures the runtime binary.
+	CfgRuntimeBinary = "worker.compute.runtime.binary"
 
+	// CfgRuntimeSGXIDs configures the SGX runtime ID(s).
 	// XXX: This is needed till the code can watch the registry for runtimes.
-	cfgRuntimeSGXIDs = "worker.compute.runtime.sgx_ids"
+	CfgRuntimeSGXIDs = "worker.compute.runtime.sgx_ids"
 
 	cfgStorageCommitTimeout = "worker.compute.storage_commit_timeout"
 
@@ -40,7 +45,7 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
 	m := make(map[signature.MapKey]bool)
 
-	for _, v := range viper.GetStringSlice(cfgRuntimeSGXIDs) {
+	for _, v := range viper.GetStringSlice(CfgRuntimeSGXIDs) {
 		var id signature.PublicKey
 		if err := id.UnmarshalHex(v); err != nil {
 			return nil, err
@@ -54,7 +59,7 @@ func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
 
 // Enabled reads our enabled flag from viper.
 func Enabled() bool {
-	return viper.GetBool(cfgWorkerEnabled)
+	return viper.GetBool(CfgWorkerEnabled)
 }
 
 // New creates a new worker.
@@ -66,13 +71,13 @@ func New(
 	keyManager *keymanager.Client,
 	registration *registration.Registration,
 ) (*Worker, error) {
-	backend := viper.GetString(cfgWorkerBackend)
-	workerRuntimeLoader := viper.GetString(cfgWorkerRuntimeLoader)
+	backend := viper.GetString(CfgWorkerBackend)
+	workerRuntimeLoader := viper.GetString(CfgWorkerRuntimeLoader)
 
 	// Setup runtimes.
 	var runtimes []RuntimeConfig
 	if Enabled() {
-		runtimeBinaries := viper.GetStringSlice(cfgRuntimeBinary)
+		runtimeBinaries := viper.GetStringSlice(CfgRuntimeBinary)
 		if len(runtimeBinaries) != len(commonWorker.GetConfig().Runtimes) {
 			return nil, fmt.Errorf("runtime binary/id count mismatch")
 		}
@@ -115,16 +120,16 @@ func New(
 }
 
 func init() {
-	Flags.Bool(cfgWorkerEnabled, false, "Enable compute worker process")
+	Flags.Bool(CfgWorkerEnabled, false, "Enable compute worker process")
 
-	Flags.String(cfgWorkerBackend, "sandboxed", "Worker backend")
+	Flags.String(CfgWorkerBackend, "sandboxed", "Worker backend")
 
-	Flags.String(cfgWorkerRuntimeLoader, "", "Path to worker process runtime loader binary")
+	Flags.String(CfgWorkerRuntimeLoader, "", "Path to worker process runtime loader binary")
 
-	Flags.StringSlice(cfgRuntimeBinary, nil, "Path to runtime binary")
+	Flags.StringSlice(CfgRuntimeBinary, nil, "Path to runtime binary")
 
 	// XXX: This is needed till the code can watch the registry for runtimes.
-	Flags.StringSlice(cfgRuntimeSGXIDs, nil, "SGX runtime IDs")
+	Flags.StringSlice(CfgRuntimeSGXIDs, nil, "SGX runtime IDs")
 
 	Flags.Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 

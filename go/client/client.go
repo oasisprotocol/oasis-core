@@ -41,8 +41,10 @@ import (
 )
 
 const (
-	cfgIndexBackend  = "client.indexer.backend"
-	cfgIndexRuntimes = "client.indexer.runtimes"
+	// CfgIndexRuntimes configures the runtime IDs to index tags for.
+	CfgIndexRuntimes = "client.indexer.runtimes"
+
+	cfgIndexBackend = "client.indexer.backend"
 )
 
 var (
@@ -565,7 +567,7 @@ func New(
 	}
 
 	// Initialize the tag indexer(s) when configured.
-	indexRuntimes := viper.GetStringSlice(cfgIndexRuntimes)
+	indexRuntimes := viper.GetStringSlice(CfgIndexRuntimes)
 	if indexRuntimes != nil {
 		var impl indexer.Backend
 		var err error
@@ -610,7 +612,7 @@ func New(
 
 func init() {
 	Flags.String(cfgIndexBackend, indexer.BleveBackendName, "Tag indexer backend")
-	Flags.StringSlice(cfgIndexRuntimes, nil, "IDs of runtimes to index tags for")
+	Flags.StringSlice(CfgIndexRuntimes, nil, "IDs of runtimes to index tags for")
 
 	_ = viper.BindPFlags(Flags)
 }
