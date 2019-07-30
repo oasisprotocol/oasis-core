@@ -286,6 +286,37 @@ func (t *Tree) Visit(ctx context.Context, visitor NodeVisitor) error {
 	return t.doVisit(ctx, visitor, t.cache.pendingRoot, 0, node.Key{})
 }
 
+// ApplyWriteLog applies the operations from a write log to the current tree.
+//
+// The caller is responsible for calling Commit.
+func (t *Tree) ApplyWriteLog(ctx context.Context, wl db.WriteLogIterator) error {
+	for {
+		// Fetch next entry from write log iterator.
+		more, err := wl.Next()
+		if err != nil {
+			return err
+		}
+		if !more {
+			break
+		}
+		entry, err := wl.Value()
+		if err != nil {
+			return err
+		}
+
+		// Apply operation.
+		if len(entry.Value) == 0 {
+			err = t.Remove(ctx, entry.Key)
+		} else {
+			err = t.Insert(ctx, entry.Key, entry.Value)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // CommitKnown checks that the computed root matches a known root and
 // if so, commits tree updates to the underlying database and returns
 // the write log.

@@ -83,19 +83,8 @@ func (rc *RootCache) Apply(
 		}
 		defer tree.Close()
 
-		for _, entry := range writeLog {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-
-			if len(entry.Value) == 0 {
-				err = tree.Remove(ctx, entry.Key)
-			} else {
-				err = tree.Insert(ctx, entry.Key, entry.Value)
-			}
-			if err != nil {
-				return nil, err
-			}
+		if err = tree.ApplyWriteLog(ctx, nodedb.NewStaticWriteLogIterator(writeLog)); err != nil {
+			return nil, err
 		}
 
 		if !rc.insecureSkipChecks {
