@@ -137,6 +137,11 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 }
 
 func (d *badgerNodeDB) HasRoot(root node.Root) bool {
+	// An empty root is always implicitly present.
+	if root.Hash.IsEmpty() {
+		return true
+	}
+
 	_, err := d.GetNode(root, &node.Pointer{
 		Clean: true,
 		Hash:  root.Hash,
