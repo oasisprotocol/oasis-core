@@ -38,6 +38,65 @@ func (rc *RootCache) GetTree(ctx context.Context, root Root) (*urkel.Tree, error
 	return newTree, nil
 }
 
+// Merge performs a 3-way merge operation between the specified roots and returns
+// a receipt for the merged root.
+func (rc *RootCache) Merge(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	base hash.Hash,
+	others []hash.Hash,
+) (*hash.Hash, error) {
+	if len(others) == 0 {
+		// No other roots passed, no reason to call the operation.
+		return nil, ErrNoMergeRoots
+	}
+
+	// Make sure that all roots exist in storage before doing any work.
+	if !rc.localDB.HasRoot(Root{Namespace: ns, Round: round, Hash: base}) {
+		return nil, ErrRootNotFound
+	}
+	for _, rootHash := range others {
+		if !rc.localDB.HasRoot(Root{Namespace: ns, Round: round + 1, Hash: rootHash}) {
+			return nil, ErrRootNotFound
+		}
+	}
+
+	if len(others) == 1 {
+		// Fast path: nothing to merge, just return the only root.
+		return &others[0], nil
+	}
+
+	// Start with the first root.
+	// TODO: WithStorageProof.
+	tree, err := urkel.NewWithRoot(ctx, nil, rc.localDB, Root{Namespace: ns, Round: round + 1, Hash: others[0]})
+	if err != nil {
+		return nil, err
+	}
+	defer tree.Close()
+
+	// Apply operations from all roots.
+	baseRoot := Root{Namespace: ns, Round: round, Hash: base}
+	for _, rootHash := range others[1:] {
+		var it nodedb.WriteLogIterator
+		it, err = rc.localDB.GetWriteLog(ctx, baseRoot, Root{Namespace: ns, Round: round + 1, Hash: rootHash})
+		if err != nil {
+			return nil, errors.Wrap(err, "storage/rootcache: failed to read write log")
+		}
+
+		if err = tree.ApplyWriteLog(ctx, it); err != nil {
+			return nil, errors.Wrap(err, "storage/rootcache: failed to apply write log")
+		}
+	}
+
+	var mergedRoot hash.Hash
+	if _, mergedRoot, err = tree.Commit(ctx, ns, round+1); err != nil {
+		return nil, errors.Wrap(err, "storage/rootcache: failed to commit write log")
+	}
+
+	return &mergedRoot, nil
+}
+
 // Apply applies the write log, bypassing the apply operation iff the new root
 // already is in the node database.
 func (rc *RootCache) Apply(
@@ -62,7 +121,7 @@ func (rc *RootCache) Apply(
 
 	// Sanity check the expected new root.
 	if !expectedNewRoot.Follows(&root) {
-		return nil, errors.New("storage/rootcache: expected root does not follow root")
+		return nil, ErrRootMustFollowOld
 	}
 
 	mu := rc.getApplyLock(root, expectedNewRoot)

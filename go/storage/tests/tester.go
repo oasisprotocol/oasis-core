@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 )
 
 var testValues = [][]byte{
@@ -83,7 +84,15 @@ func foldWriteLogIterator(t *testing.T, w api.WriteLogIterator) api.WriteLog {
 func StorageImplementationTests(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	<-backend.Initialized()
 
-	// Test MKVS storage.
+	t.Run("Basic", func(t *testing.T) {
+		testBasic(t, backend, namespace)
+	})
+	t.Run("Merge", func(t *testing.T) {
+		testMerge(t, backend, namespace)
+	})
+}
+
+func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	var rootHash hash.Hash
 	rootHash.Empty()
 
@@ -207,11 +216,11 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 
 	receipts, err = backend.Apply(context.Background(), namespace, 0, rootHash, 1, expectedNewRoot3, wl3)
 	require.NoError(t, err, "Apply() should not return an error")
-	require.NotNil(t, receipts, "Apply() should return a receipts")
+	require.NotNil(t, receipts, "Apply() should return receipts")
 
 	for i, receipt := range receipts {
 		err = receipt.Open(&receiptBody)
-		require.NoError(t, err, "receipts.Open() should not return an error")
+		require.NoError(t, err, "receipt.Open() should not return an error")
 		require.Equal(t, uint16(1), receiptBody.Version, "mkvs receipt version should be 1")
 		require.Equal(t, 1, len(receiptBody.Roots), "mkvs receipt should contain 1 root")
 		require.EqualValues(t, expectedNewRoot3, receiptBody.Roots[0], "mkvs receipt root should equal the expected new root")
@@ -226,4 +235,102 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 	// Applying the writeLog should return same root.
 	logsRootHash = CalculateExpectedNewRoot(t, logs, namespace, 1)
 	require.EqualValues(t, logsRootHash, newRoot.Hash)
+}
+
+func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace) {
+	ctx := context.Background()
+
+	writeLogs := []api.WriteLog{
+		// Base root.
+		api.WriteLog{
+			api.LogEntry{Key: []byte("foo"), Value: []byte("i am base")},
+		},
+		// First root.
+		api.WriteLog{
+			api.LogEntry{Key: []byte("first"), Value: []byte("i am first root")},
+		},
+		// Second root.
+		api.WriteLog{
+			api.LogEntry{Key: []byte("second"), Value: []byte("i am second root")},
+		},
+		// Third root.
+		api.WriteLog{
+			api.LogEntry{Key: []byte("third"), Value: []byte("i am third root")},
+		},
+	}
+
+	// Create all roots.
+	var roots []hash.Hash
+	for idx, writeLog := range writeLogs {
+		var round uint64
+		var baseRoot hash.Hash
+		if idx == 0 {
+			baseRoot.Empty()
+			round = 1
+		} else {
+			baseRoot = roots[0]
+			round = 2
+		}
+
+		// Generate expected root hash.
+		tree, err := urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: round, Hash: baseRoot})
+		require.NoError(t, err, "NewWithRoot")
+		err = tree.ApplyWriteLog(ctx, nodedb.NewStaticWriteLogIterator(writeLog))
+		require.NoError(t, err, "ApplyWriteLog")
+		var root hash.Hash
+		_, root, err = tree.Commit(ctx, namespace, round)
+		require.NoError(t, err, "Commit")
+
+		// Apply to storage backend.
+		_, err = backend.Apply(ctx, namespace, 1, baseRoot, round, root, writeLog)
+		require.NoError(t, err, "Apply")
+
+		roots = append(roots, root)
+	}
+
+	// Try to merge with only specifying the base.
+	_, err := backend.Merge(ctx, namespace, 1, roots[0], nil)
+	require.Error(t, err, "Merge without other roots should return an error")
+
+	// Try to merge with only specifying the base and first root.
+	receipts, err := backend.Merge(ctx, namespace, 1, roots[0], roots[1:2])
+	require.NoError(t, err, "Merge")
+	require.NotNil(t, receipts, "Merge should return receipts")
+
+	for _, receipt := range receipts {
+		var receiptBody api.ReceiptBody
+		err = receipt.Open(&receiptBody)
+		require.NoError(t, err, "receipt.Open")
+		require.Len(t, receiptBody.Roots, 1, "receipt should contain 1 root")
+		require.EqualValues(t, roots[1], receiptBody.Roots[0], "merged root should be equal to the only other root")
+	}
+
+	// Try to merge with specifying the base and all three roots.
+	receipts, err = backend.Merge(ctx, namespace, 1, roots[0], roots[1:])
+	require.NoError(t, err, "Merge")
+	require.NotNil(t, receipts, "Merge should return receipts")
+
+	var mergedRoot hash.Hash
+	for _, receipt := range receipts {
+		var receiptBody api.ReceiptBody
+		err = receipt.Open(&receiptBody)
+		require.NoError(t, err, "receipt.Open")
+		require.Len(t, receiptBody.Roots, 1, "receipt should contain 1 root")
+
+		mergedRoot = receiptBody.Roots[0]
+	}
+
+	// Make sure that the merged root is the same as applying all write logs against
+	// the base root.
+	var tree *urkel.Tree
+	tree, err = urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: 1, Hash: roots[0]})
+	require.NoError(t, err, "NewWithRoot")
+	for _, writeLog := range writeLogs[1:] {
+		err = tree.ApplyWriteLog(ctx, nodedb.NewStaticWriteLogIterator(writeLog))
+		require.NoError(t, err, "ApplyWriteLog")
+	}
+	_, expectedRoot, err := tree.Commit(ctx, namespace, 2)
+	require.NoError(t, err, "Commit")
+
+	require.Equal(t, expectedRoot, mergedRoot, "merged root should match expected root")
 }

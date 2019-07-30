@@ -24,6 +24,8 @@ var (
 		Actions: []accessctl.Action{
 			"Apply",
 			"ApplyBatch",
+			"Merge",
+			"MergeBatch",
 		},
 	}
 	// NOTE: GetDiff/GetCheckpoint need to be accessible to all storaged nodes,

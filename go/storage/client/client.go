@@ -204,6 +204,10 @@ func (b *storageClientBackend) writeWithClient(
 			receiptsRaw = resp.GetReceipts()
 		case *storage.ApplyBatchResponse:
 			receiptsRaw = resp.GetReceipts()
+		case *storage.MergeResponse:
+			receiptsRaw = resp.GetReceipts()
+		case *storage.MergeBatchResponse:
+			receiptsRaw = resp.GetReceipts()
 		default:
 			b.logger.Error("got unexpected response type from a storage node",
 				"node", response.node,
@@ -250,13 +254,16 @@ func (b *storageClientBackend) writeWithClient(
 		if receiptBody.Round != round {
 			equal = false
 		}
-		if len(receiptBody.Roots) != len(expectedNewRoots) {
-			equal = false
-		}
-		for i := range receiptBody.Roots {
-			if receiptBody.Roots[i] != expectedNewRoots[i] {
+		if expectedNewRoots != nil {
+			if len(receiptBody.Roots) != len(expectedNewRoots) {
 				equal = false
-				break
+			} else {
+				for i := range receiptBody.Roots {
+					if receiptBody.Roots[i] != expectedNewRoots[i] {
+						equal = false
+						break
+					}
+				}
 			}
 		}
 		if !equal {
@@ -361,6 +368,76 @@ func (b *storageClientBackend) ApplyBatch(
 			}
 		},
 		expectedNewRoots,
+	)
+}
+
+func (b *storageClientBackend) Merge(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	base hash.Hash,
+	others []hash.Hash,
+) ([]*api.Receipt, error) {
+	var req storage.MergeRequest
+	req.Namespace, _ = ns.MarshalBinary()
+	req.Round = round
+	req.Base, _ = base.MarshalBinary()
+	req.Others = make([][]byte, 0, len(others))
+	for _, h := range others {
+		raw, _ := h.MarshalBinary()
+		req.Others = append(req.Others, raw)
+	}
+
+	return b.writeWithClient(
+		ctx,
+		ns,
+		round+1,
+		func(ctx context.Context, c storage.StorageClient, node *node.Node, ch chan<- *grpcResponse) {
+			resp, err := c.Merge(ctx, &req)
+			ch <- &grpcResponse{
+				resp: resp,
+				err:  err,
+				node: node,
+			}
+		},
+		nil,
+	)
+}
+
+func (b *storageClientBackend) MergeBatch(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	ops []api.MergeOp,
+) ([]*api.Receipt, error) {
+	var req storage.MergeBatchRequest
+	req.Namespace, _ = ns.MarshalBinary()
+	req.Round = round
+	req.Ops = make([]*storage.MergeOp, 0, len(ops))
+	for _, op := range ops {
+		var pOp storage.MergeOp
+		pOp.Base, _ = op.Base.MarshalBinary()
+		pOp.Others = make([][]byte, 0, len(op.Others))
+		for _, h := range op.Others {
+			raw, _ := h.MarshalBinary()
+			pOp.Others = append(pOp.Others, raw)
+		}
+		req.Ops = append(req.Ops, &pOp)
+	}
+
+	return b.writeWithClient(
+		ctx,
+		ns,
+		round+1,
+		func(ctx context.Context, c storage.StorageClient, node *node.Node, ch chan<- *grpcResponse) {
+			resp, err := c.MergeBatch(ctx, &req)
+			ch <- &grpcResponse{
+				resp: resp,
+				err:  err,
+				node: node,
+			}
+		},
+		nil,
 	)
 }
 

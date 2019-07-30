@@ -5,6 +5,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -44,7 +46,7 @@ func (b *leveldbBackend) ApplyBatch(
 	for _, op := range ops {
 		newRoot, err := b.rootCache.Apply(ctx, ns, op.SrcRound, op.SrcRoot, dstRound, op.DstRoot, op.WriteLog)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "storage/leveldb: failed to Apply, op")
 		}
 		newRoots = append(newRoots, *newRoot)
 	}
@@ -64,10 +66,45 @@ func (b *leveldbBackend) Apply(
 ) ([]*api.Receipt, error) {
 	newRoot, err := b.rootCache.Apply(ctx, ns, srcRound, srcRoot, dstRound, dstRoot, writeLog)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "storage/leveldb: failed to Apply")
 	}
 
 	receipt, err := api.SignReceipt(b.signer, ns, dstRound, []hash.Hash{*newRoot})
+	return []*api.Receipt{receipt}, err
+}
+
+func (b *leveldbBackend) Merge(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	base hash.Hash,
+	others []hash.Hash,
+) ([]*api.Receipt, error) {
+	newRoot, err := b.rootCache.Merge(ctx, ns, round, base, others)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage/leveldb: failed to Merge")
+	}
+
+	receipt, err := api.SignReceipt(b.signer, ns, round+1, []hash.Hash{*newRoot})
+	return []*api.Receipt{receipt}, err
+}
+
+func (b *leveldbBackend) MergeBatch(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	ops []api.MergeOp,
+) ([]*api.Receipt, error) {
+	newRoots := make([]hash.Hash, 0, len(ops))
+	for _, op := range ops {
+		newRoot, err := b.rootCache.Merge(ctx, ns, round, op.Base, op.Others)
+		if err != nil {
+			return nil, errors.Wrap(err, "storage/leveldb: failed to Merge, op")
+		}
+		newRoots = append(newRoots, *newRoot)
+	}
+
+	receipt, err := api.SignReceipt(b.signer, ns, round+1, newRoots)
 	return []*api.Receipt{receipt}, err
 }
 
