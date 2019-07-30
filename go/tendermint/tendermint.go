@@ -17,7 +17,6 @@ import (
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
-	tmpex "github.com/tendermint/tendermint/p2p/pex"
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcli "github.com/tendermint/tendermint/rpc/client"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -62,11 +61,18 @@ const (
 	cfgDebugBootstrapNodeName   = "tendermint.debug.bootstrap.node_name"
 	cfgDebugBootstrapQuerySeeds = "tendermint.debug.bootstrap.query_seeds"
 	cfgDebugP2PAddrBookLenient  = "tendermint.debug.addr_book_lenient"
+
+	defaultChainID = "0xa515"
 )
 
 var (
 	_ service.TendermintService = (*tendermintService)(nil)
 )
+
+// IsSeed retuns true iff the node is configured as a seed node.
+func IsSeed() bool {
+	return viper.GetBool(cfgP2PSeedMode)
+}
 
 type tendermintService struct {
 	sync.Mutex
@@ -253,11 +259,6 @@ func (t *tendermintService) Unsubscribe(subscriber string, query tmpubsub.Query)
 	return errors.New("tendermint: unsubscribe called with no backing service")
 }
 
-func (t *tendermintService) IsSeed() bool {
-	// XXX: Probably should properly check and not rely on the flag.
-	return viper.GetBool(cfgP2PSeedMode)
-}
-
 func (t *tendermintService) Pruner() abci.StatePruner {
 	return t.mux.Pruner()
 }
@@ -436,7 +437,7 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 	//       which requires it to be valid JSON. It may appear to work until you
 	//       try to restore from an existing data directory.
 	doc := tmtypes.GenesisDoc{
-		ChainID:         "0xa515",
+		ChainID:         defaultChainID,
 		GenesisTime:     d.Time,
 		ConsensusParams: tmtypes.DefaultConsensusParams(),
 		AppState:        json.Marshal(d),
@@ -504,24 +505,6 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 			t.Logger.Debug("registered as a validator")
 		}
 
-		// Register itself as a seed node to the bootstrap server.
-		if t.IsSeed() {
-			t.Logger.Debug("registering as a seed node with the bootstrap server")
-
-			if err = common.IsAddrPort(nodeAddr); err != nil {
-				return nil, errors.Wrap(err, "tendermint: malformed bootstrap seed node address")
-			}
-
-			seed := &bootstrap.SeedNode{
-				PubKey:      t.nodeSigner.Public(),
-				CoreAddress: nodeAddr,
-			}
-			if err = bs.RegisterSeed(seed); err != nil {
-				return nil, errors.Wrap(err, "tendermint: seed bootstrap failed")
-			}
-
-			t.Logger.Debug("registered as a seed node")
-		}
 		// Query seed nodes from the bootstrap server
 		if querySeeds {
 			t.Logger.Debug("querying seeds")
@@ -549,81 +532,6 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 	tmGenDoc, err := genesisToTendermint(doc)
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint: failed to create genesis doc")
-	}
-
-	if t.IsSeed() {
-		// Add validators to seed nodes address books
-		//
-		// For extra fun, p2p/transport.go:MultiplexTransport.upgrade() uses a case
-		// sensitive string comparision to validate public keys.
-		var addrs []*tmp2p.NetAddress
-		for _, v := range doc.Validators {
-			var openedValidator genesis.Validator
-			if err = v.Open(&openedValidator); err != nil {
-				return nil, errors.Wrap(err, "tendermint: failed to verify validator")
-			}
-
-			vPubKey := crypto.PublicKeyToTendermint(&openedValidator.PubKey)
-			vPkAddrHex := strings.ToLower(vPubKey.Address().String())
-			vAddr := vPkAddrHex + "@" + openedValidator.CoreAddress
-
-			if openedValidator.PubKey.Equal(t.nodeSigner.Public()) {
-				// This validator entry is the current node, set the
-				// node name to that specified in the genesis document.
-				tenderConfig.Moniker = openedValidator.Name
-				continue
-			}
-
-			tmVAddr, err := tmp2p.NewNetAddressString(vAddr)
-			if err != nil {
-				return nil, errors.Wrap(err, "tendermint: failed to reformat genesis validator address")
-			}
-
-			addrs = append(addrs, tmVAddr)
-		}
-
-		addrBook := tmpex.NewAddrBook(tenderConfig.P2P.AddrBookFile(), tenderConfig.P2P.AddrBookStrict)
-		if err := addrBook.Start(); err != nil {
-			return nil, errors.Wrap(err, "tendermint: failed to open address book")
-		}
-		defer func() {
-			// Can't pass tmn.NewNode() an existing address book.
-			// Make sure to call Save as the address book may otherwise not be saved
-			// due to the way Stop/Quit are broken in the address book implementation.
-			addrBook.Save()
-			ch := addrBook.Quit()
-			_ = addrBook.Stop()
-			<-ch
-		}()
-
-		// Add our address to the address book, just so we can add the genesis
-		// nodes.  This is somewhat silly, but there isn't any error-checking
-		// done with AddOurAddress, so using the P2P ListenAddress as the IP/port
-		// is totally fine.
-		valPubKey := t.nodeSigner.Public()
-		ourPubKey := crypto.PublicKeyToTendermint(&valPubKey)
-		ourLaddr, err := common.GetHostPort(tenderConfig.P2P.ListenAddress)
-		if err != nil {
-			return nil, errors.Wrap(err, "tendermint: failed to parse p2p listen address")
-		}
-
-		ourPkAddrHex := strings.ToLower(ourPubKey.Address().String())
-		ourAddr, err := tmp2p.NewNetAddressString(ourPkAddrHex + "@" + ourLaddr)
-		if err != nil {
-			return nil, errors.Wrap(err, "tendermint: failed to generate our address")
-		}
-		addrBook.AddOurAddress(ourAddr)
-
-		// Populate the address book with the genesis validators.
-		for _, v := range addrs {
-			// Remove the address first as otherwise Tendermint's address book
-			// may not actually add the new address.
-			addrBook.RemoveAddress(v)
-
-			if err = addrBook.AddAddress(v, ourAddr); err != nil {
-				return nil, errors.Wrap(err, "tendermint: failed to add genesis validator to address book")
-			}
-		}
 	}
 
 	// HACK: Certain test cases use TimeoutCommit < 1 sec, and care about the

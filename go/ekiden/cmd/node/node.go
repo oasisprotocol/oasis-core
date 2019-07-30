@@ -79,6 +79,7 @@ type Node struct {
 	svcMgr       *background.ServiceManager
 	grpcInternal *grpc.Server
 	svcTmnt      tmService.TendermintService
+	svcTmntSeed  *tendermint.SeedService
 
 	Genesis   genesisAPI.Provider
 	Identity  *identity.Identity
@@ -435,20 +436,26 @@ func NewNode() (*Node, error) {
 	node.Genesis = genesis
 
 	// Initialize tendermint.
-	node.svcTmnt = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Genesis)
-	node.svcMgr.Register(node.svcTmnt)
+	if tendermint.IsSeed() {
+		node.svcTmntSeed, err = tendermint.NewSeed(dataDir, node.Identity, node.Genesis)
+		if err != nil {
+			logger.Error("failed to initialize seed node",
+				"err", err,
+			)
+			return nil, err
+		}
+		node.svcMgr.Register(node.svcTmntSeed)
+	} else {
+		node.svcTmnt = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Genesis)
+		node.svcMgr.Register(node.svcTmnt)
 
-	// Initialize the various node backends.
-	// NOTE: These backends need to be initialized here as Tendermint seed nodes
-	//       need to sync blocks for some unbelievable reason, even though their
-	//       only purpose is to gather node addresses. Not initializing the
-	//       backends would cause local consensus failure due to the ABCI app
-	//       being different.
-	if err = node.initBackends(); err != nil {
-		logger.Error("failed to initialize backends",
-			"err", err,
-		)
-		return nil, err
+		// Initialize the various node backends.
+		if err = node.initBackends(); err != nil {
+			logger.Error("failed to initialize backends",
+				"err", err,
+			)
+			return nil, err
+		}
 	}
 
 	// Initialize the IAS proxy client.
@@ -461,7 +468,7 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
-	if node.svcTmnt.IsSeed() {
+	if tendermint.IsSeed() {
 		// Tendermint nodes in seed mode crawl the network for
 		// peers. In case of incoming connections seed node will
 		// share some of the peers and immediately disconnect.
@@ -471,8 +478,8 @@ func NewNode() (*Node, error) {
 		logger.Info("starting tendermint seed node")
 
 		// Start the tendermint service.
-		if err = node.svcTmnt.Start(); err != nil {
-			logger.Error("failed to start tendermint service",
+		if err = node.svcTmntSeed.Start(); err != nil {
+			logger.Error("failed to start tendermint seed service",
 				"err", err,
 			)
 			return nil, err
