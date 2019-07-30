@@ -17,7 +17,6 @@ import (
 	badgerDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/badger"
 	levelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/leveldb"
 	lruDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/lru"
-	memoryDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/memory"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
@@ -1721,17 +1720,6 @@ func testBackend(
 	}
 }
 
-func TestUrkelMemoryBackend(t *testing.T) {
-	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
-		// Create a memory-backed Node DB.
-		ndb, _ := memoryDb.New()
-		return ndb, nil
-	},
-		func(t *testing.T, ndb db.NodeDB, custom interface{}) {
-			ndb.Close()
-		}, nil)
-}
-
 func TestUrkelLevelDBBackend(t *testing.T) {
 	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
 		// Create a new random temporary directory under /tmp.
@@ -1920,7 +1908,11 @@ func benchmarkInsertBatch(b *testing.B, numValues int, commit bool) {
 	ctx := context.Background()
 
 	for n := 0; n < b.N; n++ {
-		ndb, _ := memoryDb.New()
+		dir, err := ioutil.TempDir("", "mkvs.bench.leveldb")
+		require.NoError(b, err, "TempDir")
+		defer os.RemoveAll(dir)
+		ndb, err := levelDb.New(dir)
+		require.NoError(b, err, "New")
 		tree := New(nil, ndb)
 
 		for i := 0; i < numValues; i++ {
