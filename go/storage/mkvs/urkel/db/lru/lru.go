@@ -93,6 +93,11 @@ func (d *lruNodeDB) GetCheckpoint(ctx context.Context, hash urkel.Root) (api.Wri
 }
 
 func (d *lruNodeDB) HasRoot(root urkel.Root) bool {
+	// An empty root is always implicitly present.
+	if root.Hash.IsEmpty() {
+		return true
+	}
+
 	_, err := d.GetNode(root, &urkel.Pointer{
 		Clean: true,
 		Hash:  root.Hash,

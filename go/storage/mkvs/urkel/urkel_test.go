@@ -1021,6 +1021,16 @@ func testOnCommitHooks(t *testing.T, ndb db.NodeDB) {
 // TODO: More tests for write logs.
 // TODO: More tests with bad syncer outputs.
 
+func testHasRoot(t *testing.T, ndb db.NodeDB) {
+	// Test that an empty root is always implicitly present.
+	root := node.Root{
+		Namespace: testNs,
+		Round:     0,
+	}
+	root.Hash.Empty()
+	require.True(t, ndb.HasRoot(root), "HasRoot should return true on empty root")
+}
+
 func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interface{}), finiBackend func(t *testing.T, ndb db.NodeDB, custom interface{})) {
 	t.Run("Basic", func(t *testing.T) {
 		backend, custom := initBackend(t)
@@ -1111,6 +1121,11 @@ func testBackend(t *testing.T, initBackend func(t *testing.T) (db.NodeDB, interf
 		backend, custom := initBackend(t)
 		defer finiBackend(t, backend, custom)
 		testOnCommitHooks(t, backend)
+	})
+	t.Run("HasRoot", func(t *testing.T) {
+		backend, custom := initBackend(t)
+		defer finiBackend(t, backend, custom)
+		testHasRoot(t, backend)
 	})
 }
 
