@@ -71,22 +71,22 @@ func (q *outOfOrderQueue) Pop() interface{} {
 // Small block metadata cache.
 
 type blockSummary struct {
-	namespace common.Namespace
-	round     uint64
-	ioRoot    urkelNode.Root
-	stateRoot urkelNode.Root
+	Namespace common.Namespace `codec:"namespace"`
+	Round     uint64           `codec:"round"`
+	IORoot    urkelNode.Root   `codec:"io_root"`
+	StateRoot urkelNode.Root   `codec:"state_root"`
 }
 
 func summaryFromBlock(blk *block.Block) *blockSummary {
 	return &blockSummary{
-		namespace: blk.Header.Namespace,
-		round:     blk.Header.Round,
-		ioRoot: urkelNode.Root{
+		Namespace: blk.Header.Namespace,
+		Round:     blk.Header.Round,
+		IORoot: urkelNode.Root{
 			Namespace: blk.Header.Namespace,
 			Round:     blk.Header.Round,
 			Hash:      blk.Header.IORoot,
 		},
-		stateRoot: urkelNode.Root{
+		StateRoot: urkelNode.Root{
 			Namespace: blk.Header.Namespace,
 			Round:     blk.Header.Round,
 			Hash:      blk.Header.StateRoot,
@@ -94,8 +94,9 @@ func summaryFromBlock(blk *block.Block) *blockSummary {
 	}
 }
 
+// watcherState is the (persistent) watcher state.
 type watcherState struct {
-	lastBlock blockSummary
+	LastBlock blockSummary `codec:"last_block"`
 }
 
 // Node watches blocks for storage changes.
@@ -159,7 +160,7 @@ func NewNode(
 		initCh: make(chan struct{}),
 	}
 
-	node.syncedState.lastBlock.round = defaultUndefinedRound
+	node.syncedState.LastBlock.Round = defaultUndefinedRound
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(bucket)
 
@@ -277,7 +278,7 @@ func (n *Node) GetLastSynced() (uint64, hash.Hash, hash.Hash) {
 	n.syncedLock.RLock()
 	defer n.syncedLock.RUnlock()
 
-	return n.syncedState.lastBlock.round, n.syncedState.lastBlock.ioRoot.Hash, n.syncedState.lastBlock.stateRoot.Hash
+	return n.syncedState.LastBlock.Round, n.syncedState.LastBlock.IORoot.Hash, n.syncedState.LastBlock.StateRoot.Hash
 }
 
 func (n *Node) fetchDiff(round uint64, prevRoot *urkelNode.Root, thisRoot *urkelNode.Root) error {
@@ -331,9 +332,9 @@ func (n *Node) worker() {
 	var fetcherGroup sync.WaitGroup
 
 	n.syncedLock.RLock()
-	cachedLastRound := n.syncedState.lastBlock.round
+	cachedLastRound := n.syncedState.LastBlock.Round
 	n.syncedLock.RUnlock()
-	if cachedLastRound == defaultUndefinedRound {
+	if cachedLastRound == defaultUndefinedRound || (n.undefinedRound > 0 && cachedLastRound < n.undefinedRound) {
 		cachedLastRound = n.undefinedRound
 	}
 
@@ -375,12 +376,12 @@ mainLoop:
 				delete(hashCache, lastDiff.round-1)
 
 				n.syncedLock.Lock()
-				n.syncedState.lastBlock.round = lastDiff.round
-				n.syncedState.lastBlock.ioRoot = summary.ioRoot
-				n.syncedState.lastBlock.stateRoot = summary.stateRoot
+				n.syncedState.LastBlock.Round = lastDiff.round
+				n.syncedState.LastBlock.IORoot = summary.IORoot
+				n.syncedState.LastBlock.StateRoot = summary.StateRoot
 				err := n.stateStore.Update(func(tx *bolt.Tx) error {
 					bkt := tx.Bucket(n.bucketName)
-					bytes := cbor.Marshal(n.syncedState)
+					bytes := cbor.Marshal(&n.syncedState)
 					return bkt.Put(n.commonNode.RuntimeID[:], bytes)
 				})
 				n.syncedLock.Unlock()
@@ -403,11 +404,11 @@ mainLoop:
 
 			if _, ok := hashCache[cachedLastRound]; !ok && cachedLastRound == n.undefinedRound {
 				dummy := blockSummary{
-					namespace: blk.Header.Namespace,
-					round:     cachedLastRound,
+					Namespace: blk.Header.Namespace,
+					Round:     cachedLastRound,
 				}
-				dummy.ioRoot.Empty()
-				dummy.stateRoot.Empty()
+				dummy.IORoot.Empty()
+				dummy.StateRoot.Empty()
 				hashCache[cachedLastRound] = &dummy
 			}
 			for i := cachedLastRound + 1; i < blk.Header.Round; i++ {
@@ -440,26 +441,26 @@ mainLoop:
 				prev := hashCache[i-1] // Closures take refs, so they need new variables here.
 				this := hashCache[i]
 				prevIORoot := urkelNode.Root{ // IO roots aren't chained, so clear it (but leave cache intact).
-					Namespace: this.ioRoot.Namespace,
-					Round:     this.ioRoot.Round,
+					Namespace: this.IORoot.Namespace,
+					Round:     this.IORoot.Round,
 				}
 				prevIORoot.Hash.Empty()
 				fetcherGroup.Add(1)
 				n.fetchPool.Submit(func() {
 					defer fetcherGroup.Done()
 
-					err := n.fetchDiff(this.round, &prevIORoot, &this.ioRoot)
+					err := n.fetchDiff(this.Round, &prevIORoot, &this.IORoot)
 					if err != nil {
-						n.logger.Error("error getting block io difference to round", "err", err, "round", this.round)
+						n.logger.Error("error getting block io difference to round", "err", err, "round", this.Round)
 					}
 				})
 				fetcherGroup.Add(1)
 				n.fetchPool.Submit(func() {
 					defer fetcherGroup.Done()
 
-					err := n.fetchDiff(this.round, &prev.stateRoot, &this.stateRoot)
+					err := n.fetchDiff(this.Round, &prev.StateRoot, &this.StateRoot)
 					if err != nil {
-						n.logger.Error("error getting block state difference to round", "err", err, "round", this.round)
+						n.logger.Error("error getting block state difference to round", "err", err, "round", this.Round)
 					}
 				})
 			}
