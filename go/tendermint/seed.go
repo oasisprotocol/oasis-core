@@ -135,6 +135,9 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 	addrBookPath := filepath.Join(seedDataDir, configDir, "addrbook.json")
 	srv.addrBook = pex.NewAddrBook(addrBookPath, cfg.AddrBookStrict)
 	srv.addrBook.SetLogger(logger.With("module", "book"))
+	if err = srv.addrBook.Start(); err != nil {
+		return nil, errors.Wrap(err, "tendermint/seed: failed to start address book")
+	}
 	if err = populateAddrBookFromGenesis(srv.addrBook, genesisProvider, srv.addr); err != nil {
 		return nil, errors.Wrap(err, "tendermint/seed: failed to populate address book from genesis")
 	}
