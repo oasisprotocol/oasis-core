@@ -42,7 +42,7 @@ func AlgorithmImplementationTests(
 	require.NoError(t, err, "Initialize(td)")
 
 	// Simulate an epoch transition.
-	epoch := &committee.EpochSnapshot{}
+	epoch := committee.NewMockEpochSnapshot()
 	err = algorithm.EpochTransition(epoch)
 	require.NoError(t, err, "EpochTransition")
 

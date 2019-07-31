@@ -42,9 +42,29 @@ type config struct {
 }
 
 func (s *batchingState) scheduleBatch(force bool) error {
-	// Guarding against EpochTransition() modifying current epoch.
-	s.RLock()
-	defer s.RUnlock()
+	// The simple batching algorithm only supports a single compute committee. Use
+	// with multiple committees will currently cause the rounds to fail as all other
+	// committees will be idle.
+	var committeeID *hash.Hash
+	func() {
+		// Guarding against EpochTransition() modifying current epoch.
+		s.RLock()
+		defer s.RUnlock()
+
+		// We cannot schedule anything until there is an epoch transition.
+		if s.epoch == nil {
+			return
+		}
+
+		for id := range s.epoch.GetComputeCommittees() {
+			committeeID = &id
+			break
+		}
+	}()
+	if committeeID == nil {
+		s.logger.Warn("not scheduling before epoch transition")
+		return nil
+	}
 
 	batch, err := s.incomingQueue.Take(force)
 	if err != nil && err != errNoBatchAvailable {
@@ -54,23 +74,9 @@ func (s *batchingState) scheduleBatch(force bool) error {
 		return err
 	}
 
-	// We cannot schedule anything until there is an epoch transition.
-	if s.epoch == nil {
-		s.logger.Warn("not scheduling before epoch transition")
-		return nil
-	}
-
 	if len(batch) > 0 {
-		// The simple batching algorithm only supports a single compute committee. Use
-		// with multiple committees will currently cause the rounds to fail as all other
-		// committees will be idle.
-		var committeeID hash.Hash
-		for id := range s.epoch.GetComputeCommittees() {
-			committeeID = id
-			break
-		}
-
-		if err := s.dispatcher.Dispatch(committeeID, batch); err != nil {
+		// Try to dispatch batch to the first committee.
+		if err := s.dispatcher.Dispatch(*committeeID, batch); err != nil {
 			// Put the batch back into the incoming queue in case this failed.
 			if errAB := s.incomingQueue.AddBatch(batch); errAB != nil {
 				s.logger.Error("failed to add batch back into the incoming queue",
