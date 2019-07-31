@@ -438,6 +438,14 @@ func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.B
 		n.startProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig, inputStorageSigs)
 	case epoch.IsComputeBackupWorker():
 		// Backup worker, wait for discrepancy event.
+		state, ok := n.state.(StateWaitingForBatch)
+		if ok && state.pendingEvent != nil {
+			// We have already received a discrepancy event, start processing immediately.
+			n.logger.Info("already received a discrepancy event, start processing batch")
+			n.startProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig, inputStorageSigs)
+			return
+		}
+
 		n.transitionLocked(StateWaitingForEvent{
 			ioRoot:           ioRoot,
 			batch:            batch,
@@ -732,12 +740,6 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 		return
 	}
 
-	// If we are not waiting for an event, don't do anything.
-	state, ok := n.state.(StateWaitingForEvent)
-	if !ok {
-		return
-	}
-
 	// Check if the discrepancy occurred in our committee.
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 	expectedID := epoch.GetComputeCommitteeID()
@@ -758,6 +760,23 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 	discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
 
 	if !n.commonNode.Group.GetEpochSnapshot().IsComputeBackupWorker() {
+		return
+	}
+
+	var state StateWaitingForEvent
+	switch s := n.state.(type) {
+	case StateWaitingForBatch:
+		// Discrepancy detected event received before the batch. We need to
+		// record the received event and keep waiting for the batch.
+		s.pendingEvent = dis
+		n.transitionLocked(s)
+		return
+	case StateWaitingForEvent:
+		state = s
+	default:
+		n.logger.Warn("ignoring received discrepancy event in incorrect state",
+			"state", s,
+		)
 		return
 	}
 

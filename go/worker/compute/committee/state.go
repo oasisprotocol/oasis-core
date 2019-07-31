@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/runtime"
+	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
@@ -113,6 +114,9 @@ func (s StateNotReady) String() string {
 
 // StateWaitingForBatch is the waiting for batch state.
 type StateWaitingForBatch struct {
+	// Pending compute discrepancy detected event in case the node is a
+	// backup worker and the event was received before the batch.
+	pendingEvent *roothash.ComputeDiscrepancyDetectedEvent
 }
 
 // Name returns the name of the state.
