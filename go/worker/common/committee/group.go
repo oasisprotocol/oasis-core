@@ -85,6 +85,19 @@ type EpochSnapshot struct {
 	storageCommittee      *CommitteeInfo
 }
 
+// NewMockEpochSnapshot returns a mock epoch snapshot to be used in tests.
+func NewMockEpochSnapshot() *EpochSnapshot {
+	var computeCommitteeID hash.Hash
+	computeCommitteeID.FromBytes([]byte("mock committee id"))
+
+	return &EpochSnapshot{
+		computeCommitteeID: computeCommitteeID,
+		computeCommittees: map[hash.Hash]*CommitteeInfo{
+			computeCommitteeID: &CommitteeInfo{},
+		},
+	}
+}
+
 // GetRuntime returns the current runtime descriptor.
 func (e *EpochSnapshot) GetRuntime() *registry.Runtime {
 	return e.runtime
