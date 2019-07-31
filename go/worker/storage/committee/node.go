@@ -337,6 +337,11 @@ func (n *Node) worker() {
 		cachedLastRound = n.undefinedRound
 	}
 
+	n.logger.Info("worker initialized",
+		"genesis_round", genesisBlock.Header.Round,
+		"last_synced", cachedLastRound,
+	)
+
 	outOfOrderDone := &outOfOrderQueue{}
 	syncingRounds := make(map[uint64]*inFlight)
 	hashCache := make(map[uint64]*blockSummary)
@@ -363,6 +368,8 @@ mainLoop:
 			// Check if we have synced the given round.
 			syncingRounds[lastDiff.round].outstanding--
 			if syncingRounds[lastDiff.round].outstanding == 0 {
+				n.logger.Debug("finished syncing round", "round", lastDiff.round)
+
 				delete(syncingRounds, lastDiff.round)
 				summary := hashCache[lastDiff.round]
 				delete(hashCache, lastDiff.round-1)
@@ -389,7 +396,10 @@ mainLoop:
 		select {
 		case inBlk := <-n.blockCh.Out():
 			blk := inBlk.(*block.Block)
-			n.logger.Debug("incoming block", "round", blk.Header.Round)
+			n.logger.Debug("incoming block",
+				"round", blk.Header.Round,
+				"last_synced", cachedLastRound,
+			)
 
 			if _, ok := hashCache[cachedLastRound]; !ok && cachedLastRound == n.undefinedRound {
 				dummy := blockSummary{
@@ -419,6 +429,8 @@ mainLoop:
 				if _, ok := syncingRounds[i]; ok {
 					continue
 				}
+
+				n.logger.Debug("going to sync round", "round", i)
 
 				syncingRounds[i] = &inFlight{
 					// We are syncing two roots, I/O root and state root.
