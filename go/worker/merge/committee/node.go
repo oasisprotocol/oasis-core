@@ -393,7 +393,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 
 	commitments := state.pool.GetComputeCommitments()
 
-	if epoch.IsMergeBackupWorker() {
+	if epoch.IsMergeBackupWorker() && state.pendingEvent == nil {
 		// Backup workers only perform merge after receiving a discrepancy event.
 		n.transitionLocked(StateWaitingForEvent{commitments: commitments, results: state.results})
 		return
@@ -554,17 +554,28 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 		return
 	}
 
-	// If we are not waiting for an event, don't do anything.
-	state, ok := n.state.(StateWaitingForEvent)
-	if !ok {
-		return
-	}
-
 	n.logger.Warn("merge discrepancy detected")
 
 	discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
 
 	if !n.commonNode.Group.GetEpochSnapshot().IsMergeBackupWorker() {
+		return
+	}
+
+	var state StateWaitingForEvent
+	switch s := n.state.(type) {
+	case StateWaitingForResults:
+		// Discrepancy detected event received before the results. We need to
+		// record the received event and keep waiting for the results.
+		s.pendingEvent = dis
+		n.transitionLocked(s)
+		return
+	case StateWaitingForEvent:
+		state = s
+	default:
+		n.logger.Warn("ignoring received discrepancy event in incorrect state",
+			"state", s,
+		)
 		return
 	}
 
