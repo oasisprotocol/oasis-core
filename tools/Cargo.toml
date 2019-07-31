@@ -5,8 +5,7 @@ authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 edition = "2018"
 
 [dependencies]
-# TODO: Update to released versions when released.
-sgxs = { git = "https://github.com/fortanix/rust-sgx", rev = "ecf51e6b48c854242841f169edbfb14445fd59fb" }
+sgxs = "0.7.0"
 failure = "0.1.5"
 # TODO: Change version when merged upstream (briansmith/ring#738).
 ring = "=0.14.5"

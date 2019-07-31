@@ -9,8 +9,7 @@ replace (
 require (
 	git.schwanenlied.me/yawning/dynlib.git v0.0.0-20181128103533-74a62abb5524
 	github.com/RoaringBitmap/roaring v0.4.18 // indirect
-	github.com/blevesearch/bleve v0.7.1-0.20190531184658-92623347bffc
-	github.com/blevesearch/blevex v0.0.0-20180227211930-4b158bb555a3 // indirect
+	github.com/blevesearch/bleve v0.8.0
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/btcsuite/btcd v0.0.0-20190614013741-962a206e94e9 // indirect
