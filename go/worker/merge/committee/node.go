@@ -53,10 +53,18 @@ var (
 		},
 		[]string{"runtime"},
 	)
+	inconsistentMergeRootCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ekiden_worker_inconsistent_merge_root_count",
+			Help: "Number of inconsistent merge roots",
+		},
+		[]string{"runtime"},
+	)
 	nodeCollectors = []prometheus.Collector{
 		discrepancyDetectedCount,
 		roothashCommitLatency,
 		abortedMergeCount,
+		inconsistentMergeRootCount,
 	}
 
 	metricsOnce sync.Once
@@ -412,7 +420,8 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	// Create empty block based on previous block while we hold the lock.
-	blk := block.NewEmptyBlock(n.commonNode.CurrentBlock, 0, block.Normal)
+	prevBlk := n.commonNode.CurrentBlock
+	blk := block.NewEmptyBlock(prevBlk, 0, block.Normal)
 
 	n.transitionLocked(StateProcessingMerge{doneCh: doneCh, cancel: cancel})
 
@@ -421,42 +430,43 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 	go func() {
 		defer close(doneCh)
 
-		// TODO: Actually merge (#1823).
-		blk.Header.IORoot = results[0].IORoot
-		blk.Header.StateRoot = results[0].StateRoot
-
 		// Merge results to storage.
 		ctx, cancel = context.WithTimeout(ctx, n.cfg.StorageCommitTimeout)
 		defer cancel()
 
+		var ioRoots, stateRoots []hash.Hash
+		for _, result := range results {
+			ioRoots = append(ioRoots, result.IORoot)
+			stateRoots = append(stateRoots, result.StateRoot)
+		}
+
+		var emptyRoot hash.Hash
+		emptyRoot.Empty()
+
 		// NOTE: Order is important for verifying the receipt.
-		applyOps := []storage.ApplyOp{
+		mergeOps := []storage.MergeOp{
 			// I/O root.
-			storage.ApplyOp{
-				SrcRound: blk.Header.Round,
-				SrcRoot:  blk.Header.IORoot,
-				DstRoot:  blk.Header.IORoot,
-				WriteLog: make(storage.WriteLog, 0),
+			storage.MergeOp{
+				Base:   emptyRoot,
+				Others: ioRoots,
 			},
 			// State root.
-			storage.ApplyOp{
-				SrcRound: blk.Header.Round,
-				SrcRoot:  blk.Header.StateRoot,
-				DstRoot:  blk.Header.StateRoot,
-				WriteLog: make(storage.WriteLog, 0),
+			storage.MergeOp{
+				Base:   prevBlk.Header.StateRoot,
+				Others: stateRoots,
 			},
 		}
 
-		receipts, err := n.commonNode.Storage.ApplyBatch(ctx, blk.Header.Namespace, blk.Header.Round, applyOps)
+		receipts, err := n.commonNode.Storage.MergeBatch(ctx, prevBlk.Header.Namespace, prevBlk.Header.Round, mergeOps)
 		if err != nil {
-			n.logger.Error("failed to apply to storage",
+			n.logger.Error("failed to merge",
 				"err", err,
 			)
 			return
 		}
 
 		signatures := []signature.Signature{}
-		for _, receipt := range receipts {
+		for idx, receipt := range receipts {
 			var receiptBody storage.ReceiptBody
 			if err = receipt.Open(&receiptBody); err != nil {
 				n.logger.Error("failed to open receipt",
@@ -465,6 +475,24 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 				)
 				return
 			}
+
+			// Make sure that all merged roots from all storage nodes are the same.
+			ioRoot := receiptBody.Roots[0]
+			stateRoot := receiptBody.Roots[1]
+			if idx == 0 {
+				blk.Header.IORoot = ioRoot
+				blk.Header.StateRoot = stateRoot
+			} else if !blk.Header.IORoot.Equal(&ioRoot) || !blk.Header.StateRoot.Equal(&stateRoot) {
+				n.logger.Error("storage nodes returned different merge roots",
+					"first_io_root", blk.Header.IORoot,
+					"io_root", ioRoot,
+					"first_state_root", blk.Header.StateRoot,
+					"state_root", stateRoot,
+				)
+				inconsistentMergeRootCount.With(n.getMetricLabels()).Inc()
+				return
+			}
+
 			if err = blk.Header.VerifyStorageReceipt(&receiptBody); err != nil {
 				n.logger.Error("failed to validate receipt body",
 					"receipt body", receiptBody,
