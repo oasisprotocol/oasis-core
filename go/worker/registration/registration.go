@@ -8,6 +8,7 @@ import (
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -28,6 +29,9 @@ const (
 	cfgRegistrationEntity     = "worker.registration.entity"
 	cfgRegistrationPrivateKey = "worker.registration.private_key"
 )
+
+// Flags has our flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Registration is a service handling worker node registration.
 type Registration struct {
@@ -371,13 +375,13 @@ func (r *Registration) Cleanup() {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgRegistrationEntity, "", "Entity to use as the node owner in registrations")
-		cmd.Flags().String(cfgRegistrationPrivateKey, "", "Private key to use to sign node registrations")
+		cmd.Flags().AddFlagSet(Flags)
 	}
-	for _, v := range []string{
-		cfgRegistrationEntity,
-		cfgRegistrationPrivateKey,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
-	}
+}
+
+func init() {
+	Flags.String(cfgRegistrationEntity, "", "Entity to use as the node owner in registrations")
+	Flags.String(cfgRegistrationPrivateKey, "", "Private key to use to sign node registrations")
+
+	_ = viper.BindPFlags(Flags)
 }
