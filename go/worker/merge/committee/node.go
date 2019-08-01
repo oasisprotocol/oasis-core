@@ -19,6 +19,7 @@ import (
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
@@ -408,6 +409,8 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 	doneCh := make(chan *commitment.MergeBody, 1)
 	ctx, cancel := context.WithCancel(n.ctx)
 
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+
 	// Create empty block based on previous block while we hold the lock.
 	blk := block.NewEmptyBlock(n.commonNode.CurrentBlock, 0, block.Normal)
 
@@ -452,8 +455,6 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 			return
 		}
 
-		// TODO: Ensure that the receipt is actually signed by storage nodes.
-		// For now accept a signature from anyone.
 		signatures := []signature.Signature{}
 		for _, receipt := range receipts {
 			var receiptBody storage.ReceiptBody
@@ -472,6 +473,12 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 				return
 			}
 			signatures = append(signatures, receipt.Signature)
+		}
+		if err := epoch.VerifyCommitteeSignatures(scheduler.KindStorage, signatures); err != nil {
+			n.logger.Error("failed to validate receipt signer",
+				"err", err,
+			)
+			return
 		}
 		blk.Header.StorageSignatures = signatures
 
