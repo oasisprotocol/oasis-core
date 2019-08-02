@@ -334,7 +334,7 @@ func (n *Node) worker() {
 	n.syncedLock.RLock()
 	cachedLastRound := n.syncedState.LastBlock.Round
 	n.syncedLock.RUnlock()
-	if cachedLastRound == defaultUndefinedRound || (n.undefinedRound > 0 && cachedLastRound < n.undefinedRound) {
+	if cachedLastRound == defaultUndefinedRound || cachedLastRound < genesisBlock.Header.Round {
 		cachedLastRound = n.undefinedRound
 	}
 
