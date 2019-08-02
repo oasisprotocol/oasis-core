@@ -335,20 +335,21 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 }
 
 func (n *Node) worker() {
+	defer close(n.quitCh)
+	defer (n.cancelCtx)()
+
 	// Delay starting of committee node until after the consensus service
 	// has finished initial synchronization, if applicable.
 	if n.commonNode.Consensus != nil {
 		n.logger.Info("delaying committee node start until after initial synchronization")
 		select {
-		case <-n.quitCh:
+		case <-n.stopCh:
+			close(n.initCh)
 			return
 		case <-n.commonNode.Consensus.Synced():
 		}
 	}
 	n.logger.Info("starting committee node")
-
-	defer close(n.quitCh)
-	defer (n.cancelCtx)()
 
 	// Check incoming queue every FlushTimeout.
 	scheduleTicker := time.NewTicker(n.flushTimeout)
