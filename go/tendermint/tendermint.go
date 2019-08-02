@@ -287,12 +287,12 @@ func (t *tendermintService) ForceInitialize() error {
 	return err
 }
 
-func (t *tendermintService) GetBlock(height int64) (*tmtypes.Block, error) {
+func (t *tendermintService) GetBlock(height *int64) (*tmtypes.Block, error) {
 	if t.client == nil {
 		panic("client not available yet")
 	}
 
-	result, err := t.client.Block(&height)
+	result, err := t.client.Block(height)
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint: block query failed")
 	}
@@ -300,8 +300,12 @@ func (t *tendermintService) GetBlock(height int64) (*tmtypes.Block, error) {
 	return result.Block, nil
 }
 
-func (t *tendermintService) GetBlockResults(height int64) (*tmrpctypes.ResultBlockResults, error) {
-	result, err := t.client.BlockResults(&height)
+func (t *tendermintService) GetBlockResults(height *int64) (*tmrpctypes.ResultBlockResults, error) {
+	if t.client == nil {
+		panic("client not available yet")
+	}
+
+	result, err := t.client.BlockResults(height)
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint: block results query failed")
 	}

@@ -29,7 +29,11 @@ func TestBlockIndexer(t *testing.T) {
 	err = idx.Index(blk, 42)
 	require.NoError(t, err, "Index")
 
-	height, err := idx.GetBlockHeight(id, 0)
+	height, err := idx.GetLastHeight()
+	require.NoError(t, err, "GetLastHeight")
+	require.EqualValues(t, 42, height, "GetLastHeight")
+
+	height, err = idx.GetBlockHeight(id, 0)
 	require.NoError(t, err, "GetBlockHeight")
 	require.EqualValues(t, 42, height, "GetBlockHeight")
 
