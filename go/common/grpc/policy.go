@@ -6,8 +6,10 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/accessctl"
@@ -18,6 +20,21 @@ var (
 	_ RuntimePolicyChecker = (*AllowAllRuntimePolicyChecker)(nil)
 	_ RuntimePolicyChecker = (*DynamicRuntimePolicyChecker)(nil)
 )
+
+// ErrForbiddenByPolicy is the error returned when an action is not allowed by policy.
+type ErrForbiddenByPolicy struct {
+	method    accessctl.Action
+	runtimeID signature.PublicKey
+	subject   string
+}
+
+func (e ErrForbiddenByPolicy) Error() string {
+	return fmt.Sprintf("grpc: calling %v method for runtime %v not allowed for client %v", e.method, e.runtimeID, e.subject)
+}
+
+func (e ErrForbiddenByPolicy) GRPCStatus() *status.Status {
+	return status.New(codes.PermissionDenied, e.Error())
+}
 
 // RuntimePolicyChecker is used for setting and checking the gRPC server's access control policy
 // for different runtimes.
@@ -82,7 +99,11 @@ func (c *DynamicRuntimePolicyChecker) CheckAccessAllowed(
 	subject := accessctl.SubjectFromX509Certificate(peerCert)
 	policy := c.accessPolicies[runtimeID.ToMapKey()]
 	if policy == nil || !policy.IsAllowed(subject, method) {
-		return fmt.Errorf("grpc: calling %v method for runtime %v not allowed for client %v", method, runtimeID, peerCert.Subject)
+		return ErrForbiddenByPolicy{
+			method:    method,
+			runtimeID: runtimeID,
+			subject:   peerCert.Subject.String(),
+		}
 	}
 	return nil
 }

@@ -9,10 +9,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/accessctl"
@@ -79,7 +80,7 @@ type pingServer struct {
 
 func (s *pingServer) Ping(ctx context.Context, query *PingQuery) (*PingResponse, error) {
 	if err := s.CheckAccessAllowed(ctx, "Ping", query.Namespace); err != nil {
-		return nil, errors.Wrap(err, "ping: access policy forbade access")
+		return nil, err
 	}
 	return &PingResponse{}, nil
 }
@@ -189,7 +190,7 @@ func TestAccessPolicy(t *testing.T) {
 	_, err = client.Ping(ctx, &PingQuery{})
 	require.EqualError(
 		err,
-		"rpc error: code = Unknown desc = ping: access policy forbade access: grpc: unexpected number of peer certificates: 0",
+		"rpc error: code = Unknown desc = grpc: unexpected number of peer certificates: 0",
 		"Calling Ping without a client certificate should not be allowed",
 	)
 
@@ -202,9 +203,10 @@ func TestAccessPolicy(t *testing.T) {
 	_, err = client.Ping(ctx, &PingQuery{testNs})
 	require.EqualError(
 		err,
-		"rpc error: code = Unknown desc = ping: access policy forbade access: grpc: calling Ping method for runtime 832b5e638ea386ece9b747d25fedd5f559af6e2049db1998212b187a64303798 not allowed for client CN=ekiden-node",
+		"rpc error: code = PermissionDenied desc = grpc: calling Ping method for runtime 832b5e638ea386ece9b747d25fedd5f559af6e2049db1998212b187a64303798 not allowed for client CN=ekiden-node",
 		"Calling Ping with an empty access policy should not be allowed",
 	)
+	require.Equal(codes.PermissionDenied, status.Code(err), "returned gRPC error should be PermissionDenied")
 
 	// Add a policy rule to allow the client to call Ping.
 	policy = accessctl.NewPolicy()
