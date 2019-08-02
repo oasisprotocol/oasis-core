@@ -849,20 +849,21 @@ func (n *Node) handleExternalBatchLocked(
 }
 
 func (n *Node) worker() {
+	defer close(n.quitCh)
+	defer (n.cancelCtx)()
+
 	// Delay starting of committee node until after the consensus service
 	// has finished initial synchronization, if applicable.
 	if n.commonNode.Consensus != nil {
 		n.logger.Info("delaying committee node start until after initial synchronization")
 		select {
-		case <-n.quitCh:
+		case <-n.stopCh:
+			close(n.initCh)
 			return
 		case <-n.commonNode.Consensus.Synced():
 		}
 	}
 	n.logger.Info("starting committee node")
-
-	defer close(n.quitCh)
-	defer (n.cancelCtx)()
 
 	// We are initialized.
 	close(n.initCh)
