@@ -322,6 +322,19 @@ func (n *Node) worker() {
 	defer close(n.quitCh)
 	defer close(n.diffCh)
 
+	// Delay starting of committee node until after the consensus service
+	// has finished initial synchronization, if applicable.
+	if n.commonNode.Consensus != nil {
+		n.logger.Info("delaying committee node start until after initial synchronization")
+		select {
+		case <-n.ctx.Done():
+			close(n.initCh)
+			return
+		case <-n.commonNode.Consensus.Synced():
+		}
+	}
+	n.logger.Info("starting committee node")
+
 	genesisBlock, err := n.commonNode.Roothash.GetGenesisBlock(n.ctx, n.commonNode.RuntimeID)
 	if err != nil {
 		n.logger.Error("can't retrieve genesis block", "err", err)
