@@ -1,4 +1,4 @@
-package api
+package keyformat
 
 import (
 	"encoding/hex"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestKeyFormat(t *testing.T) {
-	fmt1 := NewKeyFormat('N', &common.Namespace{}, &hash.Hash{})
+	fmt1 := New('N', &common.Namespace{}, &hash.Hash{})
 	require.Equal(t, 1+32+32, fmt1.Size(), "format size")
 
 	var ns common.Namespace
@@ -35,7 +35,7 @@ func TestKeyFormat(t *testing.T) {
 	require.EqualValues(t, ns, decNs, "namespace encode/decode round trip")
 	require.EqualValues(t, h, decH, "hash encode/decode round trip")
 
-	fmt2 := NewKeyFormat('L', &common.Namespace{}, uint64(0), &hash.Hash{}, &hash.Hash{})
+	fmt2 := New('L', &common.Namespace{}, uint64(0), &hash.Hash{}, &hash.Hash{})
 	require.Equal(t, 1+32+8+32+32, fmt2.Size())
 
 	h.FromBytes([]byte("hash one"))

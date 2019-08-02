@@ -1,4 +1,4 @@
-package api
+package keyformat
 
 import (
 	"encoding"
@@ -7,7 +7,7 @@ import (
 )
 
 // KeyFormat is a key formatting helper to be used together with key-value
-// database-based NodeDB backends for constructing keys.
+// backends for constructing keys.
 type KeyFormat struct {
 	// prefix is the one-byte key prefix that denotes the type of the key.
 	prefix byte
@@ -17,8 +17,8 @@ type KeyFormat struct {
 	size int
 }
 
-// NewKeyFormat constructs a new key format.
-func NewKeyFormat(prefix byte, layout ...interface{}) *KeyFormat {
+// New constructs a new key format.
+func New(prefix byte, layout ...interface{}) *KeyFormat {
 	kf := &KeyFormat{
 		prefix: prefix,
 		layout: make([]int, len(layout)),
