@@ -36,7 +36,7 @@ func (s *GrpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
 	}
 	if err := s.CheckAccessAllowed(ctx, accessctl.Action("Apply"), ns); err != nil {
-		return nil, errors.Wrap(err, "storage: access policy forbade access")
+		return nil, err
 	}
 
 	var srcRoot, dstRoot hash.Hash
@@ -71,7 +71,7 @@ func (s *GrpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) 
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
 	}
 	if err := s.CheckAccessAllowed(ctx, accessctl.Action("ApplyBatch"), ns); err != nil {
-		return nil, errors.Wrap(err, "storage: access policy forbade access")
+		return nil, err
 	}
 
 	var ops []api.ApplyOp
@@ -116,7 +116,7 @@ func (s *GrpcServer) Merge(ctx context.Context, req *pb.MergeRequest) (*pb.Merge
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
 	}
 	if err := s.CheckAccessAllowed(ctx, accessctl.Action("Merge"), ns); err != nil {
-		return nil, errors.Wrap(err, "storage: access policy forbade access")
+		return nil, err
 	}
 
 	var base hash.Hash
@@ -149,7 +149,7 @@ func (s *GrpcServer) MergeBatch(ctx context.Context, req *pb.MergeBatchRequest) 
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
 	}
 	if err := s.CheckAccessAllowed(ctx, accessctl.Action("MergeBatch"), ns); err != nil {
-		return nil, errors.Wrap(err, "storage: access policy forbade access")
+		return nil, err
 	}
 
 	var ops []api.MergeOp
@@ -357,7 +357,7 @@ func (s *GrpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffSe
 	}
 
 	if err := s.CheckAccessAllowed(stream.Context(), accessctl.Action("GetDiff"), startRoot.Namespace); err != nil {
-		return errors.Wrap(err, "storage: access policy forbade access")
+		return err
 	}
 
 	<-s.backend.Initialized()
@@ -383,7 +383,7 @@ func (s *GrpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Stora
 	}
 
 	if err := s.CheckAccessAllowed(stream.Context(), accessctl.Action("GetCheckpoint"), root.Namespace); err != nil {
-		return errors.Wrap(err, "storage: access policy forbade access")
+		return err
 	}
 
 	<-s.backend.Initialized()
