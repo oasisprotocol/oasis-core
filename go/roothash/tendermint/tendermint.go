@@ -12,10 +12,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/tendermint/tendermint/abci/types"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
@@ -32,6 +34,8 @@ import (
 const (
 	// BackendName is the name of this implementation.
 	BackendName = tmapi.BackendName
+
+	crashPointBlockBeforeIndex = "roothash.before_index"
 
 	cfgIndexBlocks = "roothash.tendermint.index_blocks"
 )
@@ -67,6 +71,7 @@ type tendermintBackend struct {
 
 	closeOnce sync.Once
 	closedCh  chan struct{}
+	initCh    chan struct{}
 
 	roundTimeout time.Duration
 }
@@ -137,10 +142,15 @@ func (r *tendermintBackend) GetBlock(ctx context.Context, id signature.PublicKey
 		return nil, errors.New("roothash: block indexer not enabled for tendermint backend")
 	}
 
+	// Make sure we are initialized before querying the index.
+	select {
+	case <-r.initCh:
+	case <-r.ctx.Done():
+		return nil, r.ctx.Err()
+	}
+
 	height, err := r.blockIndex.GetBlockHeight(id, round)
 	if err != nil {
-		// TODO: Support on-demand reindexing based on neighbouring blocks in
-		//       case blocks are not found.
 		return nil, err
 	}
 
@@ -271,6 +281,91 @@ func (r *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtime
 	return notifiers
 }
 
+func (r *tendermintBackend) reindexBlocks() error {
+	if r.blockIndex == nil {
+		return nil
+	}
+
+	var err error
+	var lastHeight int64
+	if lastHeight, err = r.blockIndex.GetLastHeight(); err != nil {
+		r.logger.Error("failed to get last indexed height",
+			"err", err,
+		)
+		return err
+	}
+
+	// Scan all blocks between last indexed height and current height. Note that
+	// we can safely snapshot the current height as we have already subscribed
+	// to new blocks.
+	var currentBlk *tmtypes.Block
+	if currentBlk, err = r.service.GetBlock(nil); err != nil {
+		r.logger.Error("failed to get latest block",
+			"err", err,
+		)
+		return err
+	}
+
+	// There may not be a current block yet if we need to initialize from genesis.
+	if currentBlk == nil {
+		return nil
+	}
+
+	r.logger.Debug("reindexing blocks",
+		"last_indexed_height", lastHeight,
+		"current_height", currentBlk.Height,
+	)
+
+	// TODO: Take pruning policy into account (e.g., skip heights).
+	for height := lastHeight + 1; height <= currentBlk.Height; height++ {
+		var results *tmrpctypes.ResultBlockResults
+		results, err = r.service.GetBlockResults(&height)
+		if err != nil {
+			r.logger.Error("failed to get tendermint block",
+				"err", err,
+				"height", height,
+			)
+			return err
+		}
+
+		// Index block.
+		tmEvents := append(results.Results.BeginBlock.GetEvents(), results.Results.EndBlock.GetEvents()...)
+		for _, txResults := range results.Results.DeliverTx {
+			tmEvents = append(tmEvents, txResults.GetEvents()...)
+		}
+		for _, tmEv := range tmEvents {
+			if tmEv.GetType() != tmapi.EventTypeEkiden {
+				continue
+			}
+
+			for _, pair := range tmEv.GetAttributes() {
+				if bytes.Equal(pair.GetKey(), app.TagFinalized) {
+					var blk *block.Block
+					blk, _, err := r.getBlockFromFinalizedTag(pair.GetValue(), height)
+					if err != nil {
+						r.logger.Error("failed to get block from tag",
+							"err", err,
+						)
+						continue
+					}
+
+					err = r.blockIndex.Index(blk, height)
+					if err != nil {
+						r.logger.Error("worker: failed to index block",
+							"err", err,
+						)
+						return err
+					}
+				}
+			}
+		}
+	}
+
+	r.logger.Debug("block reindex complete")
+
+	return nil
+}
+
 func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 	defer close(r.closedCh)
 
@@ -298,7 +393,17 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 		if pruneSub != nil {
 			defer pruneSub.Close()
 		}
+
+		// Check if we need to resync any missed blocks.
+		if err = r.reindexBlocks(); err != nil {
+			r.logger.Error("failed to reindex blocks",
+				"err", err,
+			)
+			return
+		}
 	}
+
+	close(r.initCh)
 
 	// Process transactions and emit notifications for our subscribers.
 	for {
@@ -330,24 +435,22 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 		}
 
 		// Extract relevant events.
+		var height int64
 		var tmEvents []types.Event
-
 		switch ev := event.(type) {
 		case tmtypes.EventDataNewBlock:
+			height = ev.Block.Header.Height
 			tmEvents = append(ev.ResultBeginBlock.GetEvents(), ev.ResultEndBlock.GetEvents()...)
-
-			r.Lock()
-			r.lastBlockHeight = ev.Block.Header.Height
-			r.Unlock()
 		case tmtypes.EventDataTx:
+			height = ev.Height
 			tmEvents = ev.Result.GetEvents()
-
-			r.Lock()
-			r.lastBlockHeight = ev.Height
-			r.Unlock()
 		default:
 			continue
 		}
+
+		r.Lock()
+		r.lastBlockHeight = height
+		r.Unlock()
 
 		for _, tmEv := range tmEvents {
 			if tmEv.GetType() != tmapi.EventTypeEkiden {
@@ -356,7 +459,7 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 
 			for _, pair := range tmEv.GetAttributes() {
 				if bytes.Equal(pair.GetKey(), app.TagFinalized) {
-					block, value, err := r.getBlockFromFinalizedTag(pair.GetValue(), r.lastBlockHeight)
+					block, value, err := r.getBlockFromFinalizedTag(pair.GetValue(), height)
 					if err != nil {
 						r.logger.Error("worker: failed to get block from tag",
 							"err", err,
@@ -369,24 +472,31 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 					// Ensure latest block is set.
 					notifiers.Lock()
 					notifiers.lastBlock = block
-					notifiers.lastBlockHeight = r.lastBlockHeight
+					notifiers.lastBlockHeight = height
 					notifiers.Unlock()
 
 					// Index the block when an indexer is configured.
 					if r.blockIndex != nil {
-						err = r.blockIndex.Index(block, r.lastBlockHeight)
+						crash.Here(crashPointBlockBeforeIndex)
+
+						err = r.blockIndex.Index(block, height)
 						if err != nil {
 							r.logger.Error("worker: failed to index block",
 								"err", err,
+								"height", height,
 							)
-							// TODO: Support on-demand reindexing.
+							// Panic as otherwise the index would become out of sync with
+							// what was emitted from the roothash backend. The only reason
+							// why something like this could happen is a problem with the
+							// index database.
+							panic("roothash: failed to index block")
 						}
 					}
 
 					// Broadcast new block.
 					r.allBlockNotifier.Broadcast(block)
 					notifiers.blockNotifier.Broadcast(&api.AnnotatedBlock{
-						Height: r.lastBlockHeight,
+						Height: height,
 						Block:  block,
 					})
 				} else if bytes.Equal(pair.GetKey(), app.TagMergeDiscrepancyDetected) {
@@ -441,6 +551,7 @@ func New(
 		runtimeNotifiers: make(map[signature.MapKey]*runtimeBrokers),
 		genesisBlocks:    make(map[signature.MapKey]*block.Block),
 		closedCh:         make(chan struct{}),
+		initCh:           make(chan struct{}),
 		roundTimeout:     roundTimeout,
 	}
 
@@ -470,4 +581,10 @@ func RegisterFlags(cmd *cobra.Command) {
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
+}
+
+func init() {
+	crash.RegisterCrashPoints(
+		crashPointBlockBeforeIndex,
+	)
 }

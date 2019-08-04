@@ -18,6 +18,9 @@ import (
 var (
 	bktIndexRoundToHeight = []byte("\x01")
 	bktIndexHeightToRound = []byte("\x02")
+	bktMetadata           = []byte("\x03")
+
+	keyLastHeight = []byte("last_height")
 )
 
 // A thread-safe Tendermint roothash block indexer.
@@ -111,8 +114,18 @@ func (b *blockIndexer) Index(blk *block.Block, height int64) error {
 	encHeight := encodeUint64(uint64(height))
 
 	txErr := b.db.Update(func(tx *bolt.Tx) error {
+		// Update last indexed height.
+		bkt, err := tx.CreateBucketIfNotExists(bktMetadata)
+		if err != nil {
+			return err
+		}
+
+		if err = bkt.Put(keyLastHeight, encHeight); err != nil {
+			return err
+		}
+
 		// Create per-runtime bucket.
-		bkt, err := tx.CreateBucketIfNotExists(blk.Header.Namespace[:])
+		bkt, err = tx.CreateBucketIfNotExists(blk.Header.Namespace[:])
 		if err != nil {
 			return err
 		}
@@ -162,6 +175,36 @@ func (b *blockIndexer) Index(blk *block.Block, height int64) error {
 	}
 
 	return txErr
+}
+
+// GetLastHeight returns the last indexed tendermint height.
+func (b *blockIndexer) GetLastHeight() (int64, error) {
+	height := int64(-1)
+	if txErr := b.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bktMetadata)
+		if bkt == nil {
+			// Nothing indexed yet.
+			return nil
+		}
+
+		value := bkt.Get(keyLastHeight)
+		if len(value) == 0 {
+			// Nothing indexed yet.
+			return nil
+		} else if len(value) != 8 {
+			return errors.New("indexer: corrupted last height")
+		}
+
+		height = int64(decodeUint64(value))
+		return nil
+	}); txErr != nil {
+		b.logger.Error("failed to get last indexed height",
+			"err", txErr,
+		)
+		return -1, txErr
+	}
+
+	return height, nil
 }
 
 // GetBlockHeight returns a tendermint height at which a roothash
