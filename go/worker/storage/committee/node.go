@@ -424,7 +424,7 @@ mainLoop:
 				dummy.StateRoot.Empty()
 				hashCache[cachedLastRound] = &dummy
 			}
-			for i := cachedLastRound + 1; i < blk.Header.Round; i++ {
+			for i := cachedLastRound; i < blk.Header.Round; i++ {
 				if _, ok := hashCache[i]; ok {
 					continue
 				}
