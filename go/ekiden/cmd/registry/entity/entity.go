@@ -18,6 +18,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/node"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	cmdFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
@@ -29,6 +30,8 @@ const (
 	cmdRegister = "register"
 
 	cfgAllowEntitySignedNodes = "entity.debug.allow_entity_signed_nodes"
+	cfgNodeID                 = "entity.node.id"
+	cfgNodeDescriptor         = "entity.node.descriptor"
 
 	entityGenesisFilename = "entity_genesis.json"
 )
@@ -44,8 +47,21 @@ var (
 		Short: "initialize an entity",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			cmdFlags.RegisterForce(cmd)
+			cmdFlags.RegisterDebugTestEntity(cmd)
+			registerEntityFlags(cmd)
 		},
 		Run: doInit,
+	}
+
+	updateCmd = &cobra.Command{
+		Use:   "update",
+		Short: "update an entity",
+		PreRun: func(cmd *cobra.Command, args []string) {
+			cmdFlags.RegisterDebugTestEntity(cmd)
+			registerEntityFlags(cmd)
+			registerUpdateFlags(cmd)
+		},
+		Run: doUpdate,
 	}
 
 	registerCmd = &cobra.Command{
@@ -129,13 +145,137 @@ func doInit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	if err = signAndWriteEntityGenesis(dataDir, signer, ent); err != nil {
+		os.Exit(1)
+	}
+
+	logger.Info("generated entity",
+		"entity", ent.ID,
+	)
+}
+
+func doUpdate(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	dataDir, err := cmdCommon.DataDirOrPwd()
+	if err != nil {
+		logger.Error("failed to query data directory",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	// Load the existing entity.
+	ent, signer, err := loadOrGenerateEntity(dataDir, false)
+	if err != nil {
+		logger.Error("failed to load entity",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	// Update the entity.
+	ent.RegistrationTime = uint64(time.Now().Unix())
+	ent.AllowEntitySignedNodes = viper.GetBool(cfgAllowEntitySignedNodes)
+
+	ent.Nodes = nil
+	for _, v := range viper.GetStringSlice(cfgNodeID) {
+		var nodeID signature.PublicKey
+		if err = nodeID.UnmarshalHex(v); err != nil {
+			logger.Error("failed to parse node ID",
+				"err", err,
+				"node_id", v,
+			)
+			os.Exit(1)
+		}
+		ent.Nodes = append(ent.Nodes, nodeID)
+	}
+	for _, v := range viper.GetStringSlice(cfgNodeDescriptor) {
+		var b []byte
+		if b, err = ioutil.ReadFile(v); err != nil {
+			logger.Error("failed to read node descriptor",
+				"err", err,
+				"path", v,
+			)
+			os.Exit(1)
+		}
+
+		var signedNode node.SignedNode
+		if err = json.Unmarshal(b, &signedNode); err != nil {
+			logger.Error("failed to parse signed node descriptor",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+
+		var n node.Node
+		if err = signedNode.Open(registry.RegisterGenesisNodeSignatureContext, &n); err != nil {
+			logger.Error("failed to validate signed node descriptor",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+
+		if !ent.ID.Equal(n.EntityID) {
+			logger.Error("entity ID mismatch, node does not belong to this entity",
+				"entity_id", ent.ID,
+				"node_entity_id", n.EntityID,
+			)
+			os.Exit(1)
+		}
+		if !signedNode.Signature.PublicKey.Equal(n.ID) {
+			logger.Error("node genesis descriptor is not self signed",
+				"signer", signedNode.Signature.PublicKey,
+			)
+			os.Exit(1)
+		}
+		ent.Nodes = append(ent.Nodes, n.ID)
+	}
+	if len(ent.Nodes) > 0 && ent.AllowEntitySignedNodes {
+		logger.Error("entity descriptor will have self-signed nodes, when entity signed is configured")
+		os.Exit(1)
+	}
+
+	// De-duplicate the entity's nodes.
+	nodeMap := make(map[signature.MapKey]bool)
+	for _, v := range ent.Nodes {
+		nodeMap[v.ToMapKey()] = true
+	}
+	ent.Nodes = make([]signature.PublicKey, 0, len(nodeMap))
+	for k := range nodeMap {
+		var nodeID signature.PublicKey
+		nodeID.FromMapKey(k)
+		ent.Nodes = append(ent.Nodes, nodeID)
+	}
+
+	// Save the entity descriptor.
+	if err = ent.Save(dataDir); err != nil {
+		logger.Error("failed to persist entity descriptor",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	// Regenerate the genesis document entity registration.
+	if err = signAndWriteEntityGenesis(dataDir, signer, ent); err != nil {
+		os.Exit(1)
+	}
+
+	logger.Info("updated entity",
+		"entity", ent.ID,
+	)
+}
+
+func signAndWriteEntityGenesis(dataDir string, signer signature.Signer, ent *entity.Entity) error {
 	// Sign the entity registration for use in a genesis document.
 	signed, err := entity.SignEntity(signer, registry.RegisterGenesisEntitySignatureContext, ent)
 	if err != nil {
 		logger.Error("failed to sign entity for genesis registration",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
 
 	// Write out the signed entity registration.
@@ -144,12 +284,10 @@ func doInit(cmd *cobra.Command, args []string) {
 		logger.Error("failed to write signed entity genesis registration",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
 
-	logger.Info("generated entity",
-		"entity", ent.ID,
-	)
+	return nil
 }
 
 func doRegisterOrDeregister(cmd *cobra.Command, args []string) {
@@ -320,7 +458,21 @@ func registerEntityFlags(cmd *cobra.Command) {
 	for _, v := range []string{
 		cfgAllowEntitySignedNodes,
 	} {
-		_ = viper.BindPFlag(v, initCmd.Flags().Lookup(v))
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+	}
+}
+
+func registerUpdateFlags(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().StringSlice(cfgNodeID, nil, "ID(s) of nodes associated with this entity")
+		cmd.Flags().StringSlice(cfgNodeDescriptor, nil, "Node genesis descriptor(s) of nodes associated with this entity")
+	}
+
+	for _, v := range []string{
+		cfgNodeID,
+		cfgNodeDescriptor,
+	} {
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
 }
 
@@ -328,12 +480,7 @@ func registerEntityFlags(cmd *cobra.Command) {
 func Register(parentCmd *cobra.Command) {
 	for _, v := range []*cobra.Command{
 		initCmd,
-	} {
-		registerEntityFlags(v)
-	}
-
-	for _, v := range []*cobra.Command{
-		initCmd,
+		updateCmd,
 		registerCmd,
 		deregisterCmd,
 		listCmd,
@@ -345,6 +492,14 @@ func Register(parentCmd *cobra.Command) {
 	cmdFlags.RegisterRetries(registerCmd)
 	cmdFlags.RegisterRetries(deregisterCmd)
 	cmdFlags.RegisterVerbose(listCmd)
+	registerUpdateFlags(updateCmd)
+
+	for _, v := range []*cobra.Command{
+		initCmd,
+		updateCmd,
+	} {
+		registerEntityFlags(v)
+	}
 
 	for _, v := range []*cobra.Command{
 		initCmd,
@@ -352,7 +507,6 @@ func Register(parentCmd *cobra.Command) {
 		deregisterCmd,
 	} {
 		cmdFlags.RegisterDebugTestEntity(v)
-		cmdFlags.RegisterConsensusBackend(v)
 	}
 
 	for _, v := range []*cobra.Command{
