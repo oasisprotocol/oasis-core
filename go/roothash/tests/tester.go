@@ -20,9 +20,9 @@ import (
 	"github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
 const (
@@ -240,15 +240,18 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	defer sub.Close()
 
 	// Generate a dummy I/O root.
+	ioRoot := storage.Root{
+		Namespace: child.Header.Namespace,
+		Round:     child.Header.Round + 1,
+	}
+	ioRoot.Hash.Empty()
+
 	ctx := context.Background()
-	tree := urkel.New(nil, nil)
-	err = tree.Insert(ctx, block.IoKeyInputs, []byte("testInputSet"))
-	require.NoError(err, "tree.Insert")
-	err = tree.Insert(ctx, block.IoKeyOutputs, []byte("testOutputSet"))
-	require.NoError(err, "tree.Insert")
-	err = tree.Insert(ctx, block.IoKeyTags, []byte("testTagSet"))
-	require.NoError(err, "tree.Insert")
-	ioWriteLog, ioRoot, err := tree.Commit(ctx, child.Header.Namespace, child.Header.Round+1)
+	tree, err := transaction.NewTree(ctx, nil, ioRoot)
+	require.NoError(err, "tree.NewTree")
+	err = tree.AddTransaction(ctx, transaction.Transaction{Input: []byte("testInput"), Output: []byte("testOutput")}, nil)
+	require.NoError(err, "tree.AddTransaction")
+	ioWriteLog, ioRootHash, err := tree.Commit(ctx)
 	require.NoError(err, "tree.Commit")
 
 	var emptyRoot hash.Hash
@@ -263,8 +266,8 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 			Timestamp:    uint64(time.Now().Unix()),
 			HeaderType:   block.Normal,
 			PreviousHash: child.Header.EncodedHash(),
-			IORoot:       ioRoot,
-			StateRoot:    ioRoot,
+			IORoot:       ioRootHash,
+			StateRoot:    ioRootHash,
 		},
 	}
 	require.True(parent.Header.IsParentOf(&child.Header), "parent is parent of child")
@@ -275,9 +278,9 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 		child.Header.Namespace,
 		child.Header.Round+1,
 		[]storage.ApplyOp{
-			storage.ApplyOp{SrcRound: child.Header.Round + 1, SrcRoot: emptyRoot, DstRoot: ioRoot, WriteLog: ioWriteLog},
+			storage.ApplyOp{SrcRound: child.Header.Round + 1, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
 			// NOTE: Twice to get a receipt over both roots which we set to the same value.
-			storage.ApplyOp{SrcRound: child.Header.Round, SrcRoot: emptyRoot, DstRoot: ioRoot, WriteLog: ioWriteLog},
+			storage.ApplyOp{SrcRound: child.Header.Round, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
 		},
 	)
 

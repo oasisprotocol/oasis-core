@@ -22,11 +22,6 @@ const (
 	RoundLatest uint64 = math.MaxUint64
 )
 
-var (
-	// TagBlockHash is the tag used for storing the Ekiden block hash.
-	TagBlockHash = indexer.TagBlockHash
-)
-
 // Query is an indexer query.
 type Query = indexer.Query
 

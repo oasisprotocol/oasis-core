@@ -15,13 +15,6 @@ var (
 	// ErrInvalidVersion is the error returned when a version is invalid.
 	ErrInvalidVersion = errors.New("roothash: invalid version")
 
-	// IoKeyInputs is the key holding inputs in the I/O tree.
-	IoKeyInputs = []byte("i")
-	// IoKeyOutputs is the key holding outputs in the I/O tree.
-	IoKeyOutputs = []byte("o")
-	// IoKeyTags is the key holding tags in the I/O tree.
-	IoKeyTags = []byte("t")
-
 	_ cbor.Marshaler   = (*Header)(nil)
 	_ cbor.Unmarshaler = (*Header)(nil)
 )

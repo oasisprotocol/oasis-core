@@ -1,36 +1,59 @@
 package committee
 
 import (
+	"context"
+
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
-func (n *Node) byzantineMaybeInjectDiscrepancy(inputs runtime.Batch) (writelog.WriteLog, hash.Hash, error) {
+func (n *Node) byzantineMaybeInjectDiscrepancy(
+	ctx context.Context,
+	ioRoot hash.Hash,
+	batch *protocol.ComputedBatch,
+	blk *block.Block,
+) {
 	if !n.cfg.ByzantineInjectDiscrepancies {
-		return nil, hash.Hash{}, nil
+		return
 	}
 
 	n.logger.Error("BYZANTINE MODE: injecting discrepancy into batch")
 
-	for i := range inputs {
-		inputs[i] = []byte("boom")
-	}
+	// Inject bogus write log entry.
+	batch.IOWriteLog = append(batch.IOWriteLog, writelog.LogEntry{Key: []byte("__boom__"), Value: []byte("poof")})
 
-	// Update the I/O root as otherwise the runtime will complain.
-	var oldIoRoot hash.Hash
-	oldIoRoot.Empty()
-	ioTree := urkel.New(nil, nil)
-	err := ioTree.Insert(n.ctx, block.IoKeyInputs, inputs.MarshalCBOR())
+	// Compute updated I/O root.
+	tree, err := urkel.NewWithRoot(ctx, n.commonNode.Storage, nil, node.Root{
+		Namespace: blk.Header.Namespace,
+		Round:     blk.Header.Round + 1,
+		Hash:      ioRoot,
+	})
 	if err != nil {
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,
 		)
-		return nil, hash.Hash{}, err
+		return
+	}
+	defer tree.Close()
+
+	err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(batch.IOWriteLog))
+	if err != nil {
+		n.logger.Error("failed to inject discrepancy",
+			"err", err,
+		)
+		return
 	}
 
-	header := n.commonNode.CurrentBlock.Header
-	return ioTree.Commit(n.ctx, header.Namespace, header.Round+1)
+	// Compute the new I/O root.
+	_, batch.Header.IORoot, err = tree.Commit(ctx, blk.Header.Namespace, blk.Header.Round+1)
+	if err != nil {
+		n.logger.Error("failed to inject discrepancy",
+			"err", err,
+		)
+		return
+	}
 }

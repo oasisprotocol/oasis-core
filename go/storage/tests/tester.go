@@ -275,6 +275,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace) {
 		// Generate expected root hash.
 		tree, err := urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: round, Hash: baseRoot})
 		require.NoError(t, err, "NewWithRoot")
+		defer tree.Close()
 		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 		require.NoError(t, err, "ApplyWriteLog")
 		var root hash.Hash
@@ -325,6 +326,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	var tree *urkel.Tree
 	tree, err = urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: 1, Hash: roots[0]})
 	require.NoError(t, err, "NewWithRoot")
+	defer tree.Close()
 	for _, writeLog := range writeLogs[1:] {
 		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 		require.NoError(t, err, "ApplyWriteLog")

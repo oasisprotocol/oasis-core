@@ -16,14 +16,13 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/tracing"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
@@ -268,27 +267,21 @@ func (n *Node) queueBatchBlocking(
 		Round:     hdr.Round + 1,
 		Hash:      ioRootHash,
 	}
-	ioTree, err := urkel.NewWithRoot(ctx, n.commonNode.Storage, nil, ioRoot)
+	txs, err := transaction.NewTree(ctx, n.commonNode.Storage, ioRoot)
 	if err != nil {
 		n.logger.Error("failed to fetch inputs from storage",
 			"err", err,
+			"io_root", ioRoot,
 		)
 		return errStorageFailed
 	}
-	defer ioTree.Close()
+	defer txs.Close()
 
-	rawBatch, err := ioTree.Get(ctx, block.IoKeyInputs)
-	if err != nil {
+	batch, err := txs.GetInputBatch(ctx)
+	if err != nil || len(batch) == 0 {
 		n.logger.Error("failed to fetch inputs from storage",
 			"err", err,
-		)
-		return errStorageFailed
-	}
-
-	var batch runtime.Batch
-	if err = batch.UnmarshalCBOR(rawBatch); err != nil {
-		n.logger.Error("failed to unmarshal inputs",
-			"err", err,
+			"io_root", ioRoot,
 		)
 		return errStorageFailed
 	}
@@ -309,7 +302,7 @@ func (n *Node) HandleBatchFromTransactionSchedulerLocked(
 	batchSpanCtx opentracing.SpanContext,
 	committeeID hash.Hash,
 	ioRoot hash.Hash,
-	batch runtime.Batch,
+	batch transaction.Batch,
 	txnSchedSig signature.Signature,
 	inputStorageSigs []signature.Signature,
 ) {
@@ -429,7 +422,13 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext, txnSchedSig signature.Signature, inputStorageSigs []signature.Signature) {
+func (n *Node) maybeStartProcessingBatchLocked(
+	ioRoot hash.Hash,
+	batch transaction.Batch,
+	batchSpanCtx opentracing.SpanContext,
+	txnSchedSig signature.Signature,
+	inputStorageSigs []signature.Signature,
+) {
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	switch {
@@ -460,7 +459,13 @@ func (n *Node) maybeStartProcessingBatchLocked(ioRoot hash.Hash, batch runtime.B
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch, batchSpanCtx opentracing.SpanContext, txnSchedSig signature.Signature, inputStorageSigs []signature.Signature) {
+func (n *Node) startProcessingBatchLocked(
+	ioRoot hash.Hash,
+	batch transaction.Batch,
+	batchSpanCtx opentracing.SpanContext,
+	txnSchedSig signature.Signature,
+	inputStorageSigs []signature.Signature,
+) {
 	if n.commonNode.CurrentBlock == nil {
 		panic("attempted to start processing batch with a nil block")
 	}
@@ -502,18 +507,6 @@ func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch,
 			batchRuntimeProcessingTime.With(n.getMetricLabels()).Observe(time.Since(rtStartTime).Seconds())
 		}()
 
-		// Maybe inject discrepancy.
-		disWriteLog, disIoRoot, err := n.byzantineMaybeInjectDiscrepancy(rq.WorkerExecuteTxBatchRequest.Inputs)
-		if err != nil {
-			n.logger.Error("error while injecting discrepancy",
-				"err", err,
-			)
-			return
-		}
-		if disWriteLog != nil {
-			rq.WorkerExecuteTxBatchRequest.IORoot = disIoRoot
-		}
-
 		ch, err := n.workerHost.MakeRequest(ctx, rq)
 		if err != nil {
 			n.logger.Error("error while sending batch processing request to worker host",
@@ -539,9 +532,12 @@ func (n *Node) startProcessingBatchLocked(ioRoot hash.Hash, batch runtime.Batch,
 			}
 
 			// Maybe inject discrepancy.
-			if disWriteLog != nil {
-				rsp.Batch.IOWriteLog = append(rsp.Batch.IOWriteLog, disWriteLog...)
-			}
+			n.byzantineMaybeInjectDiscrepancy(
+				ctx,
+				ioRoot,
+				&rsp.Batch,
+				&rq.WorkerExecuteTxBatchRequest.Block,
+			)
 
 			done <- &rsp.Batch
 		case <-ctx.Done():
@@ -789,7 +785,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 func (n *Node) handleExternalBatchLocked(
 	committeeID hash.Hash,
 	ioRoot hash.Hash,
-	batch runtime.Batch,
+	batch transaction.Batch,
 	batchSpanCtx opentracing.SpanContext,
 	hdr block.Header,
 	txnSchedSig signature.Signature,

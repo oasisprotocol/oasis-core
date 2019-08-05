@@ -6,12 +6,10 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use super::{
     context::Context,
+    tags::Tags,
     types::{TxnBatch, TxnCall, TxnOutput},
 };
-use crate::{
-    common::{cbor, crypto::hash::Hash},
-    types::{Tag, TAG_TXN_INDEX_BLOCK},
-};
+use crate::common::{cbor, crypto::hash::Hash};
 
 /// Dispatch error.
 #[derive(Debug, Fail)]
@@ -219,13 +217,10 @@ impl Dispatcher {
     }
 
     /// Dispatches a batch of runtime requests.
-    pub fn dispatch_batch(&self, batch: &TxnBatch, mut ctx: Context) -> (TxnBatch, Vec<Tag>) {
+    pub fn dispatch_batch(&self, batch: &TxnBatch, mut ctx: Context) -> (TxnBatch, Vec<Tags>) {
         if let Some(ref ctx_init) = self.ctx_initializer {
             ctx_init.init(&mut ctx);
         }
-
-        // Reset current transaction index.
-        ctx.txn_index = TAG_TXN_INDEX_BLOCK;
 
         // Invoke start batch handler.
         if let Some(ref handler) = self.batch_handler {
@@ -236,25 +231,19 @@ impl Dispatcher {
         let outputs = TxnBatch(
             batch
                 .iter()
-                .enumerate()
-                .map(|(idx, call)| {
-                    // Set current transaction index in the context.
-                    ctx.txn_index = idx as i32;
-
+                .map(|call| {
+                    ctx.start_transaction();
                     self.dispatch(call, &mut ctx)
                 })
                 .collect(),
         );
-
-        // Reset current transaction index.
-        ctx.txn_index = TAG_TXN_INDEX_BLOCK;
 
         // Invoke end batch handler.
         if let Some(ref handler) = self.batch_handler {
             handler.end_batch(&mut ctx);
         }
 
-        (outputs, ctx.tags)
+        (outputs, ctx.close())
     }
 
     /// Dispatches a raw runtime invocation request.

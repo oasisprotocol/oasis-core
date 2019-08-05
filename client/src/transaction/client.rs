@@ -317,16 +317,11 @@ impl TxnClient {
     }
 
     /// Query the block index.
-    pub fn query_block<K, V>(&self, key: K, value: V) -> BoxFuture<Option<BlockSnapshot>>
-    where
-        K: AsRef<[u8]>,
-        V: AsRef<[u8]>,
-    {
+    pub fn query_block(&self, block_hash: Hash) -> BoxFuture<Option<BlockSnapshot>> {
         let (span, options) = self.prepare_options("TxnClient::query_block");
         let mut request = api::client::QueryBlockRequest::new();
         request.set_runtime_id(self.runtime_id.as_ref().to_vec());
-        request.set_key(key.as_ref().into());
-        request.set_value(value.as_ref().into());
+        request.set_block_hash(block_hash.as_ref().to_vec());
 
         let result: BoxFuture<Option<BlockSnapshot>> =
             match self.client.query_block_async_opt(&request, options) {
@@ -341,7 +336,7 @@ impl TxnClient {
                         Ok(rsp) => Ok(Some(BlockSnapshot::new(
                             storage_client,
                             cbor::from_slice(&rsp.block)?,
-                            Hash::from(rsp.block_hash),
+                            block_hash,
                         ))),
                     }))
                 }

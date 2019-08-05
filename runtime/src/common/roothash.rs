@@ -11,13 +11,6 @@ use super::{
     crypto::{hash::Hash, signature::SignatureBundle},
 };
 
-/// The key holding inputs in the I/O tree.
-pub const IO_KEY_INPUTS: &'static [u8] = b"i";
-/// The key holding outputs in the I/O tree.
-pub const IO_KEY_OUTPUTS: &'static [u8] = b"o";
-/// The key holding tags in the I/O tree.
-pub const IO_KEY_TAGS: &'static [u8] = b"t";
-
 /// Block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Block {

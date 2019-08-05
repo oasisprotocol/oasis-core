@@ -3,14 +3,12 @@ package host
 import (
 	"context"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/runtime"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
+	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
@@ -51,23 +49,42 @@ func (h *mockHost) Cleanup() {
 func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan *protocol.Body, error) {
 	ch := make(chan *protocol.Body)
 	go func() {
+		defer close(ch)
+
 		switch {
 		case body.WorkerExecuteTxBatchRequest != nil:
 			rq := body.WorkerExecuteTxBatchRequest
 
-			tags := []runtime.Tag{
-				runtime.Tag{TxnIndex: runtime.TagTxnIndexBlock, Key: []byte("foo"), Value: []byte("bar")},
-				runtime.Tag{TxnIndex: 0, Key: []byte("txn_foo"), Value: []byte("txn_bar")},
+			tags := transaction.Tags{
+				transaction.Tag{Key: []byte("txn_foo"), Value: []byte("txn_bar")},
 			}
 
-			tree := urkel.New(nil, nil)
-			_ = tree.Insert(ctx, block.IoKeyInputs, rq.Inputs.MarshalCBOR())
-			_ = tree.Insert(ctx, block.IoKeyOutputs, rq.Inputs.MarshalCBOR())
-			_ = tree.Insert(ctx, block.IoKeyTags, cbor.Marshal(tags))
-			ioWriteLog, ioRoot, err := tree.Commit(ctx, rq.Block.Header.Namespace, rq.Block.Header.Round+1)
+			emptyRoot := urkelNode.Root{
+				Namespace: rq.Block.Header.Namespace,
+				Round:     rq.Block.Header.Round + 1,
+			}
+			emptyRoot.Hash.Empty()
+
+			tree, err := transaction.NewTree(ctx, nil, emptyRoot)
 			if err != nil {
 				ch <- &protocol.Body{Error: &protocol.Error{Message: "(mock) failed to create I/O tree"}}
-				break
+				return
+			}
+			defer tree.Close()
+			for i := 0; i < len(rq.Inputs); i++ {
+				err = tree.AddTransaction(ctx, transaction.Transaction{
+					Input:  rq.Inputs[0],
+					Output: rq.Inputs[0],
+				}, tags)
+				if err != nil {
+					ch <- &protocol.Body{Error: &protocol.Error{Message: "(mock) failed to create I/O tree"}}
+					return
+				}
+			}
+			ioWriteLog, ioRoot, err := tree.Commit(ctx)
+			if err != nil {
+				ch <- &protocol.Body{Error: &protocol.Error{Message: "(mock) failed to create I/O tree"}}
+				return
 			}
 
 			var stateRoot hash.Hash
@@ -87,8 +104,6 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 		default:
 			ch <- &protocol.Body{Error: &protocol.Error{Message: "(mock) method not supported"}}
 		}
-
-		close(ch)
 	}()
 
 	return ch, nil

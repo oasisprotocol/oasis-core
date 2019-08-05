@@ -3,6 +3,8 @@
 pub mod context;
 pub mod dispatcher;
 pub mod macros;
+pub mod tags;
+pub mod tree;
 pub mod types;
 
 // Re-exports.

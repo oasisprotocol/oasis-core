@@ -3,7 +3,7 @@ package api
 
 import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/runtime"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 )
 
@@ -39,5 +39,5 @@ type Algorithm interface {
 // TransactionDispatcher dispatches transactions to a scheduled compute committee.
 type TransactionDispatcher interface {
 	// Dispatch attempts to dispatch a batch to a compute committee.
-	Dispatch(committeeID hash.Hash, batch runtime.Batch) error
+	Dispatch(committeeID hash.Hash, batch transaction.Batch) error
 }

@@ -83,9 +83,17 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 		offset += elemLen
 
 		switch t := v.(type) {
-		case uint64:
+		case uint8:
+			buf[0] = t
+		case *uint8:
+			buf[0] = *t
+		case uint32:
 			// Use big endian encoding so the keys sort correctly when doing
 			// range queries.
+			binary.BigEndian.PutUint32(buf, t)
+		case *uint32:
+			binary.BigEndian.PutUint32(buf, *t)
+		case uint64:
 			binary.BigEndian.PutUint64(buf, t)
 		case *uint64:
 			binary.BigEndian.PutUint64(buf, *t)
@@ -133,9 +141,13 @@ func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
 		offset += elemLen
 
 		switch t := v.(type) {
-		case *uint64:
+		case *uint8:
+			*t = buf[0]
+		case *uint32:
 			// Use big endian encoding so the keys sort correctly when doing
 			// range queries.
+			*t = binary.BigEndian.Uint32(buf)
+		case *uint64:
 			*t = binary.BigEndian.Uint64(buf)
 		case encoding.BinaryUnmarshaler:
 			err := t.UnmarshalBinary(buf)
@@ -155,14 +167,19 @@ func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
 
 func (k *KeyFormat) getSize(l interface{}) int {
 	switch t := l.(type) {
+	case uint8:
+		return 1
+	case *uint8:
+		return 1
+	case uint32:
+		return 4
+	case *uint32:
+		return 4
 	case uint64:
 		return 8
 	case *uint64:
 		return 8
 	case encoding.BinaryMarshaler:
-		// Make sure that the type supports both marshalling and unmarshalling.
-		_ = l.(encoding.BinaryUnmarshaler)
-
 		data, _ := t.MarshalBinary()
 		return len(data)
 	case []byte:

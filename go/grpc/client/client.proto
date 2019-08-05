@@ -124,17 +124,13 @@ message GetTransactionsResponse {
 message QueryBlockRequest {
     // Runtime identifier.
     bytes runtime_id = 1;
-    // Tag key.
-    bytes key = 2;
-    // Tag value.
-    bytes value = 3;
+    // Block hash.
+    bytes block_hash = 2;
 }
 
 message QueryBlockResponse {
     // A CBOR-serialized block.
     bytes block = 1;
-    // Block header hash.
-    bytes block_hash = 2;
 }
 
 message QueryTxnRequest {
