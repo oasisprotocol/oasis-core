@@ -62,6 +62,13 @@ func (k Key) Equal(other Key) bool {
 	return other == nil
 }
 
+// Compare compares the key with some other key and returns 0 if both
+// keys are equal, -1 if the the key is smaller and 1 if the key is
+// larger.
+func (k Key) Compare(other Key) int {
+	return bytes.Compare(k, other)
+}
+
 // ToMapKey returns the key in a form to be used as a Go's map key.
 func ToMapKey(k []byte) string {
 	return string(k)

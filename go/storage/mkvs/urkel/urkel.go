@@ -286,6 +286,11 @@ func (t *Tree) Visit(ctx context.Context, visitor NodeVisitor) error {
 	return t.doVisit(ctx, visitor, t.cache.pendingRoot, 0, node.Key{})
 }
 
+// NewIterator returns a new iterator over the tree.
+func (t *Tree) NewIterator(ctx context.Context) Iterator {
+	return NewIterator(ctx, t)
+}
+
 // ApplyWriteLog applies the operations from a write log to the current tree.
 //
 // The caller is responsible for calling Commit.
