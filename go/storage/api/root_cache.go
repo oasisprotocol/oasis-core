@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 // RootCache is a LRU based tree cache.
@@ -78,7 +79,7 @@ func (rc *RootCache) Merge(
 	// Apply operations from all roots.
 	baseRoot := Root{Namespace: ns, Round: round, Hash: base}
 	for _, rootHash := range others[1:] {
-		var it nodedb.WriteLogIterator
+		var it writelog.Iterator
 		it, err = rc.localDB.GetWriteLog(ctx, baseRoot, Root{Namespace: ns, Round: round + 1, Hash: rootHash})
 		if err != nil {
 			return nil, errors.Wrap(err, "storage/rootcache: failed to read write log")
@@ -142,7 +143,7 @@ func (rc *RootCache) Apply(
 		}
 		defer tree.Close()
 
-		if err = tree.ApplyWriteLog(ctx, nodedb.NewStaticWriteLogIterator(writeLog)); err != nil {
+		if err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog)); err != nil {
 			return nil, err
 		}
 

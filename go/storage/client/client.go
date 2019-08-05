@@ -27,8 +27,8 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	urkelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 var (
@@ -594,7 +594,7 @@ func (b *storageClientBackend) GetDiff(ctx context.Context, startRoot api.Root, 
 	}
 	respClient := respRaw.(storage.Storage_GetDiffClient)
 
-	pipe := urkelDb.NewPipeWriteLogIterator(ctx)
+	pipe := writelog.NewPipeIterator(ctx)
 
 	go func() {
 		defer pipe.Close()
@@ -638,7 +638,7 @@ func (b *storageClientBackend) GetCheckpoint(ctx context.Context, root api.Root)
 	}
 	respClient := respRaw.(storage.Storage_GetCheckpointClient)
 
-	pipe := urkelDb.NewPipeWriteLogIterator(ctx)
+	pipe := writelog.NewPipeIterator(ctx)
 
 	go func() {
 		defer pipe.Close()

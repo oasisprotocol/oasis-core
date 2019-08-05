@@ -77,7 +77,7 @@ type WriteLog = writelog.WriteLog
 type LogEntry = writelog.LogEntry
 
 // WriteLogIterator iterates over write log entries.
-type WriteLogIterator = nodedb.WriteLogIterator
+type WriteLogIterator = writelog.Iterator
 
 // ReceiptBody is the body of a receipt.
 type ReceiptBody struct {

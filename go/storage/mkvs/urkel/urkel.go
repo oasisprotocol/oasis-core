@@ -289,7 +289,7 @@ func (t *Tree) Visit(ctx context.Context, visitor NodeVisitor) error {
 // ApplyWriteLog applies the operations from a write log to the current tree.
 //
 // The caller is responsible for calling Commit.
-func (t *Tree) ApplyWriteLog(ctx context.Context, wl db.WriteLogIterator) error {
+func (t *Tree) ApplyWriteLog(ctx context.Context, wl writelog.Iterator) error {
 	for {
 		// Fetch next entry from write log iterator.
 		more, err := wl.Next()
@@ -381,7 +381,7 @@ func (t *Tree) commitWithHooks(
 
 	// Store write log summaries.
 	var log writelog.WriteLog
-	var logAnns writelog.WriteLogAnnotations
+	var logAnns writelog.Annotations
 	for _, entry := range t.pendingWriteLog {
 		// Skip all entries that do not exist after all the updates and
 		// did not exist before.

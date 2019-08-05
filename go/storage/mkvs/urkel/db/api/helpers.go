@@ -18,7 +18,7 @@ type HashedDBLogEntry struct {
 }
 
 // MakeHashedDBWriteLog converts the given write log and annotations into a serializable slice with hash node references.
-func MakeHashedDBWriteLog(writeLog writelog.WriteLog, annotations writelog.WriteLogAnnotations) HashedDBWriteLog {
+func MakeHashedDBWriteLog(writeLog writelog.WriteLog, annotations writelog.Annotations) HashedDBWriteLog {
 	log := make(HashedDBWriteLog, len(writeLog))
 	for idx, entry := range writeLog {
 		var h *hash.Hash
@@ -34,8 +34,8 @@ func MakeHashedDBWriteLog(writeLog writelog.WriteLog, annotations writelog.Write
 }
 
 // ReviveHashedDBWriteLog is a helper for hashed database backends that converts a HashedDBWriteLog into a WriteLog.
-func ReviveHashedDBWriteLog(ctx context.Context, hlog HashedDBWriteLog, getter func(hash.Hash) (*node.LeafNode, error)) (WriteLogIterator, error) {
-	pipe := NewPipeWriteLogIterator(ctx)
+func ReviveHashedDBWriteLog(ctx context.Context, hlog HashedDBWriteLog, getter func(hash.Hash) (*node.LeafNode, error)) (writelog.Iterator, error) {
+	pipe := writelog.NewPipeIterator(ctx)
 	go func() {
 		defer pipe.Close()
 		for _, entry := range hlog {

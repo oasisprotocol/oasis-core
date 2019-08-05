@@ -1025,7 +1025,7 @@ func testApplyWriteLog(t *testing.T, ndb db.NodeDB) {
 
 	ctx := context.Background()
 	tree := New(nil, ndb)
-	err := tree.ApplyWriteLog(ctx, db.NewStaticWriteLogIterator(writeLog))
+	err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 	require.NoError(t, err, "ApplyWriteLog")
 	_, _, err = tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
@@ -1043,7 +1043,7 @@ func testApplyWriteLog(t *testing.T, ndb db.NodeDB) {
 		writeLog = append(writeLog, writelog.LogEntry{Key: keys[i]})
 	}
 
-	err = tree.ApplyWriteLog(ctx, db.NewStaticWriteLogIterator(writeLog))
+	err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 	require.NoError(t, err, "ApplyWriteLog")
 	var rootHash hash.Hash
 	_, rootHash, err = tree.Commit(ctx, testNs, 0)

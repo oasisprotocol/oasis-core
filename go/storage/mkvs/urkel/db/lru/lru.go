@@ -73,7 +73,7 @@ func (d *lruNodeDB) GetNode(root urkel.Root, ptr *urkel.Pointer) (urkel.Node, er
 	return item.(*nodeCacheItem).Extract(), nil
 }
 
-func (d *lruNodeDB) GetWriteLog(ctx context.Context, startRoot urkel.Root, endRoot urkel.Root) (api.WriteLogIterator, error) {
+func (d *lruNodeDB) GetWriteLog(ctx context.Context, startRoot urkel.Root, endRoot urkel.Root) (writelog.Iterator, error) {
 	if !endRoot.Follows(&startRoot) {
 		return nil, api.ErrRootMustFollowOld
 	}
@@ -81,7 +81,7 @@ func (d *lruNodeDB) GetWriteLog(ctx context.Context, startRoot urkel.Root, endRo
 	return nil, api.ErrWriteLogNotFound
 }
 
-func (d *lruNodeDB) GetCheckpoint(ctx context.Context, hash urkel.Root) (api.WriteLogIterator, error) {
+func (d *lruNodeDB) GetCheckpoint(ctx context.Context, hash urkel.Root) (writelog.Iterator, error) {
 	return nil, api.ErrWriteLogNotFound
 }
 
@@ -243,7 +243,7 @@ func (b *memoryBatch) MaybeStartSubtree(subtree api.Subtree, depth urkel.Depth, 
 	return subtree
 }
 
-func (b *memoryBatch) PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error {
+func (b *memoryBatch) PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.Annotations) error {
 	return nil
 }
 

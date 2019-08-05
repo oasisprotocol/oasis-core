@@ -14,7 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
-	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 var testValues = [][]byte{
@@ -275,7 +275,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace) {
 		// Generate expected root hash.
 		tree, err := urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: round, Hash: baseRoot})
 		require.NoError(t, err, "NewWithRoot")
-		err = tree.ApplyWriteLog(ctx, nodedb.NewStaticWriteLogIterator(writeLog))
+		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 		require.NoError(t, err, "ApplyWriteLog")
 		var root hash.Hash
 		_, root, err = tree.Commit(ctx, namespace, round)
@@ -326,7 +326,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	tree, err = urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: 1, Hash: roots[0]})
 	require.NoError(t, err, "NewWithRoot")
 	for _, writeLog := range writeLogs[1:] {
-		err = tree.ApplyWriteLog(ctx, nodedb.NewStaticWriteLogIterator(writeLog))
+		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 		require.NoError(t, err, "ApplyWriteLog")
 	}
 	_, expectedRoot, err := tree.Commit(ctx, namespace, 2)

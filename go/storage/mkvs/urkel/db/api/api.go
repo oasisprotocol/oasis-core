@@ -43,10 +43,10 @@ type NodeDB interface {
 	GetNode(root node.Root, ptr *node.Pointer) (node.Node, error)
 
 	// GetWriteLog retrieves a write log between two storage instances from the database.
-	GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (WriteLogIterator, error)
+	GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (writelog.Iterator, error)
 
 	// GetCheckpoint retrieves a write log of entries in root.
-	GetCheckpoint(ctx context.Context, root node.Root) (WriteLogIterator, error)
+	GetCheckpoint(ctx context.Context, root node.Root) (writelog.Iterator, error)
 
 	// NewBatch starts a new batch.
 	NewBatch(namespace common.Namespace, round uint64, oldRoot node.Root) Batch
@@ -99,7 +99,7 @@ type Batch interface {
 	OnCommit(hook func())
 
 	// PutWriteLog stores the specified write log into the batch.
-	PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error
+	PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.Annotations) error
 
 	// RemoveNodes marks nodes for eventual garbage collection.
 	RemoveNodes(nodes []node.Node) error
@@ -141,11 +141,11 @@ func (d *nopNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error
 	return nil, ErrNodeNotFound
 }
 
-func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (WriteLogIterator, error) {
+func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (writelog.Iterator, error) {
 	return nil, ErrWriteLogNotFound
 }
 
-func (d *nopNodeDB) GetCheckpoint(ctx context.Context, root node.Root) (WriteLogIterator, error) {
+func (d *nopNodeDB) GetCheckpoint(ctx context.Context, root node.Root) (writelog.Iterator, error) {
 	return nil, ErrWriteLogNotFound
 }
 
@@ -178,7 +178,7 @@ func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth node.Depth, subtreeR
 	return &nopSubtree{}
 }
 
-func (b *nopBatch) PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error {
+func (b *nopBatch) PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.Annotations) error {
 	return nil
 }
 
@@ -215,7 +215,7 @@ func NewCheckpointableDB(db NodeDB) CheckpointableDB {
 }
 
 // GetCheckpoint returns an iterator of write log entries in the provided
-func (b *CheckpointableDB) GetCheckpoint(ctx context.Context, root node.Root) (WriteLogIterator, error) {
+func (b *CheckpointableDB) GetCheckpoint(ctx context.Context, root node.Root) (writelog.Iterator, error) {
 	if !b.db.HasRoot(root) {
 		return nil, ErrNodeNotFound
 	}
@@ -223,7 +223,7 @@ func (b *CheckpointableDB) GetCheckpoint(ctx context.Context, root node.Root) (W
 		Clean: true,
 		Hash:  root.Hash,
 	}
-	pipe := NewPipeWriteLogIterator(ctx)
+	pipe := writelog.NewPipeIterator(ctx)
 	go func() {
 		defer pipe.Close()
 
@@ -233,7 +233,7 @@ func (b *CheckpointableDB) GetCheckpoint(ctx context.Context, root node.Root) (W
 	return &pipe, nil
 }
 
-func (b *CheckpointableDB) getNodeWriteLog(ctx context.Context, pipe *PipeWriteLogIterator, root node.Root, ptr *node.Pointer) {
+func (b *CheckpointableDB) getNodeWriteLog(ctx context.Context, pipe *writelog.PipeIterator, root node.Root, ptr *node.Pointer) {
 	select {
 	case <-ctx.Done():
 		return

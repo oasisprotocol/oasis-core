@@ -120,7 +120,7 @@ func (d *leveldbNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, e
 	return node.UnmarshalBinary(bytes)
 }
 
-func (d *leveldbNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (api.WriteLogIterator, error) {
+func (d *leveldbNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (writelog.Iterator, error) {
 	if !endRoot.Follows(&startRoot) {
 		return nil, api.ErrRootMustFollowOld
 	}
@@ -498,7 +498,7 @@ type leveldbBatch struct {
 	oldRoot   node.Root
 
 	writeLog     writelog.WriteLog
-	annotations  writelog.WriteLogAnnotations
+	annotations  writelog.Annotations
 	removedNodes []node.Node
 	addedNodes   rootAddedNodes
 }
@@ -520,7 +520,7 @@ func (b *leveldbBatch) MaybeStartSubtree(subtree api.Subtree, depth node.Depth, 
 	return subtree
 }
 
-func (b *leveldbBatch) PutWriteLog(writeLog writelog.WriteLog, annotations writelog.WriteLogAnnotations) error {
+func (b *leveldbBatch) PutWriteLog(writeLog writelog.WriteLog, annotations writelog.Annotations) error {
 	b.writeLog = writeLog
 	b.annotations = annotations
 	return nil

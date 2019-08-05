@@ -145,7 +145,7 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 	return n, nil
 }
 
-func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (api.WriteLogIterator, error) {
+func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (writelog.Iterator, error) {
 	if !endRoot.Follows(&startRoot) {
 		return nil, api.ErrRootMustFollowOld
 	}
@@ -651,7 +651,7 @@ type badgerBatch struct {
 	oldRoot   node.Root
 
 	writeLog     writelog.WriteLog
-	annotations  writelog.WriteLogAnnotations
+	annotations  writelog.Annotations
 	removedNodes []node.Node
 	addedNodes   rootAddedNodes
 }
@@ -663,7 +663,7 @@ func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, depth node.Depth, 
 	return subtree
 }
 
-func (ba *badgerBatch) PutWriteLog(writeLog writelog.WriteLog, annotations writelog.WriteLogAnnotations) error {
+func (ba *badgerBatch) PutWriteLog(writeLog writelog.WriteLog, annotations writelog.Annotations) error {
 	ba.writeLog = writeLog
 	ba.annotations = annotations
 	return nil
