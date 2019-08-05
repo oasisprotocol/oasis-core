@@ -12,11 +12,8 @@ import (
 	"github.com/tendermint/tendermint/p2p/pex"
 	"github.com/tendermint/tendermint/version"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
-	"github.com/oasislabs/ekiden/go/genesis/bootstrap"
 	"github.com/oasislabs/ekiden/go/tendermint/crypto"
 )
 
@@ -118,13 +115,6 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 		Moniker:    "ekiden-seed-" + identity.NodeSigner.Public().String(),
 	}
 
-	// HACK: Register with the bootstrap server.
-	if bs, ok := genesisProvider.(*bootstrap.Provider); ok {
-		if err = registerSeedWithBootstrap(bs, identity.NodeSigner); err != nil {
-			return nil, err
-		}
-	}
-
 	// Carve out all of the services.
 	logger := newLogAdapter(!viper.GetBool(cfgLogDebug))
 	if srv.addr, err = p2p.NewNetAddressString(p2p.IDAddressString(nodeInfo.ID_, nodeInfo.ListenAddr)); err != nil {
@@ -153,24 +143,6 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 	srv.p2pSwitch.SetNodeInfo(nodeInfo)
 
 	return srv, nil
-}
-
-func registerSeedWithBootstrap(bs *bootstrap.Provider, signer signature.Signer) error {
-	nodeAddr := viper.GetString(cfgCoreExternalAddress)
-
-	if err := common.IsAddrPort(nodeAddr); err != nil {
-		return errors.Wrap(err, "tendermint/seed: malformed bootstrap seed node address")
-	}
-
-	seed := &bootstrap.SeedNode{
-		PubKey:      signer.Public(),
-		CoreAddress: nodeAddr,
-	}
-	if err := bs.RegisterSeed(seed); err != nil {
-		return errors.Wrap(err, "tendermint/seed: failed to register with bootstrap server")
-	}
-
-	return nil
 }
 
 func populateAddrBookFromGenesis(addrBook p2p.AddrBook, genesisProvider genesis.Provider, ourAddr *p2p.NetAddress) error {

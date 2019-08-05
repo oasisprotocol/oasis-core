@@ -25,14 +25,12 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	cmservice "github.com/oasislabs/ekiden/go/common/service"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
-	"github.com/oasislabs/ekiden/go/genesis/bootstrap"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/crypto"
@@ -58,9 +56,7 @@ const (
 
 	cfgLogDebug = "tendermint.log.debug"
 
-	cfgDebugBootstrapNodeName   = "tendermint.debug.bootstrap.node_name"
-	cfgDebugBootstrapQuerySeeds = "tendermint.debug.bootstrap.query_seeds"
-	cfgDebugP2PAddrBookLenient  = "tendermint.debug.addr_book_lenient"
+	cfgDebugP2PAddrBookLenient = "tendermint.debug.addr_book_lenient"
 
 	defaultChainID = "0xa515"
 )
@@ -470,64 +466,6 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 }
 
 func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.GenesisDoc, error) {
-	if bs, ok := t.genesis.(*bootstrap.Provider); ok {
-		t.Logger.Warn("The bootstrap provisioning server is NOT FOR PRODUCTION USE.")
-
-		var (
-			nodeAddr   = viper.GetString(cfgCoreExternalAddress)
-			nodeName   = viper.GetString(cfgDebugBootstrapNodeName)
-			querySeeds = viper.GetBool(cfgDebugBootstrapQuerySeeds)
-			err        error
-		)
-
-		if nodeName != "" {
-			t.Logger.Debug("registering as a validator with the bootstrap server",
-				"node_name", nodeName,
-			)
-
-			// Register as a validator node with the bootstrap server.
-			if err = common.IsAddrPort(nodeAddr); err != nil {
-				return nil, errors.Wrap(err, "tendermint: malformed bootstrap validator node address")
-			}
-			if err = common.IsFQDN(nodeName); err != nil {
-				return nil, errors.Wrap(err, "tendermint: malformed bootstrap validator node name")
-			}
-
-			// Since the bootstrap server is a nasty hack, just use the test entity for
-			// all the validators.
-			testEntity, _, _ := entity.TestEntity()
-			validator := &genesis.Validator{
-				EntityID:    testEntity.ID,
-				PubKey:      t.nodeSigner.Public(),
-				Name:        common.NormalizeFQDN(nodeName),
-				CoreAddress: nodeAddr,
-			}
-			if err = bs.RegisterValidator(validator); err != nil {
-				return nil, errors.Wrap(err, "tendermint: validator bootstrap failed")
-			}
-
-			t.Logger.Debug("registered as a validator")
-		}
-
-		// Query seed nodes from the bootstrap server
-		if querySeeds {
-			t.Logger.Debug("querying seeds")
-			seeds, err := bs.GetSeeds()
-			if err != nil {
-				return nil, errors.Wrap(err, "tendermint: getting bootstrap seeds failed")
-			}
-			for _, seed := range seeds {
-				tmPub := crypto.PublicKeyToTendermint(&seed.PubKey)
-				seedIDLower := strings.ToLower(tmPub.Address().String())
-				seedID := fmt.Sprintf("%s@%s", seedIDLower, seed.CoreAddress)
-
-				tenderConfig.P2P.Seeds = tenderConfig.P2P.Seeds + "," + seedID
-				tenderConfig.P2P.Seeds = strings.TrimLeft(tenderConfig.P2P.Seeds, ",")
-			}
-			t.Logger.Debug("done querying seeds", "seeds", tenderConfig.P2P.Seeds)
-		}
-	}
-
 	doc, err := t.genesis.GetGenesisDocument()
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint: failed to get genesis doc")
@@ -756,8 +694,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Bool(cfgP2PSeedMode, false, "run the tendermint node in seed mode")
 		cmd.Flags().String(cfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
 		cmd.Flags().Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
-		cmd.Flags().String(cfgDebugBootstrapNodeName, "", "debug bootstrap validator node name")
-		cmd.Flags().Bool(cfgDebugBootstrapQuerySeeds, false, "if true, query bootstrap server for seed nodes")
 		cmd.Flags().Bool(cfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
 	}
 
@@ -772,8 +708,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgP2PSeedMode,
 		cfgP2PSeeds,
 		cfgLogDebug,
-		cfgDebugBootstrapNodeName,
-		cfgDebugBootstrapQuerySeeds,
 		cfgDebugP2PAddrBookLenient,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
