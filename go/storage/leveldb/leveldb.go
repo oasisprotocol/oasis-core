@@ -76,6 +76,7 @@ func (b *leveldbBackend) GetSubtree(ctx context.Context, root api.Root, id api.N
 	if err != nil {
 		return nil, err
 	}
+	defer tree.Close()
 
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
@@ -85,6 +86,7 @@ func (b *leveldbBackend) GetPath(ctx context.Context, root api.Root, id api.Node
 	if err != nil {
 		return nil, err
 	}
+	defer tree.Close()
 
 	return tree.GetPath(ctx, root, id, key)
 }
@@ -94,6 +96,7 @@ func (b *leveldbBackend) GetNode(ctx context.Context, root api.Root, id api.Node
 	if err != nil {
 		return nil, err
 	}
+	defer tree.Close()
 
 	return tree.GetNode(ctx, root, id)
 }
@@ -127,7 +130,6 @@ func (b *leveldbBackend) Initialized() <-chan struct{} {
 func New(
 	dbDir string,
 	signer signature.Signer,
-	lruSizeInBytes uint64,
 	applyLockLRUSlots uint64,
 	insecureSkipChecks bool,
 ) (api.Backend, error) {
@@ -137,7 +139,7 @@ func New(
 		return nil, err
 	}
 
-	rootCache, err := api.NewRootCache(ndb, nil, lruSizeInBytes, applyLockLRUSlots, insecureSkipChecks)
+	rootCache, err := api.NewRootCache(ndb, nil, applyLockLRUSlots, insecureSkipChecks)
 	if err != nil {
 		ndb.Close()
 		return nil, err

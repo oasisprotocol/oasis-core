@@ -38,7 +38,6 @@ type badgerBackend struct {
 func New(
 	dbDir string,
 	signer signature.Signer,
-	lruSizeInBytes uint64,
 	applyLockLRUSlots uint64,
 	insecureSkipChecks bool,
 ) (api.Backend, error) {
@@ -52,7 +51,7 @@ func New(
 		return nil, errors.Wrap(err, "storage/badger: failed to open node database")
 	}
 
-	rootCache, err := api.NewRootCache(ndb, nil, lruSizeInBytes, applyLockLRUSlots, insecureSkipChecks)
+	rootCache, err := api.NewRootCache(ndb, nil, applyLockLRUSlots, insecureSkipChecks)
 	if err != nil {
 		ndb.Close()
 		return nil, errors.Wrap(err, "storage/badger: failed to create root cache")
@@ -120,6 +119,7 @@ func (ba *badgerBackend) GetSubtree(ctx context.Context, root api.Root, id api.N
 	if err != nil {
 		return nil, err
 	}
+	defer tree.Close()
 
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
@@ -129,6 +129,7 @@ func (ba *badgerBackend) GetPath(ctx context.Context, root api.Root, id api.Node
 	if err != nil {
 		return nil, err
 	}
+	defer tree.Close()
 
 	return tree.GetPath(ctx, root, id, key)
 }
@@ -138,6 +139,7 @@ func (ba *badgerBackend) GetNode(ctx context.Context, root api.Root, id api.Node
 	if err != nil {
 		return nil, err
 	}
+	defer tree.Close()
 
 	return tree.GetNode(ctx, root, id)
 }
