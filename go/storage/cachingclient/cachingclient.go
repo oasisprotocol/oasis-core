@@ -97,6 +97,7 @@ func (b *cachingClientBackend) GetSubtree(ctx context.Context, root api.Root, id
 	if err != nil {
 		return nil, err
 	}
+	defer tree.Close()
 
 	return tree.GetSubtree(ctx, root, id, maxDepth)
 }
@@ -106,6 +107,7 @@ func (b *cachingClientBackend) GetPath(ctx context.Context, root api.Root, id ap
 	if err != nil {
 		return nil, err
 	}
+	defer tree.Close()
 
 	return tree.GetPath(ctx, root, id, key)
 }
@@ -115,6 +117,7 @@ func (b *cachingClientBackend) GetNode(ctx context.Context, root api.Root, id ap
 	if err != nil {
 		return nil, err
 	}
+	defer tree.Close()
 
 	return tree.GetNode(ctx, root, id)
 }
@@ -149,7 +152,7 @@ func New(remote api.Backend, insecureSkipChecks bool) (api.Backend, error) {
 		return nil, err
 	}
 
-	rootCache, err := api.NewRootCache(local, remote, lruCacheSizeInBytes/8, 1000, insecureSkipChecks)
+	rootCache, err := api.NewRootCache(local, remote, 1000, insecureSkipChecks)
 	if err != nil {
 		local.Close()
 		return nil, err

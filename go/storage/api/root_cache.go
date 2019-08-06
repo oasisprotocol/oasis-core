@@ -21,7 +21,6 @@ type RootCache struct {
 
 	insecureSkipChecks bool
 
-	rootCache       *lru.Cache
 	applyLocks      *lru.Cache
 	applyLocksGuard sync.Mutex
 
@@ -31,11 +30,6 @@ type RootCache struct {
 // GetTree gets a tree entry from the cache by the root iff present, or creates
 // a new tree with the specified root in the node database.
 func (rc *RootCache) GetTree(ctx context.Context, root Root) (*urkel.Tree, error) {
-	cachedTree, present := rc.rootCache.Get(root.EncodedHash())
-	if present {
-		return cachedTree.(*urkel.Tree), nil
-	}
-
 	newTree, err := urkel.NewWithRoot(ctx, rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/rootcache: failed to create new tree")
@@ -81,15 +75,13 @@ func (rc *RootCache) Apply(
 	if rc.localDB.HasRoot(expectedNewRoot) {
 		// We do, don't apply anything.
 		r = dstRoot
-
-		// Do a fake get to update the LRU cache frequency.
-		_, _ = rc.rootCache.Get(expectedNewRoot.EncodedHash())
 	} else {
 		// We don't, apply operations.
 		tree, err := urkel.NewWithRoot(ctx, rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
 		if err != nil {
 			return nil, err
 		}
+		defer tree.Close()
 
 		for _, entry := range writeLog {
 			if ctx.Err() != nil {
@@ -122,9 +114,6 @@ func (rc *RootCache) Apply(
 		default:
 			return nil, err
 		}
-
-		// Also save tree root in local LRU cache.
-		_ = rc.rootCache.Put(expectedNewRoot.EncodedHash(), tree)
 	}
 
 	return &r, nil
@@ -156,21 +145,9 @@ func (rc *RootCache) HasRoot(root Root) bool {
 func NewRootCache(
 	localDB nodedb.NodeDB,
 	remoteSyncer syncer.ReadSyncer,
-	lruSizeInBytes uint64,
 	applyLockLRUSlots uint64,
 	insecureSkipChecks bool,
 ) (*RootCache, error) {
-	rootCache, err := lru.New(
-		lru.Capacity(lruSizeInBytes, true),
-		lru.OnEvict(func(key, value interface{}) {
-			// Close the tree when evicted from cache.
-			value.(*urkel.Tree).Close()
-		}),
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "storage/rootcache: failed to create rootCache")
-	}
-
 	applyLocks, err := lru.New(lru.Capacity(applyLockLRUSlots, false))
 	if err != nil {
 		return nil, errors.Wrap(err, "storage/rootcache: failed to create applyLocks")
@@ -184,7 +161,6 @@ func NewRootCache(
 		localDB:            localDB,
 		remoteSyncer:       remoteSyncer,
 		insecureSkipChecks: insecureSkipChecks,
-		rootCache:          rootCache,
 		applyLocks:         applyLocks,
 		persistEverything:  persistEverything,
 	}, nil

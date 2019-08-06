@@ -27,7 +27,6 @@ const (
 	cfgBackend             = "storage.backend"
 	cfgDebugMockSigningKey = "storage.debug.mock_signing_key"
 	cfgCrashEnabled        = "storage.crash.enabled"
-	cfgLRUSize             = "storage.root_cache.lru_size"
 	cfgLRUSlots            = "storage.root_cache.apply_lock_lru_slots"
 	cfgInsecureSkipChecks  = "storage.debug.insecure_skip_checks"
 )
@@ -53,7 +52,6 @@ func New(
 	tlsCert := identity.TLSCertificate
 
 	backend := viper.GetString(cfgBackend)
-	lruSize := uint64(viper.GetSizeInBytes(cfgLRUSize))
 	applyLockLRUSlots := uint64(viper.GetInt(cfgLRUSlots))
 	insecureSkipChecks := viper.GetBool(cfgInsecureSkipChecks)
 
@@ -62,10 +60,10 @@ func New(
 		impl = memory.New(signer, insecureSkipChecks)
 	case badger.BackendName:
 		dbDir := filepath.Join(dataDir, badger.DBFile)
-		impl, err = badger.New(dbDir, signer, lruSize, applyLockLRUSlots, insecureSkipChecks)
+		impl, err = badger.New(dbDir, signer, applyLockLRUSlots, insecureSkipChecks)
 	case leveldb.BackendName:
 		dbDir := filepath.Join(dataDir, leveldb.DBFile)
-		impl, err = leveldb.New(dbDir, signer, lruSize, applyLockLRUSlots, insecureSkipChecks)
+		impl, err = leveldb.New(dbDir, signer, applyLockLRUSlots, insecureSkipChecks)
 	case client.BackendName:
 		impl, err = client.New(ctx, tlsCert, schedulerBackend, registryBackend)
 	case cachingclient.BackendName:
@@ -98,7 +96,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgBackend, memory.BackendName, "Storage backend")
 		cmd.Flags().Bool(cfgDebugMockSigningKey, false, "Generate volatile mock signing key")
 		cmd.Flags().Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
-		cmd.Flags().String(cfgLRUSize, "128m", "Maximum LRU size in bytes to use in the MKVS tree root cache")
 		cmd.Flags().Int(cfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
 
 		cmd.Flags().Bool(cfgInsecureSkipChecks, false, "INSECURE: Skip known root checks")
@@ -109,7 +106,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgBackend,
 		cfgDebugMockSigningKey,
 		cfgCrashEnabled,
-		cfgLRUSize,
 		cfgLRUSlots,
 		cfgInsecureSkipChecks,
 	} {

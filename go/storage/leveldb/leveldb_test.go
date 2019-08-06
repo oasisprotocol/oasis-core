@@ -25,7 +25,7 @@ func TestStorageLevelDB(t *testing.T) {
 	signer, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "NewSigner()")
 
-	backend, err := New(filepath.Join(tmpDir, DBFile), signer, 32*1024*1024, 100, false)
+	backend, err := New(filepath.Join(tmpDir, DBFile), signer, 100, false)
 	require.NoError(t, err, "New()")
 	defer backend.Cleanup()
 
