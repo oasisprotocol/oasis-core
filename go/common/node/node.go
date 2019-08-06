@@ -77,6 +77,8 @@ const (
 	RoleKeyManager RolesMask = 1 << 3
 	// RoleMergeWorker is the Ekiden Merge Worker role.
 	RoleMergeWorker RolesMask = 1 << 4
+	// RoleValidator is the Ekiden validator role.
+	RoleValidator RolesMask = 1 << 5
 )
 
 // AddRoles adds the Node roles

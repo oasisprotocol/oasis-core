@@ -42,7 +42,6 @@ const (
 	cfgKind                          = "runtime.kind"
 	cfgKeyManager                    = "runtime.keymanager"
 	cfgOutput                        = "runtime.genesis.file"
-	cfgEntity                        = "entity"
 
 	optKindCompute    = "compute"
 	optKindKeyManager = "keymanager"
@@ -256,7 +255,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	ent, signer, err := loadEntity(viper.GetString(cfgEntity))
+	ent, signer, err := loadEntity(cmdFlags.Entity())
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
@@ -402,6 +401,8 @@ func registerOutputFlag(cmd *cobra.Command) {
 }
 
 func registerRuntimeFlags(cmd *cobra.Command) {
+	cmdFlags.RegisterEntity(cmd)
+
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgID, "", "Runtime ID")
 		cmd.Flags().String(cfgTEEHardware, "invalid", "Type of TEE hardware.  Supported values are \"invalid\" and \"intel-sgx\"")
@@ -413,7 +414,6 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgGenesisState, "", "Runtime state at genesis")
 		cmd.Flags().String(cfgKeyManager, "", "Key Manager Runtime ID")
 		cmd.Flags().String(cfgKind, optKindCompute, "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
-		cmd.Flags().String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
 	}
 
 	for _, v := range []string{
@@ -427,7 +427,6 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cfgGenesisState,
 		cfgKeyManager,
 		cfgKind,
-		cfgEntity,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}

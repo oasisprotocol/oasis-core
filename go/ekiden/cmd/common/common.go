@@ -12,8 +12,11 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
+	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 )
 
 const (
@@ -178,4 +181,15 @@ func GetInputReader(cmd *cobra.Command, cfg string) (io.ReadCloser, bool, error)
 
 	r, err := os.Open(f)
 	return r, true, err
+}
+
+// LoadEntity loads the entity and it's signer.
+func LoadEntity(dataDir string) (*entity.Entity, signature.Signer, error) {
+	if flags.DebugTestEntity() {
+		return entity.TestEntity()
+	}
+
+	// TODO/hsm: Configure factory dynamically.
+	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
+	return entity.Load(dataDir, entitySignerFactory)
 }
