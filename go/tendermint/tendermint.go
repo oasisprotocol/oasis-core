@@ -28,9 +28,11 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	cmservice "github.com/oasislabs/ekiden/go/common/service"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/crypto"
@@ -444,18 +446,22 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 	}
 
 	var tmValidators []tmtypes.GenesisValidator
-	for _, v := range d.Validators {
-		var openedValidator genesis.Validator
-		if err := v.Open(&openedValidator); err != nil {
+	for _, v := range d.Registry.Nodes {
+		var openedNode node.Node
+		if err := v.Open(registry.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
 			return nil, errors.Wrap(err, "tendermint: failed to verify validator")
 		}
+		// TODO: This should cross check that the entity is valid.
+		if !openedNode.HasRoles(node.RoleValidator) {
+			continue
+		}
 
-		pk := crypto.PublicKeyToTendermint(&openedValidator.PubKey)
+		pk := crypto.PublicKeyToTendermint(&openedNode.ID)
 		validator := tmtypes.GenesisValidator{
 			Address: pk.Address(),
 			PubKey:  pk,
-			Power:   openedValidator.Power,
-			Name:    openedValidator.Name,
+			Power:   1,
+			Name:    "ekiden-validator-" + openedNode.ID.String(),
 		}
 		tmValidators = append(tmValidators, validator)
 	}
@@ -471,7 +477,14 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 		return nil, errors.Wrap(err, "tendermint: failed to get genesis doc")
 	}
 
-	tmGenDoc, err := genesisToTendermint(doc)
+	var tmGenDoc *tmtypes.GenesisDoc
+	if tmProvider, ok := t.genesis.(service.GenesisProvider); ok {
+		// This is a single node config, because the genesis document was
+		// missing, probably in unit tests.
+		tmGenDoc, err = tmProvider.GetTendermintGenesisDocument()
+	} else {
+		tmGenDoc, err = genesisToTendermint(doc)
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint: failed to create genesis doc")
 	}

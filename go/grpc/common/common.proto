@@ -28,9 +28,10 @@ message Node {
     uint64 expiration = 3;
     CommitteeInfo committee = 4;
     P2PInfo p2p = 5;
-    uint64 registration_time = 6;
-    repeated NodeRuntime runtimes = 7;
-    uint32 roles = 8;
+    ConsensusInfo consensus = 6;
+    uint64 registration_time = 7;
+    repeated NodeRuntime runtimes = 8;
+    uint32 roles = 9;
 }
 
 message CommitteeInfo {
@@ -41,6 +42,10 @@ message CommitteeInfo {
 message P2PInfo {
     bytes id = 1;
     repeated Address addresses = 2;
+}
+
+message ConsensusInfo {
+    repeated Address addresses = 1;
 }
 
 message NodeRuntime {

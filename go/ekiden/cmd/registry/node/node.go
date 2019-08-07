@@ -33,6 +33,7 @@ const (
 	cfgExpiration       = "node.expiration"
 	cfgCommitteeAddress = "node.committee_address"
 	cfgP2PAddress       = "node.p2p_address"
+	cfgConsensusAddress = "node.consensus_address"
 	cfgRole             = "node.role"
 
 	optRoleComputeWorker        = "compute-worker"
@@ -204,10 +205,24 @@ func doInit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// TODO: Once node.Node has `Consensus` field, populate it.
+	// Note: While the data structure supports multiple consensus addresses,
+	// tendermint does not appear to do so(?).
 	if n.HasRoles(node.RoleValidator) {
-		logger.Error("validator provisioning not supported yet")
-		os.Exit(1)
+		addrStr := viper.GetString(cfgConsensusAddress)
+		if addrStr == "" {
+			logger.Error("validator nodes require a consensus address")
+			os.Exit(1)
+		}
+
+		var addr node.Address
+		if err = addr.UnmarshalText([]byte(addrStr)); err != nil {
+			logger.Error("failed to parse node consensus address",
+				"err", err,
+				"addr", addrStr,
+			)
+			os.Exit(1)
+		}
+		n.Consensus.Addresses = append(n.Consensus.Addresses, addr)
 	}
 
 	// Sign and write out the genesis node registration.
@@ -294,7 +309,8 @@ func registerNodeFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgEntityID, "", "Entity ID that controls this node")
 		cmd.Flags().Uint64(cfgExpiration, 0, "Epoch that the node registration should expire")
 		cmd.Flags().StringSlice(cfgCommitteeAddress, nil, "Address(es) the node can be reached as a committee member")
-		cmd.Flags().StringSlice(cfgP2PAddress, nil, "Address(es) the node node can be reached over the P2P transport")
+		cmd.Flags().StringSlice(cfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
+		cmd.Flags().String(cfgConsensusAddress, "", "Address the node can be reached as a consensus member")
 		cmd.Flags().StringSlice(cfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-worker\", \"key-manager\", \"merge-worker\", and \"validator\"")
 	}
 
@@ -303,6 +319,7 @@ func registerNodeFlags(cmd *cobra.Command) {
 		cfgExpiration,
 		cfgCommitteeAddress,
 		cfgP2PAddress,
+		cfgConsensusAddress,
 		cfgRole,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))

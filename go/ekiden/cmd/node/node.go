@@ -325,6 +325,20 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	return nil
 }
 
+func (n *Node) initGenesis() error {
+	var err error
+	if n.Genesis, err = genesis.New(n.Identity); err == nil {
+		return nil
+	}
+	if os.IsNotExist(err) {
+		// Well, there wasn't a genesis document, use a single node one, this
+		// is probably unit tests.
+		n.Genesis, err = tendermint.NewSingleNodeGenesisProvider(n.Identity)
+	}
+
+	return err
+}
+
 // NewNode initializes and launches the ekiden node service.
 //
 // WARNING: This will misbehave iff cmd != RootCommand().  This is exposed
@@ -426,14 +440,12 @@ func NewNode() (*Node, error) {
 	}
 
 	// Initialize the genesis provider.
-	genesis, err := genesis.New(node.Identity)
-	if err != nil {
+	if err = node.initGenesis(); err != nil {
 		logger.Error("failed to initialize the genesis provider",
 			"err", err,
 		)
 		return nil, err
 	}
-	node.Genesis = genesis
 
 	// Initialize tendermint.
 	if tendermint.IsSeed() {

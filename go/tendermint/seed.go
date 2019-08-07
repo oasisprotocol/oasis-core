@@ -13,7 +13,9 @@ import (
 	"github.com/tendermint/tendermint/version"
 
 	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/ekiden/go/common/node"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/tendermint/crypto"
 )
 
@@ -156,15 +158,20 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, genesisProvider genesis.
 	// For extra fun, p2p/transport.go:MultiplexTransport.upgrade() uses a case
 	// sensitive string comparision to validate public keys.
 	var addrs []*p2p.NetAddress
-	for _, v := range doc.Validators {
-		var openedValidator genesis.Validator
-		if err = v.Open(&openedValidator); err != nil {
+	for _, v := range doc.Registry.Nodes {
+		var openedNode node.Node
+		if err = v.Open(registry.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
 			return errors.Wrap(err, "tendermint/seed: failed to verify validator")
 		}
+		// TODO: This should cross check that the entity is valid.
+		if !openedNode.HasRoles(node.RoleValidator) {
+			continue
+		}
 
-		vPubKey := crypto.PublicKeyToTendermint(&openedValidator.PubKey)
+		vPubKey := crypto.PublicKeyToTendermint(&openedNode.ID)
 		vPkAddrHex := strings.ToLower(vPubKey.Address().String())
-		vAddr := vPkAddrHex + "@" + openedValidator.CoreAddress
+		coreAddress, _ := openedNode.Consensus.Addresses[0].MarshalText()
+		vAddr := vPkAddrHex + "@" + string(coreAddress)
 
 		var tmvAddr *p2p.NetAddress
 		if tmvAddr, err = p2p.NewNetAddressString(vAddr); err != nil {
