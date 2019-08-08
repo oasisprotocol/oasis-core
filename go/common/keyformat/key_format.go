@@ -24,16 +24,25 @@ func New(prefix byte, layout ...interface{}) *KeyFormat {
 		layout: make([]int, len(layout)),
 	}
 
+	hasVarSize := false
 	for i, item := range layout {
 		size := kf.getSize(item)
+		if size == -1 {
+			if hasVarSize {
+				panic("key format: there can be only one variable-sized element")
+			}
+			hasVarSize = true
+		} else {
+			kf.size += size
+		}
+
 		kf.layout[i] = size
-		kf.size += size
 	}
 
 	return kf
 }
 
-// Size returns the size in bytes of the resulting key.
+// Size returns the minimum size in bytes of the resulting key.
 func (k *KeyFormat) Size() int {
 	return 1 + k.size
 }
@@ -52,15 +61,26 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 
 	size := 1
 	for i := range values {
-		size += k.layout[i]
+		elemLen := k.layout[i]
+		if k.layout[i] == -1 {
+			// Variable-sized element, the passed value must be a []byte.
+			elemLen = len(values[i].([]byte))
+		}
+
+		size += elemLen
 	}
 	result := make([]byte, size)
 
 	result[0] = k.prefix
 	offset := 1
 	for i, v := range values {
-		buf := result[offset : offset+k.layout[i]]
-		offset += k.layout[i]
+		elemLen := k.layout[i]
+		if elemLen == -1 {
+			// Variable-sized element, the passed value must be a []byte (was checked above).
+			elemLen = len(v.([]byte))
+		}
+		buf := result[offset : offset+elemLen]
+		offset += elemLen
 
 		switch t := v.(type) {
 		case uint64:
@@ -76,6 +96,8 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 			}
 
 			copy(buf[:], data)
+		case []byte:
+			copy(buf[:], t)
 		default:
 			panic(fmt.Sprintf("unsupported type: %T", t))
 		}
@@ -96,14 +118,19 @@ func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
 	if len(values) > len(k.layout) {
 		panic("key format: number of values greater than layout")
 	}
-	if len(data) != k.Size() {
+	if len(data) < k.Size() {
 		panic("key format: malformed input")
 	}
 
 	offset := 1
 	for i, v := range values {
-		buf := data[offset : offset+k.layout[i]]
-		offset += k.layout[i]
+		elemLen := k.layout[i]
+		if elemLen == -1 {
+			// Variable-sized element, compute its size.
+			elemLen = len(data) - k.Size()
+		}
+		buf := data[offset : offset+elemLen]
+		offset += elemLen
 
 		switch t := v.(type) {
 		case *uint64:
@@ -115,6 +142,9 @@ func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
 			if err != nil {
 				panic(fmt.Sprintf("key format: failed to unmarshal: %s", err))
 			}
+		case *[]byte:
+			*t = make([]byte, elemLen)
+			copy(*t, buf)
 		default:
 			panic(fmt.Sprintf("unsupported type: %T", t))
 		}
@@ -135,6 +165,11 @@ func (k *KeyFormat) getSize(l interface{}) int {
 
 		data, _ := t.MarshalBinary()
 		return len(data)
+	case []byte:
+		// A variable-size element -- there can be only one such element
+		// in the whole key and during decoding its size is derived from
+		// the key length and the sizes of other elements.
+		return -1
 	default:
 		panic(fmt.Sprintf("unsupported type: %T", l))
 	}

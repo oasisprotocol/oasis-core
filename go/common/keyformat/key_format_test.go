@@ -58,3 +58,50 @@ func TestKeyFormat(t *testing.T) {
 	ok = fmt1.Decode(enc, &decNs, &decH)
 	require.False(t, ok, "Decode")
 }
+
+func TestVariableSize(t *testing.T) {
+	// Should panic if more than one variable-size element is specified.
+	require.Panics(t, func() {
+		New('T', []byte{}, []byte{}, &hash.Hash{})
+	}, "New should panic with more than one variable-size element")
+
+	// Create a simple key format with a variable-size element at the
+	// beginning.
+	fmt1 := New('T', []byte{}, &hash.Hash{})
+	require.Equal(t, 1+32, fmt1.Size(), "minimum format size should be correct")
+
+	vsElem := []byte("variable-sized element")
+	var h hash.Hash
+	h.Empty()
+
+	enc := fmt1.Encode(vsElem, &h)
+	require.Equal(t, "547661726961626c652d73697a656420656c656d656e74c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a", hex.EncodeToString(enc))
+
+	var decVs []byte
+	var decH hash.Hash
+	ok := fmt1.Decode(enc, &decVs, &decH)
+	require.True(t, ok, "decode should succeed")
+	require.EqualValues(t, vsElem, decVs, "decoded variable-sized element should have the same value")
+	require.EqualValues(t, h, decH, "decoded hash should have the same value")
+
+	var decVs2 []byte
+	ok = fmt1.Decode(enc, &decVs2)
+	require.True(t, ok, "decode should succeed")
+	require.EqualValues(t, vsElem, decVs, "decoded variable-sized element should have the same value")
+
+	// Create a simple key format with a variable-size element in the
+	// middle.
+	fmt2 := New('T', &hash.Hash{}, []byte{}, &hash.Hash{})
+	require.Equal(t, 1+32+32, fmt2.Size(), "minimum format size should be correct")
+
+	enc = fmt2.Encode(&h, vsElem, &h)
+	require.Equal(t, "54c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a7661726961626c652d73697a656420656c656d656e74c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a", hex.EncodeToString(enc))
+
+	var decH3, decH4 hash.Hash
+	var decVs3 []byte
+	ok = fmt2.Decode(enc, &decH3, &decVs3, &decH4)
+	require.True(t, ok, "decode should succeed")
+	require.EqualValues(t, h, decH3, "decoded hash should have the same value")
+	require.EqualValues(t, vsElem, decVs3, "decoded variable-sized element should have the same value")
+	require.EqualValues(t, h, decH4, "decoded hash should have the same value")
+}
