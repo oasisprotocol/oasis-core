@@ -31,8 +31,8 @@ steps:
   - label: Get docker tag and save it as metadata for use later
     command: .buildkite/scripts/set_docker_tag_meta_data.sh
 
-  - label: Build artifacts (master branches only)
-    branches: master
+  - label: Build artifacts (master and devnet2)
+    branches: master devnet2
     command:
       - .buildkite/scripts/setup_gitconfig.sh
       - eval $(ssh-agent -s)
@@ -45,8 +45,8 @@ steps:
     plugins:
       <<: *docker_plugin_configuration
 
-  - label: Build production-track artifacts (master branches only)
-    branches: master
+  - label: Build production-track artifacts (master and devnet2)
+    branches: master devnet2
     command:
       - .buildkite/scripts/setup_gitconfig.sh
       - eval $(ssh-agent -s)
@@ -68,10 +68,24 @@ steps:
     env:
       DEPLOYMENT_VARIANT: testing
 
+  - label: Build docker image (devnet2 branch only)
+    branches: devnet2
+    command:
+      - .buildkite/scripts/build_tag_push_deployment_image.sh context.tar.gz
+    env:
+      DEPLOYMENT_VARIANT: testing-devnet2
+
   - label: Build production-track docker image (master branches only)
     branches: master
     command:
       - .buildkite/scripts/build_tag_push_deployment_image.sh context-prod.tar.gz
+
+  - label: Build production-track docker image (devnet2 branch only)
+    branches: devnet2
+    command:
+      - .buildkite/scripts/build_tag_push_deployment_image.sh context-prod.tar.gz
+    env:
+      DEPLOYMENT_VARIANT: devnet2
 
   - block: Human approval required to deploy docker image
     branches: "*"
@@ -93,4 +107,11 @@ steps:
   - label: Deploy production-track docker image (master branches only)
     branches: master
     command:
+      - .buildkite/scripts/promote_deployment_image_to.sh latest
+
+  - label: Deploy production-track docker image (devnet2 branch only)
+    branches: devnet2
+    command:
       - .buildkite/scripts/promote_deployment_image_to.sh latest-devnet2
+    env:
+      DEPLOYMENT_VARIANT: devnet2
