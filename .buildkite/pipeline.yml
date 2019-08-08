@@ -257,9 +257,9 @@ steps:
     plugins:
       <<: *docker_plugin
 
-  ##############################
-  # Deploy jobs (only on master)
-  ##############################
+  ##################################
+  # Deploy jobs (master and devnet2)
+  ##################################
 
   # Wait for all jobs defined before this point
   # to finish running in parallel before continuing.
@@ -268,7 +268,7 @@ steps:
   - label: ":rocket: Deploy image"
     trigger: ekiden-deploy-image
     async: true
-    branches: master
+    branches: master devnet2
     build:
       message: "${BUILDKITE_MESSAGE}"
       commit: "${BUILDKITE_COMMIT}"
