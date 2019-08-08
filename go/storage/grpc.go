@@ -50,8 +50,8 @@ func (s *GrpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 	var log api.WriteLog
 	for _, item := range req.GetLog() {
 		log = append(log, api.LogEntry{
-			Key:   item.GetKey(),
-			Value: item.GetValue(),
+			Key:   append([]byte{}, item.GetKey()...),
+			Value: append([]byte{}, item.GetValue()...),
 		})
 	}
 
@@ -87,8 +87,8 @@ func (s *GrpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) 
 		var log api.WriteLog
 		for _, item := range op.GetLog() {
 			log = append(log, api.LogEntry{
-				Key:   item.GetKey(),
-				Value: item.GetValue(),
+				Key:   append([]byte{}, item.GetKey()...),
+				Value: append([]byte{}, item.GetValue()...),
 			})
 		}
 
