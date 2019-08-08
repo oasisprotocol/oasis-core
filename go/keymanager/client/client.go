@@ -169,7 +169,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 		// Kill the conn and return.
 		if st != nil {
 			st.kill()
-			c.state[idKey] = nil
+			delete(c.state, idKey)
 		}
 
 		return
@@ -210,7 +210,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 	// Kill the old state if it exists.
 	if st != nil {
 		st.kill()
-		c.state[idKey] = nil
+		delete(c.state, idKey)
 	}
 
 	// Note: While this may look screwed up, the resolver needs the client conn
