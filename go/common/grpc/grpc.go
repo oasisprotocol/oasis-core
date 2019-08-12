@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/keepalive"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/service"
@@ -61,6 +62,10 @@ var (
 		grpcCalls,
 		grpcLatency,
 		grpcStreamWrites,
+	}
+
+	serverKeepAliveParams = keepalive.ServerParameters{
+		MaxConnectionIdle: 600 * time.Second,
 	}
 
 	_ grpclog.LoggerV2          = (*grpcLogAdapter)(nil)
@@ -408,6 +413,7 @@ func newServer(
 	sOpts = append(sOpts, grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(logAdapter.streamLogger, grpc_opentracing.StreamServerInterceptor())))
 	sOpts = append(sOpts, grpc.MaxRecvMsgSize(maxRecvMsgSize))
 	sOpts = append(sOpts, grpc.MaxSendMsgSize(maxSendMsgSize))
+	sOpts = append(sOpts, grpc.KeepaliveParams(serverKeepAliveParams))
 	sOpts = append(sOpts, customOptions...)
 
 	if cert != nil {
