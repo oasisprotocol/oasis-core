@@ -53,8 +53,8 @@ test_migration() {
 
     run_compute_node 1 ${runtime} &>/dev/null
     run_storage_node 1 &>/dev/null
-    # Wait for all nodes to start: 1 compute + 1 storage + key manager.
-    wait_nodes 3
+    # Wait for all nodes to start: 1 compute + 1 storage + 3 validator + key manager.
+    wait_nodes 6
 
     set_epoch 1
     sleep 1
@@ -93,8 +93,8 @@ test_migration() {
     # Finish starting the second network.
     run_compute_node 1 ${runtime} &>/dev/null
     run_storage_node 1 clear_storage=0 &>/dev/null
-    # Wait for all nodes to start: 1 compute + 1 storage + key manager.
-    wait_nodes 3
+    # Wait for all nodes to start: 1 compute + 1 storage + 3 validator + key manager.
+    wait_nodes 6
 
     set_epoch 2
 

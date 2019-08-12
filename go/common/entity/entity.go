@@ -121,6 +121,14 @@ func (e *Entity) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, e)
 }
 
+// Save saves the JSON serialized entity descriptor.
+func (e *Entity) Save(baseDir string) error {
+	entityPath := filepath.Join(baseDir, entityFilename)
+
+	// Write to disk.
+	return ioutil.WriteFile(entityPath, json.Marshal(e), fileMode)
+}
+
 // Load loads an existing entity from disk.
 func Load(baseDir string, signerFactory signature.SignerFactory) (*Entity, signature.Signer, error) {
 	entityPath := filepath.Join(baseDir, entityFilename)
@@ -158,8 +166,6 @@ func LoadDescriptor(f string) (*Entity, error) {
 
 // Generate generates a new entity and serializes it to disk.
 func Generate(baseDir string, signerFactory signature.SignerFactory, template *Entity) (*Entity, signature.Signer, error) {
-	entityPath := filepath.Join(baseDir, entityFilename)
-
 	// Generate a new entity.
 	signer, err := signerFactory.Generate(signature.SignerEntity, rand.Reader)
 	if err != nil {
@@ -174,8 +180,7 @@ func Generate(baseDir string, signerFactory signature.SignerFactory, template *E
 		ent.AllowEntitySignedNodes = template.AllowEntitySignedNodes
 	}
 
-	// Write to disk.
-	if err = ioutil.WriteFile(entityPath, json.Marshal(ent), fileMode); err != nil {
+	if err = ent.Save(baseDir); err != nil {
 		return nil, nil, err
 	}
 

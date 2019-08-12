@@ -12,11 +12,10 @@ import (
 	"github.com/tendermint/tendermint/p2p/pex"
 	"github.com/tendermint/tendermint/version"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/ekiden/go/common/node"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
-	"github.com/oasislabs/ekiden/go/genesis/bootstrap"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/tendermint/crypto"
 )
 
@@ -118,13 +117,6 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 		Moniker:    "ekiden-seed-" + identity.NodeSigner.Public().String(),
 	}
 
-	// HACK: Register with the bootstrap server.
-	if bs, ok := genesisProvider.(*bootstrap.Provider); ok {
-		if err = registerSeedWithBootstrap(bs, identity.NodeSigner); err != nil {
-			return nil, err
-		}
-	}
-
 	// Carve out all of the services.
 	logger := newLogAdapter(!viper.GetBool(cfgLogDebug))
 	if srv.addr, err = p2p.NewNetAddressString(p2p.IDAddressString(nodeInfo.ID_, nodeInfo.ListenAddr)); err != nil {
@@ -155,24 +147,6 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 	return srv, nil
 }
 
-func registerSeedWithBootstrap(bs *bootstrap.Provider, signer signature.Signer) error {
-	nodeAddr := viper.GetString(cfgCoreExternalAddress)
-
-	if err := common.IsAddrPort(nodeAddr); err != nil {
-		return errors.Wrap(err, "tendermint/seed: malformed bootstrap seed node address")
-	}
-
-	seed := &bootstrap.SeedNode{
-		PubKey:      signer.Public(),
-		CoreAddress: nodeAddr,
-	}
-	if err := bs.RegisterSeed(seed); err != nil {
-		return errors.Wrap(err, "tendermint/seed: failed to register with bootstrap server")
-	}
-
-	return nil
-}
-
 func populateAddrBookFromGenesis(addrBook p2p.AddrBook, genesisProvider genesis.Provider, ourAddr *p2p.NetAddress) error {
 	doc, err := genesisProvider.GetGenesisDocument()
 	if err != nil {
@@ -184,15 +158,20 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, genesisProvider genesis.
 	// For extra fun, p2p/transport.go:MultiplexTransport.upgrade() uses a case
 	// sensitive string comparision to validate public keys.
 	var addrs []*p2p.NetAddress
-	for _, v := range doc.Validators {
-		var openedValidator genesis.Validator
-		if err = v.Open(&openedValidator); err != nil {
+	for _, v := range doc.Registry.Nodes {
+		var openedNode node.Node
+		if err = v.Open(registry.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
 			return errors.Wrap(err, "tendermint/seed: failed to verify validator")
 		}
+		// TODO: This should cross check that the entity is valid.
+		if !openedNode.HasRoles(node.RoleValidator) {
+			continue
+		}
 
-		vPubKey := crypto.PublicKeyToTendermint(&openedValidator.PubKey)
+		vPubKey := crypto.PublicKeyToTendermint(&openedNode.ID)
 		vPkAddrHex := strings.ToLower(vPubKey.Address().String())
-		vAddr := vPkAddrHex + "@" + openedValidator.CoreAddress
+		coreAddress, _ := openedNode.Consensus.Addresses[0].MarshalText()
+		vAddr := vPkAddrHex + "@" + string(coreAddress)
 
 		var tmvAddr *p2p.NetAddress
 		if tmvAddr, err = p2p.NewNetAddressString(vAddr); err != nil {

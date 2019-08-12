@@ -53,6 +53,10 @@ type Node struct {
 	// P2P contains information for connecting to this node via P2P transport.
 	P2P P2PInfo `codec:"p2p"`
 
+	// Consensus contains information for connecting to this node as a
+	// consensus member.
+	Consensus ConsensusInfo `codec:"consensus"`
+
 	// Time of registration.
 	RegistrationTime uint64 `codec:"registration_time"`
 
@@ -77,6 +81,8 @@ const (
 	RoleKeyManager RolesMask = 1 << 3
 	// RoleMergeWorker is the Ekiden Merge Worker role.
 	RoleMergeWorker RolesMask = 1 << 4
+	// RoleValidator is the Ekiden validator role.
+	RoleValidator RolesMask = 1 << 5
 )
 
 // AddRoles adds the Node roles
@@ -205,6 +211,34 @@ func (info *P2PInfo) fromProto(pb *pbCommon.P2PInfo) error {
 		return err
 	}
 
+	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
+		info.Addresses = make([]Address, 0, len(pbAddresses))
+		for _, v := range pbAddresses {
+			addr, err := parseProtoAddress(v)
+			if err != nil {
+				return err
+			}
+			info.Addresses = append(info.Addresses, *addr)
+		}
+	}
+
+	return nil
+}
+
+// ConsensusInfo contains information for connectiong to this node as a
+// consensus member.
+type ConsensusInfo struct {
+	// Addresses is the list of addresses at which the node can be reached.
+	Addresses []Address `codec:"addresses"`
+}
+
+func (info *ConsensusInfo) toProto() *pbCommon.ConsensusInfo {
+	pb := new(pbCommon.ConsensusInfo)
+	pb.Addresses = ToProtoAddresses(info.Addresses)
+	return pb
+}
+
+func (info *ConsensusInfo) fromProto(pb *pbCommon.ConsensusInfo) error {
 	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
 		info.Addresses = make([]Address, 0, len(pbAddresses))
 		for _, v := range pbAddresses {
@@ -399,6 +433,10 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 		return err
 	}
 
+	if err := n.Consensus.fromProto(pb.GetConsensus()); err != nil {
+		return err
+	}
+
 	n.RegistrationTime = pb.GetRegistrationTime()
 
 	if pbRuntimes := pb.GetRuntimes(); pbRuntimes != nil {
@@ -426,6 +464,7 @@ func (n *Node) ToProto() *pbCommon.Node {
 	pb.Expiration = n.Expiration
 	pb.Committee = n.Committee.toProto()
 	pb.P2P = n.P2P.toProto()
+	pb.Consensus = n.Consensus.toProto()
 	pb.RegistrationTime = n.RegistrationTime
 	if n.Runtimes != nil {
 		pb.Runtimes = make([]*pbCommon.NodeRuntime, 0, len(n.Runtimes))

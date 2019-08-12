@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
@@ -29,10 +30,10 @@ const (
 	cfgGenesisFile = "genesis_file"
 	cfgEntity      = "entity"
 	cfgRuntime     = "runtime"
+	cfgNode        = "node"
 	cfgRootHash    = "roothash"
 	cfgKeyManager  = "keymanager"
 	cfgStaking     = "staking"
-	cfgValidator   = "validator"
 )
 
 var (
@@ -71,43 +72,14 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	validatorFiles := viper.GetStringSlice(cfgValidator)
-	if len(validatorFiles) == 0 {
-		logger.Error("at least one validator must be provided")
-		return
-	}
-
-	validators := make([]*genesis.SignedValidator, 0, len(validatorFiles))
-	for _, v := range validatorFiles {
-		b, err := ioutil.ReadFile(v)
-		if err != nil {
-			logger.Error("failed to load genesis validator",
-				"err", err,
-				"filename", v,
-			)
-			return
-		}
-
-		var validator genesis.SignedValidator
-		if err := json.Unmarshal(b, &validator); err != nil {
-			logger.Error("failed to parse genesis validator",
-				"err", err,
-				"filename", v,
-			)
-			return
-		}
-
-		validators = append(validators, &validator)
-	}
-
 	// Build the genesis state, if any.
 	doc := &genesis.Document{
-		Time:       time.Now(),
-		Validators: validators,
+		Time: time.Now(),
 	}
 	entities := viper.GetStringSlice(cfgEntity)
 	runtimes := viper.GetStringSlice(cfgRuntime)
-	if err := AppendRegistryState(doc, entities, runtimes, logger); err != nil {
+	nodes := viper.GetStringSlice(cfgNode)
+	if err := AppendRegistryState(doc, entities, runtimes, nodes, logger); err != nil {
 		logger.Error("failed to parse registry genesis state",
 			"err", err,
 		)
@@ -153,10 +125,11 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 // AppendRegistryState appends the registry genesis state given a vector
 // of entity registrations and runtime registrations.
-func AppendRegistryState(doc *genesis.Document, entities, runtimes []string, l *logging.Logger) error {
+func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []string, l *logging.Logger) error {
 	regSt := registry.Genesis{
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
 		Runtimes: make([]*registry.SignedRuntime, 0, len(runtimes)),
+		Nodes:    make([]*node.SignedNode, 0, len(nodes)),
 	}
 
 	for _, v := range entities {
@@ -229,6 +202,28 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes []string, l *
 		}
 
 		regSt.Runtimes = append(regSt.Runtimes, &rt)
+	}
+
+	for _, v := range nodes {
+		b, err := ioutil.ReadFile(v)
+		if err != nil {
+			l.Error("failed to load genesis node registration",
+				"err", err,
+				"filename", v,
+			)
+			return err
+		}
+
+		var n node.SignedNode
+		if err = json.Unmarshal(b, &n); err != nil {
+			l.Error("failed to parse genesis node registration",
+				"err", err,
+				"filename", v,
+			)
+			return err
+		}
+
+		regSt.Nodes = append(regSt.Nodes, &n)
 	}
 
 	doc.Registry = regSt
@@ -379,20 +374,20 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgGenesisFile, "genesis.json", "path to created genesis document")
 		cmd.Flags().StringSlice(cfgEntity, nil, "path to entity registration file")
 		cmd.Flags().StringSlice(cfgRuntime, nil, "path to runtime registration file")
+		cmd.Flags().StringSlice(cfgNode, nil, "path to node registration file")
 		cmd.Flags().StringSlice(cfgRootHash, nil, "path to roothash genesis blocks file")
 		cmd.Flags().String(cfgStaking, "", "path to staking genesis file")
 		cmd.Flags().StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
-		cmd.Flags().StringSlice(cfgValidator, nil, "path to validator file")
 	}
 
 	for _, v := range []string{
 		cfgGenesisFile,
 		cfgEntity,
 		cfgRuntime,
+		cfgNode,
 		cfgRootHash,
 		cfgKeyManager,
 		cfgStaking,
-		cfgValidator,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
@@ -404,7 +399,6 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 // Register registers the genesis sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	registerInitGenesisFlags(initGenesisCmd)
-	initProvisionValidatorCmd(genesisCmd)
 
 	for _, v := range []*cobra.Command{
 		initGenesisCmd,

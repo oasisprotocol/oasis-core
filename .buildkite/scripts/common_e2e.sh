@@ -69,16 +69,19 @@ run_backend_tendermint_committee() {
         local datadir=${base_datadir}-${idx}
         rm -rf ${datadir}
 
+        # Use entity signed nodes for now.
         let port=(idx-1)+26656
         ${EKIDEN_NODE} \
-            genesis provision_validator \
+            registry node init \
             --datadir ${datadir} \
-            --node_addr 127.0.0.1:${port} \
-            --node_name ekiden-committee-node-${idx} \
             --entity ${entity_dir} \
-            --validator_file ${datadir}/validator.json
-        validator_files="$validator_files --validator=${datadir}/validator.json"
+            --node.consensus_address 127.0.0.1:${port} \
+            --node.expiration 1000000 \
+            --node.role validator
+        validator_files="$validator_files --node=${datadir}/node_genesis.json"
     done
+
+    # Once this switches to using node-signed nodes, update the entity.
 
     # Provision the key manager runtime.
     ${EKIDEN_NODE} \
@@ -116,7 +119,6 @@ run_backend_tendermint_committee() {
         --runtime ${entity_dir}/runtime_genesis.json \
         ${roothash_genesis_blocks:+--roothash ${roothash_genesis_blocks}} \
         ${validator_files}
-
 
     # Run the IAS proxy if needed.
     local ias_proxy_port=9001

@@ -183,6 +183,11 @@ func (k PublicKey) ToMapKey() MapKey {
 	return mk
 }
 
+// FromMapKey converts a MapKey back to a public key.
+func (k PublicKey) FromMapKey(mk MapKey) {
+	copy(k[:], mk[:])
+}
+
 // LoadPEM loads a public key from a PEM file on disk.  Iff the public key
 // is missing and a Signer is provided, the Signer's corresponding
 // public key will be written and loaded.

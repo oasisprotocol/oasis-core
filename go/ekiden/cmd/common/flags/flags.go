@@ -16,6 +16,7 @@ const (
 	cfgVerbose = "verbose"
 	cfgForce   = "force"
 	cfgRetries = "retries"
+	cfgEntity  = "entity"
 
 	cfgConsensusBackend = "consensus.backend"
 
@@ -97,4 +98,19 @@ func RegisterDebugTestEntity(cmd *cobra.Command) {
 	}
 
 	_ = viper.BindPFlag(cfgDebugTestEntity, cmd.Flags().Lookup(cfgDebugTestEntity))
+}
+
+// Entity returns the set entity directory.
+func Entity() string {
+	return viper.GetString(cfgEntity)
+}
+
+// RegisterEntity registers the entity flag.
+func RegisterEntity(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
+	}
+
+	_ = viper.BindPFlag(cfgEntity, cmd.Flags().Lookup(cfgEntity))
+
 }

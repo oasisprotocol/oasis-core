@@ -48,8 +48,8 @@ scenario_basic() {
     run_storage_node 1
     run_storage_node 2
 
-    # Wait for all nodes to start: 3 compute + 2 storage + key manager.
-    wait_nodes 6
+    # Wait for all nodes to start: 3 compute + 2 storage + key manager + 3 validator.
+    wait_nodes 9
 
     # Advance epoch to elect a new committee.
     set_epoch 1
@@ -68,8 +68,8 @@ scenario_compute_discrepancy() {
     run_storage_node 1
     run_storage_node 2
 
-    # Wait for all nodes to start: 3 compute + 2 storage + key manager.
-    wait_nodes 6
+    # Wait for all nodes to start: 3 compute + 2 storage + key manager + 3 validator.
+    wait_nodes 9
 
     # Advance epoch to elect a new committee.
     set_epoch 1
@@ -94,8 +94,8 @@ scenario_merge_discrepancy() {
     run_storage_node 1
     run_storage_node 2
 
-    # Wait for all nodes to start: 3 compute + 2 storage + key manager.
-    wait_nodes 6
+    # Wait for all nodes to start: 3 compute + 2 storage + key manager + 3 validator.
+    wait_nodes 9
 
     # Advance epoch to elect a new committee.
     set_epoch 1

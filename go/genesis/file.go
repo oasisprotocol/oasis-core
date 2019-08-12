@@ -2,12 +2,9 @@ package genesis
 
 import (
 	"io/ioutil"
-	"os"
-	"time"
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -28,32 +25,10 @@ func NewFileProvider(filename string, identity *identity.Identity) (api.Provider
 
 	raw, err := ioutil.ReadFile(filename)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// Genesis file does not exist, treat as a single-node validator.
-			logger.Warn("Genesis file not present, running as a one-node validator",
-				"filename", filename,
-			)
-
-			entity, signer, _ := entity.TestEntity()
-			validator := &api.Validator{
-				EntityID: entity.ID,
-				PubKey:   identity.NodeSigner.Public(),
-				Name:     "ekiden-dummy",
-				Power:    10,
-			}
-
-			signedValidator, sigErr := api.SignValidator(signer, validator)
-			if sigErr != nil {
-				return nil, sigErr
-			}
-
-			return &fileProvider{
-				document: &api.Document{
-					Time:       time.Now(),
-					Validators: []*api.SignedValidator{signedValidator},
-				},
-			}, nil
-		}
+		logger.Warn("failed to open genesis document",
+			"err", err,
+			"filename", filename,
+		)
 		return nil, err
 	}
 

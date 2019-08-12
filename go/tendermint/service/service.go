@@ -64,3 +64,8 @@ type TendermintService interface {
 	// Pruner returns the ABCI state pruner.
 	Pruner() abci.StatePruner
 }
+
+// GenesisProvider is a tendermint specific genesis document provider.
+type GenesisProvider interface {
+	GetTendermintGenesisDocument() (*tmtypes.GenesisDoc, error)
+}
