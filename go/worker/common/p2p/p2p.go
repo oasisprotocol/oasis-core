@@ -10,6 +10,7 @@ import (
 	"github.com/cenkalti/backoff"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core"
+	"github.com/libp2p/go-libp2p-core/helpers"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/multiformats/go-multiaddr"
@@ -148,7 +149,7 @@ func (p *P2P) publishImpl(ctx context.Context, node *node.Node, msg *Message) er
 		return err
 	}
 	defer func() {
-		_ = rawStream.Close()
+		_ = helpers.FullClose(rawStream)
 	}()
 
 	stream := NewStream(rawStream)
@@ -203,7 +204,7 @@ func (p *P2P) RegisterHandler(runtimeID signature.PublicKey, handler Handler) {
 
 func (p *P2P) handleStreamMessages(stream *Stream) {
 	defer func() {
-		_ = stream.Close()
+		_ = helpers.FullClose(stream.Stream)
 	}()
 
 	peerID := stream.Conn().RemotePeer()
@@ -245,8 +246,6 @@ func (p *P2P) handleStreamMessages(stream *Stream) {
 			"runtime_id", message.RuntimeID,
 			"peer_id", peerID,
 		)
-
-		_ = stream.Reset()
 		return
 	}
 
