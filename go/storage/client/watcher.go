@@ -138,12 +138,16 @@ func (w *watcherState) updateStorageNodeConnections() {
 
 	// TODO: Should we only update connections if keys or addresses have changed?
 
-	// Clean-up previous resolvers.
+	// Clean-up previous resolvers and connections.
 	for _, states := range w.clientStates {
 		if cleanup := states.resolverCleanupCb; cleanup != nil {
 			cleanup()
 		}
+		if states.conn != nil {
+			states.conn.Close()
+		}
 	}
+	w.clientStates = nil
 
 	connClientStates := []*clientState{}
 	numConnNodes := 0
