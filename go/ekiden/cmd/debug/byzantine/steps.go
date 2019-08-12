@@ -8,15 +8,19 @@ import (
 	"github.com/pkg/errors"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
+	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
 	keymanagerapp "github.com/oasislabs/ekiden/go/tendermint/apps/keymanager"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
@@ -25,6 +29,7 @@ import (
 	stakingapp "github.com/oasislabs/ekiden/go/tendermint/apps/staking"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
+	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
 const (
@@ -149,6 +154,78 @@ func (ht honestTendermint) stop() error {
 	ht.service = nil
 
 	return nil
+}
+
+func registryRegisterNode(svc service.TendermintService, id *identity.Identity, dataDir string, committeeAddresses []node.Address, p2pInfo node.P2PInfo, runtimeID signature.PublicKey, roles node.RolesMask) error { // nolint: deadcode, unused
+	entityID, registrationSigner, err := registration.GetRegistrationSigner(logging.GetLogger("cmd/byzantine/registration"), dataDir, id)
+	if err != nil {
+		return errors.Wrap(err, "registration GetRegistrationSigner")
+	}
+	if registrationSigner == nil {
+		return errors.New("nil registrationSigner")
+	}
+
+	nodeDesc := &node.Node{
+		ID:         id.NodeSigner.Public(),
+		EntityID:   entityID,
+		Expiration: 1000,
+		Committee: node.CommitteeInfo{
+			Certificate: id.TLSCertificate.Certificate[0],
+			Addresses:   committeeAddresses,
+		},
+		P2P:              p2pInfo,
+		RegistrationTime: uint64(time.Now().Unix()),
+		Runtimes: []*node.Runtime{
+			&node.Runtime{
+				ID: runtimeID,
+			},
+		},
+		Roles: roles,
+	}
+	signedNode, err := node.SignNode(registrationSigner, registry.RegisterGenesisNodeSignatureContext, nodeDesc)
+	if err != nil {
+		return errors.Wrap(err, "node SignNode")
+	}
+
+	if err := svc.BroadcastTx(registryapp.TransactionTag, registryapp.Tx{
+		TxRegisterNode: &registryapp.TxRegisterNode{
+			Node: *signedNode,
+		},
+	}); err != nil {
+		return errors.Wrap(err, "Tendermint BroadcastTx")
+	}
+
+	return nil
+}
+
+func registryGetNode(svc service.TendermintService, height int64, id signature.PublicKey) (*node.Node, error) { // nolint: deadcode, unused
+	response, err := svc.Query(registryapp.QueryGetNode, tmapi.QueryGetByIDRequest{
+		ID: id,
+	}, height)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Tendermint Query %s", registryapp.QueryGetNodes)
+	}
+
+	var node node.Node
+	if err := cbor.Unmarshal(response, &node); err != nil {
+		return nil, errors.Wrap(err, "CBOR Unmarshal node")
+	}
+
+	return &node, nil
+}
+
+func registryGetNodes(svc service.TendermintService, height int64) ([]*node.Node, error) { // nolint: deadcode, unused
+	response, err := svc.Query(registryapp.QueryGetNodes, nil, height)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Tendermint Query %s", registryapp.QueryGetNodes)
+	}
+
+	var nodes []*node.Node
+	if err := cbor.Unmarshal(response, &nodes); err != nil {
+		return nil, errors.Wrap(err, "CBOR Unmarshal nodes")
+	}
+
+	return nodes, nil
 }
 
 type p2pReqRes struct {
