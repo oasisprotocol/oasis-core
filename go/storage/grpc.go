@@ -28,9 +28,14 @@ var _ pb.StorageServer = (*GrpcServer)(nil)
 type GrpcServer struct {
 	backend api.Backend
 	commonGrpc.RuntimePolicyChecker
+
+	ignoreApply bool
 }
 
 func (s *GrpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.ApplyResponse, error) {
+	if s.ignoreApply {
+		return nil, errors.New("storage: ignoring apply operation")
+	}
 	var ns common.Namespace
 	if err := ns.UnmarshalBinary(req.GetNamespace()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
@@ -66,6 +71,9 @@ func (s *GrpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 }
 
 func (s *GrpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) (*pb.ApplyBatchResponse, error) {
+	if s.ignoreApply {
+		return nil, errors.New("storage: ignoring apply operation")
+	}
 	var ns common.Namespace
 	if err := ns.UnmarshalBinary(req.GetNamespace()); err != nil {
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
@@ -404,10 +412,11 @@ func (s *GrpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Stora
 
 // NewGRPCServer initializes and registers a gRPC storage server backend.
 // by the provided Backend.
-func NewGRPCServer(srv *grpc.Server, b api.Backend, policy commonGrpc.RuntimePolicyChecker) *GrpcServer {
+func NewGRPCServer(srv *grpc.Server, b api.Backend, policy commonGrpc.RuntimePolicyChecker, ignoreApply bool) *GrpcServer {
 	s := &GrpcServer{
 		backend:              b,
 		RuntimePolicyChecker: policy,
+		ignoreApply:          ignoreApply,
 	}
 
 	pb.RegisterStorageServer(srv, s)

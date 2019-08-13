@@ -3,6 +3,20 @@ syntax = "proto3";
 package storage;
 option go_package = "github.com/oasislabs/ekiden/go/grpc/storage";
 
+service StorageWorker {
+    rpc GetLastSyncedRound(GetLastSyncedRoundRequest) returns (GetLastSyncedRoundResponse) {}
+}
+
+message GetLastSyncedRoundRequest {
+    bytes runtime_id = 1;
+}
+
+message GetLastSyncedRoundResponse {
+    uint64 round = 1;
+    bytes io_root = 2;
+    bytes state_root = 3;
+}
+
 service Storage {
     // MKVS
     rpc Apply(ApplyRequest) returns (ApplyResponse) {}

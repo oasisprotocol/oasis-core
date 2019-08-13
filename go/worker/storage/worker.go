@@ -28,6 +28,8 @@ import (
 const (
 	cfgWorkerEnabled      = "worker.storage.enabled"
 	cfgWorkerFetcherCount = "worker.storage.fetcher_count"
+
+	cfgWorkerDebugIgnoreApply = "worker.debug.storage.ignore_apply"
 )
 
 var (
@@ -59,6 +61,7 @@ type Worker struct {
 
 // New constructs a new storage worker.
 func New(
+	grpcInternal *grpc.Server,
 	commonWorker *workerCommon.Worker,
 	registration *registration.Registration,
 	genesis genesis.Provider,
@@ -110,9 +113,9 @@ func New(
 			}
 		})
 
-		// Attach storage worker to gRPC server.
+		// Attach storage interface to gRPC server.
 		s.grpcPolicy = grpc.NewDynamicRuntimePolicyChecker()
-		storage.NewGRPCServer(s.commonWorker.Grpc.Server(), s.commonWorker.Storage, s.grpcPolicy)
+		storage.NewGRPCServer(s.commonWorker.Grpc.Server(), s.commonWorker.Storage, s.grpcPolicy, viper.GetBool(cfgWorkerDebugIgnoreApply))
 
 		// Register storage worker role.
 		s.registration.RegisterRole(func(n *node.Node) error {
@@ -127,6 +130,9 @@ func New(
 				return nil, err
 			}
 		}
+
+		// Attach the storage worker's internal GRPC interface.
+		newGRPCServer(grpcInternal, s)
 	}
 
 	return s, nil
@@ -271,10 +277,13 @@ func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().Bool(cfgWorkerEnabled, false, "Enable storage worker")
 		cmd.Flags().Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
+		cmd.Flags().Bool(cfgWorkerDebugIgnoreApply, false, "Ignore Apply operations (for debugging purposes)")
+		_ = cmd.Flags().MarkHidden(cfgWorkerDebugIgnoreApply)
 	}
 	for _, v := range []string{
 		cfgWorkerEnabled,
 		cfgWorkerFetcherCount,
+		cfgWorkerDebugIgnoreApply,
 	} {
 		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
 	}
