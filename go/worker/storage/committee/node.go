@@ -4,6 +4,8 @@ import (
 	"container/heap"
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/eapache/channels"
@@ -39,13 +41,37 @@ const (
 	defaultUndefinedRound = ^uint64(0)
 )
 
+// outstandingMask records which storage roots still need to be synced or need to be retried.
+type outstandingMask uint
+
+const (
+	maskNone  = outstandingMask(0x0)
+	maskIO    = outstandingMask(0x1)
+	maskState = outstandingMask(0x2)
+	maskAll   = maskIO | maskState
+)
+
+func (o outstandingMask) String() string {
+	var represented []string
+	if o&maskIO != 0 {
+		represented = append(represented, "io")
+	}
+	if o&maskState != 0 {
+		represented = append(represented, "state")
+	}
+	return fmt.Sprintf("outstanding_mask{%s}", strings.Join(represented, ", "))
+}
+
 // Syncing task context and support functions for container/heap.
 
 type fetchedDiff struct {
-	round    uint64
-	prevRoot urkelNode.Root
-	thisRoot urkelNode.Root
-	writeLog storageApi.WriteLog
+	fetchMask outstandingMask
+	fetched   bool
+	err       error
+	round     uint64
+	prevRoot  urkelNode.Root
+	thisRoot  urkelNode.Root
+	writeLog  storageApi.WriteLog
 }
 
 type outOfOrderQueue []*fetchedDiff
@@ -282,39 +308,52 @@ func (n *Node) HandleNewEventLocked(*roothashApi.Event) {
 // Watcher implementation.
 
 // GetLastSynced returns the height, IORoot hash and StateRoot hash of the last block that was fully synced to.
-func (n *Node) GetLastSynced() (uint64, hash.Hash, hash.Hash) {
+func (n *Node) GetLastSynced() (uint64, urkelNode.Root, urkelNode.Root) {
 	n.syncedLock.RLock()
 	defer n.syncedLock.RUnlock()
 
-	return n.syncedState.LastBlock.Round, n.syncedState.LastBlock.IORoot.Hash, n.syncedState.LastBlock.StateRoot.Hash
+	return n.syncedState.LastBlock.Round, n.syncedState.LastBlock.IORoot, n.syncedState.LastBlock.StateRoot
 }
 
-func (n *Node) fetchDiff(round uint64, prevRoot *urkelNode.Root, thisRoot *urkelNode.Root) error {
-	var writeLog storageApi.WriteLog
+func (n *Node) fetchDiff(round uint64, prevRoot *urkelNode.Root, thisRoot *urkelNode.Root, fetchMask outstandingMask) {
+	result := &fetchedDiff{
+		fetchMask: fetchMask,
+		fetched:   false,
+		round:     round,
+		prevRoot:  *prevRoot,
+		thisRoot:  *thisRoot,
+	}
+	defer func() {
+		n.diffCh <- result
+	}()
 	// Check if the new root doesn't already exist.
 	if !n.localStorage.HasRoot(*thisRoot) {
+		result.fetched = true
 		if thisRoot.Hash.Equal(&prevRoot.Hash) {
 			// Even if HasRoot returns false the root can still exist if it is equal
 			// to the previous root and the root was emitted by the consensus committee
 			// directly (e.g., during an epoch transition). In this case we need to
 			// still apply the (empty) write log.
-			writeLog = storageApi.WriteLog{}
+			result.writeLog = storageApi.WriteLog{}
 		} else {
 			// New root does not yet exist in storage and we need to fetch it from a
 			// remote node.
 			n.logger.Debug("calling GetDiff",
-				"previous_root", prevRoot,
-				"root", thisRoot,
+				"old_root", prevRoot,
+				"new_root", thisRoot,
+				"fetch_mask", fetchMask,
 			)
 
 			it, err := n.storageClient.GetDiff(n.ctx, *prevRoot, *thisRoot)
 			if err != nil {
-				return err
+				result.err = err
+				return
 			}
 			for {
 				more, err := it.Next()
 				if err != nil {
-					return err
+					result.err = err
+					return
 				}
 				if !more {
 					break
@@ -322,23 +361,18 @@ func (n *Node) fetchDiff(round uint64, prevRoot *urkelNode.Root, thisRoot *urkel
 
 				chunk, err := it.Value()
 				if err != nil {
-					return err
+					result.err = err
+					return
 				}
-				writeLog = append(writeLog, chunk)
+				result.writeLog = append(result.writeLog, chunk)
 			}
 		}
 	}
-	n.diffCh <- &fetchedDiff{
-		round:    round,
-		prevRoot: *prevRoot,
-		thisRoot: *thisRoot,
-		writeLog: writeLog,
-	}
-	return nil
 }
 
 type inFlight struct {
-	outstanding int
+	outstanding   outstandingMask
+	awaitingRetry outstandingMask
 }
 
 func (n *Node) worker() { // nolint: gocyclo
@@ -399,7 +433,7 @@ mainLoop:
 		if len(*outOfOrderDone) > 0 && cachedLastRound+1 == (*outOfOrderDone)[0].round {
 			lastDiff := heap.Pop(outOfOrderDone).(*fetchedDiff)
 			// Apply the write log if one exists.
-			if lastDiff.writeLog != nil {
+			if lastDiff.fetched {
 				_, err := n.localStorage.Apply(n.ctx, lastDiff.thisRoot.Namespace,
 					lastDiff.prevRoot.Round, lastDiff.prevRoot.Hash,
 					lastDiff.thisRoot.Round, lastDiff.thisRoot.Hash,
@@ -407,17 +441,17 @@ mainLoop:
 				if err != nil {
 					n.logger.Error("can't apply write log",
 						"err", err,
-						"prev_root", lastDiff.prevRoot,
-						"root", lastDiff.thisRoot,
+						"old_root", lastDiff.prevRoot,
+						"new_root", lastDiff.thisRoot,
 					)
 				}
 			}
 
 			// Check if we have synced the given round.
-			syncingRounds[lastDiff.round].outstanding--
-			if syncingRounds[lastDiff.round].outstanding == 0 {
+			syncing := syncingRounds[lastDiff.round]
+			syncing.outstanding &= ^lastDiff.fetchMask
+			if syncing.outstanding == maskNone && syncing.awaitingRetry == maskNone {
 				n.logger.Debug("finished syncing round", "round", lastDiff.round)
-
 				delete(syncingRounds, lastDiff.round)
 				summary := hashCache[lastDiff.round]
 				delete(hashCache, lastDiff.round-1)
@@ -478,6 +512,7 @@ mainLoop:
 				)
 				continue mainLoop
 			}
+
 		case inBlk := <-n.blockCh.Out():
 			blk := inBlk.(*block.Block)
 			n.logger.Debug("incoming block",
@@ -502,7 +537,11 @@ mainLoop:
 				}
 				oldBlock, err := n.commonNode.Roothash.GetBlock(n.ctx, n.commonNode.RuntimeID, i)
 				if err != nil {
-					n.logger.Error("can't get block for round", "err", err, "round", i, "current_round", blk.Header.Round)
+					n.logger.Error("can't get block for round",
+						"err", err,
+						"round", i,
+						"current_round", blk.Header.Round,
+					)
 					panic("can't get block in storage worker")
 				}
 				hashCache[i] = summaryFromBlock(oldBlock)
@@ -512,16 +551,23 @@ mainLoop:
 			}
 
 			for i := cachedLastRound + 1; i <= blk.Header.Round; i++ {
-				if _, ok := syncingRounds[i]; ok {
+				syncing, ok := syncingRounds[i]
+				if ok && syncing.outstanding == maskAll {
 					continue
 				}
 
-				n.logger.Debug("going to sync round", "round", i)
-
-				syncingRounds[i] = &inFlight{
-					// We are syncing two roots, I/O root and state root.
-					outstanding: 2,
+				if !ok {
+					syncing = &inFlight{
+						outstanding:   maskNone,
+						awaitingRetry: maskAll,
+					}
+					syncingRounds[i] = syncing
 				}
+				n.logger.Debug("preparing round sync",
+					"round", i,
+					"outstanding_mask", syncing.outstanding,
+					"awaiting_retry", syncing.awaitingRetry,
+				)
 
 				prev := hashCache[i-1] // Closures take refs, so they need new variables here.
 				this := hashCache[i]
@@ -530,28 +576,41 @@ mainLoop:
 					Round:     this.IORoot.Round,
 				}
 				prevIORoot.Hash.Empty()
-				fetcherGroup.Add(1)
-				n.fetchPool.Submit(func() {
-					defer fetcherGroup.Done()
 
-					err := n.fetchDiff(this.Round, &prevIORoot, &this.IORoot)
-					if err != nil {
-						n.logger.Error("error getting block io difference to round", "err", err, "round", this.Round)
-					}
-				})
-				fetcherGroup.Add(1)
-				n.fetchPool.Submit(func() {
-					defer fetcherGroup.Done()
-
-					err := n.fetchDiff(this.Round, &prev.StateRoot, &this.StateRoot)
-					if err != nil {
-						n.logger.Error("error getting block state difference to round", "err", err, "round", this.Round)
-					}
-				})
+				if (syncing.outstanding&maskIO) == 0 && (syncing.awaitingRetry&maskIO) != 0 {
+					syncing.outstanding |= maskIO
+					syncing.awaitingRetry &= ^maskIO
+					fetcherGroup.Add(1)
+					n.fetchPool.Submit(func() {
+						defer fetcherGroup.Done()
+						n.fetchDiff(this.Round, &prevIORoot, &this.IORoot, maskIO)
+					})
+				}
+				if (syncing.outstanding&maskState) == 0 && (syncing.awaitingRetry&maskState) != 0 {
+					syncing.outstanding |= maskState
+					syncing.awaitingRetry &= ^maskState
+					fetcherGroup.Add(1)
+					n.fetchPool.Submit(func() {
+						defer fetcherGroup.Done()
+						n.fetchDiff(this.Round, &prev.StateRoot, &this.StateRoot, maskState)
+					})
+				}
 			}
 
 		case item := <-n.diffCh:
-			heap.Push(outOfOrderDone, item)
+			if item.err != nil {
+				n.logger.Error("error calling getdiff",
+					"err", item.err,
+					"round", item.round,
+					"old_root", item.prevRoot,
+					"new_root", item.thisRoot,
+					"fetch_mask", item.fetchMask,
+				)
+				syncingRounds[item.round].outstanding &= ^item.fetchMask
+				syncingRounds[item.round].awaitingRetry |= item.fetchMask
+			} else {
+				heap.Push(outOfOrderDone, item)
+			}
 
 		case <-n.ctx.Done():
 			break mainLoop
