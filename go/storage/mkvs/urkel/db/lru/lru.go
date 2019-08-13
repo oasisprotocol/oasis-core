@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"sync"
-	"unsafe"
 
 	"github.com/oasislabs/go-codec/codec"
 	"github.com/pkg/errors"
@@ -33,18 +32,12 @@ type lruNodeDB struct {
 }
 
 type nodeCacheItem struct {
-	n urkel.Node
+	urkel.Node
 }
 
-func (nci *nodeCacheItem) Size() uint64 {
-	switch n := nci.n.(type) {
-	case *urkel.InternalNode:
-		return uint64(unsafe.Sizeof(n))
-	case *urkel.LeafNode:
-		return uint64(unsafe.Sizeof(n)) + uint64(len(n.Value.Value))
-	default:
-		return uint64(unsafe.Sizeof(nci.n))
-	}
+func (nci *nodeCacheItem) Size() (size uint64) {
+	// Add the size of the hash that is used as the node key.
+	return nci.Node.Size() + hash.Size
 }
 
 // New creates a new in-memory node database with LRU replacement policy based on given size.
@@ -76,8 +69,7 @@ func (d *lruNodeDB) GetNode(root urkel.Root, ptr *urkel.Pointer) (urkel.Node, er
 		return nil, err
 	}
 
-	node := item.(*nodeCacheItem).n
-	return node.Extract(), nil
+	return item.(*nodeCacheItem).Extract(), nil
 }
 
 func (d *lruNodeDB) GetWriteLog(ctx context.Context, startRoot urkel.Root, endRoot urkel.Root) (api.WriteLogIterator, error) {
@@ -132,8 +124,7 @@ func (d *lruNodeDB) save() error {
 			bytes := append([]byte{'K'}, key[:]...)
 
 			// Serialize node.
-			ni := item.(*nodeCacheItem)
-			nodeBytes, nerr := ni.n.MarshalBinary()
+			nodeBytes, nerr := item.(*nodeCacheItem).MarshalBinary()
 			if nerr != nil {
 				continue
 			}
@@ -189,7 +180,7 @@ func (d *lruNodeDB) load() error {
 				if nerr != nil {
 					continue
 				}
-				_ = d.putLocked(key, &nodeCacheItem{n: node})
+				_ = d.putLocked(key, &nodeCacheItem{node})
 			default:
 				continue
 			}
@@ -284,7 +275,7 @@ func (s *memorySubtree) PutNode(depth urkel.Depth, ptr *urkel.Pointer) error {
 	// already been updated.
 	node := ptr.Node.ExtractUnchecked()
 	s.batch.ops = append(s.batch.ops, func() error {
-		return s.batch.db.putLocked(node.GetHash(), &nodeCacheItem{n: node})
+		return s.batch.db.putLocked(node.GetHash(), &nodeCacheItem{node})
 	})
 	return nil
 }
