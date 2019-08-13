@@ -55,9 +55,10 @@ message GetCommonPoolResponse {
 
 message GetThresholdRequest {
 	enum ThresholdKind {
-		VALIDATOR = 0;
-		COMPUTE = 1;
-		STORAGE = 2;
+		ENTITY = 0;
+		VALIDATOR = 1;
+		COMPUTE = 2;
+		STORAGE = 3;
 	}
 	ThresholdKind threshold_kind = 1;
 }
