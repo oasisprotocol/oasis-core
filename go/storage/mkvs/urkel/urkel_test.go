@@ -51,6 +51,23 @@ func writeLogToMap(wl writelog.WriteLog) map[string]string {
 	return writeLogSet
 }
 
+func foldWriteLogIterator(t *testing.T, w writelog.Iterator) writelog.WriteLog {
+	writeLog := writelog.WriteLog{}
+
+	for {
+		more, err := w.Next()
+		require.NoError(t, err, "error iterating over WriteLogIterator")
+		if !more {
+			break
+		}
+
+		val, err := w.Value()
+		require.NoError(t, err, "error iterating over WriteLogIterator")
+		writeLog = append(writeLog, val)
+	}
+	return writeLog
+}
+
 func (s *dummySerialSyncer) GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDepth node.Depth) (*syncer.Subtree, error) {
 	obj, err := s.backing.GetSubtree(ctx, root, id, maxDepth)
 	if err != nil {
@@ -1137,6 +1154,71 @@ func testHasRoot(t *testing.T, ndb db.NodeDB) {
 	require.True(t, ndb.HasRoot(root), "HasRoot should return true for existing root")
 }
 
+func testMergeWriteLog(t *testing.T, ndb db.NodeDB) {
+	ctx := context.Background()
+
+	keyZero := []byte("foo")
+	valueZero := []byte("bar")
+	keyOne := []byte("baz")
+	valueOne := []byte("quux")
+
+	emptyRoot := node.Root{
+		Namespace: testNs,
+		Round:     0,
+	}
+	emptyRoot.Hash.Empty()
+
+	// Put some stuff in the tree.
+	tree := New(nil, ndb)
+	err := tree.Insert(ctx, keyZero, valueZero)
+	require.NoError(t, err, "Insert")
+	_, rootHash1, err := tree.Commit(ctx, testNs, 0)
+	require.NoError(t, err, "Commit")
+
+	root1 := node.Root{
+		Namespace: testNs,
+		Round:     0,
+		Hash:      rootHash1,
+	}
+
+	wli, err := ndb.GetWriteLog(ctx, emptyRoot, root1)
+	require.NoError(t, err, "GetWriteLog")
+
+	wl := writeLogToMap(foldWriteLogIterator(t, wli))
+	require.Equal(t, writeLogToMap(writelog.WriteLog{writelog.LogEntry{Key: keyZero, Value: valueZero}}), wl)
+
+	// Continue adding to this same tree.
+	tree, err = NewWithRoot(ctx, nil, ndb, root1)
+	require.NoError(t, err, "NewWithRoot")
+	err = tree.Insert(ctx, keyOne, valueOne)
+	require.NoError(t, err, "Insert")
+	_, rootHash2, err := tree.Commit(ctx, testNs, 0)
+	require.NoError(t, err, "Commit")
+
+	root2 := node.Root{
+		Namespace: testNs,
+		Round:     0,
+		Hash:      rootHash2,
+	}
+
+	// Check that we can get a combined write log from the first root to the third one.
+	wli, err = ndb.GetWriteLog(ctx, emptyRoot, root2)
+	require.NoError(t, err, "GetWriteLog")
+
+	wlDb := writeLogToMap(foldWriteLogIterator(t, wli))
+	wlLiteral := writeLogToMap(writelog.WriteLog{
+		writelog.LogEntry{Key: keyZero, Value: valueZero},
+		writelog.LogEntry{Key: keyOne, Value: valueOne},
+	})
+	require.Equal(t, wlLiteral, wlDb)
+
+	// Check that the write log to the intermediate root doesn't exist anymore.
+	_, err = ndb.GetWriteLog(ctx, emptyRoot, root1)
+	require.Error(t, err, "GetWriteLog")
+	_, err = ndb.GetWriteLog(ctx, root1, root2)
+	require.Error(t, err, "GetWriteLog")
+}
+
 func testPruneBasic(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
@@ -1730,6 +1812,7 @@ func testBackend(
 		{"DebugDump", testDebugDump},
 		{"DebugStats", testDebugStats},
 		{"OnCommitHooks", testOnCommitHooks},
+		{"MergeWriteLog", testMergeWriteLog},
 		{"HasRoot", testHasRoot},
 		{"PruneBasic", testPruneBasic},
 		{"PruneManyRounds", testPruneManyRounds},
@@ -1862,6 +1945,7 @@ func TestUrkelLRUBackend(t *testing.T) {
 			"PruneCheckpoints",
 			"Errors",
 			"HasRoot",
+			"MergeWriteLog",
 		},
 	)
 }

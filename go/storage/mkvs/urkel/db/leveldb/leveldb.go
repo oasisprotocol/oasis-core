@@ -28,7 +28,7 @@ var (
 	// Value is serialized node.
 	nodeKeyFmt = keyformat.New('N', &common.Namespace{}, &hash.Hash{})
 	// writeLogKeyFmt is the key format for write logs (namespace, round,
-	// old root, new root).
+	// new root, old root).
 	//
 	// Value is CBOR-serialized write log.
 	writeLogKeyFmt = keyformat.New('L', &common.Namespace{}, uint64(0), &hash.Hash{}, &hash.Hash{})
@@ -125,7 +125,7 @@ func (d *leveldbNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, en
 		return nil, api.ErrRootMustFollowOld
 	}
 
-	key := writeLogKeyFmt.Encode(&endRoot.Namespace, endRoot.Round, &startRoot.Hash, &endRoot.Hash)
+	key := writeLogKeyFmt.Encode(&endRoot.Namespace, endRoot.Round, &endRoot.Hash, &startRoot.Hash)
 	bytes, err := d.db.Get(key, nil)
 	if err != nil {
 		return nil, err
@@ -604,9 +604,39 @@ func (b *leveldbBatch) Commit(root node.Root) error {
 	// Store write log.
 	if b.writeLog != nil && b.annotations != nil {
 		log := api.MakeHashedDBWriteLog(b.writeLog, b.annotations)
-		bytes := cbor.Marshal(log)
-		key := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &b.oldRoot.Hash, &root.Hash)
-		b.bat.Put(key, bytes)
+
+		prefix := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &b.oldRoot.Hash)
+		it := snapshot.NewIterator(util.BytesPrefix(prefix), nil)
+		defer it.Release()
+
+		foundOld := false
+		for it.Next() {
+			var decNs common.Namespace
+			var decRound uint64
+			var oldRootHash hash.Hash
+			var olderRootHash hash.Hash
+
+			if !writeLogKeyFmt.Decode(it.Key(), &decNs, &decRound, &oldRootHash, &olderRootHash) {
+				// This should not happen as the LevelDB iterator should take care of it.
+				panic("urkel/db/leveldb: bad iterator")
+			}
+
+			// If an older write log exists, get it, merge it with this one and delete it from the db.
+			var oldWriteLog api.HashedDBWriteLog
+			if err := cbor.Unmarshal(it.Value(), &oldWriteLog); err != nil {
+				return err
+			}
+			oldWriteLog = append(oldWriteLog, log...)
+			b.bat.Put(writeLogKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &olderRootHash), cbor.Marshal(oldWriteLog))
+			b.bat.Delete(it.Key())
+			foundOld = true
+		}
+
+		if !foundOld {
+			bytes := cbor.Marshal(log)
+			key := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &b.oldRoot.Hash)
+			b.bat.Put(key, bytes)
+		}
 	}
 
 	if err := b.db.db.Write(b.bat, &opt.WriteOptions{Sync: true}); err != nil {
