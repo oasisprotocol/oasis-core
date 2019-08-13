@@ -127,15 +127,15 @@ func (app *rootHashApplication) queryGetGenesisBlock(s interface{}, r interface{
 }
 
 func (app *rootHashApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	request := &Tx{}
-	if err := cbor.Unmarshal(tx, request); err != nil {
+	var request Tx
+	if err := cbor.Unmarshal(tx, &request); err != nil {
 		app.logger.Error("CheckTx: failed to unmarshal",
 			"tx", hex.EncodeToString(tx),
 		)
 		return errors.Wrap(err, "roothash: failed to unmarshal")
 	}
 
-	if err := app.executeTx(ctx, app.state.CheckTxTree(), request); err != nil {
+	if err := app.executeTx(ctx, app.state.CheckTxTree(), &request); err != nil {
 		return err
 	}
 
@@ -574,6 +574,8 @@ func (app *rootHashApplication) commit(
 	id signature.PublicKey,
 	tx *Tx,
 ) error {
+	logger := app.logger.With("is_check_only", ctx.IsCheckOnly())
+
 	rtState, err := state.getRuntimeState(id)
 	if err != nil {
 		return errors.Wrap(err, "roothash: failed to fetch runtime state")
@@ -583,18 +585,8 @@ func (app *rootHashApplication) commit(
 	}
 	runtime := rtState.Runtime
 
-	// TODO: Validate transaction.
-
-	if ctx.IsCheckOnly() {
-		// If we are within CheckTx then we cannot do any further checks as epoch
-		// transitions are only handled in BeginBlock.
-		return nil
-	}
-
 	if rtState.Round == nil {
-		app.logger.Error("commit recevied when no round in progress",
-			"err", errNoRound,
-		)
+		logger.Error("commit recevied when no round in progress")
 		return errNoRound
 	}
 
@@ -605,7 +597,7 @@ func (app *rootHashApplication) commit(
 
 	// If the round was finalized, transition.
 	if rtState.Round.CurrentBlock.Header.Round != latestBlock.Header.Round {
-		app.logger.Debug("round was finalized, transitioning round",
+		logger.Debug("round was finalized, transitioning round",
 			"round", blockNr,
 		)
 
@@ -619,10 +611,11 @@ func (app *rootHashApplication) commit(
 	}
 
 	// Add the commitments.
-	if tx.TxMergeCommit != nil {
+	switch {
+	case tx.TxMergeCommit != nil:
 		for _, commit := range tx.TxMergeCommit.Commits {
 			if err = rtState.Round.addMergeCommitment(&commit, sv); err != nil {
-				app.logger.Error("failed to add merge commitment to round",
+				logger.Error("failed to add merge commitment to round",
 					"err", err,
 					"round", blockNr,
 				)
@@ -631,13 +624,15 @@ func (app *rootHashApplication) commit(
 		}
 
 		// Try to finalize round.
-		app.tryFinalizeMerge(ctx, runtime, rtState, false)
-	} else if tx.TxComputeCommit != nil {
+		if !ctx.IsCheckOnly() {
+			app.tryFinalizeMerge(ctx, runtime, rtState, false)
+		}
+	case tx.TxComputeCommit != nil:
 		pools := make(map[*commitment.Pool]bool)
 		for _, commit := range tx.TxComputeCommit.Commits {
 			var pool *commitment.Pool
 			if pool, err = rtState.Round.addComputeCommitment(&commit, sv); err != nil {
-				app.logger.Error("failed to add compute commitment to round",
+				logger.Error("failed to add compute commitment to round",
 					"err", err,
 					"round", blockNr,
 				)
@@ -647,9 +642,14 @@ func (app *rootHashApplication) commit(
 			pools[pool] = true
 		}
 
-		for pool := range pools {
-			app.tryFinalizeCompute(ctx, runtime, rtState, pool, false)
+		// Try to finalize compute rounds.
+		if !ctx.IsCheckOnly() {
+			for pool := range pools {
+				app.tryFinalizeCompute(ctx, runtime, rtState, pool, false)
+			}
 		}
+	default:
+		return roothash.ErrInvalidArgument
 	}
 
 	return nil
