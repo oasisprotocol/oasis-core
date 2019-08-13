@@ -35,12 +35,12 @@ const (
 
 	// PointerSize is the size of a node pointer in memory.
 	PointerSize = uint64(unsafe.Sizeof(Pointer{}))
-	// InternalNodeSize is the size of an internal node in memory.
-	InternalNodeSize = uint64(unsafe.Sizeof(InternalNode{})) + 2*PointerSize
+	// InternalNodeSize is the minimum size of an internal node in memory.
+	InternalNodeSize = uint64(unsafe.Sizeof(InternalNode{}))
 	// ValueSize is the size of an empty value node in memory.
 	ValueSize = uint64(unsafe.Sizeof(Value{}))
-	// LeafNodeSize is the size of a leaf node in memory.
-	LeafNodeSize = uint64(unsafe.Sizeof(LeafNode{})) + ValueSize
+	// LeafNodeSize is the minimum size of a leaf node in memory.
+	LeafNodeSize = uint64(unsafe.Sizeof(LeafNode{}))
 )
 
 var (
@@ -181,6 +181,19 @@ type Pointer struct {
 	DBInternal interface{}
 }
 
+// Size returns the size of this pointer in bytes.
+func (p *Pointer) Size() uint64 {
+	if p == nil {
+		return 0
+	}
+
+	size := PointerSize
+	if p.Node != nil {
+		size += p.Node.Size()
+	}
+	return size
+}
+
 // GetHash returns the pointers's cached hash.
 func (p *Pointer) GetHash() hash.Hash {
 	if p == nil {
@@ -283,6 +296,9 @@ type Node interface {
 
 	// Equal compares a node with another node.
 	Equal(other Node) bool
+
+	// Size returns the size of this pointer in bytes.
+	Size() uint64
 }
 
 // InternalNode is an internal node with two children and possibly a leaf.
@@ -297,6 +313,14 @@ type InternalNode struct {
 	LeafNode       *Pointer // for the key ending at this depth
 	Left           *Pointer
 	Right          *Pointer
+}
+
+// Size returns the size of this internal node in bytes.
+func (n *InternalNode) Size() uint64 {
+	size := InternalNodeSize
+	size += uint64(len(n.Label))
+	size += n.LeafNode.Size() + n.Left.Size() + n.Right.Size()
+	return size
 }
 
 // UpdateHash updates the node's cached hash by recomputing it.
@@ -514,6 +538,14 @@ type LeafNode struct {
 	Value *Value
 }
 
+// Size returns the size of this leaf node in bytes.
+func (n *LeafNode) Size() uint64 {
+	size := LeafNodeSize
+	size += uint64(len(n.Key))
+	size += n.Value.Size()
+	return size
+}
+
 // GetHash returns the node's cached hash.
 func (n *LeafNode) GetHash() hash.Hash {
 	return n.Hash
@@ -641,6 +673,13 @@ type Value struct {
 	Hash  hash.Hash
 	Value []byte
 	LRU   *list.Element
+}
+
+// Size returns the size of this value in bytes.
+func (v *Value) Size() uint64 {
+	size := ValueSize
+	size += uint64(len(v.Value))
+	return size
 }
 
 // GetHash returns the value's cached hash.
