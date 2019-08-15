@@ -35,6 +35,7 @@ const (
 	cfgP2PAddress       = "node.p2p_address"
 	cfgConsensusAddress = "node.consensus_address"
 	cfgRole             = "node.role"
+	cfgSelfSigned       = "node.is_self_signed"
 
 	optRoleComputeWorker        = "compute-worker"
 	optRoleStorageWorker        = "storage-worker"
@@ -135,6 +136,9 @@ func doInit(cmd *cobra.Command, args []string) {
 
 		entityID = entity.ID
 		isSelfSigned = !entity.AllowEntitySignedNodes
+		if viper.GetBool(cfgSelfSigned) {
+			isSelfSigned = true
+		}
 		defer signer.Reset()
 	}
 
@@ -312,6 +316,7 @@ func registerNodeFlags(cmd *cobra.Command) {
 		cmd.Flags().StringSlice(cfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
 		cmd.Flags().String(cfgConsensusAddress, "", "Address the node can be reached as a consensus member")
 		cmd.Flags().StringSlice(cfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-worker\", \"key-manager\", \"merge-worker\", and \"validator\"")
+		cmd.Flags().Bool(cfgSelfSigned, false, "Node registration should be self-signed")
 	}
 
 	for _, v := range []string{
@@ -321,6 +326,7 @@ func registerNodeFlags(cmd *cobra.Command) {
 		cfgP2PAddress,
 		cfgConsensusAddress,
 		cfgRole,
+		cfgSelfSigned,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}

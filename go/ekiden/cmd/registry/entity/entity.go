@@ -46,9 +46,7 @@ var (
 		Use:   "init",
 		Short: "initialize an entity",
 		PreRun: func(cmd *cobra.Command, args []string) {
-			cmdFlags.RegisterForce(cmd)
-			cmdFlags.RegisterDebugTestEntity(cmd)
-			registerEntityFlags(cmd)
+			registerInitFlags(cmd)
 		},
 		Run: doInit,
 	}
@@ -57,8 +55,6 @@ var (
 		Use:   "update",
 		Short: "update an entity",
 		PreRun: func(cmd *cobra.Command, args []string) {
-			cmdFlags.RegisterDebugTestEntity(cmd)
-			registerEntityFlags(cmd)
 			registerUpdateFlags(cmd)
 		},
 		Run: doUpdate,
@@ -68,8 +64,7 @@ var (
 		Use:   cmdRegister,
 		Short: "register an entity",
 		PreRun: func(cmd *cobra.Command, args []string) {
-			cmdFlags.RegisterRetries(cmd)
-			cmdGrpc.RegisterClientFlags(cmd, false)
+			registerRegisterOrDeregisterFlags(cmd)
 		},
 		Run: doRegisterOrDeregister,
 	}
@@ -78,8 +73,7 @@ var (
 		Use:   "deregister",
 		Short: "deregister an entity",
 		PreRun: func(cmd *cobra.Command, args []string) {
-			cmdFlags.RegisterRetries(cmd)
-			cmdGrpc.RegisterClientFlags(cmd, false)
+			registerRegisterOrDeregisterFlags(cmd)
 		},
 		Run: doRegisterOrDeregister,
 	}
@@ -232,10 +226,6 @@ func doUpdate(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 		ent.Nodes = append(ent.Nodes, n.ID)
-	}
-	if len(ent.Nodes) > 0 && ent.AllowEntitySignedNodes {
-		logger.Error("entity descriptor will have self-signed nodes, when entity signed is configured")
-		os.Exit(1)
 	}
 
 	// De-duplicate the entity's nodes.
@@ -462,6 +452,13 @@ func registerEntityFlags(cmd *cobra.Command) {
 	}
 }
 
+func registerInitFlags(cmd *cobra.Command) {
+	cmdFlags.RegisterForce(cmd)
+	cmdFlags.RegisterDebugTestEntity(cmd)
+
+	registerEntityFlags(cmd)
+}
+
 func registerUpdateFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().StringSlice(cfgNodeID, nil, "ID(s) of nodes associated with this entity")
@@ -474,6 +471,15 @@ func registerUpdateFlags(cmd *cobra.Command) {
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
+
+	cmdFlags.RegisterDebugTestEntity(cmd)
+	registerEntityFlags(cmd)
+}
+
+func registerRegisterOrDeregisterFlags(cmd *cobra.Command) {
+	cmdFlags.RegisterRetries(cmd)
+	cmdFlags.RegisterDebugTestEntity(cmd)
+	cmdGrpc.RegisterClientFlags(cmd, false)
 }
 
 // Register registers the entity sub-command and all of it's children.
@@ -488,34 +494,13 @@ func Register(parentCmd *cobra.Command) {
 		entityCmd.AddCommand(v)
 	}
 
-	cmdFlags.RegisterForce(initCmd)
-	cmdFlags.RegisterRetries(registerCmd)
-	cmdFlags.RegisterRetries(deregisterCmd)
-	cmdFlags.RegisterVerbose(listCmd)
+	registerInitFlags(initCmd)
 	registerUpdateFlags(updateCmd)
+	registerRegisterOrDeregisterFlags(registerCmd)
+	registerRegisterOrDeregisterFlags(deregisterCmd)
 
-	for _, v := range []*cobra.Command{
-		initCmd,
-		updateCmd,
-	} {
-		registerEntityFlags(v)
-	}
-
-	for _, v := range []*cobra.Command{
-		initCmd,
-		registerCmd,
-		deregisterCmd,
-	} {
-		cmdFlags.RegisterDebugTestEntity(v)
-	}
-
-	for _, v := range []*cobra.Command{
-		registerCmd,
-		deregisterCmd,
-		listCmd,
-	} {
-		cmdGrpc.RegisterClientFlags(v, false)
-	}
+	cmdFlags.RegisterVerbose(listCmd)
+	cmdGrpc.RegisterClientFlags(listCmd, false)
 
 	parentCmd.AddCommand(entityCmd)
 }

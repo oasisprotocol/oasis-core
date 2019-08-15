@@ -230,17 +230,39 @@ func getRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 		return nil, nil, errors.Wrap(err, "worker/registration: failed to load entity descriptor")
 	}
 	if !entity.AllowEntitySignedNodes {
+		// If the entity does not allow any entity-signed nodes, then
+		// registrations will always be node-signed.
 		return entity.ID, identity.NodeSigner, nil
 	}
+	for _, v := range entity.Nodes {
+		if v.Equal(identity.NodeSigner.Public()) {
+			// If the node is in the entity's list of allowed nodes
+			// then registrations MUST be node-signed.
+			return entity.ID, identity.NodeSigner, nil
+		}
+	}
 
-	logger.Warn("using the entity signing key for node registration")
+	// At this point, the entity allows entity-signed registrations,
+	// and the node is not in the entity's list of allowed
+	// node-signed nodes.
+	//
+	// TODO: The only reason why an entity descriptor ever needs to
+	// be provided, is for this check.  It would be better for the common
+	// case to just query the entity descriptor from the registry,
+	// given a entity ID.
 
 	// The entity allows self-signed nodes, try to load the entity private key.
 	f = viper.GetString(cfgRegistrationPrivateKey)
 	if f == "" {
-		// No suitable signer with which to sign node registrations.
-		return nil, nil, errors.New("worker/registration: no suitable signing key for node registration")
+		// If the private key is not provided, try using a node-signed
+		// registration, the local copy of the entity descriptor may
+		// just be stale.
+		logger.Warn("no entity signing key provided, falling back to the node identity key")
+
+		return entity.ID, identity.NodeSigner, nil
 	}
+
+	logger.Warn("using the entity signing key for node registration")
 
 	factory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
 	fileFactory := factory.(*fileSigner.Factory)
