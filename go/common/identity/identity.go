@@ -107,8 +107,12 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 			return nil, err
 		}
 
-		tlsCert, err = generateTLSCert(dataDir)
+		tlsCert, err = GenerateTLSCert()
 		if err != nil {
+			return nil, err
+		}
+
+		if err = saveTLSCert(dataDir, tlsCert); err != nil {
 			return nil, err
 		}
 	}
@@ -163,27 +167,11 @@ func loadTLSCert(dataDir string) (*tls.Certificate, error) {
 	}, nil
 }
 
-func generateTLSCert(dataDir string) (*tls.Certificate, error) {
-	tlsKeyPath, tlsCertPath := tlsCertPaths(dataDir)
-
+// GenerateTLSCert generates a node TLS certificate.
+func GenerateTLSCert() (*tls.Certificate, error) {
 	// Generate a new X509 key pair.
 	tlsKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, err
-	}
-
-	// Persist key pair.
-	der, err := x509.MarshalECPrivateKey(tlsKey)
-	if err != nil {
-		return nil, err
-	}
-
-	tlsKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  tlsKeyPEMType,
-		Bytes: der,
-	})
-
-	if err = ioutil.WriteFile(tlsKeyPath, tlsKeyPEM, 0600); err != nil {
 		return nil, err
 	}
 
@@ -199,18 +187,39 @@ func generateTLSCert(dataDir string) (*tls.Certificate, error) {
 		return nil, err
 	}
 
-	// Persist TLS certificate.
-	tlsCertPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  tlsCertPEMType,
-		Bytes: tlsCertDer,
-	})
-
-	if err = ioutil.WriteFile(tlsCertPath, tlsCertPEM, 0644); err != nil {
-		return nil, err
-	}
-
 	return &tls.Certificate{
 		Certificate: [][]byte{tlsCertDer},
 		PrivateKey:  tlsKey,
 	}, nil
+}
+
+func saveTLSCert(dataDir string, cert *tls.Certificate) error {
+	tlsKeyPath, tlsCertPath := tlsCertPaths(dataDir)
+
+	// Persist key pair.
+	der, err := x509.MarshalECPrivateKey(cert.PrivateKey.(*ecdsa.PrivateKey))
+	if err != nil {
+		return err
+	}
+
+	tlsKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  tlsKeyPEMType,
+		Bytes: der,
+	})
+
+	if err = ioutil.WriteFile(tlsKeyPath, tlsKeyPEM, 0600); err != nil {
+		return err
+	}
+
+	// Persist TLS certificate.
+	tlsCertPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  tlsCertPEMType,
+		Bytes: cert.Certificate[0],
+	})
+
+	if err = ioutil.WriteFile(tlsCertPath, tlsCertPEM, 0644); err != nil {
+		return err
+	}
+
+	return nil
 }

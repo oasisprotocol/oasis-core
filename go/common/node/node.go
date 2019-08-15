@@ -83,6 +83,10 @@ const (
 	RoleMergeWorker RolesMask = 1 << 4
 	// RoleValidator is the Ekiden validator role.
 	RoleValidator RolesMask = 1 << 5
+
+	// RoleReserved are all the bits of the Eiden Node roles bitmask
+	// that are reserved and must not be used.
+	RoleReserved RolesMask = ((1 << 32) - 1) & ^((RoleValidator << 1) - 1)
 )
 
 // AddRoles adds the Node roles
@@ -279,8 +283,14 @@ type TEEHardware uint8
 
 // TEE Hardware implementations.
 const (
-	TEEHardwareInvalid  TEEHardware = 0
+	// TEEHardwareInvalid is a non-TEE implementation.
+	TEEHardwareInvalid TEEHardware = 0
+	// TEEHardwareIntelSGX is an Intel SGX TEE implementation.
 	TEEHardwareIntelSGX TEEHardware = 1
+
+	// TEEHardwareReserved is the first reserved hardware implementation
+	// identifier. All equal or greater identifiers are reserved.
+	TEEHardwareReserved TEEHardware = TEEHardwareIntelSGX + 1
 )
 
 // FromProto deserializes a protobuf into a TEEHardware.

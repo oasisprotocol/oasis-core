@@ -201,7 +201,6 @@ func (t *Timestamp) UnmarshalCBOR(data []byte) error {
 
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
 func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis bool) (*entity.Entity, error) {
-	// XXX: Ensure ent is well-formed.
 	var ent entity.Entity
 	if sigEnt == nil {
 		return nil, ErrInvalidArgument
@@ -265,7 +264,6 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
 func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool) (*node.Node, error) {
-	// XXX: Ensure node is well-formed.
 	var n node.Node
 	if sigNode == nil {
 		return nil, ErrInvalidArgument
@@ -327,6 +325,20 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, en
 		return nil, ErrInvalidArgument
 	}
 
+	// Make sure that a node has at least one valid role.
+	switch {
+	case n.Roles == 0:
+		logger.Error("RegisterNode: no roles specified",
+			"node", n,
+		)
+		return nil, ErrInvalidArgument
+	case n.HasRoles(node.RoleReserved):
+		logger.Error("RegisterNode: invalid role specified",
+			"node", n,
+		)
+		return nil, ErrInvalidArgument
+	}
+
 	// TODO: Key manager nodes maybe should be restricted to only being a
 	// key manager at the expense of breaking some of our test configs.
 	needRuntimes := n.HasRoles(node.RoleComputeWorker | node.RoleKeyManager) // XXX: RoleTransactionSceduler?
@@ -368,6 +380,37 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, en
 				)
 				return nil, err
 			}
+		}
+	}
+
+	// If node is a validator, ensure it has ConensusInfo.
+	if n.HasRoles(node.RoleValidator) {
+		// Verify that addresses are non-empty.
+		if len(n.Consensus.Addresses) == 0 {
+			logger.Error("RegisterNode: missing consensus addresses",
+				"node", n,
+			)
+			return nil, ErrInvalidArgument
+		}
+	}
+
+	// If node is a worker, ensure it has CommitteeInfo and P2PInfo.
+	if n.HasRoles(node.RoleComputeWorker | node.RoleStorageWorker | node.RoleTransactionScheduler | node.RoleKeyManager | node.RoleMergeWorker) {
+		// Verify that addresses are non-empty.
+		if len(n.Committee.Addresses) == 0 || len(n.P2P.Addresses) == 0 {
+			logger.Error("RegisterNode: missing committee or p2p addresses",
+				"node", n,
+			)
+			return nil, ErrInvalidArgument
+		}
+
+		// Verify that certificate is well-formed.
+		if _, err := n.Committee.ParseCertificate(); err != nil {
+			logger.Error("RegisterNode: invalid committee TLS certificate",
+				"node", n,
+				"err", err,
+			)
+			return nil, ErrInvalidArgument
 		}
 	}
 
@@ -458,7 +501,6 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode *node.Node, newNode *n
 
 // VerifyRegisterRuntimeArgs verifies arguments for RegisterRuntime.
 func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isGenesis bool) (*Runtime, error) {
-	// XXX: Ensure runtime is well-formed.
 	var rt Runtime
 	if sigRt == nil {
 		return nil, ErrInvalidArgument
@@ -485,6 +527,22 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 		if rt.ID.Equal(rt.KeyManager) {
 			return nil, ErrInvalidArgument
 		}
+
+		// Ensure there is at least one member of the transaction scheduler group.
+		if rt.TransactionSchedulerGroupSize == 0 {
+			logger.Error("RegisterRuntime: transaction scheduler group too small",
+				"runtime", rt,
+			)
+			return nil, ErrInvalidArgument
+		}
+
+		// Ensure there is at least one member of the storage group.
+		if rt.StorageGroupSize == 0 {
+			logger.Error("RegisterRuntime: storage group too small",
+				"runtime", rt,
+			)
+			return nil, ErrInvalidArgument
+		}
 	case KindKeyManager:
 		if !rt.ID.Equal(rt.KeyManager) {
 			return nil, ErrInvalidArgument
@@ -495,6 +553,22 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 
 	if !isGenesis && !rt.Genesis.StateRoot.IsEmpty() {
 		// TODO: Verify storage receipt for the state root, reject such registrations for now.
+		return nil, ErrInvalidArgument
+	}
+
+	// Ensure there is at least one member of the replication group.
+	if rt.ReplicaGroupSize == 0 {
+		logger.Error("RegisterRuntime: replication group too small",
+			"runtime", rt,
+		)
+		return nil, ErrInvalidArgument
+	}
+
+	// Ensure a valid TEE hardware is specified.
+	if rt.TEEHardware >= node.TEEHardwareReserved {
+		logger.Error("RegisterRuntime: invalid TEE hardware specified",
+			"runtime", rt,
+		)
 		return nil, ErrInvalidArgument
 	}
 
