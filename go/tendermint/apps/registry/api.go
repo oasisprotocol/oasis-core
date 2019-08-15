@@ -57,6 +57,9 @@ const (
 
 	// QueryGetRuntimes is a path for GetRuntimes query.
 	QueryGetRuntimes = AppName + "/runtimes"
+
+	// QueryGenesis is a path for Genesis query.
+	QueryGenesis = AppName + "/genesis"
 )
 
 // Tx is a transaction to be accepted by the registry app.

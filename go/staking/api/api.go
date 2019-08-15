@@ -152,6 +152,9 @@ type Backend interface {
 	// respectively.
 	WatchEscrows() (<-chan interface{}, *pubsub.Subscription)
 
+	// ToGenesis returns the genesis state at specified block height.
+	ToGenesis(ctx context.Context, height int64) (*Genesis, error)
+
 	// Cleanup cleans up the backend.
 	Cleanup()
 }

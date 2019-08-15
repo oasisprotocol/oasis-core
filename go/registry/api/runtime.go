@@ -170,6 +170,12 @@ type SignedRuntime struct {
 	signature.Signed
 }
 
+// Clone returns a copy of itself.
+func (s *SignedRuntime) Clone() common.Cloneable {
+	signedRuntimeCopy := *s
+	return &signedRuntimeCopy
+}
+
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedRuntime) Open(context []byte, runtime *Runtime) error { // nolint: interfacer
 	return s.Signed.Open(context, runtime)

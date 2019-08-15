@@ -255,6 +255,20 @@ func (r *tendermintBackend) GetRuntimes(ctx context.Context, height int64) ([]*a
 	return runtimes, nil
 }
 
+func (r *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	response, err := r.service.Query(app.QueryGenesis, nil, height)
+	if err != nil {
+		return nil, errors.Wrap(err, "registry: genesis query failed")
+	}
+
+	var genesis api.Genesis
+	if err := cbor.Unmarshal(response, &genesis); err != nil {
+		return nil, errors.Wrap(err, "registry: genesis malformed response")
+	}
+
+	return &genesis, nil
+}
+
 func (r *tendermintBackend) worker(ctx context.Context) {
 	// Subscribe to transactions which modify state.
 	sub, err := r.service.Subscribe("registry-worker", app.QueryApp)

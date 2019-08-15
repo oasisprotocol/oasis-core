@@ -51,6 +51,9 @@ const (
 
 	// QueryGetGenesisBlock is a path for GetGenesisBlock query.
 	QueryGetGenesisBlock = AppName + "/genesis_block"
+
+	// QueryGenesis is a path for Genesis query.
+	QueryGenesis = AppName + "/genesis"
 )
 
 // Tx is a transaction to be accepted by the roothash app.

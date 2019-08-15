@@ -28,4 +28,7 @@ const (
 
 	// QueryGetStatuses is a path for a GetStatuses query.
 	QueryGetStatuses = AppName + "/statuses"
+
+	// QueryGenesis is a path for a Genesis query.
+	QueryGenesis = AppName + "/genesis"
 )

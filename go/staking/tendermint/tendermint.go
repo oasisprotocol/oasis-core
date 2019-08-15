@@ -244,6 +244,20 @@ func (b *tendermintBackend) WatchEscrows() (<-chan interface{}, *pubsub.Subscrip
 	return sub.Untyped(), sub
 }
 
+func (b *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	response, err := b.service.Query(app.QueryGenesis, nil, height)
+	if err != nil {
+		return nil, errors.Wrap(err, "staking/tendermint: genesis query failed")
+	}
+
+	var genesis api.Genesis
+	if err = cbor.Unmarshal(response, &genesis); err != nil {
+		return nil, errors.Wrap(err, "staking/tendermint: genesis malformed response")
+	}
+
+	return &genesis, nil
+}
+
 func (b *tendermintBackend) Cleanup() {
 	<-b.closedCh
 }

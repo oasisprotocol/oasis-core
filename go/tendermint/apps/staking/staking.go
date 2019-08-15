@@ -59,6 +59,8 @@ func (app *stakingApplication) OnRegister(state *abci.ApplicationState, queryRou
 	queryRouter.AddRoute(QueryAccounts, nil, app.queryAccounts)
 	queryRouter.AddRoute(QueryAccountInfo, api.QueryGetByIDRequest{}, app.queryAccountInfo)
 	queryRouter.AddRoute(QueryAllowance, QueryAllowanceRequest{}, app.queryAllowance)
+	queryRouter.AddRoute(QueryDebondingInterval, nil, app.queryDebondingInterval)
+	queryRouter.AddRoute(QueryGenesis, nil, app.queryGenesis)
 }
 
 func (app *stakingApplication) OnCleanup() {
@@ -271,6 +273,60 @@ func (app *stakingApplication) queryAllowance(s, r interface{}) ([]byte, error) 
 
 	ent := state.account(request.Owner)
 	return cbor.Marshal(ent.getAllowance(request.Spender)), nil
+}
+
+func (app *stakingApplication) queryDebondingInterval(s, r interface{}) ([]byte, error) {
+	state := s.(*immutableState)
+	return state.rawDebondingInterval()
+}
+
+func (app *stakingApplication) queryGenesis(s, r interface{}) ([]byte, error) {
+	state := s.(*immutableState)
+
+	totalSupply, err := state.totalSupply()
+	if err != nil {
+		return nil, err
+	}
+
+	commonPool, err := state.CommonPool()
+	if err != nil {
+		return nil, err
+	}
+
+	thresholds, err := state.Thresholds()
+	if err != nil {
+		return nil, err
+	}
+
+	debondingInterval, err := state.debondingInterval()
+	if err != nil {
+		return nil, err
+	}
+
+	accounts, err := state.accounts()
+	if err != nil {
+		return nil, err
+	}
+	ledger := make(map[signature.MapKey]*staking.GenesisLedgerEntry)
+	for _, acctID := range accounts {
+		acct := state.account(acctID)
+		ledger[acctID.ToMapKey()] = &staking.GenesisLedgerEntry{
+			GeneralBalance:  acct.GeneralBalance,
+			EscrowBalance:   acct.EscrowBalance,
+			DebondStartTime: acct.DebondStartTime,
+			Nonce:           acct.Nonce,
+			Allowances:      acct.Approvals,
+		}
+	}
+
+	gen := staking.Genesis{
+		TotalSupply:       *totalSupply,
+		CommonPool:        *commonPool,
+		Thresholds:        thresholds,
+		DebondingInterval: debondingInterval,
+		Ledger:            ledger,
+	}
+	return cbor.Marshal(gen), nil
 }
 
 func (app *stakingApplication) executeTx(ctx *abci.Context, tree *iavl.MutableTree, tx *Tx) error {

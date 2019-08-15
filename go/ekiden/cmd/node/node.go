@@ -164,6 +164,7 @@ func (n *Node) initBackends() error {
 	staking.NewGRPCServer(grpcSrv, n.Staking)
 	storage.NewGRPCServer(grpcSrv, n.Storage, &grpc.AllowAllRuntimePolicyChecker{}, false)
 	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
+	genesis.NewGRPCServer(grpcSrv, n.KeyManager, n.Registry, n.RootHash, n.Staking)
 
 	cmdCommon.Logger().Debug("backends initialized")
 

@@ -57,6 +57,7 @@ func (app *keymanagerApplication) OnRegister(state *abci.ApplicationState, query
 	// Register query handlers.
 	queryRouter.AddRoute(QueryGetStatus, tmapi.QueryGetByIDRequest{}, app.queryGetStatus)
 	queryRouter.AddRoute(QueryGetStatuses, nil, app.queryGetStatuses)
+	queryRouter.AddRoute(QueryGenesis, nil, app.queryGenesis)
 }
 
 func (app *keymanagerApplication) OnCleanup() {}
@@ -115,6 +116,9 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 			"id", v.ID,
 		)
 
+		// Make sure the Nodes field is empty when applying genesis state.
+		v.Nodes = nil
+
 		// Set, enqueue for emit.
 		state.setStatus(v)
 		toEmit = append(toEmit, v)
@@ -169,6 +173,23 @@ func (app *keymanagerApplication) queryGetStatuses(s interface{}, r interface{})
 		return nil, err
 	}
 	return cbor.Marshal(statuses), nil
+}
+
+func (app *keymanagerApplication) queryGenesis(s interface{}, r interface{}) ([]byte, error) {
+	state := s.(*immutableState)
+
+	statuses, err := state.GetStatuses()
+	if err != nil {
+		return nil, err
+	}
+
+	// Remove the Nodes field of each Status.
+	for _, status := range statuses {
+		status.Nodes = nil
+	}
+
+	gen := api.Genesis{Statuses: statuses}
+	return cbor.Marshal(gen), nil
 }
 
 func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error {
