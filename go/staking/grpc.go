@@ -57,6 +57,8 @@ func (s *grpcServer) GetCommonPool(ctx context.Context, req *pb.GetCommonPoolReq
 func (s *grpcServer) GetThreshold(ctx context.Context, req *pb.GetThresholdRequest) (*pb.GetThresholdResponse, error) {
 	var kind api.ThresholdKind
 	switch req.GetThresholdKind() {
+	case pb.GetThresholdRequest_ENTITY:
+		kind = api.KindEntity
 	case pb.GetThresholdRequest_VALIDATOR:
 		kind = api.KindValidator
 	case pb.GetThresholdRequest_COMPUTE:

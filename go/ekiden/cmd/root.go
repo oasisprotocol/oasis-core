@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/ias"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/registry"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/stake"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/storage"
 )
 
@@ -60,10 +61,11 @@ func init() {
 	// Register all of the sub-commands.
 	for _, v := range []func(*cobra.Command){
 		debug.Register,
+		genesis.Register,
 		ias.Register,
 		registry.Register,
+		stake.Register,
 		storage.Register,
-		genesis.Register,
 	} {
 		v(rootCmd)
 	}
