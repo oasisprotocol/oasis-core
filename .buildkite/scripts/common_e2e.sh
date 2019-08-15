@@ -54,6 +54,7 @@ run_backend_tendermint_committee() {
     local committee_dir=${TEST_BASE_DIR}/committee-${id}
     local base_datadir=${committee_dir}/committee-data
     local validator_files=""
+    local entity_node_files=""
 
     # Provision the entity for everything.
     local entity_dir=${committee_dir}/entity
@@ -69,7 +70,6 @@ run_backend_tendermint_committee() {
         local datadir=${base_datadir}-${idx}
         rm -rf ${datadir}
 
-        # Use entity signed nodes for now.
         let port=(idx-1)+26656
         ${EKIDEN_NODE} \
             registry node init \
@@ -77,11 +77,19 @@ run_backend_tendermint_committee() {
             --entity ${entity_dir} \
             --node.consensus_address 127.0.0.1:${port} \
             --node.expiration 1000000 \
-            --node.role validator
+            --node.role validator \
+            --node.is_self_signed
         validator_files="$validator_files --node=${datadir}/node_genesis.json"
+        entity_node_files="$entity_node_files --entity.node.descriptor=${datadir}/node_genesis.json"
     done
 
-    # Once this switches to using node-signed nodes, update the entity.
+    # Update the entity descriptor to include the node IDs of the
+    # self-signed nodes.
+    ${EKIDEN_NODE} \
+        registry entity update \
+        --entity.debug.allow_entity_signed_nodes \
+        ${entity_node_files} \
+        --datadir ${entity_dir}
 
     # Provision the key manager runtime.
     ${EKIDEN_NODE} \

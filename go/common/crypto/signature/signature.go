@@ -184,8 +184,10 @@ func (k PublicKey) ToMapKey() MapKey {
 }
 
 // FromMapKey converts a MapKey back to a public key.
-func (k PublicKey) FromMapKey(mk MapKey) {
-	copy(k[:], mk[:])
+func (k *PublicKey) FromMapKey(mk MapKey) {
+	if err := k.UnmarshalBinary(mk[:]); err != nil {
+		panic("signature: failed to convert MapKey: " + err.Error())
+	}
 }
 
 // LoadPEM loads a public key from a PEM file on disk.  Iff the public key
