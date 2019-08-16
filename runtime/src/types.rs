@@ -48,6 +48,7 @@ pub enum Body {
     WorkerInfoRequest {},
     WorkerInfoResponse {
         protocol_version: u64,
+        runtime_version: u64,
     },
     WorkerPingRequest {},
     WorkerShutdownRequest {},

@@ -6,6 +6,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/version"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
@@ -110,6 +111,10 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 }
 
 func (h *mockHost) WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
+	return nil, nil
+}
+
+func (h *mockHost) WaitForRuntimeVersion(ctx context.Context) (*version.Version, error) {
 	return nil, nil
 }
 

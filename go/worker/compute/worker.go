@@ -433,6 +433,18 @@ func newWorker(
 					)
 					continue
 				}
+
+				runtimeVersion, err := workerRT.workerHost.WaitForRuntimeVersion(w.ctx)
+				if err == nil && runtimeVersion != nil {
+					rt.Version = *runtimeVersion
+				} else {
+					w.logger.Error("failed to obtain RuntimeVersion",
+						"err", err,
+						"runtime", rt.ID,
+						"&runtimeVersion", runtimeVersion,
+					)
+					continue
+				}
 			}
 
 			return nil

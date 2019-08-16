@@ -5,6 +5,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/version"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ed25519"
 )
@@ -19,6 +20,8 @@ func TestSerialization(t *testing.T) {
 		ReplicaAllowedStragglers: 81,
 		StorageGroupSize:         90,
 		KeyManager:               signature.PublicKey(key),
+		Kind:                     KindCompute,
+		Version:                  version.Version{Major: 1, Minor: 2, Patch: 3},
 	}
 
 	cp := c.ToProto()

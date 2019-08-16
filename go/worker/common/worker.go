@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/version"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -18,7 +19,8 @@ import (
 
 // Runtime is a single runtime.
 type Runtime struct {
-	id signature.PublicKey
+	id      signature.PublicKey
+	version version.Version
 
 	node *committee.Node
 }
@@ -193,8 +195,9 @@ func (w *Worker) registerRuntime(cfg *Config, id signature.PublicKey) error {
 	}
 
 	rt := &Runtime{
-		id:   id,
-		node: node,
+		id:      id,
+		version: version.Version{Major: 0, Minor: 0, Patch: 0}, // Version is populated once the runtime has been loaded. -Matevz
+		node:    node,
 	}
 	w.runtimes[rt.id.ToMapKey()] = rt
 

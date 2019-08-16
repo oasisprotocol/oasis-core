@@ -1,6 +1,9 @@
 //! Runtime initialization.
 use crate::{
-    common::logger::{get_logger, init_logger},
+    common::{
+        logger::{get_logger, init_logger},
+        version::Version,
+    },
     dispatcher::{Dispatcher, Initializer},
     protocol::{Protocol, Stream},
     rak::RAK,
@@ -10,7 +13,7 @@ use log;
 use std::{env, sync::Arc};
 
 /// Starts the runtime.
-pub fn start_runtime(initializer: Option<Box<dyn Initializer>>) {
+pub fn start_runtime(initializer: Option<Box<dyn Initializer>>, version: Version) {
     // Output backtraces.
     env::set_var("RUST_BACKTRACE", "1");
 
@@ -47,7 +50,12 @@ pub fn start_runtime(initializer: Option<Box<dyn Initializer>>) {
 
     // Start handling protocol messages. This blocks the main thread forever
     // (or until we get a shutdown request).
-    let protocol = Arc::new(Protocol::new(stream, rak.clone(), dispatcher.clone()));
+    let protocol = Arc::new(Protocol::new(
+        stream,
+        rak.clone(),
+        dispatcher.clone(),
+        version,
+    ));
     dispatcher.start(protocol.clone());
     protocol.start();
 

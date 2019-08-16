@@ -22,14 +22,14 @@ use failure::Fallible;
 
 use ekiden_keymanager_api::*;
 use ekiden_runtime::{
-    common::runtime::RuntimeId,
+    common::{runtime::RuntimeId, version::Version},
     rak::RAK,
     register_runtime_rpc_methods,
     rpc::{
         dispatcher::{Method as RpcMethod, MethodDescriptor as RpcMethodDescriptor},
         Context as RpcContext,
     },
-    Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
+    version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 
 use self::{kdf::Kdf, policy::Policy};
@@ -82,5 +82,5 @@ fn main() {
     };
 
     // Start the runtime.
-    ekiden_runtime::start_runtime(Some(Box::new(init)));
+    ekiden_runtime::start_runtime(Some(Box::new(init)), version_from_cargo!());
 }
