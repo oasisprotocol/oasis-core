@@ -39,7 +39,8 @@ all: tools runtimes rust go
 
 tools:
 	@$(ECHO) "$(CYAN)*** Building Rust tools...$(OFF)"
-	@cargo install --quiet --path tools || true
+	@# Suppress "binary already exists" error by redirecting stderr and stdout to /dev/null.
+	@cargo install --path tools >/dev/null 2>&1 || true
 
 runtimes:
 	@$(ECHO) "$(CYAN)*** Building runtimes...$(OFF)"
