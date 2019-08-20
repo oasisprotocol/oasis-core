@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/entity"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
@@ -116,7 +117,22 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 
 		for _, vec := range nodes {
 			for _, v := range vec {
-				err := backend.RegisterNode(context.Background(), v.SignedRegistration)
+				err := backend.RegisterNode(context.Background(), v.SignedInvalidRegistration1)
+				require.Error(err, "register committee node without P2P addresses")
+
+				err = backend.RegisterNode(context.Background(), v.SignedInvalidRegistration2)
+				require.Error(err, "register committee node without committee addresses")
+
+				err = backend.RegisterNode(context.Background(), v.SignedInvalidRegistration3)
+				require.Error(err, "register committee node without committee certificate")
+
+				err = backend.RegisterNode(context.Background(), v.SignedInvalidRegistration4)
+				require.Error(err, "register node without roles")
+
+				err = backend.RegisterNode(context.Background(), v.SignedInvalidRegistration5)
+				require.Error(err, "register node with reserved roles")
+
+				err = backend.RegisterNode(context.Background(), v.SignedRegistration)
 				require.NoError(err, "RegisterNode")
 
 				select {
@@ -361,6 +377,11 @@ type TestNode struct {
 	Signer      signature.Signer
 
 	SignedRegistration          *node.SignedNode
+	SignedInvalidRegistration1  *node.SignedNode
+	SignedInvalidRegistration2  *node.SignedNode
+	SignedInvalidRegistration3  *node.SignedNode
+	SignedInvalidRegistration4  *node.SignedNode
+	SignedInvalidRegistration5  *node.SignedNode
 	SignedValidReRegistration   *node.SignedNode
 	SignedInvalidReRegistration *node.SignedNode
 }
@@ -413,15 +434,66 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 				Port: 451,
 			},
 		}
+		nod.Node.P2P.Addresses = append(nod.Node.P2P.Addresses, addr)
 		nod.Node.Committee.Addresses = append(nod.Node.Committee.Addresses, addr)
-
-		signed, err := signature.SignSigned(ent.Signer, api.RegisterNodeSignatureContext, nod.Node)
+		// Generate dummy TLS certificate.
+		tlsCert, err := identity.GenerateTLSCert()
 		if err != nil {
 			return nil, err
 		}
-		nod.SignedRegistration = &node.SignedNode{Signed: *signed}
+		nod.Node.Committee.Certificate = tlsCert.Certificate[0]
 
-		// Add another Re-Registration with differnet address field.
+		nod.SignedRegistration, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, nod.Node)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add a registration with no P2P addresses.
+		invalid1 := *nod.Node
+		invalid1.P2P.Addresses = nil
+
+		nod.SignedInvalidRegistration1, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid1)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add a registration with no committee addresses.
+		invalid2 := *nod.Node
+		invalid2.Committee.Addresses = nil
+
+		nod.SignedInvalidRegistration2, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid2)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add a registration with no committee certificate.
+		invalid3 := *nod.Node
+		invalid3.Committee.Certificate = nil
+
+		nod.SignedInvalidRegistration3, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid3)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add a registration without any roles.
+		invalid4 := *nod.Node
+		invalid4.Roles = 0
+
+		nod.SignedInvalidRegistration4, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid4)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add a registration with reserved roles.
+		invalid5 := *nod.Node
+		invalid5.Roles = 0xFFFFFFFF
+
+		nod.SignedInvalidRegistration5, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid5)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add another Re-Registration with different address field.
 		nod.UpdatedNode = &node.Node{
 			ID:               nod.Signer.Public(),
 			EntityID:         ent.Entity.ID,
@@ -436,12 +508,13 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 				Port: 452,
 			},
 		}
+		nod.UpdatedNode.P2P.Addresses = append(nod.UpdatedNode.P2P.Addresses, addr)
 		nod.UpdatedNode.Committee.Addresses = append(nod.UpdatedNode.Committee.Addresses, addr)
-		signed, err = signature.SignSigned(ent.Signer, api.RegisterNodeSignatureContext, nod.UpdatedNode)
+		nod.UpdatedNode.Committee.Certificate = nod.Node.Committee.Certificate
+		nod.SignedValidReRegistration, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, nod.UpdatedNode)
 		if err != nil {
 			return nil, err
 		}
-		nod.SignedValidReRegistration = &node.SignedNode{Signed: *signed}
 
 		// Add invalid Re-Registration with changed Roles field.
 		testRuntimeSigner := memorySigner.NewTestSigner("invalod-registration-runtime-seed")
@@ -452,12 +525,13 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 			RegistrationTime: uint64(time.Now().Unix()),
 			Runtimes:         append(nodeRts, &node.Runtime{ID: testRuntimeSigner.Public()}),
 			Roles:            role,
+			P2P:              nod.Node.P2P,
+			Committee:        nod.Node.Committee,
 		}
-		signed, err = signature.SignSigned(ent.Signer, api.RegisterNodeSignatureContext, newNode)
+		nod.SignedInvalidReRegistration, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, newNode)
 		if err != nil {
 			return nil, err
 		}
-		nod.SignedInvalidReRegistration = &node.SignedNode{Signed: *signed}
 
 		nodes = append(nodes, &nod)
 	}
