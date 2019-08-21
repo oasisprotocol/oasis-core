@@ -72,6 +72,7 @@ func (t *Tree) doRemove(
 		if remainingLeaf != nil && remainingLeft == nil && remainingRight == nil {
 			ndLeaf := n.LeafNode
 			n.LeafNode = nil
+			t.pendingRemovedNodes = append(t.pendingRemovedNodes, n)
 			t.cache.removeNode(ptr)
 			return ndLeaf, true, nil
 		} else if remainingLeaf == nil && (remainingLeft == nil || remainingRight == nil) {
@@ -92,18 +93,28 @@ func (t *Tree) doRemove(
 			case *node.InternalNode:
 				inode.Label = n.Label.Merge(n.LabelBitLength, inode.Label, inode.LabelBitLength)
 				inode.LabelBitLength += n.LabelBitLength
+				if inode.Clean {
+					// Node was clean so old node is eligible for removal.
+					t.pendingRemovedNodes = append(t.pendingRemovedNodes, inode.ExtractUnchecked())
+				}
 				inode.Clean = false
 				nodePtr.Clean = false
 				// No longer eligible for eviction as it is dirty.
 				t.cache.rollbackNode(nodePtr)
 			}
 
+			t.pendingRemovedNodes = append(t.pendingRemovedNodes, n)
 			t.cache.removeNode(ptr)
 			return nodePtr, true, nil
 		}
 
 		// Two or more children including LeafNode remain, just mark dirty bit.
 		if changed {
+			if n.Clean {
+				// Node was clean so old node is eligible for removal.
+				t.pendingRemovedNodes = append(t.pendingRemovedNodes, n.ExtractUnchecked())
+			}
+
 			n.Clean = false
 			ptr.Clean = false
 			// No longer eligible for eviction as it is dirty.
@@ -114,6 +125,7 @@ func (t *Tree) doRemove(
 	case *node.LeafNode:
 		// Remove from leaf node.
 		if n.Key.Equal(key) {
+			t.pendingRemovedNodes = append(t.pendingRemovedNodes, n)
 			t.cache.removeNode(ptr)
 			return nil, true, nil
 		}

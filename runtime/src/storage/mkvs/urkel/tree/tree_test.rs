@@ -10,12 +10,12 @@ use crate::{
 };
 
 const INSERT_ITEMS: usize = 1000;
-const ALL_ITEMS_ROOT: &str = "67774198b787b4846f67f1cfd1715b4e94d1a75f6caeda08635f8a03932f3413";
+const ALL_ITEMS_ROOT: &str = "a092507adb90fce8d38e8c8663f4db0affa50e47955535bbdb21327a8d9c2532";
 
 const LONG_KEY: &str = "Unlock the potential of your data without compromising security or privacy";
 const LONG_VALUE: &str = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance.";
 const ALL_LONG_ITEMS_ROOT: &str =
-    "0a80a0cf285f9eedec0339372c0ae25190ed75809a0799ab75a593d783ddef00";
+    "1aa1b04b41ea1cbf3f5ff839bfb1c21cacddc06b773b94b425d46b673352459b";
 
 fn generate_key_value_pairs_ex(prefix: String, count: usize) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
     let mut keys: Vec<Vec<u8>> = Vec::with_capacity(count);
@@ -86,7 +86,7 @@ fn test_basic() {
         UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(
         format!("{:?}", hash),
-        "c86e7119b52682fea21319c9c747e2197012b49f5050fce5e4aa82e5ced36236"
+        "ebf4bddfa659ceed844b04d62e05c2b8cb5ef1f6d73c6026f63d289b6777ce44"
     );
     assert_eq!(
         log,
@@ -182,7 +182,7 @@ fn test_basic() {
         UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(
         format!("{:?}", hash),
-        "573e3d24a5e6cf48a390910c31c7166aa40414037380bc77d648b3967b1e124f"
+        "5c71b5ed7fe2ea8fd663254fd54d648db8e8f285c5712e943321ca7a6710d8ca"
     );
     // Order of transactions in writelog is arbitrary.
     assert_eq!(
@@ -217,7 +217,7 @@ fn test_basic() {
         UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(
         format!("{:?}", hash),
-        "c86e7119b52682fea21319c9c747e2197012b49f5050fce5e4aa82e5ced36236"
+        "ebf4bddfa659ceed844b04d62e05c2b8cb5ef1f6d73c6026f63d289b6777ce44"
     );
     assert_eq!(
         log,

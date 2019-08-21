@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/go-codec/codec"
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/ekiden/go/common"
 	lruCache "github.com/oasislabs/ekiden/go/common/cache/lru"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -74,7 +75,7 @@ func (d *lruNodeDB) GetNode(root urkel.Root, ptr *urkel.Pointer) (urkel.Node, er
 
 func (d *lruNodeDB) GetWriteLog(ctx context.Context, startRoot urkel.Root, endRoot urkel.Root) (api.WriteLogIterator, error) {
 	if !endRoot.Follows(&startRoot) {
-		return nil, errors.New("urkel/db/lru: end root must follow start root")
+		return nil, api.ErrRootMustFollowOld
 	}
 
 	return nil, api.ErrWriteLogNotFound
@@ -95,6 +96,14 @@ func (d *lruNodeDB) HasRoot(root urkel.Root) bool {
 		Hash:  root.Hash,
 	})
 	return err != api.ErrNodeNotFound
+}
+
+func (d *lruNodeDB) Finalize(ctx context.Context, namespace common.Namespace, round uint64, roots []hash.Hash) error {
+	return nil
+}
+
+func (d *lruNodeDB) Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error) {
+	return 0, nil
 }
 
 func (d *lruNodeDB) Close() {
@@ -221,7 +230,7 @@ type memoryBatch struct {
 	ops []func() error
 }
 
-func (d *lruNodeDB) NewBatch() api.Batch {
+func (d *lruNodeDB) NewBatch(namespace common.Namespace, round uint64, oldRoot urkel.Root) api.Batch {
 	return &memoryBatch{
 		db: d,
 	}
@@ -234,16 +243,11 @@ func (b *memoryBatch) MaybeStartSubtree(subtree api.Subtree, depth urkel.Depth, 
 	return subtree
 }
 
-func (b *memoryBatch) PutWriteLog(
-	startRoot urkel.Root,
-	endRoot urkel.Root,
-	writeLog writelog.WriteLog,
-	logAnnotations writelog.WriteLogAnnotations,
-) error {
-	if !endRoot.Follows(&startRoot) {
-		return errors.New("urkel/db/lru: end root must follow start root")
-	}
+func (b *memoryBatch) PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error {
+	return nil
+}
 
+func (b *memoryBatch) RemoveNodes(nodes []urkel.Node) error {
 	return nil
 }
 

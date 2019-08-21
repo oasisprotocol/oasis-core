@@ -63,6 +63,11 @@ func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, bitDepth node.De
 			}
 
 			if !n.LeafNode.IsClean() || !n.Left.IsClean() || !n.Right.IsClean() {
+				if n.Clean {
+					// Node was clean so old node is eligible for removal.
+					t.pendingRemovedNodes = append(t.pendingRemovedNodes, n.ExtractUnchecked())
+				}
+
 				n.Clean = false
 				ptr.Clean = false
 				// No longer eligible for eviction as it is dirty.
@@ -78,6 +83,12 @@ func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, bitDepth node.De
 		labelPrefix, labelSuffix := n.Label.Split(cpLength, n.LabelBitLength)
 		n.Label = labelSuffix
 		n.LabelBitLength = n.LabelBitLength - cpLength
+
+		if n.Clean {
+			// Node was clean so old node is eligible for removal.
+			t.pendingRemovedNodes = append(t.pendingRemovedNodes, n.ExtractUnchecked())
+		}
+
 		n.Clean = false
 		ptr.Clean = false
 		// No longer eligible for eviction as it is dirty.
@@ -117,6 +128,11 @@ func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, bitDepth node.De
 					insertedLeaf: ptr,
 					existed:      true,
 				}, nil
+			}
+
+			if n.Clean {
+				// Node is dirty so old node is eligible for removal.
+				t.pendingRemovedNodes = append(t.pendingRemovedNodes, n.ExtractUnchecked())
 			}
 
 			t.cache.removeValue(n.Value)

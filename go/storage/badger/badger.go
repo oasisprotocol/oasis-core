@@ -156,6 +156,14 @@ func (ba *badgerBackend) HasRoot(root api.Root) bool {
 	return ba.nodedb.HasRoot(root)
 }
 
+func (ba *badgerBackend) Finalize(ctx context.Context, namespace common.Namespace, round uint64, roots []hash.Hash) error {
+	return ba.nodedb.Finalize(ctx, namespace, round, roots)
+}
+
+func (ba *badgerBackend) Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error) {
+	return ba.nodedb.Prune(ctx, namespace, round)
+}
+
 // NewLogAdapter returns a badger.Logger backed by an ekiden logger.
 func NewLogAdapter(logger *logging.Logger) badger.Logger {
 	return &badgerLogger{

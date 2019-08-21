@@ -18,6 +18,7 @@ func doCommit(
 	subtree db.Subtree,
 	depth node.Depth,
 	ptr *node.Pointer,
+	round *uint64,
 ) (h hash.Hash, err error) {
 	if ptr == nil {
 		h.Empty()
@@ -48,13 +49,13 @@ func doCommit(
 		}
 
 		// Commit internal leaf (considered to be on the same depth as the internal node).
-		if _, err = doCommit(ctx, cache, batch, subtree, depth, n.LeafNode); err != nil {
+		if _, err = doCommit(ctx, cache, batch, subtree, depth, n.LeafNode, round); err != nil {
 			return
 		}
 
 		for _, subNode := range []*node.Pointer{n.Left, n.Right} {
 			newSubtree := batch.MaybeStartSubtree(subtree, depth+1, subNode)
-			if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, subNode); err != nil {
+			if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, subNode, round); err != nil {
 				return
 			}
 			if newSubtree != subtree {
@@ -64,6 +65,9 @@ func doCommit(
 			}
 		}
 
+		if round != nil {
+			n.Round = *round
+		}
 		n.UpdateHash()
 
 		// Store the node.
@@ -91,6 +95,9 @@ func doCommit(
 			})
 		}
 
+		if round != nil {
+			n.Round = *round
+		}
 		n.UpdateHash()
 
 		// Store the node.

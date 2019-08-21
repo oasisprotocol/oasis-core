@@ -3,6 +3,8 @@ linters-settings:
     simplify: false
   govet:
     check-shadowing: true
+  maligned:
+    suggest-new: true
 
 linters:
   disable-all: true

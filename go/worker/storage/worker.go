@@ -170,6 +170,18 @@ func (s *Worker) Start() error {
 		return nil
 	}
 
+	// Wait for all runtimes to terminate.
+	go func() {
+		defer close(s.quitCh)
+
+		for _, r := range s.runtimes {
+			<-r.Quit()
+		}
+		if s.fetchPool != nil {
+			<-s.fetchPool.Quit()
+		}
+	}()
+
 	// Wait for the node to be registered for the current epoch.
 	go func() {
 		s.logger.Info("starting storage worker, waiting for registration")
@@ -194,18 +206,11 @@ func (s *Worker) Start() error {
 // Stop halts the service.
 func (s *Worker) Stop() {
 	go func() {
-		defer close(s.quitCh)
 		for _, r := range s.runtimes {
 			r.Stop()
 		}
 		if s.fetchPool != nil {
 			s.fetchPool.Stop()
-		}
-		for _, r := range s.runtimes {
-			<-r.Quit()
-		}
-		if s.fetchPool != nil {
-			<-s.fetchPool.Quit()
 		}
 		if s.watchState != nil {
 			s.watchState.Close()

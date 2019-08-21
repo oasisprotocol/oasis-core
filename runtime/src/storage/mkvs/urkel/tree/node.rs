@@ -244,6 +244,7 @@ impl Eq for NodePointer {}
 #[derive(Debug, Default)]
 pub struct InternalNode {
     pub clean: bool,
+    pub round: u64,
     pub hash: Hash,
     pub label: Key,              // label on the incoming edge
     pub label_bit_length: Depth, // length of the label in bits
@@ -268,6 +269,7 @@ impl Node for InternalNode {
 
         self.hash = Hash::digest_bytes_list(&[
             &[NodeKind::Internal as u8],
+            &self.round.marshal_binary().unwrap(),
             &self.label_bit_length.marshal_binary().unwrap(),
             self.label.as_ref(),
             leaf_node_hash.as_ref(),
@@ -301,6 +303,7 @@ impl Node for InternalNode {
         }
         Rc::new(RefCell::new(NodeBox::Internal(InternalNode {
             clean: true,
+            round: self.round,
             hash: self.hash,
             label: self.label.clone(),
             label_bit_length: self.label_bit_length,
@@ -316,7 +319,8 @@ impl PartialEq for InternalNode {
         if self.clean && other.clean {
             self.hash == other.hash
         } else {
-            self.leaf_node == other.leaf_node
+            self.round == other.round
+                && self.leaf_node == other.leaf_node
                 && self.left == other.left
                 && self.right == other.right
         }
@@ -329,6 +333,7 @@ impl Eq for InternalNode {}
 #[derive(Debug, Default)]
 pub struct LeafNode {
     pub clean: bool,
+    pub round: u64,
     pub hash: Hash,
     pub key: Key,
     pub value: ValuePtrRef,
@@ -338,6 +343,7 @@ impl LeafNode {
     pub fn copy(&self) -> LeafNode {
         let node = LeafNode {
             clean: self.clean,
+            round: self.round,
             hash: self.hash.clone(),
             key: self.key.to_owned(),
             value: self.value.borrow().copy(),
@@ -359,6 +365,7 @@ impl Node for LeafNode {
     fn update_hash(&mut self) {
         self.hash = Hash::digest_bytes_list(&[
             &[NodeKind::Leaf as u8],
+            &self.round.marshal_binary().unwrap(),
             self.key.as_ref(),
             self.value.borrow().hash.as_ref(),
         ]);
@@ -388,6 +395,7 @@ impl Node for LeafNode {
         }
         Rc::new(RefCell::new(NodeBox::Leaf(LeafNode {
             clean: true,
+            round: self.round,
             hash: self.hash,
             key: self.key.clone(),
             value: self.value.borrow().extract(),
@@ -400,7 +408,7 @@ impl PartialEq for LeafNode {
         if self.clean && other.clean {
             self.hash == other.hash
         } else {
-            self.key == other.key && self.value == other.value
+            self.round == other.round && self.key == other.key && self.value == other.value
         }
     }
 }

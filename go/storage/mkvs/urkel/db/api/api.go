@@ -5,15 +5,36 @@ import (
 	"context"
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 var (
-	// ErrNodeNotFound indicates that a node with the specified hash couldn't be found in the database.
+	// ErrNodeNotFound indicates that a node with the specified hash couldn't be found
+	// in the database.
 	ErrNodeNotFound = errors.New("urkel: node not found in node db")
-	// ErrWriteLogNotFound indicates that a write log for the specified storage hashes couldn't be found.
+	// ErrWriteLogNotFound indicates that a write log for the specified storage hashes
+	// couldn't be found.
 	ErrWriteLogNotFound = errors.New("urkel: write log not found in node db")
+	// ErrNotFinalized indicates that the operation requires a round to be finalized
+	// but the round is not yet finalized.
+	ErrNotFinalized = errors.New("urkel: round is not yet finalized")
+	// ErrAlreadyFinalized indicates that the given round has already been finalized.
+	ErrAlreadyFinalized = errors.New("urkel: round has already been finalized")
+	// ErrRoundNotFound indicates that the given round cannot be found.
+	ErrRoundNotFound = errors.New("urkel: round not found")
+	// ErrPreviousRoundMismatch indicates that the round given for the old root does
+	// not match the previous round.
+	ErrPreviousRoundMismatch = errors.New("urkel: previous round mismatch")
+	// ErrRoundWentBackwards indicates that the new round is earlier than an already
+	// inserted round.
+	ErrRoundWentBackwards = errors.New("urkel: round went backwards")
+	// ErrRootNotFound indicates that the given root cannot be found.
+	ErrRootNotFound = errors.New("urkel: root not found")
+	// ErrRootMustFollowOld indicates that the passed new root does not follow old root.
+	ErrRootMustFollowOld = errors.New("urkel: root must follow old root")
 )
 
 // NodeDB is the persistence layer used for persisting the in-memory tree.
@@ -28,10 +49,20 @@ type NodeDB interface {
 	GetCheckpoint(ctx context.Context, root node.Root) (WriteLogIterator, error)
 
 	// NewBatch starts a new batch.
-	NewBatch() Batch
+	NewBatch(namespace common.Namespace, round uint64, oldRoot node.Root) Batch
 
 	// HasRoot checks whether the given root exists.
 	HasRoot(root node.Root) bool
+
+	// Finalize finalizes the specified round. The passed list of roots are the
+	// roots within the round that have been finalized. All non-finalized roots
+	// can be discarded.
+	Finalize(ctx context.Context, namespace common.Namespace, round uint64, roots []hash.Hash) error
+
+	// Prune removes all roots recorded under the given namespace and round.
+	//
+	// Returns the number of pruned nodes.
+	Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error)
 
 	// Close closes the database.
 	Close()
@@ -68,12 +99,10 @@ type Batch interface {
 	OnCommit(hook func())
 
 	// PutWriteLog stores the specified write log into the batch.
-	PutWriteLog(
-		startRoot node.Root,
-		endRoot node.Root,
-		writeLog writelog.WriteLog,
-		logAnnotations writelog.WriteLogAnnotations,
-	) error
+	PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error
+
+	// RemoveNodes marks nodes for eventual garbage collection.
+	RemoveNodes(nodes []node.Node) error
 
 	// Commit commits the batch.
 	Commit(root node.Root) error
@@ -108,7 +137,6 @@ func NewNopNodeDB() (NodeDB, error) {
 	return &nopNodeDB{}, nil
 }
 
-// GetNode returns an ErrNodeNotFound error.
 func (d *nopNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
 	return nil, ErrNodeNotFound
 }
@@ -117,12 +145,20 @@ func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoo
 	return nil, ErrWriteLogNotFound
 }
 
+func (d *nopNodeDB) GetCheckpoint(ctx context.Context, root node.Root) (WriteLogIterator, error) {
+	return nil, ErrWriteLogNotFound
+}
+
 func (d *nopNodeDB) HasRoot(root node.Root) bool {
 	return false
 }
 
-func (d *nopNodeDB) GetCheckpoint(ctx context.Context, root node.Root) (WriteLogIterator, error) {
-	return nil, ErrWriteLogNotFound
+func (d *nopNodeDB) Finalize(ctx context.Context, namespace common.Namespace, round uint64, roots []hash.Hash) error {
+	return nil
+}
+
+func (d *nopNodeDB) Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error) {
+	return 0, nil
 }
 
 // Close is a no-op.
@@ -134,7 +170,7 @@ type nopBatch struct {
 	BaseBatch
 }
 
-func (d *nopNodeDB) NewBatch() Batch {
+func (d *nopNodeDB) NewBatch(namespace common.Namespace, round uint64, oldRoot node.Root) Batch {
 	return &nopBatch{}
 }
 
@@ -142,12 +178,11 @@ func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth node.Depth, subtreeR
 	return &nopSubtree{}
 }
 
-func (b *nopBatch) PutWriteLog(
-	startRoot node.Root,
-	endRoot node.Root,
-	writeLog writelog.WriteLog,
-	logAnnotations writelog.WriteLogAnnotations,
-) error {
+func (b *nopBatch) PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.WriteLogAnnotations) error {
+	return nil
+}
+
+func (b *nopBatch) RemoveNodes(nodes []node.Node) error {
 	return nil
 }
 

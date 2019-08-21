@@ -20,7 +20,6 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/cachingclient"
 	"github.com/oasislabs/ekiden/go/storage/client"
 	"github.com/oasislabs/ekiden/go/storage/leveldb"
-	"github.com/oasislabs/ekiden/go/storage/memory"
 )
 
 const (
@@ -56,8 +55,6 @@ func New(
 	insecureSkipChecks := viper.GetBool(cfgInsecureSkipChecks)
 
 	switch strings.ToLower(backend) {
-	case memory.BackendName:
-		impl = memory.New(signer, insecureSkipChecks)
 	case badger.BackendName:
 		dbDir := filepath.Join(dataDir, badger.DBFile)
 		impl, err = badger.New(dbDir, signer, applyLockLRUSlots, insecureSkipChecks)
@@ -93,7 +90,7 @@ func New(
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, memory.BackendName, "Storage backend")
+		cmd.Flags().String(cfgBackend, leveldb.BackendName, "Storage backend")
 		cmd.Flags().Bool(cfgDebugMockSigningKey, false, "Generate volatile mock signing key")
 		cmd.Flags().Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
 		cmd.Flags().Int(cfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")

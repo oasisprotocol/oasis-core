@@ -49,14 +49,14 @@ func prepareWriteLog(values [][]byte) api.WriteLog {
 	return wl
 }
 
-func CalculateExpectedNewRoot(t *testing.T, wl api.WriteLog, namespace common.Namespace) hash.Hash {
+func CalculateExpectedNewRoot(t *testing.T, wl api.WriteLog, namespace common.Namespace, round uint64) hash.Hash {
 	// Use in-memory Urkel tree to calculate the expected new root.
 	tree := urkel.New(nil, nil)
 	for _, logEntry := range wl {
 		err := tree.Insert(context.Background(), logEntry.Key, logEntry.Value)
 		require.NoError(t, err, "error inserting writeLog entry into Urkel tree")
 	}
-	_, expectedNewRoot, err := tree.Commit(context.Background(), namespace, 0)
+	_, expectedNewRoot, err := tree.Commit(context.Background(), namespace, round)
 	require.NoError(t, err, "error calculating mkvs' expectedNewRoot")
 	return expectedNewRoot
 }
@@ -88,7 +88,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 	rootHash.Empty()
 
 	wl := prepareWriteLog(testValues)
-	expectedNewRoot := CalculateExpectedNewRoot(t, wl, namespace)
+	expectedNewRoot := CalculateExpectedNewRoot(t, wl, namespace, 1)
 	var receipts []*api.Receipt
 	var receiptBody api.ReceiptBody
 	var err error
@@ -112,7 +112,7 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 
 	// Prepare another write log and form a set of apply operations.
 	wl2 := prepareWriteLog(testValues[0:2])
-	expectedNewRoot2 := CalculateExpectedNewRoot(t, wl2, namespace)
+	expectedNewRoot2 := CalculateExpectedNewRoot(t, wl2, namespace, 1)
 	applyOps := []api.ApplyOp{
 		api.ApplyOp{SrcRound: 0, SrcRoot: rootHash, DstRoot: expectedNewRoot, WriteLog: wl},
 		api.ApplyOp{SrcRound: 0, SrcRoot: rootHash, DstRoot: expectedNewRoot2, WriteLog: wl2},
@@ -197,13 +197,13 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 	require.NoError(t, err, "GetCheckpoint()")
 	logs := foldWriteLogIterator(t, logsIter)
 	// Applying the writeLog should return same root.
-	logsRootHash := CalculateExpectedNewRoot(t, logs, namespace)
+	logsRootHash := CalculateExpectedNewRoot(t, logs, namespace, 1)
 	require.EqualValues(t, logsRootHash, receiptBody.Roots[0])
 
 	// Single node tree.
 	root.Empty()
 	wl3 := prepareWriteLog([][]byte{testValues[0]})
-	expectedNewRoot3 := CalculateExpectedNewRoot(t, wl3, namespace)
+	expectedNewRoot3 := CalculateExpectedNewRoot(t, wl3, namespace, 1)
 
 	receipts, err = backend.Apply(context.Background(), namespace, 0, rootHash, 1, expectedNewRoot3, wl3)
 	require.NoError(t, err, "Apply() should not return an error")
@@ -224,6 +224,6 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 	require.NoError(t, err, "GetCheckpoint()")
 	logs = foldWriteLogIterator(t, logsIter)
 	// Applying the writeLog should return same root.
-	logsRootHash = CalculateExpectedNewRoot(t, logs, namespace)
+	logsRootHash = CalculateExpectedNewRoot(t, logs, namespace, 1)
 	require.EqualValues(t, logsRootHash, newRoot.Hash)
 }

@@ -18,7 +18,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/memory"
+	"github.com/oasislabs/ekiden/go/storage/leveldb"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/tests"
@@ -31,14 +31,17 @@ const cacheSize = 10
 func TestCachingClient(t *testing.T) {
 	signer, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "failed to generate dummy receipt signing key")
-	remote := memory.New(signer, false)
+	dbDir, err := ioutil.TempDir("", "cachingclient.test.leveldb")
+	require.NoError(t, err, "TempDir")
+	defer os.RemoveAll(dbDir)
+	remote, err := leveldb.New(dbDir, signer, 0, false)
+	require.NoError(t, err, "leveldb.New")
+
 	client, cacheDir := requireNewClient(t, remote)
-	defer func() {
-		os.RemoveAll(cacheDir)
-	}()
+	defer os.RemoveAll(cacheDir)
 
 	wl := makeTestWriteLog([]byte("TestSingle"), cacheSize)
-	expectedNewRoot := tests.CalculateExpectedNewRoot(t, wl, testNs)
+	expectedNewRoot := tests.CalculateExpectedNewRoot(t, wl, testNs, 1)
 
 	var root hash.Hash
 	root.Empty()
@@ -61,7 +64,7 @@ func TestCachingClient(t *testing.T) {
 	// Check if the values match.
 	r := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Round:     1,
 		Hash:      expectedNewRoot,
 	}
 	tree, err := urkel.NewWithRoot(context.Background(), client, nil, r)
@@ -75,7 +78,11 @@ func TestCachingClient(t *testing.T) {
 
 	// Test the persistence.
 	client.Cleanup()
-	remote = memory.New(signer, false)
+	dbDir, err = ioutil.TempDir("", "cachingclient.test.leveldb")
+	require.NoError(t, err, "TempDir")
+	defer os.RemoveAll(dbDir)
+	remote, err = leveldb.New(dbDir, signer, 0, false)
+	require.NoError(t, err, "leveldb.New")
 	_, err = New(remote, false)
 	require.NoError(t, err, "New - reopen")
 
