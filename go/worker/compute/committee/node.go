@@ -639,6 +639,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 				WriteLog: batch.StateWriteLog,
 			},
 		}
+		n.logger.Debug("here's our applyOps %%%", "apply_ops", applyOps)
 
 		receipts, err := n.commonNode.Storage.ApplyBatch(ctx, lastHeader.Namespace, lastHeader.Round+1, applyOps)
 		if err != nil {

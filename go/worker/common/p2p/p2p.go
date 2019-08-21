@@ -164,6 +164,7 @@ func (p *P2P) publishImpl(ctx context.Context, node *node.Node, msg *Message) er
 	}
 
 	if response.Error != nil {
+		p.logger.Warn("peer responded with error %%%", "message", response.Error.Message)
 		return errors.New(response.Error.Message)
 	} else if response.Ack != nil {
 		return nil

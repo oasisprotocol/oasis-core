@@ -315,6 +315,7 @@ func (n *Node) handleResultsLocked(ctx context.Context, commit *commitment.Compu
 
 	sp, err := state.pool.AddComputeCommitment(n.commonNode.CurrentBlock, epoch, commit)
 	if err != nil {
+		n.logger.Warn("pool refused commitment %%%", "err", err)
 		return err
 	}
 

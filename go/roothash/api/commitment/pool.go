@@ -251,6 +251,11 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 		required -= int(p.Runtime.ReplicaAllowedStragglers)
 	}
 
+	logger.Debug("%%% pool checking if we have enough commitments",
+		"kind", p.Committee.Kind,
+		"commits", commits,
+		"required", required,
+	)
 	if commits < required {
 		return ErrStillWaiting
 	}
@@ -288,6 +293,10 @@ func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
 			commit = c
 		}
 		if !commit.MostlyEqual(c) {
+			if !discrepancyDetected {
+				logger.Error("discrepancy detected %%%", "commitment", commit)
+			}
+			logger.Error("discrepancy detected %%%", "commitment", c)
 			discrepancyDetected = true
 		}
 	}
