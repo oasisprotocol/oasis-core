@@ -54,11 +54,11 @@ var (
 	// the runtime.
 	//
 	// NOTE: This version must be synced with runtime/src/common/version.rs.
-	RuntimeProtocol = Version{Major: 0, Minor: 4, Patch: 0}
+	RuntimeProtocol = Version{Major: 0, Minor: 5, Patch: 0}
 
 	// CommitteeProtocol versions the P2P protocol used by the
 	// committee members.
-	CommitteeProtocol = Version{Major: 0, Minor: 3, Patch: 0}
+	CommitteeProtocol = Version{Major: 0, Minor: 4, Patch: 0}
 
 	// BackendProtocol versions all data structures and processing used by
 	// the epochtime, beacon, registry, roothash, etc.

@@ -160,7 +160,7 @@ type WorkerLocalRPCCallResponse struct {
 // WorkerCheckTxBatchRequest is a worker check tx batch request message body.
 type WorkerCheckTxBatchRequest struct {
 	// Batch of runtime inputs to check.
-	Inputs transaction.Batch `codec:"inputs"`
+	Inputs transaction.RawBatch `codec:"inputs"`
 	// Block on which the batch check should be based.
 	Block roothash.Block `codec:"block"`
 }
@@ -168,7 +168,7 @@ type WorkerCheckTxBatchRequest struct {
 // WorkerCheckTxBatchResponse is a worker check tx batch response message body.
 type WorkerCheckTxBatchResponse struct {
 	// Batch of runtime check results.
-	Results transaction.Batch `codec:"results"`
+	Results transaction.RawBatch `codec:"results"`
 }
 
 // ComputedBatch is a computed batch.
@@ -195,7 +195,7 @@ type WorkerExecuteTxBatchRequest struct {
 	// the compute node should use. It must match what is passed in "inputs".
 	IORoot hash.Hash `codec:"io_root"`
 	// Batch of inputs (transactions).
-	Inputs transaction.Batch `codec:"inputs"`
+	Inputs transaction.RawBatch `codec:"inputs"`
 	// Block on which the batch computation should be based.
 	Block roothash.Block `codec:"block"`
 }

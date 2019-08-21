@@ -329,6 +329,7 @@ mod tests {
                 text: "hello".to_owned(),
                 number: 21,
             }),
+            predicted_rw_set: Default::default(),
         };
         let call_encoded = cbor::to_vec(&call);
 

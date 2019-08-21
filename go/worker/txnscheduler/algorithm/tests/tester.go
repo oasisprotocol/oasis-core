@@ -15,14 +15,14 @@ import (
 
 type testDispatcher struct {
 	ShouldFail        bool
-	DispatchedBatches []transaction.Batch
+	DispatchedBatches []transaction.RawBatch
 }
 
 func (t *testDispatcher) Clear() {
-	t.DispatchedBatches = []transaction.Batch{}
+	t.DispatchedBatches = []transaction.RawBatch{}
 }
 
-func (t *testDispatcher) Dispatch(committeeID hash.Hash, batch transaction.Batch) error {
+func (t *testDispatcher) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error {
 	if t.ShouldFail {
 		return errors.New("dispatch failed")
 	}
@@ -68,7 +68,7 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, algorithm api.Al
 	require.NoError(t, err, "Flush()")
 	require.Equal(t, 0, algorithm.UnscheduledSize(), "no transactions should be scheduled after flushing a single tx")
 	require.Equal(t, 1, len(td.DispatchedBatches), "one batch should be dispatched")
-	require.EqualValues(t, transaction.Batch{testTx}, td.DispatchedBatches[0], "transaction should be dispatched")
+	require.EqualValues(t, transaction.RawBatch{testTx}, td.DispatchedBatches[0], "transaction should be dispatched")
 	require.False(t, algorithm.IsQueued(txBytes), "IsQueued(tx)")
 
 	// Test with a Failing Dispatcher.
@@ -94,7 +94,7 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, algorithm api.Al
 	require.Equal(t, 0, algorithm.UnscheduledSize(), "no transactions after flushing a single tx")
 	require.False(t, algorithm.IsQueued(tx2Bytes), "IsQueued(tx)")
 	require.Equal(t, 1, len(td.DispatchedBatches), "one batch should be dispatched")
-	require.EqualValues(t, transaction.Batch{testTx2}, td.DispatchedBatches[0], "transaction should be dispatched")
+	require.EqualValues(t, transaction.RawBatch{testTx2}, td.DispatchedBatches[0], "transaction should be dispatched")
 
 	td.Clear()
 }

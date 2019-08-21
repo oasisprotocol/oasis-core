@@ -223,7 +223,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 }
 
 // Dispatch dispatches a batch to the compute committee.
-func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.Batch) error {
+func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error {
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
 
@@ -244,9 +244,7 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.Batch) error {
 	lastHeader := n.commonNode.CurrentBlock.Header
 
 	// Leader node opens a new parent span for batch processing.
-	batchSpan := opentracing.StartSpan("TakeBatchFromQueue(batch)",
-		opentracing.Tag{Key: "batch", Value: batch},
-	)
+	batchSpan := opentracing.StartSpan("TakeBatchFromQueue(batch)")
 	defer batchSpan.Finish()
 	batchSpanCtx := batchSpan.Context()
 
@@ -258,17 +256,17 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.Batch) error {
 	}
 	emptyRoot.Hash.Empty()
 
-	txes, err := transaction.NewTree(n.ctx, nil, emptyRoot)
+	ioTree, err := transaction.NewTree(n.ctx, nil, emptyRoot)
 	if err != nil {
 		n.logger.Error("failed to create I/O tree",
 			"err", err,
 		)
 		return err
 	}
-	defer txes.Close()
+	defer ioTree.Close()
 
 	for idx, tx := range batch {
-		if err = txes.AddTransaction(n.ctx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
+		if err = ioTree.AddTransaction(n.ctx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
 			n.logger.Error("failed to create I/O tree",
 				"err", err,
 			)
@@ -276,7 +274,7 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.Batch) error {
 		}
 	}
 
-	ioWriteLog, ioRoot, err := txes.Commit(n.ctx)
+	ioWriteLog, ioRoot, err := ioTree.Commit(n.ctx)
 	if err != nil {
 		n.logger.Error("failed to create I/O tree",
 			"err", err,

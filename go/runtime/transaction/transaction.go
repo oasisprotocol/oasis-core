@@ -217,7 +217,7 @@ func (t *Tree) AddTransaction(ctx context.Context, tx Transaction, tags Tags) er
 // inBatchOrder is a helper for sorting transactions in batch order.
 type inBatchOrder struct {
 	order []uint32
-	batch Batch
+	batch RawBatch
 }
 
 func (bo inBatchOrder) Len() int { return len(bo.batch) }
@@ -227,7 +227,7 @@ func (bo inBatchOrder) Swap(i, j int) {
 func (bo inBatchOrder) Less(i, j int) bool { return bo.order[i] < bo.order[j] }
 
 // GetInputBatch returns a batch of transaction input artifacts in batch order.
-func (t *Tree) GetInputBatch(ctx context.Context) (Batch, error) {
+func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
 	// TODO: Hint the tree to prefetch everything.
 	it := t.tree.NewIterator(ctx)
 	defer it.Close()
