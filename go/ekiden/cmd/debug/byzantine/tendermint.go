@@ -9,7 +9,7 @@ import (
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/epochtime/api"
+	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/genesis"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -23,27 +23,27 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
-var _ api.Backend = (*fakeTimeBackend)(nil)
+var _ epochtime.Backend = (*fakeTimeBackend)(nil)
 
 // fakeTimeBackend is like TendermintBackend (of epochtime), but without
 // any workers.
 type fakeTimeBackend struct{}
 
 // GetEpoch implements epochtime Backend.
-func (*fakeTimeBackend) GetEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
+func (*fakeTimeBackend) GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error) {
 	if height == 0 {
 		panic("0 height not supported")
 	}
-	return api.EpochTime(height / 30), nil
+	return epochtime.EpochTime(height / 30), nil
 }
 
 // GetEpochBlock implements epochtime Backend.
-func (*fakeTimeBackend) GetEpochBlock(ctx context.Context, epoch api.EpochTime) (int64, error) {
+func (*fakeTimeBackend) GetEpochBlock(ctx context.Context, epoch epochtime.EpochTime) (int64, error) {
 	panic("GetEpochBlock not supported")
 }
 
 // WatchEpochs implements epochtime Backend.
-func (*fakeTimeBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscription) {
+func (*fakeTimeBackend) WatchEpochs() (<-chan epochtime.EpochTime, *pubsub.Subscription) {
 	panic("WatchEpochs not supported")
 }
 
