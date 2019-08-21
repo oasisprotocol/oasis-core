@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	commonGrpc "github.com/oasislabs/ekiden/go/common/grpc"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/grpc/storage"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
@@ -36,7 +37,7 @@ const debugModeFakeRuntimeSeed = "ekiden storage client debug runtime"
 // New creates a new storage client.
 func New(
 	ctx context.Context,
-	tlsCertificate *tls.Certificate,
+	identity *identity.Identity,
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
 ) (api.Backend, error) {
@@ -58,7 +59,7 @@ func New(
 				return nil, err
 			}
 			// Set client certificate.
-			tlsConfig.Certificates = []tls.Certificate{*tlsCertificate}
+			tlsConfig.Certificates = []tls.Certificate{*identity.TLSCertificate}
 			opts = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
 		} else {
 			opts = grpc.WithInsecure()
@@ -82,7 +83,7 @@ func New(
 			scheduler:       schedulerBackend,
 			registry:        registryBackend,
 			runtimeWatchers: make(map[signature.MapKey]storageWatcher),
-			tlsCertificate:  tlsCertificate,
+			identity:        identity,
 		}
 		state := &clientState{
 			client: client,
@@ -100,7 +101,7 @@ func New(
 		scheduler:       schedulerBackend,
 		registry:        registryBackend,
 		runtimeWatchers: make(map[signature.MapKey]storageWatcher),
-		tlsCertificate:  tlsCertificate,
+		identity:        identity,
 	}
 
 	b.haltCtx, b.cancelFn = context.WithCancel(ctx)

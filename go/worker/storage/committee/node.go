@@ -204,7 +204,7 @@ func NewNode(
 	node.ctx, node.ctxCancel = context.WithCancel(context.Background())
 
 	// Create a new storage client that will be used for remote sync.
-	scl, err := client.New(node.ctx, node.commonNode.Identity.TLSCertificate, node.commonNode.Scheduler, node.commonNode.Registry)
+	scl, err := client.New(node.ctx, node.commonNode.Identity, node.commonNode.Scheduler, node.commonNode.Registry)
 	if err != nil {
 		return nil, err
 	}

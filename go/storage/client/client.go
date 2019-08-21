@@ -5,7 +5,6 @@ package client
 import (
 	"context"
 	cryptorand "crypto/rand"
-	"crypto/tls"
 	"io"
 	"math/rand"
 	"sync"
@@ -21,6 +20,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/grpc/storage"
@@ -67,7 +67,7 @@ type storageClientBackend struct {
 	runtimeWatchersLock sync.RWMutex
 	runtimeWatchers     map[signature.MapKey]storageWatcher
 
-	tlsCertificate *tls.Certificate
+	identity *identity.Identity
 
 	haltCtx  context.Context
 	cancelFn context.CancelFunc
@@ -111,7 +111,7 @@ func (b *storageClientBackend) WatchRuntime(id signature.PublicKey) error {
 	}
 
 	// Watcher doesn't exist. Start new watcher.
-	watcher = newWatcher(b.ctx, id, b.tlsCertificate, b.scheduler, b.registry)
+	watcher = newWatcher(b.ctx, id, b.identity, b.scheduler, b.registry)
 	b.runtimeWatchers[id.ToMapKey()] = watcher
 
 	// Signal init when the first registered runtime is initialized.
@@ -496,6 +496,7 @@ func (b *storageClientBackend) readWithClient(
 	var resp interface{}
 	for _, randIndex := range rng.Perm(n) {
 		state := clientStates[randIndex]
+
 		resp, err = fn(ctx, state.client)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()

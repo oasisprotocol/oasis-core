@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"crypto/tls"
 	"testing"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
@@ -35,7 +35,7 @@ func runtimeIDToNamespace(t *testing.T, runtimeID signature.PublicKey) (ns commo
 // ClientWorkerTests implements tests for client worker.
 func ClientWorkerTests(
 	t *testing.T,
-	tlsCertificate *tls.Certificate,
+	identity *identity.Identity,
 	beacon beacon.Backend,
 	timeSource epochtime.SetableBackend,
 	registry registry.Backend,
@@ -53,7 +53,7 @@ func ClientWorkerTests(
 
 	rt.MustRegister(t, registry)
 	// Initialize storage client
-	client, err := storageClient.New(ctx, tlsCertificate, schedulerBackend, registry)
+	client, err := storageClient.New(ctx, identity, schedulerBackend, registry)
 	require.NoError(err, "NewStorageClient")
 	err = client.(api.ClientBackend).WatchRuntime(rt.Runtime.ID)
 	require.NoError(err, "NewStorageClient")
