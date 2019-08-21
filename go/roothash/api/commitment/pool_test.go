@@ -637,6 +637,86 @@ func TestPoolMergeCommitment(t *testing.T) {
 		header := dc.ToDDResult().(block.Header)
 		require.EqualValues(t, &parentBlk.Header, &header, "DD should return the same header")
 	})
+
+	t.Run("ResolvedComputeDiscrepancy", func(t *testing.T) {
+		// Create a merge commitment pool.
+		mergePool := Pool{
+			Runtime:   rt,
+			Committee: mergeCommittee,
+			NodeInfo:  mergeNodeInfo,
+		}
+
+		// Create a compute commitment multi-pool.
+		computePool := MultiPool{
+			Committees: map[hash.Hash]*Pool{
+				computeCommitteeID: &Pool{
+					Runtime:   rt,
+					Committee: computeCommittee,
+					NodeInfo:  computeNodeInfo,
+				},
+			},
+		}
+
+		// Generate a commitment.
+		childBlk, parentBlk, body := generateComputeBody(t, computeCommittee)
+
+		commit1, err := SignComputeCommitment(computeSks[0], &body)
+		require.NoError(t, err, "SignComputeCommitment")
+
+		commit3, err := SignComputeCommitment(computeSks[2], &body)
+		require.NoError(t, err, "SignComputeCommitment")
+
+		// Update state root and fix the storage receipt.
+		body.Header.StateRoot.FromBytes([]byte("discrepancy"))
+		body.StorageSignatures = []signature.Signature{generateStorageReceiptSignature(t, parentBlk, &body)}
+
+		commit2, err := SignComputeCommitment(computeSks[1], &body)
+		require.NoError(t, err, "SignComputeCommitment")
+
+		// Generate a merge commitment.
+		mergeBody := MergeBody{
+			ComputeCommits: []ComputeCommitment{*commit1, *commit2, *commit3},
+			Header:         parentBlk.Header,
+		}
+
+		mergeCommit1, err := SignMergeCommitment(mergeSks[0], &mergeBody)
+		require.NoError(t, err, "SignMergeCommitment")
+
+		mergeCommit2, err := SignMergeCommitment(mergeSks[1], &mergeBody)
+		require.NoError(t, err, "SignMergeCommitment")
+
+		// Adding commitment 1 should succeed.
+		err = mergePool.AddMergeCommitment(childBlk, nopSV, mergeCommit1, &computePool)
+		require.NoError(t, err, "AddMergeCommitment")
+
+		// There should not be enough merge commitments.
+		err = mergePool.CheckEnoughCommitments(false)
+		require.Error(t, err, "CheckEnoughCommitments")
+		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
+		err = mergePool.CheckEnoughCommitments(true)
+		require.Error(t, err, "CheckEnoughCommitments")
+		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
+
+		// Adding commitment 2 should succeed.
+		err = mergePool.AddMergeCommitment(childBlk, nopSV, mergeCommit2, &computePool)
+		require.NoError(t, err, "AddComputeCommitment")
+
+		m := cbor.Marshal(computePool)
+		var d MultiPool
+		err = cbor.Unmarshal(m, &d)
+		require.NoError(t, err)
+
+		// There should be enough merge commitments.
+		err = mergePool.CheckEnoughCommitments(false)
+		require.NoError(t, err, "CheckEnoughCommitments")
+
+		// There should be no discrepancy.
+		dc, err := mergePool.DetectDiscrepancy()
+		require.NoError(t, err, "DetectDiscrepancy")
+		require.Equal(t, false, mergePool.Discrepancy)
+		header := dc.ToDDResult().(block.Header)
+		require.EqualValues(t, &parentBlk.Header, &header, "DD should return the same header")
+	})
 }
 
 func TestMultiPool(t *testing.T) {

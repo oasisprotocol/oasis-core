@@ -492,7 +492,17 @@ func (p *Pool) AddMergeCommitment(
 		if !sp.Discrepancy {
 			// If there was no discrepancy yet there must not be one now.
 			_, err = sp.DetectDiscrepancy()
-			if err != nil {
+			switch err {
+			case nil:
+			case ErrDiscrepancyDetected:
+				// We may also be able to already perform discrepancy resolution, check if
+				// this is possible.
+				_, err = sp.ResolveDiscrepancy()
+				if err == nil {
+					break
+				}
+				fallthrough
+			default:
 				logger.Debug("discrepancy detection failed for compute committee",
 					"err", err,
 				)
