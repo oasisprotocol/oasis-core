@@ -344,9 +344,8 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		gen.State = log
 	}
 
-	return &registry.Runtime{
+	rt := &registry.Runtime{
 		ID:                            id,
-		Version:                       version.FromU64(viper.GetUint64(cfgVersion)),
 		Genesis:                       gen,
 		ReplicaGroupSize:              uint64(viper.GetInt64(cfgReplicaGroupSize)),
 		ReplicaGroupBackupSize:        uint64(viper.GetInt64(cfgReplicaGroupBackupSize)),
@@ -357,7 +356,10 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		KeyManager:                    kmID,
 		Kind:                          kind,
 		RegistrationTime:              ent.RegistrationTime,
-	}, signer, nil
+	}
+	rt.Version.Version = version.FromU64(viper.GetUint64(cfgVersion))
+
+	return rt, signer, nil
 }
 
 func signForRegistration(rt *registry.Runtime, signer signature.Signer, isGenesis bool) (*registry.SignedRuntime, error) {

@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/sgx"
 	"github.com/oasislabs/ekiden/go/common/version"
 	pbRegistry "github.com/oasislabs/ekiden/go/grpc/registry"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
@@ -41,9 +42,6 @@ type Runtime struct {
 	// ID is a globally unique long term identifier of the runtime.
 	ID signature.PublicKey `codec:"id"`
 
-	// Version of the runtime.
-	Version version.Version `codec:"version"`
-
 	// Genesis is the runtime genesis information.
 	Genesis RuntimeGenesis `codec:"genesis"`
 
@@ -71,6 +69,9 @@ type Runtime struct {
 
 	// TEEHardware specifies the runtime's TEE hardware requirements.
 	TEEHardware node.TEEHardware `codec:"tee_hardware"`
+
+	// Version is the runtime version information.
+	Version VersionInfo `codec:"versions"`
 
 	// KeyManager is the key manager runtime ID for this runtime.
 	KeyManager signature.PublicKey `codec:"key_manager"`
@@ -114,13 +115,16 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 		return err
 	}
 
+	if err := c.Version.fromProto(pb.GetVersion()); err != nil {
+		return err
+	}
+
 	c.ReplicaGroupSize = pb.GetReplicaGroupSize()
 	c.ReplicaGroupBackupSize = pb.GetReplicaGroupBackupSize()
 	c.ReplicaAllowedStragglers = pb.GetReplicaAllowedStragglers()
 	c.StorageGroupSize = pb.GetStorageGroupSize()
 	c.RegistrationTime = pb.GetRegistrationTime()
 	c.Kind = RuntimeKind(pb.GetKind())
-	c.Version = version.FromU64(pb.GetVersion())
 
 	return nil
 }
@@ -139,12 +143,12 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 	if pb.KeyManager, err = c.KeyManager.MarshalBinary(); err != nil {
 		panic(err)
 	}
+	pb.Version = c.Version.toProto()
 	pb.ReplicaGroupSize = c.ReplicaGroupSize
 	pb.ReplicaGroupBackupSize = c.ReplicaGroupBackupSize
 	pb.ReplicaAllowedStragglers = c.ReplicaAllowedStragglers
 	pb.StorageGroupSize = c.StorageGroupSize
 	pb.RegistrationTime = c.RegistrationTime
-	pb.Version = c.Version.ToU64()
 	pb.Kind = uint32(c.Kind)
 
 	return pb
@@ -191,6 +195,35 @@ func SignRuntime(signer signature.Signer, context []byte, runtime *Runtime) (*Si
 	return &SignedRuntime{
 		Signed: *signed,
 	}, nil
+}
+
+// VersionInfo is the per-runtime version information.
+type VersionInfo struct {
+	// Version of the runtime.
+	Version version.Version `codec:"version"`
+
+	// TEE is the enclave version information, in an enclave provider specific
+	// format if any.
+	TEE []byte `codec:"tee,omit_empty"`
+}
+
+func (v *VersionInfo) fromProto(pb *pbRegistry.VersionInfo) error {
+	v.Version = version.FromU64(pb.GetVersion())
+	v.TEE = append([]byte{}, pb.GetTee()...)
+	return nil
+}
+
+func (v *VersionInfo) toProto() *pbRegistry.VersionInfo {
+	pb := new(pbRegistry.VersionInfo)
+	pb.Version = v.Version.ToU64()
+	pb.Tee = append([]byte{}, v.TEE...)
+	return pb
+}
+
+// VersionInfoIntelSGX is the SGX TEE version information.
+type VersionInfoIntelSGX struct {
+	// Enclaves is the allowed MRSIGNER/MRENCLAVE pairs.
+	Enclaves []sgx.EnclaveIdentity `codec:"enclaves"`
 }
 
 // RuntimeGenesis is the runtime genesis information that is used to
