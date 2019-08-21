@@ -191,7 +191,7 @@ test_suite() {
         runtime=simple-keyvalue \
         client=simple-keyvalue
 
-     # Database encryption test.
+    # Database encryption test.
     run_test \
         scenario=scenario_basic \
         name="e2e-${backend_name}-basic-enc" \

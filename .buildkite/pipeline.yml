@@ -198,7 +198,7 @@ steps:
       <<: *docker_plugin
 
   - label: E2E migration tests
-    timeout_in_minutes: 5
+    timeout_in_minutes: 10
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_migration.sh
@@ -230,7 +230,7 @@ steps:
       <<: *docker_plugin_sgx
 
   - label: E2E migration tests - intel-sgx
-    timeout_in_minutes: 8
+    timeout_in_minutes: 15
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_migration.sh
