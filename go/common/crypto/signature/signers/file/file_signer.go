@@ -3,6 +3,7 @@ package file
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -129,7 +130,7 @@ func (fac *Factory) doLoad(fn string) (signature.Signer, error) {
 		return nil, err
 	}
 	if fi.Mode().Perm() != filePerm {
-		return nil, errors.New("signature/signer/file: invalid PEM file permissions")
+		return nil, fmt.Errorf("signature/signer/file: invalid PEM file permissions %o on %s", fi.Mode(), fn)
 	}
 
 	buf, err := ioutil.ReadAll(f)

@@ -25,7 +25,7 @@ type TendermintService interface {
 	// RegisterApplication registers an ABCI multiplexer application
 	// with this service instance and check that its dependencies are
 	// registered.
-	RegisterApplication(abci.Application, []string) error
+	RegisterApplication(abci.Application) error
 
 	// ForceInitialize force-initializes the Tendermint service iff
 	// it has not been started.  Otherwise the routine has no effect

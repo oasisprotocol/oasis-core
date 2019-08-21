@@ -10,6 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	tmabci "github.com/tendermint/tendermint/abci/types"
 	tmconfig "github.com/tendermint/tendermint/config"
@@ -65,6 +66,9 @@ const (
 
 var (
 	_ service.TendermintService = (*tendermintService)(nil)
+
+	// Flags has our flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // IsSeed retuns true iff the node is configured as a seed node.
@@ -261,7 +265,7 @@ func (t *tendermintService) Pruner() abci.StatePruner {
 	return t.mux.Pruner()
 }
 
-func (t *tendermintService) RegisterApplication(app abci.Application, deps []string) error {
+func (t *tendermintService) RegisterApplication(app abci.Application) error {
 	if err := t.ForceInitialize(); err != nil {
 		return err
 	}
@@ -269,7 +273,7 @@ func (t *tendermintService) RegisterApplication(app abci.Application, deps []str
 		return errors.New("tendermint: service already started")
 	}
 
-	return t.mux.Register(app, deps)
+	return t.mux.Register(app)
 }
 
 func (t *tendermintService) ForceInitialize() error {
@@ -697,34 +701,24 @@ func newLogAdapter(suppressDebug bool) tmlog.Logger {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
-		cmd.Flags().String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
-		cmd.Flags().Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
-		cmd.Flags().Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
-		cmd.Flags().Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
-		cmd.Flags().String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
-		cmd.Flags().Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
-		cmd.Flags().Bool(cfgP2PSeedMode, false, "run the tendermint node in seed mode")
-		cmd.Flags().String(cfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
-		cmd.Flags().Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
-		cmd.Flags().Bool(cfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
-	}
-
-	for _, v := range []string{
-		cfgCoreListenAddress,
-		cfgCoreExternalAddress,
-		cfgConsensusTimeoutCommit,
-		cfgConsensusSkipTimeoutCommit,
-		cfgConsensusEmptyBlockInterval,
-		cfgABCIPruneStrategy,
-		cfgABCIPruneNumKept,
-		cfgP2PSeedMode,
-		cfgP2PSeeds,
-		cfgLogDebug,
-		cfgDebugP2PAddrBookLenient,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
+		cmd.Flags().AddFlagSet(Flags)
 	}
 
 	db.RegisterFlags(cmd)
+}
+
+func init() {
+	Flags.String(cfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
+	Flags.String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
+	Flags.Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
+	Flags.Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
+	Flags.Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
+	Flags.String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
+	Flags.Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
+	Flags.Bool(cfgP2PSeedMode, false, "run the tendermint node in seed mode")
+	Flags.String(cfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
+	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
+	Flags.Bool(cfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
+
+	viper.BindPFlags(Flags) // nolint: errcheck
 }

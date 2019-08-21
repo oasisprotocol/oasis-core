@@ -108,7 +108,7 @@ func doWaitNodes(cmd *cobra.Command, args []string) {
 	logger.Info("enough nodes have been registered")
 }
 
-// Register registers the dummy sub-command and all of it's children.
+// Register registers the dummy sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
 	cmdGrpc.RegisterClientFlags(dummyCmd, true)
 	dummySetEpochCmd.Flags().Uint64VarP(&epoch, "epoch", "e", 0, "set epoch to given value")

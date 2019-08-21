@@ -3,6 +3,7 @@ package genesis
 
 import (
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/identity"
@@ -10,6 +11,9 @@ import (
 )
 
 const cfgGenesisFile = "genesis.file"
+
+// Flags has our flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New creates a new genesis document provider.
 func New(identity *identity.Identity) (api.Provider, error) {
@@ -22,12 +26,12 @@ func New(identity *identity.Identity) (api.Provider, error) {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgGenesisFile, "genesis.json", "path to genesis file")
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgGenesisFile,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
-	}
+func init() {
+	Flags.String(cfgGenesisFile, "genesis.json", "path to genesis file")
+
+	viper.BindPFlags(Flags) // nolint: errcheck
 }

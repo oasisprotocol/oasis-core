@@ -81,6 +81,10 @@ type Application interface {
 	// instance.
 	Blessed() bool
 
+	// Dependencies returns the names of applications that the application
+	// depends on.
+	Dependencies() []string
+
 	// GetState returns an application-specific state structure for the
 	// given block height.
 	GetState(int64) (interface{}, error)
@@ -163,7 +167,7 @@ type ApplicationServer struct {
 
 // Start starts the ApplicationServer.
 func (a *ApplicationServer) Start() error {
-	return nil
+	return a.mux.checkDependencies()
 }
 
 // Stop stops the ApplicationServer.
@@ -195,12 +199,12 @@ func (a *ApplicationServer) Mux() types.Application {
 // that act on every single app (InitChain, BeginBlock, EndBlock) will be
 // called in name lexicographic order. Checks that applications named in
 // deps are already registered.
-func (a *ApplicationServer) Register(app Application, deps []string) error {
+func (a *ApplicationServer) Register(app Application) error {
 	if a.started {
 		return errors.New("mux: multiplexer already started")
 	}
 
-	return a.mux.doRegister(app, deps)
+	return a.mux.doRegister(app)
 }
 
 // RegisterGenesisHook registers a function to be called when the
@@ -637,19 +641,10 @@ func (mux *abciMux) doCleanup() {
 	}
 }
 
-func (mux *abciMux) doRegister(app Application, deps []string) error {
+func (mux *abciMux) doRegister(app Application) error {
 	name := app.Name()
 	if mux.appsByName[name] != nil {
 		return fmt.Errorf("mux: application already registered: '%s'", name)
-	}
-	var missingDeps []string
-	for _, dep := range deps {
-		if _, ok := mux.appsByName[dep]; !ok {
-			missingDeps = append(missingDeps, dep)
-		}
-	}
-	if missingDeps != nil {
-		return fmt.Errorf("mux: missing dependencies %v needed for %s", missingDeps, name)
 	}
 	if app.Blessed() {
 		// Enforce the 1 blessed app limitation.
@@ -683,6 +678,21 @@ func (mux *abciMux) rebuildAppLexOrdering() {
 	for _, name := range appOrder {
 		mux.appsByLexOrder = append(mux.appsByLexOrder, mux.appsByName[name])
 	}
+}
+
+func (mux *abciMux) checkDependencies() error {
+	var missingDeps [][2]string
+	for neededFor, app := range mux.appsByName {
+		for _, dep := range app.Dependencies() {
+			if _, ok := mux.appsByName[dep]; !ok {
+				missingDeps = append(missingDeps, [2]string{dep, neededFor})
+			}
+		}
+	}
+	if missingDeps != nil {
+		return fmt.Errorf("mux: missing dependencies %v", missingDeps)
+	}
+	return nil
 }
 
 func (mux *abciMux) extractAppFromKeyPath(s string) (Application, error) {
@@ -792,6 +802,17 @@ func (s *ApplicationState) EpochChanged(timeSource epochtime.Backend) (bool, epo
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
 		return false, epochtime.EpochInvalid
+	} else if blockHeight == 1 {
+		// There is no block before the first block. For historic reasons, this is defined as not
+		// having had a transition.
+		currentEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight)
+		if err != nil {
+			s.logger.Error("EpochChanged: failed to get current epoch",
+				"err", err,
+			)
+			return false, epochtime.EpochInvalid
+		}
+		return false, currentEpoch
 	}
 
 	previousEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight-1)

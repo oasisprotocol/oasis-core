@@ -35,6 +35,10 @@ func (app *epochTimeMockApplication) Blessed() bool {
 	return false
 }
 
+func (app *epochTimeMockApplication) Dependencies() []string {
+	return nil
+}
+
 func (app *epochTimeMockApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
 	app.state = state
 

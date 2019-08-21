@@ -41,6 +41,10 @@ func (app *stakingApplication) Blessed() bool {
 	return false
 }
 
+func (app *stakingApplication) Dependencies() []string {
+	return nil
+}
+
 func (app *stakingApplication) GetState(height int64) (interface{}, error) {
 	return newImmutableState(app.state, height)
 }
