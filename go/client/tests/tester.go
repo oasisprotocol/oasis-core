@@ -113,6 +113,13 @@ func testQuery(
 	_, err = c.GetTxn(ctx, runtimeID, 4, 1)
 	require.Error(t, err, "GetTxn(1)")
 
+	// Get transaction by latest round.
+	tx, err = c.GetTxn(ctx, runtimeID, client.RoundLatest, 0)
+	require.NoError(t, err, "GetTxn(RoundLatest)")
+	require.EqualValues(t, 4, tx.Block.Header.Round)
+	require.EqualValues(t, testInput, tx.Input)
+	require.EqualValues(t, testOutput, tx.Output)
+
 	// Get transaction by block hash and index.
 	tx, err = c.GetTxnByBlockHash(ctx, runtimeID, blk.Header.EncodedHash(), 0)
 	require.NoError(t, err, "GetTxnByBlockHash")
