@@ -6,8 +6,6 @@ use ekiden_runtime::common::{crypto::hash::Hash, roothash::Block};
 
 /// Special round number always referring to the latest round.
 pub const ROUND_LATEST: u64 = u64::max_value();
-/// Tag used for storing the Ekiden block hash.
-pub const TAG_BLOCK_HASH: &'static [u8] = b"hblk";
 
 /// A query condition.
 #[derive(Clone, Debug, Serialize, Deserialize)]
