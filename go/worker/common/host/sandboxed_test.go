@@ -120,6 +120,10 @@ func testSandboxedHost(t *testing.T, host Host) {
 		testWaitForCapabilityTEE(t, host)
 	})
 
+	t.Run("WaitForVersion", func(t *testing.T) {
+		testWaitForVersion(t, host)
+	})
+
 	t.Run("SimpleRequest", func(t *testing.T) {
 		testSimpleRequest(t, host)
 	})
@@ -146,6 +150,15 @@ func testWaitForCapabilityTEE(t *testing.T, host Host) {
 	default:
 		require.Nil(t, cap, "capabilites should be nil")
 	}
+}
+
+func testWaitForVersion(t *testing.T, host Host) {
+	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+	defer cancel()
+
+	v, err := host.WaitForRuntimeVersion(ctx)
+	require.NoError(t, err, "WaitForVersion")
+	require.NotNil(t, v, "version should not be nil")
 }
 
 func testSimpleRequest(t *testing.T, host Host) {

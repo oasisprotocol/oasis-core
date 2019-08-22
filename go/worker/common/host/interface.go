@@ -5,6 +5,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/service"
+	"github.com/oasislabs/ekiden/go/common/version"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
@@ -19,6 +20,11 @@ type Host interface {
 	// blocking if the active worker is not yet available. The returned
 	// CapabilityTEE may be out of date by the time this function returns.
 	WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error)
+
+	// WaitForRuntimeVersion gets the active worker's version of the Runtime,
+	// blocking if the active worker is not yet available. The returned
+	// Version may be out of date by the time this function returns.
+	WaitForRuntimeVersion(ctx context.Context) (*version.Version, error)
 
 	// InterruptWorker attempts to interrupt the worker, killing and
 	// respawning it if necessary.

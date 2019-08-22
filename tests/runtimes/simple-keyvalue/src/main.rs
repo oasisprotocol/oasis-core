@@ -17,13 +17,14 @@ use ekiden_runtime::{
             mrae::deoxysii::{DeoxysII, KEY_SIZE, NONCE_SIZE, TAG_SIZE},
         },
         runtime::RuntimeId,
+        version::Version,
     },
     executor::Executor,
     rak::RAK,
     register_runtime_txn_methods, runtime_context,
     storage::{StorageContext, MKVS},
     transaction::{dispatcher::CheckOnlySuccess, Context as TxnContext},
-    Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
+    version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 use simple_keyvalue_api::{with_api, KeyValue};
 
@@ -291,5 +292,5 @@ fn main() {
     };
 
     // Start the runtime.
-    ekiden_runtime::start_runtime(Some(Box::new(init)));
+    ekiden_runtime::start_runtime(Some(Box::new(init)), version_from_cargo!());
 }

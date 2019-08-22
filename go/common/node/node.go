@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
+	"github.com/oasislabs/ekiden/go/common/version"
 	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
 )
 
@@ -104,6 +105,9 @@ type Runtime struct {
 	// ID is the public key identifying the runtime.
 	ID signature.PublicKey `codec:"id"`
 
+	// Version is the version of the runtime.
+	Version version.Version `codec:"version"`
+
 	// Capabilities are the node's capabilities for a given runtime.
 	Capabilities Capabilities `codec:"capabilities"`
 
@@ -124,6 +128,7 @@ func (r *Runtime) fromProto(pb *pbCommon.NodeRuntime) error {
 	}
 
 	r.ExtraInfo = pb.GetExtraInfo()
+	r.Version = version.FromU64(pb.GetVersion())
 
 	return nil
 }
@@ -139,6 +144,7 @@ func (r *Runtime) toProto() *pbCommon.NodeRuntime {
 	}
 
 	pb.ExtraInfo = r.ExtraInfo
+	pb.Version = r.Version.ToU64()
 
 	return pb
 }

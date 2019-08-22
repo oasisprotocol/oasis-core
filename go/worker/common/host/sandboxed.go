@@ -117,7 +117,8 @@ type process struct {
 
 	logger *logging.Logger
 
-	capabilityTEE *node.CapabilityTEE
+	capabilityTEE  *node.CapabilityTEE
+	runtimeVersion *version.Version
 }
 
 func waitOnProcess(p *os.Process) <-chan error {
@@ -208,6 +209,13 @@ func (p *process) getCapabilityTEE() *node.CapabilityTEE {
 	defer p.Unlock()
 
 	return p.capabilityTEE
+}
+
+func (p *process) getRuntimeVersion() *version.Version {
+	p.Lock()
+	defer p.Unlock()
+
+	return p.runtimeVersion
 }
 
 func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies map[string]ProxySpecification, hardware node.TEEHardware) ([]string, error) {
@@ -393,6 +401,20 @@ func (h *sandboxedHost) WaitForCapabilityTEE(ctx context.Context) (*node.Capabil
 	}
 }
 
+func (h *sandboxedHost) WaitForRuntimeVersion(ctx context.Context) (*version.Version, error) {
+	h.activeWorkerAvailable.L.Lock()
+	defer h.activeWorkerAvailable.L.Unlock()
+	for {
+		activeWorker := h.activeWorker
+		if activeWorker != nil {
+			return activeWorker.getRuntimeVersion(), nil
+		}
+		if !h.activeWorkerAvailable.Wait(ctx) {
+			return nil, errors.New("aborted by context")
+		}
+	}
+}
+
 func (h *sandboxedHost) Start() error {
 	h.logger.Info("starting worker host")
 	go h.manager()
@@ -422,13 +444,18 @@ func (h *sandboxedHost) checkInfo(worker *process) error {
 	}
 
 	info := rsp.WorkerInfoResponse
-	if info.ProtocolVersion != version.RuntimeProtocol.ToU64() {
+	if version.FromU64(info.ProtocolVersion).MajorMinor() != version.RuntimeProtocol.MajorMinor() {
 		h.logger.Error("runtime has incompatible protocol version",
-			"version", info.ProtocolVersion,
-			"expected_version", version.RuntimeProtocol.ToU64(),
+			"version", version.FromU64(info.ProtocolVersion),
+			"expected_version", version.RuntimeProtocol,
 		)
 		return errors.New("incompatible runtime protocol version")
 	}
+
+	// Store the runtime version.
+	h.logger.Info("runtime has been loaded", "runtime_version", info.RuntimeVersion)
+	rtVersion := version.FromU64(info.RuntimeVersion)
+	worker.runtimeVersion = &rtVersion
 
 	return nil
 }
@@ -764,7 +791,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
 	}
 	go p.worker()
 
-	// Check runtime version information.
+	// Check and store protocol and runtime version information.
 	if err = h.checkInfo(p); err != nil {
 		return nil, errors.Wrap(err, "worker: error checking runtime info")
 	}

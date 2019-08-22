@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/version"
 	pbRegistry "github.com/oasislabs/ekiden/go/grpc/registry"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
@@ -40,6 +41,9 @@ type Runtime struct {
 	// ID is a globally unique long term identifier of the runtime.
 	ID signature.PublicKey `codec:"id"`
 
+	// Version of the runtime.
+	Version version.Version `codec:"version"`
+
 	// Genesis is the runtime genesis information.
 	Genesis RuntimeGenesis `codec:"genesis"`
 
@@ -56,7 +60,7 @@ type Runtime struct {
 	// StorageGroupSize is the size of the storage group.
 	StorageGroupSize uint64 `codec:"storage_group_size"`
 
-	// StorageGroupSize is the time of registration of the runtime.
+	// RegistrationTime is the time of registration of the runtime.
 	RegistrationTime uint64 `codec:"registration_time"`
 
 	// TransactionSchedulerGroupSize the size of the TransactionScheduler group.
@@ -116,6 +120,7 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 	c.StorageGroupSize = pb.GetStorageGroupSize()
 	c.RegistrationTime = pb.GetRegistrationTime()
 	c.Kind = RuntimeKind(pb.GetKind())
+	c.Version = version.FromU64(pb.GetVersion())
 
 	return nil
 }
@@ -139,6 +144,7 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 	pb.ReplicaAllowedStragglers = c.ReplicaAllowedStragglers
 	pb.StorageGroupSize = c.StorageGroupSize
 	pb.RegistrationTime = c.RegistrationTime
+	pb.Version = c.Version.ToU64()
 	pb.Kind = uint32(c.Kind)
 
 	return pb

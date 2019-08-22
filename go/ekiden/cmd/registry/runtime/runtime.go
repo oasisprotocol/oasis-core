@@ -21,6 +21,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/version"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	cmdFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
@@ -42,6 +43,7 @@ const (
 	cfgKind                          = "runtime.kind"
 	cfgKeyManager                    = "runtime.keymanager"
 	cfgOutput                        = "runtime.genesis.file"
+	cfgVersion                       = "runtime.version"
 
 	optKindCompute    = "compute"
 	optKindKeyManager = "keymanager"
@@ -344,6 +346,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 
 	return &registry.Runtime{
 		ID:                            id,
+		Version:                       version.FromU64(viper.GetUint64(cfgVersion)),
 		Genesis:                       gen,
 		ReplicaGroupSize:              uint64(viper.GetInt64(cfgReplicaGroupSize)),
 		ReplicaGroupBackupSize:        uint64(viper.GetInt64(cfgReplicaGroupBackupSize)),
@@ -414,6 +417,7 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgGenesisState, "", "Runtime state at genesis")
 		cmd.Flags().String(cfgKeyManager, "", "Key Manager Runtime ID")
 		cmd.Flags().String(cfgKind, optKindCompute, "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
+		cmd.Flags().String(cfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")
 	}
 
 	for _, v := range []string{
@@ -427,6 +431,7 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cfgGenesisState,
 		cfgKeyManager,
 		cfgKind,
+		cfgVersion,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}

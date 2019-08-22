@@ -357,11 +357,20 @@ func (w *worker) onNodeRegistration(n *node.Node) error {
 		return fmt.Errorf("worker/keymanager: enclave not initialized")
 	}
 
+	rtVersion, err := w.workerHost.WaitForRuntimeVersion(w.ctx)
+	if err != nil {
+		w.logger.Error("failed to obtain RuntimeVersion",
+			"err", err,
+			"runtime", w.runtimeID,
+		)
+	}
+
 	// Add the key manager runtime to the node descriptor.  Done here instead
 	// of in the registration's generic handler since the registration handler
 	// only knows about normal runtimes.
 	rtDesc := &node.Runtime{
 		ID:        w.runtimeID,
+		Version:   *rtVersion,
 		ExtraInfo: cbor.Marshal(enclaveStatus),
 	}
 	rtDesc.Capabilities.TEE = tee

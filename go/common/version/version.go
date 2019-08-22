@@ -1,4 +1,4 @@
-// Package version implements Ekiden protocol versioning.
+// Package version implements Ekiden protocol and runtime versioning.
 package version
 
 import (
@@ -11,24 +11,42 @@ import (
 
 // NOTE: This should be kept in sync with runtime/src/common/version.rs.
 
-// Version is a protocol version.
+// Version is a protocol or a runtime version.
 type Version struct {
 	Major uint16
 	Minor uint16
 	Patch uint16
 }
 
-// ToU64 returns the protocol version as an uint64.
-//
-// NOTE: This ignores the patch version so that patches do not
-//       consititute breaking versions.
+// ToU64 returns the version as platform-dependent uint64.
 func (v Version) ToU64() uint64 {
-	return (uint64(v.Major) << 32) | (uint64(v.Minor) << 16)
+	return (uint64(v.Major) << 32) | (uint64(v.Minor) << 16) | (uint64(v.Patch))
+}
+
+// FromU64 returns the version from platform-dependent uint64.
+func FromU64(v uint64) Version {
+	return Version{
+		Major: uint16((v >> 32) & 0xff),
+		Minor: uint16((v >> 16) & 0xff),
+		Patch: uint16(v & 0xff),
+	}
 }
 
 // String returns the protocol version as a string.
 func (v Version) String() string {
 	return fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
+}
+
+// MajorMinor extracts major and minor segments of the Version only.
+//
+// This is useful for comparing protocol version since the patch segment can be
+// ignored.
+func (v Version) MajorMinor() Version {
+	return Version{
+		Major: v.Major,
+		Minor: v.Minor,
+		Patch: 0,
+	}
 }
 
 var (

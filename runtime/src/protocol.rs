@@ -15,7 +15,7 @@ use io_context::Context;
 use slog::Logger;
 
 use crate::{
-    common::{cbor, logger::get_logger},
+    common::{cbor, logger::get_logger, version::Version},
     dispatcher::Dispatcher,
     rak::RAK,
     storage::KeyValue,
@@ -62,11 +62,18 @@ pub struct Protocol {
     last_request_id: AtomicUsize,
     /// Pending outgoing requests.
     pending_out_requests: Mutex<HashMap<u64, channel::Sender<Body>>>,
+    /// Runtime version.
+    runtime_version: Version,
 }
 
 impl Protocol {
     /// Create a new protocol handler instance.
-    pub fn new(stream: Stream, rak: Arc<RAK>, dispatcher: Arc<Dispatcher>) -> Self {
+    pub fn new(
+        stream: Stream,
+        rak: Arc<RAK>,
+        dispatcher: Arc<Dispatcher>,
+        runtime_version: Version,
+    ) -> Self {
         let logger = get_logger("runtime/protocol");
 
         Self {
@@ -77,6 +84,7 @@ impl Protocol {
             stream,
             last_request_id: AtomicUsize::new(0),
             pending_out_requests: Mutex::new(HashMap::new()),
+            runtime_version: runtime_version,
         }
     }
 
@@ -207,7 +215,7 @@ impl Protocol {
                         }
                     }
                     None => {
-                        warn!(self.logger, "Received response message for unknown request"; "msg_id" => message.id)
+                        warn!(self.logger, "Received response message for unknown request"; "msg_id" => message.id);
                     }
                 }
             }
@@ -221,6 +229,7 @@ impl Protocol {
         match request {
             Body::WorkerInfoRequest {} => Ok(Some(Body::WorkerInfoResponse {
                 protocol_version: BUILD_INFO.protocol_version.into(),
+                runtime_version: self.runtime_version.into(),
             })),
             Body::WorkerPingRequest {} => Ok(Some(Body::Empty {})),
             Body::WorkerShutdownRequest {} => {

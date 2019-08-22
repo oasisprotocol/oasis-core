@@ -102,6 +102,9 @@ type Error struct {
 type WorkerInfoResponse struct {
 	// ProtocolVersion is the runtime protocol version supported by the worker.
 	ProtocolVersion uint64 `codec:"protocol_version"`
+
+	// RuntimeVersion is the version of the runtime.
+	RuntimeVersion uint64 `codec:"runtime_version"`
 }
 
 // WorkerCapabilityTEERakInitRequest is a worker RFC 0009 CapabilityTEE

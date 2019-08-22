@@ -22,7 +22,9 @@ message Runtime {
 
     uint32 kind = 8;
 
-    bytes key_manager = 9;
+    uint64 version = 9;
+
+    bytes key_manager = 10;
 }
 
 service RuntimeRegistry {
