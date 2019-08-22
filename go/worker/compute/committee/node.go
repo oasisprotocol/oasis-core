@@ -302,7 +302,7 @@ func (n *Node) HandleBatchFromTransactionSchedulerLocked(
 	batchSpanCtx opentracing.SpanContext,
 	committeeID hash.Hash,
 	ioRoot hash.Hash,
-	batch transaction.Batch,
+	batch transaction.RawBatch,
 	txnSchedSig signature.Signature,
 	inputStorageSigs []signature.Signature,
 ) {
@@ -424,7 +424,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) maybeStartProcessingBatchLocked(
 	ioRoot hash.Hash,
-	batch transaction.Batch,
+	batch transaction.RawBatch,
 	batchSpanCtx opentracing.SpanContext,
 	txnSchedSig signature.Signature,
 	inputStorageSigs []signature.Signature,
@@ -461,7 +461,7 @@ func (n *Node) maybeStartProcessingBatchLocked(
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) startProcessingBatchLocked(
 	ioRoot hash.Hash,
-	batch transaction.Batch,
+	batch transaction.RawBatch,
 	batchSpanCtx opentracing.SpanContext,
 	txnSchedSig signature.Signature,
 	inputStorageSigs []signature.Signature,
@@ -785,7 +785,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 func (n *Node) handleExternalBatchLocked(
 	committeeID hash.Hash,
 	ioRoot hash.Hash,
-	batch transaction.Batch,
+	batch transaction.RawBatch,
 	batchSpanCtx opentracing.SpanContext,
 	hdr block.Header,
 	txnSchedSig signature.Signature,

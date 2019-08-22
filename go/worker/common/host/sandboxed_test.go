@@ -201,7 +201,11 @@ func testCheckTxRequest(t *testing.T, host Host) {
 	tooBigValue := string(make([]byte, 129))
 	txnCallInvalid := TxnCall{Method: "insert", Args: KeyValue{Key: "foo", Value: tooBigValue}}
 	txnCallMissing := TxnCall{Method: "missing_method", Args: KeyValue{Key: "foo", Value: "bar"}}
-	batch := transaction.Batch([][]byte{cbor.Marshal(&txnCallValid), cbor.Marshal(&txnCallInvalid), cbor.Marshal(&txnCallMissing)})
+	batch := transaction.RawBatch{
+		cbor.Marshal(&txnCallValid),
+		cbor.Marshal(&txnCallInvalid),
+		cbor.Marshal(&txnCallMissing),
+	}
 
 	rspCh, err := host.MakeRequest(ctx, &protocol.Body{
 		WorkerCheckTxBatchRequest: &protocol.WorkerCheckTxBatchRequest{

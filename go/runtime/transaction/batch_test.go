@@ -10,7 +10,7 @@ import (
 
 func TestConsistentHash(t *testing.T) {
 	// NOTE: These hashes MUST be synced with runtime/src/transaction/types.rs.
-	batch := Batch{[]byte("foo"), []byte("bar"), []byte("aaa")}
+	batch := RawBatch{[]byte("foo"), []byte("bar"), []byte("aaa")}
 	var h hash.Hash
 	h.From(batch)
 

@@ -19,8 +19,10 @@ type Algorithm interface {
 	EpochTransition(epoch *committee.EpochSnapshot) error
 
 	// ScheduleTx attempts to schedule a transaction.
-	// XXX: When needed by more complex algorithms, extend the 'tx'
-	// type to contain additional info.
+	//
+	// The scheduling algorithm may peek into the transaction to extract
+	// metadata needed for scheduling. In this case, the transaction bytes
+	// must correspond to a transaction.TxnCall structure.
 	ScheduleTx(tx []byte) error
 
 	// Flush flushes queued transactions.
@@ -39,5 +41,5 @@ type Algorithm interface {
 // TransactionDispatcher dispatches transactions to a scheduled compute committee.
 type TransactionDispatcher interface {
 	// Dispatch attempts to dispatch a batch to a compute committee.
-	Dispatch(committeeID hash.Hash, batch transaction.Batch) error
+	Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error
 }

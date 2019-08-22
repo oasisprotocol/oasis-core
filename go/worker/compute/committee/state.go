@@ -134,7 +134,7 @@ type StateWaitingForBlock struct {
 	// I/O root from the transaction scheduler containing the inputs.
 	ioRoot hash.Hash
 	// Batch that is waiting to be processed.
-	batch transaction.Batch
+	batch transaction.RawBatch
 	// Tracing for this batch.
 	batchSpanCtx opentracing.SpanContext
 	// Header of the block we are waiting for.
@@ -160,7 +160,7 @@ type StateWaitingForEvent struct {
 	// I/O root from the transaction scheduler containing the inputs.
 	ioRoot hash.Hash
 	// Batch that is being processed.
-	batch transaction.Batch
+	batch transaction.RawBatch
 	// Tracing for this batch.
 	batchSpanCtx opentracing.SpanContext
 	// Transaction scheduler's signature.
@@ -184,7 +184,7 @@ type StateProcessingBatch struct {
 	// I/O root from the transaction scheduler containing the inputs.
 	ioRoot hash.Hash
 	// Batch that is being processed.
-	batch transaction.Batch
+	batch transaction.RawBatch
 	// Tracing for this batch.
 	batchSpanCtx opentracing.SpanContext
 	// Timing for this batch.

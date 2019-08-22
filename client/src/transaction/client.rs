@@ -10,7 +10,10 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use ekiden_runtime::{
     common::{cbor, crypto::hash::Hash, runtime::RuntimeId},
-    transaction::types::{TxnBatch, TxnCall, TxnOutput},
+    transaction::{
+        rwset::ReadWriteSet,
+        types::{TxnBatch, TxnCall, TxnOutput},
+    },
 };
 
 use super::{
@@ -67,6 +70,8 @@ impl TxnClient {
         let call = TxnCall {
             method: method.to_owned(),
             args: cbor::to_value(args),
+            // TODO: Populate predicted read/write set.
+            predicted_rw_set: ReadWriteSet::default(),
         };
 
         Box::new(

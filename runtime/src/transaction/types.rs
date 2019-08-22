@@ -6,6 +6,7 @@ use std::{
 
 use serde_derive::{Deserialize, Serialize};
 
+use super::rwset::ReadWriteSet;
 use crate::common::cbor::Value;
 
 /// Transaction call.
@@ -15,6 +16,9 @@ pub struct TxnCall {
     pub method: String,
     /// Method arguments.
     pub args: Value,
+    /// Predicted read/write set.
+    #[serde(default)]
+    pub predicted_rw_set: ReadWriteSet,
 }
 
 /// Transaction call output.
