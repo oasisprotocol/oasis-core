@@ -182,18 +182,19 @@ func (s *Worker) Start() error {
 		}
 	}()
 
-	// Wait for the node to be registered for the current epoch.
+	// Start all runtimes and wait for initialization.
 	go func() {
-		s.logger.Info("starting storage worker, waiting for registration")
-		<-s.registration.InitialRegistrationCh()
-
 		s.logger.Info("starting per-runtime block watchers")
 		for _, r := range s.runtimes {
 			_ = r.Start()
 		}
+
+		// Wait for runtimes to be initialized and the node to be registered.
 		for _, r := range s.runtimes {
 			<-r.Initialized()
 		}
+
+		<-s.registration.InitialRegistrationCh()
 
 		s.logger.Info("storage worker started")
 
@@ -205,17 +206,20 @@ func (s *Worker) Start() error {
 
 // Stop halts the service.
 func (s *Worker) Stop() {
-	go func() {
-		for _, r := range s.runtimes {
-			r.Stop()
-		}
-		if s.fetchPool != nil {
-			s.fetchPool.Stop()
-		}
-		if s.watchState != nil {
-			s.watchState.Close()
-		}
-	}()
+	if !s.enabled {
+		close(s.quitCh)
+		return
+	}
+
+	for _, r := range s.runtimes {
+		r.Stop()
+	}
+	if s.fetchPool != nil {
+		s.fetchPool.Stop()
+	}
+	if s.watchState != nil {
+		s.watchState.Close()
+	}
 }
 
 // Quit returns a channel that will be closed when the service terminates.

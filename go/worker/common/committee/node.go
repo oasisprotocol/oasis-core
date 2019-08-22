@@ -242,21 +242,49 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 	}
 }
 
-func (n *Node) worker() {
+// waitForRuntime waits for the following:
+// - that the consensus service has finished initial synchronization,
+// - that the runtime for which this worker is running has been registered
+//   in the registry.
+func (n *Node) waitForRuntime() error {
 	// Delay starting of committee node until after the consensus service
 	// has finished initial synchronization, if applicable.
 	if n.Consensus != nil {
 		n.logger.Info("delaying committee node start until after initial synchronization")
 		select {
 		case <-n.quitCh:
-			return
+			return context.Canceled
 		case <-n.Consensus.Synced():
 		}
 	}
+
+	// Wait for the runtime to be registered.
+	n.logger.Info("delaying committee node start until the runtime is registered")
+	ch, sub := n.Registry.WatchRuntimes()
+	defer sub.Close()
+	for {
+		select {
+		case <-n.stopCh:
+			return context.Canceled
+		case rt := <-ch:
+			if rt.ID.Equal(n.RuntimeID) {
+				n.logger.Info("runtime is registered")
+				return nil
+			}
+		}
+	}
+}
+
+func (n *Node) worker() {
 	n.logger.Info("starting committee node")
 
 	defer close(n.quitCh)
 	defer (n.cancelCtx)()
+
+	// Wait for the runtime.
+	if err := n.waitForRuntime(); err != nil {
+		return
+	}
 
 	// Start watching roothash blocks.
 	blocks, blocksSub, err := n.Roothash.WatchBlocks(n.RuntimeID)

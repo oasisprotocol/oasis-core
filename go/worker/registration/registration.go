@@ -45,6 +45,7 @@ type Registration struct {
 	ctx       context.Context
 	// Bandaid: Idempotent Stop for testing.
 	stopped   bool
+	stopCh    chan struct{}
 	quitCh    chan struct{}
 	regCh     chan struct{}
 	logger    *logging.Logger
@@ -53,11 +54,13 @@ type Registration struct {
 }
 
 func (r *Registration) doNodeRegistration() {
+	defer close(r.quitCh)
+
 	// Delay node registration till after the consensus service has
 	// finished initial synchronization if applicable.
 	if r.consensus != nil {
 		select {
-		case <-r.quitCh:
+		case <-r.stopCh:
 			return
 		case <-r.consensus.Synced():
 		}
@@ -92,6 +95,8 @@ func (r *Registration) doNodeRegistration() {
 			// Update the epoch if it happens to change while retrying.
 			var ok bool
 			select {
+			case <-r.stopCh:
+				return context.Canceled
 			case epoch, ok = <-ch:
 				if !ok {
 					return context.Canceled
@@ -103,23 +108,31 @@ func (r *Registration) doNodeRegistration() {
 		}, off)
 	}
 
-	epoch := <-ch
-	err := regFn(epoch, true)
-	close(r.regCh)
-	if err != nil {
-		// This by definition is a cancellation.
-		return
-	}
-
+	first := true
 	for {
 		select {
-		case <-r.quitCh:
+		case <-r.stopCh:
 			return
-		case epoch = <-ch:
-			if err := regFn(epoch, false); err != nil {
+		case epoch := <-ch:
+			if err := regFn(epoch, first); err != nil {
+				if first {
+					r.logger.Error("failed to register node",
+						"err", err,
+					)
+					// This is by definition a cancellation as the first
+					// registration retries until success. So we can avoid
+					// another iteration of the loop to figure this out
+					// and abort early.
+					return
+				}
 				r.logger.Error("failed to re-register node",
 					"err", err,
 				)
+				continue
+			}
+			if first {
+				close(r.regCh)
+				first = false
 			}
 		}
 	}
@@ -298,6 +311,7 @@ func New(
 		epochtime:          epochtime,
 		registry:           registry,
 		identity:           identity,
+		stopCh:             make(chan struct{}),
 		quitCh:             make(chan struct{}),
 		regCh:              make(chan struct{}),
 		ctx:                context.Background(),
@@ -322,6 +336,11 @@ func (r *Registration) Start() error {
 	// HACK: This can be ok in certain configurations.
 	if r.entityID == nil || r.registrationSigner == nil {
 		r.logger.Warn("no entity/signer for this node, registration will NEVER succeed")
+		// Make sure the node is stopped on quit.
+		go func() {
+			<-r.stopCh
+			close(r.quitCh)
+		}()
 		return nil
 	}
 
@@ -336,7 +355,7 @@ func (r *Registration) Stop() {
 		return
 	}
 	r.stopped = true
-	close(r.quitCh)
+	close(r.stopCh)
 }
 
 // Quit returns a channel that will be closed when the service terminates.
