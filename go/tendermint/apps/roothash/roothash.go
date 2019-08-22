@@ -552,9 +552,16 @@ type roothashSignatureVerifier struct {
 //
 // Implements commitment.SignatureVerifier.
 func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error {
+	if len(sigs) == 0 {
+		return nil
+	}
+
 	committee, err := sv.scheduler.GetCommittee(kind, sv.runtimeID)
 	if err != nil {
 		return err
+	}
+	if committee == nil {
+		return errors.New("roothash: no committee with which to verify signatures")
 	}
 
 	// TODO: Consider caching this set?
