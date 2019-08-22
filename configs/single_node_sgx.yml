@@ -70,8 +70,13 @@ worker:
       loader: target/debug/ekiden-runtime-loader
 
 # IAS configuration.
+#
+# Note: IAS access requires authentication by a TLS cert registered with Intel.
+# since most people do not have this, this is disabled.
 ias:
-  proxy_addr: "127.0.0.1:9001"
+  # proxy_addr: "127.0.0.1:9001"
+  debug:
+    skip_verify: "true"
 
 # Consensus backend.
 consensus:

@@ -206,6 +206,7 @@ run_backend_tendermint_committee() {
             --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
             --datadir ${datadir} \
             --debug.allow_test_keys \
+            ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
             &
 
         # HACK HACK HACK HACK HACK
@@ -286,6 +287,7 @@ run_compute_node() {
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
+        ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
         --worker.compute.enabled \
         --worker.compute.backend sandboxed \
         --worker.compute.runtime_loader ${EKIDEN_RUNTIME_LOADER} \
@@ -373,6 +375,7 @@ run_storage_node() {
         --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
         --datadir ${data_dir} \
         --debug.allow_test_keys \
+        ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
         $extra_args \
         2>&1 | sed "s/^/[storage-node-${id}] /" &
 }
@@ -430,6 +433,7 @@ run_client_node() {
         --client.indexer.runtimes ${EKIDEN_RUNTIME_ID} \
         --datadir ${data_dir} \
         --debug.allow_test_keys \
+        ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
         2>&1 | sed "s/^/[client-node-${id}] /" &
 }
 
@@ -505,6 +509,7 @@ run_keymanager_node() {
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
+        ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
         ${EKIDEN_TEE_HARDWARE:+--worker.keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
         --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
         --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \

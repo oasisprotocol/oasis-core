@@ -92,7 +92,7 @@ type httpEndpoint struct {
 func (e *httpEndpoint) VerifyEvidence(ctx context.Context, quote, pseManifest []byte, nonce string) ([]byte, []byte, []byte, error) {
 	// Validate arguments.
 	//
-	// XXX: SHould this happen here, or should the caller handle this?
+	// XXX: Should this happen here, or should the caller handle this?
 	if _, err := DecodeQuote(quote); err != nil {
 		return nil, nil, nil, errors.Wrap(err, "ias: invalid quote")
 	}
