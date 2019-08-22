@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"sync"
 
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/credentials"
@@ -20,6 +21,44 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 )
+
+func insecureDialOption() grpc.DialOption {
+	return grpc.WithInsecure()
+}
+
+// DialOptionForNode creates a grpc.DialOption for communicating under the node's certificate.
+func DialOptionForNode(ourCerts []tls.Certificate, node *node.Node) (grpc.DialOption, error) {
+	nodeCert, err := node.Committee.ParseCertificate()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse node's certificate")
+	}
+	certPool := x509.NewCertPool()
+	certPool.AddCert(nodeCert)
+	creds := credentials.NewTLS(&tls.Config{
+		Certificates: ourCerts,
+		RootCAs:      certPool,
+		ServerName:   identity.CommonName,
+	})
+	return grpc.WithTransportCredentials(creds), nil
+}
+
+// DialNode opens a grpc.ClientConn to a node.
+func DialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, func(), error) {
+	manualResolver, address, cleanupCb := manual.NewManualResolver()
+
+	conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name))
+	if err != nil {
+		cleanupCb()
+		return nil, nil, errors.Wrap(err, "failed dialing node")
+	}
+	var resolverState resolver.State
+	for _, addr := range node.Committee.Addresses {
+		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
+	}
+	manualResolver.UpdateState(resolverState)
+
+	return conn, cleanupCb, nil
+}
 
 type storageWatcher interface {
 	getConnectedNodes() []*node.Node
@@ -164,25 +203,19 @@ func (w *watcherState) updateStorageNodeConnections() {
 		if node.Committee.Certificate == nil {
 			// NOTE: This should only happen in tests, where nodes register without a certificate.
 			// TODO: This can be rejected once node_tests register with a certificate.
-			opts = grpc.WithInsecure()
+			opts = insecureDialOption()
 			w.logger.Warn("storage committee member registered without certificate, using insecure connection!",
 				"member", node)
 		} else {
-			nodeCert, err := node.Committee.ParseCertificate()
+			var err error
+			opts, err = DialOptionForNode([]tls.Certificate{*w.identity.TLSCertificate}, node)
 			if err != nil {
-				w.logger.Error("failed to parse storage committee member's certificate",
+				w.logger.Error("failed to get GRPC dial options for storage committee member",
 					"member", node,
+					"err", err,
 				)
 				continue
 			}
-			certPool := x509.NewCertPool()
-			certPool.AddCert(nodeCert)
-			creds := credentials.NewTLS(&tls.Config{
-				Certificates: []tls.Certificate{*w.identity.TLSCertificate},
-				RootCAs:      certPool,
-				ServerName:   identity.CommonName,
-			})
-			opts = grpc.WithTransportCredentials(creds)
 		}
 
 		if len(node.Committee.Addresses) == 0 {
@@ -192,21 +225,14 @@ func (w *watcherState) updateStorageNodeConnections() {
 			continue
 		}
 
-		manualResolver, address, cleanupCb := manual.NewManualResolver()
-
-		conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name))
+		conn, cleanupCb, err := DialNode(node, opts)
 		if err != nil {
-			w.logger.Error("cannot update connection, failed dialing storage node",
+			w.logger.Error("cannot update connection",
 				"node", node,
 				"err", err,
 			)
 			continue
 		}
-		var resolverState resolver.State
-		for _, addr := range node.Committee.Addresses {
-			resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
-		}
-		manualResolver.UpdateState(resolverState)
 
 		numConnNodes++
 		connClientStates = append(connClientStates, &clientState{
