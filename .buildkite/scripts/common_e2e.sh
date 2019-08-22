@@ -142,18 +142,31 @@ run_backend_tendermint_committee() {
     # Run the IAS proxy if needed.
     local ias_proxy_port=9001
 
-    if [[ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" && "${EKIDEN_UNSAFE_SKIP_AVR_VERIFY}" == "" ]]; then
-        # TODO: Ensure that IAS credentials are configured.
-        ${EKIDEN_NODE} \
-            ias proxy \
-            --auth_cert ${EKIDEN_IAS_CERT} \
-            --auth_cert_ca ${EKIDEN_IAS_CERT} \
-            --auth_key ${EKIDEN_IAS_KEY} \
-            --spid ${EKIDEN_IAS_SPID} \
-            --metrics.mode none \
-            --log.level debug \
-            --log.file ${committee_dir}/ias-proxy.log \
-            &
+    if [ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]; then
+        if [ "${EKIDEN_UNSAFE_SKIP_AVR_VERIFY}" == "" ]; then
+            # TODO: Ensure that IAS credentials are configured.
+            ${EKIDEN_NODE} \
+                ias proxy \
+                --auth_cert ${EKIDEN_IAS_CERT} \
+                --auth_cert_ca ${EKIDEN_IAS_CERT} \
+                --auth_key ${EKIDEN_IAS_KEY} \
+                --spid ${EKIDEN_IAS_SPID} \
+                --metrics.mode none \
+                --log.level debug \
+                --log.file ${committee_dir}/ias-proxy.log \
+                &
+        else
+            # Mock, with a high-quality random SPID from random.org
+            ${EKIDEN_NODE} \
+                ias proxy \
+                --debug.mock \
+                --debug.allow_test_keys \
+                --spid 9b3085a55a5863f7cc66b380dcad0082 \
+                --metrics.mode none \
+                --log.level debug \
+                --log.file ${committee_dir}/ias-proxy.log \
+                &
+        fi
 
         EKIDEN_IAS_PROXY_ENABLED=1
     fi

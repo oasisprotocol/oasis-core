@@ -187,6 +187,31 @@ type iasEvidencePayload struct {
 	Nonce           string `codec:"string,omitempty"`
 }
 
+type mockEndpoint struct {
+	spidInfo SPIDInfo
+}
+
+func (e *mockEndpoint) VerifyEvidence(ctx context.Context, quote, pseManifest []byte, nonce string) ([]byte, []byte, []byte, error) {
+	if len(nonce) > nonceMaxLen {
+		return nil, nil, nil, fmt.Errorf("ias: invalid nonce length")
+	}
+
+	avr, err := NewMockAVR(quote, nonce)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "ias: failed to generate mock AVR")
+	}
+
+	return avr, nil, nil, nil
+}
+
+func (e *mockEndpoint) GetSPIDInfo(ctx context.Context) (*SPIDInfo, error) {
+	return &e.spidInfo, nil
+}
+
+func (e *mockEndpoint) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, error) {
+	return nil, nil
+}
+
 // EndpointConfig is the IAS endpoint configuration.
 type EndpointConfig struct {
 	// AuthCert is the IAS authentication certificate (and private key).
@@ -204,11 +229,35 @@ type EndpointConfig struct {
 	// IsProduction specifies if the endpoint should connect to the
 	// production endpoint.
 	IsProduction bool
+
+	// DebugIsMock is set if set to true will return mock AVR responses
+	// and not actually contact IAS.
+	DebugIsMock bool
 }
 
-// NewIASEndpoint returns a new Endpoint backed by an IAS server operated
-// by Intel.
+// NewIASEndpoint returns a new IAS endpoint.
 func NewIASEndpoint(cfg *EndpointConfig) (Endpoint, error) {
+	spidFromHex, err := hex.DecodeString(cfg.SPID)
+	if err != nil {
+		return nil, ErrMalformedSPID
+	}
+	var spidBin SPID
+	if err = spidBin.UnmarshalBinary(spidFromHex); err != nil {
+		return nil, err
+	}
+
+	if cfg.DebugIsMock {
+		logger.Warn("DebugSkipVerify set, VerifyEvidence calls will be mocked")
+
+		SetSkipVerify() // Intel isn't signing anything.
+		return &mockEndpoint{
+			spidInfo: SPIDInfo{
+				SPID:               spidBin,
+				QuoteSignatureType: cfg.QuoteSignatureType,
+			},
+		}, nil
+	}
+
 	tlsRoots, err := x509.SystemCertPool()
 	if err != nil {
 		return nil, errors.Wrap(err, "ias: failed to load system cert pool")
@@ -244,15 +293,6 @@ func NewIASEndpoint(cfg *EndpointConfig) (Endpoint, error) {
 		if _, err = cfg.AuthCert.Leaf.Verify(x509.VerifyOptions{Roots: tlsRoots}); err != nil {
 			return nil, errors.Wrap(err, "ias: failed to verify client certificate CA")
 		}
-	}
-
-	spidFromHex, err := hex.DecodeString(cfg.SPID)
-	if err != nil {
-		return nil, ErrMalformedSPID
-	}
-	var spidBin SPID
-	if err := spidBin.UnmarshalBinary(spidFromHex); err != nil {
-		return nil, err
 	}
 
 	e := &httpEndpoint{

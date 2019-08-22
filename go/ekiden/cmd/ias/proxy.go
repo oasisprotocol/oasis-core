@@ -30,6 +30,7 @@ const (
 	cfgSPID         = "spid"
 	cfgQuoteSigType = "quote_signature_type"
 	cfgIsProduction = "production"
+	cfgDebugMock    = "debug.mock"
 )
 
 var (
@@ -72,13 +73,15 @@ func doProxy(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	if viper.GetString(cfgAuthCertFile) == "" {
-		logger.Error("auth cert not configured")
-		return
-	}
-	if viper.GetString(cfgAuthKeyFile) == "" {
-		logger.Error("auth key not configured")
-		return
+	if !viper.GetBool(cfgDebugMock) {
+		if viper.GetString(cfgAuthCertFile) == "" {
+			logger.Error("auth cert not configured")
+			return
+		}
+		if viper.GetString(cfgAuthKeyFile) == "" {
+			logger.Error("auth key not configured")
+			return
+		}
 	}
 
 	var err error
@@ -155,8 +158,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 
 func initProxy(env *proxyEnv) error {
 	cfg := &ias.EndpointConfig{
-		SPID:         viper.GetString(cfgSPID),
-		IsProduction: viper.GetBool(cfgIsProduction),
+		SPID: viper.GetString(cfgSPID),
 	}
 
 	quoteSigType := viper.GetString(cfgQuoteSigType)
@@ -169,27 +171,33 @@ func initProxy(env *proxyEnv) error {
 		return fmt.Errorf("ias: invalid signature type: %s", quoteSigType)
 	}
 
-	if authCertCA := viper.GetString(cfgAuthCertCA); authCertCA != "" {
-		certData, err := ioutil.ReadFile(authCertCA)
-		if err != nil {
-			return err
+	if !viper.GetBool(cfgDebugMock) {
+		if authCertCA := viper.GetString(cfgAuthCertCA); authCertCA != "" {
+			certData, err := ioutil.ReadFile(authCertCA)
+			if err != nil {
+				return err
+			}
+
+			cfg.AuthCertCA, _, err = ias.CertFromPEM(certData)
+			if err != nil {
+				return err
+			}
 		}
 
-		cfg.AuthCertCA, _, err = ias.CertFromPEM(certData)
+		authCert, err := tls.LoadX509KeyPair(viper.GetString(cfgAuthCertFile), viper.GetString(cfgAuthKeyFile))
 		if err != nil {
-			return err
+			return fmt.Errorf("ias: failed to load client certificate: %s", err)
 		}
-	}
+		authCert.Leaf, err = x509.ParseCertificate(authCert.Certificate[0])
+		if err != nil {
+			return fmt.Errorf("ias: failed to parse client leaf certificate: %s", err)
+		}
+		cfg.AuthCert = &authCert
 
-	authCert, err := tls.LoadX509KeyPair(viper.GetString(cfgAuthCertFile), viper.GetString(cfgAuthKeyFile))
-	if err != nil {
-		return fmt.Errorf("ias: failed to load client certificate: %s", err)
+		cfg.IsProduction = viper.GetBool(cfgIsProduction)
+	} else {
+		cfg.DebugIsMock = true
 	}
-	authCert.Leaf, err = x509.ParseCertificate(authCert.Certificate[0])
-	if err != nil {
-		return fmt.Errorf("ias: failed to parse client leaf certificate: %s", err)
-	}
-	cfg.AuthCert = &authCert
 
 	endpoint, err := ias.NewIASEndpoint(cfg)
 	if err != nil {
@@ -212,6 +220,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgSPID, "", "SPID associated with the client certificate")
 		cmd.Flags().String(cfgQuoteSigType, "linkable", "quote signature type associated with the SPID")
 		cmd.Flags().Bool(cfgIsProduction, false, "use the production IAS endpoint")
+		cmd.Flags().Bool(cfgDebugMock, false, "generate mock IAS AVR responses (UNSAFE)")
 	}
 
 	for _, v := range []string{
@@ -221,6 +230,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgSPID,
 		cfgQuoteSigType,
 		cfgIsProduction,
+		cfgDebugMock,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
