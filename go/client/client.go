@@ -315,7 +315,7 @@ func (c *Client) GetTxn(ctx context.Context, runtimeID signature.PublicKey, roun
 		return nil, err
 	}
 
-	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, runtimeID, round, index)
+	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, runtimeID, blk.Header.Round, index)
 	if err != nil {
 		return nil, err
 	}
