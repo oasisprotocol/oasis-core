@@ -8,9 +8,9 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
@@ -134,7 +134,7 @@ type StateWaitingForBlock struct {
 	// I/O root from the transaction scheduler containing the inputs.
 	ioRoot hash.Hash
 	// Batch that is waiting to be processed.
-	batch runtime.Batch
+	batch transaction.Batch
 	// Tracing for this batch.
 	batchSpanCtx opentracing.SpanContext
 	// Header of the block we are waiting for.
@@ -160,7 +160,7 @@ type StateWaitingForEvent struct {
 	// I/O root from the transaction scheduler containing the inputs.
 	ioRoot hash.Hash
 	// Batch that is being processed.
-	batch runtime.Batch
+	batch transaction.Batch
 	// Tracing for this batch.
 	batchSpanCtx opentracing.SpanContext
 	// Transaction scheduler's signature.
@@ -184,7 +184,7 @@ type StateProcessingBatch struct {
 	// I/O root from the transaction scheduler containing the inputs.
 	ioRoot hash.Hash
 	// Batch that is being processed.
-	batch runtime.Batch
+	batch transaction.Batch
 	// Tracing for this batch.
 	batchSpanCtx opentracing.SpanContext
 	// Timing for this batch.

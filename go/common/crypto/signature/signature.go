@@ -71,6 +71,23 @@ func (k MapKey) String() string {
 	return hex.EncodeToString(k[:])
 }
 
+// MarshalBinary encodes a public key into binary form.
+func (k MapKey) MarshalBinary() (data []byte, err error) {
+	data = append([]byte{}, k[:]...)
+	return
+}
+
+// UnmarshalBinary decodes a binary marshaled public key.
+func (k *MapKey) UnmarshalBinary(data []byte) error {
+	if len(data) != PublicKeySize {
+		return ErrMalformedPublicKey
+	}
+
+	copy((*k)[:], data)
+
+	return nil
+}
+
 // PublicKey is a public key used for signing.
 type PublicKey ed25519.PublicKey
 

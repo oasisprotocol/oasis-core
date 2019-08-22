@@ -36,7 +36,7 @@ func (s *GrpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
 	}
 	if err := s.CheckAccessAllowed(ctx, accessctl.Action("Apply"), ns); err != nil {
-		return nil, errors.Wrap(err, "storage: access policy forbade access")
+		return nil, err
 	}
 
 	var srcRoot, dstRoot hash.Hash
@@ -71,7 +71,7 @@ func (s *GrpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) 
 		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
 	}
 	if err := s.CheckAccessAllowed(ctx, accessctl.Action("ApplyBatch"), ns); err != nil {
-		return nil, errors.Wrap(err, "storage: access policy forbade access")
+		return nil, err
 	}
 
 	var ops []api.ApplyOp
@@ -108,6 +108,80 @@ func (s *GrpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) 
 	}
 
 	return &pb.ApplyBatchResponse{Receipts: cbor.Marshal(receipts)}, nil
+}
+
+func (s *GrpcServer) Merge(ctx context.Context, req *pb.MergeRequest) (*pb.MergeResponse, error) {
+	var ns common.Namespace
+	if err := ns.UnmarshalBinary(req.GetNamespace()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
+	}
+	if err := s.CheckAccessAllowed(ctx, accessctl.Action("Merge"), ns); err != nil {
+		return nil, err
+	}
+
+	var base hash.Hash
+	if err := base.UnmarshalBinary(req.GetBase()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal base root")
+	}
+
+	var others []hash.Hash
+	for _, item := range req.GetOthers() {
+		var h hash.Hash
+		if err := h.UnmarshalBinary(item); err != nil {
+			return nil, errors.Wrap(err, "storage: failed to unmarshal other root")
+		}
+		others = append(others, h)
+	}
+
+	<-s.backend.Initialized()
+
+	receipts, err := s.backend.Merge(ctx, ns, req.GetRound(), base, others)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.MergeResponse{Receipts: cbor.Marshal(receipts)}, nil
+}
+
+func (s *GrpcServer) MergeBatch(ctx context.Context, req *pb.MergeBatchRequest) (*pb.MergeBatchResponse, error) {
+	var ns common.Namespace
+	if err := ns.UnmarshalBinary(req.GetNamespace()); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal namespace")
+	}
+	if err := s.CheckAccessAllowed(ctx, accessctl.Action("MergeBatch"), ns); err != nil {
+		return nil, err
+	}
+
+	var ops []api.MergeOp
+	for _, op := range req.GetOps() {
+		var base hash.Hash
+		if err := base.UnmarshalBinary(op.GetBase()); err != nil {
+			return nil, errors.Wrap(err, "storage: failed to unmarshal base root")
+		}
+
+		var others []hash.Hash
+		for _, item := range op.GetOthers() {
+			var h hash.Hash
+			if err := h.UnmarshalBinary(item); err != nil {
+				return nil, errors.Wrap(err, "storage: failed to unmarshal other root")
+			}
+			others = append(others, h)
+		}
+
+		ops = append(ops, api.MergeOp{
+			Base:   base,
+			Others: others,
+		})
+	}
+
+	<-s.backend.Initialized()
+	receipts, err := s.backend.MergeBatch(ctx, ns, req.GetRound(), ops)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.MergeBatchResponse{Receipts: cbor.Marshal(receipts)}, nil
 }
 
 func (s *GrpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) (*pb.GetSubtreeResponse, error) {
@@ -283,7 +357,7 @@ func (s *GrpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffSe
 	}
 
 	if err := s.CheckAccessAllowed(stream.Context(), accessctl.Action("GetDiff"), startRoot.Namespace); err != nil {
-		return errors.Wrap(err, "storage: access policy forbade access")
+		return err
 	}
 
 	<-s.backend.Initialized()
@@ -309,7 +383,7 @@ func (s *GrpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Stora
 	}
 
 	if err := s.CheckAccessAllowed(stream.Context(), accessctl.Action("GetCheckpoint"), root.Namespace); err != nil {
-		return errors.Wrap(err, "storage: access policy forbade access")
+		return err
 	}
 
 	<-s.backend.Initialized()

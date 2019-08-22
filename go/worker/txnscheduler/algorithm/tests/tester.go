@@ -8,21 +8,21 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/runtime"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/api"
 )
 
 type testDispatcher struct {
 	ShouldFail        bool
-	DispatchedBatches []runtime.Batch
+	DispatchedBatches []transaction.Batch
 }
 
 func (t *testDispatcher) Clear() {
-	t.DispatchedBatches = []runtime.Batch{}
+	t.DispatchedBatches = []transaction.Batch{}
 }
 
-func (t *testDispatcher) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
+func (t *testDispatcher) Dispatch(committeeID hash.Hash, batch transaction.Batch) error {
 	if t.ShouldFail {
 		return errors.New("dispatch failed")
 	}
@@ -68,7 +68,7 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, algorithm api.Al
 	require.NoError(t, err, "Flush()")
 	require.Equal(t, 0, algorithm.UnscheduledSize(), "no transactions should be scheduled after flushing a single tx")
 	require.Equal(t, 1, len(td.DispatchedBatches), "one batch should be dispatched")
-	require.EqualValues(t, runtime.Batch{testTx}, td.DispatchedBatches[0], "transaction should be dispatched")
+	require.EqualValues(t, transaction.Batch{testTx}, td.DispatchedBatches[0], "transaction should be dispatched")
 	require.False(t, algorithm.IsQueued(txBytes), "IsQueued(tx)")
 
 	// Test with a Failing Dispatcher.
@@ -94,7 +94,7 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, algorithm api.Al
 	require.Equal(t, 0, algorithm.UnscheduledSize(), "no transactions after flushing a single tx")
 	require.False(t, algorithm.IsQueued(tx2Bytes), "IsQueued(tx)")
 	require.Equal(t, 1, len(td.DispatchedBatches), "one batch should be dispatched")
-	require.EqualValues(t, runtime.Batch{testTx2}, td.DispatchedBatches[0], "transaction should be dispatched")
+	require.EqualValues(t, transaction.Batch{testTx2}, td.DispatchedBatches[0], "transaction should be dispatched")
 
 	td.Clear()
 }

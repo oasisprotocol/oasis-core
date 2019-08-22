@@ -34,10 +34,10 @@ func (k *LogEntry) Type() LogEntryType {
 	return LogInsert
 }
 
-// WriteLogAnnotations are extra metadata about write log entries.
+// Annotations are extra metadata about write log entries.
 //
 // This should always be passed alongside a WriteLog.
-type WriteLogAnnotations []LogEntryAnnotation // nolint
+type Annotations []LogEntryAnnotation
 
 // LogEntryAnnotation is an annotation for a single write log entry.
 //

@@ -13,8 +13,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/ias"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
 
@@ -188,7 +188,7 @@ func testCheckTxRequest(t *testing.T, host Host) {
 	tooBigValue := string(make([]byte, 129))
 	txnCallInvalid := TxnCall{Method: "insert", Args: KeyValue{Key: "foo", Value: tooBigValue}}
 	txnCallMissing := TxnCall{Method: "missing_method", Args: KeyValue{Key: "foo", Value: "bar"}}
-	batch := runtime.Batch([][]byte{cbor.Marshal(&txnCallValid), cbor.Marshal(&txnCallInvalid), cbor.Marshal(&txnCallMissing)})
+	batch := transaction.Batch([][]byte{cbor.Marshal(&txnCallValid), cbor.Marshal(&txnCallInvalid), cbor.Marshal(&txnCallMissing)})
 
 	rspCh, err := host.MakeRequest(ctx, &protocol.Body{
 		WorkerCheckTxBatchRequest: &protocol.WorkerCheckTxBatchRequest{
@@ -204,20 +204,20 @@ func testCheckTxRequest(t *testing.T, host Host) {
 		require.Len(t, rsp.WorkerCheckTxBatchResponse.Results, 3, "worker should return a check tx call result for each txn")
 
 		txnOutputValidRaw := rsp.WorkerCheckTxBatchResponse.Results[0]
-		var txnOutputValid runtime.TxnOutput
+		var txnOutputValid transaction.TxnOutput
 		cbor.MustUnmarshal(txnOutputValidRaw, &txnOutputValid)
 		require.NotNil(t, txnOutputValid.Success, "valid tx call should return success")
 		require.Nil(t, txnOutputValid.Error, "valid tx call should not return error")
 
 		txnOutputInvalidRaw := rsp.WorkerCheckTxBatchResponse.Results[1]
-		var txnOutputInvalid runtime.TxnOutput
+		var txnOutputInvalid transaction.TxnOutput
 		cbor.MustUnmarshal(txnOutputInvalidRaw, &txnOutputInvalid)
 		require.Nil(t, txnOutputInvalid.Success, "invalid tx call should not return success")
 		require.NotNil(t, txnOutputInvalid.Error, "invalid tx call should return error")
 		require.Regexp(t, "^Value too big to be inserted", *txnOutputInvalid.Error, "invalid tx call should indicate that method was not found")
 
 		txnOutputMissingRaw := rsp.WorkerCheckTxBatchResponse.Results[2]
-		var txnOutputMissing runtime.TxnOutput
+		var txnOutputMissing transaction.TxnOutput
 		cbor.MustUnmarshal(txnOutputMissingRaw, &txnOutputMissing)
 		require.Nil(t, txnOutputMissing.Success, "tx call for a missing method should not return success")
 		require.NotNil(t, txnOutputMissing.Error, "tx call for a missing method should return error")

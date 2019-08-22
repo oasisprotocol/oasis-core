@@ -15,11 +15,11 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/tracing"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
+	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
@@ -223,7 +223,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 }
 
 // Dispatch dispatches a batch to the compute committee.
-func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
+func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.Batch) error {
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
 
@@ -252,15 +252,31 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 
 	// Generate the initial I/O root containing only the inputs (outputs and
 	// tags will be added later by the compute nodes).
-	ioTree := urkel.New(nil, nil)
-	if err := ioTree.Insert(n.ctx, block.IoKeyInputs, batch.MarshalCBOR()); err != nil {
+	emptyRoot := storage.Root{
+		Namespace: lastHeader.Namespace,
+		Round:     lastHeader.Round + 1,
+	}
+	emptyRoot.Hash.Empty()
+
+	txes, err := transaction.NewTree(n.ctx, nil, emptyRoot)
+	if err != nil {
 		n.logger.Error("failed to create I/O tree",
 			"err", err,
 		)
 		return err
 	}
+	defer txes.Close()
 
-	ioWriteLog, ioRoot, err := ioTree.Commit(n.ctx, lastHeader.Namespace, lastHeader.Round+1)
+	for idx, tx := range batch {
+		if err = txes.AddTransaction(n.ctx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
+			n.logger.Error("failed to create I/O tree",
+				"err", err,
+			)
+			return err
+		}
+	}
+
+	ioWriteLog, ioRoot, err := txes.Commit(n.ctx)
 	if err != nil {
 		n.logger.Error("failed to create I/O tree",
 			"err", err,
@@ -273,14 +289,11 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 		opentracing.ChildOf(batchSpanCtx),
 	)
 
-	var emptyRoot hash.Hash
-	emptyRoot.Empty()
-
 	ioReceipts, err := n.commonNode.Storage.Apply(
 		ctx,
 		lastHeader.Namespace,
 		lastHeader.Round+1,
-		emptyRoot,
+		emptyRoot.Hash,
 		lastHeader.Round+1,
 		ioRoot,
 		ioWriteLog,
@@ -327,7 +340,14 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch runtime.Batch) error {
 		if n.computeNode == nil {
 			n.logger.Error("scheduler says we are a compute worker, but we are not")
 		} else {
-			n.computeNode.HandleBatchFromTransactionSchedulerLocked(batchSpanCtx, committeeID, ioRoot, batch, *txnSchedSig, ioReceiptSignatures)
+			n.computeNode.HandleBatchFromTransactionSchedulerLocked(
+				batchSpanCtx,
+				committeeID,
+				ioRoot,
+				batch,
+				*txnSchedSig,
+				ioReceiptSignatures,
+			)
 		}
 	}
 

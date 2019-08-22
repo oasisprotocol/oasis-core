@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/runtime"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 )
 
 var (
@@ -18,7 +18,7 @@ var (
 type incomingQueue struct {
 	sync.Mutex
 
-	queue          runtime.Batch
+	queue          transaction.Batch
 	queueSizeBytes uint64
 	callHashes     map[hash.Hash]bool
 
@@ -40,7 +40,7 @@ func (q *incomingQueue) Clear() {
 	q.Lock()
 	defer q.Unlock()
 
-	q.queue = make(runtime.Batch, 0)
+	q.queue = make(transaction.Batch, 0)
 	q.queueSizeBytes = 0
 	q.callHashes = make(map[hash.Hash]bool)
 }
@@ -109,7 +109,7 @@ func (q *incomingQueue) Add(call []byte) error {
 }
 
 // AddBatch adds a batch of calls to the queue.
-func (q *incomingQueue) AddBatch(batch runtime.Batch) error {
+func (q *incomingQueue) AddBatch(batch transaction.Batch) error {
 	// Compute all hashes before taking the lock.
 	var callHashes []hash.Hash
 	for _, call := range batch {
@@ -142,7 +142,7 @@ func (q *incomingQueue) AddBatch(batch runtime.Batch) error {
 }
 
 // Take attempts to take a batch from the incoming queue.
-func (q *incomingQueue) Take(force bool) (runtime.Batch, error) {
+func (q *incomingQueue) Take(force bool) (transaction.Batch, error) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -157,11 +157,11 @@ func (q *incomingQueue) Take(force bool) (runtime.Batch, error) {
 
 	// NOTE: These "returned" variables signify what will be returned back
 	//       to the queue, not what will be returned from the function.
-	var returned runtime.Batch
+	var returned transaction.Batch
 	var returnedSizeBytes uint64
 	returnedCallHashes := make(map[hash.Hash]bool)
 
-	var batch runtime.Batch
+	var batch transaction.Batch
 	var batchSizeBytes uint64
 
 	for _, call := range q.queue[:] {

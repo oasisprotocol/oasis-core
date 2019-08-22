@@ -106,6 +106,41 @@ func (ba *badgerBackend) ApplyBatch(
 	return []*api.Receipt{receipt}, err
 }
 
+func (ba *badgerBackend) Merge(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	base hash.Hash,
+	others []hash.Hash,
+) ([]*api.Receipt, error) {
+	newRoot, err := ba.rootCache.Merge(ctx, ns, round, base, others)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage/badger: failed to Merge")
+	}
+
+	receipt, err := api.SignReceipt(ba.signer, ns, round+1, []hash.Hash{*newRoot})
+	return []*api.Receipt{receipt}, err
+}
+
+func (ba *badgerBackend) MergeBatch(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	ops []api.MergeOp,
+) ([]*api.Receipt, error) {
+	newRoots := make([]hash.Hash, 0, len(ops))
+	for _, op := range ops {
+		newRoot, err := ba.rootCache.Merge(ctx, ns, round, op.Base, op.Others)
+		if err != nil {
+			return nil, errors.Wrap(err, "storage/badger: failed to Merge, op")
+		}
+		newRoots = append(newRoots, *newRoot)
+	}
+
+	receipt, err := api.SignReceipt(ba.signer, ns, round+1, newRoots)
+	return []*api.Receipt{receipt}, err
+}
+
 func (ba *badgerBackend) Cleanup() {
 	ba.nodedb.Close()
 }

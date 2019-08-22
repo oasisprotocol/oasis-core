@@ -7,12 +7,11 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/service"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
 type watchRequest struct {
@@ -102,57 +101,40 @@ func (w *blockWatcher) checkBlock(blk *block.Block) {
 		return
 	}
 
+	ctx := w.common.ctx
 	ioRoot := storage.Root{
 		Namespace: blk.Header.Namespace,
 		Round:     blk.Header.Round,
 		Hash:      blk.Header.IORoot,
 	}
 
-	tree, err := urkel.NewWithRoot(w.common.ctx, w.common.storage, nil, ioRoot)
+	tree, err := transaction.NewTree(ctx, w.common.storage, ioRoot)
 	if err != nil {
 		w.Logger.Error("can't get block I/O from storage", "err", err)
 		return
 	}
-
-	// Get inputs from storage.
-	rawInputs, err := tree.Get(w.common.ctx, block.IoKeyInputs)
-	if err != nil {
-		w.Logger.Error("can't get block inputs from storage", "err", err)
-		return
-	}
-	var inputs runtime.Batch
-	err = inputs.UnmarshalCBOR(rawInputs)
-	if err != nil {
-		w.Logger.Error("can't unmarshal inputs from cbor", "err", err)
-		return
-	}
-
-	// Get outputs from storage.
-	rawOutputs, err := tree.Get(w.common.ctx, block.IoKeyOutputs)
-	if err != nil {
-		w.Logger.Error("can't get block outputs from storage", "err", err)
-		return
-	}
-	var outputs runtime.Batch
-	err = outputs.UnmarshalCBOR(rawOutputs)
-	if err != nil {
-		w.Logger.Error("can't unmarshal outputs from cbor", "err", err)
-		return
-	}
+	defer tree.Close()
 
 	// Check if there's anything interesting in this block.
-	for i, input := range inputs {
-		var inputID hash.Hash
-		inputID.From(input)
-		if watch, ok := w.watched[inputID]; ok {
-			res := &watchResult{
-				result: outputs[i],
-			}
-			// Ignore errors, the watch is getting deleted anyway.
-			_ = watch.send(res)
-			close(watch.respCh)
-			delete(w.watched, inputID)
+traverseLoop:
+	for txHash, watch := range w.watched {
+		tx, err := tree.GetTransaction(ctx, txHash)
+		switch err {
+		case nil:
+		case transaction.ErrNotFound:
+			continue traverseLoop
+		default:
+			w.Logger.Error("can't get block I/O from storage", "err", err)
+			return
 		}
+
+		res := &watchResult{
+			result: tx.Output,
+		}
+		// Ignore errors, the watch is getting deleted anyway.
+		_ = watch.send(res)
+		close(watch.respCh)
+		delete(w.watched, txHash)
 	}
 }
 

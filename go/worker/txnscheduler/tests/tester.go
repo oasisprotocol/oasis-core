@@ -10,13 +10,12 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
 )
@@ -110,24 +109,20 @@ blockLoop:
 			require.EqualValues(t, block.Normal, blk.Header.HeaderType)
 
 			ctx := context.Background()
-			tree, err := urkel.NewWithRoot(ctx, st, nil, storage.Root{
+			tree, err := transaction.NewTree(ctx, st, storage.Root{
 				Namespace: blk.Header.Namespace,
 				Round:     blk.Header.Round,
 				Hash:      blk.Header.IORoot,
 			})
-			require.NoError(t, err, "NewWithRoot")
+			require.NoError(t, err, "NewTree")
+			defer tree.Close()
 
-			rawInputs, err := tree.Get(ctx, block.IoKeyInputs)
-			require.NoError(t, err, "Get(inputs)")
-			rawOutputs, err := tree.Get(ctx, block.IoKeyOutputs)
-			require.NoError(t, err, "Get(outputs)")
-
-			batch := runtime.Batch([][]byte{testCall})
-			rawBatch := batch.MarshalCBOR()
-
-			require.EqualValues(t, rawBatch, rawInputs)
+			txs, err := tree.GetTransactions(ctx)
+			require.NoError(t, err, "GetTransactions")
+			require.Len(t, txs, 1, "there should be one transaction")
+			require.EqualValues(t, testCall, txs[0].Input)
 			// NOTE: Mock host produces output equal to input.
-			require.EqualValues(t, rawBatch, rawOutputs)
+			require.EqualValues(t, testCall, txs[0].Output)
 
 			// NOTE: Mock host produces an empty state root.
 			var stateRoot hash.Hash

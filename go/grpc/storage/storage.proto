@@ -7,6 +7,8 @@ service Storage {
     // MKVS
     rpc Apply(ApplyRequest) returns (ApplyResponse) {}
     rpc ApplyBatch(ApplyBatchRequest) returns (ApplyBatchResponse) {}
+    rpc Merge(MergeRequest) returns (MergeResponse) {}
+    rpc MergeBatch(MergeBatchRequest) returns (MergeBatchResponse) {}
     rpc GetSubtree(GetSubtreeRequest) returns (GetSubtreeResponse) {}
     rpc GetPath(GetPathRequest) returns (GetPathResponse) {}
     rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {}
@@ -47,6 +49,34 @@ message ApplyBatchRequest {
 }
 
 message ApplyBatchResponse {
+    // A list of Receipts, serialized to CBOR.
+    bytes receipts = 1;
+}
+
+message MergeRequest {
+    bytes namespace = 1;
+    uint64 round = 2;
+    bytes base = 3;
+    repeated bytes others = 4;
+}
+
+message MergeResponse {
+    // A list of Receipts, serialized to CBOR.
+    bytes receipts = 1;
+}
+
+message MergeOp {
+    bytes base = 1;
+    repeated bytes others = 2;
+}
+
+message MergeBatchRequest {
+    bytes namespace = 1;
+    uint64 round = 2;
+    repeated MergeOp ops = 3;
+}
+
+message MergeBatchResponse {
     // A list of Receipts, serialized to CBOR.
     bytes receipts = 1;
 }

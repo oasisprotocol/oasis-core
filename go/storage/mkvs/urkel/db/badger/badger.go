@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/keyformat"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
@@ -31,38 +32,38 @@ var (
 	// nodeKeyFmt is the key format for nodes (namespace, node hash).
 	//
 	// Value is serialized node.
-	nodeKeyFmt = api.NewKeyFormat('N', &common.Namespace{}, &hash.Hash{})
+	nodeKeyFmt = keyformat.New('N', &common.Namespace{}, &hash.Hash{})
 	// writeLogKeyFmt is the key format for write logs (namespace, round,
 	// old root, new root).
 	//
 	// Value is CBOR-serialized write log.
-	writeLogKeyFmt = api.NewKeyFormat('L', &common.Namespace{}, uint64(0), &hash.Hash{}, &hash.Hash{})
+	writeLogKeyFmt = keyformat.New('L', &common.Namespace{}, uint64(0), &hash.Hash{}, &hash.Hash{})
 	// rootLinkKeyFmt is the key format for the root links (namespace, round,
 	// root).
 	//
 	// Value is next root hash.
-	rootLinkKeyFmt = api.NewKeyFormat('M', &common.Namespace{}, uint64(0), &hash.Hash{})
+	rootLinkKeyFmt = keyformat.New('M', &common.Namespace{}, uint64(0), &hash.Hash{})
 	// rootGcUpdatesKeyFmt is the key format for the pending garbage collection
 	// index updates that need to be applied only in case the given root is among
 	// the finalized roots. The key format is (namespace, round, root).
 	//
 	// Value is CBOR-serialized list of updates for garbage collection index.
-	rootGcUpdatesKeyFmt = api.NewKeyFormat('I', &common.Namespace{}, uint64(0), &hash.Hash{})
+	rootGcUpdatesKeyFmt = keyformat.New('I', &common.Namespace{}, uint64(0), &hash.Hash{})
 	// rootAddedNodesKeyFmt is the key format for the pending added nodes for the
 	// given root that need to be removed only in case the given root is not among
 	// the finalized roots. They key format is (namespace, round, root).
 	//
 	// Value is CBOR-serialized list of node hashes.
-	rootAddedNodesKeyFmt = api.NewKeyFormat('J', &common.Namespace{}, uint64(0), &hash.Hash{})
+	rootAddedNodesKeyFmt = keyformat.New('J', &common.Namespace{}, uint64(0), &hash.Hash{})
 	// gcIndexKeyFmt is the key format for the garbage collection index
 	// (namespace, end round, start round, node hash).
 	//
 	// Value is empty.
-	gcIndexKeyFmt = api.NewKeyFormat('G', &common.Namespace{}, uint64(0), uint64(0), &hash.Hash{})
+	gcIndexKeyFmt = keyformat.New('G', &common.Namespace{}, uint64(0), uint64(0), &hash.Hash{})
 	// finalizedKeyFmt is the key format for the last finalized round number.
 	//
 	// Value is the last finalized round number.
-	finalizedKeyFmt = api.NewKeyFormat('F', &common.Namespace{})
+	finalizedKeyFmt = keyformat.New('F', &common.Namespace{})
 )
 
 // rootGcIndexUpdate is an element of the rootGcUpdates list.
@@ -144,7 +145,7 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 	return n, nil
 }
 
-func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (api.WriteLogIterator, error) {
+func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (writelog.Iterator, error) {
 	if !endRoot.Follows(&startRoot) {
 		return nil, api.ErrRootMustFollowOld
 	}
@@ -650,7 +651,7 @@ type badgerBatch struct {
 	oldRoot   node.Root
 
 	writeLog     writelog.WriteLog
-	annotations  writelog.WriteLogAnnotations
+	annotations  writelog.Annotations
 	removedNodes []node.Node
 	addedNodes   rootAddedNodes
 }
@@ -662,7 +663,7 @@ func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, depth node.Depth, 
 	return subtree
 }
 
-func (ba *badgerBatch) PutWriteLog(writeLog writelog.WriteLog, annotations writelog.WriteLogAnnotations) error {
+func (ba *badgerBatch) PutWriteLog(writeLog writelog.WriteLog, annotations writelog.Annotations) error {
 	ba.writeLog = writeLog
 	ba.annotations = annotations
 	return nil

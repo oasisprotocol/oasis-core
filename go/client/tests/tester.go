@@ -126,10 +126,10 @@ func testQuery(
 	_, err = c.GetTxnByBlockHash(ctx, runtimeID, invalidHash, 0)
 	require.Error(t, err, "GetTxnByBlockHash(invalid)")
 
-	// Check that indexer has indexed block keys (check the mock worker for key/values).
-	blk, err = c.QueryBlock(ctx, runtimeID, []byte("foo"), []byte("bar"))
+	// Check that indexer has indexed the block.
+	blk, err = c.QueryBlock(ctx, runtimeID, blk.Header.EncodedHash())
 	require.NoError(t, err, "QueryBlock")
-	require.EqualValues(t, 3, blk.Header.Round)
+	require.EqualValues(t, 4, blk.Header.Round)
 
 	// Check that indexer has indexed txn keys (check the mock worker for key/values).
 	tx, err = c.QueryTxn(ctx, runtimeID, []byte("txn_foo"), []byte("txn_bar"))
@@ -144,8 +144,8 @@ func testQuery(
 	txns, err := c.GetTransactions(ctx, runtimeID, blk.Header.Round, blk.Header.IORoot)
 	require.NoError(t, err, "GetTransactions")
 	require.Len(t, txns, 1)
-	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall
-	require.EqualValues(t, []byte("hello world"), txns[0])
+	// Check for values from TestNode/Client/SubmitTx
+	require.EqualValues(t, []byte("octopus"), txns[0])
 
 	// Test advanced transaction queries.
 	query := client.Query{

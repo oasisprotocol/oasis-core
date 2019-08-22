@@ -1,4 +1,4 @@
-package api
+package keyformat
 
 import (
 	"encoding"
@@ -7,7 +7,7 @@ import (
 )
 
 // KeyFormat is a key formatting helper to be used together with key-value
-// database-based NodeDB backends for constructing keys.
+// backends for constructing keys.
 type KeyFormat struct {
 	// prefix is the one-byte key prefix that denotes the type of the key.
 	prefix byte
@@ -17,23 +17,32 @@ type KeyFormat struct {
 	size int
 }
 
-// NewKeyFormat constructs a new key format.
-func NewKeyFormat(prefix byte, layout ...interface{}) *KeyFormat {
+// New constructs a new key format.
+func New(prefix byte, layout ...interface{}) *KeyFormat {
 	kf := &KeyFormat{
 		prefix: prefix,
 		layout: make([]int, len(layout)),
 	}
 
+	hasVarSize := false
 	for i, item := range layout {
 		size := kf.getSize(item)
+		if size == -1 {
+			if hasVarSize {
+				panic("key format: there can be only one variable-sized element")
+			}
+			hasVarSize = true
+		} else {
+			kf.size += size
+		}
+
 		kf.layout[i] = size
-		kf.size += size
 	}
 
 	return kf
 }
 
-// Size returns the size in bytes of the resulting key.
+// Size returns the minimum size in bytes of the resulting key.
 func (k *KeyFormat) Size() int {
 	return 1 + k.size
 }
@@ -52,20 +61,39 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 
 	size := 1
 	for i := range values {
-		size += k.layout[i]
+		elemLen := k.layout[i]
+		if k.layout[i] == -1 {
+			// Variable-sized element, the passed value must be a []byte.
+			elemLen = len(values[i].([]byte))
+		}
+
+		size += elemLen
 	}
 	result := make([]byte, size)
 
 	result[0] = k.prefix
 	offset := 1
 	for i, v := range values {
-		buf := result[offset : offset+k.layout[i]]
-		offset += k.layout[i]
+		elemLen := k.layout[i]
+		if elemLen == -1 {
+			// Variable-sized element, the passed value must be a []byte (was checked above).
+			elemLen = len(v.([]byte))
+		}
+		buf := result[offset : offset+elemLen]
+		offset += elemLen
 
 		switch t := v.(type) {
-		case uint64:
+		case uint8:
+			buf[0] = t
+		case *uint8:
+			buf[0] = *t
+		case uint32:
 			// Use big endian encoding so the keys sort correctly when doing
 			// range queries.
+			binary.BigEndian.PutUint32(buf, t)
+		case *uint32:
+			binary.BigEndian.PutUint32(buf, *t)
+		case uint64:
 			binary.BigEndian.PutUint64(buf, t)
 		case *uint64:
 			binary.BigEndian.PutUint64(buf, *t)
@@ -76,6 +104,8 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 			}
 
 			copy(buf[:], data)
+		case []byte:
+			copy(buf[:], t)
 		default:
 			panic(fmt.Sprintf("unsupported type: %T", t))
 		}
@@ -96,25 +126,37 @@ func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
 	if len(values) > len(k.layout) {
 		panic("key format: number of values greater than layout")
 	}
-	if len(data) != k.Size() {
+	if len(data) < k.Size() {
 		panic("key format: malformed input")
 	}
 
 	offset := 1
 	for i, v := range values {
-		buf := data[offset : offset+k.layout[i]]
-		offset += k.layout[i]
+		elemLen := k.layout[i]
+		if elemLen == -1 {
+			// Variable-sized element, compute its size.
+			elemLen = len(data) - k.Size()
+		}
+		buf := data[offset : offset+elemLen]
+		offset += elemLen
 
 		switch t := v.(type) {
-		case *uint64:
+		case *uint8:
+			*t = buf[0]
+		case *uint32:
 			// Use big endian encoding so the keys sort correctly when doing
 			// range queries.
+			*t = binary.BigEndian.Uint32(buf)
+		case *uint64:
 			*t = binary.BigEndian.Uint64(buf)
 		case encoding.BinaryUnmarshaler:
 			err := t.UnmarshalBinary(buf)
 			if err != nil {
 				panic(fmt.Sprintf("key format: failed to unmarshal: %s", err))
 			}
+		case *[]byte:
+			*t = make([]byte, elemLen)
+			copy(*t, buf)
 		default:
 			panic(fmt.Sprintf("unsupported type: %T", t))
 		}
@@ -125,16 +167,26 @@ func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
 
 func (k *KeyFormat) getSize(l interface{}) int {
 	switch t := l.(type) {
+	case uint8:
+		return 1
+	case *uint8:
+		return 1
+	case uint32:
+		return 4
+	case *uint32:
+		return 4
 	case uint64:
 		return 8
 	case *uint64:
 		return 8
 	case encoding.BinaryMarshaler:
-		// Make sure that the type supports both marshalling and unmarshalling.
-		_ = l.(encoding.BinaryUnmarshaler)
-
 		data, _ := t.MarshalBinary()
 		return len(data)
+	case []byte:
+		// A variable-size element -- there can be only one such element
+		// in the whole key and during decoding its size is derived from
+		// the key length and the sizes of other elements.
+		return -1
 	default:
 		panic(fmt.Sprintf("unsupported type: %T", l))
 	}

@@ -172,6 +172,11 @@ func (n *ID) AtBitDepth(bd Depth) ID {
 	return ID{Path: n.Path, BitDepth: bd}
 }
 
+// String returns a string representation of a node ID.
+func (n ID) String() string {
+	return fmt.Sprintf("<node.ID %s/%d>", n.Path, n.BitDepth)
+}
+
 // Pointer is a pointer to another node.
 type Pointer struct {
 	Clean bool

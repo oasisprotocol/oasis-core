@@ -3,10 +3,10 @@ package protocol
 import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
@@ -157,7 +157,7 @@ type WorkerLocalRPCCallResponse struct {
 // WorkerCheckTxBatchRequest is a worker check tx batch request message body.
 type WorkerCheckTxBatchRequest struct {
 	// Batch of runtime inputs to check.
-	Inputs runtime.Batch `codec:"inputs"`
+	Inputs transaction.Batch `codec:"inputs"`
 	// Block on which the batch check should be based.
 	Block roothash.Block `codec:"block"`
 }
@@ -165,7 +165,7 @@ type WorkerCheckTxBatchRequest struct {
 // WorkerCheckTxBatchResponse is a worker check tx batch response message body.
 type WorkerCheckTxBatchResponse struct {
 	// Batch of runtime check results.
-	Results runtime.Batch `codec:"results"`
+	Results transaction.Batch `codec:"results"`
 }
 
 // ComputedBatch is a computed batch.
@@ -192,7 +192,7 @@ type WorkerExecuteTxBatchRequest struct {
 	// the compute node should use. It must match what is passed in "inputs".
 	IORoot hash.Hash `codec:"io_root"`
 	// Batch of inputs (transactions).
-	Inputs runtime.Batch `codec:"inputs"`
+	Inputs transaction.Batch `codec:"inputs"`
 	// Block on which the batch computation should be based.
 	Block roothash.Block `codec:"block"`
 }

@@ -92,6 +92,36 @@ func (b *cachingClientBackend) ApplyBatch(
 	return b.remote.ApplyBatch(ctx, ns, dstRound, ops)
 }
 
+func (b *cachingClientBackend) Merge(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	base hash.Hash,
+	others []hash.Hash,
+) ([]*api.Receipt, error) {
+	// Apply to both local and remote DB.
+	_, _ = b.rootCache.Merge(ctx, ns, round, base, others)
+
+	return b.remote.Merge(ctx, ns, round, base, others)
+}
+
+func (b *cachingClientBackend) MergeBatch(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	ops []api.MergeOp,
+) ([]*api.Receipt, error) {
+	// Apply to both local and remote DB.
+	for _, op := range ops {
+		_, err := b.rootCache.Merge(ctx, ns, round, op.Base, op.Others)
+		if err != nil {
+			break
+		}
+	}
+
+	return b.remote.MergeBatch(ctx, ns, round, ops)
+}
+
 func (b *cachingClientBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth api.Depth) (*api.Subtree, error) {
 	tree, err := b.rootCache.GetTree(ctx, root)
 	if err != nil {

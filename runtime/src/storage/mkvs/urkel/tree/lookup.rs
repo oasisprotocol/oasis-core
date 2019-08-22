@@ -76,10 +76,8 @@ impl UrkelTree {
                         );
                     }
                 }
-                return Err(format_err!(
-                    "lookup.rs: invalid internal node_ref {:?}",
-                    node_ref
-                ));
+
+                unreachable!("node kind is internal node");
             }
             NodeKind::Leaf => {
                 // Reached a leaf node, check if key matches.

@@ -2,7 +2,6 @@ package indexer
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"path/filepath"
 
@@ -11,9 +10,11 @@ import (
 	"github.com/blevesearch/bleve/index/scorch"
 	bleveQuery "github.com/blevesearch/bleve/search/query"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/keyformat"
 	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/runtime"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 )
 
 const (
@@ -21,18 +22,19 @@ const (
 	BleveBackendName = "bleve"
 
 	bleveIndexFile = "bleve-tag-index.bleve.db"
-
-	docType   = "entry"
-	docIDSize = 32 + 8 + 4
-
-	fieldID        = "_id"
-	fieldRound     = "round"
-	fieldRuntimeID = "runtime_id"
-	fieldTxnIndex  = "index"
-	fieldTags      = "tags"
 )
 
 var (
+	// txDocIDKeyFmt is the key format used for indexed transaction document IDs.
+	txDocIDKeyFmt = keyformat.New('T', &signature.MapKey{}, uint64(0), &hash.Hash{}, uint32(0))
+	// blockDocIDKeyFmt is the key format used for indexed block document IDs.
+	blockDocIDKeyFmt = keyformat.New('B', &signature.MapKey{}, uint64(0))
+
+	// queryByKindBlock is a query matching documents of kind docTypeBlock.
+	queryByKindBlock bleveQuery.Query
+	// queryByKindTx is a query matching documents of kind docTypeTx.
+	queryByKindTx bleveQuery.Query
+
 	_ Backend = (*bleveBackend)(nil)
 )
 
@@ -44,73 +46,139 @@ type bleveBackend struct {
 	index bleve.Index
 }
 
-func encodeID(runtimeID signature.PublicKey, round uint64, index int32) []byte {
-	var id [docIDSize]byte
-	offset := 0
-	// Runtime ID.
-	rawRtID, _ := runtimeID.MarshalBinary()
-	copy(id[offset:offset+32], rawRtID)
-	offset += 32
-	// Round.
-	binary.LittleEndian.PutUint64(id[offset:offset+8], round)
-	offset += 8
-	// Transaction index.
-	// NOTE: This will underflow for blocks, but that is ok.
-	binary.LittleEndian.PutUint32(id[offset:offset+4], uint32(index))
+// Common fields.
+const (
+	fieldKind      = "Kind"
+	fieldRuntimeID = "RuntimeID"
+	fieldRound     = "Round"
+)
 
-	return id[:]
+// Transaction document fields.
+const (
+	// docTypeTx is the transaction document type.
+	docTypeTx = "tx"
+
+	fieldTxIndex = "TxIndex"
+	fieldTags    = "Tags"
+)
+
+// txDocument is a transction document in the bleve index.
+type txDocument struct {
+	// NOTE: Embedding private structs does not work well with reflection.
+	ID        string
+	Kind      string
+	RuntimeID string
+	Round     uint64
+
+	TxHash  string
+	TxIndex uint32
+	Tags    map[string][]string
 }
 
-func decodeID(id []byte) (runtimeID signature.PublicKey, round uint64, index int32, err error) {
-	if len(id) != docIDSize {
-		err = ErrCorrupted
-		return
+func (d txDocument) Type() string {
+	return docTypeTx
+}
+
+// Block document fields.
+const (
+	// docTypeBlock is the block document type.
+	docTypeBlock = "block"
+
+	fieldBlockHash = "BlockHash"
+)
+
+// blockDocument is a block document in the bleve index.
+type blockDocument struct {
+	// NOTE: Embedding private structs does not work well with reflection.
+	ID        string
+	Kind      string
+	RuntimeID string
+	Round     uint64
+
+	BlockHash string
+}
+
+func (d blockDocument) Type() string {
+	return docTypeBlock
+}
+
+// queryByRuntime returns a query matching documents for the given runtime.
+func queryByRuntime(runtimeID signature.PublicKey) bleveQuery.Query {
+	query := bleve.NewTermQuery(string(runtimeID[:]))
+	query.SetField(fieldRuntimeID)
+	return query
+}
+
+// queryByRound returns a query matching documents for the given round.
+func queryByRound(round uint64) bleveQuery.Query {
+	roundF := float64(round)
+	inclusive := true
+	query := bleve.NewNumericRangeInclusiveQuery(&roundF, &roundF, &inclusive, &inclusive)
+	query.SetField(fieldRound)
+	return query
+}
+
+// queryByTag returns a query matching documents with the given tags.
+func queryByTag(key, value []byte) bleveQuery.Query {
+	query := bleve.NewTermQuery(string(value))
+	query.SetField(fmt.Sprintf("%s.%s", fieldTags, string(key)))
+	return query
+}
+
+func (b *bleveBackend) Index(
+	ctx context.Context,
+	runtimeID signature.PublicKey,
+	round uint64,
+	blockHash hash.Hash,
+	txs []*transaction.Transaction,
+	tags transaction.Tags,
+) error {
+	// The only reason why a list of transactions needs to be passed is to
+	// derive the transaction indices.
+	txIndices := make(map[hash.Hash]uint32)
+	for idx, tx := range txs {
+		txIndices[tx.Hash()] = uint32(idx)
 	}
 
-	offset := 0
-	// Runtime ID.
-	_ = runtimeID.UnmarshalBinary(id[offset : offset+32])
-	offset += 32
-	// Round.
-	round = binary.LittleEndian.Uint64(id[offset : offset+8])
-	offset += 8
-	// Transaction index.
-	index = int32(binary.LittleEndian.Uint32(id[offset : offset+4]))
-	return
-}
-
-func (b *bleveBackend) Index(ctx context.Context, runtimeID signature.PublicKey, round uint64, tags []runtime.Tag) error {
-	docs := make(map[int32]map[string]interface{})
-
+	// Generate documents for transactions.
+	txDocs := make(map[hash.Hash]txDocument)
 	for _, tag := range tags {
-		doc := docs[tag.TxnIndex]
-		if doc == nil {
-			doc = make(map[string]interface{})
-			doc["_type"] = docType
-			doc[fieldID] = string(encodeID(runtimeID, round, tag.TxnIndex))
-			doc[fieldRuntimeID] = string(runtimeID[:])
-			doc[fieldRound] = round
-			doc[fieldTxnIndex] = tag.TxnIndex
-			doc[fieldTags] = make(map[string][]string)
-			docs[tag.TxnIndex] = doc
+		doc, ok := txDocs[tag.TxHash]
+		if !ok {
+			doc.Kind = docTypeTx
+			doc.ID = string(txDocIDKeyFmt.Encode(&runtimeID, round, &tag.TxHash, txIndices[tag.TxHash]))
+			doc.RuntimeID = string(runtimeID[:])
+			doc.Round = round
+			doc.TxHash = string(tag.TxHash[:])
+			doc.TxIndex = txIndices[tag.TxHash]
+			doc.Tags = make(map[string][]string)
 		}
-
-		tags := doc[fieldTags].(map[string][]string)
-		values := tags[string(tag.Key)]
-		tags[string(tag.Key)] = append(values, string(tag.Value))
+		doc.Tags[string(tag.Key)] = append(doc.Tags[string(tag.Key)], string(tag.Value))
+		txDocs[tag.TxHash] = doc
 	}
+
+	// Generate one document for the block itself.
+	var blockDoc blockDocument
+	blockDoc.Kind = docTypeBlock
+	blockDoc.ID = string(blockDocIDKeyFmt.Encode(&runtimeID, round))
+	blockDoc.RuntimeID = string(runtimeID[:])
+	blockDoc.Round = round
+	blockDoc.BlockHash = string(blockHash[:])
 
 	batch := b.index.NewBatch()
-	for _, doc := range docs {
+	for _, txDoc := range txDocs {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
 
-		if err := batch.Index(doc[fieldID].(string), doc); err != nil {
+		if err := batch.Index(txDoc.ID, txDoc); err != nil {
 			return err
 		}
+	}
+	if err := batch.Index(blockDoc.ID, blockDoc); err != nil {
+		return err
 	}
 
 	if err := b.index.Batch(batch); err != nil {
@@ -125,22 +193,12 @@ func (b *bleveBackend) Index(ctx context.Context, runtimeID signature.PublicKey,
 	return nil
 }
 
-func (b *bleveBackend) QueryBlock(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (uint64, error) {
-	// Filter by runtime.
-	qRuntime := bleve.NewTermQuery(string(runtimeID[:]))
-	qRuntime.SetField(fieldRuntimeID)
+func (b *bleveBackend) QueryBlock(ctx context.Context, runtimeID signature.PublicKey, blockHash hash.Hash) (uint64, error) {
+	// Filter by block hash.
+	qBlockHash := bleve.NewTermQuery(string(blockHash[:]))
+	qBlockHash.SetField(fieldBlockHash)
 
-	// Filter by key/value pair.
-	qKV := bleve.NewTermQuery(string(value))
-	qKV.SetField(fmt.Sprintf("%s.%s", fieldTags, string(key)))
-
-	// Only return block tags.
-	txnIndex := float64(runtime.TagTxnIndexBlock)
-	inclusive := true
-	qIndex := bleve.NewNumericRangeInclusiveQuery(&txnIndex, &txnIndex, &inclusive, &inclusive)
-	qIndex.SetField(fieldTxnIndex)
-
-	q := bleve.NewConjunctionQuery(qRuntime, qKV, qIndex)
+	q := bleve.NewConjunctionQuery(queryByKindBlock, queryByRuntime(runtimeID), qBlockHash)
 	rq := bleve.NewSearchRequest(q)
 	rq.Size = 1
 
@@ -152,67 +210,73 @@ func (b *bleveBackend) QueryBlock(ctx context.Context, runtimeID signature.Publi
 		return 0, ErrNotFound
 	}
 
-	dRtID, round, _, err := decodeID([]byte(result.Hits[0].ID))
-	if err != nil {
-		return 0, err
-	}
-	if !dRtID.Equal(runtimeID) {
+	var decRuntimeID signature.PublicKey
+	var decRound uint64
+	if !blockDocIDKeyFmt.Decode([]byte(result.Hits[0].ID), &decRuntimeID, &decRound) || !decRuntimeID.Equal(runtimeID) {
 		return 0, ErrCorrupted
 	}
 
-	return round, nil
+	return decRound, nil
 }
 
-func (b *bleveBackend) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (uint64, uint32, error) {
-	// Filter by runtime.
-	qRuntime := bleve.NewTermQuery(string(runtimeID[:]))
-	qRuntime.SetField(fieldRuntimeID)
-
-	// Filter by key/value pair.
-	qKV := bleve.NewTermQuery(string(value))
-	qKV.SetField(fmt.Sprintf("%s.%s", fieldTags, string(key)))
-
-	// Only return transaction tags.
-	txnIndex := 0.0
-	qIndex := bleve.NewNumericRangeQuery(&txnIndex, nil)
-	qIndex.SetField(fieldTxnIndex)
-
-	q := bleve.NewConjunctionQuery(qRuntime, qKV, qIndex)
+func (b *bleveBackend) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (uint64, hash.Hash, uint32, error) {
+	q := bleve.NewConjunctionQuery(queryByKindTx, queryByRuntime(runtimeID), queryByTag(key, value))
 	rq := bleve.NewSearchRequest(q)
 	rq.Size = 1
 
 	result, err := b.index.SearchInContext(ctx, rq)
 	if err != nil {
-		return 0, 0, err
+		return 0, hash.Hash{}, 0, err
 	}
 	if len(result.Hits) == 0 {
-		return 0, 0, ErrNotFound
+		return 0, hash.Hash{}, 0, ErrNotFound
 	}
 
-	dRtID, round, index, err := decodeID([]byte(result.Hits[0].ID))
+	var decRuntimeID signature.PublicKey
+	var decRound uint64
+	var decTxHash hash.Hash
+	var decTxIndex uint32
+	if !txDocIDKeyFmt.Decode([]byte(result.Hits[0].ID), &decRuntimeID, &decRound, &decTxHash, &decTxIndex) || !decRuntimeID.Equal(runtimeID) {
+		return 0, hash.Hash{}, 0, ErrCorrupted
+	}
+
+	return decRound, decTxHash, decTxIndex, nil
+}
+
+func (b *bleveBackend) QueryTxnByIndex(ctx context.Context, runtimeID signature.PublicKey, round uint64, index uint32) (hash.Hash, error) {
+	// Filter by transaction index.
+	inclusive := true
+	indexF := float64(index)
+	qIndex := bleve.NewNumericRangeInclusiveQuery(&indexF, &indexF, &inclusive, &inclusive)
+	qIndex.SetField(fieldTxIndex)
+
+	q := bleve.NewConjunctionQuery(queryByKindTx, queryByRuntime(runtimeID), queryByRound(round), qIndex)
+	rq := bleve.NewSearchRequest(q)
+	rq.Size = 1
+
+	result, err := b.index.SearchInContext(ctx, rq)
 	if err != nil {
-		return 0, 0, err
+		return hash.Hash{}, err
 	}
-	if !dRtID.Equal(runtimeID) {
-		return 0, 0, ErrCorrupted
+	if len(result.Hits) == 0 {
+		return hash.Hash{}, ErrNotFound
 	}
 
-	return round, uint32(index), nil
+	var decRuntimeID signature.PublicKey
+	var decRound uint64
+	var decTxHash hash.Hash
+	if !txDocIDKeyFmt.Decode([]byte(result.Hits[0].ID), &decRuntimeID, &decRound, &decTxHash) || !decRuntimeID.Equal(runtimeID) {
+		return hash.Hash{}, ErrCorrupted
+	}
+
+	return decTxHash, nil
 }
 
 func (b *bleveBackend) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, query Query) (Results, error) {
-	var qs []bleveQuery.Query
-
-	// Filter by runtime.
-	qRuntime := bleve.NewTermQuery(string(runtimeID[:]))
-	qRuntime.SetField(fieldRuntimeID)
-	qs = append(qs, qRuntime)
-
-	// Only return transaction tags.
-	txnIndex := 0.0
-	qIndex := bleve.NewNumericRangeQuery(&txnIndex, nil)
-	qIndex.SetField(fieldTxnIndex)
-	qs = append(qs, qIndex)
+	qs := []bleveQuery.Query{
+		queryByKindTx,
+		queryByRuntime(runtimeID),
+	}
 
 	// Filter by round.
 	var roundMin, roundMax *float64
@@ -239,16 +303,12 @@ func (b *bleveBackend) QueryTxns(ctx context.Context, runtimeID signature.Public
 			continue
 		case 1:
 			// Single value.
-			qKV := bleve.NewTermQuery(string(cond.Values[0]))
-			qKV.SetField(fmt.Sprintf("%s.%s", fieldTags, string(cond.Key)))
-			qs = append(qs, qKV)
+			qs = append(qs, queryByTag(cond.Key, cond.Values[0]))
 		default:
 			// Multiple values.
 			var vals []bleveQuery.Query
 			for _, v := range cond.Values {
-				qKV := bleve.NewTermQuery(string(v))
-				qKV.SetField(fmt.Sprintf("%s.%s", fieldTags, string(cond.Key)))
-				vals = append(vals, qKV)
+				vals = append(vals, queryByTag(cond.Key, v))
 			}
 			qs = append(qs, bleve.NewDisjunctionQuery(vals...))
 		}
@@ -268,34 +328,24 @@ func (b *bleveBackend) QueryTxns(ctx context.Context, runtimeID signature.Public
 		return nil, err
 	}
 
-	results := make(map[uint64][]int32)
+	results := make(Results)
 	for _, hit := range result.Hits {
-		dRtID, round, index, derr := decodeID([]byte(hit.ID))
-		if derr != nil {
-			return nil, derr
-		}
-		if !dRtID.Equal(runtimeID) {
+		var decRuntimeID signature.PublicKey
+		var decRound uint64
+		var decTxHash hash.Hash
+		var decTxIndex uint32
+		if !txDocIDKeyFmt.Decode([]byte(hit.ID), &decRuntimeID, &decRound, &decTxHash, &decTxIndex) || !decRuntimeID.Equal(runtimeID) {
 			return nil, ErrCorrupted
 		}
 
-		results[round] = append(results[round], index)
+		results[decRound] = append(results[decRound], Result{TxHash: decTxHash, TxIndex: decTxIndex})
 	}
 
 	return results, nil
 }
 
 func (b *bleveBackend) WaitBlockIndexed(ctx context.Context, runtimeID signature.PublicKey, round uint64) error {
-	// Filter by runtime.
-	qRuntime := bleve.NewTermQuery(string(runtimeID[:]))
-	qRuntime.SetField(fieldRuntimeID)
-
-	// Filter by round.
-	roundF := float64(round)
-	inclusive := true
-	qRound := bleve.NewNumericRangeInclusiveQuery(&roundF, &roundF, &inclusive, &inclusive)
-	qRound.SetField(fieldRound)
-
-	q := bleve.NewConjunctionQuery(qRuntime, qRound)
+	q := bleve.NewConjunctionQuery(queryByRuntime(runtimeID), queryByRound(round))
 	rq := bleve.NewSearchRequest(q)
 	rq.Size = 1
 	result, err := b.index.SearchInContext(ctx, rq)
@@ -310,17 +360,7 @@ func (b *bleveBackend) WaitBlockIndexed(ctx context.Context, runtimeID signature
 }
 
 func (b *bleveBackend) Prune(ctx context.Context, runtimeID signature.PublicKey, round uint64) error {
-	// Filter by runtime.
-	qRuntime := bleve.NewTermQuery(string(runtimeID[:]))
-	qRuntime.SetField(fieldRuntimeID)
-
-	// Filter by round.
-	roundF := float64(round)
-	inclusive := true
-	qRound := bleve.NewNumericRangeInclusiveQuery(&roundF, &roundF, &inclusive, &inclusive)
-	qRound.SetField(fieldRound)
-
-	q := bleve.NewConjunctionQuery(qRuntime, qRound)
+	q := bleve.NewConjunctionQuery(queryByRuntime(runtimeID), queryByRound(round))
 	rq := bleve.NewSearchRequest(q)
 	result, err := b.index.SearchInContext(ctx, rq)
 	if err != nil {
@@ -384,4 +424,14 @@ func NewBleveBackend(dataDir string) (Backend, error) {
 	b.logger.Info("initialized tag indexer backend")
 
 	return b, nil
+}
+
+func init() {
+	qKindBlock := bleve.NewTermQuery(docTypeBlock)
+	qKindBlock.SetField(fieldKind)
+	queryByKindBlock = qKindBlock
+
+	qKindTx := bleve.NewTermQuery(docTypeTx)
+	qKindTx.SetField(fieldKind)
+	queryByKindTx = qKindTx
 }

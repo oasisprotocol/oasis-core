@@ -9,8 +9,12 @@ import (
 	"io"
 	"math/rand"
 	"sync"
+	"time"
 
+	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -23,8 +27,8 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	urkelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 var (
@@ -37,6 +41,11 @@ var (
 	ErrNoWatcher = errors.New("storage/client: no watcher for runtime")
 	// ErrStorageNotAvailable is the error returned when no storage node is available.
 	ErrStorageNotAvailable = errors.New("storage/client: storage not available")
+)
+
+const (
+	maxRetryElapsedTime = 5 * time.Second
+	maxRetryInterval    = 1 * time.Second
 )
 
 // storageClientBackend contains all information about the client storage API
@@ -143,7 +152,7 @@ func (b *storageClientBackend) writeWithClient(
 	ctx context.Context,
 	ns common.Namespace,
 	round uint64,
-	fn func(context.Context, storage.StorageClient, *node.Node, chan<- *grpcResponse),
+	fn func(context.Context, storage.StorageClient, *node.Node) (interface{}, error),
 	expectedNewRoots []hash.Hash,
 ) ([]*api.Receipt, error) {
 	runtimeID, err := b.getRequestRuntime(ns)
@@ -178,7 +187,32 @@ func (b *storageClientBackend) writeWithClient(
 	// as they are finished.
 	ch := make(chan *grpcResponse, n)
 	for _, clientState := range clientStates {
-		go fn(ctx, clientState.client, clientState.node, ch)
+		client, node := clientState.client, clientState.node
+
+		go func() {
+			var resp interface{}
+			op := func() error {
+				var err error
+				resp, err = fn(ctx, client, node)
+				if status.Code(err) == codes.PermissionDenied {
+					// Writes can fail around an epoch transition due to policy errors,
+					// make sure to retry in this case.
+					return err
+				}
+				return backoff.Permanent(err)
+			}
+
+			sched := backoff.NewExponentialBackOff()
+			sched.MaxInterval = maxRetryInterval
+			sched.MaxElapsedTime = maxRetryElapsedTime
+			err := backoff.Retry(op, backoff.WithContext(sched, ctx))
+
+			ch <- &grpcResponse{
+				resp: resp,
+				err:  err,
+				node: node,
+			}
+		}()
 	}
 	successes := 0
 	receipts := make([]*api.Receipt, 0, n)
@@ -203,6 +237,10 @@ func (b *storageClientBackend) writeWithClient(
 		case *storage.ApplyResponse:
 			receiptsRaw = resp.GetReceipts()
 		case *storage.ApplyBatchResponse:
+			receiptsRaw = resp.GetReceipts()
+		case *storage.MergeResponse:
+			receiptsRaw = resp.GetReceipts()
+		case *storage.MergeBatchResponse:
 			receiptsRaw = resp.GetReceipts()
 		default:
 			b.logger.Error("got unexpected response type from a storage node",
@@ -250,13 +288,16 @@ func (b *storageClientBackend) writeWithClient(
 		if receiptBody.Round != round {
 			equal = false
 		}
-		if len(receiptBody.Roots) != len(expectedNewRoots) {
-			equal = false
-		}
-		for i := range receiptBody.Roots {
-			if receiptBody.Roots[i] != expectedNewRoots[i] {
+		if expectedNewRoots != nil {
+			if len(receiptBody.Roots) != len(expectedNewRoots) {
 				equal = false
-				break
+			} else {
+				for i := range receiptBody.Roots {
+					if receiptBody.Roots[i] != expectedNewRoots[i] {
+						equal = false
+						break
+					}
+				}
 			}
 		}
 		if !equal {
@@ -309,13 +350,8 @@ func (b *storageClientBackend) Apply(
 		ctx,
 		ns,
 		dstRound,
-		func(ctx context.Context, c storage.StorageClient, node *node.Node, ch chan<- *grpcResponse) {
-			resp, err := c.Apply(ctx, &req)
-			ch <- &grpcResponse{
-				resp: resp,
-				err:  err,
-				node: node,
-			}
+		func(ctx context.Context, c storage.StorageClient, node *node.Node) (interface{}, error) {
+			return c.Apply(ctx, &req)
 		},
 		[]hash.Hash{dstRoot},
 	)
@@ -352,19 +388,78 @@ func (b *storageClientBackend) ApplyBatch(
 		ctx,
 		ns,
 		dstRound,
-		func(ctx context.Context, c storage.StorageClient, node *node.Node, ch chan<- *grpcResponse) {
-			resp, err := c.ApplyBatch(ctx, &req)
-			ch <- &grpcResponse{
-				resp: resp,
-				err:  err,
-				node: node,
-			}
+		func(ctx context.Context, c storage.StorageClient, node *node.Node) (interface{}, error) {
+			return c.ApplyBatch(ctx, &req)
 		},
 		expectedNewRoots,
 	)
 }
 
-func (b *storageClientBackend) readWithClient(ctx context.Context, ns common.Namespace, fn func(context.Context, storage.StorageClient) (interface{}, error)) (interface{}, error) {
+func (b *storageClientBackend) Merge(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	base hash.Hash,
+	others []hash.Hash,
+) ([]*api.Receipt, error) {
+	var req storage.MergeRequest
+	req.Namespace, _ = ns.MarshalBinary()
+	req.Round = round
+	req.Base, _ = base.MarshalBinary()
+	req.Others = make([][]byte, 0, len(others))
+	for _, h := range others {
+		raw, _ := h.MarshalBinary()
+		req.Others = append(req.Others, raw)
+	}
+
+	return b.writeWithClient(
+		ctx,
+		ns,
+		round+1,
+		func(ctx context.Context, c storage.StorageClient, node *node.Node) (interface{}, error) {
+			return c.Merge(ctx, &req)
+		},
+		nil,
+	)
+}
+
+func (b *storageClientBackend) MergeBatch(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	ops []api.MergeOp,
+) ([]*api.Receipt, error) {
+	var req storage.MergeBatchRequest
+	req.Namespace, _ = ns.MarshalBinary()
+	req.Round = round
+	req.Ops = make([]*storage.MergeOp, 0, len(ops))
+	for _, op := range ops {
+		var pOp storage.MergeOp
+		pOp.Base, _ = op.Base.MarshalBinary()
+		pOp.Others = make([][]byte, 0, len(op.Others))
+		for _, h := range op.Others {
+			raw, _ := h.MarshalBinary()
+			pOp.Others = append(pOp.Others, raw)
+		}
+		req.Ops = append(req.Ops, &pOp)
+	}
+
+	return b.writeWithClient(
+		ctx,
+		ns,
+		round+1,
+		func(ctx context.Context, c storage.StorageClient, node *node.Node) (interface{}, error) {
+			return c.MergeBatch(ctx, &req)
+		},
+		nil,
+	)
+}
+
+func (b *storageClientBackend) readWithClient(
+	ctx context.Context,
+	ns common.Namespace,
+	fn func(context.Context, storage.StorageClient) (interface{}, error),
+) (interface{}, error) {
 	runtimeID, err := b.getRequestRuntime(ns)
 	if err != nil {
 		b.logger.Error("readWithClient: failure when deriving runtimeID from storage namespace",
@@ -499,7 +594,7 @@ func (b *storageClientBackend) GetDiff(ctx context.Context, startRoot api.Root, 
 	}
 	respClient := respRaw.(storage.Storage_GetDiffClient)
 
-	pipe := urkelDb.NewPipeWriteLogIterator(ctx)
+	pipe := writelog.NewPipeIterator(ctx)
 
 	go func() {
 		defer pipe.Close()
@@ -543,7 +638,7 @@ func (b *storageClientBackend) GetCheckpoint(ctx context.Context, root api.Root)
 	}
 	respClient := respRaw.(storage.Storage_GetCheckpointClient)
 
-	pipe := urkelDb.NewPipeWriteLogIterator(ctx)
+	pipe := writelog.NewPipeIterator(ctx)
 
 	go func() {
 		defer pipe.Close()

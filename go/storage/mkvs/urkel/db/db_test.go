@@ -30,68 +30,9 @@ func makeWriteLog() writelog.WriteLog {
 	return wl
 }
 
-func TestStaticWriteLogIterator(t *testing.T) {
-	var more bool
-	var err error
-	var val writelog.LogEntry
-
-	wl := makeWriteLog()
-
-	it := api.NewStaticWriteLogIterator(wl)
-
-	for _, ent := range wl {
-		more, err = it.Next()
-		require.NoError(t, err, "it.Next()")
-		require.Equal(t, more, true)
-		val, err = it.Value()
-		require.NoError(t, err, "it.Value()")
-		require.Equal(t, val, ent)
-	}
-	more, err = it.Next()
-	require.NoError(t, err, "last it.Next()")
-	require.Equal(t, more, false)
-	_, err = it.Value()
-	require.Error(t, err, "last it.Value()")
-
-	var wl2 writelog.WriteLog
-	it = api.NewStaticWriteLogIterator(wl2)
-	more, err = it.Next()
-	require.NoError(t, err, "empty it.Next()")
-	require.Equal(t, more, false)
-}
-
-func TestPipeWriteLogIterator(t *testing.T) {
-	var err error
-	var more bool
-	var val writelog.LogEntry
-
-	wl := makeWriteLog()
-	pipe := api.NewPipeWriteLogIterator(context.Background())
-
-	for idx := range wl {
-		err = pipe.Put(&wl[idx])
-		require.NoError(t, err, "pipe.Put()")
-	}
-	pipe.Close()
-
-	for _, ent := range wl {
-		more, err = pipe.Next()
-		require.NoError(t, err, "pipe.Next()")
-		require.Equal(t, more, true)
-		val, err = pipe.Value()
-		require.NoError(t, err, "pipe.Value()")
-		require.Equal(t, val, ent)
-	}
-	more, err = pipe.Next()
-	require.NoError(t, err, "last pipe.Next()")
-	require.Equal(t, more, false)
-	_, err = pipe.Value()
-	require.Error(t, err, "last pipe.Value()")
-}
-
 func TestHashedWriteLog(t *testing.T) {
 	wl := makeWriteLog()
-	wla := make(writelog.WriteLogAnnotations, len(wl))
+	wla := make(writelog.Annotations, len(wl))
 	hashes := make(map[hash.Hash]*node.Pointer)
 	for i := 0; i < len(wl); i++ {
 		var h hash.Hash

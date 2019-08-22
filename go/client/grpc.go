@@ -183,17 +183,20 @@ func (s *grpcServer) QueryBlock(ctx context.Context, req *pbClient.QueryBlockReq
 		return nil, err
 	}
 
-	blk, err := s.client.QueryBlock(ctx, id, req.GetKey(), req.GetValue())
+	var blockHash hash.Hash
+	if err := blockHash.UnmarshalBinary(req.GetBlockHash()); err != nil {
+		return nil, err
+	}
+
+	blk, err := s.client.QueryBlock(ctx, id, blockHash)
 	if err != nil {
 		if err == indexer.ErrNotFound {
 			return nil, status.Errorf(codes.NotFound, err.Error())
 		}
 		return nil, err
 	}
-	blockHash := blk.Header.EncodedHash()
 	return &pbClient.QueryBlockResponse{
-		Block:     blk.MarshalCBOR(),
-		BlockHash: blockHash[:],
+		Block: blk.MarshalCBOR(),
 	}, nil
 }
 

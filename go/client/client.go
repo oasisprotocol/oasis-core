@@ -23,7 +23,6 @@ import (
 
 	"github.com/oasislabs/ekiden/go/client/indexer"
 	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
@@ -35,9 +34,9 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
 const (
@@ -176,7 +175,7 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 
 	respCh := make(chan *watchResult)
 	var requestID hash.Hash
-	requestID.From(txData)
+	requestID.FromBytes(txData)
 	watcher.newCh <- &watchRequest{
 		id:     &requestID,
 		ctx:    ctx,
@@ -283,71 +282,45 @@ func (c *Client) GetBlock(ctx context.Context, runtimeID signature.PublicKey, ro
 	return c.common.roothash.GetBlock(ctx, runtimeID, round)
 }
 
-func (c *Client) getTxnData(ctx context.Context, blk *block.Block) ([][]byte, [][]byte, error) {
-	if blk.Header.IORoot.IsEmpty() {
-		return [][]byte{}, [][]byte{}, nil
-	}
-
+func (c *Client) getTxnTree(ctx context.Context, blk *block.Block) (*transaction.Tree, error) {
 	ioRoot := storage.Root{
 		Namespace: blk.Header.Namespace,
 		Round:     blk.Header.Round,
 		Hash:      blk.Header.IORoot,
 	}
 
-	// Fetch transaction input and output.
-	tree, err := urkel.NewWithRoot(ctx, c.common.storage, nil, ioRoot)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "client: failed to fetch given io root")
-	}
-
-	rawInputs, err := tree.Get(ctx, block.IoKeyInputs)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "client: failed to fetch I/O inputs")
-	}
-	rawOutputs, err := tree.Get(ctx, block.IoKeyOutputs)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "client: failed to fetch I/O outputs")
-	}
-
-	var inputs [][]byte
-	if err := cbor.Unmarshal(rawInputs, &inputs); err != nil {
-		return nil, nil, errors.Wrap(err, "client: failed to unmarshal transaction inputs")
-	}
-
-	var outputs [][]byte
-	if err := cbor.Unmarshal(rawOutputs, &outputs); err != nil {
-		return nil, nil, errors.Wrap(err, "client: failed to unmarshal transaction outputs")
-	}
-
-	return inputs, outputs, nil
+	return transaction.NewTree(ctx, c.common.storage, ioRoot)
 }
 
-func (c *Client) getTxnDataAtIndex(ctx context.Context, blk *block.Block, index uint32) ([]byte, []byte, error) {
-	inputs, outputs, err := c.getTxnData(ctx, blk)
+func (c *Client) getTxnByHash(ctx context.Context, blk *block.Block, txHash hash.Hash) (*transaction.Transaction, error) {
+	tree, err := c.getTxnTree(ctx, blk)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+	defer tree.Close()
 
-	if int(index) >= len(inputs) {
-		return nil, nil, ErrBadIndexOrCorrupted
-	}
-	if int(index) >= len(outputs) {
-		return nil, nil, ErrBadIndexOrCorrupted
-	}
-
-	return inputs[index], outputs[index], nil
+	return tree.GetTransaction(ctx, txHash)
 }
 
 // GetTxn returns the transaction at a specific block round and index.
 //
 // Pass RoundLatest for the round to get the latest block.
 func (c *Client) GetTxn(ctx context.Context, runtimeID signature.PublicKey, round uint64, index uint32) (*TxnResult, error) {
+	if c.indexerBackend == nil {
+		return nil, ErrIndexerDisabled
+	}
+
 	blk, err := c.GetBlock(ctx, runtimeID, round)
 	if err != nil {
 		return nil, err
 	}
 
-	input, output, err := c.getTxnDataAtIndex(ctx, blk, index)
+	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, runtimeID, round, index)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := c.getTxnByHash(ctx, blk, txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -356,19 +329,28 @@ func (c *Client) GetTxn(ctx context.Context, runtimeID signature.PublicKey, roun
 		Block:     blk,
 		BlockHash: blk.Header.EncodedHash(),
 		Index:     index,
-		Input:     input,
-		Output:    output,
+		Input:     tx.Input,
+		Output:    tx.Output,
 	}, nil
 }
 
 // GetTxnByBlockHash returns the transaction at a specific block hash and index.
 func (c *Client) GetTxnByBlockHash(ctx context.Context, runtimeID signature.PublicKey, blockHash hash.Hash, index uint32) (*TxnResult, error) {
-	blk, err := c.QueryBlock(ctx, runtimeID, indexer.TagBlockHash, blockHash[:])
+	if c.indexerBackend == nil {
+		return nil, ErrIndexerDisabled
+	}
+
+	blk, err := c.QueryBlock(ctx, runtimeID, blockHash)
 	if err != nil {
 		return nil, err
 	}
 
-	input, output, err := c.getTxnDataAtIndex(ctx, blk, index)
+	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, runtimeID, blk.Header.Round, index)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := c.getTxnByHash(ctx, blk, txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -377,8 +359,8 @@ func (c *Client) GetTxnByBlockHash(ctx context.Context, runtimeID signature.Publ
 		Block:     blk,
 		BlockHash: blk.Header.EncodedHash(),
 		Index:     index,
-		Input:     input,
-		Output:    output,
+		Input:     tx.Input,
+		Output:    tx.Output,
 	}, nil
 }
 
@@ -388,37 +370,38 @@ func (c *Client) GetTransactions(ctx context.Context, runtimeID signature.Public
 		return [][]byte{}, nil
 	}
 
-	root := storage.Root{
+	ioRoot := storage.Root{
 		Round: round,
 		Hash:  rootHash,
 	}
-	copy(root.Namespace[:], runtimeID[:])
+	copy(ioRoot.Namespace[:], runtimeID[:])
 
-	tree, err := urkel.NewWithRoot(ctx, c.common.storage, nil, root)
+	tree, err := transaction.NewTree(ctx, c.common.storage, ioRoot)
 	if err != nil {
-		return nil, errors.Wrap(err, "client: failed to fetch given io root")
+		return nil, err
 	}
+	defer tree.Close()
 
-	txn, err := tree.Get(ctx, block.IoKeyInputs)
+	txs, err := tree.GetTransactions(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "client: failed to fetch I/O inputs")
+		return nil, err
 	}
 
-	var txns [][]byte
-	if err := cbor.Unmarshal(txn, &txns); err != nil {
-		return nil, errors.Wrap(err, "client: failed to unmarshal transactions")
+	var inputs [][]byte
+	for _, tx := range txs {
+		inputs = append(inputs, tx.Input)
 	}
 
-	return txns, nil
+	return inputs, nil
 }
 
 // QueryBlock queries the block index of a given runtime.
-func (c *Client) QueryBlock(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (*block.Block, error) {
+func (c *Client) QueryBlock(ctx context.Context, runtimeID signature.PublicKey, blockHash hash.Hash) (*block.Block, error) {
 	if c.indexerBackend == nil {
 		return nil, ErrIndexerDisabled
 	}
 
-	round, err := c.indexerBackend.QueryBlock(ctx, runtimeID, key, value)
+	round, err := c.indexerBackend.QueryBlock(ctx, runtimeID, blockHash)
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +415,7 @@ func (c *Client) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, ke
 		return nil, ErrIndexerDisabled
 	}
 
-	round, txnIdx, err := c.indexerBackend.QueryTxn(ctx, runtimeID, key, value)
+	round, txHash, txIndex, err := c.indexerBackend.QueryTxn(ctx, runtimeID, key, value)
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +425,7 @@ func (c *Client) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, ke
 		return nil, err
 	}
 
-	input, output, err := c.getTxnDataAtIndex(ctx, blk, txnIdx)
+	tx, err := c.getTxnByHash(ctx, blk, txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -450,9 +433,9 @@ func (c *Client) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, ke
 	return &TxnResult{
 		Block:     blk,
 		BlockHash: blk.Header.EncodedHash(),
-		Index:     txnIdx,
-		Input:     input,
-		Output:    output,
+		Index:     txIndex,
+		Input:     tx.Input,
+		Output:    tx.Output,
 	}, nil
 }
 
@@ -469,7 +452,7 @@ func (c *Client) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, q
 	}
 
 	var output []*TxnResult
-	for round, indices := range results {
+	for round, txResults := range results {
 		// Fetch block for the given round.
 		var blk *block.Block
 		blk, err = c.GetBlock(ctx, runtimeID, round)
@@ -477,25 +460,26 @@ func (c *Client) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, q
 			return nil, err
 		}
 
-		var inputs, outputs [][]byte
-		inputs, outputs, err = c.getTxnData(ctx, blk)
+		tree, err := c.getTxnTree(ctx, blk)
 		if err != nil {
 			return nil, err
 		}
+		defer tree.Close()
 
 		// Extract transaction data for the specified indices.
 		blockHash := blk.Header.EncodedHash()
-		for _, idx := range indices {
-			if int(idx) >= len(inputs) || int(idx) >= len(outputs) {
-				return nil, ErrBadIndexOrCorrupted
+		for _, txResult := range txResults {
+			tx, err := tree.GetTransaction(ctx, txResult.TxHash)
+			if err != nil {
+				return nil, err
 			}
 
 			output = append(output, &TxnResult{
 				Block:     blk,
 				BlockHash: blockHash,
-				Index:     uint32(idx),
-				Input:     inputs[idx],
-				Output:    outputs[idx],
+				Index:     txResult.TxIndex,
+				Input:     tx.Input,
+				Output:    tx.Output,
 			})
 		}
 	}

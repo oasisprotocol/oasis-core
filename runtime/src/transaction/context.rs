@@ -3,10 +3,8 @@ use std::{any::Any, sync::Arc};
 
 use io_context::Context as IoContext;
 
-use crate::{
-    common::roothash::Header,
-    types::{Tag, TAG_TXN_INDEX_BLOCK},
-};
+use super::tags::{Tag, Tags};
+use crate::common::roothash::Header;
 
 struct NoRuntimeContext;
 
@@ -23,11 +21,8 @@ pub struct Context<'a> {
     /// running the transaction.
     pub check_only: bool,
 
-    /// List of emitted tags.
-    pub(crate) tags: Vec<Tag>,
-    /// Index of the current transaction. Set by the dispatcher while
-    /// processing a batch.
-    pub(crate) txn_index: i32,
+    /// List of emitted tags for each transaction.
+    tags: Vec<Tags>,
 }
 
 impl<'a> Context<'a> {
@@ -39,29 +34,17 @@ impl<'a> Context<'a> {
             runtime: Box::new(NoRuntimeContext),
             check_only,
             tags: Vec::new(),
-            txn_index: TAG_TXN_INDEX_BLOCK,
         }
     }
 
-    fn emit_tag(&mut self, txn_index: i32, key: &[u8], value: &[u8]) {
-        self.tags.push(Tag {
-            txn_index,
-            key: key.to_vec(),
-            value: value.to_vec(),
-        })
+    /// Start a new transaction.
+    pub(crate) fn start_transaction(&mut self) {
+        self.tags.push(Tags::new());
     }
 
-    /// Emit a runtime-specific indexable tag refering to the block in which
-    /// the transaction is being processed.
-    ///
-    /// If multiple tags with the same key are emitted for a block, only the
-    /// last one will be indexed.
-    pub fn emit_block_tag<K, V>(&mut self, key: K, value: V)
-    where
-        K: AsRef<[u8]>,
-        V: AsRef<[u8]>,
-    {
-        self.emit_tag(TAG_TXN_INDEX_BLOCK, key.as_ref(), value.as_ref());
+    /// Close the context and return the emitted tags.
+    pub(crate) fn close(self) -> Vec<Tags> {
+        self.tags
     }
 
     /// Emit a runtime-specific indexable tag refering to the specific
@@ -79,10 +62,14 @@ impl<'a> Context<'a> {
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
     {
-        if self.txn_index < 0 {
-            panic!("must only be called inside a transaction");
-        }
+        assert!(
+            !self.tags.is_empty(),
+            "must only be called inside a transaction"
+        );
 
-        self.emit_tag(self.txn_index, key.as_ref(), value.as_ref());
+        self.tags
+            .last_mut()
+            .expect("tags is not empty")
+            .push(Tag::new(key.as_ref().to_vec(), value.as_ref().to_vec()))
     }
 }

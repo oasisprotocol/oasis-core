@@ -6,14 +6,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/runtime"
 	"github.com/oasislabs/ekiden/go/common/service"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 )
 
 const (
@@ -29,9 +26,6 @@ var (
 	ErrCorrupted = errors.New("indexer: index corrupted")
 	// ErrUnsupported is the error when the given method is not supported.
 	ErrUnsupported = errors.New("indexer: method not supported")
-
-	// TagBlockHash is the tag used for storing the Ekiden block hash.
-	TagBlockHash = []byte("hblk")
 )
 
 // Service is an indexer service.
@@ -102,43 +96,48 @@ func (s *Service) worker() {
 			}
 		case annBlk := <-blocksCh:
 			// New blocks to index.
-			var tags []runtime.Tag
 			blk := annBlk.Block
-			// Fetch tags from storage.
+
+			// Fetch transactions from storage.
+			//
+			// NOTE: Currently the indexer requires all transactions as well since it needs to
+			//       expose a notion of a "transaction index within a block" which is hard to
+			//       provide as batches can be merged in arbitrary order and the sequence can
+			//       only be known after the fact.
+			var txs []*transaction.Transaction
+			var tags transaction.Tags
 			if !blk.Header.IORoot.IsEmpty() {
-				ctx, cancel := context.WithTimeout(context.TODO(), storageTimeout)
+				err = func() error {
+					ctx, cancel := context.WithTimeout(context.TODO(), storageTimeout)
+					defer cancel()
 
-				ioRoot := storage.Root{
-					Namespace: blk.Header.Namespace,
-					Round:     blk.Header.Round,
-					Hash:      blk.Header.IORoot,
-				}
+					ioRoot := storage.Root{
+						Namespace: blk.Header.Namespace,
+						Round:     blk.Header.Round,
+						Hash:      blk.Header.IORoot,
+					}
 
-				var tree *urkel.Tree
-				tree, err = urkel.NewWithRoot(ctx, s.storage, nil, ioRoot)
+					var tree *transaction.Tree
+					tree, err = transaction.NewTree(ctx, s.storage, ioRoot)
+					if err != nil {
+						return err
+					}
+					defer tree.Close()
+
+					txs, err = tree.GetTransactions(ctx)
+					if err != nil {
+						return err
+					}
+
+					tags, err = tree.GetTags(ctx)
+					if err != nil {
+						return err
+					}
+
+					return nil
+				}()
 				if err != nil {
-					logger.Error("can't get block tags from storage",
-						"err", err,
-						"round", blk.Header.Round,
-					)
-					cancel()
-					continue
-				}
-
-				var rawTags []byte
-				rawTags, err = tree.Get(ctx, block.IoKeyTags)
-				cancel()
-				if err != nil {
-					logger.Error("can't get block tags from storage",
-						"err", err,
-						"round", blk.Header.Round,
-					)
-					continue
-				}
-
-				err = cbor.Unmarshal(rawTags, &tags)
-				if err != nil {
-					logger.Error("can't unmarshal tags from cbor",
+					logger.Error("can't get I/O root from storage",
 						"err", err,
 						"round", blk.Header.Round,
 					)
@@ -146,15 +145,14 @@ func (s *Service) worker() {
 				}
 			}
 
-			// Include block hash tag.
-			blockHash := blk.Header.EncodedHash()
-			tags = append(tags, runtime.Tag{
-				TxnIndex: runtime.TagTxnIndexBlock,
-				Key:      TagBlockHash,
-				Value:    blockHash[:],
-			})
-
-			if err = s.backend.Index(context.TODO(), s.runtimeID, blk.Header.Round, tags); err != nil {
+			if err = s.backend.Index(
+				context.TODO(),
+				s.runtimeID,
+				blk.Header.Round,
+				blk.Header.EncodedHash(),
+				txs,
+				tags,
+			); err != nil {
 				logger.Error("failed to index tags",
 					"err", err,
 					"round", blk.Header.Round,

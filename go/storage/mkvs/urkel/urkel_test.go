@@ -1014,6 +1014,43 @@ func testVisit(t *testing.T, ndb db.NodeDB) {
 	}
 }
 
+func testApplyWriteLog(t *testing.T, ndb db.NodeDB) {
+	keys, values := generateKeyValuePairsEx("", 100)
+
+	// Insert some items first.
+	var writeLog writelog.WriteLog
+	for i := range keys {
+		writeLog = append(writeLog, writelog.LogEntry{Key: keys[i], Value: values[i]})
+	}
+
+	ctx := context.Background()
+	tree := New(nil, ndb)
+	err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
+	require.NoError(t, err, "ApplyWriteLog")
+	_, _, err = tree.Commit(ctx, testNs, 0)
+	require.NoError(t, err, "Commit")
+
+	for i := range keys {
+		var value []byte
+		value, err = tree.Get(ctx, keys[i])
+		require.NoError(t, err, "Get")
+		require.EqualValues(t, values[i], value, "inserted value must be equal")
+	}
+
+	// Then remove all the items.
+	writeLog = nil
+	for i := range keys {
+		writeLog = append(writeLog, writelog.LogEntry{Key: keys[i]})
+	}
+
+	err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
+	require.NoError(t, err, "ApplyWriteLog")
+	var rootHash hash.Hash
+	_, rootHash, err = tree.Commit(ctx, testNs, 0)
+	require.NoError(t, err, "Commit")
+	require.True(t, rootHash.IsEmpty(), "root hash must be empty after removal of all items")
+}
+
 func testOnCommitHooks(t *testing.T, ndb db.NodeDB) {
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
@@ -1680,6 +1717,7 @@ func testBackend(
 		{"InsertCommitEach", testInsertCommitEach},
 		{"Remove", testRemove},
 		{"Visit", testVisit},
+		{"ApplyWriteLog", testApplyWriteLog},
 		{"SyncerBasic", testSyncerBasic},
 		{"SyncerGetPath", testSyncerGetPath},
 		{"SyncerRootEmptyLabelNeedsDeref", testSyncerRootEmptyLabelNeedsDeref},

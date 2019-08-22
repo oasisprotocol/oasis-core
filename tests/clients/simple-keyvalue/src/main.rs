@@ -16,7 +16,7 @@ use tokio::runtime::Runtime;
 
 use ekiden_client::{
     create_txn_api_client,
-    transaction::{Query, QueryCondition, TAG_BLOCK_HASH},
+    transaction::{Query, QueryCondition},
     Node, TxnClient,
 };
 use ekiden_runtime::{common::runtime::RuntimeId, storage::MKVS};
@@ -147,6 +147,7 @@ fn main() {
         assert_eq!(snapshot.block.header.round, round);
     }
 
+    let latest_snapshot = snapshot;
     let snapshot = rt
         .block_on(kv_client.txn_client().get_block(100000))
         .expect("non-existent block must return None");
@@ -168,31 +169,23 @@ fn main() {
 
     // Test wait_block_indexed call.
     println!("Waiting for block to be indexed...");
-    rt.block_on(kv_client.txn_client().wait_block_indexed(2))
-        .expect("wait block indexed");
-
-    // Test query_block call.
-    println!("Querying block tags (kv_hello=insert)...");
-    let snapshot = rt
-        .block_on(kv_client.txn_client().query_block(b"kv_hello", b"insert"))
-        .expect("query block snapshot")
-        .expect("block must exist");
-    println!("Found block: {:?}", snapshot.block);
-
-    println!("Querying block tags (kv_hello=get)...");
-    let snapshot = rt
-        .block_on(kv_client.txn_client().query_block(b"kv_hello", b"get"))
-        .expect("query block snapshot")
-        .expect("block must exist");
-    println!("Found block: {:?}", snapshot.block);
+    rt.block_on(
+        kv_client
+            .txn_client()
+            .wait_block_indexed(latest_snapshot.block.header.round),
+    )
+    .expect("wait block indexed");
 
     // Test query_block call by block hash.
-    println!("Querying block by hash ({:?})...", snapshot.block_hash);
+    println!(
+        "Querying block by hash ({:?})...",
+        latest_snapshot.block_hash
+    );
     let snapshot = rt
         .block_on(
             kv_client
                 .txn_client()
-                .query_block(TAG_BLOCK_HASH, snapshot.block_hash),
+                .query_block(latest_snapshot.block_hash),
         )
         .expect("query block snapshot")
         .expect("block must exist");

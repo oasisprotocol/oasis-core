@@ -69,6 +69,8 @@ var (
 
 	labelApply      = prometheus.Labels{"call": "apply"}
 	labelApplyBatch = prometheus.Labels{"call": "apply_batch"}
+	labelMerge      = prometheus.Labels{"call": "merge"}
+	labelMergeBatch = prometheus.Labels{"call": "merge_batch"}
 	labelGetSubtree = prometheus.Labels{"call": "get_subtree"}
 	labelGetPath    = prometheus.Labels{"call": "get_path"}
 	labelGetNode    = prometheus.Labels{"call": "get_node"}
@@ -150,6 +152,43 @@ func (w *metricsWrapper) ApplyBatch(
 	}
 
 	storageCalls.With(labelApplyBatch).Inc()
+	return receipts, err
+}
+
+func (w *metricsWrapper) Merge(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	base hash.Hash,
+	others []hash.Hash,
+) ([]*api.Receipt, error) {
+	start := time.Now()
+	receipts, err := w.Backend.Merge(ctx, ns, round, base, others)
+	storageLatency.With(labelMerge).Observe(time.Since(start).Seconds())
+	if err != nil {
+		storageFailures.With(labelMerge).Inc()
+		return nil, err
+	}
+
+	storageCalls.With(labelMerge).Inc()
+	return receipts, err
+}
+
+func (w *metricsWrapper) MergeBatch(
+	ctx context.Context,
+	ns common.Namespace,
+	round uint64,
+	ops []api.MergeOp,
+) ([]*api.Receipt, error) {
+	start := time.Now()
+	receipts, err := w.Backend.MergeBatch(ctx, ns, round, ops)
+	storageLatency.With(labelMergeBatch).Observe(time.Since(start).Seconds())
+	if err != nil {
+		storageFailures.With(labelMergeBatch).Inc()
+		return nil, err
+	}
+
+	storageCalls.With(labelMergeBatch).Inc()
 	return receipts, err
 }
 
