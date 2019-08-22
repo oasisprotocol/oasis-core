@@ -356,17 +356,14 @@ func (n *Node) worker() {
 	defer close(n.quitCh)
 	defer (n.cancelCtx)()
 
-	// Delay starting of committee node until after the consensus service
-	// has finished initial synchronization, if applicable.
-	if n.commonNode.Consensus != nil {
-		n.logger.Info("delaying committee node start until after initial synchronization")
-		select {
-		case <-n.stopCh:
-			close(n.initCh)
-			return
-		case <-n.commonNode.Consensus.Synced():
-		}
+	// Wait for the common node to be initialized.
+	select {
+	case <-n.commonNode.Initialized():
+	case <-n.stopCh:
+		close(n.initCh)
+		return
 	}
+
 	n.logger.Info("starting committee node")
 
 	// Check incoming queue every FlushTimeout.
