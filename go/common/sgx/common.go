@@ -151,6 +151,16 @@ func (id *EnclaveIdentity) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// UnmarshalHex decodes a hex marshaled EnclaveIdentity.
+func (id *EnclaveIdentity) UnmarshalHex(text string) error {
+	b, err := hex.DecodeString(text)
+	if err != nil {
+		return errors.Wrap(err, "sgx:malformed EnclaveIdentity")
+	}
+
+	return id.UnmarshalBinary(b)
+}
+
 // FromComponents constructs an EnclaveIdentity from it's component
 // parts.
 func (id *EnclaveIdentity) FromComponents(mrsigner Mrsigner, mrenclave Mrenclave) {
