@@ -329,7 +329,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 func (n *Node) initGenesis() error {
 	var err error
-	if n.Genesis, err = genesis.New(n.Identity); err == nil {
+	if n.Genesis, err = genesis.New(); err == nil {
 		return nil
 	}
 	if os.IsNotExist(err) {
