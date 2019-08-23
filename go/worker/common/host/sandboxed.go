@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/ctxsync"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -187,9 +188,8 @@ func (p *process) attestationWorker(h *sandboxedHost) {
 
 		p.logger.Info("regenerating CapabilityTEE")
 
-		switch p.capabilityTEE.Hardware {
-		case node.TEEHardwareIntelSGX:
-			capabilityTEE, err := h.updateCapabilityTEESgx(p)
+		if h.teeState != nil {
+			capabilityTEE, err := h.teeState.UpdateCapabilityTEE(p)
 			if err != nil {
 				p.logger.Error("failed to regenerate CapabilityTEE",
 					"err", err,
@@ -328,7 +328,7 @@ func prepareWorkerArgs(hostSocket, runtimeBinary string, proxies map[string]Prox
 	return args
 }
 
-// HostRequest is an internal request to manager goroutine that is dispatched
+// hostRequest is an internal request to manager goroutine that is dispatched
 // to the worker when a worker becomes available.
 type hostRequest struct {
 	ctx  context.Context
@@ -336,21 +336,26 @@ type hostRequest struct {
 	ch   chan<- *hostResponse
 }
 
-// HostResponse is an internal response from the manager goroutine that is
+// hostResponse is an internal response from the manager goroutine that is
 // returned to the caller when a request has been dispatched to the worker.
 type hostResponse struct {
 	ch  <-chan *protocol.Body
 	err error
 }
 
-// InterruptRequest is an internal request to manager goroutine that signals
+// interruptRequest is an internal request to manager goroutine that signals
 // the worker should be interrupted.
 type interruptRequest struct {
 	ctx context.Context
 	ch  chan<- error
 }
 
-type teeState struct {
+type teeState interface {
+	InitCapabilityTEE(worker *process) error
+	UpdateCapabilityTEE(worker *process) (*node.CapabilityTEE, error)
+}
+
+type teeStateIntelSGX struct {
 	ias  *ias.IAS
 	aesm *aesm.Client
 
@@ -359,24 +364,153 @@ type teeState struct {
 	quoteType *cias.SignatureType
 }
 
-// SandboxedHost is a worker Host that runs worker processes in a bubblewrap
-// sandbox.
-type sandboxedHost struct { // nolint: maligned
-	workerBinary  string
-	runtimeBinary string
-	noSandbox     bool
+func (st *teeStateIntelSGX) InitCapabilityTEE(worker *process) error {
+	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout)
+	defer cancel()
 
-	proxies     map[string]ProxySpecification
-	teeHardware node.TEEHardware
-	teeState    *teeState
-	msgHandler  protocol.Handler
+	qi, err := st.aesm.InitQuote(ctx)
+	if err != nil {
+		return errors.Wrap(err, "worker: error while getting quote info from AESM")
+	}
+	st.epidGID = binary.LittleEndian.Uint32(qi.GID[:])
+
+	if st.spid, err = st.ias.GetSPID(ctx); err != nil {
+		return errors.Wrap(err, "worker: error while getting IAS SPID")
+	}
+	if st.quoteType, err = st.ias.GetQuoteSignatureType(ctx); err != nil {
+		return errors.Wrap(err, "worker: error while getting IAS signature type")
+	}
+
+	if _, err = worker.protocol.Call(
+		ctx,
+		&protocol.Body{
+			WorkerCapabilityTEERakInitRequest: &protocol.WorkerCapabilityTEERakInitRequest{
+				TargetInfo: qi.TargetInfo,
+			},
+		},
+	); err != nil {
+		return errors.Wrap(err, "worker: error while initializing RAK")
+	}
+	return nil
+}
+
+func (st *teeStateIntelSGX) UpdateCapabilityTEE(worker *process) (*node.CapabilityTEE, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout)
+	defer cancel()
+
+	// Update the SigRL (Not cached, knowing if revoked is important).
+	sigRL, err := st.ias.GetSigRL(ctx, st.epidGID)
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while requesting SigRL")
+	}
+	sigRL = cbor.FixSliceForSerde(sigRL)
+
+	rakQuoteRes, err := worker.protocol.Call(
+		ctx,
+		&protocol.Body{
+			WorkerCapabilityTEERakReportRequest: &protocol.Empty{},
+		},
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while requesting worker quote and public RAK")
+	}
+	rakPub := rakQuoteRes.WorkerCapabilityTEERakReportResponse.RakPub
+	report := rakQuoteRes.WorkerCapabilityTEERakReportResponse.Report
+	nonce := rakQuoteRes.WorkerCapabilityTEERakReportResponse.Nonce
+
+	quote, err := st.aesm.GetQuote(
+		ctx,
+		report,
+		*st.quoteType,
+		st.spid,
+		make([]byte, 16),
+		sigRL,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while getting quote")
+	}
+
+	avr, sig, chain, err := st.ias.VerifyEvidence(ctx, quote, nil, nonce)
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while verifying attestation evidence")
+	}
+
+	avrBundle := cias.AVRBundle{
+		Body:             avr,
+		CertificateChain: chain,
+		Signature:        sig,
+	}
+	_, err = worker.protocol.Call(
+		ctx,
+		&protocol.Body{
+			WorkerCapabilityTEERakAvrRequest: &protocol.WorkerCapabilityTEERakAvrRequest{
+				AVR: avrBundle,
+			},
+		},
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "worker: error while configuring AVR")
+	}
+
+	attestation := avrBundle.MarshalCBOR()
+	capabilityTEE := &node.CapabilityTEE{
+		Hardware:    node.TEEHardwareIntelSGX,
+		RAK:         rakPub,
+		Attestation: attestation,
+	}
+
+	return capabilityTEE, nil
+}
+
+// Config is the worker host configuration.
+type Config struct { //nolint: maligned
+	// Role is the role of this worker host.
+	Role node.RolesMask
+
+	// ID is the runtime ID of this worker host.
+	ID signature.PublicKey
+
+	// WorkerBinary is the path to the worker executable binary, typically
+	// the loader.
+	WorkerBinary string
+
+	// RuntimeBinary is the path to the worker runtime binary.
+	RuntimeBinary string
+
+	// Proxies are the network proxies for allowing external connectivity
+	// from within the worker host environment.
+	Proxies map[string]ProxySpecification
+
+	// TEEHardware is the TEE hardware to be made available within the
+	// worker host environment.
+	TEEHardware node.TEEHardware
+
+	// IAS is the Intel Attestation Service backend.
+	IAS *ias.IAS
+
+	// MessageHandler is the IPC message handler.
+	MessageHandler protocol.Handler
+
+	// OnProcessStart is the on-process-start hook function.
+	OnProcessStart OnProcessStart
+
+	// NoSandbox will disable bubblewrap confinement iff set to true.
+	NoSandbox bool
+}
+
+// sandboxedHost is a worker Host that runs worker processes in a bubblewrap
+// sandbox.
+type sandboxedHost struct { //nolint: maligned
+	cfg *Config
+
+	proxies  map[string]ProxySpecification
+	teeState teeState
 
 	stopCh chan struct{}
 	quitCh chan struct{}
 
 	activeWorker          *process
 	activeWorkerAvailable *ctxsync.CancelableCond
-	onProcessStart        OnProcessStart
 	requestCh             chan *hostRequest
 	interruptCh           chan *interruptRequest
 
@@ -384,6 +518,9 @@ type sandboxedHost struct { // nolint: maligned
 }
 
 func (h *sandboxedHost) Name() string {
+	if h.cfg.NoSandbox {
+		return "unconfined worker host"
+	}
 	return "sandboxed worker host"
 }
 
@@ -460,105 +597,6 @@ func (h *sandboxedHost) checkInfo(worker *process) error {
 	return nil
 }
 
-func (h *sandboxedHost) initCapabilityTEESgx(worker *process) error {
-	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout)
-	defer cancel()
-
-	qi, err := h.teeState.aesm.InitQuote(ctx)
-	if err != nil {
-		return errors.Wrap(err, "worker: error while getting quote info from AESM")
-	}
-	h.teeState.epidGID = binary.LittleEndian.Uint32(qi.GID[:])
-
-	if h.teeState.spid, err = h.teeState.ias.GetSPID(ctx); err != nil {
-		return errors.Wrap(err, "worker: error while getting IAS SPID")
-	}
-	if h.teeState.quoteType, err = h.teeState.ias.GetQuoteSignatureType(ctx); err != nil {
-		return errors.Wrap(err, "worker: error while getting IAS signature type")
-	}
-
-	if _, err = worker.protocol.Call(
-		ctx,
-		&protocol.Body{
-			WorkerCapabilityTEERakInitRequest: &protocol.WorkerCapabilityTEERakInitRequest{
-				TargetInfo: qi.TargetInfo,
-			},
-		},
-	); err != nil {
-		return errors.Wrap(err, "worker: error while initializing RAK")
-	}
-
-	return nil
-}
-
-func (h *sandboxedHost) updateCapabilityTEESgx(worker *process) (*node.CapabilityTEE, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), workerRAKTimeout)
-	defer cancel()
-
-	// Update the SigRL (Not cached, knowing if revoked is important).
-	sigRL, err := h.teeState.ias.GetSigRL(ctx, h.teeState.epidGID)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while requesting SigRL")
-	}
-	sigRL = cbor.FixSliceForSerde(sigRL)
-
-	rakQuoteRes, err := worker.protocol.Call(
-		ctx,
-		&protocol.Body{
-			WorkerCapabilityTEERakReportRequest: &protocol.Empty{},
-		},
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while requesting worker quote and public RAK")
-	}
-	rakPub := rakQuoteRes.WorkerCapabilityTEERakReportResponse.RakPub
-	report := rakQuoteRes.WorkerCapabilityTEERakReportResponse.Report
-	nonce := rakQuoteRes.WorkerCapabilityTEERakReportResponse.Nonce
-
-	quote, err := h.teeState.aesm.GetQuote(
-		ctx,
-		report,
-		*h.teeState.quoteType,
-		h.teeState.spid,
-		make([]byte, 16),
-		sigRL,
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while getting quote")
-	}
-
-	avr, sig, chain, err := h.teeState.ias.VerifyEvidence(ctx, quote, nil, nonce)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while verifying attestation evidence")
-	}
-
-	avrBundle := cias.AVRBundle{
-		Body:             avr,
-		CertificateChain: chain,
-		Signature:        sig,
-	}
-	_, err = worker.protocol.Call(
-		ctx,
-		&protocol.Body{
-			WorkerCapabilityTEERakAvrRequest: &protocol.WorkerCapabilityTEERakAvrRequest{
-				AVR: avrBundle,
-			},
-		},
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "worker: error while configuring AVR")
-	}
-
-	attestation := avrBundle.MarshalCBOR()
-	capabilityTEE := &node.CapabilityTEE{
-		Hardware:    node.TEEHardwareIntelSGX,
-		RAK:         rakPub,
-		Attestation: attestation,
-	}
-
-	return capabilityTEE, nil
-}
-
 func (h *sandboxedHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan *protocol.Body, error) {
 	respCh := make(chan *hostResponse, 1)
 
@@ -597,10 +635,10 @@ func (h *sandboxedHost) InterruptWorker(ctx context.Context) error {
 	}
 }
 
-func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
+func (h *sandboxedHost) spawnWorker() (*process, error) { //nolint: gocyclo
 	h.logger.Info("spawning worker",
-		"worker_binary", h.workerBinary,
-		"runtime_binary", h.runtimeBinary,
+		"worker_binary", h.cfg.WorkerBinary,
+		"runtime_binary", h.cfg.RuntimeBinary,
 	)
 
 	// Create a temporary worker directory.
@@ -627,13 +665,13 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
 	var sandboxArgs []string
 	var sandboxBinary string
 	var workerArgs []string
-	if h.noSandbox {
-		sandboxBinary = h.workerBinary
+	if h.cfg.NoSandbox {
+		sandboxBinary = h.cfg.WorkerBinary
 		workerArgs = prepareWorkerArgs(
 			hostSocket,
-			h.runtimeBinary,
+			h.cfg.RuntimeBinary,
 			h.proxies,
-			h.teeHardware,
+			h.cfg.TEEHardware,
 		)
 	} else {
 		sandboxArgs = []string{
@@ -646,7 +684,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
 			workerMountHostSocket,
 			workerMountRuntimeBin,
 			h.proxies,
-			h.teeHardware,
+			h.cfg.TEEHardware,
 		)
 	}
 
@@ -658,7 +696,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
 
 	var sandboxCmdPipeW *os.File
 	var sandboxSeccompPipeW *os.File
-	if !h.noSandbox {
+	if !h.cfg.NoSandbox {
 		// Create a pipe for passing the sandbox arguments. The read end of the
 		// pipe is passed to the child process.
 		cmdPipeR, cmdPipeW, perr := os.Pipe()
@@ -694,9 +732,16 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
 		}
 	}()
 
-	if !h.noSandbox {
+	if !h.cfg.NoSandbox {
 		// Instruct the sandbox how to prepare itself.
-		sandboxArgs, err := prepareSandboxArgs(hostSocket, h.workerBinary, h.runtimeBinary, h.proxies, h.teeHardware) // nolint: govet
+		var sandboxArgs []string
+		sandboxArgs, err = prepareSandboxArgs(
+			hostSocket,
+			h.cfg.WorkerBinary,
+			h.cfg.RuntimeBinary,
+			h.proxies,
+			h.cfg.TEEHardware,
+		) //nolint: govet
 		if err != nil {
 			return nil, errors.Wrap(err, "worker: error while preparing sandbox args")
 		}
@@ -775,7 +820,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
 
 	// Spawn protocol instance on the given connection.
 	logger := h.logger.With("worker_pid", cmd.Process.Pid)
-	proto, err := protocol.New(logger, conn, h.msgHandler)
+	proto, err := protocol.New(logger, conn, h.cfg.MessageHandler)
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while instantiating protocol")
 	}
@@ -797,23 +842,19 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { // nolint: gocyclo
 	}
 
 	// Initialize the worker's CapabilityTEE.
-	switch h.teeHardware {
-	case node.TEEHardwareInvalid:
-		// No initialization needed.
+	if h.teeState != nil {
+		if err = h.teeState.InitCapabilityTEE(p); err != nil {
+			return nil, errors.Wrap(err, "worker: error initializing CapabilityTEE")
+		}
+		if p.capabilityTEE, err = h.teeState.UpdateCapabilityTEE(p); err != nil {
+			return nil, errors.Wrap(err, "worker: error updating CapabilityTEE")
+		}
+	} else {
 		p.capabilityTEE = nil
-	case node.TEEHardwareIntelSGX:
-		if err = h.initCapabilityTEESgx(p); err != nil {
-			return nil, errors.Wrap(err, "worker: error initializing SGX CapabilityTEE")
-		}
-		if p.capabilityTEE, err = h.updateCapabilityTEESgx(p); err != nil {
-			return nil, errors.Wrap(err, "worker: error updating SGX CapabilityTEE")
-		}
-	default:
-		return nil, node.ErrInvalidTEEHardware
 	}
 
-	if h.onProcessStart != nil {
-		if err = h.onProcessStart(proto, p.capabilityTEE); err != nil {
+	if h.cfg.OnProcessStart != nil {
+		if err = h.cfg.OnProcessStart(proto, p.capabilityTEE); err != nil {
 			return nil, errors.Wrap(err, "worker: process post-start hook failed")
 		}
 	}
@@ -948,64 +989,57 @@ ManagerLoop:
 	close(h.quitCh)
 }
 
-// NewSandboxedHost creates a new sandboxed worker host.
-func NewSandboxedHost(
-	name string,
-	workerBinary string,
-	runtimeBinary string,
-	proxies map[string]ProxySpecification,
-	teeHardware node.TEEHardware,
-	ias *ias.IAS,
-	msgHandler protocol.Handler,
-	onProcessStart OnProcessStart,
-	noSandbox bool,
-) (Host, error) {
-	if workerBinary == "" {
+// NewHost creates a new worker host.
+func NewHost(cfg *Config) (Host, error) {
+	if cfg.WorkerBinary == "" {
 		return nil, errors.New("worker binary not configured")
 	}
-	if runtimeBinary == "" {
+	if cfg.RuntimeBinary == "" {
 		return nil, errors.New("runtime binary not configured")
 	}
 
 	knownProxies := make(map[string]ProxySpecification)
-	for name, mappedSocket := range workerMountSocketMap {
-		if proxy, ok := proxies[name]; ok {
-			proxy.mapName = mappedSocket
-			if noSandbox {
-				proxy.innerAddr = proxy.OuterAddr
-			} else {
-				proxy.innerAddr = workerProxyInnerAddrs[name]
+	if cfg.Proxies != nil {
+		for name, mappedSocket := range workerMountSocketMap {
+			if proxy, ok := cfg.Proxies[name]; ok {
+				proxy.mapName = mappedSocket
+				if cfg.NoSandbox {
+					proxy.innerAddr = proxy.OuterAddr
+				} else {
+					proxy.innerAddr = workerProxyInnerAddrs[name]
+				}
+				proxy.bypass = cfg.NoSandbox
+				knownProxies[name] = proxy
 			}
-			proxy.bypass = noSandbox
-			knownProxies[name] = proxy
 		}
 	}
 
-	var aesmClient *aesm.Client
-	switch teeHardware {
+	var hostTeeState teeState
+	switch cfg.TEEHardware {
+	case node.TEEHardwareInvalid:
 	case node.TEEHardwareIntelSGX:
-		aesmClient = aesm.NewClient(teeIntelSGXSocket)
+		hostTeeState = &teeStateIntelSGX{
+			ias:  cfg.IAS,
+			aesm: aesm.NewClient(teeIntelSGXSocket),
+		}
 	default:
+		return nil, node.ErrInvalidTEEHardware
 	}
 
+	logger := logging.GetLogger("worker/common/host/sandboxed").With(
+		"name", cfg.Role.String()+":"+cfg.ID.String(),
+	)
+
 	host := &sandboxedHost{
-		workerBinary:  workerBinary,
-		runtimeBinary: runtimeBinary,
-		noSandbox:     noSandbox,
-		proxies:       knownProxies,
-		teeHardware:   teeHardware,
-		teeState: &teeState{
-			ias:  ias,
-			aesm: aesmClient,
-		},
-		msgHandler:            msgHandler,
+		cfg:                   cfg,
+		proxies:               knownProxies,
+		teeState:              hostTeeState,
 		quitCh:                make(chan struct{}),
 		stopCh:                make(chan struct{}),
 		activeWorkerAvailable: ctxsync.NewCancelableCond(new(sync.Mutex)),
-		onProcessStart:        onProcessStart,
 		requestCh:             make(chan *hostRequest, 10),
 		interruptCh:           make(chan *interruptRequest, 10),
-		logger:                logging.GetLogger("worker/common/host/sandboxed").With("name", name),
+		logger:                logger,
 	}
 	return host, nil
 }

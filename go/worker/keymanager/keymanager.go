@@ -431,17 +431,18 @@ func New(dataDir string, ias *ias.IAS, grpc *grpc.Server, r *registration.Regist
 
 		w.registration.RegisterRole(w.onNodeRegistration)
 
-		if w.workerHost, err = host.NewSandboxedHost(
-			"keymanager",
-			workerRuntimeLoaderBinary,
-			runtimeBinary,
-			make(map[string]host.ProxySpecification),
-			teeHardware,
-			ias,
-			newHostHandler(w),
-			w.onProcessStart,
-			false,
-		); err != nil {
+		hostCfg := &host.Config{
+			Role:           node.RoleKeyManager,
+			ID:             w.runtimeID,
+			WorkerBinary:   workerRuntimeLoaderBinary,
+			RuntimeBinary:  runtimeBinary,
+			TEEHardware:    teeHardware,
+			IAS:            ias,
+			MessageHandler: newHostHandler(w),
+			OnProcessStart: w.onProcessStart,
+		}
+
+		if w.workerHost, err = host.NewHost(hostCfg); err != nil {
 			return nil, false, errors.Wrap(err, "worker/keymanager: failed to create worker host")
 		}
 

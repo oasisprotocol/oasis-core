@@ -239,31 +239,24 @@ func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, 
 			OuterAddr:  v.RemoteAddress(),
 		}
 	}
+
+	hostCfg := &host.Config{
+		Role:           node.RoleComputeWorker,
+		ID:             rtCfg.ID,
+		WorkerBinary:   cfg.WorkerRuntimeLoaderBinary,
+		RuntimeBinary:  rtCfg.Binary,
+		Proxies:        proxies,
+		TEEHardware:    rtCfg.TEEHardware,
+		IAS:            w.ias,
+		MessageHandler: newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
+	}
+
 	switch strings.ToLower(cfg.Backend) {
 	case host.BackendSandboxed:
-		h, err = host.NewSandboxedHost(
-			rtCfg.ID.String(),
-			cfg.WorkerRuntimeLoaderBinary,
-			rtCfg.Binary,
-			proxies,
-			rtCfg.TEEHardware,
-			w.ias,
-			newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
-			nil,
-			false,
-		)
+		h, err = host.NewHost(hostCfg)
 	case host.BackendUnconfined:
-		h, err = host.NewSandboxedHost(
-			rtCfg.ID.String(),
-			cfg.WorkerRuntimeLoaderBinary,
-			rtCfg.Binary,
-			proxies,
-			rtCfg.TEEHardware,
-			w.ias,
-			newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
-			nil,
-			true,
-		)
+		hostCfg.NoSandbox = true
+		h, err = host.NewHost(hostCfg)
 	case host.BackendMock:
 		h, err = host.NewMockHost()
 	default:
