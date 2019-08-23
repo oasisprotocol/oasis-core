@@ -48,7 +48,6 @@ func New(
 			return nil, err
 		}
 	}
-	tlsCert := identity.TLSCertificate
 
 	backend := viper.GetString(cfgBackend)
 	applyLockLRUSlots := uint64(viper.GetInt(cfgLRUSlots))
@@ -62,10 +61,10 @@ func New(
 		dbDir := filepath.Join(dataDir, leveldb.DBFile)
 		impl, err = leveldb.New(dbDir, signer, applyLockLRUSlots, insecureSkipChecks)
 	case client.BackendName:
-		impl, err = client.New(ctx, tlsCert, schedulerBackend, registryBackend)
+		impl, err = client.New(ctx, identity, schedulerBackend, registryBackend)
 	case cachingclient.BackendName:
 		var remote api.Backend
-		remote, err = client.New(ctx, tlsCert, schedulerBackend, registryBackend)
+		remote, err = client.New(ctx, identity, schedulerBackend, registryBackend)
 		if err != nil {
 			return nil, err
 		}

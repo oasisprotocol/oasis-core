@@ -34,7 +34,7 @@ var (
 	// Value is serialized node.
 	nodeKeyFmt = keyformat.New('N', &common.Namespace{}, &hash.Hash{})
 	// writeLogKeyFmt is the key format for write logs (namespace, round,
-	// old root, new root).
+	// new root, old root).
 	//
 	// Value is CBOR-serialized write log.
 	writeLogKeyFmt = keyformat.New('L', &common.Namespace{}, uint64(0), &hash.Hash{}, &hash.Hash{})
@@ -152,13 +152,13 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 
 	tx := d.db.NewTransaction(false)
 	defer tx.Discard()
-	key := writeLogKeyFmt.Encode(&endRoot.Namespace, endRoot.Round, &startRoot.Hash, &endRoot.Hash)
+	key := writeLogKeyFmt.Encode(&endRoot.Namespace, endRoot.Round, &endRoot.Hash, &startRoot.Hash)
 	item, err := tx.Get(key)
 	if err != nil {
 		d.logger.Error("failed to Get write log from backing store",
 			"err", err,
-			"start_root", startRoot,
-			"end_root", endRoot,
+			"old_root", startRoot,
+			"new_root", endRoot,
 		)
 		return nil, errors.Wrap(err, "urkel/db/badger: failed to Get write log from backing store")
 	}
@@ -759,10 +759,48 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 	// Store write log.
 	if ba.writeLog != nil && ba.annotations != nil {
 		log := api.MakeHashedDBWriteLog(ba.writeLog, ba.annotations)
-		bytes := cbor.Marshal(log)
-		key := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &ba.oldRoot.Hash, &root.Hash)
-		if err := ba.bat.Set(key, bytes); err != nil {
-			return errors.Wrap(err, "urkel/db/badger: set returned error")
+
+		prefix := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &ba.oldRoot.Hash)
+		it := tx.NewIterator(badger.IteratorOptions{Prefix: prefix})
+		defer it.Close()
+
+		foundOld := false
+		for it.Rewind(); it.Valid(); it.Next() {
+			var decNs common.Namespace
+			var decRound uint64
+			var oldRootHash hash.Hash
+			var olderRootHash hash.Hash
+
+			if !writeLogKeyFmt.Decode(it.Item().Key(), &decNs, &decRound, &oldRootHash, &olderRootHash) {
+				// This should not happen as the Badger iterator should take care of it.
+				panic("urkel/db/badger: bad iterator")
+			}
+
+			// If an older write log exists, get it, merge it with this one and delete it from the db.
+			var oldWriteLog api.HashedDBWriteLog
+			err := it.Item().Value(func(data []byte) error {
+				return cbor.Unmarshal(data, &oldWriteLog)
+			})
+			if err != nil {
+				return err
+			}
+			oldWriteLog = append(oldWriteLog, log...)
+			bytes := cbor.Marshal(oldWriteLog)
+			if err := ba.bat.Set(writeLogKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &olderRootHash), bytes); err != nil {
+				return errors.Wrap(err, "urkel/db/badger: set merged write log returned error")
+			}
+			if err := ba.bat.Delete(it.Item().KeyCopy(nil)); err != nil {
+				return errors.Wrap(err, "urkel/db/badger: delete partial write log returned error")
+			}
+			foundOld = true
+		}
+
+		if !foundOld {
+			bytes := cbor.Marshal(log)
+			key := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &ba.oldRoot.Hash)
+			if err := ba.bat.Set(key, bytes); err != nil {
+				return errors.Wrap(err, "urkel/db/badger: set new write log returned error")
+			}
 		}
 	}
 

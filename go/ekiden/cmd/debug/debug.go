@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/debug/client"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/debug/dummy"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/debug/roothash"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/debug/storage"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/debug/tendermint"
 )
 
@@ -21,6 +22,7 @@ func Register(parentCmd *cobra.Command) {
 	client.Register(debugCmd)
 	dummy.Register(debugCmd)
 	roothash.Register(debugCmd)
+	storage.Register(debugCmd)
 	tendermint.Register(debugCmd)
 	byzantine.Register(debugCmd)
 

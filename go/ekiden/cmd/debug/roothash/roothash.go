@@ -37,7 +37,7 @@ var (
 				return err
 			}
 			for _, arg := range args {
-				if err := validateRuntimeIDStr(arg); err != nil {
+				if err := ValidateRuntimeIDStr(arg); err != nil {
 					return fmt.Errorf("malformed runtime id '%v': %v", arg, err)
 				}
 			}
@@ -52,7 +52,8 @@ var (
 	cfgRoothashExportFile = "output_file"
 )
 
-func validateRuntimeIDStr(idStr string) error {
+// ValidateRuntimeIDStr validates that the given string is a valid runtime id.
+func ValidateRuntimeIDStr(idStr string) error {
 	b, err := hex.DecodeString(idStr)
 	if err != nil {
 		return err

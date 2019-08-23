@@ -13,6 +13,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/grpc/storage"
@@ -66,7 +67,7 @@ type watcherState struct {
 
 	runtimeID signature.MapKey
 
-	tlsCertificate *tls.Certificate
+	identity *identity.Identity
 
 	registeredStorageNodes []*node.Node
 	scheduledNodes         map[signature.MapKey]bool
@@ -154,6 +155,11 @@ func (w *watcherState) updateStorageNodeConnections() {
 
 	// Connect to nodes.
 	for _, node := range nodeList {
+		// But prevent connecting to self.
+		if w.identity != nil && node.ID.Equal(w.identity.NodeSigner.Public()) {
+			continue
+		}
+
 		var opts grpc.DialOption
 		if node.Committee.Certificate == nil {
 			// NOTE: This should only happen in tests, where nodes register without a certificate.
@@ -172,7 +178,7 @@ func (w *watcherState) updateStorageNodeConnections() {
 			certPool := x509.NewCertPool()
 			certPool.AddCert(nodeCert)
 			creds := credentials.NewTLS(&tls.Config{
-				Certificates: []tls.Certificate{*w.tlsCertificate},
+				Certificates: []tls.Certificate{*w.identity.TLSCertificate},
 				RootCAs:      certPool,
 				ServerName:   "ekiden-node",
 			})
@@ -313,7 +319,7 @@ func (w *watcherState) watch(ctx context.Context) {
 func newWatcher(
 	ctx context.Context,
 	runtimeID signature.PublicKey,
-	tlsCertificate *tls.Certificate,
+	identity *identity.Identity,
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
 ) storageWatcher {
@@ -323,7 +329,7 @@ func newWatcher(
 		initCh:                 make(chan struct{}),
 		logger:                 logger,
 		runtimeID:              runtimeID.ToMapKey(),
-		tlsCertificate:         tlsCertificate,
+		identity:               identity,
 		scheduler:              schedulerBackend,
 		registry:               registryBackend,
 		registeredStorageNodes: []*node.Node{},

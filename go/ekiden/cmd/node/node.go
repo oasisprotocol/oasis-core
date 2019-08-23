@@ -162,7 +162,7 @@ func (n *Node) initBackends() error {
 	grpcSrv := n.grpcInternal.Server()
 	registry.NewGRPCServer(grpcSrv, n.Registry)
 	staking.NewGRPCServer(grpcSrv, n.Staking)
-	storage.NewGRPCServer(grpcSrv, n.Storage, &grpc.AllowAllRuntimePolicyChecker{})
+	storage.NewGRPCServer(grpcSrv, n.Storage, &grpc.AllowAllRuntimePolicyChecker{}, false)
 	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
 
 	cmdCommon.Logger().Debug("backends initialized")
@@ -232,6 +232,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 	// Initialize the storage worker.
 	n.StorageWorker, err = workerStorage.New(
+		n.grpcInternal,
 		n.CommonWorker,
 		n.WorkerRegistration,
 		n.Genesis,

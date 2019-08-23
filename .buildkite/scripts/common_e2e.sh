@@ -297,6 +297,9 @@ run_compute_node() {
 # Optional named arguments:
 #   clear_storage - clear storage node dir (default: 1)
 #
+# Output environment variables:
+#   EKIDEN_LAST_NODE_DATA_DIR - the data directory for the last node run
+#
 run_storage_node() {
     # Process arguments.
     local id=$1
@@ -304,6 +307,7 @@ run_storage_node() {
 
     # Optional arguments with default values.
     local clear_storage=1
+    local extra_args=""
     # Load named arguments that override defaults.
     local "$@"
 
@@ -317,6 +321,7 @@ run_storage_node() {
     if [[ $clear_storage == 1 ]]; then
         rm -rf ${data_dir}
     fi
+    EKIDEN_LAST_NODE_DATA_DIR="${data_dir}"
     local log_file=${EKIDEN_COMMITTEE_DIR}/storage-$id.log
     rm -rf ${log_file}
 
@@ -349,6 +354,7 @@ run_storage_node() {
         --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
         --datadir ${data_dir} \
         --debug.allow_test_keys \
+        $extra_args \
         2>&1 | sed "s/^/[storage-node-${id}] /" &
 }
 

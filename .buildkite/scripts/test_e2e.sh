@@ -108,6 +108,40 @@ assert_merge_discrepancy_scenario_works() {
     assert_merge_discrepancies
 }
 
+scenario_storage_sync() {
+    local runtime=simple-keyvalue
+    local client=simple-keyvalue
+
+    # Initialize compute nodes.
+    run_compute_node 1 ${runtime}
+    run_compute_node 2 ${runtime}
+    run_compute_node 3 ${runtime}
+
+    # Initialize storage nodes.
+    run_storage_node 1
+    run_storage_node 2 extra_args="--worker.debug.storage.ignore_apply"
+
+    # Wait for all nodes to start: 3 compute + 2 storage + key manager.
+    wait_nodes 6
+
+    # Advance epoch to elect a new committee.
+    set_epoch 1
+
+    # Wait for the client to exit without waiting on it.
+    while kill -0 ${EKIDEN_CLIENT_PID}; do
+        sleep 5
+    done
+
+    local log_file=${EKIDEN_COMMITTEE_DIR}/client-storage-debug.log
+    ${EKIDEN_NODE} debug storage check-roots \
+        --datadir ${EKIDEN_COMMITTEE_DIR} \
+        --log.level debug \
+        --log.file ${log_file} \
+        --storage.debug.client.address "unix:${EKIDEN_LAST_NODE_DATA_DIR}/internal.sock" \
+        --address "unix:${EKIDEN_LAST_NODE_DATA_DIR}/internal.sock" \
+        ${EKIDEN_RUNTIME_ID}
+}
+
 run_client_km_restart() {
     local runtime=$1
     local client=$2
@@ -198,6 +232,15 @@ test_suite() {
         client=simple-keyvalue \
         on_success_hook=assert_merge_discrepancy_scenario_works \
         beacon_deterministic=1
+
+    # Storage node syncing scenario.
+    run_test \
+        scenario=scenario_storage_sync \
+        name="e2e-${backend_name}-storage-sync" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue
+
 }
 
 ##########################################
