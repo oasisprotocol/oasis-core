@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/hex"
+	encPem "encoding/pem"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -25,6 +27,7 @@ const (
 	SignatureSize = ed25519.SignatureSize
 
 	pubPEMType = "ED25519 PUBLIC KEY"
+	sigPEMType = "ED25519 SIGNATURE"
 	filePerm   = 0600
 )
 
@@ -265,6 +268,22 @@ func (r *RawSignature) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// MarshalPEM encodes a raw signature into PEM format.
+func (r RawSignature) MarshalPEM() (data []byte, err error) {
+	return pem.Marshal(sigPEMType, r[:])
+}
+
+// UnmarshalPEM decodes a PEM marshaled raw signature.
+func (r *RawSignature) UnmarshalPEM(data []byte) error {
+	sig, err := pem.Unmarshal(sigPEMType, data)
+	if err != nil {
+		return err
+	}
+	copy(r[:], sig)
+
+	return nil
+}
+
 // Signature is a signature, bundled with the signing public key.
 type Signature struct {
 	// PublicKey is the public key that produced the signature.
@@ -334,6 +353,52 @@ func (s *Signature) ToProto() *common.Signature {
 	pb.Signature, _ = s.Signature.MarshalBinary()
 
 	return pb
+}
+
+// MarshalPEM encodes a signature into PEM format.
+func (s Signature) MarshalPEM() (data []byte, err error) {
+	pk, err := s.PublicKey.MarshalPEM()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	sig, err := s.Signature.MarshalPEM()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return bytes.Join([][]byte{pk, sig}, []byte{}), nil
+}
+
+// UnmarshalPem decodes a PEM marshaled signature.
+func (s *Signature) UnmarshalPEM(data []byte) error {
+	// Marshalled PEM file contains public key block first...
+	blk, rest := encPem.Decode(data)
+	if blk == nil {
+		return fmt.Errorf("signature: error while decoding PEM block %s", pubPEMType)
+	}
+
+	if blk.Type != pubPEMType {
+		return fmt.Errorf("signature: expected different PEM block (expected: %s got: %s)", pubPEMType, blk.Type)
+	}
+	if err := s.PublicKey.UnmarshalBinary(blk.Bytes); err != nil {
+		return err
+	}
+
+	// ...and then raw signature.
+	blk, _ = encPem.Decode(rest)
+	if blk == nil {
+		return fmt.Errorf("signature: error while decoding PEM block %s", sigPEMType)
+	}
+
+	if blk.Type != sigPEMType {
+		return fmt.Errorf("signature: expected different PEM block (expected: %s got: %s)", sigPEMType, blk.Type)
+	}
+	if err := s.Signature.UnmarshalBinary(blk.Bytes); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Signed is a signed blob.

@@ -45,10 +45,11 @@ fi
 # Run the build
 ###############
 pushd $src_dir
-    # Build non-SGX runtime.
-    cargo build --locked
+    # Build non-SGX runtime. Checking KM policy requires SGX, disable it.
+    EKIDEN_UNSAFE_SKIP_KM_POLICY="1" cargo build --locked
 
     # Build SGX runtime.
+    unset EKIDEN_UNSAFE_SKIP_KM_POLICY
     cargo build --locked --target x86_64-fortanix-unknown-sgx
     cargo elf2sgxs
 popd

@@ -40,6 +40,16 @@ func (m *Mrenclave) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// UnmarshalHex decodes a hex marshaled Mrenclave.
+func (m *Mrenclave) UnmarshalHex(text string) error {
+	b, err := hex.DecodeString(text)
+	if err != nil {
+		return err
+	}
+
+	return m.UnmarshalBinary(b)
+}
+
 // FromSgxs derives a Mrenclave from r, under the assumption that r will
 // provide the entire `.sgxs` file.
 func (m *Mrenclave) FromSgxs(r io.Reader) error {

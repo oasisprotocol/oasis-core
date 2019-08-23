@@ -62,12 +62,11 @@ run_backend_tendermint_committee() {
 
     # Provision the entity for everything.
     local entity_dir=${committee_dir}/entity
+    local km_file=${entity_dir}/km_status.json
     if [[ -z "${restore_genesis_file}" ]]; then
         # Keep the existing entity if restoring state from genesis file.
         rm -Rf ${entity_dir}
-    fi
 
-    if [[ -z "${restore_genesis_file}" ]]; then
         # If not restoring from genesis file, provision everything.
         ${EKIDEN_NODE} \
             registry entity init \
@@ -115,6 +114,34 @@ run_backend_tendermint_committee() {
             --entity ${entity_dir} \
             --datadir ${entity_dir}
 
+        # Create KM policy file, sign it with 3 keys, and generate genesis block status file.
+        ${EKIDEN_NODE} \
+            keymanager init_policy \
+            --keymanager.policy.file "${entity_dir}/km_policy.cbor" \
+            --keymanager.policy.id ${EKIDEN_KM_RUNTIME_ID} \
+            --keymanager.policy.serial 1 \
+            --keymanager.policy.enclave.id "${EKIDEN_MRSIGNER}${EKIDEN_KM_MRENCLAVE}" \
+            --keymanager.policy.may.query "${EKIDEN_RUNTIME_ID}=${EKIDEN_MRSIGNER}${EKIDEN_RUNTIME_MRENCLAVE}"
+
+        for k in 1 2 3; do
+            ${EKIDEN_NODE} \
+                keymanager sign_policy \
+                --keymanager.policy.signature.file "${entity_dir}/km_policy.cbor.sign.$k" \
+                --keymanager.policy.file "${entity_dir}/km_policy.cbor" \
+                --debug.allow_test_keys \
+                --keymanager.policy.testkey $k
+        done
+
+        ${EKIDEN_NODE} \
+            keymanager init_status \
+            --keymanager.status.file "${km_file}" \
+            --debug.allow_test_keys \
+            --keymanager.status.id ${EKIDEN_KM_RUNTIME_ID} \
+            --keymanager.policy.file "${entity_dir}/km_policy.cbor" \
+            --keymanager.policy.signature.file "${entity_dir}/km_policy.cbor.sign.1" \
+            --keymanager.policy.signature.file "${entity_dir}/km_policy.cbor.sign.2" \
+            --keymanager.policy.signature.file "${entity_dir}/km_policy.cbor.sign.3"
+
         # Provision the runtime.
         if [[ "${EKIDEN_RUNTIME_MRENCLAVE:-}" == "" ]]; then
             echo "ERROR: Runtime MRENCLAVE not configured, did you use run_test?"
@@ -145,6 +172,7 @@ run_backend_tendermint_committee() {
         ${EKIDEN_NODE} \
             genesis init \
             --genesis.file ${genesis_file} \
+            ${EKIDEN_TEE_HARDWARE:+--keymanager ${km_file}} \
             --entity ${entity_dir}/entity_genesis.json \
             --runtime ${entity_dir}/keymanager_genesis.json \
             --runtime ${entity_dir}/runtime_genesis.json \

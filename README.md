@@ -183,6 +183,9 @@ make any progress. For more information on writing your own client, see the
 
 In order to run under SGX there are some additional prerequisites:
 * Your hardware needs to have SGX support.
+* You either need to explicitly enable SGX in BIOS or make a
+  `sgx_cap_enable_device()` system call, if SGX is in software controlled state.
+* You need to install Intel's SGX driver.
 * You need the AESM daemon running. The easiest way is to just run it in a
   Docker container by doing (this will keep the container running and it will
   be automatically started on boot):
@@ -214,17 +217,24 @@ To run all unit tests:
 make test-unit
 ```
 
-To run end-to-end tests:
+To run end-to-end tests locally with SGX:
 ```
+export EKIDEN_TEE_HARDWARE=intel-sgx
 make test-e2e
 ```
 
-_NOTE: To run end-to-end tests locally without SGX, make sure the following
+To run end-to-end tests locally without SGX, first make sure the following
 environment variables are set before building the code (for more details, see
 [Building](#building)):_
 ```
 EKIDEN_UNSAFE_SKIP_AVR_VERIFY="1"
 EKIDEN_UNSAFE_SKIP_KM_POLICY="1"
+```
+
+and then run end-to-end tests:
+
+```
+make test-e2e
 ```
 
 To run all tests:

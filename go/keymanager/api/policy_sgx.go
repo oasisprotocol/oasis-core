@@ -17,7 +17,7 @@ type PolicySGX struct {
 	// ID is the runtime ID that this policy is valid for.
 	ID signature.PublicKey `codec:"id"`
 
-	// Enclaves is the per-key manager enclave ID acess control policy.
+	// Enclaves is the per-key manager enclave ID access control policy.
 	Enclaves map[sgx.EnclaveIdentity]*EnclavePolicySGX `codec:"enclaves"`
 }
 

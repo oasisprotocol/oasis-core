@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/debug"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/genesis"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/ias"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/keymanager"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/registry"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/stake"
@@ -63,6 +64,7 @@ func init() {
 		debug.Register,
 		genesis.Register,
 		ias.Register,
+		keymanager.Register,
 		registry.Register,
 		stake.Register,
 		storage.Register,

@@ -312,11 +312,11 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 			continue
 		}
 
-		var nodePolicyHash [32]byte
+		var nodePolicyHash [api.ChecksumSize]byte
 		switch len(initResponse.PolicyChecksum) {
 		case 0:
 			nodePolicyHash = emptyHashSha3
-		case 32:
+		case api.ChecksumSize:
 			copy(nodePolicyHash[:], initResponse.PolicyChecksum)
 		default:
 			app.logger.Error("failed to parse policy checksum",
