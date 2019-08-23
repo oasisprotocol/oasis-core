@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/logging"
 	pb "github.com/oasislabs/ekiden/go/grpc/ias"
 )
 
@@ -21,6 +22,19 @@ var (
 	// EvidenceSignatureContext is the signature context used for verifying evidence.
 	EvidenceSignatureContext = []byte("EkIASEvi")
 )
+
+// GRPCAuthenticator is the interface used to authenticate gRPC requests.
+type GRPCAuthenticator interface {
+	// VerifyEvidence returns nil iff the signer's evidenice may
+	// attest via the gRPC server.
+	VerifyEvidence(signer signature.PublicKey, evidence *Evidence) error
+}
+
+type noOpAuthenticator struct{}
+
+func (n *noOpAuthenticator) VerifyEvidence(signer signature.PublicKey, evidence *Evidence) error {
+	return nil
+}
 
 // SignedEvidence is signed evidence.
 type SignedEvidence struct {
@@ -44,9 +58,11 @@ func (s *SignedEvidence) UnmarshalCBOR(data []byte) error {
 
 // Evidence is attestation evidence.
 type Evidence struct {
-	Quote       []byte `codec:"quote"`
-	PSEManifest []byte `codec:"pse_manifest"`
-	Nonce       string `codec:"nonce"`
+	// ID is obviously the runtime ID of the enclave that's being attested.
+	ID          signature.PublicKey `codec:"id"`
+	Quote       []byte              `codec:"quote"`
+	PSEManifest []byte              `codec:"pse_manifest"`
+	Nonce       string              `codec:"nonce"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -60,27 +76,41 @@ func (e *Evidence) UnmarshalCBOR(data []byte) error {
 }
 
 type grpcServer struct {
-	endpoint Endpoint
+	logger *logging.Logger
+
+	endpoint      Endpoint
+	authenticator GRPCAuthenticator
 }
 
 func (s *grpcServer) VerifyEvidence(ctx context.Context, req *pb.VerifyEvidenceRequest) (*pb.VerifyEvidenceResponse, error) {
 	var signed SignedEvidence
 	if err := signed.FromProto(req.GetEvidence()); err != nil {
+		s.logger.Warn("malformed SignedEvidence",
+			"err", err,
+		)
 		return nil, err
 	}
 
 	var ev Evidence
 	if err := signed.Open(EvidenceSignatureContext, &ev); err != nil {
+		s.logger.Warn("malformed Evidence",
+			"err", err,
+		)
 		return nil, err
 	}
 
-	// TODO: Authenticate/validate the verification request.
-	//  * signed.Signature.PublicKey MUST be in the entity registry.
-	//  * ev.Quote MUST be well-formed and for an approved MRENCLAVE.
-	//  * (Possibly other validation things here.)
+	if err := s.authenticator.VerifyEvidence(signed.Signed.Signature.PublicKey, &ev); err != nil {
+		s.logger.Warn("failed to authenticate IAS VerifyEvidence request",
+			"err", err,
+		)
+		return nil, err
+	}
 
 	avr, sig, certChain, err := s.endpoint.VerifyEvidence(ctx, ev.Quote, ev.PSEManifest, ev.Nonce)
 	if err != nil {
+		s.logger.Warn("failed to attest via IAS",
+			"err", err,
+		)
 		return nil, err
 	}
 
@@ -124,9 +154,14 @@ func (s *grpcServer) GetSigRL(ctx context.Context, req *pb.GetSigRLRequest) (*pb
 
 // NewGRPCServer initializes and registers a new gRPC IAS server backed
 // by the provided backend (Endpoint).
-func NewGRPCServer(srv *grpc.Server, endpoint Endpoint) {
+func NewGRPCServer(srv *grpc.Server, endpoint Endpoint, authenticator GRPCAuthenticator) {
+	if authenticator == nil {
+		authenticator = &noOpAuthenticator{}
+	}
 	s := &grpcServer{
-		endpoint: endpoint,
+		logger:        logging.GetLogger("ias/grpc"),
+		endpoint:      endpoint,
+		authenticator: authenticator,
 	}
 	pb.RegisterIASServer(srv, s)
 }

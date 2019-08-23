@@ -43,6 +43,10 @@ CLIENT="$WORKDIR/target/debug/test-long-term-client"
 test_migration() {
     local runtime=simple-keyvalue
 
+    # Get the paths (and enclave identities) of the various enclaves.
+    get_keymanager_binary
+    get_runtime_binary runtime=${runtime}
+
     # Start the first network.
     run_backend_tendermint_committee \
         epochtime_backend=tendermint_mock \
@@ -114,6 +118,10 @@ test_migration() {
 ################################
 test_dumprestore() {
     local runtime=simple-keyvalue
+
+    # Get the paths (and enclave identities) of the various enclaves.
+    get_keymanager_binary
+    get_runtime_binary runtime=${runtime}
 
     # Make sure no leftover state is present from before.
     rm -f "${DUMP_RESTORE_STATE_FILE}"

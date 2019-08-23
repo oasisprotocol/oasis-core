@@ -54,7 +54,7 @@ func (s *IAS) GetQuoteSignatureType(ctx context.Context) (*ias.SignatureType, er
 }
 
 // VerifyEvidence verifies attestation evidence.
-func (s *IAS) VerifyEvidence(ctx context.Context, quote, pseManifest []byte, nonce string) (avr, sig, chain []byte, err error) {
+func (s *IAS) VerifyEvidence(ctx context.Context, runtimeID signature.PublicKey, quote, pseManifest []byte, nonce string) (avr, sig, chain []byte, err error) {
 	if s.client == nil {
 		// If the IAS proxy is not configured, generate a mock AVR, under the
 		// assumption that the runtime is built to support this.  The runtime
@@ -76,6 +76,7 @@ func (s *IAS) VerifyEvidence(ctx context.Context, quote, pseManifest []byte, non
 		}
 
 		evidence := ias.Evidence{
+			ID:          runtimeID,
 			Quote:       quote,
 			PSEManifest: pseManifest,
 			Nonce:       nonce,

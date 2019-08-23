@@ -24,13 +24,15 @@ import (
 )
 
 const (
-	cfgAuthCertFile = "ias.auth.cert"
-	cfgAuthKeyFile  = "ias.auth.cert.key"
-	cfgAuthCertCA   = "ias.auth.cert.ca"
-	cfgIsProduction = "ias.production"
-	cfgSPID         = "ias.spid"
-	cfgQuoteSigType = "ias.quote.signature_type"
-	cfgDebugMock    = "ias.debug.mock"
+	cfgAuthCertFile  = "ias.auth.cert"
+	cfgAuthKeyFile   = "ias.auth.cert.key"
+	cfgAuthCertCA    = "ias.auth.cert.ca"
+	cfgIsProduction  = "ias.production"
+	cfgSPID          = "ias.spid"
+	cfgQuoteSigType  = "ias.quote.signature_type"
+	cfgDebugMock     = "ias.debug.mock"
+	cfgDebugSkipAuth = "ias.debug.skip_auth"
+	cfgUseGenesis    = "ias.use_genesis"
 )
 
 var (
@@ -73,18 +75,13 @@ func doProxy(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	if !viper.GetBool(cfgDebugMock) {
-		if viper.GetString(cfgAuthCertFile) == "" {
-			logger.Error("auth cert not configured")
-			return
-		}
-		if viper.GetString(cfgAuthKeyFile) == "" {
-			logger.Error("auth key not configured")
-			return
-		}
+	endpoint, err := iasEndpointFromFlags()
+	if err != nil {
+		logger.Error("failed to initialize IAS endpoint",
+			"err", err,
+		)
+		return
 	}
-
-	var err error
 
 	// Initialize the gRPC server.
 	env.grpcSrv, err = cmdGrpc.NewServerTCP()
@@ -124,13 +121,17 @@ func doProxy(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Initialize the IAS proxy.
-	if err = initProxy(env); err != nil {
-		logger.Error("failed to initialize IAS proxy",
+	// Initialize the IAS proxy authenticator.
+	grpcAuth, err := grpcAuthenticatorFromFlags()
+	if err != nil {
+		logger.Error("failed to initialize IAS gRPC authentiator",
 			"err", err,
 		)
 		return
 	}
+
+	// Initialize the IAS proxy.
+	ias.NewGRPCServer(env.grpcSrv.Server(), endpoint, grpcAuth)
 
 	// Start metric server.
 	if err = metrics.Start(); err != nil {
@@ -156,7 +157,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 	env.svcMgr.Wait()
 }
 
-func initProxy(env *proxyEnv) error {
+func iasEndpointFromFlags() (ias.Endpoint, error) {
 	cfg := &ias.EndpointConfig{
 		SPID: viper.GetString(cfgSPID),
 	}
@@ -168,29 +169,29 @@ func initProxy(env *proxyEnv) error {
 	case "linkable":
 		cfg.QuoteSignatureType = ias.SignatureLinkable
 	default:
-		return fmt.Errorf("ias: invalid signature type: %s", quoteSigType)
+		return nil, fmt.Errorf("ias: invalid signature type: %s", quoteSigType)
 	}
 
 	if !viper.GetBool(cfgDebugMock) {
 		if authCertCA := viper.GetString(cfgAuthCertCA); authCertCA != "" {
 			certData, err := ioutil.ReadFile(authCertCA)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			cfg.AuthCertCA, _, err = ias.CertFromPEM(certData)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 
 		authCert, err := tls.LoadX509KeyPair(viper.GetString(cfgAuthCertFile), viper.GetString(cfgAuthKeyFile))
 		if err != nil {
-			return fmt.Errorf("ias: failed to load client certificate: %s", err)
+			return nil, fmt.Errorf("ias: failed to load client certificate: %s", err)
 		}
 		authCert.Leaf, err = x509.ParseCertificate(authCert.Certificate[0])
 		if err != nil {
-			return fmt.Errorf("ias: failed to parse client leaf certificate: %s", err)
+			return nil, fmt.Errorf("ias: failed to parse client leaf certificate: %s", err)
 		}
 		cfg.AuthCert = &authCert
 
@@ -199,16 +200,19 @@ func initProxy(env *proxyEnv) error {
 		cfg.DebugIsMock = true
 	}
 
-	endpoint, err := ias.NewIASEndpoint(cfg)
-	if err != nil {
-		return err
+	return ias.NewIASEndpoint(cfg)
+}
+
+func grpcAuthenticatorFromFlags() (ias.GRPCAuthenticator, error) {
+	if viper.GetBool(cfgDebugSkipAuth) {
+		logger.Warn("IAS gRPC authentication disabled, proxy is open")
+		return nil, nil
+	}
+	if viper.GetBool(cfgUseGenesis) {
+		return newGenesisAuthenticator()
 	}
 
-	ias.NewGRPCServer(env.grpcSrv.Server(), endpoint)
-
-	logger.Debug("IAS proxy initialized")
-
-	return nil
+	return nil, fmt.Errorf("ias: no authentication configured")
 }
 
 // RegisterFlags registers the flags used by the proxy command.
@@ -221,6 +225,8 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgQuoteSigType, "linkable", "quote signature type associated with the SPID")
 		cmd.Flags().Bool(cfgIsProduction, false, "use the production IAS endpoint")
 		cmd.Flags().Bool(cfgDebugMock, false, "generate mock IAS AVR responses (UNSAFE)")
+		cmd.Flags().Bool(cfgDebugSkipAuth, false, "disable proxy authentication (UNSAFE)")
+		cmd.Flags().Bool(cfgUseGenesis, false, "use a genesis document instead of the registry")
 	}
 
 	for _, v := range []string{
@@ -231,6 +237,8 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgQuoteSigType,
 		cfgIsProduction,
 		cfgDebugMock,
+		cfgDebugSkipAuth,
+		cfgUseGenesis,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}

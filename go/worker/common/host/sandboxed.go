@@ -359,6 +359,8 @@ type teeStateIntelSGX struct {
 	ias  *ias.IAS
 	aesm *aesm.Client
 
+	runtimeID signature.PublicKey
+
 	epidGID   uint32
 	spid      cias.SPID
 	quoteType *cias.SignatureType
@@ -430,7 +432,7 @@ func (st *teeStateIntelSGX) UpdateCapabilityTEE(worker *process) (*node.Capabili
 		return nil, errors.Wrap(err, "worker: error while getting quote")
 	}
 
-	avr, sig, chain, err := st.ias.VerifyEvidence(ctx, quote, nil, nonce)
+	avr, sig, chain, err := st.ias.VerifyEvidence(ctx, st.runtimeID, quote, nil, nonce)
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while verifying attestation evidence")
 	}
@@ -1019,8 +1021,9 @@ func NewHost(cfg *Config) (Host, error) {
 	case node.TEEHardwareInvalid:
 	case node.TEEHardwareIntelSGX:
 		hostTeeState = &teeStateIntelSGX{
-			ias:  cfg.IAS,
-			aesm: aesm.NewClient(teeIntelSGXSocket),
+			ias:       cfg.IAS,
+			aesm:      aesm.NewClient(teeIntelSGXSocket),
+			runtimeID: cfg.ID,
 		}
 	default:
 		return nil, node.ErrInvalidTEEHardware
