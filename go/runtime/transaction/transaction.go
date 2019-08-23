@@ -260,7 +260,7 @@ func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
 	}
 
 	// Sort transactions to be in batch order.
-	sort.Sort(bo)
+	sort.Stable(bo)
 	bo.order = nil
 
 	return bo.batch, nil
