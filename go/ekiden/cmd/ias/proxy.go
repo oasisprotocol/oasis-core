@@ -24,13 +24,13 @@ import (
 )
 
 const (
-	cfgAuthCertFile = "auth_cert"
-	cfgAuthKeyFile  = "auth_key"
-	cfgAuthCertCA   = "auth_cert_ca"
-	cfgSPID         = "spid"
-	cfgQuoteSigType = "quote_signature_type"
-	cfgIsProduction = "production"
-	cfgDebugMock    = "debug.mock"
+	cfgAuthCertFile = "ias.auth.cert"
+	cfgAuthKeyFile  = "ias.auth.cert.key"
+	cfgAuthCertCA   = "ias.auth.cert.ca"
+	cfgIsProduction = "ias.production"
+	cfgSPID         = "ias.spid"
+	cfgQuoteSigType = "ias.quote.signature_type"
+	cfgDebugMock    = "ias.debug.mock"
 )
 
 var (

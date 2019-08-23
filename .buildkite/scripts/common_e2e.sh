@@ -147,10 +147,10 @@ run_backend_tendermint_committee() {
             # TODO: Ensure that IAS credentials are configured.
             ${EKIDEN_NODE} \
                 ias proxy \
-                --auth_cert ${EKIDEN_IAS_CERT} \
-                --auth_cert_ca ${EKIDEN_IAS_CERT} \
-                --auth_key ${EKIDEN_IAS_KEY} \
-                --spid ${EKIDEN_IAS_SPID} \
+                --ias.auth.cert ${EKIDEN_IAS_CERT} \
+                --ias.auth.cert.ca ${EKIDEN_IAS_CERT} \
+                --ias.auth.cert.key ${EKIDEN_IAS_KEY} \
+                --ias.spid ${EKIDEN_IAS_SPID} \
                 --metrics.mode none \
                 --log.level debug \
                 --log.file ${committee_dir}/ias-proxy.log \
@@ -159,9 +159,9 @@ run_backend_tendermint_committee() {
             # Mock, with a high-quality random SPID from random.org
             ${EKIDEN_NODE} \
                 ias proxy \
-                --debug.mock \
+                --ias.debug.mock \
+                --ias.spid 9b3085a55a5863f7cc66b380dcad0082 \
                 --debug.allow_test_keys \
-                --spid 9b3085a55a5863f7cc66b380dcad0082 \
                 --metrics.mode none \
                 --log.level debug \
                 --log.file ${committee_dir}/ias-proxy.log \
