@@ -47,9 +47,6 @@ const (
 var (
 	// ErrIndexerDisabled is an error when the indexer is disabled.
 	ErrIndexerDisabled = errors.New("client: indexer not enabled")
-	// ErrBadIndexOrCorrupted is an error when either the storage is corrupted or
-	// the specified transaction index was bad.
-	ErrBadIndexOrCorrupted = errors.New("bad transaction index or corrupted storage")
 )
 
 const (
@@ -315,7 +312,7 @@ func (c *Client) GetTxn(ctx context.Context, runtimeID signature.PublicKey, roun
 		return nil, err
 	}
 
-	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, runtimeID, round, index)
+	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, runtimeID, blk.Header.Round, index)
 	if err != nil {
 		return nil, err
 	}

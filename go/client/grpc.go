@@ -122,7 +122,7 @@ func (s *grpcServer) GetTxn(ctx context.Context, req *pbClient.GetTxnRequest) (*
 
 	tx, err := s.client.GetTxn(ctx, id, req.GetRound(), req.GetIndex())
 	if err != nil {
-		if err == ErrBadIndexOrCorrupted {
+		if err == indexer.ErrNotFound {
 			return nil, status.Errorf(codes.NotFound, err.Error())
 		}
 		return nil, err
@@ -146,7 +146,7 @@ func (s *grpcServer) GetTxnByBlockHash(ctx context.Context, req *pbClient.GetTxn
 
 	tx, err := s.client.GetTxnByBlockHash(ctx, id, blockHash, req.GetIndex())
 	if err != nil {
-		if err == ErrBadIndexOrCorrupted {
+		if err == indexer.ErrNotFound {
 			return nil, status.Errorf(codes.NotFound, err.Error())
 		}
 		return nil, err
