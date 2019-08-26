@@ -26,6 +26,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
@@ -99,7 +100,7 @@ func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.
 	certPool := x509.NewCertPool()
 	certPool.AddCert(nodeCert)
 
-	creds := credentials.NewClientTLSFromCert(certPool, "ekiden-node")
+	creds := credentials.NewClientTLSFromCert(certPool, identity.CommonName)
 
 	manualResolver, address, cleanup := manual.NewManualResolver()
 	defer cleanup()

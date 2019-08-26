@@ -17,6 +17,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/keymanager/api"
@@ -202,7 +203,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 		}
 	}
 
-	creds := credentials.NewClientTLSFromCert(certPool, "ekiden-node")
+	creds := credentials.NewClientTLSFromCert(certPool, identity.CommonName)
 	opts := grpc.WithTransportCredentials(creds)
 
 	// TODO: This probably could skip updating the connection sometimes.

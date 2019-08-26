@@ -180,7 +180,7 @@ func (w *watcherState) updateStorageNodeConnections() {
 			creds := credentials.NewTLS(&tls.Config{
 				Certificates: []tls.Certificate{*w.identity.TLSCertificate},
 				RootCAs:      certPool,
-				ServerName:   "ekiden-node",
+				ServerName:   identity.CommonName,
 			})
 			opts = grpc.WithTransportCredentials(creds)
 		}
