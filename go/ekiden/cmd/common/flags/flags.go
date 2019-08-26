@@ -21,6 +21,9 @@ const (
 	cfgConsensusBackend = "consensus.backend"
 
 	cfgDebugTestEntity = "debug.test_entity"
+
+	// CfgGenesisFile is the flag used to specify a genesis file.
+	CfgGenesisFile = "genesis.file"
 )
 
 // Verbose returns true iff the verbose flag is set.
@@ -113,4 +116,22 @@ func RegisterEntity(cmd *cobra.Command) {
 
 	_ = viper.BindPFlag(cfgEntity, cmd.Flags().Lookup(cfgEntity))
 
+}
+
+// GenesisFile returns the set genesis file.
+func GenesisFile() string {
+	return viper.GetString(CfgGenesisFile)
+}
+
+// RegisterGenesisFile registers the genesis file flag.
+func RegisterGenesisFile(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(CfgGenesisFile, "genesis.json", "path to genesis file")
+	}
+
+	for _, v := range []string{
+		CfgGenesisFile,
+	} {
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+	}
 }

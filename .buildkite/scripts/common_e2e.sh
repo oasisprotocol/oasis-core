@@ -131,7 +131,7 @@ run_backend_tendermint_committee() {
     else
         ${EKIDEN_NODE} \
             genesis init \
-            --genesis_file ${genesis_file} \
+            --genesis.file ${genesis_file} \
             --entity ${entity_dir}/entity_genesis.json \
             --runtime ${entity_dir}/keymanager_genesis.json \
             --runtime ${entity_dir}/runtime_genesis.json \

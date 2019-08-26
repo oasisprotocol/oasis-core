@@ -581,7 +581,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		tracing.RegisterFlags,
 		cmdGrpc.RegisterServerLocalFlags,
 		pprof.RegisterFlags,
-		genesis.RegisterFlags,
 		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
 		registry.RegisterFlags,
@@ -609,4 +608,5 @@ func RegisterFlags(cmd *cobra.Command) {
 
 	flags.RegisterDebugTestEntity(cmd)
 	flags.RegisterConsensusBackend(cmd)
+	flags.RegisterGenesisFile(cmd)
 }

@@ -147,7 +147,7 @@ test_dumprestore() {
 
     # Dump BFT state.
     "$WORKDIR/go/ekiden/ekiden" genesis dump \
-        --height 0 --genesis_file "${DUMP_RESTORE_STATE_FILE}" \
+        --height 0 --genesis.file "${DUMP_RESTORE_STATE_FILE}" \
         --address unix:${EKIDEN_VALIDATOR_SOCKET}
 
     # Stop all nodes.

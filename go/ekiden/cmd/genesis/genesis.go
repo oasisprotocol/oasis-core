@@ -30,7 +30,6 @@ import (
 )
 
 const (
-	cfgGenesisFile = "genesis_file"
 	cfgEntity      = "entity"
 	cfgRuntime     = "runtime"
 	cfgNode        = "node"
@@ -79,7 +78,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		common.EarlyLogAndExit(err)
 	}
 
-	f := viper.GetString(cfgGenesisFile)
+	f := flags.GenesisFile()
 	if len(f) == 0 {
 		logger.Error("failed to determine output location")
 		return
@@ -411,7 +410,7 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	w, shouldClose, err := common.GetOutputWriter(cmd, cfgGenesisFile)
+	w, shouldClose, err := common.GetOutputWriter(cmd, flags.CfgGenesisFile)
 	if err != nil {
 		logger.Error("failed to get writer for genesis file",
 			"err", err,
@@ -432,20 +431,20 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 
 func registerDumpGenesisFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgGenesisFile, "genesis.json", "path to created genesis document")
 		cmd.Flags().Int64(cfgBlockHeight, 0, "block height at which to dump state")
 	}
 
 	for _, v := range []string{
-		cfgGenesisFile,
+		cfgBlockHeight,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
+
+	flags.RegisterGenesisFile(cmd)
 }
 
 func registerInitGenesisFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgGenesisFile, "genesis.json", "path to created genesis document")
 		cmd.Flags().StringSlice(cfgEntity, nil, "path to entity registration file")
 		cmd.Flags().StringSlice(cfgRuntime, nil, "path to runtime registration file")
 		cmd.Flags().StringSlice(cfgNode, nil, "path to node registration file")
@@ -455,7 +454,6 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 	}
 
 	for _, v := range []string{
-		cfgGenesisFile,
 		cfgEntity,
 		cfgRuntime,
 		cfgNode,
@@ -468,6 +466,7 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 
 	flags.RegisterDebugTestEntity(cmd)
 	flags.RegisterConsensusBackend(cmd)
+	flags.RegisterGenesisFile(cmd)
 }
 
 // Register registers the genesis sub-command and all of it's children.

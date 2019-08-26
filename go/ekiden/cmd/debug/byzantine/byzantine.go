@@ -7,7 +7,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
-	"github.com/oasislabs/ekiden/go/genesis"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/tendermint"
 )
 
@@ -49,7 +49,7 @@ func registerComputeHonestFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().AddFlagSet(tendermint.Flags)
 	}
-	genesis.RegisterFlags(cmd)
+	flags.RegisterGenesisFile(cmd)
 }
 
 // Register registers the byzantine sub-command and all of its children.
