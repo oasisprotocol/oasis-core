@@ -2,6 +2,7 @@
 package grpc
 
 import (
+	"crypto/tls"
 	"errors"
 	"path/filepath"
 
@@ -28,9 +29,9 @@ const (
 //
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
-func NewServerTCP() (*cmnGrpc.Server, error) {
+func NewServerTCP(cert *tls.Certificate) (*cmnGrpc.Server, error) {
 	port := uint16(viper.GetInt(cfgGRPCPort))
-	return cmnGrpc.NewServerTCP("internal", port, nil, nil)
+	return cmnGrpc.NewServerTCP("internal", port, cert, nil)
 }
 
 // NewServerLocal constructs a new gRPC server service listening on

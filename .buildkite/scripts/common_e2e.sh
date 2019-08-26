@@ -26,6 +26,7 @@ EKIDEN_MRSIGNER=${EKIDEN_MRSIGNER:-"9affcfae47b848ec2caf1c49b4b283531e1cc425f935
 #   EKIDEN_COMMITTEE_DIR
 #   EKIDEN_GENESIS_FILE
 #   EKIDEN_IAS_PROXY_PORT
+#   EKIDEN_IAS_PROXY_CERT
 #   EKIDEN_EPOCHTIME_BACKEND
 #   EKIDEN_VALIDATOR_SOCKET
 #   EKIDEN_CLIENT_SOCKET
@@ -153,12 +154,15 @@ run_backend_tendermint_committee() {
 
     # Run the IAS proxy if needed.
     local ias_proxy_port=9001
+    local ias_dir=${committee_dir}/ias-proxy
+    rm -Rf {$ias_dir}
 
     if [ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]; then
         if [ "${EKIDEN_UNSAFE_SKIP_AVR_VERIFY}" == "" ]; then
             # TODO: Ensure that IAS credentials are configured.
             ${EKIDEN_NODE} \
                 ias proxy \
+                --datadir ${ias_dir} \
                 --ias.debug.skip_auth \
                 --ias.auth.cert ${EKIDEN_IAS_CERT} \
                 --ias.auth.cert.ca ${EKIDEN_IAS_CERT} \
@@ -172,6 +176,7 @@ run_backend_tendermint_committee() {
             # Mock, with a high-quality random SPID from random.org
             ${EKIDEN_NODE} \
                 ias proxy \
+                --datadir ${ias_dir} \
                 --ias.debug.mock \
                 --ias.use_genesis \
                 --genesis.file ${genesis_file} \
@@ -184,6 +189,7 @@ run_backend_tendermint_committee() {
         fi
 
         EKIDEN_IAS_PROXY_ENABLED=1
+        EKIDEN_IAS_PROXY_CERT=${ias_dir}/ias_proxy_cert.pem
     fi
 
     # Export some variables so compute workers can find them.
@@ -337,6 +343,7 @@ run_compute_node() {
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
+        ${EKIDEN_IAS_PROXY_ENABLED:+--ias.tls ${EKIDEN_IAS_PROXY_CERT}} \
         ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
         --worker.compute.enabled \
         --worker.compute.backend sandboxed \
@@ -577,6 +584,7 @@ run_keymanager_node() {
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
+        ${EKIDEN_IAS_PROXY_ENABLED:+--ias.tls ${EKIDEN_IAS_PROXY_CERT}} \
         ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
         ${EKIDEN_TEE_HARDWARE:+--worker.keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
         --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \

@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	tlsCert "github.com/oasislabs/ekiden/go/common/crypto/tls"
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
@@ -33,6 +35,9 @@ const (
 	cfgDebugMock     = "ias.debug.mock"
 	cfgDebugSkipAuth = "ias.debug.skip_auth"
 	cfgUseGenesis    = "ias.use_genesis"
+
+	tlsKeyFilename  = "ias_proxy.pem"
+	tlsCertFilename = "ias_proxy_cert.pem"
 )
 
 var (
@@ -58,6 +63,15 @@ type proxyEnv struct {
 	grpcSrv *grpc.Server
 }
 
+func tlsCertPaths(dataDir string) (string, string) {
+	var (
+		certPath = filepath.Join(dataDir, tlsCertFilename)
+		keyPath  = filepath.Join(dataDir, tlsKeyFilename)
+	)
+
+	return certPath, keyPath
+}
+
 func doProxy(cmd *cobra.Command, args []string) {
 	var startOk bool
 	defer func() {
@@ -75,6 +89,23 @@ func doProxy(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
+	dataDir, err := cmdCommon.DataDirOrPwd()
+	if err != nil {
+		logger.Error("failed to query data directory",
+			"err", err,
+		)
+		return
+	}
+
+	tlsCertPath, tlsKeyPath := tlsCertPaths(dataDir)
+	cert, err := tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, ias.CommonName)
+	if err != nil {
+		logger.Error("failed to load or generate TLS cert",
+			"err", err,
+		)
+		return
+	}
+
 	endpoint, err := iasEndpointFromFlags()
 	if err != nil {
 		logger.Error("failed to initialize IAS endpoint",
@@ -84,7 +115,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 	}
 
 	// Initialize the gRPC server.
-	env.grpcSrv, err = cmdGrpc.NewServerTCP()
+	env.grpcSrv, err = cmdGrpc.NewServerTCP(cert)
 	if err != nil {
 		logger.Error("failed to initialize gRPC server",
 			"err", err,

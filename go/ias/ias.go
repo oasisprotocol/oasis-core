@@ -3,14 +3,19 @@ package ias
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	tlsCert "github.com/oasislabs/ekiden/go/common/crypto/tls"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
@@ -19,6 +24,7 @@ import (
 
 const (
 	cfgProxyAddress    = "ias.proxy_addr"
+	cfgTLSCertFile     = "ias.tls"
 	cfgDebugSkipVerify = "ias.debug.skip_verify"
 )
 
@@ -141,7 +147,31 @@ func New(identity *identity.Identity) (*IAS, error) {
 		s.spidInfo = &ias.SPIDInfo{}
 		_ = s.spidInfo.SPID.UnmarshalBinary(make([]byte, ias.SPIDSize))
 	} else {
-		conn, err := grpc.Dial(proxyAddr, grpc.WithInsecure()) // TODO: TLS?
+		tlsCertFile := viper.GetString(cfgTLSCertFile)
+		if tlsCertFile == "" {
+			s.logger.Error("IAS proxy TLS certificate not configured")
+			return nil, errors.New("ias: proxy TLS certificate not configured")
+		}
+
+		proxyCert, err := tlsCert.LoadCertificate(tlsCertFile)
+		if err != nil {
+			return nil, err
+		}
+
+		parsedCert, err := x509.ParseCertificate(proxyCert.Certificate[0])
+		if err != nil {
+			return nil, err
+		}
+
+		certPool := x509.NewCertPool()
+		certPool.AddCert(parsedCert)
+		creds := credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{*identity.TLSCertificate},
+			RootCAs:      certPool,
+			ServerName:   ias.CommonName,
+		})
+
+		conn, err := grpc.Dial(proxyAddr, grpc.WithTransportCredentials(creds))
 		if err != nil {
 			return nil, err
 		}
@@ -177,11 +207,13 @@ func New(identity *identity.Identity) (*IAS, error) {
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgProxyAddress, "", "IAS proxy address")
+		cmd.Flags().String(cfgTLSCertFile, "", "IAS proxy TLS certificate")
 		cmd.Flags().Bool(cfgDebugSkipVerify, false, "skip IAS AVR signature verification (UNSAFE)")
 	}
 
 	for _, v := range []string{
 		cfgProxyAddress,
+		cfgTLSCertFile,
 		cfgDebugSkipVerify,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))

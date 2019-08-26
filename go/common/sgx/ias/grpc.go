@@ -21,6 +21,9 @@ var (
 
 	// EvidenceSignatureContext is the signature context used for verifying evidence.
 	EvidenceSignatureContext = []byte("EkIASEvi")
+
+	// CommonName is the CommonName for the IAS proxy TLS certificate.
+	CommonName = "ias-proxy"
 )
 
 // GRPCAuthenticator is the interface used to authenticate gRPC requests.
