@@ -197,6 +197,12 @@ type SignedEntity struct {
 	signature.Signed
 }
 
+// Clone returns a copy of itself.
+func (s *SignedEntity) Clone() common.Cloneable {
+	signedEntityCopy := *s
+	return &signedEntityCopy
+}
+
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedEntity) Open(context []byte, entity *Entity) error { // nolint: interfacer
 	return s.Signed.Open(context, entity)

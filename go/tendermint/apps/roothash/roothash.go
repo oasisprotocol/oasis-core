@@ -83,6 +83,7 @@ func (app *rootHashApplication) OnRegister(state *abci.ApplicationState, queryRo
 	// Register query handlers.
 	queryRouter.AddRoute(QueryGetLatestBlock, api.QueryGetByIDRequest{}, app.queryGetLatestBlock)
 	queryRouter.AddRoute(QueryGetGenesisBlock, api.QueryGetByIDRequest{}, app.queryGetGenesisBlock)
+	queryRouter.AddRoute(QueryGenesis, nil, app.queryGenesis)
 }
 
 func (app *rootHashApplication) OnCleanup() {
@@ -128,6 +129,20 @@ func (app *rootHashApplication) queryGetGenesisBlock(s interface{}, r interface{
 	block := runtime.GenesisBlock.MarshalCBOR()
 
 	return block, nil
+}
+
+func (app *rootHashApplication) queryGenesis(s interface{}, r interface{}) ([]byte, error) {
+	state := s.(*immutableState)
+	runtimes := state.getRuntimes()
+
+	// Get per-runtime blocks.
+	blocks := make(map[signature.MapKey]*block.Block)
+	for _, rt := range runtimes {
+		blocks[rt.Runtime.ID.ToMapKey()] = rt.CurrentBlock
+	}
+
+	gen := roothash.Genesis{Blocks: blocks}
+	return cbor.Marshal(gen), nil
 }
 
 func (app *rootHashApplication) CheckTx(ctx *abci.Context, tx []byte) error {

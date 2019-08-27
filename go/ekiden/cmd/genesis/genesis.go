@@ -2,6 +2,7 @@
 package genesis
 
 import (
+	"context"
 	"errors"
 	"io/ioutil"
 	"math/big"
@@ -18,7 +19,9 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
+	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
+	genesisGrpc "github.com/oasislabs/ekiden/go/grpc/genesis"
 	keymanager "github.com/oasislabs/ekiden/go/keymanager/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
@@ -34,6 +37,7 @@ const (
 	cfgRootHash    = "roothash"
 	cfgKeyManager  = "keymanager"
 	cfgStaking     = "staking"
+	cfgBlockHeight = "height"
 )
 
 var (
@@ -49,6 +53,15 @@ var (
 			registerInitGenesisFlags(cmd)
 		},
 		Run: doInitGenesis,
+	}
+
+	dumpGenesisCmd = &cobra.Command{
+		Use:   "dump",
+		Short: "dump state into genesis file",
+		PreRun: func(cmd *cobra.Command, args []string) {
+			registerDumpGenesisFlags(cmd)
+		},
+		Run: doDumpGenesis,
 	}
 
 	logger = logging.GetLogger("cmd/genesis")
@@ -369,6 +382,67 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 	return nil
 }
 
+func doDumpGenesis(cmd *cobra.Command, args []string) {
+	ctx := context.Background()
+
+	if err := common.Init(); err != nil {
+		common.EarlyLogAndExit(err)
+	}
+
+	conn, err := cmdGrpc.NewClient(cmd)
+	if err != nil {
+		logger.Error("failed to establish connection with node",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	defer conn.Close()
+
+	client := genesisGrpc.NewGenesisClient(conn)
+
+	req := &genesisGrpc.GenesisRequest{
+		Height: viper.GetInt64(cfgBlockHeight),
+	}
+	result, err := client.ToGenesis(ctx, req)
+	if err != nil {
+		logger.Error("failed to generate genesis document",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	w, shouldClose, err := common.GetOutputWriter(cmd, cfgGenesisFile)
+	if err != nil {
+		logger.Error("failed to get writer for genesis file",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if shouldClose {
+		defer w.Close()
+	}
+
+	if _, err = w.Write(result.Json); err != nil {
+		logger.Error("failed to write genesis file",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+}
+
+func registerDumpGenesisFlags(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().String(cfgGenesisFile, "genesis.json", "path to created genesis document")
+		cmd.Flags().Int64(cfgBlockHeight, 0, "block height at which to dump state")
+	}
+
+	for _, v := range []string{
+		cfgGenesisFile,
+	} {
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+	}
+}
+
 func registerInitGenesisFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgGenesisFile, "genesis.json", "path to created genesis document")
@@ -399,9 +473,12 @@ func registerInitGenesisFlags(cmd *cobra.Command) {
 // Register registers the genesis sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	registerInitGenesisFlags(initGenesisCmd)
+	registerDumpGenesisFlags(dumpGenesisCmd)
+	cmdGrpc.RegisterClientFlags(dumpGenesisCmd, true)
 
 	for _, v := range []*cobra.Command{
 		initGenesisCmd,
+		dumpGenesisCmd,
 	} {
 		genesisCmd.AddCommand(v)
 	}

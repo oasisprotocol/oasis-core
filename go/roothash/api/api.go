@@ -81,6 +81,9 @@ type Backend interface {
 	// ComputeCommit submits a batch of compute commitments for slashing.
 	ComputeCommit(context.Context, signature.PublicKey, []commitment.ComputeCommitment) error
 
+	// ToGenesis returns the genesis state at specified block height.
+	ToGenesis(context.Context, int64) (*Genesis, error)
+
 	// Cleanup cleans up the roothash backend.
 	Cleanup()
 }

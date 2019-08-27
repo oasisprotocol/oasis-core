@@ -157,6 +157,9 @@ type Backend interface {
 	// all runtimes will be sent immediately.
 	WatchRuntimes() (<-chan *Runtime, *pubsub.Subscription)
 
+	// ToGenesis returns the genesis state at specified block height.
+	ToGenesis(context.Context, int64) (*Genesis, error)
+
 	// Cleanup cleans up the registry backend.
 	Cleanup()
 }

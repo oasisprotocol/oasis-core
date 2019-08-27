@@ -514,6 +514,12 @@ type SignedNode struct {
 	signature.Signed
 }
 
+// Clone returns a copy of itself.
+func (s *SignedNode) Clone() common.Cloneable {
+	signedNodeCopy := *s
+	return &signedNodeCopy
+}
+
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedNode) Open(context []byte, node *Node) error { // nolint: interfacer
 	return s.Signed.Open(context, node)

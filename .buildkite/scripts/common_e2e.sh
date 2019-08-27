@@ -48,6 +48,7 @@ run_backend_tendermint_committee() {
     local roothash_genesis_blocks=""
     local nodes=3
     local runtime_genesis=""
+    local restore_genesis_file=""
     # Load named arguments that override defaults.
     local "${@}"
 
@@ -58,75 +59,85 @@ run_backend_tendermint_committee() {
 
     # Provision the entity for everything.
     local entity_dir=${committee_dir}/entity
-    rm -Rf ${entity_dir}
+    if [[ -z "${restore_genesis_file}" ]]; then
+        # Keep the existing entity if restoring state from genesis file.
+        rm -Rf ${entity_dir}
+    fi
 
-    ${EKIDEN_NODE} \
-        registry entity init \
-        --entity.debug.allow_entity_signed_nodes \
-        --datadir ${entity_dir}
-
-    # Provision the validators.
-    for idx in $(seq 1 $nodes); do
-        local datadir=${base_datadir}-${idx}
-        rm -rf ${datadir}
-
-        let port=(idx-1)+26656
+    if [[ -z "${restore_genesis_file}" ]]; then
+        # If not restoring from genesis file, provision everything.
         ${EKIDEN_NODE} \
-            registry node init \
-            --datadir ${datadir} \
+            registry entity init \
+            --entity.debug.allow_entity_signed_nodes \
+            --datadir ${entity_dir}
+
+        # Provision the validators.
+        for idx in $(seq 1 $nodes); do
+            local datadir=${base_datadir}-${idx}
+            rm -rf ${datadir}
+
+            let port=(idx-1)+26656
+            ${EKIDEN_NODE} \
+                registry node init \
+                --datadir ${datadir} \
+                --entity ${entity_dir} \
+                --node.consensus_address 127.0.0.1:${port} \
+                --node.expiration 1000000 \
+                --node.role validator \
+                --node.is_self_signed
+            validator_files="$validator_files --node=${datadir}/node_genesis.json"
+            entity_node_files="$entity_node_files --entity.node.descriptor=${datadir}/node_genesis.json"
+        done
+
+        # Update the entity descriptor to include the node IDs of the
+        # self-signed nodes.
+        ${EKIDEN_NODE} \
+            registry entity update \
+            --entity.debug.allow_entity_signed_nodes \
+            ${entity_node_files} \
+            --datadir ${entity_dir}
+
+        # Provision the key manager runtime.
+        ${EKIDEN_NODE} \
+            registry runtime init_genesis \
+            --runtime.id ${EKIDEN_KM_RUNTIME_ID} \
+            ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
+            --runtime.kind keymanager \
+            --runtime.genesis.file keymanager_genesis.json \
             --entity ${entity_dir} \
-            --node.consensus_address 127.0.0.1:${port} \
-            --node.expiration 1000000 \
-            --node.role validator \
-            --node.is_self_signed
-        validator_files="$validator_files --node=${datadir}/node_genesis.json"
-        entity_node_files="$entity_node_files --entity.node.descriptor=${datadir}/node_genesis.json"
-    done
+            --datadir ${entity_dir}
 
-    # Update the entity descriptor to include the node IDs of the
-    # self-signed nodes.
-    ${EKIDEN_NODE} \
-        registry entity update \
-        --entity.debug.allow_entity_signed_nodes \
-        ${entity_node_files} \
-        --datadir ${entity_dir}
-
-    # Provision the key manager runtime.
-    ${EKIDEN_NODE} \
-        registry runtime init_genesis \
-        --runtime.id ${EKIDEN_KM_RUNTIME_ID} \
-        ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
-        --runtime.kind keymanager \
-        --runtime.genesis.file keymanager_genesis.json \
-        --entity ${entity_dir} \
-        --datadir ${entity_dir}
-
-    # Provision the runtime.
-    ${EKIDEN_NODE} \
-        registry runtime init_genesis \
-        --runtime.id ${EKIDEN_RUNTIME_ID} \
-        --runtime.replica_group_size ${replica_group_size} \
-        --runtime.replica_group_backup_size ${replica_group_backup_size} \
-        --runtime.storage_group_size ${storage_group_size} \
-        ${runtime_genesis:+--runtime.genesis.state ${runtime_genesis}} \
-        ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
-        --runtime.keymanager ${EKIDEN_KM_RUNTIME_ID} \
-        --runtime.kind compute \
-        --entity ${entity_dir} \
-        --datadir ${entity_dir}
+        # Provision the runtime.
+        ${EKIDEN_NODE} \
+            registry runtime init_genesis \
+            --runtime.id ${EKIDEN_RUNTIME_ID} \
+            --runtime.replica_group_size ${replica_group_size} \
+            --runtime.replica_group_backup_size ${replica_group_backup_size} \
+            --runtime.storage_group_size ${storage_group_size} \
+            ${runtime_genesis:+--runtime.genesis.state ${runtime_genesis}} \
+            ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
+            --runtime.keymanager ${EKIDEN_KM_RUNTIME_ID} \
+            --runtime.kind compute \
+            --entity ${entity_dir} \
+            --datadir ${entity_dir}
+    fi
 
     # Create the genesis document.
     local genesis_file=${committee_dir}/genesis.json
     rm -Rf ${genesis_file}
 
-    ${EKIDEN_NODE} \
-        genesis init \
-        --genesis_file ${genesis_file} \
-        --entity ${entity_dir}/entity_genesis.json \
-        --runtime ${entity_dir}/keymanager_genesis.json \
-        --runtime ${entity_dir}/runtime_genesis.json \
-        ${roothash_genesis_blocks:+--roothash ${roothash_genesis_blocks}} \
-        ${validator_files}
+    if [[ ! -z "${restore_genesis_file}" ]]; then
+        cp ${restore_genesis_file} ${genesis_file}
+    else
+        ${EKIDEN_NODE} \
+            genesis init \
+            --genesis_file ${genesis_file} \
+            --entity ${entity_dir}/entity_genesis.json \
+            --runtime ${entity_dir}/keymanager_genesis.json \
+            --runtime ${entity_dir}/runtime_genesis.json \
+            ${roothash_genesis_blocks:+--roothash ${roothash_genesis_blocks}} \
+            ${validator_files}
+    fi
 
     # Run the IAS proxy if needed.
     local ias_proxy_port=9001
@@ -157,10 +168,18 @@ run_backend_tendermint_committee() {
     EKIDEN_ENTITY_PRIVATE_KEY=${entity_dir}/entity.pem
 
     # Run the seed node.
-    run_seed_node
+    if [[ ! -z "${restore_genesis_file}" ]]; then
+        run_seed_node 1
+    else
+        run_seed_node 0
+    fi
 
     # Run the key manager node.
-    run_keymanager_node 0
+    if [[ ! -z "${restore_genesis_file}" ]]; then
+        run_keymanager_node 1
+    else
+        run_keymanager_node 0
+    fi
 
     # Run the validator nodes.
     for idx in $(seq 1 $nodes); do
@@ -512,6 +531,8 @@ run_keymanager_node() {
 #
 # Any arguments are passed to the Go node.
 run_seed_node() {
+    local keep_data_dir=$1
+    shift
     local extra_args=$*
 
     # Ensure the genesis file is available.
@@ -521,7 +542,9 @@ run_seed_node() {
     fi
 
     local data_dir=${EKIDEN_COMMITTEE_DIR}/seed-$id
-    rm -rf ${data_dir}
+    if [ "${keep_data_dir}" != "1" ]; then
+        rm -rf ${data_dir}
+    fi
     local log_file=${EKIDEN_COMMITTEE_DIR}/seed-$id.log
     rm -rf ${log_file}
 
@@ -627,6 +650,7 @@ run_test() {
     local client_runner=run_basic_client
     local client="none"
     local beacon_deterministic=""
+    local restore_genesis_file=""
     # Load named arguments that override defaults.
     local "${@}"
 
@@ -657,7 +681,7 @@ run_test() {
     fi
 
     # Start backend.
-    $backend_runner
+    $backend_runner restore_genesis_file=${restore_genesis_file}
     sleep 1
 
     # Run the client.

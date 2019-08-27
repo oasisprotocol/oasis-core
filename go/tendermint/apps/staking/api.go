@@ -51,6 +51,12 @@ const (
 
 	// QueryAllowance is the path for an Allowance query.
 	QueryAllowance = AppName + "/allowance"
+
+	// QueryDebondingInterval is the path for a DebondingInterval query.
+	QueryDebondingInterval = AppName + "/debonding_interval"
+
+	// QueryGenesis is the path for a Genesis query.
+	QueryGenesis = AppName + "/genesis"
 )
 
 // Tx is a transaction to be accepted by the staking app.

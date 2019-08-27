@@ -61,6 +61,7 @@ func (app *registryApplication) OnRegister(state *abci.ApplicationState, queryRo
 	queryRouter.AddRoute(QueryGetNodes, nil, app.queryGetNodes)
 	queryRouter.AddRoute(QueryGetRuntime, api.QueryGetByIDRequest{}, app.queryGetRuntime)
 	queryRouter.AddRoute(QueryGetRuntimes, nil, app.queryGetRuntimes)
+	queryRouter.AddRoute(QueryGenesis, nil, app.queryGenesis)
 }
 
 func (app *registryApplication) OnCleanup() {
@@ -77,7 +78,18 @@ func (app *registryApplication) GetState(height int64) (interface{}, error) {
 func (app *registryApplication) queryGetEntity(s interface{}, r interface{}) ([]byte, error) {
 	request := r.(*api.QueryGetByIDRequest)
 	state := s.(*immutableState)
-	return state.getEntityRaw(request.ID)
+
+	signedEntityRaw, err := state.getSignedEntityRaw(request.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var signedEntity entity.SignedEntity
+	if err = cbor.Unmarshal(signedEntityRaw, &signedEntity); err != nil {
+		return nil, err
+	}
+
+	return signedEntity.Blob, nil
 }
 
 func (app *registryApplication) queryGetEntities(s interface{}, r interface{}) ([]byte, error) {
@@ -88,7 +100,18 @@ func (app *registryApplication) queryGetEntities(s interface{}, r interface{}) (
 func (app *registryApplication) queryGetNode(s interface{}, r interface{}) ([]byte, error) {
 	request := r.(*api.QueryGetByIDRequest)
 	state := s.(*immutableState)
-	return state.getNodeRaw(request.ID)
+
+	signedNodeRaw, err := state.getSignedNodeRaw(request.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var signedNode node.SignedNode
+	if err = cbor.Unmarshal(signedNodeRaw, &signedNode); err != nil {
+		return nil, err
+	}
+
+	return signedNode.Blob, nil
 }
 
 func (app *registryApplication) queryGetNodes(s interface{}, r interface{}) ([]byte, error) {
@@ -99,12 +122,61 @@ func (app *registryApplication) queryGetNodes(s interface{}, r interface{}) ([]b
 func (app *registryApplication) queryGetRuntime(s interface{}, r interface{}) ([]byte, error) {
 	request := r.(*api.QueryGetByIDRequest)
 	state := s.(*immutableState)
-	return state.getRuntimeRaw(request.ID)
+
+	signedRuntimeRaw, err := state.getSignedRuntimeRaw(request.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var signedRuntime registry.SignedRuntime
+	if err = cbor.Unmarshal(signedRuntimeRaw, &signedRuntime); err != nil {
+		return nil, err
+	}
+
+	return signedRuntime.Blob, nil
 }
 
 func (app *registryApplication) queryGetRuntimes(s interface{}, r interface{}) ([]byte, error) {
 	state := s.(*immutableState)
 	return state.getRuntimesRaw()
+}
+
+func (app *registryApplication) queryGenesis(s interface{}, r interface{}) ([]byte, error) {
+	state := s.(*immutableState)
+
+	// Fetch entities, runtimes, and nodes from state.
+	signedEntities, err := state.getSignedEntities()
+	if err != nil {
+		return nil, err
+	}
+	signedRuntimes, err := state.getSignedRuntimes()
+	if err != nil {
+		return nil, err
+	}
+	signedNodes, err := state.getSignedNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	// We only want to keep the nodes that are validators.
+	validatorNodes := make([]*node.SignedNode, 0)
+	for _, sn := range signedNodes {
+		var n node.Node
+		if err = cbor.Unmarshal(sn.Blob, &n); err != nil {
+			return nil, err
+		}
+
+		if n.HasRoles(node.RoleValidator) {
+			validatorNodes = append(validatorNodes, sn)
+		}
+	}
+
+	gen := registry.Genesis{
+		Entities: signedEntities,
+		Runtimes: signedRuntimes,
+		Nodes:    validatorNodes,
+	}
+	return cbor.Marshal(gen), nil
 }
 
 func (app *registryApplication) CheckTx(ctx *abci.Context, tx []byte) error {
@@ -302,7 +374,7 @@ func (app *registryApplication) registerEntity(
 		}
 	}
 
-	state.createEntity(ent)
+	state.createEntity(ent, sigEnt)
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("RegisterEntity: registered",
@@ -426,7 +498,7 @@ func (app *registryApplication) registerNode(
 	if err != nil {
 		if err == errNodeNotFound {
 			// Node doesn't exist. Create node.
-			err = state.createNode(newNode)
+			err = state.createNode(newNode, sigNode)
 			if err != nil {
 				app.logger.Error("RegisterNode: failed to create node",
 					"err", err,
@@ -454,7 +526,7 @@ func (app *registryApplication) registerNode(
 			)
 			return err
 		}
-		err = state.createNode(newNode)
+		err = state.createNode(newNode, sigNode)
 		if err != nil {
 			app.logger.Error("RegisterNode: failed to update node",
 				"err", err,
@@ -502,7 +574,7 @@ func (app *registryApplication) registerRuntime(
 		}
 	}
 
-	if err = state.createRuntime(rt, sigRt.Signature.PublicKey); err != nil {
+	if err = state.createRuntime(rt, sigRt); err != nil {
 		app.logger.Error("RegisterRuntime: failed to create runtime",
 			"err", err,
 			"runtime", rt,

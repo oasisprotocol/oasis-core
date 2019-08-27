@@ -59,6 +59,9 @@ type Backend interface {
 	//
 	// Upon subscription the current status is sent immediately.
 	WatchStatuses() (<-chan *Status, *pubsub.Subscription)
+
+	// ToGenesis returns the genesis state at specified block height.
+	ToGenesis(context.Context, int64) (*Genesis, error)
 }
 
 // InitResponse is the initialization RPC response, returned as part of a

@@ -394,7 +394,7 @@ func (t *tendermintService) lazyInit() error {
 		)
 		return err
 	}
-	tenderminGenesisProvider := func() (*tmtypes.GenesisDoc, error) {
+	tendermintGenesisProvider := func() (*tmtypes.GenesisDoc, error) {
 		return tmGenDoc, nil
 	}
 
@@ -419,7 +419,7 @@ func (t *tendermintService) lazyInit() error {
 			// TODO/hsm: This needs to use a separte key.
 			&tmp2p.NodeKey{PrivKey: crypto.UnsafeSignerToTendermint(t.nodeSigner)},
 			tmproxy.NewLocalClientCreator(t.mux.Mux()),
-			tenderminGenesisProvider,
+			tendermintGenesisProvider,
 			dbProvider,
 			tmnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
 			newLogAdapter(!viper.GetBool(cfgLogDebug)),

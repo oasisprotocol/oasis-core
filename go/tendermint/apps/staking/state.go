@@ -108,6 +108,15 @@ func (s *immutableState) debondingInterval() (uint64, error) {
 	return binary.LittleEndian.Uint64(value), nil
 }
 
+func (s *immutableState) rawDebondingInterval() ([]byte, error) {
+	q, err := s.debondingInterval()
+	if err != nil {
+		return nil, err
+	}
+
+	return cbor.Marshal(q), nil
+}
+
 // Thresholds returns the currently configured thresholds if any.
 func (s *immutableState) Thresholds() (map[staking.ThresholdKind]staking.Quantity, error) {
 	m := make(map[staking.ThresholdKind]staking.Quantity)
