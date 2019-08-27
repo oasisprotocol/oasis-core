@@ -9,18 +9,22 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	storagegrpc "github.com/oasislabs/ekiden/go/grpc/storage"
+	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	storageclient "github.com/oasislabs/ekiden/go/storage/client"
 	urkelnode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
 var _ storage.Backend = (*honestNodeStorage)(nil)
 
 type honestNodeStorage struct {
+	nodeID            signature.PublicKey
 	client            storagegrpc.StorageClient
 	resolverCleanupCb func()
 	initCh            chan struct{}
@@ -40,6 +44,7 @@ func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeSt
 	close(initCh)
 
 	return &honestNodeStorage{
+		nodeID:            node.ID,
 		client:            storagegrpc.NewStorageClient(conn),
 		resolverCleanupCb: resolverCleanupCb,
 		initCh:            initCh,
@@ -136,4 +141,48 @@ func (hns *honestNodeStorage) Cleanup() {
 
 func (hns *honestNodeStorage) Initialized() <-chan struct{} {
 	return hns.initCh
+}
+
+func storageConnectToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, id *identity.Identity) ([]*honestNodeStorage, error) {
+	var hnss []*honestNodeStorage
+	if err := schedulerForRoleInCommittee(svc, height, committee, role, func(n *node.Node) error {
+		hns, err := newHonestNodeStorage(id, n)
+		if err != nil {
+			return errors.Wrapf(err, "newHonestNodeStorage %s", n.ID)
+		}
+
+		hnss = append(hnss, hns)
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return hnss, nil
+}
+
+func storageBroadcastCleanup(hnss []*honestNodeStorage) {
+	for _, hns := range hnss {
+		hns.Cleanup()
+	}
+}
+
+func storageBroadcastApplyBatch(
+	ctx context.Context,
+	hnss []*honestNodeStorage,
+	ns common.Namespace,
+	dstRound uint64,
+	ops []storage.ApplyOp,
+) ([]*storage.Receipt, error) {
+	var receipts []*storage.Receipt
+	for _, hns := range hnss {
+		r, err := hns.ApplyBatch(ctx, ns, dstRound, ops)
+		if err != nil {
+			return receipts, errors.Wrapf(err, "honest node storage ApplyBatch %s", hns.nodeID)
+		}
+
+		receipts = append(receipts, r...)
+	}
+
+	return receipts, nil
 }
