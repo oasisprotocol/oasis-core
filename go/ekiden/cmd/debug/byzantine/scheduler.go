@@ -9,6 +9,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/node"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	schedulerapp "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
@@ -101,4 +102,24 @@ func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.Pu
 		return nil
 	}
 	return errors.New("we're not scheduled")
+}
+
+func schedulerForRoleInCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, fn func(*node.Node) error) error {
+	for _, member := range committee.Members {
+		if member.Role != role {
+			continue
+		}
+
+		n, err := registryGetNode(svc, height, member.PublicKey)
+		if err != nil {
+			return errors.Wrapf(err, "registry get node %s", member.PublicKey)
+		}
+
+		if err = fn(n); err != nil {
+			// Forward callback error to caller verbatim.
+			return err
+		}
+	}
+
+	return nil
 }
