@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -161,17 +162,12 @@ func (cbc *computeBatchContext) createCommitmentMessage(id *identity.Identity, r
 }
 
 func computePublishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, message *p2p.Message) error { // nolint: deadcode, unused
-	for _, member := range committee.Members {
-		if member.Role != role {
-			continue
-		}
+	if err := schedulerForRoleInCommittee(svc, height, committee, role, func(n *node.Node) error {
+		ph.service.Publish(ph.context, n, message)
 
-		node, err := registryGetNode(svc, height, member.PublicKey)
-		if err != nil {
-			return errors.Wrapf(err, "registry get node %s", member.PublicKey)
-		}
-
-		ph.service.Publish(ph.context, node, message)
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	ph.service.Flush()
