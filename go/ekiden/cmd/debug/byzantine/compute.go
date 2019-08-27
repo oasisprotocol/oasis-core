@@ -133,7 +133,11 @@ func (cbc *computeBatchContext) commit(ctx context.Context) error {
 	return nil
 }
 
-func (cbc *computeBatchContext) createCommitmentMessage(id *identity.Identity, runtimeID signature.PublicKey, groupVersion int64, committeeID hash.Hash) (*p2p.Message, error) {
+func (cbc *computeBatchContext) createCommitmentMessage(id *identity.Identity, runtimeID signature.PublicKey, groupVersion int64, committeeID hash.Hash, storageReceipts []*storage.Receipt) (*p2p.Message, error) {
+	var storageSigs []signature.Signature
+	for _, receipt := range storageReceipts {
+		storageSigs = append(storageSigs, receipt.Signature)
+	}
 	commit, err := commitment.SignComputeCommitment(id.NodeSigner, &commitment.ComputeBody{
 		CommitteeID: committeeID,
 		Header: commitment.ComputeResultsHeader{
@@ -141,7 +145,7 @@ func (cbc *computeBatchContext) createCommitmentMessage(id *identity.Identity, r
 			IORoot:       cbc.newIORoot,
 			StateRoot:    cbc.newStateRoot,
 		},
-		// StorageSignatures not set
+		StorageSignatures: storageSigs,
 		// RakSig not set
 		TxnSchedSig:      cbc.bdSig,
 		InputRoot:        cbc.bd.IORoot,

@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
@@ -105,7 +106,48 @@ func (hns *honestNodeStorage) ApplyBatch(
 	dstRound uint64,
 	ops []storage.ApplyOp,
 ) ([]*storage.Receipt, error) {
-	panic("not implemented")
+	namespaceBinary, err := ns.MarshalBinary()
+	if err != nil {
+		panic(fmt.Sprintf("namespace MarshalBinary failed: %+v", err))
+	}
+	var pOps []*storagegrpc.ApplyOp
+	for _, op := range ops {
+		srcRootRaw, err1 := op.SrcRoot.MarshalBinary()
+		if err1 != nil {
+			panic(fmt.Sprintf("apply operation source root MarshalBinary failed: %+v", err))
+		}
+		dstRootRaw, err1 := op.DstRoot.MarshalBinary()
+		if err1 != nil {
+			panic(fmt.Sprintf("apply operation destination root MarshalBinary failed: %+v", err))
+		}
+		var pLogs []*storagegrpc.LogEntry
+		for _, log := range op.WriteLog {
+			pLogs = append(pLogs, &storagegrpc.LogEntry{
+				Key:   log.Key,
+				Value: log.Value,
+			})
+		}
+		pOps = append(pOps, &storagegrpc.ApplyOp{
+			SrcRound: op.SrcRound,
+			SrcRoot:  srcRootRaw,
+			DstRoot:  dstRootRaw,
+			Log:      pLogs,
+		})
+	}
+	resp, err := hns.client.ApplyBatch(ctx, &storagegrpc.ApplyBatchRequest{
+		Namespace: namespaceBinary,
+		DstRound:  dstRound,
+		Ops:       pOps,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "client ApplyBatch")
+	}
+	var receipts []*storage.Receipt
+	if err = cbor.Unmarshal(resp.GetReceipts(), &receipts); err != nil {
+		panic(fmt.Sprintf("CBOR unmarshal receipts failed: %+v", err))
+	}
+
+	return receipts, nil
 }
 
 func (hns *honestNodeStorage) Merge(
