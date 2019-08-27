@@ -1,23 +1,17 @@
 package ias
 
 import (
-	"bytes"
-
-	"github.com/pkg/errors"
-
-	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/sgx"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 	"github.com/oasislabs/ekiden/go/genesis"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 )
 
 type genesisAuthenticator struct {
-	logger   *logging.Logger
-	enclaves map[signature.MapKey][]sgx.EnclaveIdentity
+	logger *logging.Logger
+
+	enclaves *enclaveStore
 }
 
 func (auth *genesisAuthenticator) VerifyEvidence(signer signature.PublicKey, evidence *ias.Evidence) error {
@@ -25,40 +19,19 @@ func (auth *genesisAuthenticator) VerifyEvidence(signer signature.PublicKey, evi
 	// validate that the signer is a node scheduled for the appropriate
 	// runtime.
 
-	enclaveIDs, ok := auth.enclaves[evidence.ID.ToMapKey()]
-	if !ok {
-		auth.logger.Error("not a genesis runtime",
+	err := auth.enclaves.verifyEvidence(evidence)
+	if err != nil {
+		auth.logger.Error("rejecting proxy request, invalid runtime",
+			"err", err,
 			"id", evidence.ID,
 		)
-		return errors.New("ias: not a runtime specified in genesis")
+		return err
 	}
 
-	quote, err := ias.DecodeQuote(evidence.Quote)
-	if err != nil {
-		auth.logger.Error("evidence contains an invalid quote",
-			"err", err,
-		)
-		return errors.Wrap(err, "ias: evidence contains an invalid quote")
-	}
-
-	var id sgx.EnclaveIdentity
-	id.FromComponents(quote.Report.MRSIGNER, quote.Report.MRENCLAVE)
-
-	for _, v := range enclaveIDs {
-		if bytes.Equal(v[:], id[:]) {
-			auth.logger.Debug("found enclave identity in genesis runtime descriptor",
-				"id", evidence.ID,
-				"enclave_identity", id,
-			)
-			return nil
-		}
-	}
-
-	auth.logger.Error("enclave identity not in genesis runtime descriptor",
+	auth.logger.Debug("allowing proxy request, found enclave identity",
 		"id", evidence.ID,
-		"enclave_identity", id,
 	)
-	return errors.New("ias: enclave identity not in genesis runtime descriptor")
+	return nil
 }
 
 func newGenesisAuthenticator() (ias.GRPCAuthenticator, error) {
@@ -74,7 +47,7 @@ func newGenesisAuthenticator() (ias.GRPCAuthenticator, error) {
 
 	auth := &genesisAuthenticator{
 		logger:   logging.GetLogger("cmd/ias/proxy/auth/genesis"),
-		enclaves: make(map[signature.MapKey][]sgx.EnclaveIdentity),
+		enclaves: newEnclaveStore(),
 	}
 	for _, v := range doc.Registry.Runtimes {
 		var rt registry.Runtime
@@ -82,19 +55,9 @@ func newGenesisAuthenticator() (ias.GRPCAuthenticator, error) {
 			return nil, err
 		}
 
-		if rt.TEEHardware != node.TEEHardwareIntelSGX {
-			continue
-		}
-		if len(rt.Version.TEE) == 0 {
-			continue
-		}
-
-		var vi registry.VersionInfoIntelSGX
-		if err = cbor.Unmarshal(rt.Version.TEE, &vi); err != nil {
+		if _, err = auth.enclaves.addRuntime(&rt); err != nil {
 			return nil, err
 		}
-
-		auth.enclaves[rt.ID.ToMapKey()] = vi.Enclaves
 	}
 
 	return auth, nil

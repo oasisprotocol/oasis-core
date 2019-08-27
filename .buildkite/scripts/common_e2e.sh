@@ -158,12 +158,20 @@ run_backend_tendermint_committee() {
     rm -Rf {$ias_dir}
 
     if [ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]; then
+        # Note: This can just use a real client and watch the
+        # registry by setting `--address` and `--ias.wait_runtimes`
+        # to the appropriate values.
+        #
+        # nb: The startup order of things would need to be changed,
+        # and the brittle test cases will probably break in mysterious
+        # ways.
         if [ "${EKIDEN_UNSAFE_SKIP_AVR_VERIFY}" == "" ]; then
             # TODO: Ensure that IAS credentials are configured.
             ${EKIDEN_NODE} \
                 ias proxy \
                 --datadir ${ias_dir} \
-                --ias.debug.skip_auth \
+                --ias.use_genesis \
+                --genesis.file ${genesis_file} \
                 --ias.auth.cert ${EKIDEN_IAS_CERT} \
                 --ias.auth.cert.ca ${EKIDEN_IAS_CERT} \
                 --ias.auth.cert.key ${EKIDEN_IAS_KEY} \
@@ -177,9 +185,9 @@ run_backend_tendermint_committee() {
             ${EKIDEN_NODE} \
                 ias proxy \
                 --datadir ${ias_dir} \
-                --ias.debug.mock \
                 --ias.use_genesis \
                 --genesis.file ${genesis_file} \
+                --ias.debug.mock \
                 --ias.spid 9b3085a55a5863f7cc66b380dcad0082 \
                 --debug.allow_test_keys \
                 --metrics.mode none \
@@ -189,13 +197,13 @@ run_backend_tendermint_committee() {
         fi
 
         EKIDEN_IAS_PROXY_ENABLED=1
+        EKIDEN_IAS_PROXY_PORT=${ias_proxy_port}
         EKIDEN_IAS_PROXY_CERT=${ias_dir}/ias_proxy_cert.pem
     fi
 
     # Export some variables so compute workers can find them.
     EKIDEN_COMMITTEE_DIR=${committee_dir}
     EKIDEN_VALIDATOR_SOCKET=${base_datadir}-1/internal.sock
-    EKIDEN_IAS_PROXY_PORT=${ias_proxy_port}
     EKIDEN_GENESIS_FILE=${genesis_file}
     EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
     EKIDEN_ENTITY_DESCRIPTOR=${entity_dir}/entity.json

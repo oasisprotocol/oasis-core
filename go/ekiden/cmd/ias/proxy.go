@@ -2,6 +2,7 @@
 package ias
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -35,6 +36,7 @@ const (
 	cfgDebugMock     = "ias.debug.mock"
 	cfgDebugSkipAuth = "ias.debug.skip_auth"
 	cfgUseGenesis    = "ias.use_genesis"
+	cfgWaitRuntimes  = "ias.wait_runtimes"
 
 	tlsKeyFilename  = "ias_proxy.pem"
 	tlsCertFilename = "ias_proxy_cert.pem"
@@ -153,7 +155,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 	}
 
 	// Initialize the IAS proxy authenticator.
-	grpcAuth, err := grpcAuthenticatorFromFlags()
+	grpcAuth, err := grpcAuthenticatorFromFlags(env.svcMgr.Ctx, cmd)
 	if err != nil {
 		logger.Error("failed to initialize IAS gRPC authentiator",
 			"err", err,
@@ -234,7 +236,7 @@ func iasEndpointFromFlags() (ias.Endpoint, error) {
 	return ias.NewIASEndpoint(cfg)
 }
 
-func grpcAuthenticatorFromFlags() (ias.GRPCAuthenticator, error) {
+func grpcAuthenticatorFromFlags(ctx context.Context, cmd *cobra.Command) (ias.GRPCAuthenticator, error) {
 	if viper.GetBool(cfgDebugSkipAuth) {
 		logger.Warn("IAS gRPC authentication disabled, proxy is open")
 		return nil, nil
@@ -243,7 +245,7 @@ func grpcAuthenticatorFromFlags() (ias.GRPCAuthenticator, error) {
 		return newGenesisAuthenticator()
 	}
 
-	return nil, fmt.Errorf("ias: no authentication configured")
+	return newRegistryAuthenticator(ctx, cmd)
 }
 
 // RegisterFlags registers the flags used by the proxy command.
@@ -258,6 +260,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cmd.Flags().Bool(cfgDebugMock, false, "generate mock IAS AVR responses (UNSAFE)")
 		cmd.Flags().Bool(cfgDebugSkipAuth, false, "disable proxy authentication (UNSAFE)")
 		cmd.Flags().Bool(cfgUseGenesis, false, "use a genesis document instead of the registry")
+		cmd.Flags().Int(cfgWaitRuntimes, 0, "wait for N runtimes to be registered before servicing requests")
 	}
 
 	for _, v := range []string{
@@ -270,6 +273,7 @@ func RegisterFlags(cmd *cobra.Command) {
 		cfgDebugMock,
 		cfgDebugSkipAuth,
 		cfgUseGenesis,
+		cfgWaitRuntimes,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
@@ -282,6 +286,8 @@ func RegisterFlags(cmd *cobra.Command) {
 	} {
 		v(cmd)
 	}
+
+	cmdGrpc.RegisterClientFlags(cmd, false)
 }
 
 // Register registers the ias sub-command and all of it's children.
