@@ -27,10 +27,6 @@ const (
 	cfgTxFile   = "stake.transaction.file"
 
 	cfgTransferDestination = "stake.transfer.destination"
-
-	cfgApprovalSpender = "stake.approval.spender"
-
-	cfgWithdrawalFrom = "stake.withdrawal.from"
 )
 
 var (
@@ -66,24 +62,6 @@ var (
 		Run: doAccountTransfer,
 	}
 
-	accountApproveCmd = &cobra.Command{
-		Use:   "gen_approve",
-		Short: "generate an approval transaction",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerAccountApproveFlags(cmd)
-		},
-		Run: doAccountApprove,
-	}
-
-	accountWithdrawCmd = &cobra.Command{
-		Use:   "gen_withdraw",
-		Short: "Generate a withdrawal transaction",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerAccountWithdrawFlags(cmd)
-		},
-		Run: doAccountWithdraw,
-	}
-
 	accountBurnCmd = &cobra.Command{
 		Use:   "gen_burn",
 		Short: "Generate a burn transaction",
@@ -114,8 +92,6 @@ var (
 
 type serializedTx struct {
 	Transfer      *api.SignedTransfer      `codec:"tranfer"`
-	Approval      *api.SignedApproval      `codec:"approval"`
-	Withdrawal    *api.SignedWithdrawal    `codec:"withdrawal"`
 	Burn          *api.SignedBurn          `codec:"burn"`
 	Escrow        *api.SignedEscrow        `codec:"escrow"`
 	ReclaimEscrow *api.SignedReclaimEscrow `codec:"reclaim_escrow"`
@@ -193,16 +169,6 @@ func doAccountSubmit(cmd *cobra.Command, args []string) {
 				SignedTransfer: cbor.Marshal(signed),
 			})
 		}
-		if signed := tx.Approval; signed != nil {
-			_, err = client.Approve(ctx, &grpcStaking.ApproveRequest{
-				SignedApproval: cbor.Marshal(signed),
-			})
-		}
-		if signed := tx.Withdrawal; signed != nil {
-			_, err = client.Withdraw(ctx, &grpcStaking.WithdrawRequest{
-				SignedWithdrawal: cbor.Marshal(signed),
-			})
-		}
 		if signed := tx.Burn; signed != nil {
 			_, err = client.Burn(ctx, &grpcStaking.BurnRequest{
 				SignedBurn: cbor.Marshal(signed),
@@ -263,96 +229,6 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 
 	tx := &serializedTx{
 		Transfer: signedXfer,
-	}
-	tx.MustSave()
-}
-
-func doAccountApprove(cmd *cobra.Command, args []string) {
-	if err := cmdCommon.Init(); err != nil {
-		cmdCommon.EarlyLogAndExit(err)
-	}
-
-	assertTxFileOK()
-
-	var approval api.Approval
-	if err := approval.Spender.UnmarshalHex(viper.GetString(cfgApprovalSpender)); err != nil {
-		logger.Error("failed to parse approval spender ID",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-	if err := approval.Tokens.UnmarshalText([]byte(viper.GetString(cfgTxAmount))); err != nil {
-		logger.Error("failed to parse approval amount",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-	approval.Nonce = viper.GetUint64(cfgTxNonce)
-
-	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Entity())
-	if err != nil {
-		logger.Error("failed to load account entity",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-	defer signer.Reset()
-
-	signedApproval, err := api.SignApproval(signer, &approval)
-	if err != nil {
-		logger.Error("failed to sign approval",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-
-	tx := &serializedTx{
-		Approval: signedApproval,
-	}
-	tx.MustSave()
-}
-
-func doAccountWithdraw(cmd *cobra.Command, args []string) {
-	if err := cmdCommon.Init(); err != nil {
-		cmdCommon.EarlyLogAndExit(err)
-	}
-
-	assertTxFileOK()
-
-	var withdrawal api.Withdrawal
-	if err := withdrawal.From.UnmarshalHex(viper.GetString(cfgWithdrawalFrom)); err != nil {
-		logger.Error("failed to parse withdrawal source ID",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-	if err := withdrawal.Tokens.UnmarshalText([]byte(viper.GetString(cfgTxAmount))); err != nil {
-		logger.Error("failed to parse withdrawal amount",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-	withdrawal.Nonce = viper.GetUint64(cfgTxNonce)
-
-	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Entity())
-	if err != nil {
-		logger.Error("failed to load account entity",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-	defer signer.Reset()
-
-	signedWithdrawal, err := api.SignWithdrawal(signer, &withdrawal)
-	if err != nil {
-		logger.Error("failed to sign withdrawal",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-
-	tx := &serializedTx{
-		Withdrawal: signedWithdrawal,
 	}
 	tx.MustSave()
 }
@@ -536,41 +412,11 @@ func registerAccountTransferFlags(cmd *cobra.Command) {
 	registerTxFlags(cmd)
 }
 
-func registerAccountApproveFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgApprovalSpender, "", "approval spender account ID")
-	}
-
-	for _, v := range []string{
-		cfgApprovalSpender,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
-
-	registerTxFlags(cmd)
-}
-
-func registerAccountWithdrawFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgWithdrawalFrom, "", "withdrawal source account ID")
-	}
-
-	for _, v := range []string{
-		cfgWithdrawalFrom,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
-
-	registerTxFlags(cmd)
-}
-
 func registerAccountCmd() {
 	for _, v := range []*cobra.Command{
 		accountInfoCmd,
 		accountSubmitCmd,
 		accountTransferCmd,
-		accountApproveCmd,
-		accountWithdrawCmd,
 		accountBurnCmd,
 		accountReclaimEscrowCmd,
 	} {
@@ -580,8 +426,6 @@ func registerAccountCmd() {
 	registerAccountInfoFlags(accountInfoCmd)
 	registerAccountSubmitFlags(accountSubmitCmd)
 	registerAccountTransferFlags(accountTransferCmd)
-	registerAccountApproveFlags(accountApproveCmd)
-	registerAccountWithdrawFlags(accountWithdrawCmd)
 	registerTxFlags(accountBurnCmd)
 	registerTxFlags(accountEscrowCmd)
 	registerTxFlags(accountReclaimEscrowCmd)

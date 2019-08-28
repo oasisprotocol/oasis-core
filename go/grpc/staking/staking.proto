@@ -12,19 +12,15 @@ service Staking {
 	rpc GetThreshold(GetThresholdRequest) returns (GetThresholdResponse) {}
 	rpc GetAccounts(GetAccountsRequest) returns (GetAccountsResponse) {} // TODO: Stream this?
 	rpc GetAccountInfo(GetAccountInfoRequest) returns (GetAccountInfoResponse) {}
-	rpc GetAllowance(GetAllowanceRequest) returns (GetAllowanceResponse) {}
 
 	// Calls that mutate state.
 	rpc Transfer(TransferRequest) returns (TransferResponse) {}
-	rpc Approve(ApproveRequest) returns (ApproveResponse) {}
-	rpc Withdraw(WithdrawRequest) returns (WithdrawResponse) {}
 	rpc Burn(BurnRequest) returns (BurnResponse) {}
 	rpc AddEscrow(AddEscrowRequest) returns (AddEscrowResponse) {}
 	rpc ReclaimEscrow(ReclaimEscrowRequest) returns (ReclaimEscrowResponse) {}
 
 	// Calls that watch events.
 	rpc WatchTransfers (WatchTransfersRequest) returns (stream WatchTransfersResponse) {}
-	rpc WatchApprovals (WatchApprovalsRequest) returns (stream WatchApprovalsResponse) {}
 	rpc WatchBurns (WatchBurnsRequest) returns (stream WatchBurnsResponse) {}
 	rpc WatchEscrows (WatchEscrowsRequest) returns (stream WatchEscrowsResponse) {}
 }
@@ -84,32 +80,11 @@ message GetAccountInfoResponse {
 	uint64 nonce = 4;
 }
 
-message GetAllowanceRequest {
-	bytes owner = 1;
-	bytes spender = 2;
-}
-
-message GetAllowanceResponse {
-	bytes allowance = 1;
-}
-
 message TransferRequest {
 	bytes signed_transfer = 1;
 }
 
 message TransferResponse {}
-
-message ApproveRequest {
-	bytes signed_approval = 1;
-}
-
-message ApproveResponse {}
-
-message WithdrawRequest {
-	bytes signed_withdrawal = 1;
-}
-
-message WithdrawResponse {}
 
 message BurnRequest {
 	bytes signed_burn = 1;
@@ -132,12 +107,6 @@ message ReclaimEscrowResponse {}
 message WatchTransfersRequest {}
 
 message WatchTransfersResponse {
-	bytes event = 1;
-}
-
-message WatchApprovalsRequest {}
-
-message WatchApprovalsResponse {
 	bytes event = 1;
 }
 

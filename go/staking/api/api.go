@@ -47,10 +47,6 @@ var (
 	// fails due to insufficient balance.
 	ErrInsufficientBalance = errors.New("staking: insufficient balance")
 
-	// ErrInsufficientAllowance is the error returned when a withdrawal
-	// fails due to insufficient allowance.
-	ErrInsufficientAllowance = errors.New("staking: insufficient allowance")
-
 	// ErrInvalidAccount is the error returned when an operation fails
 	// due to a missing account.
 	ErrInvalidAccount = errors.New("staking: invalid account")
@@ -68,10 +64,6 @@ var (
 
 	_ cbor.Marshaler   = (*Transfer)(nil)
 	_ cbor.Unmarshaler = (*Transfer)(nil)
-	_ cbor.Marshaler   = (*Approval)(nil)
-	_ cbor.Unmarshaler = (*Approval)(nil)
-	_ cbor.Marshaler   = (*Withdrawal)(nil)
-	_ cbor.Unmarshaler = (*Withdrawal)(nil)
 	_ cbor.Marshaler   = (*Burn)(nil)
 	_ cbor.Unmarshaler = (*Burn)(nil)
 	_ cbor.Marshaler   = (*Escrow)(nil)
@@ -106,24 +98,6 @@ type Backend interface {
 	// Transfer executes a SignedTransfer.
 	Transfer(ctx context.Context, signedXfer *SignedTransfer) error
 
-	// Allowance returns the number of tokens the spender can
-	// withdraw from the owner entity's balance.
-	Allowance(ctx context.Context, owner, spender signature.PublicKey) (*Quantity, error)
-
-	// Approve executes a SignedApproval, approving the spender to
-	// withdraw up to the specified amount of tokens from the signer's
-	// balance.
-	//
-	// If the call is called repeatedly with the same spender, the
-	// most recent allowance value is used.
-	Approve(ctx context.Context, signedApproval *SignedApproval) error
-
-	// Withdraw execues a SignedWithdrawal, withdrawing tokens from the
-	// specified entity's balance into the signer's balance.
-	//
-	// This is analagous to ERC20's `transferFrom` call.
-	Withdraw(ctx context.Context, signedWithdrawal *SignedWithdrawal) error
-
 	// Burn destroys tokens in the signing entity's balance.
 	Burn(ctx context.Context, signedBurn *SignedBurn) error
 
@@ -137,10 +111,6 @@ type Backend interface {
 	// WatchTransfers returns a channel that produces a stream of TranserEvent
 	// on all balance transfers.
 	WatchTransfers() (<-chan *TransferEvent, *pubsub.Subscription)
-
-	// WatchApprovals returns a channel that produces a stream of ApprovalEvent
-	// on all approvals.
-	WatchApprovals() (<-chan *ApprovalEvent, *pubsub.Subscription)
 
 	// WatchBurns returns a channel of BurnEvent on token destruction.
 	WatchBurns() (<-chan *BurnEvent, *pubsub.Subscription)
@@ -177,14 +147,6 @@ type TransferEvent struct {
 	From   signature.PublicKey `codec:"from"`
 	To     signature.PublicKey `codec:"to"`
 	Tokens Quantity            `codec:"tokens"`
-}
-
-// ApprovalEvent is the event emitted when a withdraw is approved via a call
-// to Allowance.
-type ApprovalEvent struct {
-	Owner   signature.PublicKey `codec:"owner"`
-	Spender signature.PublicKey `codec:"spender"`
-	Tokens  Quantity            `codec:"tokens"`
 }
 
 // BurnEvent is the event emitted when tokens are destroyed via a call to Burn.
@@ -230,42 +192,6 @@ func (x *Transfer) MarshalCBOR() []byte {
 // UnmarshalCBOR deserializes a CBOR byte vector into given type.
 func (x *Transfer) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, x)
-}
-
-// Approval is a token transfer approval.
-type Approval struct {
-	Nonce uint64 `codec:"nonce"`
-
-	Spender signature.PublicKey `codec:"approve_spender"`
-	Tokens  Quantity            `codec:"approve_tokens"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (a *Approval) MarshalCBOR() []byte {
-	return cbor.Marshal(a)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (a *Approval) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, a)
-}
-
-// Withdrawal is a token withdrawal.
-type Withdrawal struct {
-	Nonce uint64 `codec:"nonce"`
-
-	From   signature.PublicKey `codec:"withdraw_from"`
-	Tokens Quantity            `codec:"withdraw_tokens"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (w *Withdrawal) MarshalCBOR() []byte {
-	return cbor.Marshal(w)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (w *Withdrawal) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, w)
 }
 
 // Burn is a token burn (destruction).
@@ -332,40 +258,6 @@ func SignTransfer(signer signature.Signer, xfer *Transfer) (*SignedTransfer, err
 	}
 
 	return &SignedTransfer{
-		Signed: *signed,
-	}, nil
-}
-
-// SignedApproval is an Approval, signed by the owner entity.
-type SignedApproval struct {
-	signature.Signed
-}
-
-// SignApproval serializes the Approval and signs the result.
-func SignApproval(signer signature.Signer, approval *Approval) (*SignedApproval, error) {
-	signed, err := signature.SignSigned(signer, ApproveSignatureContext, approval)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SignedApproval{
-		Signed: *signed,
-	}, nil
-}
-
-// SignedWithdrawal is a Withdrawal, signed by the destination entity.
-type SignedWithdrawal struct {
-	signature.Signed
-}
-
-// SignWithdrawal serializes the Withdrawal and signs the result.
-func SignWithdrawal(signer signature.Signer, withdrawal *Withdrawal) (*SignedWithdrawal, error) {
-	signed, err := signature.SignSigned(signer, WithdrawSignatureContext, withdrawal)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SignedWithdrawal{
 		Signed: *signed,
 	}, nil
 }
@@ -491,9 +383,8 @@ type Genesis struct {
 
 // GenesisLedgerEntry is the per-account ledger entry for the genesis block.
 type GenesisLedgerEntry struct {
-	GeneralBalance  Quantity                       `codec:"general_balance"`
-	EscrowBalance   Quantity                       `codec:"escrow_balance"`
-	DebondStartTime uint64                         `codec:"debond_start"`
-	Nonce           uint64                         `codec:"nonce"`
-	Allowances      map[signature.MapKey]*Quantity `codec:"allowances,omitempty"`
+	GeneralBalance  Quantity `codec:"general_balance"`
+	EscrowBalance   Quantity `codec:"escrow_balance"`
+	DebondStartTime uint64   `codec:"debond_start"`
+	Nonce           uint64   `codec:"nonce"`
 }

@@ -132,50 +132,6 @@ func (b *tendermintBackend) Transfer(ctx context.Context, signedXfer *api.Signed
 	return nil
 }
 
-func (b *tendermintBackend) Allowance(ctx context.Context, owner, spender signature.PublicKey) (*api.Quantity, error) {
-	query := app.QueryAllowanceRequest{
-		Owner:   owner,
-		Spender: spender,
-	}
-	response, err := b.service.Query(app.QueryAllowance, query, 0)
-	if err != nil {
-		return nil, errors.Wrap(err, "staking: allowance query failed")
-	}
-
-	var data api.Quantity
-	if err := cbor.Unmarshal(response, &data); err != nil {
-		return nil, errors.Wrap(err, "staking: allowance malformed response")
-	}
-
-	return &data, nil
-}
-
-func (b *tendermintBackend) Approve(ctx context.Context, signedApproval *api.SignedApproval) error {
-	tx := app.Tx{
-		TxApprove: &app.TxApprove{
-			SignedApproval: *signedApproval,
-		},
-	}
-	if err := b.service.BroadcastTx(app.TransactionTag, tx); err != nil {
-		return errors.Wrap(err, "staking: approve transaction failed")
-	}
-
-	return nil
-}
-
-func (b *tendermintBackend) Withdraw(ctx context.Context, signedWithdrawal *api.SignedWithdrawal) error {
-	tx := app.Tx{
-		TxWithdraw: &app.TxWithdraw{
-			SignedWithdrawal: *signedWithdrawal,
-		},
-	}
-	if err := b.service.BroadcastTx(app.TransactionTag, tx); err != nil {
-		return errors.Wrap(err, "staking: withdraw transaction failed")
-	}
-
-	return nil
-}
-
 func (b *tendermintBackend) Burn(ctx context.Context, signedBurn *api.SignedBurn) error {
 	tx := app.Tx{
 		TxBurn: &app.TxBurn{
@@ -218,14 +174,6 @@ func (b *tendermintBackend) ReclaimEscrow(ctx context.Context, signedReclaim *ap
 func (b *tendermintBackend) WatchTransfers() (<-chan *api.TransferEvent, *pubsub.Subscription) {
 	typedCh := make(chan *api.TransferEvent)
 	sub := b.transferNotifier.Subscribe()
-	sub.Unwrap(typedCh)
-
-	return typedCh, sub
-}
-
-func (b *tendermintBackend) WatchApprovals() (<-chan *api.ApprovalEvent, *pubsub.Subscription) {
-	typedCh := make(chan *api.ApprovalEvent)
-	sub := b.approvalNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
@@ -343,8 +291,6 @@ func (b *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventD
 
 	if e := output.OutputTransfer; e != nil {
 		b.transferNotifier.Broadcast(e)
-	} else if e := output.OutputApprove; e != nil {
-		b.approvalNotifier.Broadcast(e)
 	} else if e := output.OutputBurn; e != nil {
 		b.burnNotifier.Broadcast(e)
 	} else if e := output.OutputAddEscrow; e != nil {

@@ -56,7 +56,6 @@ func StakingImplementationTests(t *testing.T, backend api.Backend) {
 	}{
 		{"InitialEnv", testInitialEnv},
 		{"Transfer", testTransfer},
-		{"Allowance", testAllowance},
 		{"Burn", testBurn},
 		{"Escrow", testEscrow},
 	} {
@@ -143,81 +142,6 @@ func testTransfer(t *testing.T, backend api.Backend) {
 	require.NoError(err, "dest: AccountInfo - after")
 	require.Equal(&xfer.Tokens, destBalance, "dest: generalBalance - after")
 	require.EqualValues(0, nonce, "dest: nonce - after")
-}
-
-func testAllowance(t *testing.T, backend api.Backend) {
-	require := require.New(t)
-
-	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
-	require.NoError(err, "src: AccountInfo - before")
-
-	appCh, appSub := backend.WatchApprovals()
-	defer appSub.Close()
-
-	approval := &api.Approval{
-		Nonce:   nonce,
-		Spender: destID,
-		Tokens:  qtyFromInt(math.MaxUint16),
-	}
-	signed, err := api.SignApproval(srcSigner, approval)
-	require.NoError(err, "Sign approval")
-
-	err = backend.Approve(context.Background(), signed)
-	require.NoError(err, "Approve")
-
-	select {
-	case ev := <-appCh:
-		require.Equal(srcID, ev.Owner, "Event: owner")
-		require.Equal(destID, ev.Spender, "Event: spender")
-		require.Equal(approval.Tokens, ev.Tokens, "Event: tokens")
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive approval event")
-	}
-
-	allowance, err := backend.Allowance(context.Background(), srcID, destID)
-	require.NoError(err, "Allowance")
-	require.EqualValues(&approval.Tokens, allowance, "allowance is set")
-
-	xferCh, xferSub := backend.WatchTransfers()
-	defer xferSub.Close()
-
-	destBalance, _, _, _, err := backend.AccountInfo(context.Background(), destID)
-	require.NoError(err, "dest: AccountInfo - before")
-
-	withdrawal := &api.Withdrawal{
-		Nonce:  approval.Nonce + 1, // nb: Uses `from` nonce! Change?
-		From:   srcID,
-		Tokens: approval.Tokens,
-	}
-	signedW, err := api.SignWithdrawal(destSigner, withdrawal)
-	require.NoError(err, "Sign withdrawal")
-
-	err = backend.Withdraw(context.Background(), signedW)
-	require.NoError(err, "Withdraw")
-
-	select {
-	case ev := <-xferCh:
-		require.Equal(srcID, ev.From, "Event: from")
-		require.Equal(destID, ev.To, "Event: to")
-		require.Equal(withdrawal.Tokens, ev.Tokens, "Event: tokens")
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive transfer event (withdrawal)")
-	}
-
-	allowance, err = backend.Allowance(context.Background(), srcID, destID)
-	require.NoError(err, "Allowance - after")
-	require.True(allowance.IsZero(), "allowance is zero")
-
-	_ = srcBalance.Sub(&withdrawal.Tokens)
-	balance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
-	require.NoError(err, "src: AccountInfo - after")
-	require.Equal(srcBalance, balance, "src: balance - after")
-	require.Equal(withdrawal.Nonce+1, nonce, "src: nonce - after")
-
-	_ = destBalance.Add(&withdrawal.Tokens)
-	balance, _, _, _, err = backend.AccountInfo(context.Background(), destID)
-	require.NoError(err, "dest: AccountInfo - after")
-	require.Equal(destBalance, balance, "dest: balance - after")
 }
 
 func testBurn(t *testing.T, backend api.Backend) {

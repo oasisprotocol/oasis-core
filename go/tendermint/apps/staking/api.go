@@ -1,7 +1,6 @@
 package staking
 
 import (
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	staking "github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 )
@@ -49,9 +48,6 @@ const (
 	// QueryAccountInfo is the path for an AccountInfo query.
 	QueryAccountInfo = AppName + "/account_info"
 
-	// QueryAllowance is the path for an Allowance query.
-	QueryAllowance = AppName + "/allowance"
-
 	// QueryDebondingInterval is the path for a DebondingInterval query.
 	QueryDebondingInterval = AppName + "/debonding_interval"
 
@@ -64,8 +60,6 @@ type Tx struct {
 	_struct struct{} `codec:",omitempty"` // nolint
 
 	*TxTransfer      `codec:"Transfer"`
-	*TxApprove       `codec:"Approve"`
-	*TxWithdraw      `codec:"Withdraw"`
 	*TxBurn          `codec:"Burn"`
 	*TxAddEscrow     `codec:"AddEscrow"`
 	*TxReclaimEscrow `codec:"ReclaimEscrow"`
@@ -74,16 +68,6 @@ type Tx struct {
 // TxTransfer is a transaction for a transfer.
 type TxTransfer struct {
 	SignedTransfer staking.SignedTransfer
-}
-
-// TxApprove is a transaction for an Approve.
-type TxApprove struct {
-	SignedApproval staking.SignedApproval
-}
-
-// TxWithdraw is a transaction for a Withdraw.
-type TxWithdraw struct {
-	SignedWithdrawal staking.SignedWithdrawal
 }
 
 // TxBurn is a transaction for a Burn.
@@ -106,7 +90,6 @@ type Output struct {
 	_struct struct{} `codec:",omitemtpy"` // nolint
 
 	OutputTransfer      *staking.TransferEvent      `codec:"Transfer"`
-	OutputApprove       *staking.ApprovalEvent      `codec:"Approve"`
 	OutputBurn          *staking.BurnEvent          `codec:"Burn"`
 	OutputAddEscrow     *staking.EscrowEvent        `codec:"AddEscrow"`
 	OutputReclaimEscrow *staking.ReclaimEscrowEvent `codec:"ReclaimEscrow"`
@@ -118,10 +101,4 @@ type QueryAccountInfoResponse struct {
 	EscrowBalance   staking.Quantity `codec:"escrow_balance"`
 	DebondStartTime uint64           `codec:"debond_start_time"`
 	Nonce           uint64           `codec:"nonce"`
-}
-
-// QueryAllowanceRequest is a request to QueryAllowance.
-type QueryAllowanceRequest struct {
-	Owner   signature.PublicKey `codec:"owner"`
-	Spender signature.PublicKey `codec:"spender"`
 }
