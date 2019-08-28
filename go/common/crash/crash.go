@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/debug"
@@ -36,6 +37,9 @@ type Crasher struct {
 	// callerSkip is used by the global crasher instance to determine the caller
 	// of the package level `Here` function.
 	callerSkip int
+
+	// Flags has our flags.
+	Flags *flag.FlagSet
 }
 
 // CrasherOptions options used to create a new crasher.
@@ -176,19 +180,27 @@ func (c *Crasher) Config(crashPointConfig map[string]float64) {
 // RegisterFlags registers cobra and viper flags for the registered crash
 // points.
 func RegisterFlags(cmd *cobra.Command) {
+	crashGlobal.InitFlags()
 	crashGlobal.RegisterFlags(cmd)
+}
+
+// InitFlags creates flags from the registered crash points and registers those flags with Viper.
+func (c *Crasher) InitFlags() {
+	c.Flags = flag.NewFlagSet("", flag.ContinueOnError)
+	for _, crashPointID := range c.ListRegisteredCrashPoints() {
+		argFlag := fmt.Sprintf("%s.%s", c.CLIPrefix, crashPointID)
+		helpMessage := fmt.Sprintf(`Crash probability of "%s" crash point`, crashPointID)
+		c.Flags.Float64(argFlag, 0.0, helpMessage)
+	}
+
+	_ = viper.BindPFlags(c.Flags)
 }
 
 // RegisterFlags registers CLI flags with cobra and viper used to configure a
 // crasher instance.
 func (c *Crasher) RegisterFlags(cmd *cobra.Command) {
-	for _, crashPointID := range c.ListRegisteredCrashPoints() {
-		argFlag := fmt.Sprintf("%s.%s", c.CLIPrefix, crashPointID)
-		helpMessage := fmt.Sprintf(`Crash probability of "%s" crash point`, crashPointID)
-		if !cmd.Flags().Parsed() {
-			cmd.Flags().Float64(argFlag, 0.0, helpMessage)
-		}
-		_ = viper.BindPFlag(argFlag, cmd.Flags().Lookup(argFlag))
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().AddFlagSet(c.Flags)
 	}
 }
 

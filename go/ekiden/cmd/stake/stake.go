@@ -28,19 +28,13 @@ var (
 	infoCmd = &cobra.Command{
 		Use:   "info",
 		Short: "query the common token info",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerInfoFlags(cmd)
-		},
-		Run: doInfo,
+		Run:   doInfo,
 	}
 
 	listCmd = &cobra.Command{
 		Use:   "list",
 		Short: "list accounts",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerListFlags(cmd)
-		},
-		Run: doList,
+		Run:   doList,
 	}
 
 	logger = logging.GetLogger("cmd/stake")

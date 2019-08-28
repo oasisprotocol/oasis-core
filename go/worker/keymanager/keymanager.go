@@ -12,6 +12,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -47,6 +48,9 @@ var (
 	errMalformedResponse = fmt.Errorf("worker/keymanager: malformed response from worker")
 
 	emptyRoot hash.Hash
+
+	// Flags has our flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 type worker struct {
@@ -456,28 +460,22 @@ func New(dataDir string, ias *ias.IAS, grpc *grpc.Server, r *registration.Regist
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgEnabled, false, "Enable key manager worker")
-
-		cmd.Flags().String(cfgTEEHardware, "", "TEE hardware to use for the key manager")
-		cmd.Flags().String(cfgRuntimeLoader, "", "Path to key manager worker process binary")
-		cmd.Flags().String(cfgRuntimeBinary, "", "Path to key manager runtime binary")
-		cmd.Flags().String(cfgRuntimeID, "", "Key manager Runtime ID")
-		cmd.Flags().Bool(cfgMayGenerate, false, "Key manager may generate new master secret")
-	}
-
-	for _, v := range []string{
-		cfgEnabled,
-
-		cfgTEEHardware,
-		cfgRuntimeLoader,
-		cfgRuntimeBinary,
-		cfgRuntimeID,
-		cfgMayGenerate,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
+		cmd.Flags().AddFlagSet(Flags)
 	}
 }
 
 func init() {
 	emptyRoot.Empty()
+}
+
+func init() {
+	Flags.Bool(cfgEnabled, false, "Enable key manager worker")
+
+	Flags.String(cfgTEEHardware, "", "TEE hardware to use for the key manager")
+	Flags.String(cfgRuntimeLoader, "", "Path to key manager worker process binary")
+	Flags.String(cfgRuntimeBinary, "", "Path to key manager runtime binary")
+	Flags.String(cfgRuntimeID, "", "Key manager Runtime ID")
+	Flags.Bool(cfgMayGenerate, false, "Key manager may generate new master secret")
+
+	_ = viper.BindPFlags(Flags)
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/epochtime/api"
@@ -19,6 +20,9 @@ const (
 	cfgBackend            = "epochtime.backend"
 	cfgTendermintInterval = "epochtime.tendermint.interval"
 )
+
+// Flags has our flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
 func New(ctx context.Context, tmService service.TendermintService) (api.Backend, error) {
@@ -38,14 +42,13 @@ func New(ctx context.Context, tmService service.TendermintService) (api.Backend,
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, tendermint.BackendName, "Epoch time backend")
-		cmd.Flags().Int64(cfgTendermintInterval, 86400, "Epoch interval (in blocks)")
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgBackend,
-		cfgTendermintInterval,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
-	}
+func init() {
+	Flags.String(cfgBackend, tendermint.BackendName, "Epoch time backend")
+	Flags.Int64(cfgTendermintInterval, 86400, "Epoch interval (in blocks)")
+
+	_ = viper.BindPFlags(Flags)
 }

@@ -8,12 +8,16 @@ import (
 	"net/http/pprof"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/service"
 )
 
 const cfgPprofBind = "pprof.bind"
+
+// Flags has our flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 type pprofService struct {
 	service.BaseBackgroundService
@@ -101,12 +105,12 @@ func New(ctx context.Context) (service.BackgroundService, error) {
 // RegisterFlags registers the flags used by the pprof service.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgPprofBind, "", "enable profiling endpoint at given address")
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgPprofBind,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
+func init() {
+	Flags.String(cfgPprofBind, "", "enable profiling endpoint at given address")
+
+	_ = viper.BindPFlags(Flags)
 }

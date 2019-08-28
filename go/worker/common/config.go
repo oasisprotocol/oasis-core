@@ -2,6 +2,7 @@ package common
 
 import (
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -16,6 +17,9 @@ var (
 	cfgClientAddresses = "worker.client.addresses"
 
 	cfgRuntimeID = "worker.runtime.id"
+
+	// Flags has our flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // Config contains workers common config
@@ -76,18 +80,15 @@ func newConfig() (*Config, error) {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
-		cmd.Flags().StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
-
-		cmd.Flags().StringSlice(cfgRuntimeID, []string{}, "List of IDs (hex) of runtimes that this node will participate in")
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgClientPort,
-		cfgClientAddresses,
+func init() {
+	Flags.Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
+	Flags.StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 
-		cfgRuntimeID,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
-	}
+	Flags.StringSlice(cfgRuntimeID, []string{}, "List of IDs (hex) of runtimes that this node will participate in")
+
+	_ = viper.BindPFlags(Flags)
 }

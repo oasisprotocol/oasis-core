@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
@@ -19,6 +20,9 @@ import (
 )
 
 const cfgDebugBypassStake = "scheduler.debug.bypass_stake" // nolint: gosec
+
+// Flags has our flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
 func New(ctx context.Context, timeSource epochtime.Backend, reg registry.Backend, beacon beacon.Backend, service service.TendermintService) (api.Backend, error) {
@@ -41,12 +45,12 @@ func flagsToConfig() *api.Config {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgDebugBypassStake,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
+func init() {
+	Flags.Bool(cfgDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
+
+	_ = viper.BindPFlags(Flags)
 }

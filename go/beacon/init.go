@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/beacon/api"
@@ -19,6 +20,9 @@ import (
 const (
 	cfgDebugDeterministic = "beacon.debug.deterministic"
 )
+
+// Flags has our flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
 func New(ctx context.Context, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
@@ -41,12 +45,12 @@ func flagsToConfig() *api.Config {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgDebugDeterministic, false, "enable deterministic beacon output (UNSAFE)")
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgDebugDeterministic,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
-	}
+func init() {
+	Flags.Bool(cfgDebugDeterministic, false, "enable deterministic beacon output (UNSAFE)")
+
+	_ = viper.BindPFlags(Flags)
 }

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	bolt "github.com/etcd-io/bbolt"
@@ -34,6 +35,9 @@ const (
 
 var (
 	workerStorageDBBucketName = []byte("worker/storage/watchers")
+
+	// Flags has our flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // Enabled reads our enabled flag from viper.
@@ -275,16 +279,15 @@ func (s *Worker) initGenesis(gen *genesis.Document) error {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgWorkerEnabled, false, "Enable storage worker")
-		cmd.Flags().Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
-		cmd.Flags().Bool(cfgWorkerDebugIgnoreApply, false, "Ignore Apply operations (for debugging purposes)")
-		_ = cmd.Flags().MarkHidden(cfgWorkerDebugIgnoreApply)
+		cmd.Flags().AddFlagSet(Flags)
 	}
-	for _, v := range []string{
-		cfgWorkerEnabled,
-		cfgWorkerFetcherCount,
-		cfgWorkerDebugIgnoreApply,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
-	}
+}
+
+func init() {
+	Flags.Bool(cfgWorkerEnabled, false, "Enable storage worker")
+	Flags.Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
+	Flags.Bool(cfgWorkerDebugIgnoreApply, false, "Ignore Apply operations (for debugging purposes)")
+	_ = Flags.MarkHidden(cfgWorkerDebugIgnoreApply)
+
+	_ = viper.BindPFlags(Flags)
 }

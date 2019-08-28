@@ -720,5 +720,5 @@ func init() {
 	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 	Flags.Bool(cfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
 
-	viper.BindPFlags(Flags) // nolint: errcheck
+	_ = viper.BindPFlags(Flags)
 }

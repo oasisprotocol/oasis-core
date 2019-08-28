@@ -16,6 +16,7 @@ import (
 	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -34,6 +35,9 @@ const (
 )
 
 var (
+	// Flags has the server flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
+
 	grpcMetricsOnce sync.Once
 
 	grpcCalls = prometheus.NewCounterVec(
@@ -437,12 +441,12 @@ func newServer(
 // RegisterServerFlags registers the flags used by the gRPC server.
 func RegisterServerFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgGRPCVerboseDebug, false, "gRPC request/responses in debug logs")
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgGRPCVerboseDebug,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
+func init() {
+	Flags.Bool(cfgGRPCVerboseDebug, false, "gRPC request/responses in debug logs")
+
+	_ = viper.BindPFlags(Flags)
 }

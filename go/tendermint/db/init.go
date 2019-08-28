@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	dbm "github.com/tendermint/tendermint/libs/db"
@@ -16,6 +17,9 @@ import (
 )
 
 const cfgBackend = "tendermint.db.backend"
+
+// Flags has our flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // GetProvider returns the currently configured Tendermint DBProvider.
 func GetProvider() (node.DBProvider, error) {
@@ -48,12 +52,12 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 // RegisterFlags registers the configuration flags with the provided command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, bolt.BackendName, "tendermint db backend")
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgBackend,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
+func init() {
+	Flags.String(cfgBackend, bolt.BackendName, "tendermint db backend")
+
+	_ = viper.BindPFlags(Flags)
 }

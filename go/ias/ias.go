@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -27,6 +28,9 @@ const (
 	cfgTLSCertFile     = "ias.tls"
 	cfgDebugSkipVerify = "ias.debug.skip_verify"
 )
+
+// Flags has our flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // IAS is an IAS proxy client.
 type IAS struct {
@@ -206,16 +210,14 @@ func New(identity *identity.Identity) (*IAS, error) {
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgProxyAddress, "", "IAS proxy address")
-		cmd.Flags().String(cfgTLSCertFile, "", "IAS proxy TLS certificate")
-		cmd.Flags().Bool(cfgDebugSkipVerify, false, "skip IAS AVR signature verification (UNSAFE)")
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgProxyAddress,
-		cfgTLSCertFile,
-		cfgDebugSkipVerify,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
+func init() {
+	Flags.String(cfgProxyAddress, "", "IAS proxy address")
+	Flags.String(cfgTLSCertFile, "", "IAS proxy TLS certificate")
+	Flags.Bool(cfgDebugSkipVerify, false, "skip IAS AVR signature verification (UNSAFE)")
+
+	_ = viper.BindPFlags(Flags)
 }

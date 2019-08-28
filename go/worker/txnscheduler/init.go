@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
@@ -19,6 +20,9 @@ const (
 	// the same algorithm.
 	cfgAlgorithm = "worker.txnscheduler.algorithm"
 )
+
+// Flags has our flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Enabled reads our enabled flag from viper.
 func Enabled() bool {
@@ -59,20 +63,17 @@ func New(
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgWorkerEnabled, false, "Enable transaction scheduler process")
-
-		cmd.Flags().String(cfgAlgorithm, "batching", "Transaction scheduling algorithm")
-		cmd.Flags().Duration(cfgFlushTimeout, 1*time.Second, "Maximum amount of time to wait for a scheduled batch")
-	}
-
-	for _, v := range []string{
-		cfgWorkerEnabled,
-
-		cfgAlgorithm,
-		cfgFlushTimeout,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
+		cmd.Flags().AddFlagSet(Flags)
 	}
 
 	txnSchedulerAlgorithm.RegisterFlags(cmd)
+}
+
+func init() {
+	Flags.Bool(cfgWorkerEnabled, false, "Enable transaction scheduler process")
+
+	Flags.String(cfgAlgorithm, "batching", "Transaction scheduling algorithm")
+	Flags.Duration(cfgFlushTimeout, 1*time.Second, "Maximum amount of time to wait for a scheduled batch")
+
+	_ = viper.BindPFlags(Flags)
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -40,6 +41,9 @@ const (
 )
 
 var (
+	DumpGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	InitGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
+
 	genesisCmd = &cobra.Command{
 		Use:   "genesis",
 		Short: "genesis block utilities",
@@ -48,19 +52,13 @@ var (
 	initGenesisCmd = &cobra.Command{
 		Use:   "init",
 		Short: "initialize the genesis file",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerInitGenesisFlags(cmd)
-		},
-		Run: doInitGenesis,
+		Run:   doInitGenesis,
 	}
 
 	dumpGenesisCmd = &cobra.Command{
 		Use:   "dump",
 		Short: "dump state into genesis file",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerDumpGenesisFlags(cmd)
-		},
-		Run: doDumpGenesis,
+		Run:   doDumpGenesis,
 	}
 
 	logger = logging.GetLogger("cmd/genesis")
@@ -431,13 +429,7 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 
 func registerDumpGenesisFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Int64(cfgBlockHeight, 0, "block height at which to dump state")
-	}
-
-	for _, v := range []string{
-		cfgBlockHeight,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		cmd.Flags().AddFlagSet(DumpGenesisFlags)
 	}
 
 	flags.RegisterGenesisFile(cmd)
@@ -445,23 +437,7 @@ func registerDumpGenesisFlags(cmd *cobra.Command) {
 
 func registerInitGenesisFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().StringSlice(cfgEntity, nil, "path to entity registration file")
-		cmd.Flags().StringSlice(cfgRuntime, nil, "path to runtime registration file")
-		cmd.Flags().StringSlice(cfgNode, nil, "path to node registration file")
-		cmd.Flags().StringSlice(cfgRootHash, nil, "path to roothash genesis blocks file")
-		cmd.Flags().String(cfgStaking, "", "path to staking genesis file")
-		cmd.Flags().StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
-	}
-
-	for _, v := range []string{
-		cfgEntity,
-		cfgRuntime,
-		cfgNode,
-		cfgRootHash,
-		cfgKeyManager,
-		cfgStaking,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		cmd.Flags().AddFlagSet(InitGenesisFlags)
 	}
 
 	flags.RegisterDebugTestEntity(cmd)
@@ -483,4 +459,18 @@ func Register(parentCmd *cobra.Command) {
 	}
 
 	parentCmd.AddCommand(genesisCmd)
+}
+
+func init() {
+	DumpGenesisFlags.Int64(cfgBlockHeight, 0, "block height at which to dump state")
+
+	InitGenesisFlags.StringSlice(cfgEntity, nil, "path to entity registration file")
+	InitGenesisFlags.StringSlice(cfgRuntime, nil, "path to runtime registration file")
+	InitGenesisFlags.StringSlice(cfgNode, nil, "path to node registration file")
+	InitGenesisFlags.StringSlice(cfgRootHash, nil, "path to roothash genesis blocks file")
+	InitGenesisFlags.String(cfgStaking, "", "path to staking genesis file")
+	InitGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
+
+	_ = viper.BindPFlags(DumpGenesisFlags)
+	_ = viper.BindPFlags(InitGenesisFlags)
 }

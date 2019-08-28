@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
@@ -37,6 +38,9 @@ const (
 )
 
 var (
+	EntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	UpdateFlags = flag.NewFlagSet("", flag.ContinueOnError)
+
 	entityCmd = &cobra.Command{
 		Use:   "entity",
 		Short: "entity registry backend utilities",
@@ -45,47 +49,31 @@ var (
 	initCmd = &cobra.Command{
 		Use:   "init",
 		Short: "initialize an entity",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerInitFlags(cmd)
-		},
-		Run: doInit,
+		Run:   doInit,
 	}
 
 	updateCmd = &cobra.Command{
 		Use:   "update",
 		Short: "update an entity",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerUpdateFlags(cmd)
-		},
-		Run: doUpdate,
+		Run:   doUpdate,
 	}
 
 	registerCmd = &cobra.Command{
 		Use:   cmdRegister,
 		Short: "register an entity",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerRegisterOrDeregisterFlags(cmd)
-		},
-		Run: doRegisterOrDeregister,
+		Run:   doRegisterOrDeregister,
 	}
 
 	deregisterCmd = &cobra.Command{
 		Use:   "deregister",
 		Short: "deregister an entity",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerRegisterOrDeregisterFlags(cmd)
-		},
-		Run: doRegisterOrDeregister,
+		Run:   doRegisterOrDeregister,
 	}
 
 	listCmd = &cobra.Command{
 		Use:   "list",
 		Short: "list registered entities",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			cmdGrpc.RegisterClientFlags(cmd, false)
-			cmdFlags.RegisterVerbose(cmd)
-		},
-		Run: doList,
+		Run:   doList,
 	}
 
 	logger = logging.GetLogger("cmd/registry/entity")
@@ -442,13 +430,7 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 
 func registerEntityFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgAllowEntitySignedNodes, false, "Entity signing key may be used for node registration (UNSAFE)")
-	}
-
-	for _, v := range []string{
-		cfgAllowEntitySignedNodes,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		cmd.Flags().AddFlagSet(EntityFlags)
 	}
 }
 
@@ -461,15 +443,7 @@ func registerInitFlags(cmd *cobra.Command) {
 
 func registerUpdateFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().StringSlice(cfgNodeID, nil, "ID(s) of nodes associated with this entity")
-		cmd.Flags().StringSlice(cfgNodeDescriptor, nil, "Node genesis descriptor(s) of nodes associated with this entity")
-	}
-
-	for _, v := range []string{
-		cfgNodeID,
-		cfgNodeDescriptor,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		cmd.Flags().AddFlagSet(UpdateFlags)
 	}
 
 	cmdFlags.RegisterDebugTestEntity(cmd)
@@ -503,4 +477,14 @@ func Register(parentCmd *cobra.Command) {
 	cmdGrpc.RegisterClientFlags(listCmd, false)
 
 	parentCmd.AddCommand(entityCmd)
+}
+
+func init() {
+	EntityFlags.Bool(cfgAllowEntitySignedNodes, false, "Entity signing key may be used for node registration (UNSAFE)")
+
+	UpdateFlags.StringSlice(cfgNodeID, nil, "ID(s) of nodes associated with this entity")
+	UpdateFlags.StringSlice(cfgNodeDescriptor, nil, "Node genesis descriptor(s) of nodes associated with this entity")
+
+	_ = viper.BindPFlags(EntityFlags)
+	_ = viper.BindPFlags(UpdateFlags)
 }

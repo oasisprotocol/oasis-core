@@ -10,6 +10,7 @@ import (
 	"github.com/eapache/channels"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/tendermint/tendermint/abci/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -41,6 +42,9 @@ const (
 
 var (
 	_ api.Backend = (*tendermintBackend)(nil)
+
+	// Flags has our flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 type runtimeBrokers struct {
@@ -586,17 +590,15 @@ func New(
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgIndexBlocks, false, "Should the roothash blocks be indexed")
-	}
-
-	for _, v := range []string{
-		cfgIndexBlocks,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
+		cmd.Flags().AddFlagSet(Flags)
 	}
 }
 
 func init() {
+	Flags.Bool(cfgIndexBlocks, false, "Should the roothash blocks be indexed")
+
+	_ = viper.BindPFlags(Flags)
+
 	crash.RegisterCrashPoints(
 		crashPointBlockBeforeIndex,
 	)

@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -37,6 +38,9 @@ var (
 		Short: "benchmark storage backend",
 		Run:   doBenchmark,
 	}
+
+	// Flags has our flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
@@ -291,15 +295,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 // RegisterFlags registers the flags used by the benchmark sub-command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgProfileCPU, false, "Enable CPU profiling in benchmark")
-		cmd.Flags().Bool(cfgProfileMEM, false, "Enable memory profiling in benchmark")
-	}
-
-	for _, v := range []string{
-		cfgProfileCPU,
-		cfgProfileMEM,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
+		cmd.Flags().AddFlagSet(Flags)
 	}
 
 	for _, v := range []func(*cobra.Command){
@@ -313,4 +309,11 @@ func RegisterFlags(cmd *cobra.Command) {
 func Register(parentCmd *cobra.Command) {
 	RegisterFlags(benchmarkStorageCmd)
 	parentCmd.AddCommand(benchmarkStorageCmd)
+}
+
+func init() {
+	Flags.Bool(cfgProfileCPU, false, "Enable CPU profiling in benchmark")
+	Flags.Bool(cfgProfileMEM, false, "Enable memory profiling in benchmark")
+
+	_ = viper.BindPFlags(Flags)
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -30,6 +31,11 @@ const (
 )
 
 var (
+	AccountInfoFlags     = flag.NewFlagSet("", flag.ContinueOnError)
+	TxFlags              = flag.NewFlagSet("", flag.ContinueOnError)
+	TxFileFlags          = flag.NewFlagSet("", flag.ContinueOnError)
+	AccountTransferFlags = flag.NewFlagSet("", flag.ContinueOnError)
+
 	accountCmd = &cobra.Command{
 		Use:   "account",
 		Short: "account management commands",
@@ -38,55 +44,37 @@ var (
 	accountInfoCmd = &cobra.Command{
 		Use:   "info",
 		Short: "query account info",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerAccountInfoFlags(cmd)
-		},
-		Run: doAccountInfo,
+		Run:   doAccountInfo,
 	}
 
 	accountSubmitCmd = &cobra.Command{
 		Use:   "submit",
 		Short: "Submit a pre-generated transaction",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerAccountSubmitFlags(cmd)
-		},
-		Run: doAccountSubmit,
+		Run:   doAccountSubmit,
 	}
 
 	accountTransferCmd = &cobra.Command{
 		Use:   "gen_transfer",
 		Short: "generate a transfer transaction",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerAccountTransferFlags(cmd)
-		},
-		Run: doAccountTransfer,
+		Run:   doAccountTransfer,
 	}
 
 	accountBurnCmd = &cobra.Command{
 		Use:   "gen_burn",
 		Short: "Generate a burn transaction",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerTxFlags(cmd)
-		},
-		Run: doAccountBurn,
+		Run:   doAccountBurn,
 	}
 
 	accountEscrowCmd = &cobra.Command{
 		Use:   "gen_escrow",
 		Short: "Generate an escrow (stake) transaction",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerTxFlags(cmd)
-		},
-		Run: doAccountEscrow,
+		Run:   doAccountEscrow,
 	}
 
 	accountReclaimEscrowCmd = &cobra.Command{
 		Use:   "gen_reclaim_escrow",
 		Short: "Generate a reclaim_escrow (unstake) transaction",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerTxFlags(cmd)
-		},
-		Run: doAccountReclaimEscrow,
+		Run:   doAccountReclaimEscrow,
 	}
 )
 
@@ -352,13 +340,7 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 
 func registerAccountInfoFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgAccountID, "", "ID of the account")
-	}
-
-	for _, v := range []string{
-		cfgAccountID,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		cmd.Flags().AddFlagSet(AccountInfoFlags)
 	}
 
 	cmdFlags.RegisterRetries(cmd)
@@ -374,15 +356,7 @@ func registerAccountSubmitFlags(cmd *cobra.Command) {
 
 func registerTxFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Uint64(cfgTxNonce, 0, "nonce of the source account")
-		cmd.Flags().String(cfgTxAmount, "0", "amount of tokens for the transaction")
-	}
-
-	for _, v := range []string{
-		cfgTxNonce,
-		cfgTxAmount,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		cmd.Flags().AddFlagSet(TxFlags)
 	}
 
 	registerTxFileFlag(cmd)
@@ -392,21 +366,13 @@ func registerTxFlags(cmd *cobra.Command) {
 
 func registerTxFileFlag(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgTxFile, "", "path to the transaction")
+		cmd.Flags().AddFlagSet(TxFileFlags)
 	}
-
-	_ = viper.BindPFlag(cfgTxFile, cmd.Flags().Lookup(cfgTxFile))
 }
 
 func registerAccountTransferFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgTransferDestination, "", "transfer destination account ID")
-	}
-
-	for _, v := range []string{
-		cfgTransferDestination,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		cmd.Flags().AddFlagSet(AccountTransferFlags)
 	}
 
 	registerTxFlags(cmd)
@@ -429,4 +395,20 @@ func registerAccountCmd() {
 	registerTxFlags(accountBurnCmd)
 	registerTxFlags(accountEscrowCmd)
 	registerTxFlags(accountReclaimEscrowCmd)
+}
+
+func init() {
+	AccountInfoFlags.String(cfgAccountID, "", "ID of the account")
+
+	TxFlags.Uint64(cfgTxNonce, 0, "nonce of the source account")
+	TxFlags.String(cfgTxAmount, "0", "amount of tokens for the transaction")
+
+	TxFileFlags.String(cfgTxFile, "", "path to the transaction")
+
+	AccountTransferFlags.String(cfgTransferDestination, "", "transfer destination account ID")
+
+	_ = viper.BindPFlags(AccountInfoFlags)
+	_ = viper.BindPFlags(TxFlags)
+	_ = viper.BindPFlags(TxFileFlags)
+	_ = viper.BindPFlags(AccountTransferFlags)
 }

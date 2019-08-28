@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -34,6 +35,9 @@ const (
 
 var (
 	ErrKeyManagerNotAvailable = errors.New("keymanager/client: key manager not available")
+
+	// Flags has our flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // Client is a key manager client instance.
@@ -289,14 +293,13 @@ func New(backend api.Backend, registryBackend registry.Backend) (*Client, error)
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgDebugClientAddress, "", "Key manager address")
-		cmd.Flags().String(cfgDebugClientCert, "", "Key manager TLS certificate")
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgDebugClientAddress,
-		cfgDebugClientCert,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
-	}
+func init() {
+	Flags.String(cfgDebugClientAddress, "", "Key manager address")
+	Flags.String(cfgDebugClientCert, "", "Key manager TLS certificate")
+
+	_ = viper.BindPFlags(Flags)
 }

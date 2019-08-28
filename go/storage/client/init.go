@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -33,6 +34,9 @@ const (
 
 // In debug mode, we connect to the provided node and save it to the fake runtime.
 const debugModeFakeRuntimeSeed = "ekiden storage client debug runtime"
+
+// Flags has our flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New creates a new storage client.
 func New(
@@ -113,14 +117,13 @@ func New(
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgDebugClientAddress, "", "Address of node to connect to with the storage client")
-		cmd.Flags().String(cfgDebugClientTLSCertFile, "", "Path to tls certificate for grpc")
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgDebugClientAddress,
-		cfgDebugClientTLSCertFile,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
+func init() {
+	Flags.String(cfgDebugClientAddress, "", "Address of node to connect to with the storage client")
+	Flags.String(cfgDebugClientTLSCertFile, "", "Path to tls certificate for grpc")
+
+	_ = viper.BindPFlags(Flags)
 }

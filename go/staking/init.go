@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/json"
@@ -19,6 +20,9 @@ import (
 const (
 	cfgDebugGenesisState = "staking.debug.genesis_state"
 )
+
+// Flags has our flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
 func New(ctx context.Context, tmService service.TendermintService) (api.Backend, error) {
@@ -51,14 +55,14 @@ func New(ctx context.Context, tmService service.TendermintService) (api.Backend,
 // RegisterFlags registers the configuration flags with the provided command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		// cfgDebugGenesisState isn't for anything but test cases.
-		cmd.Flags().String(cfgDebugGenesisState, "", "(Debug only) Staking genesis state")
-		_ = cmd.Flags().MarkHidden(cfgDebugGenesisState)
+		cmd.Flags().AddFlagSet(Flags)
 	}
+}
 
-	for _, v := range []string{
-		cfgDebugGenesisState,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
+func init() {
+	// cfgDebugGenesisState isn't for anything but test cases.
+	Flags.String(cfgDebugGenesisState, "", "(Debug only) Staking genesis state")
+	_ = Flags.MarkHidden(cfgDebugGenesisState)
+
+	_ = viper.BindPFlags(Flags)
 }

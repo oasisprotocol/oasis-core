@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
@@ -22,6 +23,12 @@ const (
 
 	defaultAddress      = "127.0.0.1:42261"
 	localSocketFilename = "internal.sock"
+)
+
+var (
+	ServerTCPFlags   = flag.NewFlagSet("", flag.ContinueOnError)
+	ServerLocalFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	ClientFlags      = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // NewServerTCP constructs a new gRPC server service listening on
@@ -54,13 +61,7 @@ func NewServerLocal() (*cmnGrpc.Server, error) {
 // RegisterServerTCPFlags registers the flags used by the gRPC server.
 func RegisterServerTCPFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Uint16(cfgGRPCPort, 9001, "gRPC server port")
-	}
-
-	for _, v := range []string{
-		cfgGRPCPort,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		cmd.Flags().AddFlagSet(ServerTCPFlags)
 	}
 
 	cmnGrpc.RegisterServerFlags(cmd)
@@ -71,13 +72,7 @@ func RegisterServerLocalFlags(cmd *cobra.Command) {
 	cmnGrpc.RegisterServerFlags(cmd)
 
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().Uint16(cfgDebugPort, 0, "gRPC server debug port (INSECURE/UNSAFE)")
-	}
-
-	for _, v := range []string{
-		cfgDebugPort,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		cmd.Flags().AddFlagSet(ServerLocalFlags)
 	}
 }
 
@@ -92,11 +87,7 @@ func RegisterClientFlags(cmd *cobra.Command, persistent bool) {
 	}
 
 	if !cmd.Flags().Parsed() {
-		flagSet.StringP(cfgAddress, "a", defaultAddress, "remote gRPC address")
-	}
-
-	if persistent {
-		_ = viper.BindPFlag(cfgAddress, flagSet.Lookup(cfgAddress))
+		flagSet.AddFlagSet(ClientFlags)
 	}
 }
 
@@ -110,4 +101,16 @@ func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
 	}
 
 	return conn, nil
+}
+
+func init() {
+	ServerTCPFlags.Uint16(cfgGRPCPort, 9001, "gRPC server port")
+
+	ServerLocalFlags.Uint16(cfgDebugPort, 0, "gRPC server debug port (INSECURE/UNSAFE)")
+
+	ClientFlags.StringP(cfgAddress, "a", defaultAddress, "remote gRPC address")
+
+	_ = viper.BindPFlags(ServerTCPFlags)
+	_ = viper.BindPFlags(ServerLocalFlags)
+	_ = viper.BindPFlags(ClientFlags)
 }
