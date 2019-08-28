@@ -19,13 +19,8 @@ const (
 	// Use the config file (parsed by viper) instead.
 )
 
-var (
-	logFmt   logging.Format
-	logLevel logging.Level = logging.LevelWarn
-
-	// LoggingFlags has the logging flags.
-	loggingFlags = flag.NewFlagSet("", flag.ContinueOnError)
-)
+// LoggingFlags has the logging flags.
+var loggingFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 func registerLoggingFlags(rootCmd *cobra.Command) {
 	rootCmd.PersistentFlags().AddFlagSet(loggingFlags)
@@ -73,6 +68,9 @@ func initLogging() error {
 }
 
 func init() {
+	logFmt := logging.FmtLogfmt
+	logLevel := logging.LevelWarn
+
 	loggingFlags.String(cfgLogFile, "", "log file")
 	loggingFlags.Var(&logFmt, cfgLogFmt, "log format")
 	loggingFlags.Var(&logLevel, cfgLogLevel, "log level")
