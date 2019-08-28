@@ -115,26 +115,6 @@ func (s *grpcServer) GetAccountInfo(ctx context.Context, req *pb.GetAccountInfoR
 	return &resp, nil
 }
 
-func (s *grpcServer) GetAllowance(ctx context.Context, req *pb.GetAllowanceRequest) (*pb.GetAllowanceResponse, error) {
-	var owner, spender signature.PublicKey
-	if err := owner.UnmarshalBinary(req.GetOwner()); err != nil {
-		return nil, err
-	}
-	if err := spender.UnmarshalBinary(req.GetSpender()); err != nil {
-		return nil, err
-	}
-
-	allowance, err := s.backend.Allowance(ctx, owner, spender)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp pb.GetAllowanceResponse
-	resp.Allowance, _ = allowance.MarshalBinary()
-
-	return &resp, nil
-}
-
 func (s *grpcServer) Transfer(ctx context.Context, req *pb.TransferRequest) (*pb.TransferResponse, error) {
 	var signedTransfer api.SignedTransfer
 	if err := cbor.Unmarshal(req.GetSignedTransfer(), &signedTransfer); err != nil {
@@ -146,32 +126,6 @@ func (s *grpcServer) Transfer(ctx context.Context, req *pb.TransferRequest) (*pb
 	}
 
 	return &pb.TransferResponse{}, nil
-}
-
-func (s *grpcServer) Approve(ctx context.Context, req *pb.ApproveRequest) (*pb.ApproveResponse, error) {
-	var signedApproval api.SignedApproval
-	if err := cbor.Unmarshal(req.GetSignedApproval(), &signedApproval); err != nil {
-		return nil, err
-	}
-
-	if err := s.backend.Approve(ctx, &signedApproval); err != nil {
-		return nil, err
-	}
-
-	return &pb.ApproveResponse{}, nil
-}
-
-func (s *grpcServer) Withdraw(ctx context.Context, req *pb.WithdrawRequest) (*pb.WithdrawResponse, error) {
-	var signedWithdrawal api.SignedWithdrawal
-	if err := cbor.Unmarshal(req.GetSignedWithdrawal(), &signedWithdrawal); err != nil {
-		return nil, err
-	}
-
-	if err := s.backend.Withdraw(ctx, &signedWithdrawal); err != nil {
-		return nil, err
-	}
-
-	return &pb.WithdrawResponse{}, nil
 }
 
 func (s *grpcServer) Burn(ctx context.Context, req *pb.BurnRequest) (*pb.BurnResponse, error) {
@@ -232,35 +186,6 @@ func (s *grpcServer) WatchTransfers(req *pb.WatchTransfersRequest, stream pb.Sta
 		}
 
 		resp := &pb.WatchTransfersResponse{
-			Event: cbor.Marshal(ev),
-		}
-		if err := stream.Send(resp); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (s *grpcServer) WatchApprovals(req *pb.WatchApprovalsRequest, stream pb.Staking_WatchApprovalsServer) error {
-	ch, sub := s.backend.WatchApprovals()
-	defer sub.Close()
-
-	for {
-		var (
-			ev *api.ApprovalEvent
-			ok bool
-		)
-
-		select {
-		case ev, ok = <-ch:
-		case <-stream.Context().Done():
-		}
-		if !ok {
-			break
-		}
-
-		resp := &pb.WatchApprovalsResponse{
 			Event: cbor.Marshal(ev),
 		}
 		if err := stream.Send(resp); err != nil {

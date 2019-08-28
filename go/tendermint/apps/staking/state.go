@@ -29,23 +29,6 @@ type ledgerEntry struct {
 	EscrowBalance   staking.Quantity `codec:"escrow_balance"`
 	DebondStartTime uint64           `codec:"debond_start_time"`
 	Nonce           uint64           `codec:"nonce"`
-
-	Approvals map[signature.MapKey]*staking.Quantity `codec:"approvals"`
-}
-
-func (ent *ledgerEntry) getAllowance(id signature.PublicKey) *staking.Quantity {
-	if q := ent.Approvals[id.ToMapKey()]; q != nil {
-		return q.Clone()
-	}
-	return &staking.Quantity{}
-}
-
-func (ent *ledgerEntry) setAllowance(id signature.PublicKey, n *staking.Quantity) {
-	if n.IsZero() {
-		delete(ent.Approvals, id.ToMapKey())
-	} else {
-		ent.Approvals[id.ToMapKey()] = n.Clone()
-	}
 }
 
 type immutableState struct {
@@ -181,17 +164,12 @@ func (s *immutableState) rawAccounts() ([]byte, error) {
 func (s *immutableState) account(id signature.PublicKey) *ledgerEntry {
 	_, value := s.Snapshot.Get([]byte(fmt.Sprintf(stateAccountsMap, id)))
 	if value == nil {
-		return &ledgerEntry{
-			Approvals: make(map[signature.MapKey]*staking.Quantity),
-		}
+		return &ledgerEntry{}
 	}
 
 	var ent ledgerEntry
 	if err := cbor.Unmarshal(value, &ent); err != nil {
 		panic("staking: corrupt account state: " + err.Error())
-	}
-	if ent.Approvals == nil {
-		ent.Approvals = make(map[signature.MapKey]*staking.Quantity)
 	}
 	return &ent
 }

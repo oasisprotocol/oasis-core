@@ -58,7 +58,6 @@ func (app *stakingApplication) OnRegister(state *abci.ApplicationState, queryRou
 	queryRouter.AddRoute(QueryThresholds, nil, app.queryThresholds)
 	queryRouter.AddRoute(QueryAccounts, nil, app.queryAccounts)
 	queryRouter.AddRoute(QueryAccountInfo, api.QueryGetByIDRequest{}, app.queryAccountInfo)
-	queryRouter.AddRoute(QueryAllowance, QueryAllowanceRequest{}, app.queryAllowance)
 	queryRouter.AddRoute(QueryDebondingInterval, nil, app.queryDebondingInterval)
 	queryRouter.AddRoute(QueryGenesis, nil, app.queryGenesis)
 }
@@ -152,20 +151,6 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 			DebondStartTime: v.DebondStartTime,
 			Nonce:           v.Nonce,
 		}
-		for spender, qty := range v.Allowances {
-			var spenderID signature.PublicKey
-			_ = spenderID.UnmarshalBinary(spender[:])
-			if !qty.IsValid() {
-				app.logger.Error("InitChain: invalid genesis allowance",
-					"id", id,
-					"spender_id", spenderID,
-					"quantity", qty,
-				)
-				return errors.New("staking/tendermint: invalid genesis allowance")
-			}
-			account.setAllowance(spenderID, qty)
-		}
-
 		state.setAccount(id, account)
 		if err := totalSupply.Add(&account.GeneralBalance); err != nil {
 			app.logger.Error("InitChain: failed to add general balance",
@@ -267,14 +252,6 @@ func (app *stakingApplication) queryAccountInfo(s, r interface{}) ([]byte, error
 	return cbor.Marshal(resp), nil
 }
 
-func (app *stakingApplication) queryAllowance(s, r interface{}) ([]byte, error) {
-	request := r.(*QueryAllowanceRequest)
-	state := s.(*immutableState)
-
-	ent := state.account(request.Owner)
-	return cbor.Marshal(ent.getAllowance(request.Spender)), nil
-}
-
 func (app *stakingApplication) queryDebondingInterval(s, r interface{}) ([]byte, error) {
 	state := s.(*immutableState)
 	return state.rawDebondingInterval()
@@ -315,7 +292,6 @@ func (app *stakingApplication) queryGenesis(s, r interface{}) ([]byte, error) {
 			EscrowBalance:   acct.EscrowBalance,
 			DebondStartTime: acct.DebondStartTime,
 			Nonce:           acct.Nonce,
-			Allowances:      acct.Approvals,
 		}
 	}
 
@@ -334,10 +310,6 @@ func (app *stakingApplication) executeTx(ctx *abci.Context, tree *iavl.MutableTr
 
 	if tx.TxTransfer != nil {
 		return app.transfer(ctx, state, &tx.TxTransfer.SignedTransfer)
-	} else if tx.TxApprove != nil {
-		return app.approve(ctx, state, &tx.TxApprove.SignedApproval)
-	} else if tx.TxWithdraw != nil {
-		return app.withdraw(ctx, state, &tx.TxWithdraw.SignedWithdrawal)
 	} else if tx.TxBurn != nil {
 		return app.burn(ctx, state, &tx.TxBurn.SignedBurn)
 	} else if tx.TxAddEscrow != nil {
@@ -396,126 +368,6 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *MutableState, 
 				From:   fromID,
 				To:     xfer.To,
 				Tokens: xfer.Tokens,
-			},
-		})
-	}
-
-	return nil
-}
-
-func (app *stakingApplication) approve(ctx *abci.Context, state *MutableState, signedApproval *staking.SignedApproval) error {
-	var approval staking.Approval
-	if err := signedApproval.Open(staking.ApproveSignatureContext, &approval); err != nil {
-		app.logger.Error("Approve: invalid signature",
-			"signed_approval", signedApproval,
-		)
-		return staking.ErrInvalidSignature
-	}
-
-	if !approval.Tokens.IsValid() {
-		app.logger.Error("Approve: invalid approval quantity",
-			"id", signedApproval.Signature.PublicKey,
-			"spender", approval.Spender,
-			"amount", approval.Tokens,
-		)
-		return staking.ErrInvalidArgument
-	}
-
-	id := signedApproval.Signature.PublicKey
-	from := state.account(id)
-	if from.Nonce != approval.Nonce {
-		app.logger.Error("Approve: invalid account nonce",
-			"from", id,
-			"account_nonce", from.Nonce,
-			"approval_nonce", approval.Nonce,
-		)
-		return staking.ErrInvalidNonce
-	}
-
-	from.Nonce++
-	from.setAllowance(approval.Spender, &approval.Tokens)
-	state.setAccount(id, from)
-
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("Approve: executed approval",
-			"from", id,
-			"spender", approval.Spender,
-			"amount", approval.Tokens,
-		)
-
-		ctx.EmitData(&Output{
-			OutputApprove: &staking.ApprovalEvent{
-				Owner:   id,
-				Spender: approval.Spender,
-				Tokens:  approval.Tokens,
-			},
-		})
-	}
-
-	return nil
-}
-
-func (app *stakingApplication) withdraw(ctx *abci.Context, state *MutableState, signedWithdrawal *staking.SignedWithdrawal) error {
-	var withdrawal staking.Withdrawal
-	if err := signedWithdrawal.Open(staking.WithdrawSignatureContext, &withdrawal); err != nil {
-		app.logger.Error("Withdraw: invalid signature",
-			"signed_withdrawal", signedWithdrawal,
-		)
-		return staking.ErrInvalidSignature
-	}
-
-	fromID := withdrawal.From
-	from := state.account(fromID)
-	if from.Nonce != withdrawal.Nonce {
-		app.logger.Error("Withdraw: invalid account nonce",
-			"from", fromID,
-			"account_nonce", from.Nonce,
-			"withdrawal_nonce", withdrawal.Nonce,
-		)
-		return staking.ErrInvalidNonce
-	}
-
-	toID := signedWithdrawal.Signature.PublicKey
-	to := state.account(toID)
-
-	// Ensure there is sufficient allowance.
-	allowance := from.getAllowance(toID)
-	if err := allowance.Sub(&withdrawal.Tokens); err != nil {
-		app.logger.Error("Withdraw: insufficent allowance",
-			"id", fromID,
-			"spender", toID,
-			"amount", withdrawal.Tokens,
-		)
-		return staking.ErrInsufficientAllowance
-	}
-
-	if err := staking.Move(&to.GeneralBalance, &from.GeneralBalance, &withdrawal.Tokens); err != nil {
-		app.logger.Error("Withdraw: failed to move balance",
-			"err", err,
-			"from", fromID,
-			"to", toID,
-			"amount", withdrawal.Tokens,
-		)
-		return err
-	}
-
-	from.Nonce++
-	from.setAllowance(toID, allowance)
-	state.setAccount(fromID, from)
-	state.setAccount(toID, to)
-
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("Withdraw: executed withdrawal",
-			"from", fromID,
-			"to", toID,
-			"amount", withdrawal.Tokens,
-		)
-
-		ctx.EmitData(&Output{
-			OutputTransfer: &staking.TransferEvent{
-				From:   fromID,
-				To:     toID,
-				Tokens: withdrawal.Tokens,
 			},
 		})
 	}
