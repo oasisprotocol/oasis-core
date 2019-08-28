@@ -352,12 +352,14 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		ReplicaAllowedStragglers:      uint64(viper.GetInt64(cfgReplicaAllowedStragglers)),
 		StorageGroupSize:              uint64(viper.GetInt64(cfgStorageGroupSize)),
 		TransactionSchedulerGroupSize: uint64(viper.GetInt64(cfgTransactionSchedulerGroupSize)),
-		TEEHardware:                   teeHardware,
-		KeyManager:                    kmID,
 		Kind:                          kind,
-		RegistrationTime:              ent.RegistrationTime,
+		TEEHardware:                   teeHardware,
+		Version: registry.VersionInfo{
+			Version: version.FromU64(viper.GetUint64(cfgVersion)),
+		},
+		KeyManager:       kmID,
+		RegistrationTime: ent.RegistrationTime,
 	}
-	rt.Version.Version = version.FromU64(viper.GetUint64(cfgVersion))
 
 	return rt, signer, nil
 }
