@@ -329,7 +329,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 func (n *Node) initGenesis() error {
 	var err error
-	if n.Genesis, err = genesis.New(n.Identity); err == nil {
+	if n.Genesis, err = genesis.New(); err == nil {
 		return nil
 	}
 	if os.IsNotExist(err) {
@@ -581,7 +581,6 @@ func RegisterFlags(cmd *cobra.Command) {
 		tracing.RegisterFlags,
 		cmdGrpc.RegisterServerLocalFlags,
 		pprof.RegisterFlags,
-		genesis.RegisterFlags,
 		beacon.RegisterFlags,
 		epochtime.RegisterFlags,
 		registry.RegisterFlags,
@@ -609,4 +608,5 @@ func RegisterFlags(cmd *cobra.Command) {
 
 	flags.RegisterDebugTestEntity(cmd)
 	flags.RegisterConsensusBackend(cmd)
+	flags.RegisterGenesisFile(cmd)
 }

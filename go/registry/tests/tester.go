@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/ekiden/go/common/crypto/tls"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -437,7 +438,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 		nod.Node.P2P.Addresses = append(nod.Node.P2P.Addresses, addr)
 		nod.Node.Committee.Addresses = append(nod.Node.Committee.Addresses, addr)
 		// Generate dummy TLS certificate.
-		tlsCert, err := identity.GenerateTLSCert()
+		tlsCert, err := tls.Generate(identity.CommonName)
 		if err != nil {
 			return nil, err
 		}

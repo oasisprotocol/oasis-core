@@ -6,6 +6,7 @@ package node
 import (
 	"crypto/x509"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -89,6 +90,34 @@ const (
 	// that are reserved and must not be used.
 	RoleReserved RolesMask = ((1 << 32) - 1) & ^((RoleValidator << 1) - 1)
 )
+
+func (m RolesMask) String() string {
+	if m&RoleReserved != 0 {
+		return "[invalid roles]"
+	}
+
+	var ret []string
+	if m&RoleComputeWorker != 0 {
+		ret = append(ret, "compute")
+	}
+	if m&RoleStorageWorker != 0 {
+		ret = append(ret, "storage")
+	}
+	if m&RoleTransactionScheduler != 0 {
+		ret = append(ret, "tx_scheduler")
+	}
+	if m&RoleKeyManager != 0 {
+		ret = append(ret, "key_manager")
+	}
+	if m&RoleMergeWorker != 0 {
+		ret = append(ret, "merge")
+	}
+	if m&RoleValidator != 0 {
+		ret = append(ret, "validator")
+	}
+
+	return strings.Join(ret, ",")
+}
 
 // AddRoles adds the Node roles
 func (n *Node) AddRoles(r RolesMask) {

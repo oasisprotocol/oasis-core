@@ -7,7 +7,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
-	"github.com/oasislabs/ekiden/go/genesis"
+	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/tendermint"
 )
 
@@ -20,7 +20,10 @@ var (
 	computeHonestCmd = &cobra.Command{
 		Use:   "compute-honest",
 		Short: "act as an honest compute worker",
-		Run:   doComputeHonest,
+		PreRun: func(cmd *cobra.Command, args []string) {
+			registerComputeHonestFlags(cmd)
+		},
+		Run: doComputeHonest,
 	}
 )
 
@@ -42,13 +45,17 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 	logger.Warn("compute honest: mostly not implemented")
 }
 
-// Register registers the byzantine sub-command and all of its children.
-func Register(parentCmd *cobra.Command) {
-	byzantineCmd.AddCommand(computeHonestCmd)
-	parentCmd.AddCommand(byzantineCmd)
+func registerComputeHonestFlags(cmd *cobra.Command) {
+	if !cmd.Flags().Parsed() {
+		cmd.Flags().AddFlagSet(tendermint.Flags)
+	}
+	flags.RegisterGenesisFile(cmd)
 }
 
-func init() {
-	computeHonestCmd.Flags().AddFlagSet(genesis.Flags)
-	computeHonestCmd.Flags().AddFlagSet(tendermint.Flags)
+// Register registers the byzantine sub-command and all of its children.
+func Register(parentCmd *cobra.Command) {
+	registerComputeHonestFlags(computeHonestCmd)
+
+	byzantineCmd.AddCommand(computeHonestCmd)
+	parentCmd.AddCommand(byzantineCmd)
 }

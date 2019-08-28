@@ -37,7 +37,7 @@ const debugModeFakeRuntimeSeed = "ekiden storage client debug runtime"
 // New creates a new storage client.
 func New(
 	ctx context.Context,
-	identity *identity.Identity,
+	ident *identity.Identity,
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
 ) (api.Backend, error) {
@@ -50,7 +50,7 @@ func New(
 
 		var opts grpc.DialOption
 		if viper.GetString(cfgDebugClientTLSCertFile) != "" {
-			tlsConfig, err := commonGrpc.NewClientTLSConfigFromFile(viper.GetString(cfgDebugClientTLSCertFile), "ekiden-node")
+			tlsConfig, err := commonGrpc.NewClientTLSConfigFromFile(viper.GetString(cfgDebugClientTLSCertFile), identity.CommonName)
 			if err != nil {
 				logger.Error("failed creating client tls config from file",
 					"file", viper.GetString(cfgDebugClientTLSCertFile),
@@ -59,7 +59,7 @@ func New(
 				return nil, err
 			}
 			// Set client certificate.
-			tlsConfig.Certificates = []tls.Certificate{*identity.TLSCertificate}
+			tlsConfig.Certificates = []tls.Certificate{*ident.TLSCertificate}
 			opts = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
 		} else {
 			opts = grpc.WithInsecure()
@@ -83,7 +83,7 @@ func New(
 			scheduler:       schedulerBackend,
 			registry:        registryBackend,
 			runtimeWatchers: make(map[signature.MapKey]storageWatcher),
-			identity:        identity,
+			identity:        ident,
 		}
 		state := &clientState{
 			client: client,
@@ -101,7 +101,7 @@ func New(
 		scheduler:       schedulerBackend,
 		registry:        registryBackend,
 		runtimeWatchers: make(map[signature.MapKey]storageWatcher),
-		identity:        identity,
+		identity:        ident,
 	}
 
 	b.haltCtx, b.cancelFn = context.WithCancel(ctx)

@@ -21,7 +21,10 @@ func TestSerialization(t *testing.T) {
 		StorageGroupSize:         90,
 		KeyManager:               signature.PublicKey(key),
 		Kind:                     KindCompute,
-		Version:                  version.Version{Major: 1, Minor: 2, Patch: 3},
+		Version: VersionInfo{
+			TEE:     []byte{},
+			Version: version.Version{Major: 1, Minor: 2, Patch: 3},
+		},
 	}
 
 	cp := c.ToProto()

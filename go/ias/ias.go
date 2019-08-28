@@ -3,51 +3,30 @@ package ias
 
 import (
 	"context"
-	"os"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	tlsCert "github.com/oasislabs/ekiden/go/common/crypto/tls"
 	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 	iasGrpc "github.com/oasislabs/ekiden/go/grpc/ias"
 )
 
 const (
-	cfgProxyAddress     = "ias.proxy_addr"
-	envUnsafeSkipVerify = "EKIDEN_UNSAFE_SKIP_AVR_VERIFY"
+	cfgProxyAddress    = "ias.proxy_addr"
+	cfgTLSCertFile     = "ias.tls"
+	cfgDebugSkipVerify = "ias.debug.skip_verify"
 )
-
-type mockAVR struct {
-	Timestamp             string `codec:"timestamp"`
-	ISVEnclaveQuoteStatus string `codec:"isvEnclaveQuoteStatus"`
-	ISVEnclaveQuoteBody   []byte `codec:"isvEnclaveQuoteBody"`
-	Nonce                 string `codec:"nonce,omitempty"`
-}
-
-func newMockAVR(quote []byte, nonce string) ([]byte, error) {
-	avr := &mockAVR{
-		Timestamp:             time.Now().UTC().Format(ias.TimestampFormat),
-		ISVEnclaveQuoteStatus: "OK",
-		ISVEnclaveQuoteBody:   quote[:ias.QuoteLen],
-		Nonce:                 nonce,
-	}
-	q, err := ias.DecodeQuote(avr.ISVEnclaveQuoteBody)
-	if err != nil {
-		return nil, err
-	}
-	if err = q.Verify(); err != nil {
-		return nil, err
-	}
-
-	return json.Marshal(avr), nil
-}
 
 // IAS is an IAS proxy client.
 type IAS struct {
@@ -81,51 +60,56 @@ func (s *IAS) GetQuoteSignatureType(ctx context.Context) (*ias.SignatureType, er
 }
 
 // VerifyEvidence verifies attestation evidence.
-func (s *IAS) VerifyEvidence(ctx context.Context, quote, pseManifest []byte, nonce string) (avr, sig, chain []byte, err error) {
+func (s *IAS) VerifyEvidence(ctx context.Context, runtimeID signature.PublicKey, quote, pseManifest []byte, nonce string) (avr, sig, chain []byte, err error) {
 	if s.client == nil {
-		// Generate mock AVR when IAS is not configured. Signature and certificate chain are empty
-		// and such a report will not pass any verification so it can only be used with verification
-		// disabled (e.g., built with EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1).
-		avr, err = newMockAVR(quote, nonce)
+		// If the IAS proxy is not configured, generate a mock AVR, under the
+		// assumption that the runtime is built to support this.  The runtime
+		// with reject the mock AVR if it is not.
+		avr, err = ias.NewMockAVR(quote, nonce)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		sig = cbor.FixSliceForSerde(nil)
-		chain = cbor.FixSliceForSerde(nil)
-		return
+	} else {
+		// Ensure the quote passes basic sanity/security checks before even
+		// bothering to contact the backend.
+		var untrustedQuote *ias.Quote
+		untrustedQuote, err = ias.DecodeQuote(quote)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if err = untrustedQuote.Verify(); err != nil {
+			return nil, nil, nil, err
+		}
+
+		evidence := ias.Evidence{
+			ID:          runtimeID,
+			Quote:       quote,
+			PSEManifest: pseManifest,
+			Nonce:       nonce,
+		}
+		var signedEvidence *signature.Signed
+		signedEvidence, err = signature.SignSigned(s.identity.NodeSigner, ias.EvidenceSignatureContext, &evidence)
+		if err != nil {
+			return
+		}
+
+		req := iasGrpc.VerifyEvidenceRequest{
+			Evidence: signedEvidence.ToProto(),
+		}
+		var resp *iasGrpc.VerifyEvidenceResponse
+		resp, err = s.client.VerifyEvidence(ctx, &req)
+		if err != nil {
+			return
+		}
+
+		avr = resp.Avr
+		sig = resp.Signature
+		chain = resp.CertificateChain
 	}
 
-	// Ensure the quote passes basic sanity/security checks before even
-	// bothering to contact the backend.
-	untrustedQuote, err := ias.DecodeQuote(quote)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if err = untrustedQuote.Verify(); err != nil {
-		return nil, nil, nil, err
-	}
+	sig = cbor.FixSliceForSerde(sig)
+	chain = cbor.FixSliceForSerde(chain)
 
-	evidence := ias.Evidence{
-		Quote:       quote,
-		PSEManifest: pseManifest,
-		Nonce:       nonce,
-	}
-	se, err := signature.SignSigned(s.identity.NodeSigner, ias.EvidenceSignatureContext, &evidence)
-	if err != nil {
-		return
-	}
-
-	req := iasGrpc.VerifyEvidenceRequest{
-		Evidence: se.ToProto(),
-	}
-	res, err := s.client.VerifyEvidence(ctx, &req)
-	if err != nil {
-		return
-	}
-
-	avr = res.Avr
-	sig = res.Signature
-	chain = res.CertificateChain
 	return
 }
 
@@ -160,14 +144,34 @@ func New(identity *identity.Identity) (*IAS, error) {
 	if proxyAddr == "" {
 		s.logger.Warn("IAS proxy is not configured, all reports will be mocked")
 
-		if os.Getenv(envUnsafeSkipVerify) != "" {
-			s.logger.Warn("EKIDEN_UNSAFE_SKIP_AVR_VERIFY set, AVR signature validation bypassed")
-			ias.SetSkipVerify() // Disable signature verification as well.
-		}
 		s.spidInfo = &ias.SPIDInfo{}
 		_ = s.spidInfo.SPID.UnmarshalBinary(make([]byte, ias.SPIDSize))
 	} else {
-		conn, err := grpc.Dial(proxyAddr, grpc.WithInsecure()) // TODO: TLS?
+		tlsCertFile := viper.GetString(cfgTLSCertFile)
+		if tlsCertFile == "" {
+			s.logger.Error("IAS proxy TLS certificate not configured")
+			return nil, errors.New("ias: proxy TLS certificate not configured")
+		}
+
+		proxyCert, err := tlsCert.LoadCertificate(tlsCertFile)
+		if err != nil {
+			return nil, err
+		}
+
+		parsedCert, err := x509.ParseCertificate(proxyCert.Certificate[0])
+		if err != nil {
+			return nil, err
+		}
+
+		certPool := x509.NewCertPool()
+		certPool.AddCert(parsedCert)
+		creds := credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{*identity.TLSCertificate},
+			RootCAs:      certPool,
+			ServerName:   ias.CommonName,
+		})
+
+		conn, err := grpc.Dial(proxyAddr, grpc.WithTransportCredentials(creds))
 		if err != nil {
 			return nil, err
 		}
@@ -190,6 +194,11 @@ func New(identity *identity.Identity) (*IAS, error) {
 		}
 	}
 
+	if viper.GetBool(cfgDebugSkipVerify) {
+		s.logger.Warn("`ias.debug.skip_verify` set, AVR signature validation bypassed")
+		ias.SetSkipVerify()
+	}
+
 	return s, nil
 }
 
@@ -198,11 +207,15 @@ func New(identity *identity.Identity) (*IAS, error) {
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgProxyAddress, "", "IAS proxy address")
+		cmd.Flags().String(cfgTLSCertFile, "", "IAS proxy TLS certificate")
+		cmd.Flags().Bool(cfgDebugSkipVerify, false, "skip IAS AVR signature verification (UNSAFE)")
 	}
 
 	for _, v := range []string{
 		cfgProxyAddress,
+		cfgTLSCertFile,
+		cfgDebugSkipVerify,
 	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
+		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}
 }

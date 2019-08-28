@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/genesis/api"
@@ -20,7 +19,7 @@ func (p *fileProvider) GetGenesisDocument() (*api.Document, error) {
 }
 
 // NewFileProvider creates a new local file genesis provider.
-func NewFileProvider(filename string, identity *identity.Identity) (api.Provider, error) {
+func NewFileProvider(filename string) (api.Provider, error) {
 	logger := logging.GetLogger("genesis/file")
 
 	raw, err := ioutil.ReadFile(filename)

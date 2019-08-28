@@ -15,12 +15,14 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/sgx"
 	"github.com/oasislabs/ekiden/go/common/version"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	cmdFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
@@ -44,6 +46,7 @@ const (
 	cfgKeyManager                    = "runtime.keymanager"
 	cfgOutput                        = "runtime.genesis.file"
 	cfgVersion                       = "runtime.version"
+	cfgVersionEnclave                = "runtime.version.enclave"
 
 	optKindCompute    = "compute"
 	optKindKeyManager = "keymanager"
@@ -344,20 +347,38 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		gen.State = log
 	}
 
-	return &registry.Runtime{
+	rt := &registry.Runtime{
 		ID:                            id,
-		Version:                       version.FromU64(viper.GetUint64(cfgVersion)),
 		Genesis:                       gen,
 		ReplicaGroupSize:              uint64(viper.GetInt64(cfgReplicaGroupSize)),
 		ReplicaGroupBackupSize:        uint64(viper.GetInt64(cfgReplicaGroupBackupSize)),
 		ReplicaAllowedStragglers:      uint64(viper.GetInt64(cfgReplicaAllowedStragglers)),
 		StorageGroupSize:              uint64(viper.GetInt64(cfgStorageGroupSize)),
 		TransactionSchedulerGroupSize: uint64(viper.GetInt64(cfgTransactionSchedulerGroupSize)),
-		TEEHardware:                   teeHardware,
-		KeyManager:                    kmID,
 		Kind:                          kind,
-		RegistrationTime:              ent.RegistrationTime,
-	}, signer, nil
+		TEEHardware:                   teeHardware,
+		Version: registry.VersionInfo{
+			Version: version.FromU64(viper.GetUint64(cfgVersion)),
+		},
+		KeyManager:       kmID,
+		RegistrationTime: ent.RegistrationTime,
+	}
+	if teeHardware == node.TEEHardwareIntelSGX {
+		var vi registry.VersionInfoIntelSGX
+		for _, v := range viper.GetStringSlice(cfgVersionEnclave) {
+			var enclaveID sgx.EnclaveIdentity
+			if err := enclaveID.UnmarshalHex(v); err != nil {
+				logger.Error("failed to parse SGX enclave identity",
+					"err", err,
+				)
+				return nil, nil, err
+			}
+			vi.Enclaves = append(vi.Enclaves, enclaveID)
+		}
+		rt.Version.TEE = cbor.Marshal(vi)
+	}
+
+	return rt, signer, nil
 }
 
 func signForRegistration(rt *registry.Runtime, signer signature.Signer, isGenesis bool) (*registry.SignedRuntime, error) {
@@ -418,6 +439,7 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cmd.Flags().String(cfgKeyManager, "", "Key Manager Runtime ID")
 		cmd.Flags().String(cfgKind, optKindCompute, "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
 		cmd.Flags().String(cfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")
+		cmd.Flags().StringSlice(cfgVersionEnclave, nil, "Runtime TEE enclave version(s)")
 	}
 
 	for _, v := range []string{
@@ -432,6 +454,7 @@ func registerRuntimeFlags(cmd *cobra.Command) {
 		cfgKeyManager,
 		cfgKind,
 		cfgVersion,
+		cfgVersionEnclave,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}

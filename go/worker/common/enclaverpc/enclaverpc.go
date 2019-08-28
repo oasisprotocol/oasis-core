@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/oasislabs/ekiden/go/common/identity"
 	erpcGrpc "github.com/oasislabs/ekiden/go/grpc/enclaverpc"
 )
 
@@ -43,7 +44,7 @@ func (c *Client) CallEnclave(ctx context.Context, request []byte) ([]byte, error
 
 // NewClient creates a new enclave RPC client instance.
 func NewClient(address string, certFile string, endpoint string) (*Client, error) {
-	creds, err := credentials.NewClientTLSFromFile(certFile, "ekiden-node")
+	creds, err := credentials.NewClientTLSFromFile(certFile, identity.CommonName)
 	if err != nil {
 		return nil, err
 	}

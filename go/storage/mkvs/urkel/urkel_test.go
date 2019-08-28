@@ -26,6 +26,9 @@ const (
 	insertItems  = 1000
 	allItemsRoot = "a092507adb90fce8d38e8c8663f4db0affa50e47955535bbdb21327a8d9c2532"
 
+	insertItemsShort  = 500
+	allItemsRootShort = "0366d0a68c73d612c7247fdba819d0f0dde332ee95adb9fb0047824afab9604d"
+
 	longKey          = "Unlock the potential of your data without compromising security or privacy"
 	longValue        = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance."
 	allLongItemsRoot = "1aa1b04b41ea1cbf3f5ff839bfb1c21cacddc06b773b94b425d46b673352459b"
@@ -516,7 +519,7 @@ func testRemove(t *testing.T, ndb db.NodeDB) {
 
 	// First insert keys 0..n and remove them in order n..0.
 	var roots []hash.Hash
-	keys, values := generateKeyValuePairs()
+	keys, values := generateKeyValuePairsEx("", insertItemsShort)
 	for i := 0; i < len(keys); i++ {
 		err := tree.Insert(ctx, keys[i], values[i])
 		require.NoError(t, err, "Insert")
@@ -530,7 +533,7 @@ func testRemove(t *testing.T, ndb db.NodeDB) {
 		roots = append(roots, root)
 	}
 
-	require.Equal(t, allItemsRoot, roots[len(roots)-1].String())
+	require.Equal(t, allItemsRootShort, roots[len(roots)-1].String())
 
 	for i := len(keys) - 1; i > 0; i-- {
 		err := tree.Remove(ctx, keys[i])

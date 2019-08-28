@@ -43,6 +43,10 @@ CLIENT="$WORKDIR/target/debug/test-long-term-client"
 test_migration() {
     local runtime=simple-keyvalue
 
+    # Get the paths (and enclave identities) of the various enclaves.
+    get_keymanager_binary
+    get_runtime_binary runtime=${runtime}
+
     # Start the first network.
     run_backend_tendermint_committee \
         epochtime_backend=tendermint_mock \
@@ -115,6 +119,10 @@ test_migration() {
 test_dumprestore() {
     local runtime=simple-keyvalue
 
+    # Get the paths (and enclave identities) of the various enclaves.
+    get_keymanager_binary
+    get_runtime_binary runtime=${runtime}
+
     # Make sure no leftover state is present from before.
     rm -f "${DUMP_RESTORE_STATE_FILE}"
     rm -rf "${TEST_BASE_DIR}"/committee* export-roothash.json
@@ -147,7 +155,7 @@ test_dumprestore() {
 
     # Dump BFT state.
     "$WORKDIR/go/ekiden/ekiden" genesis dump \
-        --height 0 --genesis_file "${DUMP_RESTORE_STATE_FILE}" \
+        --height 0 --genesis.file "${DUMP_RESTORE_STATE_FILE}" \
         --address unix:${EKIDEN_VALIDATOR_SOCKET}
 
     # Stop all nodes.
@@ -176,6 +184,7 @@ test_dumprestore() {
     cp -a ${TEST_BASE_DIR}/committee-1/committee-data-3/*.pem ${TEST_BASE_DIR}/committee-2/committee-data-3/
     cp -a ${TEST_BASE_DIR}/committee-1/entity/entity.{json,pem} ${TEST_BASE_DIR}/committee-2/entity/
     cp -a ${TEST_BASE_DIR}/committee-1/key-manager/*.pem ${TEST_BASE_DIR}/committee-2/key-manager/
+    cp -a ${TEST_BASE_DIR}/committee-1/key-manager/km-local-storage.bolt.db ${TEST_BASE_DIR}/committee-2/key-manager/
     cp -a ${TEST_BASE_DIR}/committee-1/seed-1/*.pem ${TEST_BASE_DIR}/committee-2/seed-2/
     cp -a ${TEST_BASE_DIR}/committee-1/worker-1/*.pem ${TEST_BASE_DIR}/committee-2/worker-1/
     cp -a ${TEST_BASE_DIR}/committee-1/client-1/*.pem ${TEST_BASE_DIR}/committee-2/client-1/

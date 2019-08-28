@@ -17,6 +17,8 @@ EKIDEN_TEE_HARDWARE=${EKIDEN_TEE_HARDWARE:-""}
 EKIDEN_RUNTIME_ID=${EKIDEN_RUNTIME_ID:-"0000000000000000000000000000000000000000000000000000000000000000"}
 # Keymanager runtime identifier.
 EKIDEN_KM_RUNTIME_ID=${EKIDEN_KM_RUNTIME_ID:-"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}
+# SGX MRSIGNER used to sign enclaves (default is the Fortanix test key).
+EKIDEN_MRSIGNER=${EKIDEN_MRSIGNER:-"9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a"}
 
 # Run a Tendermint validator committee.
 #
@@ -24,6 +26,7 @@ EKIDEN_KM_RUNTIME_ID=${EKIDEN_KM_RUNTIME_ID:-"ffffffffffffffffffffffffffffffffff
 #   EKIDEN_COMMITTEE_DIR
 #   EKIDEN_GENESIS_FILE
 #   EKIDEN_IAS_PROXY_PORT
+#   EKIDEN_IAS_PROXY_CERT
 #   EKIDEN_EPOCHTIME_BACKEND
 #   EKIDEN_VALIDATOR_SOCKET
 #   EKIDEN_CLIENT_SOCKET
@@ -98,16 +101,25 @@ run_backend_tendermint_committee() {
             --datadir ${entity_dir}
 
         # Provision the key manager runtime.
+        if [[ "${EKIDEN_KM_MRENCLAVE:-}" == "" ]]; then
+            echo "ERROR: Key manager MRENCLAVE not configured, did you use run_test?"
+            exit 1
+        fi
         ${EKIDEN_NODE} \
             registry runtime init_genesis \
             --runtime.id ${EKIDEN_KM_RUNTIME_ID} \
             ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
+            ${EKIDEN_TEE_HARDWARE:+--runtime.version.enclave ${EKIDEN_MRSIGNER}${EKIDEN_KM_MRENCLAVE}} \
             --runtime.kind keymanager \
             --runtime.genesis.file keymanager_genesis.json \
             --entity ${entity_dir} \
             --datadir ${entity_dir}
 
         # Provision the runtime.
+        if [[ "${EKIDEN_RUNTIME_MRENCLAVE:-}" == "" ]]; then
+            echo "ERROR: Runtime MRENCLAVE not configured, did you use run_test?"
+            exit 1
+        fi
         ${EKIDEN_NODE} \
             registry runtime init_genesis \
             --runtime.id ${EKIDEN_RUNTIME_ID} \
@@ -116,6 +128,7 @@ run_backend_tendermint_committee() {
             --runtime.storage_group_size ${storage_group_size} \
             ${runtime_genesis:+--runtime.genesis.state ${runtime_genesis}} \
             ${EKIDEN_TEE_HARDWARE:+--runtime.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
+            ${EKIDEN_TEE_HARDWARE:+--runtime.version.enclave ${EKIDEN_MRSIGNER}${EKIDEN_RUNTIME_MRENCLAVE}} \
             --runtime.keymanager ${EKIDEN_KM_RUNTIME_ID} \
             --runtime.kind compute \
             --entity ${entity_dir} \
@@ -131,7 +144,7 @@ run_backend_tendermint_committee() {
     else
         ${EKIDEN_NODE} \
             genesis init \
-            --genesis_file ${genesis_file} \
+            --genesis.file ${genesis_file} \
             --entity ${entity_dir}/entity_genesis.json \
             --runtime ${entity_dir}/keymanager_genesis.json \
             --runtime ${entity_dir}/runtime_genesis.json \
@@ -141,27 +154,56 @@ run_backend_tendermint_committee() {
 
     # Run the IAS proxy if needed.
     local ias_proxy_port=9001
+    local ias_dir=${committee_dir}/ias-proxy
+    rm -Rf {$ias_dir}
 
-    if [[ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" && "${EKIDEN_UNSAFE_SKIP_AVR_VERIFY}" == "" ]]; then
-        # TODO: Ensure that IAS credentials are configured.
-        ${EKIDEN_NODE} \
-            ias proxy \
-            --auth_cert ${EKIDEN_IAS_CERT} \
-            --auth_cert_ca ${EKIDEN_IAS_CERT} \
-            --auth_key ${EKIDEN_IAS_KEY} \
-            --spid ${EKIDEN_IAS_SPID} \
-            --metrics.mode none \
-            --log.level debug \
-            --log.file ${committee_dir}/ias-proxy.log \
-            &
+    if [ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]; then
+        # Note: This can just use a real client and watch the
+        # registry by setting `--address` and `--ias.wait_runtimes`
+        # to the appropriate values.
+        #
+        # nb: The startup order of things would need to be changed,
+        # and the brittle test cases will probably break in mysterious
+        # ways.
+        if [ "${EKIDEN_UNSAFE_SKIP_AVR_VERIFY}" == "" ]; then
+            # TODO: Ensure that IAS credentials are configured.
+            ${EKIDEN_NODE} \
+                ias proxy \
+                --datadir ${ias_dir} \
+                --ias.use_genesis \
+                --genesis.file ${genesis_file} \
+                --ias.auth.cert ${EKIDEN_IAS_CERT} \
+                --ias.auth.cert.ca ${EKIDEN_IAS_CERT} \
+                --ias.auth.cert.key ${EKIDEN_IAS_KEY} \
+                --ias.spid ${EKIDEN_IAS_SPID} \
+                --metrics.mode none \
+                --log.level debug \
+                --log.file ${committee_dir}/ias-proxy.log \
+                &
+        else
+            # Mock, with a high-quality random SPID from random.org
+            ${EKIDEN_NODE} \
+                ias proxy \
+                --datadir ${ias_dir} \
+                --ias.use_genesis \
+                --genesis.file ${genesis_file} \
+                --ias.debug.mock \
+                --ias.spid 9b3085a55a5863f7cc66b380dcad0082 \
+                --debug.allow_test_keys \
+                --metrics.mode none \
+                --log.level debug \
+                --log.file ${committee_dir}/ias-proxy.log \
+                &
+        fi
 
         EKIDEN_IAS_PROXY_ENABLED=1
+        EKIDEN_IAS_PROXY_PORT=${ias_proxy_port}
+        EKIDEN_IAS_PROXY_CERT=${ias_dir}/ias_proxy_cert.pem
     fi
 
     # Export some variables so compute workers can find them.
     EKIDEN_COMMITTEE_DIR=${committee_dir}
     EKIDEN_VALIDATOR_SOCKET=${base_datadir}-1/internal.sock
-    EKIDEN_IAS_PROXY_PORT=${ias_proxy_port}
     EKIDEN_GENESIS_FILE=${genesis_file}
     EKIDEN_EPOCHTIME_BACKEND=${epochtime_backend}
     EKIDEN_ENTITY_DESCRIPTOR=${entity_dir}/entity.json
@@ -206,6 +248,7 @@ run_backend_tendermint_committee() {
             --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
             --datadir ${datadir} \
             --debug.allow_test_keys \
+            ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
             &
 
         # HACK HACK HACK HACK HACK
@@ -220,6 +263,30 @@ run_backend_tendermint_committee() {
 
     # Run the client node.
     run_client_node 1
+}
+
+# Get the runtime binary path.
+#
+# Optional named arguments:
+#   runtime - name of the runtime to use
+#
+# Sets:
+#   EKIDEN_RUNTIME_BINARY
+#   EKIDEN_RUNTIME_MRENCLAVE
+get_runtime_binary() {
+    local runtime=simple-keyvalue
+    # Load named arguments that override defaults.
+    local "${@}"
+
+    local runtime_target=""
+    local runtime_ext=""
+    if [[ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]]; then
+        runtime_target="x86_64-fortanix-unknown-sgx"
+        runtime_ext=".sgxs"
+    fi
+
+    EKIDEN_RUNTIME_BINARY=${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/${runtime}${runtime_ext}
+    EKIDEN_RUNTIME_MRENCLAVE=($(sha256sum ${EKIDEN_RUNTIME_BINARY}))
 }
 
 # Run a compute node.
@@ -258,17 +325,15 @@ run_compute_node() {
         chmod 600 ${data_dir}/identity.pem
     fi
 
+    if [[ "${EKIDEN_RUNTIME_BINARY:-}" == "" ]]; then
+        echo "ERROR: Runtime binary not configured, did you use run_test?"
+        exit 1
+    fi
+
     # Generate port number.
     let client_port=id+11000
     let p2p_port=id+12000
     let tm_port=id+13000
-
-    local runtime_target=""
-    local runtime_ext=""
-    if [[ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]]; then
-        runtime_target="x86_64-fortanix-unknown-sgx"
-        runtime_ext=".sgxs"
-    fi
 
     ${EKIDEN_NODE} \
         --log.level debug \
@@ -286,10 +351,12 @@ run_compute_node() {
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
+        ${EKIDEN_IAS_PROXY_ENABLED:+--ias.tls ${EKIDEN_IAS_PROXY_CERT}} \
+        ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
         --worker.compute.enabled \
         --worker.compute.backend sandboxed \
         --worker.compute.runtime_loader ${EKIDEN_RUNTIME_LOADER} \
-        --worker.compute.runtime.binary ${WORKDIR}/target/${runtime_target}/debug/${runtime}${runtime_ext} \
+        --worker.compute.runtime.binary ${EKIDEN_RUNTIME_BINARY} \
         ${EKIDEN_TEE_HARDWARE:+--worker.compute.runtime.sgx_ids ${EKIDEN_RUNTIME_ID}} \
         --worker.txnscheduler.enabled \
         --worker.txnscheduler.batching.max_batch_size 1 \
@@ -373,6 +440,7 @@ run_storage_node() {
         --worker.runtime.id ${EKIDEN_RUNTIME_ID} \
         --datadir ${data_dir} \
         --debug.allow_test_keys \
+        ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
         $extra_args \
         2>&1 | sed "s/^/[storage-node-${id}] /" &
 }
@@ -430,6 +498,7 @@ run_client_node() {
         --client.indexer.runtimes ${EKIDEN_RUNTIME_ID} \
         --datadir ${data_dir} \
         --debug.allow_test_keys \
+        ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
         2>&1 | sed "s/^/[client-node-${id}] /" &
 }
 
@@ -462,10 +531,30 @@ set_epoch() {
         --epoch $epoch
 }
 
+# Get the key manager binary path.
+#
+# Sets:
+#   EKIDEN_KM_BINARY
+#   EKIDEN_KM_MRENCLAVE
+get_keymanager_binary() {
+    local runtime_target=""
+    local runtime_ext=""
+    if [[ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]]; then
+        runtime_target="x86_64-fortanix-unknown-sgx"
+        runtime_ext=".sgxs"
+    fi
+
+    EKIDEN_KM_BINARY=${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext}
+    EKIDEN_KM_MRENCLAVE=($(sha256sum ${EKIDEN_KM_BINARY}))
+}
+
 # Run a key manager node.
 #
 # Required arguments:
 #   keep_data_dir - Should the data directory be preserved (1) or not (0)
+#
+# Require variables:
+#   EKIDEN_KM_BINARY - Set by get_keymanager_binary
 #
 # Any arguments are passed to the key manager node.
 run_keymanager_node() {
@@ -480,11 +569,9 @@ run_keymanager_node() {
     local log_file=${EKIDEN_COMMITTEE_DIR}/key-manager.log
     rm -rf ${log_file}
 
-    local runtime_target=""
-    local runtime_ext=""
-    if [[ "${EKIDEN_TEE_HARDWARE}" == "intel-sgx" ]]; then
-        runtime_target="x86_64-fortanix-unknown-sgx"
-        runtime_ext=".sgxs"
+    if [[ "${EKIDEN_KM_BINARY:-}" == "" ]]; then
+        echo "ERROR: Key manager binary not configured, did you use run_test?"
+        exit 1
     fi
 
     let tm_port=13900
@@ -505,13 +592,15 @@ run_keymanager_node() {
         --tendermint.consensus.timeout_commit 250ms \
         --tendermint.debug.addr_book_lenient \
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.proxy_addr 127.0.0.1:${EKIDEN_IAS_PROXY_PORT}} \
+        ${EKIDEN_IAS_PROXY_ENABLED:+--ias.tls ${EKIDEN_IAS_PROXY_CERT}} \
+        ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
         ${EKIDEN_TEE_HARDWARE:+--worker.keymanager.tee_hardware ${EKIDEN_TEE_HARDWARE}} \
         --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
         --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --worker.client.port 9003 \
         --worker.keymanager.enabled \
         --worker.keymanager.runtime.loader ${EKIDEN_RUNTIME_LOADER} \
-        --worker.keymanager.runtime.binary ${EKIDEN_ROOT_PATH}/target/${runtime_target}/debug/ekiden-keymanager-runtime${runtime_ext} \
+        --worker.keymanager.runtime.binary ${EKIDEN_KM_BINARY} \
         --worker.keymanager.runtime.id ${EKIDEN_KM_RUNTIME_ID} \
         --worker.keymanager.may_generate \
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
@@ -675,6 +764,10 @@ run_test() {
     fi
 
     echo -e "\n\e[36;7;1mRUNNING TEST:\e[27m ${name}\e[0m\n"
+
+    # Get the paths (and enclave identities) of the various enclaves.
+    get_keymanager_binary
+    get_runtime_binary runtime=${runtime}
 
     if [[ "${pre_init_hook}" != "" ]]; then
         $pre_init_hook

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ias"
@@ -68,18 +69,22 @@ func TestSandboxedHost(t *testing.T) {
 	ias, err := ias.New(nil)
 	require.NoError(t, err, "ias.New")
 
+	var testID signature.PublicKey
+	_ = testID.UnmarshalBinary(make([]byte, signature.PublicKeySize))
+
 	// Create host with sandbox disabled.
-	host, err := NewSandboxedHost(
-		"test_worker",
-		envWorkerHostWorkerBinary,
-		envWorkerHostRuntimeBinary,
-		make(map[string]ProxySpecification),
-		tee,
-		ias,
-		&mockHostHandler{},
-		nil,
-		true,
-	)
+	cfg := &Config{
+		Role:           node.RoleComputeWorker,
+		ID:             testID,
+		WorkerBinary:   envWorkerHostWorkerBinary,
+		RuntimeBinary:  envWorkerHostRuntimeBinary,
+		Proxies:        nil,
+		TEEHardware:    tee,
+		IAS:            ias,
+		MessageHandler: &mockHostHandler{},
+		NoSandbox:      true,
+	}
+	host, err := NewHost(cfg)
 	require.NoError(t, err, "NewSandboxedHost")
 
 	t.Run("WithNoSandbox", func(t *testing.T) {
@@ -87,17 +92,8 @@ func TestSandboxedHost(t *testing.T) {
 	})
 
 	// Create host with sandbox enabled.
-	host, err = NewSandboxedHost(
-		"test_worker",
-		envWorkerHostWorkerBinary,
-		envWorkerHostRuntimeBinary,
-		make(map[string]ProxySpecification),
-		tee,
-		ias,
-		&mockHostHandler{},
-		nil,
-		false,
-	)
+	cfg.NoSandbox = false
+	host, err = NewHost(cfg)
 	require.NoError(t, err, "NewSandboxedHost")
 
 	t.Run("WithSandbox", func(t *testing.T) {
@@ -143,7 +139,7 @@ func testWaitForCapabilityTEE(t *testing.T, host Host) {
 
 	cap, err := host.WaitForCapabilityTEE(ctx)
 	require.NoError(t, err, "WaitForCapabilityTEE")
-	switch host.(*sandboxedHost).teeHardware {
+	switch host.(*sandboxedHost).cfg.TEEHardware {
 	case node.TEEHardwareIntelSGX:
 		require.NotNil(t, cap, "capabilities should not be nil")
 		require.Equal(t, node.TEEHardwareIntelSGX, cap.Hardware, "TEE hardware should be Intel SGX")

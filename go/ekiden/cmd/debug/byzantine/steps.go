@@ -67,7 +67,7 @@ func (ht *honestTendermint) start(dataDir string) error {
 	if err != nil {
 		return errors.Wrap(err, "identity LoadOrGenerate")
 	}
-	genesis, err := genesis.New(identity)
+	genesis, err := genesis.New()
 	if err != nil {
 		return errors.Wrap(err, "genesis New")
 	}

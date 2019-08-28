@@ -3,20 +3,12 @@ package identity
 
 import (
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
-	"errors"
-	"io/ioutil"
-	"math/big"
-	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	tlsCert "github.com/oasislabs/ekiden/go/common/crypto/tls"
 )
 
 const (
@@ -26,23 +18,12 @@ const (
 	// P2PKeyPubFilename is the filename of the PEM encoded p2p public key.
 	P2PKeyPubFilename = "p2p_pub.pem"
 
+	// CommonName is the CommonName to use when generating TLS certificates.
+	CommonName = "ekiden-node"
+
 	tlsKeyFilename  = "tls_identity.pem"
 	tlsCertFilename = "tls_identity_cert.pem"
-	tlsKeyPEMType   = "EC PRIVATE KEY"
-	tlsCertPEMType  = "CERTIFICATE"
 )
-
-var tlsTemplate = x509.Certificate{
-	SerialNumber: big.NewInt(1),
-	Subject: pkix.Name{
-		CommonName: "ekiden-node",
-	},
-	KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageCertSign,
-	ExtKeyUsage: []x509.ExtKeyUsage{
-		x509.ExtKeyUsageServerAuth,
-		x509.ExtKeyUsageClientAuth,
-	},
-}
 
 // Identity is a node identity.
 type Identity struct {
@@ -101,27 +82,25 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 	//
 	// TODO: The key and cert could probably be made totally ephemeral, as long
 	// as the registry update takes effect immediately.
-	tlsCert, err := loadTLSCert(dataDir)
+	var (
+		cert *tls.Certificate
+		err  error
+	)
+	tlsCertPath, tlsKeyPath := tlsCertPaths(dataDir)
+	if shouldGenerate {
+		cert, err = tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, CommonName)
+	} else {
+		cert, err = tlsCert.Load(tlsCertPath, tlsKeyPath)
+	}
 	if err != nil {
-		if !os.IsNotExist(err) || !shouldGenerate {
-			return nil, err
-		}
-
-		tlsCert, err = GenerateTLSCert()
-		if err != nil {
-			return nil, err
-		}
-
-		if err = saveTLSCert(dataDir, tlsCert); err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	return &Identity{
 		NodeSigner:     signers[0],
 		P2PSigner:      signers[1],
-		TLSKey:         tlsCert.PrivateKey.(*ecdsa.PrivateKey),
-		TLSCertificate: tlsCert,
+		TLSKey:         cert.PrivateKey.(*ecdsa.PrivateKey),
+		TLSCertificate: cert,
 	}, nil
 }
 
@@ -131,95 +110,5 @@ func tlsCertPaths(dataDir string) (string, string) {
 		tlsCertPath = filepath.Join(dataDir, tlsCertFilename)
 	)
 
-	return tlsKeyPath, tlsCertPath
-}
-
-func loadTLSCert(dataDir string) (*tls.Certificate, error) {
-	tlsKeyPath, tlsCertPath := tlsCertPaths(dataDir)
-
-	// Decode key.
-	tlsKeyPEM, err := ioutil.ReadFile(tlsKeyPath)
-	if err != nil {
-		return nil, err
-	}
-	blk, _ := pem.Decode(tlsKeyPEM)
-	if blk == nil || blk.Type != tlsKeyPEMType {
-		return nil, errors.New("failed to parse TLS private key")
-	}
-	tlsKey, err := x509.ParseECPrivateKey(blk.Bytes)
-	if err != nil {
-		return nil, err
-	}
-
-	// Decode certificate.
-	tlsCertPEM, err := ioutil.ReadFile(tlsCertPath)
-	if err != nil {
-		return nil, err
-	}
-	blk, _ = pem.Decode(tlsCertPEM)
-	if blk == nil || blk.Type != tlsCertPEMType {
-		return nil, errors.New("failed to parse TLS certificate")
-	}
-
-	return &tls.Certificate{
-		Certificate: [][]byte{blk.Bytes},
-		PrivateKey:  tlsKey,
-	}, nil
-}
-
-// GenerateTLSCert generates a node TLS certificate.
-func GenerateTLSCert() (*tls.Certificate, error) {
-	// Generate a new X509 key pair.
-	tlsKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-
-	// Generate X509 certificate based on the key pair.
-	certTemplate := tlsTemplate
-	// Valid since one hour before issue.
-	certTemplate.NotBefore = time.Now().Add(-1 * time.Hour)
-	// Valid for one year.
-	// TODO: Use shorter validity and support proper rotation while the node is running.
-	certTemplate.NotAfter = time.Now().AddDate(1, 0, 0)
-	tlsCertDer, err := x509.CreateCertificate(rand.Reader, &certTemplate, &certTemplate, tlsKey.Public(), tlsKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tls.Certificate{
-		Certificate: [][]byte{tlsCertDer},
-		PrivateKey:  tlsKey,
-	}, nil
-}
-
-func saveTLSCert(dataDir string, cert *tls.Certificate) error {
-	tlsKeyPath, tlsCertPath := tlsCertPaths(dataDir)
-
-	// Persist key pair.
-	der, err := x509.MarshalECPrivateKey(cert.PrivateKey.(*ecdsa.PrivateKey))
-	if err != nil {
-		return err
-	}
-
-	tlsKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  tlsKeyPEMType,
-		Bytes: der,
-	})
-
-	if err = ioutil.WriteFile(tlsKeyPath, tlsKeyPEM, 0600); err != nil {
-		return err
-	}
-
-	// Persist TLS certificate.
-	tlsCertPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  tlsCertPEMType,
-		Bytes: cert.Certificate[0],
-	})
-
-	if err = ioutil.WriteFile(tlsCertPath, tlsCertPEM, 0644); err != nil {
-		return err
-	}
-
-	return nil
+	return tlsCertPath, tlsKeyPath
 }
