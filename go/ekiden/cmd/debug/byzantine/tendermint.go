@@ -34,6 +34,8 @@ func (*fakeTimeBackend) GetEpoch(ctx context.Context, height int64) (epochtime.E
 	if height == 0 {
 		panic("0 height not supported")
 	}
+	// Use the the epoch interval that we have in E2E tests.
+	// We could make this more flexible with command line flags in future work.
 	return epochtime.EpochTime(height / 30), nil
 }
 
