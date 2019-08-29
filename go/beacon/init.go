@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -21,7 +20,7 @@ const (
 	cfgDebugDeterministic = "beacon.debug.deterministic"
 )
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
@@ -38,14 +37,6 @@ func New(ctx context.Context, timeSource epochtime.Backend, tmService service.Te
 func flagsToConfig() *api.Config {
 	return &api.Config{
 		DebugDeterministic: viper.GetBool(cfgDebugDeterministic),
-	}
-}
-
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -21,7 +20,7 @@ const (
 	cfgTendermintInterval = "epochtime.tendermint.interval"
 )
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
@@ -35,14 +34,6 @@ func New(ctx context.Context, tmService service.TendermintService) (api.Backend,
 		return tendermintmock.New(ctx, tmService)
 	default:
 		return nil, fmt.Errorf("epochtime: unsupported backend: '%v'", backend)
-	}
-}
-
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
 	}
 }
 

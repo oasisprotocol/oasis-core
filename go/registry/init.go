@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -22,7 +21,7 @@ const (
 	cfgDebugBypassStake              = "registry.debug.bypass_stake" // nolint: gosec
 )
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
@@ -49,14 +48,6 @@ func flagsToConfig() *api.Config {
 	return &api.Config{
 		DebugAllowRuntimeRegistration: viper.GetBool(cfgDebugAllowRuntimeRegistration),
 		DebugBypassStake:              viper.GetBool(cfgDebugBypassStake),
-	}
-}
-
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
 	}
 }
 

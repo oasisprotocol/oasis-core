@@ -302,12 +302,6 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func registerNodeFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(flags)
-	}
-}
-
 // Register registers the node sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	for _, v := range []*cobra.Command{
@@ -317,20 +311,20 @@ func Register(parentCmd *cobra.Command) {
 		nodeCmd.AddCommand(v)
 	}
 
-	cmdFlags.RegisterVerbose(listCmd)
+	listCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
 
 	for _, v := range []*cobra.Command{
 		initCmd,
 	} {
-		cmdFlags.RegisterDebugTestEntity(v)
-		cmdFlags.RegisterEntity(v)
-		registerNodeFlags(v)
+		v.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
+		v.Flags().AddFlagSet(cmdFlags.EntityFlags)
+		v.Flags().AddFlagSet(flags)
 	}
 
 	for _, v := range []*cobra.Command{
 		listCmd,
 	} {
-		cmdGrpc.RegisterClientFlags(v, false)
+		v.Flags().AddFlagSet(cmdGrpc.ClientFlags)
 	}
 
 	parentCmd.AddCommand(nodeCmd)

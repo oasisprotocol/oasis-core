@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/pprof"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -16,7 +15,7 @@ import (
 
 const cfgPprofBind = "pprof.bind"
 
-// Flags has our flags.
+// Flags has the flags used by the pprof service.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 type pprofService struct {
@@ -100,13 +99,6 @@ func New(ctx context.Context) (service.BackgroundService, error) {
 		ctx:                   ctx,
 		errCh:                 make(chan error),
 	}, nil
-}
-
-// RegisterFlags registers the flags used by the pprof service.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
 }
 
 func init() {

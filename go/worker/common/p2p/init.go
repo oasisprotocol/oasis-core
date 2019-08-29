@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -11,16 +10,8 @@ const (
 	cfgP2pAddresses = "worker.p2p.addresses"
 )
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
-
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
-}
 
 func init() {
 	Flags.Uint16(cfgP2pPort, 9200, "Port to use for incoming P2P connections")

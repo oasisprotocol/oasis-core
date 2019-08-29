@@ -104,8 +104,8 @@ func checkDiff(ctx context.Context, storageClient storageApi.Backend, root strin
 func doCheckRoots(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 
-	storageClient.RegisterFlags(cmd)
-	cmdGrpc.RegisterClientFlags(cmd, true)
+	cmd.Flags().AddFlagSet(storageClient.Flags)
+	cmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 
 	conn, client := cmdDebugClient.DoConnect(cmd)
 	storageWorkerClient := storageGrpc.NewStorageWorkerClient(conn)
@@ -226,8 +226,8 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 
 // Register registers the storage sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
-	storageClient.RegisterFlags(storageCheckRootsCmd)
-	cmdGrpc.RegisterClientFlags(storageCheckRootsCmd, true)
+	storageCheckRootsCmd.Flags().AddFlagSet(storageClient.Flags)
+	storageCheckRootsCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 
 	storageCmd.AddCommand(storageCheckRootsCmd)
 	parentCmd.AddCommand(storageCmd)

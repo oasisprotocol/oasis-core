@@ -31,10 +31,11 @@ const (
 )
 
 var (
-	AccountInfoFlags     = flag.NewFlagSet("", flag.ContinueOnError)
-	TxFlags              = flag.NewFlagSet("", flag.ContinueOnError)
-	TxFileFlags          = flag.NewFlagSet("", flag.ContinueOnError)
-	AccountTransferFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	accountInfoFlags     = flag.NewFlagSet("", flag.ContinueOnError)
+	accountSubmitFlags   = flag.NewFlagSet("", flag.ContinueOnError)
+	txFlags              = flag.NewFlagSet("", flag.ContinueOnError)
+	txFileFlags          = flag.NewFlagSet("", flag.ContinueOnError)
+	accountTransferFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	accountCmd = &cobra.Command{
 		Use:   "account",
@@ -338,46 +339,6 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 	tx.MustSave()
 }
 
-func registerAccountInfoFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(AccountInfoFlags)
-	}
-
-	cmdFlags.RegisterRetries(cmd)
-	cmdGrpc.RegisterClientFlags(cmd, false)
-}
-
-func registerAccountSubmitFlags(cmd *cobra.Command) {
-	registerTxFileFlag(cmd)
-
-	cmdFlags.RegisterRetries(cmd)
-	cmdGrpc.RegisterClientFlags(cmd, false)
-}
-
-func registerTxFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(TxFlags)
-	}
-
-	registerTxFileFlag(cmd)
-	cmdFlags.RegisterDebugTestEntity(cmd)
-	cmdFlags.RegisterEntity(cmd)
-}
-
-func registerTxFileFlag(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(TxFileFlags)
-	}
-}
-
-func registerAccountTransferFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(AccountTransferFlags)
-	}
-
-	registerTxFlags(cmd)
-}
-
 func registerAccountCmd() {
 	for _, v := range []*cobra.Command{
 		accountInfoCmd,
@@ -389,30 +350,35 @@ func registerAccountCmd() {
 		accountCmd.AddCommand(v)
 	}
 
-	registerAccountInfoFlags(accountInfoCmd)
-	registerAccountSubmitFlags(accountSubmitCmd)
-	registerAccountTransferFlags(accountTransferCmd)
-	registerTxFlags(accountBurnCmd)
-	registerTxFlags(accountEscrowCmd)
-	registerTxFlags(accountReclaimEscrowCmd)
+	accountInfoCmd.Flags().AddFlagSet(accountInfoFlags)
+	accountSubmitCmd.Flags().AddFlagSet(accountSubmitFlags)
+	accountTransferCmd.Flags().AddFlagSet(accountTransferFlags)
+	accountBurnCmd.Flags().AddFlagSet(txFlags)
+	accountEscrowCmd.Flags().AddFlagSet(txFlags)
+	accountReclaimEscrowCmd.Flags().AddFlagSet(txFlags)
 }
 
 func init() {
-	AccountInfoFlags.String(cfgAccountID, "", "ID of the account")
+	accountInfoFlags.String(cfgAccountID, "", "ID of the account")
+	_ = viper.BindPFlags(accountInfoFlags)
+	accountInfoFlags.AddFlagSet(cmdFlags.RetriesFlags)
+	accountInfoFlags.AddFlagSet(cmdGrpc.ClientFlags)
 
-	TxFlags.Uint64(cfgTxNonce, 0, "nonce of the source account")
-	TxFlags.String(cfgTxAmount, "0", "amount of tokens for the transaction")
+	accountSubmitFlags.AddFlagSet(accountInfoFlags)
+	accountSubmitFlags.AddFlagSet(cmdFlags.RetriesFlags)
+	accountSubmitFlags.AddFlagSet(cmdGrpc.ClientFlags)
 
-	TxFileFlags.String(cfgTxFile, "", "path to the transaction")
+	txFileFlags.String(cfgTxFile, "", "path to the transaction")
+	_ = viper.BindPFlags(txFileFlags)
 
-	AccountTransferFlags.String(cfgTransferDestination, "", "transfer destination account ID")
+	txFlags.Uint64(cfgTxNonce, 0, "nonce of the source account")
+	txFlags.String(cfgTxAmount, "0", "amount of tokens for the transaction")
+	_ = viper.BindPFlags(txFlags)
+	txFlags.AddFlagSet(txFileFlags)
+	txFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
+	txFlags.AddFlagSet(cmdFlags.EntityFlags)
 
-	for _, v := range []*flag.FlagSet{
-		AccountInfoFlags,
-		TxFlags,
-		TxFileFlags,
-		AccountTransferFlags,
-	} {
-		_ = viper.BindPFlags(v)
-	}
+	accountTransferFlags.String(cfgTransferDestination, "", "transfer destination account ID")
+	_ = viper.BindPFlags(accountTransferFlags)
+	accountTransferFlags.AddFlagSet(txFlags)
 }

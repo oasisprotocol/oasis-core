@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	tmabci "github.com/tendermint/tendermint/abci/types"
@@ -67,7 +66,7 @@ const (
 var (
 	_ service.TendermintService = (*tendermintService)(nil)
 
-	// Flags has our flags.
+	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
@@ -697,16 +696,6 @@ func newLogAdapter(suppressDebug bool) tmlog.Logger {
 	}
 }
 
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
-
-	db.RegisterFlags(cmd)
-}
-
 func init() {
 	Flags.String(cfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
 	Flags.String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
@@ -719,6 +708,6 @@ func init() {
 	Flags.String(cfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
 	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 	Flags.Bool(cfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
-
 	_ = viper.BindPFlags(Flags)
+	Flags.AddFlagSet(db.Flags)
 }

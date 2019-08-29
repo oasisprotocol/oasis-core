@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -18,7 +17,7 @@ import (
 
 const cfgBackend = "tendermint.db.backend"
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // GetProvider returns the currently configured Tendermint DBProvider.
@@ -46,13 +45,6 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 		return bolt.New(fn, noSuffix)
 	default:
 		return nil, fmt.Errorf("tendermint/db: unsupported backend: '%v'", backend)
-	}
-}
-
-// RegisterFlags registers the configuration flags with the provided command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
 	}
 }
 

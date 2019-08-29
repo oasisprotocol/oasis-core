@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -35,7 +34,7 @@ const (
 // In debug mode, we connect to the provided node and save it to the fake runtime.
 const debugModeFakeRuntimeSeed = "ekiden storage client debug runtime"
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New creates a new storage client.
@@ -111,14 +110,6 @@ func New(
 	b.haltCtx, b.cancelFn = context.WithCancel(ctx)
 
 	return b, nil
-}
-
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
 }
 
 func init() {

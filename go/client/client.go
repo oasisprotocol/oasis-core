@@ -18,7 +18,6 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -50,7 +49,7 @@ var (
 	// ErrIndexerDisabled is an error when the indexer is disabled.
 	ErrIndexerDisabled = errors.New("client: indexer not enabled")
 
-	// Flags has our flags.
+	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
@@ -616,14 +615,6 @@ func New(
 	}
 
 	return c, nil
-}
-
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
 }
 
 func init() {

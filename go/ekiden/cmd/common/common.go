@@ -31,7 +31,7 @@ var (
 
 	rootLog = logging.GetLogger("ekiden")
 
-	// RootFlags has the persistent flags.
+	// RootFlags has the flags that are common across all commands.
 	RootFlags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
@@ -85,20 +85,13 @@ func Logger() *logging.Logger {
 	return rootLog
 }
 
-// RegisterRootFlags registers the persistent flags that are common
-// across all commands.
-func RegisterRootFlags(rootCmd *cobra.Command) {
-	rootCmd.PersistentFlags().AddFlagSet(RootFlags)
-
-	registerLoggingFlags(rootCmd)
-}
-
 func init() {
+	initLoggingFlags()
 	RootFlags.StringVar(&cfgFile, cfgConfigFile, "", "config file")
 	RootFlags.String(cfgDataDir, "", "data directory")
 	RootFlags.Bool(cfgAllowTestKeys, false, "Allow test keys (UNSAFE)")
-
 	_ = viper.BindPFlags(RootFlags)
+	RootFlags.AddFlagSet(loggingFlags)
 }
 
 // InitConfig initializes the command configuration.

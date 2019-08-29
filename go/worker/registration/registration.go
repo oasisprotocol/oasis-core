@@ -7,7 +7,6 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -30,7 +29,7 @@ const (
 	cfgRegistrationPrivateKey = "worker.registration.private_key"
 )
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Registration is a service handling worker node registration.
@@ -369,14 +368,6 @@ func (r *Registration) Quit() <-chan struct{} {
 
 // Cleanup performs the service specific post-termination cleanup.
 func (r *Registration) Cleanup() {
-}
-
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
 }
 
 func init() {

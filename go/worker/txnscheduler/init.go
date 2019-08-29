@@ -3,7 +3,6 @@ package txnscheduler
 import (
 	"time"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -21,7 +20,7 @@ const (
 	cfgAlgorithm = "worker.txnscheduler.algorithm"
 )
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Enabled reads our enabled flag from viper.
@@ -59,16 +58,6 @@ func New(
 	return newWorker(Enabled(), commonWorker, compute, registration, cfg)
 }
 
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
-
-	txnSchedulerAlgorithm.RegisterFlags(cmd)
-}
-
 func init() {
 	Flags.Bool(cfgWorkerEnabled, false, "Enable transaction scheduler process")
 
@@ -76,4 +65,6 @@ func init() {
 	Flags.Duration(cfgFlushTimeout, 1*time.Second, "Maximum amount of time to wait for a scheduled batch")
 
 	_ = viper.BindPFlags(Flags)
+
+	Flags.AddFlagSet(txnSchedulerAlgorithm.Flags)
 }

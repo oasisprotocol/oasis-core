@@ -4,7 +4,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -21,10 +20,6 @@ const (
 
 // LoggingFlags has the logging flags.
 var loggingFlags = flag.NewFlagSet("", flag.ContinueOnError)
-
-func registerLoggingFlags(rootCmd *cobra.Command) {
-	rootCmd.PersistentFlags().AddFlagSet(loggingFlags)
-}
 
 func initLogging() error {
 	logFile := viper.GetString(cfgLogFile)
@@ -67,7 +62,7 @@ func initLogging() error {
 	return logging.Initialize(w, logFmt, logLevel, moduleLevels)
 }
 
-func init() {
+func initLoggingFlags() {
 	logFmt := logging.FmtLogfmt
 	logLevel := logging.LevelWarn
 

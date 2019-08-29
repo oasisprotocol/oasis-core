@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -49,7 +48,7 @@ var (
 
 	emptyRoot hash.Hash
 
-	// Flags has our flags.
+	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
@@ -456,19 +455,9 @@ func New(dataDir string, ias *ias.IAS, grpc *grpc.Server, r *registration.Regist
 	return w, w.enabled, nil
 }
 
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
-}
-
 func init() {
 	emptyRoot.Empty()
-}
 
-func init() {
 	Flags.Bool(cfgEnabled, false, "Enable key manager worker")
 
 	Flags.String(cfgTEEHardware, "", "TEE hardware to use for the key manager")

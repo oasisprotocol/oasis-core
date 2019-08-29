@@ -38,8 +38,10 @@ const (
 )
 
 var (
-	EntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
-	UpdateFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	entityFlags               = flag.NewFlagSet("", flag.ContinueOnError)
+	initFlags                 = flag.NewFlagSet("", flag.ContinueOnError)
+	updateFlags               = flag.NewFlagSet("", flag.ContinueOnError)
+	registerOrDeregisterFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	entityCmd = &cobra.Command{
 		Use:   "entity",
@@ -428,34 +430,6 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 	return entity.Load(dataDir, entitySignerFactory)
 }
 
-func registerEntityFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(EntityFlags)
-	}
-}
-
-func registerInitFlags(cmd *cobra.Command) {
-	cmdFlags.RegisterForce(cmd)
-	cmdFlags.RegisterDebugTestEntity(cmd)
-
-	registerEntityFlags(cmd)
-}
-
-func registerUpdateFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(UpdateFlags)
-	}
-
-	cmdFlags.RegisterDebugTestEntity(cmd)
-	registerEntityFlags(cmd)
-}
-
-func registerRegisterOrDeregisterFlags(cmd *cobra.Command) {
-	cmdFlags.RegisterRetries(cmd)
-	cmdFlags.RegisterDebugTestEntity(cmd)
-	cmdGrpc.RegisterClientFlags(cmd, false)
-}
-
 // Register registers the entity sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	for _, v := range []*cobra.Command{
@@ -468,27 +442,32 @@ func Register(parentCmd *cobra.Command) {
 		entityCmd.AddCommand(v)
 	}
 
-	registerInitFlags(initCmd)
-	registerUpdateFlags(updateCmd)
-	registerRegisterOrDeregisterFlags(registerCmd)
-	registerRegisterOrDeregisterFlags(deregisterCmd)
+	initCmd.Flags().AddFlagSet(initFlags)
+	updateCmd.Flags().AddFlagSet(updateFlags)
+	registerCmd.Flags().AddFlagSet(registerOrDeregisterFlags)
+	deregisterCmd.Flags().AddFlagSet(registerOrDeregisterFlags)
 
-	cmdFlags.RegisterVerbose(listCmd)
-	cmdGrpc.RegisterClientFlags(listCmd, false)
+	listCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
+	listCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
 
 	parentCmd.AddCommand(entityCmd)
 }
 
 func init() {
-	EntityFlags.Bool(cfgAllowEntitySignedNodes, false, "Entity signing key may be used for node registration (UNSAFE)")
+	entityFlags.Bool(cfgAllowEntitySignedNodes, false, "Entity signing key may be used for node registration (UNSAFE)")
+	_ = viper.BindPFlags(entityFlags)
 
-	UpdateFlags.StringSlice(cfgNodeID, nil, "ID(s) of nodes associated with this entity")
-	UpdateFlags.StringSlice(cfgNodeDescriptor, nil, "Node genesis descriptor(s) of nodes associated with this entity")
+	initFlags.AddFlagSet(cmdFlags.ForceFlags)
+	initFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
+	initFlags.AddFlagSet(entityFlags)
 
-	for _, v := range []*flag.FlagSet{
-		EntityFlags,
-		UpdateFlags,
-	} {
-		_ = viper.BindPFlags(v)
-	}
+	updateFlags.StringSlice(cfgNodeID, nil, "ID(s) of nodes associated with this entity")
+	updateFlags.StringSlice(cfgNodeDescriptor, nil, "Node genesis descriptor(s) of nodes associated with this entity")
+	_ = viper.BindPFlags(updateFlags)
+	updateFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
+	updateFlags.AddFlagSet(entityFlags)
+
+	registerOrDeregisterFlags.AddFlagSet(cmdFlags.RetriesFlags)
+	registerOrDeregisterFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
+	registerOrDeregisterFlags.AddFlagSet(cmdGrpc.ClientFlags)
 }

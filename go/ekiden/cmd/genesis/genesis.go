@@ -45,8 +45,8 @@ const (
 )
 
 var (
-	DumpGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
-	InitGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	dumpGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	initGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	genesisCmd = &cobra.Command{
 		Use:   "genesis",
@@ -431,29 +431,11 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 	}
 }
 
-func registerDumpGenesisFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(DumpGenesisFlags)
-	}
-
-	flags.RegisterGenesisFile(cmd)
-}
-
-func registerInitGenesisFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(InitGenesisFlags)
-	}
-
-	flags.RegisterDebugTestEntity(cmd)
-	flags.RegisterConsensusBackend(cmd)
-	flags.RegisterGenesisFile(cmd)
-}
-
 // Register registers the genesis sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	registerInitGenesisFlags(initGenesisCmd)
-	registerDumpGenesisFlags(dumpGenesisCmd)
-	cmdGrpc.RegisterClientFlags(dumpGenesisCmd, true)
+	initGenesisCmd.Flags().AddFlagSet(initGenesisFlags)
+	dumpGenesisCmd.Flags().AddFlagSet(dumpGenesisFlags)
+	dumpGenesisCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 
 	for _, v := range []*cobra.Command{
 		initGenesisCmd,
@@ -466,16 +448,19 @@ func Register(parentCmd *cobra.Command) {
 }
 
 func init() {
-	DumpGenesisFlags.Int64(cfgBlockHeight, 0, "block height at which to dump state")
+	dumpGenesisFlags.Int64(cfgBlockHeight, 0, "block height at which to dump state")
+	_ = viper.BindPFlags(dumpGenesisFlags)
+	dumpGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
 
-	InitGenesisFlags.StringSlice(cfgRuntime, nil, "path to runtime registration file")
-	InitGenesisFlags.StringSlice(cfgNode, nil, "path to node registration file")
-	InitGenesisFlags.StringSlice(cfgRootHash, nil, "path to roothash genesis blocks file")
-	InitGenesisFlags.String(cfgStaking, "", "path to staking genesis file")
-	InitGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
-	_ = viper.BindPFlags(InitGenesisFlags)
-	InitGenesisFlags.StringSlice(cfgEntity, nil, "path to entity registration file")
-	_ = viper.BindPFlag(viperEntity, InitGenesisFlags.Lookup(cfgEntity))
-
-	_ = viper.BindPFlags(DumpGenesisFlags)
+	initGenesisFlags.StringSlice(cfgRuntime, nil, "path to runtime registration file")
+	initGenesisFlags.StringSlice(cfgNode, nil, "path to node registration file")
+	initGenesisFlags.StringSlice(cfgRootHash, nil, "path to roothash genesis blocks file")
+	initGenesisFlags.String(cfgStaking, "", "path to staking genesis file")
+	initGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
+	_ = viper.BindPFlags(initGenesisFlags)
+	initGenesisFlags.StringSlice(cfgEntity, nil, "path to entity registration file")
+	_ = viper.BindPFlag(viperEntity, initGenesisFlags.Lookup(cfgEntity))
+	initGenesisFlags.AddFlagSet(flags.DebugTestEntityFlags)
+	initGenesisFlags.AddFlagSet(flags.ConsensusBackendFlags)
+	initGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
 }

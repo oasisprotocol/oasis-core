@@ -6,7 +6,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	jaegercfg "github.com/uber/jaeger-client-go/config"
@@ -22,10 +21,8 @@ const (
 	cfgTracingSamplerParam               = "tracing.sampler.param"
 )
 
-var (
-	// Flags has our flags.
-	Flags = flag.NewFlagSet("", flag.ContinueOnError)
-)
+// Flags has the flags used by the tracing service.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // ServiceConfig contains the configuration parameters for tracing.
 type ServiceConfig struct {
@@ -97,13 +94,6 @@ func New(serviceName string) (service.CleanupAble, error) {
 	}
 
 	return &tracingService{closer: closer}, nil
-}
-
-// RegisterFlags registers the flags used by the tracing service.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
 }
 
 func init() {

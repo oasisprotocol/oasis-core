@@ -56,8 +56,8 @@ const (
 )
 
 var (
-	OutputFlags  = flag.NewFlagSet("", flag.ContinueOnError)
-	RuntimeFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	outputFlags  = flag.NewFlagSet("", flag.ContinueOnError)
+	runtimeFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	runtimeCmd = &cobra.Command{
 		Use:   "runtime",
@@ -399,20 +399,6 @@ func loadEntity(dataDir string) (*entity.Entity, signature.Signer, error) {
 	return entity.Load(dataDir, entitySignerFactory)
 }
 
-func registerOutputFlag(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(OutputFlags)
-	}
-}
-
-func registerRuntimeFlags(cmd *cobra.Command) {
-	cmdFlags.RegisterEntity(cmd)
-
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(RuntimeFlags)
-	}
-}
-
 // Register registers the runtime sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	for _, v := range []*cobra.Command{
@@ -427,43 +413,40 @@ func Register(parentCmd *cobra.Command) {
 		initGenesisCmd,
 		registerCmd,
 	} {
-		cmdFlags.RegisterDebugTestEntity(v)
-		cmdFlags.RegisterConsensusBackend(v)
+		v.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
+		v.Flags().AddFlagSet(cmdFlags.ConsensusBackendFlags)
 	}
 
-	registerRuntimeFlags(initGenesisCmd)
-	registerOutputFlag(initGenesisCmd)
+	initGenesisCmd.Flags().AddFlagSet(runtimeFlags)
+	initGenesisCmd.Flags().AddFlagSet(outputFlags)
 
-	cmdGrpc.RegisterClientFlags(listCmd, false)
-	cmdFlags.RegisterVerbose(listCmd)
+	listCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
+	listCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
 
-	cmdGrpc.RegisterClientFlags(registerCmd, false)
-	cmdFlags.RegisterRetries(registerCmd)
-	registerRuntimeFlags(registerCmd)
+	registerCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
+	registerCmd.Flags().AddFlagSet(cmdFlags.RetriesFlags)
+
+	registerCmd.Flags().AddFlagSet(runtimeFlags)
 
 	parentCmd.AddCommand(runtimeCmd)
 }
 
 func init() {
-	OutputFlags.String(cfgOutput, runtimeGenesisFilename, "File name of the document to be written under datadir")
+	outputFlags.String(cfgOutput, runtimeGenesisFilename, "File name of the document to be written under datadir")
+	_ = viper.BindPFlags(outputFlags)
 
-	RuntimeFlags.String(cfgID, "", "Runtime ID")
-	RuntimeFlags.String(cfgTEEHardware, "invalid", "Type of TEE hardware.  Supported values are \"invalid\" and \"intel-sgx\"")
-	RuntimeFlags.Uint64(cfgReplicaGroupSize, 1, "Number of workers in the runtime replica group")
-	RuntimeFlags.Uint64(cfgReplicaGroupBackupSize, 0, "Number of backup workers in the runtime replica group")
-	RuntimeFlags.Uint64(cfgReplicaAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime replica group")
-	RuntimeFlags.Uint64(cfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
-	RuntimeFlags.Uint64(cfgTransactionSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
-	RuntimeFlags.String(cfgGenesisState, "", "Runtime state at genesis")
-	RuntimeFlags.String(cfgKeyManager, "", "Key Manager Runtime ID")
-	RuntimeFlags.String(cfgKind, optKindCompute, "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
-	RuntimeFlags.String(cfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")
-	RuntimeFlags.StringSlice(cfgVersionEnclave, nil, "Runtime TEE enclave version(s)")
-
-	for _, v := range []*flag.FlagSet{
-		OutputFlags,
-		RuntimeFlags,
-	} {
-		_ = viper.BindPFlags(v)
-	}
+	runtimeFlags.String(cfgID, "", "Runtime ID")
+	runtimeFlags.String(cfgTEEHardware, "invalid", "Type of TEE hardware.  Supported values are \"invalid\" and \"intel-sgx\"")
+	runtimeFlags.Uint64(cfgReplicaGroupSize, 1, "Number of workers in the runtime replica group")
+	runtimeFlags.Uint64(cfgReplicaGroupBackupSize, 0, "Number of backup workers in the runtime replica group")
+	runtimeFlags.Uint64(cfgReplicaAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime replica group")
+	runtimeFlags.Uint64(cfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
+	runtimeFlags.Uint64(cfgTransactionSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
+	runtimeFlags.String(cfgGenesisState, "", "Runtime state at genesis")
+	runtimeFlags.String(cfgKeyManager, "", "Key Manager Runtime ID")
+	runtimeFlags.String(cfgKind, optKindCompute, "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
+	runtimeFlags.String(cfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")
+	runtimeFlags.StringSlice(cfgVersionEnclave, nil, "Runtime TEE enclave version(s)")
+	_ = viper.BindPFlags(runtimeFlags)
+	runtimeFlags.AddFlagSet(cmdFlags.EntityFlags)
 }

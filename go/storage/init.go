@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -30,7 +29,7 @@ const (
 	cfgInsecureSkipChecks  = "storage.debug.insecure_skip_checks"
 )
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
@@ -87,17 +86,6 @@ func New(
 	return newMetricsWrapper(impl), nil
 }
 
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
-
-	client.RegisterFlags(cmd)
-	cachingclient.RegisterFlags(cmd)
-}
-
 func init() {
 	Flags.String(cfgBackend, database.BackendNameLevelDB, "Storage backend")
 	Flags.Bool(cfgDebugMockSigningKey, false, "Generate volatile mock signing key")
@@ -108,4 +96,7 @@ func init() {
 	_ = Flags.MarkHidden(cfgInsecureSkipChecks)
 
 	_ = viper.BindPFlags(Flags)
+
+	Flags.AddFlagSet(client.Flags)
+	Flags.AddFlagSet(cachingclient.Flags)
 }

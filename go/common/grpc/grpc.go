@@ -15,7 +15,6 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -35,7 +34,7 @@ const (
 )
 
 var (
-	// Flags has the server flags.
+	// Flags has the flags used by the gRPC server.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	grpcMetricsOnce sync.Once
@@ -436,13 +435,6 @@ func newServer(
 		errCh:                 make(chan error, len(listenerParams)),
 		unsafeDebug:           unsafeDebug,
 	}, nil
-}
-
-// RegisterServerFlags registers the flags used by the gRPC server.
-func RegisterServerFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
 }
 
 func init() {

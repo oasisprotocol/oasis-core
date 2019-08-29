@@ -4,7 +4,6 @@ package batching
 import (
 	"sync"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -23,7 +22,7 @@ const (
 	cfgMaxBatchSizeBytes = "worker.txnscheduler.batching.max_batch_size_bytes"
 )
 
-// Flags has our flags.
+// Flags has the configuration flag for the batching algorithm.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 type batchingState struct {
@@ -169,13 +168,6 @@ func New() (api.Algorithm, error) {
 	}
 
 	return &batching, nil
-}
-
-// RegisterFlags registers the configuration flag for the batching algorithm.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
 }
 
 func init() {

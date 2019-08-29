@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -25,7 +24,7 @@ const (
 	cfgRoundTimeout = "roothash.round_timeout"
 )
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
@@ -57,18 +56,8 @@ func New(
 	return newMetricsWrapper(impl), nil
 }
 
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
-
-	tendermint.RegisterFlags(cmd)
-}
-
 func init() {
 	Flags.Duration(cfgRoundTimeout, 10*time.Second, "Root hash round timeout")
-
 	_ = viper.BindPFlags(Flags)
+	Flags.AddFlagSet(tendermint.Flags)
 }

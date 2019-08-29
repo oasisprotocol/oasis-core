@@ -12,7 +12,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/client_golang/prometheus/push"
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -31,7 +30,7 @@ const (
 	metricsModePush = "push"
 )
 
-// Flags has our flags.
+// Flags has the flags used by the metrics service.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // ServiceConfig contains the configuration parameters for metrics.
@@ -221,13 +220,6 @@ func New(ctx context.Context) (service.BackgroundService, error) {
 		return newPushService()
 	default:
 		return nil, fmt.Errorf("metrics: unsupported mode: '%v'", mode)
-	}
-}
-
-// RegisterFlags registers the flags used by the metrics service.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
 	}
 }
 

@@ -3,7 +3,6 @@ package merge
 import (
 	"time"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -18,7 +17,7 @@ const (
 	cfgByzantineInjectDiscrepancies = "worker.merge.byzantine.inject_discrepancies"
 )
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Enabled reads our enabled flag from viper.
@@ -39,14 +38,6 @@ func New(
 	}
 
 	return newWorker(Enabled(), commonWorker, registration, cfg)
-}
-
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
 }
 
 func init() {

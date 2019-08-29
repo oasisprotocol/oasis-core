@@ -44,7 +44,7 @@ const (
 )
 
 var (
-	// Flags has our flags.
+	// Flags has the flags used by the proxy command.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	iasCmd = &cobra.Command{
@@ -249,27 +249,9 @@ func grpcAuthenticatorFromFlags(ctx context.Context, cmd *cobra.Command) (ias.GR
 	return newRegistryAuthenticator(ctx, cmd)
 }
 
-// RegisterFlags registers the flags used by the proxy command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
-
-	for _, v := range []func(*cobra.Command){
-		metrics.RegisterFlags,
-		cmdGrpc.RegisterServerTCPFlags,
-		flags.RegisterGenesisFile,
-		pprof.RegisterFlags,
-	} {
-		v(cmd)
-	}
-
-	cmdGrpc.RegisterClientFlags(cmd, false)
-}
-
 // Register registers the ias sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	RegisterFlags(iasProxyCmd)
+	iasProxyCmd.Flags().AddFlagSet(Flags)
 
 	iasCmd.AddCommand(iasProxyCmd)
 	parentCmd.AddCommand(iasCmd)
@@ -286,6 +268,10 @@ func init() {
 	Flags.Bool(cfgDebugSkipAuth, false, "disable proxy authentication (UNSAFE)")
 	Flags.Bool(cfgUseGenesis, false, "use a genesis document instead of the registry")
 	Flags.Int(cfgWaitRuntimes, 0, "wait for N runtimes to be registered before servicing requests")
-
 	_ = viper.BindPFlags(Flags)
+	Flags.AddFlagSet(metrics.Flags)
+	Flags.AddFlagSet(cmdGrpc.ServerTCPFlags)
+	Flags.AddFlagSet(cmdGrpc.ClientFlags)
+	Flags.AddFlagSet(flags.GenesisFileFlags)
+	Flags.AddFlagSet(pprof.Flags)
 }

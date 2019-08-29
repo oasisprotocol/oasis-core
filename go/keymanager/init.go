@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/keymanager/api"
@@ -38,8 +36,4 @@ func New(
 	}
 
 	return impl, err
-}
-
-// RegisterFlags registers the configuration flags with the provided command.
-func RegisterFlags(cmd *cobra.Command) {
 }

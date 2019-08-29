@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -35,7 +34,7 @@ const (
 	cfgByzantineInjectDiscrepancies = "worker.compute.byzantine.inject_discrepancies"
 )
 
-// Flags has our flags.
+// Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
@@ -113,14 +112,6 @@ func New(
 
 	return newWorker(dataDir, Enabled(), commonWorker, mergeWorker,
 		ias, keyManager, registration, cfg)
-}
-
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
 }
 
 func init() {

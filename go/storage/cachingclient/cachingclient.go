@@ -6,7 +6,6 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -35,7 +34,7 @@ var (
 	_ api.Backend       = (*cachingClientBackend)(nil)
 	_ api.ClientBackend = (*cachingClientBackend)(nil)
 
-	// Flags has our flags.
+	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
@@ -200,14 +199,6 @@ func New(remote api.Backend, insecureSkipChecks bool) (api.Backend, error) {
 	}
 
 	return b, nil
-}
-
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().AddFlagSet(Flags)
-	}
 }
 
 func init() {
