@@ -38,28 +38,30 @@ func New(
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
 ) (api.Backend, error) {
-	var impl api.Backend
-	var err error
+	cfg := &api.Config{
+		DB:                 dataDir,
+		Signer:             identity.NodeSigner,
+		ApplyLockLRUSlots:  uint64(viper.GetInt(cfgLRUSlots)),
+		InsecureSkipChecks: viper.GetBool(cfgInsecureSkipChecks),
+	}
 
-	signer := identity.NodeSigner
+	var err error
 	if viper.GetBool(cfgDebugMockSigningKey) {
-		signer, err = memorySigner.NewSigner(rand.Reader)
+		cfg.Signer, err = memorySigner.NewSigner(rand.Reader)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	var impl api.Backend
 	backend := viper.GetString(cfgBackend)
-	applyLockLRUSlots := uint64(viper.GetInt(cfgLRUSlots))
-	insecureSkipChecks := viper.GetBool(cfgInsecureSkipChecks)
-
 	switch strings.ToLower(backend) {
 	case badger.BackendName:
-		dbDir := filepath.Join(dataDir, badger.DBFile)
-		impl, err = badger.New(dbDir, signer, applyLockLRUSlots, insecureSkipChecks)
+		cfg.DB = filepath.Join(cfg.DB, badger.DBFile)
+		impl, err = badger.New(cfg)
 	case leveldb.BackendName:
-		dbDir := filepath.Join(dataDir, leveldb.DBFile)
-		impl, err = leveldb.New(dbDir, signer, applyLockLRUSlots, insecureSkipChecks)
+		cfg.DB = filepath.Join(cfg.DB, leveldb.DBFile)
+		impl, err = leveldb.New(cfg)
 	case client.BackendName:
 		impl, err = client.New(ctx, identity, schedulerBackend, registryBackend)
 	case cachingclient.BackendName:
@@ -68,7 +70,7 @@ func New(
 		if err != nil {
 			return nil, err
 		}
-		impl, err = cachingclient.New(remote, insecureSkipChecks)
+		impl, err = cachingclient.New(remote, cfg.InsecureSkipChecks)
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", backend)
 	}

@@ -172,19 +172,14 @@ func (b *leveldbBackend) Initialized() <-chan struct{} {
 
 // New constructs a new LevelDB backed storage Backend instance, using
 // the provided path for the database.
-func New(
-	dbDir string,
-	signer signature.Signer,
-	applyLockLRUSlots uint64,
-	insecureSkipChecks bool,
-) (api.Backend, error) {
-	ndb, err := levelNodedb.New(dbDir)
+func New(cfg *api.Config) (api.Backend, error) {
+	ndb, err := levelNodedb.New(cfg.DB)
 	if err != nil {
 		ndb.Close()
 		return nil, err
 	}
 
-	rootCache, err := api.NewRootCache(ndb, nil, applyLockLRUSlots, insecureSkipChecks)
+	rootCache, err := api.NewRootCache(ndb, nil, cfg.ApplyLockLRUSlots, cfg.InsecureSkipChecks)
 	if err != nil {
 		ndb.Close()
 		return nil, err
@@ -194,7 +189,7 @@ func New(
 		logger:    logging.GetLogger("storage/leveldb"),
 		nodedb:    ndb,
 		rootCache: rootCache,
-		signer:    signer,
+		signer:    cfg.Signer,
 	}
 
 	return b, nil

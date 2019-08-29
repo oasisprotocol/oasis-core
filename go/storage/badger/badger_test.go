@@ -12,21 +12,32 @@ import (
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
 var testNs common.Namespace
 
 func TestStorageBadger(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "ekiden-storage-leveldb-test")
-	require.NoError(t, err, "TempDir()")
-	defer os.RemoveAll(tmpDir)
+	require := require.New(t)
 
-	signer, err := memorySigner.NewSigner(rand.Reader)
-	require.NoError(t, err, "NewPrivateKey()")
+	var (
+		cfg = api.Config{
+			ApplyLockLRUSlots: 100,
+		}
+		err error
+	)
 
-	backend, err := New(filepath.Join(tmpDir, DBFile), signer, 100, false)
-	require.NoError(t, err, "New()")
+	cfg.Signer, err = memorySigner.NewSigner(rand.Reader)
+	require.NoError(err, "NewSigner()")
+
+	cfg.DB, err = ioutil.TempDir("", "ekiden-storage-leveldb-test")
+	require.NoError(err, "TempDir()")
+	defer os.RemoveAll(cfg.DB)
+
+	cfg.DB = filepath.Join(cfg.DB, DBFile)
+	backend, err := New(&cfg)
+	require.NoError(err, "New()")
 	defer backend.Cleanup()
 
 	tests.StorageImplementationTests(t, backend, testNs)

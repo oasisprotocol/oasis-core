@@ -68,6 +68,21 @@ var (
 	_ cbor.Unmarshaler = (*Receipt)(nil)
 )
 
+// Config is the storage backend configuration.
+type Config struct {
+	// DB is the path to the database.
+	DB string
+
+	// Signer is the signing key to use for generating recipts.
+	Signer signature.Signer
+
+	// ApplyLockLRUSlots is the number of LRU slots to use for Apply call locks.
+	ApplyLockLRUSlots uint64
+
+	// InsecureSkipChecks bypasses the known root checks.
+	InsecureSkipChecks bool
+}
+
 // WriteLog is a write log.
 //
 // The keys in the write log must be unique.

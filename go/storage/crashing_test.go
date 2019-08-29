@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crash"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/storage/leveldb"
 	"github.com/oasislabs/ekiden/go/storage/tests"
 )
@@ -19,14 +20,22 @@ import (
 var testNs common.Namespace
 
 func TestCrashingBackendDoNotInterfere(t *testing.T) {
-	signer, err := memorySigner.NewSigner(rand.Reader)
-	require.NoError(t, err, "NewSigner()")
+	require := require.New(t)
 
-	dbDir, err := ioutil.TempDir("", "crashing.test.leveldb")
-	require.NoError(t, err, "TempDir")
-	defer os.RemoveAll(dbDir)
-	realBackend, err := leveldb.New(dbDir, signer, 0, false)
-	require.NoError(t, err, "leveldb.New")
+	var (
+		cfg api.Config
+		err error
+	)
+
+	cfg.Signer, err = memorySigner.NewSigner(rand.Reader)
+	require.NoError(err, "NewSigner()")
+
+	cfg.DB, err = ioutil.TempDir("", "crashing.test.leveldb")
+	require.NoError(err, "TempDir")
+	defer os.RemoveAll(cfg.DB)
+
+	realBackend, err := leveldb.New(&cfg)
+	require.NoError(err, "leveldb.New")
 	backend := newCrashingWrapper(realBackend)
 
 	crash.Config(map[string]float64{

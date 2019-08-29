@@ -29,12 +29,20 @@ var testNs common.Namespace
 const cacheSize = 10
 
 func TestCachingClient(t *testing.T) {
-	signer, err := memorySigner.NewSigner(rand.Reader)
+	var (
+		cfg = api.Config{
+			ApplyLockLRUSlots: 100,
+		}
+		err error
+	)
+
+	cfg.Signer, err = memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "failed to generate dummy receipt signing key")
-	dbDir, err := ioutil.TempDir("", "cachingclient.test.leveldb")
+	cfg.DB, err = ioutil.TempDir("", "cachingclient.test.leveldb")
 	require.NoError(t, err, "TempDir")
-	defer os.RemoveAll(dbDir)
-	remote, err := leveldb.New(dbDir, signer, 0, false)
+	defer os.RemoveAll(cfg.DB)
+
+	remote, err := leveldb.New(&cfg)
 	require.NoError(t, err, "leveldb.New")
 
 	client, cacheDir := requireNewClient(t, remote)
@@ -78,10 +86,11 @@ func TestCachingClient(t *testing.T) {
 
 	// Test the persistence.
 	client.Cleanup()
-	dbDir, err = ioutil.TempDir("", "cachingclient.test.leveldb")
+
+	cfg.DB, err = ioutil.TempDir("", "cachingclient.test.leveldb")
 	require.NoError(t, err, "TempDir")
-	defer os.RemoveAll(dbDir)
-	remote, err = leveldb.New(dbDir, signer, 0, false)
+	defer os.RemoveAll(cfg.DB)
+	remote, err = leveldb.New(&cfg)
 	require.NoError(t, err, "leveldb.New")
 	_, err = New(remote, false)
 	require.NoError(t, err, "New - reopen")
