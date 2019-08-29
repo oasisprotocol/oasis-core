@@ -16,7 +16,7 @@ import (
 	"github.com/tendermint/tendermint/node"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
-	ekbadger "github.com/oasislabs/ekiden/go/storage/badger"
+	ekbadger "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/badger"
 )
 
 const (

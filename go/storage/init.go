@@ -16,10 +16,9 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/badger"
 	"github.com/oasislabs/ekiden/go/storage/cachingclient"
 	"github.com/oasislabs/ekiden/go/storage/client"
-	"github.com/oasislabs/ekiden/go/storage/leveldb"
+	"github.com/oasislabs/ekiden/go/storage/database"
 )
 
 const (
@@ -38,28 +37,27 @@ func New(
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
 ) (api.Backend, error) {
-	var impl api.Backend
-	var err error
+	cfg := &api.Config{
+		Backend:            strings.ToLower(viper.GetString(cfgBackend)),
+		DB:                 dataDir,
+		Signer:             identity.NodeSigner,
+		ApplyLockLRUSlots:  uint64(viper.GetInt(cfgLRUSlots)),
+		InsecureSkipChecks: viper.GetBool(cfgInsecureSkipChecks),
+	}
 
-	signer := identity.NodeSigner
+	var err error
 	if viper.GetBool(cfgDebugMockSigningKey) {
-		signer, err = memorySigner.NewSigner(rand.Reader)
+		cfg.Signer, err = memorySigner.NewSigner(rand.Reader)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	backend := viper.GetString(cfgBackend)
-	applyLockLRUSlots := uint64(viper.GetInt(cfgLRUSlots))
-	insecureSkipChecks := viper.GetBool(cfgInsecureSkipChecks)
-
-	switch strings.ToLower(backend) {
-	case badger.BackendName:
-		dbDir := filepath.Join(dataDir, badger.DBFile)
-		impl, err = badger.New(dbDir, signer, applyLockLRUSlots, insecureSkipChecks)
-	case leveldb.BackendName:
-		dbDir := filepath.Join(dataDir, leveldb.DBFile)
-		impl, err = leveldb.New(dbDir, signer, applyLockLRUSlots, insecureSkipChecks)
+	var impl api.Backend
+	switch cfg.Backend {
+	case database.BackendNameLevelDB, database.BackendNameBadgerDB:
+		cfg.DB = filepath.Join(cfg.DB, database.DefaultFileName(cfg.Backend))
+		impl, err = database.New(cfg)
 	case client.BackendName:
 		impl, err = client.New(ctx, identity, schedulerBackend, registryBackend)
 	case cachingclient.BackendName:
@@ -68,9 +66,9 @@ func New(
 		if err != nil {
 			return nil, err
 		}
-		impl, err = cachingclient.New(remote, insecureSkipChecks)
+		impl, err = cachingclient.New(remote, cfg.InsecureSkipChecks)
 	default:
-		err = fmt.Errorf("storage: unsupported backend: '%v'", backend)
+		err = fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
 	}
 
 	crashEnabled := viper.GetBool(cfgCrashEnabled)
@@ -89,7 +87,7 @@ func New(
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, leveldb.BackendName, "Storage backend")
+		cmd.Flags().String(cfgBackend, database.BackendNameLevelDB, "Storage backend")
 		cmd.Flags().Bool(cfgDebugMockSigningKey, false, "Generate volatile mock signing key")
 		cmd.Flags().Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
 		cmd.Flags().Int(cfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")

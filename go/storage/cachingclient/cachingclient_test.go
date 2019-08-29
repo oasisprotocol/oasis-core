@@ -18,7 +18,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/leveldb"
+	"github.com/oasislabs/ekiden/go/storage/database"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/tests"
@@ -29,13 +29,22 @@ var testNs common.Namespace
 const cacheSize = 10
 
 func TestCachingClient(t *testing.T) {
-	signer, err := memorySigner.NewSigner(rand.Reader)
+	var (
+		cfg = api.Config{
+			Backend:           database.BackendNameLevelDB,
+			ApplyLockLRUSlots: 100,
+		}
+		err error
+	)
+
+	cfg.Signer, err = memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "failed to generate dummy receipt signing key")
-	dbDir, err := ioutil.TempDir("", "cachingclient.test.leveldb")
+	cfg.DB, err = ioutil.TempDir("", "cachingclient.test.leveldb")
 	require.NoError(t, err, "TempDir")
-	defer os.RemoveAll(dbDir)
-	remote, err := leveldb.New(dbDir, signer, 0, false)
-	require.NoError(t, err, "leveldb.New")
+	defer os.RemoveAll(cfg.DB)
+
+	remote, err := database.New(&cfg)
+	require.NoError(t, err, "database.New")
 
 	client, cacheDir := requireNewClient(t, remote)
 	defer os.RemoveAll(cacheDir)
@@ -78,11 +87,12 @@ func TestCachingClient(t *testing.T) {
 
 	// Test the persistence.
 	client.Cleanup()
-	dbDir, err = ioutil.TempDir("", "cachingclient.test.leveldb")
+
+	cfg.DB, err = ioutil.TempDir("", "cachingclient.test.leveldb")
 	require.NoError(t, err, "TempDir")
-	defer os.RemoveAll(dbDir)
-	remote, err = leveldb.New(dbDir, signer, 0, false)
-	require.NoError(t, err, "leveldb.New")
+	defer os.RemoveAll(cfg.DB)
+	remote, err = database.New(&cfg)
+	require.NoError(t, err, "database.New")
 	_, err = New(remote, false)
 	require.NoError(t, err, "New - reopen")
 
