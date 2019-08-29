@@ -37,6 +37,12 @@ var (
 	ErrRootMustFollowOld = errors.New("urkel: root must follow old root")
 )
 
+// Config is the node database backend configuration.
+type Config struct {
+	// DB is the path to the database.
+	DB string
+}
+
 // NodeDB is the persistence layer used for persisting the in-memory tree.
 type NodeDB interface {
 	// GetNode lookups up a node in the database.

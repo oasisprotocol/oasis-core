@@ -8,7 +8,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -1851,7 +1850,9 @@ func TestUrkelLevelDBBackend(t *testing.T) {
 		require.NoError(t, err, "TempDir")
 
 		// Create a LevelDB-backed Node DB.
-		ndb, err := levelDb.New(dir)
+		ndb, err := levelDb.New(&db.Config{
+			DB: dir,
+		})
 		require.NoError(t, err, "New")
 
 		return ndb, dir
@@ -1873,7 +1874,9 @@ func TestUrkelBadgerBackend(t *testing.T) {
 		require.NoError(t, err, "TempDir")
 
 		// Create a Badger-backed Node DB.
-		ndb, err := badgerDb.New(badger.DefaultOptions(dir).WithLogger(nil))
+		ndb, err := badgerDb.New(&db.Config{
+			DB: dir,
+		})
 		require.NoError(t, err, "New")
 
 		return ndb, dir
@@ -2036,7 +2039,9 @@ func benchmarkInsertBatch(b *testing.B, numValues int, commit bool) {
 		dir, err := ioutil.TempDir("", "mkvs.bench.leveldb")
 		require.NoError(b, err, "TempDir")
 		defer os.RemoveAll(dir)
-		ndb, err := levelDb.New(dir)
+		ndb, err := levelDb.New(&db.Config{
+			DB: dir,
+		})
 		require.NoError(b, err, "New")
 		tree := New(nil, ndb)
 

@@ -70,6 +70,9 @@ var (
 
 // Config is the storage backend configuration.
 type Config struct {
+	// Backend is the database backend.
+	Backend string
+
 	// DB is the path to the database.
 	DB string
 
@@ -81,6 +84,13 @@ type Config struct {
 
 	// InsecureSkipChecks bypasses the known root checks.
 	InsecureSkipChecks bool
+}
+
+// ToNodeDB converts from a Config to a node DB Config.
+func (cfg *Config) ToNodeDB() *nodedb.Config {
+	return &nodedb.Config{
+		DB: cfg.DB,
+	}
 }
 
 // WriteLog is a write log.

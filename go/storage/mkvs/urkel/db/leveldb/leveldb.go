@@ -94,8 +94,8 @@ type leveldbNodeDB struct {
 }
 
 // New creates a new LevelDB-backed node database.
-func New(dirname string) (api.NodeDB, error) {
-	db, err := leveldb.OpenFile(dirname, nil)
+func New(cfg *api.Config) (api.NodeDB, error) {
+	db, err := leveldb.OpenFile(cfg.DB, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/leveldb"
+	"github.com/oasislabs/ekiden/go/storage/database"
 	"github.com/oasislabs/ekiden/go/storage/tests"
 )
 
@@ -23,7 +23,9 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 	require := require.New(t)
 
 	var (
-		cfg api.Config
+		cfg = api.Config{
+			Backend: database.BackendNameLevelDB,
+		}
 		err error
 	)
 
@@ -34,8 +36,8 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(cfg.DB)
 
-	realBackend, err := leveldb.New(&cfg)
-	require.NoError(err, "leveldb.New")
+	realBackend, err := database.New(&cfg)
+	require.NoError(err, "database.New")
 	backend := newCrashingWrapper(realBackend)
 
 	crash.Config(map[string]float64{

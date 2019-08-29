@@ -18,7 +18,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/leveldb"
+	"github.com/oasislabs/ekiden/go/storage/database"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/tests"
@@ -31,6 +31,7 @@ const cacheSize = 10
 func TestCachingClient(t *testing.T) {
 	var (
 		cfg = api.Config{
+			Backend:           database.BackendNameLevelDB,
 			ApplyLockLRUSlots: 100,
 		}
 		err error
@@ -42,8 +43,8 @@ func TestCachingClient(t *testing.T) {
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(cfg.DB)
 
-	remote, err := leveldb.New(&cfg)
-	require.NoError(t, err, "leveldb.New")
+	remote, err := database.New(&cfg)
+	require.NoError(t, err, "database.New")
 
 	client, cacheDir := requireNewClient(t, remote)
 	defer os.RemoveAll(cacheDir)
@@ -90,8 +91,8 @@ func TestCachingClient(t *testing.T) {
 	cfg.DB, err = ioutil.TempDir("", "cachingclient.test.leveldb")
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(cfg.DB)
-	remote, err = leveldb.New(&cfg)
-	require.NoError(t, err, "leveldb.New")
+	remote, err = database.New(&cfg)
+	require.NoError(t, err, "database.New")
 	_, err = New(remote, false)
 	require.NoError(t, err, "New - reopen")
 

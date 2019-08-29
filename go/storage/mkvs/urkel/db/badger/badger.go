@@ -3,6 +3,8 @@ package badger
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,13 +84,16 @@ type rootGcUpdates []rootGcUpdate
 type rootAddedNodes []hash.Hash
 
 // New creates a new BadgerDB-backed node database.
-func New(opts badger.Options) (api.NodeDB, error) {
+func New(cfg *api.Config) (api.NodeDB, error) {
 	db := &badgerNodeDB{
 		logger:   logging.GetLogger("urkel/db/badger"),
 		closeCh:  make(chan struct{}),
 		closedCh: make(chan struct{}),
 	}
 	db.CheckpointableDB = api.NewCheckpointableDB(db)
+
+	opts := badger.DefaultOptions(cfg.DB)
+	opts = opts.WithLogger(NewLogAdapter(db.logger))
 
 	var err error
 	if db.db, err = badger.Open(opts); err != nil {
@@ -848,4 +853,31 @@ func (s *badgerSubtree) VisitCleanNode(depth node.Depth, ptr *node.Pointer) erro
 
 func (s *badgerSubtree) Commit() error {
 	return nil
+}
+
+// NewLogAdapter returns a badger.Logger backed by an ekiden logger.
+func NewLogAdapter(logger *logging.Logger) badger.Logger {
+	return &badgerLogger{
+		logger: logger,
+	}
+}
+
+type badgerLogger struct {
+	logger *logging.Logger
+}
+
+func (l *badgerLogger) Errorf(format string, a ...interface{}) {
+	l.logger.Error(strings.TrimSpace(fmt.Sprintf(format, a...)))
+}
+
+func (l *badgerLogger) Warningf(format string, a ...interface{}) {
+	l.logger.Warn(strings.TrimSpace(fmt.Sprintf(format, a...)))
+}
+
+func (l *badgerLogger) Infof(format string, a ...interface{}) {
+	l.logger.Info(strings.TrimSpace(fmt.Sprintf(format, a...)))
+}
+
+func (l *badgerLogger) Debugf(format string, a ...interface{}) {
+	l.logger.Debug(strings.TrimSpace(fmt.Sprintf(format, a...)))
 }

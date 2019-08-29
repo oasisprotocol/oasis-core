@@ -16,10 +16,9 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/badger"
 	"github.com/oasislabs/ekiden/go/storage/cachingclient"
 	"github.com/oasislabs/ekiden/go/storage/client"
-	"github.com/oasislabs/ekiden/go/storage/leveldb"
+	"github.com/oasislabs/ekiden/go/storage/database"
 )
 
 const (
@@ -39,6 +38,7 @@ func New(
 	registryBackend registry.Backend,
 ) (api.Backend, error) {
 	cfg := &api.Config{
+		Backend:            strings.ToLower(viper.GetString(cfgBackend)),
 		DB:                 dataDir,
 		Signer:             identity.NodeSigner,
 		ApplyLockLRUSlots:  uint64(viper.GetInt(cfgLRUSlots)),
@@ -54,14 +54,10 @@ func New(
 	}
 
 	var impl api.Backend
-	backend := viper.GetString(cfgBackend)
-	switch strings.ToLower(backend) {
-	case badger.BackendName:
-		cfg.DB = filepath.Join(cfg.DB, badger.DBFile)
-		impl, err = badger.New(cfg)
-	case leveldb.BackendName:
-		cfg.DB = filepath.Join(cfg.DB, leveldb.DBFile)
-		impl, err = leveldb.New(cfg)
+	switch cfg.Backend {
+	case database.BackendNameLevelDB, database.BackendNameBadgerDB:
+		cfg.DB = filepath.Join(cfg.DB, database.DefaultFileName(cfg.Backend))
+		impl, err = database.New(cfg)
 	case client.BackendName:
 		impl, err = client.New(ctx, identity, schedulerBackend, registryBackend)
 	case cachingclient.BackendName:
@@ -72,7 +68,7 @@ func New(
 		}
 		impl, err = cachingclient.New(remote, cfg.InsecureSkipChecks)
 	default:
-		err = fmt.Errorf("storage: unsupported backend: '%v'", backend)
+		err = fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
 	}
 
 	crashEnabled := viper.GetBool(cfgCrashEnabled)
@@ -91,7 +87,7 @@ func New(
 // command.
 func RegisterFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, leveldb.BackendName, "Storage backend")
+		cmd.Flags().String(cfgBackend, database.BackendNameLevelDB, "Storage backend")
 		cmd.Flags().Bool(cfgDebugMockSigningKey, false, "Generate volatile mock signing key")
 		cmd.Flags().Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
 		cmd.Flags().Int(cfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
