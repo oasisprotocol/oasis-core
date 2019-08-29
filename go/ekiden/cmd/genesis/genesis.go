@@ -38,6 +38,10 @@ const (
 	cfgKeyManager  = "keymanager"
 	cfgStaking     = "staking"
 	cfgBlockHeight = "height"
+
+	// Our 'entity' flag overlaps with the common flag 'entity'.
+	// We bind it to a separate Viper key to disambiguate at runtime.
+	viperEntity = "provision_entity"
 )
 
 var (
@@ -86,7 +90,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	doc := &genesis.Document{
 		Time: time.Now(),
 	}
-	entities := viper.GetStringSlice(cfgEntity)
+	entities := viper.GetStringSlice(viperEntity)
 	runtimes := viper.GetStringSlice(cfgRuntime)
 	nodes := viper.GetStringSlice(cfgNode)
 	if err := AppendRegistryState(doc, entities, runtimes, nodes, logger); err != nil {
@@ -464,13 +468,14 @@ func Register(parentCmd *cobra.Command) {
 func init() {
 	DumpGenesisFlags.Int64(cfgBlockHeight, 0, "block height at which to dump state")
 
-	InitGenesisFlags.StringSlice(cfgEntity, nil, "path to entity registration file")
 	InitGenesisFlags.StringSlice(cfgRuntime, nil, "path to runtime registration file")
 	InitGenesisFlags.StringSlice(cfgNode, nil, "path to node registration file")
 	InitGenesisFlags.StringSlice(cfgRootHash, nil, "path to roothash genesis blocks file")
 	InitGenesisFlags.String(cfgStaking, "", "path to staking genesis file")
 	InitGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
+	_ = viper.BindPFlags(InitGenesisFlags)
+	InitGenesisFlags.StringSlice(cfgEntity, nil, "path to entity registration file")
+	_ = viper.BindPFlag(viperEntity, InitGenesisFlags.Lookup(cfgEntity))
 
 	_ = viper.BindPFlags(DumpGenesisFlags)
-	_ = viper.BindPFlags(InitGenesisFlags)
 }
