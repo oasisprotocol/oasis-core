@@ -485,6 +485,10 @@ func init() {
 	UpdateFlags.StringSlice(cfgNodeID, nil, "ID(s) of nodes associated with this entity")
 	UpdateFlags.StringSlice(cfgNodeDescriptor, nil, "Node genesis descriptor(s) of nodes associated with this entity")
 
-	_ = viper.BindPFlags(EntityFlags)
-	_ = viper.BindPFlags(UpdateFlags)
+	for _, v := range []*flag.FlagSet{
+		EntityFlags,
+		UpdateFlags,
+	} {
+		_ = viper.BindPFlags(v)
+	}
 }

@@ -144,11 +144,15 @@ func init() {
 
 	GenesisFileFlags.String(CfgGenesisFile, "genesis.json", "path to genesis file")
 
-	_ = viper.BindPFlags(VerboseFlags)
-	_ = viper.BindPFlags(ForceFlags)
-	_ = viper.BindPFlags(RetriesFlags)
-	_ = viper.BindPFlags(ConsensusBackendFlags)
-	_ = viper.BindPFlags(DebugTestEntityFlags)
-	_ = viper.BindPFlags(EntityFlags)
-	_ = viper.BindPFlags(GenesisFileFlags)
+	for _, v := range []*flag.FlagSet{
+		VerboseFlags,
+		ForceFlags,
+		RetriesFlags,
+		ConsensusBackendFlags,
+		DebugTestEntityFlags,
+		EntityFlags,
+		GenesisFileFlags,
+	} {
+		_ = viper.BindPFlags(v)
+	}
 }

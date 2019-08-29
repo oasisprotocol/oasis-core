@@ -110,7 +110,11 @@ func init() {
 
 	ClientFlags.StringP(cfgAddress, "a", defaultAddress, "remote gRPC address")
 
-	_ = viper.BindPFlags(ServerTCPFlags)
-	_ = viper.BindPFlags(ServerLocalFlags)
-	_ = viper.BindPFlags(ClientFlags)
+	for _, v := range []*flag.FlagSet{
+		ServerTCPFlags,
+		ServerLocalFlags,
+		ClientFlags,
+	} {
+		_ = viper.BindPFlags(v)
+	}
 }

@@ -460,6 +460,10 @@ func init() {
 	RuntimeFlags.String(cfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")
 	RuntimeFlags.StringSlice(cfgVersionEnclave, nil, "Runtime TEE enclave version(s)")
 
-	_ = viper.BindPFlags(OutputFlags)
-	_ = viper.BindPFlags(RuntimeFlags)
+	for _, v := range []*flag.FlagSet{
+		OutputFlags,
+		RuntimeFlags,
+	} {
+		_ = viper.BindPFlags(v)
+	}
 }

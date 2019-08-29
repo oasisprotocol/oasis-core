@@ -407,8 +407,12 @@ func init() {
 
 	AccountTransferFlags.String(cfgTransferDestination, "", "transfer destination account ID")
 
-	_ = viper.BindPFlags(AccountInfoFlags)
-	_ = viper.BindPFlags(TxFlags)
-	_ = viper.BindPFlags(TxFileFlags)
-	_ = viper.BindPFlags(AccountTransferFlags)
+	for _, v := range []*flag.FlagSet{
+		AccountInfoFlags,
+		TxFlags,
+		TxFileFlags,
+		AccountTransferFlags,
+	} {
+		_ = viper.BindPFlags(v)
+	}
 }
