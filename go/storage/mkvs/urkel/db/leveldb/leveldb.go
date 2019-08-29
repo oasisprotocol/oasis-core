@@ -91,15 +91,20 @@ type leveldbNodeDB struct {
 	db *leveldb.DB
 
 	closeOnce sync.Once
+
+	writeSync bool
 }
 
 // New creates a new LevelDB-backed node database.
 func New(cfg *api.Config) (api.NodeDB, error) {
-	db, err := leveldb.OpenFile(cfg.DB, nil)
+	db, err := leveldb.OpenFile(cfg.DB, &opt.Options{NoSync: cfg.DebugNoFsync})
 	if err != nil {
 		return nil, err
 	}
-	levelNDb := &leveldbNodeDB{db: db}
+	levelNDb := &leveldbNodeDB{
+		db:        db,
+		writeSync: !cfg.DebugNoFsync,
+	}
 	levelNDb.CheckpointableDB = api.NewCheckpointableDB(levelNDb)
 	return levelNDb, nil
 }
@@ -320,7 +325,7 @@ func (d *leveldbNodeDB) Finalize(ctx context.Context, namespace common.Namespace
 	}
 
 	// Commit batch.
-	if err := d.db.Write(batch, &opt.WriteOptions{Sync: true}); err != nil {
+	if err := d.db.Write(batch, &opt.WriteOptions{Sync: d.writeSync}); err != nil {
 		return err
 	}
 
@@ -445,7 +450,7 @@ func (d *leveldbNodeDB) Prune(ctx context.Context, namespace common.Namespace, r
 	}
 
 	// Commit batch.
-	if err := d.db.Write(batch, &opt.WriteOptions{Sync: true}); err != nil {
+	if err := d.db.Write(batch, &opt.WriteOptions{Sync: d.writeSync}); err != nil {
 		return 0, err
 	}
 
@@ -639,7 +644,7 @@ func (b *leveldbBatch) Commit(root node.Root) error {
 		}
 	}
 
-	if err := b.db.db.Write(b.bat, &opt.WriteOptions{Sync: true}); err != nil {
+	if err := b.db.db.Write(b.bat, &opt.WriteOptions{Sync: b.db.writeSync}); err != nil {
 		return err
 	}
 

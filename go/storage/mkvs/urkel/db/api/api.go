@@ -41,6 +41,9 @@ var (
 type Config struct {
 	// DB is the path to the database.
 	DB string
+
+	// DebugNoFsync will disable fsync() where possible.
+	DebugNoFsync bool
 }
 
 // NodeDB is the persistence layer used for persisting the in-memory tree.

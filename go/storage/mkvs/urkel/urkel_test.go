@@ -1851,7 +1851,8 @@ func TestUrkelLevelDBBackend(t *testing.T) {
 
 		// Create a LevelDB-backed Node DB.
 		ndb, err := levelDb.New(&db.Config{
-			DB: dir,
+			DB:           dir,
+			DebugNoFsync: true,
 		})
 		require.NoError(t, err, "New")
 
@@ -1875,7 +1876,8 @@ func TestUrkelBadgerBackend(t *testing.T) {
 
 		// Create a Badger-backed Node DB.
 		ndb, err := badgerDb.New(&db.Config{
-			DB: dir,
+			DB:           dir,
+			DebugNoFsync: true,
 		})
 		require.NoError(t, err, "New")
 

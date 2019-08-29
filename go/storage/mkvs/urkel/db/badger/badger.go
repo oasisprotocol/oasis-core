@@ -94,6 +94,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 
 	opts := badger.DefaultOptions(cfg.DB)
 	opts = opts.WithLogger(NewLogAdapter(db.logger))
+	opts = opts.WithSyncWrites(!cfg.DebugNoFsync)
 
 	var err error
 	if db.db, err = badger.Open(opts); err != nil {
