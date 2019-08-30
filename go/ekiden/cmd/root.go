@@ -55,8 +55,8 @@ func init() {
 	cobra.OnInitialize(cmdCommon.InitConfig)
 	initVersions()
 
-	cmdCommon.RegisterRootFlags(rootCmd)
-	node.RegisterFlags(rootCmd)
+	rootCmd.PersistentFlags().AddFlagSet(cmdCommon.RootFlags)
+	rootCmd.Flags().AddFlagSet(node.Flags)
 
 	// Register all of the sub-commands.
 	for _, v := range []func(*cobra.Command){

@@ -4,7 +4,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -18,24 +18,8 @@ const (
 	// Use the config file (parsed by viper) instead.
 )
 
-var (
-	logFmt   logging.Format
-	logLevel logging.Level = logging.LevelWarn
-)
-
-func registerLoggingFlags(rootCmd *cobra.Command) {
-	rootCmd.PersistentFlags().String(cfgLogFile, "", "log file")
-	rootCmd.PersistentFlags().Var(&logFmt, cfgLogFmt, "log format")
-	rootCmd.PersistentFlags().Var(&logLevel, cfgLogLevel, "log level")
-
-	for _, v := range []string{
-		cfgLogFile,
-		cfgLogFmt,
-		cfgLogLevel,
-	} {
-		_ = viper.BindPFlag(v, rootCmd.PersistentFlags().Lookup(v))
-	}
-}
+// LoggingFlags has the logging flags.
+var loggingFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 func initLogging() error {
 	logFile := viper.GetString(cfgLogFile)
@@ -76,4 +60,15 @@ func initLogging() error {
 	}
 
 	return logging.Initialize(w, logFmt, logLevel, moduleLevels)
+}
+
+func initLoggingFlags() {
+	logFmt := logging.FmtLogfmt
+	logLevel := logging.LevelWarn
+
+	loggingFlags.String(cfgLogFile, "", "log file")
+	loggingFlags.Var(&logFmt, cfgLogFmt, "log format")
+	loggingFlags.Var(&logLevel, cfgLogLevel, "log level")
+
+	_ = viper.BindPFlags(loggingFlags)
 }

@@ -6,7 +6,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -33,6 +33,9 @@ const (
 var (
 	_ api.Backend       = (*cachingClientBackend)(nil)
 	_ api.ClientBackend = (*cachingClientBackend)(nil)
+
+	// Flags has the configuration flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 type cachingClientBackend struct {
@@ -198,18 +201,9 @@ func New(remote api.Backend, insecureSkipChecks bool) (api.Backend, error) {
 	return b, nil
 }
 
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgCacheFile, "cachingclient.storage.file", "Path to file for persistent cache storage")
-		cmd.Flags().String(cfgCacheSize, "512mb", "Cache size (bytes)")
-	}
+func init() {
+	Flags.String(cfgCacheFile, "cachingclient.storage.file", "Path to file for persistent cache storage")
+	Flags.String(cfgCacheSize, "512mb", "Cache size (bytes)")
 
-	for _, v := range []string{
-		cfgCacheFile,
-		cfgCacheSize,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
+	_ = viper.BindPFlags(Flags)
 }

@@ -93,7 +93,7 @@ func doWaitSync(cmd *cobra.Command, args []string) {
 
 // Register registers the client sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	cmdGrpc.RegisterClientFlags(clientCmd, true)
+	clientCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 
 	clientCmd.AddCommand(clientIsSyncedCmd)
 	clientCmd.AddCommand(clientWaitSyncCmd)

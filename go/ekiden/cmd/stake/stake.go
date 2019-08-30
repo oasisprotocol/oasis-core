@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -28,22 +29,19 @@ var (
 	infoCmd = &cobra.Command{
 		Use:   "info",
 		Short: "query the common token info",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerInfoFlags(cmd)
-		},
-		Run: doInfo,
+		Run:   doInfo,
 	}
 
 	listCmd = &cobra.Command{
 		Use:   "list",
 		Short: "list accounts",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			registerListFlags(cmd)
-		},
-		Run: doList,
+		Run:   doList,
 	}
 
 	logger = logging.GetLogger("cmd/stake")
+
+	infoFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	listFlags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 func doConnect(cmd *cobra.Command) (*grpc.ClientConn, grpcStaking.StakingClient) {
@@ -241,17 +239,6 @@ func getAccountInfo(ctx context.Context, cmd *cobra.Command, id signature.Public
 	return &ai
 }
 
-func registerInfoFlags(cmd *cobra.Command) {
-	cmdFlags.RegisterRetries(cmd)
-	cmdGrpc.RegisterClientFlags(cmd, false)
-}
-
-func registerListFlags(cmd *cobra.Command) {
-	cmdFlags.RegisterRetries(cmd)
-	cmdFlags.RegisterVerbose(cmd)
-	cmdGrpc.RegisterClientFlags(cmd, false)
-}
-
 // Register registers the stake sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	registerAccountCmd()
@@ -263,8 +250,17 @@ func Register(parentCmd *cobra.Command) {
 		stakeCmd.AddCommand(v)
 	}
 
-	registerInfoFlags(infoCmd)
-	registerListFlags(listCmd)
+	infoCmd.Flags().AddFlagSet(infoFlags)
+	listCmd.Flags().AddFlagSet(listFlags)
 
 	parentCmd.AddCommand(stakeCmd)
+}
+
+func init() {
+	infoFlags.AddFlagSet(cmdFlags.RetriesFlags)
+	infoFlags.AddFlagSet(cmdGrpc.ClientFlags)
+
+	listFlags.AddFlagSet(cmdFlags.RetriesFlags)
+	listFlags.AddFlagSet(cmdFlags.VerboseFlags)
+	listFlags.AddFlagSet(cmdGrpc.ClientFlags)
 }

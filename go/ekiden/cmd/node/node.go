@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 
 	"github.com/oasislabs/ekiden/go/beacon"
 	beaconAPI "github.com/oasislabs/ekiden/go/beacon/api"
@@ -57,11 +58,11 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
 )
 
+// Flags has the configuration flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
+
 // Run runs the ekiden node.
 func Run(cmd *cobra.Command, args []string) {
-	// Re-register flags due to https://github.com/spf13/viper/issues/233.
-	RegisterFlags(cmd)
-
 	node, err := NewNode()
 	if err != nil {
 		return
@@ -573,40 +574,38 @@ func NewNode() (*Node, error) {
 	return node, nil
 }
 
-// RegisterFlags registers the flags used by the node command.
-func RegisterFlags(cmd *cobra.Command) {
-	// Backend initialization flags.
-	for _, v := range []func(*cobra.Command){
-		metrics.RegisterFlags,
-		tracing.RegisterFlags,
-		cmdGrpc.RegisterServerLocalFlags,
-		pprof.RegisterFlags,
-		beacon.RegisterFlags,
-		epochtime.RegisterFlags,
-		registry.RegisterFlags,
-		roothash.RegisterFlags,
-		scheduler.RegisterFlags,
-		staking.RegisterFlags,
-		storage.RegisterFlags,
-		tendermint.RegisterFlags,
-		ias.RegisterFlags,
-		keymanager.RegisterFlags,
-		keymanagerClient.RegisterFlags,
-		keymanagerWorker.RegisterFlags,
-		client.RegisterFlags,
-		compute.RegisterFlags,
-		p2p.RegisterFlags,
-		registration.RegisterFlags,
-		txnscheduler.RegisterFlags,
-		workerCommon.RegisterFlags,
-		workerStorage.RegisterFlags,
-		merge.RegisterFlags,
-		crash.RegisterFlags,
-	} {
-		v(cmd)
-	}
+func init() {
+	Flags.AddFlagSet(flags.DebugTestEntityFlags)
+	Flags.AddFlagSet(flags.ConsensusBackendFlags)
+	Flags.AddFlagSet(flags.GenesisFileFlags)
 
-	flags.RegisterDebugTestEntity(cmd)
-	flags.RegisterConsensusBackend(cmd)
-	flags.RegisterGenesisFile(cmd)
+	// Backend initialization flags.
+	for _, v := range []*flag.FlagSet{
+		metrics.Flags,
+		tracing.Flags,
+		cmdGrpc.ServerLocalFlags,
+		pprof.Flags,
+		beacon.Flags,
+		epochtime.Flags,
+		registry.Flags,
+		roothash.Flags,
+		scheduler.Flags,
+		staking.Flags,
+		storage.Flags,
+		tendermint.Flags,
+		ias.Flags,
+		keymanagerClient.Flags,
+		keymanagerWorker.Flags,
+		client.Flags,
+		compute.Flags,
+		p2p.Flags,
+		registration.Flags,
+		txnscheduler.Flags,
+		workerCommon.Flags,
+		workerStorage.Flags,
+		merge.Flags,
+		crash.InitFlags(),
+	} {
+		Flags.AddFlagSet(v)
+	}
 }

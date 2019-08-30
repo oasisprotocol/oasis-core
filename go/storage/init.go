@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
@@ -28,6 +28,9 @@ const (
 	cfgLRUSlots            = "storage.root_cache.apply_lock_lru_slots"
 	cfgInsecureSkipChecks  = "storage.debug.insecure_skip_checks"
 )
+
+// Flags has the configuration flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
 func New(
@@ -83,29 +86,17 @@ func New(
 	return newMetricsWrapper(impl), nil
 }
 
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgBackend, database.BackendNameLevelDB, "Storage backend")
-		cmd.Flags().Bool(cfgDebugMockSigningKey, false, "Generate volatile mock signing key")
-		cmd.Flags().Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
-		cmd.Flags().Int(cfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
+func init() {
+	Flags.String(cfgBackend, database.BackendNameLevelDB, "Storage backend")
+	Flags.Bool(cfgDebugMockSigningKey, false, "Generate volatile mock signing key")
+	Flags.Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
+	Flags.Int(cfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
 
-		cmd.Flags().Bool(cfgInsecureSkipChecks, false, "INSECURE: Skip known root checks")
-		_ = cmd.Flags().MarkHidden(cfgInsecureSkipChecks)
-	}
+	Flags.Bool(cfgInsecureSkipChecks, false, "INSECURE: Skip known root checks")
+	_ = Flags.MarkHidden(cfgInsecureSkipChecks)
 
-	for _, v := range []string{
-		cfgBackend,
-		cfgDebugMockSigningKey,
-		cfgCrashEnabled,
-		cfgLRUSlots,
-		cfgInsecureSkipChecks,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
-	}
+	_ = viper.BindPFlags(Flags)
 
-	client.RegisterFlags(cmd)
-	cachingclient.RegisterFlags(cmd)
+	Flags.AddFlagSet(client.Flags)
+	Flags.AddFlagSet(cachingclient.Flags)
 }

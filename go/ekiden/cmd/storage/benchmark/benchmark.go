@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -37,12 +38,11 @@ var (
 		Short: "benchmark storage backend",
 		Run:   doBenchmark,
 	}
+
+	flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
-	// Re-register flags due to https://github.com/spf13/viper/issues/233.
-	RegisterFlags(cmd)
-
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -288,29 +288,15 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	}
 }
 
-// RegisterFlags registers the flags used by the benchmark sub-command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgProfileCPU, false, "Enable CPU profiling in benchmark")
-		cmd.Flags().Bool(cfgProfileMEM, false, "Enable memory profiling in benchmark")
-	}
-
-	for _, v := range []string{
-		cfgProfileCPU,
-		cfgProfileMEM,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) //nolint: errcheck
-	}
-
-	for _, v := range []func(*cobra.Command){
-		storage.RegisterFlags,
-	} {
-		v(cmd)
-	}
-}
-
 // Register registers the storage benchmark sub-command.
 func Register(parentCmd *cobra.Command) {
-	RegisterFlags(benchmarkStorageCmd)
+	benchmarkStorageCmd.Flags().AddFlagSet(flags)
 	parentCmd.AddCommand(benchmarkStorageCmd)
+}
+
+func init() {
+	flags.Bool(cfgProfileCPU, false, "Enable CPU profiling in benchmark")
+	flags.Bool(cfgProfileMEM, false, "Enable memory profiling in benchmark")
+	_ = viper.BindPFlags(flags)
+	flags.AddFlagSet(storage.Flags)
 }

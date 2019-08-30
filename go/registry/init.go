@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
@@ -20,6 +20,9 @@ const (
 	cfgDebugAllowRuntimeRegistration = "registry.debug.allow_runtime_registration"
 	cfgDebugBypassStake              = "registry.debug.bypass_stake" // nolint: gosec
 )
+
+// Flags has the configuration flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
 func New(ctx context.Context, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
@@ -48,18 +51,9 @@ func flagsToConfig() *api.Config {
 	}
 }
 
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
-		cmd.Flags().Bool(cfgDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
-	}
+func init() {
+	Flags.Bool(cfgDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
+	Flags.Bool(cfgDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 
-	for _, v := range []string{
-		cfgDebugAllowRuntimeRegistration,
-		cfgDebugBypassStake,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
+	_ = viper.BindPFlags(Flags)
 }

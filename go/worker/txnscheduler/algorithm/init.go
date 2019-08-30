@@ -3,14 +3,14 @@ package algorithm
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	flag "github.com/spf13/pflag"
 
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/api"
 	"github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/batching"
 )
 
-const ()
+// Flags has the configuration flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New creates a new algorithm.
 func New(name string) (api.Algorithm, error) {
@@ -22,12 +22,6 @@ func New(name string) (api.Algorithm, error) {
 	}
 }
 
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	for _, v := range []string{} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
-	}
-
-	batching.RegisterFlags(cmd)
+func init() {
+	Flags.AddFlagSet(batching.Flags)
 }

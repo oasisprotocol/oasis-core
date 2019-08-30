@@ -18,7 +18,7 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/client/indexer"
@@ -48,6 +48,9 @@ const (
 var (
 	// ErrIndexerDisabled is an error when the indexer is disabled.
 	ErrIndexerDisabled = errors.New("client: indexer not enabled")
+
+	// Flags has the configuration flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 const (
@@ -614,18 +617,9 @@ func New(
 	return c, nil
 }
 
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgIndexBackend, indexer.BleveBackendName, "Tag indexer backend")
-		cmd.Flags().StringSlice(cfgIndexRuntimes, nil, "IDs of runtimes to index tags for")
-	}
+func init() {
+	Flags.String(cfgIndexBackend, indexer.BleveBackendName, "Tag indexer backend")
+	Flags.StringSlice(cfgIndexRuntimes, nil, "IDs of runtimes to index tags for")
 
-	for _, v := range []string{
-		cfgIndexBackend,
-		cfgIndexRuntimes,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
-	}
+	_ = viper.BindPFlags(Flags)
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/client_golang/prometheus/push"
-	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/service"
@@ -29,6 +29,9 @@ const (
 	metricsModePull = "pull"
 	metricsModePush = "push"
 )
+
+// Flags has the flags used by the metrics service.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // ServiceConfig contains the configuration parameters for metrics.
 type ServiceConfig struct {
@@ -220,23 +223,12 @@ func New(ctx context.Context) (service.BackgroundService, error) {
 	}
 }
 
-// RegisterFlags registers the flags used by the metrics service.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgMetricsMode, metricsModePull, "metrics (prometheus) mode")
-		cmd.Flags().String(cfgMetricsAddr, "0.0.0.0:3000", "metrics pull/push address")
-		cmd.Flags().String(cfgMetricsPushJobName, "", "metrics push job name")
-		cmd.Flags().String(cfgMetricsPushInstanceLabel, "", "metrics push instance label")
-		cmd.Flags().Duration(cfgMetricsPushInterval, 5*time.Second, "metrics push interval")
-	}
+func init() {
+	Flags.String(cfgMetricsMode, metricsModePull, "metrics (prometheus) mode")
+	Flags.String(cfgMetricsAddr, "0.0.0.0:3000", "metrics pull/push address")
+	Flags.String(cfgMetricsPushJobName, "", "metrics push job name")
+	Flags.String(cfgMetricsPushInstanceLabel, "", "metrics push instance label")
+	Flags.Duration(cfgMetricsPushInterval, 5*time.Second, "metrics push interval")
 
-	for _, v := range []string{
-		cfgMetricsMode,
-		cfgMetricsAddr,
-		cfgMetricsPushJobName,
-		cfgMetricsPushInstanceLabel,
-		cfgMetricsPushInterval,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
+	_ = viper.BindPFlags(Flags)
 }

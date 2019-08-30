@@ -155,7 +155,7 @@ func doExport(cmd *cobra.Command, args []string) {
 
 // Register regisers the roothash sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	cmdGrpc.RegisterClientFlags(roothashCmd, true)
+	roothashCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 	roothashExportCmd.Flags().StringVarP(&roothashExportFile, cfgRoothashExportFile, "o", "", "root hash block output file")
 
 	roothashCmd.AddCommand(roothashExportCmd)

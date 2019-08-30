@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
@@ -26,18 +26,26 @@ const (
 	CfgGenesisFile = "genesis.file"
 )
 
+var (
+	// VerboseFlags has the verbose flag.
+	VerboseFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	// ForceFlags has the force flag.
+	ForceFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	// RetriesFlags has the retries flag.
+	RetriesFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	// ConsensusBackendFlags has the consensus backend flag.
+	ConsensusBackendFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	// DebugTestEntityFlags has the test entity enable flag.
+	DebugTestEntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	// EntityFlags has the entity flag.
+	EntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	// GenesisFileFlags has the genesis file flag.
+	GenesisFileFlags = flag.NewFlagSet("", flag.ContinueOnError)
+)
+
 // Verbose returns true iff the verbose flag is set.
 func Verbose() bool {
 	return viper.GetBool(cfgVerbose)
-}
-
-// RegisterVerbose registers the verbose flag for the provided command.
-func RegisterVerbose(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().BoolP(cfgVerbose, "v", false, "verbose output")
-	}
-
-	_ = viper.BindPFlag(cfgVerbose, cmd.Flags().Lookup(cfgVerbose))
 }
 
 // Force returns true iff the force flag is set.
@@ -45,27 +53,9 @@ func Force() bool {
 	return viper.GetBool(cfgForce)
 }
 
-// RegisterForce registers the force flag for the provided command.
-func RegisterForce(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgForce, false, "force")
-	}
-
-	_ = viper.BindPFlag(cfgForce, cmd.Flags().Lookup(cfgForce))
-}
-
 // Retries returns the retries flag value.
 func Retries() int {
 	return viper.GetInt(cfgRetries)
-}
-
-// RegisterRetries registers the retries flag for the provided command.
-func RegisterRetries(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().Int(cfgRetries, 0, "retries (-1 = forever)")
-	}
-
-	_ = viper.BindPFlag(cfgRetries, cmd.Flags().Lookup(cfgRetries))
 }
 
 // ConsensusBackend returns the set consensus backend.
@@ -80,27 +70,9 @@ func ConsensusBackend() string {
 	}
 }
 
-// RegisterConsensusBackend registers the consensus backend flag for the provided command.
-func RegisterConsensusBackend(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgConsensusBackend, tmapi.BackendName, "force")
-	}
-
-	_ = viper.BindPFlag(cfgConsensusBackend, cmd.Flags().Lookup(cfgConsensusBackend))
-}
-
 // DebugTestEntity returns true iff the test entity enable flag is set.
 func DebugTestEntity() bool {
 	return viper.GetBool(cfgDebugTestEntity)
-}
-
-// RegisterDebugTestEntity registers the test entity enable flag.
-func RegisterDebugTestEntity(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgDebugTestEntity, false, "use the test entity (UNSAFE)")
-	}
-
-	_ = viper.BindPFlag(cfgDebugTestEntity, cmd.Flags().Lookup(cfgDebugTestEntity))
 }
 
 // Entity returns the set entity directory.
@@ -108,30 +80,35 @@ func Entity() string {
 	return viper.GetString(cfgEntity)
 }
 
-// RegisterEntity registers the entity flag.
-func RegisterEntity(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
-	}
-
-	_ = viper.BindPFlag(cfgEntity, cmd.Flags().Lookup(cfgEntity))
-
-}
-
 // GenesisFile returns the set genesis file.
 func GenesisFile() string {
 	return viper.GetString(CfgGenesisFile)
 }
 
-// RegisterGenesisFile registers the genesis file flag.
-func RegisterGenesisFile(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(CfgGenesisFile, "genesis.json", "path to genesis file")
-	}
+func init() {
+	VerboseFlags.BoolP(cfgVerbose, "v", false, "verbose output")
 
-	for _, v := range []string{
-		CfgGenesisFile,
+	ForceFlags.Bool(cfgForce, false, "force")
+
+	RetriesFlags.Int(cfgRetries, 0, "retries (-1 = forever)")
+
+	ConsensusBackendFlags.String(cfgConsensusBackend, tmapi.BackendName, "force")
+
+	DebugTestEntityFlags.Bool(cfgDebugTestEntity, false, "use the test entity (UNSAFE)")
+
+	EntityFlags.String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
+
+	GenesisFileFlags.String(CfgGenesisFile, "genesis.json", "path to genesis file")
+
+	for _, v := range []*flag.FlagSet{
+		VerboseFlags,
+		ForceFlags,
+		RetriesFlags,
+		ConsensusBackendFlags,
+		DebugTestEntityFlags,
+		EntityFlags,
+		GenesisFileFlags,
 	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
+		_ = viper.BindPFlags(v)
 	}
 }

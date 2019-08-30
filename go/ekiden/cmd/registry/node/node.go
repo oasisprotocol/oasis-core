@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
@@ -50,6 +51,8 @@ const (
 )
 
 var (
+	flags = flag.NewFlagSet("", flag.ContinueOnError)
+
 	nodeCmd = &cobra.Command{
 		Use:   "node",
 		Short: "node registry backend utilities",
@@ -58,22 +61,13 @@ var (
 	initCmd = &cobra.Command{
 		Use:   "init",
 		Short: "initialize a node",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			cmdFlags.RegisterDebugTestEntity(cmd)
-			cmdFlags.RegisterEntity(cmd)
-			registerNodeFlags(cmd)
-		},
-		Run: doInit,
+		Run:   doInit,
 	}
 
 	listCmd = &cobra.Command{
 		Use:   "list",
 		Short: "list registered nodes",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			cmdGrpc.RegisterClientFlags(cmd, false)
-			cmdFlags.RegisterVerbose(cmd)
-		},
-		Run: doList,
+		Run:   doList,
 	}
 
 	logger = logging.GetLogger("cmd/registry/node")
@@ -308,30 +302,6 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func registerNodeFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgEntityID, "", "Entity ID that controls this node")
-		cmd.Flags().Uint64(cfgExpiration, 0, "Epoch that the node registration should expire")
-		cmd.Flags().StringSlice(cfgCommitteeAddress, nil, "Address(es) the node can be reached as a committee member")
-		cmd.Flags().StringSlice(cfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
-		cmd.Flags().String(cfgConsensusAddress, "", "Address the node can be reached as a consensus member")
-		cmd.Flags().StringSlice(cfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-worker\", \"key-manager\", \"merge-worker\", and \"validator\"")
-		cmd.Flags().Bool(cfgSelfSigned, false, "Node registration should be self-signed")
-	}
-
-	for _, v := range []string{
-		cfgEntityID,
-		cfgExpiration,
-		cfgCommitteeAddress,
-		cfgP2PAddress,
-		cfgConsensusAddress,
-		cfgRole,
-		cfgSelfSigned,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
-}
-
 // Register registers the node sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	for _, v := range []*cobra.Command{
@@ -341,21 +311,33 @@ func Register(parentCmd *cobra.Command) {
 		nodeCmd.AddCommand(v)
 	}
 
-	cmdFlags.RegisterVerbose(listCmd)
+	listCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
 
 	for _, v := range []*cobra.Command{
 		initCmd,
 	} {
-		cmdFlags.RegisterDebugTestEntity(v)
-		cmdFlags.RegisterEntity(v)
-		registerNodeFlags(v)
+		v.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
+		v.Flags().AddFlagSet(cmdFlags.EntityFlags)
+		v.Flags().AddFlagSet(flags)
 	}
 
 	for _, v := range []*cobra.Command{
 		listCmd,
 	} {
-		cmdGrpc.RegisterClientFlags(v, false)
+		v.Flags().AddFlagSet(cmdGrpc.ClientFlags)
 	}
 
 	parentCmd.AddCommand(nodeCmd)
+}
+
+func init() {
+	flags.String(cfgEntityID, "", "Entity ID that controls this node")
+	flags.Uint64(cfgExpiration, 0, "Epoch that the node registration should expire")
+	flags.StringSlice(cfgCommitteeAddress, nil, "Address(es) the node can be reached as a committee member")
+	flags.StringSlice(cfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
+	flags.String(cfgConsensusAddress, "", "Address the node can be reached as a consensus member")
+	flags.StringSlice(cfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-worker\", \"key-manager\", \"merge-worker\", and \"validator\"")
+	flags.Bool(cfgSelfSigned, false, "Node registration should be self-signed")
+
+	_ = viper.BindPFlags(flags)
 }

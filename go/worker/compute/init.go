@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -33,6 +33,9 @@ const (
 
 	cfgByzantineInjectDiscrepancies = "worker.compute.byzantine.inject_discrepancies"
 )
+
+// Flags has the configuration flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
 	m := make(map[signature.MapKey]bool)
@@ -111,42 +114,22 @@ func New(
 		ias, keyManager, registration, cfg)
 }
 
-// RegisterFlags registers the configuration flags with the provided
-// command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgWorkerEnabled, false, "Enable compute worker process")
+func init() {
+	Flags.Bool(cfgWorkerEnabled, false, "Enable compute worker process")
 
-		cmd.Flags().String(cfgWorkerBackend, "sandboxed", "Worker backend")
+	Flags.String(cfgWorkerBackend, "sandboxed", "Worker backend")
 
-		cmd.Flags().String(cfgWorkerRuntimeLoader, "", "Path to worker process runtime loader binary")
+	Flags.String(cfgWorkerRuntimeLoader, "", "Path to worker process runtime loader binary")
 
-		cmd.Flags().StringSlice(cfgRuntimeBinary, nil, "Path to runtime binary")
+	Flags.StringSlice(cfgRuntimeBinary, nil, "Path to runtime binary")
 
-		// XXX: This is needed till the code can watch the registry for runtimes.
-		cmd.Flags().StringSlice(cfgRuntimeSGXIDs, nil, "SGX runtime IDs")
+	// XXX: This is needed till the code can watch the registry for runtimes.
+	Flags.StringSlice(cfgRuntimeSGXIDs, nil, "SGX runtime IDs")
 
-		cmd.Flags().Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
+	Flags.Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 
-		cmd.Flags().Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
-		_ = cmd.Flags().MarkHidden(cfgByzantineInjectDiscrepancies)
-	}
+	Flags.Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
+	_ = Flags.MarkHidden(cfgByzantineInjectDiscrepancies)
 
-	for _, v := range []string{
-		cfgWorkerEnabled,
-
-		cfgWorkerBackend,
-
-		cfgWorkerRuntimeLoader,
-
-		cfgRuntimeBinary,
-
-		cfgRuntimeSGXIDs,
-
-		cfgStorageCommitTimeout,
-
-		cfgByzantineInjectDiscrepancies,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
-	}
+	_ = viper.BindPFlags(Flags)
 }

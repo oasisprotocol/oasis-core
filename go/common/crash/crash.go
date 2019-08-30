@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/debug"
@@ -173,23 +173,23 @@ func (c *Crasher) Config(crashPointConfig map[string]float64) {
 	}
 }
 
-// RegisterFlags registers cobra and viper flags for the registered crash
-// points.
-func RegisterFlags(cmd *cobra.Command) {
-	crashGlobal.RegisterFlags(cmd)
+// InitFlags creates flags from the registered crash points and registers those flags with Viper.
+func InitFlags() *flag.FlagSet {
+	return crashGlobal.InitFlags()
 }
 
-// RegisterFlags registers CLI flags with cobra and viper used to configure a
-// crasher instance.
-func (c *Crasher) RegisterFlags(cmd *cobra.Command) {
+// InitFlags creates flags from the registered crash points and registers those flags with Viper.
+func (c *Crasher) InitFlags() *flag.FlagSet {
+	flags := flag.NewFlagSet("", flag.ContinueOnError)
 	for _, crashPointID := range c.ListRegisteredCrashPoints() {
 		argFlag := fmt.Sprintf("%s.%s", c.CLIPrefix, crashPointID)
 		helpMessage := fmt.Sprintf(`Crash probability of "%s" crash point`, crashPointID)
-		if !cmd.Flags().Parsed() {
-			cmd.Flags().Float64(argFlag, 0.0, helpMessage)
-		}
-		_ = viper.BindPFlag(argFlag, cmd.Flags().Lookup(argFlag))
+		flags.Float64(argFlag, 0.0, helpMessage)
 	}
+
+	_ = viper.BindPFlags(flags)
+
+	return flags
 }
 
 // LoadViperArgValues loads viper arg values into the crash point config of the

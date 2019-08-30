@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	tlsCert "github.com/oasislabs/ekiden/go/common/crypto/tls"
@@ -43,6 +44,8 @@ const (
 )
 
 var (
+	proxyFlags = flag.NewFlagSet("", flag.ContinueOnError)
+
 	iasCmd = &cobra.Command{
 		Use:   "ias",
 		Short: "IAS related utilities",
@@ -52,9 +55,6 @@ var (
 		Use:   "proxy",
 		Short: "forward IAS requests under given client credentials",
 		Run:   doProxy,
-		PreRun: func(cmd *cobra.Command, args []string) {
-			RegisterFlags(cmd)
-		},
 	}
 
 	logger = logging.GetLogger("cmd/ias/proxy")
@@ -248,52 +248,29 @@ func grpcAuthenticatorFromFlags(ctx context.Context, cmd *cobra.Command) (ias.GR
 	return newRegistryAuthenticator(ctx, cmd)
 }
 
-// RegisterFlags registers the flags used by the proxy command.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().String(cfgAuthCertFile, "", "the file with the client certificate")
-		cmd.Flags().String(cfgAuthKeyFile, "", "the file with the client private key")
-		cmd.Flags().String(cfgAuthCertCA, "", "the file with the CA that signed the client certificate")
-		cmd.Flags().String(cfgSPID, "", "SPID associated with the client certificate")
-		cmd.Flags().String(cfgQuoteSigType, "linkable", "quote signature type associated with the SPID")
-		cmd.Flags().Bool(cfgIsProduction, false, "use the production IAS endpoint")
-		cmd.Flags().Bool(cfgDebugMock, false, "generate mock IAS AVR responses (UNSAFE)")
-		cmd.Flags().Bool(cfgDebugSkipAuth, false, "disable proxy authentication (UNSAFE)")
-		cmd.Flags().Bool(cfgUseGenesis, false, "use a genesis document instead of the registry")
-		cmd.Flags().Int(cfgWaitRuntimes, 0, "wait for N runtimes to be registered before servicing requests")
-	}
-
-	for _, v := range []string{
-		cfgAuthCertFile,
-		cfgAuthKeyFile,
-		cfgAuthCertCA,
-		cfgSPID,
-		cfgQuoteSigType,
-		cfgIsProduction,
-		cfgDebugMock,
-		cfgDebugSkipAuth,
-		cfgUseGenesis,
-		cfgWaitRuntimes,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
-
-	for _, v := range []func(*cobra.Command){
-		metrics.RegisterFlags,
-		cmdGrpc.RegisterServerTCPFlags,
-		flags.RegisterGenesisFile,
-		pprof.RegisterFlags,
-	} {
-		v(cmd)
-	}
-
-	cmdGrpc.RegisterClientFlags(cmd, false)
-}
-
 // Register registers the ias sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	RegisterFlags(iasProxyCmd)
+	iasProxyCmd.Flags().AddFlagSet(proxyFlags)
 
 	iasCmd.AddCommand(iasProxyCmd)
 	parentCmd.AddCommand(iasCmd)
+}
+
+func init() {
+	proxyFlags.String(cfgAuthCertFile, "", "the file with the client certificate")
+	proxyFlags.String(cfgAuthKeyFile, "", "the file with the client private key")
+	proxyFlags.String(cfgAuthCertCA, "", "the file with the CA that signed the client certificate")
+	proxyFlags.String(cfgSPID, "", "SPID associated with the client certificate")
+	proxyFlags.String(cfgQuoteSigType, "linkable", "quote signature type associated with the SPID")
+	proxyFlags.Bool(cfgIsProduction, false, "use the production IAS endpoint")
+	proxyFlags.Bool(cfgDebugMock, false, "generate mock IAS AVR responses (UNSAFE)")
+	proxyFlags.Bool(cfgDebugSkipAuth, false, "disable proxy authentication (UNSAFE)")
+	proxyFlags.Bool(cfgUseGenesis, false, "use a genesis document instead of the registry")
+	proxyFlags.Int(cfgWaitRuntimes, 0, "wait for N runtimes to be registered before servicing requests")
+	_ = viper.BindPFlags(proxyFlags)
+	proxyFlags.AddFlagSet(metrics.Flags)
+	proxyFlags.AddFlagSet(cmdGrpc.ServerTCPFlags)
+	proxyFlags.AddFlagSet(cmdGrpc.ClientFlags)
+	proxyFlags.AddFlagSet(flags.GenesisFileFlags)
+	proxyFlags.AddFlagSet(pprof.Flags)
 }

@@ -4,7 +4,7 @@ package batching
 import (
 	"sync"
 
-	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
@@ -21,6 +21,9 @@ const (
 	cfgMaxBatchSize      = "worker.txnscheduler.batching.max_batch_size"
 	cfgMaxBatchSizeBytes = "worker.txnscheduler.batching.max_batch_size_bytes"
 )
+
+// Flags has the configuration flag for the batching algorithm.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 type batchingState struct {
 	sync.RWMutex
@@ -167,19 +170,10 @@ func New() (api.Algorithm, error) {
 	return &batching, nil
 }
 
-// RegisterFlags registers the configuration flag for the batching algorithm.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().Uint64(cfgMaxQueueSize, 10000, "Maximum size of the batching queue")
-		cmd.Flags().Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
-		cmd.Flags().String(cfgMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
-	}
+func init() {
+	Flags.Uint64(cfgMaxQueueSize, 10000, "Maximum size of the batching queue")
+	Flags.Uint64(cfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
+	Flags.String(cfgMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
 
-	for _, v := range []string{
-		cfgMaxQueueSize,
-		cfgMaxBatchSize,
-		cfgMaxBatchSizeBytes,
-	} {
-		viper.BindPFlag(v, cmd.Flags().Lookup(v)) // nolint: errcheck
-	}
+	_ = viper.BindPFlags(Flags)
 }

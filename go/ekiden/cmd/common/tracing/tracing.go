@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	jaegercfg "github.com/uber/jaeger-client-go/config"
 
@@ -20,6 +20,9 @@ const (
 	cfgTracingReporterLocalAgentHostPort = "tracing.reporter.agent_addr"
 	cfgTracingSamplerParam               = "tracing.sampler.param"
 )
+
+// Flags has the flags used by the tracing service.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // ServiceConfig contains the configuration parameters for tracing.
 type ServiceConfig struct {
@@ -93,21 +96,11 @@ func New(serviceName string) (service.CleanupAble, error) {
 	return &tracingService{closer: closer}, nil
 }
 
-// RegisterFlags registers the flags used by the tracing service.
-func RegisterFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().Bool(cfgTracingEnabled, false, "Enable tracing")
-		cmd.Flags().Duration(cfgTracingReporterFlushInterval, 1*time.Second, "How often the buffer is force-flushed, even if it's not full")
-		cmd.Flags().String(cfgTracingReporterLocalAgentHostPort, "jaeger:6831", "Send spans to jaeger-agent at this address")
-		cmd.Flags().Float64(cfgTracingSamplerParam, 1.0, "Probability for probabilistic sampler")
-	}
+func init() {
+	Flags.Bool(cfgTracingEnabled, false, "Enable tracing")
+	Flags.Duration(cfgTracingReporterFlushInterval, 1*time.Second, "How often the buffer is force-flushed, even if it's not full")
+	Flags.String(cfgTracingReporterLocalAgentHostPort, "jaeger:6831", "Send spans to jaeger-agent at this address")
+	Flags.Float64(cfgTracingSamplerParam, 1.0, "Probability for probabilistic sampler")
 
-	for _, v := range []string{
-		cfgTracingEnabled,
-		cfgTracingReporterFlushInterval,
-		cfgTracingReporterLocalAgentHostPort,
-		cfgTracingSamplerParam,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
+	_ = viper.BindPFlags(Flags)
 }

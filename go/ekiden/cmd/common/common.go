@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common"
@@ -29,6 +30,9 @@ var (
 	cfgFile string
 
 	rootLog = logging.GetLogger("ekiden")
+
+	// RootFlags has the flags that are common across all commands.
+	RootFlags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // DataDir retuns the data directory iff one is set.
@@ -81,22 +85,13 @@ func Logger() *logging.Logger {
 	return rootLog
 }
 
-// RegisterRootFlags registers the persistent flags that are common
-// across all commands.
-func RegisterRootFlags(rootCmd *cobra.Command) {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, cfgConfigFile, "", "config file")
-	rootCmd.PersistentFlags().String(cfgDataDir, "", "data directory")
-	rootCmd.PersistentFlags().Bool(cfgAllowTestKeys, false, "Allow test keys (UNSAFE)")
-
-	for _, v := range []string{
-		cfgConfigFile,
-		cfgDataDir,
-		cfgAllowTestKeys,
-	} {
-		_ = viper.BindPFlag(v, rootCmd.PersistentFlags().Lookup(v))
-	}
-
-	registerLoggingFlags(rootCmd)
+func init() {
+	initLoggingFlags()
+	RootFlags.StringVar(&cfgFile, cfgConfigFile, "", "config file")
+	RootFlags.String(cfgDataDir, "", "data directory")
+	RootFlags.Bool(cfgAllowTestKeys, false, "Allow test keys (UNSAFE)")
+	_ = viper.BindPFlags(RootFlags)
+	RootFlags.AddFlagSet(loggingFlags)
 }
 
 // InitConfig initializes the command configuration.

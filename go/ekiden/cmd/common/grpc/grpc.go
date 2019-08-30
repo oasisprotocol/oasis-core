@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
@@ -22,6 +22,15 @@ const (
 
 	defaultAddress      = "127.0.0.1:42261"
 	localSocketFilename = "internal.sock"
+)
+
+var (
+	// ServerTCPFlags has the flags used by the gRPC server.
+	ServerTCPFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	// ServerLocalFlags has the flags used by the gRPC server.
+	ServerLocalFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	// ClientFlags has the flags for a gRPC client.
+	ClientFlags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // NewServerTCP constructs a new gRPC server service listening on
@@ -51,55 +60,6 @@ func NewServerLocal() (*cmnGrpc.Server, error) {
 	return cmnGrpc.NewServerLocal("internal", path, debugPort, nil)
 }
 
-// RegisterServerTCPFlags registers the flags used by the gRPC server.
-func RegisterServerTCPFlags(cmd *cobra.Command) {
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().Uint16(cfgGRPCPort, 9001, "gRPC server port")
-	}
-
-	for _, v := range []string{
-		cfgGRPCPort,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
-
-	cmnGrpc.RegisterServerFlags(cmd)
-}
-
-// RegisterServerLocalFlags registers the flags used by the gRPC server.
-func RegisterServerLocalFlags(cmd *cobra.Command) {
-	cmnGrpc.RegisterServerFlags(cmd)
-
-	if !cmd.Flags().Parsed() {
-		cmd.Flags().Uint16(cfgDebugPort, 0, "gRPC server debug port (INSECURE/UNSAFE)")
-	}
-
-	for _, v := range []string{
-		cfgDebugPort,
-	} {
-		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
-	}
-}
-
-// RegisterClientFlags registers the flags for a gRPC client.
-func RegisterClientFlags(cmd *cobra.Command, persistent bool) {
-	var flagSet *pflag.FlagSet
-	switch persistent {
-	case true:
-		flagSet = cmd.PersistentFlags()
-	case false:
-		flagSet = cmd.Flags()
-	}
-
-	if !cmd.Flags().Parsed() {
-		flagSet.StringP(cfgAddress, "a", defaultAddress, "remote gRPC address")
-	}
-
-	if persistent {
-		_ = viper.BindPFlag(cfgAddress, flagSet.Lookup(cfgAddress))
-	}
-}
-
 // NewClient connects to a remote gRPC server.
 func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
 	addr, _ := cmd.Flags().GetString(cfgAddress)
@@ -110,4 +70,17 @@ func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
 	}
 
 	return conn, nil
+}
+
+func init() {
+	ServerTCPFlags.Uint16(cfgGRPCPort, 9001, "gRPC server port")
+	_ = viper.BindPFlags(ServerTCPFlags)
+	ServerTCPFlags.AddFlagSet(cmnGrpc.Flags)
+
+	ServerLocalFlags.Uint16(cfgDebugPort, 0, "gRPC server debug port (INSECURE/UNSAFE)")
+	_ = viper.BindPFlags(ServerLocalFlags)
+	ServerLocalFlags.AddFlagSet(cmnGrpc.Flags)
+
+	ClientFlags.StringP(cfgAddress, "a", defaultAddress, "remote gRPC address")
+	_ = viper.BindPFlags(ClientFlags)
 }
