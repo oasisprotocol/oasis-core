@@ -27,6 +27,7 @@ import (
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
 	grpcRegistry "github.com/oasislabs/ekiden/go/grpc/registry"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	"github.com/oasislabs/ekiden/go/worker/common/configparser"
 )
 
 const (
@@ -37,6 +38,7 @@ const (
 	cfgConsensusAddress = "node.consensus_address"
 	cfgRole             = "node.role"
 	cfgSelfSigned       = "node.is_self_signed"
+	cfgNodeRuntimeID    = "node.runtime.id"
 
 	optRoleComputeWorker        = "compute-worker"
 	optRoleStorageWorker        = "storage-worker"
@@ -174,6 +176,19 @@ func doInit(cmd *cobra.Command, args []string) {
 			"err", err,
 		)
 		os.Exit(1)
+	}
+
+	runtimeIDs, err := configparser.GetRuntimes(viper.GetStringSlice(cfgNodeRuntimeID))
+	if err != nil {
+		logger.Error("failed to parse node runtime id",
+			"err", err,
+		)
+	}
+	for _, r := range runtimeIDs {
+		runtime := &node.Runtime{
+			ID: r,
+		}
+		n.Runtimes = append(n.Runtimes, runtime)
 	}
 
 	for _, v := range viper.GetStringSlice(cfgCommitteeAddress) {
@@ -336,8 +351,9 @@ func init() {
 	flags.StringSlice(cfgCommitteeAddress, nil, "Address(es) the node can be reached as a committee member")
 	flags.StringSlice(cfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
 	flags.String(cfgConsensusAddress, "", "Address the node can be reached as a consensus member")
-	flags.StringSlice(cfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-worker\", \"key-manager\", \"merge-worker\", and \"validator\"")
+	flags.StringSlice(cfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-scheduler\", \"key-manager\", \"merge-worker\", and \"validator\"")
 	flags.Bool(cfgSelfSigned, false, "Node registration should be self-signed")
+	flags.StringSlice(cfgNodeRuntimeID, nil, "Hex Encoded Runtime ID(s) of the node.")
 
 	_ = viper.BindPFlags(flags)
 }
