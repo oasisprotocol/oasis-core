@@ -39,8 +39,7 @@ var (
 		Run:   doBenchmark,
 	}
 
-	// Flags has the flags used by the benchmark sub-command.
-	Flags = flag.NewFlagSet("", flag.ContinueOnError)
+	flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
@@ -291,13 +290,13 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 
 // Register registers the storage benchmark sub-command.
 func Register(parentCmd *cobra.Command) {
-	benchmarkStorageCmd.Flags().AddFlagSet(Flags)
+	benchmarkStorageCmd.Flags().AddFlagSet(flags)
 	parentCmd.AddCommand(benchmarkStorageCmd)
 }
 
 func init() {
-	Flags.Bool(cfgProfileCPU, false, "Enable CPU profiling in benchmark")
-	Flags.Bool(cfgProfileMEM, false, "Enable memory profiling in benchmark")
-	_ = viper.BindPFlags(Flags)
-	Flags.AddFlagSet(storage.Flags)
+	flags.Bool(cfgProfileCPU, false, "Enable CPU profiling in benchmark")
+	flags.Bool(cfgProfileMEM, false, "Enable memory profiling in benchmark")
+	_ = viper.BindPFlags(flags)
+	flags.AddFlagSet(storage.Flags)
 }
