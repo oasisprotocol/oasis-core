@@ -104,9 +104,6 @@ func checkDiff(ctx context.Context, storageClient storageApi.Backend, root strin
 func doCheckRoots(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 
-	cmd.Flags().AddFlagSet(storageClient.Flags)
-	cmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
-
 	conn, client := cmdDebugClient.DoConnect(cmd)
 	storageWorkerClient := storageGrpc.NewStorageWorkerClient(conn)
 	defer conn.Close()
