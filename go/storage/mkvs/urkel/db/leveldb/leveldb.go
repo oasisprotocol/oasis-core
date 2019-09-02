@@ -696,6 +696,13 @@ func (b *leveldbBatch) Commit(root node.Root) error {
 	}
 	defer snapshot.Release()
 
+	// Make sure that the round that we try to commit into has not yet been
+	// finalized.
+	lastFinalizedRound, exists := b.db.meta.getLastFinalizedRound(root.Namespace)
+	if exists && lastFinalizedRound >= root.Round {
+		return api.ErrAlreadyFinalized
+	}
+
 	// Get previous round.
 	prevRound, err := getPreviousRound(snapshot, root.Namespace, root.Round)
 	if err != nil {

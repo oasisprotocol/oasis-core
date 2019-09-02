@@ -47,7 +47,7 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 		"storage.read.after":   0.0,
 	})
 
-	tests.StorageImplementationTests(t, backend, testNs)
+	tests.StorageImplementationTests(t, backend, testNs, 0)
 }
 
 func init() {

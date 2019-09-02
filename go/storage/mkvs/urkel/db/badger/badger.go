@@ -832,6 +832,13 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 	tx := ba.db.db.NewTransaction(false)
 	defer tx.Discard()
 
+	// Make sure that the round that we try to commit into has not yet been
+	// finalized.
+	lastFinalizedRound, exists := ba.db.meta.getLastFinalizedRound(root.Namespace)
+	if exists && lastFinalizedRound >= root.Round {
+		return api.ErrAlreadyFinalized
+	}
+
 	// Get previous round.
 	prevRound, err := getPreviousRound(tx, root.Namespace, root.Round)
 	if err != nil {

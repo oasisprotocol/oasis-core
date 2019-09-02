@@ -1810,6 +1810,14 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	err = ndb.Finalize(ctx, testNs, 0, []hash.Hash{rootHashR0_1})
 	require.Error(t, err, "Finalize should fail as round is already finalized")
 	require.Equal(t, db.ErrAlreadyFinalized, err)
+
+	// Commit into an already finalized round should fail.
+	tree = New(nil, ndb)
+	err = tree.Insert(ctx, []byte("already finalized"), []byte("woohoo"))
+	require.NoError(t, err, "Insert")
+	_, _, err = tree.Commit(ctx, testNs, 0)
+	require.Error(t, err, "Commit should fail for already finalized round")
+	require.Equal(t, db.ErrAlreadyFinalized, err)
 }
 
 func testBackend(
