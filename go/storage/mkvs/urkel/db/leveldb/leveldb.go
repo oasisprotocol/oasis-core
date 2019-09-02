@@ -85,10 +85,35 @@ type rootGcUpdates []rootGcUpdate
 // rootAddedNodes is the value of the rootAddedNodes keys.
 type rootAddedNodes []hash.Hash
 
+type metadata struct {
+	sync.RWMutex
+
+	lastFinalizedRound map[common.Namespace]uint64
+}
+
+func (m *metadata) getLastFinalizedRound(ns common.Namespace) (uint64, bool) {
+	m.RLock()
+	defer m.RUnlock()
+
+	round, ok := m.lastFinalizedRound[ns]
+	return round, ok
+}
+
+func (m *metadata) setLastFinalizedRound(ns common.Namespace, round uint64) {
+	m.Lock()
+	defer m.Unlock()
+
+	if m.lastFinalizedRound == nil {
+		m.lastFinalizedRound = make(map[common.Namespace]uint64)
+	}
+	m.lastFinalizedRound[ns] = round
+}
+
 type leveldbNodeDB struct {
 	api.CheckpointableDB
 
-	db *leveldb.DB
+	db   *leveldb.DB
+	meta metadata
 
 	closeOnce sync.Once
 
@@ -106,7 +131,41 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 		writeSync: !cfg.DebugNoFsync,
 	}
 	levelNDb.CheckpointableDB = api.NewCheckpointableDB(levelNDb)
+
+	// Load database metadata.
+	if err = levelNDb.load(); err != nil {
+		levelNDb.Close()
+		return nil, err
+	}
+
 	return levelNDb, nil
+}
+
+func (d *leveldbNodeDB) load() error {
+	d.meta.Lock()
+	defer d.meta.Unlock()
+
+	// Load finalized rounds.
+	it := d.db.NewIterator(util.BytesPrefix(finalizedKeyFmt.Encode()), nil)
+	defer it.Release()
+
+	for it.Next() {
+		var decNs common.Namespace
+
+		if !finalizedKeyFmt.Decode(it.Key(), &decNs) {
+			// This should not happen as the LevelDB iterator should take care of it.
+			panic("urkel/db/leveldb: bad iterator")
+		}
+
+		var lastFinalizedRound uint64
+		if err := cbor.Unmarshal(it.Value(), &lastFinalizedRound); err != nil {
+			return err
+		}
+
+		d.meta.lastFinalizedRound[decNs] = lastFinalizedRound
+	}
+
+	return nil
 }
 
 func (d *leveldbNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
@@ -179,27 +238,13 @@ func (d *leveldbNodeDB) Finalize(ctx context.Context, namespace common.Namespace
 	defer snapshot.Release()
 
 	// Make sure that the previous round has been finalized.
-	data, err := snapshot.Get(finalizedKeyFmt.Encode(&namespace), nil)
-	switch err {
-	case nil:
-		var lastFinalizedRound uint64
-		if err = cbor.Unmarshal(data, &lastFinalizedRound); err != nil {
-			panic("urkel/db/leveldb: corrupted finalized round index")
-		}
-
-		if round > 0 && lastFinalizedRound < (round-1) {
-			return api.ErrNotFinalized
-		}
-
-		// Make sure that this round has not yet been finalized.
-		if round <= lastFinalizedRound {
-			return api.ErrAlreadyFinalized
-		}
-	default:
-		// No previous round has been finalized.
-		if round > 0 {
-			return api.ErrNotFinalized
-		}
+	lastFinalizedRound, exists := d.meta.getLastFinalizedRound(namespace)
+	if round > 0 && (!exists || lastFinalizedRound < (round-1)) {
+		return api.ErrNotFinalized
+	}
+	// Make sure that this round has not yet been finalized.
+	if exists && round <= lastFinalizedRound {
+		return api.ErrAlreadyFinalized
 	}
 	// Update last finalized round.
 	batch.Put(finalizedKeyFmt.Encode(&namespace), cbor.Marshal(round))
@@ -329,6 +374,9 @@ func (d *leveldbNodeDB) Finalize(ctx context.Context, namespace common.Namespace
 		return err
 	}
 
+	// Update cached last finalized round.
+	d.meta.setLastFinalizedRound(namespace, round)
+
 	return nil
 }
 
@@ -350,17 +398,8 @@ func (d *leveldbNodeDB) Prune(ctx context.Context, namespace common.Namespace, r
 	defer snapshot.Release()
 
 	// Make sure that the round that we try to prune has been finalized.
-	data, err := snapshot.Get(finalizedKeyFmt.Encode(&namespace), nil)
-	if err != nil {
-		return 0, api.ErrNotFinalized
-	}
-
-	var lastFinalizedRound uint64
-	if err = cbor.Unmarshal(data, &lastFinalizedRound); err != nil {
-		panic("urkel/db/leveldb: corrupted finalized round index")
-	}
-
-	if lastFinalizedRound < round {
+	lastFinalizedRound, exists := d.meta.getLastFinalizedRound(namespace)
+	if !exists || lastFinalizedRound < round {
 		return 0, api.ErrNotFinalized
 	}
 

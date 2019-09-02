@@ -83,6 +83,30 @@ type rootGcUpdates []rootGcUpdate
 // rootAddedNodes is the value of the rootAddedNodes keys.
 type rootAddedNodes []hash.Hash
 
+type metadata struct {
+	sync.RWMutex
+
+	lastFinalizedRound map[common.Namespace]uint64
+}
+
+func (m *metadata) getLastFinalizedRound(ns common.Namespace) (uint64, bool) {
+	m.RLock()
+	defer m.RUnlock()
+
+	round, ok := m.lastFinalizedRound[ns]
+	return round, ok
+}
+
+func (m *metadata) setLastFinalizedRound(ns common.Namespace, round uint64) {
+	m.Lock()
+	defer m.Unlock()
+
+	if m.lastFinalizedRound == nil {
+		m.lastFinalizedRound = make(map[common.Namespace]uint64)
+	}
+	m.lastFinalizedRound[ns] = round
+}
+
 // New creates a new BadgerDB-backed node database.
 func New(cfg *api.Config) (api.NodeDB, error) {
 	db := &badgerNodeDB{
@@ -100,6 +124,13 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	if db.db, err = badger.Open(opts); err != nil {
 		return nil, errors.Wrap(err, "urkel/db/badger: failed to open database")
 	}
+
+	// Load database metadata.
+	if err = db.load(); err != nil {
+		_ = db.db.Close()
+		return nil, errors.Wrap(err, "urkel/db/badger: failed to load metadata")
+	}
+
 	go db.gcWorker()
 
 	return db, nil
@@ -110,11 +141,46 @@ type badgerNodeDB struct {
 
 	logger *logging.Logger
 
-	db *badger.DB
+	db   *badger.DB
+	meta metadata
 
 	closeOnce sync.Once
 	closeCh   chan struct{}
 	closedCh  chan struct{}
+}
+
+func (d *badgerNodeDB) load() error {
+	d.meta.Lock()
+	defer d.meta.Unlock()
+
+	return d.db.View(func(tx *badger.Txn) error {
+		// Load finalized rounds.
+		it := tx.NewIterator(badger.IteratorOptions{Prefix: finalizedKeyFmt.Encode()})
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+
+			var decNs common.Namespace
+
+			if !finalizedKeyFmt.Decode(item.Key(), &decNs) {
+				// This should not happen as the Badger iterator should take care of it.
+				panic("urkel/db/badger: bad iterator")
+			}
+
+			var lastFinalizedRound uint64
+			err := item.Value(func(data []byte) error {
+				return cbor.Unmarshal(data, &lastFinalizedRound)
+			})
+			if err != nil {
+				return err
+			}
+
+			d.meta.lastFinalizedRound[decNs] = lastFinalizedRound
+		}
+
+		return nil
+	})
 }
 
 func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
@@ -223,36 +289,13 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 	defer tx.Discard()
 
 	// Make sure that the previous round has been finalized.
-	item, err := tx.Get(finalizedKeyFmt.Encode(&namespace))
-	switch err {
-	case nil:
-		var lastFinalizedRound uint64
-		err = item.Value(func(data []byte) error {
-			return cbor.Unmarshal(data, &lastFinalizedRound)
-		})
-		if err != nil {
-			panic("urkel/db/badger: corrupted finalized round index")
-		}
-
-		if round > 0 && lastFinalizedRound < (round-1) {
-			return api.ErrNotFinalized
-		}
-
-		// Make sure that this round has not yet been finalized.
-		if round <= lastFinalizedRound {
-			return api.ErrAlreadyFinalized
-		}
-	case badger.ErrKeyNotFound:
-		// No previous round has been finalized.
-		if round > 0 {
-			return api.ErrNotFinalized
-		}
-	default:
-		return err
+	lastFinalizedRound, exists := d.meta.getLastFinalizedRound(namespace)
+	if round > 0 && (!exists || lastFinalizedRound < (round-1)) {
+		return api.ErrNotFinalized
 	}
-	// Update last finalized round.
-	if err = batch.Set(finalizedKeyFmt.Encode(&namespace), cbor.Marshal(round)); err != nil {
-		return err
+	// Make sure that this round has not yet been finalized.
+	if exists && round <= lastFinalizedRound {
+		return api.ErrAlreadyFinalized
 	}
 
 	// Determine a set of finalized roots. Finalization is transitive, so if
@@ -284,7 +327,7 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 
 			if item.ValueSize() > 0 {
 				var nextRoot hash.Hash
-				err = item.Value(func(data []byte) error {
+				err := item.Value(func(data []byte) error {
 					return nextRoot.UnmarshalBinary(data)
 				})
 				if err != nil {
@@ -322,8 +365,7 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 		rootAddedNodesKey := rootAddedNodesKeyFmt.Encode(&namespace, round, &rootHash)
 
 		// Load hashes of nodes added during this round for this root.
-		var item *badger.Item
-		item, err = tx.Get(rootAddedNodesKey)
+		item, err := tx.Get(rootAddedNodesKey)
 		if err != nil {
 			panic("urkel/db/badger: corrupted root added nodes index")
 		}
@@ -392,13 +434,26 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 		}
 
 		key := nodeKeyFmt.Encode(&namespace, &h)
-		if err = batch.Delete(key); err != nil {
+		if err := batch.Delete(key); err != nil {
 			return err
 		}
 	}
 
+	// Update last finalized round. This is done at the end as Badger may
+	// split the batch into multiple transactions.
+	if err := batch.Set(finalizedKeyFmt.Encode(&namespace), cbor.Marshal(round)); err != nil {
+		return err
+	}
+
 	// Commit batch.
-	return batch.Flush()
+	if err := batch.Flush(); err != nil {
+		return err
+	}
+
+	// Update cached last finalized round.
+	d.meta.setLastFinalizedRound(namespace, round)
+
+	return nil
 }
 
 func (d *badgerNodeDB) Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error) {
@@ -411,24 +466,8 @@ func (d *badgerNodeDB) Prune(ctx context.Context, namespace common.Namespace, ro
 	defer tx.Discard()
 
 	// Make sure that the round that we try to prune has been finalized.
-	item, err := tx.Get(finalizedKeyFmt.Encode(&namespace))
-	switch err {
-	case nil:
-	case badger.ErrKeyNotFound:
-		return 0, api.ErrNotFinalized
-	default:
-		return 0, err
-	}
-
-	var lastFinalizedRound uint64
-	err = item.Value(func(data []byte) error {
-		return cbor.Unmarshal(data, &lastFinalizedRound)
-	})
-	if err != nil {
-		panic("urkel/db/badger: corrupted finalized round index")
-	}
-
-	if lastFinalizedRound < round {
+	lastFinalizedRound, exists := d.meta.getLastFinalizedRound(namespace)
+	if !exists || lastFinalizedRound < round {
 		return 0, api.ErrNotFinalized
 	}
 
