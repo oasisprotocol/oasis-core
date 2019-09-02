@@ -22,13 +22,11 @@ var (
 	}
 	mergeCommitteePolicy = &committee.AccessPolicy{
 		Actions: []accessctl.Action{
-			"Apply",
-			"ApplyBatch",
 			"Merge",
 			"MergeBatch",
 		},
 	}
-	// NOTE: GetDiff/GetCheckpoint need to be accessible to all storaged nodes,
+	// NOTE: GetDiff/GetCheckpoint need to be accessible to all storage nodes,
 	// not just the ones in the current storage committee so that new nodes can
 	// sync-up.
 	storageNodesPolicy = &committee.AccessPolicy{
