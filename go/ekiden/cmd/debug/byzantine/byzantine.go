@@ -13,7 +13,6 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
@@ -134,22 +133,9 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		"new_state_root", cbc.newStateRoot,
 	)
 
-	receipts, err := storageBroadcastApplyBatch(ctx, hnss, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1, []storage.ApplyOp{
-		storage.ApplyOp{
-			SrcRound: cbc.bd.Header.Round + 1,
-			SrcRoot:  cbc.bd.IORoot,
-			DstRoot:  cbc.newIORoot,
-			WriteLog: cbc.ioWriteLog,
-		},
-		storage.ApplyOp{
-			SrcRound: cbc.bd.Header.Round,
-			SrcRoot:  cbc.bd.Header.StateRoot,
-			DstRoot:  cbc.newStateRoot,
-			WriteLog: cbc.stateWriteLog,
-		},
-	})
+	receipts, err := cbc.uploadBatch(ctx, hnss)
 	if err != nil {
-		panic(fmt.Sprintf("storage broadcast apply batch failed: %+v", err))
+		panic(fmt.Sprintf("compute upload batch failed: %+v", err))
 	}
 
 	message, err := cbc.createCommitmentMessage(defaultIdentity, defaultRuntimeID, electionHeight, computeCommittee.EncodedMembersHash(), receipts)

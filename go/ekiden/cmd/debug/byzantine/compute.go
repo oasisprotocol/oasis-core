@@ -133,6 +133,28 @@ func (cbc *computeBatchContext) commit(ctx context.Context) error {
 	return nil
 }
 
+func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestNodeStorage) ([]*storage.Receipt, error) {
+	receipts, err := storageBroadcastApplyBatch(ctx, hnss, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1, []storage.ApplyOp{
+		storage.ApplyOp{
+			SrcRound: cbc.bd.Header.Round + 1,
+			SrcRoot:  cbc.bd.IORoot,
+			DstRoot:  cbc.newIORoot,
+			WriteLog: cbc.ioWriteLog,
+		},
+		storage.ApplyOp{
+			SrcRound: cbc.bd.Header.Round,
+			SrcRoot:  cbc.bd.Header.StateRoot,
+			DstRoot:  cbc.newStateRoot,
+			WriteLog: cbc.stateWriteLog,
+		},
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "storageBroadcastApplyBatch")
+	}
+
+	return receipts, nil
+}
+
 func (cbc *computeBatchContext) createCommitmentMessage(id *identity.Identity, runtimeID signature.PublicKey, groupVersion int64, committeeID hash.Hash, storageReceipts []*storage.Receipt) (*p2p.Message, error) {
 	var storageSigs []signature.Signature
 	for _, receipt := range storageReceipts {
