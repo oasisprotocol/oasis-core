@@ -40,6 +40,7 @@ type Handler interface {
 // P2P is a peer-to-peer node using libp2p.
 type P2P struct {
 	sync.RWMutex
+	publishing sync.WaitGroup
 
 	registerAddresses []multiaddr.Multiaddr
 
@@ -176,7 +177,9 @@ func (p *P2P) publishImpl(ctx context.Context, node *node.Node, msg *Message) er
 // If message publish fails, it is automatically retried until successful,
 // using an exponential backoff.
 func (p *P2P) Publish(ctx context.Context, node *node.Node, msg *Message) {
+	p.publishing.Add(1)
 	go func() {
+		defer p.publishing.Done()
 		bctx := backoff.WithContext(backoff.NewExponentialBackOff(), ctx)
 
 		err := backoff.Retry(func() error {
@@ -189,6 +192,11 @@ func (p *P2P) Publish(ctx context.Context, node *node.Node, msg *Message) {
 			)
 		}
 	}()
+}
+
+// Wait until Publish routines have finished.
+func (p *P2P) Flush() {
+	p.publishing.Wait()
 }
 
 // RegisterHandler registeres a message handler for the specified runtime.
