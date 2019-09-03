@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
+	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
 var (
@@ -68,4 +69,5 @@ func init() {
 	computeHonestCmd.Flags().AddFlagSet(flags.GenesisFileFlags)
 	computeHonestCmd.Flags().AddFlagSet(p2p.Flags)
 	computeHonestCmd.Flags().AddFlagSet(tendermint.Flags)
+	computeHonestCmd.Flags().AddFlagSet(registration.Flags)
 }

@@ -222,7 +222,8 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 	return nil
 }
 
-func getRegistrationSigner(logger *logging.Logger, dataDir string, identity *identity.Identity) (signature.PublicKey, signature.Signer, error) {
+// GetRegistrationSigner loads the signing credentials as configured by this package's flags.
+func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *identity.Identity) (signature.PublicKey, signature.Signer, error) {
 	// If the test entity is enabled, use the entity signing key for signing
 	// registrations.
 	if flags.DebugTestEntity() {
@@ -302,7 +303,7 @@ func New(
 ) (*Registration, error) {
 	logger := logging.GetLogger("worker/registration")
 
-	entityID, registrationSigner, err := getRegistrationSigner(logger, dataDir, identity)
+	entityID, registrationSigner, err := GetRegistrationSigner(logger, dataDir, identity)
 	if err != nil {
 		return nil, err
 	}
