@@ -81,29 +81,29 @@ func foldWriteLogIterator(t *testing.T, w api.WriteLogIterator) api.WriteLog {
 
 // StorageImplementationTests exercises the basic functionality of a storage
 // backend.
-func StorageImplementationTests(t *testing.T, backend api.Backend, namespace common.Namespace) {
+func StorageImplementationTests(t *testing.T, backend api.Backend, namespace common.Namespace, round uint64) {
 	<-backend.Initialized()
 
 	t.Run("Basic", func(t *testing.T) {
-		testBasic(t, backend, namespace)
+		testBasic(t, backend, namespace, round)
 	})
 	t.Run("Merge", func(t *testing.T) {
-		testMerge(t, backend, namespace)
+		testMerge(t, backend, namespace, round)
 	})
 }
 
-func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace) {
+func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, round uint64) {
 	var rootHash hash.Hash
 	rootHash.Empty()
 
 	wl := prepareWriteLog(testValues)
-	expectedNewRoot := CalculateExpectedNewRoot(t, wl, namespace, 1)
+	expectedNewRoot := CalculateExpectedNewRoot(t, wl, namespace, round)
 	var receipts []*api.Receipt
 	var receiptBody api.ReceiptBody
 	var err error
 
 	// Apply write log to an empty root.
-	receipts, err = backend.Apply(context.Background(), namespace, 0, rootHash, 1, expectedNewRoot, wl)
+	receipts, err = backend.Apply(context.Background(), namespace, round, rootHash, round, expectedNewRoot, wl)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -114,21 +114,21 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace) {
 		require.NoError(t, err, "receipt.Open() should not return an error")
 		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
 		require.Equal(t, namespace, receiptBody.Namespace, "receiptBody should contain correct namespace")
-		require.EqualValues(t, 1, receiptBody.Round, "receiptBody should contain correct round")
+		require.EqualValues(t, round, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
 	}
 
 	// Prepare another write log and form a set of apply operations.
 	wl2 := prepareWriteLog(testValues[0:2])
-	expectedNewRoot2 := CalculateExpectedNewRoot(t, wl2, namespace, 1)
+	expectedNewRoot2 := CalculateExpectedNewRoot(t, wl2, namespace, round)
 	applyOps := []api.ApplyOp{
-		api.ApplyOp{SrcRound: 0, SrcRoot: rootHash, DstRoot: expectedNewRoot, WriteLog: wl},
-		api.ApplyOp{SrcRound: 0, SrcRoot: rootHash, DstRoot: expectedNewRoot2, WriteLog: wl2},
+		api.ApplyOp{SrcRound: round, SrcRoot: rootHash, DstRoot: expectedNewRoot, WriteLog: wl},
+		api.ApplyOp{SrcRound: round, SrcRoot: rootHash, DstRoot: expectedNewRoot2, WriteLog: wl2},
 	}
 
 	// Apply a batch of operations against the MKVS.
-	receipts, err = backend.ApplyBatch(context.Background(), namespace, 1, applyOps)
+	receipts, err = backend.ApplyBatch(context.Background(), namespace, round, applyOps)
 	require.NoError(t, err, "ApplyBatch() should not return an error")
 	require.NotNil(t, receipts, "ApplyBatch() should return receipts")
 
@@ -139,7 +139,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace) {
 		require.NoError(t, err, "receipt.Open() should not return an error")
 		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
 		require.Equal(t, namespace, receiptBody.Namespace, "receiptBody should contain correct namespace")
-		require.EqualValues(t, 1, receiptBody.Round, "receiptBody should contain correct round")
+		require.EqualValues(t, round, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, len(applyOps), len(receiptBody.Roots), "receiptBody should contain as many roots as there were applyOps")
 		for i, applyOp := range applyOps {
 			require.EqualValues(t, applyOp.DstRoot, receiptBody.Roots[i], "receiptBody root for an applyOp should equal the expected new root")
@@ -150,7 +150,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace) {
 
 	newRoot := api.Root{
 		Namespace: namespace,
-		Round:     1,
+		Round:     round,
 		Hash:      receiptBody.Roots[0],
 	}
 
@@ -172,7 +172,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	// Get the write log, it should be the same as what we stuffed in.
 	root := api.Root{
 		Namespace: namespace,
-		Round:     0,
+		Round:     round,
 		Hash:      rootHash,
 	}
 	it, err := backend.GetDiff(context.Background(), root, newRoot)
@@ -185,7 +185,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	require.Equal(t, getDiffWl, originalWl)
 
 	// Now try applying the same operations again, we should get the same root.
-	receipts, err = backend.Apply(context.Background(), namespace, 0, rootHash, 1, receiptBody.Roots[0], wl)
+	receipts, err = backend.Apply(context.Background(), namespace, round, rootHash, round, receiptBody.Roots[0], wl)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -196,7 +196,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace) {
 		require.NoError(t, err, "receipt.Open() should not return an error")
 		require.Equal(t, uint16(1), receiptBody.Version, "receiptBody version should be 1")
 		require.Equal(t, namespace, receiptBody.Namespace, "receiptBody should contain correct namespace")
-		require.EqualValues(t, 1, receiptBody.Round, "receiptBody should contain correct round")
+		require.EqualValues(t, round, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
 	}
@@ -206,15 +206,15 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	require.NoError(t, err, "GetCheckpoint()")
 	logs := foldWriteLogIterator(t, logsIter)
 	// Applying the writeLog should return same root.
-	logsRootHash := CalculateExpectedNewRoot(t, logs, namespace, 1)
+	logsRootHash := CalculateExpectedNewRoot(t, logs, namespace, round)
 	require.EqualValues(t, logsRootHash, receiptBody.Roots[0])
 
 	// Single node tree.
 	root.Empty()
 	wl3 := prepareWriteLog([][]byte{testValues[0]})
-	expectedNewRoot3 := CalculateExpectedNewRoot(t, wl3, namespace, 1)
+	expectedNewRoot3 := CalculateExpectedNewRoot(t, wl3, namespace, round)
 
-	receipts, err = backend.Apply(context.Background(), namespace, 0, rootHash, 1, expectedNewRoot3, wl3)
+	receipts, err = backend.Apply(context.Background(), namespace, round, rootHash, round, expectedNewRoot3, wl3)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -233,11 +233,11 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	require.NoError(t, err, "GetCheckpoint()")
 	logs = foldWriteLogIterator(t, logsIter)
 	// Applying the writeLog should return same root.
-	logsRootHash = CalculateExpectedNewRoot(t, logs, namespace, 1)
+	logsRootHash = CalculateExpectedNewRoot(t, logs, namespace, round)
 	require.EqualValues(t, logsRootHash, newRoot.Hash)
 }
 
-func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace) {
+func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, round uint64) {
 	ctx := context.Background()
 
 	writeLogs := []api.WriteLog{
@@ -262,39 +262,39 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	// Create all roots.
 	var roots []hash.Hash
 	for idx, writeLog := range writeLogs {
-		var round uint64
+		var dstRound uint64
 		var baseRoot hash.Hash
 		if idx == 0 {
 			baseRoot.Empty()
-			round = 1
+			dstRound = round
 		} else {
 			baseRoot = roots[0]
-			round = 2
+			dstRound = round + 1
 		}
 
 		// Generate expected root hash.
-		tree, err := urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: round, Hash: baseRoot})
+		tree, err := urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: dstRound, Hash: baseRoot})
 		require.NoError(t, err, "NewWithRoot")
 		defer tree.Close()
 		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 		require.NoError(t, err, "ApplyWriteLog")
 		var root hash.Hash
-		_, root, err = tree.Commit(ctx, namespace, round)
+		_, root, err = tree.Commit(ctx, namespace, dstRound)
 		require.NoError(t, err, "Commit")
 
 		// Apply to storage backend.
-		_, err = backend.Apply(ctx, namespace, 1, baseRoot, round, root, writeLog)
+		_, err = backend.Apply(ctx, namespace, round, baseRoot, dstRound, root, writeLog)
 		require.NoError(t, err, "Apply")
 
 		roots = append(roots, root)
 	}
 
 	// Try to merge with only specifying the base.
-	_, err := backend.Merge(ctx, namespace, 1, roots[0], nil)
+	_, err := backend.Merge(ctx, namespace, round, roots[0], nil)
 	require.Error(t, err, "Merge without other roots should return an error")
 
 	// Try to merge with only specifying the base and first root.
-	receipts, err := backend.Merge(ctx, namespace, 1, roots[0], roots[1:2])
+	receipts, err := backend.Merge(ctx, namespace, round, roots[0], roots[1:2])
 	require.NoError(t, err, "Merge")
 	require.NotNil(t, receipts, "Merge should return receipts")
 
@@ -307,7 +307,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	}
 
 	// Try to merge with specifying the base and all three roots.
-	receipts, err = backend.Merge(ctx, namespace, 1, roots[0], roots[1:])
+	receipts, err = backend.Merge(ctx, namespace, round, roots[0], roots[1:])
 	require.NoError(t, err, "Merge")
 	require.NotNil(t, receipts, "Merge should return receipts")
 
@@ -324,14 +324,14 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace) {
 	// Make sure that the merged root is the same as applying all write logs against
 	// the base root.
 	var tree *urkel.Tree
-	tree, err = urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: 1, Hash: roots[0]})
+	tree, err = urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: round, Hash: roots[0]})
 	require.NoError(t, err, "NewWithRoot")
 	defer tree.Close()
 	for _, writeLog := range writeLogs[1:] {
 		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 		require.NoError(t, err, "ApplyWriteLog")
 	}
-	_, expectedRoot, err := tree.Commit(ctx, namespace, 2)
+	_, expectedRoot, err := tree.Commit(ctx, namespace, round+1)
 	require.NoError(t, err, "Commit")
 
 	require.Equal(t, expectedRoot, mergedRoot, "merged root should match expected root")

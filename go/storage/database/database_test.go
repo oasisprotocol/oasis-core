@@ -52,7 +52,7 @@ func doTestImpl(t *testing.T, backend string) {
 	require.NoError(err, "New()")
 	defer impl.Cleanup()
 
-	tests.StorageImplementationTests(t, impl, testNs)
+	tests.StorageImplementationTests(t, impl, testNs, 0)
 }
 
 func init() {

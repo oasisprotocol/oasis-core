@@ -83,6 +83,27 @@ type rootGcUpdates []rootGcUpdate
 // rootAddedNodes is the value of the rootAddedNodes keys.
 type rootAddedNodes []hash.Hash
 
+type metadata struct {
+	sync.RWMutex
+
+	lastFinalizedRound map[common.Namespace]uint64
+}
+
+func (m *metadata) getLastFinalizedRound(ns common.Namespace) (uint64, bool) {
+	m.RLock()
+	defer m.RUnlock()
+
+	round, ok := m.lastFinalizedRound[ns]
+	return round, ok
+}
+
+func (m *metadata) setLastFinalizedRound(ns common.Namespace, round uint64) {
+	m.Lock()
+	defer m.Unlock()
+
+	m.lastFinalizedRound[ns] = round
+}
+
 // New creates a new BadgerDB-backed node database.
 func New(cfg *api.Config) (api.NodeDB, error) {
 	db := &badgerNodeDB{
@@ -100,6 +121,13 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	if db.db, err = badger.Open(opts); err != nil {
 		return nil, errors.Wrap(err, "urkel/db/badger: failed to open database")
 	}
+
+	// Load database metadata.
+	if err = db.load(); err != nil {
+		_ = db.db.Close()
+		return nil, errors.Wrap(err, "urkel/db/badger: failed to load metadata")
+	}
+
 	go db.gcWorker()
 
 	return db, nil
@@ -110,11 +138,48 @@ type badgerNodeDB struct {
 
 	logger *logging.Logger
 
-	db *badger.DB
+	db   *badger.DB
+	meta metadata
 
 	closeOnce sync.Once
 	closeCh   chan struct{}
 	closedCh  chan struct{}
+}
+
+func (d *badgerNodeDB) load() error {
+	d.meta.Lock()
+	defer d.meta.Unlock()
+
+	d.meta.lastFinalizedRound = make(map[common.Namespace]uint64)
+
+	return d.db.View(func(tx *badger.Txn) error {
+		// Load finalized rounds.
+		it := tx.NewIterator(badger.IteratorOptions{Prefix: finalizedKeyFmt.Encode()})
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+
+			var decNs common.Namespace
+
+			if !finalizedKeyFmt.Decode(item.Key(), &decNs) {
+				// This should not happen as the Badger iterator should take care of it.
+				panic("urkel/db/badger: bad iterator")
+			}
+
+			var lastFinalizedRound uint64
+			err := item.Value(func(data []byte) error {
+				return cbor.Unmarshal(data, &lastFinalizedRound)
+			})
+			if err != nil {
+				return err
+			}
+
+			d.meta.lastFinalizedRound[decNs] = lastFinalizedRound
+		}
+
+		return nil
+	})
 }
 
 func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
@@ -158,39 +223,125 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 
 	tx := d.db.NewTransaction(false)
 	defer tx.Discard()
-	key := writeLogKeyFmt.Encode(&endRoot.Namespace, endRoot.Round, &endRoot.Hash, &startRoot.Hash)
-	item, err := tx.Get(key)
-	if err != nil {
-		d.logger.Error("failed to Get write log from backing store",
-			"err", err,
-			"old_root", startRoot,
-			"new_root", endRoot,
-		)
-		return nil, errors.Wrap(err, "urkel/db/badger: failed to Get write log from backing store")
-	}
-	bytes, err := item.ValueCopy(nil)
-	if err != nil {
-		d.logger.Error("failed to copy bytes from write log value",
-			"err", err,
-		)
-		return nil, errors.Wrap(err, "urkel/db/badger: failed to copy bytes from write log value")
-	}
 
-	var dbLog api.HashedDBWriteLog
-	if err := cbor.Unmarshal(bytes, &dbLog); err != nil {
-		d.logger.Error("failed to unmarshal write log",
-			"err", err,
-		)
-		return nil, errors.Wrap(err, "urkel/db/badger: failed to unmarshal write log")
-	}
+	// Start at the end root and search towards the start root. This assumes that the
+	// chains are not long and that there is not a lot of forks as in that case performance
+	// would suffer.
+	//
+	// In reality the two common cases are:
+	// - State updates: s -> s' (a single hop)
+	// - I/O updates: empty -> i -> io (two hops)
+	//
+	// For this reason, we currently refuse to traverse more than two hops.
+	const maxAllowedHops = 2
 
-	return api.ReviveHashedDBWriteLog(ctx, dbLog, func(h hash.Hash) (*node.LeafNode, error) {
-		leaf, err := d.GetNode(endRoot, &node.Pointer{Hash: h, Clean: true})
-		if err != nil {
-			return nil, err
+	type wlItem struct {
+		depth       uint8
+		endRootHash hash.Hash
+		logKeys     [][]byte
+		logRoots    []hash.Hash
+	}
+	// NOTE: We could use a proper deque, but as long as we keep the number of hops and
+	//       forks low, this should not be a problem.
+	queue := []*wlItem{&wlItem{depth: 0, endRootHash: endRoot.Hash}}
+	for len(queue) > 0 {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
-		return leaf.(*node.LeafNode), nil
-	})
+
+		curItem := queue[0]
+		queue = queue[1:]
+
+		wl, err := func() (writelog.Iterator, error) {
+			// Iterate over all write logs that result in the current item.
+			prefix := writeLogKeyFmt.Encode(&endRoot.Namespace, endRoot.Round, &curItem.endRootHash)
+			it := tx.NewIterator(badger.IteratorOptions{Prefix: prefix})
+			defer it.Close()
+
+			for it.Rewind(); it.Valid(); it.Next() {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+
+				item := it.Item()
+
+				var decNs common.Namespace
+				var decRound uint64
+				var decEndRootHash hash.Hash
+				var decStartRootHash hash.Hash
+
+				if !writeLogKeyFmt.Decode(item.Key(), &decNs, &decRound, &decEndRootHash, &decStartRootHash) {
+					// This should not happen as the Badger iterator should take care of it.
+					panic("urkel/db/badger: bad iterator")
+				}
+
+				nextItem := wlItem{
+					depth:       curItem.depth + 1,
+					endRootHash: decStartRootHash,
+					// Only store log keys to avoid keeping everything in memory while
+					// we are searching for the right path.
+					logKeys:  append(curItem.logKeys, item.KeyCopy(nil)),
+					logRoots: append(curItem.logRoots, curItem.endRootHash),
+				}
+				if nextItem.endRootHash.Equal(&startRoot.Hash) {
+					// Path has been found, deserialize and stream write logs.
+					var index int
+					pipeTx := d.db.NewTransaction(false)
+					return api.ReviveHashedDBWriteLogs(ctx,
+						func() (node.Root, api.HashedDBWriteLog, error) {
+							if index >= len(nextItem.logKeys) {
+								return node.Root{}, nil, nil
+							}
+
+							key := nextItem.logKeys[index]
+							root := node.Root{
+								Namespace: endRoot.Namespace,
+								Round:     endRoot.Round,
+								Hash:      nextItem.logRoots[index],
+							}
+
+							item, err := pipeTx.Get(key)
+							if err != nil {
+								return node.Root{}, nil, err
+							}
+
+							var log api.HashedDBWriteLog
+							err = item.Value(func(data []byte) error {
+								return cbor.Unmarshal(data, &log)
+							})
+							if err != nil {
+								return node.Root{}, nil, err
+							}
+
+							index++
+							return root, log, nil
+						},
+						func(root node.Root, h hash.Hash) (*node.LeafNode, error) {
+							leaf, err := d.GetNode(root, &node.Pointer{Hash: h, Clean: true})
+							if err != nil {
+								return nil, err
+							}
+							return leaf.(*node.LeafNode), nil
+						},
+						func() {
+							pipeTx.Discard()
+						},
+					)
+				}
+
+				if nextItem.depth < maxAllowedHops {
+					queue = append(queue, &nextItem)
+				}
+			}
+
+			return nil, nil
+		}()
+		if wl != nil || err != nil {
+			return wl, err
+		}
+	}
+
+	return nil, api.ErrWriteLogNotFound
 }
 
 func (d *badgerNodeDB) HasRoot(root node.Root) bool {
@@ -223,36 +374,13 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 	defer tx.Discard()
 
 	// Make sure that the previous round has been finalized.
-	item, err := tx.Get(finalizedKeyFmt.Encode(&namespace))
-	switch err {
-	case nil:
-		var lastFinalizedRound uint64
-		err = item.Value(func(data []byte) error {
-			return cbor.Unmarshal(data, &lastFinalizedRound)
-		})
-		if err != nil {
-			panic("urkel/db/badger: corrupted finalized round index")
-		}
-
-		if round > 0 && lastFinalizedRound < (round-1) {
-			return api.ErrNotFinalized
-		}
-
-		// Make sure that this round has not yet been finalized.
-		if round <= lastFinalizedRound {
-			return api.ErrAlreadyFinalized
-		}
-	case badger.ErrKeyNotFound:
-		// No previous round has been finalized.
-		if round > 0 {
-			return api.ErrNotFinalized
-		}
-	default:
-		return err
+	lastFinalizedRound, exists := d.meta.getLastFinalizedRound(namespace)
+	if round > 0 && (!exists || lastFinalizedRound < (round-1)) {
+		return api.ErrNotFinalized
 	}
-	// Update last finalized round.
-	if err = batch.Set(finalizedKeyFmt.Encode(&namespace), cbor.Marshal(round)); err != nil {
-		return err
+	// Make sure that this round has not yet been finalized.
+	if exists && round <= lastFinalizedRound {
+		return api.ErrAlreadyFinalized
 	}
 
 	// Determine a set of finalized roots. Finalization is transitive, so if
@@ -284,7 +412,7 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 
 			if item.ValueSize() > 0 {
 				var nextRoot hash.Hash
-				err = item.Value(func(data []byte) error {
+				err := item.Value(func(data []byte) error {
 					return nextRoot.UnmarshalBinary(data)
 				})
 				if err != nil {
@@ -322,8 +450,7 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 		rootAddedNodesKey := rootAddedNodesKeyFmt.Encode(&namespace, round, &rootHash)
 
 		// Load hashes of nodes added during this round for this root.
-		var item *badger.Item
-		item, err = tx.Get(rootAddedNodesKey)
+		item, err := tx.Get(rootAddedNodesKey)
 		if err != nil {
 			panic("urkel/db/badger: corrupted root added nodes index")
 		}
@@ -373,6 +500,22 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 			if err = batch.Delete(it.Item().KeyCopy(nil)); err != nil {
 				return err
 			}
+
+			// Remove write logs for the non-finalized root.
+			if err = func() error {
+				rootWriteLogsPrefix := writeLogKeyFmt.Encode(&namespace, round, &rootHash)
+				wit := tx.NewIterator(badger.IteratorOptions{Prefix: rootWriteLogsPrefix})
+				defer wit.Close()
+
+				for wit.Rewind(); wit.Valid(); wit.Next() {
+					if err = batch.Delete(wit.Item().KeyCopy(nil)); err != nil {
+						return err
+					}
+				}
+				return nil
+			}(); err != nil {
+				return err
+			}
 		}
 
 		// GC updates no longer needed after finalization.
@@ -392,13 +535,26 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 		}
 
 		key := nodeKeyFmt.Encode(&namespace, &h)
-		if err = batch.Delete(key); err != nil {
+		if err := batch.Delete(key); err != nil {
 			return err
 		}
 	}
 
+	// Update last finalized round. This is done at the end as Badger may
+	// split the batch into multiple transactions.
+	if err := batch.Set(finalizedKeyFmt.Encode(&namespace), cbor.Marshal(round)); err != nil {
+		return err
+	}
+
 	// Commit batch.
-	return batch.Flush()
+	if err := batch.Flush(); err != nil {
+		return err
+	}
+
+	// Update cached last finalized round.
+	d.meta.setLastFinalizedRound(namespace, round)
+
+	return nil
 }
 
 func (d *badgerNodeDB) Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error) {
@@ -411,24 +567,8 @@ func (d *badgerNodeDB) Prune(ctx context.Context, namespace common.Namespace, ro
 	defer tx.Discard()
 
 	// Make sure that the round that we try to prune has been finalized.
-	item, err := tx.Get(finalizedKeyFmt.Encode(&namespace))
-	switch err {
-	case nil:
-	case badger.ErrKeyNotFound:
-		return 0, api.ErrNotFinalized
-	default:
-		return 0, err
-	}
-
-	var lastFinalizedRound uint64
-	err = item.Value(func(data []byte) error {
-		return cbor.Unmarshal(data, &lastFinalizedRound)
-	})
-	if err != nil {
-		panic("urkel/db/badger: corrupted finalized round index")
-	}
-
-	if lastFinalizedRound < round {
+	lastFinalizedRound, exists := d.meta.getLastFinalizedRound(namespace)
+	if !exists || lastFinalizedRound < round {
 		return 0, api.ErrNotFinalized
 	}
 
@@ -692,6 +832,13 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 	tx := ba.db.db.NewTransaction(false)
 	defer tx.Discard()
 
+	// Make sure that the round that we try to commit into has not yet been
+	// finalized.
+	lastFinalizedRound, exists := ba.db.meta.getLastFinalizedRound(root.Namespace)
+	if exists && lastFinalizedRound >= root.Round {
+		return api.ErrAlreadyFinalized
+	}
+
 	// Get previous round.
 	prevRound, err := getPreviousRound(tx, root.Namespace, root.Round)
 	if err != nil {
@@ -765,48 +912,10 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 	// Store write log.
 	if ba.writeLog != nil && ba.annotations != nil {
 		log := api.MakeHashedDBWriteLog(ba.writeLog, ba.annotations)
-
-		prefix := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &ba.oldRoot.Hash)
-		it := tx.NewIterator(badger.IteratorOptions{Prefix: prefix})
-		defer it.Close()
-
-		foundOld := false
-		for it.Rewind(); it.Valid(); it.Next() {
-			var decNs common.Namespace
-			var decRound uint64
-			var oldRootHash hash.Hash
-			var olderRootHash hash.Hash
-
-			if !writeLogKeyFmt.Decode(it.Item().Key(), &decNs, &decRound, &oldRootHash, &olderRootHash) {
-				// This should not happen as the Badger iterator should take care of it.
-				panic("urkel/db/badger: bad iterator")
-			}
-
-			// If an older write log exists, get it, merge it with this one and delete it from the db.
-			var oldWriteLog api.HashedDBWriteLog
-			err := it.Item().Value(func(data []byte) error {
-				return cbor.Unmarshal(data, &oldWriteLog)
-			})
-			if err != nil {
-				return err
-			}
-			oldWriteLog = append(oldWriteLog, log...)
-			bytes := cbor.Marshal(oldWriteLog)
-			if err := ba.bat.Set(writeLogKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &olderRootHash), bytes); err != nil {
-				return errors.Wrap(err, "urkel/db/badger: set merged write log returned error")
-			}
-			if err := ba.bat.Delete(it.Item().KeyCopy(nil)); err != nil {
-				return errors.Wrap(err, "urkel/db/badger: delete partial write log returned error")
-			}
-			foundOld = true
-		}
-
-		if !foundOld {
-			bytes := cbor.Marshal(log)
-			key := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &ba.oldRoot.Hash)
-			if err := ba.bat.Set(key, bytes); err != nil {
-				return errors.Wrap(err, "urkel/db/badger: set new write log returned error")
-			}
+		bytes := cbor.Marshal(log)
+		key := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &ba.oldRoot.Hash)
+		if err := ba.bat.Set(key, bytes); err != nil {
+			return errors.Wrap(err, "urkel/db/badger: set new write log returned error")
 		}
 	}
 

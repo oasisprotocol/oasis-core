@@ -85,10 +85,32 @@ type rootGcUpdates []rootGcUpdate
 // rootAddedNodes is the value of the rootAddedNodes keys.
 type rootAddedNodes []hash.Hash
 
+type metadata struct {
+	sync.RWMutex
+
+	lastFinalizedRound map[common.Namespace]uint64
+}
+
+func (m *metadata) getLastFinalizedRound(ns common.Namespace) (uint64, bool) {
+	m.RLock()
+	defer m.RUnlock()
+
+	round, ok := m.lastFinalizedRound[ns]
+	return round, ok
+}
+
+func (m *metadata) setLastFinalizedRound(ns common.Namespace, round uint64) {
+	m.Lock()
+	defer m.Unlock()
+
+	m.lastFinalizedRound[ns] = round
+}
+
 type leveldbNodeDB struct {
 	api.CheckpointableDB
 
-	db *leveldb.DB
+	db   *leveldb.DB
+	meta metadata
 
 	closeOnce sync.Once
 
@@ -106,7 +128,43 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 		writeSync: !cfg.DebugNoFsync,
 	}
 	levelNDb.CheckpointableDB = api.NewCheckpointableDB(levelNDb)
+
+	// Load database metadata.
+	if err = levelNDb.load(); err != nil {
+		levelNDb.Close()
+		return nil, err
+	}
+
 	return levelNDb, nil
+}
+
+func (d *leveldbNodeDB) load() error {
+	d.meta.Lock()
+	defer d.meta.Unlock()
+
+	d.meta.lastFinalizedRound = make(map[common.Namespace]uint64)
+
+	// Load finalized rounds.
+	it := d.db.NewIterator(util.BytesPrefix(finalizedKeyFmt.Encode()), nil)
+	defer it.Release()
+
+	for it.Next() {
+		var decNs common.Namespace
+
+		if !finalizedKeyFmt.Decode(it.Key(), &decNs) {
+			// This should not happen as the LevelDB iterator should take care of it.
+			panic("urkel/db/leveldb: bad iterator")
+		}
+
+		var lastFinalizedRound uint64
+		if err := cbor.Unmarshal(it.Value(), &lastFinalizedRound); err != nil {
+			return err
+		}
+
+		d.meta.lastFinalizedRound[decNs] = lastFinalizedRound
+	}
+
+	return nil
 }
 
 func (d *leveldbNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
@@ -130,24 +188,123 @@ func (d *leveldbNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, en
 		return nil, api.ErrRootMustFollowOld
 	}
 
-	key := writeLogKeyFmt.Encode(&endRoot.Namespace, endRoot.Round, &endRoot.Hash, &startRoot.Hash)
-	bytes, err := d.db.Get(key, nil)
+	// Get a database snapshot for consistent queries.
+	snapshot, err := d.db.GetSnapshot()
 	if err != nil {
 		return nil, err
 	}
+	defer snapshot.Release()
 
-	var log api.HashedDBWriteLog
-	if err := cbor.Unmarshal(bytes, &log); err != nil {
-		return nil, err
+	// Start at the end root and search towards the start root. This assumes that the
+	// chains are not long and that there is not a lot of forks as in that case performance
+	// would suffer.
+	//
+	// In reality the two common cases are:
+	// - State updates: s -> s' (a single hop)
+	// - I/O updates: empty -> i -> io (two hops)
+	//
+	// For this reason, we currently refuse to traverse more than two hops.
+	const maxAllowedHops = 2
+
+	type wlItem struct {
+		depth       uint8
+		endRootHash hash.Hash
+		logKeys     [][]byte
+		logRoots    []hash.Hash
+	}
+	// NOTE: We could use a proper deque, but as long as we keep the number of hops and
+	//       forks low, this should not be a problem.
+	queue := []*wlItem{&wlItem{depth: 0, endRootHash: endRoot.Hash}}
+	for len(queue) > 0 {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		curItem := queue[0]
+		queue = queue[1:]
+
+		wl, err := func() (writelog.Iterator, error) {
+			// Iterate over all write logs that result in the current item.
+			prefix := writeLogKeyFmt.Encode(&endRoot.Namespace, endRoot.Round, &curItem.endRootHash)
+			it := snapshot.NewIterator(util.BytesPrefix(prefix), nil)
+			defer it.Release()
+
+			for it.Next() {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+
+				var decNs common.Namespace
+				var decRound uint64
+				var decEndRootHash hash.Hash
+				var decStartRootHash hash.Hash
+
+				if !writeLogKeyFmt.Decode(it.Key(), &decNs, &decRound, &decEndRootHash, &decStartRootHash) {
+					// This should not happen as the LevelDB iterator should take care of it.
+					panic("urkel/db/leveldb: bad iterator")
+				}
+
+				nextItem := wlItem{
+					depth:       curItem.depth + 1,
+					endRootHash: decStartRootHash,
+					// Only store log keys to avoid keeping everything in memory while
+					// we are searching for the right path.
+					logKeys:  append(curItem.logKeys, it.Key()),
+					logRoots: append(curItem.logRoots, curItem.endRootHash),
+				}
+				if nextItem.endRootHash.Equal(&startRoot.Hash) {
+					// Path has been found, deserialize and stream write logs.
+					var index int
+					return api.ReviveHashedDBWriteLogs(ctx,
+						func() (node.Root, api.HashedDBWriteLog, error) {
+							if index >= len(nextItem.logKeys) {
+								return node.Root{}, nil, nil
+							}
+
+							key := nextItem.logKeys[index]
+							root := node.Root{
+								Namespace: endRoot.Namespace,
+								Round:     endRoot.Round,
+								Hash:      nextItem.logRoots[index],
+							}
+
+							data, err := d.db.Get(key, nil)
+							if err != nil {
+								return node.Root{}, nil, err
+							}
+
+							var log api.HashedDBWriteLog
+							if err := cbor.Unmarshal(data, &log); err != nil {
+								return node.Root{}, nil, err
+							}
+
+							index++
+							return root, log, nil
+						},
+						func(root node.Root, h hash.Hash) (*node.LeafNode, error) {
+							leaf, err := d.GetNode(root, &node.Pointer{Hash: h, Clean: true})
+							if err != nil {
+								return nil, err
+							}
+							return leaf.(*node.LeafNode), nil
+						},
+						func() {},
+					)
+				}
+
+				if nextItem.depth < maxAllowedHops {
+					queue = append(queue, &nextItem)
+				}
+			}
+
+			return nil, nil
+		}()
+		if wl != nil || err != nil {
+			return wl, err
+		}
 	}
 
-	return api.ReviveHashedDBWriteLog(ctx, log, func(h hash.Hash) (*node.LeafNode, error) {
-		leaf, err := d.GetNode(endRoot, &node.Pointer{Hash: h, Clean: true})
-		if err != nil {
-			return nil, err
-		}
-		return leaf.(*node.LeafNode), nil
-	})
+	return nil, api.ErrWriteLogNotFound
 }
 
 func (d *leveldbNodeDB) HasRoot(root node.Root) bool {
@@ -179,27 +336,13 @@ func (d *leveldbNodeDB) Finalize(ctx context.Context, namespace common.Namespace
 	defer snapshot.Release()
 
 	// Make sure that the previous round has been finalized.
-	data, err := snapshot.Get(finalizedKeyFmt.Encode(&namespace), nil)
-	switch err {
-	case nil:
-		var lastFinalizedRound uint64
-		if err = cbor.Unmarshal(data, &lastFinalizedRound); err != nil {
-			panic("urkel/db/leveldb: corrupted finalized round index")
-		}
-
-		if round > 0 && lastFinalizedRound < (round-1) {
-			return api.ErrNotFinalized
-		}
-
-		// Make sure that this round has not yet been finalized.
-		if round <= lastFinalizedRound {
-			return api.ErrAlreadyFinalized
-		}
-	default:
-		// No previous round has been finalized.
-		if round > 0 {
-			return api.ErrNotFinalized
-		}
+	lastFinalizedRound, exists := d.meta.getLastFinalizedRound(namespace)
+	if round > 0 && (!exists || lastFinalizedRound < (round-1)) {
+		return api.ErrNotFinalized
+	}
+	// Make sure that this round has not yet been finalized.
+	if exists && round <= lastFinalizedRound {
+		return api.ErrAlreadyFinalized
 	}
 	// Update last finalized round.
 	batch.Put(finalizedKeyFmt.Encode(&namespace), cbor.Marshal(round))
@@ -306,6 +449,17 @@ func (d *leveldbNodeDB) Finalize(ctx context.Context, namespace common.Namespace
 				maybeLoneNodes[h] = true
 			}
 			batch.Delete(it.Key())
+
+			// Remove write logs for the non-finalized root.
+			func() {
+				rootWriteLogsPrefix := writeLogKeyFmt.Encode(&namespace, round, &rootHash)
+				wit := snapshot.NewIterator(util.BytesPrefix(rootWriteLogsPrefix), nil)
+				defer wit.Release()
+
+				for wit.Next() {
+					batch.Delete(wit.Key())
+				}
+			}()
 		}
 
 		// GC updates no longer needed after finalization.
@@ -329,6 +483,9 @@ func (d *leveldbNodeDB) Finalize(ctx context.Context, namespace common.Namespace
 		return err
 	}
 
+	// Update cached last finalized round.
+	d.meta.setLastFinalizedRound(namespace, round)
+
 	return nil
 }
 
@@ -350,17 +507,8 @@ func (d *leveldbNodeDB) Prune(ctx context.Context, namespace common.Namespace, r
 	defer snapshot.Release()
 
 	// Make sure that the round that we try to prune has been finalized.
-	data, err := snapshot.Get(finalizedKeyFmt.Encode(&namespace), nil)
-	if err != nil {
-		return 0, api.ErrNotFinalized
-	}
-
-	var lastFinalizedRound uint64
-	if err = cbor.Unmarshal(data, &lastFinalizedRound); err != nil {
-		panic("urkel/db/leveldb: corrupted finalized round index")
-	}
-
-	if lastFinalizedRound < round {
+	lastFinalizedRound, exists := d.meta.getLastFinalizedRound(namespace)
+	if !exists || lastFinalizedRound < round {
 		return 0, api.ErrNotFinalized
 	}
 
@@ -548,6 +696,13 @@ func (b *leveldbBatch) Commit(root node.Root) error {
 	}
 	defer snapshot.Release()
 
+	// Make sure that the round that we try to commit into has not yet been
+	// finalized.
+	lastFinalizedRound, exists := b.db.meta.getLastFinalizedRound(root.Namespace)
+	if exists && lastFinalizedRound >= root.Round {
+		return api.ErrAlreadyFinalized
+	}
+
 	// Get previous round.
 	prevRound, err := getPreviousRound(snapshot, root.Namespace, root.Round)
 	if err != nil {
@@ -609,39 +764,9 @@ func (b *leveldbBatch) Commit(root node.Root) error {
 	// Store write log.
 	if b.writeLog != nil && b.annotations != nil {
 		log := api.MakeHashedDBWriteLog(b.writeLog, b.annotations)
-
-		prefix := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &b.oldRoot.Hash)
-		it := snapshot.NewIterator(util.BytesPrefix(prefix), nil)
-		defer it.Release()
-
-		foundOld := false
-		for it.Next() {
-			var decNs common.Namespace
-			var decRound uint64
-			var oldRootHash hash.Hash
-			var olderRootHash hash.Hash
-
-			if !writeLogKeyFmt.Decode(it.Key(), &decNs, &decRound, &oldRootHash, &olderRootHash) {
-				// This should not happen as the LevelDB iterator should take care of it.
-				panic("urkel/db/leveldb: bad iterator")
-			}
-
-			// If an older write log exists, get it, merge it with this one and delete it from the db.
-			var oldWriteLog api.HashedDBWriteLog
-			if err := cbor.Unmarshal(it.Value(), &oldWriteLog); err != nil {
-				return err
-			}
-			oldWriteLog = append(oldWriteLog, log...)
-			b.bat.Put(writeLogKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &olderRootHash), cbor.Marshal(oldWriteLog))
-			b.bat.Delete(it.Key())
-			foundOld = true
-		}
-
-		if !foundOld {
-			bytes := cbor.Marshal(log)
-			key := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &b.oldRoot.Hash)
-			b.bat.Put(key, bytes)
-		}
+		bytes := cbor.Marshal(log)
+		key := writeLogKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &b.oldRoot.Hash)
+		b.bat.Put(key, bytes)
 	}
 
 	if err := b.db.db.Write(b.bat, &opt.WriteOptions{Sync: b.db.writeSync}); err != nil {

@@ -283,7 +283,12 @@ func testBeacon(t *testing.T, node *testNode) {
 }
 
 func testStorage(t *testing.T, node *testNode) {
-	storageTests.StorageImplementationTests(t, node.Storage, testNamespace)
+	// Determine the current round. This is required so that we can commit into
+	// storage at the next (non-finalized) round.
+	blk, err := node.RootHash.GetLatestBlock(context.Background(), testRuntimeID)
+	require.NoError(t, err, "GetLatestBlock")
+
+	storageTests.StorageImplementationTests(t, node.Storage, testNamespace, blk.Header.Round+1)
 }
 
 func testRegistry(t *testing.T, node *testNode) {
@@ -350,7 +355,13 @@ func testStorageClient(t *testing.T, node *testNode) {
 	}
 	debugClient, err := storageClient.New(ctx, node.Identity, nil, nil)
 	require.NoError(t, err, "NewDebugStorageClient")
-	storageTests.StorageImplementationTests(t, debugClient, testNamespace)
+
+	// Determine the current round. This is required so that we can commit into
+	// storage at the next (non-finalized) round.
+	blk, err := node.RootHash.GetLatestBlock(ctx, testRuntimeID)
+	require.NoError(t, err, "GetLatestBlock")
+
+	storageTests.StorageImplementationTests(t, debugClient, testNamespace, blk.Header.Round+1)
 }
 
 func init() {

@@ -59,10 +59,22 @@ func TestHashedWriteLog(t *testing.T) {
 
 	hashed := api.MakeHashedDBWriteLog(wl, wla)
 
-	it, err := api.ReviveHashedDBWriteLog(context.Background(), hashed, func(h hash.Hash) (*node.LeafNode, error) {
-		return hashes[h].Node.(*node.LeafNode), nil
-	})
-	require.NoError(t, err, "ReviveHashedDBWriteLog")
+	var done bool
+	it, err := api.ReviveHashedDBWriteLogs(context.Background(),
+		func() (node.Root, api.HashedDBWriteLog, error) {
+			if done {
+				return node.Root{}, nil, nil
+			}
+			done = true
+
+			return node.Root{}, hashed, nil
+		},
+		func(root node.Root, h hash.Hash) (*node.LeafNode, error) {
+			return hashes[h].Node.(*node.LeafNode), nil
+		},
+		func() {},
+	)
+	require.NoError(t, err, "ReviveHashedDBWriteLogs")
 
 	i := 0
 	for {

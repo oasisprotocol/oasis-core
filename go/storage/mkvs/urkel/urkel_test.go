@@ -1190,8 +1190,6 @@ func testMergeWriteLog(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, writeLogToMap(writelog.WriteLog{writelog.LogEntry{Key: keyZero, Value: valueZero}}), wl)
 
 	// Continue adding to this same tree.
-	tree, err = NewWithRoot(ctx, nil, ndb, root1)
-	require.NoError(t, err, "NewWithRoot")
 	err = tree.Insert(ctx, keyOne, valueOne)
 	require.NoError(t, err, "Insert")
 	_, rootHash2, err := tree.Commit(ctx, testNs, 0)
@@ -1214,11 +1212,31 @@ func testMergeWriteLog(t *testing.T, ndb db.NodeDB) {
 	})
 	require.Equal(t, wlLiteral, wlDb)
 
-	// Check that the write log to the intermediate root doesn't exist anymore.
-	_, err = ndb.GetWriteLog(ctx, emptyRoot, root1)
+	// We can still get write logs to intermediate roots.
+	wli, err = ndb.GetWriteLog(ctx, emptyRoot, root1)
+	require.NoError(t, err, "GetWriteLog")
+	_ = writelog.DrainIterator(wli)
+	wli, err = ndb.GetWriteLog(ctx, root1, root2)
+	require.NoError(t, err, "GetWriteLog")
+	_ = writelog.DrainIterator(wli)
+
+	// Make sure that we fail with more than two hops.
+	err = tree.Insert(ctx, []byte("moo"), []byte("goo"))
+	require.NoError(t, err, "Insert")
+	_, rootHash3, err := tree.Commit(ctx, testNs, 0)
+	require.NoError(t, err, "Commit")
+
+	root3 := node.Root{
+		Namespace: testNs,
+		Round:     0,
+		Hash:      rootHash3,
+	}
+
+	_, err = ndb.GetWriteLog(ctx, emptyRoot, root3)
 	require.Error(t, err, "GetWriteLog")
-	_, err = ndb.GetWriteLog(ctx, root1, root2)
-	require.Error(t, err, "GetWriteLog")
+	wli, err = ndb.GetWriteLog(ctx, root2, root3)
+	require.NoError(t, err, "GetWriteLog")
+	_ = writelog.DrainIterator(wli)
 }
 
 func testPruneBasic(t *testing.T, ndb db.NodeDB) {
@@ -1437,7 +1455,7 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Insert")
 	err = tree.Remove(ctx, []byte("moo"))
 	require.NoError(t, err, "Insert")
-	_, _, err = tree.Commit(ctx, testNs, 1)
+	_, rootHashR1_1, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
 
 	// Create a derived root B in round 1.
@@ -1452,6 +1470,16 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB) {
 	// should be discarded.
 	err = ndb.Finalize(ctx, testNs, 1, []hash.Hash{rootHashR1_2})
 	require.NoError(t, err, "Finalize")
+
+	// Make sure that the write log for the discarded root is gone.
+	rootR0_1 := node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_1}
+	rootR1_1 := node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_1}
+	rootR1_2 := node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_2}
+	_, err = ndb.GetWriteLog(ctx, rootR0_1, rootR1_1)
+	require.Error(t, err, "GetWriteLog")
+	// Make sure that the write log for the non-discarded root exists.
+	_, err = ndb.GetWriteLog(ctx, rootR0_1, rootR1_2)
+	require.NoError(t, err, "GetWriteLog")
 
 	// Create a derived root C from derived root B in round 2.
 	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_2})
@@ -1781,6 +1809,14 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Finalize")
 	err = ndb.Finalize(ctx, testNs, 0, []hash.Hash{rootHashR0_1})
 	require.Error(t, err, "Finalize should fail as round is already finalized")
+	require.Equal(t, db.ErrAlreadyFinalized, err)
+
+	// Commit into an already finalized round should fail.
+	tree = New(nil, ndb)
+	err = tree.Insert(ctx, []byte("already finalized"), []byte("woohoo"))
+	require.NoError(t, err, "Insert")
+	_, _, err = tree.Commit(ctx, testNs, 0)
+	require.Error(t, err, "Commit should fail for already finalized round")
 	require.Equal(t, db.ErrAlreadyFinalized, err)
 }
 

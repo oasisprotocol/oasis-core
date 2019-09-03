@@ -120,3 +120,13 @@ func NewPipeIterator(ctx context.Context) PipeIterator {
 		ctx:   ctx,
 	}
 }
+
+// DrainIterator drains the iterator, discarding all values.
+func DrainIterator(it Iterator) error {
+	for {
+		more, err := it.Next()
+		if !more || err != nil {
+			return err
+		}
+	}
+}

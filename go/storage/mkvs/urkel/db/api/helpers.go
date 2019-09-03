@@ -33,32 +33,65 @@ func MakeHashedDBWriteLog(writeLog writelog.WriteLog, annotations writelog.Annot
 	return log
 }
 
-// ReviveHashedDBWriteLog is a helper for hashed database backends that converts a HashedDBWriteLog into a WriteLog.
-func ReviveHashedDBWriteLog(ctx context.Context, hlog HashedDBWriteLog, getter func(hash.Hash) (*node.LeafNode, error)) (writelog.Iterator, error) {
+// ReviveHashedDBWriteLogs is a helper for hashed database backends that converts
+// a HashedDBWriteLog into a WriteLog.
+//
+// The provided logGetter will be called first to fetch the next write log to
+// convert. If it returns a nil write log, iteration terminates.
+//
+// Then the provided valueGetter will be called for each log entry to fetch each
+// of the values in the write log.
+//
+// After iteration has finished, closer will be called.
+func ReviveHashedDBWriteLogs(
+	ctx context.Context,
+	logGetter func() (node.Root, HashedDBWriteLog, error),
+	valueGetter func(node.Root, hash.Hash) (*node.LeafNode, error),
+	closer func(),
+) (writelog.Iterator, error) {
 	pipe := writelog.NewPipeIterator(ctx)
 	go func() {
 		defer pipe.Close()
-		for _, entry := range hlog {
-			var newEntry *writelog.LogEntry
-			if entry.InsertedHash == nil {
-				newEntry = &writelog.LogEntry{
-					Key:   entry.Key,
-					Value: nil,
-				}
-			} else {
-				node, err := getter(*entry.InsertedHash)
-				if err != nil {
-					_ = pipe.PutError(err)
-					break
-				}
-				newEntry = &writelog.LogEntry{
-					Key:   entry.Key,
-					Value: node.Value.Value,
-				}
+		defer closer()
+
+		for {
+			// Return early if context has been cancelled.
+			if ctx.Err() != nil {
+				return
 			}
-			if err := pipe.Put(newEntry); err != nil {
+
+			// Fetch the next write log from the database.
+			root, log, err := logGetter()
+			if err != nil {
 				_ = pipe.PutError(err)
-				break
+				return
+			}
+			if log == nil {
+				return
+			}
+
+			for _, entry := range log {
+				var newEntry *writelog.LogEntry
+				if entry.InsertedHash == nil {
+					newEntry = &writelog.LogEntry{
+						Key:   entry.Key,
+						Value: nil,
+					}
+				} else {
+					node, err := valueGetter(root, *entry.InsertedHash)
+					if err != nil {
+						_ = pipe.PutError(err)
+						return
+					}
+					newEntry = &writelog.LogEntry{
+						Key:   entry.Key,
+						Value: node.Value.Value,
+					}
+				}
+				if err := pipe.Put(newEntry); err != nil {
+					_ = pipe.PutError(err)
+					return
+				}
 			}
 		}
 	}()
