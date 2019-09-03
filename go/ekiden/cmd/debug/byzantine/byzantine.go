@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
+	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
@@ -91,16 +92,12 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindMerge, err))
 	}
 
-	firstStorageNode, err := registryGetNode(ht.service, electionHeight, storageCommittee.Members[0].PublicKey)
+	logger.Debug("compute honest: connecting to storage committee")
+	hnss, err := storageConnectToCommittee(ht.service, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
 	if err != nil {
-		panic(fmt.Sprintf("registry get node %s failed: %+v", storageCommittee.Members[0].PublicKey, err))
+		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
 	}
-	logger.Debug("compute honest: connecting to storage node", "node", firstStorageNode)
-	hns, err := newHonestNodeStorage(defaultIdentity, firstStorageNode)
-	if err != nil {
-		panic(fmt.Sprintf("honest node storage with initialization failed: %+v", err))
-	}
-	defer hns.Cleanup()
+	defer storageBroadcastCleanup(hnss)
 
 	cbc := newComputeBatchContext()
 
@@ -111,7 +108,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
-	if err = cbc.openTrees(ctx, hns); err != nil {
+	if err = cbc.openTrees(ctx, hnss[0]); err != nil {
 		panic(fmt.Sprintf("compute open trees failed: %+v", err))
 	}
 	defer cbc.closeTrees()
@@ -137,9 +134,25 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		"new_state_root", cbc.newStateRoot,
 	)
 
-	// TODO: Upload commitment to storage.
+	receipts, err := storageBroadcastApplyBatch(ctx, hnss, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1, []storage.ApplyOp{
+		storage.ApplyOp{
+			SrcRound: cbc.bd.Header.Round + 1,
+			SrcRoot:  cbc.bd.IORoot,
+			DstRoot:  cbc.newIORoot,
+			WriteLog: cbc.ioWriteLog,
+		},
+		storage.ApplyOp{
+			SrcRound: cbc.bd.Header.Round,
+			SrcRoot:  cbc.bd.Header.StateRoot,
+			DstRoot:  cbc.newStateRoot,
+			WriteLog: cbc.stateWriteLog,
+		},
+	})
+	if err != nil {
+		panic(fmt.Sprintf("storage broadcast apply batch failed: %+v", err))
+	}
 
-	message, err := cbc.createCommitmentMessage(defaultIdentity, defaultRuntimeID, electionHeight, computeCommittee.EncodedMembersHash())
+	message, err := cbc.createCommitmentMessage(defaultIdentity, defaultRuntimeID, electionHeight, computeCommittee.EncodedMembersHash(), receipts)
 	if err != nil {
 		panic(fmt.Sprintf("compute create commitment message failed: %+v", err))
 	}
