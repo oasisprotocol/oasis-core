@@ -114,11 +114,11 @@ func (hns *honestNodeStorage) ApplyBatch(
 	for _, op := range ops {
 		srcRootRaw, err1 := op.SrcRoot.MarshalBinary()
 		if err1 != nil {
-			panic(fmt.Sprintf("apply operation source root MarshalBinary failed: %+v", err))
+			panic(fmt.Sprintf("apply operation source root MarshalBinary failed: %+v", err1))
 		}
 		dstRootRaw, err1 := op.DstRoot.MarshalBinary()
 		if err1 != nil {
-			panic(fmt.Sprintf("apply operation destination root MarshalBinary failed: %+v", err))
+			panic(fmt.Sprintf("apply operation destination root MarshalBinary failed: %+v", err1))
 		}
 		var pLogs []*storagegrpc.LogEntry
 		for _, log := range op.WriteLog {
