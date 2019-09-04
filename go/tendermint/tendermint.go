@@ -301,6 +301,15 @@ func (t *tendermintService) GetBlock(height *int64) (*tmtypes.Block, error) {
 	return result.Block, nil
 }
 
+func (t *tendermintService) GetHeight() (int64, error) {
+	blk, err := t.GetBlock(nil)
+	if err != nil {
+		return 0, err
+	}
+
+	return blk.Header.Height, nil
+}
+
 func (t *tendermintService) GetBlockResults(height *int64) (*tmrpctypes.ResultBlockResults, error) {
 	if t.client == nil {
 		panic("client not available yet")

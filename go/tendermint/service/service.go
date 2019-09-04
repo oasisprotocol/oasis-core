@@ -32,6 +32,9 @@ type TendermintService interface {
 	// and will succeed.
 	ForceInitialize() error
 
+	// GetHeight returns the Tendermint block height.
+	GetHeight() (int64, error)
+
 	// GetBlock returns the Tendermint block at the specified height.
 	GetBlock(height *int64) (*tmtypes.Block, error)
 
