@@ -18,6 +18,8 @@ var (
 
 // Document is a genesis document.
 type Document struct {
+	// Height is the block height at which the document was generated.
+	Height int64 `codec:"height"`
 	// Time is the time the genesis block was constructed.
 	Time time.Time `codec:"genesis_time"`
 	// Registry is the registry genesis state.
