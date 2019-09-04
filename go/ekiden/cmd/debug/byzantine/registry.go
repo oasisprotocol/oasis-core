@@ -59,9 +59,9 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 	return nil
 }
 
-func registryGetNode(svc service.TendermintService, height int64, id signature.PublicKey) (*node.Node, error) { // nolint: deadcode, unused
+func registryGetNode(svc service.TendermintService, height int64, runtimeID signature.PublicKey) (*node.Node, error) { // nolint: deadcode, unused
 	response, err := svc.Query(registryapp.QueryGetNode, tmapi.QueryGetByIDRequest{
-		ID: id,
+		ID: runtimeID,
 	}, height)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Tendermint Query %s", registryapp.QueryGetNodes)
