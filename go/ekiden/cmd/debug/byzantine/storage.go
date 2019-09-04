@@ -34,11 +34,11 @@ type honestNodeStorage struct {
 func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeStorage, error) { // nolint: deadcode, unused
 	opts, err := storageclient.DialOptionForNode([]tls.Certificate{*id.TLSCertificate}, node)
 	if err != nil {
-		return nil, errors.Wrap(err, "storageclient DialOptionForNode")
+		return nil, errors.Wrap(err, "storage client DialOptionForNode")
 	}
 	conn, resolverCleanupCb, err := storageclient.DialNode(node, opts)
 	if err != nil {
-		return nil, errors.Wrap(err, "storageclient DialNode")
+		return nil, errors.Wrap(err, "storage client DialNode")
 	}
 
 	initCh := make(chan struct{})
@@ -190,7 +190,7 @@ func storageConnectToCommittee(svc service.TendermintService, height int64, comm
 	if err := schedulerForRoleInCommittee(svc, height, committee, role, func(n *node.Node) error {
 		hns, err := newHonestNodeStorage(id, n)
 		if err != nil {
-			return errors.Wrapf(err, "newHonestNodeStorage %s", n.ID)
+			return errors.Wrapf(err, "new honest node storage %s", n.ID)
 		}
 
 		hnss = append(hnss, hns)

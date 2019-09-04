@@ -149,7 +149,7 @@ func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestN
 		},
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "storageBroadcastApplyBatch")
+		return nil, errors.Wrap(err, "storage broadcast apply batch")
 	}
 
 	return receipts, nil
@@ -174,7 +174,7 @@ func (cbc *computeBatchContext) createCommitmentMessage(id *identity.Identity, r
 		InputStorageSigs: cbc.bd.StorageSignatures,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "commitment SignComputeCommitment")
+		return nil, errors.Wrap(err, "commitment sign compute commitment")
 	}
 
 	return &p2p.Message{

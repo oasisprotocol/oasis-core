@@ -144,7 +144,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 	}
 
 	if err = computePublishToCommittee(ht.service, electionHeight, mergeCommittee, scheduler.Worker, ph, message); err != nil {
-		panic(fmt.Sprintf("compute publish to committee merge worker: %+v", err))
+		panic(fmt.Sprintf("compute publish to committee merge worker failed: %+v", err))
 	}
 	logger.Debug("compute honest: commitment sent")
 }
