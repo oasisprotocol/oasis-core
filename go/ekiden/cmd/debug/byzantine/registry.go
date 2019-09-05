@@ -64,7 +64,7 @@ func registryGetNode(svc service.TendermintService, height int64, runtimeID sign
 		ID: runtimeID,
 	}, height)
 	if err != nil {
-		return nil, errors.Wrapf(err, "Tendermint Query %s", registryapp.QueryGetNodes)
+		return nil, errors.Wrapf(err, "Tendermint Query %s", registryapp.QueryGetNode)
 	}
 
 	var node node.Node
