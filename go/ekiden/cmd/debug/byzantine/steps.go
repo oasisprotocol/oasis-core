@@ -2,12 +2,14 @@ package byzantine
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/ekiden/go/common/node"
 )
 
 const (
@@ -16,6 +18,14 @@ const (
 
 var (
 	defaultRuntimeID signature.PublicKey
+	fakeAddresses    = []node.Address{
+		node.Address{
+			TCPAddr: net.TCPAddr{
+				IP:   net.IPv4(127, 0, 0, 1),
+				Port: 11004,
+			},
+		},
+	}
 )
 
 func initDefaultIdentity(dataDir string) (*identity.Identity, error) {

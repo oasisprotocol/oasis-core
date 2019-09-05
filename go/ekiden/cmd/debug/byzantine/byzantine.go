@@ -3,7 +3,6 @@ package byzantine
 import (
 	"context"
 	"fmt"
-	"net"
 
 	"github.com/spf13/cobra"
 
@@ -61,12 +60,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), []node.Address{node.Address{
-		TCPAddr: net.TCPAddr{
-			IP:   net.IPv4(127, 0, 0, 1),
-			Port: 11004,
-		},
-	}}, ph.service.Info(), defaultRuntimeID, node.RoleComputeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
