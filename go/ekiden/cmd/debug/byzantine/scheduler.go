@@ -16,7 +16,7 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
-func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.CommitteeKind) (int64, error) { // nolint: deadcode, unused
+func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.CommitteeKind) (int64, error) {
 	sub, err := svc.Subscribe("script", schedulerapp.QueryApp)
 	if err != nil {
 		return 0, errors.Wrap(err, "Tendermint Subscribe")
@@ -63,7 +63,7 @@ func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.C
 	}
 }
 
-func schedulerGetCommittee(svc service.TendermintService, height int64, kind scheduler.CommitteeKind, runtimeID signature.PublicKey) (*scheduler.Committee, error) { // nolint: deadcode, unused
+func schedulerGetCommittee(svc service.TendermintService, height int64, kind scheduler.CommitteeKind, runtimeID signature.PublicKey) (*scheduler.Committee, error) {
 	raw, err := svc.Query(schedulerapp.QueryKindsCommittees, []scheduler.CommitteeKind{kind}, height)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Tendermint Query %s", schedulerapp.QueryKindsCommittees)
@@ -88,7 +88,7 @@ func schedulerGetCommittee(svc service.TendermintService, height int64, kind sch
 	return nil, errors.New("query didn't return a committee for our runtime")
 }
 
-func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.PublicKey, role scheduler.Role) error { // nolint: deadcode, unused
+func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.PublicKey, role scheduler.Role) error {
 	for _, member := range committee.Members {
 		if !member.PublicKey.Equal(nodeID) {
 			continue

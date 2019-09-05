@@ -21,7 +21,7 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 )
 
-type computeBatchContext struct { // nolint: unused
+type computeBatchContext struct {
 	bd    commitment.TxnSchedulerBatchDispatch
 	bdSig signature.Signature
 
@@ -35,7 +35,7 @@ type computeBatchContext struct { // nolint: unused
 	newIORoot     hash.Hash
 }
 
-func newComputeBatchContext() *computeBatchContext { // nolint: deadcode, unused
+func newComputeBatchContext() *computeBatchContext {
 	return &computeBatchContext{}
 }
 
@@ -100,7 +100,7 @@ func (cbc *computeBatchContext) addResult(ctx context.Context, tx *transaction.T
 	return nil
 }
 
-func (cbc *computeBatchContext) addResultSuccess(ctx context.Context, tx *transaction.Transaction, res interface{}, tags transaction.Tags) error { // nolint: unused
+func (cbc *computeBatchContext) addResultSuccess(ctx context.Context, tx *transaction.Transaction, res interface{}, tags transaction.Tags) error {
 	// Hack: The actual TxnOutput struct doesn't serialize right.
 	return cbc.addResult(ctx, tx, cbor.Marshal(struct {
 		Success interface{}
@@ -187,7 +187,7 @@ func (cbc *computeBatchContext) createCommitmentMessage(id *identity.Identity, r
 	}, nil
 }
 
-func computePublishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, message *p2p.Message) error { // nolint: deadcode, unused
+func computePublishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, message *p2p.Message) error {
 	if err := schedulerForRoleInCommittee(svc, height, committee, role, func(n *node.Node) error {
 		ph.service.Publish(ph.context, n, message)
 

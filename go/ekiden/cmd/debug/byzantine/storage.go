@@ -31,7 +31,7 @@ type honestNodeStorage struct {
 	initCh            chan struct{}
 }
 
-func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeStorage, error) { // nolint: deadcode, unused
+func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeStorage, error) {
 	opts, err := storageclient.DialOptionForNode([]tls.Certificate{*id.TLSCertificate}, node)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage client DialOptionForNode")
