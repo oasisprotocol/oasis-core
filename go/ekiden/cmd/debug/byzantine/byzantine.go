@@ -138,12 +138,12 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute upload batch failed: %+v", err))
 	}
 
-	message, err := cbc.createCommitmentMessage(defaultIdentity, defaultRuntimeID, electionHeight, computeCommittee.EncodedMembersHash(), receipts)
+	commit, err := cbc.createCommitment(defaultIdentity, computeCommittee.EncodedMembersHash(), receipts)
 	if err != nil {
-		panic(fmt.Sprintf("compute create commitment message failed: %+v", err))
+		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
 
-	if err = computePublishToCommittee(ht.service, electionHeight, mergeCommittee, scheduler.Worker, ph, message); err != nil {
+	if err = computePublishToCommittee(ht.service, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight, commit); err != nil {
 		panic(fmt.Sprintf("compute publish to committee merge worker failed: %+v", err))
 	}
 	logger.Debug("compute honest: commitment sent")

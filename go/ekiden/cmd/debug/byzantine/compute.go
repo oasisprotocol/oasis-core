@@ -154,7 +154,7 @@ func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestN
 	return receipts, nil
 }
 
-func (cbc *computeBatchContext) createCommitmentMessage(id *identity.Identity, runtimeID signature.PublicKey, groupVersion int64, committeeID hash.Hash, storageReceipts []*storage.Receipt) (*p2p.Message, error) {
+func (cbc *computeBatchContext) createCommitment(id *identity.Identity, committeeID hash.Hash, storageReceipts []*storage.Receipt) (*commitment.ComputeCommitment, error) {
 	var storageSigs []signature.Signature
 	for _, receipt := range storageReceipts {
 		storageSigs = append(storageSigs, receipt.Signature)
@@ -176,18 +176,18 @@ func (cbc *computeBatchContext) createCommitmentMessage(id *identity.Identity, r
 		return nil, errors.Wrap(err, "commitment sign compute commitment")
 	}
 
-	return &p2p.Message{
+	return commit, nil
+}
+
+func computePublishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, runtimeID signature.PublicKey, groupVersion int64, commit *commitment.ComputeCommitment) error {
+	if err := schedulerPublishToCommittee(svc, height, committee, role, ph, &p2p.Message{
 		RuntimeID:    runtimeID,
 		GroupVersion: groupVersion,
 		SpanContext:  nil,
 		ComputeWorkerFinished: &p2p.ComputeWorkerFinished{
 			Commitment: *commit,
 		},
-	}, nil
-}
-
-func computePublishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, message *p2p.Message) error {
-	if err := schedulerPublishToCommittee(svc, height, committee, role, ph, message); err != nil {
+	}); err != nil {
 		return errors.Wrap(err, "scheduler publish to committee")
 	}
 
