@@ -32,6 +32,9 @@ type computeBatchContext struct {
 	newStateRoot  hash.Hash
 	ioWriteLog    writelog.WriteLog
 	newIORoot     hash.Hash
+
+	storageReceipts []*storage.Receipt
+	commit          *commitment.ComputeCommitment
 }
 
 func newComputeBatchContext() *computeBatchContext {
@@ -117,7 +120,7 @@ func (cbc *computeBatchContext) addResultError(ctx context.Context, tx *transact
 	}), tags)
 }
 
-func (cbc *computeBatchContext) commit(ctx context.Context) error {
+func (cbc *computeBatchContext) commitTrees(ctx context.Context) error {
 	var err error
 	cbc.stateWriteLog, cbc.newStateRoot, err = cbc.stateTree.Commit(ctx, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1)
 	if err != nil {
@@ -132,8 +135,9 @@ func (cbc *computeBatchContext) commit(ctx context.Context) error {
 	return nil
 }
 
-func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestNodeStorage) ([]*storage.Receipt, error) {
-	receipts, err := storageBroadcastApplyBatch(ctx, hnss, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1, []storage.ApplyOp{
+func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestNodeStorage) error {
+	var err error
+	cbc.storageReceipts, err = storageBroadcastApplyBatch(ctx, hnss, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1, []storage.ApplyOp{
 		storage.ApplyOp{
 			SrcRound: cbc.bd.Header.Round + 1,
 			SrcRoot:  cbc.bd.IORoot,
@@ -148,18 +152,19 @@ func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestN
 		},
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "storage broadcast apply batch")
+		return errors.Wrap(err, "storage broadcast apply batch")
 	}
 
-	return receipts, nil
+	return nil
 }
 
-func (cbc *computeBatchContext) createCommitment(id *identity.Identity, committeeID hash.Hash, storageReceipts []*storage.Receipt) (*commitment.ComputeCommitment, error) {
+func (cbc *computeBatchContext) createCommitment(id *identity.Identity, committeeID hash.Hash) error {
 	var storageSigs []signature.Signature
-	for _, receipt := range storageReceipts {
+	for _, receipt := range cbc.storageReceipts {
 		storageSigs = append(storageSigs, receipt.Signature)
 	}
-	commit, err := commitment.SignComputeCommitment(id.NodeSigner, &commitment.ComputeBody{
+	var err error
+	cbc.commit, err = commitment.SignComputeCommitment(id.NodeSigner, &commitment.ComputeBody{
 		CommitteeID: committeeID,
 		Header: commitment.ComputeResultsHeader{
 			PreviousHash: cbc.bd.Header.EncodedHash(),
@@ -173,19 +178,19 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, committe
 		InputStorageSigs: cbc.bd.StorageSignatures,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "commitment sign compute commitment")
+		return errors.Wrap(err, "commitment sign compute commitment")
 	}
 
-	return commit, nil
+	return nil
 }
 
-func computePublishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, runtimeID signature.PublicKey, groupVersion int64, commit *commitment.ComputeCommitment) error {
+func (cbc *computeBatchContext) publishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, runtimeID signature.PublicKey, groupVersion int64) error {
 	if err := schedulerPublishToCommittee(svc, height, committee, role, ph, &p2p.Message{
 		RuntimeID:    runtimeID,
 		GroupVersion: groupVersion,
 		SpanContext:  nil,
 		ComputeWorkerFinished: &p2p.ComputeWorkerFinished{
-			Commitment: *commit,
+			Commitment: *cbc.commit,
 		},
 	}); err != nil {
 		return errors.Wrap(err, "scheduler publish to committee")

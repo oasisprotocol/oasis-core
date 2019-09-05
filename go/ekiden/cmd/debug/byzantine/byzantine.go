@@ -123,8 +123,8 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute add result success failed: %+v", err))
 	}
 
-	if err = cbc.commit(ctx); err != nil {
-		panic(fmt.Sprintf("compute commit failed: %+v", err))
+	if err = cbc.commitTrees(ctx); err != nil {
+		panic(fmt.Sprintf("compute commit trees failed: %+v", err))
 	}
 	logger.Debug("compute honest: committed storage trees",
 		"io_write_log", cbc.ioWriteLog,
@@ -133,17 +133,15 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		"new_state_root", cbc.newStateRoot,
 	)
 
-	receipts, err := cbc.uploadBatch(ctx, hnss)
-	if err != nil {
+	if err = cbc.uploadBatch(ctx, hnss); err != nil {
 		panic(fmt.Sprintf("compute upload batch failed: %+v", err))
 	}
 
-	commit, err := cbc.createCommitment(defaultIdentity, computeCommittee.EncodedMembersHash(), receipts)
-	if err != nil {
+	if err = cbc.createCommitment(defaultIdentity, computeCommittee.EncodedMembersHash()); err != nil {
 		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
 
-	if err = computePublishToCommittee(ht.service, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight, commit); err != nil {
+	if err = cbc.publishToCommittee(ht.service, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight); err != nil {
 		panic(fmt.Sprintf("compute publish to committee merge worker failed: %+v", err))
 	}
 	logger.Debug("compute honest: commitment sent")
