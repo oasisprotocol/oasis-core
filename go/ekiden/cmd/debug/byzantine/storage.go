@@ -166,7 +166,43 @@ func (hns *honestNodeStorage) MergeBatch(
 	round uint64,
 	ops []storage.MergeOp,
 ) ([]*storage.Receipt, error) {
-	panic("not implemented")
+	namespaceBinary, err := ns.MarshalBinary()
+	if err != nil {
+		panic(fmt.Sprintf("namespace MarshalBinary failed: %+v", err))
+	}
+	var pOps []*storagegrpc.MergeOp
+	for _, op := range ops {
+		baseRaw, err1 := op.Base.MarshalBinary()
+		if err1 != nil {
+			panic(fmt.Sprintf("merge operation base MarshalBinary failed: %+v", err1))
+		}
+		var pOthers [][]byte
+		for _, other := range op.Others {
+			otherRaw, err2 := other.MarshalBinary()
+			if err2 != nil {
+				panic(fmt.Sprintf("other MarshalBinary failed: %+v", err2))
+			}
+			pOthers = append(pOthers, otherRaw)
+		}
+		pOps = append(pOps, &storagegrpc.MergeOp{
+			Base:   baseRaw,
+			Others: pOthers,
+		})
+	}
+	resp, err := hns.client.MergeBatch(ctx, &storagegrpc.MergeBatchRequest{
+		Namespace: namespaceBinary,
+		Round:     round,
+		Ops:       pOps,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "client MergeBatch")
+	}
+	var receipts []*storage.Receipt
+	if err = cbor.Unmarshal(resp.GetReceipts(), &receipts); err != nil {
+		panic(fmt.Sprintf("CBOR unmarshal receipts failed: %+v", err))
+	}
+
+	return receipts, nil
 }
 
 func (hns *honestNodeStorage) GetDiff(context.Context, storage.Root, storage.Root) (storage.WriteLogIterator, error) {
@@ -221,6 +257,26 @@ func storageBroadcastApplyBatch(
 		r, err := hns.ApplyBatch(ctx, ns, dstRound, ops)
 		if err != nil {
 			return receipts, errors.Wrapf(err, "honest node storage ApplyBatch %s", hns.nodeID)
+		}
+
+		receipts = append(receipts, r...)
+	}
+
+	return receipts, nil
+}
+
+func storageBroadcastMergeBatch(
+	ctx context.Context,
+	hnss []*honestNodeStorage,
+	ns common.Namespace,
+	round uint64,
+	ops []storage.MergeOp,
+) ([]*storage.Receipt, error) {
+	var receipts []*storage.Receipt
+	for _, hns := range hnss {
+		r, err := hns.MergeBatch(ctx, ns, round, ops)
+		if err != nil {
+			return receipts, errors.Wrapf(err, "honest node storage MergeBatch %s", hns.nodeID)
 		}
 
 		receipts = append(receipts, r...)
