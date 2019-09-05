@@ -74,17 +74,3 @@ func registryGetNode(svc service.TendermintService, height int64, runtimeID sign
 
 	return &node, nil
 }
-
-func registryGetNodes(svc service.TendermintService, height int64) ([]*node.Node, error) { // nolint: deadcode, unused
-	response, err := svc.Query(registryapp.QueryGetNodes, nil, height)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Tendermint Query %s", registryapp.QueryGetNodes)
-	}
-
-	var nodes []*node.Node
-	if err := cbor.Unmarshal(response, &nodes); err != nil {
-		return nil, errors.Wrap(err, "CBOR Unmarshal nodes")
-	}
-
-	return nodes, nil
-}
