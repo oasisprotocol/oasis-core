@@ -14,6 +14,7 @@ import (
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	schedulerapp "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 )
 
 func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.CommitteeKind) (int64, error) {
@@ -120,6 +121,20 @@ func schedulerForRoleInCommittee(svc service.TendermintService, height int64, co
 			return err
 		}
 	}
+
+	return nil
+}
+
+func schedulerPublishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, message *p2p.Message) error {
+	if err := schedulerForRoleInCommittee(svc, height, committee, role, func(n *node.Node) error {
+		ph.service.Publish(ph.context, n, message)
+
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	ph.service.Flush()
 
 	return nil
 }
