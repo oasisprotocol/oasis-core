@@ -405,7 +405,7 @@ func NewNode() (*Node, error) {
 
 	// Initialize the internal gRPC server.
 	// Depends on global tracer.
-	node.grpcInternal, err = cmdGrpc.NewServerLocal()
+	node.grpcInternal, err = cmdGrpc.NewServerLocal(false)
 	if err != nil {
 		logger.Error("failed to initialize gRPC server",
 			"err", err,
