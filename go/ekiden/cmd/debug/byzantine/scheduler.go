@@ -23,19 +23,8 @@ func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.C
 		return 0, errors.Wrap(err, "Tendermint Subscribe")
 	}
 	defer func() {
-		// Drain our unbuffered subscription while we work on unsubscribing.
-		go func() {
-			for {
-				select {
-				case <-sub.Out():
-				case <-sub.Cancelled():
-					break
-				}
-			}
-		}()
-		err := svc.Unsubscribe("script", schedulerapp.QueryApp)
-		if err != nil {
-			panic(fmt.Sprintf("Tendermint Unsubscribe: %+v", err))
+		if err := tendermintUnsubscribeDrain(svc, "script", schedulerapp.QueryApp, sub); err != nil {
+			panic(fmt.Sprintf("Tendermint unsubscribe drain: %+v", err))
 		}
 	}()
 

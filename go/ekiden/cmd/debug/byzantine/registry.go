@@ -48,12 +48,12 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 		return errors.Wrap(err, "node SignNode")
 	}
 
-	if err := svc.BroadcastTx(registryapp.TransactionTag, registryapp.Tx{
+	if err := tendermintBroadcastTxCommit(svc, registryapp.TransactionTag, registryapp.Tx{
 		TxRegisterNode: &registryapp.TxRegisterNode{
 			Node: *signedNode,
 		},
 	}); err != nil {
-		return errors.Wrap(err, "Tendermint BroadcastTx")
+		return errors.Wrap(err, "Tendermint BroadcastTx commit")
 	}
 
 	return nil
