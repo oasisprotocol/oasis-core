@@ -281,6 +281,9 @@ type Server struct {
 
 	unsafeDebug bool
 
+	wrapper *grpcWrapper
+}
+
 // ServerConfig holds the configuration used for creating a server.
 type ServerConfig struct { // nolint: maligned
 	// Name of the server being constructed.
@@ -294,6 +297,9 @@ type ServerConfig struct { // nolint: maligned
 	Path string
 	// Certificate is the certificate used by the server. Should be nil for local servers.
 	Certificate *tls.Certificate
+	// InstallWrapper specifies whether intercepting facilities should be enabled on this server,
+	// to enable intercepting RPC calls with a wrapper.
+	InstallWrapper bool
 	// CustomOptions is an array of extra options for the grpc server.
 	CustomOptions []grpc.ServerOption
 }
@@ -418,8 +424,22 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	logAdapter := newGrpcLogAdapter(svc.Logger)
 
 	var sOpts []grpc.ServerOption
-	sOpts = append(sOpts, grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(logAdapter.unaryLogger, grpc_opentracing.UnaryServerInterceptor())))
-	sOpts = append(sOpts, grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(logAdapter.streamLogger, grpc_opentracing.StreamServerInterceptor())))
+	var wrapper *grpcWrapper
+	unaryInterceptors := []grpc.UnaryServerInterceptor{
+		logAdapter.unaryLogger,
+		grpc_opentracing.UnaryServerInterceptor(),
+	}
+	streamInterceptors := []grpc.StreamServerInterceptor{
+		logAdapter.streamLogger,
+		grpc_opentracing.StreamServerInterceptor(),
+	}
+	if config.InstallWrapper {
+		wrapper = newWrapper()
+		unaryInterceptors = append(unaryInterceptors, wrapper.unaryInterceptor)
+		streamInterceptors = append(streamInterceptors, wrapper.streamInterceptor)
+	}
+	sOpts = append(sOpts, grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)))
+	sOpts = append(sOpts, grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(streamInterceptors...)))
 	sOpts = append(sOpts, grpc.MaxRecvMsgSize(maxRecvMsgSize))
 	sOpts = append(sOpts, grpc.MaxSendMsgSize(maxSendMsgSize))
 	sOpts = append(sOpts, grpc.KeepaliveParams(serverKeepAliveParams))
@@ -440,6 +460,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		server:                grpc.NewServer(sOpts...),
 		errCh:                 make(chan error, len(listenerParams)),
 		unsafeDebug:           unsafeDebug,
+		wrapper:               wrapper,
 	}, nil
 }
 

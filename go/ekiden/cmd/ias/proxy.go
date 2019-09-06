@@ -117,7 +117,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 	}
 
 	// Initialize the gRPC server.
-	env.grpcSrv, err = cmdGrpc.NewServerTCP(cert)
+	env.grpcSrv, err = cmdGrpc.NewServerTCP(cert, false)
 	if err != nil {
 		logger.Error("failed to initialize gRPC server",
 			"err", err,

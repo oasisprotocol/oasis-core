@@ -38,11 +38,12 @@ var (
 //
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
-func NewServerTCP(cert *tls.Certificate) (*cmnGrpc.Server, error) {
+func NewServerTCP(cert *tls.Certificate, installWrapper bool) (*cmnGrpc.Server, error) {
 	config := &cmnGrpc.ServerConfig{
-		Name:        "internal",
-		Port:        uint16(viper.GetInt(cfgGRPCPort)),
-		Certificate: cert,
+		Name:           "internal",
+		Port:           uint16(viper.GetInt(cfgGRPCPort)),
+		Certificate:    cert,
+		InstallWrapper: installWrapper,
 	}
 	return cmnGrpc.NewServer(config)
 }
@@ -52,7 +53,7 @@ func NewServerTCP(cert *tls.Certificate) (*cmnGrpc.Server, error) {
 //
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
-func NewServerLocal() (*cmnGrpc.Server, error) {
+func NewServerLocal(installWrapper bool) (*cmnGrpc.Server, error) {
 	dataDir := common.DataDir()
 	if dataDir == "" {
 		return nil, errors.New("data directory must be set")
@@ -62,9 +63,10 @@ func NewServerLocal() (*cmnGrpc.Server, error) {
 	debugPort := uint16(viper.GetInt(cfgDebugPort))
 
 	config := &cmnGrpc.ServerConfig{
-		Name: "internal",
-		Port: debugPort,
-		Path: path,
+		Name:           "internal",
+		Port:           debugPort,
+		Path:           path,
+		InstallWrapper: installWrapper,
 	}
 
 	return cmnGrpc.NewServer(config)
