@@ -39,8 +39,12 @@ var (
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
 func NewServerTCP(cert *tls.Certificate) (*cmnGrpc.Server, error) {
-	port := uint16(viper.GetInt(cfgGRPCPort))
-	return cmnGrpc.NewServerTCP("internal", port, cert, nil)
+	config := &cmnGrpc.ServerConfig{
+		Name:        "internal",
+		Port:        uint16(viper.GetInt(cfgGRPCPort)),
+		Certificate: cert,
+	}
+	return cmnGrpc.NewServer(config)
 }
 
 // NewServerLocal constructs a new gRPC server service listening on
@@ -53,11 +57,17 @@ func NewServerLocal() (*cmnGrpc.Server, error) {
 	if dataDir == "" {
 		return nil, errors.New("data directory must be set")
 	}
+	path := filepath.Join(dataDir, localSocketFilename)
 
 	debugPort := uint16(viper.GetInt(cfgDebugPort))
 
-	path := filepath.Join(dataDir, localSocketFilename)
-	return cmnGrpc.NewServerLocal("internal", path, debugPort, nil)
+	config := &cmnGrpc.ServerConfig{
+		Name: "internal",
+		Port: debugPort,
+		Path: path,
+	}
+
+	return cmnGrpc.NewServer(config)
 }
 
 // NewClient connects to a remote gRPC server.

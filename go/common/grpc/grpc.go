@@ -280,6 +280,22 @@ type Server struct {
 	errCh            chan error
 
 	unsafeDebug bool
+
+// ServerConfig holds the configuration used for creating a server.
+type ServerConfig struct { // nolint: maligned
+	// Name of the server being constructed.
+	Name string
+	// Port is the port used for TCP servers.
+	//
+	// Iff Path is not empty (i.e. a local server is being created), and Port is not 0, then
+	// the local server will *also* listen on that port.
+	Port uint16
+	// Path is the path for the local server. Leave nil to create a TCP server.
+	Path string
+	// Certificate is the certificate used by the server. Should be nil for local servers.
+	Certificate *tls.Certificate
+	// CustomOptions is an array of extra options for the grpc server.
+	CustomOptions []grpc.ServerOption
 }
 
 type listenerConfig struct {
@@ -348,61 +364,45 @@ func (s *Server) Server() *grpc.Server {
 	return s.server
 }
 
-// NewServerTCP constructs a new gRPC server service listening on
-// a specific TCP port.
+// NewServer constructs a new gRPC server service listening on
+// a specific TCP port or local socket path.
 //
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
-func NewServerTCP(name string, port uint16, cert *tls.Certificate, customOptions []grpc.ServerOption) (*Server, error) {
-	cfg := listenerConfig{
-		network: "tcp",
-		address: ":" + strconv.Itoa(int(port)),
-	}
-	return newServer(name, []listenerConfig{cfg}, cert, false, tls.RequestClientCert, customOptions)
-}
+func NewServer(config *ServerConfig) (*Server, error) {
+	var listenerParams []listenerConfig
+	var clientAuthType tls.ClientAuthType
+	unsafeDebug := false
 
-// NewServerLocal constructs a new gRPC server service listening on
-// a specific AF_LOCAL socket.  Iff the optional debugPort is non-zero
-// the server will *also* listen on `:debugPort`.
-//
-// This internally takes a snapshot of the current global tracer, so
-// make sure you initialize the global tracer before calling this.
-func NewServerLocal(name, path string, debugPort uint16, customOptions []grpc.ServerOption) (*Server, error) {
-	// Remove any existing socket files first.
-	_ = os.Remove(path)
-
-	type addr struct {
-		net, addr string
-	}
-
-	var addrs = []addr{
-		{"unix", path},
-	}
-	if debugPort != 0 {
-		addrs = append(addrs, addr{"tcp", ":" + strconv.Itoa(int(debugPort))})
-	}
-
-	var cfgs []listenerConfig
-	for _, v := range addrs {
+	if config.Path == "" {
+		// Public TCP server.
 		cfg := listenerConfig{
-			network: v.net,
-			address: v.addr,
+			network: "tcp",
+			address: ":" + strconv.Itoa(int(config.Port)),
 		}
-		cfgs = append(cfgs, cfg)
+		listenerParams = []listenerConfig{cfg}
+		clientAuthType = tls.RequestClientCert
+	} else {
+		// Local server.
+
+		// Remove any existing socket files first.
+		_ = os.Remove(config.Path)
+
+		listenerParams = append(listenerParams, listenerConfig{
+			network: "unix",
+			address: config.Path,
+		})
+		if config.Port != 0 {
+			listenerParams = append(listenerParams, listenerConfig{
+				network: "tcp",
+				address: ":" + strconv.Itoa(int(config.Port)),
+			})
+			unsafeDebug = true
+		}
+
+		clientAuthType = tls.NoClientCert
 	}
-	srv, err := newServer(name, cfgs, nil, debugPort != 0, tls.NoClientCert, customOptions)
 
-	return srv, err
-}
-
-func newServer(
-	name string,
-	listenerParams []listenerConfig,
-	cert *tls.Certificate,
-	unsafeDebug bool,
-	clientAuthType tls.ClientAuthType,
-	customOptions []grpc.ServerOption,
-) (*Server, error) {
 	grpcMetricsOnce.Do(func() {
 		prometheus.MustRegister(grpcCollectors...)
 	})
@@ -413,7 +413,7 @@ func newServer(
 		grpclog.SetLoggerV2(logAdapter)
 	})
 
-	name = fmt.Sprintf("grpc/%s", name)
+	name := fmt.Sprintf("grpc/%s", config.Name)
 	svc := *service.NewBaseBackgroundService(name)
 	logAdapter := newGrpcLogAdapter(svc.Logger)
 
@@ -423,11 +423,11 @@ func newServer(
 	sOpts = append(sOpts, grpc.MaxRecvMsgSize(maxRecvMsgSize))
 	sOpts = append(sOpts, grpc.MaxSendMsgSize(maxSendMsgSize))
 	sOpts = append(sOpts, grpc.KeepaliveParams(serverKeepAliveParams))
-	sOpts = append(sOpts, customOptions...)
+	sOpts = append(sOpts, config.CustomOptions...)
 
-	if cert != nil {
+	if config.Certificate != nil {
 		tlsConfig := &tls.Config{
-			Certificates: []tls.Certificate{*cert},
+			Certificates: []tls.Certificate{*config.Certificate},
 			ClientAuth:   clientAuthType,
 		}
 		sOpts = append(sOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))

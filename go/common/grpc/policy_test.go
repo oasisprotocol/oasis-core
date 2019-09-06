@@ -151,7 +151,13 @@ func TestAccessPolicy(t *testing.T) {
 	serverCertPool.AddCert(serverX509Cert)
 
 	// Create a new gRPC server.
-	grpcServer, err := NewServerTCP(host, port, serverTLSCert, []grpc.ServerOption{grpc.CustomCodec(&CBORCodec{})})
+	serverConfig := &ServerConfig{
+		Name:          host,
+		Port:          port,
+		Certificate:   serverTLSCert,
+		CustomOptions: []grpc.ServerOption{grpc.CustomCodec(&CBORCodec{})},
+	}
+	grpcServer, err := NewServer(serverConfig)
 	require.NoErrorf(err, "Failed to create a new gRPC server: %v", err)
 
 	runtimeID, err := testNs.ToRuntimeID()
