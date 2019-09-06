@@ -28,6 +28,11 @@ var (
 		Short: "act as an honest compute worker",
 		Run:   doComputeHonest,
 	}
+	mergeHonestCmd = &cobra.Command{
+		Use:   "merge-honest",
+		Short: "act as an honest merge worker",
+		Run:   doMergeHonest,
+	}
 )
 
 func doComputeHonest(cmd *cobra.Command, args []string) {
@@ -141,9 +146,99 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 	logger.Debug("compute honest: commitment sent")
 }
 
+func doMergeHonest(cmd *cobra.Command, args []string) {
+	if err := common.Init(); err != nil {
+		common.EarlyLogAndExit(err)
+	}
+
+	defaultIdentity, err := initDefaultIdentity(common.DataDir())
+	if err != nil {
+		panic(fmt.Sprintf("init default identity failed: %+v", err))
+	}
+
+	ht := newHonestTendermint()
+	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
+		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
+	}
+	defer func() {
+		if err1 := ht.stop(); err1 != nil {
+			panic(fmt.Sprintf("honest Tendermint stop failed: %+v", err1))
+		}
+	}()
+
+	ph := newP2PHandle()
+	if err = ph.start(defaultIdentity, defaultRuntimeID); err != nil {
+		panic(fmt.Sprintf("P2P start failed: %+v", err))
+	}
+	defer func() {
+		if err1 := ph.stop(); err1 != nil {
+			panic(fmt.Sprintf("P2P stop failed: %+v", err1))
+		}
+	}()
+
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, node.RoleMergeWorker); err != nil {
+		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
+	}
+
+	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindCompute)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
+	}
+	mergeCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindMerge, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindMerge, err))
+	}
+	if err = schedulerCheckScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
+		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
+	}
+	logger.Debug("merge honest: merge schedule ok")
+	storageCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindStorage, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
+	}
+
+	logger.Debug("merge honest: connecting to storage committee")
+	hnss, err := storageConnectToCommittee(ht.service, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
+	if err != nil {
+		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
+	}
+	defer storageBroadcastCleanup(hnss)
+
+	mbc := newMergeBatchContext()
+
+	if err = mbc.loadCurrentBlock(ht.service, defaultRuntimeID); err != nil {
+		panic(fmt.Sprintf("merge load current block failed: %+v", err))
+	}
+
+	// Receive 1 committee * 2 commitments per committee.
+	if err = mbc.receiveCommitments(ph, 2); err != nil {
+		panic(fmt.Sprintf("merge receive commitments failed: %+v", err))
+	}
+	logger.Debug("merge honest: received commitments", "commitments", mbc.commitments)
+
+	ctx := context.Background()
+
+	if err = mbc.process(ctx, hnss); err != nil {
+		panic(fmt.Sprintf("merge process failed: %+v", err))
+	}
+	logger.Debug("merge honest: processed",
+		"new_block", mbc.newBlock,
+	)
+
+	if err = mbc.createCommitment(defaultIdentity); err != nil {
+		panic(fmt.Sprintf("merge create commitment failed: %+v", err))
+	}
+
+	if err = mbc.publishToChain(ht.service, defaultRuntimeID); err != nil {
+		panic(fmt.Sprintf("merge publish to chain failed: %+v", err))
+	}
+	logger.Debug("merge honest: commitment sent")
+}
+
 // Register registers the byzantine sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
 	byzantineCmd.AddCommand(computeHonestCmd)
+	byzantineCmd.AddCommand(mergeHonestCmd)
 	parentCmd.AddCommand(byzantineCmd)
 }
 
