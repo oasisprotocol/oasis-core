@@ -1,0 +1,14 @@
+[package]
+name = "simple-keyvalue-ops-client"
+version = "0.3.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+description = "Simple key value operation test client"
+
+[dependencies]
+ekiden-client = { path = "../../../client" }
+ekiden-runtime = { path = "../../../runtime" }
+simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
+clap = "2.29.1"
+tokio = "0.1.17"
+grpcio = "0.4.4"
+io-context = "0.2.0"

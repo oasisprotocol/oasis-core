@@ -1418,6 +1418,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "simple-keyvalue-ops-client"
+version = "0.3.0-alpha"
+dependencies = [
+ "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ekiden-client 0.3.0-alpha",
+ "ekiden-runtime 0.3.0-alpha",
+ "grpcio 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "simple-keyvalue-api 0.3.0-alpha",
+ "tokio 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
