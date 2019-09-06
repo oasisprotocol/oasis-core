@@ -404,6 +404,7 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
+	// Process merge honestly.
 	if err = mbc.process(ctx, hnss); err != nil {
 		panic(fmt.Sprintf("merge process failed: %+v", err))
 	}
