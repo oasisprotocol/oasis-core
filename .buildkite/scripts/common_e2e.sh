@@ -737,6 +737,7 @@ run_test() {
     local post_km_hook=""
     local on_success_hook="assert_basic_success"
     local client_runner=run_basic_client
+    local client_extra_args=""
     local client="none"
     local beacon_deterministic=""
     local restore_genesis_file=""
@@ -778,7 +779,7 @@ run_test() {
     sleep 1
 
     # Run the client.
-    $client_runner $runtime $client
+    $client_runner $runtime $client $client_extra_args
     local client_pid=${EKIDEN_CLIENT_PID:-""}
 
     # Run post key-manager startup hook.
