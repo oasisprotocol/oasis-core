@@ -94,10 +94,15 @@ func (mbc *mergeBatchContext) process(ctx context.Context, hnss []*honestNodeSto
 	if err := mbc.storageReceipts[0].Open(&firstReceiptBody); err != nil {
 		return errors.Wrap(err, "storage receipt Open")
 	}
+	var signatures []signature.Signature
+	for _, receipt := range mbc.storageReceipts {
+		signatures = append(signatures, receipt.Signature)
+	}
 
 	mbc.newBlock = block.NewEmptyBlock(mbc.currentBlock, 0, block.Normal)
 	mbc.newBlock.Header.IORoot = firstReceiptBody.Roots[0]
 	mbc.newBlock.Header.StateRoot = firstReceiptBody.Roots[1]
+	mbc.newBlock.Header.StorageSignatures = signatures
 
 	return nil
 }
