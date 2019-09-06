@@ -289,7 +289,8 @@ test_suite() {
             name="e2e-${backend_name}-byzantine-compute-honest" \
             backend_runner=$backend_runner \
             runtime=simple-keyvalue \
-            client=simple-keyvalue \
+            client=simple-keyvalue-ops \
+            client_extra_args="set hello_key hello_value" \
             beacon_deterministic=1
     fi
 }
