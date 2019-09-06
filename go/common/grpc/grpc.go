@@ -37,7 +37,8 @@ var (
 	// Flags has the flags used by the gRPC server.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
-	grpcMetricsOnce sync.Once
+	grpcMetricsOnce      sync.Once
+	grpcGlobalLoggerOnce sync.Once
 
 	grpcCalls = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -406,10 +407,15 @@ func newServer(
 		prometheus.MustRegister(grpcCollectors...)
 	})
 
+	grpcGlobalLoggerOnce.Do(func() {
+		logger := logging.GetLogger("grpc")
+		logAdapter := newGrpcLogAdapter(logger)
+		grpclog.SetLoggerV2(logAdapter)
+	})
+
 	name = fmt.Sprintf("grpc/%s", name)
 	svc := *service.NewBaseBackgroundService(name)
 	logAdapter := newGrpcLogAdapter(svc.Logger)
-	grpclog.SetLoggerV2(logAdapter)
 
 	var sOpts []grpc.ServerOption
 	sOpts = append(sOpts, grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(logAdapter.unaryLogger, grpc_opentracing.UnaryServerInterceptor())))
