@@ -31,14 +31,14 @@ type honestNodeStorage struct {
 	initCh            chan struct{}
 }
 
-func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeStorage, error) { // nolint: deadcode, unused
+func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeStorage, error) {
 	opts, err := storageclient.DialOptionForNode([]tls.Certificate{*id.TLSCertificate}, node)
 	if err != nil {
-		return nil, errors.Wrap(err, "storageclient DialOptionForNode")
+		return nil, errors.Wrap(err, "storage client DialOptionForNode")
 	}
 	conn, resolverCleanupCb, err := storageclient.DialNode(node, opts)
 	if err != nil {
-		return nil, errors.Wrap(err, "storageclient DialNode")
+		return nil, errors.Wrap(err, "storage client DialNode")
 	}
 
 	initCh := make(chan struct{})
@@ -114,11 +114,11 @@ func (hns *honestNodeStorage) ApplyBatch(
 	for _, op := range ops {
 		srcRootRaw, err1 := op.SrcRoot.MarshalBinary()
 		if err1 != nil {
-			panic(fmt.Sprintf("apply operation source root MarshalBinary failed: %+v", err))
+			panic(fmt.Sprintf("apply operation source root MarshalBinary failed: %+v", err1))
 		}
 		dstRootRaw, err1 := op.DstRoot.MarshalBinary()
 		if err1 != nil {
-			panic(fmt.Sprintf("apply operation destination root MarshalBinary failed: %+v", err))
+			panic(fmt.Sprintf("apply operation destination root MarshalBinary failed: %+v", err1))
 		}
 		var pLogs []*storagegrpc.LogEntry
 		for _, log := range op.WriteLog {
@@ -190,7 +190,7 @@ func storageConnectToCommittee(svc service.TendermintService, height int64, comm
 	if err := schedulerForRoleInCommittee(svc, height, committee, role, func(n *node.Node) error {
 		hns, err := newHonestNodeStorage(id, n)
 		if err != nil {
-			return errors.Wrapf(err, "newHonestNodeStorage %s", n.ID)
+			return errors.Wrapf(err, "new honest node storage %s", n.ID)
 		}
 
 		hnss = append(hnss, hns)

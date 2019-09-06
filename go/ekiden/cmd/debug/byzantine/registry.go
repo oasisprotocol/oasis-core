@@ -17,7 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
-func registryRegisterNode(svc service.TendermintService, id *identity.Identity, dataDir string, committeeAddresses []node.Address, p2pInfo node.P2PInfo, runtimeID signature.PublicKey, roles node.RolesMask) error { // nolint: deadcode, unused
+func registryRegisterNode(svc service.TendermintService, id *identity.Identity, dataDir string, committeeAddresses []node.Address, p2pInfo node.P2PInfo, runtimeID signature.PublicKey, roles node.RolesMask) error {
 	entityID, registrationSigner, err := registration.GetRegistrationSigner(logging.GetLogger("cmd/byzantine/registration"), dataDir, id)
 	if err != nil {
 		return errors.Wrap(err, "registration GetRegistrationSigner")
@@ -59,12 +59,12 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 	return nil
 }
 
-func registryGetNode(svc service.TendermintService, height int64, id signature.PublicKey) (*node.Node, error) { // nolint: deadcode, unused
+func registryGetNode(svc service.TendermintService, height int64, runtimeID signature.PublicKey) (*node.Node, error) {
 	response, err := svc.Query(registryapp.QueryGetNode, tmapi.QueryGetByIDRequest{
-		ID: id,
+		ID: runtimeID,
 	}, height)
 	if err != nil {
-		return nil, errors.Wrapf(err, "Tendermint Query %s", registryapp.QueryGetNodes)
+		return nil, errors.Wrapf(err, "Tendermint Query %s", registryapp.QueryGetNode)
 	}
 
 	var node node.Node
@@ -73,18 +73,4 @@ func registryGetNode(svc service.TendermintService, height int64, id signature.P
 	}
 
 	return &node, nil
-}
-
-func registryGetNodes(svc service.TendermintService, height int64) ([]*node.Node, error) { // nolint: deadcode, unused
-	response, err := svc.Query(registryapp.QueryGetNodes, nil, height)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Tendermint Query %s", registryapp.QueryGetNodes)
-	}
-
-	var nodes []*node.Node
-	if err := cbor.Unmarshal(response, &nodes); err != nil {
-		return nil, errors.Wrap(err, "CBOR Unmarshal nodes")
-	}
-
-	return nodes, nil
 }

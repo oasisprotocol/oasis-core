@@ -3,7 +3,6 @@ package byzantine
 import (
 	"context"
 	"fmt"
-	"net"
 
 	"github.com/spf13/cobra"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
@@ -62,12 +60,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), []node.Address{node.Address{
-		TCPAddr: net.TCPAddr{
-			IP:   net.IPv4(127, 0, 0, 1),
-			Port: 11004,
-		},
-	}}, ph.service.Info(), defaultRuntimeID, node.RoleComputeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -124,8 +117,8 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute add result success failed: %+v", err))
 	}
 
-	if err = cbc.commit(ctx); err != nil {
-		panic(fmt.Sprintf("compute commit failed: %+v", err))
+	if err = cbc.commitTrees(ctx); err != nil {
+		panic(fmt.Sprintf("compute commit trees failed: %+v", err))
 	}
 	logger.Debug("compute honest: committed storage trees",
 		"io_write_log", cbc.ioWriteLog,
@@ -134,31 +127,16 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		"new_state_root", cbc.newStateRoot,
 	)
 
-	receipts, err := storageBroadcastApplyBatch(ctx, hnss, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1, []storage.ApplyOp{
-		storage.ApplyOp{
-			SrcRound: cbc.bd.Header.Round + 1,
-			SrcRoot:  cbc.bd.IORoot,
-			DstRoot:  cbc.newIORoot,
-			WriteLog: cbc.ioWriteLog,
-		},
-		storage.ApplyOp{
-			SrcRound: cbc.bd.Header.Round,
-			SrcRoot:  cbc.bd.Header.StateRoot,
-			DstRoot:  cbc.newStateRoot,
-			WriteLog: cbc.stateWriteLog,
-		},
-	})
-	if err != nil {
-		panic(fmt.Sprintf("storage broadcast apply batch failed: %+v", err))
+	if err = cbc.uploadBatch(ctx, hnss); err != nil {
+		panic(fmt.Sprintf("compute upload batch failed: %+v", err))
 	}
 
-	message, err := cbc.createCommitmentMessage(defaultIdentity, defaultRuntimeID, electionHeight, computeCommittee.EncodedMembersHash(), receipts)
-	if err != nil {
-		panic(fmt.Sprintf("compute create commitment message failed: %+v", err))
+	if err = cbc.createCommitment(defaultIdentity, computeCommittee.EncodedMembersHash()); err != nil {
+		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
 
-	if err = computePublishToCommittee(ht.service, electionHeight, mergeCommittee, scheduler.Worker, ph, message); err != nil {
-		panic(fmt.Sprintf("compute publish to committee merge worker: %+v", err))
+	if err = cbc.publishToCommittee(ht.service, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight); err != nil {
+		panic(fmt.Sprintf("compute publish to committee merge worker failed: %+v", err))
 	}
 	logger.Debug("compute honest: commitment sent")
 }

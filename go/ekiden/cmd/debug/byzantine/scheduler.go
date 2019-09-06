@@ -14,9 +14,10 @@ import (
 	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
 	schedulerapp "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
+	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 )
 
-func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.CommitteeKind) (int64, error) { // nolint: deadcode, unused
+func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.CommitteeKind) (int64, error) {
 	sub, err := svc.Subscribe("script", schedulerapp.QueryApp)
 	if err != nil {
 		return 0, errors.Wrap(err, "Tendermint Subscribe")
@@ -63,7 +64,7 @@ func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.C
 	}
 }
 
-func schedulerGetCommittee(svc service.TendermintService, height int64, kind scheduler.CommitteeKind, runtimeID signature.PublicKey) (*scheduler.Committee, error) { // nolint: deadcode, unused
+func schedulerGetCommittee(svc service.TendermintService, height int64, kind scheduler.CommitteeKind, runtimeID signature.PublicKey) (*scheduler.Committee, error) {
 	raw, err := svc.Query(schedulerapp.QueryKindsCommittees, []scheduler.CommitteeKind{kind}, height)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Tendermint Query %s", schedulerapp.QueryKindsCommittees)
@@ -88,7 +89,7 @@ func schedulerGetCommittee(svc service.TendermintService, height int64, kind sch
 	return nil, errors.New("query didn't return a committee for our runtime")
 }
 
-func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.PublicKey, role scheduler.Role) error { // nolint: deadcode, unused
+func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.PublicKey, role scheduler.Role) error {
 	for _, member := range committee.Members {
 		if !member.PublicKey.Equal(nodeID) {
 			continue
@@ -120,6 +121,20 @@ func schedulerForRoleInCommittee(svc service.TendermintService, height int64, co
 			return err
 		}
 	}
+
+	return nil
+}
+
+func schedulerPublishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, message *p2p.Message) error {
+	if err := schedulerForRoleInCommittee(svc, height, committee, role, func(n *node.Node) error {
+		ph.service.Publish(ph.context, n, message)
+
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	ph.service.Flush()
 
 	return nil
 }

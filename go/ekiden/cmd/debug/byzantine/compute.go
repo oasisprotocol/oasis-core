@@ -9,7 +9,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -21,7 +20,7 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 )
 
-type computeBatchContext struct { // nolint: unused
+type computeBatchContext struct {
 	bd    commitment.TxnSchedulerBatchDispatch
 	bdSig signature.Signature
 
@@ -33,9 +32,12 @@ type computeBatchContext struct { // nolint: unused
 	newStateRoot  hash.Hash
 	ioWriteLog    writelog.WriteLog
 	newIORoot     hash.Hash
+
+	storageReceipts []*storage.Receipt
+	commit          *commitment.ComputeCommitment
 }
 
-func newComputeBatchContext() *computeBatchContext { // nolint: deadcode, unused
+func newComputeBatchContext() *computeBatchContext {
 	return &computeBatchContext{}
 }
 
@@ -100,7 +102,7 @@ func (cbc *computeBatchContext) addResult(ctx context.Context, tx *transaction.T
 	return nil
 }
 
-func (cbc *computeBatchContext) addResultSuccess(ctx context.Context, tx *transaction.Transaction, res interface{}, tags transaction.Tags) error { // nolint: unused
+func (cbc *computeBatchContext) addResultSuccess(ctx context.Context, tx *transaction.Transaction, res interface{}, tags transaction.Tags) error {
 	// Hack: The actual TxnOutput struct doesn't serialize right.
 	return cbc.addResult(ctx, tx, cbor.Marshal(struct {
 		Success interface{}
@@ -118,7 +120,7 @@ func (cbc *computeBatchContext) addResultError(ctx context.Context, tx *transact
 	}), tags)
 }
 
-func (cbc *computeBatchContext) commit(ctx context.Context) error {
+func (cbc *computeBatchContext) commitTrees(ctx context.Context) error {
 	var err error
 	cbc.stateWriteLog, cbc.newStateRoot, err = cbc.stateTree.Commit(ctx, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1)
 	if err != nil {
@@ -133,12 +135,36 @@ func (cbc *computeBatchContext) commit(ctx context.Context) error {
 	return nil
 }
 
-func (cbc *computeBatchContext) createCommitmentMessage(id *identity.Identity, runtimeID signature.PublicKey, groupVersion int64, committeeID hash.Hash, storageReceipts []*storage.Receipt) (*p2p.Message, error) {
+func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestNodeStorage) error {
+	var err error
+	cbc.storageReceipts, err = storageBroadcastApplyBatch(ctx, hnss, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1, []storage.ApplyOp{
+		storage.ApplyOp{
+			SrcRound: cbc.bd.Header.Round + 1,
+			SrcRoot:  cbc.bd.IORoot,
+			DstRoot:  cbc.newIORoot,
+			WriteLog: cbc.ioWriteLog,
+		},
+		storage.ApplyOp{
+			SrcRound: cbc.bd.Header.Round,
+			SrcRoot:  cbc.bd.Header.StateRoot,
+			DstRoot:  cbc.newStateRoot,
+			WriteLog: cbc.stateWriteLog,
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "storage broadcast apply batch")
+	}
+
+	return nil
+}
+
+func (cbc *computeBatchContext) createCommitment(id *identity.Identity, committeeID hash.Hash) error {
 	var storageSigs []signature.Signature
-	for _, receipt := range storageReceipts {
+	for _, receipt := range cbc.storageReceipts {
 		storageSigs = append(storageSigs, receipt.Signature)
 	}
-	commit, err := commitment.SignComputeCommitment(id.NodeSigner, &commitment.ComputeBody{
+	var err error
+	cbc.commit, err = commitment.SignComputeCommitment(id.NodeSigner, &commitment.ComputeBody{
 		CommitteeID: committeeID,
 		Header: commitment.ComputeResultsHeader{
 			PreviousHash: cbc.bd.Header.EncodedHash(),
@@ -152,29 +178,23 @@ func (cbc *computeBatchContext) createCommitmentMessage(id *identity.Identity, r
 		InputStorageSigs: cbc.bd.StorageSignatures,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "commitment SignComputeCommitment")
+		return errors.Wrap(err, "commitment sign compute commitment")
 	}
 
-	return &p2p.Message{
+	return nil
+}
+
+func (cbc *computeBatchContext) publishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, runtimeID signature.PublicKey, groupVersion int64) error {
+	if err := schedulerPublishToCommittee(svc, height, committee, role, ph, &p2p.Message{
 		RuntimeID:    runtimeID,
 		GroupVersion: groupVersion,
 		SpanContext:  nil,
 		ComputeWorkerFinished: &p2p.ComputeWorkerFinished{
-			Commitment: *commit,
+			Commitment: *cbc.commit,
 		},
-	}, nil
-}
-
-func computePublishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, message *p2p.Message) error { // nolint: deadcode, unused
-	if err := schedulerForRoleInCommittee(svc, height, committee, role, func(n *node.Node) error {
-		ph.service.Publish(ph.context, n, message)
-
-		return nil
 	}); err != nil {
-		return err
+		return errors.Wrap(err, "scheduler publish to committee")
 	}
-
-	ph.service.Flush()
 
 	return nil
 }
