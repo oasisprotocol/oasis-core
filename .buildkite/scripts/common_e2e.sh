@@ -457,7 +457,7 @@ run_byzantine_node() {
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
         --debug.allow_test_keys \
-        ${extra_args} 2>&1 | tee ${out_file} | sed "s/^/[byzantine] /" &
+        ${extra_args} 2>&1 | tee ${out_file} | python -u ../private-ops/untracked/color-log.py | sed "s/^/[byzantine] /" &
 }
 
 # Run a storage node.
