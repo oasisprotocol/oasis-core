@@ -34,11 +34,11 @@ pushd go
         grep -v github.com/oasislabs/ekiden/go/storage/mkvs/urkel )
   # Ekiden node tests.
   pushd ekiden
-    env -u GOPATH go test -race -coverpkg ../... -coverprofile=coverage.txt -covermode=atomic -v
+    env -u GOPATH go test -race -coverpkg ../... -coverprofile=coverage.txt -covermode=atomic -v ./...
   popd
   # Urkel tree tests.
   pushd storage/mkvs/urkel
-    env -u GOPATH go test -race -coverpkg ./... -coverprofile=coverage.txt -covermode=atomic -v
+    env -u GOPATH go test -race -coverpkg ./... -coverprofile=coverage.txt -covermode=atomic -v ./...
   popd
 popd
 
