@@ -14,6 +14,7 @@ func TestSizeAccounting(t *testing.T) {
 		// Cache key: 32 bytes
 		Node: &node.InternalNode{
 			// Hash: 32 bytes
+			// Round: 8 bytes
 			// Label (slice pointers): 24 bytes
 			Label: node.Key([]byte("my label")), // 8 bytes
 			// LabelBitLength: 2 bytes
@@ -26,6 +27,7 @@ func TestSizeAccounting(t *testing.T) {
 				Node: &node.LeafNode{
 					// Clean: 1 byte
 					// Hash: 32 bytes
+					// Round: 8 bytes
 					// Key (slice pointers): 24 bytes
 					Key: node.Key([]byte("key")), // 3 bytes
 					// Value (pointer): 8 bytes
@@ -53,6 +55,7 @@ func TestSizeAccounting(t *testing.T) {
 	totalSize := 32 +
 		// Node:
 		32 + // .Hash
+		8 + // .Round
 		24 + // .Label
 		8 + // .Label
 		2 + // .LabelBitLength
@@ -65,6 +68,7 @@ func TestSizeAccounting(t *testing.T) {
 			// Node.LeafNode.Node:
 			(1 + // .Clean
 				32 + // .Hash
+				8 + // .Round
 				24 + // .Key
 				3 + // .Key
 				8 + // .Value
