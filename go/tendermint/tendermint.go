@@ -178,9 +178,13 @@ func (t *tendermintService) RegisterGenesisHook(hook func()) {
 	t.mux.RegisterGenesisHook(hook)
 }
 
-func (t *tendermintService) BroadcastTx(tag byte, tx interface{}) error {
+func (t *tendermintService) MarshalTx(tag byte, tx interface{}) tmtypes.Tx {
 	message := cbor.Marshal(tx)
-	data := append([]byte{tag}, message...)
+	return append([]byte{tag}, message...)
+}
+
+func (t *tendermintService) BroadcastTx(tag byte, tx interface{}) error {
+	data := t.MarshalTx(tag, tx)
 
 	response, err := t.client.BroadcastTxSync(data)
 	if err != nil {

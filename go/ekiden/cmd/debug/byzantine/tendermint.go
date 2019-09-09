@@ -2,9 +2,12 @@ package byzantine
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
+	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
 	"github.com/oasislabs/ekiden/go/common/identity"
@@ -129,4 +132,48 @@ func (ht honestTendermint) stop() error {
 	ht.service = nil
 
 	return nil
+}
+
+// tendermintUnsubscribeDrain drains an unbuffered subscription while unsubscribing.
+func tendermintUnsubscribeDrain(svc service.TendermintService, subscriber string, query tmpubsub.Query, sub tmtypes.Subscription) error {
+	go func() {
+		for {
+			select {
+			case <-sub.Out():
+			case <-sub.Cancelled():
+				break
+			}
+		}
+	}()
+	if err := svc.Unsubscribe("script", query); err != nil {
+		return errors.Wrap(err, "Tendermint Unsubscribe")
+	}
+
+	return nil
+}
+
+// tendermintBroadcastTxCommit is like Tendermint's own BroadcastTxCommit, but without
+// the timeout system.
+func tendermintBroadcastTxCommit(svc service.TendermintService, tag byte, tx interface{}) error {
+	q := tmtypes.EventQueryTxFor(svc.MarshalTx(tag, tx))
+	deliverTxSub, err := svc.Subscribe("script", q)
+	if err != nil {
+		return errors.Wrap(err, "Tendermint Subscribe")
+	}
+	defer func() {
+		if err1 := tendermintUnsubscribeDrain(svc, "script", q, deliverTxSub); err1 != nil {
+			panic(fmt.Sprintf("Tendermint unsubscribe drain: %+v", err1))
+		}
+	}()
+
+	if err = svc.BroadcastTx(tag, tx); err != nil {
+		return errors.Wrap(err, "Tendermint BroadcastTx")
+	}
+
+	select {
+	case <-deliverTxSub.Out():
+		return nil
+	case <-deliverTxSub.Cancelled():
+		return errors.Wrap(deliverTxSub.Err(), "deliverTx subscription cancelled")
+	}
 }

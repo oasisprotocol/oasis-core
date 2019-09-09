@@ -49,6 +49,10 @@ type TendermintService interface {
 	// NodeKey returns the node's P2P (link) authentication public key.
 	NodeKey() *signature.PublicKey
 
+	// MarshalTx returns the Tendermint transaction from the inputs
+	// that you would pass to BroadcastTx.
+	MarshalTx(tag byte, tx interface{}) tmtypes.Tx
+
 	// BroadcastTx broadcasts a transaction for Ekiden ABCI application.
 	//
 	// The CBOR-encodable transaction together with the given application

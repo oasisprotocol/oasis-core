@@ -29,13 +29,13 @@ func roothashGetLatestBlock(svc service.TendermintService, height int64, runtime
 }
 
 func roothashMergeCommit(svc service.TendermintService, runtimeID signature.PublicKey, commits []commitment.MergeCommitment) error {
-	if err := svc.BroadcastTx(roothashapp.TransactionTag, roothashapp.Tx{
+	if err := tendermintBroadcastTxCommit(svc, roothashapp.TransactionTag, roothashapp.Tx{
 		TxMergeCommit: &roothashapp.TxMergeCommit{
 			ID:      runtimeID,
 			Commits: commits,
 		},
 	}); err != nil {
-		return errors.Wrap(err, "Tendermint BroadcastTx")
+		return errors.Wrap(err, "Tendermint BroadcastTx commit")
 	}
 
 	return nil
