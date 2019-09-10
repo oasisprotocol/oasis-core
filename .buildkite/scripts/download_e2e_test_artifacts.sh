@@ -24,6 +24,7 @@ download_artifact ekiden-keymanager-runtime target/debug 755
 download_artifact test-long-term-client target/debug 755
 download_artifact simple-keyvalue-client target/debug 755
 download_artifact simple-keyvalue-enc-client target/debug 755
+download_artifact simple-keyvalue-ops-client target/debug 755
 
 download_artifact simple-keyvalue.sgxs target/x86_64-fortanix-unknown-sgx/debug 755
 download_artifact simple-keyvalue target/debug 755

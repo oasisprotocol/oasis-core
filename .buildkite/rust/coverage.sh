@@ -51,6 +51,7 @@ cargo tarpaulin \
   --exclude simple-keyvalue \
   --exclude simple-keyvalue-client \
   --exclude simple-keyvalue-enc-client \
+  --exclude simple-keyvalue-ops-client \
   --exclude test-long-term-client \
   --exclude-files '*generated*' \
   --exclude-files tests \
