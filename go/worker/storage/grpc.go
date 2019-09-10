@@ -44,6 +44,27 @@ func (s *grpcServer) GetLastSyncedRound(ctx context.Context, req *pb.GetLastSync
 	return resp, nil
 }
 
+func (s *grpcServer) ForceFinalize(ctx context.Context, req *pb.ForceFinalizeRequest) (*pb.ForceFinalizeResponse, error) {
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {
+		return nil, err
+	}
+
+	round := req.GetRound()
+
+	var node *committee.Node
+	node, ok := s.w.runtimes[id.ToMapKey()]
+	if !ok {
+		return nil, ErrRuntimeNotFound
+	}
+
+	if err := node.ForceFinalize(ctx, id, round); err != nil {
+		return nil, err
+	}
+
+	return &pb.ForceFinalizeResponse{}, nil
+}
+
 func newGRPCServer(grpc *grpc.Server, w *Worker) {
 	s := &grpcServer{w}
 	pb.RegisterStorageWorkerServer(grpc.Server(), s)

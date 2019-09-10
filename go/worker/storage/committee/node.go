@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/accessctl"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
@@ -38,6 +40,9 @@ var (
 )
 
 const (
+	// RoundLatest is a magic value for the latest round.
+	RoundLatest = math.MaxUint64
+
 	defaultUndefinedRound = ^uint64(0)
 )
 
@@ -313,6 +318,31 @@ func (n *Node) GetLastSynced() (uint64, urkelNode.Root, urkelNode.Root) {
 	defer n.syncedLock.RUnlock()
 
 	return n.syncedState.LastBlock.Round, n.syncedState.LastBlock.IORoot, n.syncedState.LastBlock.StateRoot
+}
+
+// ForceFinalize forces a storage finalization for the given round.
+func (n *Node) ForceFinalize(ctx context.Context, runtimeID signature.PublicKey, round uint64) error {
+	n.logger.Debug("forcing round finalization",
+		"round", round,
+		"runtime_id", runtimeID,
+	)
+
+	var block *block.Block
+	var err error
+
+	if round == RoundLatest {
+		block, err = n.commonNode.Roothash.GetLatestBlock(ctx, runtimeID)
+	} else {
+		block, err = n.commonNode.Roothash.GetBlock(ctx, runtimeID, round)
+	}
+
+	if err != nil {
+		return err
+	}
+	return n.localStorage.Finalize(ctx, block.Header.Namespace, round, []hash.Hash{
+		block.Header.IORoot,
+		block.Header.StateRoot,
+	})
 }
 
 func (n *Node) fetchDiff(round uint64, prevRoot *urkelNode.Root, thisRoot *urkelNode.Root, fetchMask outstandingMask) {
