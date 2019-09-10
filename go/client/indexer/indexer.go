@@ -6,6 +6,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/cenkalti/backoff"
+
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/service"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
@@ -14,7 +16,8 @@ import (
 )
 
 const (
-	storageTimeout = 5 * time.Second
+	storageRequestTimeout = 5 * time.Second
+	storageRetryTimeout   = 120 * time.Second
 )
 
 var (
@@ -107,8 +110,11 @@ func (s *Service) worker() {
 			var txs []*transaction.Transaction
 			var tags transaction.Tags
 			if !blk.Header.IORoot.IsEmpty() {
-				err = func() error {
-					ctx, cancel := context.WithTimeout(context.TODO(), storageTimeout)
+				off := backoff.NewExponentialBackOff()
+				off.MaxElapsedTime = storageRetryTimeout
+
+				err = backoff.Retry(func() error {
+					ctx, cancel := context.WithTimeout(context.TODO(), storageRequestTimeout)
 					defer cancel()
 
 					ioRoot := storage.Root{
@@ -135,7 +141,8 @@ func (s *Service) worker() {
 					}
 
 					return nil
-				}()
+				}, off)
+
 				if err != nil {
 					logger.Error("can't get I/O root from storage",
 						"err", err,
