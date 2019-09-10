@@ -190,7 +190,11 @@ func (p *P2P) Publish(ctx context.Context, node *node.Node, msg *Message) {
 				"err", err,
 				"node_id", node.ID,
 			)
+			return
 		}
+		p.logger.Debug("successfully published message",
+			"node_id", node.ID,
+		)
 	}()
 }
 
