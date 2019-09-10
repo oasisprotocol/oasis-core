@@ -307,7 +307,9 @@ func (n *Node) handleResultsLocked(ctx context.Context, commit *commitment.Compu
 		return errIncorrectState
 	}
 
-	n.logger.Debug("received new compute commitment")
+	n.logger.Debug("received new compute commitment",
+		"node_id", commit.Signature.PublicKey,
+	)
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
