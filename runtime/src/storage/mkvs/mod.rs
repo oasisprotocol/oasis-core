@@ -1,10 +1,12 @@
 //! Merklized key-value store.
+use std::ops::{Deref, DerefMut};
+
 use base64;
 use failure::Fallible;
 use io_context::Context;
 use serde::{self, ser::SerializeSeq, Serializer};
 use serde_bytes::Bytes;
-use serde_derive::Deserialize;
+use serde_derive::{Deserialize, Serialize};
 
 use crate::common::{crypto::hash::Hash, roothash::Namespace};
 
@@ -68,6 +70,42 @@ impl serde::Serialize for LogEntry {
 /// The keys in the write log must be unique.
 pub type WriteLog = Vec<LogEntry>;
 
+/// A key prefix.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Prefix(#[serde(with = "serde_bytes")] Vec<u8>);
+
+impl AsRef<[u8]> for Prefix {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl Deref for Prefix {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Prefix {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Into<Vec<u8>> for Prefix {
+    fn into(self) -> Vec<u8> {
+        self.0
+    }
+}
+
+impl From<Vec<u8>> for Prefix {
+    fn from(v: Vec<u8>) -> Prefix {
+        Prefix(v)
+    }
+}
+
 /// Merklized key-value store.
 pub trait MKVS: Send + Sync {
     /// Fetch entry with given key.
@@ -86,6 +124,9 @@ pub trait MKVS: Send + Sync {
     /// Remove entry with given key, returning the value at the key if the key was previously
     /// in the database.
     fn remove(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>>;
+
+    /// Populate the in-memory tree with nodes for keys starting with given prefixes.
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16);
 
     /// Commit all database changes to the underlying store.
     fn commit(

@@ -1,7 +1,10 @@
 use failure::Fallible;
 use io_context::Context;
 
-use crate::storage::mkvs::urkel::{cache::*, sync::*, tree::*};
+use crate::storage::mkvs::{
+    urkel::{cache::*, sync::*, tree::*},
+    Prefix,
+};
 
 pub(super) struct FetcherSyncGetPrefixes<'a> {
     prefixes: &'a Vec<Prefix>,

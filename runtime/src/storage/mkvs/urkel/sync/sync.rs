@@ -1,14 +1,14 @@
-use std::{
-    any::Any,
-    ops::{Deref, DerefMut},
-};
+use std::any::Any;
 
 use failure::Fallible;
 use io_context::Context;
 use serde_bytes;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{common::crypto::hash::Hash, storage::mkvs::urkel::tree::*};
+use crate::{
+    common::crypto::hash::Hash,
+    storage::mkvs::{urkel::tree::*, Prefix},
+};
 
 use super::Proof;
 
@@ -30,41 +30,6 @@ pub struct GetRequest {
     pub key: Vec<u8>,
     #[serde(default)]
     pub include_siblings: bool,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct Prefix(#[serde(with = "serde_bytes")] Vec<u8>);
-
-impl AsRef<[u8]> for Prefix {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl Deref for Prefix {
-    type Target = Vec<u8>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Prefix {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Into<Vec<u8>> for Prefix {
-    fn into(self) -> Vec<u8> {
-        self.0
-    }
-}
-
-impl From<Vec<u8>> for Prefix {
-    fn from(v: Vec<u8>) -> Prefix {
-        Prefix(v)
-    }
 }
 
 /// Request for the SyncGetPrefixes operation.

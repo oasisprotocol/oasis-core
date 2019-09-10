@@ -10,7 +10,7 @@ use ekiden_runtime::{
     storage::{
         mkvs::{
             urkel::{sync::*, Root},
-            UrkelTree, WriteLog,
+            Prefix, UrkelTree, WriteLog,
         },
         MKVS,
     },
@@ -122,6 +122,10 @@ impl MKVS for BlockSnapshot {
 
     fn remove(&mut self, _ctx: Context, _key: &[u8]) -> Option<Vec<u8>> {
         unimplemented!("block snapshot is read-only");
+    }
+
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) {
+        MKVS::prefetch_prefixes(&self.mkvs, ctx, prefixes, limit)
     }
 
     fn commit(
