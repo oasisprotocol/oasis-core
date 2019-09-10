@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/runtime/transaction"
@@ -20,8 +21,9 @@ import (
 var (
 	logger       = logging.GetLogger("cmd/byzantine")
 	byzantineCmd = &cobra.Command{
-		Use:   "byzantine",
-		Short: "run some node behaviors for testing, often not honest",
+		Use:              "byzantine",
+		Short:            "run some node behaviors for testing, often not honest",
+		PersistentPreRun: activateCommonConfig,
 	}
 	computeHonestCmd = &cobra.Command{
 		Use:   "compute-honest",
@@ -34,6 +36,12 @@ var (
 		Run:   doMergeHonest,
 	}
 )
+
+func activateCommonConfig(cmd *cobra.Command, args []string) {
+	// This subcommand is used in networks where other nodes are honest or colluding with us.
+	// Set this so we don't reject things when we run without real IAS.
+	ias.SetSkipVerify()
+}
 
 func doComputeHonest(cmd *cobra.Command, args []string) {
 	if err := common.Init(); err != nil {
