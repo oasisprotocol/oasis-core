@@ -191,7 +191,7 @@ func (p *Protocol) handleMessage(ctx context.Context, message *Message) {
 		close(respCh)
 	default:
 		p.logger.Warn("received a malformed message from worker, ignoring",
-			"msg", fmt.Sprintf("%+v", message),
+			"message", fmt.Sprintf("%+v", message),
 		)
 	}
 }
