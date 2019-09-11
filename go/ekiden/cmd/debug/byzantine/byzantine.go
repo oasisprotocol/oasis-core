@@ -525,6 +525,14 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 
 	mbc.commitments = origCommitments
 
+	// Sanity check the merge results.
+	if mbc.newBlock.Header.IORoot != emptyRoot {
+		panic(fmt.Sprintf("merge of empty IO trees should be empty. got %s, expected %s", mbc.newBlock.Header.IORoot, emptyRoot))
+	}
+	if mbc.newBlock.Header.StateRoot != mbc.currentBlock.Header.StateRoot {
+		panic(fmt.Sprintf("merge of identical state trees should be the same. got %s, expected %s", mbc.newBlock.Header.StateRoot, mbc.currentBlock.Header.StateRoot))
+	}
+
 	if err = mbc.createCommitment(defaultIdentity); err != nil {
 		panic(fmt.Sprintf("merge create commitment failed: %+v", err))
 	}
