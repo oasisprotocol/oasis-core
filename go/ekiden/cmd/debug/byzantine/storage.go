@@ -17,7 +17,6 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	storageclient "github.com/oasislabs/ekiden/go/storage/client"
-	urkelnode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
@@ -52,40 +51,49 @@ func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeSt
 	}, nil
 }
 
-func (hns *honestNodeStorage) GetSubtree(ctx context.Context, root urkelnode.Root, id urkelnode.ID, maxDepth urkelnode.Depth) (*syncer.Subtree, error) {
-	panic("not implemented")
-}
-
-func (hns *honestNodeStorage) GetPath(ctx context.Context, root urkelnode.Root, id urkelnode.ID, key urkelnode.Key) (*syncer.Subtree, error) {
-	idPathBinary, err := id.Path.MarshalBinary()
-	if err != nil {
-		panic(fmt.Sprintf("id Path MarshalBinary failed: %+v", err))
-	}
-	keyBinary, err := key.MarshalBinary()
-	if err != nil {
-		panic(fmt.Sprintf("key MarshalBinary failed: %+v", err))
-	}
-	resp, err := hns.client.GetPath(ctx, &storagegrpc.GetPathRequest{
-		Root: root.MarshalCBOR(),
-		Id: &storagegrpc.NodeID{
-			BitDepth: uint32(id.BitDepth),
-			Path:     idPathBinary,
-		},
-		Key: keyBinary,
+func (hns *honestNodeStorage) SyncGet(ctx context.Context, request *syncer.GetRequest) (*syncer.ProofResponse, error) {
+	rsp, err := hns.client.SyncGet(ctx, &storagegrpc.ReadSyncerRequest{
+		Request: cbor.Marshal(request),
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "client GetPath")
-	}
-	var subtree storage.Subtree
-	if err = subtree.UnmarshalBinary(resp.GetSubtree()); err != nil {
-		return nil, errors.Wrap(err, "subtree UnmarshalBinary")
+		return nil, errors.Wrap(err, "client SyncGet")
 	}
 
-	return &subtree, nil
+	var rs syncer.ProofResponse
+	if err := cbor.Unmarshal(rsp.Response, &rs); err != nil {
+		return nil, errors.Wrap(err, "response Unmarshal")
+	}
+	return &rs, nil
 }
 
-func (hns *honestNodeStorage) GetNode(ctx context.Context, root urkelnode.Root, id urkelnode.ID) (urkelnode.Node, error) {
-	panic("not implemented")
+func (hns *honestNodeStorage) SyncGetPrefixes(ctx context.Context, request *syncer.GetPrefixesRequest) (*syncer.ProofResponse, error) {
+	rsp, err := hns.client.SyncGetPrefixes(ctx, &storagegrpc.ReadSyncerRequest{
+		Request: cbor.Marshal(request),
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "client SyncGet")
+	}
+
+	var rs syncer.ProofResponse
+	if err := cbor.Unmarshal(rsp.Response, &rs); err != nil {
+		return nil, errors.Wrap(err, "response Unmarshal")
+	}
+	return &rs, nil
+}
+
+func (hns *honestNodeStorage) SyncIterate(ctx context.Context, request *syncer.IterateRequest) (*syncer.ProofResponse, error) {
+	rsp, err := hns.client.SyncIterate(ctx, &storagegrpc.ReadSyncerRequest{
+		Request: cbor.Marshal(request),
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "client SyncGet")
+	}
+
+	var rs syncer.ProofResponse
+	if err := cbor.Unmarshal(rsp.Response, &rs); err != nil {
+		return nil, errors.Wrap(err, "response Unmarshal")
+	}
+	return &rs, nil
 }
 
 func (hns *honestNodeStorage) Apply(

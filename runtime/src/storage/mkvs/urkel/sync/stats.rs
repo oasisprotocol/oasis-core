@@ -3,18 +3,16 @@ use std::any::Any;
 use failure::Fallible;
 use io_context::Context;
 
-use crate::storage::mkvs::urkel::{sync::*, tree::*};
+use crate::storage::mkvs::urkel::sync::*;
 
 /// A proxy read syncer which keeps track of call statistics.
 pub struct StatsCollector {
-    /// Count of `get_subtree` calls made to the underlying read syncer.
-    pub subtree_fetches: usize,
-    /// Count of `get_path` calls made to the underlying read syncer.
-    pub path_fetches: usize,
-    /// Count of `get_node` calls made to the underlying read syncer.
-    pub node_fetches: usize,
-    /// Count of `get_value` calls made to the underlying read syncer.
-    pub value_fetches: usize,
+    /// Count of `sync_get` calls made to the underlying read syncer.
+    pub sync_get_count: usize,
+    /// Count of `sync_get_prefixes` calls made to the underlying read syncer.
+    pub sync_get_prefixes_count: usize,
+    /// Count of `sync_iterate` calls made to the underlying read syncer.
+    pub sync_iterate_count: usize,
 
     rs: Box<dyn ReadSync>,
 }
@@ -23,10 +21,9 @@ impl StatsCollector {
     /// Construct a new instance, proxying to the given backing read syncer.
     pub fn new(rs: Box<dyn ReadSync>) -> StatsCollector {
         StatsCollector {
-            subtree_fetches: 0,
-            path_fetches: 0,
-            node_fetches: 0,
-            value_fetches: 0,
+            sync_get_count: 0,
+            sync_get_prefixes_count: 0,
+            sync_iterate_count: 0,
             rs: rs,
         }
     }
@@ -37,24 +34,22 @@ impl ReadSync for StatsCollector {
         self
     }
 
-    fn get_subtree(
+    fn sync_get(&mut self, ctx: Context, request: GetRequest) -> Fallible<ProofResponse> {
+        self.sync_get_count += 1;
+        self.rs.sync_get(ctx, request)
+    }
+
+    fn sync_get_prefixes(
         &mut self,
         ctx: Context,
-        root: Root,
-        id: NodeID,
-        max_depth: Depth,
-    ) -> Fallible<Subtree> {
-        self.subtree_fetches += 1;
-        self.rs.get_subtree(ctx, root, id, max_depth)
+        request: GetPrefixesRequest,
+    ) -> Fallible<ProofResponse> {
+        self.sync_get_prefixes_count += 1;
+        self.rs.sync_get_prefixes(ctx, request)
     }
 
-    fn get_path(&mut self, ctx: Context, root: Root, id: NodeID, key: &Key) -> Fallible<Subtree> {
-        self.path_fetches += 1;
-        self.rs.get_path(ctx, root, id, key)
-    }
-
-    fn get_node(&mut self, ctx: Context, root: Root, id: NodeID) -> Fallible<NodeRef> {
-        self.node_fetches += 1;
-        self.rs.get_node(ctx, root, id)
+    fn sync_iterate(&mut self, ctx: Context, request: IterateRequest) -> Fallible<ProofResponse> {
+        self.sync_iterate_count += 1;
+        self.rs.sync_iterate(ctx, request)
     }
 }

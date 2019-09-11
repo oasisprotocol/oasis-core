@@ -29,6 +29,13 @@ pub struct LogEntry {
 }
 
 impl LogEntry {
+    pub fn new(key: &[u8], value: &[u8]) -> Self {
+        Self {
+            key: key.to_owned(),
+            value: value.to_owned(),
+        }
+    }
+
     pub fn kind(&self) -> LogEntryKind {
         if self.value.is_empty() {
             LogEntryKind::Delete

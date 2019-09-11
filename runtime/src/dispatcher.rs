@@ -30,7 +30,10 @@ use crate::{
     },
     storage::{
         mkvs::{
-            urkel::sync::{HostReadSyncer, NoopReadSyncer, Root},
+            urkel::{
+                sync::{HostReadSyncer, NoopReadSyncer},
+                Root,
+            },
             UrkelTree,
         },
         StorageContext,

@@ -165,20 +165,26 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 			)
 		}
 
-		// GetSubtree.
+		// SyncGet.
 		res = testing.Benchmark(func(b *testing.B) {
 			b.SetBytes(int64(sz))
 			for i := 0; i < b.N; i++ {
-				_, err = storage.GetSubtree(context.Background(), newRoot, storageAPI.NodeID{Path: []byte{}, BitDepth: 0}, 10)
+				_, err = storage.SyncGet(context.Background(), &storageAPI.GetRequest{
+					Tree: storageAPI.TreeID{
+						Root:     newRoot,
+						Position: newRoot.Hash,
+					},
+					Key: key,
+				})
 				if err != nil {
-					b.Fatalf("failed to GetSubtree(): %v", err)
+					b.Fatalf("failed to SyncGet(): %v", err)
 				}
 			}
 		})
 		if err != nil {
-			logger.Error("failed to GetSubtree()", "err", err)
+			logger.Error("failed to SyncGet()", "err", err)
 		} else {
-			logger.Info("GetSubtree",
+			logger.Info("SyncGet",
 				"sz", sz,
 				"ns_per_op", res.NsPerOp(),
 			)

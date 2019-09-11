@@ -3,7 +3,44 @@ use std::sync::Arc;
 use failure::Fallible;
 use io_context::Context;
 
-use crate::storage::mkvs::urkel::{cache::*, tree::*};
+use crate::storage::mkvs::urkel::{cache::*, sync::*, tree::*};
+
+pub(super) struct FetcherSyncGet<'a> {
+    key: &'a Key,
+    include_siblings: bool,
+}
+
+impl<'a> FetcherSyncGet<'a> {
+    pub(super) fn new(key: &'a Key, include_siblings: bool) -> Self {
+        Self {
+            key,
+            include_siblings,
+        }
+    }
+}
+
+impl<'a> ReadSyncFetcher for FetcherSyncGet<'a> {
+    fn fetch(
+        &self,
+        ctx: Context,
+        root: Root,
+        ptr: NodePtrRef,
+        rs: &mut Box<dyn ReadSync>,
+    ) -> Fallible<Proof> {
+        let rsp = rs.sync_get(
+            ctx,
+            GetRequest {
+                tree: TreeID {
+                    root,
+                    position: ptr.borrow().hash,
+                },
+                key: self.key.clone(),
+                include_siblings: self.include_siblings,
+            },
+        )?;
+        Ok(rsp.proof)
+    }
+}
 
 impl UrkelTree {
     /// Get an existing key.
@@ -22,15 +59,10 @@ impl UrkelTree {
         key: &Key,
         depth: Depth,
     ) -> Fallible<Option<Value>> {
-        let node_ref = self.cache.borrow_mut().deref_node_ptr(
-            ctx,
-            NodeID {
-                path: &key,
-                bit_depth: bit_depth,
-            },
-            ptr,
-            Some(&key),
-        )?;
+        let node_ref =
+            self.cache
+                .borrow_mut()
+                .deref_node_ptr(ctx, ptr, FetcherSyncGet::new(key, false))?;
 
         match classify_noderef!(?node_ref) {
             NodeKind::None => {

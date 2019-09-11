@@ -67,16 +67,16 @@ var (
 		storageFinalizedCount,
 	}
 
-	labelApply      = prometheus.Labels{"call": "apply"}
-	labelApplyBatch = prometheus.Labels{"call": "apply_batch"}
-	labelMerge      = prometheus.Labels{"call": "merge"}
-	labelMergeBatch = prometheus.Labels{"call": "merge_batch"}
-	labelGetSubtree = prometheus.Labels{"call": "get_subtree"}
-	labelGetPath    = prometheus.Labels{"call": "get_path"}
-	labelGetNode    = prometheus.Labels{"call": "get_node"}
-	labelHasRoot    = prometheus.Labels{"call": "has_root"}
-	labelFinalize   = prometheus.Labels{"call": "finalize"}
-	labelPrune      = prometheus.Labels{"call": "prune"}
+	labelApply           = prometheus.Labels{"call": "apply"}
+	labelApplyBatch      = prometheus.Labels{"call": "apply_batch"}
+	labelMerge           = prometheus.Labels{"call": "merge"}
+	labelMergeBatch      = prometheus.Labels{"call": "merge_batch"}
+	labelSyncGet         = prometheus.Labels{"call": "sync_get"}
+	labelSyncGetPrefixes = prometheus.Labels{"call": "sync_get_prefixes"}
+	labelSyncIterate     = prometheus.Labels{"call": "sync_iterate"}
+	labelHasRoot         = prometheus.Labels{"call": "has_root"}
+	labelFinalize        = prometheus.Labels{"call": "finalize"}
+	labelPrune           = prometheus.Labels{"call": "prune"}
 
 	_ api.LocalBackend  = (*metricsWrapper)(nil)
 	_ api.ClientBackend = (*metricsWrapper)(nil)
@@ -192,43 +192,43 @@ func (w *metricsWrapper) MergeBatch(
 	return receipts, err
 }
 
-func (w *metricsWrapper) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth api.Depth) (*api.Subtree, error) {
+func (w *metricsWrapper) SyncGet(ctx context.Context, request *api.GetRequest) (*api.ProofResponse, error) {
 	start := time.Now()
-	st, err := w.Backend.GetSubtree(ctx, root, id, maxDepth)
-	storageLatency.With(labelGetSubtree).Observe(time.Since(start).Seconds())
+	res, err := w.Backend.SyncGet(ctx, request)
+	storageLatency.With(labelSyncGet).Observe(time.Since(start).Seconds())
 	if err != nil {
-		storageFailures.With(labelGetSubtree).Inc()
+		storageFailures.With(labelSyncGet).Inc()
 		return nil, err
 	}
 
-	storageCalls.With(labelGetSubtree).Inc()
-	return st, err
+	storageCalls.With(labelSyncGet).Inc()
+	return res, err
 }
 
-func (w *metricsWrapper) GetPath(ctx context.Context, root api.Root, id api.NodeID, key api.Key) (*api.Subtree, error) {
+func (w *metricsWrapper) SyncGetPrefixes(ctx context.Context, request *api.GetPrefixesRequest) (*api.ProofResponse, error) {
 	start := time.Now()
-	st, err := w.Backend.GetPath(ctx, root, id, key)
-	storageLatency.With(labelGetPath).Observe(time.Since(start).Seconds())
+	res, err := w.Backend.SyncGetPrefixes(ctx, request)
+	storageLatency.With(labelSyncGetPrefixes).Observe(time.Since(start).Seconds())
 	if err != nil {
-		storageFailures.With(labelGetPath).Inc()
+		storageFailures.With(labelSyncGetPrefixes).Inc()
 		return nil, err
 	}
 
-	storageCalls.With(labelGetPath).Inc()
-	return st, err
+	storageCalls.With(labelSyncGetPrefixes).Inc()
+	return res, err
 }
 
-func (w *metricsWrapper) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {
+func (w *metricsWrapper) SyncIterate(ctx context.Context, request *api.IterateRequest) (*api.ProofResponse, error) {
 	start := time.Now()
-	node, err := w.Backend.GetNode(ctx, root, id)
-	storageLatency.With(labelGetNode).Observe(time.Since(start).Seconds())
+	res, err := w.Backend.SyncIterate(ctx, request)
+	storageLatency.With(labelSyncIterate).Observe(time.Since(start).Seconds())
 	if err != nil {
-		storageFailures.With(labelGetNode).Inc()
+		storageFailures.With(labelSyncIterate).Inc()
 		return nil, err
 	}
 
-	storageCalls.With(labelGetNode).Inc()
-	return node, err
+	storageCalls.With(labelSyncIterate).Inc()
+	return res, err
 }
 
 func (w *metricsWrapper) HasRoot(root api.Root) bool {

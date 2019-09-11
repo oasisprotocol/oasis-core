@@ -9,10 +9,7 @@ use super::tags::Tags;
 use crate::{
     common::{cbor, crypto::hash::Hash, key_format::KeyFormat},
     storage::mkvs::{
-        urkel::{
-            sync::{ReadSync, Root},
-            UrkelTree,
-        },
+        urkel::{sync::ReadSync, Root, UrkelTree},
         WriteLog,
     },
 };

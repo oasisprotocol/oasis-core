@@ -47,84 +47,28 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		}
 	}
 	// Storage.
-	if body.HostStorageSyncGetSubtreeRequest != nil {
-		rq := body.HostStorageSyncGetSubtreeRequest
-		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetSubtree(root_hash, node_path, node_depth, max_depth)",
-			opentracing.Tag{Key: "root_hash", Value: rq.Root.Hash},
-			opentracing.Tag{Key: "node_path", Value: rq.NodePath},
-			opentracing.Tag{Key: "node_bit_depth", Value: rq.NodeBitDepth},
-			opentracing.Tag{Key: "max_depth", Value: rq.MaxDepth},
-		)
+	if body.HostStorageSyncRequest != nil {
+		rq := body.HostStorageSyncRequest
+		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.Sync")
 		defer span.Finish()
 
-		nodeID := storage.NodeID{
-			Path:     rq.NodePath,
-			BitDepth: rq.NodeBitDepth,
+		var rsp *storage.ProofResponse
+		var err error
+		switch {
+		case rq.SyncGet != nil:
+			rsp, err = h.storage.SyncGet(sctx, rq.SyncGet)
+		case rq.SyncGetPrefixes != nil:
+			rsp, err = h.storage.SyncGetPrefixes(sctx, rq.SyncGetPrefixes)
+		case rq.SyncIterate != nil:
+			rsp, err = h.storage.SyncIterate(sctx, rq.SyncIterate)
+		default:
+			return nil, errMethodNotSupported
 		}
-
-		subtree, err := h.storage.GetSubtree(sctx, rq.Root, nodeID, rq.MaxDepth)
 		if err != nil {
 			return nil, err
 		}
 
-		serialized, err := subtree.MarshalBinary()
-		if err != nil {
-			return nil, err
-		}
-
-		return &protocol.Body{HostStorageSyncSerializedResponse: &protocol.HostStorageSyncSerializedResponse{Serialized: serialized}}, nil
-	}
-	if body.HostStorageSyncGetPathRequest != nil {
-		rq := body.HostStorageSyncGetPathRequest
-		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetPath(root_hash, key, start_depth)",
-			opentracing.Tag{Key: "root_hash", Value: rq.Root.Hash},
-			opentracing.Tag{Key: "key", Value: rq.Key},
-			opentracing.Tag{Key: "start_bit_depth", Value: rq.StartBitDepth},
-		)
-		defer span.Finish()
-
-		nodeID := storage.NodeID{
-			Path:     rq.NodePath,
-			BitDepth: rq.NodeBitDepth,
-		}
-
-		subtree, err := h.storage.GetPath(sctx, rq.Root, nodeID, rq.Key)
-		if err != nil {
-			return nil, err
-		}
-
-		serialized, err := subtree.MarshalBinary()
-		if err != nil {
-			return nil, err
-		}
-
-		return &protocol.Body{HostStorageSyncSerializedResponse: &protocol.HostStorageSyncSerializedResponse{Serialized: serialized}}, nil
-	}
-	if body.HostStorageSyncGetNodeRequest != nil {
-		rq := body.HostStorageSyncGetNodeRequest
-		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.GetNode(root_hash, node_path, node_depth)",
-			opentracing.Tag{Key: "root_hash", Value: rq.Root.Hash},
-			opentracing.Tag{Key: "node_path", Value: rq.NodePath},
-			opentracing.Tag{Key: "node_depth", Value: rq.NodeBitDepth},
-		)
-		defer span.Finish()
-
-		nodeID := storage.NodeID{
-			Path:     rq.NodePath,
-			BitDepth: rq.NodeBitDepth,
-		}
-
-		node, err := h.storage.GetNode(sctx, rq.Root, nodeID)
-		if err != nil {
-			return nil, err
-		}
-
-		serialized, err := node.MarshalBinary()
-		if err != nil {
-			return nil, err
-		}
-
-		return &protocol.Body{HostStorageSyncSerializedResponse: &protocol.HostStorageSyncSerializedResponse{Serialized: serialized}}, nil
+		return &protocol.Body{HostStorageSyncResponse: &protocol.HostStorageSyncResponse{ProofResponse: rsp}}, nil
 	}
 	// Local storage.
 	if body.HostLocalStorageGetRequest != nil {

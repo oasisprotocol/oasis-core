@@ -150,6 +150,9 @@ steps:
   - label: Test Rust crates
     command:
       - .buildkite/scripts/setup_gitconfig.sh
+      # Build storage interoperability test helpers first.
+      - make -C go urkel-test-helpers
+      - export EKIDEN_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers)
       - .buildkite/rust/test_generic.sh .
     agents:
       buildkite_agent_size: large

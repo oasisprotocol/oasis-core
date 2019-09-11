@@ -34,42 +34,6 @@ pub struct Root {
     pub hash: Hash,
 }
 
-/// `NodeID` is a root-relative identifier which uniquely identifies a node
-/// under a given root.
-///
-/// bit_depth is a sum of bits on the path from the root to the node in compressed
-/// urkel tree.
-#[derive(Clone, Copy, Debug)]
-pub struct NodeID<'a> {
-    pub path: &'a Key,
-    pub bit_depth: Depth,
-}
-
-impl<'a> NodeID<'a> {
-    // Return the ID that identifies the tree root.
-    pub fn root() -> NodeID<'static> {
-        const EMPTY_KEY: &'static Key = &Key::new();
-
-        NodeID {
-            path: EMPTY_KEY,
-            bit_depth: 0,
-        }
-    }
-
-    /// Check whether the ID is that of a tree root.
-    pub fn is_root(&self) -> bool {
-        self.bit_depth == 0 && self.path.len() == 0
-    }
-
-    /// Return a copy of this `NodeID` with a different depth.
-    pub fn at_bit_depth(&self, bit_depth: Depth) -> NodeID {
-        NodeID {
-            path: self.path,
-            bit_depth: bit_depth,
-        }
-    }
-}
-
 /// A box type that can contain either internal or leaf nodes.
 #[derive(Debug, Eq, PartialEq)]
 pub enum NodeBox {
@@ -155,6 +119,26 @@ impl NodePointer {
             node: None,
             clean: true,
             hash: Hash::empty_hash(),
+            ..Default::default()
+        }))
+    }
+
+    /// Construct a hash-only pointer.
+    pub fn hash_ptr(hash: Hash) -> NodePtrRef {
+        Rc::new(RefCell::new(NodePointer {
+            node: None,
+            clean: true,
+            hash: hash,
+            ..Default::default()
+        }))
+    }
+
+    /// Construct a node pointer from a full node.
+    pub fn from_node(node: NodeBox) -> NodePtrRef {
+        Rc::new(RefCell::new(NodePointer {
+            hash: node.get_hash(),
+            node: Some(Rc::new(RefCell::new(node))),
+            clean: true,
             ..Default::default()
         }))
     }

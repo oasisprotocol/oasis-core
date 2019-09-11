@@ -2,7 +2,6 @@
 mod macros;
 
 mod commit;
-mod debug;
 mod errors;
 mod insert;
 mod iterator;
@@ -10,19 +9,16 @@ mod lookup;
 mod marshal;
 mod mkvs;
 mod node;
+mod prefetch;
 mod remove;
-mod sync;
 mod tree;
 
 pub use commit::*;
-pub use debug::*;
 pub use errors::*;
 pub use insert::*;
 pub use iterator::*;
-pub use lookup::*;
 pub use node::*;
 pub use remove::*;
-pub use sync::*;
 pub use tree::*;
 
 #[cfg(test)]

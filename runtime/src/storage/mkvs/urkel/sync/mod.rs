@@ -1,16 +1,18 @@
+//! The read-only tree sync interface.
 mod errors;
 mod host;
+mod merge;
 mod noop;
+mod proof;
 mod stats;
-mod subtree;
 mod sync;
 
-pub use super::tree::{NodeBox, NodeID, NodeRef, Root, Value};
 pub use errors::*;
 pub use host::*;
+pub use merge::*;
 pub use noop::*;
+pub use proof::*;
 pub use stats::*;
-pub use subtree::*;
 pub use sync::*;
 
 #[cfg(test)]

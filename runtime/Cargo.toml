@@ -42,3 +42,13 @@ tiny-keccak = "1.4.2"
 sp800-185 = "0.2.0"
 zeroize = "0.6"
 intrusive-collections = "0.7"
+
+[dev-dependencies]
+# For storage interoperability tests only.
+grpcio = "0.4.4"
+protobuf = "~2.4"
+tempfile = "3.0.7"
+
+[build-dependencies]
+# For storage interoperability tests only.
+protoc-grpcio = "1.0.1"

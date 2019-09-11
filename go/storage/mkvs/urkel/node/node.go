@@ -142,41 +142,6 @@ func (r *Root) EncodedHash() hash.Hash {
 	return hh
 }
 
-// ID is a root-relative node identifier which uniquely identifies
-// a node under a given root.
-//
-// BitDepth is a sum of bits on the path from the root to the node in compressed
-// urkel tree.
-//
-// If there exist InternalNode and LeafNode having the same Key and BitDepth,
-// ID represents the InternalNode.
-type ID struct {
-	Path     Key   `codec:"path"`
-	BitDepth Depth `codec:"bit_depth"`
-}
-
-// Root sets the ID to that of the tree root.
-func (n *ID) Root() {
-	n.Path = nil
-	n.BitDepth = 0
-}
-
-// IsRoot checks whether the ID is that of a tree root.
-func (n *ID) IsRoot() bool {
-	return n.BitDepth == 0 && len(n.Path) == 0
-}
-
-// AtBitDepth returns a ID representing the same path at a specified
-// bit depth.
-func (n *ID) AtBitDepth(bd Depth) ID {
-	return ID{Path: n.Path, BitDepth: bd}
-}
-
-// String returns a string representation of a node ID.
-func (n ID) String() string {
-	return fmt.Sprintf("<node.ID %s/%d>", n.Path, n.BitDepth)
-}
-
 // Pointer is a pointer to another node.
 type Pointer struct {
 	Clean bool
@@ -280,6 +245,13 @@ type Node interface {
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
 
+	// IsClean returns true if the node is non-dirty.
+	IsClean() bool
+
+	// CompactMarshalBinary encodes a node into binary form without any hash
+	// pointers (e.g., for proofs).
+	CompactMarshalBinary() ([]byte, error)
+
 	// GetHash returns the node's cached hash.
 	GetHash() hash.Hash
 
@@ -329,6 +301,11 @@ type InternalNode struct {
 	LeafNode *Pointer
 	Left     *Pointer
 	Right    *Pointer
+}
+
+// IsClean returns true if the node is non-dirty.
+func (n *InternalNode) IsClean() bool {
+	return n.Clean
 }
 
 // Size returns the size of this internal node in bytes.
@@ -436,8 +413,9 @@ func (n *InternalNode) Validate(h hash.Hash) error {
 	return nil
 }
 
-// MarshalBinary encodes an internal node into binary form.
-func (n *InternalNode) MarshalBinary() (data []byte, err error) {
+// CompactMarshalBinary encodes an internal node into binary form without
+// any hash pointers (e.g., for proofs).
+func (n *InternalNode) CompactMarshalBinary() (data []byte, err error) {
 	// Internal node's LeafNode is always marshaled along the internal node.
 	var leafNodeBinary []byte
 	if n.LeafNode == nil {
@@ -449,10 +427,7 @@ func (n *InternalNode) MarshalBinary() (data []byte, err error) {
 		}
 	}
 
-	leftHash := n.Left.GetHash()
-	rightHash := n.Right.GetHash()
-
-	data = make([]byte, 1+RoundSize+DepthSize+len(n.Label)+len(leafNodeBinary)+hash.Size*2)
+	data = make([]byte, 1+RoundSize+DepthSize+len(n.Label)+len(leafNodeBinary))
 	pos := 0
 	data[pos] = PrefixInternalNode
 	pos++
@@ -463,10 +438,21 @@ func (n *InternalNode) MarshalBinary() (data []byte, err error) {
 	copy(data[pos:pos+len(n.Label)], n.Label)
 	pos += len(n.Label)
 	copy(data[pos:pos+len(leafNodeBinary)], leafNodeBinary[:])
-	pos += len(leafNodeBinary)
-	copy(data[pos:pos+hash.Size], leftHash[:])
-	pos += hash.Size
-	copy(data[pos:], rightHash[:])
+	return
+}
+
+// MarshalBinary encodes an internal node into binary form.
+func (n *InternalNode) MarshalBinary() (data []byte, err error) {
+	data, err = n.CompactMarshalBinary()
+	if err != nil {
+		return
+	}
+
+	leftHash := n.Left.GetHash()
+	rightHash := n.Right.GetHash()
+
+	data = append(data, leftHash[:]...)
+	data = append(data, rightHash[:]...)
 	return
 }
 
@@ -478,7 +464,7 @@ func (n *InternalNode) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled internal node.
 func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 1+RoundSize+DepthSize+1+hash.Size*2 {
+	if len(data) < 1+RoundSize+DepthSize+1 {
 		return 0, ErrMalformedNode
 	}
 
@@ -515,32 +501,35 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 		pos += leafNodeBinarySize
 	}
 
-	var leftHash hash.Hash
-	if err := leftHash.UnmarshalBinary(data[pos : pos+hash.Size]); err != nil {
-		return 0, errors.Wrap(err, "urkel: failed to unmarshal left hash")
+	// Hashes are only present in non-compact serialization.
+	if len(data) >= pos+hash.Size*2 {
+		var leftHash hash.Hash
+		if err := leftHash.UnmarshalBinary(data[pos : pos+hash.Size]); err != nil {
+			return 0, errors.Wrap(err, "urkel: failed to unmarshal left hash")
+		}
+		pos += hash.Size
+		var rightHash hash.Hash
+		if err := rightHash.UnmarshalBinary(data[pos : pos+hash.Size]); err != nil {
+			return 0, errors.Wrapf(err, "urkel: failed to unmarshal right hash")
+		}
+		pos += hash.Size
+
+		if leftHash.IsEmpty() {
+			n.Left = nil
+		} else {
+			n.Left = &Pointer{Clean: true, Hash: leftHash}
+		}
+
+		if rightHash.IsEmpty() {
+			n.Right = nil
+		} else {
+			n.Right = &Pointer{Clean: true, Hash: rightHash}
+		}
+
+		n.UpdateHash()
 	}
-	pos += hash.Size
-	var rightHash hash.Hash
-	if err := rightHash.UnmarshalBinary(data[pos : pos+hash.Size]); err != nil {
-		return 0, errors.Wrapf(err, "urkel: failed to unmarshal right hash")
-	}
-	pos += hash.Size
 
 	n.Clean = true
-
-	if leftHash.IsEmpty() {
-		n.Left = nil
-	} else {
-		n.Left = &Pointer{Clean: true, Hash: leftHash}
-	}
-
-	if rightHash.IsEmpty() {
-		n.Right = nil
-	} else {
-		n.Right = &Pointer{Clean: true, Hash: rightHash}
-	}
-
-	n.UpdateHash()
 
 	return pos, nil
 }
@@ -570,6 +559,11 @@ type LeafNode struct {
 	Hash  hash.Hash
 	Key   Key
 	Value *Value
+}
+
+// IsClean returns true if the node is non-dirty.
+func (n *LeafNode) IsClean() bool {
+	return n.Clean
 }
 
 // Size returns the size of this leaf node in bytes.
@@ -642,8 +636,8 @@ func (n *LeafNode) Validate(h hash.Hash) error {
 	return nil
 }
 
-// MarshalBinary encodes a leaf node into binary form.
-func (n *LeafNode) MarshalBinary() (data []byte, err error) {
+// CompactMarshalBinary encodes a leaf node into binary form.
+func (n *LeafNode) CompactMarshalBinary() (data []byte, err error) {
 	keyData, err := n.Key.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -663,6 +657,11 @@ func (n *LeafNode) MarshalBinary() (data []byte, err error) {
 	pos += len(keyData)
 	copy(data[pos:], valueData)
 	return
+}
+
+// MarshalBinary encodes a leaf node into binary form.
+func (n *LeafNode) MarshalBinary() ([]byte, error) {
+	return n.CompactMarshalBinary()
 }
 
 // UnmarshalBinary decodes a binary marshaled leaf node.

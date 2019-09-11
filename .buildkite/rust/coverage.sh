@@ -55,6 +55,7 @@ cargo tarpaulin \
   --exclude test-long-term-client \
   --exclude-files '*generated*' \
   --exclude-files tests \
+  --exclude-files runtime/src/storage/mkvs/urkel/interop \
   --coveralls ${coveralls_api_token} \
   -v
 set -x

@@ -77,16 +77,14 @@ type Body struct {
 	WorkerAbortResponse                  *Empty
 
 	// Host interface.
-	HostRPCCallRequest                *HostRPCCallRequest
-	HostRPCCallResponse               *HostRPCCallResponse
-	HostStorageSyncGetSubtreeRequest  *HostStorageSyncGetSubtreeRequest
-	HostStorageSyncGetPathRequest     *HostStorageSyncGetPathRequest
-	HostStorageSyncGetNodeRequest     *HostStorageSyncGetNodeRequest
-	HostStorageSyncSerializedResponse *HostStorageSyncSerializedResponse
-	HostLocalStorageGetRequest        *HostLocalStorageGetRequest
-	HostLocalStorageGetResponse       *HostLocalStorageGetResponse
-	HostLocalStorageSetRequest        *HostLocalStorageSetRequest
-	HostLocalStorageSetResponse       *Empty
+	HostRPCCallRequest          *HostRPCCallRequest
+	HostRPCCallResponse         *HostRPCCallResponse
+	HostStorageSyncRequest      *HostStorageSyncRequest
+	HostStorageSyncResponse     *HostStorageSyncResponse
+	HostLocalStorageGetRequest  *HostLocalStorageGetRequest
+	HostLocalStorageGetResponse *HostLocalStorageGetResponse
+	HostLocalStorageSetRequest  *HostLocalStorageSetRequest
+	HostLocalStorageSetResponse *Empty
 }
 
 // Empty is an empty message body.
@@ -221,33 +219,20 @@ type HostRPCCallResponse struct {
 	Response []byte `codec:"response"`
 }
 
-// HostStorageSyncGetSubtreeRequest is a host storage read syncer get subtree request message body.
-type HostStorageSyncGetSubtreeRequest struct {
-	Root         storage.Root  `codec:"root"`
-	NodePath     []byte        `codec:"node_path"`
-	NodeBitDepth storage.Depth `codec:"node_bit_depth"`
-	MaxDepth     storage.Depth `codec:"max_depth"`
+// HostStorageSyncRequest is a host storage read syncer request message body.
+type HostStorageSyncRequest struct {
+	_struct struct{} `codec:",omitempty"` // nolint
+
+	SyncGet         *storage.GetRequest
+	SyncGetPrefixes *storage.GetPrefixesRequest
+	SyncIterate     *storage.IterateRequest
 }
 
-// HostStorageSyncGetPathRequest is a host storage read syncer get path request message body.
-type HostStorageSyncGetPathRequest struct { // nolint: maligned
-	Root          storage.Root  `codec:"root"`
-	NodePath      []byte        `codec:"node_path"`
-	NodeBitDepth  storage.Depth `codec:"node_bit_depth"`
-	Key           []byte        `codec:"key"`
-	StartBitDepth storage.Depth `codec:"start_bit_depth"`
-}
+// HostStorageSyncResponse is a host storage read syncer response body.
+type HostStorageSyncResponse struct {
+	_struct struct{} `codec:",omitempty"` // nolint
 
-// HostStorageSyncGetNodeRequest is a host storage read syncer get node request message body.
-type HostStorageSyncGetNodeRequest struct {
-	Root         storage.Root  `codec:"root"`
-	NodePath     []byte        `codec:"node_path"`
-	NodeBitDepth storage.Depth `codec:"node_bit_depth"`
-}
-
-// HostStorageSyncSerializedResponse is a host storage read syncer response body containing serialized data.
-type HostStorageSyncSerializedResponse struct {
-	Serialized []byte `codec:"serialized"`
+	ProofResponse *storage.ProofResponse
 }
 
 // HostLocalStorageGetRequest is a host local storage get request message body.

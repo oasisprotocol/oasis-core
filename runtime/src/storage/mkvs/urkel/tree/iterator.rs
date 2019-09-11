@@ -4,7 +4,41 @@ use std::{collections::VecDeque, fmt, iter::Iterator, mem::replace, sync::Arc};
 use failure::{Error, Fallible};
 use io_context::Context;
 
-use crate::storage::mkvs::urkel::{cache::*, tree::*};
+use crate::storage::mkvs::urkel::{cache::*, sync::*, tree::*};
+
+pub(super) struct FetcherSyncIterate<'a> {
+    key: &'a Key,
+    prefetch: usize,
+}
+
+impl<'a> FetcherSyncIterate<'a> {
+    pub(super) fn new(key: &'a Key, prefetch: usize) -> Self {
+        Self { key, prefetch }
+    }
+}
+
+impl<'a> ReadSyncFetcher for FetcherSyncIterate<'a> {
+    fn fetch(
+        &self,
+        ctx: Context,
+        root: Root,
+        ptr: NodePtrRef,
+        rs: &mut Box<dyn ReadSync>,
+    ) -> Fallible<Proof> {
+        let rsp = rs.sync_iterate(
+            ctx,
+            IterateRequest {
+                tree: TreeID {
+                    root,
+                    position: ptr.borrow().hash,
+                },
+                key: self.key.clone(),
+                prefetch: self.prefetch as u16,
+            },
+        )?;
+        Ok(rsp.proof)
+    }
+}
 
 /// Visit state of a node.
 #[derive(Debug, PartialEq)]
@@ -38,6 +72,7 @@ impl fmt::Debug for PathAtom {
 pub struct TreeIterator<'tree> {
     ctx: Arc<Context>,
     tree: &'tree UrkelTree,
+    prefetch: usize,
     pos: VecDeque<PathAtom>,
     key: Option<Key>,
     value: Option<Vec<u8>>,
@@ -50,11 +85,17 @@ impl<'tree> TreeIterator<'tree> {
         Self {
             ctx: ctx.freeze(),
             tree,
+            prefetch: 0,
             pos: VecDeque::new(),
             key: None,
             value: None,
             error: None,
         }
+    }
+
+    /// Sets the number of next elements to prefetch.
+    pub fn set_prefetch(&mut self, prefetch: usize) {
+        self.prefetch = prefetch;
     }
 
     fn reset(&mut self) {
@@ -143,15 +184,10 @@ impl<'tree> TreeIterator<'tree> {
         mut key: Key,
         mut state: VisitState,
     ) -> Fallible<()> {
-        // TODO: Hint the remote end that we are iterating (ekiden#1983).
         let node_ref = self.tree.cache.borrow_mut().deref_node_ptr(
             &self.ctx,
-            NodeID {
-                path: &path,
-                bit_depth: bit_depth,
-            },
             ptr.clone(),
-            Some(&key),
+            FetcherSyncIterate::new(&key, self.prefetch),
         )?;
 
         match classify_noderef!(?node_ref) {
@@ -303,10 +339,12 @@ mod test {
     use io_context::Context;
 
     use super::*;
-    use crate::storage::mkvs::urkel::sync::*;
+    use crate::storage::mkvs::urkel::interop::{Driver, ProtocolServer};
 
     #[test]
     fn test_iterator() {
+        let server = ProtocolServer::new();
+
         let mut tree = UrkelTree::make()
             .new(Context::background(), Box::new(NoopReadSyncer {}))
             .expect("new_tree");
@@ -346,10 +384,10 @@ mod test {
         test_iterator_with(&items, &mut tree);
 
         // Remote.
-        let hash = tree
-            .commit(Context::background(), Default::default(), 0)
-            .unwrap()
-            .1;
+        let (write_log, hash) =
+            UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+                .expect("commit");
+        server.apply(&write_log, hash, Default::default(), 0);
 
         let mut remote_tree = UrkelTree::make()
             .with_capacity(0, 0)
@@ -357,7 +395,7 @@ mod test {
                 hash,
                 ..Default::default()
             })
-            .new(Context::background(), Box::new(tree))
+            .new(Context::background(), server.read_sync())
             .expect("with_root");
 
         test_iterator_with(&items, &mut remote_tree);

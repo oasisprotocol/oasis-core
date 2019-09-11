@@ -1,12 +1,12 @@
-use std::{any::Any, cell::RefCell, rc::Rc, sync::Arc};
+use std::{any::Any, sync::Arc};
 
 use failure::Fallible;
 use io_context::Context;
 
 use crate::{
     protocol::{Protocol, ProtocolError},
-    storage::mkvs::urkel::{marshal::*, sync::*, tree::*},
-    types::Body,
+    storage::mkvs::urkel::sync::*,
+    types::{Body, StorageSyncRequest, StorageSyncResponse},
 };
 
 /// A proxy read syncer which forwards calls to the runtime host.
@@ -19,6 +19,21 @@ impl HostReadSyncer {
     pub fn new(protocol: Arc<Protocol>) -> HostReadSyncer {
         HostReadSyncer { protocol: protocol }
     }
+
+    fn make_request_with_proof(
+        &self,
+        ctx: Context,
+        request: StorageSyncRequest,
+    ) -> Fallible<ProofResponse> {
+        let request = Body::HostStorageSyncRequest { request };
+        match self.protocol.make_request(ctx, request) {
+            Ok(Body::HostStorageSyncResponse {
+                response: StorageSyncResponse::ProofResponse(response),
+            }) => Ok(response),
+            Ok(_) => Err(ProtocolError::InvalidResponse.into()),
+            Err(error) => Err(error),
+        }
+    }
 }
 
 impl ReadSync for HostReadSyncer {
@@ -26,62 +41,19 @@ impl ReadSync for HostReadSyncer {
         self
     }
 
-    fn get_subtree(
+    fn sync_get(&mut self, ctx: Context, request: GetRequest) -> Fallible<ProofResponse> {
+        self.make_request_with_proof(ctx, StorageSyncRequest::SyncGet(request))
+    }
+
+    fn sync_get_prefixes(
         &mut self,
         ctx: Context,
-        root: Root,
-        id: NodeID,
-        max_depth: Depth,
-    ) -> Fallible<Subtree> {
-        let req = Body::HostStorageSyncGetSubtreeRequest {
-            root: root,
-            node_path: id.path.clone(),
-            node_bit_depth: id.bit_depth,
-            max_depth: max_depth,
-        };
-        match self.protocol.make_request(ctx, req) {
-            Ok(Body::HostStorageSyncSerializedResponse { serialized }) => {
-                let mut st = Subtree::new();
-                st.unmarshal_binary(serialized.as_slice())?;
-                Ok(st)
-            }
-            Ok(_) => Err(ProtocolError::InvalidResponse.into()),
-            Err(error) => Err(error),
-        }
+        request: GetPrefixesRequest,
+    ) -> Fallible<ProofResponse> {
+        self.make_request_with_proof(ctx, StorageSyncRequest::SyncGetPrefixes(request))
     }
 
-    fn get_path(&mut self, ctx: Context, root: Root, id: NodeID, key: &Key) -> Fallible<Subtree> {
-        let req = Body::HostStorageSyncGetPathRequest {
-            root: root,
-            node_path: id.path.clone(),
-            node_bit_depth: id.bit_depth,
-            key: key.clone(),
-        };
-        match self.protocol.make_request(ctx, req) {
-            Ok(Body::HostStorageSyncSerializedResponse { serialized }) => {
-                let mut st = Subtree::new();
-                st.unmarshal_binary(serialized.as_slice())?;
-                Ok(st)
-            }
-            Ok(_) => Err(ProtocolError::InvalidResponse.into()),
-            Err(error) => Err(error),
-        }
-    }
-
-    fn get_node(&mut self, ctx: Context, root: Root, id: NodeID) -> Fallible<NodeRef> {
-        let req = Body::HostStorageSyncGetNodeRequest {
-            root: root,
-            node_path: id.path.clone(),
-            node_bit_depth: id.bit_depth,
-        };
-        match self.protocol.make_request(ctx, req) {
-            Ok(Body::HostStorageSyncSerializedResponse { serialized }) => {
-                let mut node = NodeBox::default();
-                node.unmarshal_binary(serialized.as_slice())?;
-                Ok(Rc::new(RefCell::new(node)))
-            }
-            Ok(_) => Err(ProtocolError::InvalidResponse.into()),
-            Err(error) => Err(error),
-        }
+    fn sync_iterate(&mut self, ctx: Context, request: IterateRequest) -> Fallible<ProofResponse> {
+        self.make_request_with_proof(ctx, StorageSyncRequest::SyncIterate(request))
     }
 }

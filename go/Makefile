@@ -28,6 +28,10 @@ lint:
 test: generate
 	@env -u GOPATH $(EKIDEN_GO) test -race -v ./...
 
+# Urkel interoperability test helpers.
+urkel-test-helpers: generate
+	@env -u GOPATH $(EKIDEN_GO) build -v -o ./storage/mkvs/urkel/interop/urkel_test_helpers ./storage/mkvs/urkel/interop
+
 # Clean.
 clean:
 	@env -u GOPATH $(EKIDEN_GO) clean

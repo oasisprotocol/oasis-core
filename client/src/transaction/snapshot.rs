@@ -1,5 +1,5 @@
 //! A block snapshot.
-use std::{any::Any, cell::RefCell, rc::Rc};
+use std::any::Any;
 
 use ekiden_runtime::{
     common::{
@@ -9,11 +9,7 @@ use ekiden_runtime::{
     },
     storage::{
         mkvs::{
-            urkel::{
-                marshal::Marshal,
-                sync::{NodeBox, NodeID, NodeRef, ReadSync, Root, Subtree},
-                Depth, Key,
-            },
+            urkel::{sync::*, Root},
             UrkelTree, WriteLog,
         },
         MKVS,
@@ -150,71 +146,43 @@ impl ReadSync for RemoteReadSync {
         self
     }
 
-    fn get_subtree(
+    fn sync_get(&mut self, _ctx: Context, request: GetRequest) -> Fallible<ProofResponse> {
+        let mut rq = api::storage::ReadSyncerRequest::new();
+        rq.set_request(cbor::to_vec(&request));
+
+        let response = self
+            .0
+            .sync_get(&rq)
+            .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?;
+
+        Ok(cbor::from_slice(response.get_response())?)
+    }
+
+    fn sync_get_prefixes(
         &mut self,
         _ctx: Context,
-        root: Root,
-        id: NodeID,
-        max_depth: Depth,
-    ) -> Fallible<Subtree> {
-        let mut request = api::storage::GetSubtreeRequest::new();
-        request.set_root(cbor::to_vec(&root));
-        request.set_id({
-            let mut nid = api::storage::NodeID::new();
-            nid.set_path(id.path.marshal_binary()?.to_vec());
-            nid.set_bit_depth(id.bit_depth.into());
-            nid
-        });
-        request.set_max_depth(max_depth.into());
+        request: GetPrefixesRequest,
+    ) -> Fallible<ProofResponse> {
+        let mut rq = api::storage::ReadSyncerRequest::new();
+        rq.set_request(cbor::to_vec(&request));
 
         let response = self
             .0
-            .get_subtree(&request)
+            .sync_get_prefixes(&rq)
             .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?;
 
-        let mut st = Subtree::new();
-        st.unmarshal_binary(response.get_subtree())?;
-        Ok(st)
+        Ok(cbor::from_slice(response.get_response())?)
     }
 
-    fn get_path(&mut self, _ctx: Context, root: Root, id: NodeID, key: &Key) -> Fallible<Subtree> {
-        let mut request = api::storage::GetPathRequest::new();
-        request.set_root(cbor::to_vec(&root));
-        request.set_id({
-            let mut nid = api::storage::NodeID::new();
-            nid.set_path(id.path.marshal_binary()?.to_vec());
-            nid.set_bit_depth(id.bit_depth.into());
-            nid
-        });
-        request.set_key(key.marshal_binary()?.to_vec());
+    fn sync_iterate(&mut self, _ctx: Context, request: IterateRequest) -> Fallible<ProofResponse> {
+        let mut rq = api::storage::ReadSyncerRequest::new();
+        rq.set_request(cbor::to_vec(&request));
 
         let response = self
             .0
-            .get_path(&request)
+            .sync_iterate(&rq)
             .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?;
 
-        let mut st = Subtree::new();
-        st.unmarshal_binary(response.get_subtree())?;
-        Ok(st)
-    }
-
-    fn get_node(&mut self, _ctx: Context, root: Root, id: NodeID) -> Fallible<NodeRef> {
-        let mut request = api::storage::GetNodeRequest::new();
-        request.set_root(cbor::to_vec(&root));
-        request.set_id({
-            let mut nid = api::storage::NodeID::new();
-            nid.set_path(id.path.marshal_binary()?.to_vec());
-            nid.set_bit_depth(id.bit_depth.into());
-            nid
-        });
-
-        let response = self
-            .0
-            .get_node(&request)
-            .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?;
-
-        let mut node = NodeBox::default();
-        node.unmarshal_binary(response.get_node())?;
-        Ok(Rc::new(RefCell::new(node)))
+        Ok(cbor::from_slice(response.get_response())?)
     }
 }

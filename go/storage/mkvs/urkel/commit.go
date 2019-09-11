@@ -3,10 +3,118 @@ package urkel
 import (
 	"context"
 
+	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
+
+// CommitKnown checks that the computed root matches a known root and
+// if so, commits tree updates to the underlying database and returns
+// the write log.
+//
+// In case the computed root doesn't match the known root, the update
+// is NOT committed and ErrKnownRootMismatch is returned.
+func (t *Tree) CommitKnown(ctx context.Context, root node.Root) (writelog.WriteLog, error) {
+	writeLog, _, err := t.commitWithHooks(ctx, root.Namespace, root.Round, func(rootHash hash.Hash) error {
+		if !rootHash.Equal(&root.Hash) {
+			return ErrKnownRootMismatch
+		}
+
+		return nil
+	})
+	return writeLog, err
+}
+
+// Commit commits tree updates to the underlying database and returns
+// the write log and new merkle root.
+func (t *Tree) Commit(ctx context.Context, namespace common.Namespace, round uint64) (writelog.WriteLog, hash.Hash, error) {
+	return t.commitWithHooks(ctx, namespace, round, nil)
+}
+
+func (t *Tree) commitWithHooks(
+	ctx context.Context,
+	namespace common.Namespace,
+	round uint64,
+	beforeDbCommit func(hash.Hash) error,
+) (writelog.WriteLog, hash.Hash, error) {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
+	if t.cache.isClosed() {
+		return nil, hash.Hash{}, ErrClosed
+	}
+
+	oldRoot := t.cache.getSyncRoot()
+	if oldRoot.IsEmpty() {
+		oldRoot.Namespace = namespace
+		oldRoot.Round = round
+	}
+
+	batch := t.cache.db.NewBatch(namespace, round, oldRoot)
+	defer batch.Reset()
+
+	subtree := batch.MaybeStartSubtree(nil, 0, t.cache.pendingRoot)
+
+	rootHash, err := doCommit(ctx, t.cache, batch, subtree, 0, t.cache.pendingRoot, &round)
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+	if err := subtree.Commit(); err != nil {
+		return nil, hash.Hash{}, err
+	}
+
+	// Perform pre-commit validation if configured.
+	if beforeDbCommit != nil {
+		if err := beforeDbCommit(rootHash); err != nil {
+			return nil, hash.Hash{}, err
+		}
+	}
+
+	// Store write log summaries.
+	var log writelog.WriteLog
+	var logAnns writelog.Annotations
+	for _, entry := range t.pendingWriteLog {
+		// Skip all entries that do not exist after all the updates and
+		// did not exist before.
+		if entry.value == nil && !entry.existed {
+			continue
+		}
+
+		log = append(log, writelog.LogEntry{Key: entry.key, Value: entry.value})
+		if len(entry.value) == 0 {
+			logAnns = append(logAnns, writelog.LogEntryAnnotation{InsertedNode: nil})
+		} else {
+			logAnns = append(logAnns, writelog.LogEntryAnnotation{InsertedNode: entry.insertedLeaf})
+		}
+	}
+
+	root := node.Root{
+		Namespace: namespace,
+		Round:     round,
+		Hash:      rootHash,
+	}
+	if err := batch.PutWriteLog(log, logAnns); err != nil {
+		return nil, hash.Hash{}, err
+	}
+
+	// Store removed nodes.
+	if err := batch.RemoveNodes(t.pendingRemovedNodes); err != nil {
+		return nil, hash.Hash{}, err
+	}
+
+	// And finally commit to the database.
+	if err := batch.Commit(root); err != nil {
+		return nil, hash.Hash{}, err
+	}
+
+	t.pendingWriteLog = make(map[string]*pendingEntry)
+	t.pendingRemovedNodes = nil
+	t.cache.setSyncRoot(root)
+
+	return log, rootHash, nil
+}
 
 // doCommit commits all dirty nodes and values into the underlying node
 // database. This operation may cause committed nodes and values to be

@@ -5,6 +5,8 @@ use io_context::Context;
 
 use crate::storage::mkvs::urkel::{cache::*, tree::*};
 
+use super::lookup::FetcherSyncGet;
+
 impl UrkelTree {
     /// Insert a key/value pair into the tree.
     pub fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Fallible<Option<Vec<u8>>> {
@@ -47,12 +49,8 @@ impl UrkelTree {
     ) -> Fallible<(NodePtrRef, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
-            NodeID {
-                path: key,
-                bit_depth: bit_depth,
-            },
             ptr.clone(),
-            None,
+            FetcherSyncGet::new(key, false),
         )?;
 
         let (_, key_remainder) = key.split(bit_depth, key.bit_length());

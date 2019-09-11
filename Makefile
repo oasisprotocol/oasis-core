@@ -71,8 +71,11 @@ fmt:
 test: test-unit test-e2e
 
 test-unit:
+	@$(ECHO) "$(CYAN)*** Building storage interoperability test helpers...$(OFF)"
+	@$(MAKE) -C go urkel-test-helpers
 	@$(ECHO) "$(CYAN)*** Running Rust unit tests...$(OFF)"
 	@export KM_ENCLAVE_PATH=$(KM_ENCLAVE_PATH) && \
+		export EKIDEN_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers) && \
 		cargo test
 	@$(ECHO) "$(CYAN)*** Running Go unit tests...$(OFF)"
 	@$(MAKE) -C go test

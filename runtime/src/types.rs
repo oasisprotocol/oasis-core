@@ -12,10 +12,7 @@ use crate::{
         roothash::{Block, ComputeResultsHeader},
         sgx::avr::AVR,
     },
-    storage::mkvs::{
-        urkel::{sync::Root, Depth, Key},
-        WriteLog,
-    },
+    storage::mkvs::{urkel::sync, WriteLog},
     transaction::types::TxnBatch,
 };
 
@@ -31,6 +28,20 @@ pub struct ComputedBatch {
     /// If this runtime uses a TEE, then this is the signature of the batch's
     /// BatchSigMessage with the node's RAK for this runtime.
     pub rak_sig: Signature,
+}
+
+/// Storage sync request.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum StorageSyncRequest {
+    SyncGet(sync::GetRequest),
+    SyncGetPrefixes(sync::GetPrefixesRequest),
+    SyncIterate(sync::IterateRequest),
+}
+
+/// Storage sync response.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum StorageSyncResponse {
+    ProofResponse(sync::ProofResponse),
 }
 
 /// Worker protocol message body.
@@ -116,22 +127,13 @@ pub enum Body {
         #[serde(with = "serde_bytes")]
         response: Vec<u8>,
     },
-    HostStorageSyncGetSubtreeRequest {
-        root: Root,
-        node_path: Key,
-        node_bit_depth: Depth,
-        max_depth: Depth,
+    HostStorageSyncRequest {
+        #[serde(flatten)]
+        request: StorageSyncRequest,
     },
-    HostStorageSyncGetPathRequest {
-        root: Root,
-        node_path: Key,
-        node_bit_depth: Depth,
-        key: Key,
-    },
-    HostStorageSyncGetNodeRequest {
-        root: Root,
-        node_path: Key,
-        node_bit_depth: Depth,
+    HostStorageSyncResponse {
+        #[serde(flatten)]
+        response: StorageSyncResponse,
     },
     HostStorageSyncSerializedResponse {
         #[serde(with = "serde_bytes")]
