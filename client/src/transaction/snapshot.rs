@@ -110,8 +110,8 @@ impl BlockSnapshot {
 }
 
 impl MKVS for BlockSnapshot {
-    fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
-        MKVS::get(&self.mkvs, ctx, key)
+    fn get(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
+        MKVS::get(&mut self.mkvs, ctx, key)
     }
 
     fn insert(&mut self, _ctx: Context, _key: &[u8], _value: &[u8]) -> Option<Vec<u8>> {

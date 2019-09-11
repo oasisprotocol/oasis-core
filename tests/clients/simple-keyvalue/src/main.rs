@@ -120,7 +120,7 @@ fn main() {
 
     // Test get_latest_block call.
     println!("Getting latest block...");
-    let snapshot = rt
+    let mut snapshot = rt
         .block_on(kv_client.txn_client().get_latest_block())
         .expect("get latest block snapshot");
     println!("Retrieved block: {:?}", snapshot.block);

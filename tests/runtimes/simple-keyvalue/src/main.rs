@@ -177,7 +177,7 @@ impl EncryptionContext {
     }
 
     /// Get encrypted MKVS entry.
-    pub fn get(&self, mkvs: &dyn MKVS, ctx: IoContext, key: &[u8]) -> Option<Vec<u8>> {
+    pub fn get(&self, mkvs: &mut dyn MKVS, ctx: IoContext, key: &[u8]) -> Option<Vec<u8>> {
         let key = self.derive_encrypted_key(key);
         let ciphertext = match mkvs.get(ctx, &key) {
             Some(ciphertext) => ciphertext,

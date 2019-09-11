@@ -1,7 +1,8 @@
 //! Runtime transaction batch dispatcher.
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use failure::{Fallible, ResultExt};
+use io_context::Context as IoContext;
 use serde::{de::DeserializeOwned, Serialize};
 
 use super::{
@@ -9,13 +10,24 @@ use super::{
     tags::Tags,
     types::{TxnBatch, TxnCall, TxnOutput},
 };
-use crate::common::{cbor, crypto::hash::Hash};
+use crate::{
+    common::{cbor, crypto::hash::Hash},
+    storage::{context::StorageContext, mkvs::MKVS, KeyValue},
+};
 
 /// Dispatch error.
 #[derive(Debug, Fail)]
 enum DispatchError {
     #[fail(display = "method not found: {}", method)]
     MethodNotFound { method: String },
+}
+
+/// Storage context configuration to be used during transaction dispatch.
+pub struct DispatchStorageContext<'a> {
+    /// Reference to the MKVS backend.
+    pub mkvs: &'a mut dyn MKVS,
+    /// Reference to the untrusted local key/value store.
+    pub untrusted_local: &'a Arc<dyn KeyValue>,
 }
 
 /// Error indicating that performing a transaction check was successful.
@@ -101,7 +113,12 @@ pub trait MethodHandlerDispatch {
     fn get_descriptor(&self) -> &MethodDescriptor;
 
     /// Dispatches the given raw call.
-    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<cbor::Value>;
+    fn dispatch(
+        &self,
+        storage: &mut DispatchStorageContext,
+        call: TxnCall,
+        ctx: &mut Context,
+    ) -> Fallible<cbor::Value>;
 }
 
 struct MethodHandlerDispatchImpl<Call, Output> {
@@ -120,11 +137,36 @@ where
         &self.descriptor
     }
 
-    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<cbor::Value> {
+    fn dispatch(
+        &self,
+        storage: &mut DispatchStorageContext,
+        call: TxnCall,
+        ctx: &mut Context,
+    ) -> Fallible<cbor::Value> {
+        let predicted_rw_set = call.predicted_rw_set;
         let call = cbor::from_value(call.args).context("unable to parse call arguments")?;
-        let response = self.handler.handle(&call, ctx)?;
 
-        Ok(cbor::to_value(response))
+        let response = if predicted_rw_set.is_empty() {
+            // If the predicted read/write set is empty, there is no need to do any
+            // verification. It is very important that this notion of an empty read
+            // write set is understood by the transaction scheduler in the same way.
+            StorageContext::enter(storage.mkvs, storage.untrusted_local.clone(), || {
+                self.handler.handle(&call, ctx)
+            })
+        } else {
+            // Wrap current storage context into a read-write set verifier.
+            let mut verifier = predicted_rw_set.into_verifier(storage.mkvs);
+            let response =
+                StorageContext::enter(&mut verifier, storage.untrusted_local.clone(), || {
+                    self.handler.handle(&call, ctx)
+                });
+
+            // Try to commit.
+            verifier.commit(IoContext::create_child(&ctx.io_ctx))?;
+            response
+        };
+
+        Ok(cbor::to_value(response?))
     }
 }
 
@@ -156,8 +198,13 @@ impl Method {
     }
 
     /// Dispatch method call.
-    pub fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<cbor::Value> {
-        self.dispatcher.dispatch(call, ctx)
+    pub fn dispatch(
+        &self,
+        storage: &mut DispatchStorageContext,
+        call: TxnCall,
+        ctx: &mut Context,
+    ) -> Fallible<cbor::Value> {
+        self.dispatcher.dispatch(storage, call, ctx)
     }
 }
 
@@ -217,7 +264,12 @@ impl Dispatcher {
     }
 
     /// Dispatches a batch of runtime requests.
-    pub fn dispatch_batch(&self, batch: &TxnBatch, mut ctx: Context) -> (TxnBatch, Vec<Tags>) {
+    pub fn dispatch_batch(
+        &self,
+        mut storage: DispatchStorageContext,
+        batch: &TxnBatch,
+        mut ctx: Context,
+    ) -> (TxnBatch, Vec<Tags>) {
         if let Some(ref ctx_init) = self.ctx_initializer {
             ctx_init.init(&mut ctx);
         }
@@ -233,7 +285,7 @@ impl Dispatcher {
                 .iter()
                 .map(|call| {
                     ctx.start_transaction();
-                    self.dispatch(call, &mut ctx)
+                    self.dispatch(&mut storage, call, &mut ctx)
                 })
                 .collect(),
         );
@@ -247,8 +299,13 @@ impl Dispatcher {
     }
 
     /// Dispatches a raw runtime invocation request.
-    pub fn dispatch(&self, call: &Vec<u8>, ctx: &mut Context) -> Vec<u8> {
-        let rsp = match self.dispatch_fallible(call, ctx) {
+    pub fn dispatch(
+        &self,
+        storage: &mut DispatchStorageContext,
+        call: &Vec<u8>,
+        ctx: &mut Context,
+    ) -> Vec<u8> {
+        let rsp = match self.dispatch_fallible(storage, call, ctx) {
             Ok(response) => TxnOutput::Success(response),
             Err(error) => {
                 if let Some(check_msg) = error.downcast_ref::<CheckOnlySuccess>() {
@@ -262,11 +319,16 @@ impl Dispatcher {
         cbor::to_vec(&rsp)
     }
 
-    fn dispatch_fallible(&self, call: &Vec<u8>, ctx: &mut Context) -> Fallible<cbor::Value> {
+    fn dispatch_fallible(
+        &self,
+        storage: &mut DispatchStorageContext,
+        call: &Vec<u8>,
+        ctx: &mut Context,
+    ) -> Fallible<cbor::Value> {
         let call: TxnCall = cbor::from_slice(call).context("unable to parse call")?;
 
         match self.methods.get(&call.method) {
-            Some(dispatcher) => dispatcher.dispatch(call, ctx),
+            Some(dispatcher) => dispatcher.dispatch(storage, call, ctx),
             None => Err(DispatchError::MethodNotFound {
                 method: call.method,
             }
@@ -284,10 +346,23 @@ impl Dispatcher {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use failure::Fallible;
     use io_context::Context as IoContext;
     use serde_derive::{Deserialize, Serialize};
 
-    use crate::common::{cbor, roothash::Header};
+    use crate::{
+        common::{
+            cbor,
+            crypto::hash::Hash,
+            roothash::{Header, Namespace},
+        },
+        storage::{
+            mkvs::{Prefix, WriteLog, MKVS},
+            KeyValue,
+        },
+    };
 
     use super::*;
 
@@ -317,6 +392,49 @@ mod tests {
         ));
     }
 
+    struct Dummy;
+
+    impl MKVS for Dummy {
+        fn get(&mut self, _ctx: IoContext, _key: &[u8]) -> Option<Vec<u8>> {
+            unimplemented!();
+        }
+
+        fn insert(&mut self, _ctx: IoContext, _key: &[u8], _value: &[u8]) -> Option<Vec<u8>> {
+            unimplemented!();
+        }
+
+        fn remove(&mut self, _ctx: IoContext, _key: &[u8]) -> Option<Vec<u8>> {
+            unimplemented!();
+        }
+
+        fn prefetch_prefixes(&self, _ctx: IoContext, _prefixes: &Vec<Prefix>, _limit: u16) {
+            unimplemented!();
+        }
+
+        fn commit(
+            &mut self,
+            _ctx: IoContext,
+            _namespace: Namespace,
+            _round: u64,
+        ) -> Fallible<(WriteLog, Hash)> {
+            unimplemented!();
+        }
+
+        fn rollback(&mut self) {
+            unimplemented!();
+        }
+    }
+
+    impl KeyValue for Dummy {
+        fn get(&self, _key: Vec<u8>) -> Fallible<Vec<u8>> {
+            unimplemented!();
+        }
+
+        fn insert(&self, _key: Vec<u8>, _value: Vec<u8>) -> Fallible<()> {
+            unimplemented!();
+        }
+    }
+
     #[test]
     fn test_dispatcher() {
         let mut dispatcher = Dispatcher::new();
@@ -340,7 +458,16 @@ mod tests {
         let mut ctx = Context::new(IoContext::background().freeze(), &header, false);
 
         // Call runtime.
-        let result = dispatcher.dispatch(&call_encoded, &mut ctx);
+        let mut dummy_mkvs = Dummy;
+        let dummy_kv: Arc<dyn KeyValue> = Arc::new(Dummy);
+        let result = dispatcher.dispatch(
+            &mut DispatchStorageContext {
+                mkvs: &mut dummy_mkvs,
+                untrusted_local: &dummy_kv,
+            },
+            &call_encoded,
+            &mut ctx,
+        );
 
         // Decode result.
         let result_decoded: TxnOutput = cbor::from_slice(&result).unwrap();

@@ -109,7 +109,7 @@ impl From<Vec<u8>> for Prefix {
 /// Merklized key-value store.
 pub trait MKVS: Send + Sync {
     /// Fetch entry with given key.
-    fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>>;
+    fn get(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>>;
 
     /// Update entry with given key.
     ///

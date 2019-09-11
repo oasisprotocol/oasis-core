@@ -12,9 +12,9 @@ unsafe impl Sync for UrkelTree {}
 // TODO: We should likely change the MKVS interface to propagate errors instead of unwrapping.
 
 impl MKVS for UrkelTree {
-    fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
+    fn get(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
         let _lock = self.lock.lock().unwrap();
-        self.get(ctx, key).unwrap()
+        UrkelTree::get(self, ctx, key).unwrap()
     }
 
     fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {

@@ -1,8 +1,8 @@
 //! Thread-local storage context.
 //!
-//! The storage context is a convenient way to share CAS and MKVS
+//! The storage context is a convenient way to share MKVS
 //! implementations across the current thread.
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, mem::transmute, sync::Arc};
 
 use super::{KeyValue, MKVS};
 
@@ -15,29 +15,30 @@ thread_local! {
     static CTX: RefCell<Option<Ctx>> = RefCell::new(None);
 }
 
-struct CtxGuard;
+struct CtxGuard {
+    old_ctx: Option<Ctx>,
+}
 
 impl CtxGuard {
-    fn new<M>(mkvs: &mut M, untrusted_local: Arc<dyn KeyValue>) -> Self
-    where
-        M: MKVS + 'static,
-    {
-        CTX.with(|ctx| {
-            assert!(ctx.borrow().is_none(), "nested enter is not allowed");
+    fn new(mkvs: &mut dyn MKVS, untrusted_local: Arc<dyn KeyValue>) -> Self {
+        let old_ctx = CTX.with(|ctx| {
             ctx.borrow_mut().replace(Ctx {
-                mkvs,
+                // Need to fake the 'static lifetime on the trait. This is fine as we know
+                // that the pointer can only actually be used while the StorageContext is
+                // live.
+                mkvs: unsafe { transmute::<&mut dyn MKVS, &'static mut dyn MKVS>(mkvs) },
                 untrusted_local,
-            });
+            })
         });
 
-        CtxGuard
+        CtxGuard { old_ctx }
     }
 }
 
 impl Drop for CtxGuard {
     fn drop(&mut self) {
         CTX.with(|local| {
-            drop(local.borrow_mut().take());
+            drop(local.replace(self.old_ctx.take()));
         });
     }
 }
@@ -47,9 +48,8 @@ pub struct StorageContext;
 
 impl StorageContext {
     /// Enter the storage context.
-    pub fn enter<M, F, R>(mkvs: &mut M, untrusted_local: Arc<dyn KeyValue>, f: F) -> R
+    pub fn enter<F, R>(mkvs: &mut dyn MKVS, untrusted_local: Arc<dyn KeyValue>, f: F) -> R
     where
-        M: MKVS + 'static,
         F: FnOnce() -> R,
     {
         let _guard = CtxGuard::new(mkvs, untrusted_local);
@@ -69,8 +69,10 @@ impl StorageContext {
             let ctx = ctx.borrow();
             let ctx_ref = ctx.as_ref().expect("must only be called while entered");
             let mkvs_ref = unsafe { ctx_ref.mkvs.as_mut().expect("pointer is never null") };
+            let untrusted_local_ref = ctx_ref.untrusted_local.clone();
+            drop(ctx);
 
-            f(mkvs_ref, &ctx_ref.untrusted_local)
+            f(mkvs_ref, &untrusted_local_ref)
         })
     }
 }

@@ -36,10 +36,12 @@ use crate::{
             },
             UrkelTree,
         },
-        StorageContext,
+        KeyValue, StorageContext,
     },
     transaction::{
-        dispatcher::Dispatcher as TxnDispatcher, tree::Tree as TxnTree, types::TxnBatch,
+        dispatcher::{DispatchStorageContext, Dispatcher as TxnDispatcher},
+        tree::Tree as TxnTree,
+        types::TxnBatch,
         Context as TxnContext,
     },
     types::{Body, ComputedBatch},
@@ -267,15 +269,19 @@ impl Dispatcher {
             },
         );
 
-        let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
+        let untrusted_local: Arc<dyn KeyValue> = Arc::new(ProtocolUntrustedLocalStorage::new(
             Context::create_child(&ctx),
             protocol.clone(),
         ));
         let txn_ctx = TxnContext::new(ctx.clone(), &block.header, check_only);
-        let (mut outputs, mut tags) =
-            StorageContext::enter(&mut cache.mkvs, untrusted_local.clone(), || {
-                txn_dispatcher.dispatch_batch(&inputs, txn_ctx)
-            });
+        let (mut outputs, mut tags) = txn_dispatcher.dispatch_batch(
+            DispatchStorageContext {
+                mkvs: &mut cache.mkvs,
+                untrusted_local: &untrusted_local,
+            },
+            &inputs,
+            txn_ctx,
+        );
 
         if check_only {
             debug!(self.logger, "Transaction batch check complete");
