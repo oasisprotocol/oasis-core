@@ -2,14 +2,15 @@ module github.com/oasislabs/ekiden/go
 
 replace (
 	git.schwanenlied.me/yawning/bsaes.git => github.com/yawning/bsaes v0.0.0-20190320102049-26d1add596b6
-	git.schwanenlied.me/yawning/dynlib.git => github.com/yawning/dynlib v0.0.0-20181128103533-74a62abb5524
+	git.schwanenlied.me/yawning/dynlib.git => github.com/yawning/dynlib v0.0.0-20190911075527-1e6ab3739fd8
 	github.com/tendermint/iavl => github.com/oasislabs/iavl v0.12.0-ekiden2
 )
 
 require (
-	git.schwanenlied.me/yawning/dynlib.git v0.0.0-20181128103533-74a62abb5524
+	git.schwanenlied.me/yawning/dynlib.git v0.0.0-20190911075527-1e6ab3739fd8
 	github.com/RoaringBitmap/roaring v0.4.18 // indirect
 	github.com/blevesearch/bleve v0.8.0
+	github.com/blevesearch/blevex v0.0.0-20180227211930-4b158bb555a3 // indirect
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/btcsuite/btcd v0.0.0-20190614013741-962a206e94e9 // indirect

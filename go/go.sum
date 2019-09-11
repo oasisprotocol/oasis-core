@@ -16,8 +16,6 @@ github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.0 h1:HWo1m869IqiPhD389kmkxeTalrjNbbJTC8LXupb+sl0=
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
-github.com/blevesearch/bleve v0.7.1-0.20190531184658-92623347bffc h1:5ThJ90xibwACVovwY6xsj3WNmc/STfCY9PYlyYH3Lx0=
-github.com/blevesearch/bleve v0.7.1-0.20190531184658-92623347bffc/go.mod h1:Y2lmIkzV6mcNfAnAdOd+ZxHkHchhBfU/xroGIp61wfw=
 github.com/blevesearch/bleve v0.8.0 h1:DCoCrxscCXrlzVWK92k7Vq4d28lTAFuigVmcgIX0VCo=
 github.com/blevesearch/bleve v0.8.0/go.mod h1:Y2lmIkzV6mcNfAnAdOd+ZxHkHchhBfU/xroGIp61wfw=
 github.com/blevesearch/blevex v0.0.0-20180227211930-4b158bb555a3 h1:U6vnxZrTfItfiUiYx0lf/LgHjRSfaKK5QHSom3lEbnA=
@@ -459,8 +457,8 @@ github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 github.com/yawning/bsaes v0.0.0-20190320102049-26d1add596b6 h1:XiURQ8aOK64ZQZo3A9CcH6HBPXHO1jQYKmojVZt1B1o=
 github.com/yawning/bsaes v0.0.0-20190320102049-26d1add596b6/go.mod h1:Bb2B6frTcZ7ENcY8EkrWfco1TDSju9uvZS7Edpud4hg=
-github.com/yawning/dynlib v0.0.0-20181128103533-74a62abb5524 h1:mVjIWxguYcKYzB/1FPRwDr2BtjUKazQhmwjVSo5qpRI=
-github.com/yawning/dynlib v0.0.0-20181128103533-74a62abb5524/go.mod h1:lsPnsCcmF/7g2/YABGVu2x5c3kTGkACLD3Gs2xMvFxw=
+github.com/yawning/dynlib v0.0.0-20190911075527-1e6ab3739fd8 h1:aabJ179OilUevkOaJGAi/WrpxL2rD5gDdIoDaHL/arc=
+github.com/yawning/dynlib v0.0.0-20190911075527-1e6ab3739fd8/go.mod h1:lsPnsCcmF/7g2/YABGVu2x5c3kTGkACLD3Gs2xMvFxw=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.etcd.io/bbolt v1.3.3 h1:MUGmc65QhB3pIlaQ5bB4LwqSj6GIonVJXpZiaKNyaKk=
 go.etcd.io/bbolt v1.3.3/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
