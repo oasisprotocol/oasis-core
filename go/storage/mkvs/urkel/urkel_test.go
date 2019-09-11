@@ -201,12 +201,11 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, writelog.LogInsert, log[1].Type())
 
 	// Create a new tree backed by the same database.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{
+	tree = NewWithRoot(nil, ndb, node.Root{
 		Namespace: testNs,
 		Round:     0,
 		Hash:      root,
 	})
-	require.NoError(t, err, "NewWithRoot")
 
 	value, err = tree.Get(ctx, keyZero)
 	require.NoError(t, err, "Get")
@@ -605,12 +604,10 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 	// syncer interface.
 
 	stats := syncer.NewStatsCollector(tree)
-	remoteTree, err := NewWithRoot(ctx, stats, nil, r, Capacity(0, 0))
-	require.NoError(t, err, "NewWithRoot")
+	remoteTree := NewWithRoot(stats, nil, r, Capacity(0, 0))
 
 	for i := 0; i < len(keys); i++ {
-		var value []byte
-		value, err = remoteTree.Get(ctx, keys[i])
+		value, err := remoteTree.Get(ctx, keys[i])
 		require.NoError(t, err, "Get")
 		require.Equal(t, values[i], value)
 	}
@@ -665,20 +662,17 @@ func testSyncerRootEmptyLabelNeedsDeref(t *testing.T, ndb db.NodeDB) {
 	// Create a remote tree so we will need to deref.
 
 	t.Run("Get", func(t *testing.T) {
-		remoteTree, err := NewWithRoot(ctx, tree, nil, root)
-		require.NoError(t, err, "NewWithRoot")
+		remoteTree := NewWithRoot(tree, nil, root)
 		testGet(t, remoteTree)
 	})
 
 	t.Run("Remove", func(t *testing.T) {
-		remoteTree, err := NewWithRoot(ctx, tree, nil, root)
-		require.NoError(t, err, "NewWithRoot")
+		remoteTree := NewWithRoot(tree, nil, root)
 		testRemove(t, remoteTree)
 	})
 
 	t.Run("Insert", func(t *testing.T) {
-		remoteTree, err := NewWithRoot(ctx, tree, nil, root)
-		require.NoError(t, err, "NewWithRoot")
+		remoteTree := NewWithRoot(tree, nil, root)
 		testInsert(t, remoteTree)
 	})
 }
@@ -704,11 +698,10 @@ func testSyncerRemove(t *testing.T, ndb db.NodeDB) {
 		Hash:      roots[len(roots)-1],
 	}
 	stats := syncer.NewStatsCollector(tree)
-	remoteTree, err := NewWithRoot(ctx, stats, nil, root)
-	require.NoError(t, err, "NewWithRoot")
+	remoteTree := NewWithRoot(stats, nil, root)
 
 	for i := len(keys) - 1; i >= 0; i-- {
-		err = remoteTree.Remove(ctx, keys[i])
+		err := remoteTree.Remove(ctx, keys[i])
 		require.NoError(t, err, "Remove")
 	}
 
@@ -740,8 +733,7 @@ func testSyncerInsert(t *testing.T, ndb db.NodeDB) {
 		Hash:      rootHash,
 	}
 	stats := syncer.NewStatsCollector(tree)
-	remoteTree, err := NewWithRoot(ctx, stats, nil, root)
-	require.NoError(t, err, "NewWithRoot")
+	remoteTree := NewWithRoot(stats, nil, root)
 
 	keys, values = generateKeyValuePairs()
 	for i := 0; i < len(keys); i++ {
@@ -781,12 +773,11 @@ func testSyncerNilNodes(t *testing.T, ndb db.NodeDB) {
 	wire := &dummySerialSyncer{
 		backing: tree,
 	}
-	remote, err := NewWithRoot(ctx, wire, nil, node.Root{
+	remote := NewWithRoot(wire, nil, node.Root{
 		Namespace: testNs,
 		Round:     0,
 		Hash:      root,
 	})
-	require.NoError(t, err, "NewWithRoot")
 
 	// Now try inserting a k-v pair that will force the tree to traverse through the nil node
 	// and dereference it.
@@ -799,11 +790,10 @@ func testSyncerPrefetchPrefixes(t *testing.T, ndb db.NodeDB) {
 	keys, values, root, tree := generatePopulatedTree(t, ndb)
 
 	stats := syncer.NewStatsCollector(tree)
-	remoteTree, err := NewWithRoot(ctx, stats, nil, root, Capacity(0, 0))
-	require.NoError(t, err, "NewWithRoot")
+	remoteTree := NewWithRoot(stats, nil, root, Capacity(0, 0))
 
 	// Prefetch keys starting with prefix "key".
-	err = remoteTree.PrefetchPrefixes(ctx, [][]byte{[]byte("key")}, 1000)
+	err := remoteTree.PrefetchPrefixes(ctx, [][]byte{[]byte("key")}, 1000)
 	require.NoError(t, err, "PrefetchPrefixes")
 	require.EqualValues(t, 1, stats.SyncGetPrefixesCount, "SyncGetPrefixes should be called exactly once")
 
@@ -1167,8 +1157,7 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, 2, pruned)
 
 	// Keys must still be available in round 2.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 2, Hash: rootHash3})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 2, Hash: rootHash3})
 	value, err := tree.Get(ctx, []byte("blah"))
 	require.NoError(t, err, "Get")
 	require.EqualValues(t, []byte("ugh"), value)
@@ -1184,8 +1173,7 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB) {
 	require.Nil(t, value, "removed key must be gone")
 
 	// Round 0 must be gone.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHash1})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHash1})
 	_, err = tree.Get(ctx, []byte("foo"))
 	require.Error(t, err, "Get")
 }
@@ -1275,9 +1263,7 @@ func testPruneCheckpoints(t *testing.T, ndb db.NodeDB) {
 			continue
 		}
 
-		var err error
-		tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: uint64(r), Hash: roots[r]})
-		require.NoError(t, err, "NewWithRoot")
+		tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: uint64(r), Hash: roots[r]})
 
 		for pr := 0; pr <= r; pr++ {
 			for p := 0; p < numPairsPerRound; p++ {
@@ -1323,8 +1309,7 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Finalize")
 
 	// Create a derived root A in round 1.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_1})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_1})
 	err = tree.Insert(ctx, []byte("dr"), []byte("A"))
 	require.NoError(t, err, "Insert")
 	err = tree.Remove(ctx, []byte("moo"))
@@ -1333,8 +1318,7 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Commit")
 
 	// Create a derived root B in round 1.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_1})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_1})
 	err = tree.Insert(ctx, []byte("dr"), []byte("B"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_2, err := tree.Commit(ctx, testNs, 1)
@@ -1356,8 +1340,7 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "GetWriteLog")
 
 	// Create a derived root C from derived root B in round 2.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_2})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_2})
 	err = tree.Insert(ctx, []byte("yet"), []byte("another"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR2_1, err := tree.Commit(ctx, testNs, 2)
@@ -1382,8 +1365,8 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB) {
 	}{
 		{2, rootHashR2_1, []string{"foo", "moo", "dr", "yet"}},
 	} {
-		tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: root.Round, Hash: root.Hash})
-		require.NoError(t, err, "NewWithRoot")
+		tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: root.Round, Hash: root.Hash})
+
 		for _, key := range root.Keys {
 			value, err := tree.Get(ctx, []byte(key))
 			require.NoError(t, err, "Get(%d, %s)", root.Round, key)
@@ -1425,8 +1408,7 @@ func testPruneLoneRootsShared(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Finalize")
 
 	// Check that the shared nodes are still there.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHash1})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHash1})
 	value, err := tree.Get(ctx, []byte("foo"))
 	require.NoError(t, err, "Get")
 	require.EqualValues(t, []byte("bar"), value)
@@ -1486,8 +1468,7 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, 1, nodesR1_1)
 
 	// Create a derived root in round 1.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_2})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_2})
 	err = tree.Insert(ctx, []byte("different2"), []byte("boo"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_2, err := tree.Commit(ctx, testNs, 1)
@@ -1503,8 +1484,7 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	nodesR1_3 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_3}, seenNodes)
 	require.EqualValues(t, 1, nodesR1_3)
 
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_3})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_3})
 	err = tree.Insert(ctx, []byte("second"), []byte("i am"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_4, err := tree.Commit(ctx, testNs, 1)
@@ -1517,15 +1497,13 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	// the first root and the third root is derived from the second root
 	// (both in the same round). All three should be garbage collected
 	// as they are not referenced in subsequent rounds.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_3})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_3})
 	err = tree.Insert(ctx, []byte("first"), []byte("am i"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_5, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
 	nodesR1_5 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_5}, seenNodes)
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_5})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_5})
 	err = tree.Insert(ctx, []byte("second"), []byte("i am"))
 	require.NoError(t, err, "Insert")
 	err = tree.Remove(ctx, []byte("yet"))
@@ -1533,8 +1511,7 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	_, rootHashR1_6, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
 	nodesR1_6 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_6}, seenNodes)
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_6})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_6})
 	err = tree.Insert(ctx, []byte("third"), []byte("i am not"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_7, err := tree.Commit(ctx, testNs, 1)
@@ -1546,20 +1523,17 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	// the first root and the third root is derived from the second root
 	// (both in the same round). The third root is then referenced in round
 	// 2 so only intermediate nodes should be garbage collected.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_4})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_4})
 	err = tree.Insert(ctx, []byte("first2"), []byte("am i"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_8, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_8})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_8})
 	err = tree.Insert(ctx, []byte("second2"), []byte("i am"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_9, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_9})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_9})
 	err = tree.Insert(ctx, []byte("third2"), []byte("i am not"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_10, err := tree.Commit(ctx, testNs, 1)
@@ -1579,16 +1553,14 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Commit")
 
 	// Create a derived root in round 2.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_2})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_2})
 	err = tree.Insert(ctx, []byte("foo"), []byte("boo"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR2_2, err := tree.Commit(ctx, testNs, 2)
 	require.NoError(t, err, "Commit")
 
 	// Create another derived root in round 2.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_10})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_10})
 	err = tree.Insert(ctx, []byte("foo2"), []byte("boo"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR2_3, err := tree.Commit(ctx, testNs, 2)
@@ -1619,8 +1591,8 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 		{2, rootHashR2_2, []string{"goo", "different2", "foo"}},
 		{2, rootHashR2_3, []string{"yet2", "first2", "second2", "third2", "foo2"}},
 	} {
-		tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: root.Round, Hash: root.Hash})
-		require.NoError(t, err, "NewWithRoot")
+		tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: root.Round, Hash: root.Hash})
+
 		for _, key := range root.Keys {
 			value, err := tree.Get(ctx, []byte(key))
 			require.NoError(t, err, "Get(%d, %s)", root.Round, key)
@@ -1647,8 +1619,7 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Commit")
 
 	// Commit for non-following round should fail.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR1_1})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR1_1})
 	err = tree.Insert(ctx, []byte("moo"), []byte("moo"))
 	require.NoError(t, err, "Insert")
 	_, _, err = tree.Commit(ctx, testNs, 100)
@@ -1656,8 +1627,7 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, db.ErrRootMustFollowOld, err)
 
 	// Commit with mismatched old root should fail.
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 99, Hash: rootHashR1_1})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 99, Hash: rootHashR1_1})
 	err = tree.Insert(ctx, []byte("moo"), []byte("moo"))
 	require.NoError(t, err, "Insert")
 	_, _, err = tree.Commit(ctx, testNs, 100)
@@ -1667,8 +1637,7 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	// Commit with non-existent old root should fail.
 	var bogusRoot hash.Hash
 	bogusRoot.FromBytes([]byte("bogus root"))
-	tree, err = NewWithRoot(ctx, nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: bogusRoot})
-	require.NoError(t, err, "NewWithRoot")
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: bogusRoot})
 	_, _, err = tree.Commit(ctx, testNs, 1)
 	require.Error(t, err, "Commit should fail for invalid root")
 	require.Equal(t, db.ErrRootNotFound, err)
@@ -1841,8 +1810,7 @@ func TestUrkelLRUBackend(t *testing.T) {
 				Round:     0,
 				Hash:      root,
 			}
-			tree, terr := NewWithRoot(context.Background(), nil, d, r)
-			require.NoError(t, terr, "NewWithRoot (persistence)")
+			tree = NewWithRoot(nil, d, r)
 			v, verr := tree.Get(context.Background(), persistenceKey)
 			require.NoError(t, verr, "Get (persistence)")
 			require.Equal(t, persistenceVal, v)

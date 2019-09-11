@@ -345,9 +345,7 @@ mod test {
     fn test_iterator() {
         let server = ProtocolServer::new();
 
-        let mut tree = UrkelTree::make()
-            .new(Context::background(), Box::new(NoopReadSyncer {}))
-            .expect("new_tree");
+        let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
 
         // Test with an empty tree.
         let mut it = tree.iter(Context::background());
@@ -395,8 +393,7 @@ mod test {
                 hash,
                 ..Default::default()
             })
-            .new(Context::background(), server.read_sync())
-            .expect("with_root");
+            .new(server.read_sync());
 
         test_iterator_with(&items, &mut remote_tree);
     }

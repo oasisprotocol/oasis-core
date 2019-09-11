@@ -55,8 +55,7 @@ func TestIterator(t *testing.T) {
 	root.Hash = rootHash
 
 	stats := syncer.NewStatsCollector(tree)
-	remote, err := NewWithRoot(ctx, stats, nil, root)
-	require.NoError(t, err, "NewWithRoot")
+	remote := NewWithRoot(stats, nil, root)
 	defer remote.Close()
 
 	t.Run("Remote", func(t *testing.T) {
@@ -71,8 +70,7 @@ func TestIterator(t *testing.T) {
 	})
 
 	stats = syncer.NewStatsCollector(tree)
-	remote, err = NewWithRoot(ctx, stats, nil, root)
-	require.NoError(t, err, "NewWithRoot")
+	remote = NewWithRoot(stats, nil, root)
 	defer remote.Close()
 
 	t.Run("RemoteWithPrefetch10", func(t *testing.T) {
@@ -87,8 +85,7 @@ func TestIterator(t *testing.T) {
 	})
 
 	stats = syncer.NewStatsCollector(tree)
-	remote, err = NewWithRoot(ctx, stats, nil, root)
-	require.NoError(t, err, "NewWithRoot")
+	remote = NewWithRoot(stats, nil, root)
 	defer remote.Close()
 
 	t.Run("RemoteWithPrefetch3", func(t *testing.T) {

@@ -91,14 +91,14 @@ func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) *Tree {
 
 // NewWithRoot creates a new Urkel tree with an existing root, backed by
 // the given node database.
-func NewWithRoot(ctx context.Context, rs syncer.ReadSyncer, ndb db.NodeDB, root node.Root, options ...Option) (*Tree, error) {
+func NewWithRoot(rs syncer.ReadSyncer, ndb db.NodeDB, root node.Root, options ...Option) *Tree {
 	t := New(rs, ndb, options...)
 	t.cache.setPendingRoot(&node.Pointer{
 		Clean: true,
 		Hash:  root.Hash,
 	})
 	t.cache.setSyncRoot(root)
-	return t, nil
+	return t
 }
 
 // NewIterator returns a new iterator over the tree.

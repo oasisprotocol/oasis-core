@@ -74,8 +74,7 @@ impl Clone for BlockSnapshot {
                 round: self.block.header.round,
                 hash: self.block.header.state_root,
             })
-            .new(Context::background(), Box::new(read_syncer.clone()))
-            .expect("prefetching disabled so new must always succeed");
+            .new(Box::new(read_syncer.clone()));
 
         Self {
             block,
@@ -99,8 +98,7 @@ impl BlockSnapshot {
                 round: block.header.round,
                 hash: block.header.state_root,
             })
-            .new(Context::background(), Box::new(read_syncer.clone()))
-            .expect("prefetching disabled so new must always succeed");
+            .new(Box::new(read_syncer.clone()));
 
         Self {
             block,

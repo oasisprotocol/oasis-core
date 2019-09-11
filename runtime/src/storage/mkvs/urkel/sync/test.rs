@@ -13,9 +13,7 @@ use crate::storage::mkvs::{
 fn test_nil_pointers() {
     let server = ProtocolServer::new();
 
-    let mut tree = UrkelTree::make()
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+    let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
 
     // Arbitrary sequence of operations. The point is to produce a tree with
     // an internal node where at least one of the children is a null pointer.
@@ -46,8 +44,7 @@ fn test_nil_pointers() {
             hash: root,
             ..Default::default()
         })
-        .new(Context::background(), server.read_sync())
-        .expect("remote_tree");
+        .new(server.read_sync());
 
     // Now try inserting a k-v pair that will force the tree to traverse through the nil node
     // and dereference it.

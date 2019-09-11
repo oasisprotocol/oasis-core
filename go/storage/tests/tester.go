@@ -156,8 +156,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 
 	// Test individual fetches.
 	t.Run("SyncGet", func(t *testing.T) {
-		tree, terr := urkel.NewWithRoot(ctx, backend, nil, newRoot)
-		require.NoError(t, terr, "NewWithRoot")
+		tree := urkel.NewWithRoot(backend, nil, newRoot)
 		defer tree.Close()
 		for _, entry := range wl {
 			value, werr := tree.Get(ctx, entry.Key)
@@ -168,17 +167,15 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 
 	// Test prefetch.
 	t.Run("SyncGetPrefixes", func(t *testing.T) {
-		tree, terr := urkel.NewWithRoot(ctx, backend, nil, newRoot)
-		require.NoError(t, terr, "NewWithRoot")
+		tree := urkel.NewWithRoot(backend, nil, newRoot)
 		defer tree.Close()
-		terr = tree.PrefetchPrefixes(ctx, [][]byte{[]byte("1")}, 10)
-		require.NoError(t, terr, "PrefetchPrefixes")
+		err = tree.PrefetchPrefixes(ctx, [][]byte{[]byte("1")}, 10)
+		require.NoError(t, err, "PrefetchPrefixes")
 	})
 
 	// Test iteration.
 	t.Run("SyncIterate", func(t *testing.T) {
-		tree, terr := urkel.NewWithRoot(ctx, backend, nil, newRoot)
-		require.NoError(t, terr, "NewWithRoot")
+		tree := urkel.NewWithRoot(backend, nil, newRoot)
 		defer tree.Close()
 		it := tree.NewIterator(ctx)
 		defer it.Close()
@@ -295,10 +292,9 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 		}
 
 		// Generate expected root hash.
-		tree, err := urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: dstRound, Hash: baseRoot})
-		require.NoError(t, err, "NewWithRoot")
+		tree := urkel.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Round: dstRound, Hash: baseRoot})
 		defer tree.Close()
-		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
+		err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 		require.NoError(t, err, "ApplyWriteLog")
 		var root hash.Hash
 		_, root, err = tree.Commit(ctx, namespace, dstRound)
@@ -345,9 +341,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 
 	// Make sure that the merged root is the same as applying all write logs against
 	// the base root.
-	var tree *urkel.Tree
-	tree, err = urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: round, Hash: roots[0]})
-	require.NoError(t, err, "NewWithRoot")
+	tree := urkel.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Round: round, Hash: roots[0]})
 	defer tree.Close()
 	for _, writeLog := range writeLogs[1:] {
 		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))

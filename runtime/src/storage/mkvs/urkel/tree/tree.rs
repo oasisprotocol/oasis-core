@@ -6,9 +6,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use failure::Fallible;
-use io_context::Context;
-
 use crate::storage::mkvs::urkel::{cache::*, sync::*, tree::*};
 
 pub struct PendingLogEntry {
@@ -47,8 +44,8 @@ impl UrkelOptions {
     }
 
     /// Commit the options set so far into a newly constructed tree instance.
-    pub fn new(self, ctx: Context, read_syncer: Box<dyn ReadSync>) -> Fallible<UrkelTree> {
-        UrkelTree::new(ctx, read_syncer, &self)
+    pub fn new(self, read_syncer: Box<dyn ReadSync>) -> UrkelTree {
+        UrkelTree::new(read_syncer, &self)
     }
 }
 
@@ -61,11 +58,7 @@ pub struct UrkelTree {
 
 impl UrkelTree {
     /// Construct a new tree instance using the given read syncer and options struct.
-    pub fn new(
-        _ctx: Context,
-        read_syncer: Box<dyn ReadSync>,
-        opts: &UrkelOptions,
-    ) -> Fallible<UrkelTree> {
+    pub fn new(read_syncer: Box<dyn ReadSync>, opts: &UrkelOptions) -> UrkelTree {
         let tree = UrkelTree {
             cache: RefCell::new(LRUCache::new(
                 opts.node_capacity,
@@ -87,7 +80,7 @@ impl UrkelTree {
             tree.cache.borrow_mut().set_sync_root(root);
         }
 
-        Ok(tree)
+        tree
     }
 
     /// Return an options struct to chain configuration calls on.

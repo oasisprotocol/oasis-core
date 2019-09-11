@@ -283,21 +283,18 @@ func (c *Client) GetBlock(ctx context.Context, runtimeID signature.PublicKey, ro
 	return c.common.roothash.GetBlock(ctx, runtimeID, round)
 }
 
-func (c *Client) getTxnTree(ctx context.Context, blk *block.Block) (*transaction.Tree, error) {
+func (c *Client) getTxnTree(blk *block.Block) *transaction.Tree {
 	ioRoot := storage.Root{
 		Namespace: blk.Header.Namespace,
 		Round:     blk.Header.Round,
 		Hash:      blk.Header.IORoot,
 	}
 
-	return transaction.NewTree(ctx, c.common.storage, ioRoot)
+	return transaction.NewTree(c.common.storage, ioRoot)
 }
 
 func (c *Client) getTxnByHash(ctx context.Context, blk *block.Block, txHash hash.Hash) (*transaction.Transaction, error) {
-	tree, err := c.getTxnTree(ctx, blk)
-	if err != nil {
-		return nil, err
-	}
+	tree := c.getTxnTree(blk)
 	defer tree.Close()
 
 	return tree.GetTransaction(ctx, txHash)
@@ -377,10 +374,7 @@ func (c *Client) GetTransactions(ctx context.Context, runtimeID signature.Public
 	}
 	copy(ioRoot.Namespace[:], runtimeID[:])
 
-	tree, err := transaction.NewTree(ctx, c.common.storage, ioRoot)
-	if err != nil {
-		return nil, err
-	}
+	tree := transaction.NewTree(c.common.storage, ioRoot)
 	defer tree.Close()
 
 	txs, err := tree.GetTransactions(ctx)
@@ -461,10 +455,7 @@ func (c *Client) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, q
 			return nil, err
 		}
 
-		tree, err := c.getTxnTree(ctx, blk)
-		if err != nil {
-			return nil, err
-		}
+		tree := c.getTxnTree(blk)
 		defer tree.Close()
 
 		// Extract transaction data for the specified indices.

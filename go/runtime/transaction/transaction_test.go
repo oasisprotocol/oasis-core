@@ -20,8 +20,7 @@ func TestTransaction(t *testing.T) {
 	var emptyRoot node.Root
 	emptyRoot.Empty()
 
-	tree, err := NewTree(ctx, store, emptyRoot)
-	require.NoError(t, err, "NewTree")
+	tree := NewTree(store, emptyRoot)
 
 	// No transactions in empty tree.
 	txns, err := tree.GetTransactions(ctx)
@@ -133,9 +132,7 @@ func TestTransaction(t *testing.T) {
 	require.NoError(t, err, "Commit")
 	require.EqualValues(t, rootHash, storeRootHash)
 
-	tree, err = NewTree(ctx, store, node.Root{Hash: storeRootHash})
-	require.NoError(t, err, "NewTree")
-
+	tree = NewTree(store, node.Root{Hash: storeRootHash})
 	txns, err = tree.GetTransactions(ctx)
 	require.NoError(t, err, "GetTransactions")
 	require.Len(t, txns, len(testTxns)+1, "there should be some transactions")

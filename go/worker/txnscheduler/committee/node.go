@@ -256,17 +256,11 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error
 	}
 	emptyRoot.Hash.Empty()
 
-	ioTree, err := transaction.NewTree(n.ctx, nil, emptyRoot)
-	if err != nil {
-		n.logger.Error("failed to create I/O tree",
-			"err", err,
-		)
-		return err
-	}
+	ioTree := transaction.NewTree(nil, emptyRoot)
 	defer ioTree.Close()
 
 	for idx, tx := range batch {
-		if err = ioTree.AddTransaction(n.ctx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
+		if err := ioTree.AddTransaction(n.ctx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
 			n.logger.Error("failed to create I/O tree",
 				"err", err,
 			)

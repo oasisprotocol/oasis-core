@@ -108,11 +108,7 @@ func (w *blockWatcher) checkBlock(blk *block.Block) {
 		Hash:      blk.Header.IORoot,
 	}
 
-	tree, err := transaction.NewTree(ctx, w.common.storage, ioRoot)
-	if err != nil {
-		w.Logger.Error("can't get block I/O from storage", "err", err)
-		return
-	}
+	tree := transaction.NewTree(w.common.storage, ioRoot)
 	defer tree.Close()
 
 	// Check if there's anything interesting in this block.

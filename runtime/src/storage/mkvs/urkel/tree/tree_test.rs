@@ -51,9 +51,7 @@ fn generate_long_key_value_pairs() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
 
 #[test]
 fn test_basic() {
-    let mut tree = UrkelTree::make()
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+    let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
 
     let key_zero = b"foo";
     let value_zero = b"bar";
@@ -239,9 +237,7 @@ fn test_basic() {
 
 #[test]
 fn test_long_keys() {
-    let mut tree = UrkelTree::make()
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+    let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
 
     // First insert keys 0..n and remove them in order n..0.
     let mut roots: Vec<Hash> = Vec::new();
@@ -294,9 +290,7 @@ fn test_long_keys() {
 
 #[test]
 fn test_empty_keys() {
-    let mut tree = UrkelTree::make()
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+    let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
 
     fn test_empty_key(tree: &mut UrkelTree) {
         let empty_key = b"";
@@ -410,9 +404,7 @@ fn test_empty_keys() {
 
 #[test]
 fn test_insert_commit_batch() {
-    let mut tree = UrkelTree::make()
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+    let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -439,8 +431,7 @@ fn test_insert_commit_batch() {
 fn test_insert_commit_each() {
     let mut tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -469,8 +460,7 @@ fn test_insert_commit_each() {
 fn test_remove() {
     let mut tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     // First insert keys 0..n and remove them in order n..0.
     let mut roots: Vec<Hash> = Vec::new();
@@ -561,8 +551,7 @@ fn test_syncer_basic() {
 
     let mut tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -590,8 +579,7 @@ fn test_syncer_basic() {
             hash,
             ..Default::default()
         })
-        .new(Context::background(), Box::new(stats))
-        .expect("with_root");
+        .new(Box::new(stats));
 
     for i in 0..keys.len() {
         let value = remote_tree
@@ -618,8 +606,7 @@ fn test_syncer_remove() {
 
     let mut tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
     let mut roots: Vec<Hash> = Vec::new();
 
     let mut write_log = WriteLog::new();
@@ -649,8 +636,7 @@ fn test_syncer_remove() {
             hash: roots[roots.len() - 1],
             ..Default::default()
         })
-        .new(Context::background(), Box::new(stats))
-        .expect("with_root");
+        .new(Box::new(stats));
 
     for i in (0..keys.len()).rev() {
         remote_tree
@@ -684,8 +670,7 @@ fn test_syncer_insert() {
 
     let mut tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -708,8 +693,7 @@ fn test_syncer_insert() {
             hash,
             ..Default::default()
         })
-        .new(Context::background(), Box::new(stats))
-        .expect("with_root");
+        .new(Box::new(stats));
 
     for i in 0..keys.len() {
         remote_tree
@@ -738,8 +722,7 @@ fn test_syncer_prefetch_prefixes() {
 
     let mut tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -762,8 +745,7 @@ fn test_syncer_prefetch_prefixes() {
             hash,
             ..Default::default()
         })
-        .new(Context::background(), Box::new(stats))
-        .expect("with_root");
+        .new(Box::new(stats));
 
     // Prefetch keys starting with prefix "key".
     remote_tree
@@ -793,8 +775,7 @@ fn test_syncer_prefetch_prefixes() {
 fn test_value_eviction() {
     let mut tree = UrkelTree::make()
         .with_capacity(0, 512)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -829,8 +810,7 @@ fn test_value_eviction() {
 fn test_node_eviction() {
     let mut tree = UrkelTree::make()
         .with_capacity(128, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs_ex("foo".to_string(), 150);
     for i in 0..keys.len() {

@@ -165,16 +165,11 @@ type Tree struct {
 }
 
 // NewTree creates a new transaction artifacts tree.
-func NewTree(ctx context.Context, rs syncer.ReadSyncer, ioRoot node.Root) (*Tree, error) {
-	tree, err := urkel.NewWithRoot(ctx, rs, nil, ioRoot)
-	if err != nil {
-		return nil, err
-	}
-
+func NewTree(rs syncer.ReadSyncer, ioRoot node.Root) *Tree {
 	return &Tree{
 		ioRoot: ioRoot,
-		tree:   tree,
-	}, nil
+		tree:   urkel.NewWithRoot(rs, nil, ioRoot),
+	}
 }
 
 // Close releases resources associated with this transaction artifact tree.
