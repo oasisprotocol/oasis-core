@@ -255,13 +255,13 @@ func (s *grpcStreamLogger) SendMsg(m interface{}) error {
 			s.logAdapter.reqLogger.Debug("SendMsg",
 				"method", s.method,
 				"stream_seq", s.seq,
-				"msg", m,
+				"message", m,
 			)
 		default:
 			s.logAdapter.reqLogger.Debug("SendMsg failed",
 				"method", s.method,
 				"stream_seq", s.seq,
-				"msg", m,
+				"message", m,
 				"err", err,
 			)
 		}
