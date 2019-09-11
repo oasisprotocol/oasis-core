@@ -494,6 +494,9 @@ func (g *Group) publishLocked(
 	// Publish batch to given committee.
 	publicIdentity := g.identity.NodeSigner.Public()
 	for index, member := range ci.Committee.Members {
+		g.logger.Debug("publishing to committee members",
+			"node", ci.Nodes[index],
+		)
 		if member.PublicKey.Equal(publicIdentity) {
 			// Do not publish to self.
 			continue
