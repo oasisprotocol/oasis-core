@@ -4,6 +4,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"sort"
 	"time"
@@ -459,9 +460,11 @@ func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes []*node.Ru
 			return false
 		}
 		if !verifyRuntimeCapabilities(logger, &currentRuntime.Capabilities, &newRuntime.Capabilities) {
+			curRtJSON, _ := json.Marshal(currentRuntime)
+			newRtJSON, _ := json.Marshal(newRuntime)
 			logger.Error("RegisterNode: trying to update runtimes, runtime Capabilities changed",
-				"current_runtime", currentRuntime,
-				"new_runtime", newRuntime,
+				"current_runtime", curRtJSON,
+				"new_runtime", newRtJSON,
 			)
 			return false
 		}
@@ -508,15 +511,17 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode *node.Node, newNode *n
 	}
 	if !currentNode.EntityID.Equal(newNode.EntityID) {
 		logger.Error("RegisterNode: trying to update node entity ID",
-			"current_id", currentNode.ID,
-			"new_id", newNode.ID,
+			"current_id", currentNode.EntityID,
+			"new_id", newNode.EntityID,
 		)
 		return ErrNodeUpdateNotAllowed
 	}
 	if !verifyNodeRuntimeChanges(logger, currentNode.Runtimes, newNode.Runtimes) {
+		curNodeRuntimes, _ := json.Marshal(currentNode.Runtimes)
+		newNodeRuntimes, _ := json.Marshal(newNode.Runtimes)
 		logger.Error("RegisterNode: trying to update node runtimes",
-			"current_runtimes", currentNode.Runtimes,
-			"new_runtimes", newNode.Runtimes,
+			"current_runtimes", curNodeRuntimes,
+			"new_runtimes", newNodeRuntimes,
 		)
 		return ErrNodeUpdateNotAllowed
 	}

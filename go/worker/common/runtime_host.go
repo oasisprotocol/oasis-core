@@ -11,7 +11,9 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/node"
-	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
+	keymanagerApi "github.com/oasislabs/ekiden/go/keymanager/api"
+	keymanagerClient "github.com/oasislabs/ekiden/go/keymanager/client"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
@@ -28,20 +30,36 @@ var (
 )
 
 type runtimeHostHandler struct {
-	runtimeID signature.PublicKey
+	runtime *registry.Runtime
 
-	storage      storage.Backend
-	keyManager   *keymanager.Client
-	localStorage *host.LocalStorage
+	storage          storage.Backend
+	keyManager       keymanagerApi.Backend
+	keyManagerClient *keymanagerClient.Client
+	localStorage     *host.LocalStorage
 }
 
 func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
+	// Key manager.
+	if body.HostKeyManagerPolicyRequest != nil {
+		status, err := h.keyManager.GetStatus(ctx, h.runtime.KeyManager)
+		if err != nil {
+			return nil, err
+		}
+
+		var policy keymanagerApi.SignedPolicySGX
+		if status != nil && status.Policy != nil {
+			policy = *status.Policy
+		}
+		return &protocol.Body{HostKeyManagerPolicyResponse: &protocol.HostKeyManagerPolicyResponse{
+			SignedPolicyRaw: cbor.Marshal(policy),
+		}}, nil
+	}
 	// RPC.
 	if body.HostRPCCallRequest != nil {
 		switch body.HostRPCCallRequest.Endpoint {
 		case protocol.EndpointKeyManager:
 			// Call into the remote key manager.
-			res, err := h.keyManager.CallRemote(ctx, h.runtimeID, body.HostRPCCallRequest.Request)
+			res, err := h.keyManagerClient.CallRemote(ctx, h.runtime.ID, body.HostRPCCallRequest.Request)
 			if err != nil {
 				return nil, err
 			}
@@ -78,14 +96,14 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 	}
 	// Local storage.
 	if body.HostLocalStorageGetRequest != nil {
-		value, err := h.localStorage.Get(h.runtimeID, body.HostLocalStorageGetRequest.Key)
+		value, err := h.localStorage.Get(h.runtime.ID, body.HostLocalStorageGetRequest.Key)
 		if err != nil {
 			return nil, err
 		}
 		return &protocol.Body{HostLocalStorageGetResponse: &protocol.HostLocalStorageGetResponse{Value: value}}, nil
 	}
 	if body.HostLocalStorageSetRequest != nil {
-		if err := h.localStorage.Set(h.runtimeID, body.HostLocalStorageSetRequest.Key, body.HostLocalStorageSetRequest.Value); err != nil {
+		if err := h.localStorage.Set(h.runtime.ID, body.HostLocalStorageSetRequest.Key, body.HostLocalStorageSetRequest.Value); err != nil {
 			return nil, err
 		}
 		return &protocol.Body{HostLocalStorageSetResponse: &protocol.Empty{}}, nil
@@ -96,12 +114,13 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 
 // NewRuntimeHostHandler creates a worker host handler for runtime execution.
 func NewRuntimeHostHandler(
-	runtimeID signature.PublicKey,
+	runtime *registry.Runtime,
 	storage storage.Backend,
-	keyManager *keymanager.Client,
+	keyManager keymanagerApi.Backend,
+	keyManagerClient *keymanagerClient.Client,
 	localStorage *host.LocalStorage,
 ) protocol.Handler {
-	return &runtimeHostHandler{runtimeID, storage, keyManager, localStorage}
+	return &runtimeHostHandler{runtime, storage, keyManager, keyManagerClient, localStorage}
 }
 
 // RuntimeHostWorker provides methods for workers that need to host runtimes.
@@ -123,6 +142,7 @@ func (f *runtimeWorkerHostSandboxedFactory) NewWorkerHost(cfg host.Config) (host
 	// Instantiate the template with the provided configuration values.
 	hostCfg := f.cfgTemplate
 	hostCfg.TEEHardware = cfg.TEEHardware
+	hostCfg.MessageHandler = cfg.MessageHandler
 
 	return host.NewHost(&hostCfg)
 }
@@ -141,12 +161,6 @@ func (rw *RuntimeHostWorker) NewRuntimeWorkerHostFactory(role node.RolesMask, id
 		WorkerBinary:  cfg.Loader,
 		RuntimeBinary: rtCfg.Binary,
 		IAS:           rw.commonWorker.IAS,
-		MessageHandler: NewRuntimeHostHandler(
-			rtCfg.ID,
-			rw.commonWorker.Storage,
-			rw.commonWorker.KeyManager,
-			rw.commonWorker.LocalStorage,
-		),
 	}
 
 	switch strings.ToLower(cfg.Backend) {
@@ -202,6 +216,13 @@ func (n *RuntimeHostNode) InitializeRuntimeWorkerHost() error {
 
 	cfg := host.Config{
 		TEEHardware: n.commonNode.Runtime.TEEHardware,
+		MessageHandler: NewRuntimeHostHandler(
+			n.commonNode.Runtime,
+			n.commonNode.Storage,
+			n.commonNode.KeyManager,
+			n.commonNode.KeyManagerClient,
+			n.commonNode.LocalStorage,
+		),
 	}
 	workerHost, err := n.workerHostFactory.NewWorkerHost(cfg)
 	if err != nil {

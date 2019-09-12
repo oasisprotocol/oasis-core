@@ -10,7 +10,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/version"
 	"github.com/oasislabs/ekiden/go/ias"
-	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
+	keymanagerApi "github.com/oasislabs/ekiden/go/keymanager/api"
+	keymanagerClient "github.com/oasislabs/ekiden/go/keymanager/client"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -49,17 +50,18 @@ type Worker struct {
 	enabled bool
 	cfg     Config
 
-	Identity     *identity.Identity
-	Storage      storage.Backend
-	Roothash     roothash.Backend
-	Registry     registry.Backend
-	Scheduler    scheduler.Backend
-	Consensus    consensus.Backend
-	Grpc         *grpc.Server
-	P2P          *p2p.P2P
-	IAS          *ias.IAS
-	KeyManager   *keymanager.Client
-	LocalStorage *host.LocalStorage
+	Identity         *identity.Identity
+	Storage          storage.Backend
+	Roothash         roothash.Backend
+	Registry         registry.Backend
+	Scheduler        scheduler.Backend
+	Consensus        consensus.Backend
+	Grpc             *grpc.Server
+	P2P              *p2p.P2P
+	IAS              *ias.IAS
+	KeyManager       keymanagerApi.Backend
+	KeyManagerClient *keymanagerClient.Client
+	LocalStorage     *host.LocalStorage
 
 	runtimes map[signature.MapKey]*Runtime
 
@@ -216,6 +218,9 @@ func (w *Worker) NewUnmanagedCommitteeNode(id signature.PublicKey, enableP2P boo
 	return committee.NewNode(
 		id,
 		w.Identity,
+		w.KeyManager,
+		w.KeyManagerClient,
+		w.LocalStorage,
 		w.Storage,
 		w.Roothash,
 		w.Registry,
@@ -275,26 +280,28 @@ func newWorker(
 	grpc *grpc.Server,
 	p2p *p2p.P2P,
 	ias *ias.IAS,
-	keyManager *keymanager.Client,
+	keyManager keymanagerApi.Backend,
+	keyManagerClient *keymanagerClient.Client,
 	cfg Config,
 ) (*Worker, error) {
 	w := &Worker{
-		enabled:    enabled,
-		cfg:        cfg,
-		Identity:   identity,
-		Storage:    storageBackend,
-		Roothash:   roothash,
-		Registry:   registryInst,
-		Scheduler:  scheduler,
-		Consensus:  consensus,
-		Grpc:       grpc,
-		P2P:        p2p,
-		IAS:        ias,
-		KeyManager: keyManager,
-		runtimes:   make(map[signature.MapKey]*Runtime),
-		quitCh:     make(chan struct{}),
-		initCh:     make(chan struct{}),
-		logger:     logging.GetLogger("worker/common"),
+		enabled:          enabled,
+		cfg:              cfg,
+		Identity:         identity,
+		Storage:          storageBackend,
+		Roothash:         roothash,
+		Registry:         registryInst,
+		Scheduler:        scheduler,
+		Consensus:        consensus,
+		Grpc:             grpc,
+		P2P:              p2p,
+		IAS:              ias,
+		KeyManager:       keyManager,
+		KeyManagerClient: keyManagerClient,
+		runtimes:         make(map[signature.MapKey]*Runtime),
+		quitCh:           make(chan struct{}),
+		initCh:           make(chan struct{}),
+		logger:           logging.GetLogger("worker/common"),
 	}
 
 	if enabled {
@@ -327,7 +334,8 @@ func New(
 	consensus consensus.Backend,
 	p2p *p2p.P2P,
 	ias *ias.IAS,
-	keyManager *keymanager.Client,
+	keyManager keymanagerApi.Backend,
+	keyManagerClient *keymanagerClient.Client,
 ) (*Worker, error) {
 	cfg, err := newConfig()
 	if err != nil {
@@ -345,5 +353,5 @@ func New(
 		return nil, err
 	}
 
-	return newWorker(dataDir, enabled, identity, storage, roothash, registry, scheduler, consensus, grpc, p2p, ias, keyManager, *cfg)
+	return newWorker(dataDir, enabled, identity, storage, roothash, registry, scheduler, consensus, grpc, p2p, ias, keyManager, keyManagerClient, *cfg)
 }

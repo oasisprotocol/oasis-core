@@ -197,6 +197,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.svcTmnt,
 		n.P2P,
 		n.IAS,
+		n.KeyManager,
 		n.KeyManagerClient,
 	)
 	if err != nil {

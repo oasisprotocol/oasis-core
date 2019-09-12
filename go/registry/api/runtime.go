@@ -242,7 +242,7 @@ func (v *VersionInfo) toProto() *pbRegistry.VersionInfo {
 
 // VersionInfoIntelSGX is the SGX TEE version information.
 type VersionInfoIntelSGX struct {
-	// Enclaves is the allowed MRSIGNER/MRENCLAVE pairs.
+	// Enclaves is the allowed MRENCLAVE/MRSIGNER pairs.
 	Enclaves []sgx.EnclaveIdentity `json:"enclaves"`
 }
 

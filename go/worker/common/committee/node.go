@@ -11,11 +11,14 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
+	keymanagerApi "github.com/oasislabs/ekiden/go/keymanager/api"
+	keymanagerClient "github.com/oasislabs/ekiden/go/keymanager/client"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 )
 
@@ -77,12 +80,15 @@ type Node struct {
 	RuntimeID signature.PublicKey
 	Runtime   *registry.Runtime
 
-	Identity  *identity.Identity
-	Storage   storage.Backend
-	Roothash  roothash.Backend
-	Registry  registry.Backend
-	Scheduler scheduler.Backend
-	Consensus consensus.Backend
+	Identity         *identity.Identity
+	KeyManager       keymanagerApi.Backend
+	KeyManagerClient *keymanagerClient.Client
+	LocalStorage     *host.LocalStorage
+	Storage          storage.Backend
+	Roothash         roothash.Backend
+	Registry         registry.Backend
+	Scheduler        scheduler.Backend
+	Consensus        consensus.Backend
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -339,6 +345,9 @@ func (n *Node) worker() {
 func NewNode(
 	runtimeID signature.PublicKey,
 	identity *identity.Identity,
+	keymanager keymanagerApi.Backend,
+	keymanagerClient *keymanagerClient.Client,
+	localStorage *host.LocalStorage,
 	storage storage.Backend,
 	roothash roothash.Backend,
 	registry registry.Backend,
@@ -353,19 +362,22 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		RuntimeID: runtimeID,
-		Identity:  identity,
-		Storage:   storage,
-		Roothash:  roothash,
-		Registry:  registry,
-		Scheduler: scheduler,
-		Consensus: consensus,
-		ctx:       ctx,
-		cancelCtx: cancel,
-		stopCh:    make(chan struct{}),
-		quitCh:    make(chan struct{}),
-		initCh:    make(chan struct{}),
-		logger:    logging.GetLogger("worker/common/committee").With("runtime_id", runtimeID),
+		RuntimeID:        runtimeID,
+		Identity:         identity,
+		KeyManager:       keymanager,
+		KeyManagerClient: keymanagerClient,
+		LocalStorage:     localStorage,
+		Storage:          storage,
+		Roothash:         roothash,
+		Registry:         registry,
+		Scheduler:        scheduler,
+		Consensus:        consensus,
+		ctx:              ctx,
+		cancelCtx:        cancel,
+		stopCh:           make(chan struct{}),
+		quitCh:           make(chan struct{}),
+		initCh:           make(chan struct{}),
+		logger:           logging.GetLogger("worker/common/committee").With("runtime_id", runtimeID),
 	}
 
 	group, err := NewGroup(identity, runtimeID, n, registry, scheduler, p2p)

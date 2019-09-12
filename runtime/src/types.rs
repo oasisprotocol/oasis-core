@@ -55,7 +55,7 @@ pub enum Body {
         message: String,
     },
 
-    // Worker interface.
+    // Runtime worker interface.
     WorkerInfoRequest {},
     WorkerInfoResponse {
         protocol_version: u64,
@@ -118,6 +118,11 @@ pub enum Body {
     },
 
     // Host interface.
+    HostKeyManagerPolicyRequest {},
+    HostKeyManagerPolicyResponse {
+        #[serde(with = "serde_bytes")]
+        signed_policy_raw: Vec<u8>,
+    },
     HostRPCCallRequest {
         endpoint: String,
         #[serde(with = "serde_bytes")]

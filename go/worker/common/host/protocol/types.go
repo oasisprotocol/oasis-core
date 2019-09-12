@@ -75,14 +75,16 @@ type Body struct {
 	WorkerAbortResponse                  *Empty                                `json:",omitempty"`
 
 	// Host interface.
-	HostRPCCallRequest          *HostRPCCallRequest          `json:",omitempty"`
-	HostRPCCallResponse         *HostRPCCallResponse         `json:",omitempty"`
-	HostStorageSyncRequest      *HostStorageSyncRequest      `json:",omitempty"`
-	HostStorageSyncResponse     *HostStorageSyncResponse     `json:",omitempty"`
-	HostLocalStorageGetRequest  *HostLocalStorageGetRequest  `json:",omitempty"`
-	HostLocalStorageGetResponse *HostLocalStorageGetResponse `json:",omitempty"`
-	HostLocalStorageSetRequest  *HostLocalStorageSetRequest  `json:",omitempty"`
-	HostLocalStorageSetResponse *Empty                       `json:",omitempty"`
+	HostKeyManagerPolicyRequest  *HostKeyManagerPolicyRequest  `json:",omitempty"`
+	HostKeyManagerPolicyResponse *HostKeyManagerPolicyResponse `json:",omitempty"`
+	HostRPCCallRequest           *HostRPCCallRequest           `json:",omitempty"`
+	HostRPCCallResponse          *HostRPCCallResponse          `json:",omitempty"`
+	HostStorageSyncRequest       *HostStorageSyncRequest       `json:",omitempty"`
+	HostStorageSyncResponse      *HostStorageSyncResponse      `json:",omitempty"`
+	HostLocalStorageGetRequest   *HostLocalStorageGetRequest   `json:",omitempty"`
+	HostLocalStorageGetResponse  *HostLocalStorageGetResponse  `json:",omitempty"`
+	HostLocalStorageSetRequest   *HostLocalStorageSetRequest   `json:",omitempty"`
+	HostLocalStorageSetResponse  *Empty                        `json:",omitempty"`
 }
 
 // Empty is an empty message body.
@@ -205,6 +207,15 @@ const (
 	// EndpointKeyManager is a key manager client endpoint.
 	EndpointKeyManager string = "key-manager"
 )
+
+// HostKeyManagerPolicyRequest is a host key manager policy request message body.
+type HostKeyManagerPolicyRequest struct {
+}
+
+// HostKeyManagerPolicyResponse is a host key manager policy response message body.
+type HostKeyManagerPolicyResponse struct {
+	SignedPolicyRaw []byte `json:"signed_policy_raw"`
+}
 
 // HostRPCCallRequest is a host RPC call request message body.
 type HostRPCCallRequest struct {

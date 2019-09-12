@@ -67,8 +67,8 @@ type Report struct {
 	CPUSVN     [16]byte
 	MiscSelect uint32
 	Attributes [16]byte
-	MRENCLAVE  sgx.Mrenclave
-	MRSIGNER   sgx.Mrsigner
+	MRENCLAVE  sgx.MrEnclave
+	MRSIGNER   sgx.MrSigner
 	ISVProdID  uint16
 	ISVSVN     uint16
 	ReportData [64]byte
@@ -78,8 +78,8 @@ func (r *Report) decode(data []byte) error {
 	copy(r.CPUSVN[:], data[0:])
 	r.MiscSelect = binary.LittleEndian.Uint32(data[16:])
 	copy(r.Attributes[:], data[48:])
-	_ = r.MRENCLAVE.UnmarshalBinary(data[64 : 64+sgx.MrenclaveSize])
-	_ = r.MRSIGNER.UnmarshalBinary(data[128 : 128+sgx.MrsignerSize])
+	_ = r.MRENCLAVE.UnmarshalBinary(data[64 : 64+sgx.MrEnclaveSize])
+	_ = r.MRSIGNER.UnmarshalBinary(data[128 : 128+sgx.MrSignerSize])
 	r.ISVProdID = binary.LittleEndian.Uint16(data[256:])
 	r.ISVSVN = binary.LittleEndian.Uint16(data[258:])
 	copy(r.ReportData[:], data[OffsetReportReportData:])

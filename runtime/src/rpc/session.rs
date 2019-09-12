@@ -221,7 +221,7 @@ impl Session {
         let rak_binding: RAKBinding = cbor::from_slice(rak_binding)?;
         let authenticated_avr = avr::verify(&rak_binding.avr)?;
 
-        // Verify MRSIGNER/MRENCLAVE.
+        // Verify MRENCLAVE/MRSIGNER.
         if let Some(ref remote_enclaves) = self.remote_enclaves {
             if !remote_enclaves.contains(&authenticated_avr.identity) {
                 return Err(SessionError::MismatchedEnclaveIdentity.into());

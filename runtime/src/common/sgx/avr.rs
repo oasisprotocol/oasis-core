@@ -449,7 +449,7 @@ pub(crate) fn timestamp_is_fresh(now: i64, timestamp: i64) -> bool {
 }
 
 /// Enclave identity.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EnclaveIdentity {
     pub mr_enclave: MrEnclave,
     pub mr_signer: MrSigner,
