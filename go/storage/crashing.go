@@ -29,23 +29,23 @@ type crashingWrapper struct {
 	api.Backend
 }
 
-func (w *crashingWrapper) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth api.Depth) (*api.Subtree, error) {
+func (w *crashingWrapper) SyncGet(ctx context.Context, request *api.GetRequest) (*api.ProofResponse, error) {
 	crash.Here(crashPointReadBefore)
-	res, err := w.Backend.GetSubtree(ctx, root, id, maxDepth)
+	res, err := w.Backend.SyncGet(ctx, request)
 	crash.Here(crashPointReadAfter)
 	return res, err
 }
 
-func (w *crashingWrapper) GetPath(ctx context.Context, root api.Root, id api.NodeID, key api.Key) (*api.Subtree, error) {
+func (w *crashingWrapper) SyncGetPrefixes(ctx context.Context, request *api.GetPrefixesRequest) (*api.ProofResponse, error) {
 	crash.Here(crashPointReadBefore)
-	res, err := w.Backend.GetPath(ctx, root, id, key)
+	res, err := w.Backend.SyncGetPrefixes(ctx, request)
 	crash.Here(crashPointReadAfter)
 	return res, err
 }
 
-func (w *crashingWrapper) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {
+func (w *crashingWrapper) SyncIterate(ctx context.Context, request *api.IterateRequest) (*api.ProofResponse, error) {
 	crash.Here(crashPointReadBefore)
-	res, err := w.Backend.GetNode(ctx, root, id)
+	res, err := w.Backend.SyncIterate(ctx, request)
 	crash.Here(crashPointReadAfter)
 	return res, err
 }

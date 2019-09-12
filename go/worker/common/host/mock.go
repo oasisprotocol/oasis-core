@@ -66,14 +66,11 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 			}
 			emptyRoot.Hash.Empty()
 
-			tree, err := transaction.NewTree(ctx, nil, emptyRoot)
-			if err != nil {
-				ch <- &protocol.Body{Error: &protocol.Error{Message: "(mock) failed to create I/O tree"}}
-				return
-			}
+			tree := transaction.NewTree(nil, emptyRoot)
 			defer tree.Close()
+
 			for i := 0; i < len(rq.Inputs); i++ {
-				err = tree.AddTransaction(ctx, transaction.Transaction{
+				err := tree.AddTransaction(ctx, transaction.Transaction{
 					Input:  rq.Inputs[0],
 					Output: rq.Inputs[0],
 				}, tags)

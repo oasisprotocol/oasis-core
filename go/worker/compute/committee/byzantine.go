@@ -27,20 +27,14 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(
 	batch.IOWriteLog = append(batch.IOWriteLog, writelog.LogEntry{Key: []byte("__boom__"), Value: []byte("poof")})
 
 	// Compute updated I/O root.
-	tree, err := urkel.NewWithRoot(ctx, n.commonNode.Storage, nil, node.Root{
+	tree := urkel.NewWithRoot(n.commonNode.Storage, nil, node.Root{
 		Namespace: blk.Header.Namespace,
 		Round:     blk.Header.Round + 1,
 		Hash:      ioRoot,
 	})
-	if err != nil {
-		n.logger.Error("failed to inject discrepancy",
-			"err", err,
-		)
-		return
-	}
 	defer tree.Close()
 
-	err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(batch.IOWriteLog))
+	err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(batch.IOWriteLog))
 	if err != nil {
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,

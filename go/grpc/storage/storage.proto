@@ -18,16 +18,16 @@ message GetLastSyncedRoundResponse {
 }
 
 service Storage {
-    // MKVS
     rpc Apply(ApplyRequest) returns (ApplyResponse) {}
     rpc ApplyBatch(ApplyBatchRequest) returns (ApplyBatchResponse) {}
     rpc Merge(MergeRequest) returns (MergeResponse) {}
     rpc MergeBatch(MergeBatchRequest) returns (MergeBatchResponse) {}
-    rpc GetSubtree(GetSubtreeRequest) returns (GetSubtreeResponse) {}
-    rpc GetPath(GetPathRequest) returns (GetPathResponse) {}
-    rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {}
     rpc GetDiff(GetDiffRequest) returns (stream WriteLogResponse) {}
     rpc GetCheckpoint(GetCheckpointRequest) returns (stream WriteLogResponse) {}
+    // ReadSyncer
+    rpc SyncGet(ReadSyncerRequest) returns (ReadSyncerResponse) {}
+    rpc SyncGetPrefixes(ReadSyncerRequest) returns (ReadSyncerResponse) {}
+    rpc SyncIterate(ReadSyncerRequest) returns (ReadSyncerResponse) {}
 }
 
 message LogEntry {
@@ -95,41 +95,6 @@ message MergeBatchResponse {
     bytes receipts = 1;
 }
 
-message NodeID {
-    bytes path = 1;
-    // bit_depth is actually Depth (uint16), but protobufs don't have that :/
-    uint32 bit_depth = 2;
-}
-
-message GetSubtreeRequest {
-    bytes root = 1;
-    NodeID id = 2;
-    uint32 max_depth = 3;  // Depth
-}
-
-message GetSubtreeResponse {
-    bytes subtree = 1;  // serialized to binary
-}
-
-message GetPathRequest {
-    bytes root = 1;
-    NodeID id = 2;
-    bytes key = 3;
-}
-
-message GetPathResponse {
-    bytes subtree = 1;  // serialized to binary
-}
-
-message GetNodeRequest {
-    bytes root = 1;
-    NodeID id = 2;
-}
-
-message GetNodeResponse {
-    bytes node = 1;  // serialized to binary
-}
-
 // SyncOptions are shared options for GetDiff and GetCheckpoint services.
 message SyncOptions {
     bytes offset_key = 1;
@@ -151,4 +116,16 @@ message GetDiffRequest {
 message GetCheckpointRequest {
     bytes root = 1;
     SyncOptions opts = 2;
+}
+
+message ReadSyncerRequest {
+    // TODO: CBOR-serialized request. Use proper types when we start using
+    //       CBOR over gRPC directly.
+    bytes request = 1;
+}
+
+message ReadSyncerResponse {
+    // TODO: CBOR-serialized response. Use proper types when we start using
+    //       CBOR over gRPC directly.
+    bytes response = 1;
 }

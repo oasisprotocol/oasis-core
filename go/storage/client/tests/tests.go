@@ -58,10 +58,9 @@ func ClientWorkerTests(
 	err = client.(api.ClientBackend).WatchRuntime(rt.Runtime.ID)
 	require.NoError(err, "NewStorageClient")
 
-	// Create mock root hash and id hash for GetValue().
+	// Create mock root hash.
 	var rootHash hash.Hash
 	rootHash.FromBytes([]byte("non-existing"))
-	id := api.Key("key")
 
 	root := api.Root{
 		Namespace: runtimeIDToNamespace(t, rt.Runtime.ID),
@@ -69,8 +68,8 @@ func ClientWorkerTests(
 		Hash:      rootHash,
 	}
 
-	// Storage should not yet be available
-	r, err := client.GetPath(ctx, root, api.NodeID{}, id)
+	// Storage should not yet be available.
+	r, err := client.SyncGet(ctx, &api.GetRequest{})
 	require.EqualError(err, storageClient.ErrStorageNotAvailable.Error(), "storage client get before initialization")
 	require.Nil(r, "result should be nil")
 
@@ -115,7 +114,12 @@ recvLoop:
 
 	// Try getting path.
 	// TimeOut is expected, as test nodes do not actually start storage worker.
-	r, err = client.GetPath(ctx, root, api.NodeID{}, id)
+	r, err = client.SyncGet(ctx, &api.GetRequest{
+		Tree: api.TreeID{
+			Root:     root,
+			Position: root.Hash,
+		},
+	})
 	require.Error(err, "storage client should error")
 	require.Equal(codes.Unavailable, status.Code(err), "storage client should timeout")
 	require.Nil(r, "result should be nil")

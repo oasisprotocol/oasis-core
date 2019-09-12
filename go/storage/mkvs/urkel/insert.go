@@ -7,14 +7,58 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
+// Insert inserts a key/value pair into the tree.
+func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
+	if t.cache.isClosed() {
+		return ErrClosed
+	}
+
+	var result insertResult
+	result, err := t.doInsert(ctx, t.cache.pendingRoot, 0, key, value, 0)
+	if err != nil {
+		return err
+	}
+
+	// Update the pending write log.
+	entry := t.pendingWriteLog[node.ToMapKey(key)]
+	if entry == nil {
+		t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{
+			key:          key,
+			value:        value,
+			existed:      result.existed,
+			insertedLeaf: result.insertedLeaf,
+		}
+	} else {
+		entry.value = value
+	}
+
+	t.cache.setPendingRoot(result.newRoot)
+	return nil
+}
+
 type insertResult struct {
 	newRoot      *node.Pointer
 	insertedLeaf *node.Pointer
 	existed      bool
 }
 
-func (t *Tree) doInsert(ctx context.Context, ptr *node.Pointer, bitDepth node.Depth, key node.Key, val []byte, depth node.Depth) (insertResult, error) {
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth}, ptr, nil)
+func (t *Tree) doInsert(
+	ctx context.Context,
+	ptr *node.Pointer,
+	bitDepth node.Depth,
+	key node.Key,
+	val []byte,
+	depth node.Depth,
+) (insertResult, error) {
+	if ctx.Err() != nil {
+		return insertResult{}, ctx.Err()
+	}
+
+	// Dereference the node, possibly making a remote request.
+	nd, err := t.cache.derefNodePtr(ctx, ptr, t.newFetcherSyncGet(key, false))
 	if err != nil {
 		return insertResult{}, err
 	}

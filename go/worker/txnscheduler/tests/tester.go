@@ -109,12 +109,11 @@ blockLoop:
 			require.EqualValues(t, block.Normal, blk.Header.HeaderType)
 
 			ctx := context.Background()
-			tree, err := transaction.NewTree(ctx, st, storage.Root{
+			tree := transaction.NewTree(st, storage.Root{
 				Namespace: blk.Header.Namespace,
 				Round:     blk.Header.Round,
 				Hash:      blk.Header.IORoot,
 			})
-			require.NoError(t, err, "NewTree")
 			defer tree.Close()
 
 			txs, err := tree.GetTransactions(ctx)

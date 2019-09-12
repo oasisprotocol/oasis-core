@@ -23,19 +23,23 @@ func TestSerializationLeafNode(t *testing.T) {
 		},
 	}
 
-	rawLeafNode, err := leafNode.MarshalBinary()
+	rawLeafNodeFull, err := leafNode.MarshalBinary()
 	require.NoError(t, err, "MarshalBinary")
+	rawLeafNodeCompact, err := leafNode.CompactMarshalBinary()
+	require.NoError(t, err, "CompactMarshalBinary")
 
-	var decodedLeafNode LeafNode
-	err = decodedLeafNode.UnmarshalBinary(rawLeafNode)
-	require.NoError(t, err, "UnmarshalBinary")
+	for _, rawLeafNode := range [][]byte{rawLeafNodeFull, rawLeafNodeCompact} {
+		var decodedLeafNode LeafNode
+		err = decodedLeafNode.UnmarshalBinary(rawLeafNode)
+		require.NoError(t, err, "UnmarshalBinary")
 
-	require.True(t, decodedLeafNode.Clean)
-	require.Equal(t, leafNode.Round, decodedLeafNode.Round)
-	require.Equal(t, leafNode.Key, decodedLeafNode.Key)
-	require.True(t, decodedLeafNode.Value.Clean)
-	require.Equal(t, leafNode.Value.Value, decodedLeafNode.Value.Value)
-	require.NotNil(t, decodedLeafNode.Value.Value)
+		require.True(t, decodedLeafNode.Clean)
+		require.Equal(t, leafNode.Round, decodedLeafNode.Round)
+		require.Equal(t, leafNode.Key, decodedLeafNode.Key)
+		require.True(t, decodedLeafNode.Value.Clean)
+		require.Equal(t, leafNode.Value.Value, decodedLeafNode.Value.Value)
+		require.NotNil(t, decodedLeafNode.Value.Value)
+	}
 }
 
 func TestSerializationInternalNode(t *testing.T) {
@@ -67,26 +71,34 @@ func TestSerializationInternalNode(t *testing.T) {
 		Right:          &Pointer{Clean: true, Hash: rightHash},
 	}
 
-	rawIntNode, err := intNode.MarshalBinary()
+	rawIntNodeFull, err := intNode.MarshalBinary()
 	require.NoError(t, err, "MarshalBinary")
+	rawIntNodeCompact, err := intNode.CompactMarshalBinary()
+	require.NoError(t, err, "CompactMarshalBinary")
 
-	var decodedIntNode InternalNode
-	err = decodedIntNode.UnmarshalBinary(rawIntNode)
-	require.NoError(t, err, "UnmarshalBinary")
+	for idx, rawIntNode := range [][]byte{rawIntNodeFull, rawIntNodeCompact} {
+		var decodedIntNode InternalNode
+		err = decodedIntNode.UnmarshalBinary(rawIntNode)
+		require.NoError(t, err, "UnmarshalBinary")
 
-	require.True(t, decodedIntNode.Clean)
-	require.Equal(t, intNode.Round, decodedIntNode.Round)
-	require.Equal(t, intNode.Label, decodedIntNode.Label)
-	require.Equal(t, intNode.LabelBitLength, decodedIntNode.LabelBitLength)
-	require.Equal(t, intNode.LeafNode.Hash, decodedIntNode.LeafNode.Hash)
-	require.Equal(t, intNode.Left.Hash, decodedIntNode.Left.Hash)
-	require.Equal(t, intNode.Right.Hash, decodedIntNode.Right.Hash)
-	require.True(t, decodedIntNode.LeafNode.Clean)
-	require.True(t, decodedIntNode.Left.Clean)
-	require.True(t, decodedIntNode.Right.Clean)
-	require.NotNil(t, decodedIntNode.LeafNode.Node)
-	require.Nil(t, decodedIntNode.Left.Node)
-	require.Nil(t, decodedIntNode.Right.Node)
+		require.True(t, decodedIntNode.Clean)
+		require.Equal(t, intNode.Round, decodedIntNode.Round)
+		require.Equal(t, intNode.Label, decodedIntNode.Label)
+		require.Equal(t, intNode.LabelBitLength, decodedIntNode.LabelBitLength)
+		require.Equal(t, intNode.LeafNode.Hash, decodedIntNode.LeafNode.Hash)
+		require.True(t, decodedIntNode.LeafNode.Clean)
+		require.NotNil(t, decodedIntNode.LeafNode.Node)
+
+		// Only check left/right for non-compact encoding.
+		if idx == 0 {
+			require.Equal(t, intNode.Left.Hash, decodedIntNode.Left.Hash)
+			require.Equal(t, intNode.Right.Hash, decodedIntNode.Right.Hash)
+			require.True(t, decodedIntNode.Left.Clean)
+			require.True(t, decodedIntNode.Right.Clean)
+			require.Nil(t, decodedIntNode.Left.Node)
+			require.Nil(t, decodedIntNode.Right.Node)
+		}
+	}
 }
 
 func TestHashLeafNode(t *testing.T) {

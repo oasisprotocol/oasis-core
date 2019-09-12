@@ -267,14 +267,7 @@ func (n *Node) queueBatchBlocking(
 		Round:     hdr.Round + 1,
 		Hash:      ioRootHash,
 	}
-	txs, err := transaction.NewTree(ctx, n.commonNode.Storage, ioRoot)
-	if err != nil {
-		n.logger.Error("failed to fetch inputs from storage",
-			"err", err,
-			"io_root", ioRoot,
-		)
-		return errStorageFailed
-	}
+	txs := transaction.NewTree(n.commonNode.Storage, ioRoot)
 	defer txs.Close()
 
 	batch, err := txs.GetInputBatch(ctx)

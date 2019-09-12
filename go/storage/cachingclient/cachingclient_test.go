@@ -76,8 +76,7 @@ func TestCachingClient(t *testing.T) {
 		Round:     1,
 		Hash:      expectedNewRoot,
 	}
-	tree, err := urkel.NewWithRoot(context.Background(), client, nil, r)
-	require.NoError(t, err, "NewWithRoot")
+	tree := urkel.NewWithRoot(client, nil, r)
 	for i, kv := range wl {
 		var v []byte
 		v, err = tree.Get(context.Background(), kv.Key)
@@ -97,8 +96,7 @@ func TestCachingClient(t *testing.T) {
 	require.NoError(t, err, "New - reopen")
 
 	// Check if the values are still fetchable.
-	tree, err = urkel.NewWithRoot(context.Background(), client, nil, r)
-	require.NoError(t, err, "NewWithRoot")
+	tree = urkel.NewWithRoot(client, nil, r)
 	for i, kv := range wl {
 		var v []byte
 		v, err = tree.Get(context.Background(), kv.Key)

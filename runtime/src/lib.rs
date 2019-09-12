@@ -39,6 +39,8 @@ extern crate percent_encoding;
 extern crate ring;
 extern crate rustc_hex;
 extern crate snow;
+#[cfg(test)]
+extern crate tempfile;
 extern crate tokio_current_thread;
 extern crate tokio_executor;
 extern crate webpki;

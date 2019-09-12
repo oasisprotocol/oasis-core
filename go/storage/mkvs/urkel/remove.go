@@ -7,8 +7,32 @@ import (
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
-// TODO: Optimize this so that we submit a GetPath query that fetches the required nodes.
-//       Currently removals require GetNode fetches.
+// Remove removes a key from the tree.
+func (t *Tree) Remove(ctx context.Context, key []byte) error {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
+	if t.cache.isClosed() {
+		return ErrClosed
+	}
+
+	var changed bool
+	newRoot, changed, err := t.doRemove(ctx, t.cache.pendingRoot, 0, key, 0)
+	if err != nil {
+		return err
+	}
+
+	// Update the pending write log.
+	entry := t.pendingWriteLog[node.ToMapKey(key)]
+	if entry == nil {
+		t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{key, nil, changed, nil}
+	} else {
+		entry.value = nil
+	}
+
+	t.cache.setPendingRoot(newRoot)
+	return nil
+}
 
 func (t *Tree) doRemove(
 	ctx context.Context,
@@ -17,7 +41,12 @@ func (t *Tree) doRemove(
 	key node.Key,
 	depth node.Depth,
 ) (*node.Pointer, bool, error) {
-	nd, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitDepth}, ptr, key)
+	if ctx.Err() != nil {
+		return nil, false, ctx.Err()
+	}
+
+	// Dereference the node, possibly making a remote request.
+	nd, err := t.cache.derefNodePtr(ctx, ptr, t.newFetcherSyncGet(key, true))
 	if err != nil {
 		return nil, false, err
 	}
@@ -44,26 +73,16 @@ func (t *Tree) doRemove(
 		}
 
 		// Fetch and check the remaining children.
-		remainingLeaf, err := t.cache.derefNodePtr(ctx, node.ID{Path: key, BitDepth: bitLength}, n.LeafNode, nil)
+		var remainingLeaf node.Node
+		if n.LeafNode != nil {
+			// NOTE: The leaf node is always included with the internal node.
+			remainingLeaf = n.LeafNode.Node
+		}
+		remainingLeft, err := t.cache.derefNodePtr(ctx, n.Left, t.newFetcherSyncGet(key, true))
 		if err != nil {
 			return nil, false, err
 		}
-		keyPrefix, _ := key.Split(bitLength, key.BitLength())
-		remainingLeft, err := t.cache.derefNodePtr(
-			ctx,
-			node.ID{Path: keyPrefix.AppendBit(bitLength, false), BitDepth: bitLength},
-			n.Left,
-			nil,
-		)
-		if err != nil {
-			return nil, false, err
-		}
-		remainingRight, err := t.cache.derefNodePtr(
-			ctx,
-			node.ID{Path: keyPrefix.AppendBit(bitLength, true), BitDepth: bitLength},
-			n.Right,
-			nil,
-		)
+		remainingRight, err := t.cache.derefNodePtr(ctx, n.Right, t.newFetcherSyncGet(key, true))
 		if err != nil {
 			return nil, false, err
 		}

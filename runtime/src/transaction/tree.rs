@@ -9,10 +9,7 @@ use super::tags::Tags;
 use crate::{
     common::{cbor, crypto::hash::Hash, key_format::KeyFormat},
     storage::mkvs::{
-        urkel::{
-            sync::{ReadSync, Root},
-            UrkelTree,
-        },
+        urkel::{sync::ReadSync, Root, UrkelTree},
         WriteLog,
     },
 };
@@ -158,11 +155,11 @@ pub struct Tree {
 
 impl Tree {
     /// Create a new transaction artifacts tree.
-    pub fn new(ctx: Context, read_syncer: Box<dyn ReadSync>, io_root: Root) -> Fallible<Self> {
-        Ok(Self {
+    pub fn new(read_syncer: Box<dyn ReadSync>, io_root: Root) -> Self {
+        Self {
             io_root,
-            tree: UrkelTree::make().with_root(io_root).new(ctx, read_syncer)?,
-        })
+            tree: UrkelTree::make().with_root(io_root).new(read_syncer),
+        }
     }
 
     /// Add an input transaction artifact.
@@ -241,14 +238,12 @@ mod test {
     #[test]
     fn test_transaction() {
         let mut tree = Tree::new(
-            Context::background(),
             Box::new(NoopReadSyncer {}),
             Root {
                 hash: Hash::empty_hash(),
                 ..Default::default()
             },
-        )
-        .unwrap();
+        );
 
         let input = b"this goes in".to_vec();
         let tx_hash = Hash::digest_bytes(&input);

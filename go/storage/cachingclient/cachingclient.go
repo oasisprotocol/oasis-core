@@ -125,34 +125,34 @@ func (b *cachingClientBackend) MergeBatch(
 	return b.remote.MergeBatch(ctx, ns, round, ops)
 }
 
-func (b *cachingClientBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth api.Depth) (*api.Subtree, error) {
-	tree, err := b.rootCache.GetTree(ctx, root)
+func (b *cachingClientBackend) SyncGet(ctx context.Context, request *api.GetRequest) (*api.ProofResponse, error) {
+	tree, err := b.rootCache.GetTree(ctx, request.Tree.Root)
 	if err != nil {
 		return nil, err
 	}
 	defer tree.Close()
 
-	return tree.GetSubtree(ctx, root, id, maxDepth)
+	return tree.SyncGet(ctx, request)
 }
 
-func (b *cachingClientBackend) GetPath(ctx context.Context, root api.Root, id api.NodeID, key api.Key) (*api.Subtree, error) {
-	tree, err := b.rootCache.GetTree(ctx, root)
+func (b *cachingClientBackend) SyncGetPrefixes(ctx context.Context, request *api.GetPrefixesRequest) (*api.ProofResponse, error) {
+	tree, err := b.rootCache.GetTree(ctx, request.Tree.Root)
 	if err != nil {
 		return nil, err
 	}
 	defer tree.Close()
 
-	return tree.GetPath(ctx, root, id, key)
+	return tree.SyncGetPrefixes(ctx, request)
 }
 
-func (b *cachingClientBackend) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {
-	tree, err := b.rootCache.GetTree(ctx, root)
+func (b *cachingClientBackend) SyncIterate(ctx context.Context, request *api.IterateRequest) (*api.ProofResponse, error) {
+	tree, err := b.rootCache.GetTree(ctx, request.Tree.Root)
 	if err != nil {
 		return nil, err
 	}
 	defer tree.Close()
 
-	return tree.GetNode(ctx, root, id)
+	return tree.SyncIterate(ctx, request)
 }
 
 func (b *cachingClientBackend) GetDiff(ctx context.Context, startRoot api.Root, endRoot api.Root) (api.WriteLogIterator, error) {

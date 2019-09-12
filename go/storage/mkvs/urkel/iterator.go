@@ -4,10 +4,71 @@ import (
 	"context"
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 )
 
 var errClosed = errors.New("iterator: use of closed iterator")
+
+// SyncIterate seeks to a given key and then fetches the specified
+// number of following items based on key iteration order.
+func (t *Tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) (*syncer.ProofResponse, error) {
+	t.cache.Lock()
+	defer t.cache.Unlock()
+
+	if t.cache.isClosed() {
+		return nil, ErrClosed
+	}
+	if !request.Tree.Root.Equal(&t.cache.syncRoot) {
+		return nil, syncer.ErrInvalidRoot
+	}
+	if !t.cache.pendingRoot.IsClean() {
+		return nil, syncer.ErrDirtyRoot
+	}
+
+	// Create an iterator which generates proofs.
+	it := t.NewIterator(ctx, WithProof(request.Tree.Root.Hash))
+	defer it.Close()
+
+	it.Seek(request.Key)
+	if it.Err() != nil {
+		return nil, it.Err()
+	}
+	for i := 0; it.Valid() && i < int(request.Prefetch); i++ {
+		it.Next()
+	}
+	if it.Err() != nil {
+		return nil, it.Err()
+	}
+
+	// Retrieve the proof for the items iterated over.
+	proof, err := it.GetProof()
+	if err != nil {
+		return nil, err
+	}
+
+	return &syncer.ProofResponse{
+		Proof: *proof,
+	}, nil
+}
+
+func (t *Tree) newFetcherSyncIterate(key node.Key, prefetch uint16) readSyncFetcher {
+	return func(ctx context.Context, ptr *node.Pointer, rs syncer.ReadSyncer) (*syncer.Proof, error) {
+		rsp, err := rs.SyncIterate(ctx, &syncer.IterateRequest{
+			Tree: syncer.TreeID{
+				Root:     t.cache.syncRoot,
+				Position: ptr.Hash,
+			},
+			Key:      key,
+			Prefetch: prefetch,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &rsp.Proof, nil
+	}
+}
 
 // Iterator is an Urkel tree iterator.
 //
@@ -28,6 +89,11 @@ type Iterator interface {
 	Key() node.Key
 	// Value returns the value under the iterator.
 	Value() []byte
+	// GetProof builds a proof for all items iterated over by the iterator.
+	//
+	// You must initialize the iterator with a WithProof option, otherwise
+	// calling this method will panic.
+	GetProof() (*syncer.Proof, error)
 	// Close releases resources associated with the iterator.
 	//
 	// Not calling this method leads to memory leaks.
@@ -51,20 +117,46 @@ type pathAtom struct {
 }
 
 type treeIterator struct {
-	ctx   context.Context
-	tree  *Tree
-	err   error
-	pos   []pathAtom
-	key   node.Key
-	value []byte
+	ctx      context.Context
+	tree     *Tree
+	prefetch uint16
+	err      error
+	pos      []pathAtom
+	key      node.Key
+	value    []byte
+
+	proofBuilder *syncer.ProofBuilder
+}
+
+// IteratorOption is a configuration option for a tree iterator.
+type IteratorOption func(it Iterator)
+
+// IteratorPrefetch sets the number of next elements to prefetch.
+//
+// If no prefetch is specified, no prefetching will be done.
+func IteratorPrefetch(prefetch uint16) IteratorOption {
+	return func(it Iterator) {
+		it.(*treeIterator).prefetch = prefetch
+	}
+}
+
+func WithProof(root hash.Hash) IteratorOption {
+	return func(it Iterator) {
+		it.(*treeIterator).proofBuilder = syncer.NewProofBuilder(root)
+	}
 }
 
 // NewIterator creates a new iterator over the given tree.
-func NewIterator(ctx context.Context, tree *Tree) Iterator {
-	return &treeIterator{
+func NewIterator(ctx context.Context, tree *Tree, options ...IteratorOption) Iterator {
+	it := &treeIterator{
 		ctx:  ctx,
 		tree: tree,
 	}
+
+	for _, v := range options {
+		v(it)
+	}
+	return it
 }
 
 func (it *treeIterator) Valid() bool {
@@ -138,10 +230,18 @@ func (it *treeIterator) Next() {
 }
 
 func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node.Key, key node.Key, state visitState) error {
-	// TODO: Hint the remote end that we are iterating (ekiden#1983).
-	nd, err := it.tree.cache.derefNodePtr(it.ctx, node.ID{Path: path, BitDepth: bitDepth}, ptr, key)
+	// Dereference the node, possibly making a remote request.
+	nd, err := it.tree.cache.derefNodePtr(it.ctx, ptr, it.tree.newFetcherSyncIterate(key, it.prefetch))
 	if err != nil {
 		return err
+	}
+
+	// Include nodes in proof if we have a proof builder.
+	if pb := it.proofBuilder; pb != nil && ptr != nil {
+		proofRoot := pb.GetRoot()
+		if pb.HasRoot() || proofRoot.Equal(&ptr.Hash) {
+			pb.Include(nd)
+		}
 	}
 
 	switch n := nd.(type) {
@@ -227,6 +327,13 @@ func (it *treeIterator) Key() node.Key {
 
 func (it *treeIterator) Value() []byte {
 	return it.value
+}
+
+func (it *treeIterator) GetProof() (*syncer.Proof, error) {
+	if it.proofBuilder == nil {
+		panic("iterator: called GetProof on an iterator without WithProof option")
+	}
+	return it.proofBuilder.Build(it.ctx)
 }
 
 func (it *treeIterator) Close() {

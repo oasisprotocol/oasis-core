@@ -247,8 +247,8 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 	ioRoot.Hash.Empty()
 
 	ctx := context.Background()
-	tree, err := transaction.NewTree(ctx, nil, ioRoot)
-	require.NoError(err, "tree.NewTree")
+	tree := transaction.NewTree(nil, ioRoot)
+	defer tree.Close()
 	err = tree.AddTransaction(ctx, transaction.Transaction{Input: []byte("testInput"), Output: []byte("testOutput")}, nil)
 	require.NoError(err, "tree.AddTransaction")
 	ioWriteLog, ioRootHash, err := tree.Commit(ctx)

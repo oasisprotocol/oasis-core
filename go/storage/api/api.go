@@ -174,10 +174,6 @@ func SignReceipt(signer signature.Signer, ns common.Namespace, round uint64, roo
 // Root is a storage root.
 type Root = urkelNode.Root
 
-// NodeID is a root-relative node identifier which uniquely identifies
-// a node under a given root.
-type NodeID = urkelNode.ID
-
 // Key is a node's key spelled out from the root to the node.
 type Key = urkelNode.Key
 
@@ -197,22 +193,23 @@ type InternalNode = urkelNode.InternalNode
 // LeafNode is a leaf node containing a key/value pair.
 type LeafNode = urkelNode.LeafNode
 
-// SubtreeIndex is a subtree index.
-type SubtreeIndex = syncer.SubtreeIndex
+// TreeID identifies a specific tree and a position within that tree.
+type TreeID = syncer.TreeID
 
-// InvalidSubtreeIndex is an invalid subtree index.
-const InvalidSubtreeIndex = syncer.InvalidSubtreeIndex
+// GetRequest is a request for the SyncGet operation.
+type GetRequest = syncer.GetRequest
 
-// SubtreePointer is a pointer into the compressed representation of a
-// subtree.
-type SubtreePointer = syncer.SubtreePointer
+// GetPrefixesRequest is a request for the SyncGetPrefixes operation.
+type GetPrefixesRequest = syncer.GetPrefixesRequest
 
-// InternalNodeSummary is a compressed (index-only) representation of an
-// internal node.
-type InternalNodeSummary = syncer.InternalNodeSummary
+// IterateRequest is a request for the SyncIterate operation.
+type IterateRequest = syncer.IterateRequest
 
-// Subtree is a compressed representation of a subtree.
-type Subtree = syncer.Subtree
+// ProofResponse is a response for requests that produce proofs.
+type ProofResponse = syncer.ProofResponse
+
+// Proof is a Merkle proof for a subtree.
+type Proof = syncer.Proof
 
 // ApplyOp is an apply operation within a batch of apply operations.
 type ApplyOp struct {

@@ -3,10 +3,7 @@ use std::{any::Any, ptr::NonNull, sync::Arc};
 use failure::Fallible;
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::lru_cache::CacheItemBox, sync::*, tree::*},
-};
+use crate::storage::mkvs::urkel::{cache::lru_cache::CacheItemBox, sync::*, tree::*};
 
 /// Statistics about the contents of the cache.
 #[derive(Debug, Default)]
@@ -17,6 +14,33 @@ pub struct CacheStats {
     pub leaf_node_count: u64,
     /// Total size of values held by the cache.
     pub leaf_value_size: usize,
+}
+
+/// Used to fetch proofs from a remote tree via the ReadSyncer interface.
+pub trait ReadSyncFetcher {
+    /// Fetch proof.
+    fn fetch(
+        &self,
+        ctx: Context,
+        root: Root,
+        ptr: NodePtrRef,
+        rs: &mut Box<dyn ReadSync>,
+    ) -> Fallible<Proof>;
+}
+
+impl<F> ReadSyncFetcher for F
+where
+    F: Fn(Context, Root, NodePtrRef, &mut Box<dyn ReadSync>) -> Fallible<Proof>,
+{
+    fn fetch(
+        &self,
+        ctx: Context,
+        root: Root,
+        ptr: NodePtrRef,
+        rs: &mut Box<dyn ReadSync>,
+    ) -> Fallible<Proof> {
+        (*self)(ctx, root, ptr, rs)
+    }
 }
 
 /// Cache interface for the in-mmory tree cache.
@@ -36,8 +60,6 @@ pub trait Cache {
     /// Set the root of the tree after committing.
     fn set_sync_root(&mut self, root: Root);
 
-    /// Set the maximum depth for subtree prefetch.
-    fn set_prefetch_depth(&mut self, depth: Depth);
     /// Get the read syncer backing this cache.
     fn get_read_syncer(&self) -> &Box<dyn ReadSync>;
 
@@ -60,32 +82,22 @@ pub trait Cache {
     /// Remove a value from the cache.
     fn remove_value(&mut self, ptr: ValuePtrRef);
 
-    /// Returns the node spelled out by id.path of length id.bit_depth.
-    ///
-    /// Beside the node, this function also returns bit depth of the node's parent.
-    ///
-    /// id.Path.len() must always be at least id.bit_depth/8 bytes long.
-    ///
-    /// If there is an InternalNode and its LeafNode spelled out by the same id, then this function
-    /// returns an InternalNode. If id is empty, then this function returns the root.
-    ///
-    /// WARNING: If the requested node does not exist in the tree, this function
-    /// returns either nil or some other arbitrary node.
-    fn deref_node_id(
-        &mut self,
-        ctx: &Arc<Context>,
-        node_id: NodeID,
-    ) -> Fallible<(NodePtrRef, Depth)>;
     /// Dereference a node pointer into a concrete node object.
     ///
     /// Calling this method may invoke the underlying read syncer.
-    fn deref_node_ptr(
+    fn deref_node_ptr<F: ReadSyncFetcher>(
         &mut self,
         ctx: &Arc<Context>,
-        node_id: NodeID,
-        node_ptr: NodePtrRef,
-        key: Option<&Key>,
+        ptr: NodePtrRef,
+        fetcher: F,
     ) -> Fallible<Option<NodeRef>>;
+    /// Perform a remote sync with the configured remote syncer.
+    fn remote_sync<F: ReadSyncFetcher>(
+        &mut self,
+        ctx: &Arc<Context>,
+        ptr: NodePtrRef,
+        fetcher: F,
+    ) -> Fallible<()>;
     /// Dereference a value pointer into a concrete value.
     ///
     /// Calling this method may invoke the underlying read syncer.
@@ -105,27 +117,6 @@ pub trait Cache {
     // Mark a tree node as no longer being eligible for eviction
     // due to it becoming dirty.
     fn rollback_node(&mut self, ptr: NodePtrRef, kind: NodeKind);
-
-    /// Reconstruct a subtree of nodes and return a pointer to its root.
-    ///
-    /// Call this to resurrect a subtree summary as returned by a read syncer.
-    fn reconstruct_subtree(
-        &mut self,
-        ctx: &Arc<Context>,
-        root: Hash,
-        st: &Subtree,
-        depth: Depth,
-        max_depth: Depth,
-    ) -> Fallible<NodePtrRef>;
-
-    /// Prefetch a subtree from the read syncer.
-    fn prefetch(
-        &mut self,
-        ctx: &Arc<Context>,
-        subtree_root: Hash,
-        subtree_path: Key,
-        depth: Depth,
-    ) -> Fallible<NodePtrRef>;
 }
 
 /// Shorthand for the type that cacheable items must hold to aid caching.

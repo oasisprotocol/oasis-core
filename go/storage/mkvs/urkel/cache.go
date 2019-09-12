@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
@@ -17,6 +16,8 @@ import (
 // cache handles the in-memory tree cache.
 type cache struct {
 	sync.Mutex
+	syncer.ProofVerifier
+	syncer.SubtreeMerger
 
 	db db.NodeDB
 	rs syncer.ReadSyncer
@@ -39,14 +40,8 @@ type cache struct {
 	nodeCapacity uint64
 	// Maximum capacity of leaf values.
 	valueCapacity uint64
-	// Prefetch depth.
-	prefetchDepth node.Depth
 	// Persist all the nodes and values we obtain from the remote syncer?
 	persistEverythingFromSyncer bool
-	// Syncer remote GetNode timeout.
-	syncerGetNodeTimeout time.Duration
-	// Syncer remote subtree prefetch timeout.
-	syncerPrefetchTimeout time.Duration
 
 	lruNodes  *list.List
 	lruValues *list.List
@@ -62,8 +57,6 @@ func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) *cache {
 		lruNodes:                    list.New(),
 		lruValues:                   list.New(),
 		persistEverythingFromSyncer: false,
-		syncerGetNodeTimeout:        1 * time.Second,
-		syncerPrefetchTimeout:       5 * time.Second,
 		valueCapacity:               16 * 1024 * 1024,
 		nodeCapacity:                5000,
 	}
@@ -309,69 +302,24 @@ func (c *cache) evictNodes(targetCapacity uint64) {
 	}
 }
 
-// derefNodeID returns the node spelled out by id.Path of length id.BitDepth.
-//
-// Beside the node, this function also returns bit depth of the node's parent.
-//
-// len(id.Path) must always be at least id.BitDepth/8 bytes long.
-//
-// If there is an InternalNode and its LeafNode spelled out by the same id then
-// this function returns an InternalNode. If id is empty, then this function
-// returns the root.
-//
-// WARNING: If the requested node does not exist in the tree, this function
-// returns either nil or some other arbitrary node.
-func (c *cache) derefNodeID(ctx context.Context, id node.ID) (*node.Pointer, node.Depth, error) {
-	curPtr := c.pendingRoot
-	bd := node.Depth(0)
-
-	if id.IsRoot() {
-		return curPtr, 0, nil
-	}
-	// Add 1 for the discriminator bit.
-	id.BitDepth++
-
-Loop:
-	for bd < id.BitDepth {
-		// bd is the parent's BitDepth.
-		nd, err := c.derefNodePtr(ctx, node.ID{Path: id.Path, BitDepth: bd}, curPtr, nil)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		switch n := nd.(type) {
-		case *node.InternalNode:
-			if bd+n.LabelBitLength < id.BitDepth {
-				if id.Path.GetBit(bd + n.LabelBitLength) {
-					curPtr = n.Right
-				} else {
-					curPtr = n.Left
-				}
-				bd += n.LabelBitLength
-			} else {
-				// end of id.BitDepth reached
-				break Loop
-			}
-		case *node.LeafNode:
-			break Loop
-		default:
-			return nil, 0, fmt.Errorf("urkel: derefNodeID for id %v visited nil node %v", id, n)
-		}
-	}
-
-	// bd is BitDepth of curPtr's parent
-	return curPtr, bd, nil
-}
+// readSyncFetcher is a function that is used to fetch proofs from a remote
+// tree via the ReadSyncer interface.
+type readSyncFetcher func(context.Context, *node.Pointer, syncer.ReadSyncer) (*syncer.Proof, error)
 
 // derefNodePtr dereferences an internal node pointer.
 //
 // This may result in node database accesses or remote syncing if the node
 // is not available locally.
-func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer, key node.Key) (node.Node, error) {
+func (c *cache) derefNodePtr(
+	ctx context.Context,
+	ptr *node.Pointer,
+	fetcher readSyncFetcher,
+) (node.Node, error) {
 	if ptr == nil {
 		return nil, nil
 	}
 
+	// TODO: Simplify this eviction mess.
 	if ptr.Node != nil {
 		var refetch bool
 		switch n := ptr.Node.(type) {
@@ -401,11 +349,6 @@ func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer,
 		return nil, nil
 	}
 
-	// Make sure that the ID is that of the root in case we are dereferencing the root.
-	if ptr == c.pendingRoot {
-		id.Root()
-	}
-
 	// First, attempt to fetch from the local node database.
 	n, err := c.db.GetNode(c.syncRoot, ptr)
 	switch err {
@@ -414,49 +357,98 @@ func (c *cache) derefNodePtr(ctx context.Context, id node.ID, ptr *node.Pointer,
 		// Commit node to cache.
 		c.commitNode(ptr)
 	case db.ErrNodeNotFound:
-		// Node not found in local node database, try the syncer.
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.syncerGetNodeTimeout)
-		defer cancel()
+		// Node not found in local node database, try the syncer if available.
+		if c.rs == syncer.NopReadSyncer {
+			return nil, err
+		}
 
-		if key == nil {
-			// Target key is not known, we need to fetch the node.
-			if n, err = c.rs.GetNode(ctx, c.syncRoot, id); err != nil {
-				return nil, err
-			}
-
-			if err = n.Validate(ptr.Hash); err != nil {
-				return nil, err
-			}
-
-			ptr.Node = n
-			// Commit node to cache.
-			c.commitNode(ptr)
-		} else {
-			// If target key is known, we can try prefetching the whole path
-			// instead of one node at a time.
-			var st *syncer.Subtree
-			if st, err = c.rs.GetPath(ctx, c.syncRoot, id, key); err != nil {
-				return nil, err
-			}
-			// Build full node index.
-			st.BuildFullNodeIndex()
-
-			// reconstructSubtree commits nodes to cache so a separate commitNode
-			// is not needed.
-			var newPtr *node.Pointer
-			// TODO: Call reconstructSubtree with actual node depth of st! -Matevz
-			if newPtr, err = c.reconstructSubtree(ctx, ptr.Hash, st, 0, MaxPrefetchDepth); err != nil {
-				return nil, err
-			}
-
-			*ptr = *newPtr
+		if err = c.remoteSync(ctx, ptr, fetcher); err != nil {
+			return nil, err
 		}
 	default:
 		return nil, err
 	}
 
 	return ptr.Node, nil
+}
+
+// remoteSync performs a remote sync with the configured remote syncer.
+func (c *cache) remoteSync(ctx context.Context, ptr *node.Pointer, fetcher readSyncFetcher) error {
+	proof, err := fetcher(ctx, ptr, c.rs)
+	if err != nil {
+		return err
+	}
+
+	// The proof can be for one of two hashes: i) it is either for ptr.Hash in case
+	// all the nodes are only contained in the subtree below ptr, or ii) it is for
+	// the c.syncRoot.Hash in case it contains nodes outside the subtree.
+	var dstPtr *node.Pointer
+	var expectedRoot hash.Hash
+	switch {
+	case proof.UntrustedRoot.Equal(&ptr.Hash):
+		dstPtr = ptr
+		expectedRoot = ptr.Hash
+	case proof.UntrustedRoot.Equal(&c.syncRoot.Hash):
+		dstPtr = c.pendingRoot
+		expectedRoot = c.syncRoot.Hash
+	default:
+		// Proof is for an unknown root.
+		return fmt.Errorf("urkel: got proof for unexpected root (%s)", proof.UntrustedRoot)
+	}
+
+	// Verify proof.
+	subtree, err := c.VerifyProof(ctx, expectedRoot, proof)
+	if err != nil {
+		return err
+	}
+
+	// Merge resulting nodes.
+	var batch db.Batch
+	var dbSubtree db.Subtree
+	if c.persistEverythingFromSyncer {
+		// NOTE: This is a dummy batch, we assume that the node database backend is a
+		//       cache-only backend and does not care about correct values.
+		batch = c.db.NewBatch(c.syncRoot.Namespace, c.syncRoot.Round, c.syncRoot)
+		dbSubtree = batch.MaybeStartSubtree(nil, 0, subtree)
+	}
+	var commitNode func(*node.Pointer)
+	commitNode = func(p *node.Pointer) {
+		if p == nil || p.Node == nil {
+			return
+		}
+
+		// Commit all children.
+		switch n := p.Node.(type) {
+		case *node.InternalNode:
+			commitNode(n.Left)
+			commitNode(n.Right)
+		case *node.LeafNode:
+			c.commitValue(n.Value)
+		}
+
+		// Commit the node itself.
+		c.commitNode(p)
+		// Persist synced nodes to local node database when configured. We assume that
+		// in this case the node database backend is a cache-only backend and does not
+		// perform any subtree aggregation.
+		if c.persistEverythingFromSyncer {
+			_ = dbSubtree.PutNode(0, p)
+		}
+	}
+	// Persist synced nodes to local node database when configured.
+	if c.persistEverythingFromSyncer {
+		if err := dbSubtree.Commit(); err != nil {
+			return err
+		}
+		if err := batch.Commit(c.syncRoot); err != nil {
+			return err
+		}
+	}
+
+	if err := c.MergeVerifiedSubtree(ctx, dstPtr, subtree, commitNode); err != nil {
+		return err
+	}
+	return nil
 }
 
 // derefValue dereferences an internal value pointer.
@@ -475,175 +467,4 @@ func (c *cache) derefValue(ctx context.Context, v *node.Value) ([]byte, error) {
 	}
 
 	return nil, errors.New("urkel: leaf node does not contain value")
-}
-
-// prefetch prefetches a given subtree up to the configured prefetch depth.
-func (c *cache) prefetch(ctx context.Context, subtreeRoot hash.Hash, subtreePath node.Key, bitDepth node.Depth) (*node.Pointer, error) {
-	if c.prefetchDepth == 0 {
-		return nil, nil
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, c.syncerPrefetchTimeout)
-	defer cancel()
-
-	st, err := c.rs.GetSubtree(ctx, c.syncRoot, node.ID{Path: subtreePath, BitDepth: bitDepth}, c.prefetchDepth)
-	switch err {
-	case nil:
-	case syncer.ErrUnsupported:
-		return nil, nil
-	default:
-		return nil, err
-	}
-	// Build full node index.
-	st.BuildFullNodeIndex()
-
-	ptr, err := c.reconstructSubtree(ctx, subtreeRoot, st, 0, c.prefetchDepth)
-	if err != nil {
-		return nil, err
-	}
-
-	return ptr, nil
-}
-
-// reconstructSubtree reconstructs a tree summary received through a
-// remote syncer.
-func (c *cache) reconstructSubtree(ctx context.Context, rootHash hash.Hash, st *syncer.Subtree, depth node.Depth, maxDepth node.Depth) (*node.Pointer, error) {
-	ptr, err := c.doReconstructSummary(st, st.Root, depth, maxDepth)
-	if err != nil {
-		return nil, err
-	}
-	if ptr == nil {
-		return nil, errors.New("urkel: reconstructed root pointer is nil")
-	}
-
-	var d db.NodeDB
-	if !c.persistEverythingFromSyncer {
-		// Create a no-op database so we can run commit. We don't want to
-		// persist everything we retrieve from a remote endpoint as this
-		// may be dangerous.
-		d, _ = db.NewNopNodeDB()
-	} else {
-		// Sometimes we do want to persist everything from the syncer.
-		// This is used in the cachingclient, for example.
-		d = c.db
-	}
-
-	root := node.Root{
-		Namespace: c.syncRoot.Namespace,
-		Round:     c.syncRoot.Round,
-		Hash:      rootHash,
-	}
-	batch := d.NewBatch(c.syncRoot.Namespace, c.syncRoot.Round, root)
-	defer batch.Reset()
-	subtree := batch.MaybeStartSubtree(nil, depth, ptr)
-
-	syncRootHash, err := doCommit(ctx, c, batch, subtree, depth, ptr, nil)
-	if err != nil {
-		return nil, err
-	}
-	if !syncRootHash.Equal(&rootHash) {
-		return nil, fmt.Errorf("urkel: syncer returned bad root (expected: %s got: %s)",
-			rootHash,
-			syncRootHash,
-		)
-	}
-	if err := subtree.Commit(); err != nil {
-		return nil, err
-	}
-	// We must commit even though this is a no-op database in order to fire
-	// the on-commit hooks.
-	if err := batch.Commit(root); err != nil {
-		return nil, err
-	}
-
-	return ptr, nil
-}
-
-// doReconstructSummary reconstructs a tree summary received through a
-// remote syncer.
-func (c *cache) doReconstructSummary(
-	st *syncer.Subtree,
-	sptr syncer.SubtreePointer,
-	depth node.Depth,
-	maxDepth node.Depth,
-) (*node.Pointer, error) {
-	if depth > maxDepth {
-		return nil, errors.New("urkel: maximum depth exceeded")
-	}
-
-	// Mark node as used to ensure that we error if we try to revisit
-	// the same node.
-	defer st.MarkUsed(sptr)
-
-	if !sptr.Valid {
-		return nil, errors.New("urkel: invalid subtree pointer")
-	}
-
-	if sptr.Full {
-		nd, err := st.GetFullNodeAt(sptr.Index)
-		if err != nil {
-			return nil, err
-		}
-
-		var ptr *node.Pointer
-		switch n := nd.(type) {
-		case *node.InternalNode:
-			// Internal node, check if we also have full nodes for left/right.
-			n.Clean = false
-
-			for _, child := range []**node.Pointer{&n.Left, &n.Right} {
-				if *child == nil {
-					continue
-				}
-
-				if p := st.GetFullNodePointer((*child).Hash); p.Valid {
-					var rp *node.Pointer
-					rp, err = c.doReconstructSummary(st, p, depth+1, maxDepth)
-					if err != nil {
-						return nil, err
-					}
-
-					*child = rp
-				}
-			}
-
-			ptr = c.newInternalNodePtr(n)
-		case *node.LeafNode:
-			// Leaf node.
-			n.Clean = false
-			n.Value = c.newValuePtr(n.Value)
-			ptr = c.newLeafNodePtr(n)
-		}
-
-		return ptr, nil
-	}
-
-	// Summary node.
-
-	s, err := st.GetSummaryAt(sptr.Index)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if the summary referes to a dead node.
-	if s == nil {
-		return nil, nil
-	}
-
-	leafNode, err := c.doReconstructSummary(st, s.LeafNode, depth, maxDepth)
-	if err != nil {
-		return nil, err
-	}
-	left, err := c.doReconstructSummary(st, s.Left, depth+1, maxDepth)
-	if err != nil {
-		return nil, err
-	}
-	right, err := c.doReconstructSummary(st, s.Right, depth+1, maxDepth)
-	if err != nil {
-		return nil, err
-	}
-
-	intNode := c.newInternalNode(s.Label, s.LabelBitLength, leafNode, left, right)
-	intNode.Node.(*node.InternalNode).Round = s.Round
-	return intNode, nil
 }

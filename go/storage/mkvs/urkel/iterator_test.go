@@ -7,12 +7,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
 func TestIterator(t *testing.T) {
 	ctx := context.Background()
 	tree := New(nil, nil)
+	defer tree.Close()
 
 	// Test with an empty tree.
 	it := tree.NewIterator(ctx)
@@ -42,7 +44,9 @@ func TestIterator(t *testing.T) {
 	require.NoError(t, err, "ApplyWriteLog")
 
 	t.Run("Direct", func(t *testing.T) {
-		testIterator(t, items, tree)
+		dit := tree.NewIterator(ctx)
+		defer dit.Close()
+		testIterator(t, items, dit)
 	})
 
 	var root node.Root
@@ -50,11 +54,49 @@ func TestIterator(t *testing.T) {
 	require.NoError(t, err, "Commit")
 	root.Hash = rootHash
 
-	remote, err := NewWithRoot(ctx, tree, nil, root)
-	require.NoError(t, err, "NewWithRoot")
+	stats := syncer.NewStatsCollector(tree)
+	remote := NewWithRoot(stats, nil, root)
+	defer remote.Close()
 
 	t.Run("Remote", func(t *testing.T) {
-		testIterator(t, items, remote)
+		rit := remote.NewIterator(ctx)
+		defer rit.Close()
+
+		testIterator(t, items, rit)
+
+		require.EqualValues(t, 0, stats.SyncGetCount, "SyncGetCount")
+		require.EqualValues(t, 0, stats.SyncGetPrefixesCount, "SyncGetPrefixesCount")
+		require.EqualValues(t, 6, stats.SyncIterateCount, "SyncIterateCount")
+	})
+
+	stats = syncer.NewStatsCollector(tree)
+	remote = NewWithRoot(stats, nil, root)
+	defer remote.Close()
+
+	t.Run("RemoteWithPrefetch10", func(t *testing.T) {
+		rpit := remote.NewIterator(ctx, IteratorPrefetch(10))
+		defer rpit.Close()
+
+		testIterator(t, items, rpit)
+
+		require.EqualValues(t, 0, stats.SyncGetCount, "SyncGetCount")
+		require.EqualValues(t, 0, stats.SyncGetPrefixesCount, "SyncGetPrefixesCount")
+		require.EqualValues(t, 1, stats.SyncIterateCount, "SyncIterateCount")
+	})
+
+	stats = syncer.NewStatsCollector(tree)
+	remote = NewWithRoot(stats, nil, root)
+	defer remote.Close()
+
+	t.Run("RemoteWithPrefetch3", func(t *testing.T) {
+		rpit := remote.NewIterator(ctx, IteratorPrefetch(3))
+		defer rpit.Close()
+
+		testIterator(t, items, rpit)
+
+		require.EqualValues(t, 0, stats.SyncGetCount, "SyncGetCount")
+		require.EqualValues(t, 0, stats.SyncGetPrefixesCount, "SyncGetPrefixesCount")
+		require.EqualValues(t, 2, stats.SyncIterateCount, "SyncIterateCount")
 	})
 }
 
@@ -63,12 +105,7 @@ type testCase struct {
 	pos  int
 }
 
-func testIterator(t *testing.T, items writelog.WriteLog, tree *Tree) {
-	ctx := context.Background()
-
-	it := tree.NewIterator(ctx)
-	defer it.Close()
-
+func testIterator(t *testing.T, items writelog.WriteLog, it Iterator) {
 	// Iterate through the whole tree.
 	var idx int
 	for it.Rewind(); it.Valid(); it.Next() {

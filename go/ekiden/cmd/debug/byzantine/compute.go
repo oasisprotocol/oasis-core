@@ -59,28 +59,22 @@ func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {
 
 func (cbc *computeBatchContext) openTrees(ctx context.Context, rs syncer.ReadSyncer) error {
 	var err error
-	cbc.ioTree, err = transaction.NewTree(ctx, rs, storage.Root{
+	cbc.ioTree = transaction.NewTree(rs, storage.Root{
 		Namespace: cbc.bd.Header.Namespace,
 		Round:     cbc.bd.Header.Round + 1,
 		Hash:      cbc.bd.IORoot,
 	})
-	if err != nil {
-		return errors.Wrap(err, "transaction NewTree")
-	}
 
 	cbc.txs, err = cbc.ioTree.GetTransactions(ctx)
 	if err != nil {
 		return errors.Wrap(err, "IO tree GetTransactions")
 	}
 
-	cbc.stateTree, err = urkel.NewWithRoot(ctx, rs, nil, storage.Root{
+	cbc.stateTree = urkel.NewWithRoot(rs, nil, storage.Root{
 		Namespace: cbc.bd.Header.Namespace,
 		Round:     cbc.bd.Header.Round,
 		Hash:      cbc.bd.Header.StateRoot,
 	})
-	if err != nil {
-		return errors.Wrap(err, "urkel NewWithRoot")
-	}
 
 	return nil
 }

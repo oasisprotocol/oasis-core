@@ -93,6 +93,8 @@ func StorageImplementationTests(t *testing.T, backend api.Backend, namespace com
 }
 
 func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, round uint64) {
+	ctx := context.Background()
+
 	var rootHash hash.Hash
 	rootHash.Empty()
 
@@ -103,7 +105,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 	var err error
 
 	// Apply write log to an empty root.
-	receipts, err = backend.Apply(context.Background(), namespace, round, rootHash, round, expectedNewRoot, wl)
+	receipts, err = backend.Apply(ctx, namespace, round, rootHash, round, expectedNewRoot, wl)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -128,7 +130,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 	}
 
 	// Apply a batch of operations against the MKVS.
-	receipts, err = backend.ApplyBatch(context.Background(), namespace, round, applyOps)
+	receipts, err = backend.ApplyBatch(ctx, namespace, round, applyOps)
 	require.NoError(t, err, "ApplyBatch() should not return an error")
 	require.NotNil(t, receipts, "ApplyBatch() should return receipts")
 
@@ -146,28 +148,45 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 		}
 	}
 
-	emptyPath := api.Key{}
-
 	newRoot := api.Root{
 		Namespace: namespace,
 		Round:     round,
 		Hash:      receiptBody.Roots[0],
 	}
 
-	// Get a subtree summary of the new root.
-	st, err := backend.GetSubtree(context.Background(), newRoot, api.NodeID{Path: emptyPath, BitDepth: 0}, 10)
-	require.NoError(t, err, "GetSubtree()")
-	require.NotNil(t, st, "subtree returned by GetSubtree()")
+	// Test individual fetches.
+	t.Run("SyncGet", func(t *testing.T) {
+		tree := urkel.NewWithRoot(backend, nil, newRoot)
+		defer tree.Close()
+		for _, entry := range wl {
+			value, werr := tree.Get(ctx, entry.Key)
+			require.NoError(t, werr, "Get")
+			require.EqualValues(t, entry.Value, value)
+		}
+	})
 
-	// Get a path summary of the new root.
-	st, err = backend.GetPath(context.Background(), newRoot, api.NodeID{Path: emptyPath, BitDepth: 0}, emptyPath)
-	require.NoError(t, err, "GetPath()")
-	require.NotNil(t, st, "subtree returned by GetPath()")
+	// Test prefetch.
+	t.Run("SyncGetPrefixes", func(t *testing.T) {
+		tree := urkel.NewWithRoot(backend, nil, newRoot)
+		defer tree.Close()
+		err = tree.PrefetchPrefixes(ctx, [][]byte{[]byte("1")}, 10)
+		require.NoError(t, err, "PrefetchPrefixes")
+	})
 
-	// Get the root node.
-	n, err := backend.GetNode(context.Background(), newRoot, api.NodeID{Path: emptyPath, BitDepth: 0})
-	require.NoError(t, err, "GetNode()")
-	require.NotNil(t, n)
+	// Test iteration.
+	t.Run("SyncIterate", func(t *testing.T) {
+		tree := urkel.NewWithRoot(backend, nil, newRoot)
+		defer tree.Close()
+		it := tree.NewIterator(ctx)
+		defer it.Close()
+
+		var idx int
+		for it.Rewind(); it.Valid(); it.Next() {
+			idx++
+		}
+		require.NoError(t, it.Err(), "iterator should not error")
+		require.EqualValues(t, len(wl), idx, "iterator should visit all items")
+	})
 
 	// Get the write log, it should be the same as what we stuffed in.
 	root := api.Root{
@@ -175,7 +194,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 		Round:     round,
 		Hash:      rootHash,
 	}
-	it, err := backend.GetDiff(context.Background(), root, newRoot)
+	it, err := backend.GetDiff(ctx, root, newRoot)
 	require.NoError(t, err, "GetDiff()")
 	getDiffWl := foldWriteLogIterator(t, it)
 	originalWl := make(api.WriteLog, len(wl))
@@ -185,7 +204,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 	require.Equal(t, getDiffWl, originalWl)
 
 	// Now try applying the same operations again, we should get the same root.
-	receipts, err = backend.Apply(context.Background(), namespace, round, rootHash, round, receiptBody.Roots[0], wl)
+	receipts, err = backend.Apply(ctx, namespace, round, rootHash, round, receiptBody.Roots[0], wl)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -202,7 +221,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 	}
 
 	// Test GetCheckpoint.
-	logsIter, err := backend.GetCheckpoint(context.Background(), newRoot)
+	logsIter, err := backend.GetCheckpoint(ctx, newRoot)
 	require.NoError(t, err, "GetCheckpoint()")
 	logs := foldWriteLogIterator(t, logsIter)
 	// Applying the writeLog should return same root.
@@ -214,7 +233,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 	wl3 := prepareWriteLog([][]byte{testValues[0]})
 	expectedNewRoot3 := CalculateExpectedNewRoot(t, wl3, namespace, round)
 
-	receipts, err = backend.Apply(context.Background(), namespace, round, rootHash, round, expectedNewRoot3, wl3)
+	receipts, err = backend.Apply(ctx, namespace, round, rootHash, round, expectedNewRoot3, wl3)
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -229,7 +248,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 		}
 	}
 
-	logsIter, err = backend.GetCheckpoint(context.Background(), newRoot)
+	logsIter, err = backend.GetCheckpoint(ctx, newRoot)
 	require.NoError(t, err, "GetCheckpoint()")
 	logs = foldWriteLogIterator(t, logsIter)
 	// Applying the writeLog should return same root.
@@ -273,10 +292,9 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 		}
 
 		// Generate expected root hash.
-		tree, err := urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: dstRound, Hash: baseRoot})
-		require.NoError(t, err, "NewWithRoot")
+		tree := urkel.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Round: dstRound, Hash: baseRoot})
 		defer tree.Close()
-		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
+		err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 		require.NoError(t, err, "ApplyWriteLog")
 		var root hash.Hash
 		_, root, err = tree.Commit(ctx, namespace, dstRound)
@@ -323,9 +341,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 
 	// Make sure that the merged root is the same as applying all write logs against
 	// the base root.
-	var tree *urkel.Tree
-	tree, err = urkel.NewWithRoot(ctx, backend, nil, api.Root{Namespace: namespace, Round: round, Hash: roots[0]})
-	require.NoError(t, err, "NewWithRoot")
+	tree := urkel.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Round: round, Hash: roots[0]})
 	defer tree.Close()
 	for _, writeLog := range writeLogs[1:] {
 		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))

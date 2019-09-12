@@ -31,12 +31,7 @@ type RootCache struct {
 // GetTree gets a tree entry from the cache by the root iff present, or creates
 // a new tree with the specified root in the node database.
 func (rc *RootCache) GetTree(ctx context.Context, root Root) (*urkel.Tree, error) {
-	newTree, err := urkel.NewWithRoot(ctx, rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
-	if err != nil {
-		return nil, errors.Wrap(err, "storage/rootcache: failed to create new tree")
-	}
-
-	return newTree, nil
+	return urkel.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything), nil
 }
 
 // Merge performs a 3-way merge operation between the specified roots and returns
@@ -70,17 +65,13 @@ func (rc *RootCache) Merge(
 
 	// Start with the first root.
 	// TODO: WithStorageProof.
-	tree, err := urkel.NewWithRoot(ctx, nil, rc.localDB, Root{Namespace: ns, Round: round + 1, Hash: others[0]})
-	if err != nil {
-		return nil, err
-	}
+	tree := urkel.NewWithRoot(nil, rc.localDB, Root{Namespace: ns, Round: round + 1, Hash: others[0]})
 	defer tree.Close()
 
 	// Apply operations from all roots.
 	baseRoot := Root{Namespace: ns, Round: round, Hash: base}
 	for _, rootHash := range others[1:] {
-		var it writelog.Iterator
-		it, err = rc.localDB.GetWriteLog(ctx, baseRoot, Root{Namespace: ns, Round: round + 1, Hash: rootHash})
+		it, err := rc.localDB.GetWriteLog(ctx, baseRoot, Root{Namespace: ns, Round: round + 1, Hash: rootHash})
 		if err != nil {
 			return nil, errors.Wrap(err, "storage/rootcache: failed to read write log")
 		}
@@ -91,6 +82,7 @@ func (rc *RootCache) Merge(
 	}
 
 	var mergedRoot hash.Hash
+	var err error
 	if _, mergedRoot, err = tree.Commit(ctx, ns, round+1); err != nil {
 		return nil, errors.Wrap(err, "storage/rootcache: failed to commit write log")
 	}
@@ -137,16 +129,14 @@ func (rc *RootCache) Apply(
 		r = dstRoot
 	} else {
 		// We don't, apply operations.
-		tree, err := urkel.NewWithRoot(ctx, rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
-		if err != nil {
-			return nil, err
-		}
+		tree := urkel.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
 		defer tree.Close()
 
-		if err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog)); err != nil {
+		if err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog)); err != nil {
 			return nil, err
 		}
 
+		var err error
 		if !rc.insecureSkipChecks {
 			_, err = tree.CommitKnown(ctx, expectedNewRoot)
 		} else {

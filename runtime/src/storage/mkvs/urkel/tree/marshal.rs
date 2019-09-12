@@ -95,7 +95,7 @@ impl Marshal for InternalNode {
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
         let mut pos = 0;
-        if data.len() < 1 + ROUND_SIZE + size_of::<Depth>() + 1 + 2 * Hash::len()
+        if data.len() < 1 + ROUND_SIZE + size_of::<Depth>() + 1
             || data[pos] != NodeKind::Internal as u8
         {
             return Err(TreeError::MalformedNode.into());
@@ -128,34 +128,38 @@ impl Marshal for InternalNode {
             }));
         };
 
-        let left_hash = Hash::from(&data[pos..pos + Hash::len()]);
-        pos += Hash::len();
-        let right_hash = Hash::from(&data[pos..pos + Hash::len()]);
-        pos += Hash::len();
+        // Hashes are only present in non-compact serialization.
+        if data.len() >= pos + Hash::len() * 2 {
+            let left_hash = Hash::from(&data[pos..pos + Hash::len()]);
+            pos += Hash::len();
+            let right_hash = Hash::from(&data[pos..pos + Hash::len()]);
+            pos += Hash::len();
+
+            if left_hash.is_empty() {
+                self.left = NodePointer::null_ptr();
+            } else {
+                self.left = Rc::new(RefCell::new(NodePointer {
+                    clean: true,
+                    hash: left_hash,
+                    node: None,
+                    ..Default::default()
+                }));
+            }
+            if right_hash.is_empty() {
+                self.right = NodePointer::null_ptr();
+            } else {
+                self.right = Rc::new(RefCell::new(NodePointer {
+                    clean: true,
+                    hash: right_hash,
+                    node: None,
+                    ..Default::default()
+                }));
+            }
+
+            self.update_hash();
+        }
 
         self.clean = true;
-        if left_hash.is_empty() {
-            self.left = NodePointer::null_ptr();
-        } else {
-            self.left = Rc::new(RefCell::new(NodePointer {
-                clean: true,
-                hash: left_hash,
-                node: None,
-                ..Default::default()
-            }));
-        }
-        if right_hash.is_empty() {
-            self.right = NodePointer::null_ptr();
-        } else {
-            self.right = Rc::new(RefCell::new(NodePointer {
-                clean: true,
-                hash: right_hash,
-                node: None,
-                ..Default::default()
-            }));
-        }
-
-        self.update_hash();
 
         Ok(pos)
     }

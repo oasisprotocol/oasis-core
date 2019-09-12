@@ -21,16 +21,10 @@ func (n *Node) byzantineMaybeInjectDiscrepancy(header *block.Header) {
 		Round:     header.Round,
 		Hash:      header.StateRoot,
 	}
-	stateTree, err := urkel.NewWithRoot(n.ctx, n.commonNode.Storage, nil, stateRoot)
-	if err != nil {
-		n.logger.Error("failed to inject discrepancy",
-			"err", err,
-		)
-		n.abortMergeLocked(err)
-		return
-	}
+	stateTree := urkel.NewWithRoot(n.commonNode.Storage, nil, stateRoot)
+	defer stateTree.Close()
 
-	err = stateTree.Insert(n.ctx, []byte("__boom__"), []byte("BOOM"))
+	err := stateTree.Insert(n.ctx, []byte("__boom__"), []byte("BOOM"))
 	if err != nil {
 		n.logger.Error("failed to inject discrepancy",
 			"err", err,

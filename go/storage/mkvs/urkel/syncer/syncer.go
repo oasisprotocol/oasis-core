@@ -5,67 +5,85 @@ import (
 	"context"
 	"errors"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
 var (
-	ErrDirtyRoot    = errors.New("urkel: root is dirty")
-	ErrInvalidRoot  = errors.New("urkel: invalid root")
-	ErrNodeNotFound = errors.New("urkel: node not found during sync")
-	ErrUnsupported  = errors.New("urkel: method not supported")
+	// ErrDirtyRoot is the error returned when a ReadSyncer tries to sync from a
+	// tree with a dirty root (e.g., a root with local modifications).
+	ErrDirtyRoot = errors.New("urkel: root is dirty")
+	// ErrInvalidRoot is the error returned when a ReadSyncer tries to sync from a
+	// tree with a different root.
+	ErrInvalidRoot = errors.New("urkel: invalid root")
+	// ErrUnsupported is the error returned when a ReadSyncer method is not supported.
+	ErrUnsupported = errors.New("urkel: method not supported")
 )
 
-// PathOptions are the options for GetPath queries.
-type PathOptions struct {
-	// IncludeSiblings specifies whether the subtree should also include
-	// off-path siblings. This is useful when the caller knows that it
-	// will also need full sibling information during the local operation.
-	IncludeSiblings bool `codec:"include_siblings"`
+// TreeID identifies a specific tree and a position within that tree.
+type TreeID struct {
+	// Root is the Merkle tree root.
+	Root node.Root `codec:"root"`
+	// Position is the caller's position in the tree structure to allow
+	// returning partial proofs if possible.
+	Position hash.Hash `codec:"position"`
+}
+
+// GetRequest is a request for the SyncGet operation.
+type GetRequest struct {
+	Tree            TreeID `codec:"tree"`
+	Key             []byte `codec:"key"`
+	IncludeSiblings bool   `codec:"include_siblings,omitempty"`
+}
+
+// GetPrefixesRequest is a request for the SyncGetPrefixes operation.
+type GetPrefixesRequest struct {
+	Tree     TreeID   `codec:"tree"`
+	Prefixes [][]byte `codec:"prefixes"`
+	Limit    uint16   `codec:"limit"`
+}
+
+// IterateRequest is a request for the SyncIterate operation.
+type IterateRequest struct {
+	Tree     TreeID `codec:"tree"`
+	Key      []byte `codec:"key"`
+	Prefetch uint16 `codec:"prefetch"`
+}
+
+// ProofResponse is a response for requests that produce proofs.
+type ProofResponse struct {
+	Proof Proof `codec:"proof"`
 }
 
 // ReadSyncer is the interface for synchronizing the in-memory cache
 // with another (potentially untrusted) MKVS.
 type ReadSyncer interface {
-	// GetSubtree retrieves a subtree rooted at the node uniquely identified
-	// by the passed node ID. The maxDepth specifies the maximum node depth
-	// up to which the subtree will be traversed.
-	//
-	// It is the responsibility of the caller to validate that the subtree
-	// is correct and consistent.
-	GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDepth node.Depth) (*Subtree, error)
+	// SyncGet fetches a single key and returns the corresponding proof.
+	SyncGet(ctx context.Context, request *GetRequest) (*ProofResponse, error)
 
-	// GetPath retrieves a path of nodes rooted at the node uniquely
-	// identified by the passed node ID and advancing towards the specified
-	// key.
-	//
-	// It is the responsibility of the caller to validate that the subtree
-	// is correct and consistent.
-	GetPath(ctx context.Context, root node.Root, id node.ID, key node.Key) (*Subtree, error)
+	// SyncGetPrefixes fetches all keys under the given prefixes and returns
+	// the corresponding proofs.
+	SyncGetPrefixes(ctx context.Context, request *GetPrefixesRequest) (*ProofResponse, error)
 
-	// GetNode retrieves a specific node under the given root.
-	//
-	// It is the responsibility of the caller to validate that the node
-	// is consistent. The node's cached hash should be considered invalid
-	// and must be recomputed locally.
-	GetNode(ctx context.Context, root node.Root, id node.ID) (node.Node, error)
+	// SyncIterate seeks to a given key and then fetches the specified
+	// number of following items based on key iteration order.
+	SyncIterate(ctx context.Context, request *IterateRequest) (*ProofResponse, error)
 }
 
 // nopReadSyncer is a no-op read syncer.
 type nopReadSyncer struct{}
 
-// NewNopReadSyncer creates a new no-op read syncer.
-func NewNopReadSyncer() ReadSyncer {
-	return &nopReadSyncer{}
-}
+// NopReadSyncer is a no-op read syncer.
+var NopReadSyncer = &nopReadSyncer{}
 
-func (r *nopReadSyncer) GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDepth node.Depth) (*Subtree, error) {
+func (r *nopReadSyncer) SyncGet(ctx context.Context, request *GetRequest) (*ProofResponse, error) {
 	return nil, ErrUnsupported
 }
 
-func (r *nopReadSyncer) GetPath(ctx context.Context, root node.Root, id node.ID, key node.Key) (*Subtree, error) {
-	return nil, ErrNodeNotFound
+func (r *nopReadSyncer) SyncGetPrefixes(ctx context.Context, request *GetPrefixesRequest) (*ProofResponse, error) {
+	return nil, ErrUnsupported
 }
 
-func (r *nopReadSyncer) GetNode(ctx context.Context, root node.Root, id node.ID) (node.Node, error) {
-	return nil, ErrNodeNotFound
+func (r *nopReadSyncer) SyncIterate(ctx context.Context, request *IterateRequest) (*ProofResponse, error) {
+	return nil, ErrUnsupported
 }

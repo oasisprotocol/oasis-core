@@ -1,17 +1,12 @@
 package syncer
 
-import (
-	"context"
-
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-)
+import "context"
 
 // StatsCollector is a ReadSyncer which collects call statistics.
 type StatsCollector struct {
-	SubtreeFetches int
-	PathFetches    int
-	NodeFetches    int
-	ValueFetches   int
+	SyncGetCount         int
+	SyncGetPrefixesCount int
+	SyncIterateCount     int
 
 	rs ReadSyncer
 }
@@ -23,19 +18,17 @@ func NewStatsCollector(rs ReadSyncer) *StatsCollector {
 	}
 }
 
-// GetSubtree retrieves a compressed subtree summary of the given root.
-func (c *StatsCollector) GetSubtree(ctx context.Context, root node.Root, id node.ID, maxDepth node.Depth) (*Subtree, error) {
-	c.SubtreeFetches++
-	return c.rs.GetSubtree(ctx, root, id, maxDepth)
+func (c *StatsCollector) SyncGet(ctx context.Context, request *GetRequest) (*ProofResponse, error) {
+	c.SyncGetCount++
+	return c.rs.SyncGet(ctx, request)
 }
 
-func (c *StatsCollector) GetPath(ctx context.Context, root node.Root, id node.ID, key node.Key) (*Subtree, error) {
-	c.PathFetches++
-	return c.rs.GetPath(ctx, root, id, key)
+func (c *StatsCollector) SyncGetPrefixes(ctx context.Context, request *GetPrefixesRequest) (*ProofResponse, error) {
+	c.SyncGetPrefixesCount++
+	return c.rs.SyncGetPrefixes(ctx, request)
 }
 
-// GetNode retrieves a specific node under the given root.
-func (c *StatsCollector) GetNode(ctx context.Context, root node.Root, id node.ID) (node.Node, error) {
-	c.NodeFetches++
-	return c.rs.GetNode(ctx, root, id)
+func (c *StatsCollector) SyncIterate(ctx context.Context, request *IterateRequest) (*ProofResponse, error) {
+	c.SyncIterateCount++
+	return c.rs.SyncIterate(ctx, request)
 }

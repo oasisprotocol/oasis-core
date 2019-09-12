@@ -60,7 +60,9 @@ func (s *GrpcServer) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.Apply
 		})
 	}
 
-	<-s.backend.Initialized()
+	if err := s.ensureBackendInitialized(ctx); err != nil {
+		return nil, err
+	}
 	receipts, err := s.backend.Apply(ctx, ns, req.GetSrcRound(), srcRoot, req.GetDstRound(), dstRoot, log)
 
 	if err != nil {
@@ -108,7 +110,9 @@ func (s *GrpcServer) ApplyBatch(ctx context.Context, req *pb.ApplyBatchRequest) 
 		})
 	}
 
-	<-s.backend.Initialized()
+	if err := s.ensureBackendInitialized(ctx); err != nil {
+		return nil, err
+	}
 	receipts, err := s.backend.ApplyBatch(ctx, ns, req.GetDstRound(), ops)
 
 	if err != nil {
@@ -141,7 +145,9 @@ func (s *GrpcServer) Merge(ctx context.Context, req *pb.MergeRequest) (*pb.Merge
 		others = append(others, h)
 	}
 
-	<-s.backend.Initialized()
+	if err := s.ensureBackendInitialized(ctx); err != nil {
+		return nil, err
+	}
 
 	receipts, err := s.backend.Merge(ctx, ns, req.GetRound(), base, others)
 	if err != nil {
@@ -182,7 +188,9 @@ func (s *GrpcServer) MergeBatch(ctx context.Context, req *pb.MergeBatchRequest) 
 		})
 	}
 
-	<-s.backend.Initialized()
+	if err := s.ensureBackendInitialized(ctx); err != nil {
+		return nil, err
+	}
 	receipts, err := s.backend.MergeBatch(ctx, ns, req.GetRound(), ops)
 
 	if err != nil {
@@ -192,95 +200,55 @@ func (s *GrpcServer) MergeBatch(ctx context.Context, req *pb.MergeBatchRequest) 
 	return &pb.MergeBatchResponse{Receipts: cbor.Marshal(receipts)}, nil
 }
 
-func (s *GrpcServer) GetSubtree(ctx context.Context, req *pb.GetSubtreeRequest) (*pb.GetSubtreeResponse, error) {
-	var root api.Root
-	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
+func (s *GrpcServer) SyncGet(ctx context.Context, req *pb.ReadSyncerRequest) (*pb.ReadSyncerResponse, error) {
+	var rq api.GetRequest
+	if err := cbor.Unmarshal(req.Request, &rq); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal request")
 	}
 
-	maxDepth := api.Depth(req.GetMaxDepth())
-
-	nid := req.GetId()
-	nodeID := api.NodeID{
-		BitDepth: api.Depth(nid.GetBitDepth()),
+	if err := s.ensureBackendInitialized(ctx); err != nil {
+		return nil, err
 	}
-	if err := nodeID.Path.UnmarshalBinary(nid.GetPath()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal id path")
-	}
-
-	<-s.backend.Initialized()
-	subtree, err := s.backend.GetSubtree(ctx, root, nodeID, maxDepth)
+	rsp, err := s.backend.SyncGet(ctx, &rq)
 	if err != nil {
 		return nil, err
 	}
 
-	serializedSubtree, err := subtree.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-
-	return &pb.GetSubtreeResponse{Subtree: serializedSubtree}, nil
+	return &pb.ReadSyncerResponse{Response: cbor.Marshal(rsp)}, nil
 }
 
-func (s *GrpcServer) GetPath(ctx context.Context, req *pb.GetPathRequest) (*pb.GetPathResponse, error) {
-	var root api.Root
-	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
+func (s *GrpcServer) SyncGetPrefixes(ctx context.Context, req *pb.ReadSyncerRequest) (*pb.ReadSyncerResponse, error) {
+	var rq api.GetPrefixesRequest
+	if err := cbor.Unmarshal(req.Request, &rq); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal request")
 	}
 
-	nid := req.GetId()
-	nodeID := api.NodeID{
-		BitDepth: api.Depth(nid.GetBitDepth()),
+	if err := s.ensureBackendInitialized(ctx); err != nil {
+		return nil, err
 	}
-	if err := nodeID.Path.UnmarshalBinary(nid.GetPath()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal id path")
-	}
-
-	var key api.Key
-	if err := key.UnmarshalBinary(req.GetKey()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal key")
-	}
-
-	<-s.backend.Initialized()
-	subtree, err := s.backend.GetPath(ctx, root, nodeID, key)
+	rsp, err := s.backend.SyncGetPrefixes(ctx, &rq)
 	if err != nil {
 		return nil, err
 	}
 
-	serializedSubtree, err := subtree.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-
-	return &pb.GetPathResponse{Subtree: serializedSubtree}, nil
+	return &pb.ReadSyncerResponse{Response: cbor.Marshal(rsp)}, nil
 }
 
-func (s *GrpcServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.GetNodeResponse, error) {
-	var root api.Root
-	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal root")
+func (s *GrpcServer) SyncIterate(ctx context.Context, req *pb.ReadSyncerRequest) (*pb.ReadSyncerResponse, error) {
+	var rq api.IterateRequest
+	if err := cbor.Unmarshal(req.Request, &rq); err != nil {
+		return nil, errors.Wrap(err, "storage: failed to unmarshal request")
 	}
 
-	nid := req.GetId()
-	nodeID := api.NodeID{
-		BitDepth: api.Depth(nid.GetBitDepth()),
+	if err := s.ensureBackendInitialized(ctx); err != nil {
+		return nil, err
 	}
-	if err := nodeID.Path.UnmarshalBinary(nid.GetPath()); err != nil {
-		return nil, errors.Wrap(err, "storage: failed to unmarshal id path")
-	}
-
-	<-s.backend.Initialized()
-	node, err := s.backend.GetNode(ctx, root, nodeID)
+	rsp, err := s.backend.SyncIterate(ctx, &rq)
 	if err != nil {
 		return nil, err
 	}
 
-	serializedNode, err := node.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-
-	return &pb.GetNodeResponse{Node: serializedNode}, nil
+	return &pb.ReadSyncerResponse{Response: cbor.Marshal(rsp)}, nil
 }
 
 // writeLogService implements sending write log iterator for GetDiff and GetCheckpoint methods.
@@ -368,7 +336,9 @@ func (s *GrpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffSe
 		return err
 	}
 
-	<-s.backend.Initialized()
+	if err := s.ensureBackendInitialized(stream.Context()); err != nil {
+		return err
+	}
 
 	it, err := s.backend.GetDiff(stream.Context(), startRoot, endRoot)
 	if err != nil {
@@ -394,7 +364,9 @@ func (s *GrpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Stora
 		return err
 	}
 
-	<-s.backend.Initialized()
+	if err := s.ensureBackendInitialized(stream.Context()); err != nil {
+		return err
+	}
 
 	it, err := s.backend.GetCheckpoint(stream.Context(), root)
 	if err != nil {
@@ -408,6 +380,15 @@ func (s *GrpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Stora
 	}
 
 	return svc.SendWriteLogIterator()
+}
+
+func (s *GrpcServer) ensureBackendInitialized(ctx context.Context) error {
+	select {
+	case <-s.backend.Initialized():
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // NewGRPCServer initializes and registers a gRPC storage server backend.

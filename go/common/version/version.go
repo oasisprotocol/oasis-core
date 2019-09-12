@@ -54,7 +54,7 @@ var (
 	// the runtime.
 	//
 	// NOTE: This version must be synced with runtime/src/common/version.rs.
-	RuntimeProtocol = Version{Major: 0, Minor: 5, Patch: 0}
+	RuntimeProtocol = Version{Major: 0, Minor: 6, Patch: 0}
 
 	// CommitteeProtocol versions the P2P protocol used by the
 	// committee members.

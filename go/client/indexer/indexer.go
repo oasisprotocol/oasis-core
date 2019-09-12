@@ -123,11 +123,7 @@ func (s *Service) worker() {
 						Hash:      blk.Header.IORoot,
 					}
 
-					var tree *transaction.Tree
-					tree, err = transaction.NewTree(ctx, s.storage, ioRoot)
-					if err != nil {
-						return err
-					}
+					tree := transaction.NewTree(s.storage, ioRoot)
 					defer tree.Close()
 
 					txs, err = tree.GetTransactions(ctx)

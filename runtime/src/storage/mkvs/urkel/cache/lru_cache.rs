@@ -4,12 +4,7 @@ use failure::Fallible;
 use intrusive_collections::{IntrusivePointer, LinkedList, LinkedListLink};
 use io_context::Context;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::urkel::{cache::*, sync::*, tree::*},
-};
-
-const MAX_PREFETCH_DEPTH: Depth = 255;
+use crate::storage::mkvs::urkel::{cache::*, sync::*, tree::*};
 
 #[derive(Clone, Default)]
 pub struct CacheItemBox<Item: CacheItem + Default> {
@@ -129,8 +124,6 @@ pub struct LRUCache {
     internal_node_count: u64,
     leaf_node_count: u64,
 
-    prefetch_depth: Depth,
-
     lru_values: LRUList<ValuePointer>,
     lru_nodes: LRUList<NodePointer>,
 }
@@ -159,8 +152,6 @@ impl LRUCache {
 
             internal_node_count: 0,
             leaf_node_count: 0,
-
-            prefetch_depth: 0,
 
             lru_values: LRUList::new(value_capacity),
             lru_nodes: LRUList::new(node_capacity),
@@ -215,68 +206,23 @@ impl LRUCache {
         self.lru_values.move_to_front(val)
     }
 
-    fn _reconstruct_summary(
-        &mut self,
-        st: &Subtree,
-        sptr: &SubtreePointer,
-        depth: Depth,
-        max_depth: Depth,
-    ) -> Fallible<NodePtrRef> {
-        if depth > max_depth {
-            return Err(CacheError::MaximumDepthExceeded.into());
+    fn commit_merged_node(&mut self, ptr: NodePtrRef) {
+        // Commit all children.
+        match classify_noderef!(? ptr.borrow().node) {
+            NodeKind::Internal => {
+                let node_ref = ptr.borrow().get_node();
+                self.commit_merged_node(noderef_as!(node_ref, Internal).left.clone());
+                self.commit_merged_node(noderef_as!(node_ref, Internal).right.clone());
+            }
+            NodeKind::Leaf => {
+                let node_ref = ptr.borrow().get_node();
+                self.commit_value(noderef_as!(node_ref, Leaf).value.clone());
+            }
+            NodeKind::None => {}
         }
 
-        if !sptr.valid {
-            return Err(CacheError::InvalidSubtreePointer.into());
-        }
-
-        if sptr.full {
-            let node_ref = st.get_full_node_at(sptr.index)?;
-            return match *node_ref.borrow_mut() {
-                NodeBox::Internal(ref mut int) => {
-                    int.clean = false;
-
-                    // Internal node, check if we also have full nodes for left/right.
-                    let left_ptr = st.get_full_node_pointer(int.left.borrow().hash);
-                    if left_ptr.valid {
-                        int.left =
-                            self._reconstruct_summary(st, &left_ptr, depth + 1, max_depth)?;
-                    }
-
-                    let right_ptr = st.get_full_node_pointer(int.right.borrow().hash);
-                    if right_ptr.valid {
-                        int.right =
-                            self._reconstruct_summary(st, &right_ptr, depth + 1, max_depth)?;
-                    }
-
-                    Ok(self.new_internal_node_ptr(Some(node_ref.clone())))
-                }
-                NodeBox::Leaf(ref mut leaf) => {
-                    leaf.clean = false;
-                    Ok(self.new_leaf_node_ptr(Some(node_ref.clone())))
-                }
-            };
-        } else {
-            let summary = st.get_summary_at(sptr.index)?;
-            return match summary {
-                None => Ok(NodePointer::null_ptr()),
-                Some(summary) => {
-                    let leaf_node =
-                        self._reconstruct_summary(st, &summary.leaf_node, depth, max_depth)?;
-                    let left =
-                        self._reconstruct_summary(st, &summary.left, depth + 1, max_depth)?;
-                    let right =
-                        self._reconstruct_summary(st, &summary.right, depth + 1, max_depth)?;
-                    Ok(self.new_internal_node(
-                        &summary.label,
-                        summary.label_bit_length,
-                        leaf_node,
-                        left,
-                        right,
-                    ))
-                }
-            };
-        }
+        // Commit the node itself.
+        self.commit_node(ptr);
     }
 }
 
@@ -307,10 +253,6 @@ impl Cache for LRUCache {
 
     fn set_sync_root(&mut self, root: Root) {
         self.sync_root = root;
-    }
-
-    fn set_prefetch_depth(&mut self, depth: Depth) {
-        self.prefetch_depth = depth;
     }
 
     fn get_read_syncer(&self) -> &Box<dyn ReadSync> {
@@ -390,67 +332,11 @@ impl Cache for LRUCache {
         self.lru_values.remove(ptr);
     }
 
-    fn deref_node_id(
+    fn deref_node_ptr<F: ReadSyncFetcher>(
         &mut self,
         ctx: &Arc<Context>,
-        mut id: NodeID,
-    ) -> Fallible<(NodePtrRef, Depth)> {
-        let mut cur_ptr = self.pending_root.clone();
-        let mut bd: Depth = 0;
-
-        if id.is_root() {
-            return Ok((cur_ptr, 0));
-        }
-        // Add 1 for the discriminator bit.
-        id.bit_depth += 1;
-
-        while bd < id.bit_depth {
-            // bd is the parent's BitDepth. Add 1 for discriminator bit.
-            let nd = self.deref_node_ptr(
-                ctx,
-                NodeID {
-                    path: id.path,
-                    bit_depth: bd,
-                },
-                cur_ptr.clone(),
-                None,
-            )?;
-            let nd = match nd {
-                None => panic!(
-                    "urkel: derefNodeID for id {:?} visited nil node {:?}",
-                    id, nd
-                ),
-                Some(nd) => nd,
-            };
-
-            if let NodeBox::Internal(ref n) = *nd.borrow() {
-                if bd + n.label_bit_length < id.bit_depth {
-                    if id.path.get_bit(bd + n.label_bit_length) {
-                        cur_ptr = n.right.clone();
-                    } else {
-                        cur_ptr = n.left.clone();
-                    }
-                    bd += n.label_bit_length;
-                } else {
-                    // end of id.bit_depth reached
-                    break;
-                }
-            };
-            if let NodeBox::Leaf(ref _n) = *nd.borrow() {
-                break;
-            };
-        }
-
-        // bd is bit_depth of cur_ptr's parent
-        Ok((cur_ptr, bd))
-    }
-
-    fn deref_node_ptr(
-        &mut self,
-        ctx: &Arc<Context>,
-        mut id: NodeID,
         ptr: NodePtrRef,
-        key: Option<&Key>,
+        fetcher: F,
     ) -> Fallible<Option<NodeRef>> {
         let ptr_ref = ptr;
         let ptr = ptr_ref.borrow();
@@ -493,41 +379,53 @@ impl Cache for LRUCache {
             drop(ptr);
         }
 
-        // Make sure that the ID is that of the root in case we are dereferencing the root.
-        if ptr_ref == self.pending_root {
-            id = NodeID::root();
-        }
+        // Node not available locally, fetch from read syncer.
+        self.remote_sync(ctx, ptr_ref.clone(), fetcher)?;
 
-        let mut ptr = ptr_ref.borrow_mut();
-        match key {
-            None => {
-                let node_ref =
-                    self.read_syncer
-                        .get_node(Context::create_child(ctx), self.sync_root, id);
-                let node_ref = node_ref?;
-                node_ref.borrow_mut().validate(ptr.hash)?;
-                ptr.node = Some(node_ref.clone());
-            }
-            Some(key) => {
-                let mut st = self.read_syncer.get_path(
-                    Context::create_child(ctx),
-                    self.sync_root,
-                    id,
-                    key,
-                )?;
-                // Build full node index.
-                st.build_full_node_index();
-                // TODO: Call reconstructSubtree with actual node depth of st! -Matevz
-                let new_ptr =
-                    self.reconstruct_subtree(ctx, ptr.hash, &st, 0, MAX_PREFETCH_DEPTH)?;
-                let new_ptr = new_ptr.borrow();
-                ptr.clean = new_ptr.clean;
-                ptr.hash = new_ptr.hash;
-                ptr.node = new_ptr.node.clone();
-            }
+        let ptr = ptr_ref.borrow();
+        Ok(ptr.node.clone())
+    }
+
+    fn remote_sync<F: ReadSyncFetcher>(
+        &mut self,
+        ctx: &Arc<Context>,
+        ptr: NodePtrRef,
+        fetcher: F,
+    ) -> Fallible<()> {
+        let proof = fetcher.fetch(
+            Context::create_child(&ctx),
+            self.sync_root,
+            ptr.clone(),
+            &mut self.read_syncer,
+        )?;
+
+        // The proof can be for one of two hashes: i) it is either for ptr.Hash in case
+        // all the nodes are only contained in the subtree below ptr, or ii) it is for
+        // the c.syncRoot.Hash in case it contains nodes outside the subtree.
+        let ptr_hash = ptr.borrow().hash;
+        let (dst_ptr, expected_root) = if proof.untrusted_root == ptr_hash {
+            (ptr, ptr_hash)
+        } else if proof.untrusted_root == self.sync_root.hash {
+            (self.pending_root.clone(), self.sync_root.hash)
+        } else {
+            return Err(format_err!(
+                "urkel: got proof for unexpected root ({:?})",
+                proof.untrusted_root
+            ));
         };
 
-        Ok(ptr.node.clone())
+        // Verify proof.
+        let pv = ProofVerifier;
+        let subtree = pv.verify_proof(Context::create_child(&ctx), expected_root, &proof)?;
+
+        // Merge resulting nodes.
+        let mut merged_nodes: Vec<NodePtrRef> = Vec::new();
+        merge_verified_subtree(dst_ptr, subtree, &mut merged_nodes)?;
+        for node_ref in merged_nodes {
+            self.commit_merged_node(node_ref);
+        }
+
+        Ok(())
     }
 
     fn deref_value_ptr(
@@ -601,70 +499,5 @@ impl Cache for LRUCache {
         };
 
         ptr.borrow_mut().set_cache_extra(None);
-    }
-
-    fn reconstruct_subtree(
-        &mut self,
-        ctx: &Arc<Context>,
-        root: Hash,
-        st: &Subtree,
-        depth: Depth,
-        max_depth: Depth,
-    ) -> Fallible<NodePtrRef> {
-        let ptr = self._reconstruct_summary(st, &st.root, depth, max_depth)?;
-        if ptr.borrow().is_null() {
-            return Err(CacheError::ReconstructedRootNil.into());
-        }
-
-        let mut update_list: UpdateList<LRUCache> = UpdateList::new();
-        let new_root = _commit(ctx, ptr.clone(), &mut update_list, None)?;
-        if new_root != root {
-            Err(CacheError::SyncerBadRoot {
-                expected_root: root,
-                returned_root: new_root,
-            }
-            .into())
-        } else {
-            update_list.commit(self);
-            Ok(ptr)
-        }
-    }
-
-    fn prefetch(
-        &mut self,
-        ctx: &Arc<Context>,
-        subtree_root: Hash,
-        subtree_path: Key,
-        bit_depth: Depth,
-    ) -> Fallible<NodePtrRef> {
-        if self.prefetch_depth == 0 {
-            return Ok(NodePointer::null_ptr());
-        }
-
-        let mut result = self.read_syncer.get_subtree(
-            Context::create_child(ctx),
-            self.sync_root,
-            NodeID {
-                path: &subtree_path,
-                bit_depth: bit_depth,
-            },
-            self.prefetch_depth,
-        );
-
-        let st = match result {
-            Err(err) => {
-                if let Some(sync_err) = err.downcast_ref::<SyncerError>() {
-                    if let SyncerError::Unsupported = sync_err {
-                        return Ok(NodePointer::null_ptr());
-                    }
-                }
-                return Err(err);
-            }
-            Ok(ref mut st) => st,
-        };
-        // Build full node index.
-        st.build_full_node_index();
-
-        self.reconstruct_subtree(ctx, subtree_root, st, 0, self.prefetch_depth)
     }
 }

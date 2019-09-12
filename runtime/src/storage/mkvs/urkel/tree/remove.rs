@@ -5,6 +5,8 @@ use io_context::Context;
 
 use crate::storage::mkvs::urkel::{cache::*, tree::*};
 
+use super::lookup::FetcherSyncGet;
+
 impl UrkelTree {
     /// Remove a key from the tree and return true if the tree was modified.
     pub fn remove(&mut self, ctx: Context, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
@@ -43,12 +45,8 @@ impl UrkelTree {
     ) -> Fallible<(NodePtrRef, bool, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
-            NodeID {
-                path: key,
-                bit_depth: bit_depth,
-            },
             ptr.clone(),
-            Some(key),
+            FetcherSyncGet::new(key, true),
         )?;
 
         match classify_noderef!(?node_ref) {
@@ -100,40 +98,20 @@ impl UrkelTree {
                     }
 
                     // Fetch and check the remaining children.
-                    remaining_leaf = self.cache.borrow_mut().deref_node_ptr(
-                        ctx,
-                        NodeID {
-                            path: &key,
-                            bit_depth: bit_depth,
-                        },
-                        n.leaf_node.clone(),
-                        None,
-                    )?;
-                    let (key_prefix, _) =
-                        key.split(bit_depth + n.label_bit_length, key.bit_length());
+                    // NOTE: The leaf node is always included with the internal node.
+                    remaining_leaf = n.leaf_node.borrow().node.clone();
                     remaining_left = self.cache.borrow_mut().deref_node_ptr(
                         ctx,
-                        NodeID {
-                            path: &key_prefix.append_bit(bit_depth + n.label_bit_length, false),
-                            bit_depth: bit_depth + n.label_bit_length,
-                        },
                         n.left.clone(),
-                        None,
+                        FetcherSyncGet::new(key, true),
                     )?;
                     remaining_right = self.cache.borrow_mut().deref_node_ptr(
                         ctx,
-                        NodeID {
-                            path: &key_prefix.append_bit(bit_depth + n.label_bit_length, true),
-                            bit_depth: bit_depth + n.label_bit_length,
-                        },
                         n.right.clone(),
-                        None,
+                        FetcherSyncGet::new(key, true),
                     )?;
                 } else {
-                    return Err(format_err!(
-                        "remove.rs: unknown internal node_ref {:?}",
-                        node_ref
-                    ));
+                    unreachable!("node kind is Internal");
                 }
 
                 // If exactly one child including LeafNode remains, collapse it.

@@ -4,8 +4,13 @@ use std::{collections::HashSet, iter::FromIterator};
 use crate::{
     common::crypto::hash::Hash,
     storage::mkvs::{
-        urkel::{cache::*, sync::*, tree::*},
-        LogEntry, LogEntryKind,
+        urkel::{
+            cache::*,
+            interop::{Driver, ProtocolServer},
+            sync::*,
+            tree::*,
+        },
+        LogEntry, LogEntryKind, WriteLog,
     },
 };
 
@@ -46,9 +51,7 @@ fn generate_long_key_value_pairs() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
 
 #[test]
 fn test_basic() {
-    let mut tree = UrkelTree::make()
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+    let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
 
     let key_zero = b"foo";
     let value_zero = b"bar";
@@ -234,9 +237,7 @@ fn test_basic() {
 
 #[test]
 fn test_long_keys() {
-    let mut tree = UrkelTree::make()
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+    let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
 
     // First insert keys 0..n and remove them in order n..0.
     let mut roots: Vec<Hash> = Vec::new();
@@ -289,9 +290,7 @@ fn test_long_keys() {
 
 #[test]
 fn test_empty_keys() {
-    let mut tree = UrkelTree::make()
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+    let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
 
     fn test_empty_key(tree: &mut UrkelTree) {
         let empty_key = b"";
@@ -405,9 +404,7 @@ fn test_empty_keys() {
 
 #[test]
 fn test_insert_commit_batch() {
-    let mut tree = UrkelTree::make()
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+    let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -434,8 +431,7 @@ fn test_insert_commit_batch() {
 fn test_insert_commit_each() {
     let mut tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -464,8 +460,7 @@ fn test_insert_commit_each() {
 fn test_remove() {
     let mut tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     // First insert keys 0..n and remove them in order n..0.
     let mut roots: Vec<Hash> = Vec::new();
@@ -551,11 +546,12 @@ fn test_remove() {
 }
 
 #[test]
-fn test_syncer_basic_no_prefetch() {
+fn test_syncer_basic() {
+    let server = ProtocolServer::new();
+
     let mut tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -567,23 +563,23 @@ fn test_syncer_basic_no_prefetch() {
         .expect("insert");
     }
 
-    let (_, hash) =
+    let (write_log, hash) =
         UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(format!("{:?}", hash), ALL_ITEMS_ROOT);
 
-    // Create a "remote" tree that talks to the original tree via the
-    // syncer interface. First try with no prefetching and then with
-    // prefetching.
+    server.apply(&write_log, hash, Default::default(), 0);
 
-    let stats = StatsCollector::new(Box::new(tree));
+    // Create a "remote" tree that talks to the original tree via the
+    // syncer interface.
+
+    let stats = StatsCollector::new(server.read_sync());
     let remote_tree = UrkelTree::make()
         .with_capacity(0, 0)
         .with_root(Root {
             hash,
             ..Default::default()
         })
-        .new(Context::background(), Box::new(stats))
-        .expect("with_root");
+        .new(Box::new(stats));
 
     for i in 0..keys.len() {
         let value = remote_tree
@@ -593,158 +589,27 @@ fn test_syncer_basic_no_prefetch() {
         assert_eq!(values[i], value.as_slice());
     }
 
-    {
-        let cache = remote_tree.cache.borrow();
-        let stats = cache
-            .get_read_syncer()
-            .as_any()
-            .downcast_ref::<StatsCollector>()
-            .expect("stats");
-        assert_eq!(0, stats.subtree_fetches, "subtree fetches (no prefetch)");
-        assert_eq!(0, stats.node_fetches, "node fetches (no prefetch)");
-        assert_eq!(637, stats.path_fetches, "path fetches (no prefetch)");
-        assert_eq!(0, stats.value_fetches, "value fetches (no prefetch)");
-    }
-}
-
-#[test]
-fn test_syncer_basic_with_prefetch() {
-    let mut tree = UrkelTree::make()
-        .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
-
-    let (keys, values) = generate_key_value_pairs();
-    for i in 0..keys.len() {
-        tree.insert(
-            Context::background(),
-            keys[i].as_slice(),
-            values[i].as_slice(),
-        )
-        .expect("insert");
-    }
-
-    let (_, hash) =
-        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
-    assert_eq!(format!("{:?}", hash), ALL_ITEMS_ROOT);
-
-    // Create a "remote" tree that talks to the original tree via the
-    // syncer interface. First try with no prefetching and then with
-    // prefetching.
-
-    let stats = StatsCollector::new(Box::new(tree));
-    let remote_tree = UrkelTree::make()
-        .with_capacity(0, 0)
-        .with_root(Root {
-            hash,
-            ..Default::default()
-        })
-        .with_prefetch_depth(12)
-        .new(Context::background(), Box::new(stats))
-        .expect("with_root");
-
-    for i in 0..keys.len() {
-        let value = remote_tree
-            .get(Context::background(), keys[i].as_slice())
-            .expect("get")
-            .expect("get_some");
-        assert_eq!(values[i], value.as_slice());
-    }
-
-    {
-        let cache = remote_tree.cache.borrow();
-        let stats = cache
-            .get_read_syncer()
-            .as_any()
-            .downcast_ref::<StatsCollector>()
-            .expect("stats");
-        assert_eq!(1, stats.subtree_fetches, "subtree fetches (with prefetch)");
-        assert_eq!(0, stats.node_fetches, "node fetches (with prefetch)");
-        assert_eq!(224, stats.path_fetches, "path fetches (with prefetch)");
-        assert_eq!(0, stats.value_fetches, "value fetches (with prefetch)");
-    }
-}
-
-#[test]
-fn test_syncer_get_path() {
-    let mut tree = UrkelTree::make()
-        .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
-
-    let (keys, values) = generate_key_value_pairs();
-    for i in 0..keys.len() {
-        tree.insert(
-            Context::background(),
-            keys[i].as_slice(),
-            values[i].as_slice(),
-        )
-        .expect("insert");
-    }
-
-    let (_, hash) =
-        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
-
-    // Test with a remote tree via the read-syncer interface.
-    let mut remote_tree = UrkelTree::make()
-        .with_capacity(0, 0)
-        .with_root(Root {
-            hash,
-            ..Default::default()
-        })
-        .with_prefetch_depth(10)
-        .new(Context::background(), Box::new(tree))
-        .expect("with_root");
-
-    for i in 0..keys.len() {
-        let st = remote_tree
-            .get_path(
-                Context::background(),
-                Root {
-                    hash,
-                    ..Default::default()
-                },
-                NodeID::root(),
-                &keys[i],
-            )
-            .expect("get_path");
-
-        // Reconstructed subtree should contain key as leaf node.
-        let mut found_leaf = false;
-        for n in st.full_nodes {
-            match classify_noderef!(?n) {
-                NodeKind::Leaf => {
-                    let n = n.unwrap();
-                    if noderef_as!(n, Leaf).key == keys[i] {
-                        assert_eq!(
-                            values[i],
-                            noderef_as!(n, Leaf)
-                                .value
-                                .borrow()
-                                .value
-                                .as_ref()
-                                .unwrap()
-                                .as_slice()
-                        );
-                        found_leaf = true;
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
-        assert_eq!(true, found_leaf, "subtree should contain target leaf");
-    }
+    let cache = remote_tree.cache.borrow();
+    let stats = cache
+        .get_read_syncer()
+        .as_any()
+        .downcast_ref::<StatsCollector>()
+        .expect("stats");
+    assert_eq!(keys.len(), stats.sync_get_count, "sync_get count");
+    assert_eq!(0, stats.sync_get_prefixes_count, "sync_get_prefixes count");
+    assert_eq!(0, stats.sync_iterate_count, "sync_iterate count");
 }
 
 #[test]
 fn test_syncer_remove() {
+    let server = ProtocolServer::new();
+
     let mut tree = UrkelTree::make()
         .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
     let mut roots: Vec<Hash> = Vec::new();
 
+    let mut write_log = WriteLog::new();
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
         tree.insert(
@@ -754,24 +619,26 @@ fn test_syncer_remove() {
         )
         .expect("insert");
 
-        let (_, hash) = UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
-            .expect("commit");
+        let (mut wl, hash) =
+            UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+                .expect("commit");
         roots.push(hash);
+        write_log.append(&mut wl);
     }
 
     assert_eq!(format!("{:?}", roots[roots.len() - 1]), ALL_ITEMS_ROOT);
+    server.apply(&write_log, roots[roots.len() - 1], Default::default(), 0);
 
+    let stats = StatsCollector::new(server.read_sync());
     let mut remote_tree = UrkelTree::make()
         .with_capacity(0, 0)
         .with_root(Root {
             hash: roots[roots.len() - 1],
             ..Default::default()
         })
-        .new(Context::background(), Box::new(tree))
-        .expect("with_root");
+        .new(Box::new(stats));
 
     for i in (0..keys.len()).rev() {
-        println!("i={}", i);
         remote_tree
             .remove(Context::background(), keys[i].as_slice())
             .expect("remove");
@@ -785,14 +652,130 @@ fn test_syncer_remove() {
     )
     .expect("commit");
     assert_eq!(hash, Hash::empty_hash());
+
+    let cache = remote_tree.cache.borrow();
+    let stats = cache
+        .get_read_syncer()
+        .as_any()
+        .downcast_ref::<StatsCollector>()
+        .expect("stats");
+    assert_eq!(850, stats.sync_get_count, "sync_get count");
+    assert_eq!(0, stats.sync_get_prefixes_count, "sync_get_prefixes count");
+    assert_eq!(0, stats.sync_iterate_count, "sync_iterate count");
+}
+
+#[test]
+fn test_syncer_insert() {
+    let server = ProtocolServer::new();
+
+    let mut tree = UrkelTree::make()
+        .with_capacity(0, 0)
+        .new(Box::new(NoopReadSyncer {}));
+
+    let (keys, values) = generate_key_value_pairs();
+    for i in 0..keys.len() {
+        tree.insert(
+            Context::background(),
+            keys[i].as_slice(),
+            values[i].as_slice(),
+        )
+        .expect("insert");
+    }
+
+    let (write_log, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+    server.apply(&write_log, hash, Default::default(), 0);
+
+    let stats = StatsCollector::new(server.read_sync());
+    let mut remote_tree = UrkelTree::make()
+        .with_capacity(0, 0)
+        .with_root(Root {
+            hash,
+            ..Default::default()
+        })
+        .new(Box::new(stats));
+
+    for i in 0..keys.len() {
+        remote_tree
+            .insert(
+                Context::background(),
+                keys[i].as_slice(),
+                values[i].as_slice(),
+            )
+            .expect("insert");
+    }
+
+    let cache = remote_tree.cache.borrow();
+    let stats = cache
+        .get_read_syncer()
+        .as_any()
+        .downcast_ref::<StatsCollector>()
+        .expect("stats");
+    assert_eq!(1000, stats.sync_get_count, "sync_get count");
+    assert_eq!(0, stats.sync_get_prefixes_count, "sync_get_prefixes count");
+    assert_eq!(0, stats.sync_iterate_count, "sync_iterate count");
+}
+
+#[test]
+fn test_syncer_prefetch_prefixes() {
+    let server = ProtocolServer::new();
+
+    let mut tree = UrkelTree::make()
+        .with_capacity(0, 0)
+        .new(Box::new(NoopReadSyncer {}));
+
+    let (keys, values) = generate_key_value_pairs();
+    for i in 0..keys.len() {
+        tree.insert(
+            Context::background(),
+            keys[i].as_slice(),
+            values[i].as_slice(),
+        )
+        .expect("insert");
+    }
+
+    let (write_log, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+    server.apply(&write_log, hash, Default::default(), 0);
+
+    let stats = StatsCollector::new(server.read_sync());
+    let remote_tree = UrkelTree::make()
+        .with_capacity(0, 0)
+        .with_root(Root {
+            hash,
+            ..Default::default()
+        })
+        .new(Box::new(stats));
+
+    // Prefetch keys starting with prefix "key".
+    remote_tree
+        .prefetch_prefixes(Context::background(), &vec![b"key".to_vec().into()], 1000)
+        .expect("prefetch_prefixes");
+
+    for i in 0..keys.len() {
+        let value = remote_tree
+            .get(Context::background(), keys[i].as_slice())
+            .expect("get")
+            .expect("get_some");
+        assert_eq!(values[i], value.as_slice());
+    }
+
+    let cache = remote_tree.cache.borrow();
+    let stats = cache
+        .get_read_syncer()
+        .as_any()
+        .downcast_ref::<StatsCollector>()
+        .expect("stats");
+    assert_eq!(0, stats.sync_get_count, "sync_get count");
+    assert_eq!(1, stats.sync_get_prefixes_count, "sync_get_prefixes count");
+    assert_eq!(0, stats.sync_iterate_count, "sync_iterate count");
 }
 
 #[test]
 fn test_value_eviction() {
     let mut tree = UrkelTree::make()
         .with_capacity(0, 512)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -805,22 +788,29 @@ fn test_value_eviction() {
     }
     UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
 
-    let stats = tree.stats(Context::background(), 0);
     assert_eq!(
-        999, stats.cache.internal_node_count,
+        999,
+        tree.cache.borrow().stats().internal_node_count,
         "cache.internal_node_count"
     );
-    assert_eq!(1000, stats.cache.leaf_node_count, "cache.leaf_node_count");
+    assert_eq!(
+        1000,
+        tree.cache.borrow().stats().leaf_node_count,
+        "cache.leaf_node_count"
+    );
     // Only a subset of the leaf values should remain in cache.
-    assert_eq!(508, stats.cache.leaf_value_size, "cache.leaf_value_size");
+    assert_eq!(
+        508,
+        tree.cache.borrow().stats().leaf_value_size,
+        "cache.leaf_value_size"
+    );
 }
 
 #[test]
 fn test_node_eviction() {
     let mut tree = UrkelTree::make()
         .with_capacity(128, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
+        .new(Box::new(NoopReadSyncer {}));
 
     let (keys, values) = generate_key_value_pairs_ex("foo".to_string(), 150);
     for i in 0..keys.len() {
@@ -844,80 +834,21 @@ fn test_node_eviction() {
     }
     UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
 
-    let stats = tree.stats(Context::background(), 0);
     // Only a subset of nodes should remain in cache.
     assert_eq!(
-        67, stats.cache.internal_node_count,
+        67,
+        tree.cache.borrow().stats().internal_node_count,
         "cache.internal_node_count"
     );
-    assert_eq!(61, stats.cache.leaf_node_count, "cache.leaf_node_count");
+    assert_eq!(
+        61,
+        tree.cache.borrow().stats().leaf_node_count,
+        "cache.leaf_node_count"
+    );
     // Only a subset of the leaf values should remain in cache.
-    assert_eq!(1032, stats.cache.leaf_value_size, "cache.leaf_value_size");
-}
-
-#[test]
-fn test_debug_dump() {
-    let mut tree = UrkelTree::make()
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
-    tree.insert(Context::background(), b"foo 1", b"bar 1")
-        .expect("insert");
-    tree.insert(Context::background(), b"foo 2", b"bar 2")
-        .expect("insert");
-    tree.insert(Context::background(), b"foo 3", b"bar 3")
-        .expect("insert");
-    tree.insert(Context::background(), b"foo", b"bar")
-        .expect("insert");
-
-    let mut output: Vec<u8> = Vec::new();
-    tree.dump(Context::background(), &mut output).expect("dump");
-    assert!(output.len() > 0);
-}
-
-#[test]
-fn test_debug_stats() {
-    let mut tree = UrkelTree::make()
-        .with_capacity(0, 0)
-        .new(Context::background(), Box::new(NoopReadSyncer {}))
-        .expect("new_tree");
-
-    let (keys, values) = generate_key_value_pairs();
-    for i in 0..keys.len() {
-        tree.insert(
-            Context::background(),
-            keys[i].as_slice(),
-            values[i].as_slice(),
-        )
-        .expect("insert");
-    }
-
-    let stats = tree.stats(Context::background(), 0);
-    assert_eq!(14, stats.max_depth, "max_depth");
-    assert_eq!(999, stats.internal_node_count, "internal_node_count");
-    assert_eq!(901, stats.leaf_node_count, "leaf_node_count");
-    assert_eq!(8107, stats.leaf_value_size, "leaf_value_size");
-    assert_eq!(99, stats.dead_node_count, "dead_node_count");
-    // Cached node counts will update on commit.
     assert_eq!(
-        0, stats.cache.internal_node_count,
-        "cache.internal_node_count"
+        1032,
+        tree.cache.borrow().stats().leaf_value_size,
+        "cache.leaf_value_size"
     );
-    assert_eq!(0, stats.cache.leaf_node_count, "cache.leaf_node_count");
-    // Cached leaf value size will update on commit.
-    assert_eq!(0, stats.cache.leaf_value_size, "cache.leaf_value_size");
-
-    UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
-
-    let stats = tree.stats(Context::background(), 0);
-    assert_eq!(14, stats.max_depth, "max_depth");
-    assert_eq!(999, stats.internal_node_count, "internal_node_count");
-    assert_eq!(901, stats.leaf_node_count, "leaf_node_count");
-    assert_eq!(8107, stats.leaf_value_size, "leaf_value_size");
-    assert_eq!(99, stats.dead_node_count, "dead_node_count");
-    assert_eq!(
-        999, stats.cache.internal_node_count,
-        "cache.internal_node_count"
-    );
-    assert_eq!(1000, stats.cache.leaf_node_count, "cache.leaf_node_count");
-    assert_eq!(8890, stats.cache.leaf_value_size, "cache.leaf_value_size");
 }

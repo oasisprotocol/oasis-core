@@ -27,7 +27,6 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
 )
 
@@ -514,72 +513,73 @@ func (b *storageClientBackend) readWithClient(
 	return nil, err
 }
 
-func (b *storageClientBackend) GetSubtree(ctx context.Context, root api.Root, id api.NodeID, maxDepth api.Depth) (*api.Subtree, error) {
-	var req storage.GetSubtreeRequest
-	req.Root = root.MarshalCBOR()
-	req.MaxDepth = uint32(maxDepth)
-	req.Id = &storage.NodeID{BitDepth: uint32(id.BitDepth)}
-	req.Id.Path, _ = id.Path.MarshalBinary()
-
-	respRaw, err := b.readWithClient(ctx, root.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
-		return c.GetSubtree(ctx, &req)
-	})
+func (b *storageClientBackend) SyncGet(ctx context.Context, request *api.GetRequest) (*api.ProofResponse, error) {
+	rq := storage.ReadSyncerRequest{
+		Request: cbor.Marshal(request),
+	}
+	rspRaw, err := b.readWithClient(
+		ctx,
+		request.Tree.Root.Namespace,
+		func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+			return c.SyncGet(ctx, &rq)
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
-	resp := respRaw.(*storage.GetSubtreeResponse)
+	rsp := rspRaw.(*storage.ReadSyncerResponse)
 
-	var subtree api.Subtree
-	if err = subtree.UnmarshalBinary(resp.GetSubtree()); err != nil {
-		return nil, errors.Wrap(err, "storage client: failed to unmarshal subtree")
+	var syncerRsp api.ProofResponse
+	if err = cbor.Unmarshal(rsp.Response, &syncerRsp); err != nil {
+		return nil, err
 	}
-
-	return &subtree, nil
+	return &syncerRsp, nil
 }
 
-func (b *storageClientBackend) GetPath(ctx context.Context, root api.Root, id api.NodeID, key api.Key) (*api.Subtree, error) {
-	var req storage.GetPathRequest
-	req.Root = root.MarshalCBOR()
-	req.Id = &storage.NodeID{BitDepth: uint32(id.BitDepth)}
-	req.Id.Path, _ = id.Path.MarshalBinary()
-	req.Key, _ = key.MarshalBinary()
-
-	respRaw, err := b.readWithClient(ctx, root.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
-		return c.GetPath(ctx, &req)
-	})
+func (b *storageClientBackend) SyncGetPrefixes(ctx context.Context, request *api.GetPrefixesRequest) (*api.ProofResponse, error) {
+	rq := storage.ReadSyncerRequest{
+		Request: cbor.Marshal(request),
+	}
+	rspRaw, err := b.readWithClient(
+		ctx,
+		request.Tree.Root.Namespace,
+		func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+			return c.SyncGetPrefixes(ctx, &rq)
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
-	resp := respRaw.(*storage.GetPathResponse)
+	rsp := rspRaw.(*storage.ReadSyncerResponse)
 
-	var subtree api.Subtree
-	if err = subtree.UnmarshalBinary(resp.GetSubtree()); err != nil {
-		return nil, errors.Wrap(err, "storage client: failed to unmarshal subtree")
+	var syncerRsp api.ProofResponse
+	if err = cbor.Unmarshal(rsp.Response, &syncerRsp); err != nil {
+		return nil, err
 	}
-
-	return &subtree, nil
+	return &syncerRsp, nil
 }
 
-func (b *storageClientBackend) GetNode(ctx context.Context, root api.Root, id api.NodeID) (api.Node, error) {
-	var req storage.GetNodeRequest
-	req.Root = root.MarshalCBOR()
-	req.Id = &storage.NodeID{BitDepth: uint32(id.BitDepth)}
-	req.Id.Path, _ = id.Path.MarshalBinary()
-
-	respRaw, err := b.readWithClient(ctx, root.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
-		return c.GetNode(ctx, &req)
-	})
+func (b *storageClientBackend) SyncIterate(ctx context.Context, request *api.IterateRequest) (*api.ProofResponse, error) {
+	rq := storage.ReadSyncerRequest{
+		Request: cbor.Marshal(request),
+	}
+	rspRaw, err := b.readWithClient(
+		ctx,
+		request.Tree.Root.Namespace,
+		func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
+			return c.SyncIterate(ctx, &rq)
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
-	resp := respRaw.(*storage.GetNodeResponse)
+	rsp := rspRaw.(*storage.ReadSyncerResponse)
 
-	n, err := urkelNode.UnmarshalBinary(resp.GetNode())
-	if err != nil {
-		return nil, errors.Wrap(err, "storage client: failed to unmarshal node")
+	var syncerRsp api.ProofResponse
+	if err = cbor.Unmarshal(rsp.Response, &syncerRsp); err != nil {
+		return nil, err
 	}
-
-	return n, nil
+	return &syncerRsp, nil
 }
 
 func (b *storageClientBackend) GetDiff(ctx context.Context, startRoot api.Root, endRoot api.Root) (api.WriteLogIterator, error) {

@@ -3,7 +3,7 @@ use io_context::Context;
 
 use crate::{
     common::{crypto::hash::Hash, roothash::Namespace},
-    storage::mkvs::{urkel::tree::*, WriteLog, MKVS},
+    storage::mkvs::{urkel::tree::*, Prefix, WriteLog, MKVS},
 };
 
 unsafe impl Send for UrkelTree {}
@@ -27,6 +27,12 @@ impl MKVS for UrkelTree {
         let lock = self.lock.clone();
         let _guard = lock.lock().unwrap();
         self.remove(ctx, key).unwrap()
+    }
+
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) {
+        let lock = self.lock.clone();
+        let _guard = lock.lock().unwrap();
+        self.prefetch_prefixes(ctx, prefixes, limit).unwrap()
     }
 
     fn commit(
