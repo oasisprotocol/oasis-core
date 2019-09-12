@@ -86,7 +86,7 @@ func (hns *honestNodeStorage) SyncIterate(ctx context.Context, request *syncer.I
 		Request: cbor.Marshal(request),
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "client SyncGet")
+		return nil, errors.Wrap(err, "client SyncIterate")
 	}
 
 	var rs syncer.ProofResponse
