@@ -30,7 +30,7 @@ enum DemuxError {
     MaxConcurrentSessions,
 }
 
-pub type SessionMessage = (SessionID, Option<Arc<SessionInfo>>, Message);
+pub type SessionMessage = (SessionID, Option<Arc<SessionInfo>>, Message, String);
 
 /// Session demultiplexer.
 pub struct Demux {
@@ -93,13 +93,22 @@ impl Demux {
     ) -> Fallible<Option<SessionMessage>> {
         let frame: Frame = cbor::from_slice(&data)?;
         let id = frame.session.clone();
+        let untrusted_plaintext = frame.untrusted_plaintext.clone();
 
         if let Some(enriched_session) = self.sessions.get_mut(&id) {
             match enriched_session
                 .session
                 .process_data(frame.payload, writer)
-                .map(|m| m.map(|msg| (id, enriched_session.session.session_info(), msg)))
-            {
+                .map(|m| {
+                    m.map(|msg| {
+                        (
+                            id,
+                            enriched_session.session.session_info(),
+                            msg,
+                            untrusted_plaintext.clone(),
+                        )
+                    })
+                }) {
                 Ok(result) => {
                     enriched_session.last_process_frame_time = insecure_posix_system_time();
                     Ok(result)
@@ -128,10 +137,9 @@ impl Demux {
             // Create a new session.
             if self.sessions.len() < self.max_concurrent_sessions {
                 let mut session = Builder::new().local_rak(self.rak.clone()).build_responder();
-                let result = match session
-                    .process_data(frame.payload, writer)
-                    .map(|m| m.map(|msg| (id, session.session_info(), msg)))
-                {
+                let result = match session.process_data(frame.payload, writer).map(|m| {
+                    m.map(|msg| (id, session.session_info(), msg, untrusted_plaintext.clone()))
+                }) {
                     Ok(result) => result,
                     // In case there is an error, drop the session.
                     Err(error) => return Err(error),

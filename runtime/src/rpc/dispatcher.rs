@@ -118,7 +118,7 @@ impl Method {
         &self.dispatcher.get_descriptor().name
     }
 
-    /// Dispatch arequest.
+    /// Dispatch a request.
     pub fn dispatch(&self, request: Request, ctx: &mut Context) -> Fallible<Response> {
         self.dispatcher.dispatch(request, ctx)
     }
