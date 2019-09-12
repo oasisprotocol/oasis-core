@@ -460,39 +460,35 @@ test_suite() {
         runtime=simple-keyvalue \
         client=simple-keyvalue
 
-    # Byzantine node scenarios.
-    # Reenable these as part of https://github.com/oasislabs/ekiden/issues/2074.
-    if [[ ${EKIDEN_TEE_HARDWARE} != "intel-sgx" ]]; then
-        run_test \
-            scenario=scenario_byzantine_compute_honest \
-            name="e2e-${backend_name}-byzantine-compute-honest" \
-            backend_runner=$backend_runner \
-            runtime=simple-keyvalue \
-            client=simple-keyvalue-ops \
-            client_extra_args="set hello_key hello_value" \
-            beacon_deterministic=1
+    run_test \
+        scenario=scenario_byzantine_compute_honest \
+        name="e2e-${backend_name}-byzantine-compute-honest" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-ops \
+        client_extra_args="set hello_key hello_value" \
+        beacon_deterministic=1
 
-        run_test \
-            scenario=scenario_byzantine_compute_wrong \
-            name="e2e-${backend_name}-byzantine-compute-wrong" \
-            backend_runner=$backend_runner \
-            runtime=simple-keyvalue \
-            client=simple-keyvalue-ops \
-            client_extra_args="set hello_key hello_value" \
-            on_success_hook=assert_compute_discrepancy_scenario_works \
-            beacon_deterministic=1
+    run_test \
+        scenario=scenario_byzantine_compute_wrong \
+        name="e2e-${backend_name}-byzantine-compute-wrong" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-ops \
+        client_extra_args="set hello_key hello_value" \
+        on_success_hook=assert_compute_discrepancy_scenario_works \
+        beacon_deterministic=1
 
-        run_test \
-            scenario=scenario_byzantine_compute_straggler \
-            name="e2e-${backend_name}-byzantine-compute-straggler" \
-            backend_runner=$backend_runner \
-            runtime=simple-keyvalue \
-            client=simple-keyvalue-ops \
-            client_extra_args="set hello_key hello_value" \
-            on_success_hook=assert_compute_straggler_scenario_works \
-            epochtime_backend=tendermint_mock \
-            beacon_deterministic=1
-    fi
+    run_test \
+        scenario=scenario_byzantine_compute_straggler \
+        name="e2e-${backend_name}-byzantine-compute-straggler" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-ops \
+        client_extra_args="set hello_key hello_value" \
+        on_success_hook=assert_compute_straggler_scenario_works \
+        epochtime_backend=tendermint_mock \
+        beacon_deterministic=1
 
     run_test \
         scenario=scenario_byzantine_merge_honest \
