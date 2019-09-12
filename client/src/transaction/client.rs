@@ -461,7 +461,7 @@ impl TxnClient {
             .tag(tag::StdTag::span_kind("client"))
             .start();
 
-        let mut options = grpcio::CallOption::default();
+        let mut options = grpcio::CallOption::default().wait_for_ready(true);
         if let Some(timeout) = self.timeout {
             options = options.timeout(timeout);
         }
