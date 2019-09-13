@@ -47,7 +47,7 @@ func (worker *Storage) startNode() error {
 		args = args.workerRuntimeID(v.id)
 	}
 
-	if err := worker.net.startEkidenNode(worker.dir, args, "storage"); err != nil {
+	if err := worker.net.startEkidenNode(worker.dir, nil, args, "storage"); err != nil {
 		return errors.Wrap(err, "ekiden/storage: failed to launch node")
 	}
 

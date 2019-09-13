@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ekiden-test-runner/env"
 )
 
@@ -51,6 +52,7 @@ type Network struct {
 	clients        []*Client
 
 	seedNode *seedNode
+	iasProxy *iasProxy
 
 	cfg          *NetworkCfg
 	nextNodePort uint16
@@ -125,6 +127,21 @@ func (net *Network) Errors() <-chan error {
 func (net *Network) Start() error {
 	net.logger.Info("starting network")
 
+	// Figure out if the IAS proxy is needed by peeking at all the
+	// runtimes.
+	for _, v := range net.Runtimes() {
+		needIASProxy := v.teeHardware == node.TEEHardwareIntelSGX
+		if needIASProxy {
+			if _, err := net.newIASProxy(); err != nil {
+				net.logger.Error("failed to provision IAS proxy",
+					"err", err,
+				)
+				return err
+			}
+			break
+		}
+	}
+
 	net.logger.Debug("provisioning genesis doc")
 	if err := net.makeGenesis(); err != nil {
 		net.logger.Error("failed to create genesis document",
@@ -139,6 +156,16 @@ func (net *Network) Start() error {
 			"err", err,
 		)
 		return err
+	}
+
+	net.logger.Debug("starting IAS proxy node")
+	if net.iasProxy != nil {
+		if err := net.iasProxy.startNode(); err != nil {
+			net.logger.Error("failed to start IAS proxy node",
+				"err", err,
+			)
+			return err
+		}
 	}
 
 	net.logger.Debug("starting seed node")
@@ -228,16 +255,21 @@ func (net *Network) runEkidenBinary(consoleWriter io.Writer, args ...string) err
 	return cmd.Run()
 }
 
-func (net *Network) startEkidenNode(dir *env.Dir, extraArgs *argBuilder, descr string) error {
+func (net *Network) startEkidenNode(dir *env.Dir, subCmd []string, extraArgs *argBuilder, descr string) error {
 	baseArgs := []string{
 		"--datadir", dir.String(),
 		"--log.level", "debug",
 		"--log.file", nodeLogPath(dir),
 		"--metrics.mode", "none",
 		"--genesis.file", net.genesisPath(),
-		"--tendermint.debug.addr_book_lenient",
 	}
-	args := append(baseArgs, extraArgs.vec...)
+	if len(subCmd) == 0 {
+		baseArgs = append(baseArgs, "--tendermint.debug.addr_book_lenient")
+		extraArgs = extraArgs.appendIASProxy(net.iasProxy)
+	}
+	args := append([]string{}, subCmd...)
+	args = append(args, baseArgs...)
+	args = append(args, extraArgs.vec...)
 
 	w, err := dir.NewLogWriter("console.log")
 	if err != nil {

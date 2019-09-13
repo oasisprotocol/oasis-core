@@ -53,7 +53,7 @@ func (val *Validator) startNode() error {
 		storageBackend("client").
 		appendNetwork(val.net)
 
-	if err := val.net.startEkidenNode(val.dir, args, "validator"); err != nil {
+	if err := val.net.startEkidenNode(val.dir, nil, args, "validator"); err != nil {
 		return errors.Wrap(err, "ekiden/validator: failed to launch node")
 	}
 

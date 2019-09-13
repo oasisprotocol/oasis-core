@@ -67,7 +67,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		"--runtime.storage_group_size", strconv.Itoa(cfg.StorageGroupSize),
 		// ${runtime_genesis:+--runtime.genesis.state ${runtime_genesis}}
 	}
-	if cfg.TEEHardware != node.TEEHardwareInvalid {
+	if cfg.TEEHardware == node.TEEHardwareIntelSGX {
 		var m *sgx.Mrenclave
 		if m, err = deriveMrenclave(cfg.Binary); err != nil {
 			return nil, err

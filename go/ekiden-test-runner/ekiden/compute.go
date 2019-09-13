@@ -50,7 +50,7 @@ func (worker *Compute) startNode() error {
 		args = args.appendComputeNodeRuntime(v)
 	}
 
-	if err := worker.net.startEkidenNode(worker.dir, args, "compute"); err != nil {
+	if err := worker.net.startEkidenNode(worker.dir, nil, args, "compute"); err != nil {
 		return errors.Wrap(err, "ekiden/compute: failed to launch node")
 	}
 

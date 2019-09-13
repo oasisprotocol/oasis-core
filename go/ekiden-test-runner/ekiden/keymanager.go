@@ -65,7 +65,7 @@ func (km *Keymanager) startNode() error {
 		args = args.workerKeymanagerTEEHardware(km.teeHardware)
 	}
 
-	if err := km.net.startEkidenNode(km.dir, args, "keymanager"); err != nil {
+	if err := km.net.startEkidenNode(km.dir, nil, args, "keymanager"); err != nil {
 		return errors.Wrap(err, "ekiden/keymanager: failed to launch node")
 	}
 

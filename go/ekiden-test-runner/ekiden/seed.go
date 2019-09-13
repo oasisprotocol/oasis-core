@@ -24,7 +24,7 @@ func (seed *seedNode) startNode() error {
 		tendermintCoreListenAddress(seed.consensusPort).
 		tendermintSeedMode()
 
-	if err := seed.net.startEkidenNode(seed.dir, args, "seed"); err != nil {
+	if err := seed.net.startEkidenNode(seed.dir, nil, args, "seed"); err != nil {
 		return errors.Wrap(err, "ekiden/seed: failed to launch node")
 	}
 

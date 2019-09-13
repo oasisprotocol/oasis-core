@@ -1,6 +1,7 @@
 package ekiden
 
 import (
+	"encoding/hex"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -41,6 +42,13 @@ func (args *argBuilder) debugAllowTestKeys() *argBuilder {
 func (args *argBuilder) grpcDebugPort(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + grpc.CfgDebugPort, strconv.Itoa(int(port)),
+	}...)
+	return args
+}
+
+func (args *argBuilder) grpcServerPort(port uint16) *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + grpc.CfgServerPort, strconv.Itoa(int(port)),
 	}...)
 	return args
 }
@@ -229,6 +237,23 @@ func (args *argBuilder) workerTxnschedulerBatchingMaxBatchSize(sz int) *argBuild
 	return args
 }
 
+func (args *argBuilder) iasUseGenesis() *argBuilder {
+	args.vec = append(args.vec, "--ias.use_genesis")
+	return args
+}
+
+func (args *argBuilder) iasDebugMock() *argBuilder {
+	args.vec = append(args.vec, "--ias.debug.mock")
+	return args
+}
+
+func (args *argBuilder) iasSPID(spid []byte) *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--ias.spid", hex.EncodeToString(spid),
+	}...)
+	return args
+}
+
 func (args *argBuilder) appendNetwork(net *Network) *argBuilder {
 	args = args.grpcVerboseDebug().
 		consensusBackend(net.cfg.ConsensusBackend).
@@ -265,6 +290,17 @@ func (args *argBuilder) appendEntity(ent *Entity) *argBuilder {
 		}...)
 	} else if ent.isDebugTestEntity {
 		args.vec = append(args.vec, "--"+flags.CfgDebugTestEntity)
+	}
+	return args
+}
+
+func (args *argBuilder) appendIASProxy(ias *iasProxy) *argBuilder {
+	if ias != nil {
+		args.vec = append(args.vec, []string{
+			"--ias.proxy_addr", "127.0.0.1:" + strconv.Itoa(int(ias.grpcPort)),
+			"--ias.tls", filepath.Join(ias.dir.String(), "ias_proxy_cert.pem"),
+			"--ias.debug.skip_verify",
+		}...)
 	}
 	return args
 }

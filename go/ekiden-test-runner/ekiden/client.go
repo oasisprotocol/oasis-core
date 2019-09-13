@@ -38,7 +38,7 @@ func (client *Client) startNode() error {
 		args = args.clientIndexRuntimes(v.id)
 	}
 
-	if err := client.net.startEkidenNode(client.dir, args, "client"); err != nil {
+	if err := client.net.startEkidenNode(client.dir, nil, args, "client"); err != nil {
 		return errors.Wrap(err, "ekiden/client: failed to launch node")
 	}
 
