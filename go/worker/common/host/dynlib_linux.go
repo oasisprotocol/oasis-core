@@ -2,7 +2,7 @@
 
 package host
 
-import dynlib "git.schwanenlied.me/yawning/dynlib.git"
+import dynlib "gitlab.com/yawning/dynlib.git"
 
 func loadDynlibCache() (*dynlib.Cache, error) {
 	return dynlib.LoadCache()
