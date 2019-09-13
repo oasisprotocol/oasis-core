@@ -41,10 +41,10 @@ var (
 	// Value is CBOR-serialized write log.
 	writeLogKeyFmt = keyformat.New('L', &common.Namespace{}, uint64(0), &hash.Hash{}, &hash.Hash{})
 	// rootLinkKeyFmt is the key format for the root links (namespace, round,
-	// root).
+	// src root, dst root).
 	//
-	// Value is next root hash.
-	rootLinkKeyFmt = keyformat.New('M', &common.Namespace{}, uint64(0), &hash.Hash{})
+	// Value is empty.
+	rootLinkKeyFmt = keyformat.New('M', &common.Namespace{}, uint64(0), &hash.Hash{}, &hash.Hash{})
 	// rootGcUpdatesKeyFmt is the key format for the pending garbage collection
 	// index updates that need to be applied only in case the given root is among
 	// the finalized roots. The key format is (namespace, round, root).
@@ -350,8 +350,11 @@ func (d *badgerNodeDB) HasRoot(root node.Root) bool {
 		return true
 	}
 
+	var emptyHash hash.Hash
+	emptyHash.Empty()
+
 	err := d.db.View(func(tx *badger.Txn) error {
-		_, err := tx.Get(rootLinkKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash))
+		_, err := tx.Get(rootLinkKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &emptyHash))
 		return err
 	})
 	switch err {
@@ -375,7 +378,7 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 
 	// Make sure that the previous round has been finalized.
 	lastFinalizedRound, exists := d.meta.getLastFinalizedRound(namespace)
-	if round > 0 && (!exists || lastFinalizedRound < (round-1)) {
+	if round > 0 && exists && lastFinalizedRound < (round-1) {
 		return api.ErrNotFinalized
 	}
 	// Make sure that this round has not yet been finalized.
@@ -404,25 +407,19 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 			var decNs common.Namespace
 			var decRound uint64
 			var rootHash hash.Hash
+			var nextRoot hash.Hash
 
-			if !rootLinkKeyFmt.Decode(item.Key(), &decNs, &decRound, &rootHash) {
+			if !rootLinkKeyFmt.Decode(item.Key(), &decNs, &decRound, &rootHash, &nextRoot) {
 				// This should not happen as the Badger iterator should take care of it.
 				panic("urkel/db/badger: bad iterator")
 			}
 
-			if item.ValueSize() > 0 {
-				var nextRoot hash.Hash
-				err := item.Value(func(data []byte) error {
-					return nextRoot.UnmarshalBinary(data)
-				})
-				if err != nil {
-					panic("urkel/db/badger: corrupted root link index")
-				}
-
-				if !finalizedRoots[rootHash] && finalizedRoots[nextRoot] {
-					finalizedRoots[rootHash] = true
-					updated = true
-				}
+			if nextRoot.IsEmpty() {
+				continue
+			}
+			if !finalizedRoots[rootHash] && finalizedRoots[nextRoot] {
+				finalizedRoots[rootHash] = true
+				updated = true
 			}
 		}
 	}
@@ -440,10 +437,21 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, namespace common.Namespace,
 		var decNs common.Namespace
 		var decRound uint64
 		var rootHash hash.Hash
+		var nextRoot hash.Hash
 
-		if !rootLinkKeyFmt.Decode(it.Item().Key(), &decNs, &decRound, &rootHash) {
+		if !rootLinkKeyFmt.Decode(it.Item().Key(), &decNs, &decRound, &rootHash, &nextRoot) {
 			// This should not happen as the Badger iterator should take care of it.
 			panic("urkel/db/badger: bad iterator")
+		}
+		// Skip all actual links to avoid processing the same root multiple times.
+		if !nextRoot.IsEmpty() {
+			// We still need to remove the links for non-finalized roots.
+			if !finalizedRoots[rootHash] {
+				if err := batch.Delete(it.Item().KeyCopy(nil)); err != nil {
+					return err
+				}
+			}
+			continue
 		}
 
 		rootGcUpdatesKey := rootGcUpdatesKeyFmt.Encode(&namespace, round, &rootHash)
@@ -617,35 +625,48 @@ func (d *badgerNodeDB) Prune(ctx context.Context, namespace common.Namespace, ro
 	it = tx.NewIterator(badger.IteratorOptions{Prefix: prefix})
 	defer it.Close()
 
+	maybeLoneRoots := make(map[hash.Hash]bool)
 	for it.Rewind(); it.Valid(); it.Next() {
 		item := it.Item()
 
-		// Prune lone roots (e.g., roots that start in the pruned round and don't
-		// have any derived roots in following rounds).
-		if item.ValueSize() == 0 {
-			var decNs common.Namespace
-			var decRound uint64
-			var rootHash hash.Hash
+		var decNs common.Namespace
+		var decRound uint64
+		var rootHash hash.Hash
+		var nextRoot hash.Hash
 
-			if !rootLinkKeyFmt.Decode(item.Key(), &decNs, &decRound, &rootHash) {
-				// This should not happen as the LevelDB iterator should take care of it.
-				panic("urkel/db/badger: bad iterator")
-			}
+		if !rootLinkKeyFmt.Decode(item.Key(), &decNs, &decRound, &rootHash, &nextRoot) {
+			// This should not happen as the LevelDB iterator should take care of it.
+			panic("urkel/db/badger: bad iterator")
+		}
 
-			// Traverse the root and prune all items created in this round.
-			root := node.Root{Namespace: namespace, Round: round, Hash: rootHash}
-			err = api.Visit(ctx, d, root, func(ctx context.Context, n node.Node) bool {
-				if n.GetCreatedRound() == round {
-					pruneHashes[n.GetHash()] = true
-				}
-				return true
-			})
-			if err != nil {
-				return 0, err
+		if nextRoot.IsEmpty() {
+			// Need to only set the flag iff the flag has not already been set
+			// to either value before.
+			if _, ok := maybeLoneRoots[rootHash]; !ok {
+				maybeLoneRoots[rootHash] = true
 			}
+		} else {
+			maybeLoneRoots[rootHash] = false
 		}
 
 		if err = batch.Delete(item.KeyCopy(nil)); err != nil {
+			return 0, err
+		}
+	}
+	for rootHash, isLone := range maybeLoneRoots {
+		if !isLone {
+			continue
+		}
+
+		// Traverse the root and prune all items created in this round.
+		root := node.Root{Namespace: namespace, Round: round, Hash: rootHash}
+		err = api.Visit(ctx, d, root, func(ctx context.Context, n node.Node) bool {
+			if n.GetCreatedRound() == round {
+				pruneHashes[n.GetHash()] = true
+			}
+			return true
+		})
+		if err != nil {
 			return 0, err
 		}
 	}
@@ -763,8 +784,7 @@ func getPreviousRound(tx *badger.Txn, namespace common.Namespace, round uint64) 
 	// Try to decode the current or previous round as a linkKeyFmt.
 	var decNs common.Namespace
 	var decRound uint64
-	var decHash hash.Hash
-	if !rootLinkKeyFmt.Decode(it.Item().Key(), &decNs, &decRound, &decHash) || !decNs.Equal(&namespace) {
+	if !rootLinkKeyFmt.Decode(it.Item().Key(), &decNs, &decRound) || !decNs.Equal(&namespace) {
 		// No previous round.
 		return 0, nil
 	}
@@ -777,7 +797,7 @@ func getPreviousRound(tx *badger.Txn, namespace common.Namespace, round uint64) 
 			return 0, nil
 		}
 
-		if !rootLinkKeyFmt.Decode(it.Item().Key(), &decNs, &decRound, &decHash) || !decNs.Equal(&namespace) {
+		if !rootLinkKeyFmt.Decode(it.Item().Key(), &decNs, &decRound) || !decNs.Equal(&namespace) {
 			// No previous round.
 			return 0, nil
 		}
@@ -846,17 +866,19 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 	}
 
 	// Create root with an empty next link.
-	if err = ba.bat.Set(rootLinkKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash), []byte("")); err != nil {
+	var emptyHash hash.Hash
+	emptyHash.Empty()
+	if err = ba.bat.Set(rootLinkKeyFmt.Encode(&root.Namespace, root.Round, &root.Hash, &emptyHash), []byte("")); err != nil {
 		return errors.Wrap(err, "urkel/db/badger: set returned error")
 	}
 
 	// Update the root link for the old root.
 	if !ba.oldRoot.Hash.IsEmpty() {
-		key := rootLinkKeyFmt.Encode(&ba.oldRoot.Namespace, ba.oldRoot.Round, &ba.oldRoot.Hash)
 		if prevRound != ba.oldRoot.Round && ba.oldRoot.Round != root.Round {
 			return api.ErrPreviousRoundMismatch
 		}
 
+		key := rootLinkKeyFmt.Encode(&ba.oldRoot.Namespace, ba.oldRoot.Round, &ba.oldRoot.Hash, &emptyHash)
 		_, err = tx.Get(key)
 		switch err {
 		case nil:
@@ -866,12 +888,8 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 			return err
 		}
 
-		var data []byte
-		data, err = root.Hash.MarshalBinary()
-		if err != nil {
-			return err
-		}
-		if err = ba.bat.Set(key, data); err != nil {
+		key = rootLinkKeyFmt.Encode(&ba.oldRoot.Namespace, ba.oldRoot.Round, &ba.oldRoot.Hash, &root.Hash)
+		if err = ba.bat.Set(key, []byte("")); err != nil {
 			return errors.Wrap(err, "urkel/db/badger: set returned error")
 		}
 	}
