@@ -11,7 +11,9 @@ const (
 	// QuoteLen is the length of a quote in bytes, without the signature.
 	QuoteLen = 432
 
-	quoteBodyLen = 48
+	QuoteBodyLen = 48
+
+	OffsetReportReportData = 320
 )
 
 // SignatureType is the type of signature accommpanying an enclave quote.
@@ -78,7 +80,7 @@ func (r *Report) decode(data []byte) error {
 	_ = r.MRSIGNER.UnmarshalBinary(data[128 : 128+sgx.MrsignerSize])
 	r.ISVProdID = binary.LittleEndian.Uint16(data[256:])
 	r.ISVSVN = binary.LittleEndian.Uint16(data[258:])
-	copy(r.ReportData[:], data[320:])
+	copy(r.ReportData[:], data[OffsetReportReportData:])
 	return nil
 }
 
@@ -106,10 +108,10 @@ func DecodeQuote(data []byte) (*Quote, error) {
 	data = data[:QuoteLen] // Clip off the signature (Do we need this?).
 
 	var q Quote
-	if err := q.Body.decode(data[:quoteBodyLen]); err != nil {
+	if err := q.Body.decode(data[:QuoteBodyLen]); err != nil {
 		return nil, err
 	}
-	if err := q.Report.decode(data[quoteBodyLen:]); err != nil {
+	if err := q.Report.decode(data[QuoteBodyLen:]); err != nil {
 		return nil, err
 	}
 
