@@ -21,6 +21,7 @@ import (
 	storageApi "github.com/oasislabs/ekiden/go/storage/api"
 	storageClient "github.com/oasislabs/ekiden/go/storage/client"
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/ekiden/go/worker/storage/committee"
 )
 
 const (
@@ -29,6 +30,8 @@ const (
 )
 
 var (
+	finalizeRound uint64
+
 	storageCmd = &cobra.Command{
 		Use:   "storage",
 		Short: "node storage interface utilities",
@@ -51,6 +54,25 @@ var (
 			return nil
 		},
 		Run: doCheckRoots,
+	}
+
+	storageForceFinalizeCmd = &cobra.Command{
+		Use:   "force-finalize runtime-id (hex)...",
+		Short: "force the node to trigger round finalization and wait for it to complete",
+		Args: func(cmd *cobra.Command, args []string) error {
+			nrFn := cobra.MinimumNArgs(1)
+			if err := nrFn(cmd, args); err != nil {
+				return err
+			}
+			for _, arg := range args {
+				if err := cmdRoothashDebug.ValidateRuntimeIDStr(arg); err != nil {
+					return fmt.Errorf("malformed runtime id '%v': %v", arg, err)
+				}
+			}
+
+			return nil
+		},
+		Run: doForceFinalize,
 	}
 
 	logger = logging.GetLogger("cmd/storage")
@@ -221,11 +243,56 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 	}
 }
 
+func doForceFinalize(cmd *cobra.Command, args []string) {
+	if finalizeRound == 0 {
+		panic("can't finalize round 0")
+	}
+
+	ctx := context.Background()
+
+	conn, _ := cmdDebugClient.DoConnect(cmd)
+	storageWorkerClient := storageGrpc.NewStorageWorkerClient(conn)
+	defer conn.Close()
+
+	failed := false
+	for _, arg := range args {
+		var id signature.PublicKey
+		if err := id.UnmarshalHex(arg); err != nil {
+			logger.Error("failed to decode runtime id",
+				"err", err,
+			)
+			failed = true
+			continue
+		}
+
+		_, err := storageWorkerClient.ForceFinalize(ctx, &storageGrpc.ForceFinalizeRequest{
+			RuntimeId: id,
+			Round:     finalizeRound,
+		})
+		if err != nil {
+			logger.Error("failed to force round to finalize",
+				"err", err,
+				"round", finalizeRound,
+			)
+			failed = true
+			continue
+		}
+	}
+	if failed {
+		os.Exit(1)
+	}
+}
+
 // Register registers the storage sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
 	storageCheckRootsCmd.Flags().AddFlagSet(storageClient.Flags)
 	storageCheckRootsCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 
+	storageForceFinalizeCmd.Flags().AddFlagSet(storageClient.Flags)
+	storageForceFinalizeCmd.Flags().Uint64Var(&finalizeRound, "round", committee.RoundLatest, "the round to force finalize; default latest")
+	storageForceFinalizeCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
+
 	storageCmd.AddCommand(storageCheckRootsCmd)
+	storageCmd.AddCommand(storageForceFinalizeCmd)
 	parentCmd.AddCommand(storageCmd)
 }

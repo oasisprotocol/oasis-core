@@ -5,6 +5,7 @@ option go_package = "github.com/oasislabs/ekiden/go/grpc/storage";
 
 service StorageWorker {
     rpc GetLastSyncedRound(GetLastSyncedRoundRequest) returns (GetLastSyncedRoundResponse) {}
+    rpc ForceFinalize(ForceFinalizeRequest) returns (ForceFinalizeResponse) {}
 }
 
 message GetLastSyncedRoundRequest {
@@ -15,6 +16,14 @@ message GetLastSyncedRoundResponse {
     uint64 round = 1;
     bytes io_root = 2;
     bytes state_root = 3;
+}
+
+message ForceFinalizeRequest {
+    bytes runtime_id = 1;
+    uint64 round = 2;
+}
+
+message ForceFinalizeResponse {
 }
 
 service Storage {
