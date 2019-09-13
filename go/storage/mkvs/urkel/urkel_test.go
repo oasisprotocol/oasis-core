@@ -3,6 +3,7 @@ package urkel
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -1420,6 +1421,147 @@ func testPruneLoneRootsShared(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, []byte("bar3"), value)
 }
 
+func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
+	ctx := context.Background()
+
+	type item struct {
+		Key   string
+		Value string
+	}
+	batches := []struct {
+		Namespace common.Namespace
+		Round     uint64
+		SrcRoot   string
+		DstRoot   string
+		Finalized bool
+		Items     []item
+	}{
+		{
+			Namespace: common.Namespace{},
+			Round:     4,
+			SrcRoot:   "xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
+			DstRoot:   "lOaArHdVlgA5zgUeG/W0zbaXoWTd3Yey7Cd7e9caq14=",
+			Items: []item{
+				{
+					Key: "VFxlQ0wtW+UFzn4ojduOXMqLVlgtTzk5tN+eysKJiu7nAA==",
+					Value: "glkBGqNkYXJnc6Jja2V5eEpVbmxvY2sgdGhlIHBvdGVudGlhbCBvZiB5b3VyIGRhdGEgd2l0aG91" +
+						"dCBjb21wcm9taXNpbmcgc2VjdXJpdHkgb3IgcHJpdmFjeWV2YWx1ZXh5VGhlIHBsYXRmb3JtIHRo" +
+						"YXQgcHV0cyBkYXRhIHByaXZhY3kgZmlyc3QuIEZyb20gc2hhcmluZyBtZWRpY2FsIHJlY29yZHMs" +
+						"IHRvIGFuYWx5emluZyBwZXJzb25hbCBmaW5hbmNpYWwgaW5mb3JtYXRpb24gZXRjLmZtZXRob2Rm" +
+						"aW5zZXJ0cHByZWRpY3RlZF9yd19zZXSjaHJlYWRfc2V0gGl3cml0ZV9zZXSAa2dyYW51bGFyaXR5" +
+						"AAA=",
+				},
+			},
+		},
+		{
+			Namespace: common.Namespace{},
+			Round:     4,
+			SrcRoot:   "lOaArHdVlgA5zgUeG/W0zbaXoWTd3Yey7Cd7e9caq14=",
+			DstRoot:   "NokDIzVABsWhFaoHexVcpP9F4MXjzsMHHRtOyN8ryxw=",
+			Finalized: true,
+			Items: []item{
+				{
+					Key: "RWt2X2tleVxlQ0wtW+UFzn4ojduOXMqLVlgtTzk5tN+eysKJiu7n",
+					Value: "VW5sb2NrIHRoZSBwb3RlbnRpYWwgb2YgeW91ciBkYXRhIHdpdGhvdXQgY29tcHJvbWlzaW5nIHNl" +
+						"Y3VyaXR5IG9yIHByaXZhY3k=",
+				},
+				{
+					Key:   "RWt2X29wXGVDTC1b5QXOfiiN245cyotWWC1POTm0357KwomK7uc=",
+					Value: "aW5zZXJ0",
+				},
+				{
+					Key:   "VFxlQ0wtW+UFzn4ojduOXMqLVlgtTzk5tN+eysKJiu7nAQ==",
+					Value: "gUqhZ1N1Y2Nlc3P2",
+				},
+			},
+		},
+		{
+			Namespace: common.Namespace{},
+			Round:     4,
+			SrcRoot:   "lOaArHdVlgA5zgUeG/W0zbaXoWTd3Yey7Cd7e9caq14=",
+			DstRoot:   "8mGdcK7Gpw2/7kIuMfk2HiE1SYr6rOVynEgSOqe4TLk=",
+			Items: []item{
+				{
+					Key: "RWt2X2tleVxlQ0wtW+UFzn4ojduOXMqLVlgtTzk5tN+eysKJiu7n",
+					Value: "VW5sb2NrIHRoZSBwb3RlbnRpYWwgb2YgeW91ciBkYXRhIHdpdGhvdXQgY29tcHJvbWlzaW5nIHNl" +
+						"Y3VyaXR5IG9yIHByaXZhY3k=",
+				},
+				{
+					Key:   "RWt2X29wXGVDTC1b5QXOfiiN245cyotWWC1POTm0357KwomK7uc=",
+					Value: "aW5zZXJ0",
+				},
+				{
+					Key:   "VFxlQ0wtW+UFzn4ojduOXMqLVlgtTzk5tN+eysKJiu7nAQ==",
+					Value: "gUqhZ1N1Y2Nlc3P2",
+				},
+				{
+					Key:   "X19ib29tX18=",
+					Value: "cG9vZg==",
+				},
+			},
+		},
+	}
+
+	var finalizedRoots []hash.Hash
+	for _, batch := range batches {
+		srcRootHashRaw, err := base64.StdEncoding.DecodeString(batch.SrcRoot)
+		require.NoError(t, err, "base64.DecodeString")
+		var srcRootHash hash.Hash
+		err = srcRootHash.UnmarshalBinary(srcRootHashRaw)
+		require.NoError(t, err, "hash.UnmarshalBinary")
+
+		tree := NewWithRoot(nil, ndb, node.Root{
+			Namespace: batch.Namespace,
+			Round:     batch.Round,
+			Hash:      srcRootHash,
+		})
+		defer tree.Close()
+
+		for _, item := range batch.Items {
+			var key, value []byte
+			key, err = base64.StdEncoding.DecodeString(item.Key)
+			require.NoError(t, err, "base64.DecodeString")
+			value, err = base64.StdEncoding.DecodeString(item.Value)
+			require.NoError(t, err, "base64.DecodeString")
+			err = tree.Insert(ctx, key, value)
+			require.NoError(t, err, "Insert")
+		}
+
+		_, rootHash, err := tree.Commit(ctx, batch.Namespace, batch.Round)
+		require.NoError(t, err, "Commit")
+
+		dstRootHashRaw, err := base64.StdEncoding.DecodeString(batch.DstRoot)
+		require.NoError(t, err, "base64.DecodeString")
+		var dstRootHash hash.Hash
+		err = dstRootHash.UnmarshalBinary(dstRootHashRaw)
+		require.NoError(t, err, "hash.UnmarshalBinary")
+		require.EqualValues(t, dstRootHash, rootHash, "computed root hash must be as expected")
+
+		if batch.Finalized {
+			finalizedRoots = append(finalizedRoots, rootHash)
+		}
+	}
+
+	err := ndb.Finalize(ctx, batches[0].Namespace, batches[0].Round, finalizedRoots)
+	require.NoError(t, err, "Finalize")
+
+	tree := NewWithRoot(nil, ndb, node.Root{
+		Namespace: batches[0].Namespace,
+		Round:     batches[0].Round,
+		Hash:      finalizedRoots[0],
+	})
+	defer tree.Close()
+
+	it := tree.NewIterator(ctx)
+	defer it.Close()
+
+	for it.Rewind(); it.Valid(); it.Next() {
+		// Just iterate over the whole tree. If the tree is not consistent
+		// this iteration will throw an error that a node is missing.
+	}
+	require.NoError(t, it.Err(), "tree should still be consistent")
+}
+
 func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
 
@@ -1618,6 +1760,13 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	_, rootHashR1_1, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
 
+	// Commit root for round 2.
+	tree = New(nil, ndb)
+	err = tree.Insert(ctx, []byte("another2"), []byte("bar"))
+	require.NoError(t, err, "Insert")
+	_, rootHashR2_1, err := tree.Commit(ctx, testNs, 2)
+	require.NoError(t, err, "Commit")
+
 	// Commit for non-following round should fail.
 	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR1_1})
 	err = tree.Insert(ctx, []byte("moo"), []byte("moo"))
@@ -1642,17 +1791,17 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	require.Error(t, err, "Commit should fail for invalid root")
 	require.Equal(t, db.ErrRootNotFound, err)
 
-	// Finalize of round 1 should fail as round 0 is not finalized.
-	err = ndb.Finalize(ctx, testNs, 1, []hash.Hash{rootHashR1_1})
-	require.Error(t, err, "Finalize should fail as previous round not finalized")
-	require.Equal(t, db.ErrNotFinalized, err)
-
 	// Finalizing a round twice should fail.
 	err = ndb.Finalize(ctx, testNs, 0, []hash.Hash{rootHashR0_1})
 	require.NoError(t, err, "Finalize")
 	err = ndb.Finalize(ctx, testNs, 0, []hash.Hash{rootHashR0_1})
 	require.Error(t, err, "Finalize should fail as round is already finalized")
 	require.Equal(t, db.ErrAlreadyFinalized, err)
+
+	// Finalize of round 2 should fail as round 1 is not finalized.
+	err = ndb.Finalize(ctx, testNs, 2, []hash.Hash{rootHashR2_1})
+	require.Error(t, err, "Finalize should fail as previous round not finalized")
+	require.Equal(t, db.ErrNotFinalized, err)
 
 	// Commit into an already finalized round should fail.
 	tree = New(nil, ndb)
@@ -1697,6 +1846,7 @@ func testBackend(
 		{"PruneManyRounds", testPruneManyRounds},
 		{"PruneLoneRoots", testPruneLoneRoots},
 		{"PruneLoneRootsShared", testPruneLoneRootsShared},
+		{"PruneLoneRootsShared2", testPruneLoneRootsShared2},
 		{"PruneForkedRoots", testPruneForkedRoots},
 		{"PruneCheckpoints", testPruneCheckpoints},
 		{"Errors", testErrors},
@@ -1825,6 +1975,7 @@ func TestUrkelLRUBackend(t *testing.T) {
 			"PruneManyRounds",
 			"PruneLoneRoots",
 			"PruneLoneRootsShared",
+			"PruneLoneRootsShared2",
 			"PruneForkedRoots",
 			"PruneCheckpoints",
 			"Errors",
