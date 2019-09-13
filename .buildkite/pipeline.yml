@@ -83,7 +83,7 @@ steps:
   # Build jobs
   ############
   # This label needs to be synced with runtime-ethereum's
-  # .buildkite/scripts/download_common_artifacts.sh.
+  # .buildkite/scripts/download_utils.sh.
   - label: Build Go node
     command:
       - .buildkite/scripts/setup_gitconfig.sh
@@ -96,7 +96,7 @@ steps:
       <<: *docker_plugin
 
   # This label needs to be synced with runtime-ethereum's
-  # .buildkite/scripts/download_common_artifacts.sh.
+  # .buildkite/scripts/download_utils.sh.
   - label: Build Rust runtime loader
     command:
       - .buildkite/scripts/setup_gitconfig.sh
@@ -123,7 +123,7 @@ steps:
   # Runtime build jobs
   ####################
   # This label needs to be synced with runtime-ethereum's
-  # .buildkite/rust/build_and_test_runtime.sh and .buildkite/scripts/download_common_artifacts.sh.
+  # .buildkite/rust/test_runtime_and_gateway.sh and .buildkite/scripts/download_utils.sh.
   - label: Build key manager runtime
     command:
       - .buildkite/scripts/setup_gitconfig.sh
