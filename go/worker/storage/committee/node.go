@@ -531,7 +531,15 @@ mainLoop:
 				dummy.StateRoot.Round = cachedLastRound + 1
 				hashCache[cachedLastRound] = &dummy
 			}
-			for i := cachedLastRound; i < blk.Header.Round; i++ {
+			// Determine if we need to fetch any old block summaries. In case the first
+			// round is an undefined round, we need to start with the following round
+			// since the undefined round may be unsigned -1 and in this case the loop
+			// would not do any iterations.
+			startSummaryRound := cachedLastRound
+			if startSummaryRound == n.undefinedRound {
+				startSummaryRound++
+			}
+			for i := startSummaryRound; i < blk.Header.Round; i++ {
 				if _, ok := hashCache[i]; ok {
 					continue
 				}
