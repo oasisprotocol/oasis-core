@@ -101,6 +101,6 @@ clean: clean-go clean-runtimes
 	@$(ECHO) "$(CYAN)*** Cleaning up...$(OFF)"
 	@cargo clean
 
-regenerate-single-node: go
+regenerate-single-node: go runtimes
 	@$(ECHO) "$(CYAN)*** Regenerating single node config artifacts...$(OFF)"
 	@./scripts/regenerate_single_node.sh

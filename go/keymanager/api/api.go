@@ -13,6 +13,9 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 )
 
+// ChecksumSize is the length of checksum in bytes.
+const ChecksumSize = 32
+
 var (
 	// ErrNoSuchKeyManager is the error returned when a key manager does not
 	// exist.
@@ -21,6 +24,10 @@ var (
 	// TestPublicKey is the insecure hardcoded key manager public key, used
 	// in insecure builds when a RAK is unavailable.
 	TestPublicKey signature.PublicKey
+
+	// TestSigners contains a list of signers with corresponding test keys, used
+	// in insecure builds when a RAK is unavailable.
+	TestSigners []signature.Signer
 
 	initResponseContext = []byte("EkKmIniR")
 )
@@ -135,6 +142,8 @@ func init() {
 		"ekiden key manager test multisig key 2",
 	} {
 		tmpSigner := memorySigner.NewTestSigner(v)
+		TestSigners = append(TestSigners, tmpSigner)
+
 		if idx == 0 {
 			TestPublicKey = tmpSigner.Public()
 		}

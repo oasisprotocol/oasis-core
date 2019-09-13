@@ -33,7 +33,7 @@ lazy_static! {
     static ref POLICY: Policy = Policy::new();
     static ref MULTISIG_KEYS: HashSet<PublicKey> = {
         let mut set = HashSet::new();
-        if option_env!("EKIDNE_UNSAFE_KM_POLICY_KEYS").is_some() {
+        if option_env!("EKIDEN_UNSAFE_KM_POLICY_KEYS").is_some() {
             for seed in [
                 "ekiden key manager test multisig key 0",
                 "ekiden key manager test multisig key 1",
@@ -118,6 +118,7 @@ impl Policy {
             if old_policy.checksum != new_policy.checksum {
                 return Err(KeyManagerError::PolicyChanged.into());
             }
+            inner.policy = Some(old_policy.clone());
             return Ok(old_policy.checksum.clone());
         }
 
@@ -246,7 +247,7 @@ impl Policy {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct CachedPolicy {
     pub checksum: Vec<u8>,
     pub serial: u32,
@@ -282,7 +283,7 @@ impl CachedPolicy {
 
         // Ensure that enough valid signatures from trusted signers are present.
         let signers: HashSet<_> = MULTISIG_KEYS.intersection(&signers).collect();
-        let multisig_threshold = match option_env!("EKIDNE_UNSAFE_KM_POLICY_KEYS") {
+        let multisig_threshold = match option_env!("EKIDEN_UNSAFE_KM_POLICY_KEYS") {
             Some(_) => 2,
             None => MULTISIG_THRESHOLD,
         };

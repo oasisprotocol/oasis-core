@@ -98,7 +98,7 @@ func (fac *Factory) Generate(role signature.SignerRole, rng io.Reader) (signatur
 	return signer, nil
 }
 
-// Load will load the private key corresonding to the role, and return a Signer
+// Load will load the private key corresponding to the role, and return a Signer
 // ready for use.
 func (fac *Factory) Load(role signature.SignerRole) (signature.Signer, error) {
 	if err := fac.EnsureRole(role); err != nil {
@@ -108,7 +108,7 @@ func (fac *Factory) Load(role signature.SignerRole) (signature.Signer, error) {
 	return fac.doLoad(filepath.Join(fac.dataDir, fn))
 }
 
-// ForceLoad is evil and should be destroyed, howeverr that requires
+// ForceLoad is evil and should be destroyed, however that requires
 // fixing deployment, and the entity key for node registration mess.
 func (fac *Factory) ForceLoad(fn string) (signature.Signer, error) {
 	return fac.doLoad(fn)

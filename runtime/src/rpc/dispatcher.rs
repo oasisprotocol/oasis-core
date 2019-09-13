@@ -185,6 +185,10 @@ impl Dispatcher {
             true => &self.local_methods,
         };
 
+        if let Some(ref ctx_init) = self.ctx_initializer {
+            ctx_init.init(ctx);
+        }
+
         match vtbl.get(&request.method) {
             Some(dispatcher) => dispatcher.dispatch(request, ctx),
             None => Err(DispatchError::MethodNotFound {
@@ -196,6 +200,10 @@ impl Dispatcher {
 
     /// Dispatch local request.
     pub fn dispatch_local(&self, request: Request, mut ctx: Context) -> Response {
+        if let Some(ref ctx_init) = self.ctx_initializer {
+            ctx_init.init(&mut ctx);
+        }
+
         match self.dispatch_fallible(request, &mut ctx, true) {
             Ok(response) => response,
             Err(error) => Response {

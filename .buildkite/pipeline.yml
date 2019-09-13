@@ -172,6 +172,15 @@ steps:
       - .buildkite/go/test_and_coverage_ekiden.sh
     plugins:
       <<: *docker_plugin
+  
+  - label: Test Ekiden tools
+    command:
+      - .buildkite/scripts/download_e2e_test_artifacts.sh
+      - .buildkite/go/test_ekiden_tools.sh
+    agents:
+      buildkite_agent_size: medium
+    plugins:
+      <<: *docker_plugin
 
   #########################
   # Test single node config
