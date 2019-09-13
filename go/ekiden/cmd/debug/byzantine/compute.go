@@ -152,25 +152,34 @@ func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestN
 	return nil
 }
 
-func (cbc *computeBatchContext) createCommitment(id *identity.Identity, committeeID hash.Hash) error {
+func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak signature.Signer, committeeID hash.Hash) error {
 	var storageSigs []signature.Signature
 	for _, receipt := range cbc.storageReceipts {
 		storageSigs = append(storageSigs, receipt.Signature)
 	}
-	var err error
-	cbc.commit, err = commitment.SignComputeCommitment(id.NodeSigner, &commitment.ComputeBody{
-		CommitteeID: committeeID,
-		Header: commitment.ComputeResultsHeader{
-			PreviousHash: cbc.bd.Header.EncodedHash(),
-			IORoot:       cbc.newIORoot,
-			StateRoot:    cbc.newStateRoot,
-		},
+	header := commitment.ComputeResultsHeader{
+		PreviousHash: cbc.bd.Header.EncodedHash(),
+		IORoot:       cbc.newIORoot,
+		StateRoot:    cbc.newStateRoot,
+	}
+	computeBody := &commitment.ComputeBody{
+		CommitteeID:       committeeID,
+		Header:            header,
 		StorageSignatures: storageSigs,
-		// RakSig not set
-		TxnSchedSig:      cbc.bdSig,
-		InputRoot:        cbc.bd.IORoot,
-		InputStorageSigs: cbc.bd.StorageSignatures,
-	})
+		TxnSchedSig:       cbc.bdSig,
+		InputRoot:         cbc.bd.IORoot,
+		InputStorageSigs:  cbc.bd.StorageSignatures,
+	}
+	if rak != nil {
+		rakSig, err := signature.Sign(rak, commitment.ComputeResultsHeaderSignatureContext, header.MarshalCBOR())
+		if err != nil {
+			return errors.Wrapf(err, "signature Sign RAK")
+		}
+
+		computeBody.RakSig = rakSig.Signature
+	}
+	var err error
+	cbc.commit, err = commitment.SignComputeCommitment(id.NodeSigner, computeBody)
 	if err != nil {
 		return errors.Wrap(err, "commitment sign compute commitment")
 	}
