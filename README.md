@@ -31,7 +31,7 @@ Prerequisites:
   sudo apt install bubblewrap gcc g++ protobuf-compiler cmake libssl-dev libseccomp-dev
   ```
 
-* [Go](https://golang.org) (at least version 1.12).
+* [Go](https://golang.org) (at least version 1.13).
 
   If your distribution provides a new-enough version of Go, just use that.
 
@@ -40,15 +40,21 @@ Prerequisites:
   * [ensure `$GOPATH/bin` is in your `PATH`](
     https://tip.golang.org/doc/code.html#GOPATH),
   * [install the desired version of Go](
-    https://golang.org/doc/install#extra_versions), e.g. 1.12.4, with:
+    https://golang.org/doc/install#extra_versions), e.g. 1.13, with:
     ```
-    go get golang.org/dl/go1.12.4
-    go1.12.4 download
+    go get golang.org/dl/go1.13
+    go1.13 download
     ```
   * instruct Ekiden to use this particular version of Go by setting the
     `EKIDEN_GO` environment variable in your `~/.bashrc`:
     ```
-    export EKIDEN_GO=go1.12.4
+    export EKIDEN_GO=go1.13
+    ```
+  * since some oasis repositories are currently private, you need to set
+    the `GONOSUMDB` environment variable appropriately - as above it is
+    best to set it in your `~/.bashrc`:
+    ```
+    export GONOSUMDB=github.com/oasislabs
     ```
 
 * [protoc-gen-go](https://github.com/golang/protobuf).
