@@ -11,8 +11,10 @@ const (
 	// QuoteLen is the length of a quote in bytes, without the signature.
 	QuoteLen = 432
 
+	// QuoteBodyLen is the length of the part of the quote body that comes before the report.
 	QuoteBodyLen = 48
 
+	// OffsetReportReportData is the offset into the report structure of the report_data field.
 	OffsetReportReportData = 320
 )
 

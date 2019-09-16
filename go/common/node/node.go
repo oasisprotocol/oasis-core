@@ -400,6 +400,7 @@ func (c *CapabilityTEE) toProto() *pbCommon.CapabilitiesTEE {
 	return pb
 }
 
+// RAKHash computes the expected AVR report hash bound to a given public RAK.
 func RAKHash(rak signature.PublicKey) hash.Hash {
 	var rakHash hash.Hash
 	hData := make([]byte, 0, len(teeHashContext)+signature.PublicKeySize)
