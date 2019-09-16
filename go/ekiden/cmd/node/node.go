@@ -65,7 +65,7 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 func Run(cmd *cobra.Command, args []string) {
 	node, err := NewNode()
 	if err != nil {
-		return
+		os.Exit(1)
 	}
 	defer node.Cleanup()
 
