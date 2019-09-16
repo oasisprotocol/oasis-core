@@ -530,11 +530,6 @@ run_client_node() {
         2>&1 | sed "s/^/[client-node-${id}] /" &
 }
 
-# Cat all worker node logs.
-cat_worker_logs() {
-    cat ${EKIDEN_COMMITTEE_DIR}/worker-*.log
-}
-
 # Wait for a number of compute nodes to register.
 #
 # Arguments:
@@ -840,14 +835,12 @@ run_test() {
 ####################
 
 _assert_worker_logs_contain() {
+    set +ex
     required_code=$1
     pattern=$2
     msg=$3
 
-    set +ex
-    # NOTE: Cannot use pipes due to annoying SIGPIPE handling by cat causing
-    #       it to exit with code 141.
-    grep -q "${pattern}" <(cat_worker_logs)
+    grep -q "${pattern}" ${EKIDEN_COMMITTEE_DIR}/worker-*.log
     if [[ $? != $required_code ]]; then
         echo -e "\e[31;1mTEST ASSERTION FAILED: ${msg}\e[0m"
         set -ex
