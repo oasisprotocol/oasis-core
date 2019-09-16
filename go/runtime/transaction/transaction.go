@@ -359,6 +359,40 @@ func (t *Tree) GetTransaction(ctx context.Context, txHash hash.Hash) (*Transacti
 	return &tx, nil
 }
 
+// GetTransactionMultiple looks up multiple transactions by their hashes at
+// once and retrieves all of their artifacts.
+//
+// The function behaves identically to multiple GetTransaction calls, but is
+// more efficient as it performs prefetching to get all the requested
+// transactions in one round trip.
+func (t *Tree) GetTransactionMultiple(ctx context.Context, txHashes []hash.Hash) (map[hash.Hash]*Transaction, error) {
+	// Prefetch all of the specified transactions from storage so that we
+	// don't need to do multiple round trips.
+	var keys [][]byte
+	for _, txHash := range txHashes {
+		keys = append(keys, txnKeyFmt.Encode(&txHash))
+	}
+	if err := t.tree.PrefetchPrefixes(ctx, keys, prefetchArtifactCount); err != nil {
+		return nil, err
+	}
+
+	// Look up each transaction.
+	result := make(map[hash.Hash]*Transaction)
+	for _, txHash := range txHashes {
+		tx, err := t.GetTransaction(ctx, txHash)
+		switch err {
+		case nil:
+			result[txHash] = tx
+		case ErrNotFound:
+			// Just continue.
+		default:
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
 // GetTags retrieves all tags emitted in this tree.
 func (t *Tree) GetTags(ctx context.Context) (Tags, error) {
 	it := t.tree.NewIterator(ctx, urkel.IteratorPrefetch(prefetchArtifactCount))
