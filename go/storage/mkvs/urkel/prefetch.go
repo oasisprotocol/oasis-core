@@ -22,6 +22,10 @@ func (t *Tree) PrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit ui
 		return nil
 	}
 
+	return t.doPrefetchPrefixes(ctx, prefixes, limit)
+}
+
+func (t *Tree) doPrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit uint16) error {
 	// TODO: Can we avoid fetching items that we already have?
 
 	return t.cache.remoteSync(
@@ -64,7 +68,7 @@ func (t *Tree) SyncGetPrefixes(ctx context.Context, request *syncer.GetPrefixesR
 	// is available. This is needed to ensure that the same optimization
 	// carries on to the next layer.
 	if t.cache.rs != syncer.NopReadSyncer {
-		err := t.PrefetchPrefixes(ctx, request.Prefixes, request.Limit)
+		err := t.doPrefetchPrefixes(ctx, request.Prefixes, request.Limit)
 		if err != nil {
 			return nil, err
 		}
