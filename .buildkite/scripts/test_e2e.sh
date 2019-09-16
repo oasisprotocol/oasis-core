@@ -79,6 +79,7 @@ assert_compute_discrepancy_scenario_works() {
     assert_no_panics
     assert_no_round_timeouts
     assert_compute_discrepancies
+    assert_no_merge_discrepancies
 }
 
 scenario_merge_discrepancy() {
@@ -267,6 +268,7 @@ assert_compute_straggler_scenario_works() {
     assert_no_panics
     assert_round_timeouts
     assert_compute_discrepancies
+    assert_no_merge_discrepancies
 }
 
 scenario_byzantine_merge_honest() {
@@ -307,6 +309,13 @@ scenario_byzantine_merge_honest() {
 
     # Advance epoch to elect a new committee.
     set_epoch 1
+}
+
+assert_merge_straggler_scenario_works() {
+    assert_no_panics
+    assert_round_timeouts
+    assert_no_compute_discrepancies
+    assert_merge_discrepancies
 }
 
 scenario_byzantine_merge_wrong() {

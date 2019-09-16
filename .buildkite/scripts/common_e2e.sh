@@ -897,6 +897,11 @@ assert_compute_discrepancies() {
     assert_worker_logs_contain "compute discrepancy detected" "Compute discrepancy NOT detected during run."
 }
 
+# Assert that there were no merge discrepancies.
+assert_no_merge_discrepancies() {
+    assert_worker_logs_not_contain "merge discrepancy detected" "Merge discrepancy detected during run."
+}
+
 # Assert that there were merge discrepancies.
 assert_merge_discrepancies() {
     assert_worker_logs_contain "merge discrepancy detected" "Merge discrepancy NOT detected during run."
