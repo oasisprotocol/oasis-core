@@ -160,6 +160,7 @@ scenario_byzantine_compute_honest() {
     ${EKIDEN_NODE} debug byzantine compute-honest \
         --log.level debug \
         --log.format JSON \
+        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:13004 \
         --tendermint.consensus.timeout_commit 250ms \
@@ -201,6 +202,7 @@ scenario_byzantine_compute_wrong() {
     ${EKIDEN_NODE} debug byzantine compute-wrong \
         --log.level debug \
         --log.format JSON \
+        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:13004 \
         --tendermint.consensus.timeout_commit 250ms \
@@ -242,6 +244,7 @@ scenario_byzantine_compute_straggler() {
     ${EKIDEN_NODE} debug byzantine compute-straggler \
         --log.level debug \
         --log.format JSON \
+        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:13004 \
         --tendermint.consensus.timeout_commit 250ms \
@@ -291,6 +294,7 @@ scenario_byzantine_merge_honest() {
     ${EKIDEN_NODE} debug byzantine merge-honest \
         --log.level debug \
         --log.format JSON \
+        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:13004 \
         --tendermint.consensus.timeout_commit 250ms \
@@ -338,6 +342,7 @@ scenario_byzantine_merge_wrong() {
     ${EKIDEN_NODE} debug byzantine merge-wrong \
         --log.level debug \
         --log.format JSON \
+        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:13004 \
         --tendermint.consensus.timeout_commit 250ms \
@@ -378,6 +383,7 @@ scenario_byzantine_merge_straggler() {
     ${EKIDEN_NODE} debug byzantine merge-straggler \
         --log.level debug \
         --log.format JSON \
+        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:13004 \
         --tendermint.consensus.timeout_commit 250ms \
