@@ -17,6 +17,10 @@ func (t *Tree) PrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit ui
 	if t.cache.isClosed() {
 		return ErrClosed
 	}
+	if t.cache.rs == syncer.NopReadSyncer {
+		// If there is no remote syncer, we just do nothing.
+		return nil
+	}
 
 	// TODO: Can we avoid fetching items that we already have?
 
@@ -66,11 +70,8 @@ func (t *Tree) SyncGetPrefixes(ctx context.Context, request *syncer.GetPrefixesR
 		}
 	}
 
-	it := t.NewIterator(ctx)
+	it := t.NewIterator(ctx, WithProof(request.Tree.Root.Hash))
 	defer it.Close()
-
-	pb := syncer.NewProofBuilder(request.Tree.Root.Hash)
-	it.(*treeIterator).proofBuilder = pb
 
 	var total int
 prefixLoop:
@@ -93,7 +94,7 @@ prefixLoop:
 		}
 	}
 
-	proof, err := pb.Build(ctx)
+	proof, err := it.GetProof()
 	if err != nil {
 		return nil, err
 	}
