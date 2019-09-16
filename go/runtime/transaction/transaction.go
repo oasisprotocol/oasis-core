@@ -27,6 +27,10 @@ var (
 	errMalformedArtifactKind = errors.New("transaction: malformed artifact kind")
 )
 
+// prefetchArtifactCount is the number of items to prefetch from storage when
+// iterating over all artifacts.
+const prefetchArtifactCount uint16 = 20000
+
 // artifactKind is an artifact kind.
 type artifactKind uint8
 
@@ -223,8 +227,7 @@ func (bo inBatchOrder) Less(i, j int) bool { return bo.order[i] < bo.order[j] }
 
 // GetInputBatch returns a batch of transaction input artifacts in batch order.
 func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
-	// TODO: Hint the tree to prefetch everything.
-	it := t.tree.NewIterator(ctx)
+	it := t.tree.NewIterator(ctx, urkel.IteratorPrefetch(prefetchArtifactCount))
 	defer it.Close()
 
 	var curTx hash.Hash
@@ -264,8 +267,7 @@ func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
 // GetTransactions returns a list of all transaction artifacts in the tree
 // in a stable order (transactions are ordered by their hash).
 func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
-	// TODO: Hint the tree to prefetch everything.
-	it := t.tree.NewIterator(ctx)
+	it := t.tree.NewIterator(ctx, urkel.IteratorPrefetch(prefetchArtifactCount))
 	defer it.Close()
 
 	var curTx hash.Hash
@@ -359,8 +361,7 @@ func (t *Tree) GetTransaction(ctx context.Context, txHash hash.Hash) (*Transacti
 
 // GetTags retrieves all tags emitted in this tree.
 func (t *Tree) GetTags(ctx context.Context) (Tags, error) {
-	// TODO: Hint the tree to prefetch everything.
-	it := t.tree.NewIterator(ctx)
+	it := t.tree.NewIterator(ctx, urkel.IteratorPrefetch(prefetchArtifactCount))
 	defer it.Close()
 
 	var curTx hash.Hash
