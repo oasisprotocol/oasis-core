@@ -78,6 +78,9 @@ impl ProofVerifier {
                 proof.untrusted_root,
             ));
         }
+        if proof.entries.is_empty() {
+            return Err(format_err!("verifier: empty proof"));
+        }
 
         let (_, root_node) = self._verify_proof(proof, 0)?;
         let root_hash = root_node.borrow().hash;
@@ -93,6 +96,9 @@ impl ProofVerifier {
     }
 
     fn _verify_proof(&self, proof: &Proof, idx: usize) -> Fallible<(usize, NodePtrRef)> {
+        if idx >= proof.entries.len() {
+            return Err(format_err!("verifier: malformed proof"));
+        }
         let entry = match &proof.entries[idx] {
             Some(entry) => entry.as_ref(),
             None => return Ok((idx + 1, NodePointer::null_ptr())),
@@ -171,6 +177,14 @@ mod test {
 
         // Invalid proofs should not verify.
 
+        // Empty proof.
+        let empty_proof = Proof::default();
+        let result = pv.verify_proof(Context::background(), root_hash, &empty_proof);
+        assert!(
+            result.is_err(),
+            "verify proof should fail with an empty proof"
+        );
+
         // Different root.
         let bogus_hash = Hash::digest_bytes(b"i am a bogus hash");
         let result = pv.verify_proof(Context::background(), bogus_hash, &proof);
@@ -209,6 +223,15 @@ mod test {
         // Corrupted proof element type.
         let mut corrupted = proof.clone();
         corrupted.entries[3].as_mut().unwrap()[0] = 0xaa;
+        let result = pv.verify_proof(Context::background(), root_hash, &corrupted);
+        assert!(
+            result.is_err(),
+            "verify proof should fail with invalid proof"
+        );
+
+        // Missing elements.
+        let mut corrupted = proof.clone();
+        corrupted.entries.truncate(3);
         let result = pv.verify_proof(Context::background(), root_hash, &corrupted);
         assert!(
             result.is_err(),
