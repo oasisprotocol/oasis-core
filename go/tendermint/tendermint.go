@@ -70,6 +70,44 @@ var (
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
+type failMonitor struct {
+	sync.Mutex
+
+	isCleanShutdown bool
+}
+
+func (m *failMonitor) markCleanShutdown() {
+	m.Lock()
+	defer m.Unlock()
+
+	m.isCleanShutdown = true
+}
+
+func newFailMonitor(logger *logging.Logger, fn func()) *failMonitor {
+	// Tendermint in it's infinite wisdom, doesn't terminate when
+	// consensus fails, instead opting to "just" log, and tear down
+	// the ConsensusState.  Since this behavior is stupid, watch for
+	// unexpected ConsensusState termination, and panic to kill the
+	// ekiden node.
+
+	var m failMonitor
+	go func() {
+		// Wait(), basically.
+		fn()
+
+		// Check to see if the termination was expected or not.
+		m.Lock()
+		defer m.Unlock()
+
+		if !m.isCleanShutdown {
+			logger.Error("unexpected termination detected")
+			panic("tendermint: unexpected termination detected, consensus failure?")
+		}
+	}()
+
+	return &m
+}
+
 // IsSeed retuns true iff the node is configured as a seed node.
 func IsSeed() bool {
 	return viper.GetBool(cfgP2PSeedMode)
@@ -85,6 +123,7 @@ type tendermintService struct {
 	node          *tmnode.Node
 	client        tmcli.Client
 	blockNotifier *pubsub.Broker
+	failMonitor   *failMonitor
 
 	genesis                  genesis.Provider
 	nodeSigner               signature.Signer
@@ -154,6 +193,7 @@ func (t *tendermintService) Stop() {
 		return
 	}
 
+	t.failMonitor.markCleanShutdown()
 	if err := t.node.Stop(); err != nil {
 		t.Logger.Error("Error on stopping node", err)
 	}
@@ -440,6 +480,7 @@ func (t *tendermintService) lazyInit() error {
 			return errors.Wrap(err, "tendermint: failed to create node")
 		}
 		t.client = tmcli.NewLocal(t.node)
+		t.failMonitor = newFailMonitor(t.Logger, t.node.Wait)
 
 		return nil
 	}
