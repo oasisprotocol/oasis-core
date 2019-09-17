@@ -249,6 +249,7 @@ scenario_byzantine_compute_straggler() {
         --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
         --debug.allow_test_keys \
+        --mock_epochtime \
         2>&1 | sed "s/^/[byzantine] /" &
 
     # Initialize storage nodes.
@@ -260,6 +261,12 @@ scenario_byzantine_compute_straggler() {
 
     # Advance epoch to elect a new committee.
     set_epoch 1
+}
+
+assert_compute_straggler_scenario_works() {
+    assert_no_panics
+    assert_round_timeouts
+    assert_compute_discrepancies
 }
 
 scenario_byzantine_merge_honest() {
@@ -470,6 +477,8 @@ test_suite() {
             runtime=simple-keyvalue \
             client=simple-keyvalue-ops \
             client_extra_args="set hello_key hello_value" \
+            on_success_hook=assert_compute_straggler_scenario_works \
+            epochtime_backend=tendermint_mock \
             beacon_deterministic=1
     fi
 

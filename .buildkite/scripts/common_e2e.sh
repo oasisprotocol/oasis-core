@@ -769,6 +769,7 @@ run_test() {
     local client="none"
     local beacon_deterministic=""
     local restore_genesis_file=""
+    local epochtime_backend="tendermint"
     # Load named arguments that override defaults.
     local "${@}"
 
@@ -803,7 +804,9 @@ run_test() {
     fi
 
     # Start backend.
-    $backend_runner restore_genesis_file=${restore_genesis_file}
+    $backend_runner \
+        restore_genesis_file=${restore_genesis_file} \
+        epochtime_backend=${epochtime_backend}
     sleep 1
 
     # Run the client.
@@ -870,6 +873,12 @@ assert_no_panics() {
 # Assert that there are were no round timeouts.
 assert_no_round_timeouts() {
     assert_worker_logs_not_contain "FireTimer" "Round timeouts detected during run."
+    assert_worker_logs_not_contain "round failed" "Failed rounds detected during run."
+}
+
+# Assert that there are were round timeouts.
+assert_round_timeouts() {
+    assert_worker_logs_contain "FireTimer" "Round timeouts NOT detected during run."
     assert_worker_logs_not_contain "round failed" "Failed rounds detected during run."
 }
 

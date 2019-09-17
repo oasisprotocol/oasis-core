@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -19,6 +21,8 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
+
+const cfgMockEpochTime = "mock_epochtime"
 
 var (
 	logger       = logging.GetLogger("cmd/byzantine")
@@ -70,8 +74,9 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
+	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
 	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
+	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
 	}
 	defer func() {
@@ -181,8 +186,9 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
+	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
 	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
+	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
 	}
 	defer func() {
@@ -292,8 +298,9 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
+	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
 	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
+	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
 	}
 	defer func() {
@@ -349,8 +356,9 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
+	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
 	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
+	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
 	}
 	defer func() {
@@ -439,8 +447,9 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
+	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
 	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
+	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
 	}
 	defer func() {
@@ -554,6 +563,11 @@ func Register(parentCmd *cobra.Command) {
 }
 
 func init() {
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	fs.Bool(cfgMockEpochTime, false, "use the mock epochtime backend")
+	_ = viper.BindPFlags(fs)
+	byzantineCmd.PersistentFlags().AddFlagSet(fs)
+
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.GenesisFileFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(p2p.Flags)
 	byzantineCmd.PersistentFlags().AddFlagSet(tendermint.Flags)
