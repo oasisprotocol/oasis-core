@@ -10,6 +10,7 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
+	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -18,6 +19,7 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	beaconapp "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
+	epochtime_mockapp "github.com/oasislabs/ekiden/go/tendermint/apps/epochtime_mock"
 	keymanagerapp "github.com/oasislabs/ekiden/go/tendermint/apps/keymanager"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	roothashapp "github.com/oasislabs/ekiden/go/tendermint/apps/roothash"
@@ -30,13 +32,33 @@ var _ epochtime.Backend = (*fakeTimeBackend)(nil)
 
 // fakeTimeBackend is like TendermintBackend (of epochtime), but without
 // any workers.
-type fakeTimeBackend struct{}
+type fakeTimeBackend struct {
+	service service.TendermintService
+
+	useMockEpochTime bool
+}
 
 // GetEpoch implements epochtime Backend.
-func (*fakeTimeBackend) GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error) {
+func (t *fakeTimeBackend) GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error) {
 	if height == 0 {
 		panic("0 height not supported")
 	}
+
+	if t.useMockEpochTime {
+		// Query the epochtime_mock Tendermint application.
+		response, err := t.service.Query(epochtime_mockapp.QueryGetEpoch, nil, height)
+		if err != nil {
+			return 0, errors.Wrap(err, "epochtime: get block epoch query failed")
+		}
+
+		var data epochtime_mockapp.QueryGetEpochResponse
+		if err := cbor.Unmarshal(response, &data); err != nil {
+			return 0, errors.Wrap(err, "epochtime: get block epoch malformed response")
+		}
+
+		return data.Epoch, nil
+	}
+
 	// Use the the epoch interval that we have in E2E tests.
 	// We could make this more flexible with command line flags in future work.
 	return epochtime.EpochTime(height / 30), nil
@@ -60,7 +82,7 @@ func newHonestTendermint() *honestTendermint {
 	return &honestTendermint{}
 }
 
-func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
+func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMockEpochTime bool) error {
 	if ht.service != nil {
 		return errors.New("honest Tendermint service already started")
 	}
@@ -79,8 +101,15 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 	// This isn't very flexible. It's configured to match what we use in end-to-end tests.
 	// And we do that mostly by hardcoding options. We could make this more flexible with command
 	// line flags in future work.
-	timeSource := &fakeTimeBackend{}
-	// Tendermint epochtime has no registration
+	timeSource := &fakeTimeBackend{
+		service:          ht.service,
+		useMockEpochTime: useMockEpochTime,
+	}
+	if useMockEpochTime {
+		if err := ht.service.RegisterApplication(epochtime_mockapp.New()); err != nil {
+			return errors.Wrap(err, "honest Tendermint service RegisterApplication epochtime_mock")
+		}
+	}
 	if err := ht.service.RegisterApplication(beaconapp.New(timeSource, &beacon.Config{
 		DebugDeterministic: true,
 	})); err != nil {
