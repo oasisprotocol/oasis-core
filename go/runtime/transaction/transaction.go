@@ -27,6 +27,10 @@ var (
 	errMalformedArtifactKind = errors.New("transaction: malformed artifact kind")
 )
 
+// prefetchArtifactCount is the number of items to prefetch from storage when
+// iterating over all artifacts.
+const prefetchArtifactCount uint16 = 20000
+
 // artifactKind is an artifact kind.
 type artifactKind uint8
 
@@ -192,17 +196,17 @@ func (t *Tree) AddTransaction(ctx context.Context, tx Transaction, tags Tags) er
 
 	// Add transaction artifacts.
 	if err := t.tree.Insert(ctx, txnKeyFmt.Encode(&txHash, kindInput), tx.asInputArtifacts().MarshalCBOR()); err != nil {
-		return err
+		return errors.Wrap(err, "transaction: input artifacts insert failed")
 	}
 	if tx.Output != nil {
 		if err := t.tree.Insert(ctx, txnKeyFmt.Encode(&txHash, kindOutput), tx.asOutputArtifacts().MarshalCBOR()); err != nil {
-			return err
+			return errors.Wrap(err, "transaction: output artifacts insert failed")
 		}
 	}
 	// Add tags if specified.
 	for _, tag := range tags {
 		if err := t.tree.Insert(ctx, tagKeyFmt.Encode(tag.Key, &txHash), tag.Value); err != nil {
-			return err
+			return errors.Wrap(err, "transaction: tag insert failed")
 		}
 	}
 
@@ -223,8 +227,7 @@ func (bo inBatchOrder) Less(i, j int) bool { return bo.order[i] < bo.order[j] }
 
 // GetInputBatch returns a batch of transaction input artifacts in batch order.
 func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
-	// TODO: Hint the tree to prefetch everything.
-	it := t.tree.NewIterator(ctx)
+	it := t.tree.NewIterator(ctx, urkel.IteratorPrefetch(prefetchArtifactCount))
 	defer it.Close()
 
 	var curTx hash.Hash
@@ -251,7 +254,7 @@ func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
 		bo.order = append(bo.order, ia.BatchOrder)
 	}
 	if it.Err() != nil {
-		return nil, it.Err()
+		return nil, errors.Wrap(it.Err(), "transaction: get input batch failed")
 	}
 
 	// Sort transactions to be in batch order.
@@ -264,8 +267,7 @@ func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
 // GetTransactions returns a list of all transaction artifacts in the tree
 // in a stable order (transactions are ordered by their hash).
 func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
-	// TODO: Hint the tree to prefetch everything.
-	it := t.tree.NewIterator(ctx)
+	it := t.tree.NewIterator(ctx, urkel.IteratorPrefetch(prefetchArtifactCount))
 	defer it.Close()
 
 	var curTx hash.Hash
@@ -308,7 +310,7 @@ func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
 
 	}
 	if it.Err() != nil {
-		return nil, it.Err()
+		return nil, errors.Wrap(it.Err(), "transaction: get transactions failed")
 	}
 
 	return txs, nil
@@ -348,7 +350,7 @@ func (t *Tree) GetTransaction(ctx context.Context, txHash hash.Hash) (*Transacti
 
 	}
 	if it.Err() != nil {
-		return nil, it.Err()
+		return nil, errors.Wrap(it.Err(), "transaction: get transaction failed")
 	}
 	if len(tx.Input) == 0 {
 		return nil, ErrNotFound
@@ -357,10 +359,43 @@ func (t *Tree) GetTransaction(ctx context.Context, txHash hash.Hash) (*Transacti
 	return &tx, nil
 }
 
+// GetTransactionMultiple looks up multiple transactions by their hashes at
+// once and retrieves all of their artifacts.
+//
+// The function behaves identically to multiple GetTransaction calls, but is
+// more efficient as it performs prefetching to get all the requested
+// transactions in one round trip.
+func (t *Tree) GetTransactionMultiple(ctx context.Context, txHashes []hash.Hash) (map[hash.Hash]*Transaction, error) {
+	// Prefetch all of the specified transactions from storage so that we
+	// don't need to do multiple round trips.
+	var keys [][]byte
+	for _, txHash := range txHashes {
+		keys = append(keys, txnKeyFmt.Encode(&txHash))
+	}
+	if err := t.tree.PrefetchPrefixes(ctx, keys, prefetchArtifactCount); err != nil {
+		return nil, errors.Wrap(err, "transaction: prefetch failed")
+	}
+
+	// Look up each transaction.
+	result := make(map[hash.Hash]*Transaction)
+	for _, txHash := range txHashes {
+		tx, err := t.GetTransaction(ctx, txHash)
+		switch err {
+		case nil:
+			result[txHash] = tx
+		case ErrNotFound:
+			// Just continue.
+		default:
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
 // GetTags retrieves all tags emitted in this tree.
 func (t *Tree) GetTags(ctx context.Context) (Tags, error) {
-	// TODO: Hint the tree to prefetch everything.
-	it := t.tree.NewIterator(ctx)
+	it := t.tree.NewIterator(ctx, urkel.IteratorPrefetch(prefetchArtifactCount))
 	defer it.Close()
 
 	var curTx hash.Hash
@@ -381,7 +416,7 @@ func (t *Tree) GetTags(ctx context.Context) (Tags, error) {
 		})
 	}
 	if it.Err() != nil {
-		return nil, it.Err()
+		return nil, errors.Wrap(it.Err(), "transaction: get tags failed")
 	}
 
 	return tags, nil

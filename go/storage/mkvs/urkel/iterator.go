@@ -140,6 +140,8 @@ func IteratorPrefetch(prefetch uint16) IteratorOption {
 	}
 }
 
+// WithProof configures the iterator for generating proofs of all
+// visited nodes.
 func WithProof(root hash.Hash) IteratorOption {
 	return func(it Iterator) {
 		it.(*treeIterator).proofBuilder = syncer.NewProofBuilder(root)

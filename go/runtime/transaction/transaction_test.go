@@ -70,9 +70,11 @@ func TestTransaction(t *testing.T) {
 	require.NoError(t, err, "GetTransactions")
 	require.Len(t, txns, len(testTxns)+1, "there should be some transactions")
 
+	var txHashes []hash.Hash
 	txnsByHash := make(map[hash.Hash]*Transaction)
 	for _, tx := range txns {
 		txnsByHash[tx.Hash()] = tx
+		txHashes = append(txHashes, tx.Hash())
 	}
 
 	for _, checkTx := range testTxns {
@@ -91,6 +93,12 @@ func TestTransaction(t *testing.T) {
 	_, err = tree.GetTransaction(ctx, missingHash)
 	require.Error(t, err, "GetTransaction")
 	require.Equal(t, err, ErrNotFound, "GetTransaction should return ErrNotFound on missing tx")
+
+	// Fetching multiple transactions should work.
+	queryTxHashes := append([]hash.Hash{missingHash}, txHashes[:5]...)
+	matches, err := tree.GetTransactionMultiple(ctx, queryTxHashes)
+	require.NoError(t, err, "GetTransactionMultiple")
+	require.Len(t, matches, 5, "all matched transactions should be returned")
 
 	// Get tags.
 	rtags, err := tree.GetTags(ctx)

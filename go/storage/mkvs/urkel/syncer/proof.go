@@ -66,10 +66,6 @@ func (b *ProofBuilder) GetRoot() hash.Hash {
 
 // Build tries to build the proof.
 func (b *ProofBuilder) Build(ctx context.Context) (*Proof, error) {
-	if !b.HasRoot() {
-		return nil, errors.New("proof: no root in proof")
-	}
-
 	proof := Proof{
 		UntrustedRoot: b.root,
 	}
@@ -145,12 +141,22 @@ func (pv *ProofVerifier) VerifyProof(ctx context.Context, root hash.Hash, proof 
 			proof.UntrustedRoot,
 		)
 	}
+	if len(proof.Entries) == 0 {
+		return nil, errors.New("verifier: empty proof")
+	}
 
 	_, rootNode, err := pv.verifyProof(ctx, proof, 0)
 	if err != nil {
 		return nil, err
 	}
-	if !rootNode.Hash.Equal(&root) {
+	rootNodeHash := rootNode.GetHash()
+	if rootNodeHash.IsEmpty() {
+		// Make sure that in case the root node is empty we always return nil
+		// and not a pointer that represents nil.
+		rootNode = nil
+	}
+
+	if !rootNodeHash.Equal(&root) {
 		return nil, fmt.Errorf("verifier: bad root (expected: %s got: %s)",
 			root,
 			rootNode.Hash,
@@ -162,6 +168,9 @@ func (pv *ProofVerifier) VerifyProof(ctx context.Context, root hash.Hash, proof 
 func (pv *ProofVerifier) verifyProof(ctx context.Context, proof *Proof, idx int) (int, *node.Pointer, error) {
 	if ctx.Err() != nil {
 		return -1, nil, ctx.Err()
+	}
+	if idx >= len(proof.Entries) {
+		return -1, nil, errors.New("verifier: malformed proof")
 	}
 
 	entry := proof.Entries[idx]

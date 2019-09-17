@@ -63,6 +63,13 @@ var (
 		},
 		[]string{"runtime"},
 	)
+	batchReadTime = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "ekiden_worker_batch_read_time",
+			Help: "Time it takes to read a batch from storage",
+		},
+		[]string{"runtime"},
+	)
 	batchProcessingTime = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "ekiden_worker_batch_processing_time",
@@ -95,6 +102,7 @@ var (
 		discrepancyDetectedCount,
 		abortedBatchCount,
 		storageCommitLatency,
+		batchReadTime,
 		batchProcessingTime,
 		batchRuntimeProcessingTime,
 		batchSize,
@@ -270,6 +278,7 @@ func (n *Node) queueBatchBlocking(
 	txs := transaction.NewTree(n.commonNode.Storage, ioRoot)
 	defer txs.Close()
 
+	readStartTime := time.Now()
 	batch, err := txs.GetInputBatch(ctx)
 	if err != nil || len(batch) == 0 {
 		n.logger.Error("failed to fetch inputs from storage",
@@ -278,6 +287,7 @@ func (n *Node) queueBatchBlocking(
 		)
 		return errStorageFailed
 	}
+	batchReadTime.With(n.getMetricLabels()).Observe(time.Since(readStartTime).Seconds())
 
 	var batchSpanCtx opentracing.SpanContext
 	if batchSpan := opentracing.SpanFromContext(ctx); batchSpan != nil {

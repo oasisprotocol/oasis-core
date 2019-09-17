@@ -112,21 +112,23 @@ func (w *blockWatcher) checkBlock(blk *block.Block) {
 	defer tree.Close()
 
 	// Check if there's anything interesting in this block.
-traverseLoop:
-	for txHash, watch := range w.watched {
-		tx, err := tree.GetTransaction(ctx, txHash)
-		switch err {
-		case nil:
-		case transaction.ErrNotFound:
-			continue traverseLoop
-		default:
-			w.Logger.Error("can't get block I/O from storage", "err", err)
-			return
-		}
+	var txHashes []hash.Hash
+	for txHash := range w.watched {
+		txHashes = append(txHashes, txHash)
+	}
 
+	matches, err := tree.GetTransactionMultiple(ctx, txHashes)
+	if err != nil {
+		w.Logger.Error("can't get block I/O from storage", "err", err)
+		return
+	}
+
+	for txHash, tx := range matches {
+		watch := w.watched[txHash]
 		res := &watchResult{
 			result: tx.Output,
 		}
+
 		// Ignore errors, the watch is getting deleted anyway.
 		_ = watch.send(res)
 		close(watch.respCh)

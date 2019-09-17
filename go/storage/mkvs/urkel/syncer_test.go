@@ -35,8 +35,8 @@ func TestProof(t *testing.T) {
 	require.False(builder.HasRoot(), "HasRoot should return false")
 	require.EqualValues(rootHash, builder.GetRoot(), "GetRoot should return correct root")
 
-	_, err = builder.Build(ctx)
-	require.Error(err, "Build should fail without a root present")
+	rootOnlyProof, err := builder.Build(ctx)
+	require.NoError(err, "Build should not fail without a root present")
 
 	// Including a nil node should not panic.
 	builder.Include(nil)
@@ -102,7 +102,26 @@ func TestProof(t *testing.T) {
 	_, err = pv.VerifyProof(ctx, rootHash, proof)
 	require.NoError(err, "VerifyProof should not fail with a valid proof")
 
+	// Proof with only the root node should verify.
+	_, err = pv.VerifyProof(ctx, rootHash, rootOnlyProof)
+	require.NoError(err, "VerifyProof should not fail on a proof with only the root node")
+
+	// Empty root proof should verify.
+	var emptyHash hash.Hash
+	emptyHash.Empty()
+	builder = syncer.NewProofBuilder(emptyHash)
+	emptyRootProof, err := builder.Build(ctx)
+	require.NoError(err, "Build should not fail for an empty root")
+	emptyRootPtr, err := pv.VerifyProof(ctx, emptyHash, emptyRootProof)
+	require.NoError(err, "VerifyProof should not fail with a valid proof for an empty root")
+	require.Nil(emptyRootPtr, "VerifyProof should return nil pointer for an empty root")
+
 	// Invalid proofs should not verify.
+
+	// Empty proof.
+	var emptyProof syncer.Proof
+	_, err = pv.VerifyProof(ctx, rootHash, &emptyProof)
+	require.Error(err, "VerifyProof should fail with empty proof")
 
 	// Different root.
 	var bogusHash hash.Hash
@@ -111,26 +130,45 @@ func TestProof(t *testing.T) {
 	require.Error(err, "VerifyProof should fail with proof for a different root")
 
 	// Different hash element.
-	corrupted := *proof
+	corrupted := copyProof(proof)
 	corrupted.Entries[4][10] = 0x00
-	_, err = pv.VerifyProof(ctx, rootHash, &corrupted)
+	_, err = pv.VerifyProof(ctx, rootHash, corrupted)
 	require.Error(err, "VerifyProof should fail with invalid proof")
 
 	// Corrupted full node.
-	corrupted = *proof
+	corrupted = copyProof(proof)
 	corrupted.Entries[0] = corrupted.Entries[0][:3]
-	_, err = pv.VerifyProof(ctx, rootHash, &corrupted)
+	_, err = pv.VerifyProof(ctx, rootHash, corrupted)
 	require.Error(err, "VerifyProof should fail with invalid proof")
 
 	// Corrupted hash.
-	corrupted = *proof
+	corrupted = copyProof(proof)
 	corrupted.Entries[2] = corrupted.Entries[2][:3]
-	_, err = pv.VerifyProof(ctx, rootHash, &corrupted)
+	_, err = pv.VerifyProof(ctx, rootHash, corrupted)
 	require.Error(err, "VerifyProof should fail with invalid proof")
 
 	// Corrupted proof element type.
-	corrupted = *proof
+	corrupted = copyProof(proof)
 	corrupted.Entries[3][0] = 0xaa
-	_, err = pv.VerifyProof(ctx, rootHash, &corrupted)
+	_, err = pv.VerifyProof(ctx, rootHash, corrupted)
 	require.Error(err, "VerifyProof should fail with invalid proof")
+
+	// Missing elements.
+	corrupted = copyProof(proof)
+	corrupted.Entries = corrupted.Entries[:3]
+	_, err = pv.VerifyProof(ctx, rootHash, corrupted)
+	require.Error(err, "VerifyProof should fail with invalid proof")
+}
+
+func copyProof(p *syncer.Proof) *syncer.Proof {
+	if p == nil {
+		return nil
+	}
+
+	result := *p
+	result.Entries = append([][]byte{}, result.Entries...)
+	for i, e := range result.Entries {
+		result.Entries[i] = append([]byte{}, e...)
+	}
+	return &result
 }
