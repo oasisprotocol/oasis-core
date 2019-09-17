@@ -196,17 +196,17 @@ func (t *Tree) AddTransaction(ctx context.Context, tx Transaction, tags Tags) er
 
 	// Add transaction artifacts.
 	if err := t.tree.Insert(ctx, txnKeyFmt.Encode(&txHash, kindInput), tx.asInputArtifacts().MarshalCBOR()); err != nil {
-		return err
+		return errors.Wrap(err, "transaction: input artifacts insert failed")
 	}
 	if tx.Output != nil {
 		if err := t.tree.Insert(ctx, txnKeyFmt.Encode(&txHash, kindOutput), tx.asOutputArtifacts().MarshalCBOR()); err != nil {
-			return err
+			return errors.Wrap(err, "transaction: output artifacts insert failed")
 		}
 	}
 	// Add tags if specified.
 	for _, tag := range tags {
 		if err := t.tree.Insert(ctx, tagKeyFmt.Encode(tag.Key, &txHash), tag.Value); err != nil {
-			return err
+			return errors.Wrap(err, "transaction: tag insert failed")
 		}
 	}
 
@@ -254,7 +254,7 @@ func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
 		bo.order = append(bo.order, ia.BatchOrder)
 	}
 	if it.Err() != nil {
-		return nil, it.Err()
+		return nil, errors.Wrap(it.Err(), "transaction: get input batch failed")
 	}
 
 	// Sort transactions to be in batch order.
@@ -310,7 +310,7 @@ func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
 
 	}
 	if it.Err() != nil {
-		return nil, it.Err()
+		return nil, errors.Wrap(it.Err(), "transaction: get transactions failed")
 	}
 
 	return txs, nil
@@ -350,7 +350,7 @@ func (t *Tree) GetTransaction(ctx context.Context, txHash hash.Hash) (*Transacti
 
 	}
 	if it.Err() != nil {
-		return nil, it.Err()
+		return nil, errors.Wrap(it.Err(), "transaction: get transaction failed")
 	}
 	if len(tx.Input) == 0 {
 		return nil, ErrNotFound
@@ -373,7 +373,7 @@ func (t *Tree) GetTransactionMultiple(ctx context.Context, txHashes []hash.Hash)
 		keys = append(keys, txnKeyFmt.Encode(&txHash))
 	}
 	if err := t.tree.PrefetchPrefixes(ctx, keys, prefetchArtifactCount); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "transaction: prefetch failed")
 	}
 
 	// Look up each transaction.
@@ -416,7 +416,7 @@ func (t *Tree) GetTags(ctx context.Context) (Tags, error) {
 		})
 	}
 	if it.Err() != nil {
-		return nil, it.Err()
+		return nil, errors.Wrap(it.Err(), "transaction: get tags failed")
 	}
 
 	return tags, nil
