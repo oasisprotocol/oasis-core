@@ -30,6 +30,7 @@ docker_plugin_default_config: &docker_plugin_default_config
     - "CARGO_TARGET_DIR=/tmp/artifacts"
     - "CARGO_INSTALL_ROOT=/root/.cargo"
     - "GOPROXY=https://athens.ops.oasiscloud.io/"
+    - "GONOSUMDB=github.com/oasislabs"
   propagate-environment: true
   unconfined: true
 
@@ -46,6 +47,7 @@ docker_plugin_sgx_config: &docker_plugin_sgx_config
     - "CARGO_TARGET_DIR=/tmp/artifacts"
     - "CARGO_INSTALL_ROOT=/root/.cargo"
     - "GOPROXY=https://athens.ops.oasiscloud.io/"
+    - "GONOSUMDB=github.com/oasislabs"
 
 
 docker_plugin: &docker_plugin
@@ -172,7 +174,7 @@ steps:
       - .buildkite/go/test_and_coverage_ekiden.sh
     plugins:
       <<: *docker_plugin
-  
+
   - label: Test Ekiden tools
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
