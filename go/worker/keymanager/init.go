@@ -9,6 +9,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/ias"
@@ -71,6 +72,7 @@ func New(
 		commonWorker: commonWorker,
 		registration: r,
 		backend:      backend,
+		grpcPolicy:   grpc.NewDynamicRuntimePolicyChecker(),
 		enabled:      Enabled(),
 		mayGenerate:  viper.GetBool(CfgMayGenerate),
 	}

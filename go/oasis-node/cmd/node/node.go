@@ -509,7 +509,7 @@ func NewNode() (*Node, error) {
 	logger.Info("starting Oasis node")
 
 	// Initialize the key manager client service.
-	node.KeyManagerClient, err = keymanagerClient.New(node.KeyManager, node.Registry)
+	node.KeyManagerClient, err = keymanagerClient.New(node.KeyManager, node.Registry, node.Identity)
 	if err != nil {
 		logger.Error("failed to initialize key manager client",
 			"err", err,

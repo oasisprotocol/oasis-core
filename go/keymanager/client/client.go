@@ -3,6 +3,7 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"sync"
@@ -44,6 +45,8 @@ type Client struct {
 	sync.RWMutex
 
 	logger *logging.Logger
+
+	nodeIdentity *identity.Identity
 
 	backend  api.Backend
 	registry registry.Backend
@@ -206,7 +209,12 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 		}
 	}
 
-	creds := credentials.NewClientTLSFromCert(certPool, identity.CommonName)
+	// Open a gRPC connection using the node's TLS certificate.
+	creds := credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{*c.nodeIdentity.TLSCertificate},
+		RootCAs:      certPool,
+		ServerName:   identity.CommonName,
+	})
 	opts := grpc.WithTransportCredentials(creds)
 
 	// TODO: This probably could skip updating the connection sometimes.
@@ -260,11 +268,12 @@ func (c *Client) updateNodes(nodeList []*node.Node) {
 }
 
 // New creates a new key manager client instance.
-func New(backend api.Backend, registryBackend registry.Backend) (*Client, error) {
+func New(backend api.Backend, registryBackend registry.Backend, nodeIdentity *identity.Identity) (*Client, error) {
 	c := &Client{
-		logger: logging.GetLogger("keymanager/client"),
-		state:  make(map[signature.MapKey]*clientState),
-		kmMap:  make(map[signature.MapKey]signature.PublicKey),
+		logger:       logging.GetLogger("keymanager/client"),
+		nodeIdentity: nodeIdentity,
+		state:        make(map[signature.MapKey]*clientState),
+		kmMap:        make(map[signature.MapKey]signature.PublicKey),
 	}
 
 	if debugAddress := viper.GetString(cfgDebugClientAddress); debugAddress != "" {

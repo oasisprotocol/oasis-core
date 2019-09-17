@@ -26,6 +26,7 @@ impl SessionID {
 /// Frame.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Frame {
+    #[serde(with = "serde_bytes")]
     pub session: SessionID,
     // The `untrusted_plaintext` field is only a temporary workaround until
     // the snow library supports encrypting the payload with authenticated

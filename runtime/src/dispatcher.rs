@@ -440,7 +440,7 @@ impl Dispatcher {
                     // First make sure that the untrusted_plaintext matches
                     // the request's method!
                     if untrusted_plaintext != req.method {
-                        error!(self.logger, "Request method's don't match!";
+                        error!(self.logger, "Request methods don't match!";
                             "untrusted_plaintext" => ?untrusted_plaintext,
                             "method" => ?req.method
                         );
