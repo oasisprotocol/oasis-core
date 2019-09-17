@@ -137,6 +137,20 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication roothash")
 	}
 
+	// Wait for height=1 to pass, during which mux apps perform deferred initialization.
+	blockOne := make(chan struct{})
+	blocksCh, blocksSub := ht.service.WatchBlocks()
+	go func() {
+		defer blocksSub.Close()
+		for {
+			block := <-blocksCh
+			if block.Header.Height > 1 {
+				break
+			}
+		}
+		close(blockOne)
+	}()
+
 	if err := ht.service.Start(); err != nil {
 		return errors.Wrap(err, "honest Tendermint service Start")
 	}
@@ -145,6 +159,8 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	logger.Debug("honest Tendermint service waiting for Tendermint sync")
 	<-ht.service.Synced()
 	logger.Debug("honest Tendermint service sync done")
+	<-blockOne
+	logger.Debug("honest Tendermint block one occurred")
 
 	return nil
 }
