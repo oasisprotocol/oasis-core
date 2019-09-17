@@ -447,7 +447,6 @@ run_byzantine_node() {
     ${EKIDEN_NODE} debug byzantine ${script_name} \
         --log.level debug \
         --log.format JSON \
-        --log.file ${log_file} \
         --genesis.file ${EKIDEN_GENESIS_FILE} \
         --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
         --tendermint.consensus.timeout_commit 250ms \
