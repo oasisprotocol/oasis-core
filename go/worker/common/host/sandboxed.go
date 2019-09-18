@@ -125,16 +125,24 @@ type process struct {
 func waitOnProcess(p *os.Process) <-chan error {
 	waitCh := make(chan error)
 	go func() {
+		defer close(waitCh)
+
 		ps, err := p.Wait()
 		if err != nil {
 			// Error while waiting on process.
 			waitCh <- err
 		} else if !ps.Success() {
+			// Processes dying due to a signal require special handling.
+			if status, ok := ps.Sys().(syscall.WaitStatus); ok {
+				if status.Signaled() {
+					waitCh <- fmt.Errorf("process died due to signal %s", status.Signal())
+					return
+				}
+			}
+
 			// Process terminated with a non-zero exit code.
 			waitCh <- fmt.Errorf("process terminated with exit code %d", ps.Sys().(syscall.WaitStatus).ExitStatus())
 		}
-
-		close(waitCh)
 	}()
 
 	return waitCh
@@ -731,6 +739,11 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { //nolint: gocyclo
 		if haveErrors {
 			_ = cmd.Process.Kill()
 			_, _ = cmd.Process.Wait()
+
+			// Some environments (lolDocker) do not have something that
+			// reaps zombie processes by default.  Kill the process group
+			// as well.
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		}
 	}()
 
@@ -771,9 +784,9 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { //nolint: gocyclo
 		"worker_pid", cmd.Process.Pid,
 	)
 
-	// Spawn goroutine that waits for the sync FD to be closed. We only need it while
-	// we wait for the connection to be accepted as later we can simply wait on the
-	// sandbox process to exit.
+	// Spawn a goroutine that handles waiting on the child, assuming
+	// that this function returns successfully.  Child failure for the
+	// rest of this function is handled by the `haveErrors` defer.
 	waitCh := waitOnProcess(cmd.Process)
 
 	// Spawn goroutine that waits for a connection to be established.
