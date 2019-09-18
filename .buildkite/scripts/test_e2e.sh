@@ -79,6 +79,7 @@ assert_compute_discrepancy_scenario_works() {
     assert_no_panics
     assert_no_round_timeouts
     assert_compute_discrepancies
+    assert_no_merge_discrepancies
 }
 
 scenario_merge_discrepancy() {
@@ -169,6 +170,7 @@ scenario_byzantine_compute_honest() {
         --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
         --debug.allow_test_keys \
+        ${EKIDEN_TEE_HARDWARE:+--fake_sgx} \
         2>&1 | sed "s/^/[byzantine] /" &
 
     # Initialize storage nodes.
@@ -209,6 +211,7 @@ scenario_byzantine_compute_wrong() {
         --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
         --debug.allow_test_keys \
+        ${EKIDEN_TEE_HARDWARE:+--fake_sgx} \
         2>&1 | sed "s/^/[byzantine] /" &
 
     # Initialize storage nodes.
@@ -249,6 +252,7 @@ scenario_byzantine_compute_straggler() {
         --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
         --debug.allow_test_keys \
+        ${EKIDEN_TEE_HARDWARE:+--fake_sgx} \
         --mock_epochtime \
         2>&1 | sed "s/^/[byzantine] /" &
 
@@ -267,6 +271,7 @@ assert_compute_straggler_scenario_works() {
     assert_no_panics
     assert_round_timeouts
     assert_compute_discrepancies
+    assert_no_merge_discrepancies
 }
 
 scenario_byzantine_merge_honest() {
@@ -307,6 +312,13 @@ scenario_byzantine_merge_honest() {
 
     # Advance epoch to elect a new committee.
     set_epoch 1
+}
+
+assert_merge_straggler_scenario_works() {
+    assert_no_panics
+    assert_round_timeouts
+    assert_no_compute_discrepancies
+    assert_merge_discrepancies
 }
 
 scenario_byzantine_merge_wrong() {
@@ -448,39 +460,35 @@ test_suite() {
         runtime=simple-keyvalue \
         client=simple-keyvalue
 
-    # Byzantine node scenarios.
-    # Reenable these as part of https://github.com/oasislabs/ekiden/issues/2074.
-    if [[ ${EKIDEN_TEE_HARDWARE} != "intel-sgx" ]]; then
-        run_test \
-            scenario=scenario_byzantine_compute_honest \
-            name="e2e-${backend_name}-byzantine-compute-honest" \
-            backend_runner=$backend_runner \
-            runtime=simple-keyvalue \
-            client=simple-keyvalue-ops \
-            client_extra_args="set hello_key hello_value" \
-            beacon_deterministic=1
+    run_test \
+        scenario=scenario_byzantine_compute_honest \
+        name="e2e-${backend_name}-byzantine-compute-honest" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-ops \
+        client_extra_args="set hello_key hello_value" \
+        beacon_deterministic=1
 
-        run_test \
-            scenario=scenario_byzantine_compute_wrong \
-            name="e2e-${backend_name}-byzantine-compute-wrong" \
-            backend_runner=$backend_runner \
-            runtime=simple-keyvalue \
-            client=simple-keyvalue-ops \
-            client_extra_args="set hello_key hello_value" \
-            on_success_hook=assert_compute_discrepancy_scenario_works \
-            beacon_deterministic=1
+    run_test \
+        scenario=scenario_byzantine_compute_wrong \
+        name="e2e-${backend_name}-byzantine-compute-wrong" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-ops \
+        client_extra_args="set hello_key hello_value" \
+        on_success_hook=assert_compute_discrepancy_scenario_works \
+        beacon_deterministic=1
 
-        run_test \
-            scenario=scenario_byzantine_compute_straggler \
-            name="e2e-${backend_name}-byzantine-compute-straggler" \
-            backend_runner=$backend_runner \
-            runtime=simple-keyvalue \
-            client=simple-keyvalue-ops \
-            client_extra_args="set hello_key hello_value" \
-            on_success_hook=assert_compute_straggler_scenario_works \
-            epochtime_backend=tendermint_mock \
-            beacon_deterministic=1
-    fi
+    run_test \
+        scenario=scenario_byzantine_compute_straggler \
+        name="e2e-${backend_name}-byzantine-compute-straggler" \
+        backend_runner=$backend_runner \
+        runtime=simple-keyvalue \
+        client=simple-keyvalue-ops \
+        client_extra_args="set hello_key hello_value" \
+        on_success_hook=assert_compute_straggler_scenario_works \
+        epochtime_backend=tendermint_mock \
+        beacon_deterministic=1
 
     run_test \
         scenario=scenario_byzantine_merge_honest \

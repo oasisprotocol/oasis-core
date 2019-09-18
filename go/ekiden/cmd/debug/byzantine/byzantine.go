@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
@@ -22,7 +23,10 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
-const cfgMockEpochTime = "mock_epochtime"
+const (
+	cfgFakeSGX       = "fake_sgx"
+	cfgMockEpochTime = "mock_epochtime"
+)
 
 var (
 	logger       = logging.GetLogger("cmd/byzantine")
@@ -95,7 +99,11 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, node.RoleComputeWorker); err != nil {
+	var capabilities *node.Capabilities
+	if viper.GetBool(cfgFakeSGX) {
+		capabilities = &fakeCapabilitiesSGX
+	}
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -166,7 +174,11 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute upload batch failed: %+v", err))
 	}
 
-	if err = cbc.createCommitment(defaultIdentity, computeCommittee.EncodedMembersHash()); err != nil {
+	var rak signature.Signer
+	if viper.GetBool(cfgFakeSGX) {
+		rak = fakeRAK
+	}
+	if err = cbc.createCommitment(defaultIdentity, rak, computeCommittee.EncodedMembersHash()); err != nil {
 		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
 
@@ -207,7 +219,11 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, node.RoleComputeWorker); err != nil {
+	var capabilities *node.Capabilities
+	if viper.GetBool(cfgFakeSGX) {
+		capabilities = &fakeCapabilitiesSGX
+	}
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -278,7 +294,11 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute upload batch failed: %+v", err))
 	}
 
-	if err = cbc.createCommitment(defaultIdentity, computeCommittee.EncodedMembersHash()); err != nil {
+	var rak signature.Signer
+	if viper.GetBool(cfgFakeSGX) {
+		rak = fakeRAK
+	}
+	if err = cbc.createCommitment(defaultIdentity, rak, computeCommittee.EncodedMembersHash()); err != nil {
 		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
 
@@ -319,7 +339,11 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, node.RoleComputeWorker); err != nil {
+	var capabilities *node.Capabilities
+	if viper.GetBool(cfgFakeSGX) {
+		capabilities = &fakeCapabilitiesSGX
+	}
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -377,7 +401,7 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, node.RoleMergeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -468,7 +492,7 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, node.RoleMergeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -564,6 +588,7 @@ func Register(parentCmd *cobra.Command) {
 
 func init() {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	fs.Bool(cfgFakeSGX, false, "register with SGX capability")
 	fs.Bool(cfgMockEpochTime, false, "use the mock epochtime backend")
 	_ = viper.BindPFlags(fs)
 	byzantineCmd.PersistentFlags().AddFlagSet(fs)

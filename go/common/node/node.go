@@ -400,13 +400,19 @@ func (c *CapabilityTEE) toProto() *pbCommon.CapabilitiesTEE {
 	return pb
 }
 
-// Verify verifies the node's TEE capabilities, at the provided timestamp.
-func (c *CapabilityTEE) Verify(ts time.Time) error {
+// RAKHash computes the expected AVR report hash bound to a given public RAK.
+func RAKHash(rak signature.PublicKey) hash.Hash {
 	var rakHash hash.Hash
 	hData := make([]byte, 0, len(teeHashContext)+signature.PublicKeySize)
 	hData = append(hData, teeHashContext...)
-	hData = append(hData, c.RAK[:]...)
+	hData = append(hData, rak[:]...)
 	rakHash.FromBytes(hData)
+	return rakHash
+}
+
+// Verify verifies the node's TEE capabilities, at the provided timestamp.
+func (c *CapabilityTEE) Verify(ts time.Time) error {
+	rakHash := RAKHash(c.RAK)
 
 	switch c.Hardware {
 	case TEEHardwareIntelSGX:

@@ -17,7 +17,7 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
-func registryRegisterNode(svc service.TendermintService, id *identity.Identity, dataDir string, committeeAddresses []node.Address, p2pInfo node.P2PInfo, runtimeID signature.PublicKey, roles node.RolesMask) error {
+func registryRegisterNode(svc service.TendermintService, id *identity.Identity, dataDir string, committeeAddresses []node.Address, p2pInfo node.P2PInfo, runtimeID signature.PublicKey, capabilities *node.Capabilities, roles node.RolesMask) error {
 	entityID, registrationSigner, err := registration.GetRegistrationSigner(logging.GetLogger("cmd/byzantine/registration"), dataDir, id)
 	if err != nil {
 		return errors.Wrap(err, "registration GetRegistrationSigner")
@@ -42,6 +42,9 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 			},
 		},
 		Roles: roles,
+	}
+	if capabilities != nil {
+		nodeDesc.Runtimes[0].Capabilities = *capabilities
 	}
 	signedNode, err := node.SignNode(registrationSigner, registry.RegisterGenesisNodeSignatureContext, nodeDesc)
 	if err != nil {
