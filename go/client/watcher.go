@@ -2,12 +2,21 @@ package client
 
 import (
 	"context"
-	"errors"
+	"crypto/x509"
+
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/resolver"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
+	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/service"
+	"github.com/oasislabs/ekiden/go/grpc/txnscheduler"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
@@ -30,9 +39,55 @@ func (w *watchRequest) send(res *watchResult) error {
 }
 
 type watchResult struct {
-	result    []byte
-	err       error
-	newLeader *node.Node
+	result                []byte
+	err                   error
+	newTxnschedulerClient txnscheduler.TransactionSchedulerClient
+}
+
+type txnschedulerClientState struct {
+	client            txnscheduler.TransactionSchedulerClient
+	conn              *grpc.ClientConn
+	resolverCleanupCb func()
+}
+
+func (t *txnschedulerClientState) updateConnection(node *node.Node) error {
+	// Clean-up previous resolvers and connections.
+	if cleanup := t.resolverCleanupCb; cleanup != nil {
+		cleanup()
+	}
+	if t.conn != nil {
+		t.conn.Close()
+	}
+
+	// Setup resolver.
+	nodeCert, err := node.Committee.ParseCertificate()
+	if err != nil {
+		return errors.Wrap(err, "client/watcher: failed to parse txnscheduler leader certificate")
+	}
+	certPool := x509.NewCertPool()
+	certPool.AddCert(nodeCert)
+
+	creds := credentials.NewClientTLSFromCert(certPool, identity.CommonName)
+
+	manualResolver, address, cleanup := manual.NewManualResolver()
+	t.resolverCleanupCb = cleanup
+
+	// Dial.
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(creds), grpc.WithBalancerName(roundrobin.Name))
+	if err != nil {
+		return errors.Wrap(err, "client/watcher: failed to dial txnscheduler leader")
+	}
+	t.conn = conn
+
+	t.client = txnscheduler.NewTransactionSchedulerClient(conn)
+
+	var resolverState resolver.State
+	for _, addr := range node.Committee.Addresses {
+		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
+	}
+	manualResolver.UpdateState(resolverState)
+
+	return nil
 }
 
 type blockWatcher struct {
@@ -44,7 +99,7 @@ type blockWatcher struct {
 	watched map[hash.Hash]*watchRequest
 	newCh   chan *watchRequest
 
-	leader *node.Node
+	txnschedulerClientState *txnschedulerClientState
 
 	stopCh chan struct{}
 }
@@ -68,26 +123,28 @@ func (w *blockWatcher) refreshCommittee(height int64) error {
 		return errors.New("client/watcher: no transaction scheduler committee after epoch transition")
 	}
 
-	var leader *node.Node
+	var leaderNode *node.Node
 	for _, node := range committee.Members {
 		if node.Role != scheduler.Leader {
 			continue
 		}
-		leader, err = w.common.registry.GetNode(w.common.ctx, node.PublicKey)
+		leaderNode, err = w.common.registry.GetNode(w.common.ctx, node.PublicKey)
 		if err != nil {
 			return err
 		}
 		break
 	}
-	if leader == nil {
+	if leaderNode == nil {
 		return errors.New("client/watcher: no leader in new committee")
 	}
 
-	// Update our notion of the leader and tell every client to resubmit.
-	w.leader = leader
+	// Update txnscheduler leader connection and tell every client to resubmit.
+	if err := w.txnschedulerClientState.updateConnection(leaderNode); err != nil {
+		return err
+	}
 	for key, watch := range w.watched {
 		res := &watchResult{
-			newLeader: leader,
+			newTxnschedulerClient: w.txnschedulerClientState.client,
 		}
 		if watch.send(res) != nil {
 			delete(w.watched, key)
@@ -170,9 +227,9 @@ func (w *blockWatcher) watch() {
 
 		case newWatch := <-w.newCh:
 			w.watched[*newWatch.id] = newWatch
-			if w.leader != nil {
+			if w.txnschedulerClientState.client != nil {
 				res := &watchResult{
-					newLeader: w.leader,
+					newTxnschedulerClient: w.txnschedulerClientState.client,
 				}
 				if newWatch.send(res) != nil {
 					delete(w.watched, *newWatch.id)
@@ -195,7 +252,6 @@ func (w *blockWatcher) watch() {
 		if current.Header.HeaderType == block.EpochTransition || !gotFirstBlock {
 			if err := w.refreshCommittee(height); err != nil {
 				w.Logger.Error("error getting new committee data, waiting for next epoch", "err", err)
-				w.leader = nil
 				continue
 			}
 
@@ -223,12 +279,13 @@ func (w *blockWatcher) Stop() {
 func newWatcher(common *clientCommon, id signature.PublicKey) (*blockWatcher, error) {
 	svc := service.NewBaseBackgroundService("client/watcher")
 	watcher := &blockWatcher{
-		BaseBackgroundService: *svc,
-		common:                common,
-		id:                    id,
-		watched:               make(map[hash.Hash]*watchRequest),
-		newCh:                 make(chan *watchRequest),
-		stopCh:                make(chan struct{}),
+		BaseBackgroundService:   *svc,
+		common:                  common,
+		id:                      id,
+		txnschedulerClientState: &txnschedulerClientState{},
+		watched:                 make(map[hash.Hash]*watchRequest),
+		newCh:                   make(chan *watchRequest),
+		stopCh:                  make(chan struct{}),
 	}
 	return watcher, nil
 }
