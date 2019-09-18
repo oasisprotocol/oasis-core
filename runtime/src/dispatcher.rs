@@ -1,6 +1,7 @@
 //! Runtime call dispatcher.
 use std::{
     convert::TryInto,
+    process,
     sync::{Arc, Condvar, Mutex},
     thread,
 };
@@ -81,6 +82,21 @@ where
 
 type QueueItem = (Context, u64, Body);
 
+/// A guard that will abort the process if dropped while panicking.
+///
+/// This is to ensure that the runtime will terminate in case there is
+/// a panic encountered during dispatch and the runtime is built with
+/// a non-abort panic handler.
+struct AbortOnPanic;
+
+impl Drop for AbortOnPanic {
+    fn drop(&mut self) {
+        if thread::panicking() {
+            process::abort();
+        }
+    }
+}
+
 /// Runtime call dispatcher.
 pub struct Dispatcher {
     logger: Logger,
@@ -103,7 +119,10 @@ impl Dispatcher {
         });
 
         let d = dispatcher.clone();
-        thread::spawn(move || d.run(initializer, rx));
+        thread::spawn(move || {
+            let _guard = AbortOnPanic;
+            d.run(initializer, rx)
+        });
 
         dispatcher
     }
