@@ -60,6 +60,11 @@ var (
 		Short: "act as a merge worker that commits wrong result",
 		Run:   doMergeWrong,
 	}
+	mergeStragglerCmd = &cobra.Command{
+		Use:   "merge-straggler",
+		Short: "act as a merge worker that registers and doesn't do any work",
+		Run:   doMergeStraggler,
+	}
 )
 
 func activateCommonConfig(cmd *cobra.Command, args []string) {
@@ -576,6 +581,65 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 	logger.Debug("merge wrong: commitment sent")
 }
 
+func doMergeStraggler(cmd *cobra.Command, args []string) {
+	if err := common.Init(); err != nil {
+		common.EarlyLogAndExit(err)
+	}
+
+	defaultIdentity, err := initDefaultIdentity(common.DataDir())
+	if err != nil {
+		panic(fmt.Sprintf("init default identity failed: %+v", err))
+	}
+
+	useMockEpochTime := viper.GetBool(cfgMockEpochTime)
+	ht := newHonestTendermint()
+	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
+		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
+	}
+	defer func() {
+		if err1 := ht.stop(); err1 != nil {
+			panic(fmt.Sprintf("honest Tendermint stop failed: %+v", err1))
+		}
+	}()
+
+	ph := newP2PHandle()
+	if err = ph.start(defaultIdentity, defaultRuntimeID); err != nil {
+		panic(fmt.Sprintf("P2P start failed: %+v", err))
+	}
+	defer func() {
+		if err1 := ph.stop(); err1 != nil {
+			panic(fmt.Sprintf("P2P stop failed: %+v", err1))
+		}
+	}()
+
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
+		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
+	}
+
+	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindCompute)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
+	}
+	mergeCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindMerge, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindMerge, err))
+	}
+	if err = schedulerCheckScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
+		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
+	}
+	logger.Debug("merge straggler: merge schedule ok")
+
+	mbc := newMergeBatchContext()
+
+	// Receive 1 committee * 2 commitments per committee.
+	if err = mbc.receiveCommitments(ph, 2); err != nil {
+		panic(fmt.Sprintf("merge receive commitments failed: %+v", err))
+	}
+	logger.Debug("merge straggler: received commitments", "commitments", mbc.commitments)
+
+	logger.Debug("merge straggler: bailing")
+}
+
 // Register registers the byzantine sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
 	byzantineCmd.AddCommand(computeHonestCmd)
@@ -583,6 +647,7 @@ func Register(parentCmd *cobra.Command) {
 	byzantineCmd.AddCommand(computeStragglerCmd)
 	byzantineCmd.AddCommand(mergeHonestCmd)
 	byzantineCmd.AddCommand(mergeWrongCmd)
+	byzantineCmd.AddCommand(mergeStragglerCmd)
 	parentCmd.AddCommand(byzantineCmd)
 }
 
