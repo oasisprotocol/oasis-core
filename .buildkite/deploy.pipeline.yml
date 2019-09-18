@@ -25,6 +25,8 @@ docker_plugin: &docker_plugin_configuration
       - "LANG=C.UTF-8"
       - "CARGO_TARGET_DIR=/workdir/target"
       - "CARGO_INSTALL_ROOT=/root/.cargo"
+      - "GOPROXY=https://athens.ops.oasiscloud.io/"
+      - "GONOSUMDB=github.com/oasislabs"
     propagate-environment: true
 
 steps:
