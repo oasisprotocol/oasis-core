@@ -3,6 +3,7 @@ package common
 import (
 	"fmt"
 	"os"
+	"syscall"
 )
 
 // Mkdir creates a directory iff it does not exist, and otherwise
@@ -29,6 +30,12 @@ func Mkdir(d string) error {
 	}
 	if fm.Perm() != permDir {
 		return fmt.Errorf("common/Mkdir: path '%s' has invalid permissions: %v", d, fm.Perm())
+	}
+	if fs, ok := fi.Sys().(*syscall.Stat_t); ok {
+		euid := os.Geteuid()
+		if euid != int(fs.Uid) {
+			return fmt.Errorf("common/Mkdir: path '%s' has invalid owner: %d", d, fs.Uid)
+		}
 	}
 
 	return nil
