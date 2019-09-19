@@ -172,7 +172,7 @@ scenario_byzantine_compute_honest() {
         --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
         --debug.allow_test_keys \
         ${EKIDEN_TEE_HARDWARE:+--fake_sgx} \
-        2>&1 | sed "s/^/[byzantine] /" &
+        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
 
     # Initialize storage nodes.
     run_storage_node 1
@@ -214,7 +214,7 @@ scenario_byzantine_compute_wrong() {
         --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
         --debug.allow_test_keys \
         ${EKIDEN_TEE_HARDWARE:+--fake_sgx} \
-        2>&1 | sed "s/^/[byzantine] /" &
+        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
 
     # Initialize storage nodes.
     run_storage_node 1
@@ -257,7 +257,7 @@ scenario_byzantine_compute_straggler() {
         --debug.allow_test_keys \
         ${EKIDEN_TEE_HARDWARE:+--fake_sgx} \
         --mock_epochtime \
-        2>&1 | sed "s/^/[byzantine] /" &
+        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
 
     # Initialize storage nodes.
     run_storage_node 1
@@ -305,7 +305,7 @@ scenario_byzantine_merge_honest() {
         --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
         --debug.allow_test_keys \
-        2>&1 | sed "s/^/[byzantine] /" &
+        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
 
     # Initialize storage nodes.
     run_storage_node 1
@@ -353,7 +353,7 @@ scenario_byzantine_merge_wrong() {
         --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
         --debug.allow_test_keys \
-        2>&1 | sed "s/^/[byzantine] /" &
+        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
 
     # Initialize storage nodes.
     run_storage_node 1
@@ -394,7 +394,7 @@ scenario_byzantine_merge_straggler() {
         --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
         --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
         --debug.allow_test_keys \
-        2>&1 | sed "s/^/[byzantine] /" &
+        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
 
     # Initialize storage nodes.
     run_storage_node 1
