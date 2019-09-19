@@ -344,6 +344,8 @@ run_compute_node() {
     rm -rf ${data_dir}
     local log_file=${EKIDEN_COMMITTEE_DIR}/worker-$id.log
     rm -rf ${log_file}
+    local out_file=${EKIDEN_COMMITTEE_DIR}/worker-out-$id.log
+    rm -rf ${out_file}
 
     # Prepare keys to ensure deterministic committees.
     if [[ -f "${WORKDIR}/tests/identities/worker-${id}.pem" ]]; then
@@ -397,7 +399,7 @@ run_compute_node() {
         --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
         --datadir ${data_dir} \
         --debug.allow_test_keys \
-        ${extra_args} 2>&1 | sed "s/^/[compute-node-${id}] /" &
+        ${extra_args} 2>&1 | tee ${out_file} | sed "s/^/[compute-node-${id}] /" &
 }
 
 # Run a storage node.
