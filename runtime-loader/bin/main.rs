@@ -5,7 +5,7 @@ use std::path::Path;
 
 use clap::{App, Arg};
 
-use ekiden_runtime_loader::{proxy, ElfLoader, Loader, SgxsLoader};
+use ekiden_runtime_loader::{ElfLoader, Loader, SgxsLoader};
 
 fn main() {
     let matches = App::new("Ekiden runtime loader")
@@ -31,7 +31,6 @@ fn main() {
                 .takes_value(true)
                 .required(true),
         )
-        .args(&proxy::get_arguments())
         .get_matches();
 
     // Check if passed runtime exists.
@@ -43,9 +42,6 @@ fn main() {
     // Decode arguments.
     let host_socket = value_t!(matches, "host-socket", String).unwrap_or_else(|e| e.exit());
     let mode = matches.value_of("type").unwrap();
-
-    // Start proxy servers.
-    proxy::start_proxies(matches.clone());
 
     // Create appropriate loader and run the runtime.
     let loader: Box<dyn Loader> = match mode {

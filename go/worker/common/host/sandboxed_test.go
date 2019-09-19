@@ -78,7 +78,6 @@ func TestSandboxedHost(t *testing.T) {
 		ID:             testID,
 		WorkerBinary:   envWorkerHostWorkerBinary,
 		RuntimeBinary:  envWorkerHostRuntimeBinary,
-		Proxies:        nil,
 		TEEHardware:    tee,
 		IAS:            ias,
 		MessageHandler: &mockHostHandler{},

@@ -34,11 +34,6 @@ const (
 	// BackendUnconfined is the name of the no-sandbox backend.
 	BackendUnconfined = "unconfined"
 
-	// MetricsProxyKey is the key used to configure the metrics proxy.
-	MetricsProxyKey = "metrics"
-	// TracingProxyKey is the key used to configure the tracing proxy.
-	TracingProxyKey = "tracing"
-
 	// Worker connect timeout.
 	workerConnectTimeout = 5 * time.Second
 	// Worker runtime information request timeout.
@@ -68,42 +63,11 @@ const (
 	teeIntelSGXSocket = "/var/run/aesmd/aesm.socket"
 )
 
-var (
-	_ Host = (*sandboxedHost)(nil)
-
-	// Paths for proxy sockets inside the sandbox.
-	workerMountSocketMap = map[string]string{
-		MetricsProxyKey: "/prometheus-proxy.sock",
-		TracingProxyKey: "/jaeger-proxy.sock",
-	}
-
-	// Ports inside the sandbox to forward to the outside.
-	workerProxyInnerAddrs = map[string]string{
-		MetricsProxyKey: "127.0.0.1:8080",
-		TracingProxyKey: "127.0.0.1:6831",
-	}
-)
+var _ Host = (*sandboxedHost)(nil)
 
 // OnProcessStart is the function called after a worker process has been
 // started.
 type OnProcessStart func(*protocol.Protocol, *node.CapabilityTEE) error
-
-// ProxySpecification contains all necessary details about a single proxy.
-type ProxySpecification struct {
-	// ProxyType is the type of this proxy ("stream" or "dgram").
-	ProxyType string
-	// SourceName is the path of the unix socket outside the sandbox.
-	SourceName string
-	// OuterAddr is the address to which the proxy is forwarding outside.
-	OuterAddr string
-	// mapName is the name of the unix socket inside the sandbox.
-	mapName string
-	// innerAddr is the address on which the proxy will listen inside the sandbox;
-	// if bypass is true, innerAddr is the same as OuterAddr
-	innerAddr string
-	// bypass specifies if a proxy is needed or if the service will connect directly.
-	bypass bool
-}
 
 type process struct {
 	sync.Mutex
@@ -226,7 +190,7 @@ func (p *process) getRuntimeVersion() *version.Version {
 	return p.runtimeVersion
 }
 
-func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies map[string]ProxySpecification, hardware node.TEEHardware) ([]string, error) {
+func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, hardware node.TEEHardware) ([]string, error) {
 	// Prepare general arguments.
 	args := []string{
 		// Unshare all possible namespaces.
@@ -253,11 +217,6 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies 
 		"--new-session",
 		// Change working directory to /.
 		"--chdir", "/",
-	}
-
-	// Append any extra bind options for proxies.
-	for _, pair := range proxies {
-		args = append(args, "--bind", pair.SourceName, pair.mapName)
 	}
 
 	// Bind the TEE specific files.
@@ -313,15 +272,9 @@ func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, proxies 
 	return args, nil
 }
 
-func prepareWorkerArgs(hostSocket, runtimeBinary string, proxies map[string]ProxySpecification, hardware node.TEEHardware) []string {
+func prepareWorkerArgs(hostSocket, runtimeBinary string, hardware node.TEEHardware) []string {
 	args := []string{
 		"--host-socket", hostSocket,
-	}
-	for name, proxy := range proxies {
-		if proxy.bypass {
-			continue
-		}
-		args = append(args, fmt.Sprintf("--proxy-bind=%s,%s,%s,%s", proxy.ProxyType, name, proxy.innerAddr, proxy.mapName))
 	}
 
 	// Configure runtime type.
@@ -487,10 +440,6 @@ type Config struct { //nolint: maligned
 	// RuntimeBinary is the path to the worker runtime binary.
 	RuntimeBinary string
 
-	// Proxies are the network proxies for allowing external connectivity
-	// from within the worker host environment.
-	Proxies map[string]ProxySpecification
-
 	// TEEHardware is the TEE hardware to be made available within the
 	// worker host environment.
 	TEEHardware node.TEEHardware
@@ -513,7 +462,6 @@ type Config struct { //nolint: maligned
 type sandboxedHost struct { //nolint: maligned
 	cfg *Config
 
-	proxies  map[string]ProxySpecification
 	teeState teeState
 
 	stopCh chan struct{}
@@ -680,7 +628,6 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { //nolint: gocyclo
 		workerArgs = prepareWorkerArgs(
 			hostSocket,
 			h.cfg.RuntimeBinary,
-			h.proxies,
 			h.cfg.TEEHardware,
 		)
 	} else {
@@ -693,7 +640,6 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { //nolint: gocyclo
 		workerArgs = prepareWorkerArgs(
 			workerMountHostSocket,
 			workerMountRuntimeBin,
-			h.proxies,
 			h.cfg.TEEHardware,
 		)
 	}
@@ -754,7 +700,6 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { //nolint: gocyclo
 			hostSocket,
 			h.cfg.WorkerBinary,
 			h.cfg.RuntimeBinary,
-			h.proxies,
 			h.cfg.TEEHardware,
 		) //nolint: govet
 		if err != nil {
@@ -1013,22 +958,6 @@ func NewHost(cfg *Config) (Host, error) {
 		return nil, errors.New("runtime binary not configured")
 	}
 
-	knownProxies := make(map[string]ProxySpecification)
-	if cfg.Proxies != nil {
-		for name, mappedSocket := range workerMountSocketMap {
-			if proxy, ok := cfg.Proxies[name]; ok {
-				proxy.mapName = mappedSocket
-				if cfg.NoSandbox {
-					proxy.innerAddr = proxy.OuterAddr
-				} else {
-					proxy.innerAddr = workerProxyInnerAddrs[name]
-				}
-				proxy.bypass = cfg.NoSandbox
-				knownProxies[name] = proxy
-			}
-		}
-	}
-
 	var hostTeeState teeState
 	switch cfg.TEEHardware {
 	case node.TEEHardwareInvalid:
@@ -1048,7 +977,6 @@ func NewHost(cfg *Config) (Host, error) {
 
 	host := &sandboxedHost{
 		cfg:                   cfg,
-		proxies:               knownProxies,
 		teeState:              hostTeeState,
 		quitCh:                make(chan struct{}),
 		stopCh:                make(chan struct{}),
