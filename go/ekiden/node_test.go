@@ -61,8 +61,9 @@ var (
 		{"tendermint.consensus.timeout_commit", 1 * time.Millisecond},
 		{"tendermint.consensus.skip_timeout_commit", true},
 		{"worker.compute.enabled", true},
-		{"worker.compute.backend", "mock"},
-		{"worker.compute.runtime.binary", "mock-runtime"},
+		{"worker.runtime.backend", "mock"},
+		{"worker.runtime.loader", "mock-runtime"},
+		{"worker.runtime.binary", "mock-runtime"},
 		{"worker.storage.enabled", true},
 		{"worker.client.port", workerClientPort},
 		{"worker.txnscheduler.enabled", true},
@@ -231,7 +232,6 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	require.NoError(err, "register test runtime")
 
 	// Get the runtime and the corresponding compute committee node instance.
-	require.Equal(node.ComputeWorker.GetConfig().Runtimes[0].ID, testRuntime.ID)
 	computeRT := node.ComputeWorker.GetRuntime(testRuntime.ID)
 	require.NotNil(t, computeRT)
 	node.computeCommitteeNode = computeRT.GetNode()

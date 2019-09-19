@@ -2,14 +2,10 @@ package compute
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/ias"
-	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
@@ -18,24 +14,15 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
-// RuntimeConfig is a single runtime's configuration.
-type RuntimeConfig struct {
-	ID          signature.PublicKey
-	Binary      string
-	TEEHardware node.TEEHardware
-}
-
 // Config is the compute worker configuration.
 type Config struct {
-	Backend                   string
-	Committee                 committee.Config
-	WorkerRuntimeLoaderBinary string
-	Runtimes                  []RuntimeConfig
+	// Committee is the compute committee configuration.
+	Committee committee.Config
 }
 
 // Runtime is a single runtime.
 type Runtime struct {
-	cfg *RuntimeConfig
+	id signature.PublicKey
 
 	workerHost host.Host
 	node       *committee.Node
@@ -51,18 +38,16 @@ func (r *Runtime) GetNode() *committee.Node {
 
 // Worker is a compute worker handling many runtimes.
 type Worker struct {
+	*workerCommon.RuntimeHostWorker
+
 	enabled bool
 	cfg     Config
 
 	commonWorker *workerCommon.Worker
 	merge        *merge.Worker
-	ias          *ias.IAS
-	keyManager   *keymanager.Client
 	registration *registration.Registration
 
 	runtimes map[signature.MapKey]*Runtime
-
-	localStorage *host.LocalStorage
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -114,7 +99,7 @@ func (w *Worker) Start() error {
 	// Start runtime services.
 	for _, rt := range w.runtimes {
 		w.logger.Info("starting services for runtime",
-			"runtime_id", rt.cfg.ID,
+			"runtime_id", rt.id,
 		)
 
 		if err := rt.workerHost.Start(); err != nil {
@@ -137,15 +122,11 @@ func (w *Worker) Stop() {
 
 	for _, rt := range w.runtimes {
 		w.logger.Info("stopping services for runtime",
-			"runtime_id", rt.cfg.ID,
+			"runtime_id", rt.id,
 		)
 
 		rt.node.Stop()
 		rt.workerHost.Stop()
-	}
-
-	if w.localStorage != nil {
-		w.localStorage.Stop()
 	}
 }
 
@@ -195,58 +176,30 @@ func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
 	return rt
 }
 
-func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, err error) {
-	hostCfg := &host.Config{
-		Role:           node.RoleComputeWorker,
-		ID:             rtCfg.ID,
-		WorkerBinary:   cfg.WorkerRuntimeLoaderBinary,
-		RuntimeBinary:  rtCfg.Binary,
-		TEEHardware:    rtCfg.TEEHardware,
-		IAS:            w.ias,
-		MessageHandler: newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
-	}
-
-	switch strings.ToLower(cfg.Backend) {
-	case host.BackendSandboxed:
-		h, err = host.NewHost(hostCfg)
-	case host.BackendUnconfined:
-		hostCfg.NoSandbox = true
-		h, err = host.NewHost(hostCfg)
-	case host.BackendMock:
-		h, err = host.NewMockHost()
-	default:
-		err = fmt.Errorf("unsupported worker host backend: '%v'", cfg.Backend)
-	}
-
-	return
-}
-
-func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
+func (w *Worker) registerRuntime(cfg *Config, rt *workerCommon.Runtime) error {
 	w.logger.Info("registering new runtime",
-		"runtime_id", rtCfg.ID,
+		"runtime_id", rt.GetID(),
 	)
 
 	// Get other nodes from this runtime.
-	commonNode := w.commonWorker.GetRuntime(rtCfg.ID).GetNode()
+	commonNode := rt.GetNode()
 	var mergeNode *mergeCommittee.Node
 	if w.merge.Enabled() {
-		mergeNode = w.merge.GetRuntime(rtCfg.ID).GetNode()
+		mergeNode = w.merge.GetRuntime(rt.GetID()).GetNode()
 	}
 
 	// Create worker host for the given runtime.
-	workerHost, err := w.newWorkerHost(cfg, rtCfg)
+	workerHost, err := w.NewRuntimeWorkerHost(node.RoleComputeWorker, rt.GetID())
 	if err != nil {
 		return err
 	}
 
 	// Create committee node for the given runtime.
-	nodeCfg := cfg.Committee
-
 	node, err := committee.NewNode(
 		commonNode,
 		mergeNode,
 		workerHost,
-		nodeCfg,
+		cfg.Committee,
 	)
 	if err != nil {
 		return err
@@ -254,15 +207,15 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 
 	commonNode.AddHooks(node)
 
-	rt := &Runtime{
-		cfg:        rtCfg,
+	crt := &Runtime{
+		id:         rt.GetID(),
 		workerHost: workerHost,
 		node:       node,
 	}
-	w.runtimes[rt.cfg.ID.ToMapKey()] = rt
+	w.runtimes[crt.id.ToMapKey()] = crt
 
 	w.logger.Info("new runtime registered",
-		"runtime_id", rt.cfg.ID,
+		"runtime_id", rt.GetID(),
 	)
 
 	return nil
@@ -273,8 +226,6 @@ func newWorker(
 	enabled bool,
 	commonWorker *workerCommon.Worker,
 	merge *merge.Worker,
-	ias *ias.IAS,
-	keyManager *keymanager.Client,
 	registration *registration.Registration,
 	cfg Config,
 ) (*Worker, error) {
@@ -285,8 +236,6 @@ func newWorker(
 		cfg:          cfg,
 		commonWorker: commonWorker,
 		merge:        merge,
-		ias:          ias,
-		keyManager:   keyManager,
 		registration: registration,
 		runtimes:     make(map[signature.MapKey]*Runtime),
 		ctx:          ctx,
@@ -301,22 +250,16 @@ func newWorker(
 			panic("common worker should have been enabled for compute worker")
 		}
 
-		if cfg.WorkerRuntimeLoaderBinary == "" && cfg.Backend != host.BackendMock {
-			return nil, fmt.Errorf("compute/worker: no runtime loader binary configured and backend not host.BackendMock")
-		}
-		if len(cfg.Runtimes) == 0 {
-			return nil, fmt.Errorf("compute/worker: no runtimes configured")
-		}
-
-		// Open the local storage.
+		// Create the runtime host worker.
 		var err error
-		if w.localStorage, err = host.NewLocalStorage(dataDir, "worker-local-storage.bolt.db"); err != nil {
+		w.RuntimeHostWorker, err = workerCommon.NewRuntimeHostWorker(commonWorker)
+		if err != nil {
 			return nil, err
 		}
 
 		// Register all configured runtimes.
-		for _, rtCfg := range cfg.Runtimes {
-			if err = w.registerRuntime(&cfg, &rtCfg); err != nil {
+		for _, rt := range commonWorker.GetRuntimes() {
+			if err := w.registerRuntime(&cfg, rt); err != nil {
 				return nil, err
 			}
 		}
@@ -324,6 +267,7 @@ func newWorker(
 		// Register compute worker role.
 		w.registration.RegisterRole(func(n *node.Node) error {
 			n.AddRoles(node.RoleComputeWorker)
+
 			for _, rt := range n.Runtimes {
 				var err error
 
@@ -347,7 +291,7 @@ func newWorker(
 					w.logger.Error("failed to obtain RuntimeVersion",
 						"err", err,
 						"runtime", rt.ID,
-						"&runtimeVersion", runtimeVersion,
+						"runtime_version", runtimeVersion,
 					)
 					continue
 				}

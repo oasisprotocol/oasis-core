@@ -1,13 +1,16 @@
-package compute
+package common
 
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/opentracing/opentracing-go"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/node"
 	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
@@ -18,10 +21,10 @@ var (
 	errMethodNotSupported   = errors.New("method not supported")
 	errEndpointNotSupported = errors.New("RPC endpoint not supported")
 
-	_ protocol.Handler = (*hostHandler)(nil)
+	_ protocol.Handler = (*runtimeHostHandler)(nil)
 )
 
-type hostHandler struct {
+type runtimeHostHandler struct {
 	runtimeID signature.PublicKey
 
 	storage      storage.Backend
@@ -29,7 +32,7 @@ type hostHandler struct {
 	localStorage *host.LocalStorage
 }
 
-func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
+func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
 	// RPC.
 	if body.HostRPCCallRequest != nil {
 		switch body.HostRPCCallRequest.Endpoint {
@@ -88,6 +91,71 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 	return nil, errMethodNotSupported
 }
 
-func newHostHandler(runtimeID signature.PublicKey, storage storage.Backend, keyManager *keymanager.Client, localStorage *host.LocalStorage) protocol.Handler {
-	return &hostHandler{runtimeID, storage, keyManager, localStorage}
+// NewRuntimeHostHandler creates a worker host handler for runtime execution.
+func NewRuntimeHostHandler(
+	runtimeID signature.PublicKey,
+	storage storage.Backend,
+	keyManager *keymanager.Client,
+	localStorage *host.LocalStorage,
+) protocol.Handler {
+	return &runtimeHostHandler{runtimeID, storage, keyManager, localStorage}
+}
+
+// RuntimeHostWorker provides methods for workers that need to host runtimes.
+type RuntimeHostWorker struct {
+	commonWorker *Worker
+}
+
+// NewRuntimeWorkerHost creates a new worker host for the given runtime.
+func (rw *RuntimeHostWorker) NewRuntimeWorkerHost(role node.RolesMask, id signature.PublicKey) (h host.Host, err error) {
+	cfg := rw.commonWorker.GetConfig().RuntimeHost
+	rtCfg, ok := cfg.Runtimes[id.ToMapKey()]
+	if !ok {
+		return nil, fmt.Errorf("runtime host: unknown runtime: %s", id)
+	}
+
+	hostCfg := &host.Config{
+		Role:          role,
+		ID:            rtCfg.ID,
+		WorkerBinary:  cfg.Loader,
+		RuntimeBinary: rtCfg.Binary,
+		TEEHardware:   rtCfg.TEEHardware,
+		IAS:           rw.commonWorker.IAS,
+		MessageHandler: NewRuntimeHostHandler(
+			rtCfg.ID,
+			rw.commonWorker.Storage,
+			rw.commonWorker.KeyManager,
+			rw.commonWorker.LocalStorage,
+		),
+	}
+
+	switch strings.ToLower(cfg.Backend) {
+	case host.BackendSandboxed:
+		h, err = host.NewHost(hostCfg)
+	case host.BackendUnconfined:
+		hostCfg.NoSandbox = true
+		h, err = host.NewHost(hostCfg)
+	case host.BackendMock:
+		h, err = host.NewMockHost()
+	default:
+		err = fmt.Errorf("runtime host: unsupported worker host backend: '%v'", cfg.Backend)
+	}
+
+	return
+}
+
+// NewRuntimeHostWorker creates a new runtime host worker.
+func NewRuntimeHostWorker(commonWorker *Worker) (*RuntimeHostWorker, error) {
+	cfg := commonWorker.GetConfig().RuntimeHost
+	if cfg == nil {
+		return nil, fmt.Errorf("runtime host: missing configuration")
+	}
+	if cfg.Loader == "" && cfg.Backend != host.BackendMock {
+		return nil, fmt.Errorf("runtime host: no runtime loader binary configured and backend not host.BackendMock")
+	}
+	if len(cfg.Runtimes) == 0 {
+		return nil, fmt.Errorf("runtime host: no runtimes configured")
+	}
+
+	return &RuntimeHostWorker{commonWorker: commonWorker}, nil
 }
