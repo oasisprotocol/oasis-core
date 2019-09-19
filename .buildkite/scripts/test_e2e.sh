@@ -157,22 +157,8 @@ scenario_byzantine_compute_honest() {
     cp ${WORKDIR}/tests/identities/byzantine.pem ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
     chmod 600 ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
 
-    ${EKIDEN_NODE} debug byzantine compute-honest \
-        --log.level debug \
-        --log.format JSON \
-        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
-        --genesis.file ${EKIDEN_GENESIS_FILE} \
-        --tendermint.core.listen_address tcp://0.0.0.0:13004 \
-        --tendermint.consensus.timeout_commit 250ms \
-        --tendermint.debug.addr_book_lenient \
-        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
-        --worker.p2p.port 12004 \
-        --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
-        --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
-        --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
-        --debug.allow_test_keys \
-        ${EKIDEN_TEE_HARDWARE:+--fake_sgx} \
-        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
+    run_byzantine_node compute-honest \
+        ${EKIDEN_TEE_HARDWARE:+--fake_sgx}
 
     # Initialize storage nodes.
     run_storage_node 1
@@ -199,22 +185,8 @@ scenario_byzantine_compute_wrong() {
     cp ${WORKDIR}/tests/identities/byzantine.pem ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
     chmod 600 ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
 
-    ${EKIDEN_NODE} debug byzantine compute-wrong \
-        --log.level debug \
-        --log.format JSON \
-        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
-        --genesis.file ${EKIDEN_GENESIS_FILE} \
-        --tendermint.core.listen_address tcp://0.0.0.0:13004 \
-        --tendermint.consensus.timeout_commit 250ms \
-        --tendermint.debug.addr_book_lenient \
-        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
-        --worker.p2p.port 12004 \
-        --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
-        --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
-        --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
-        --debug.allow_test_keys \
-        ${EKIDEN_TEE_HARDWARE:+--fake_sgx} \
-        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
+    run_byzantine_node compute-wrong \
+        ${EKIDEN_TEE_HARDWARE:+--fake_sgx}
 
     # Initialize storage nodes.
     run_storage_node 1
@@ -241,23 +213,9 @@ scenario_byzantine_compute_straggler() {
     cp ${WORKDIR}/tests/identities/byzantine.pem ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
     chmod 600 ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
 
-    ${EKIDEN_NODE} debug byzantine compute-straggler \
-        --log.level debug \
-        --log.format JSON \
-        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
-        --genesis.file ${EKIDEN_GENESIS_FILE} \
-        --tendermint.core.listen_address tcp://0.0.0.0:13004 \
-        --tendermint.consensus.timeout_commit 250ms \
-        --tendermint.debug.addr_book_lenient \
-        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
-        --worker.p2p.port 12004 \
-        --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
-        --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
-        --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
-        --debug.allow_test_keys \
+    run_byzantine_node compute-straggler \
         ${EKIDEN_TEE_HARDWARE:+--fake_sgx} \
-        --mock_epochtime \
-        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
+        --mock_epochtime
 
     # Initialize storage nodes.
     run_storage_node 1
@@ -291,21 +249,8 @@ scenario_byzantine_merge_honest() {
     cp ${WORKDIR}/tests/identities/byzantine.pem ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
     chmod 600 ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
 
-    ${EKIDEN_NODE} debug byzantine merge-honest \
-        --log.level debug \
-        --log.format JSON \
-        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
-        --genesis.file ${EKIDEN_GENESIS_FILE} \
-        --tendermint.core.listen_address tcp://0.0.0.0:13004 \
-        --tendermint.consensus.timeout_commit 250ms \
-        --tendermint.debug.addr_book_lenient \
-        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
-        --worker.p2p.port 12004 \
-        --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
-        --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
-        --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
-        --debug.allow_test_keys \
-        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
+    run_byzantine_node merge-honest \
+        ${EKIDEN_TEE_HARDWARE:+--fake_sgx}
 
     # Initialize storage nodes.
     run_storage_node 1
@@ -339,21 +284,7 @@ scenario_byzantine_merge_wrong() {
     cp ${WORKDIR}/tests/identities/byzantine.pem ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
     chmod 600 ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
 
-    ${EKIDEN_NODE} debug byzantine merge-wrong \
-        --log.level debug \
-        --log.format JSON \
-        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
-        --genesis.file ${EKIDEN_GENESIS_FILE} \
-        --tendermint.core.listen_address tcp://0.0.0.0:13004 \
-        --tendermint.consensus.timeout_commit 250ms \
-        --tendermint.debug.addr_book_lenient \
-        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
-        --worker.p2p.port 12004 \
-        --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
-        --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
-        --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
-        --debug.allow_test_keys \
-        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
+    run_byzantine_node merge-wrong
 
     # Initialize storage nodes.
     run_storage_node 1
@@ -380,21 +311,7 @@ scenario_byzantine_merge_straggler() {
     cp ${WORKDIR}/tests/identities/byzantine.pem ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
     chmod 600 ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
 
-    ${EKIDEN_NODE} debug byzantine merge-straggler \
-        --log.level debug \
-        --log.format JSON \
-        --log.file ${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log \
-        --genesis.file ${EKIDEN_GENESIS_FILE} \
-        --tendermint.core.listen_address tcp://0.0.0.0:13004 \
-        --tendermint.consensus.timeout_commit 250ms \
-        --tendermint.debug.addr_book_lenient \
-        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
-        --worker.p2p.port 12004 \
-        --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
-        --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
-        --datadir ${EKIDEN_COMMITTEE_DIR}/byzantine \
-        --debug.allow_test_keys \
-        2>&1 | tee ${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log | sed "s/^/[byzantine] /" &
+    run_byzantine_node merge-straggler
 
     # Initialize storage nodes.
     run_storage_node 1

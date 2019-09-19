@@ -402,6 +402,61 @@ run_compute_node() {
         ${extra_args} 2>&1 | tee ${out_file} | sed "s/^/[compute-node-${id}] /" &
 }
 
+# Run a Byzantine node.
+#
+# Requires that EKIDEN_GENESIS_FILE is set.
+# Exits with an error otherwise.
+#
+# Arguments:
+#   script_name - which Byzantine script to run
+#
+# Any additional arguments are passed to the Byzantine node.
+run_byzantine_node() {
+    local script_name=$1
+    shift || true
+    local extra_args=$*
+
+    # Ensure the genesis file is available.
+    if [[ "${EKIDEN_GENESIS_FILE:-}" == "" ]]; then
+        echo "ERROR: Genesis file not configured. Did you use run_backend_tendermint_committee?"
+        exit 1
+    fi
+
+    local data_dir=${EKIDEN_COMMITTEE_DIR}/byzantine
+    rm -rf ${data_dir}
+    local log_file=${EKIDEN_COMMITTEE_DIR}/worker-byzantine.log
+    rm -rf ${log_file}
+    local out_file=${EKIDEN_COMMITTEE_DIR}/worker-out-byzantine.log
+    rm -rf ${out_file}
+
+    # Prepare keys to ensure deterministic committees.
+    if [[ -f "${WORKDIR}/tests/identities/byzantine.pem" ]]; then
+        mkdir -p ${data_dir}
+        chmod 700 ${data_dir}
+        cp ${WORKDIR}/tests/identities/byzantine.pem ${data_dir}/identity.pem
+        chmod 600 ${data_dir}/identity.pem
+    fi
+
+    # Generate port number.
+    let p2p_port=12004
+    let tm_port=13004
+
+    ${EKIDEN_NODE} debug byzantine ${script_name} \
+        --log.level debug \
+        --log.file ${log_file} \
+        --genesis.file ${EKIDEN_GENESIS_FILE} \
+        --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
+        --tendermint.consensus.timeout_commit 250ms \
+        --tendermint.debug.addr_book_lenient \
+        --worker.p2p.port ${p2p_port} \
+        --worker.registration.entity ${EKIDEN_ENTITY_DESCRIPTOR} \
+        --worker.registration.private_key ${EKIDEN_ENTITY_PRIVATE_KEY} \
+        --tendermint.seeds "${EKIDEN_SEED_NODE_ID}@127.0.0.1:${EKIDEN_SEED_NODE_PORT}" \
+        --datadir ${data_dir} \
+        --debug.allow_test_keys \
+        ${extra_args} 2>&1 | tee ${out_file} | sed "s/^/[byzantine] /" &
+}
+
 # Run a storage node.
 #
 # Requires that EKIDEN_GENESIS_FILE is set.
