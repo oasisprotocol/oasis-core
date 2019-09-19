@@ -3,16 +3,11 @@ package compute
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/metrics"
-	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/tracing"
 	"github.com/oasislabs/ekiden/go/ias"
 	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
@@ -21,12 +16,6 @@ import (
 	"github.com/oasislabs/ekiden/go/worker/merge"
 	mergeCommittee "github.com/oasislabs/ekiden/go/worker/merge/committee"
 	"github.com/oasislabs/ekiden/go/worker/registration"
-)
-
-const (
-	proxySocketDirName     = "proxy-sockets"
-	metricsProxySocketName = "metrics.sock"
-	tracingProxySocketName = "tracing.sock"
 )
 
 // RuntimeConfig is a single runtime's configuration.
@@ -73,9 +62,6 @@ type Worker struct {
 
 	runtimes map[signature.MapKey]*Runtime
 
-	netProxies map[string]NetworkProxy
-	socketDir  string
-
 	localStorage *host.LocalStorage
 
 	ctx       context.Context
@@ -111,18 +97,7 @@ func (w *Worker) Start() error {
 			<-rt.workerHost.Quit()
 			<-rt.node.Quit()
 		}
-
-		for _, proxy := range w.netProxies {
-			<-proxy.Quit()
-		}
 	}()
-
-	// Start all the network proxies.
-	for _, proxy := range w.netProxies {
-		if err := proxy.Start(); err != nil {
-			return err
-		}
-	}
 
 	// Wait for all runtimes to be initialized and for the node
 	// to be registered for the current epoch.
@@ -169,10 +144,6 @@ func (w *Worker) Stop() {
 		rt.workerHost.Stop()
 	}
 
-	for _, proxy := range w.netProxies {
-		proxy.Stop()
-	}
-
 	if w.localStorage != nil {
 		w.localStorage.Stop()
 	}
@@ -198,12 +169,6 @@ func (w *Worker) Cleanup() {
 		rt.node.Cleanup()
 		rt.workerHost.Cleanup()
 	}
-
-	for _, proxy := range w.netProxies {
-		proxy.Cleanup()
-	}
-
-	os.RemoveAll(w.socketDir)
 }
 
 // Initialized returns a channel that will be closed when the compute worker
@@ -231,21 +196,11 @@ func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
 }
 
 func (w *Worker) newWorkerHost(cfg *Config, rtCfg *RuntimeConfig) (h host.Host, err error) {
-	proxies := make(map[string]host.ProxySpecification)
-	for k, v := range w.netProxies {
-		proxies[k] = host.ProxySpecification{
-			ProxyType:  v.Type(),
-			SourceName: v.UnixPath(),
-			OuterAddr:  v.RemoteAddress(),
-		}
-	}
-
 	hostCfg := &host.Config{
 		Role:           node.RoleComputeWorker,
 		ID:             rtCfg.ID,
 		WorkerBinary:   cfg.WorkerRuntimeLoaderBinary,
 		RuntimeBinary:  rtCfg.Binary,
-		Proxies:        proxies,
 		TEEHardware:    rtCfg.TEEHardware,
 		IAS:            w.ias,
 		MessageHandler: newHostHandler(rtCfg.ID, w.commonWorker.Storage, w.keyManager, w.localStorage),
@@ -323,18 +278,6 @@ func newWorker(
 	registration *registration.Registration,
 	cfg Config,
 ) (*Worker, error) {
-	startedOk := false
-	socketDir := filepath.Join(dataDir, proxySocketDirName)
-	err := common.Mkdir(socketDir)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if !startedOk {
-			os.RemoveAll(socketDir)
-		}
-	}()
-
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
@@ -346,8 +289,6 @@ func newWorker(
 		keyManager:   keyManager,
 		registration: registration,
 		runtimes:     make(map[signature.MapKey]*Runtime),
-		netProxies:   make(map[string]NetworkProxy),
-		socketDir:    socketDir,
 		ctx:          ctx,
 		cancelCtx:    cancelCtx,
 		quitCh:       make(chan struct{}),
@@ -367,36 +308,8 @@ func newWorker(
 			return nil, fmt.Errorf("compute/worker: no runtimes configured")
 		}
 
-		// Create required network proxies.
-		metricsConfig := metrics.GetServiceConfig()
-		if metricsConfig.Mode == "push" {
-			var proxy NetworkProxy
-			proxy, err = NewNetworkProxy(host.MetricsProxyKey, "http", filepath.Join(w.socketDir, metricsProxySocketName), metricsConfig.Address)
-			if err != nil {
-				return nil, err
-			}
-			w.netProxies[host.MetricsProxyKey] = proxy
-		}
-
-		tracingConfig := tracing.GetServiceConfig()
-		if tracingConfig.Enabled {
-			var (
-				address string
-				proxy   NetworkProxy
-			)
-
-			address, err = common.GetHostPort(tracingConfig.AgentAddress)
-			if err != nil {
-				return nil, err
-			}
-			proxy, err = NewNetworkProxy(host.TracingProxyKey, "dgram", filepath.Join(w.socketDir, tracingProxySocketName), address)
-			if err != nil {
-				return nil, err
-			}
-			w.netProxies[host.TracingProxyKey] = proxy
-		}
-
 		// Open the local storage.
+		var err error
 		if w.localStorage, err = host.NewLocalStorage(dataDir, "worker-local-storage.bolt.db"); err != nil {
 			return nil, err
 		}
@@ -444,6 +357,5 @@ func newWorker(
 		})
 	}
 
-	startedOk = true
 	return w, nil
 }

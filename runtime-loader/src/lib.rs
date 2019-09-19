@@ -1,14 +1,10 @@
 //! Ekiden runtime loader.
 extern crate aesm_client;
-extern crate clap;
 extern crate enclave_runner;
 extern crate failure;
-extern crate futures;
 extern crate sgxs_loaders;
-extern crate tokio;
 
 pub mod elf;
-pub mod proxy;
 pub mod sgxs;
 
 use failure::Fallible;

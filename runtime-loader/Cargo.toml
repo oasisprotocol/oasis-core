@@ -10,9 +10,6 @@ enclave-runner = "0.2.0"
 sgxs-loaders = "0.2.0"
 clap = "2.29.1"
 failure = "0.1.5"
-tokio = "0.1.17"
-tokio-uds = "0.2.5"
-futures = "0.1.25"
 
 [[bin]]
 name = "ekiden-runtime-loader"
