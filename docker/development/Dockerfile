@@ -70,8 +70,8 @@ RUN . $NVM_DIR/nvm.sh && \
     nvm alias default node && \
     npm install -g truffle-oasis
 
-# Install bubblewrap (we need version 0.3.1 which is not available for 18.04).
-RUN wget http://archive.ubuntu.com/ubuntu/pool/main/b/bubblewrap/bubblewrap_0.3.1-2_amd64.deb && \
-    echo '348ff7e71cac05d9e8f154ecc24ad1c9461e76b4ff23e992dcb60f9da51247af bubblewrap_0.3.1-2_amd64.deb' | sha256sum -c && \
-    dpkg -i bubblewrap_0.3.1-2_amd64.deb && \
-    rm bubblewrap_0.3.1-2_amd64.deb
+# Install bubblewrap (we need version 0.3.3 which is not available for 18.04).
+RUN wget http://archive.ubuntu.com/ubuntu/pool/main/b/bubblewrap/bubblewrap_0.3.3-2_amd64.deb && \
+    echo '1cf9bdae5cfab75f292fad9ee0ef76a7c55243dbc0515709624b2a9573d19447 bubblewrap_0.3.3-2_amd64.deb' | sha256sum -c && \
+    dpkg -i bubblewrap_0.3.3-2_amd64.deb && \
+    rm bubblewrap_0.3.3-2_amd64.deb

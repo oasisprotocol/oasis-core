@@ -15,7 +15,7 @@ Prerequisites:
 
 * System packages:
   * [Bubblewrap](https://github.com/projectatomic/bubblewrap) (at least version
-    0.3.1).
+    0.3.3).
   * [GCC](http://gcc.gnu.org/) (including C++ subpackage).
   * [Protobuf](https://github.com/protocolbuffers/protobuf) compiler.
   * [CMake](https://cmake.org/).
