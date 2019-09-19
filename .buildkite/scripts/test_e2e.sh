@@ -311,7 +311,8 @@ scenario_byzantine_merge_straggler() {
     cp ${WORKDIR}/tests/identities/byzantine.pem ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
     chmod 600 ${EKIDEN_COMMITTEE_DIR}/byzantine/identity.pem
 
-    run_byzantine_node merge-straggler
+    run_byzantine_node merge-straggler \
+        --mock_epochtime
 
     # Initialize storage nodes.
     run_storage_node 1
@@ -480,6 +481,7 @@ test_suite() {
         client=simple-keyvalue-ops \
         client_extra_args="set hello_key hello_value" \
         on_success_hook=assert_merge_straggler_scenario_works \
+        epochtime_backend=tendermint_mock \
         beacon_deterministic=1
 }
 
