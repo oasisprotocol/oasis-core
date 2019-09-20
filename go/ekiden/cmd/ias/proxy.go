@@ -91,11 +91,9 @@ func doProxy(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	dataDir, err := cmdCommon.DataDirOrPwd()
-	if err != nil {
-		logger.Error("failed to query data directory",
-			"err", err,
-		)
+	dataDir := cmdCommon.DataDir()
+	if dataDir == "" {
+		logger.Error("failed to query data directory")
 		return
 	}
 
