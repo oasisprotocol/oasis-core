@@ -22,10 +22,6 @@ import (
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 )
 
-func insecureDialOption() grpc.DialOption {
-	return grpc.WithInsecure()
-}
-
 // DialOptionForNode creates a grpc.DialOption for communicating under the node's certificate.
 func DialOptionForNode(ourCerts []tls.Certificate, node *node.Node) (grpc.DialOption, error) {
 	nodeCert, err := node.Committee.ParseCertificate()
@@ -199,23 +195,22 @@ func (w *watcherState) updateStorageNodeConnections() {
 			continue
 		}
 
-		var opts grpc.DialOption
 		if node.Committee.Certificate == nil {
 			// NOTE: This should only happen in tests, where nodes register without a certificate.
 			// TODO: This can be rejected once node_tests register with a certificate.
-			opts = insecureDialOption()
-			w.logger.Warn("storage committee member registered without certificate, using insecure connection!",
+			w.logger.Warn("storage committee member registered without certificate, ignoring node",
 				"member", node)
-		} else {
-			var err error
-			opts, err = DialOptionForNode([]tls.Certificate{*w.identity.TLSCertificate}, node)
-			if err != nil {
-				w.logger.Error("failed to get GRPC dial options for storage committee member",
-					"member", node,
-					"err", err,
-				)
-				continue
-			}
+			continue
+		}
+
+		var err error
+		opts, err := DialOptionForNode([]tls.Certificate{*w.identity.TLSCertificate}, node)
+		if err != nil {
+			w.logger.Error("failed to get GRPC dial options for storage committee member",
+				"member", node,
+				"err", err,
+			)
+			continue
 		}
 
 		if len(node.Committee.Addresses) == 0 {
