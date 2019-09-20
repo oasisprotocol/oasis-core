@@ -31,13 +31,14 @@ import (
 )
 
 const (
-	cfgEntity      = "entity"
-	cfgRuntime     = "runtime"
-	cfgNode        = "node"
-	cfgRootHash    = "roothash"
-	cfgKeyManager  = "keymanager"
-	cfgStaking     = "staking"
-	cfgBlockHeight = "height"
+	cfgEntity             = "entity"
+	cfgRuntime            = "runtime"
+	cfgNode               = "node"
+	cfgRootHash           = "roothash"
+	cfgKeyManager         = "keymanager"
+	cfgKeyManagerOperator = "keymanager.operator"
+	cfgStaking            = "staking"
+	cfgBlockHeight        = "height"
 
 	// Our 'entity' flag overlaps with the common flag 'entity'.
 	// We bind it to a separate Viper key to disambiguate at runtime.
@@ -146,26 +147,54 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 		Nodes:    make([]*node.SignedNode, 0, len(nodes)),
 	}
 
-	for _, v := range entities {
-		b, err := ioutil.ReadFile(v)
+	entMap := make(map[signature.MapKey]bool)
+	appendToEntities := func(signedEntity *entity.SignedEntity, ent *entity.Entity) error {
+		idKey := ent.ID.ToMapKey()
+		if entMap[idKey] {
+			return errors.New("genesis: duplicate entity registration")
+		}
+		entMap[idKey] = true
+
+		regSt.Entities = append(regSt.Entities, signedEntity)
+
+		return nil
+	}
+
+	loadSignedEntity := func(fn string) (*entity.SignedEntity, *entity.Entity, error) {
+		b, err := ioutil.ReadFile(fn)
 		if err != nil {
-			l.Error("failed to load genesis entity registration",
+			return nil, nil, err
+		}
+
+		var signedEntity entity.SignedEntity
+		if err = json.Unmarshal(b, &signedEntity); err != nil {
+			return nil, nil, err
+		}
+
+		var ent entity.Entity
+		if err := signedEntity.Open(registry.RegisterGenesisEntitySignatureContext, &ent); err != nil {
+			return nil, nil, err
+		}
+
+		return &signedEntity, &ent, nil
+	}
+
+	for _, v := range entities {
+		signedEntity, ent, err := loadSignedEntity(v)
+		if err != nil {
+			l.Error("failed to load genesis entity",
 				"err", err,
 				"filename", v,
 			)
 			return err
 		}
 
-		var entity entity.SignedEntity
-		if err = json.Unmarshal(b, &entity); err != nil {
-			l.Error("failed to parse genesis entity registration",
+		if err = appendToEntities(signedEntity, ent); err != nil {
+			l.Error("failed to process genesis entity",
 				"err", err,
 				"filename", v,
 			)
-			return err
 		}
-
-		regSt.Entities = append(regSt.Entities, &entity)
 	}
 	if flags.DebugTestEntity() {
 		l.Warn("registering debug test entity")
@@ -178,7 +207,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			return err
 		}
 
-		signed, err := entity.SignEntity(signer, registry.RegisterGenesisEntitySignatureContext, ent)
+		signedEntity, err := entity.SignEntity(signer, registry.RegisterGenesisEntitySignatureContext, ent)
 		if err != nil {
 			l.Error("failed to sign test entity",
 				"err", err,
@@ -186,14 +215,34 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			return err
 		}
 
-		if err = signed.Open(registry.RegisterGenesisEntitySignatureContext, ent); err != nil {
-			l.Error("signed entity does not round trip",
+		if err = appendToEntities(signedEntity, ent); err != nil {
+			l.Error("failed to process test entity",
 				"err", err,
 			)
 			return err
 		}
 
-		regSt.Entities = append(regSt.Entities, signed)
+		regSt.KeyManagerOperator = ent.ID
+	}
+
+	if s := viper.GetString(cfgKeyManagerOperator); s != "" {
+		_, ent, err := loadSignedEntity(s)
+		if err != nil {
+			l.Error("failed to load key manager operator entity",
+				"err", err,
+				"filename", s,
+			)
+			return err
+		}
+
+		if !entMap[ent.ID.ToMapKey()] {
+			l.Error("key manager operator is not a genesis entity",
+				"id", ent.ID,
+			)
+			return registry.ErrNoSuchEntity
+		}
+
+		regSt.KeyManagerOperator = ent.ID
 	}
 
 	for _, v := range runtimes {
@@ -457,6 +506,7 @@ func init() {
 	initGenesisFlags.StringSlice(cfgRootHash, nil, "path to roothash genesis blocks file")
 	initGenesisFlags.String(cfgStaking, "", "path to staking genesis file")
 	initGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
+	initGenesisFlags.String(cfgKeyManagerOperator, "", "path to key manager operator entity registration file")
 	_ = viper.BindPFlags(initGenesisFlags)
 	initGenesisFlags.StringSlice(cfgEntity, nil, "path to entity registration file")
 	_ = viper.BindPFlag(viperEntity, initGenesisFlags.Lookup(cfgEntity))
