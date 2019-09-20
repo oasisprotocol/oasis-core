@@ -45,8 +45,6 @@ worker:
     loader: target/debug/ekiden-runtime-loader
     id: "0000000000000000000000000000000000000000000000000000000000000000"
     binary: target/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs
-    sgx_ids:
-      - "0000000000000000000000000000000000000000000000000000000000000000"
   storage:
     enabled: true
   txnscheduler:

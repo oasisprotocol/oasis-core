@@ -388,7 +388,6 @@ run_compute_node() {
         --worker.runtime.backend sandboxed \
         --worker.runtime.loader ${EKIDEN_RUNTIME_LOADER} \
         --worker.runtime.binary ${EKIDEN_RUNTIME_BINARY} \
-        ${EKIDEN_TEE_HARDWARE:+--worker.runtime.sgx_ids ${EKIDEN_RUNTIME_ID}} \
         --worker.txnscheduler.enabled \
         --worker.txnscheduler.batching.max_batch_size 1 \
         --worker.merge.enabled \

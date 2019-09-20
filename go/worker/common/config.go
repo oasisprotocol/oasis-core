@@ -22,8 +22,6 @@ var (
 	cfgRuntimeBackend = "worker.runtime.backend"
 	cfgRuntimeLoader  = "worker.runtime.loader"
 	cfgRuntimeBinary  = "worker.runtime.binary"
-	// XXX: This is needed till the code can watch the registry for runtimes.
-	cfgRuntimeSGXIDs = "worker.runtime.sgx_ids"
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -45,9 +43,8 @@ type Config struct { // nolint: maligned
 
 // RuntimeHostRuntimeConfig is a single runtime's host configuration.
 type RuntimeHostRuntimeConfig struct {
-	ID          signature.PublicKey
-	Binary      string
-	TEEHardware node.TEEHardware
+	ID     signature.PublicKey
+	Binary string
 }
 
 // RuntimeHostConfig is configuration for a worker that hosts runtimes.
@@ -82,21 +79,6 @@ func (c *Config) GetNodeAddresses() ([]node.Address, error) {
 	return addresses, nil
 }
 
-func getSGXRuntimeIDs() (map[signature.MapKey]bool, error) {
-	m := make(map[signature.MapKey]bool)
-
-	for _, v := range viper.GetStringSlice(cfgRuntimeSGXIDs) {
-		var id signature.PublicKey
-		if err := id.UnmarshalHex(v); err != nil {
-			return nil, err
-		}
-
-		m[id.ToMapKey()] = true
-	}
-
-	return m, nil
-}
-
 // newConfig creates a new worker config.
 func newConfig() (*Config, error) {
 	// Parse register address overrides.
@@ -123,11 +105,6 @@ func newConfig() (*Config, error) {
 			return nil, fmt.Errorf("runtime binary/id count mismatch")
 		}
 
-		sgxRuntimeIDs, err := getSGXRuntimeIDs()
-		if err != nil {
-			return nil, err
-		}
-
 		cfg.RuntimeHost = &RuntimeHostConfig{
 			Backend:  viper.GetString(cfgRuntimeBackend),
 			Loader:   runtimeLoader,
@@ -137,15 +114,9 @@ func newConfig() (*Config, error) {
 		for idx, runtimeBinary := range runtimeBinaries {
 			runtimeID := runtimes[idx]
 
-			var teeHardware node.TEEHardware
-			if sgxRuntimeIDs[runtimeID.ToMapKey()] {
-				teeHardware = node.TEEHardwareIntelSGX
-			}
-
 			cfg.RuntimeHost.Runtimes[runtimeID.ToMapKey()] = RuntimeHostRuntimeConfig{
-				ID:          runtimeID,
-				Binary:      runtimeBinary,
-				TEEHardware: teeHardware,
+				ID:     runtimeID,
+				Binary: runtimeBinary,
 			}
 		}
 	}
@@ -162,8 +133,6 @@ func init() {
 	Flags.String(cfgRuntimeBackend, "sandboxed", "Runtime worker host backend")
 	Flags.String(cfgRuntimeLoader, "", "Path to runtime loader binary")
 	Flags.StringSlice(cfgRuntimeBinary, nil, "Path to runtime binary")
-	// XXX: This is needed till the code can watch the registry for runtimes.
-	Flags.StringSlice(cfgRuntimeSGXIDs, nil, "SGX runtime IDs")
 
 	_ = viper.BindPFlags(Flags)
 }

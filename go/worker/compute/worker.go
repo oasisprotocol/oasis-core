@@ -7,7 +7,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
-	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/compute/committee"
 	"github.com/oasislabs/ekiden/go/worker/merge"
 	mergeCommittee "github.com/oasislabs/ekiden/go/worker/merge/committee"
@@ -24,8 +23,7 @@ type Config struct {
 type Runtime struct {
 	id signature.PublicKey
 
-	workerHost host.Host
-	node       *committee.Node
+	node *committee.Node
 }
 
 // GetNode returns the committee node for this runtime.
@@ -79,7 +77,6 @@ func (w *Worker) Start() error {
 		defer (w.cancelCtx)()
 
 		for _, rt := range w.runtimes {
-			<-rt.workerHost.Quit()
 			<-rt.node.Quit()
 		}
 	}()
@@ -102,9 +99,6 @@ func (w *Worker) Start() error {
 			"runtime_id", rt.id,
 		)
 
-		if err := rt.workerHost.Start(); err != nil {
-			return err
-		}
 		if err := rt.node.Start(); err != nil {
 			return err
 		}
@@ -126,7 +120,6 @@ func (w *Worker) Stop() {
 		)
 
 		rt.node.Stop()
-		rt.workerHost.Stop()
 	}
 }
 
@@ -148,7 +141,6 @@ func (w *Worker) Cleanup() {
 
 	for _, rt := range w.runtimes {
 		rt.node.Cleanup()
-		rt.workerHost.Cleanup()
 	}
 }
 
@@ -189,7 +181,7 @@ func (w *Worker) registerRuntime(cfg *Config, rt *workerCommon.Runtime) error {
 	}
 
 	// Create worker host for the given runtime.
-	workerHost, err := w.NewRuntimeWorkerHost(node.RoleComputeWorker, rt.GetID())
+	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleComputeWorker, rt.GetID())
 	if err != nil {
 		return err
 	}
@@ -198,7 +190,7 @@ func (w *Worker) registerRuntime(cfg *Config, rt *workerCommon.Runtime) error {
 	node, err := committee.NewNode(
 		commonNode,
 		mergeNode,
-		workerHost,
+		workerHostFactory,
 		cfg.Committee,
 	)
 	if err != nil {
@@ -208,9 +200,8 @@ func (w *Worker) registerRuntime(cfg *Config, rt *workerCommon.Runtime) error {
 	commonNode.AddHooks(node)
 
 	crt := &Runtime{
-		id:         rt.GetID(),
-		workerHost: workerHost,
-		node:       node,
+		id:   rt.GetID(),
+		node: node,
 	}
 	w.runtimes[crt.id.ToMapKey()] = crt
 
@@ -268,6 +259,15 @@ func newWorker(
 		w.registration.RegisterRole(func(n *node.Node) error {
 			n.AddRoles(node.RoleComputeWorker)
 
+			// Wait until all the runtimes are initialized.
+			for _, rt := range w.runtimes {
+				select {
+				case <-rt.node.Initialized():
+				case <-w.ctx.Done():
+					return w.ctx.Err()
+				}
+			}
+
 			for _, rt := range n.Runtimes {
 				var err error
 
@@ -276,7 +276,9 @@ func newWorker(
 					continue
 				}
 
-				if rt.Capabilities.TEE, err = workerRT.workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
+				// NOTE: Worker host must not be nil as we waited for initialization.
+				workerHost := workerRT.GetNode().GetWorkerHost()
+				if rt.Capabilities.TEE, err = workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
 					w.logger.Error("failed to obtain CapabilityTEE",
 						"err", err,
 						"runtime", rt.ID,
@@ -284,7 +286,7 @@ func newWorker(
 					continue
 				}
 
-				runtimeVersion, err := workerRT.workerHost.WaitForRuntimeVersion(w.ctx)
+				runtimeVersion, err := workerHost.WaitForRuntimeVersion(w.ctx)
 				if err == nil && runtimeVersion != nil {
 					rt.Version = *runtimeVersion
 				} else {

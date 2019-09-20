@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
 )
@@ -22,6 +23,8 @@ var (
 	errEndpointNotSupported = errors.New("RPC endpoint not supported")
 
 	_ protocol.Handler = (*runtimeHostHandler)(nil)
+	_ host.Factory     = (*runtimeWorkerHostMockFactory)(nil)
+	_ host.Factory     = (*runtimeWorkerHostSandboxedFactory)(nil)
 )
 
 type runtimeHostHandler struct {
@@ -106,20 +109,37 @@ type RuntimeHostWorker struct {
 	commonWorker *Worker
 }
 
-// NewRuntimeWorkerHost creates a new worker host for the given runtime.
-func (rw *RuntimeHostWorker) NewRuntimeWorkerHost(role node.RolesMask, id signature.PublicKey) (h host.Host, err error) {
+type runtimeWorkerHostMockFactory struct{}
+
+func (f *runtimeWorkerHostMockFactory) NewWorkerHost(cfg host.Config) (host.Host, error) {
+	return host.NewMockHost()
+}
+
+type runtimeWorkerHostSandboxedFactory struct {
+	cfgTemplate host.Config
+}
+
+func (f *runtimeWorkerHostSandboxedFactory) NewWorkerHost(cfg host.Config) (host.Host, error) {
+	// Instantiate the template with the provided configuration values.
+	hostCfg := f.cfgTemplate
+	hostCfg.TEEHardware = cfg.TEEHardware
+
+	return host.NewHost(&hostCfg)
+}
+
+// NewRuntimeWorkerHostFactory creates a new worker host factory for the given runtime.
+func (rw *RuntimeHostWorker) NewRuntimeWorkerHostFactory(role node.RolesMask, id signature.PublicKey) (h host.Factory, err error) {
 	cfg := rw.commonWorker.GetConfig().RuntimeHost
 	rtCfg, ok := cfg.Runtimes[id.ToMapKey()]
 	if !ok {
 		return nil, fmt.Errorf("runtime host: unknown runtime: %s", id)
 	}
 
-	hostCfg := &host.Config{
+	cfgTemplate := host.Config{
 		Role:          role,
 		ID:            rtCfg.ID,
 		WorkerBinary:  cfg.Loader,
 		RuntimeBinary: rtCfg.Binary,
-		TEEHardware:   rtCfg.TEEHardware,
 		IAS:           rw.commonWorker.IAS,
 		MessageHandler: NewRuntimeHostHandler(
 			rtCfg.ID,
@@ -130,17 +150,16 @@ func (rw *RuntimeHostWorker) NewRuntimeWorkerHost(role node.RolesMask, id signat
 	}
 
 	switch strings.ToLower(cfg.Backend) {
-	case host.BackendSandboxed:
-		h, err = host.NewHost(hostCfg)
 	case host.BackendUnconfined:
-		hostCfg.NoSandbox = true
-		h, err = host.NewHost(hostCfg)
+		cfgTemplate.NoSandbox = true
+		fallthrough
+	case host.BackendSandboxed:
+		h = &runtimeWorkerHostSandboxedFactory{cfgTemplate}
 	case host.BackendMock:
-		h, err = host.NewMockHost()
+		h = &runtimeWorkerHostMockFactory{}
 	default:
 		err = fmt.Errorf("runtime host: unsupported worker host backend: '%v'", cfg.Backend)
 	}
-
 	return
 }
 
@@ -158,4 +177,77 @@ func NewRuntimeHostWorker(commonWorker *Worker) (*RuntimeHostWorker, error) {
 	}
 
 	return &RuntimeHostWorker{commonWorker: commonWorker}, nil
+}
+
+// RuntimeHostNode provides methods for committee nodes that need to host runtimes.
+type RuntimeHostNode struct {
+	commonNode *committee.Node
+
+	workerHostFactory host.Factory
+	workerHost        host.Host
+}
+
+// InitializeRuntimeWorkerHost initializes the runtime worker host for this
+// given runtime.
+//
+// This method must only be called once a runtime has been configured by
+// the common committee node -- otherwise the method will panic.
+func (n *RuntimeHostNode) InitializeRuntimeWorkerHost() error {
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
+
+	if n.commonNode.Runtime == nil {
+		panic("runtime host node: initialize runtime worker host without runtime descriptor")
+	}
+
+	cfg := host.Config{
+		TEEHardware: n.commonNode.Runtime.TEEHardware,
+	}
+	workerHost, err := n.workerHostFactory.NewWorkerHost(cfg)
+	if err != nil {
+		return err
+	}
+	if err := workerHost.Start(); err != nil {
+		return err
+	}
+	n.workerHost = workerHost
+	return nil
+}
+
+// StopRuntimeWorkerHost signals the worker host to stop and waits for it
+// to fully stop.
+func (n *RuntimeHostNode) StopRuntimeWorkerHost() {
+	workerHost := n.GetWorkerHost()
+	if workerHost == nil {
+		return
+	}
+
+	workerHost.Stop()
+	<-workerHost.Quit()
+
+	n.commonNode.CrossNode.Lock()
+	n.workerHost = nil
+	n.commonNode.CrossNode.Unlock()
+}
+
+// GetWorkerHost returns the worker host instance used by this committee node.
+func (n *RuntimeHostNode) GetWorkerHost() host.Host {
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
+
+	return n.workerHost
+}
+
+// GetWorkerHostLocked is the same as GetWorkerHost but the caller must ensure
+// that the commonNode.CrossNode lock is held while called.
+func (n *RuntimeHostNode) GetWorkerHostLocked() host.Host {
+	return n.workerHost
+}
+
+// NewRuntimeHostNode creates a new runtime host node.
+func NewRuntimeHostNode(commonNode *committee.Node, workerHostFactory host.Factory) *RuntimeHostNode {
+	return &RuntimeHostNode{
+		commonNode:        commonNode,
+		workerHostFactory: workerHostFactory,
+	}
 }

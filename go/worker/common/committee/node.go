@@ -75,6 +75,7 @@ type NodeHooks interface {
 // Node is a committee node.
 type Node struct {
 	RuntimeID signature.PublicKey
+	Runtime   *registry.Runtime
 
 	Identity  *identity.Identity
 	Storage   storage.Backend
@@ -269,6 +270,9 @@ func (n *Node) waitForRuntime() error {
 		case rt := <-ch:
 			if rt.ID.Equal(n.RuntimeID) {
 				n.logger.Info("runtime is registered")
+
+				// Save runtime descriptor.
+				n.Runtime = rt
 				return nil
 			}
 		}

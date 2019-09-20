@@ -30,3 +30,12 @@ type Host interface {
 	// respawning it if necessary.
 	InterruptWorker(ctx context.Context) error
 }
+
+// Factory is a factory of worker hosts.
+type Factory interface {
+	// NewWorkerHost creates a new worker host based on the provided
+	// configuration.
+	//
+	// Some configuration fields may be overriden by the factory.
+	NewWorkerHost(cfg Config) (Host, error)
+}
