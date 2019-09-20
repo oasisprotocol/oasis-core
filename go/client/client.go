@@ -2,33 +2,24 @@ package client
 
 import (
 	"context"
-	"crypto/x509"
 	"fmt"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/status"
-
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/client/indexer"
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
-	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/grpc/txnscheduler"
 	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
@@ -92,38 +83,11 @@ type Client struct {
 	logger *logging.Logger
 }
 
-func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.SubmitTxRequest, nodeMeta *node.Node, resultCh chan error) {
+func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.SubmitTxRequest, txnschedulerClient txnscheduler.TransactionSchedulerClient, resultCh chan error) {
 	defer close(submitCtx.closeCh)
 
-	nodeCert, err := nodeMeta.Committee.ParseCertificate()
-	if err != nil {
-		resultCh <- err
-		return
-	}
-	certPool := x509.NewCertPool()
-	certPool.AddCert(nodeCert)
-
-	creds := credentials.NewClientTLSFromCert(certPool, identity.CommonName)
-
-	manualResolver, address, cleanup := manual.NewManualResolver()
-	defer cleanup()
-
-	conn, err := grpc.DialContext(submitCtx.ctx, address, grpc.WithTransportCredentials(creds), grpc.WithBalancerName(roundrobin.Name))
-	if err != nil {
-		resultCh <- err
-		return
-	}
-	defer conn.Close()
-	client := txnscheduler.NewTransactionSchedulerClient(conn)
-
-	var resolverState resolver.State
-	for _, addr := range nodeMeta.Committee.Addresses {
-		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
-	}
-	manualResolver.UpdateState(resolverState)
-
 	op := func() error {
-		_, err := client.SubmitTx(submitCtx.ctx, req)
+		_, err := txnschedulerClient.SubmitTx(submitCtx.ctx, req)
 		if submitCtx.ctx.Err() != nil {
 			return backoff.Permanent(submitCtx.ctx.Err())
 		}
@@ -222,7 +186,7 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 			return nil, errors.New("client: block watch channel closed unexpectedly (unknown error)")
 		}
 
-		if resp.newLeader != nil {
+		if resp.newTxnschedulerClient != nil {
 			if submitCtx != nil {
 				submitCtx.cancel()
 				select {
@@ -236,7 +200,7 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 				cancelFunc: cancelFunc,
 				closeCh:    make(chan struct{}),
 			}
-			go c.doSubmitTxToLeader(submitCtx, req, resp.newLeader, submitResultCh)
+			go c.doSubmitTxToLeader(submitCtx, req, resp.newTxnschedulerClient, submitResultCh)
 			continue
 		} else if resp.err != nil {
 			return nil, resp.err

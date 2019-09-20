@@ -196,8 +196,6 @@ func (w *watcherState) updateStorageNodeConnections() {
 		}
 
 		if node.Committee.Certificate == nil {
-			// NOTE: This should only happen in tests, where nodes register without a certificate.
-			// TODO: This can be rejected once node_tests register with a certificate.
 			w.logger.Warn("storage committee member registered without certificate, ignoring node",
 				"member", node)
 			continue
