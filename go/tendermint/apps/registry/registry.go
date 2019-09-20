@@ -172,9 +172,10 @@ func (app *registryApplication) queryGenesis(s interface{}, r interface{}) ([]by
 	}
 
 	gen := registry.Genesis{
-		Entities: signedEntities,
-		Runtimes: signedRuntimes,
-		Nodes:    validatorNodes,
+		Entities:           signedEntities,
+		Runtimes:           signedRuntimes,
+		Nodes:              validatorNodes,
+		KeyManagerOperator: state.getKeyManagerOperator(),
 	}
 	return cbor.Marshal(gen), nil
 }
@@ -207,6 +208,12 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	)
 
 	state := NewMutableState(app.state.DeliverTxTree())
+
+	state.setKeyManagerOperator(st.KeyManagerOperator)
+	app.logger.Debug("InitChain: Registering key manager operator",
+		"id", st.KeyManagerOperator,
+	)
+
 	for _, v := range st.Entities {
 		app.logger.Debug("InitChain: Registering genesis entity",
 			"entity", v.Signature.PublicKey,
@@ -232,7 +239,7 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 		}
 	}
 	for _, v := range st.Nodes {
-		app.logger.Debug("InitChain: Registring genesis node",
+		app.logger.Debug("InitChain: Registering genesis node",
 			"node_owner", v.Signature.PublicKey,
 		)
 		if err := app.registerNode(ctx, state, v); err != nil {
@@ -456,7 +463,8 @@ func (app *registryApplication) registerNode(
 		return err
 	}
 
-	newNode, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain())
+	kmOperator := state.getKeyManagerOperator()
+	newNode, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), kmOperator)
 	if err != nil {
 		return err
 	}

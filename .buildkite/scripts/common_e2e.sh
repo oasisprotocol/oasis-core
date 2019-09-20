@@ -173,6 +173,7 @@ run_backend_tendermint_committee() {
             genesis init \
             --genesis.file ${genesis_file} \
             ${EKIDEN_TEE_HARDWARE:+--keymanager ${km_file}} \
+            --keymanager.operator ${entity_dir}/entity_genesis.json \
             --entity ${entity_dir}/entity_genesis.json \
             --runtime ${entity_dir}/keymanager_genesis.json \
             --runtime ${entity_dir}/runtime_genesis.json \

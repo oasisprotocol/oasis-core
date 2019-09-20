@@ -266,7 +266,7 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
-func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool) (*node.Node, error) {
+func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool, kmOperator signature.PublicKey) (*node.Node, error) {
 	var n node.Node
 	if sigNode == nil {
 		return nil, ErrInvalidArgument
@@ -397,6 +397,17 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, en
 		}
 	}
 
+	// If node is a key manager, ensure that it is owned by the key manager
+	// operator.
+	if n.HasRoles(node.RoleKeyManager) {
+		if !n.EntityID.Equal(kmOperator) {
+			logger.Error("RegisterNode: key manager not owned by key manager operator",
+				"node", n,
+			)
+			return nil, ErrInvalidArgument
+		}
+	}
+
 	// If node is a worker, ensure it has CommitteeInfo and P2PInfo.
 	if n.HasRoles(node.RoleComputeWorker | node.RoleStorageWorker | node.RoleTransactionScheduler | node.RoleKeyManager | node.RoleMergeWorker) {
 		// Verify that addresses are non-empty.
@@ -432,7 +443,7 @@ func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes []*node.Ru
 	sortRuntimeList(currentRuntimes)
 	sortRuntimeList(newRuntimes)
 	if len(currentRuntimes) != len(newRuntimes) {
-		logger.Error("RegisterNode: trying to update runtimes, length missmatch",
+		logger.Error("RegisterNode: trying to update runtimes, length mismatch",
 			"current_runtimes", currentRuntimes,
 			"new_runtimes", newRuntimes,
 		)
@@ -608,6 +619,10 @@ type Genesis struct {
 
 	// Nodes is the initial list of nodes.
 	Nodes []*node.SignedNode `codec:"nodes,omit_empty"`
+
+	// KeyManagerOperator is the ID of the entity that is allowed to operate
+	// key manager nodes.
+	KeyManagerOperator signature.PublicKey `codec:"km_operator"`
 }
 
 // Config is the per-backend common configuration.

@@ -26,6 +26,9 @@ const (
 
 	// Runtime map state key prefix.
 	stateSignedRuntimeMap = "registry/signed_runtime/%s"
+
+	// KeyManagerOperator state key.
+	stateKeyManagerOperator = "registry/km_operator"
 )
 
 var (
@@ -270,6 +273,20 @@ func (s *immutableState) getByID(stateKey string, id string) ([]byte, error) {
 	return value, nil
 }
 
+func (s *immutableState) getKeyManagerOperator() signature.PublicKey {
+	_, value := s.Snapshot.Get([]byte(stateKeyManagerOperator))
+	if value == nil {
+		return nil
+	}
+
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(value); err != nil {
+		panic("tendermint/registry: corrupted key manager operator: " + err.Error())
+	}
+
+	return id
+}
+
 func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -364,6 +381,15 @@ func (s *MutableState) createRuntime(rt *registry.Runtime, sigRt *registry.Signe
 	)
 
 	return nil
+}
+
+func (s *MutableState) setKeyManagerOperator(id signature.PublicKey) {
+	if len(id) == 0 {
+		return
+	}
+
+	value, _ := id.MarshalBinary()
+	s.tree.Set([]byte(stateKeyManagerOperator), value)
 }
 
 // NewMutableState creates a new mutable registry state wrapper.
