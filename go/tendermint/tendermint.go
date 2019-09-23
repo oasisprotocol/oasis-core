@@ -517,7 +517,7 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 		validator := tmtypes.GenesisValidator{
 			Address: pk.Address(),
 			PubKey:  pk,
-			Power:   1,
+			Power:   api.VotingPower,
 			Name:    "ekiden-validator-" + openedNode.ID.String(),
 		}
 		tmValidators = append(tmValidators, validator)

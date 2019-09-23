@@ -2,7 +2,6 @@ package tendermint
 
 import (
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -16,6 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/node"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	"github.com/oasislabs/ekiden/go/tendermint/api"
 	"github.com/oasislabs/ekiden/go/tendermint/crypto"
 )
 
@@ -154,9 +154,6 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, genesisProvider genesis.
 	}
 
 	// Convert to a representation suitable for address book population.
-	//
-	// For extra fun, p2p/transport.go:MultiplexTransport.upgrade() uses a case
-	// sensitive string comparision to validate public keys.
 	var addrs []*p2p.NetAddress
 	for _, v := range doc.Registry.Nodes {
 		var openedNode node.Node
@@ -168,13 +165,9 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, genesisProvider genesis.
 			continue
 		}
 
-		vPubKey := crypto.PublicKeyToTendermint(&openedNode.ID)
-		vPkAddrHex := strings.ToLower(vPubKey.Address().String())
-		coreAddress, _ := openedNode.Consensus.Addresses[0].MarshalText()
-		vAddr := vPkAddrHex + "@" + string(coreAddress)
-
 		var tmvAddr *p2p.NetAddress
-		if tmvAddr, err = p2p.NewNetAddressString(vAddr); err != nil {
+		tmvAddr, err = api.NodeToP2PAddr(&openedNode)
+		if err != nil {
 			return errors.Wrap(err, "tendermint/seed: failed to reformat genesis validator address")
 		}
 

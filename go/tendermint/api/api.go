@@ -4,13 +4,18 @@ package api
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 	tmcommon "github.com/tendermint/tendermint/libs/common"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
+	tmp2p "github.com/tendermint/tendermint/p2p"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/tendermint/crypto"
 )
 
 // Conesnus Backend Name
@@ -85,4 +90,51 @@ func QueryForEvent(eventApp []byte, eventType []byte) tmpubsub.Query {
 // QueryGetByIDRequest is a request for fetching things by ids.
 type QueryGetByIDRequest struct {
 	ID signature.PublicKey
+}
+
+// VotingPower is the default voting power for all validator nodes.
+const VotingPower = 1
+
+// PublicKeyToValidatorUpdate converts an ekiden node public key to a
+// tendermint validator update.
+func PublicKeyToValidatorUpdate(id signature.PublicKey, power int64) types.ValidatorUpdate {
+	pk, _ := id.MarshalBinary()
+
+	return types.ValidatorUpdate{
+		PubKey: types.PubKey{
+			Type: types.PubKeyEd25519,
+			Data: pk,
+		},
+		Power: power,
+	}
+}
+
+// NodeToP2PAddr converts an ekiden node descriptor to a tendermint p2p
+// address book entry.
+func NodeToP2PAddr(n *node.Node) (*tmp2p.NetAddress, error) {
+	// WARNING: p2p/transport.go:MultiplexTransport.upgrade() uses
+	// a case senstive string comparsison to validate public keys,
+	// because tendermint.
+
+	if !n.HasRoles(node.RoleValidator) {
+		return nil, fmt.Errorf("tendermint/api: node is not a validator")
+	}
+
+	pubKey := crypto.PublicKeyToTendermint(&n.ID)
+	pubKeyAddrHex := strings.ToLower(pubKey.Address().String())
+
+	if len(n.Consensus.Addresses) == 0 {
+		// Should never happen, but check anyway.
+		return nil, fmt.Errorf("tendermint/api: node has no consensus addresses")
+	}
+	coreAddress, _ := n.Consensus.Addresses[0].MarshalText()
+
+	addr := pubKeyAddrHex + "@" + string(coreAddress)
+
+	tmAddr, err := tmp2p.NewNetAddressString(addr)
+	if err != nil {
+		return nil, errors.Wrap(err, "tenderimt/api: failed to reformat validator")
+	}
+
+	return tmAddr, nil
 }
