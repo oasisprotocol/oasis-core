@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"errors"
 
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/service"
@@ -15,6 +16,9 @@ type Host interface {
 
 	// MakeRequest sends a request to the worker process.
 	MakeRequest(ctx context.Context, body *protocol.Body) (<-chan *protocol.Body, error)
+
+	// Call sends a request to the worker process and returns the response or error.
+	Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error)
 
 	// WaitForCapabilityTEE gets the active worker's CapabilityTEE,
 	// blocking if the active worker is not yet available. The returned
@@ -38,4 +42,32 @@ type Factory interface {
 	//
 	// Some configuration fields may be overriden by the factory.
 	NewWorkerHost(cfg Config) (Host, error)
+}
+
+// BaseHost provides implementations of common Host methods.
+type BaseHost struct {
+	Host Host
+}
+
+// Call sends a request to the worker process and returns the response or error.
+func (h BaseHost) Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
+	respCh, err := h.Host.MakeRequest(ctx, body)
+	if err != nil {
+		return nil, err
+	}
+
+	select {
+	case resp, ok := <-respCh:
+		if !ok {
+			return nil, errors.New("channel closed")
+		}
+
+		if resp.Error != nil {
+			return nil, errors.New(resp.Error.Message)
+		}
+
+		return resp, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
