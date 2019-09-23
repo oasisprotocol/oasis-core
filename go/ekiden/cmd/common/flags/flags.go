@@ -18,7 +18,8 @@ const (
 	cfgRetries = "retries"
 	cfgEntity  = "entity"
 
-	cfgConsensusBackend = "consensus.backend"
+	cfgConsensusBackend   = "consensus.backend"
+	cfgConsensusValidator = "consensus.validator"
 
 	cfgDebugTestEntity = "debug.test_entity"
 
@@ -33,14 +34,17 @@ var (
 	ForceFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	// RetriesFlags has the retries flag.
 	RetriesFlags = flag.NewFlagSet("", flag.ContinueOnError)
-	// ConsensusBackendFlags has the consensus backend flag.
-	ConsensusBackendFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	// DebugTestEntityFlags has the test entity enable flag.
 	DebugTestEntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	// EntityFlags has the entity flag.
 	EntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	// GenesisFileFlags has the genesis file flag.
 	GenesisFileFlags = flag.NewFlagSet("", flag.ContinueOnError)
+
+	// ConsensusBackendFlag has the consensus backend flag.
+	ConsensusBackendFlag = flag.NewFlagSet("", flag.ContinueOnError)
+	// ConsensusValidatorFlag has the consensus validator flag.
+	ConsensusValidatorFlag = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // Verbose returns true iff the verbose flag is set.
@@ -70,6 +74,12 @@ func ConsensusBackend() string {
 	}
 }
 
+// ConsensusValidator returns true iff the node is opting in to be a consensus
+// validator.
+func ConsensusValidator() bool {
+	return viper.GetBool(cfgConsensusValidator)
+}
+
 // DebugTestEntity returns true iff the test entity enable flag is set.
 func DebugTestEntity() bool {
 	return viper.GetBool(cfgDebugTestEntity)
@@ -92,7 +102,8 @@ func init() {
 
 	RetriesFlags.Int(cfgRetries, 0, "retries (-1 = forever)")
 
-	ConsensusBackendFlags.String(cfgConsensusBackend, tmapi.BackendName, "force")
+	ConsensusBackendFlag.String(cfgConsensusBackend, tmapi.BackendName, "consensus backend")
+	ConsensusValidatorFlag.Bool(cfgConsensusValidator, false, "node is a consensus validator")
 
 	DebugTestEntityFlags.Bool(cfgDebugTestEntity, false, "use the test entity (UNSAFE)")
 
@@ -104,10 +115,11 @@ func init() {
 		VerboseFlags,
 		ForceFlags,
 		RetriesFlags,
-		ConsensusBackendFlags,
 		DebugTestEntityFlags,
 		EntityFlags,
 		GenesisFileFlags,
+		ConsensusBackendFlag,
+		ConsensusValidatorFlag,
 	} {
 		_ = viper.BindPFlags(v)
 	}

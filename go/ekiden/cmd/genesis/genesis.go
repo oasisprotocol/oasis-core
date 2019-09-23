@@ -511,6 +511,6 @@ func init() {
 	initGenesisFlags.StringSlice(cfgEntity, nil, "path to entity registration file")
 	_ = viper.BindPFlag(viperEntity, initGenesisFlags.Lookup(cfgEntity))
 	initGenesisFlags.AddFlagSet(flags.DebugTestEntityFlags)
-	initGenesisFlags.AddFlagSet(flags.ConsensusBackendFlags)
+	initGenesisFlags.AddFlagSet(flags.ConsensusBackendFlag)
 	initGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
 }

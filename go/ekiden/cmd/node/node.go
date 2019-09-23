@@ -576,7 +576,8 @@ func NewNode() (*Node, error) {
 
 func init() {
 	Flags.AddFlagSet(flags.DebugTestEntityFlags)
-	Flags.AddFlagSet(flags.ConsensusBackendFlags)
+	Flags.AddFlagSet(flags.ConsensusBackendFlag)
+	Flags.AddFlagSet(flags.ConsensusValidatorFlag)
 	Flags.AddFlagSet(flags.GenesisFileFlags)
 
 	// Backend initialization flags.

@@ -414,7 +414,7 @@ func Register(parentCmd *cobra.Command) {
 		registerCmd,
 	} {
 		v.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
-		v.Flags().AddFlagSet(cmdFlags.ConsensusBackendFlags)
+		v.Flags().AddFlagSet(cmdFlags.ConsensusBackendFlag)
 	}
 
 	initGenesisCmd.Flags().AddFlagSet(runtimeFlags)

@@ -280,6 +280,7 @@ run_backend_tendermint_committee() {
             --metrics.mode none \
             --storage.backend client \
             --consensus.backend tendermint \
+            --consensus.validator \
             --genesis.file ${genesis_file} \
             --tendermint.core.listen_address tcp://0.0.0.0:${tm_port} \
             --tendermint.consensus.timeout_commit 250ms \
