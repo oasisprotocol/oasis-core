@@ -14,11 +14,12 @@ import (
 
 const (
 	stateCommitteeMap = "scheduler/committee/%02x/%s"
+
+	stateCurrentValidators = "scheduler/validators/current"
+	statePendingValidators = "scheduler/validators/pending"
 )
 
-var (
-	logger = logging.GetLogger("tendermint/scheduler")
-)
+var logger = logging.GetLogger("tendermint/scheduler")
 
 type immutableState struct {
 	*abci.ImmutableState
@@ -85,6 +86,28 @@ func (s *immutableState) getKindsCommittees(kinds []api.CommitteeKind) ([]*api.C
 	return committees, nil
 }
 
+func (s *immutableState) getCurrentValidators() ([]signature.PublicKey, error) {
+	_, raw := s.Snapshot.Get([]byte(stateCurrentValidators))
+	if raw == nil {
+		return nil, nil
+	}
+
+	var validators []signature.PublicKey
+	err := cbor.Unmarshal(raw, &validators)
+	return validators, err
+}
+
+func (s *immutableState) getPendingValidators() ([]signature.PublicKey, error) {
+	_, raw := s.Snapshot.Get([]byte(statePendingValidators))
+	if raw == nil {
+		return nil, nil
+	}
+
+	var validators []signature.PublicKey
+	err := cbor.Unmarshal(raw, &validators)
+	return validators, err
+}
+
 func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -110,6 +133,18 @@ func (s *MutableState) putCommittee(c *api.Committee) {
 
 func (s *MutableState) dropCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) {
 	s.tree.Remove([]byte(fmt.Sprintf(stateCommitteeMap, uint8(kind), runtimeID)))
+}
+
+func (s *MutableState) putCurrentValidators(validators []signature.PublicKey) {
+	s.tree.Set([]byte(stateCurrentValidators), cbor.Marshal(validators))
+}
+
+func (s *MutableState) putPendingValidators(validators []signature.PublicKey) {
+	if validators == nil {
+		s.tree.Remove([]byte(statePendingValidators))
+		return
+	}
+	s.tree.Set([]byte(statePendingValidators), cbor.Marshal(validators))
 }
 
 // NewMutableState creates a new mutable scheduler state wrapper.

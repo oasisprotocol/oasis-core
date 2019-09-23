@@ -18,7 +18,10 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/service"
 )
 
-const cfgDebugBypassStake = "scheduler.debug.bypass_stake" // nolint: gosec
+const (
+	cfgDebugBypassStake      = "scheduler.debug.bypass_stake" // nolint: gosec
+	cfgDebugStaticValidators = "scheduler.debug.static_validators"
+)
 
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -36,12 +39,14 @@ func New(ctx context.Context, timeSource epochtime.Backend, reg registry.Backend
 
 func flagsToConfig() *api.Config {
 	return &api.Config{
-		DebugBypassStake: viper.GetBool(cfgDebugBypassStake),
+		DebugBypassStake:      viper.GetBool(cfgDebugBypassStake),
+		DebugStaticValidators: viper.GetBool(cfgDebugStaticValidators),
 	}
 }
 
 func init() {
 	Flags.Bool(cfgDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
+	Flags.Bool(cfgDebugStaticValidators, false, "bypass all validator elections (UNSAFE)")
 
 	_ = viper.BindPFlags(Flags)
 }
