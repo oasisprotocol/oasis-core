@@ -106,7 +106,7 @@ func (app *schedulerApplication) TransactionTag() byte {
 }
 
 func (app *schedulerApplication) Blessed() bool {
-	return false
+	return true
 }
 
 func (app *schedulerApplication) Dependencies() []string {
