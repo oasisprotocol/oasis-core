@@ -382,7 +382,7 @@ func statusFromFlags() (*kmApi.Status, error) {
 	}
 
 	// Unmarshal KM policy and its signatures.
-	signedPolicy := kmApi.SignedPolicySGX{}
+	var signedPolicy *kmApi.SignedPolicySGX
 	if viper.GetString(cfgPolicyFile) != "" {
 		pb, err := ioutil.ReadFile(viper.GetString(cfgPolicyFile))
 		if err != nil {
@@ -393,7 +393,9 @@ func statusFromFlags() (*kmApi.Status, error) {
 		if err != nil {
 			return nil, err
 		}
-		signedPolicy.Policy = *p
+		signedPolicy = &kmApi.SignedPolicySGX{
+			Policy: *p,
+		}
 
 		for _, sigFile := range viper.GetStringSlice(cfgPolicySigFile) {
 			sigBytes, err := ioutil.ReadFile(sigFile)
@@ -435,7 +437,7 @@ func statusFromFlags() (*kmApi.Status, error) {
 		IsInitialized: viper.GetBool(cfgStatusInitialized),
 		IsSecure:      viper.GetBool(cfgStatusSecure),
 		Checksum:      checksum,
-		Policy:        &signedPolicy,
+		Policy:        signedPolicy,
 	}, nil
 }
 

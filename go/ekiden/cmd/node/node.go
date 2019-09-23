@@ -188,7 +188,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	// Start common worker.
 	n.CommonWorker, err = workerCommon.New(
 		dataDir,
-		compute.Enabled() || workerStorage.Enabled() || txnscheduler.Enabled() || merge.Enabled(),
+		compute.Enabled() || workerStorage.Enabled() || txnscheduler.Enabled() || merge.Enabled() || keymanagerWorker.Enabled(),
 		n.Identity,
 		n.Storage,
 		n.RootHash,
@@ -222,12 +222,11 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	n.svcMgr.Register(n.WorkerRegistration)
 
 	// Initialize the key manager worker service.
-	kmSvc, kmEnabled, err := keymanagerWorker.New(
+	kmSvc, err := keymanagerWorker.New(
 		dataDir,
+		n.CommonWorker,
 		n.IAS,
-		n.CommonWorker.Grpc,
 		n.WorkerRegistration,
-		&workerCommonCfg,
 		n.KeyManager,
 	)
 	if err != nil {
@@ -317,7 +316,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 
 	// Only start the external gRPC server if any workers are enabled.
-	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() || n.MergeWorker.Enabled() || kmEnabled {
+	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() || n.MergeWorker.Enabled() || kmSvc.Enabled() {
 		if err = n.CommonWorker.Grpc.Start(); err != nil {
 			logger.Error("failed to start external gRPC server",
 				"err", err,

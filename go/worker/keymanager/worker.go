@@ -1,4 +1,3 @@
-// Package keymanager implements the key manager worker.
 package keymanager
 
 import (
@@ -6,54 +5,46 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/service"
-	"github.com/oasislabs/ekiden/go/ias"
 	"github.com/oasislabs/ekiden/go/keymanager/api"
+	registry "github.com/oasislabs/ekiden/go/registry/api"
+	roothash "github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
+	committeeCommon "github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
+	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 	"github.com/oasislabs/ekiden/go/worker/registration"
 )
 
-const (
-	cfgEnabled = "worker.keymanager.enabled"
-
-	cfgTEEHardware   = "worker.keymanager.tee_hardware"
-	cfgRuntimeLoader = "worker.keymanager.runtime.loader"
-	cfgRuntimeBinary = "worker.keymanager.runtime.binary"
-	cfgRuntimeID     = "worker.keymanager.runtime.id"
-	cfgMayGenerate   = "worker.keymanager.may_generate"
-
-	rpcCallTimeout = 5 * time.Second
-)
+const rpcCallTimeout = 5 * time.Second
 
 var (
-	_ service.BackgroundService = (*worker)(nil)
+	_ service.BackgroundService = (*Worker)(nil)
 
 	errMalformedResponse = fmt.Errorf("worker/keymanager: malformed response from worker")
 
 	emptyRoot hash.Hash
-
-	// Flags has the configuration flags.
-	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
-type worker struct {
-	sync.Mutex
+// The key manager worker.
+//
+// It behaves differently from other workers as the key manager has its
+// own runtime. It needs to keep track of compute committees for other
+// runtimes in order to update the access control lists.
+type Worker struct {
+	sync.RWMutex
 
 	logger *logging.Logger
 
@@ -63,11 +54,11 @@ type worker struct {
 	quitCh    chan struct{}
 	initCh    chan struct{}
 
-	runtimeID    signature.PublicKey
-	workerHost   host.Host
-	localStorage *host.LocalStorage
-	grpc         *grpc.Server
+	runtimeID     signature.PublicKey
+	workerHost    host.Host
+	workerHostCfg host.Config
 
+	commonWorker  *workerCommon.Worker
 	registration  *registration.Registration
 	enclaveStatus *api.SignedInitResponse
 	backend       api.Backend
@@ -76,11 +67,11 @@ type worker struct {
 	mayGenerate bool
 }
 
-func (w *worker) Name() string {
+func (w *Worker) Name() string {
 	return "key manager worker"
 }
 
-func (w *worker) Start() error {
+func (w *Worker) Start() error {
 	if !w.enabled {
 		w.logger.Info("not starting key manager worker as it is disabled")
 		close(w.initCh)
@@ -89,17 +80,12 @@ func (w *worker) Start() error {
 	}
 
 	w.logger.Info("starting key manager worker")
-
-	if err := w.workerHost.Start(); err != nil {
-		return err
-	}
-
-	close(w.initCh)
+	go w.worker()
 
 	return nil
 }
 
-func (w *worker) Stop() {
+func (w *Worker) Stop() {
 	defer close(w.quitCh)
 
 	w.logger.Info("stopping key manager service")
@@ -111,33 +97,36 @@ func (w *worker) Stop() {
 	// Stop the sub-components.
 	w.cancelCtx()
 	close(w.stopCh)
-
-	w.workerHost.Stop()
-
-	w.localStorage.Stop()
 }
 
-func (w *worker) Quit() <-chan struct{} {
+// Enabled returns if worker is enabled.
+func (w *Worker) Enabled() bool {
+	return w.enabled
+}
+
+func (w *Worker) Quit() <-chan struct{} {
 	return w.quitCh
 }
 
-func (w *worker) Cleanup() {
-	if !w.enabled {
-		return
-	}
-
-	w.workerHost.Cleanup()
-	w.grpc.Cleanup()
+func (w *Worker) Cleanup() {
 }
 
-func (w *worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
+func (w *Worker) getWorkerHost() host.Host {
+	w.RLock()
+	defer w.RUnlock()
+
+	return w.workerHost
+}
+
+func (w *Worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, rpcCallTimeout)
 	defer cancel()
 
+	// Wait for initialization to complete.
 	select {
 	case <-w.initCh:
 	case <-ctx.Done():
-		return nil, context.Canceled
+		return nil, ctx.Err()
 	}
 
 	req := &protocol.Body{
@@ -147,7 +136,9 @@ func (w *worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 		},
 	}
 
-	ch, err := w.workerHost.MakeRequest(ctx, req)
+	// NOTE: Worker host should not be nil as we wait for initialization above.
+	workerHost := w.getWorkerHost()
+	ch, err := workerHost.MakeRequest(ctx, req)
 	if err != nil {
 		w.logger.Error("failed to dispatch RPC call to worker host",
 			"err", err,
@@ -187,11 +178,7 @@ func (w *worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 	}
 }
 
-func (w *worker) onProcessStart(proto *protocol.Protocol, tee *node.CapabilityTEE) error {
-	// TODO: A more natural place to do this is probably on node
-	// registration, or better yet periodically based on the BFT
-	// component.
-
+func (w *Worker) updateStatus(status *api.Status) error {
 	// Initialize the key manager.
 	type InitRequest struct {
 		Checksum    []byte `codec:"checksum"`
@@ -201,19 +188,6 @@ func (w *worker) onProcessStart(proto *protocol.Protocol, tee *node.CapabilityTE
 	type InitCall struct { // nolint: maligned
 		Method string      `codec:"method"`
 		Args   InitRequest `codec:"args"`
-	}
-
-	// Query the BFT component for the policy, checksum, peers (as available).
-	status, err := w.backend.GetStatus(w.ctx, w.runtimeID)
-	if err != nil {
-		if err != api.ErrNoSuchKeyManager {
-			w.logger.Error("failed to query key manger status",
-				"err", err,
-				"id", w.runtimeID,
-			)
-			return err
-		}
-		status = &api.Status{}
 	}
 
 	var policy []byte
@@ -236,7 +210,8 @@ func (w *worker) onProcessStart(proto *protocol.Protocol, tee *node.CapabilityTE
 		},
 	}
 
-	response, err := proto.Call(w.ctx, req)
+	workerHost := w.getWorkerHost()
+	response, err := workerHost.Call(w.ctx, req)
 	if err != nil {
 		w.logger.Error("failed to initialize enclave",
 			"err", err,
@@ -276,6 +251,13 @@ func (w *worker) onProcessStart(proto *protocol.Protocol, tee *node.CapabilityTE
 	}
 
 	// Validate the signature.
+	tee, err := workerHost.WaitForCapabilityTEE(w.ctx)
+	if err != nil {
+		w.logger.Error("failed to get TEE capability",
+			"err", err,
+		)
+		return fmt.Errorf("worker/keymanager: failed to get TEE capability")
+	}
 	if tee != nil {
 		var signingKey signature.PublicKey
 
@@ -342,8 +324,17 @@ func extractMessageResponsePayload(raw []byte) ([]byte, error) {
 	return cbor.Marshal(msg.Response.Body.Success), nil
 }
 
-func (w *worker) onNodeRegistration(n *node.Node) error {
-	tee, err := w.workerHost.WaitForCapabilityTEE(w.ctx)
+func (w *Worker) onNodeRegistration(n *node.Node) error {
+	// Wait for initialization to complete.
+	select {
+	case <-w.initCh:
+	case <-w.ctx.Done():
+		return w.ctx.Err()
+	}
+
+	// NOTE: Worker host should not be nil as we wait for initialization above.
+	workerHost := w.getWorkerHost()
+	tee, err := workerHost.WaitForCapabilityTEE(w.ctx)
 	if err != nil {
 		w.logger.Error("failed to obtain CapabilityTEE",
 			"err", err,
@@ -360,7 +351,7 @@ func (w *worker) onNodeRegistration(n *node.Node) error {
 		return fmt.Errorf("worker/keymanager: enclave not initialized")
 	}
 
-	rtVersion, err := w.workerHost.WaitForRuntimeVersion(w.ctx)
+	rtVersion, err := workerHost.WaitForRuntimeVersion(w.ctx)
 	if err != nil {
 		w.logger.Error("failed to obtain RuntimeVersion",
 			"err", err,
@@ -384,87 +375,167 @@ func (w *worker) onNodeRegistration(n *node.Node) error {
 	return nil
 }
 
-// New constructs a new key manager worker.
-func New(dataDir string, ias *ias.IAS, grpc *grpc.Server, r *registration.Registration, workerCommonCfg *workerCommon.Config, backend api.Backend) (service.BackgroundService, bool, error) {
-	var teeHardware node.TEEHardware
-	s := viper.GetString(cfgTEEHardware)
-	switch strings.ToLower(s) {
-	case "", "invalid":
-	case "intel-sgx":
-		teeHardware = node.TEEHardwareIntelSGX
-	default:
-		return nil, false, fmt.Errorf("invalid TEE hardware: %s", s)
+func (w *Worker) worker() {
+	defer close(w.quitCh)
+
+	// Wait for consensus sync.
+	w.logger.Info("delaying worker start until after initial synchronization")
+	select {
+	case <-w.stopCh:
+		return
+	case <-w.commonWorker.Consensus.Synced():
 	}
 
-	workerRuntimeLoaderBinary := viper.GetString(cfgRuntimeLoader)
-	runtimeBinary := viper.GetString(cfgRuntimeBinary)
+	// Subscribe to key manager status updates.
+	statusCh, statusSub := w.backend.WatchStatuses()
+	defer statusSub.Close()
 
-	ctx, cancelFn := context.WithCancel(context.Background())
+	// Subscribe to runtime registrations in order to know which runtimes
+	// are using us as a key manager.
+	clientRuntimes := make(map[signature.MapKey]*clientRuntimeWatcher)
+	clientRuntimesQuitCh := make(chan *clientRuntimeWatcher)
+	defer close(clientRuntimesQuitCh)
+	rtCh, rtSub := w.commonWorker.Registry.WatchRuntimes()
+	defer rtSub.Close()
 
-	w := &worker{
-		logger:       logging.GetLogger("worker/keymanager"),
-		ctx:          ctx,
-		cancelCtx:    cancelFn,
-		stopCh:       make(chan struct{}),
-		quitCh:       make(chan struct{}),
-		initCh:       make(chan struct{}),
-		grpc:         grpc,
-		registration: r,
-		backend:      backend,
-		enabled:      viper.GetBool(cfgEnabled),
-		mayGenerate:  viper.GetBool(cfgMayGenerate),
+	var initialSyncDone bool
+	for {
+		select {
+		case status := <-statusCh:
+			if !status.ID.Equal(w.runtimeID) {
+				continue
+			}
+
+			w.logger.Info("received key manager status update")
+
+			// Check if this is the first update and we need to initialize the
+			// worker host.
+			workerHost := w.getWorkerHost()
+			if workerHost == nil {
+				// Start key manager runtime worker host.
+				w.logger.Info("starting key manager runtime")
+
+				var err error
+				workerHost, err = host.NewHost(&w.workerHostCfg)
+				if err != nil {
+					w.logger.Error("failed to create worker host",
+						"err", err,
+					)
+					return
+				}
+				if err := workerHost.Start(); err != nil {
+					w.logger.Error("failed to start worker host",
+						"err", err,
+					)
+					return
+				}
+				defer func() {
+					workerHost.Stop()
+					<-workerHost.Quit()
+				}()
+				w.Lock()
+				w.workerHost = workerHost
+				w.Unlock()
+			}
+
+			// Forward status update to key manager runtime.
+			if err := w.updateStatus(status); err != nil {
+				w.logger.Error("failed to handle status update",
+					"err", err,
+				)
+				continue
+			}
+
+			if !initialSyncDone {
+				// Signal that we are initialized.
+				close(w.initCh)
+				initialSyncDone = true
+			}
+		case rt := <-rtCh:
+			if rt.Kind != registry.KindCompute || !rt.KeyManager.Equal(w.runtimeID) {
+				continue
+			}
+			if clientRuntimes[rt.ID.ToMapKey()] != nil {
+				continue
+			}
+
+			w.logger.Info("seen new runtime using us as a key manager",
+				"runtime_id", rt.ID,
+			)
+
+			node, err := w.commonWorker.NewUnmanagedCommitteeNode(rt.ID, false)
+			if err != nil {
+				w.logger.Error("unable to create new committee node",
+					"runtime_id", rt.ID,
+					"err", err,
+				)
+				continue
+			}
+
+			crw := &clientRuntimeWatcher{
+				w:    w,
+				node: node,
+			}
+			node.AddHooks(crw)
+
+			if err := node.Start(); err != nil {
+				w.logger.Error("unable to start new committee node",
+					"runtime_id", rt.ID,
+					"err", err,
+				)
+				continue
+			}
+			defer func() {
+				node.Stop()
+				<-node.Quit()
+			}()
+			go func() {
+				select {
+				case <-node.Quit():
+					clientRuntimesQuitCh <- crw
+				case <-w.stopCh:
+				}
+			}()
+
+			clientRuntimes[rt.ID.ToMapKey()] = crw
+		case crw := <-clientRuntimesQuitCh:
+			w.logger.Error("client runtime watcher quit unexpectedly, terminating",
+				"runtme_id", crw.node.RuntimeID,
+			)
+			return
+		case <-w.stopCh:
+			w.logger.Info("termination requested")
+			return
+		}
 	}
-
-	if w.enabled {
-		if err := w.runtimeID.UnmarshalHex(viper.GetString(cfgRuntimeID)); err != nil {
-			return nil, false, errors.Wrap(err, "worker/keymanager: failed to parse runtime ID")
-		}
-
-		if workerRuntimeLoaderBinary == "" {
-			return nil, false, fmt.Errorf("worker/keymanager: worker runtime loader binary not configured")
-		}
-		if runtimeBinary == "" {
-			return nil, false, fmt.Errorf("worker/keymanager: runtime binary not configured")
-		}
-
-		var err error
-		if w.localStorage, err = host.NewLocalStorage(dataDir, "km-local-storage.bolt.db"); err != nil {
-			return nil, false, errors.Wrap(err, "worker/keymanager: failed to open local storage")
-		}
-
-		w.registration.RegisterRole(w.onNodeRegistration)
-
-		hostCfg := &host.Config{
-			Role:           node.RoleKeyManager,
-			ID:             w.runtimeID,
-			WorkerBinary:   workerRuntimeLoaderBinary,
-			RuntimeBinary:  runtimeBinary,
-			TEEHardware:    teeHardware,
-			IAS:            ias,
-			MessageHandler: newHostHandler(w),
-			OnProcessStart: w.onProcessStart,
-		}
-
-		if w.workerHost, err = host.NewHost(hostCfg); err != nil {
-			return nil, false, errors.Wrap(err, "worker/keymanager: failed to create worker host")
-		}
-
-		newEnclaveRPCGRPCServer(w)
-	}
-
-	return w, w.enabled, nil
 }
 
-func init() {
-	emptyRoot.Empty()
+type clientRuntimeWatcher struct {
+	w    *Worker
+	node *committeeCommon.Node
+}
 
-	Flags.Bool(cfgEnabled, false, "Enable key manager worker")
+func (crw *clientRuntimeWatcher) HandlePeerMessage(context.Context, *p2p.Message) (bool, error) {
+	// This should never be called as P2P is disabled.
+	panic("keymanager/worker: must never be called")
+}
 
-	Flags.String(cfgTEEHardware, "", "TEE hardware to use for the key manager")
-	Flags.String(cfgRuntimeLoader, "", "Path to key manager worker process binary")
-	Flags.String(cfgRuntimeBinary, "", "Path to key manager runtime binary")
-	Flags.String(cfgRuntimeID, "", "Key manager Runtime ID")
-	Flags.Bool(cfgMayGenerate, false, "Key manager may generate new master secret")
+// Guarded by CrossNode.
+func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committeeCommon.EpochSnapshot) {
+	// TODO: Update the key manager access control policy (#1900).
+}
 
-	_ = viper.BindPFlags(Flags)
+// Guarded by CrossNode.
+func (crw *clientRuntimeWatcher) HandleNewBlockEarlyLocked(*block.Block) {
+	// Nothing to do here.
+}
+
+// Guarded by CrossNode.
+func (crw *clientRuntimeWatcher) HandleNewBlockLocked(*block.Block) {
+	// Nothing to do here.
+}
+
+// Guarded by CrossNode.
+func (crw *clientRuntimeWatcher) HandleNewEventLocked(*roothash.Event) {
+	// Nothing to do here.
 }

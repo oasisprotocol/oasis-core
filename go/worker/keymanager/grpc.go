@@ -9,7 +9,7 @@ import (
 var _ pb.EnclaveRpcServer = (*grpcServer)(nil)
 
 type grpcServer struct {
-	w *worker
+	w *Worker
 }
 
 func (s *grpcServer) CallEnclave(ctx context.Context, req *pb.CallEnclaveRequest) (*pb.CallEnclaveResponse, error) {
@@ -21,7 +21,7 @@ func (s *grpcServer) CallEnclave(ctx context.Context, req *pb.CallEnclaveRequest
 	return &pb.CallEnclaveResponse{Payload: rsp}, nil
 }
 
-func newEnclaveRPCGRPCServer(w *worker) {
+func newEnclaveRPCGRPCServer(w *Worker) {
 	s := &grpcServer{w}
-	pb.RegisterEnclaveRpcServer(w.grpc.Server(), s)
+	pb.RegisterEnclaveRpcServer(w.commonWorker.Grpc.Server(), s)
 }
