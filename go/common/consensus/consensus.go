@@ -1,7 +1,9 @@
-package common
+// Package consensus provides the implementation agnostic consesus
+// backend.
+package consensus
 
-// ConsensusBackend is an interface that a consensus backend must provide.
-type ConsensusBackend interface {
+// Backend is an interface that a consensus backend must provide.
+type Backend interface {
 	// Synced returns a channel that is closed once synchronization is
 	// complete.
 	Synced() <-chan struct{}

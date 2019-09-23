@@ -10,7 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/consensus"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/entity"
@@ -53,7 +53,7 @@ type Registration struct {
 	regCh     chan struct{}
 	logger    *logging.Logger
 	roleHooks []func(*node.Node) error
-	consensus common.ConsensusBackend
+	consensus consensus.Backend
 }
 
 func (r *Registration) doNodeRegistration() {
@@ -297,7 +297,7 @@ func New(
 	epochtime epochtime.Backend,
 	registry registry.Backend,
 	identity *identity.Identity,
-	consensus common.ConsensusBackend,
+	consensus consensus.Backend,
 	p2p *p2p.P2P,
 	workerCommonCfg *workerCommon.Config,
 ) (*Registration, error) {

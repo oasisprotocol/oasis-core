@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/ekiden/go/client/indexer"
-	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/consensus"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -54,7 +54,7 @@ type clientCommon struct {
 	storage    storage.Backend
 	scheduler  scheduler.Backend
 	registry   registry.Backend
-	consensus  common.ConsensusBackend
+	consensus  consensus.Backend
 	keyManager *keymanager.Client
 
 	ctx context.Context
@@ -510,7 +510,7 @@ func New(
 	storage storage.Backend,
 	scheduler scheduler.Backend,
 	registry registry.Backend,
-	consensus common.ConsensusBackend,
+	consensus consensus.Backend,
 	keyManager *keymanager.Client,
 ) (*Client, error) {
 	c := &Client{

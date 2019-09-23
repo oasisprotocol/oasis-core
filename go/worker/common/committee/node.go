@@ -7,7 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/consensus"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -82,7 +82,7 @@ type Node struct {
 	Roothash  roothash.Backend
 	Registry  registry.Backend
 	Scheduler scheduler.Backend
-	Consensus common.ConsensusBackend
+	Consensus consensus.Backend
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -343,7 +343,7 @@ func NewNode(
 	roothash roothash.Backend,
 	registry registry.Backend,
 	scheduler scheduler.Backend,
-	consensus common.ConsensusBackend,
+	consensus consensus.Backend,
 	p2p *p2p.P2P,
 ) (*Node, error) {
 	metricsOnce.Do(func() {

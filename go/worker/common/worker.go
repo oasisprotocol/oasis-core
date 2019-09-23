@@ -3,7 +3,7 @@ package common
 import (
 	"fmt"
 
-	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/consensus"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/identity"
@@ -51,7 +51,7 @@ type Worker struct {
 	Roothash     roothash.Backend
 	Registry     registry.Backend
 	Scheduler    scheduler.Backend
-	Consensus    common.ConsensusBackend
+	Consensus    consensus.Backend
 	Grpc         *grpc.Server
 	P2P          *p2p.P2P
 	IAS          *ias.IAS
@@ -268,7 +268,7 @@ func newWorker(
 	roothash roothash.Backend,
 	registryInst registry.Backend,
 	scheduler scheduler.Backend,
-	consensus common.ConsensusBackend,
+	consensus consensus.Backend,
 	grpc *grpc.Server,
 	p2p *p2p.P2P,
 	ias *ias.IAS,
@@ -321,7 +321,7 @@ func New(
 	roothash roothash.Backend,
 	registry registry.Backend,
 	scheduler scheduler.Backend,
-	consensus common.ConsensusBackend,
+	consensus consensus.Backend,
 	p2p *p2p.P2P,
 	ias *ias.IAS,
 	keyManager *keymanager.Client,
