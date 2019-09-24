@@ -8,14 +8,14 @@ import (
 )
 
 const (
-	// QuoteLen is the length of a quote in bytes, without the signature.
-	QuoteLen = 432
+	// quoteLen is the length of a quote in bytes, without the signature.
+	quoteLen = 432
 
-	// QuoteBodyLen is the length of the part of the quote body that comes before the report.
-	QuoteBodyLen = 48
+	// quoteBodyLen is the length of the part of the quote body that comes before the report.
+	quoteBodyLen = 48
 
-	// OffsetReportReportData is the offset into the report structure of the report_data field.
-	OffsetReportReportData = 320
+	// offsetReportReportData is the offset into the report structure of the report_data field.
+	offsetReportReportData = 320
 )
 
 // SignatureType is the type of signature accommpanying an enclave quote.
@@ -37,7 +37,8 @@ type Body struct {
 	Basename                               [32]byte
 }
 
-func (b *Body) decode(data []byte) error {
+// UnmarshalBinary decodes Body from byte array.
+func (b *Body) UnmarshalBinary(data []byte) error {
 	b.Version = binary.LittleEndian.Uint16(data[0:])
 	switch b.Version {
 	case 1, 2:
@@ -62,6 +63,28 @@ func (b *Body) decode(data []byte) error {
 	return nil
 }
 
+// MarshalBinary encodes Body to byte array.
+func (b *Body) MarshalBinary() ([]byte, error) {
+	bBin := []byte{}
+	uint16b := make([]byte, 2)
+	uint32b := make([]byte, 4)
+
+	binary.LittleEndian.PutUint16(uint16b, b.Version)
+	bBin = append(bBin, uint16b[:]...)
+	binary.LittleEndian.PutUint16(uint16b, uint16(b.SignatureType))
+	bBin = append(bBin, uint16b[:]...)
+	binary.LittleEndian.PutUint32(uint32b, b.GID)
+	bBin = append(bBin, uint32b[:]...)
+	binary.LittleEndian.PutUint16(uint16b, b.ISVSVNQuotingEnclave)
+	bBin = append(bBin, uint16b[:]...)
+	binary.LittleEndian.PutUint16(uint16b, b.ISVSVNProvisioningCertificationEnclave)
+	bBin = append(bBin, uint16b[:]...)
+	bBin = append(bBin, make([]byte, 4)...) // 4 reserved bytes.
+	bBin = append(bBin, b.Basename[:]...)
+
+	return bBin, nil
+}
+
 // Report is an enclave report body.
 type Report struct {
 	CPUSVN     [16]byte
@@ -74,7 +97,33 @@ type Report struct {
 	ReportData [64]byte
 }
 
-func (r *Report) decode(data []byte) error {
+// MarshalBinary encodes Report into byte array.
+func (r *Report) MarshalBinary() ([]byte, error) {
+	rBin := []byte{}
+	uint16b := make([]byte, 2)
+	uint32b := make([]byte, 4)
+
+	rBin = append(rBin, r.CPUSVN[:]...)
+	binary.LittleEndian.PutUint32(uint32b, r.MiscSelect)
+	rBin = append(rBin, uint32b[:]...)
+	rBin = append(rBin, make([]byte, 28)...) // 28 reserved bytes.
+	rBin = append(rBin, r.Attributes[:]...)
+	rBin = append(rBin, r.MRENCLAVE[:]...)
+	rBin = append(rBin, make([]byte, 32)...) // 32 reserved bytes.
+	rBin = append(rBin, r.MRSIGNER[:]...)
+	rBin = append(rBin, make([]byte, 96)...) // 96 reserved bytes.
+	binary.LittleEndian.PutUint16(uint16b, r.ISVProdID)
+	rBin = append(rBin, uint16b[:]...)
+	binary.LittleEndian.PutUint16(uint16b, r.ISVSVN)
+	rBin = append(rBin, uint16b[:]...)
+	rBin = append(rBin, make([]byte, 60)...) // 60 reserved bytes.
+	rBin = append(rBin, r.ReportData[:]...)
+
+	return rBin, nil
+}
+
+// UnmarshalBinary decodes Report from byte array
+func (r *Report) UnmarshalBinary(data []byte) error {
 	copy(r.CPUSVN[:], data[0:])
 	r.MiscSelect = binary.LittleEndian.Uint32(data[16:])
 	copy(r.Attributes[:], data[48:])
@@ -82,7 +131,7 @@ func (r *Report) decode(data []byte) error {
 	_ = r.MRSIGNER.UnmarshalBinary(data[128 : 128+sgx.MrSignerSize])
 	r.ISVProdID = binary.LittleEndian.Uint16(data[256:])
 	r.ISVSVN = binary.LittleEndian.Uint16(data[258:])
-	copy(r.ReportData[:], data[OffsetReportReportData:])
+	copy(r.ReportData[:], data[offsetReportReportData:])
 	return nil
 }
 
@@ -94,28 +143,47 @@ type Quote struct {
 
 // Verify checks the quote for validity.
 func (q *Quote) Verify() error {
-	if mrsignerBlacklist[q.Report.MRSIGNER] {
+	if mrSignerBlacklist[q.Report.MRSIGNER] {
 		return fmt.Errorf("ias/quote: blacklisted MRSIGNER")
 	}
 	return nil
 }
 
-// DecodeQuote decodes an enclave quote.
-func DecodeQuote(data []byte) (*Quote, error) {
+// MarshalBinary encodes an enclave quote.
+func (q *Quote) MarshalBinary() ([]byte, error) {
+	bQuote := []byte{}
+
+	bBody, err := q.Body.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	bReport, err := q.Report.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	bQuote = append(bQuote, bBody[:]...)
+	bQuote = append(bQuote, bReport[:]...)
+
+	return bQuote, nil
+}
+
+// UnmarshalBinary decodes an enclave quote.
+func (q *Quote) UnmarshalBinary(data []byte) error {
 	// Signature length is variable, and also more importantly, missing
 	// in the AVR.
-	if len(data) < QuoteLen {
-		return nil, fmt.Errorf("ias/quote: invalid quote body length")
+	if len(data) < quoteLen {
+		return fmt.Errorf("ias/quote: invalid quote body length")
 	}
-	data = data[:QuoteLen] // Clip off the signature (Do we need this?).
+	data = data[:quoteLen] // Clip off the signature (Do we need this?).
 
-	var q Quote
-	if err := q.Body.decode(data[:QuoteBodyLen]); err != nil {
-		return nil, err
+	if err := q.Body.UnmarshalBinary(data[:quoteBodyLen]); err != nil {
+		return err
 	}
-	if err := q.Report.decode(data[QuoteBodyLen:]); err != nil {
-		return nil, err
+	if err := q.Report.UnmarshalBinary(data[quoteBodyLen:]); err != nil {
+		return err
 	}
 
-	return &q, nil
+	return nil
 }

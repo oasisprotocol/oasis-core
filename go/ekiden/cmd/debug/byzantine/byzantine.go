@@ -28,6 +28,8 @@ const (
 	CfgFakeSGX = "fake_sgx"
 	// CfgMockEpochtime configures the mock epochtime backend.
 	CfgMockEpochtime = "mock_epochtime"
+	// CfgVersionFakeEnclaveID configures runtime's EnclaveIdentity.
+	CfgVersionFakeEnclaveID = "runtime.version.fake_enclave_id"
 )
 
 var (
@@ -107,8 +109,11 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 	}()
 
 	var capabilities *node.Capabilities
+	var rak signature.Signer
 	if viper.GetBool(CfgFakeSGX) {
-		capabilities = &fakeCapabilitiesSGX
+		if rak, capabilities, err = initFakeCapabilitiesSGX(); err != nil {
+			panic(fmt.Sprintf("initFakeCapabilitiesSGX: %+v", err))
+		}
 	}
 	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
@@ -181,10 +186,6 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute upload batch failed: %+v", err))
 	}
 
-	var rak signature.Signer
-	if viper.GetBool(CfgFakeSGX) {
-		rak = fakeRAK
-	}
 	if err = cbc.createCommitment(defaultIdentity, rak, computeCommittee.EncodedMembersHash()); err != nil {
 		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
@@ -227,8 +228,11 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 	}()
 
 	var capabilities *node.Capabilities
+	var rak signature.Signer
 	if viper.GetBool(CfgFakeSGX) {
-		capabilities = &fakeCapabilitiesSGX
+		if rak, capabilities, err = initFakeCapabilitiesSGX(); err != nil {
+			panic(fmt.Sprintf("initFakeCapabilitiesSGX: %+v", err))
+		}
 	}
 	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
@@ -301,10 +305,6 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute upload batch failed: %+v", err))
 	}
 
-	var rak signature.Signer
-	if viper.GetBool(CfgFakeSGX) {
-		rak = fakeRAK
-	}
 	if err = cbc.createCommitment(defaultIdentity, rak, computeCommittee.EncodedMembersHash()); err != nil {
 		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
@@ -348,7 +348,9 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 
 	var capabilities *node.Capabilities
 	if viper.GetBool(CfgFakeSGX) {
-		capabilities = &fakeCapabilitiesSGX
+		if _, capabilities, err = initFakeCapabilitiesSGX(); err != nil {
+			panic(fmt.Sprintf("initFakeCapabilitiesSGX: %+v", err))
+		}
 	}
 	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
@@ -657,6 +659,7 @@ func init() {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fs.Bool(CfgFakeSGX, false, "register with SGX capability")
 	fs.Bool(CfgMockEpochtime, false, "use the mock epochtime backend")
+	fs.String(CfgVersionFakeEnclaveID, "", "Fake runtime enclave identity")
 	_ = viper.BindPFlags(fs)
 	byzantineCmd.PersistentFlags().AddFlagSet(fs)
 

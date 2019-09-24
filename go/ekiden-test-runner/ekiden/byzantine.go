@@ -52,6 +52,7 @@ func (worker *Byzantine) startNode() error {
 	for _, v := range worker.net.Runtimes() {
 		if v.kind == registry.KindCompute && v.teeHardware == node.TEEHardwareIntelSGX {
 			args = args.byzantineFakeSGX()
+			args = args.byzantineVersionFakeEnclaveID(v)
 		}
 	}
 

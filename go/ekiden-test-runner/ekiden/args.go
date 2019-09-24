@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	commonGrpc "github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/sgx"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
@@ -319,6 +320,15 @@ func (args *argBuilder) byzantineFakeSGX() *argBuilder {
 
 func (args *argBuilder) byzantineMockEpochtime() *argBuilder {
 	args.vec = append(args.vec, "--"+byzantine.CfgMockEpochtime)
+	return args
+}
+
+func (args *argBuilder) byzantineVersionFakeEnclaveID(rt *Runtime) *argBuilder {
+	eid := sgx.EnclaveIdentity{
+		MrEnclave: *rt.mrEnclave,
+		MrSigner:  *rt.mrSigner,
+	}
+	args.vec = append(args.vec, "--"+byzantine.CfgVersionFakeEnclaveID, eid.String())
 	return args
 }
 

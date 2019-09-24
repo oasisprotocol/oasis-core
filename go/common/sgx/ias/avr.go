@@ -63,7 +63,7 @@ var (
 		ReasonAACompromise:         "aACompromise",
 	}
 
-	mrsignerBlacklist = make(map[sgx.MrSigner]bool)
+	mrSignerBlacklist = make(map[sgx.MrSigner]bool)
 
 	// FortanixTestMrSigner is the MRSIGNER value corresponding to the Fortanix
 	// test signing key that is used by default if no other signing key is
@@ -223,7 +223,11 @@ type AttestationVerificationReport struct {
 // Quote decodes and returns the enclave quote component of an Attestation
 // Verification Report.
 func (a *AttestationVerificationReport) Quote() (*Quote, error) {
-	return DecodeQuote(a.ISVEnclaveQuoteBody)
+	var quote Quote
+	if err := quote.UnmarshalBinary(a.ISVEnclaveQuoteBody); err != nil {
+		return nil, err
+	}
+	return &quote, nil
 }
 
 func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
@@ -244,7 +248,7 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 
 	switch len(a.ISVEnclaveQuoteBody) {
 	case 0:
-	case QuoteLen:
+	case quoteLen:
 		untrustedQuote, err := a.Quote()
 		if err != nil {
 			return errors.Wrap(err, "ias/avr: malformed quote")
@@ -412,7 +416,7 @@ func BuildMrSignerBlacklist(allowTestKeys bool) {
 			if err := signer.UnmarshalHex(v); err != nil {
 				panic("ias/avr: failed to decode MRSIGNER: " + v)
 			}
-			mrsignerBlacklist[signer] = true
+			mrSignerBlacklist[signer] = true
 		}
 	}
 }

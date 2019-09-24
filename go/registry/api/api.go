@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
+	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 )
 
 const (
@@ -64,8 +65,25 @@ var (
 	ErrBadEntityForNode = errors.New("registry: unknown entity in node registration")
 
 	// ErrBadEntityForRuntime is the error returned when a runtime
-	// registration with an unknown entity is attempted.
+	// attempts to register with an unknown entity.
 	ErrBadEntityForRuntime = errors.New("registry: unknown entity in runtime registration")
+
+	// ErrNoEnclaveForRuntime is the error returned when a TEE runtime
+	// registers with no enclave IDs.
+	ErrNoEnclaveForRuntime = errors.New("registry: no enclaves for TEE runtime registration")
+
+	// ErrBadEnclaveIdentity is the error returned when a node tries to
+	// register runtimes with wrong Enclave IDs.
+	ErrBadEnclaveIdentity = errors.New("registry: bad enclave id")
+
+	// ErrBadCapabilitiesTEEHardware is the error returned when a node tries to
+	// register a runtime with bad Capabilities.TEE.Hardware.
+	ErrBadCapabilitiesTEEHardware = errors.New("registry: bad capabilities.TEE.Hardware")
+
+	// ErrTEEHardwareMismatch is the error returned when a node tries to
+	// register a runtime and Capabilities.TEE.Hardware mismatches the one in
+	// the registry.
+	ErrTEEHardwareMismatch = errors.New("registry: runtime TEE.Hardware mismatches the one in registry")
 
 	// ErrNoSuchEntity is the error returned when an entity does not exist.
 	ErrNoSuchEntity = errors.New("registry: no such entity")
@@ -267,7 +285,7 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
-func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool, kmOperator signature.PublicKey) (*node.Node, error) {
+func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool, kmOperator signature.PublicKey, regRuntimes []*Runtime) (*node.Node, error) {
 	var n node.Node
 	if sigNode == nil {
 		return nil, ErrInvalidArgument
@@ -345,7 +363,7 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, en
 
 	// TODO: Key manager nodes maybe should be restricted to only being a
 	// key manager at the expense of breaking some of our test configs.
-	needRuntimes := n.HasRoles(node.RoleComputeWorker | node.RoleKeyManager) // XXX: RoleTransactionSceduler?
+	needRuntimes := n.HasRoles(node.RoleComputeWorker | node.RoleKeyManager) // XXX: RoleTransactionScheduler?
 
 	switch len(n.Runtimes) {
 	case 0:
@@ -371,17 +389,7 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, en
 			}
 			rtMap[k] = true
 
-			tee := rt.Capabilities.TEE
-			if tee == nil {
-				continue
-			}
-
-			if err := tee.Verify(now); err != nil {
-				logger.Error("RegisterNode: failed to validate attestation",
-					"node", n,
-					"runtime", rt.ID,
-					"err", err,
-				)
+			if err := VerifyNodeRuntimeEnclaveIDs(logger, rt, regRuntimes, now); err != nil {
 				return nil, err
 			}
 		}
@@ -430,6 +438,100 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, en
 	}
 
 	return &n, nil
+}
+
+// VerifyNodeRuntimeEnclaveIDs verifies TEE-specific attributes of the node's runtime.
+func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRuntimes []*Runtime, ts time.Time) error {
+	// If no TEE available, do nothing.
+	if rt.Capabilities.TEE == nil {
+		return nil
+	}
+
+	switch rt.Capabilities.TEE.Hardware {
+	case node.TEEHardwareInvalid:
+	case node.TEEHardwareIntelSGX:
+		// Check MRENCLAVE/MRSIGNER.
+		var eidValid bool
+		var avrBundle ias.AVRBundle
+		if err := avrBundle.UnmarshalCBOR(rt.Capabilities.TEE.Attestation); err != nil {
+			return err
+		}
+
+		avr, err := avrBundle.Open(ias.IntelTrustRoots, ts)
+		if err != nil {
+			return err
+		}
+
+		// Extract the original ISV quote.
+		q, err := avr.Quote()
+		if err != nil {
+			return err
+		}
+
+	regRtLoop:
+		for _, regRt := range regRuntimes {
+			// Make sure we compare EnclaveIdentity of the same registered RuntimeIDs only!
+			if !regRt.ID.Equal(rt.ID) {
+				continue
+			}
+
+			if regRt.TEEHardware != rt.Capabilities.TEE.Hardware {
+				rtJSON, _ := json.Marshal(rt)
+				regRtJSON, _ := json.Marshal(regRt)
+				quoteJSON, _ := json.Marshal(q)
+				logger.Error("VerifyNodeRuntimeEnclaveIDs: runtime TEE.Hardware mismatch",
+					"quote", quoteJSON,
+					"node.Runtime", rtJSON,
+					"registered runtime", regRtJSON,
+					"ts", ts,
+				)
+				return ErrTEEHardwareMismatch
+			}
+
+			var vi VersionInfoIntelSGX
+			if err := cbor.Unmarshal(regRt.Version.TEE, &vi); err != nil {
+				return err
+			}
+			for _, eid := range vi.Enclaves {
+				eidMrenclave := eid.MrEnclave
+				eidMrsigner := eid.MrSigner
+				// Compare MRENCLAVE/MRSIGNER to the one stored in the registry.
+				if bytes.Equal(eidMrenclave[:], q.Report.MRENCLAVE[:]) && bytes.Equal(eidMrsigner[:], q.Report.MRSIGNER[:]) {
+					eidValid = true
+					break regRtLoop
+				}
+			}
+		}
+
+		if !eidValid {
+			if logger != nil {
+				rtJSON, _ := json.Marshal(rt)
+				regRuntimesJSON, _ := json.Marshal(regRuntimes)
+				quoteJSON, _ := json.Marshal(q)
+				logger.Error("VerifyNodeRuntimeEnclaveIDs: bad enclave ID",
+					"quote", quoteJSON,
+					"node.Runtime", rtJSON,
+					"registered runtimes", regRuntimesJSON,
+					"ts", ts,
+				)
+			}
+
+			return ErrBadEnclaveIdentity
+		}
+	default:
+		return ErrBadCapabilitiesTEEHardware
+	}
+
+	if err := rt.Capabilities.TEE.Verify(ts); err != nil {
+		logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
+			"runtime", rt.ID,
+			"ts", ts,
+			"err", err,
+		)
+		return err
+	}
+
+	return nil
 }
 
 // sortRuntimeList sorts the given runtime list to ensure a canonical order.
@@ -644,13 +746,13 @@ func VerifyTimestamp(timestamp uint64, now uint64) error {
 // Genesis is the registry genesis state.
 type Genesis struct {
 	// Entities is the initial list of entities.
-	Entities []*entity.SignedEntity `json:"entities,omit_empty"`
+	Entities []*entity.SignedEntity `json:"entities,omitempty"`
 
 	// Runtimes is the initial list of runtimes.
-	Runtimes []*SignedRuntime `json:"runtimes,omit_empty"`
+	Runtimes []*SignedRuntime `json:"runtimes,omitempty"`
 
 	// Nodes is the initial list of nodes.
-	Nodes []*node.SignedNode `json:"nodes,omit_empty"`
+	Nodes []*node.SignedNode `json:"nodes,omitempty"`
 
 	// KeyManagerOperator is the ID of the entity that is allowed to operate
 	// key manager nodes.

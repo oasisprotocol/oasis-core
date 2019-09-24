@@ -40,15 +40,15 @@ func NewDefaultFixture() (*ekiden.NetworkFixture, error) {
 	if err != nil {
 		return nil, err
 	}
-	var mrsigner *sgx.MrSigner
+	var mrSigner *sgx.MrSigner
 	if tee == node.TEEHardwareIntelSGX {
-		mrsigner = &ias.FortanixTestMrSigner
+		mrSigner = &ias.FortanixTestMrSigner
 	}
 
 	return &ekiden.NetworkFixture{
 		TEE: ekiden.TEEFixture{
 			Hardware: tee,
-			MrSigner: mrsigner,
+			MrSigner: mrSigner,
 		},
 		Network: ekiden.NetworkCfg{
 			EkidenBinary:           viper.GetString(cfgEkidenBinary),

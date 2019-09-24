@@ -169,5 +169,5 @@ type PrunedBlock struct {
 // Genesis is the roothash genesis state.
 type Genesis struct {
 	// Blocks is the per-runtime map of genesis blocks.
-	Blocks map[signature.MapKey]*block.Block `json:"blocks,omit_empty"`
+	Blocks map[signature.MapKey]*block.Block `json:"blocks,omitempty"`
 }

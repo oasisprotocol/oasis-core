@@ -327,7 +327,8 @@ func (net *Network) Stop() {
 }
 
 func (net *Network) runEkidenBinary(consoleWriter io.Writer, args ...string) error {
-	cmd := exec.Command(net.cfg.EkidenBinary, args...)
+	ekidenBinary := net.cfg.EkidenBinary
+	cmd := exec.Command(ekidenBinary, args...)
 	cmd.SysProcAttr = CmdAttrs
 	if consoleWriter != nil {
 		cmd.Stdout = consoleWriter
@@ -390,7 +391,8 @@ func (net *Network) startEkidenNode(
 		_ = w.Close()
 	})
 
-	cmd := exec.Command(net.cfg.EkidenBinary, args...)
+	ekidenBinary := net.cfg.EkidenBinary
+	cmd := exec.Command(ekidenBinary, args...)
 	cmd.SysProcAttr = CmdAttrs
 	cmd.Stdout = w
 	cmd.Stderr = w

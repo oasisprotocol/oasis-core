@@ -224,7 +224,7 @@ type VersionInfo struct {
 
 	// TEE is the enclave version information, in an enclave provider specific
 	// format if any.
-	TEE []byte `json:"tee,omit_empty"`
+	TEE []byte `json:"tee,omitempty"`
 }
 
 func (v *VersionInfo) fromProto(pb *pbRegistry.VersionInfo) error {

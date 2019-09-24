@@ -90,20 +90,20 @@ func (s *IAS) GetQuoteSignatureType(ctx context.Context) (*ias.SignatureType, er
 }
 
 // VerifyEvidence verifies attestation evidence.
-func (s *IAS) VerifyEvidence(ctx context.Context, runtimeID signature.PublicKey, quote, pseManifest []byte, nonce string) (avr, sig, chain []byte, err error) {
+func (s *IAS) VerifyEvidence(ctx context.Context, runtimeID signature.PublicKey, quoteBinary, pseManifest []byte, nonce string) (avr, sig, chain []byte, err error) {
 	if s.client == nil {
 		// If the IAS proxy is not configured, generate a mock AVR, under the
 		// assumption that the runtime is built to support this.  The runtime
 		// with reject the mock AVR if it is not.
-		avr, err = ias.NewMockAVR(quote, nonce)
+		avr, err = ias.NewMockAVR(quoteBinary, nonce)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 	} else {
-		// Ensure the quote passes basic sanity/security checks before even
+		// Ensure the quoteBinary passes basic sanity/security checks before even
 		// bothering to contact the backend.
-		var untrustedQuote *ias.Quote
-		untrustedQuote, err = ias.DecodeQuote(quote)
+		var untrustedQuote ias.Quote
+		err = untrustedQuote.UnmarshalBinary(quoteBinary)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -113,7 +113,7 @@ func (s *IAS) VerifyEvidence(ctx context.Context, runtimeID signature.PublicKey,
 
 		evidence := ias.Evidence{
 			ID:          runtimeID,
-			Quote:       quote,
+			Quote:       quoteBinary,
 			PSEManifest: pseManifest,
 			Nonce:       nonce,
 		}

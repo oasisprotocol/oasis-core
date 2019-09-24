@@ -25,8 +25,8 @@ type Runtime struct { // nolint: maligned
 
 	binary      string
 	teeHardware node.TEEHardware
-	mrenclave   *sgx.MrEnclave
-	mrsigner    *sgx.MrSigner
+	mrEnclave   *sgx.MrEnclave
+	mrSigner    *sgx.MrSigner
 }
 
 // RuntimeCfg is the ekiden runtime provisioning configuration.
@@ -84,15 +84,15 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 			args = append(args, "--runtime.genesis.state", cfg.GenesisState)
 		}
 	}
-	var mrenclave *sgx.MrEnclave
+	var mrEnclave *sgx.MrEnclave
 	if cfg.TEEHardware == node.TEEHardwareIntelSGX {
-		if mrenclave, err = deriveMrenclave(cfg.Binary); err != nil {
+		if mrEnclave, err = deriveMrEnclave(cfg.Binary); err != nil {
 			return nil, err
 		}
 
 		args = append(args, []string{
 			"--runtime.tee_hardware", cfg.TEEHardware.String(),
-			"--runtime.version.enclave", mrenclave.String() + cfg.MrSigner.String(),
+			"--runtime.version.enclave", mrEnclave.String() + cfg.MrSigner.String(),
 		}...)
 	}
 	if cfg.Keymanager != nil {
@@ -121,15 +121,15 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		kind:        cfg.Kind,
 		binary:      cfg.Binary,
 		teeHardware: cfg.TEEHardware,
-		mrenclave:   mrenclave,
-		mrsigner:    cfg.MrSigner,
+		mrEnclave:   mrEnclave,
+		mrSigner:    cfg.MrSigner,
 	}
 	net.runtimes = append(net.runtimes, rt)
 
 	return rt, nil
 }
 
-func deriveMrenclave(f string) (*sgx.MrEnclave, error) {
+func deriveMrEnclave(f string) (*sgx.MrEnclave, error) {
 	r, err := os.Open(f)
 	if err != nil {
 		return nil, errors.Wrap(err, "ekiden: failed to open enclave binary")

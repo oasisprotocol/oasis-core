@@ -89,12 +89,13 @@ type httpEndpoint struct {
 	spidInfo SPIDInfo
 }
 
-func (e *httpEndpoint) VerifyEvidence(ctx context.Context, quote, pseManifest []byte, nonce string) ([]byte, []byte, []byte, error) {
+func (e *httpEndpoint) VerifyEvidence(ctx context.Context, quoteBinary, pseManifest []byte, nonce string) ([]byte, []byte, []byte, error) {
 	// Validate arguments.
 	//
 	// XXX: Should this happen here, or should the caller handle this?
-	if _, err := DecodeQuote(quote); err != nil {
-		return nil, nil, nil, errors.Wrap(err, "ias: invalid quote")
+	var quote Quote
+	if err := quote.UnmarshalBinary(quoteBinary); err != nil {
+		return nil, nil, nil, errors.Wrap(err, "ias: invalid quoteBinary")
 	}
 	if len(nonce) > nonceMaxLen {
 		return nil, nil, nil, fmt.Errorf("ias: invalid nonce length")
@@ -102,7 +103,7 @@ func (e *httpEndpoint) VerifyEvidence(ctx context.Context, quote, pseManifest []
 
 	// Encode the payload in the format that IAS wants.
 	reqPayload, err := json.Marshal(&iasEvidencePayload{
-		ISVEnclaveQuote: quote,
+		ISVEnclaveQuote: quoteBinary,
 		PSEManifest:     pseManifest,
 		Nonce:           nonce,
 	})

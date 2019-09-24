@@ -95,7 +95,7 @@ func (km *Keymanager) provisionGenesis() error {
 			"--keymanager.policy.file", kmPolicyPath,
 			"--keymanager.policy.id", km.runtime.id.String(),
 			"--keymanager.policy.serial", "1",
-			"--keymanager.policy.enclave.id", km.runtime.mrenclave.String() + km.runtime.mrsigner.String(),
+			"--keymanager.policy.enclave.id", km.runtime.mrEnclave.String() + km.runtime.mrSigner.String(),
 		}
 
 		for _, rt := range km.net.runtimes {
@@ -103,7 +103,7 @@ func (km *Keymanager) provisionGenesis() error {
 				continue
 			}
 
-			arg := fmt.Sprintf("%s=%s%s", rt.id, rt.mrenclave, rt.mrsigner)
+			arg := fmt.Sprintf("%s=%s%s", rt.id, rt.mrEnclave, rt.mrSigner)
 			policyArgs = append(policyArgs, "--keymanager.policy.may.query", arg)
 		}
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
@@ -235,7 +236,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 			}
 		}
 
-		newStatus := app.generateStatus(rt, oldStatus, nodes)
+		newStatus := app.generateStatus(rt, oldStatus, nodes, ctx.Now())
 		if forceEmit || !bytes.Equal(cbor.Marshal(oldStatus), cbor.Marshal(newStatus)) {
 			app.logger.Debug("status updated",
 				"id", newStatus.ID,
@@ -263,7 +264,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 	return nil
 }
 
-func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStatus *api.Status, nodes []*node.Node) *api.Status {
+func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStatus *api.Status, nodes []*node.Node, ts time.Time) *api.Status {
 	status := &api.Status{
 		ID:            kmrt.ID,
 		IsInitialized: oldStatus.IsInitialized,
@@ -308,7 +309,7 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 			continue
 		}
 
-		initResponse, err := api.VerifyExtraInfo(kmrt, nodeRt)
+		initResponse, err := api.VerifyExtraInfo(kmrt, nodeRt, ts)
 		if err != nil {
 			app.logger.Error("failed to validate ExtraInfo",
 				"err", err,

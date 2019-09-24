@@ -2,13 +2,13 @@ package byzantine
 
 import (
 	"crypto/rand"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net"
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -16,6 +16,7 @@ import (
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/ekiden/go/common/sgx"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 )
 
@@ -33,8 +34,6 @@ var (
 			},
 		},
 	}
-	fakeRAK             signature.Signer
-	fakeCapabilitiesSGX node.Capabilities
 )
 
 func initDefaultIdentity(dataDir string) (*identity.Identity, error) {
@@ -46,30 +45,68 @@ func initDefaultIdentity(dataDir string) (*identity.Identity, error) {
 	return id, nil
 }
 
-func init() {
-	if err := defaultRuntimeID.UnmarshalHex(defaultRuntimeIDHex); err != nil {
-		panic(fmt.Sprintf("default runtime ID UnmarshalHex: %+v", err))
-	}
-	var err error
-	fakeRAK, err = memorySigner.NewFactory().Generate(signature.SignerUnknown, rand.Reader)
+// Initializes fake CapabilitiesSGX and RAK.
+// To also populate EnclaveIdentity in the Quote from
+// runtime.version.fake_enclave flag, this function requires viper to be
+// initialized and the flag registered first.
+func initFakeCapabilitiesSGX() (signature.Signer, *node.Capabilities, error) {
+	// Get fake RAK.
+	fr, err := memorySigner.NewFactory().Generate(signature.SignerUnknown, rand.Reader)
 	if err != nil {
-		panic(fmt.Sprintf("memory signer factory Generate failed: %+v", err))
+		return nil, nil, err
 	}
-	quote := make([]byte, ias.QuoteLen)
-	binary.LittleEndian.PutUint16(quote[0:], 1)
-	rakHash := node.RAKHash(fakeRAK.Public())
-	copy(quote[ias.QuoteBodyLen+ias.OffsetReportReportData:], rakHash[:])
+	rakHash := node.RAKHash(fr.Public())
+
+	// Read EnclaveIdentity from cmd.
+	// Requires viper to be initialized before that!
+	v := viper.GetString(CfgVersionFakeEnclaveID)
+	enclaveIdentity := sgx.EnclaveIdentity{}
+	if v != "" {
+		if err = enclaveIdentity.UnmarshalHex(v); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// Manage ISVEnclaveQuoteBody.
+	quote := ias.Quote{
+		Body: ias.Body{
+			Version: 1,
+		},
+		Report: ias.Report{
+			MRENCLAVE: enclaveIdentity.MrEnclave,
+			MRSIGNER:  enclaveIdentity.MrSigner,
+		},
+	}
+	copy(quote.Report.ReportData[:], rakHash[:])
+
+	quoteBinary, err := quote.MarshalBinary()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Manage AVRBundle's Body.
 	body, _ := json.Marshal(&ias.AttestationVerificationReport{
 		Timestamp:             time.Now().UTC().Format(ias.TimestampFormat),
 		ISVEnclaveQuoteStatus: ias.QuoteOK,
-		ISVEnclaveQuoteBody:   quote,
+		ISVEnclaveQuoteBody:   quoteBinary,
 	})
-	fakeCapabilitiesSGX.TEE = &node.CapabilityTEE{
+
+	// Populate TEE attribute.
+	fc := node.Capabilities{}
+	fc.TEE = &node.CapabilityTEE{
 		Hardware: node.TEEHardwareIntelSGX,
 		Attestation: cbor.Marshal(ias.AVRBundle{
 			Body: body,
 			// Everything we do is simulated, and we wouldn't be able to get a real signed AVR.
 		}),
-		RAK: fakeRAK.Public(),
+		RAK: fr.Public(),
+	}
+
+	return fr, &fc, nil
+}
+
+func init() {
+	if err := defaultRuntimeID.UnmarshalHex(defaultRuntimeIDHex); err != nil {
+		panic(fmt.Sprintf("default runtime ID UnmarshalHex: %+v", err))
 	}
 }
