@@ -458,7 +458,7 @@ func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes []*node.Ru
 			)
 			return false
 		}
-		if currentRuntime.Capabilities != newRuntime.Capabilities {
+		if !verifyRuntimeCapabilities(logger, &currentRuntime.Capabilities, &newRuntime.Capabilities) {
 			logger.Error("RegisterNode: trying to update runtimes, runtime Capabilities changed",
 				"current_runtime", currentRuntime,
 				"new_runtime", newRuntime,
@@ -466,6 +466,31 @@ func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes []*node.Ru
 			return false
 		}
 	}
+	return true
+}
+
+// verifyRuntimeCapabilities verifies node runtime capabilities changes.
+func verifyRuntimeCapabilities(logger *logging.Logger, currentCaps *node.Capabilities, newCaps *node.Capabilities) bool {
+	// TEE capability.
+	if (currentCaps.TEE == nil) != (newCaps.TEE == nil) {
+		logger.Error("RegisterNode: trying to change between TEE/non-TEE capability",
+			"current_caps", currentCaps,
+			"new_caps", newCaps,
+		)
+		return false
+	}
+	if currentCaps.TEE == nil {
+		return true
+	}
+	if currentCaps.TEE.Hardware != newCaps.TEE.Hardware {
+		logger.Error("RegisterNode: trying to change TEE hardware",
+			"current_tee_hw", currentCaps.TEE.Hardware,
+			"new_tee_hw", newCaps.TEE.Hardware,
+		)
+		return false
+	}
+	// RAK and Attestation fields are allowed to change as they may be updated if
+	// the node and/or the runtime restarts.
 	return true
 }
 
