@@ -512,8 +512,6 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 		}
 		blk.Header.StorageSignatures = signatures
 
-		n.byzantineMaybeInjectDiscrepancy(&blk.Header)
-
 		doneCh <- &commitment.MergeBody{
 			ComputeCommits: commitments,
 			Header:         blk.Header,

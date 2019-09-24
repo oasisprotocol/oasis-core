@@ -16,8 +16,6 @@ const (
 	cfgWorkerEnabled = "worker.compute.enabled"
 
 	cfgStorageCommitTimeout = "worker.compute.storage_commit_timeout"
-
-	cfgByzantineInjectDiscrepancies = "worker.compute.byzantine.inject_discrepancies"
 )
 
 // Flags has the configuration flags.
@@ -38,8 +36,6 @@ func New(
 	cfg := Config{
 		Committee: committee.Config{
 			StorageCommitTimeout: viper.GetDuration(cfgStorageCommitTimeout),
-
-			ByzantineInjectDiscrepancies: viper.GetBool(cfgByzantineInjectDiscrepancies),
 		},
 	}
 
@@ -50,9 +46,6 @@ func init() {
 	Flags.Bool(cfgWorkerEnabled, false, "Enable compute worker process")
 
 	Flags.Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
-
-	Flags.Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies into batches")
-	_ = Flags.MarkHidden(cfgByzantineInjectDiscrepancies)
 
 	_ = viper.BindPFlags(Flags)
 }
