@@ -1,9 +1,6 @@
 package cmd
 
 import (
-	"io/ioutil"
-	"os"
-
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -19,7 +16,8 @@ import (
 )
 
 const (
-	cfgServerSocket = "socket"
+	cfgServerSocket  = "socket"
+	cfgServerDataDir = "datadir"
 )
 
 var (
@@ -38,15 +36,11 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 	svcMgr := background.NewServiceManager(logger)
 	defer svcMgr.Cleanup()
 
-	// Create a new random temporary directory under /tmp.
-	dataDir, err := ioutil.TempDir("", "ekiden-storage-protocol-server-")
-	if err != nil {
-		logger.Error("failed to create data directory",
-			"err", err,
-		)
+	dataDir := viper.GetString(cfgServerDataDir)
+	if dataDir == "" {
+		logger.Error("no data directory specified")
 		return
 	}
-	defer os.RemoveAll(dataDir)
 
 	// Generate dummy identity.
 	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory())
@@ -114,5 +108,6 @@ func RegisterProtoServer(parentCmd *cobra.Command) {
 
 func init() {
 	protoServerFlags.String(cfgServerSocket, "storage.sock", "path to storage protocol server socket")
+	protoServerFlags.String(cfgServerDataDir, "", "path to data directory")
 	_ = viper.BindPFlags(protoServerFlags)
 }

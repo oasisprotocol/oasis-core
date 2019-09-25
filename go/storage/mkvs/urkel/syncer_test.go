@@ -89,13 +89,11 @@ func TestProof(t *testing.T) {
 	// TODO: Provide multiple test vectors.
 	testVectorProof := base64.StdEncoding.EncodeToString(cbor.Marshal(proof))
 	require.EqualValues(
-		"omdlbnRyaWVzhVIBAQAAAAAAAAAAJABrZXkgMAJOAQEAAAAAAAAAAAEAAAJYIQIQb3/oa32LwFDPgWs981ShL0gbPqt1ukBp6HbjH"+
-			"/Wz81ghAqDH7XAay7FXPD3A1Jjerq2VJ3+qXKpDmsn2GZaRC/MyWCEC/pte6Ci+YRcj5qqf30hjTTdsnnSLQYRJJuDntH47+SdudW"+
-			"50cnVzdGVkX3Jvb3RYIPGqFcpFKzYGSKFyVv70CXCpkr2XLQYsuTu0DHywQ/TJ",
+		"omdlbnRyaWVzhVIBAQAAAAAAAAAAJABrZXkgMAJOAQEAAAAAAAAAAAEAAAJYIQLfcbr2Zv0eZpMHlih4wq2kOBFhVcnJrZxX6NcwiYk7r1ghAt978txVc0EYdJJeTFslGslX071IXQB2AjNmdUK72P2IWCEC2cyKQF3sbrxpyUzrjSjTbzpWcb/S5InBJOw0IWchn9NudW50cnVzdGVkX3Jvb3RYIF655z+dXJ64QCdz4e69vE1azM6nxnpdzpH/jE6h1cys",
 		testVectorProof,
 	)
 	testVectorRootHash := rootHash.String()
-	require.EqualValues("f1aa15ca452b360648a17256fef40970a992bd972d062cb93bb40c7cb043f4c9", testVectorRootHash)
+	require.EqualValues("5eb9e73f9d5c9eb8402773e1eebdbc4d5acccea7c67a5dce91ff8c4ea1d5ccac", testVectorRootHash)
 
 	// Proof should verify.
 	var pv syncer.ProofVerifier

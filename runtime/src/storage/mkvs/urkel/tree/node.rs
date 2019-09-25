@@ -1,11 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
-use failure::Fallible;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{
     common::{crypto::hash::Hash, roothash::Namespace},
-    storage::mkvs::urkel::{cache::*, marshal::*, tree::*},
+    storage::mkvs::urkel::{cache::*, marshal::*},
 };
 
 /// Common interface for node-like objects in the tree.
@@ -16,8 +15,6 @@ pub trait Node {
     fn get_hash(&self) -> Hash;
     /// Recompute the node's hash.
     fn update_hash(&mut self);
-    /// Check if the node's hash matches its contents.
-    fn validate(&mut self, h: Hash) -> Fallible<()>;
     /// Duplicate the node but include only hash references.
     fn extract(&self) -> NodeRef;
 }
@@ -66,13 +63,6 @@ impl Node for NodeBox {
         match self {
             NodeBox::Internal(ref mut n) => n.update_hash(),
             NodeBox::Leaf(ref mut n) => n.update_hash(),
-        }
-    }
-
-    fn validate(&mut self, h: Hash) -> Fallible<()> {
-        match self {
-            NodeBox::Internal(ref mut n) => n.validate(h),
-            NodeBox::Leaf(ref mut n) => n.validate(h),
         }
     }
 
@@ -262,25 +252,6 @@ impl Node for InternalNode {
         ]);
     }
 
-    fn validate(&mut self, h: Hash) -> Fallible<()> {
-        if !self.leaf_node.borrow().clean || !self.left.borrow().clean || !self.right.borrow().clean
-        {
-            Err(TreeError::DirtyPointers.into())
-        } else {
-            self.update_hash();
-
-            if self.hash != h {
-                Err(TreeError::HashMismatch {
-                    expected_hash: h,
-                    computed_hash: self.hash,
-                }
-                .into())
-            } else {
-                Ok(())
-            }
-        }
-    }
-
     fn extract(&self) -> NodeRef {
         if !self.clean {
             panic!("urkel: extract called on dirty node");
@@ -320,7 +291,7 @@ pub struct LeafNode {
     pub round: u64,
     pub hash: Hash,
     pub key: Key,
-    pub value: ValuePtrRef,
+    pub value: Value,
 }
 
 impl LeafNode {
@@ -330,7 +301,7 @@ impl LeafNode {
             round: self.round,
             hash: self.hash.clone(),
             key: self.key.to_owned(),
-            value: self.value.borrow().copy(),
+            value: self.value.clone(),
         };
 
         return node;
@@ -351,26 +322,8 @@ impl Node for LeafNode {
             &[NodeKind::Leaf as u8],
             &self.round.marshal_binary().unwrap(),
             self.key.as_ref(),
-            self.value.borrow().hash.as_ref(),
+            self.value.as_ref(),
         ]);
-    }
-
-    fn validate(&mut self, h: Hash) -> Fallible<()> {
-        if !self.value.borrow().clean {
-            Err(TreeError::DirtyValue.into())
-        } else {
-            self.update_hash();
-
-            if self.hash != h {
-                Err(TreeError::HashMismatch {
-                    expected_hash: h,
-                    computed_hash: self.hash,
-                }
-                .into())
-            } else {
-                Ok(())
-            }
-        }
     }
 
     fn extract(&self) -> NodeRef {
@@ -382,7 +335,7 @@ impl Node for LeafNode {
             round: self.round,
             hash: self.hash,
             key: self.key.clone(),
-            value: self.value.borrow().extract(),
+            value: self.value.clone(),
         })))
     }
 }
@@ -569,89 +522,5 @@ impl KeyTrait for Key {
     }
 }
 
+// Value holds the leaf node value.
 pub type Value = Vec<u8>;
-/// A reference-counted value pointer.
-pub type ValuePtrRef = Rc<RefCell<ValuePointer>>;
-
-/// A value pointer holds a value.
-#[derive(Debug, Default)]
-pub struct ValuePointer {
-    pub clean: bool,
-    pub hash: Hash,
-    pub value: Option<Value>,
-
-    pub cache_extra: CacheExtra<ValuePointer>,
-}
-
-impl ValuePointer {
-    pub fn update_hash(&mut self) {
-        match &self.value {
-            None => self.hash = Hash::empty_hash(),
-            Some(ref val) => self.hash = Hash::digest_bytes(&val[..]),
-        };
-    }
-
-    pub fn validate(&mut self, hash: Hash) -> Fallible<()> {
-        self.update_hash();
-        if self.hash != hash {
-            Err(TreeError::HashMismatch {
-                expected_hash: hash,
-                computed_hash: self.hash,
-            }
-            .into())
-        } else {
-            Ok(())
-        }
-    }
-
-    pub fn extract(&self) -> ValuePtrRef {
-        if !self.clean {
-            panic!("urkel: extract called on dirty value");
-        }
-        Rc::new(RefCell::new(ValuePointer {
-            clean: true,
-            hash: self.hash,
-            value: self.value.clone(),
-            ..Default::default()
-        }))
-    }
-
-    // Makes a deep copy of the Value.
-    pub fn copy(&self) -> ValuePtrRef {
-        Rc::new(RefCell::new(ValuePointer {
-            clean: true,
-            hash: self.hash.clone(),
-            value: self.value.clone().to_owned(),
-            ..Default::default()
-        }))
-    }
-}
-
-impl CacheItem for ValuePointer {
-    fn get_cache_extra(&self) -> CacheExtra<ValuePointer> {
-        self.cache_extra
-    }
-
-    fn set_cache_extra(&mut self, new_val: CacheExtra<ValuePointer>) {
-        self.cache_extra = new_val;
-    }
-
-    fn get_cached_size(&self) -> usize {
-        match &self.value {
-            None => panic!("urkel: tried to cache None value"),
-            Some(ref val) => val.len(),
-        }
-    }
-}
-
-impl PartialEq for ValuePointer {
-    fn eq(&self, other: &ValuePointer) -> bool {
-        if self.clean && other.clean {
-            self.hash == other.hash
-        } else {
-            self.value != None && self.value == other.value
-        }
-    }
-}
-
-impl Eq for ValuePointer {}

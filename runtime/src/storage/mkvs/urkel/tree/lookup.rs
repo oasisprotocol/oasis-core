@@ -115,10 +115,7 @@ impl UrkelTree {
                 // Reached a leaf node, check if key matches.
                 let node_ref = node_ref.unwrap();
                 if noderef_as!(node_ref, Leaf).key == *key {
-                    return Ok(self
-                        .cache
-                        .borrow_mut()
-                        .deref_value_ptr(ctx, noderef_as!(node_ref, Leaf).value.clone())?);
+                    return Ok(Some(noderef_as!(node_ref, Leaf).value.clone()));
                 } else {
                     return Ok(None);
                 }

@@ -162,7 +162,7 @@ func (t *Tree) doGet(
 	case *node.LeafNode:
 		// Reached a leaf node, check if key matches.
 		if n.Key.Equal(key) {
-			return t.cache.derefValue(ctx, n.Value)
+			return n.Value, nil
 		}
 	default:
 		panic(fmt.Sprintf("urkel: unknown node type: %+v", n))

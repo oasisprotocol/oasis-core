@@ -15,12 +15,12 @@ use crate::{
 };
 
 const INSERT_ITEMS: usize = 1000;
-const ALL_ITEMS_ROOT: &str = "a092507adb90fce8d38e8c8663f4db0affa50e47955535bbdb21327a8d9c2532";
+const ALL_ITEMS_ROOT: &str = "71bb02a598b13c6c8e1e969e4c7f91b30a441bb9140e97b4a2d2962d4ed9d63a";
 
 const LONG_KEY: &str = "Unlock the potential of your data without compromising security or privacy";
 const LONG_VALUE: &str = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance.";
 const ALL_LONG_ITEMS_ROOT: &str =
-    "1aa1b04b41ea1cbf3f5ff839bfb1c21cacddc06b773b94b425d46b673352459b";
+    "51ab169f7362d3261a63883e8a4011108784108107c93e8a1693c26fbeed4715";
 
 fn generate_key_value_pairs_ex(prefix: String, count: usize) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
     let mut keys: Vec<Vec<u8>> = Vec::with_capacity(count);
@@ -89,7 +89,7 @@ fn test_basic() {
         UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(
         format!("{:?}", hash),
-        "ebf4bddfa659ceed844b04d62e05c2b8cb5ef1f6d73c6026f63d289b6777ce44"
+        "68e0c95d0dcb3a4ace95d1a64b8d7bb1dd08e3708abdca4068c1ccf32b7076d4"
     );
     assert_eq!(
         log,
@@ -185,7 +185,7 @@ fn test_basic() {
         UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(
         format!("{:?}", hash),
-        "5c71b5ed7fe2ea8fd663254fd54d648db8e8f285c5712e943321ca7a6710d8ca"
+        "821d13489eae34debd85117823058a143ee3c534e91828a0db8d48ecb2128b8c"
     );
     // Order of transactions in writelog is arbitrary.
     assert_eq!(
@@ -220,7 +220,7 @@ fn test_basic() {
         UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     assert_eq!(
         format!("{:?}", hash),
-        "ebf4bddfa659ceed844b04d62e05c2b8cb5ef1f6d73c6026f63d289b6777ce44"
+        "68e0c95d0dcb3a4ace95d1a64b8d7bb1dd08e3708abdca4068c1ccf32b7076d4"
     );
     assert_eq!(
         log,
@@ -793,14 +793,9 @@ fn test_value_eviction() {
         tree.cache.borrow().stats().internal_node_count,
         "cache.internal_node_count"
     );
-    assert_eq!(
-        1000,
-        tree.cache.borrow().stats().leaf_node_count,
-        "cache.leaf_node_count"
-    );
     // Only a subset of the leaf values should remain in cache.
     assert_eq!(
-        508,
+        512,
         tree.cache.borrow().stats().leaf_value_size,
         "cache.leaf_value_size"
     );
@@ -836,18 +831,12 @@ fn test_node_eviction() {
 
     // Only a subset of nodes should remain in cache.
     assert_eq!(
-        67,
+        128,
         tree.cache.borrow().stats().internal_node_count,
         "cache.internal_node_count"
     );
     assert_eq!(
-        61,
-        tree.cache.borrow().stats().leaf_node_count,
-        "cache.leaf_node_count"
-    );
-    // Only a subset of the leaf values should remain in cache.
-    assert_eq!(
-        1032,
+        300,
         tree.cache.borrow().stats().leaf_value_size,
         "cache.leaf_value_size"
     );

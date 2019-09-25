@@ -25,14 +25,14 @@ import (
 
 const (
 	insertItems  = 1000
-	allItemsRoot = "a092507adb90fce8d38e8c8663f4db0affa50e47955535bbdb21327a8d9c2532"
+	allItemsRoot = "71bb02a598b13c6c8e1e969e4c7f91b30a441bb9140e97b4a2d2962d4ed9d63a"
 
 	insertItemsShort  = 500
-	allItemsRootShort = "0366d0a68c73d612c7247fdba819d0f0dde332ee95adb9fb0047824afab9604d"
+	allItemsRootShort = "3c7a9fbe868a9db439e128985a61518701f00d15bcd6a46956e6e12e4fad818b"
 
 	longKey          = "Unlock the potential of your data without compromising security or privacy"
 	longValue        = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance."
-	allLongItemsRoot = "1aa1b04b41ea1cbf3f5ff839bfb1c21cacddc06b773b94b425d46b673352459b"
+	allLongItemsRoot = "51ab169f7362d3261a63883e8a4011108784108107c93e8a1693c26fbeed4715"
 )
 
 var (
@@ -151,7 +151,7 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 
 	log, root, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
-	require.Equal(t, "ebf4bddfa659ceed844b04d62e05c2b8cb5ef1f6d73c6026f63d289b6777ce44", root.String())
+	require.Equal(t, "68e0c95d0dcb3a4ace95d1a64b8d7bb1dd08e3708abdca4068c1ccf32b7076d4", root.String())
 	require.Equal(t, writeLogToMap(writelog.WriteLog{writelog.LogEntry{Key: keyZero, Value: valueZero}}), writeLogToMap(log))
 	require.Equal(t, log[0].Type(), writelog.LogInsert)
 
@@ -196,7 +196,7 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 	// Tree now has key_zero and key_one and should hash as if the mangling didn't happen.
 	log, root, err = tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
-	require.Equal(t, "5c71b5ed7fe2ea8fd663254fd54d648db8e8f285c5712e943321ca7a6710d8ca", root.String())
+	require.Equal(t, "821d13489eae34debd85117823058a143ee3c534e91828a0db8d48ecb2128b8c", root.String())
 	require.Equal(t, writeLogToMap(writelog.WriteLog{writelog.LogEntry{Key: keyOne, Value: valueOne}, writelog.LogEntry{Key: keyZero, Value: valueZero}}), writeLogToMap(log))
 	require.Equal(t, writelog.LogInsert, log[0].Type())
 	require.Equal(t, writelog.LogInsert, log[1].Type())
@@ -223,7 +223,7 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 
 	log, root, err = tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
-	require.Equal(t, "ebf4bddfa659ceed844b04d62e05c2b8cb5ef1f6d73c6026f63d289b6777ce44", root.String())
+	require.Equal(t, "68e0c95d0dcb3a4ace95d1a64b8d7bb1dd08e3708abdca4068c1ccf32b7076d4", root.String())
 	require.Equal(t, writeLogToMap(writelog.WriteLog{writelog.LogEntry{Key: keyOne, Value: nil}}), writeLogToMap(log))
 	require.Equal(t, writelog.LogDelete, log[0].Type())
 
@@ -823,9 +823,8 @@ func testValueEviction(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Commit")
 
 	require.EqualValues(t, 999, tree.cache.internalNodeCount, "Cache.InternalNodeCount")
-	require.EqualValues(t, 1000, tree.cache.leafNodeCount, "Cache.LeafNodeCount")
 	// Only a subset of the leaf values should remain in cache.
-	require.EqualValues(t, 508, tree.cache.valueSize, "Cache.ValueSize")
+	require.EqualValues(t, 448, tree.cache.valueSize, "Cache.ValueSize")
 }
 
 func testNodeEviction(t *testing.T, ndb db.NodeDB) {
@@ -851,10 +850,8 @@ func testNodeEviction(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Commit")
 
 	// Only a subset of nodes should remain in cache.
-	require.EqualValues(t, 67, tree.cache.internalNodeCount, "Cache.InternalNodeCount")
-	require.EqualValues(t, 61, tree.cache.leafNodeCount, "Cache.LeafNodeCount")
-	// Only a subset of the leaf values should remain in cache.
-	require.EqualValues(t, 1032, tree.cache.valueSize, "Cache.LeafValueSize")
+	require.EqualValues(t, 128, tree.cache.internalNodeCount, "Cache.InternalNodeCount")
+	require.EqualValues(t, 15904, tree.cache.valueSize, "Cache.LeafValueSize")
 }
 
 func testDoubleInsertWithEviction(t *testing.T, ndb db.NodeDB) {
@@ -1440,7 +1437,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
 			Namespace: common.Namespace{},
 			Round:     4,
 			SrcRoot:   "xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
-			DstRoot:   "lOaArHdVlgA5zgUeG/W0zbaXoWTd3Yey7Cd7e9caq14=",
+			DstRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
 			Items: []item{
 				{
 					Key: "VFxlQ0wtW+UFzn4ojduOXMqLVlgtTzk5tN+eysKJiu7nAA==",
@@ -1456,8 +1453,8 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
 		{
 			Namespace: common.Namespace{},
 			Round:     4,
-			SrcRoot:   "lOaArHdVlgA5zgUeG/W0zbaXoWTd3Yey7Cd7e9caq14=",
-			DstRoot:   "NokDIzVABsWhFaoHexVcpP9F4MXjzsMHHRtOyN8ryxw=",
+			SrcRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
+			DstRoot:   "XeNxDPHiY0PAQI5vFxFNxjwgAj++Sf0kCohpaUvImUg=",
 			Finalized: true,
 			Items: []item{
 				{
@@ -1478,8 +1475,8 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
 		{
 			Namespace: common.Namespace{},
 			Round:     4,
-			SrcRoot:   "lOaArHdVlgA5zgUeG/W0zbaXoWTd3Yey7Cd7e9caq14=",
-			DstRoot:   "8mGdcK7Gpw2/7kIuMfk2HiE1SYr6rOVynEgSOqe4TLk=",
+			SrcRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
+			DstRoot:   "rgbZz2sV2QlI/XG/+GiQoYlDpmxrMbY/hFs6PhTu1hA=",
 			Items: []item{
 				{
 					Key: "RWt2X2tleVxlQ0wtW+UFzn4ojduOXMqLVlgtTzk5tN+eysKJiu7n",

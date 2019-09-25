@@ -27,8 +27,13 @@ func (t *Tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) 
 		return nil, syncer.ErrDirtyRoot
 	}
 
-	// Create an iterator which generates proofs.
-	it := t.NewIterator(ctx, WithProof(request.Tree.Root.Hash))
+	// Create an iterator which generates proofs. Always anchor the proof at the
+	// root as an iterator may encompass many subtrees. Make sure to propagate
+	// prefetching to any upstream remote syncers.
+	it := t.NewIterator(ctx,
+		WithProof(request.Tree.Root.Hash),
+		IteratorPrefetch(request.Prefetch),
+	)
 	defer it.Close()
 
 	it.Seek(request.Key)
@@ -309,14 +314,7 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node
 		// Reached a leaf node.
 		if n.Key.Compare(key) >= 0 {
 			it.key = n.Key
-
-			// Fetch value. It currently doesn't make sense to make this lazy
-			// as the leaf nodes contain the full values.
-			var err error
-			it.value, err = it.tree.cache.derefValue(it.ctx, n.Value)
-			if err != nil {
-				return err
-			}
+			it.value = n.Value
 		}
 	}
 

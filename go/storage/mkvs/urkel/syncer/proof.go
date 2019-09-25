@@ -26,17 +26,22 @@ type Proof struct {
 	Entries [][]byte `codec:"entries"`
 }
 
+type proofNode struct {
+	serialized []byte
+	children   []hash.Hash
+}
+
 // ProofBuilder is a Merkle proof builder.
 type ProofBuilder struct {
 	root     hash.Hash
-	included map[hash.Hash]node.Node
+	included map[hash.Hash]*proofNode
 }
 
 // NewProofBuilder creates a new Merkle proof builder for the given root.
 func NewProofBuilder(root hash.Hash) *ProofBuilder {
 	return &ProofBuilder{
 		root:     root,
-		included: make(map[hash.Hash]node.Node),
+		included: make(map[hash.Hash]*proofNode),
 	}
 }
 
@@ -51,7 +56,34 @@ func (b *ProofBuilder) Include(n node.Node) {
 		panic("proof: attempted to add a dirty node")
 	}
 
-	b.included[n.GetHash()] = n
+	// Node is available, serialize it.
+	var err error
+	var pn proofNode
+	pn.serialized, err = n.CompactMarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+
+	// For internal nodes, also add any children.
+	if nd, ok := n.(*node.InternalNode); ok {
+		// Add leaf, left and right.
+		for _, child := range []*node.Pointer{
+			// NOTE: LeafNode is always included with the internal node.
+			nd.Left,
+			nd.Right,
+		} {
+			var childHash hash.Hash
+			if child == nil {
+				childHash.Empty()
+			} else {
+				childHash = child.Hash
+			}
+
+			pn.children = append(pn.children, childHash)
+		}
+	}
+
+	b.included[n.GetHash()] = &pn
 }
 
 // HasRoot returns true if the root node has already been included.
@@ -97,29 +129,12 @@ func (b *ProofBuilder) build(ctx context.Context, proof *Proof, h hash.Hash) err
 	}
 
 	// Pre-order traversal, add visited node.
-	data, err := n.CompactMarshalBinary()
-	if err != nil {
-		return err
-	}
-	proof.Entries = append(proof.Entries, append([]byte{proofEntryFull}, data...))
+	proof.Entries = append(proof.Entries, append([]byte{proofEntryFull}, n.serialized...))
 
-	if nd, ok := n.(*node.InternalNode); ok {
-		// Add leaf, left and right.
-		for _, child := range []*node.Pointer{
-			// NOTE: LeafNode is always included with the internal node.
-			nd.Left,
-			nd.Right,
-		} {
-			var childHash hash.Hash
-			if child == nil {
-				childHash.Empty()
-			} else {
-				childHash = child.Hash
-			}
-
-			if err := b.build(ctx, proof, childHash); err != nil {
-				return err
-			}
+	// And then add any children.
+	for _, childHash := range n.children {
+		if err := b.build(ctx, proof, childHash); err != nil {
+			return err
 		}
 	}
 

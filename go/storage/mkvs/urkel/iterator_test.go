@@ -98,6 +98,29 @@ func TestIterator(t *testing.T) {
 		require.EqualValues(t, 0, stats.SyncGetPrefixesCount, "SyncGetPrefixesCount")
 		require.EqualValues(t, 2, stats.SyncIterateCount, "SyncIterateCount")
 	})
+
+	statsIntermediate := syncer.NewStatsCollector(tree)
+	intermediate := NewWithRoot(statsIntermediate, nil, root)
+	defer intermediate.Close()
+
+	stats = syncer.NewStatsCollector(intermediate)
+	remote = NewWithRoot(stats, nil, root)
+	defer remote.Close()
+
+	t.Run("RemoteIntermediateWithPrefetch10", func(t *testing.T) {
+		rpit := remote.NewIterator(ctx, IteratorPrefetch(10))
+		defer rpit.Close()
+
+		testIterator(t, items, rpit)
+
+		require.EqualValues(t, 0, stats.SyncGetCount, "SyncGetCount")
+		require.EqualValues(t, 0, stats.SyncGetPrefixesCount, "SyncGetPrefixesCount")
+		require.EqualValues(t, 1, stats.SyncIterateCount, "SyncIterateCount")
+
+		require.EqualValues(t, 0, statsIntermediate.SyncGetCount, "SyncGetCount")
+		require.EqualValues(t, 0, statsIntermediate.SyncGetPrefixesCount, "SyncGetPrefixesCount")
+		require.EqualValues(t, 1, statsIntermediate.SyncIterateCount, "SyncIterateCount")
+	})
 }
 
 type testCase struct {

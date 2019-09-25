@@ -293,13 +293,7 @@ impl<'tree> TreeIterator<'tree> {
                 if let NodeBox::Leaf(ref n) = *node_ref.borrow() {
                     if n.key >= key {
                         self.key = Some(n.key.clone());
-                        // Fetch value. It currently doesn't make sense to make this lazy
-                        // as the leaf nodes contain the full values.
-                        self.value = self
-                            .tree
-                            .cache
-                            .borrow_mut()
-                            .deref_value_ptr(&self.ctx, n.value.clone())?;
+                        self.value = Some(n.value.clone());
                     }
                 } else {
                     unreachable!("node kind is leaf node");

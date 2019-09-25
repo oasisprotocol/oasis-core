@@ -30,15 +30,8 @@ func TestSizeAccounting(t *testing.T) {
 					// Round: 8 bytes
 					// Key (slice pointers): 24 bytes
 					Key: node.Key([]byte("key")), // 3 bytes
-					// Value (pointer): 8 bytes
-					Value: &node.Value{
-						// Clean: 1 byte
-						// Hash: 32 bytes
-						// Value (slice pointers): 24 bytes
-						Value: []byte("value"), // 5 bytes
-						// LRU (nil pointer): 8 bytes
-						// Padding: 7 bytes
-					},
+					// Value (slice pointers): 24 bytes
+					Value: []byte("value"), // 5 bytes
 					// Padding: 7 bytes
 				},
 				// LRU (nil pointer): 8 bytes
@@ -71,15 +64,8 @@ func TestSizeAccounting(t *testing.T) {
 				8 + // .Round
 				24 + // .Key
 				3 + // .Key
-				8 + // .Value
-				// Node.LeafNode.Node.Value:
-				(1 + // .Clean
-					32 + // .Hash
-					24 + // .Value
-					5 + // .Value
-					8 + // .LRU
-					7) + // (padding)
-				// ---
+				24 + // .Value
+				5 + // .Value
 				7) + // (padding)
 			// ---
 			8 + // .LRU

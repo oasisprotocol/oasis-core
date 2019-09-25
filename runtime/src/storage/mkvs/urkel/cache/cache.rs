@@ -10,8 +10,6 @@ use crate::storage::mkvs::urkel::{cache::lru_cache::CacheItemBox, sync::*, tree:
 pub struct CacheStats {
     /// Count of internal nodes held by the cache.
     pub internal_node_count: u64,
-    /// Count of leaf nodes held by the cache.
-    pub leaf_node_count: u64,
     /// Total size of values held by the cache.
     pub leaf_value_size: usize,
 }
@@ -73,14 +71,10 @@ pub trait Cache {
         right: NodePtrRef,
     ) -> NodePtrRef;
     /// Create a new leaf node and returns a pointer to it.
-    fn new_leaf_node(&mut self, key: &Key, val: Value) -> NodePtrRef;
-    /// Create a new value object and returns a pointer to it.
-    fn new_value(&mut self, val: Value) -> ValuePtrRef;
+    fn new_leaf_node(&mut self, key: &Key, value: Value) -> NodePtrRef;
 
     /// Try removing a node from the cache.
     fn remove_node(&mut self, ptr: NodePtrRef);
-    /// Remove a value from the cache.
-    fn remove_value(&mut self, ptr: ValuePtrRef);
 
     /// Dereference a node pointer into a concrete node object.
     ///
@@ -98,21 +92,12 @@ pub trait Cache {
         ptr: NodePtrRef,
         fetcher: F,
     ) -> Fallible<()>;
-    /// Dereference a value pointer into a concrete value.
-    ///
-    /// Calling this method may invoke the underlying read syncer.
-    fn deref_value_ptr(&mut self, ctx: &Arc<Context>, val: ValuePtrRef) -> Fallible<Option<Value>>;
 
     /// Commit a node into the cache.
     ///
     /// This method may evict some nodes in order to make space
     /// for the one being committed.
     fn commit_node(&mut self, ptr: NodePtrRef);
-    /// Commit a value into the cache.
-    ///
-    /// This method may evict some values in order to make space
-    /// for the one being committed.
-    fn commit_value(&mut self, ptr: ValuePtrRef);
 
     // Mark a tree node as no longer being eligible for eviction
     // due to it becoming dirty.

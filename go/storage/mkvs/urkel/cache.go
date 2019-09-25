@@ -3,7 +3,6 @@ package urkel
 import (
 	"container/list"
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -33,18 +32,16 @@ type cache struct {
 	valueSize uint64
 	// Current number of internal nodes.
 	internalNodeCount uint64
-	// Current number leaf nodes.
-	leafNodeCount uint64
 
-	// Maximum capacity of internal and leaf nodes.
+	// Maximum capacity of internal nodes.
 	nodeCapacity uint64
 	// Maximum capacity of leaf values.
 	valueCapacity uint64
 	// Persist all the nodes and values we obtain from the remote syncer?
 	persistEverythingFromSyncer bool
 
-	lruNodes  *list.List
-	lruValues *list.List
+	lruInternal *list.List
+	lruLeaf     *list.List
 }
 
 // MaxPrefetchDepth is the maximum depth of the prefeteched tree.
@@ -54,8 +51,8 @@ func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) *cache {
 	c := &cache{
 		db:                          ndb,
 		rs:                          rs,
-		lruNodes:                    list.New(),
-		lruValues:                   list.New(),
+		lruInternal:                 list.New(),
+		lruLeaf:                     list.New(),
 		persistEverythingFromSyncer: false,
 		valueCapacity:               16 * 1024 * 1024,
 		nodeCapacity:                5000,
@@ -71,8 +68,8 @@ func (c *cache) close() {
 	c.db = nil
 	c.rs = nil
 	c.pendingRoot = nil
-	c.lruNodes = nil
-	c.lruValues = nil
+	c.lruInternal = nil
+	c.lruLeaf = nil
 
 	// Reset sync root.
 	c.syncRoot = node.Root{}
@@ -80,7 +77,6 @@ func (c *cache) close() {
 	// Reset statistics.
 	c.valueSize = 0
 	c.internalNodeCount = 0
-	c.leafNodeCount = 0
 }
 
 func (c *cache) isClosed() bool {
@@ -108,7 +104,7 @@ func (c *cache) newLeafNodePtr(n *node.LeafNode) *node.Pointer {
 func (c *cache) newLeafNode(key node.Key, val []byte) *node.Pointer {
 	return c.newLeafNodePtr(&node.LeafNode{
 		Key:   key[:],
-		Value: c.newValue(val),
+		Value: val,
 	})
 }
 
@@ -133,15 +129,12 @@ func (c *cache) useNode(ptr *node.Pointer) {
 	if ptr.LRU == nil {
 		return
 	}
-	c.lruNodes.MoveToFront(ptr.LRU)
-}
-
-// useValue moves the value to the front of the LRU list.
-func (c *cache) useValue(v *node.Value) {
-	if v.LRU == nil {
-		return
+	switch ptr.Node.(type) {
+	case *node.InternalNode:
+		c.lruInternal.MoveToFront(ptr.LRU)
+	case *node.LeafNode:
+		c.lruLeaf.MoveToFront(ptr.LRU)
 	}
-	c.lruValues.MoveToFront(v.LRU)
 }
 
 // commitNode makes the node eligible for eviction.
@@ -158,45 +151,24 @@ func (c *cache) commitNode(ptr *node.Pointer) {
 	}
 
 	// Evict nodes till there is enough capacity.
-	if c.nodeCapacity > 0 && c.internalNodeCount+c.leafNodeCount+1 > c.nodeCapacity {
-		c.evictNodes(1)
-	}
-
-	ptr.LRU = c.lruNodes.PushFront(ptr)
 	switch n := ptr.Node.(type) {
 	case *node.InternalNode:
+		if c.nodeCapacity > 0 && c.internalNodeCount+1 > c.nodeCapacity {
+			c.evictInternal(1)
+		}
+
+		ptr.LRU = c.lruInternal.PushFront(ptr)
 		c.internalNodeCount++
 	case *node.LeafNode:
-		c.leafNodeCount++
+		valueSize := n.Size()
 
-		if n.Value != nil {
-			c.commitValue(n.Value)
+		if c.valueCapacity > 0 && c.valueSize+valueSize > c.valueCapacity {
+			c.evictLeaf(valueSize)
 		}
-	}
-}
 
-// commitValue makes the value eligible for eviction.
-func (c *cache) commitValue(v *node.Value) {
-	if !v.Clean {
-		panic("urkel: commitValue called on dirty value")
+		ptr.LRU = c.lruLeaf.PushFront(ptr)
+		c.valueSize += valueSize
 	}
-	if v.LRU != nil {
-		c.useValue(v)
-		return
-	}
-	if v.Value == nil {
-		return
-	}
-
-	valueSize := uint64(len(v.Value))
-
-	// Evict values till there is enough capacity.
-	if c.valueCapacity > 0 && c.valueSize+valueSize > c.valueCapacity {
-		c.evictValues(valueSize)
-	}
-
-	v.LRU = c.lruValues.PushFront(v)
-	c.valueSize += valueSize
 }
 
 // rollbackNode marks a tree node as no longer being eligible for
@@ -207,25 +179,16 @@ func (c *cache) rollbackNode(ptr *node.Pointer) {
 		return
 	}
 
-	c.lruNodes.Remove(ptr.LRU)
-
-	switch ptr.Node.(type) {
+	switch n := ptr.Node.(type) {
 	case *node.InternalNode:
+		c.lruInternal.Remove(ptr.LRU)
 		c.internalNodeCount--
 	case *node.LeafNode:
-		c.leafNodeCount--
+		c.lruLeaf.Remove(ptr.LRU)
+		c.valueSize -= n.Size()
 	}
 
 	ptr.LRU = nil
-}
-
-func (c *cache) newValuePtr(v *node.Value) *node.Value {
-	// TODO: Deduplicate values.
-	return v
-}
-
-func (c *cache) newValue(val []byte) *node.Value {
-	return c.newValuePtr(&node.Value{Value: val})
 }
 
 // removeNode removes a tree node.
@@ -250,50 +213,31 @@ func (c *cache) removeNode(ptr *node.Pointer) {
 			c.removeNode(n.Right)
 			n.Right = nil
 		}
-	}
 
-	c.lruNodes.Remove(ptr.LRU)
-
-	switch n := ptr.Node.(type) {
-	case *node.InternalNode:
+		c.lruInternal.Remove(ptr.LRU)
 		c.internalNodeCount--
 	case *node.LeafNode:
-		// Also remove the value.
-		c.removeValue(n.Value)
-		c.leafNodeCount--
+		c.lruLeaf.Remove(ptr.LRU)
+		c.valueSize -= n.Size()
 	}
 
 	ptr.Node = nil
 	ptr.LRU = nil
 }
 
-// removeValue removes a value.
-func (c *cache) removeValue(v *node.Value) {
-	if v.LRU == nil {
-		// Value has not yet been committed to cache.
-		return
-	}
-
-	c.lruValues.Remove(v.LRU)
-	c.valueSize -= uint64(len(v.Value))
-	v.Value = nil
-	v.LRU = nil
-}
-
-// evictValues tries to evict values from the cache.
-func (c *cache) evictValues(targetCapacity uint64) {
-	for c.lruValues.Len() > 0 && c.valueSize+targetCapacity > c.valueCapacity {
-		elem := c.lruValues.Back()
-		v := elem.Value.(*node.Value)
-		c.removeValue(v)
+// evictLeaf tries to evict leaf nodes from the cache.
+func (c *cache) evictLeaf(targetCapacity uint64) {
+	for c.lruLeaf.Len() > 0 && c.valueSize+targetCapacity > c.valueCapacity {
+		elem := c.lruLeaf.Back()
+		v := elem.Value.(*node.Pointer)
+		c.removeNode(v)
 	}
 }
 
-// evictNodes tries to evict nodes from the cache.
-func (c *cache) evictNodes(targetCapacity uint64) {
-	// TODO: Consider optimizing this to know which nodes are eligible for removal.
-	for c.lruNodes.Len() > 0 && c.internalNodeCount+c.leafNodeCount+targetCapacity > c.nodeCapacity {
-		elem := c.lruNodes.Back()
+// evictInternal tries to evict internal nodes from the cache.
+func (c *cache) evictInternal(targetCapacity uint64) {
+	for c.lruInternal.Len() > 0 && c.internalNodeCount+targetCapacity > c.nodeCapacity {
+		elem := c.lruInternal.Back()
 		n := elem.Value.(*node.Pointer)
 		if !n.Clean {
 			panic(fmt.Errorf("urkel: tried to evict dirty node %v", n))
@@ -319,21 +263,13 @@ func (c *cache) derefNodePtr(
 		return nil, nil
 	}
 
-	// TODO: Simplify this eviction mess.
 	if ptr.Node != nil {
 		var refetch bool
 		switch n := ptr.Node.(type) {
 		case *node.InternalNode:
-			// If this is an internal node, check if the leaf node or its value has been
-			// evicted. In this case treat it as if we need to re-fetch the node.
-			if n.LeafNode != nil && (n.LeafNode.Node == nil || n.LeafNode.Node.(*node.LeafNode).Value == nil) {
-				c.removeNode(ptr)
-				refetch = true
-			}
-		case *node.LeafNode:
-			// If this is a leaf node, check if the value has been evicted. In this case
-			// treat it as if we need to re-fetch the node.
-			if n.Value.Value == nil {
+			// If this is an internal node, check if the leaf node has been evicted.
+			// In this case treat it as if we need to re-fetch the node.
+			if n.LeafNode != nil && n.LeafNode.Node == nil {
 				c.removeNode(ptr)
 				refetch = true
 			}
@@ -418,12 +354,9 @@ func (c *cache) remoteSync(ctx context.Context, ptr *node.Pointer, fetcher readS
 		}
 
 		// Commit all children.
-		switch n := p.Node.(type) {
-		case *node.InternalNode:
+		if n, ok := p.Node.(*node.InternalNode); ok {
 			commitNode(n.Left)
 			commitNode(n.Right)
-		case *node.LeafNode:
-			c.commitValue(n.Value)
 		}
 
 		// Commit the node itself.
@@ -449,22 +382,4 @@ func (c *cache) remoteSync(ctx context.Context, ptr *node.Pointer, fetcher readS
 		return err
 	}
 	return nil
-}
-
-// derefValue dereferences an internal value pointer.
-//
-// This may result in node database accesses or remote syncing if the value
-// is not available locally.
-func (c *cache) derefValue(ctx context.Context, v *node.Value) ([]byte, error) {
-	// Move the accessed value to the front of the LRU list.
-	if v.LRU != nil || v.Value != nil {
-		c.useValue(v)
-		return v.Value, nil
-	}
-
-	if !v.Clean {
-		return nil, nil
-	}
-
-	return nil, errors.New("urkel: leaf node does not contain value")
 }

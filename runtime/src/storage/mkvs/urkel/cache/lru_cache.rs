@@ -122,16 +122,15 @@ pub struct LRUCache {
     sync_root: Root,
 
     internal_node_count: u64,
-    leaf_node_count: u64,
 
-    lru_values: LRUList<ValuePointer>,
-    lru_nodes: LRUList<NodePointer>,
+    lru_leaf: LRUList<NodePointer>,
+    lru_internal: LRUList<NodePointer>,
 }
 
 impl LRUCache {
     /// Construct a new cache instance.
     ///
-    /// * `node_capacity` is the maximum number of nodes held by the
+    /// * `node_capacity` is the maximum number of internal nodes held by the
     ///   cache before eviction.
     /// * `value_capacity` is the total size, in bytes, of values held
     ///   by the cache before eviction.
@@ -151,10 +150,9 @@ impl LRUCache {
             sync_root: Root::default(),
 
             internal_node_count: 0,
-            leaf_node_count: 0,
 
-            lru_values: LRUList::new(value_capacity),
-            lru_nodes: LRUList::new(node_capacity),
+            lru_leaf: LRUList::new(value_capacity),
+            lru_internal: LRUList::new(node_capacity),
         })
     }
 
@@ -172,15 +170,12 @@ impl LRUCache {
         }))
     }
 
-    fn new_value_ptr(&self, val: Value) -> ValuePtrRef {
-        Rc::new(RefCell::new(ValuePointer {
-            value: Some(val.clone()),
-            ..Default::default()
-        }))
-    }
-
-    fn use_node(&mut self, node: NodePtrRef) -> bool {
-        self.lru_nodes.move_to_front(node)
+    fn use_node(&mut self, ptr: NodePtrRef) -> bool {
+        match classify_noderef!(? ptr.borrow().node) {
+            NodeKind::Internal => self.lru_internal.move_to_front(ptr),
+            NodeKind::Leaf => self.lru_leaf.move_to_front(ptr),
+            NodeKind::None => false,
+        }
     }
 
     fn subtract_node(&mut self, ptr: NodePtrRef) {
@@ -193,17 +188,10 @@ impl LRUCache {
                 NodeBox::Internal(_) => {
                     self.internal_node_count -= 1;
                 }
-                NodeBox::Leaf(ref n) => {
-                    self.remove_value(n.value.clone());
-                    self.leaf_node_count -= 1;
-                }
+                NodeBox::Leaf(_) => {}
             };
             ptr.node = None;
         }
-    }
-
-    fn use_value(&mut self, val: ValuePtrRef) -> bool {
-        self.lru_values.move_to_front(val)
     }
 
     fn commit_merged_node(&mut self, ptr: NodePtrRef) {
@@ -214,10 +202,7 @@ impl LRUCache {
                 self.commit_merged_node(noderef_as!(node_ref, Internal).left.clone());
                 self.commit_merged_node(noderef_as!(node_ref, Internal).right.clone());
             }
-            NodeKind::Leaf => {
-                let node_ref = ptr.borrow().get_node();
-                self.commit_value(noderef_as!(node_ref, Leaf).value.clone());
-            }
+            NodeKind::Leaf => {}
             NodeKind::None => {}
         }
 
@@ -234,8 +219,7 @@ impl Cache for LRUCache {
     fn stats(&self) -> CacheStats {
         CacheStats {
             internal_node_count: self.internal_node_count,
-            leaf_node_count: self.leaf_node_count,
-            leaf_value_size: self.lru_values.size,
+            leaf_value_size: self.lru_leaf.size,
         }
     }
 
@@ -278,17 +262,13 @@ impl Cache for LRUCache {
         self.new_internal_node_ptr(Some(node))
     }
 
-    fn new_leaf_node(&mut self, key: &Key, val: Value) -> NodePtrRef {
+    fn new_leaf_node(&mut self, key: &Key, value: Value) -> NodePtrRef {
         let node = Rc::new(RefCell::new(NodeBox::Leaf(LeafNode {
             key: key.clone(),
-            value: self.new_value(val),
+            value,
             ..Default::default()
         })));
         self.new_leaf_node_ptr(Some(node))
-    }
-
-    fn new_value(&mut self, val: Value) -> ValuePtrRef {
-        self.new_value_ptr(val)
     }
 
     fn remove_node(&mut self, ptr: NodePtrRef) {
@@ -315,21 +295,24 @@ impl Cache for LRUCache {
                         continue;
                     }
                 }
-                if let NodeBox::Leaf(ref n) = *node_ref.borrow() {
-                    self.remove_value(n.value.clone());
-                }
             }
 
             stack.pop();
 
-            if self.lru_nodes.remove(top.clone()) {
-                self.subtract_node(top);
+            match classify_noderef!(? top.borrow().node) {
+                NodeKind::Internal => {
+                    if self.lru_internal.remove(top.clone()) {
+                        self.subtract_node(top);
+                    }
+                }
+                NodeKind::Leaf => {
+                    if self.lru_leaf.remove(top.clone()) {
+                        self.subtract_node(top);
+                    }
+                }
+                NodeKind::None => {}
             }
         }
-    }
-
-    fn remove_value(&mut self, ptr: ValuePtrRef) {
-        self.lru_values.remove(ptr);
     }
 
     fn deref_node_ptr<F: ReadSyncFetcher>(
@@ -343,26 +326,12 @@ impl Cache for LRUCache {
         if let Some(ref node) = &ptr.node {
             let refetch = match *node.borrow() {
                 NodeBox::Internal(ref n) => {
-                    // If this is an internal node, check if the leaf node or its value has been
-                    // evicted. In this case treat it as if we need to re-fetch the node.
+                    // If this is an internal node, check if the leaf node  has been evicted.
+                    // In this case treat it as if we need to re-fetch the node.
                     let leaf_ptr = n.leaf_node.borrow();
-                    if leaf_ptr.is_null() {
-                        false
-                    } else if let Some(ref int_leaf_node) = &leaf_ptr.node {
-                        if let NodeBox::Leaf(ref int_leaf) = *int_leaf_node.borrow() {
-                            int_leaf.value.borrow().value.is_none()
-                        } else {
-                            panic!("internal leaf node is not a leaf");
-                        }
-                    } else {
-                        true
-                    }
+                    !leaf_ptr.is_null() && leaf_ptr.node.is_none()
                 }
-                NodeBox::Leaf(ref n) => {
-                    // If this is a leaf node, check if the value has been evicted. In this case
-                    // treat it as if we need to re-fetch the node.
-                    n.value.borrow().value.is_none()
-                }
+                NodeBox::Leaf(..) => false,
             };
 
             if refetch {
@@ -428,23 +397,6 @@ impl Cache for LRUCache {
         Ok(())
     }
 
-    fn deref_value_ptr(
-        &mut self,
-        _ctx: &Arc<Context>,
-        val: ValuePtrRef,
-    ) -> Fallible<Option<Value>> {
-        if self.use_value(val.clone()) || val.borrow().value != None {
-            return Ok(val.borrow().value.clone());
-        }
-
-        if !val.borrow().clean {
-            return Ok(None);
-        }
-
-        // A leaf node should always also contain a value.
-        panic!("urkel: leaf node does not contain value");
-    }
-
     fn commit_node(&mut self, ptr: NodePtrRef) {
         if !ptr.borrow().clean {
             panic!("urkel: commit_node called on dirty node");
@@ -456,32 +408,20 @@ impl Cache for LRUCache {
             return;
         }
 
-        for node in self.lru_nodes.evict_for_val(ptr.clone()).iter() {
+        let lru = match classify_noderef!(? ptr.borrow().node) {
+            NodeKind::Internal => {
+                self.internal_node_count += 1;
+                &mut self.lru_internal
+            }
+            NodeKind::Leaf => &mut self.lru_leaf,
+            NodeKind::None => return,
+        };
+
+        let evicted = lru.evict_for_val(ptr.clone());
+        lru.add_to_front(ptr.clone());
+        for node in evicted {
             self.subtract_node(node.clone());
         }
-        self.lru_nodes.add_to_front(ptr.clone());
-
-        if let Some(ref some_node) = ptr.borrow().node {
-            match *some_node.borrow() {
-                NodeBox::Internal(_) => self.internal_node_count += 1,
-                NodeBox::Leaf(_) => self.leaf_node_count += 1,
-            };
-        }
-    }
-
-    fn commit_value(&mut self, ptr: ValuePtrRef) {
-        if !ptr.borrow().clean {
-            panic!("urkel: commit_value called on dirty value");
-        }
-        if self.use_value(ptr.clone()) {
-            return;
-        }
-        if let None = ptr.borrow().value {
-            return;
-        }
-
-        self.lru_values.evict_for_val(ptr.clone());
-        self.lru_values.add_to_front(ptr.clone());
     }
 
     fn rollback_node(&mut self, ptr: NodePtrRef, kind: NodeKind) {
@@ -490,13 +430,15 @@ impl Cache for LRUCache {
             return;
         }
 
-        self.lru_nodes.remove(ptr.clone());
-
-        match kind {
-            NodeKind::Internal => self.internal_node_count -= 1,
-            NodeKind::Leaf => self.leaf_node_count -= 1,
-            _ => panic!("lru_cache: rollback works only for Internal and Leaf nodes!"),
+        let lru = match kind {
+            NodeKind::Internal => {
+                self.internal_node_count -= 1;
+                &mut self.lru_internal
+            }
+            NodeKind::Leaf => &mut self.lru_leaf,
+            NodeKind::None => panic!("lru_cache: rollback works only for Internal and Leaf nodes!"),
         };
+        lru.remove(ptr.clone());
 
         ptr.borrow_mut().set_cache_extra(None);
     }
