@@ -27,8 +27,13 @@ func (t *Tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) 
 		return nil, syncer.ErrDirtyRoot
 	}
 
-	// Create an iterator which generates proofs.
-	it := t.NewIterator(ctx, WithProof(request.Tree.Root.Hash))
+	// Create an iterator which generates proofs. Always anchor the proof at the
+	// root as an iterator may encompass many subtrees. Make sure to propagate
+	// prefetching to any upstream remote syncers.
+	it := t.NewIterator(ctx,
+		WithProof(request.Tree.Root.Hash),
+		IteratorPrefetch(request.Prefetch),
+	)
 	defer it.Close()
 
 	it.Seek(request.Key)
