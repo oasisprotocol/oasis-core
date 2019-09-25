@@ -2,6 +2,8 @@
 package service
 
 import (
+	"context"
+
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -56,8 +58,18 @@ type TendermintService interface {
 	// BroadcastTx broadcasts a transaction for Ekiden ABCI application.
 	//
 	// The CBOR-encodable transaction together with the given application
-	// tag is first marshalled and then transmitted using BroadcastTxCommit.
-	BroadcastTx(tag byte, tx interface{}) error
+	// tag is first marshalled and then transmitted using BroadcastTxSync.
+	//
+	// In case retry is true and local CheckTx fails, broadcast will be
+	// retried when the next Tendermint block is received (whcih may make
+	// the transaction valid).
+	//
+	// In case wait is true, the method will wait until the transaction
+	// is finalized.
+	//
+	// Note that there is no implicit timeout -- if you need one, make
+	// sure to cancel the context.
+	BroadcastTx(ctx context.Context, tag byte, tx interface{}, retry, wait bool) error
 
 	// Query performs a query against the tendermint application.
 	Query(path string, query interface{}, height int64) ([]byte, error)
