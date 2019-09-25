@@ -11,7 +11,7 @@ use std::{
 use failure::Fallible;
 use grpcio::{CallOption, ChannelBuilder, EnvBuilder};
 use io_context::Context;
-use tempfile::NamedTempFile;
+use tempfile::{self, TempDir};
 
 use super::{
     grpc::{self, storage::StorageClient},
@@ -29,6 +29,8 @@ const PROTOCOL_SERVER_BINARY: &'static str = env!("EKIDEN_PROTOCOL_SERVER_BINARY
 pub struct ProtocolServer {
     server_process: Child,
     client: StorageClient,
+    #[allow(unused)]
+    datadir: TempDir,
 }
 
 struct ProtocolServerReadSyncer {
@@ -38,14 +40,17 @@ struct ProtocolServerReadSyncer {
 impl ProtocolServer {
     /// Create a new protocol server for testing.
     pub fn new() -> Self {
-        let socket_path = NamedTempFile::new()
-            .expect("failed to create temporary socket path")
-            .into_temp_path()
-            .to_path_buf();
+        let datadir = tempfile::Builder::new()
+            .prefix("ekiden-test-storage-protocol-server")
+            .tempdir()
+            .expect("failed to create temporary data directory");
+        let socket_path = datadir.path().join("socket");
 
         // Start protocol server.
         let server_process = Command::new(PROTOCOL_SERVER_BINARY)
             .arg("proto-server")
+            .arg("--datadir")
+            .arg(datadir.path())
             .arg("--socket")
             .arg(socket_path.clone())
             .spawn()
@@ -62,6 +67,7 @@ impl ProtocolServer {
         Self {
             server_process,
             client,
+            datadir,
         }
     }
 
@@ -77,6 +83,7 @@ impl Drop for ProtocolServer {
     fn drop(&mut self) {
         // Stop protocol server.
         drop(self.server_process.kill());
+        drop(self.server_process.wait());
     }
 }
 
