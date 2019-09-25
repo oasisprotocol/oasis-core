@@ -40,6 +40,7 @@ var (
 	}
 
 	testTotalSupply = qtyFromInt(math.MaxInt64)
+	qtyOne          = qtyFromInt(1)
 
 	srcSigner  = mustGenerateSigner()
 	srcID      = srcSigner.Public()
@@ -56,6 +57,7 @@ func StakingImplementationTests(t *testing.T, backend api.Backend) {
 	}{
 		{"InitialEnv", testInitialEnv},
 		{"Transfer", testTransfer},
+		{"TransferSelf", testSelfTransfer},
 		{"Burn", testBurn},
 		{"Escrow", testEscrow},
 	} {
@@ -142,6 +144,63 @@ func testTransfer(t *testing.T, backend api.Backend) {
 	require.NoError(err, "dest: AccountInfo - after")
 	require.Equal(&xfer.Tokens, destBalance, "dest: generalBalance - after")
 	require.EqualValues(0, nonce, "dest: nonce - after")
+
+	// Transfers that exceed available balance should fail.
+	xfer.Nonce = nonce
+	_ = newSrcBalance.Add(&qtyOne)
+	xfer.Tokens = *newSrcBalance
+
+	signed, err = api.SignTransfer(srcSigner, xfer)
+	require.NoError(err, "Sign xfer - fail test")
+
+	err = backend.Transfer(context.Background(), signed)
+	require.Error(err, "Transfer - more than available balance")
+}
+
+func testSelfTransfer(t *testing.T, backend api.Backend) {
+	require := require.New(t)
+
+	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	require.NoError(err, "src: AccountInfo - before")
+
+	ch, sub := backend.WatchTransfers()
+	defer sub.Close()
+
+	xfer := &api.Transfer{
+		Nonce:  nonce,
+		To:     srcID,
+		Tokens: qtyFromInt(math.MaxUint8),
+	}
+	signed, err := api.SignTransfer(srcSigner, xfer)
+	require.NoError(err, "Sign xfer")
+
+	err = backend.Transfer(context.Background(), signed)
+	require.NoError(err, "Transfer")
+
+	select {
+	case ev := <-ch:
+		require.Equal(srcID, ev.From, "Event: from")
+		require.Equal(srcID, ev.To, "Event: to")
+		require.Equal(xfer.Tokens, ev.Tokens, "Event: tokens")
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive transfer event")
+	}
+
+	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	require.NoError(err, "src: AccountInfo - after")
+	require.Equal(srcBalance, newSrcBalance, "src: generalBalance")
+	require.Equal(xfer.Nonce+1, nonce, "src: nonce")
+
+	// Self transfers that are more than the balance should fail.
+	xfer.Nonce = nonce
+	_ = newSrcBalance.Add(&qtyOne)
+	xfer.Tokens = *newSrcBalance
+
+	signed, err = api.SignTransfer(srcSigner, xfer)
+	require.NoError(err, "Sign xfer - fail test")
+
+	err = backend.Transfer(context.Background(), signed)
+	require.Error(err, "Transfer - more than available balance")
 }
 
 func testBurn(t *testing.T, backend api.Backend) {
