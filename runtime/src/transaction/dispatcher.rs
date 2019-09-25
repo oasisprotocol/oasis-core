@@ -7,7 +7,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use super::{
     context::Context,
     tags::Tags,
-    types::{TxnBatch, TxnCall, TxnOutput},
+    types::{TxnBatch, TxnCall, TxnCheckResult, TxnOutput},
 };
 use crate::common::{cbor, crypto::hash::Hash};
 
@@ -19,9 +19,9 @@ enum DispatchError {
 }
 
 /// Error indicating that performing a transaction check was successful.
-#[derive(Debug, Fail)]
+#[derive(Debug, Default, Fail)]
 #[fail(display = "transaction check successful")]
-pub struct CheckOnlySuccess;
+pub struct CheckOnlySuccess(pub TxnCheckResult);
 
 /// Custom batch handler.
 ///
@@ -250,13 +250,10 @@ impl Dispatcher {
     pub fn dispatch(&self, call: &Vec<u8>, ctx: &mut Context) -> Vec<u8> {
         let rsp = match self.dispatch_fallible(call, ctx) {
             Ok(response) => TxnOutput::Success(response),
-            Err(error) => {
-                if let Some(check_msg) = error.downcast_ref::<CheckOnlySuccess>() {
-                    TxnOutput::Success(cbor::Value::Text(format!("{}", check_msg)))
-                } else {
-                    TxnOutput::Error(format!("{}", error))
-                }
-            }
+            Err(error) => match error.downcast::<CheckOnlySuccess>() {
+                Ok(check_result) => TxnOutput::Success(cbor::to_value(check_result.0)),
+                Err(error) => TxnOutput::Error(format!("{}", error)),
+            },
         };
 
         cbor::to_vec(&rsp)
@@ -329,7 +326,6 @@ mod tests {
                 text: "hello".to_owned(),
                 number: 21,
             }),
-            predicted_rw_set: Default::default(),
         };
         let call_encoded = cbor::to_vec(&call);
 

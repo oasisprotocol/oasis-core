@@ -16,9 +16,6 @@ pub struct TxnCall {
     pub method: String,
     /// Method arguments.
     pub args: Value,
-    /// Predicted read/write set.
-    #[serde(default)]
-    pub predicted_rw_set: ReadWriteSet,
 }
 
 /// Transaction call output.
@@ -28,6 +25,13 @@ pub enum TxnOutput {
     Success(Value),
     /// Call raised an error.
     Error(String),
+}
+
+/// The result of a successful CheckTx call.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TxnCheckResult {
+    /// Predicted read/write set.
+    pub predicted_rw_set: ReadWriteSet,
 }
 
 /// Internal module to efficiently serialize batches.
