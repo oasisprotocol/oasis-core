@@ -341,20 +341,37 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *MutableState, 
 		return staking.ErrInvalidNonce
 	}
 
-	to := state.account(xfer.To)
-	if err := staking.Move(&to.GeneralBalance, &from.GeneralBalance, &xfer.Tokens); err != nil {
-		app.logger.Error("Transfer: failed to move balance",
-			"err", err,
-			"from", fromID,
-			"to", xfer.To,
-			"amount", xfer.Tokens,
-		)
-		return err
+	if fromID.Equal(xfer.To) {
+		// Handle transfer to self as just a balance check.
+		if from.GeneralBalance.Cmp(&xfer.Tokens) < 0 {
+			err := staking.ErrInsufficientBalance
+			app.logger.Error("Transfer: self-transfer greater than balance",
+				"err", err,
+				"from", fromID,
+				"to", xfer.To,
+				"amount", xfer.Tokens,
+			)
+			return err
+		}
+	} else {
+		// Source and destination MUST be separate accounts with how
+		// staking.Move is implemented.
+		to := state.account(xfer.To)
+		if err := staking.Move(&to.GeneralBalance, &from.GeneralBalance, &xfer.Tokens); err != nil {
+			app.logger.Error("Transfer: failed to move balance",
+				"err", err,
+				"from", fromID,
+				"to", xfer.To,
+				"amount", xfer.Tokens,
+			)
+			return err
+		}
+
+		state.setAccount(xfer.To, to)
 	}
 
 	from.Nonce++
 	state.setAccount(fromID, from)
-	state.setAccount(xfer.To, to)
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("Transfer: executed transfer",
