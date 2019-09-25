@@ -460,6 +460,8 @@ type Config struct { //nolint: maligned
 // sandboxedHost is a worker Host that runs worker processes in a bubblewrap
 // sandbox.
 type sandboxedHost struct { //nolint: maligned
+	BaseHost
+
 	cfg *Config
 
 	teeState teeState
@@ -562,7 +564,7 @@ func (h *sandboxedHost) MakeRequest(ctx context.Context, body *protocol.Body) (<
 	select {
 	case h.requestCh <- &hostRequest{ctx, body, respCh}:
 	case <-ctx.Done():
-		return nil, context.Canceled
+		return nil, ctx.Err()
 	}
 
 	// Wait for response from the manager goroutine.
@@ -570,7 +572,7 @@ func (h *sandboxedHost) MakeRequest(ctx context.Context, body *protocol.Body) (<
 	case resp := <-respCh:
 		return resp.ch, resp.err
 	case <-ctx.Done():
-		return nil, context.Canceled
+		return nil, ctx.Err()
 	}
 }
 
@@ -985,5 +987,7 @@ func NewHost(cfg *Config) (Host, error) {
 		interruptCh:           make(chan *interruptRequest, 10),
 		logger:                logger,
 	}
+	host.BaseHost = BaseHost{Host: host}
+
 	return host, nil
 }

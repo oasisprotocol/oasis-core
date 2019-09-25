@@ -69,7 +69,7 @@ func (p *Protocol) Call(ctx context.Context, body *Body) (*Body, error) {
 
 		return resp, nil
 	case <-ctx.Done():
-		return nil, context.Canceled
+		return nil, ctx.Err()
 	}
 }
 

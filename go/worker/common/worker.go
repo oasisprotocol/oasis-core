@@ -190,12 +190,27 @@ func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
 	return rt
 }
 
-func (w *Worker) registerRuntime(cfg *Config, id signature.PublicKey) error {
-	w.logger.Info("registering new runtime",
-		"runtime_id", id,
-	)
+// NewUnmanagedCommitteeNode creates a new common committee node that is not
+// managed by this worker.
+//
+// Since the node is unmanaged the caller needs to ensure that the node will
+// be properly terminated once started.
+//
+// Note that this does not instruct the storage backend to watch the given
+// runtime.
+func (w *Worker) NewUnmanagedCommitteeNode(id signature.PublicKey, enableP2P bool) (*committee.Node, error) {
+	var p2p *p2p.P2P
+	if enableP2P {
+		// Make sure that there is no other (managed) runtime already registered
+		// with the same identifier as registering another will overwrite the
+		// P2P handler.
+		if w.runtimes[id.ToMapKey()] != nil {
+			return nil, fmt.Errorf("worker/common: managed runtime with id %s already exists", id)
+		}
+		p2p = w.P2P
+	}
 
-	node, err := committee.NewNode(
+	return committee.NewNode(
 		id,
 		w.Identity,
 		w.Storage,
@@ -203,8 +218,16 @@ func (w *Worker) registerRuntime(cfg *Config, id signature.PublicKey) error {
 		w.Registry,
 		w.Scheduler,
 		w.Consensus,
-		w.P2P,
+		p2p,
 	)
+}
+
+func (w *Worker) registerRuntime(id signature.PublicKey) error {
+	w.logger.Info("registering new runtime",
+		"runtime_id", id,
+	)
+
+	node, err := w.NewUnmanagedCommitteeNode(id, true)
 	if err != nil {
 		return err
 	}
@@ -219,6 +242,20 @@ func (w *Worker) registerRuntime(cfg *Config, id signature.PublicKey) error {
 	w.logger.Info("new runtime registered",
 		"runtime_id", rt.id,
 	)
+
+	// If using a storage client, it should watch the configured runtimes.
+	if storageClient, ok := w.Storage.(storage.ClientBackend); ok {
+		if err := storageClient.WatchRuntime(id); err != nil {
+			w.logger.Warn("common/worker: error watching storage runtime, expected if using cachingclient with local backend",
+				"err", err,
+				"runtime_id", id,
+			)
+		}
+	} else {
+		w.logger.Info("not watching storage runtime since not using a storage client backend",
+			"runtime_id", id,
+		)
+	}
 
 	return nil
 }
@@ -258,10 +295,6 @@ func newWorker(
 	}
 
 	if enabled {
-		if len(cfg.Runtimes) == 0 {
-			return nil, fmt.Errorf("common/worker: no runtimes configured")
-		}
-
 		// Open the local storage.
 		var err error
 		if w.LocalStorage, err = host.NewLocalStorage(dataDir, "worker-local-storage.bolt.db"); err != nil {
@@ -270,22 +303,8 @@ func newWorker(
 
 		for _, id := range cfg.Runtimes {
 			// Register all configured runtimes.
-			if err := w.registerRuntime(&cfg, id); err != nil {
+			if err := w.registerRuntime(id); err != nil {
 				return nil, err
-			}
-
-			// If using a storage client, it should watch the configured runtimes.
-			if storageClient, ok := storageBackend.(storage.ClientBackend); ok {
-				if err := storageClient.WatchRuntime(id); err != nil {
-					w.logger.Warn("common/worker: error watching storage runtime, expected if using cachingclient with local backend",
-						"err", err,
-						"runtime_id", id,
-					)
-				}
-			} else {
-				w.logger.Info("not watching storage runtime since not using a storage client backend",
-					"runtime_id", id,
-				)
 			}
 		}
 	}

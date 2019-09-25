@@ -22,6 +22,8 @@ const BackendMock = "mock"
 
 // MockHost is a mock worker Host used in tests.
 type mockHost struct {
+	BaseHost
+
 	quitCh chan struct{}
 
 	logger *logging.Logger
@@ -125,5 +127,7 @@ func NewMockHost() (Host, error) {
 		quitCh: make(chan struct{}),
 		logger: logging.GetLogger("worker/common/host/mock"),
 	}
+	host.BaseHost = BaseHost{Host: host}
+
 	return host, nil
 }

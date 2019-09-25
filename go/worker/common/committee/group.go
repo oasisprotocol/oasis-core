@@ -210,15 +210,10 @@ type Group struct {
 	handler MessageHandler
 
 	activeEpoch *epoch
-	p2p         *p2p.P2P
+	// p2p may be nil.
+	p2p *p2p.P2P
 
 	logger *logging.Logger
-}
-
-// P2PInfo returns the information needed to establish connections to this
-// node via the P2P transport.
-func (g *Group) P2PInfo() node.P2PInfo {
-	return g.p2p.Info()
 }
 
 // RoundTransition processes a round transition that just happened.
@@ -480,6 +475,10 @@ func (g *Group) publishLocked(
 	ci *CommitteeInfo,
 	msg *p2p.Message,
 ) error {
+	if g.p2p == nil {
+		return errors.New("group: p2p transport is not enabled")
+	}
+
 	pubCtx := g.activeEpoch.roundCtx
 
 	var scBinary []byte
@@ -588,7 +587,9 @@ func NewGroup(
 		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtimeID),
 	}
 
-	p2p.RegisterHandler(runtimeID, g)
+	if p2p != nil {
+		p2p.RegisterHandler(runtimeID, g)
+	}
 
 	return g, nil
 }
