@@ -309,14 +309,7 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node
 		// Reached a leaf node.
 		if n.Key.Compare(key) >= 0 {
 			it.key = n.Key
-
-			// Fetch value. It currently doesn't make sense to make this lazy
-			// as the leaf nodes contain the full values.
-			var err error
-			it.value, err = it.tree.cache.derefValue(it.ctx, n.Value)
-			if err != nil {
-				return err
-			}
+			it.value = n.Value
 		}
 	}
 

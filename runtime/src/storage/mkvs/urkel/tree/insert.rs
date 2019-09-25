@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{mem, sync::Arc};
 
 use failure::Fallible;
 use io_context::Context;
@@ -186,25 +186,17 @@ impl UrkelTree {
                     // Should always succeed.
                     if n.key == *key {
                         // If the key matches, we can just update the value.
-                        match n.value.borrow().value {
-                            // TODO check comparison; hash
-                            Some(ref leaf_val) => {
-                                if leaf_val == &val {
-                                    return Ok((ptr.clone(), n.value.borrow().value.clone()));
-                                }
-                            }
-                            _ => {}
-                        };
-                        self.cache.borrow_mut().remove_value(n.value.clone());
-                        let old_val = n.value.borrow().value.clone();
-                        n.value = self.cache.borrow_mut().new_value(val);
+                        if n.value == val {
+                            return Ok((ptr.clone(), Some(val)));
+                        }
+                        let old_val = mem::replace(&mut n.value, val);
                         n.clean = false;
                         ptr.borrow_mut().clean = false;
                         // No longer eligible for eviction as it is dirty.
                         self.cache
                             .borrow_mut()
                             .rollback_node(ptr.clone(), NodeKind::Leaf);
-                        return Ok((ptr.clone(), old_val));
+                        return Ok((ptr.clone(), Some(old_val)));
                     }
 
                     let (_, leaf_key_remainder) = n.key.split(bit_depth, n.key.bit_length());

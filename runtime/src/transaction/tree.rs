@@ -277,7 +277,7 @@ mod test {
         let (_, root_hash) = tree.commit(Context::background()).unwrap();
         assert_eq!(
             format!("{:?}", root_hash),
-            "a4d8f91eb389f897f031c1bb996380a23071ac0797c01ee346b86d3e2307f105"
+            "4cc8bb6bdb377cc7f1ff8fe972004e1d66fa2c6726ec9e5f870865c190b6a47d"
         );
     }
 }

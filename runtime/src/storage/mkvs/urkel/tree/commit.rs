@@ -94,17 +94,6 @@ pub fn _commit<C: Cache>(
             if node_ref.borrow().is_clean() {
                 ptr.borrow_mut().hash = node_ref.borrow().get_hash();
             } else {
-                if !noderef_as!(node_ref, Leaf).value.borrow().clean {
-                    noderef_as!(node_ref, Leaf).value.borrow_mut().update_hash();
-
-                    let closure_value = noderef_as!(node_ref, Leaf).value.clone();
-                    update_list.push(Box::new(move |cache| {
-                        closure_value.borrow_mut().clean = true;
-                        // Make value eligible for eviction.
-                        cache.commit_value(closure_value.clone());
-                    }));
-                }
-
                 if let Some(round) = round {
                     noderef_as_mut!(node_ref, Leaf).round = round;
                 }

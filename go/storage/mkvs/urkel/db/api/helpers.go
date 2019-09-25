@@ -85,7 +85,7 @@ func ReviveHashedDBWriteLogs(
 					}
 					newEntry = &writelog.LogEntry{
 						Key:   entry.Key,
-						Value: node.Value.Value,
+						Value: node.Value,
 					}
 				}
 				if err := pipe.Put(newEntry); err != nil {

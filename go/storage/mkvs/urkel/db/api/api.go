@@ -258,7 +258,7 @@ func (b *CheckpointableDB) getNodeWriteLog(ctx context.Context, pipe *writelog.P
 	case *node.LeafNode:
 		entry := writelog.LogEntry{
 			Key:   n.Key[:],
-			Value: n.Value.Value[:],
+			Value: n.Value[:],
 		}
 		if err := pipe.Put(&entry); err != nil {
 			_ = pipe.PutError(err)

@@ -37,13 +37,13 @@ const (
 	PointerSize = uint64(unsafe.Sizeof(Pointer{}))
 	// InternalNodeSize is the minimum size of an internal node in memory.
 	InternalNodeSize = uint64(unsafe.Sizeof(InternalNode{}))
-	// ValueSize is the size of an empty value node in memory.
-	ValueSize = uint64(unsafe.Sizeof(Value{}))
 	// LeafNodeSize is the minimum size of a leaf node in memory.
 	LeafNodeSize = uint64(unsafe.Sizeof(LeafNode{}))
 
 	// RoundSize is the size of the encoded round.
 	RoundSize = int(unsafe.Sizeof(uint64(0)))
+	// ValueLengthSize is the size of the encoded value length.
+	ValueLengthSize = int(unsafe.Sizeof(uint32(0)))
 )
 
 var (
@@ -51,8 +51,6 @@ var (
 	_ encoding.BinaryUnmarshaler = (*InternalNode)(nil)
 	_ encoding.BinaryMarshaler   = (*LeafNode)(nil)
 	_ encoding.BinaryUnmarshaler = (*LeafNode)(nil)
-	_ encoding.BinaryMarshaler   = (*Value)(nil)
-	_ encoding.BinaryUnmarshaler = (*Value)(nil)
 	_ cbor.Marshaler             = (*Root)(nil)
 	_ cbor.Unmarshaler           = (*Root)(nil)
 )
@@ -270,13 +268,6 @@ type Node interface {
 	// references without checking the dirty flag.
 	ExtractUnchecked() Node
 
-	// Validate that the node is internally consistent with the given
-	// node hash. This does NOT verify that the whole subtree is
-	// consistent.
-	//
-	// Calling this on a dirty node will return an error.
-	Validate(h hash.Hash) error
-
 	// Equal compares a node with another node.
 	Equal(other Node) bool
 
@@ -389,28 +380,6 @@ func (n *InternalNode) ExtractUnchecked() Node {
 		Left:     n.Left.ExtractUnchecked(),
 		Right:    n.Right.ExtractUnchecked(),
 	}
-}
-
-// Validate that the node is internally consistent with the given
-// node hash. This does NOT verify that the whole subtree is
-// consistent.
-//
-// Calling this on a dirty node will return an error.
-func (n *InternalNode) Validate(h hash.Hash) error {
-	if !n.LeafNode.IsClean() || !n.Left.IsClean() || !n.Right.IsClean() {
-		return errors.New("urkel: node has dirty pointers")
-	}
-
-	n.UpdateHash()
-
-	if !h.Equal(&n.Hash) {
-		return fmt.Errorf("urkel: node hash mismatch (expected: %s got: %s)",
-			h.String(),
-			n.Hash.String(),
-		)
-	}
-
-	return nil
 }
 
 // CompactMarshalBinary encodes an internal node into binary form without
@@ -558,7 +527,7 @@ type LeafNode struct {
 	Round uint64
 	Hash  hash.Hash
 	Key   Key
-	Value *Value
+	Value []byte
 }
 
 // IsClean returns true if the node is non-dirty.
@@ -570,7 +539,7 @@ func (n *LeafNode) IsClean() bool {
 func (n *LeafNode) Size() uint64 {
 	size := LeafNodeSize
 	size += uint64(len(n.Key))
-	size += n.Value.Size()
+	size += uint64(len(n.Value))
 	return size
 }
 
@@ -591,7 +560,7 @@ func (n *LeafNode) UpdateHash() {
 	var round [RoundSize]byte
 	binary.LittleEndian.PutUint64(round[:], n.Round)
 
-	n.Hash.FromBytes([]byte{PrefixLeafNode}, round[:], n.Key[:], n.Value.Hash[:])
+	n.Hash.FromBytes([]byte{PrefixLeafNode}, round[:], n.Key[:], n.Value[:])
 }
 
 // Extract makes a copy of the node containing only hash references.
@@ -610,30 +579,8 @@ func (n *LeafNode) ExtractUnchecked() Node {
 		Round: n.Round,
 		Hash:  n.Hash,
 		Key:   n.Key,
-		Value: n.Value.ExtractUnchecked(),
+		Value: n.Value,
 	}
-}
-
-// Validate that the node is internally consistent with the given
-// node hash. This does NOT verify that the whole subtree is
-// consistent.
-//
-// Calling this on a dirty node will return an error.
-func (n *LeafNode) Validate(h hash.Hash) error {
-	if !n.Value.Clean {
-		return errors.New("urkel: node has dirty value")
-	}
-
-	n.UpdateHash()
-
-	if !h.Equal(&n.Hash) {
-		return fmt.Errorf("urkel: node hash mismatch (expected: %s got: %s)",
-			h.String(),
-			n.Hash.String(),
-		)
-	}
-
-	return nil
 }
 
 // CompactMarshalBinary encodes a leaf node into binary form.
@@ -643,11 +590,7 @@ func (n *LeafNode) CompactMarshalBinary() (data []byte, err error) {
 		return nil, err
 	}
 
-	valueData, err := n.Value.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-	data = make([]byte, 1+RoundSize+len(keyData)+len(valueData))
+	data = make([]byte, 1+RoundSize+len(keyData)+ValueLengthSize+len(n.Value))
 	pos := 0
 	data[pos] = PrefixLeafNode
 	pos++
@@ -655,7 +598,9 @@ func (n *LeafNode) CompactMarshalBinary() (data []byte, err error) {
 	pos += RoundSize
 	copy(data[pos:pos+len(keyData)], keyData)
 	pos += len(keyData)
-	copy(data[pos:], valueData)
+	binary.LittleEndian.PutUint32(data[pos:pos+ValueLengthSize], uint32(len(n.Value)))
+	pos += ValueLengthSize
+	copy(data[pos:], n.Value)
 	return
 }
 
@@ -672,7 +617,7 @@ func (n *LeafNode) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled leaf node.
 func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 1+RoundSize+DepthSize || data[0] != PrefixLeafNode {
+	if len(data) < 1+RoundSize+DepthSize+ValueLengthSize || data[0] != PrefixLeafNode {
 		return 0, ErrMalformedNode
 	}
 
@@ -687,16 +632,15 @@ func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
 	}
 	pos += keySize
 
-	var value Value
-	valueSize, err := value.SizedUnmarshalBinary(data[pos:])
-	if err != nil {
-		return 0, err
-	}
+	valueSize := int(binary.LittleEndian.Uint32(data[pos : pos+ValueLengthSize]))
+	pos += ValueLengthSize
+
+	value := data[pos : pos+valueSize]
 	pos += valueSize
 
 	n.Clean = true
 	n.Key = key
-	n.Value = &value
+	n.Value = value
 
 	n.UpdateHash()
 
@@ -715,124 +659,9 @@ func (n *LeafNode) Equal(other Node) bool {
 		if n.Clean && other.Clean {
 			return n.Hash.Equal(&other.Hash)
 		}
-		return n.Round == other.Round && n.Key.Equal(other.Key) && n.Value.EqualPointer(other.Value)
+		return n.Round == other.Round && n.Key.Equal(other.Key) && bytes.Equal(n.Value, other.Value)
 	}
 	return false
-}
-
-// Value holds the value.
-type Value struct {
-	Clean bool
-	Hash  hash.Hash
-	Value []byte
-	LRU   *list.Element
-}
-
-// Size returns the size of this value in bytes.
-func (v *Value) Size() uint64 {
-	size := ValueSize
-	size += uint64(len(v.Value))
-	return size
-}
-
-// GetHash returns the value's cached hash.
-func (v *Value) GetHash() hash.Hash {
-	return v.Hash
-}
-
-// UpdateHash updates the value's cached hash by recomputing it.
-//
-// Does not mark the node as clean.
-func (v *Value) UpdateHash() {
-	v.Hash.FromBytes(v.Value)
-}
-
-// Equal compares the value with some other value.
-func (v *Value) Equal(other []byte) bool {
-	if v.Value != nil {
-		return bytes.Equal(v.Value, other)
-	}
-
-	var otherHash hash.Hash
-	otherHash.FromBytes(other)
-	return v.Hash.Equal(&otherHash)
-}
-
-// EqualPointer compares the value pointer with some other value pointer.
-func (v *Value) EqualPointer(other *Value) bool {
-	if v == nil && other == nil {
-		return true
-	}
-	if v == nil || other == nil {
-		return true
-	}
-	return v.Equal(other.Value)
-}
-
-// Extract makes a copy of the value containing only hash references.
-func (v *Value) Extract() *Value {
-	if !v.Clean {
-		panic("urkel: extract called on dirty value")
-	}
-	return v.ExtractUnchecked()
-}
-
-// Extract makes a copy of the value containing only hash references
-// without checking the dirty flag.
-func (v *Value) ExtractUnchecked() *Value {
-	return &Value{
-		Clean: true,
-		Hash:  v.Hash,
-		Value: v.Value,
-	}
-}
-
-// Validate that the value is internally consistent with the given
-// value hash.
-func (v *Value) Validate(h hash.Hash) error {
-	v.UpdateHash()
-
-	if !h.Equal(&v.Hash) {
-		return fmt.Errorf("urkel: value hash mismatch (expected: %s got: %s)",
-			h.String(),
-			v.Hash.String(),
-		)
-	}
-
-	return nil
-}
-
-// MarshalBinary encodes a value into binary form.
-func (v *Value) MarshalBinary() (data []byte, err error) {
-	data = make([]byte, 4+len(v.Value))
-	binary.LittleEndian.PutUint32(data[:4], uint32(len(v.Value)))
-	if v.Value != nil {
-		copy(data[4:], v.Value)
-	}
-	return
-}
-
-// UnmarshalBinary decodes a binary marshaled value.
-func (v *Value) UnmarshalBinary(data []byte) error {
-	_, err := v.SizedUnmarshalBinary(data)
-	return err
-}
-
-// SizedUnmarshalBinary decodes a binary marshaled value.
-func (v *Value) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 4 {
-		return 0, ErrMalformedNode
-	}
-
-	valueLen := int(binary.LittleEndian.Uint32(data[:4]))
-	v.Value = nil
-	v.Clean = true
-	if valueLen > 0 {
-		v.Value = make([]byte, valueLen)
-		copy(v.Value, data[4:])
-	}
-	v.UpdateHash()
-	return valueLen + 4, nil
 }
 
 // UnmarshalBinary unmarshals a node of arbitrary type.

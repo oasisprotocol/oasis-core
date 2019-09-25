@@ -1,6 +1,7 @@
 package urkel
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -166,7 +167,7 @@ func (t *Tree) doInsert(
 	case *node.LeafNode:
 		// If the key matches, we can just update the value.
 		if n.Key.Equal(key) {
-			if n.Value.Equal(val) {
+			if bytes.Equal(n.Value, val) {
 				return insertResult{
 					newRoot:      ptr,
 					insertedLeaf: ptr,
@@ -179,8 +180,7 @@ func (t *Tree) doInsert(
 				t.pendingRemovedNodes = append(t.pendingRemovedNodes, n.ExtractUnchecked())
 			}
 
-			t.cache.removeValue(n.Value)
-			n.Value = t.cache.newValue(val)
+			n.Value = val
 			n.Clean = false
 			ptr.Clean = false
 			// No longer eligible for eviction as it is dirty.

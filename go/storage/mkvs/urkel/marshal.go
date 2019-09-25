@@ -7,7 +7,6 @@ import (
 var (
 	_ SizedBinaryUnmarshaler = (*node.InternalNode)(nil)
 	_ SizedBinaryUnmarshaler = (*node.LeafNode)(nil)
-	_ SizedBinaryUnmarshaler = (*node.Value)(nil)
 )
 
 // SizedBinaryUnmarshaler defines an unmarshaling method that

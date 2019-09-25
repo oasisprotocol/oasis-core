@@ -204,9 +204,9 @@ impl UrkelTree {
                 // Remove from leaf node.
                 let node_ref = node_ref.unwrap();
                 if noderef_as!(node_ref, Leaf).key == *key {
-                    let old_val = noderef_as!(node_ref, Leaf).value.borrow().value.clone();
+                    let old_val = noderef_as!(node_ref, Leaf).value.clone();
                     self.cache.borrow_mut().remove_node(ptr.clone());
-                    return Ok((NodePointer::null_ptr(), true, old_val));
+                    return Ok((NodePointer::null_ptr(), true, Some(old_val)));
                 }
 
                 return Ok((ptr.clone(), false, None));

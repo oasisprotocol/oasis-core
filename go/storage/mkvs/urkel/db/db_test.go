@@ -44,11 +44,7 @@ func TestHashedWriteLog(t *testing.T) {
 				Clean: true,
 				Hash:  h,
 				Key:   wl[i].Key,
-				Value: &node.Value{
-					Clean: true,
-					Hash:  h,
-					Value: wl[i].Value,
-				},
+				Value: wl[i].Value,
 			},
 		}
 		wla[i] = writelog.LogEntryAnnotation{

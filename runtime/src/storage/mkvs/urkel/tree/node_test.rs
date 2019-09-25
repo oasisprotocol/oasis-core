@@ -7,17 +7,9 @@ use crate::{
 
 #[test]
 fn test_serialization_leaf() {
-    let key = b"a golden key".to_vec();
-    let value_hash = Hash::digest_bytes(b"value");
-
     let leaf_node = LeafNode {
-        key: key,
-        value: Rc::new(RefCell::new(ValuePointer {
-            clean: true,
-            hash: value_hash,
-            value: Some(b"value".to_vec()),
-            ..Default::default()
-        })),
+        key: b"a golden key".to_vec(),
+        value: b"value".to_vec(),
         ..Default::default()
     };
 
@@ -32,24 +24,14 @@ fn test_serialization_leaf() {
 
     assert_eq!(true, decoded_leaf_node.clean);
     assert_eq!(leaf_node.key, decoded_leaf_node.key);
-    assert_eq!(true, decoded_leaf_node.value.borrow().clean);
-    assert_eq!(
-        leaf_node.value.borrow().value,
-        decoded_leaf_node.value.borrow().value
-    );
-    assert_ne!(None, decoded_leaf_node.value.borrow().value);
+    assert_eq!(leaf_node.value, decoded_leaf_node.value);
 }
 
 #[test]
 fn test_serialization_internal() {
     let mut leaf_node = LeafNode {
         key: b"a golden key".to_vec(),
-        value: Rc::new(RefCell::new(ValuePointer {
-            clean: true,
-            hash: Hash::digest_bytes(b"value"),
-            value: Some(b"value".to_vec()),
-            ..Default::default()
-        })),
+        value: b"value".to_vec(),
         ..Default::default()
     };
     leaf_node.update_hash();
@@ -115,25 +97,17 @@ fn test_serialization_internal() {
 
 #[test]
 fn test_hash_leaf() {
-    let key = b"a golden key".to_vec();
-    let value_hash = Hash::digest_bytes(b"value");
-
     let mut leaf_node = LeafNode {
         round: 0xDEADBEEF,
-        key: key,
-        value: Rc::new(RefCell::new(ValuePointer {
-            clean: true,
-            hash: value_hash,
-            value: Some(Vec::from("value")),
-            ..Default::default()
-        })),
+        key: b"a golden key".to_vec(),
+        value: b"value".to_vec(),
         ..Default::default()
     };
 
     leaf_node.update_hash();
     assert_eq!(
         leaf_node.hash,
-        Hash::from_str("7fc8d2e9142d15de712757dba87f6efd82a04a4ed1488e21ee95e3a7ec7a5fce").unwrap()
+        Hash::from_str("1bf37ec60c5494775e7029ec2a888c42d14f9710852c86ffe0afab8e3c43b782").unwrap()
     );
 }
 

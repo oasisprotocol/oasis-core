@@ -193,16 +193,6 @@ func doCommit(
 			panic("urkel: non-clean pointer has clean node")
 		}
 
-		if !n.Value.Clean {
-			n.Value.UpdateHash()
-
-			batch.OnCommit(func() {
-				n.Value.Clean = true
-				// Make value eligible for eviction.
-				cache.commitValue(n.Value)
-			})
-		}
-
 		if round != nil {
 			n.Round = *round
 		}
