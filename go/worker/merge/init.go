@@ -12,9 +12,8 @@ import (
 )
 
 const (
-	cfgWorkerEnabled                = "worker.merge.enabled"
-	cfgStorageCommitTimeout         = "worker.merge.storage_commit_timeout"
-	cfgByzantineInjectDiscrepancies = "worker.merge.byzantine.inject_discrepancies"
+	cfgWorkerEnabled        = "worker.merge.enabled"
+	cfgStorageCommitTimeout = "worker.merge.storage_commit_timeout"
 )
 
 // Flags has the configuration flags.
@@ -32,8 +31,7 @@ func New(
 ) (*Worker, error) {
 	cfg := Config{
 		Committee: committee.Config{
-			StorageCommitTimeout:         viper.GetDuration(cfgStorageCommitTimeout),
-			ByzantineInjectDiscrepancies: viper.GetBool(cfgByzantineInjectDiscrepancies),
+			StorageCommitTimeout: viper.GetDuration(cfgStorageCommitTimeout),
 		},
 	}
 
@@ -43,9 +41,6 @@ func New(
 func init() {
 	Flags.Bool(cfgWorkerEnabled, false, "Enable merge worker process")
 	Flags.Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
-
-	Flags.Bool(cfgByzantineInjectDiscrepancies, false, "BYZANTINE: Inject discrepancies")
-	_ = Flags.MarkHidden(cfgByzantineInjectDiscrepancies)
 
 	_ = viper.BindPFlags(Flags)
 }

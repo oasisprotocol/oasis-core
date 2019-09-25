@@ -545,14 +545,6 @@ func (n *Node) startProcessingBatchLocked(
 				return
 			}
 
-			// Maybe inject discrepancy.
-			n.byzantineMaybeInjectDiscrepancy(
-				ctx,
-				ioRoot,
-				&rsp.Batch,
-				&rq.WorkerExecuteTxBatchRequest.Block,
-			)
-
 			done <- &rsp.Batch
 		case <-ctx.Done():
 			n.logger.Error("batch processing aborted by context, interrupting worker")

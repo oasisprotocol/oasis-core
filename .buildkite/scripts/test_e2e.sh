@@ -55,60 +55,6 @@ scenario_basic() {
     set_epoch 1
 }
 
-scenario_compute_discrepancy() {
-    local runtime=$1
-
-    # Initialize compute nodes.
-    run_compute_node 1 ${runtime} \
-        --worker.compute.byzantine.inject_discrepancies
-    run_compute_node 2 ${runtime}
-    run_compute_node 3 ${runtime}
-
-    # Initialize storage nodes.
-    run_storage_node 1
-    run_storage_node 2
-
-    # Wait for all nodes to start: 3 compute + 2 storage + key manager + 3 validator.
-    wait_nodes 9
-
-    # Advance epoch to elect a new committee.
-    set_epoch 1
-}
-
-assert_compute_discrepancy_scenario_works() {
-    assert_no_panics
-    assert_no_round_timeouts
-    assert_compute_discrepancies
-    assert_no_merge_discrepancies
-}
-
-scenario_merge_discrepancy() {
-    local runtime=$1
-
-    # Initialize compute nodes.
-    run_compute_node 1 ${runtime}
-    run_compute_node 2 ${runtime} \
-        --worker.merge.byzantine.inject_discrepancies
-    run_compute_node 3 ${runtime}
-
-    # Initialize storage nodes.
-    run_storage_node 1
-    run_storage_node 2
-
-    # Wait for all nodes to start: 3 compute + 2 storage + key manager + 3 validator.
-    wait_nodes 9
-
-    # Advance epoch to elect a new committee.
-    set_epoch 1
-}
-
-assert_merge_discrepancy_scenario_works() {
-    assert_no_panics
-    assert_no_round_timeouts
-    assert_no_compute_discrepancies
-    assert_merge_discrepancies
-}
-
 scenario_storage_sync() {
     local runtime=simple-keyvalue
     local client=simple-keyvalue
@@ -197,6 +143,13 @@ scenario_byzantine_compute_wrong() {
 
     # Advance epoch to elect a new committee.
     set_epoch 1
+}
+
+assert_compute_discrepancy_scenario_works() {
+    assert_no_panics
+    assert_no_round_timeouts
+    assert_compute_discrepancies
+    assert_no_merge_discrepancies
 }
 
 scenario_byzantine_compute_straggler() {
@@ -297,6 +250,13 @@ scenario_byzantine_merge_wrong() {
     set_epoch 1
 }
 
+assert_merge_discrepancy_scenario_works() {
+    assert_no_panics
+    assert_no_round_timeouts
+    assert_no_compute_discrepancies
+    assert_merge_discrepancies
+}
+
 scenario_byzantine_merge_straggler() {
     local runtime=$1
 
@@ -390,31 +350,6 @@ test_suite() {
         runtime=simple-keyvalue \
         client=simple-keyvalue-enc \
         client_runner=run_client_km_restart
-
-    # Discrepancy scenarios.
-    # NOTE: This scenario currently fails on SGX due to the way discrepancy
-    # injection is currently implemented.
-    # For more details, see:
-    # https://github.com/oasislabs/ekiden/issues/1730.
-    if [[ ${EKIDEN_TEE_HARDWARE} != "intel-sgx" ]]; then
-        run_test \
-            scenario=scenario_compute_discrepancy \
-            name="e2e-${backend_name}-compute-discrepancy" \
-            backend_runner=$backend_runner \
-            runtime=simple-keyvalue \
-            client=simple-keyvalue \
-            on_success_hook=assert_compute_discrepancy_scenario_works \
-            beacon_deterministic=1
-    fi
-
-    run_test \
-        scenario=scenario_merge_discrepancy \
-        name="e2e-${backend_name}-merge-discrepancy" \
-        backend_runner=$backend_runner \
-        runtime=simple-keyvalue \
-        client=simple-keyvalue \
-        on_success_hook=assert_merge_discrepancy_scenario_works \
-        beacon_deterministic=1
 
     # Storage node syncing scenario.
     run_test \
