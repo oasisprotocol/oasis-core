@@ -480,7 +480,7 @@ func (t *tendermintService) lazyInit() error {
 			return errors.Wrap(err, "tendermint: failed to create node")
 		}
 		t.client = tmcli.NewLocal(t.node)
-		t.failMonitor = newFailMonitor(t.Logger, t.node.Wait)
+		t.failMonitor = newFailMonitor(t.Logger, t.node.ConsensusState().Wait)
 
 		return nil
 	}
