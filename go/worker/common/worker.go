@@ -9,11 +9,14 @@ import (
 	"github.com/oasislabs/ekiden/go/common/identity"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/version"
+	"github.com/oasislabs/ekiden/go/ias"
+	keymanager "github.com/oasislabs/ekiden/go/keymanager/client"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
+	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
 )
 
@@ -43,14 +46,17 @@ type Worker struct {
 	enabled bool
 	cfg     Config
 
-	Identity  *identity.Identity
-	Storage   storage.Backend
-	Roothash  roothash.Backend
-	Registry  registry.Backend
-	Scheduler scheduler.Backend
-	Consensus common.ConsensusBackend
-	Grpc      *grpc.Server
-	P2P       *p2p.P2P
+	Identity     *identity.Identity
+	Storage      storage.Backend
+	Roothash     roothash.Backend
+	Registry     registry.Backend
+	Scheduler    scheduler.Backend
+	Consensus    common.ConsensusBackend
+	Grpc         *grpc.Server
+	P2P          *p2p.P2P
+	IAS          *ias.IAS
+	KeyManager   *keymanager.Client
+	LocalStorage *host.LocalStorage
 
 	runtimes map[signature.MapKey]*Runtime
 
@@ -62,7 +68,7 @@ type Worker struct {
 
 // Name returns the service name.
 func (w *Worker) Name() string {
-	return "txnscheduler worker"
+	return "common worker"
 }
 
 // Start starts the service.
@@ -126,6 +132,10 @@ func (w *Worker) Stop() {
 	}
 
 	w.Grpc.Stop()
+
+	if w.LocalStorage != nil {
+		w.LocalStorage.Stop()
+	}
 }
 
 // Enabled returns if worker is enabled.
@@ -160,6 +170,11 @@ func (w *Worker) Initialized() <-chan struct{} {
 // GetConfig returns the worker's configuration.
 func (w *Worker) GetConfig() Config {
 	return w.cfg
+}
+
+// GetRuntimes returns a map of registered runtimes.
+func (w *Worker) GetRuntimes() map[signature.MapKey]*Runtime {
+	return w.runtimes
 }
 
 // GetRuntime returns a registered runtime.
@@ -209,6 +224,7 @@ func (w *Worker) registerRuntime(cfg *Config, id signature.PublicKey) error {
 }
 
 func newWorker(
+	dataDir string,
 	enabled bool,
 	identity *identity.Identity,
 	storageBackend storage.Backend,
@@ -218,23 +234,27 @@ func newWorker(
 	consensus common.ConsensusBackend,
 	grpc *grpc.Server,
 	p2p *p2p.P2P,
+	ias *ias.IAS,
+	keyManager *keymanager.Client,
 	cfg Config,
 ) (*Worker, error) {
 	w := &Worker{
-		enabled:   enabled,
-		cfg:       cfg,
-		Identity:  identity,
-		Storage:   storageBackend,
-		Roothash:  roothash,
-		Registry:  registryInst,
-		Scheduler: scheduler,
-		Consensus: consensus,
-		Grpc:      grpc,
-		P2P:       p2p,
-		runtimes:  make(map[signature.MapKey]*Runtime),
-		quitCh:    make(chan struct{}),
-		initCh:    make(chan struct{}),
-		logger:    logging.GetLogger("worker/common"),
+		enabled:    enabled,
+		cfg:        cfg,
+		Identity:   identity,
+		Storage:    storageBackend,
+		Roothash:   roothash,
+		Registry:   registryInst,
+		Scheduler:  scheduler,
+		Consensus:  consensus,
+		Grpc:       grpc,
+		P2P:        p2p,
+		IAS:        ias,
+		KeyManager: keyManager,
+		runtimes:   make(map[signature.MapKey]*Runtime),
+		quitCh:     make(chan struct{}),
+		initCh:     make(chan struct{}),
+		logger:     logging.GetLogger("worker/common"),
 	}
 
 	if enabled {
@@ -242,11 +262,18 @@ func newWorker(
 			return nil, fmt.Errorf("common/worker: no runtimes configured")
 		}
 
+		// Open the local storage.
+		var err error
+		if w.LocalStorage, err = host.NewLocalStorage(dataDir, "worker-local-storage.bolt.db"); err != nil {
+			return nil, err
+		}
+
 		for _, id := range cfg.Runtimes {
 			// Register all configured runtimes.
 			if err := w.registerRuntime(&cfg, id); err != nil {
 				return nil, err
 			}
+
 			// If using a storage client, it should watch the configured runtimes.
 			if storageClient, ok := storageBackend.(storage.ClientBackend); ok {
 				if err := storageClient.WatchRuntime(id); err != nil {
@@ -268,6 +295,7 @@ func newWorker(
 
 // New creates a new worker.
 func New(
+	dataDir string,
 	enabled bool,
 	identity *identity.Identity,
 	storage storage.Backend,
@@ -276,6 +304,8 @@ func New(
 	scheduler scheduler.Backend,
 	consensus common.ConsensusBackend,
 	p2p *p2p.P2P,
+	ias *ias.IAS,
+	keyManager *keymanager.Client,
 ) (*Worker, error) {
 	cfg, err := newConfig()
 	if err != nil {
@@ -293,5 +323,5 @@ func New(
 		return nil, err
 	}
 
-	return newWorker(enabled, identity, storage, roothash, registry, scheduler, consensus, grpc, p2p, *cfg)
+	return newWorker(dataDir, enabled, identity, storage, roothash, registry, scheduler, consensus, grpc, p2p, ias, keyManager, *cfg)
 }

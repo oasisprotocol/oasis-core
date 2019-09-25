@@ -23,6 +23,7 @@ import (
 	"github.com/oasislabs/ekiden/go/runtime/transaction"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
+	commonWorker "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/committee"
 	"github.com/oasislabs/ekiden/go/worker/common/host"
 	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
@@ -122,9 +123,10 @@ type Config struct {
 
 // Node is a committee node.
 type Node struct {
+	*commonWorker.RuntimeHostNode
+
 	commonNode *committee.Node
 	mergeNode  *mergeCommittee.Node
-	workerHost host.Host
 
 	cfg Config
 
@@ -493,6 +495,15 @@ func (n *Node) startProcessingBatchLocked(
 	batchSize.With(n.getMetricLabels()).Observe(float64(len(batch)))
 	n.transitionLocked(StateProcessingBatch{ioRoot, batch, batchSpanCtx, batchStartTime, cancel, done, txnSchedSig, inputStorageSigs})
 
+	workerHost := n.GetWorkerHostLocked()
+	if workerHost == nil {
+		// This should not happen as we only register to be a compute worker
+		// once the worker host is ready.
+		n.logger.Error("received a batch while worker host is not yet initialized")
+		n.abortBatchLocked(errWorkerAborted)
+		return
+	}
+
 	// Request the worker host to process a batch. This is done in a separate
 	// goroutine so that the committee node can continue processing blocks.
 	go func() {
@@ -510,7 +521,7 @@ func (n *Node) startProcessingBatchLocked(
 			batchRuntimeProcessingTime.With(n.getMetricLabels()).Observe(time.Since(rtStartTime).Seconds())
 		}()
 
-		ch, err := n.workerHost.MakeRequest(ctx, rq)
+		ch, err := workerHost.MakeRequest(ctx, rq)
 		if err != nil {
 			n.logger.Error("error while sending batch processing request to worker host",
 				"err", err,
@@ -547,7 +558,7 @@ func (n *Node) startProcessingBatchLocked(
 			n.logger.Error("batch processing aborted by context, interrupting worker")
 
 			// Interrupt the worker, so we can start processing the next batch.
-			err = n.workerHost.InterruptWorker(n.ctx)
+			err = workerHost.InterruptWorker(n.ctx)
 			if err != nil {
 				n.logger.Error("failed to interrupt the worker",
 					"err", err,
@@ -861,6 +872,15 @@ func (n *Node) worker() {
 
 	n.logger.Info("starting committee node")
 
+	// Initialize worker host for the new runtime.
+	if err := n.InitializeRuntimeWorkerHost(); err != nil {
+		n.logger.Error("failed to initialize worker host",
+			"err", err,
+		)
+		return
+	}
+	defer n.StopRuntimeWorkerHost()
+
 	// We are initialized.
 	close(n.initCh)
 
@@ -877,6 +897,9 @@ func (n *Node) worker() {
 		}()
 
 		select {
+		case <-n.stopCh:
+			n.logger.Info("termination requested")
+			return
 		case batch := <-processingDoneCh:
 			// Batch processing has finished.
 			if batch == nil {
@@ -905,7 +928,7 @@ func (n *Node) worker() {
 func NewNode(
 	commonNode *committee.Node,
 	mergeNode *mergeCommittee.Node,
-	worker host.Host,
+	workerHostFactory host.Factory,
 	cfg Config,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
@@ -915,9 +938,9 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
+		RuntimeHostNode:  commonWorker.NewRuntimeHostNode(commonNode, workerHostFactory),
 		commonNode:       commonNode,
 		mergeNode:        mergeNode,
-		workerHost:       worker,
 		cfg:              cfg,
 		ctx:              ctx,
 		cancelCtx:        cancel,

@@ -385,10 +385,9 @@ run_compute_node() {
         ${EKIDEN_IAS_PROXY_ENABLED:+--ias.tls ${EKIDEN_IAS_PROXY_CERT}} \
         ${EKIDEN_TEE_HARDWARE:+--ias.debug.skip_verify} \
         --worker.compute.enabled \
-        --worker.compute.backend sandboxed \
-        --worker.compute.runtime_loader ${EKIDEN_RUNTIME_LOADER} \
-        --worker.compute.runtime.binary ${EKIDEN_RUNTIME_BINARY} \
-        ${EKIDEN_TEE_HARDWARE:+--worker.compute.runtime.sgx_ids ${EKIDEN_RUNTIME_ID}} \
+        --worker.runtime.backend sandboxed \
+        --worker.runtime.loader ${EKIDEN_RUNTIME_LOADER} \
+        --worker.runtime.binary ${EKIDEN_RUNTIME_BINARY} \
         --worker.txnscheduler.enabled \
         --worker.txnscheduler.batching.max_batch_size 1 \
         --worker.merge.enabled \

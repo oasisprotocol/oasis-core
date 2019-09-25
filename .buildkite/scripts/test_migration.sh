@@ -71,7 +71,7 @@ test_migration() {
         --runtime-id "$RUNTIME_ID"
 
     # Stop the compute nodes.
-    pkill --echo --full --signal 9 worker.compute.backend
+    pkill --echo --full --signal 9 worker.runtime.backend
 
     # Export.
     "$WORKDIR/go/ekiden/ekiden" debug roothash export "$RUNTIME_ID" \
@@ -151,7 +151,7 @@ test_dumprestore() {
         --runtime-id "$RUNTIME_ID"
 
     # Stop the compute nodes.
-    pkill --echo --full --signal 9 worker.compute.backend
+    pkill --echo --full --signal 9 worker.runtime.backend
 
     # Dump BFT state.
     "$WORKDIR/go/ekiden/ekiden" genesis dump \

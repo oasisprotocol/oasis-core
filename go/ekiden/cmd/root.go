@@ -45,7 +45,7 @@ func initVersions() {
 {{- with ekidenVersion }}
 Runtime protocol version: {{ .RuntimeProtocol }}
 Backend protocol version: {{ .BackendProtocol }}
-Compute committee protocol version: {{ .ComputeCommitteeProtocol }}
+Committee protocol version: {{ .CommitteeProtocol }}
 Tendermint core version: {{ .Tendermint }}
 ABCI library version: {{ .ABCI }}
 {{ end -}}

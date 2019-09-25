@@ -187,7 +187,8 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 	// Start common worker.
 	n.CommonWorker, err = workerCommon.New(
-		compute.Enabled() || workerStorage.Enabled() || txnscheduler.Enabled(),
+		dataDir,
+		compute.Enabled() || workerStorage.Enabled() || txnscheduler.Enabled() || merge.Enabled(),
 		n.Identity,
 		n.Storage,
 		n.RootHash,
@@ -195,6 +196,8 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.Scheduler,
 		n.svcTmnt,
 		n.P2P,
+		n.IAS,
+		n.KeyManagerClient,
 	)
 	if err != nil {
 		return err
@@ -260,8 +263,6 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		dataDir,
 		n.CommonWorker,
 		n.MergeWorker,
-		n.IAS,
-		n.KeyManagerClient,
 		n.WorkerRegistration,
 	)
 	if err != nil {
@@ -541,7 +542,7 @@ func NewNode() (*Node, error) {
 		return nil, err
 	}
 
-	// Initialize and Start ekiden workers
+	// Initialize and start ekiden workers.
 	if err = node.initAndStartWorkers(logger); err != nil {
 		logger.Error("failed to initialize workers",
 			"err", err,
