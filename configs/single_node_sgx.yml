@@ -78,6 +78,7 @@ ias:
 # Consensus backend.
 consensus:
   backend: tendermint
+  validator: true
 
 # Epochtime backend.
 epochtime:
@@ -105,6 +106,11 @@ client:
   indexer:
     runtimes:
       - "0000000000000000000000000000000000000000000000000000000000000000"
+
+# Scheduler configuration.
+scheduler:
+  debug:
+    static_validators: true
 
 # Tracing settings.
 #tracing:

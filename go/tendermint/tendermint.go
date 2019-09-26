@@ -3,6 +3,8 @@ package tendermint
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -208,6 +210,48 @@ func (t *tendermintService) Started() <-chan struct{} {
 
 func (t *tendermintService) Synced() <-chan struct{} {
 	return t.syncedCh
+}
+
+func (t *tendermintService) GetAddresses() ([]node.Address, error) {
+	addrURI := viper.GetString(cfgCoreExternalAddress)
+	if addrURI == "" {
+		addrURI = viper.GetString(cfgCoreListenAddress)
+	}
+	if addrURI == "" {
+		return nil, fmt.Errorf("tendermint: no external address configured")
+	}
+
+	u, err := url.Parse(addrURI)
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint: failed to parse external address URL")
+	}
+
+	if u.Scheme != "tcp" {
+		return nil, fmt.Errorf("tendermint: external address has invalid scheme: '%v'", u.Scheme)
+	}
+
+	// Handle the case when no IP is explicitly configured, and the
+	// default value is used.
+	if u.Hostname() == "0.0.0.0" {
+		var port string
+		if _, port, err = net.SplitHostPort(u.Host); err != nil {
+			return nil, errors.Wrap(err, "tendermint: malformed external address host/port")
+		}
+
+		ip := common.GuessExternalAddress()
+		if ip == nil {
+			return nil, fmt.Errorf("tendermint: failed to guess external address")
+		}
+
+		u.Host = ip.String() + ":" + port
+	}
+
+	var addr node.Address
+	if err = addr.UnmarshalText([]byte(u.Host)); err != nil {
+		return nil, errors.Wrap(err, "tendermint: failed to parse external address host")
+	}
+
+	return []node.Address{addr}, nil
 }
 
 func (t *tendermintService) RegisterGenesisHook(hook func()) {
@@ -480,7 +524,7 @@ func (t *tendermintService) lazyInit() error {
 			return errors.Wrap(err, "tendermint: failed to create node")
 		}
 		t.client = tmcli.NewLocal(t.node)
-		t.failMonitor = newFailMonitor(t.Logger, t.node.Wait)
+		t.failMonitor = newFailMonitor(t.Logger, t.node.ConsensusState().Wait)
 
 		return nil
 	}
@@ -517,7 +561,7 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 		validator := tmtypes.GenesisValidator{
 			Address: pk.Address(),
 			PubKey:  pk,
-			Power:   1,
+			Power:   api.VotingPower,
 			Name:    "ekiden-validator-" + openedNode.ID.String(),
 		}
 		tmValidators = append(tmValidators, validator)

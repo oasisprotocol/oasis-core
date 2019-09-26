@@ -6,7 +6,7 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/consensus"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
 	"github.com/oasislabs/ekiden/go/common/service"
@@ -16,7 +16,7 @@ import (
 // TendermintService provides Tendermint access to Ekiden backends.
 type TendermintService interface {
 	service.BackgroundService
-	common.ConsensusBackend
+	consensus.Backend
 
 	// Started returns the channel that will be closed when the
 	// tendermint service has been started.

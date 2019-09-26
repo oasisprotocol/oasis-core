@@ -169,7 +169,11 @@ type Backend interface {
 
 // Config is the per-backend common configuration.
 type Config struct {
-	// DebugBypassStake is true iff the scheduler should bypass all of the staking
-	// related checks and operations.
+	// DebugBypassStake is true iff the scheduler should bypass all of
+	// the staking related checks and operations.
 	DebugBypassStake bool
+
+	// DebugStaticValidators is true iff the scheduler should use
+	// a static validator set instead of electing anything.
+	DebugStaticValidators bool
 }

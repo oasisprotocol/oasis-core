@@ -10,7 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/common"
+	"github.com/oasislabs/ekiden/go/common/consensus"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/entity"
@@ -53,7 +53,7 @@ type Registration struct {
 	regCh     chan struct{}
 	logger    *logging.Logger
 	roleHooks []func(*node.Node) error
-	consensus common.ConsensusBackend
+	consensus consensus.Backend
 }
 
 func (r *Registration) doNodeRegistration() {
@@ -222,6 +222,28 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 	return nil
 }
 
+func (r *Registration) consensusValidatorHook(n *node.Node) error {
+	addrs, err := r.consensus.GetAddresses()
+	if err != nil {
+		return errors.Wrap(err, "worker/registration: failed to get consensus validator addresses")
+	}
+
+	if len(addrs) == 0 {
+		r.logger.Error("node has no consensus addresses, not registering as validator")
+		return nil
+	}
+
+	// TODO: Someone, somewhere needs to check to see if the address is
+	// actually routable (or applicable for a given configuration).  My
+	// inclination is to do it in the registry, but this would be the other
+	// location for such a thing.
+
+	n.Consensus.Addresses = addrs
+	n.AddRoles(node.RoleValidator)
+
+	return nil
+}
+
 // GetRegistrationSigner loads the signing credentials as configured by this package's flags.
 func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *identity.Identity) (signature.PublicKey, signature.Signer, error) {
 	// If the test entity is enabled, use the entity signing key for signing
@@ -297,7 +319,7 @@ func New(
 	epochtime epochtime.Backend,
 	registry registry.Backend,
 	identity *identity.Identity,
-	consensus common.ConsensusBackend,
+	consensus consensus.Backend,
 	p2p *p2p.P2P,
 	workerCommonCfg *workerCommon.Config,
 ) (*Registration, error) {
@@ -323,6 +345,10 @@ func New(
 		consensus:          consensus,
 		p2p:                p2p,
 		roleHooks:          []func(*node.Node) error{},
+	}
+
+	if flags.ConsensusValidator() {
+		r.RegisterRole(r.consensusValidatorHook)
 	}
 
 	return r, nil

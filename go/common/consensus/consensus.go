@@ -1,10 +1,17 @@
-package common
+// Package consensus provides the implementation agnostic consesus
+// backend.
+package consensus
 
-// ConsensusBackend is an interface that a consensus backend must provide.
-type ConsensusBackend interface {
+import "github.com/oasislabs/ekiden/go/common/node"
+
+// Backend is an interface that a consensus backend must provide.
+type Backend interface {
 	// Synced returns a channel that is closed once synchronization is
 	// complete.
 	Synced() <-chan struct{}
+
+	// GetAddresses returns the consensus backend addresses.
+	GetAddresses() ([]node.Address, error)
 
 	// RegisterGenesisHook registers a function to be called when the
 	// consensus backend is initialized from genesis (e.g., on fresh

@@ -3,6 +3,7 @@ package scheduler
 import (
 	"bytes"
 	"crypto"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -36,6 +37,7 @@ var (
 	rngContextStorage              = []byte("EkS-ABCI-Storage")
 	rngContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
 	rngContextMerge                = []byte("EkS-ABCI-Merge")
+	rngContextValidators           = []byte("EkS-ABCI-Validators")
 
 	errUnexpectedTransaction = errors.New("tendermint/scheduler: unexpected transaction")
 )
@@ -106,7 +108,7 @@ func (app *schedulerApplication) TransactionTag() byte {
 }
 
 func (app *schedulerApplication) Blessed() bool {
-	return false
+	return true
 }
 
 func (app *schedulerApplication) Dependencies() []string {
@@ -140,6 +142,76 @@ func (app *schedulerApplication) ForeignCheckTx(ctx *abci.Context, other abci.Ap
 }
 
 func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) error {
+	if app.cfg.DebugStaticValidators {
+		app.logger.Warn("static validators are configured")
+		return nil
+	}
+
+	regState := registryapp.NewMutableState(app.state.DeliverTxTree())
+	nodes, err := regState.GetNodes()
+	if err != nil {
+		return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
+	}
+
+	registeredValidators := make(map[signature.MapKey]*node.Node)
+	for _, v := range nodes {
+		if v.HasRoles(node.RoleValidator) {
+			registeredValidators[v.ID.ToMapKey()] = v
+		}
+	}
+
+	// Assemble the list of the tendermint genesis validators, and do some
+	// sanity checking.
+	var currentValidators []signature.PublicKey
+	for _, v := range req.Validators {
+		tmPk := v.GetPubKey()
+
+		if t := tmPk.GetType(); t != types.PubKeyEd25519 {
+			app.logger.Error("invalid genesis validator public key type",
+				"public_key", hex.EncodeToString(tmPk.GetData()),
+				"type", t,
+			)
+			return fmt.Errorf("scheduler: invalid genesus validator public key type: '%v'", t)
+		}
+
+		var id signature.PublicKey
+		if err = id.UnmarshalBinary(tmPk.GetData()); err != nil {
+			app.logger.Error("invalid genesis validator public key",
+				"err", err,
+				"public_key", hex.EncodeToString(tmPk.GetData()),
+			)
+			return errors.Wrap(err, "scheduler: invalid genesis validator public key")
+		}
+
+		if power := v.GetPower(); power != api.VotingPower {
+			app.logger.Error("invalid voting power",
+				"id", id,
+				"power", power,
+			)
+			return fmt.Errorf("scheduler: invalid genesis validator voting power: %v", power)
+		}
+
+		n := registeredValidators[id.ToMapKey()]
+		if n == nil {
+			app.logger.Error("genesis validator not in registry",
+				"id", id,
+			)
+			return fmt.Errorf("scheduler: genesis validator not in registry")
+		}
+
+		currentValidators = append(currentValidators, n.ID)
+	}
+
+	// TODO/security: Enforce genesis validator staking.
+
+	// Add the current validator set to ABCI, so that we can alter it later.
+	//
+	// Sort of stupid it needs to be done this way, but tendermint doesn't
+	// appear to pass ABCI the validator set anywhere other than InitChain.
+
+	state := NewMutableState(app.state.DeliverTxTree())
+	state.putCurrentValidators(currentValidators)
+
 	return nil
 }
 
@@ -175,9 +247,21 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get stake snapshot")
 		}
+
+		// Handle the validator election first, because no consensus is
+		// catastrophic, while no validators is not.
+		if !app.cfg.DebugStaticValidators {
+			if err = app.electValidators(ctx, beacon, entityStake, nodes); err != nil {
+				// It is unclear what the behavior should be if the validator
+				// election fails.  The system can not ensure integrity, so
+				// presumably manual intervention is required...
+				return errors.Wrap(err, "tendermint/scheduler: couldn't elect validators")
+			}
+		}
+
 		kinds := []scheduler.CommitteeKind{scheduler.KindCompute, scheduler.KindStorage, scheduler.KindTransactionScheduler, scheduler.KindMerge}
 		for _, kind := range kinds {
-			if err := app.electAll(ctx, request, epoch, beacon, entityStake, runtimes, nodes, kind); err != nil {
+			if err = app.electAllCommittees(ctx, request, epoch, beacon, entityStake, runtimes, nodes, kind); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("tendermint/scheduler: couldn't elect %s committees", kind))
 			}
 		}
@@ -237,7 +321,72 @@ func (app *schedulerApplication) ForeignDeliverTx(ctx *abci.Context, other abci.
 }
 
 func (app *schedulerApplication) EndBlock(req types.RequestEndBlock) (types.ResponseEndBlock, error) {
-	return types.ResponseEndBlock{}, nil
+	var resp types.ResponseEndBlock
+
+	state := NewMutableState(app.state.DeliverTxTree())
+	pendingValidators, err := state.getPendingValidators()
+	if err != nil {
+		return resp, errors.Wrap(err, "scheduler/tendermint: failed to query pending validators")
+	}
+	if pendingValidators == nil {
+		// No validator updates to apply.
+		return resp, nil
+	}
+
+	currentValidators, err := state.getCurrentValidators()
+	if err != nil {
+		return resp, errors.Wrap(err, "scheduler/tendermint: failed to query current validators")
+	}
+
+	// Clear out the pending validator update.
+	state.putPendingValidators(nil)
+
+	// Tendermint expects a vector of ValidatorUpdate that expresses
+	// the difference between the current validator set (tracked manually
+	// from InitChain), and the new validator set, which is a huge pain
+	// in the ass.
+
+	currentMap := make(map[signature.MapKey]bool)
+	for _, v := range currentValidators {
+		currentMap[v.ToMapKey()] = true
+	}
+
+	pendingMap := make(map[signature.MapKey]bool)
+	for _, v := range pendingValidators {
+		pendingMap[v.ToMapKey()] = true
+	}
+
+	var updates []types.ValidatorUpdate
+	for _, v := range currentValidators {
+		mk := v.ToMapKey()
+
+		switch pendingMap[mk] {
+		case false:
+			// Existing validator is not part of the new set, reduce it's
+			// voting power to 0, to indicate removal.
+			updates = append(updates, api.PublicKeyToValidatorUpdate(v, 0))
+		case true:
+			// Existing validator is part of the new set, remove it from
+			// the pending map, since there is nothing to be done.
+			pendingMap[mk] = false
+		}
+	}
+
+	for _, v := range pendingValidators {
+		mk := v.ToMapKey()
+
+		if pendingMap[mk] {
+			// This is a validator that is not part of the current set.
+			updates = append(updates, api.PublicKeyToValidatorUpdate(v, api.VotingPower))
+		}
+	}
+
+	resp.ValidatorUpdates = updates
+
+	// Stash the updated validator set.
+	state.putCurrentValidators(pendingValidators)
+
+	return resp, nil
 }
 
 func (app *schedulerApplication) FireTimer(ctx *abci.Context, t *abci.Timer) {}
@@ -330,7 +479,7 @@ func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registr
 // Operates on consensus connection.
 // Return error if node should crash.
 // For non-fatal problems, save a problem condition to the state and return successfully.
-func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
+func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
 	if !rt.IsCompute() && kind != scheduler.KindCompute {
 		return nil
@@ -417,7 +566,7 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 
 	drbg, err := drbg.New(crypto.SHA512, beacon, rt.ID[:], rngCtx)
 	if err != nil {
-		return fmt.Errorf("tendermint/scheduler: couldn't instantiate DRBG: %s", err.Error())
+		return errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
 	}
 	rngSrc := mathrand.New(drbg)
 	rng := rand.New(rngSrc)
@@ -456,12 +605,62 @@ func (app *schedulerApplication) elect(ctx *abci.Context, request types.RequestB
 }
 
 // Operates on consensus connection.
-func (app *schedulerApplication) electAll(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
+func (app *schedulerApplication) electAllCommittees(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	for _, runtime := range runtimes {
-		if err := app.elect(ctx, request, epoch, beacon, entityStake, runtime, nodes, kind); err != nil {
+		if err := app.electCommittee(ctx, request, epoch, beacon, entityStake, runtime, nodes, kind); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byte, entityStake *stakeAccumulator, nodes []*node.Node) error {
+	// XXX: How many validators do we want, anyway?
+	const maxValidators = 100
+
+	// Filter the node list based on eligibility.
+	var nodeList []*node.Node
+	for _, n := range nodes {
+		if !n.HasRoles(node.RoleValidator) {
+			continue
+		}
+		nodeList = append(nodeList, n)
+	}
+
+	drbg, err := drbg.New(crypto.SHA512, beacon, nil, rngContextValidators)
+	if err != nil {
+		return errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
+	}
+	rngSrc := mathrand.New(drbg)
+	rng := rand.New(rngSrc)
+
+	// Generate the permutation assuming the entire eligible node list may
+	// need to be traversed, due to some nodes having insufficient stake.
+	idxs := rng.Perm(len(nodeList))
+
+	var newValidators []signature.PublicKey
+	for i := 0; i < len(idxs); i++ {
+		n := nodeList[idxs[i]]
+
+		if err = entityStake.checkAndAccumulate(n.EntityID, staking.KindValidator); err != nil {
+			continue
+		}
+
+		newValidators = append(newValidators, n.ID)
+		if len(newValidators) >= maxValidators {
+			break
+		}
+	}
+
+	if len(newValidators) == 0 {
+		return fmt.Errorf("tendermint/scheduler: failed to elect any validators")
+	}
+
+	// Set the new pending validator set in the ABCI state.  It needs to be
+	// applied in EndBlock.
+	state := NewMutableState(app.state.DeliverTxTree())
+	state.putPendingValidators(newValidators)
+
 	return nil
 }
 
