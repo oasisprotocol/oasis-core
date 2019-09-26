@@ -49,7 +49,7 @@ type stakeAccumulator struct {
 	unsafeBypass bool
 }
 
-func (acc *stakeAccumulator) checkAndAccumulate(id signature.PublicKey, kind staking.ThresholdKind) error {
+func (acc *stakeAccumulator) checkThreshold(id signature.PublicKey, kind staking.ThresholdKind, accumulate bool) error {
 	if acc.unsafeBypass {
 		return nil
 	}
@@ -70,9 +70,11 @@ func (acc *stakeAccumulator) checkAndAccumulate(id signature.PublicKey, kind sta
 		return err
 	}
 
-	// The entity has sufficient stake to qualify for the additional role,
-	// update the accumulated roles.
-	acc.perEntityStake[mk] = kinds
+	if accumulate {
+		// The entity has sufficient stake to qualify for the additional role,
+		// update the accumulated roles.
+		acc.perEntityStake[mk] = kinds
+	}
 
 	return nil
 }
@@ -281,7 +283,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 				}
 
 				var id signature.PublicKey
-				_ = id.UnmarshalBinary(k[:])
+				id.FromMapKey(k)
 				toUpdate = append(toUpdate, id)
 			}
 
@@ -446,11 +448,11 @@ func (app *schedulerApplication) isSuitableComputeWorker(n *node.Node, rt *regis
 	return false
 }
 
-func (app *schedulerApplication) isSuitableStorageWorker(n *node.Node) bool {
+func (app *schedulerApplication) isSuitableStorageWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
 	return n.HasRoles(node.RoleStorageWorker)
 }
 
-func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt *registry.Runtime) bool {
+func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
 	if !n.HasRoles(node.RoleTransactionScheduler) {
 		return false
 	}
@@ -463,7 +465,7 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt
 	return false
 }
 
-func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registry.Runtime) bool {
+func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
 	if !n.HasRoles(node.RoleMergeWorker) {
 		return false
 	}
@@ -485,65 +487,57 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 		return nil
 	}
 
-	var nodeList []*node.Node
-	var workerSize, backupSize int
-	var rngCtx []byte
+	// Determine the context, committee size, and pre-filter the node-list
+	// based on eligibility and entity stake.
+	var (
+		nodeList []*node.Node
+
+		rngCtx       []byte
+		threshold    staking.ThresholdKind
+		isSuitableFn func(*node.Node, *registry.Runtime, time.Time) bool
+
+		workerSize, backupSize int
+	)
+
 	switch kind {
 	case scheduler.KindCompute:
-		for _, n := range nodes {
-			if err := entityStake.checkAndAccumulate(n.EntityID, staking.KindCompute); err != nil {
-				continue
-			}
-			if app.isSuitableComputeWorker(n, rt, request.Header.Time) {
-				nodeList = append(nodeList, n)
-			}
-		}
+		rngCtx = rngContextCompute
+		threshold = staking.KindCompute
+		isSuitableFn = app.isSuitableComputeWorker
 		workerSize = int(rt.ReplicaGroupSize)
 		backupSize = int(rt.ReplicaGroupBackupSize)
-		rngCtx = rngContextCompute
 	case scheduler.KindStorage:
-		for _, n := range nodes {
-			if err := entityStake.checkAndAccumulate(n.EntityID, staking.KindStorage); err != nil {
-				continue
-			}
-			if app.isSuitableStorageWorker(n) {
-				nodeList = append(nodeList, n)
-			}
-		}
-		workerSize = int(rt.StorageGroupSize)
-		backupSize = 0
 		rngCtx = rngContextStorage
+		threshold = staking.KindStorage
+		isSuitableFn = app.isSuitableStorageWorker
+		workerSize = int(rt.StorageGroupSize)
 	case scheduler.KindTransactionScheduler:
-		for _, n := range nodes {
-			if err := entityStake.checkAndAccumulate(n.EntityID, staking.KindCompute); err != nil {
-				continue
-			}
-			if app.isSuitableTransactionScheduler(n, rt) {
-				nodeList = append(nodeList, n)
-			}
-		}
-		workerSize = int(rt.TransactionSchedulerGroupSize)
-		backupSize = 0
 		rngCtx = rngContextTransactionScheduler
+		threshold = staking.KindCompute
+		isSuitableFn = app.isSuitableTransactionScheduler
+		workerSize = int(rt.TransactionSchedulerGroupSize)
 	case scheduler.KindMerge:
-		for _, n := range nodes {
-			if err := entityStake.checkAndAccumulate(n.EntityID, staking.KindCompute); err != nil {
-				continue
-			}
-			if app.isSuitableMergeWorker(n, rt) {
-				nodeList = append(nodeList, n)
-			}
-		}
+		rngCtx = rngContextMerge
+		threshold = staking.KindCompute
+		isSuitableFn = app.isSuitableMergeWorker
 		// TODO: Allow independent group sizes.
 		workerSize = int(rt.ReplicaGroupSize)
 		backupSize = int(rt.ReplicaGroupBackupSize)
-		rngCtx = rngContextMerge
 	default:
-		// This is a problem with this code. Don't try to handle it at runtime.
 		return fmt.Errorf("tendermint/scheduler: invalid committee type: %v", kind)
 	}
-	nrNodes := len(nodeList)
 
+	for _, n := range nodes {
+		// Check, but do not accumulate stake till the election happens.
+		if err := entityStake.checkThreshold(n.EntityID, threshold, false); err != nil {
+			continue
+		}
+		if isSuitableFn(n, rt, request.Header.Time) {
+			nodeList = append(nodeList, n)
+		}
+	}
+
+	// Ensure that it is theoretically possible to elect a valid committee.
 	if workerSize == 0 {
 		app.logger.Error("empty committee not allowed",
 			"kind", kind,
@@ -552,8 +546,10 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 		NewMutableState(app.state.DeliverTxTree()).dropCommittee(kind, rt.ID)
 		return nil
 	}
-	if (workerSize + backupSize) > nrNodes {
-		app.logger.Error("committee size exceeds available nodes",
+
+	nrNodes, wantedNodes := len(nodeList), workerSize+backupSize
+	if wantedNodes > nrNodes {
+		app.logger.Error("committee size exceeds available nodes (pre-stake)",
 			"kind", kind,
 			"runtime_id", rt.ID,
 			"worker_size", workerSize,
@@ -564,35 +560,48 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 		return nil
 	}
 
+	// Do the actual election.
 	drbg, err := drbg.New(crypto.SHA512, beacon, rt.ID[:], rngCtx)
 	if err != nil {
 		return errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
 	}
-	rngSrc := mathrand.New(drbg)
-	rng := rand.New(rngSrc)
-
+	rng := rand.New(mathrand.New(drbg))
 	idxs := rng.Perm(nrNodes)
 
 	var members []*scheduler.CommitteeNode
+	for i := 0; i < len(idxs); i++ {
+		n := nodeList[idxs[i]]
 
-	for i := 0; i < (workerSize + backupSize); i++ {
-		var role scheduler.Role
-		switch {
-		case i == 0:
-			if kind.NeedsLeader() {
-				role = scheduler.Leader
-			} else {
-				role = scheduler.Worker
-			}
-		case i >= workerSize:
+		// Re-check and then accumulate the entity's stake.
+		if err = entityStake.checkThreshold(n.EntityID, threshold, true); err != nil {
+			continue
+		}
+
+		role := scheduler.Worker
+		if i == 0 && kind.NeedsLeader() {
+			role = scheduler.Leader
+		} else if i >= workerSize {
 			role = scheduler.BackupWorker
-		default:
-			role = scheduler.Worker
 		}
 		members = append(members, &scheduler.CommitteeNode{
 			Role:      role,
 			PublicKey: nodeList[idxs[i]].ID,
 		})
+		if len(members) >= wantedNodes {
+			break
+		}
+	}
+
+	if len(members) != wantedNodes {
+		app.logger.Error("insufficent nodes with adequate stake to elect",
+			"kind", kind,
+			"runtime_id", rt.ID,
+			"worker_size", workerSize,
+			"backup_size", backupSize,
+			"available", len(members),
+		)
+		NewMutableState(app.state.DeliverTxTree()).dropCommittee(kind, rt.ID)
+		return nil
 	}
 
 	NewMutableState(app.state.DeliverTxTree()).putCommittee(&scheduler.Committee{
@@ -618,10 +627,13 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 	// XXX: How many validators do we want, anyway?
 	const maxValidators = 100
 
-	// Filter the node list based on eligibility.
+	// Filter the node list based on eligibility and entity stake.
 	var nodeList []*node.Node
 	for _, n := range nodes {
 		if !n.HasRoles(node.RoleValidator) {
+			continue
+		}
+		if err := entityStake.checkThreshold(n.EntityID, staking.KindValidator, false); err != nil {
 			continue
 		}
 		nodeList = append(nodeList, n)
@@ -642,7 +654,8 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 	for i := 0; i < len(idxs); i++ {
 		n := nodeList[idxs[i]]
 
-		if err = entityStake.checkAndAccumulate(n.EntityID, staking.KindValidator); err != nil {
+		// Re-check and then accumulate the entity's stake.
+		if err = entityStake.checkThreshold(n.EntityID, staking.KindValidator, true); err != nil {
 			continue
 		}
 
