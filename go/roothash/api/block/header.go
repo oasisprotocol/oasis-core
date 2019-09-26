@@ -37,6 +37,17 @@ const (
 	EpochTransition HeaderType = 2
 )
 
+// DummyRoothashMessage is a no-effect message for testing.
+// Mux app in charge: staking
+type DummyRoothashMessage struct {
+	Greeting string `json:"greeting"`
+}
+
+// RoothashMessage is a roothash message.
+type RoothashMessage struct {
+	DummyRoothashMessage *DummyRoothashMessage
+}
+
 // Header is a block header.
 //
 // Keep this in sync with /runtime/src/common/roothash.rs.
@@ -64,6 +75,9 @@ type Header struct { // nolint: maligned
 
 	// StateRoot is the state merkle root.
 	StateRoot hash.Hash `json:"state_root"`
+
+	// RoothashMessages is the roothash messages sent in this round.
+	RoothashMessages []*RoothashMessage `json:"roothash_messages"`
 
 	// StorageSignatures are the storage receipt signatures for the merkle
 	// roots.

@@ -9,7 +9,7 @@ use super::{
     tags::Tags,
     types::{TxnBatch, TxnCall, TxnCheckResult, TxnOutput},
 };
-use crate::common::{cbor, crypto::hash::Hash};
+use crate::common::{cbor, crypto::hash::Hash, roothash::RoothashMessage};
 
 /// Dispatch error.
 #[derive(Debug, Fail)]
@@ -217,7 +217,11 @@ impl Dispatcher {
     }
 
     /// Dispatches a batch of runtime requests.
-    pub fn dispatch_batch(&self, batch: &TxnBatch, mut ctx: Context) -> (TxnBatch, Vec<Tags>) {
+    pub fn dispatch_batch(
+        &self,
+        batch: &TxnBatch,
+        mut ctx: Context,
+    ) -> (TxnBatch, Vec<Tags>, Vec<RoothashMessage>) {
         if let Some(ref ctx_init) = self.ctx_initializer {
             ctx_init.init(&mut ctx);
         }
@@ -243,7 +247,8 @@ impl Dispatcher {
             handler.end_batch(&mut ctx);
         }
 
-        (outputs, ctx.close())
+        let (tags, roothash_messages) = ctx.close();
+        (outputs, tags, roothash_messages)
     }
 
     /// Dispatches a raw runtime invocation request.

@@ -20,6 +20,12 @@ pub struct Block {
 
 impl_bytes!(Namespace, 32, "Chain namespace.");
 
+/// Roothash message.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RoothashMessage {
+    DummyRoothashMessage { greeting: String },
+}
+
 /// Block header.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Header {
@@ -39,6 +45,8 @@ pub struct Header {
     pub io_root: Hash,
     /// State merkle root.
     pub state_root: Hash,
+    /// Roothash messages sent this round.
+    pub roothash_messages: Option<Vec<RoothashMessage>>,
     /// Storage receipt signatures.
     pub storage_signatures: Option<Vec<SignatureBundle>>,
 }
@@ -65,6 +73,8 @@ pub struct ComputeResultsHeader {
     pub io_root: Hash,
     /// The root hash of the state after computing this batch.
     pub state_root: Hash,
+    /// Roothash messages sent from this batch.
+    pub roothash_messages: Vec<RoothashMessage>,
 }
 
 #[cfg(test)]
@@ -77,7 +87,7 @@ mod tests {
         let empty = Header::default();
         assert_eq!(
             empty.encoded_hash(),
-            Hash::from("fb1a6451509ddc17e94582df50e0fd1842ffce903a9a8d362ff90a3084e8dbdd")
+            Hash::from("96227abf446627117cd990023d9201f79ee2e3cc5119eded59259b913a1d79f5")
         );
 
         let populated = Header {
@@ -89,11 +99,14 @@ mod tests {
             previous_hash: empty.encoded_hash(),
             io_root: Hash::empty_hash(),
             state_root: Hash::empty_hash(),
+            roothash_messages: Some(vec![RoothashMessage::DummyRoothashMessage {
+                greeting: "hi".to_owned(),
+            }]),
             ..Default::default()
         };
         assert_eq!(
             populated.encoded_hash(),
-            Hash::from("091d12549887474e7fc6651c73711bf1da4dc567cdc845f6b14afd7f376305fc")
+            Hash::from("036e67a988b0ea6371a4482f708138322c3f7c4dd4ae4610e4018f96d78e1153")
         );
     }
 }

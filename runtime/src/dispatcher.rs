@@ -291,7 +291,7 @@ impl Dispatcher {
             protocol.clone(),
         ));
         let txn_ctx = TxnContext::new(ctx.clone(), &block.header, check_only);
-        let (mut outputs, mut tags) =
+        let (mut outputs, mut tags, roothash_messages) =
             StorageContext::enter(&mut cache.mkvs, untrusted_local.clone(), || {
                 txn_dispatcher.dispatch_batch(&inputs, txn_ctx)
             });
@@ -366,6 +366,7 @@ impl Dispatcher {
                 previous_hash: block.header.encoded_hash(),
                 io_root,
                 state_root: new_state_root,
+                roothash_messages,
             };
 
             debug!(self.logger, "Transaction batch execution complete";

@@ -12,13 +12,13 @@ import (
 func TestConsistentHash(t *testing.T) {
 	// NOTE: These hashes MUST be synced with runtime/src/common/roothash.rs.
 	var emptyHeaderHash hash.Hash
-	_ = emptyHeaderHash.UnmarshalHex("fb1a6451509ddc17e94582df50e0fd1842ffce903a9a8d362ff90a3084e8dbdd")
+	_ = emptyHeaderHash.UnmarshalHex("96227abf446627117cd990023d9201f79ee2e3cc5119eded59259b913a1d79f5")
 
 	var empty Header
 	require.EqualValues(t, emptyHeaderHash, empty.EncodedHash())
 
 	var populatedHeaderHash hash.Hash
-	_ = populatedHeaderHash.UnmarshalHex("091d12549887474e7fc6651c73711bf1da4dc567cdc845f6b14afd7f376305fc")
+	_ = populatedHeaderHash.UnmarshalHex("036e67a988b0ea6371a4482f708138322c3f7c4dd4ae4610e4018f96d78e1153")
 
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
@@ -35,6 +35,11 @@ func TestConsistentHash(t *testing.T) {
 		PreviousHash: emptyHeaderHash,
 		IORoot:       emptyRoot,
 		StateRoot:    emptyRoot,
+		RoothashMessages: []*RoothashMessage{
+			{
+				DummyRoothashMessage: &DummyRoothashMessage{Greeting: "hi"},
+			},
+		},
 	}
 	require.EqualValues(t, populatedHeaderHash, populated.EncodedHash())
 }
