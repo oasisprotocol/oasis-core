@@ -520,8 +520,10 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode *node.Node, newNode *n
 		)
 		return ErrNodeUpdateNotAllowed
 	}
-	if currentNode.Roles != newNode.Roles {
-		logger.Error("RegisterNode: trying to update node roles",
+	if !newNode.HasRoles(currentNode.Roles) {
+		// Allow nodes to increase the roles they wish to opt-in to,
+		// but not to remove any roles.
+		logger.Error("RegisterNode: trying to update node roles - downgrade",
 			"current_roles", currentNode.Roles,
 			"new_roles", newNode.Roles,
 		)
