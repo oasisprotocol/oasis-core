@@ -86,8 +86,6 @@ func (w *Worker) Start() error {
 }
 
 func (w *Worker) Stop() {
-	defer close(w.quitCh)
-
 	w.logger.Info("stopping key manager service")
 
 	if !w.enabled {

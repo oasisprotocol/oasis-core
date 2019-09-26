@@ -2,7 +2,6 @@ package byzantine
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -200,25 +199,9 @@ func tendermintUnsubscribeDrain(svc service.TendermintService, subscriber string
 // tendermintBroadcastTxCommit is like Tendermint's own BroadcastTxCommit, but without
 // the timeout system.
 func tendermintBroadcastTxCommit(svc service.TendermintService, tag byte, tx interface{}) error {
-	q := tmtypes.EventQueryTxFor(svc.MarshalTx(tag, tx))
-	deliverTxSub, err := svc.Subscribe("script", q)
-	if err != nil {
-		return errors.Wrap(err, "Tendermint Subscribe")
-	}
-	defer func() {
-		if err1 := tendermintUnsubscribeDrain(svc, "script", q, deliverTxSub); err1 != nil {
-			panic(fmt.Sprintf("Tendermint unsubscribe drain: %+v", err1))
-		}
-	}()
-
-	if err = svc.BroadcastTx(tag, tx); err != nil {
+	if err := svc.BroadcastTx(context.Background(), tag, tx, true, true); err != nil {
 		return errors.Wrap(err, "Tendermint BroadcastTx")
 	}
 
-	select {
-	case <-deliverTxSub.Out():
-		return nil
-	case <-deliverTxSub.Cancelled():
-		return errors.Wrap(deliverTxSub.Err(), "deliverTx subscription cancelled")
-	}
+	return nil
 }

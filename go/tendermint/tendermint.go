@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -17,6 +18,7 @@ import (
 	tmconfig "github.com/tendermint/tendermint/config"
 	tmlog "github.com/tendermint/tendermint/libs/log"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
+	tmmempool "github.com/tendermint/tendermint/mempool"
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
 	tmproxy "github.com/tendermint/tendermint/proxy"
@@ -135,6 +137,8 @@ type tendermintService struct {
 	syncedCh                 chan struct{}
 
 	startFn func() error
+
+	nextSubscriberID uint64
 }
 
 func (t *tendermintService) initialized() bool {
@@ -267,9 +271,11 @@ func (t *tendermintService) MarshalTx(tag byte, tx interface{}) tmtypes.Tx {
 	return append([]byte{tag}, message...)
 }
 
-func (t *tendermintService) BroadcastTx(tag byte, tx interface{}) error {
-	data := t.MarshalTx(tag, tx)
+func (t *tendermintService) BroadcastTx(ctx context.Context, tag byte, tx interface{}, retry, wait bool) error {
+	return t.broadcastTx(ctx, tag, tx, retry, wait)
+}
 
+func (t *tendermintService) broadcastTxRaw(data []byte) error {
 	response, err := t.client.BroadcastTxSync(data)
 	if err != nil {
 		return errors.Wrap(err, "broadcast tx: commit failed")
@@ -280,6 +286,89 @@ func (t *tendermintService) BroadcastTx(tag byte, tx interface{}) error {
 	}
 
 	return nil
+}
+
+func (t *tendermintService) newSubscriberID() string {
+	return fmt.Sprintf("subscriber-%d", atomic.AddUint64(&t.nextSubscriberID, 1))
+}
+
+func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interface{}, retry, wait bool) error {
+	// Subscribe to the transaction being included in a block.
+	data := t.MarshalTx(tag, tx)
+	query := tmtypes.EventQueryTxFor(data)
+	subID := t.newSubscriberID()
+	txSub, err := t.Subscribe(subID, query)
+	if err != nil {
+		return err
+	}
+	// This should be simple, but Tenermint's unbuffered pubsub is very dangerous
+	// as if you don't drain the subscription channel, the whole pubsub system can
+	// get blocked forever. So make sure to process events immediately.
+	txCh := make(chan struct{})
+	go func() {
+		defer close(txCh)
+		var seen bool
+		for {
+			select {
+			case <-txSub.Out():
+				if seen {
+					// Discard any events past the first one.
+					continue
+				}
+				txCh <- struct{}{}
+				seen = true
+			case <-txSub.Cancelled():
+				return
+			}
+		}
+	}()
+	defer t.Unsubscribe(subID, query) // nolint: errcheck
+
+	// First try to broadcast.
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		err = t.broadcastTxRaw(data)
+		if err == nil || err == tmmempool.ErrTxInCache {
+			break
+		}
+		if !retry {
+			return err
+		}
+
+		// If we fail, wait for the next Tendermint block and retry.
+		var r bool
+		if r, err = func() (bool, error) {
+			blockCh, blockSub := t.WatchBlocks()
+			defer blockSub.Close()
+
+			select {
+			case <-txCh:
+				// Transaction seen while waiting for next block.
+				return true, nil
+			case <-blockCh:
+			case <-ctx.Done():
+				return true, ctx.Err()
+			}
+
+			return false, nil
+		}(); r {
+			return err
+		}
+	}
+
+	if !wait {
+		return nil
+	}
+
+	// Wait for the transaction to be included in a block.
+	select {
+	case <-txCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (t *tendermintService) Query(path string, query interface{}, height int64) ([]byte, error) {

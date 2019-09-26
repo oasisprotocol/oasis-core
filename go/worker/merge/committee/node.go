@@ -96,6 +96,10 @@ type Node struct { // nolint: maligned
 	// Mutable and shared with common node's worker.
 	// Guarded by .commonNode.CrossNode.
 	state NodeState
+	// Context valid until the next round.
+	// Guarded by .commonNode.CrossNode.
+	roundCtx       context.Context
+	roundCancelCtx context.CancelFunc
 
 	stateTransitions *pubsub.Broker
 	// Bump this when we need to change what the worker selects over.
@@ -269,6 +273,12 @@ func (n *Node) HandleNewBlockEarlyLocked(blk *block.Block) {
 func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
+	// Cancel old round context, start a new one.
+	if n.roundCancelCtx != nil {
+		(n.roundCancelCtx)()
+	}
+	n.roundCtx, n.roundCancelCtx = context.WithCancel(n.ctx)
+
 	// Perform actions based on current state.
 	switch n.state.(type) {
 	case StateWaitingForEvent:
@@ -371,17 +381,22 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		fallthrough
 	case commitment.ErrInsufficientVotes:
 		// Discrepancy resolution failed.
-		logger.Warn("insufficient votes, performing CC-Commit")
+		logger.Warn("insufficient votes, performing compute commit")
 
-		// Submit CC-Commit to BFT.
-		err = n.commonNode.Roothash.ComputeCommit(n.ctx, n.commonNode.RuntimeID, pool.GetComputeCommitments())
-		if err != nil {
-			// NOTE: This may happen just because someone else just submitted
-			//       the same CC-Commit. It is safe to ignore this error.
-			logger.Warn("failed to submit CC-Commit",
-				"err", err,
-			)
-		}
+		// Submit compute commit to BFT.
+		ccs := pool.GetComputeCommitments()
+		go func() {
+			ccErr := n.commonNode.Roothash.ComputeCommit(n.roundCtx, n.commonNode.RuntimeID, ccs)
+
+			switch ccErr {
+			case nil:
+				logger.Info("compute commit finalized")
+			default:
+				logger.Warn("failed to submit compute commit",
+					"err", ccErr,
+				)
+			}
+		}()
 		return
 	default:
 		n.abortMergeLocked(err)
@@ -401,7 +416,6 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 	n.logger.Info("have valid commitments from all committees, merging")
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
-
 	commitments := state.pool.GetComputeCommitments()
 
 	if epoch.IsMergeBackupWorker() && state.pendingEvent == nil {
@@ -417,7 +431,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, results []*commitment.ComputeResultsHeader) {
 	doneCh := make(chan *commitment.MergeBody, 1)
-	ctx, cancel := context.WithCancel(n.ctx)
+	ctx, cancel := context.WithCancel(n.roundCtx)
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
@@ -542,18 +556,23 @@ func (n *Node) proposeHeaderLocked(result *commitment.MergeBody) {
 	// span := opentracing.StartSpan("roothash.MergeCommit", opentracing.ChildOf(state.batchSpanCtx))
 	// defer span.Finish()
 
-	start := time.Now()
+	// Submit merge commit to consensus.
 	mcs := []commitment.MergeCommitment{*mc}
-	err = n.commonNode.Roothash.MergeCommit(n.ctx, n.commonNode.RuntimeID, mcs)
-	if err != nil {
-		n.logger.Error("failed to submit MC-Commit",
-			"err", err,
-		)
-		n.abortMergeLocked(err)
-		return
-	}
+	mergeCommitStart := time.Now()
+	go func() {
+		mcErr := n.commonNode.Roothash.MergeCommit(n.roundCtx, n.commonNode.RuntimeID, mcs)
+		// Record merge commit latency.
+		roothashCommitLatency.With(n.getMetricLabels()).Observe(time.Since(mergeCommitStart).Seconds())
 
-	roothashCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
+		switch mcErr {
+		case nil:
+			n.logger.Info("merge commit finalized")
+		default:
+			n.logger.Error("failed to submit merge commit",
+				"err", mcErr,
+			)
+		}
+	}()
 }
 
 // Guarded by n.commonNode.CrossNode.

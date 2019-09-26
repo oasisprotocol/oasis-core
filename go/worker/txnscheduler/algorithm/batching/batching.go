@@ -65,7 +65,6 @@ func (s *batchingState) scheduleBatch(force bool) error {
 		}
 	}()
 	if committeeID == nil {
-		s.logger.Warn("not scheduling before epoch transition")
 		return nil
 	}
 

@@ -87,7 +87,7 @@ func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTim
 	ch, sub := t.WatchEpochs()
 	defer sub.Close()
 
-	if err := t.service.BroadcastTx(app.TransactionTag, tx); err != nil {
+	if err := t.service.BroadcastTx(ctx, app.TransactionTag, tx, false, false); err != nil {
 		return errors.Wrap(err, "epochtime: set epoch failed")
 	}
 
