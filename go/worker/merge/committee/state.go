@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	roothash "github.com/oasislabs/ekiden/go/roothash/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
 )
@@ -93,9 +94,10 @@ func (s StateNotReady) String() string {
 
 // StateWaitingForResults is the waiting for results state.
 type StateWaitingForResults struct {
-	pool    *commitment.MultiPool
-	timer   *time.Timer
-	results []*commitment.ComputeResultsHeader
+	pool             *commitment.MultiPool
+	timer            *time.Timer
+	consensusTimeout map[hash.Hash]bool
+	results          []*commitment.ComputeResultsHeader
 	// Pending merge discrepancy detected event in case the node is a
 	// backup worker and the event was received before the results.
 	pendingEvent *roothash.MergeDiscrepancyDetectedEvent

@@ -710,7 +710,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 	rtState *runtimeState,
 	pool *commitment.Pool,
 	forced bool,
-) { // nolint: gocyclo
+) {
 	latestBlock := rtState.CurrentBlock
 	blockNr := latestBlock.Header.Round
 	id, _ := runtime.ID.MarshalBinary()
@@ -727,7 +727,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 	}
 
 	// TODO: Separate timeout for compute/merge.
-	_, err := pool.TryFinalize(ctx.Now(), app.roundTimeout, forced)
+	_, err := pool.TryFinalize(ctx.Now(), app.roundTimeout, forced, true)
 	switch err {
 	case nil:
 		// No error -- there is no discrepancy. But only the merge committee
@@ -760,6 +760,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 			ID: id,
 			Event: roothash.ComputeDiscrepancyDetectedEvent{
 				CommitteeID: pool.GetCommitteeID(),
+				Timeout:     forced,
 			},
 		}
 		ctx.EmitTag(TagComputeDiscrepancyDetected, tagV.MarshalCBOR())
@@ -784,7 +785,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 	runtime *registry.Runtime,
 	rtState *runtimeState,
 	forced bool,
-) { // nolint: gocyclo
+) {
 	latestBlock := rtState.CurrentBlock
 	blockNr := latestBlock.Header.Round
 	id, _ := runtime.ID.MarshalBinary()
@@ -798,7 +799,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		return
 	}
 
-	commit, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), app.roundTimeout, forced)
+	commit, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), app.roundTimeout, forced, true)
 	switch err {
 	case nil:
 		// Round has been finalized.
