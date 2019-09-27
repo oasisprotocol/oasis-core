@@ -125,7 +125,7 @@ func (b *tendermintBackend) Transfer(ctx context.Context, signedXfer *api.Signed
 			SignedTransfer: *signedXfer,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false, false); err != nil {
+	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
 		return errors.Wrap(err, "staking: transfer transaction failed")
 	}
 
@@ -138,7 +138,7 @@ func (b *tendermintBackend) Burn(ctx context.Context, signedBurn *api.SignedBurn
 			SignedBurn: *signedBurn,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false, false); err != nil {
+	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
 		return errors.Wrap(err, "staking: burn transaction failed")
 	}
 
@@ -151,7 +151,7 @@ func (b *tendermintBackend) AddEscrow(ctx context.Context, signedEscrow *api.Sig
 			SignedEscrow: *signedEscrow,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false, false); err != nil {
+	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
 		return errors.Wrap(err, "staking: add escrow transaction failed")
 	}
 
@@ -164,7 +164,7 @@ func (b *tendermintBackend) ReclaimEscrow(ctx context.Context, signedReclaim *ap
 			SignedReclaimEscrow: *signedReclaim,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false, false); err != nil {
+	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
 		return errors.Wrap(err, "staking: reclaim escrow transaction failed")
 	}
 

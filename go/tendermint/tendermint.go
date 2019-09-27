@@ -18,7 +18,6 @@ import (
 	tmconfig "github.com/tendermint/tendermint/config"
 	tmlog "github.com/tendermint/tendermint/libs/log"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmmempool "github.com/tendermint/tendermint/mempool"
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
 	tmproxy "github.com/tendermint/tendermint/proxy"
@@ -271,8 +270,8 @@ func (t *tendermintService) MarshalTx(tag byte, tx interface{}) tmtypes.Tx {
 	return append([]byte{tag}, message...)
 }
 
-func (t *tendermintService) BroadcastTx(ctx context.Context, tag byte, tx interface{}, retry, wait bool) error {
-	return t.broadcastTx(ctx, tag, tx, retry, wait)
+func (t *tendermintService) BroadcastTx(ctx context.Context, tag byte, tx interface{}, wait bool) error {
+	return t.broadcastTx(ctx, tag, tx, wait)
 }
 
 func (t *tendermintService) broadcastTxRaw(data []byte) error {
@@ -292,7 +291,7 @@ func (t *tendermintService) newSubscriberID() string {
 	return fmt.Sprintf("subscriber-%d", atomic.AddUint64(&t.nextSubscriberID, 1))
 }
 
-func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interface{}, retry, wait bool) error {
+func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interface{}, wait bool) error {
 	// Subscribe to the transaction being included in a block.
 	data := t.MarshalTx(tag, tx)
 	query := tmtypes.EventQueryTxFor(data)
@@ -325,37 +324,8 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 	defer t.Unsubscribe(subID, query) // nolint: errcheck
 
 	// First try to broadcast.
-	for {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		err = t.broadcastTxRaw(data)
-		if err == nil || err == tmmempool.ErrTxInCache {
-			break
-		}
-		if !retry {
-			return err
-		}
-
-		// If we fail, wait for the next Tendermint block and retry.
-		var r bool
-		if r, err = func() (bool, error) {
-			blockCh, blockSub := t.WatchBlocks()
-			defer blockSub.Close()
-
-			select {
-			case <-txCh:
-				// Transaction seen while waiting for next block.
-				return true, nil
-			case <-blockCh:
-			case <-ctx.Done():
-				return true, ctx.Err()
-			}
-
-			return false, nil
-		}(); r {
-			return err
-		}
+	if err := t.broadcastTxRaw(data); err != nil {
+		return err
 	}
 
 	if !wait {
