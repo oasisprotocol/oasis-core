@@ -187,7 +187,7 @@ func (e *httpEndpoint) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, er
 type iasEvidencePayload struct {
 	ISVEnclaveQuote []byte `json:"isvEnclaveQuote"`
 	PSEManifest     []byte `json:"pseManifest,omitempty"`
-	Nonce           string `json:"string,omitempty"`
+	Nonce           string `json:"nonce,omitempty"`
 }
 
 type mockEndpoint struct {
