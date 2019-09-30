@@ -3,6 +3,7 @@ package entity
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/ekiden/go/common/json"
 	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
 )
 
@@ -37,19 +37,19 @@ var (
 // services.
 type Entity struct {
 	// ID is the public key identifying the entity.
-	ID signature.PublicKey `codec:"id"`
+	ID signature.PublicKey `json:"id"`
 
 	// Nodes is the vector of node identity keys owned by this entity, that
 	// will sign the descriptor with the node signing key rather than the
 	// entity signing key.
-	Nodes []signature.PublicKey `codec:"nodes"`
+	Nodes []signature.PublicKey `json:"nodes"`
 
 	// Time of registration.
-	RegistrationTime uint64 `codec:"registration_time"`
+	RegistrationTime uint64 `json:"registration_time"`
 
 	// AllowEntitySignedNodes is true iff nodes belonging to this entity
 	// may be signed with the entity signing key.
-	AllowEntitySignedNodes bool `codec:"allow_entity_signed_nodes"`
+	AllowEntitySignedNodes bool `json:"allow_entity_signed_nodes"`
 }
 
 // String returns a string representation of itself.
@@ -126,7 +126,11 @@ func (e *Entity) Save(baseDir string) error {
 	entityPath := filepath.Join(baseDir, entityFilename)
 
 	// Write to disk.
-	return ioutil.WriteFile(entityPath, json.Marshal(e), fileMode)
+	b, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(entityPath, b, fileMode)
 }
 
 // Load loads an existing entity from disk.

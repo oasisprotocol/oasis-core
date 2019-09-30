@@ -42,32 +42,32 @@ const (
 // Keep this in sync with /runtime/src/common/roothash.rs.
 type Header struct { // nolint: maligned
 	// Version is the protocol version number.
-	Version uint16 `codec:"version"`
+	Version uint16 `json:"version"`
 
 	// Namespace is the header's chain namespace.
-	Namespace common.Namespace `codec:"namespace"`
+	Namespace common.Namespace `json:"namespace"`
 
 	// Round is the block round.
-	Round uint64 `codec:"round"`
+	Round uint64 `json:"round"`
 
 	// Timestamp is the block timestamp (POSIX time).
-	Timestamp uint64 `codec:"timestamp"`
+	Timestamp uint64 `json:"timestamp"`
 
 	// HeaderType is the header type.
-	HeaderType HeaderType `codec:"header_type"`
+	HeaderType HeaderType `json:"header_type"`
 
 	// PreviousHash is the previous block hash.
-	PreviousHash hash.Hash `codec:"previous_hash"`
+	PreviousHash hash.Hash `json:"previous_hash"`
 
 	// IORoot is the I/O merkle root.
-	IORoot hash.Hash `codec:"io_root"`
+	IORoot hash.Hash `json:"io_root"`
 
 	// StateRoot is the state merkle root.
-	StateRoot hash.Hash `codec:"state_root"`
+	StateRoot hash.Hash `json:"state_root"`
 
 	// StorageSignatures are the storage receipt signatures for the merkle
 	// roots.
-	StorageSignatures []signature.Signature `codec:"storage_signatures"`
+	StorageSignatures []signature.Signature `json:"storage_signatures"`
 }
 
 // IsParentOf returns true iff the header is the parent of a child header.

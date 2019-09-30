@@ -43,7 +43,7 @@ func (q *Quantity) UnmarshalBinary(data []byte) error {
 }
 
 // MarshalText encodes a Quantity into text form.
-func (q *Quantity) MarshalText() ([]byte, error) {
+func (q Quantity) MarshalText() ([]byte, error) {
 	return q.inner.MarshalText()
 }
 

@@ -3,6 +3,7 @@ package keymanager
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -78,8 +78,9 @@ func (app *keymanagerApplication) ForeignCheckTx(ctx *abci.Context, other abci.A
 func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.KeyManager
 
+	b, _ := json.Marshal(st)
 	app.logger.Debug("InitChain: Genesis state",
-		"state", string(json.Marshal(st)),
+		"state", string(b),
 	)
 
 	// TODO: The better thing to do would be to move the registry init

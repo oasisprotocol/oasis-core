@@ -2,6 +2,7 @@ package tendermint
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -29,7 +30,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/pubsub"
@@ -595,14 +595,21 @@ func (t *tendermintService) lazyInit() error {
 
 // genesisToTendermint converts the Ekiden genesis block to tendermint's format.
 func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
-	// NOTE: The AppState MUST be encoded as JSON since its type is json.RawMessage
-	//       which requires it to be valid JSON. It may appear to work until you
-	//       try to restore from an existing data directory.
+	// WARNING: The AppState MUST be encoded as JSON since its type is
+	// json.RawMessage which requires it to be valid JSON. It may appear
+	// to work until you try to restore from an existing data directory.
+	//
+	// The runtime library sorts map keys, so the output of json.Marshal
+	// should be deterministic.
+	b, err := json.Marshal(d)
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint: failed to serialize genesis doc")
+	}
 	doc := tmtypes.GenesisDoc{
 		ChainID:         defaultChainID,
 		GenesisTime:     d.Time,
 		ConsensusParams: tmtypes.DefaultConsensusParams(),
-		AppState:        json.Marshal(d),
+		AppState:        b,
 	}
 
 	var tmValidators []tmtypes.GenesisValidator

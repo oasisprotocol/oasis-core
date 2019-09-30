@@ -3,13 +3,13 @@ package staking
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/common/json"
 	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/staking/tendermint"

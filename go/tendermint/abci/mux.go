@@ -7,6 +7,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -22,7 +23,6 @@ import (
 	dbm "github.com/tendermint/tendermint/libs/db"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/version"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -393,8 +393,9 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		panic("mux: invalid genesis application state")
 	}
 
+	b, _ := json.Marshal(st)
 	mux.logger.Debug("Genesis ABCI application state",
-		"state", string(json.Marshal(st)),
+		"state", string(b),
 	)
 
 	// Stick the digest of the genesis block (the RequestInitChain) into
@@ -411,7 +412,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 
 	// HACK: Can't emit tags from InitChain, stash the genesis state
 	// so that processing can happen in BeginBlock.
-	b, _ := req.Marshal()
+	b, _ = req.Marshal()
 	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisRequest), b)
 
 	resp := mux.BaseApplication.InitChain(req)

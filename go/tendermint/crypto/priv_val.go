@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/json"
 )
 
 // This derives heavily from `tendermint/privval/file.go` for reasons that should
@@ -53,7 +53,7 @@ func voteToStep(vote *tmtypes.Vote) int8 {
 
 type privVal struct {
 	privval.FilePVLastSignState
-	PublicKey signature.PublicKey `codec:"public_key"`
+	PublicKey signature.PublicKey `json:"public_key"`
 
 	filePath string
 	signer   signature.Signer
@@ -139,7 +139,11 @@ func (pv *privVal) update(height int64, round int, step int8, signBytes, sig []b
 }
 
 func (pv *privVal) save() error {
-	if err := tmcmn.WriteFileAtomic(pv.filePath, json.Marshal(pv), 0600); err != nil {
+	b, err := json.Marshal(pv)
+	if err != nil {
+		return err
+	}
+	if err = tmcmn.WriteFileAtomic(pv.filePath, b, 0600); err != nil {
 		return errors.Wrap(err, "tendermint/crypto: failed to save private validator file")
 	}
 

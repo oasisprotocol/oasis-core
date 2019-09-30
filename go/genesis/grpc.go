@@ -2,11 +2,11 @@ package genesis
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/genesis/api"
 	pb "github.com/oasislabs/ekiden/go/grpc/genesis"
 	keymanager "github.com/oasislabs/ekiden/go/keymanager/api"
@@ -67,8 +67,12 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 	}
 
 	// Return final genesis document as JSON.
+	b, err := json.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
 	resp := pb.GenesisResponse{
-		Json: json.Marshal(doc),
+		Json: b,
 	}
 	return &resp, nil
 }

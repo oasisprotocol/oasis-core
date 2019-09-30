@@ -107,14 +107,14 @@ type WriteLogIterator = writelog.Iterator
 // ReceiptBody is the body of a receipt.
 type ReceiptBody struct {
 	// Version is the storage data structure version.
-	Version uint16 `codec:"version"`
+	Version uint16 `json:"version"`
 	// Namespace is the chain namespace under which the root(s) are stored.
-	Namespace common.Namespace `codec:"ns"`
+	Namespace common.Namespace `json:"ns"`
 	// Round is the chain round in which the root(s) are stored.
-	Round uint64 `codec:"round"`
+	Round uint64 `json:"round"`
 	// Roots are the merkle roots of the merklized data structure that the
 	// storage node is certifying to store.
-	Roots []hash.Hash `codec:"roots"`
+	Roots []hash.Hash `json:"roots"`
 }
 
 // Receipt is a signed ReceiptBody.

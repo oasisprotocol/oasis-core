@@ -1,11 +1,11 @@
 package genesis
 
 import (
+	"encoding/json"
 	"io/ioutil"
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/genesis/api"
 )

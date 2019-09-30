@@ -4,6 +4,7 @@ package signature
 import (
 	"bytes"
 	"encoding"
+	"encoding/base64"
 	"encoding/hex"
 	encPem "encoding/pem"
 	"errors"
@@ -89,6 +90,21 @@ func (k *MapKey) UnmarshalBinary(data []byte) error {
 	copy((*k)[:], data)
 
 	return nil
+}
+
+// MarshalText encodes a public key into text form.
+func (k MapKey) MarshalText() (data []byte, err error) {
+	return []byte(base64.StdEncoding.EncodeToString(k[:])), nil
+}
+
+// UnmarshalText decodes a text marshaled public key.
+func (k *MapKey) UnmarshalText(text []byte) error {
+	b, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return err
+	}
+
+	return k.UnmarshalBinary(b)
 }
 
 // PublicKey is a public key used for signing.
@@ -268,6 +284,21 @@ func (r *RawSignature) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// MarshalText encodes a signature into text form.
+func (r RawSignature) MarshalText() (data []byte, err error) {
+	return []byte(base64.StdEncoding.EncodeToString(r[:])), nil
+}
+
+// UnmarshalText decodes a text marshaled signature.
+func (r *RawSignature) UnmarshalText(text []byte) error {
+	b, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return err
+	}
+
+	return r.UnmarshalBinary(b)
+}
+
 // MarshalPEM encodes a raw signature into PEM format.
 func (r RawSignature) MarshalPEM() (data []byte, err error) {
 	return pem.Marshal(sigPEMType, r[:])
@@ -287,10 +318,10 @@ func (r *RawSignature) UnmarshalPEM(data []byte) error {
 // Signature is a signature, bundled with the signing public key.
 type Signature struct {
 	// PublicKey is the public key that produced the signature.
-	PublicKey PublicKey `codec:"public_key"`
+	PublicKey PublicKey `json:"public_key"`
 
 	// Signature is the actual raw signature.
-	Signature RawSignature `codec:"signature"`
+	Signature RawSignature `json:"signature"`
 }
 
 // Sign generates a signature with the private key over the context and
@@ -404,10 +435,10 @@ func (s *Signature) UnmarshalPEM(data []byte) error {
 // Signed is a signed blob.
 type Signed struct {
 	// Blob is the signed blob.
-	Blob []byte `codec:"untrusted_raw_value"`
+	Blob []byte `json:"untrusted_raw_value"`
 
 	// Signature is the signature over blob.
-	Signature Signature `codec:"signature"`
+	Signature Signature `json:"signature"`
 }
 
 // SignSigned generates a Signed with the Signer over the context and

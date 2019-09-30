@@ -39,34 +39,34 @@ var (
 // Node represents public connectivity information about an Ekiden node.
 type Node struct {
 	// ID is the public key identifying the node.
-	ID signature.PublicKey `codec:"id"`
+	ID signature.PublicKey `json:"id"`
 
 	// EntityID is the public key identifying the Entity controlling
 	// the node.
-	EntityID signature.PublicKey `codec:"entity_id"`
+	EntityID signature.PublicKey `json:"entity_id"`
 
 	// Expiration is the epoch in which this node's commitment expires.
-	Expiration uint64 `codec:"expiration"`
+	Expiration uint64 `json:"expiration"`
 
 	// Committee contains information for connecting to this node as a committee
 	// member.
-	Committee CommitteeInfo `codec:"committee"`
+	Committee CommitteeInfo `json:"committee"`
 
 	// P2P contains information for connecting to this node via P2P transport.
-	P2P P2PInfo `codec:"p2p"`
+	P2P P2PInfo `json:"p2p"`
 
 	// Consensus contains information for connecting to this node as a
 	// consensus member.
-	Consensus ConsensusInfo `codec:"consensus"`
+	Consensus ConsensusInfo `json:"consensus"`
 
 	// Time of registration.
-	RegistrationTime uint64 `codec:"registration_time"`
+	RegistrationTime uint64 `json:"registration_time"`
 
 	// Runtimes are the node's runtimes.
-	Runtimes []*Runtime `codec:"runtimes"`
+	Runtimes []*Runtime `json:"runtimes"`
 
 	// Roles is a bitmask representing the node roles.
-	Roles RolesMask `codec:"roles"`
+	Roles RolesMask `json:"roles"`
 }
 
 // RolesMask is Ekiden Node roles bitmask.
@@ -132,17 +132,17 @@ func (n *Node) HasRoles(r RolesMask) bool {
 // Runtime represents the runtimes supported by a given Ekiden node.
 type Runtime struct {
 	// ID is the public key identifying the runtime.
-	ID signature.PublicKey `codec:"id"`
+	ID signature.PublicKey `json:"id"`
 
 	// Version is the version of the runtime.
-	Version version.Version `codec:"version"`
+	Version version.Version `json:"version"`
 
 	// Capabilities are the node's capabilities for a given runtime.
-	Capabilities Capabilities `codec:"capabilities"`
+	Capabilities Capabilities `json:"capabilities"`
 
 	// ExtraInfo is the extra per node + per runtime opaque data associated
 	// with the current instance.
-	ExtraInfo []byte `codec:"extra_info"`
+	ExtraInfo []byte `json:"extra_info"`
 }
 
 func (r *Runtime) fromProto(pb *pbCommon.NodeRuntime) error {
@@ -182,10 +182,10 @@ func (r *Runtime) toProto() *pbCommon.NodeRuntime {
 // committee member.
 type CommitteeInfo struct {
 	// Certificate is the certificate for establishing TLS connections.
-	Certificate []byte `codec:"certificate"`
+	Certificate []byte `json:"certificate"`
 
 	// Addresses is the list of addresses at which the node can be reached.
-	Addresses []Address `codec:"addresses"`
+	Addresses []Address `json:"addresses"`
 }
 
 // ParseCertificate returns the parsed x509 certificate.
@@ -226,10 +226,10 @@ func (info *CommitteeInfo) fromProto(pb *pbCommon.CommitteeInfo) error {
 // P2PInfo contains information for connecting to this node via P2P transport.
 type P2PInfo struct {
 	// ID is the unique identifier of the node on the P2P transport.
-	ID signature.PublicKey `codec:"id"`
+	ID signature.PublicKey `json:"id"`
 
 	// Addresses is the list of addresses at which the node can be reached.
-	Addresses []Address `codec:"addresses"`
+	Addresses []Address `json:"addresses"`
 }
 
 func (info *P2PInfo) toProto() *pbCommon.P2PInfo {
@@ -268,7 +268,7 @@ func (info *P2PInfo) fromProto(pb *pbCommon.P2PInfo) error {
 // consensus member.
 type ConsensusInfo struct {
 	// Addresses is the list of addresses at which the node can be reached.
-	Addresses []Address `codec:"addresses"`
+	Addresses []Address `json:"addresses"`
 }
 
 func (info *ConsensusInfo) toProto() *pbCommon.ConsensusInfo {
@@ -295,7 +295,7 @@ func (info *ConsensusInfo) fromProto(pb *pbCommon.ConsensusInfo) error {
 // Capabilities represents a node's capabilities.
 type Capabilities struct {
 	// TEE is the capability of a node executing batches in a TEE.
-	TEE *CapabilityTEE `codec:"tee,omitempty"`
+	TEE *CapabilityTEE `json:"tee,omitempty"`
 }
 
 func (c *Capabilities) fromProto(pb *pbCommon.Capabilities) error {
@@ -356,13 +356,13 @@ func (h *TEEHardware) ToProto() (pbCommon.CapabilitiesTEE_Hardware, error) {
 // CapabilityTEE represents the node's TEE capability.
 type CapabilityTEE struct {
 	// TEE hardware type.
-	Hardware TEEHardware `codec:"hardware"`
+	Hardware TEEHardware `json:"hardware"`
 
 	// Runtime attestation key.
-	RAK signature.PublicKey `codec:"rak"`
+	RAK signature.PublicKey `json:"rak"`
 
 	// Attestation.
-	Attestation []byte `codec:"attestation"`
+	Attestation []byte `json:"attestation"`
 }
 
 func (c *CapabilityTEE) fromProto(pb *pbCommon.CapabilitiesTEE) error {

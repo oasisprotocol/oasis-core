@@ -1,12 +1,12 @@
 package tendermint
 
 import (
+	"encoding/json"
 	"time"
 
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/json"
 	genesis "github.com/oasislabs/ekiden/go/genesis/api"
 	"github.com/oasislabs/ekiden/go/tendermint/crypto"
 	"github.com/oasislabs/ekiden/go/tendermint/service"
@@ -33,11 +33,15 @@ func NewSingleNodeGenesisProvider(identity *identity.Identity) (genesis.Provider
 	doc := &genesis.Document{
 		Time: time.Now(),
 	}
+	b, err := json.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
 	tmDoc := &tmtypes.GenesisDoc{
 		ChainID:         "ekiden-test-chain",
 		GenesisTime:     doc.Time,
 		ConsensusParams: tmtypes.DefaultConsensusParams(),
-		AppState:        json.Marshal(doc),
+		AppState:        b,
 	}
 
 	nodeID := identity.NodeSigner.Public()

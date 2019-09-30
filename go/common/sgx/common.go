@@ -4,6 +4,7 @@ package sgx
 import (
 	"crypto/rsa"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"io"
 
@@ -161,11 +162,26 @@ func (id *EnclaveIdentity) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// MarshalText encodes an EnclaveIdentity into text form.
+func (id EnclaveIdentity) MarshalText() (data []byte, err error) {
+	return []byte(base64.StdEncoding.EncodeToString(id[:])), nil
+}
+
+// UnmarshalText decodes a text marshaled EnclaveIdentity.
+func (id *EnclaveIdentity) UnmarshalText(text []byte) error {
+	b, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return errors.Wrap(err, "sgx: malformed EnclaveIdentity")
+	}
+
+	return id.UnmarshalBinary(b)
+}
+
 // UnmarshalHex decodes a hex marshaled EnclaveIdentity.
 func (id *EnclaveIdentity) UnmarshalHex(text string) error {
 	b, err := hex.DecodeString(text)
 	if err != nil {
-		return errors.Wrap(err, "sgx:malformed EnclaveIdentity")
+		return errors.Wrap(err, "sgx: malformed EnclaveIdentity")
 	}
 
 	return id.UnmarshalBinary(b)

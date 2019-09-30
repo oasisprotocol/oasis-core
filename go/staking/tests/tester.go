@@ -4,6 +4,7 @@ package tests
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"math"
 	"math/big"
 	"testing"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/staking/api"
 )
 
@@ -22,7 +22,7 @@ const recvTimeout = 5 * time.Second
 var (
 	// DebugGenesisState is the string representation of the initial
 	// genesis state that the backend MUST be populated with.
-	DebugGenesisState = string(json.Marshal(debugGenesisState))
+	DebugGenesisState string
 
 	debugGenesisState = api.Genesis{
 		TotalSupply: testTotalSupply,
@@ -332,4 +332,9 @@ func qtyFromInt(n int) api.Quantity {
 		panic(err)
 	}
 	return *q
+}
+
+func init() {
+	b, _ := json.Marshal(debugGenesisState)
+	DebugGenesisState = string(b)
 }

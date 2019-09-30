@@ -62,10 +62,10 @@ func (s *SignedEvidence) UnmarshalCBOR(data []byte) error {
 // Evidence is attestation evidence.
 type Evidence struct {
 	// ID is obviously the runtime ID of the enclave that's being attested.
-	ID          signature.PublicKey `codec:"id"`
-	Quote       []byte              `codec:"quote"`
-	PSEManifest []byte              `codec:"pse_manifest"`
-	Nonce       string              `codec:"nonce"`
+	ID          signature.PublicKey `json:"id"`
+	Quote       []byte              `json:"quote"`
+	PSEManifest []byte              `json:"pse_manifest"`
+	Nonce       string              `json:"nonce"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
