@@ -103,6 +103,8 @@ type ComputeDiscrepancyDetectedEvent struct {
 	// CommitteeID is the identifier of the compute committee where a
 	// discrepancy has been detected.
 	CommitteeID hash.Hash `codec:"cid"`
+	// Timeout signals whether the discrepancy was due to a timeout.
+	Timeout bool `codec:"timeout"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.

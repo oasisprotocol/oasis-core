@@ -351,7 +351,16 @@ func (p *Pool) ResolveDiscrepancy() (OpenCommitment, error) {
 // TryFinalize attempts to finalize the commitments by performing discrepancy
 // detection and discrepancy resolution, based on the state of the pool. It may
 // request the caller to schedule timeouts by setting NextTimeout appropriately.
-func (p *Pool) TryFinalize(now time.Time, roundTimeout time.Duration, didTimeout bool) (OpenCommitment, error) {
+//
+// If a timeout occurs and isTimeoutAuthoritative is false, the internal
+// discrepancy flag will not be changed but the method will still return the
+// ErrDiscrepancyDetected error.
+func (p *Pool) TryFinalize(
+	now time.Time,
+	roundTimeout time.Duration,
+	didTimeout bool,
+	isTimeoutAuthoritative bool,
+) (OpenCommitment, error) {
 	var err error
 	var rearmTimer bool
 	defer func() {
@@ -380,7 +389,9 @@ func (p *Pool) TryFinalize(now time.Time, roundTimeout time.Duration, didTimeout
 			//
 			// Transition to the discrepancy state so the backup workers
 			// process the round, assuming that it is possible to do so.
-			p.Discrepancy = true
+			if isTimeoutAuthoritative {
+				p.Discrepancy = true
+			}
 			return nil, ErrDiscrepancyDetected
 		}
 

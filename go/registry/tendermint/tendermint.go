@@ -50,7 +50,7 @@ func (r *tendermintBackend) RegisterEntity(ctx context.Context, sigEnt *entity.S
 		},
 	}
 
-	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, false, false); err != nil {
+	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
 		return errors.Wrap(err, "registry: register entity failed")
 	}
 
@@ -64,7 +64,7 @@ func (r *tendermintBackend) DeregisterEntity(ctx context.Context, sigTimestamp *
 		},
 	}
 
-	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, false, false); err != nil {
+	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
 		return errors.Wrap(err, "registry: deregister entity failed")
 	}
 
@@ -118,7 +118,7 @@ func (r *tendermintBackend) RegisterNode(ctx context.Context, sigNode *node.Sign
 		},
 	}
 
-	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, false, false); err != nil {
+	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
 		return errors.Wrap(err, "registry: register node failed")
 	}
 
@@ -201,7 +201,7 @@ func (r *tendermintBackend) RegisterRuntime(ctx context.Context, sigCon *api.Sig
 		},
 	}
 
-	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, false, false); err != nil {
+	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
 		return errors.Wrap(err, "registry: register runtime failed")
 	}
 

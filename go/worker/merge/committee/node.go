@@ -245,8 +245,9 @@ func (n *Node) newStateWaitingForResultsLocked(epoch *committee.EpochSnapshot) S
 	}
 
 	return StateWaitingForResults{
-		pool:  pool,
-		timer: time.NewTimer(infiniteTimeout),
+		pool:             pool,
+		timer:            time.NewTimer(infiniteTimeout),
+		consensusTimeout: make(map[hash.Hash]bool),
 	}
 }
 
@@ -359,8 +360,20 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 	//       2*roundTimeout.
 	roundTimeout := n.commonNode.Roothash.Info().ComputeRoundTimeout
 
-	logger := n.logger.With("committee_id", pool.GetCommitteeID())
-	commit, err := pool.TryFinalize(now, roundTimeout, didTimeout)
+	// We have two kinds of timeouts -- the first is based on local monotonic time and
+	// starts counting as soon as the first commitment for a committee is received. It
+	// is used to trigger submission of compute commitments to the consensus layer for
+	// proof of timeout. The consensus layer starts its own timeout and this is the
+	// second timeout.
+	//
+	// The timeout is only considered authoritative once confirmed by consensus. In
+	// case of a local-only timeout, we will submit what compute commitments we have
+	// to consensus and not change the internal Discrepancy flag.
+	cid := pool.GetCommitteeID()
+	consensusTimeout := state.consensusTimeout[cid]
+
+	logger := n.logger.With("committee_id", cid)
+	commit, err := pool.TryFinalize(now, roundTimeout, didTimeout, consensusTimeout)
 	switch err {
 	case nil:
 	case commitment.ErrStillWaiting:
@@ -371,7 +384,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		// We may also be able to already perform discrepancy resolution, check if
 		// this is possible. This may be the case if we receive commits from backup
 		// workers before receiving commits from regular workers.
-		commit, err = pool.TryFinalize(now, roundTimeout, false)
+		commit, err = pool.TryFinalize(now, roundTimeout, false, false)
 		if err == nil {
 			// Discrepancy was already resolved, proceed with merge.
 			break
@@ -602,12 +615,18 @@ func (n *Node) abortMergeLocked(reason error) {
 // HandleNewEventLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
-	dis := ev.MergeDiscrepancyDetected
-	if dis == nil {
+	switch {
+	case ev.MergeDiscrepancyDetected != nil:
+		n.handleMergeDiscrepancyLocked(ev.MergeDiscrepancyDetected)
+	case ev.ComputeDiscrepancyDetected != nil:
+		n.handleComputeDiscrepancyLocked(ev.ComputeDiscrepancyDetected)
+	default:
 		// Ignore other events.
-		return
 	}
+}
 
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) handleMergeDiscrepancyLocked(ev *roothash.MergeDiscrepancyDetectedEvent) {
 	n.logger.Warn("merge discrepancy detected")
 
 	discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
@@ -621,7 +640,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 	case StateWaitingForResults:
 		// Discrepancy detected event received before the results. We need to
 		// record the received event and keep waiting for the results.
-		s.pendingEvent = dis
+		s.pendingEvent = ev
 		n.transitionLocked(s)
 		return
 	case StateWaitingForEvent:
@@ -636,6 +655,32 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 	// Backup worker, start processing merge.
 	n.logger.Info("backup worker activating and processing merge")
 	n.startMergeLocked(state.commitments, state.results)
+}
+
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) handleComputeDiscrepancyLocked(ev *roothash.ComputeDiscrepancyDetectedEvent) {
+	n.logger.Warn("compute discrepancy detected",
+		"committee_id", ev.CommitteeID,
+		"timeout", ev.Timeout,
+	)
+
+	switch s := n.state.(type) {
+	case StateWaitingForResults:
+		// If the discrepancy was due to a timeout, record it.
+		pool := s.pool.Committees[ev.CommitteeID]
+		if pool == nil {
+			n.logger.Error("compute discrepancy event for unknown committee",
+				"committee_id", ev.CommitteeID,
+			)
+			return
+		}
+
+		if ev.Timeout {
+			s.consensusTimeout[ev.CommitteeID] = true
+			n.tryFinalizeResultsLocked(pool, true)
+		}
+	default:
+	}
 }
 
 func (n *Node) worker() {

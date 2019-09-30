@@ -199,7 +199,7 @@ func tendermintUnsubscribeDrain(svc service.TendermintService, subscriber string
 // tendermintBroadcastTxCommit is like Tendermint's own BroadcastTxCommit, but without
 // the timeout system.
 func tendermintBroadcastTxCommit(svc service.TendermintService, tag byte, tx interface{}) error {
-	if err := svc.BroadcastTx(context.Background(), tag, tx, true, true); err != nil {
+	if err := svc.BroadcastTx(context.Background(), tag, tx, true); err != nil {
 		return errors.Wrap(err, "Tendermint BroadcastTx")
 	}
 

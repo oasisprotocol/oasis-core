@@ -232,7 +232,7 @@ func (r *tendermintBackend) MergeCommit(ctx context.Context, id signature.Public
 		},
 	}
 
-	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, true, true); err != nil {
+	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "roothash: merge commit failed")
 	}
 
@@ -247,7 +247,7 @@ func (r *tendermintBackend) ComputeCommit(ctx context.Context, id signature.Publ
 		},
 	}
 
-	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, true, true); err != nil {
+	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "roothash: compute commit failed")
 	}
 
