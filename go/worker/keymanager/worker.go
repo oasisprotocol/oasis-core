@@ -147,7 +147,7 @@ func (w *Worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 	select {
 	case response := <-ch:
 		if response == nil {
-			w.logger.Error("channel closed durring RPC call",
+			w.logger.Error("channel closed during RPC call",
 				"err", io.EOF,
 			)
 			return nil, errors.Wrap(io.EOF, "worker/keymanager: channel closed during RPC call")
