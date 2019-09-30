@@ -24,32 +24,32 @@ const (
 // Condition is a query condition.
 type Condition struct {
 	// Key is the tag key that should be matched.
-	Key []byte `codec:"key"`
+	Key []byte `json:"key"`
 	// Values are a list of tag values that the given tag key should
 	// have. They are combined using an OR query which means that any
 	// of the values will match.
-	Values [][]byte `codec:"values"`
+	Values [][]byte `json:"values"`
 }
 
 // Query is a complex query against the index.
 type Query struct {
 	// RoundMin is an optional minimum round (inclusive).
-	RoundMin uint64 `codec:"round_min"`
+	RoundMin uint64 `json:"round_min"`
 	// RoundMax is an optional maximum round (inclusive).
 	//
 	// A zero value means that there is no upper limit.
-	RoundMax uint64 `codec:"round_max"`
+	RoundMax uint64 `json:"round_max"`
 
 	// Conditions are the query conditions.
 	//
 	// They are combined using an AND query which means that all of
 	// the conditions must be satisfied for an item to match.
-	Conditions []Condition `codec:"conditions"`
+	Conditions []Condition `json:"conditions"`
 
 	// Limit is the maximum number of results to return.
 	//
 	// A zero value means that the `maxQueryLimit` limit is used.
-	Limit uint64 `codec:"limit"`
+	Limit uint64 `json:"limit"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.

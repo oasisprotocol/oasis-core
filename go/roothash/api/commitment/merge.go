@@ -15,8 +15,8 @@ import (
 var MergeSignatureContext = []byte("EkCommMC")
 
 type MergeBody struct {
-	ComputeCommits []ComputeCommitment `codec:"commits"`
-	Header         block.Header        `codec:"header"`
+	ComputeCommits []ComputeCommitment `json:"commits"`
+	Header         block.Header        `json:"header"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -43,7 +43,7 @@ type MergeCommitment struct {
 type OpenMergeCommitment struct {
 	MergeCommitment
 
-	Body *MergeBody `codec:"body"`
+	Body *MergeBody `json:"body"`
 }
 
 // MostlyEqual returns true if the commitment is mostly equal to another

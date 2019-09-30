@@ -10,27 +10,25 @@ import (
 
 // Message is a message sent to nodes via P2P transport.
 type Message struct {
-	_struct struct{} `codec:",omitempty"` // nolint
-
 	// RuntimeID is the identifier of the runtime this message
 	// belongs to. It is used as a namespace.
-	RuntimeID signature.PublicKey `codec:"runtime_id"`
+	RuntimeID signature.PublicKey `json:"runtime_id,omitempty"`
 
 	// GroupVersion is the version of all elected committees (the consensus
 	// block height of last processed committee election). Messages with
 	// non-matching group versions will be discarded.
-	GroupVersion int64 `codec:"group_version"`
+	GroupVersion int64 `json:"group_version,omitempty"`
 
 	// Jaeger's span context in binary format.
-	SpanContext []byte `codec:"span"`
+	SpanContext []byte `json:"span,omitempty"`
 
 	// Message types.
 
-	Ack   *Ack
-	Error *Error
+	Ack   *Ack   `json:"ack,omitempty"`
+	Error *Error `json:"err,omitempty"`
 
-	SignedTxnSchedulerBatchDispatch *commitment.SignedTxnSchedulerBatchDispatch
-	ComputeWorkerFinished           *ComputeWorkerFinished
+	SignedTxnSchedulerBatchDispatch *commitment.SignedTxnSchedulerBatchDispatch `json:",omitempty"`
+	ComputeWorkerFinished           *ComputeWorkerFinished                      `json:",omitempty"`
 }
 
 // ComputeWorkerFinished is the message sent from the compute workers to

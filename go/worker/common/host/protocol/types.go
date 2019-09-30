@@ -41,50 +41,48 @@ const (
 
 // Message is a protocol message.
 type Message struct {
-	ID          uint64      `codec:"id"`
-	MessageType MessageType `codec:"message_type"`
-	Body        Body        `codec:"body"`
-	SpanContext []byte      `codec:"span_context"`
+	ID          uint64      `json:"id"`
+	MessageType MessageType `json:"message_type"`
+	Body        Body        `json:"body"`
+	SpanContext []byte      `json:"span_context"`
 }
 
 // Body is a protocol message body.
 type Body struct {
-	_struct struct{} `codec:",omitempty"` // nolint
-
-	Empty *Empty
-	Error *Error
+	Empty *Empty `json:",omitempty"`
+	Error *Error `json:",omitempty"`
 
 	// Worker interface.
-	WorkerInfoRequest                    *Empty
-	WorkerInfoResponse                   *WorkerInfoResponse
-	WorkerPingRequest                    *Empty
-	WorkerShutdownRequest                *Empty
-	WorkerCapabilityTEERakInitRequest    *WorkerCapabilityTEERakInitRequest
-	WorkerCapabilityTEERakInitResponse   *Empty
-	WorkerCapabilityTEERakReportRequest  *Empty
-	WorkerCapabilityTEERakReportResponse *WorkerCapabilityTEERakReportResponse
-	WorkerCapabilityTEERakAvrRequest     *WorkerCapabilityTEERakAvrRequest
-	WorkerCapabilityTEERakAvrResponse    *Empty
-	WorkerRPCCallRequest                 *WorkerRPCCallRequest
-	WorkerRPCCallResponse                *WorkerRPCCallResponse
-	WorkerLocalRPCCallRequest            *WorkerLocalRPCCallRequest
-	WorkerLocalRPCCallResponse           *WorkerLocalRPCCallResponse
-	WorkerCheckTxBatchRequest            *WorkerCheckTxBatchRequest
-	WorkerCheckTxBatchResponse           *WorkerCheckTxBatchResponse
-	WorkerExecuteTxBatchRequest          *WorkerExecuteTxBatchRequest
-	WorkerExecuteTxBatchResponse         *WorkerExecuteTxBatchResponse
-	WorkerAbortRequest                   *Empty
-	WorkerAbortResponse                  *Empty
+	WorkerInfoRequest                    *Empty                                `json:",omitempty"`
+	WorkerInfoResponse                   *WorkerInfoResponse                   `json:",omitempty"`
+	WorkerPingRequest                    *Empty                                `json:",omitempty"`
+	WorkerShutdownRequest                *Empty                                `json:",omitempty"`
+	WorkerCapabilityTEERakInitRequest    *WorkerCapabilityTEERakInitRequest    `json:",omitempty"`
+	WorkerCapabilityTEERakInitResponse   *Empty                                `json:",omitempty"`
+	WorkerCapabilityTEERakReportRequest  *Empty                                `json:",omitempty"`
+	WorkerCapabilityTEERakReportResponse *WorkerCapabilityTEERakReportResponse `json:",omitempty"`
+	WorkerCapabilityTEERakAvrRequest     *WorkerCapabilityTEERakAvrRequest     `json:",omitempty"`
+	WorkerCapabilityTEERakAvrResponse    *Empty                                `json:",omitempty"`
+	WorkerRPCCallRequest                 *WorkerRPCCallRequest                 `json:",omitempty"`
+	WorkerRPCCallResponse                *WorkerRPCCallResponse                `json:",omitempty"`
+	WorkerLocalRPCCallRequest            *WorkerLocalRPCCallRequest            `json:",omitempty"`
+	WorkerLocalRPCCallResponse           *WorkerLocalRPCCallResponse           `json:",omitempty"`
+	WorkerCheckTxBatchRequest            *WorkerCheckTxBatchRequest            `json:",omitempty"`
+	WorkerCheckTxBatchResponse           *WorkerCheckTxBatchResponse           `json:",omitempty"`
+	WorkerExecuteTxBatchRequest          *WorkerExecuteTxBatchRequest          `json:",omitempty"`
+	WorkerExecuteTxBatchResponse         *WorkerExecuteTxBatchResponse         `json:",omitempty"`
+	WorkerAbortRequest                   *Empty                                `json:",omitempty"`
+	WorkerAbortResponse                  *Empty                                `json:",omitempty"`
 
 	// Host interface.
-	HostRPCCallRequest          *HostRPCCallRequest
-	HostRPCCallResponse         *HostRPCCallResponse
-	HostStorageSyncRequest      *HostStorageSyncRequest
-	HostStorageSyncResponse     *HostStorageSyncResponse
-	HostLocalStorageGetRequest  *HostLocalStorageGetRequest
-	HostLocalStorageGetResponse *HostLocalStorageGetResponse
-	HostLocalStorageSetRequest  *HostLocalStorageSetRequest
-	HostLocalStorageSetResponse *Empty
+	HostRPCCallRequest          *HostRPCCallRequest          `json:",omitempty"`
+	HostRPCCallResponse         *HostRPCCallResponse         `json:",omitempty"`
+	HostStorageSyncRequest      *HostStorageSyncRequest      `json:",omitempty"`
+	HostStorageSyncResponse     *HostStorageSyncResponse     `json:",omitempty"`
+	HostLocalStorageGetRequest  *HostLocalStorageGetRequest  `json:",omitempty"`
+	HostLocalStorageGetResponse *HostLocalStorageGetResponse `json:",omitempty"`
+	HostLocalStorageSetRequest  *HostLocalStorageSetRequest  `json:",omitempty"`
+	HostLocalStorageSetResponse *Empty                       `json:",omitempty"`
 }
 
 // Empty is an empty message body.
@@ -93,93 +91,93 @@ type Empty struct {
 
 // Error is a message body representing an error.
 type Error struct {
-	Message string `codec:"message"`
+	Message string `json:"message"`
 }
 
 // WorkerInfoResponse is a worker info response message body.
 type WorkerInfoResponse struct {
 	// ProtocolVersion is the runtime protocol version supported by the worker.
-	ProtocolVersion uint64 `codec:"protocol_version"`
+	ProtocolVersion uint64 `json:"protocol_version"`
 
 	// RuntimeVersion is the version of the runtime.
-	RuntimeVersion uint64 `codec:"runtime_version"`
+	RuntimeVersion uint64 `json:"runtime_version"`
 }
 
 // WorkerCapabilityTEERakInitRequest is a worker RFC 0009 CapabilityTEE
 // initialization request message body.
 type WorkerCapabilityTEERakInitRequest struct {
-	TargetInfo []byte `codec:"target_info"`
+	TargetInfo []byte `json:"target_info"`
 }
 
 // WorkerCapabilityTEERakReportResponse is a worker RFC 0009 CapabilityTEE RAK response message body.
 type WorkerCapabilityTEERakReportResponse struct {
-	RakPub signature.PublicKey `codec:"rak_pub"`
-	Report []byte              `codec:"report"`
-	Nonce  string              `codec:"nonce"`
+	RakPub signature.PublicKey `json:"rak_pub"`
+	Report []byte              `json:"report"`
+	Nonce  string              `json:"nonce"`
 }
 
 // WorkerCapabilityTEERakAvrRequest is a worker RFC 0009 CapabilityTEE RAK AVR setup request message body.
 type WorkerCapabilityTEERakAvrRequest struct {
-	AVR ias.AVRBundle `codec:"avr"`
+	AVR ias.AVRBundle `json:"avr"`
 }
 
 // WorkerRPCCallRequest is a worker RPC call request message body.
 type WorkerRPCCallRequest struct {
 	// Request.
-	Request []byte `codec:"request"`
+	Request []byte `json:"request"`
 	// State root hash.
-	StateRoot hash.Hash `codec:"state_root"`
+	StateRoot hash.Hash `json:"state_root"`
 }
 
 // WorkerRPCCallResponse is a worker RPC call response message body.
 type WorkerRPCCallResponse struct {
 	// Response.
-	Response []byte `codec:"response"`
+	Response []byte `json:"response"`
 	// Batch of storage write operations.
-	WriteLog storage.WriteLog `codec:"write_log"`
+	WriteLog storage.WriteLog `json:"write_log"`
 	// New state root hash.
-	NewStateRoot hash.Hash `codec:"new_state_root"`
+	NewStateRoot hash.Hash `json:"new_state_root"`
 }
 
 // WorkerLocalRPCCallRequest is a worker local RPC call request message body.
 type WorkerLocalRPCCallRequest struct {
 	// Request.
-	Request []byte `codec:"request"`
+	Request []byte `json:"request"`
 	// State root hash.
-	StateRoot hash.Hash `codec:"state_root"`
+	StateRoot hash.Hash `json:"state_root"`
 }
 
 // WorkerLocalRPCCallResponse is a worker local RPC call response message body.
 type WorkerLocalRPCCallResponse struct {
 	// Response.
-	Response []byte `codec:"response"`
+	Response []byte `json:"response"`
 }
 
 // WorkerCheckTxBatchRequest is a worker check tx batch request message body.
 type WorkerCheckTxBatchRequest struct {
 	// Batch of runtime inputs to check.
-	Inputs transaction.RawBatch `codec:"inputs"`
+	Inputs transaction.RawBatch `json:"inputs"`
 	// Block on which the batch check should be based.
-	Block roothash.Block `codec:"block"`
+	Block roothash.Block `json:"block"`
 }
 
 // WorkerCheckTxBatchResponse is a worker check tx batch response message body.
 type WorkerCheckTxBatchResponse struct {
 	// Batch of runtime check results.
-	Results transaction.RawBatch `codec:"results"`
+	Results transaction.RawBatch `json:"results"`
 }
 
 // ComputedBatch is a computed batch.
 type ComputedBatch struct {
 	// Header is the compute results header.
-	Header commitment.ComputeResultsHeader `codec:"header"`
+	Header commitment.ComputeResultsHeader `json:"header"`
 	// Log that generates the I/O tree.
-	IOWriteLog storage.WriteLog `codec:"io_write_log"`
+	IOWriteLog storage.WriteLog `json:"io_write_log"`
 	// Batch of storage write operations.
-	StateWriteLog storage.WriteLog `codec:"state_write_log"`
+	StateWriteLog storage.WriteLog `json:"state_write_log"`
 	// If this runtime uses a TEE, then this is the signature of Header with
 	// node's RAK for this runtime.
-	RakSig signature.RawSignature `codec:"rak_sig"`
+	RakSig signature.RawSignature `json:"rak_sig"`
 }
 
 // String returns a string representation of a computed batch.
@@ -191,16 +189,16 @@ func (b *ComputedBatch) String() string {
 type WorkerExecuteTxBatchRequest struct {
 	// IORoot is the I/O root containing the inputs (transactions) that
 	// the compute node should use. It must match what is passed in "inputs".
-	IORoot hash.Hash `codec:"io_root"`
+	IORoot hash.Hash `json:"io_root"`
 	// Batch of inputs (transactions).
-	Inputs transaction.RawBatch `codec:"inputs"`
+	Inputs transaction.RawBatch `json:"inputs"`
 	// Block on which the batch computation should be based.
-	Block roothash.Block `codec:"block"`
+	Block roothash.Block `json:"block"`
 }
 
 // WorkerExecuteTxBatchResponse is a worker execute tx batch response message body.
 type WorkerExecuteTxBatchResponse struct {
-	Batch ComputedBatch `codec:"batch"`
+	Batch ComputedBatch `json:"batch"`
 }
 
 const (
@@ -210,43 +208,39 @@ const (
 
 // HostRPCCallRequest is a host RPC call request message body.
 type HostRPCCallRequest struct {
-	Endpoint string `codec:"endpoint"`
-	Request  []byte `codec:"request"`
+	Endpoint string `json:"endpoint"`
+	Request  []byte `json:"request"`
 }
 
 // HostRPCCallResponse is a host RPC call response message body.
 type HostRPCCallResponse struct {
-	Response []byte `codec:"response"`
+	Response []byte `json:"response"`
 }
 
 // HostStorageSyncRequest is a host storage read syncer request message body.
 type HostStorageSyncRequest struct {
-	_struct struct{} `codec:",omitempty"` // nolint
-
-	SyncGet         *storage.GetRequest
-	SyncGetPrefixes *storage.GetPrefixesRequest
-	SyncIterate     *storage.IterateRequest
+	SyncGet         *storage.GetRequest         `json:",omitempty"`
+	SyncGetPrefixes *storage.GetPrefixesRequest `json:",omitempty"`
+	SyncIterate     *storage.IterateRequest     `json:",omitempty"`
 }
 
 // HostStorageSyncResponse is a host storage read syncer response body.
 type HostStorageSyncResponse struct {
-	_struct struct{} `codec:",omitempty"` // nolint
-
-	ProofResponse *storage.ProofResponse
+	ProofResponse *storage.ProofResponse `json:",omitempty"`
 }
 
 // HostLocalStorageGetRequest is a host local storage get request message body.
 type HostLocalStorageGetRequest struct {
-	Key []byte `codec:"key"`
+	Key []byte `json:"key"`
 }
 
 // HostLocalStorageGetResponse is a host local storage get response message body.
 type HostLocalStorageGetResponse struct {
-	Value []byte `codec:"value"`
+	Value []byte `json:"value"`
 }
 
 // HostLocalStorageSetRequest is a host local storage set request message body.
 type HostLocalStorageSetRequest struct {
-	Key   []byte `codec:"key"`
-	Value []byte `codec:"value"`
+	Key   []byte `json:"key"`
+	Value []byte `json:"value"`
 }

@@ -42,8 +42,8 @@ type SignatureVerifier interface {
 // NodeInfo contains information about a node that is member of a committee.
 type NodeInfo struct {
 	// CommitteeNode is an index into the Committee.Members structure.
-	CommitteeNode int           `codec:"committee_node"`
-	Runtime       *node.Runtime `codec:"runtime"`
+	CommitteeNode int           `json:"committee_node"`
+	Runtime       *node.Runtime `json:"runtime"`
 }
 
 // Pool is a serializable pool of commiments that can be used to perform
@@ -53,22 +53,22 @@ type NodeInfo struct {
 type Pool struct {
 	// Runtime is the runtime descriptor this pool is collecting the
 	// commitments for.
-	Runtime *registry.Runtime `codec:"runtime"`
+	Runtime *registry.Runtime `json:"runtime"`
 	// Committee is the committee this pool is collecting the commitments for.
-	Committee *scheduler.Committee `codec:"committee"`
+	Committee *scheduler.Committee `json:"committee"`
 	// NodeInfo contains node information about committee members.
-	NodeInfo map[signature.MapKey]NodeInfo `codec:"node_info"`
+	NodeInfo map[signature.MapKey]NodeInfo `json:"node_info"`
 	// Commitments are the commitments in the pool.
 	//
 	// The type of conrete commitments depends on Committee.Kind and all
 	// commitments in the pool MUST be of the same type.
-	Commitments map[signature.MapKey]OpenCommitment `codec:"commitments"`
+	Commitments map[signature.MapKey]OpenCommitment `json:"commitments"`
 	// Discrepancy is a flag signalling that a discrepancy has been detected.
-	Discrepancy bool `codec:"discrepancy"`
+	Discrepancy bool `json:"discrepancy"`
 	// NextTimeout is the time when the next call to TryFinalize(true) should
 	// be scheduled to be executed. Zero timestamp means that no timeout is
 	// to be scheduled.
-	NextTimeout time.Time `codec:"next_timeout"`
+	NextTimeout time.Time `json:"next_timeout"`
 }
 
 // GetCommitteeID returns the identifier of the committee this pool is collecting
@@ -584,7 +584,7 @@ func (p *Pool) IsTimeout(now time.Time) bool {
 // MultiPool contains pools for multiple committees and routes operations to
 // multiple committees based on commitments' committee IDs.
 type MultiPool struct {
-	Committees map[hash.Hash]*Pool `codec:"committees"`
+	Committees map[hash.Hash]*Pool `json:"committees"`
 }
 
 // AddComputeCommitment verifies and adds a new compute commitment to the pool.

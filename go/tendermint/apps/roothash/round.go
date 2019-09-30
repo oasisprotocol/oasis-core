@@ -15,11 +15,11 @@ var (
 )
 
 type round struct {
-	ComputePool *commitment.MultiPool `codec:"compute_pool"`
-	MergePool   *commitment.Pool      `codec:"merge_pool"`
+	ComputePool *commitment.MultiPool `json:"compute_pool"`
+	MergePool   *commitment.Pool      `json:"merge_pool"`
 
-	CurrentBlock *block.Block `codec:"current_block"`
-	Finalized    bool         `codec:"finalized"`
+	CurrentBlock *block.Block `json:"current_block"`
+	Finalized    bool         `json:"finalized"`
 }
 
 func (r *round) reset() {

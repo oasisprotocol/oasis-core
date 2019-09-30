@@ -38,8 +38,8 @@ var (
 )
 
 type timerContext struct {
-	ID    signature.PublicKey `codec:"id"`
-	Round uint64              `codec:"round"`
+	ID    signature.PublicKey `json:"id"`
+	Round uint64              `json:"round"`
 }
 
 func (ctx *timerContext) MarshalCBOR() []byte {

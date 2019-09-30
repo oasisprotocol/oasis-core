@@ -35,11 +35,11 @@ func (s CoarsenedSet) Equal(other CoarsenedSet) bool {
 type ReadWriteSet struct {
 	// Granularity is the size of the key prefixes (in bytes) used for
 	// coarsening the keys.
-	Granularity uint16 `codec:"granularity"`
+	Granularity uint16 `json:"granularity"`
 	// ReadSet is the read set.
-	ReadSet CoarsenedSet `codec:"read_set"`
+	ReadSet CoarsenedSet `json:"read_set"`
 	// WriteSet is the write set.
-	WriteSet CoarsenedSet `codec:"write_set"`
+	WriteSet CoarsenedSet `json:"write_set"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.

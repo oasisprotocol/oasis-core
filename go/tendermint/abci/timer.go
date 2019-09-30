@@ -17,11 +17,11 @@ const (
 )
 
 type timerState struct {
-	ID       string    `codec:"id"`
-	App      string    `codec:"app"`
-	Armed    bool      `codec:"armed"`
-	Deadline time.Time `codec:"deadline"`
-	Data     []byte    `codec:"data"`
+	ID       string    `json:"id"`
+	App      string    `json:"app"`
+	Armed    bool      `json:"armed"`
+	Deadline time.Time `json:"deadline"`
+	Data     []byte    `json:"data"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -46,7 +46,7 @@ func (s *timerState) getDeadlineMapKey() []byte {
 
 // Timer is a serializable timer that can be used in ABCI applications.
 type Timer struct {
-	ID string `codec:"id"`
+	ID string `json:"id"`
 
 	currentState *timerState
 	pendingState *timerState

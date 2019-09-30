@@ -21,8 +21,8 @@ var (
 )
 
 type mockEpochTimeState struct {
-	Epoch  api.EpochTime `codec:"epoch"`
-	Height int64         `codec:"height"`
+	Epoch  api.EpochTime `json:"epoch"`
+	Height int64         `json:"height"`
 }
 
 func (s *mockEpochTimeState) MarshalCBOR() []byte {
