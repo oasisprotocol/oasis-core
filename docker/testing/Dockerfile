@@ -34,7 +34,7 @@ RUN wget -O codecov https://codecov.io/bash && \
     chmod +x codecov && \
     mv codecov /usr/local/bin
 
-# Install tarpaulin.
+# Install tarpaulin and cargo audit.
 RUN RUSTFLAGS="--cfg procmacro2_semver_exempt" \
     cargo install --version 0.8.3 cargo-tarpaulin \
     cargo install cargo-audit
