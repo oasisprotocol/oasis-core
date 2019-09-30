@@ -53,7 +53,7 @@ fn main() {
             with_api! { register_runtime_rpc_methods!(rpc, api); }
         }
 
-        // TODO: Somone that cares can add macros for this, I do not.  Note
+        // TODO: Someone that cares can add macros for this, I do not.  Note
         // that these are local methods, for use by the node key manager
         // component.
         rpc.add_method(
