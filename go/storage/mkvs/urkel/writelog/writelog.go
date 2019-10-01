@@ -13,10 +13,8 @@ type WriteLog []LogEntry
 
 // LogEntry is a write log entry.
 type LogEntry struct {
-	_struct struct{} `codec:",toarray"` // nolint
-
-	Key   []byte
-	Value []byte
+	Key   []byte `json:"key,omitempty"`
+	Value []byte `json:"value,omitempty"`
 }
 
 func (k *LogEntry) UnmarshalJSON(src []byte) error {
