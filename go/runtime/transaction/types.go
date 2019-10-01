@@ -8,8 +8,6 @@ type TxnCall struct {
 	Method string `codec:"method"`
 	// Args are the method arguments.
 	Args interface{} `codec:"args"`
-	// PredictedReadWriteSet is the predicted read/write set.
-	PredictedReadWriteSet ReadWriteSet `codec:"predicted_rw_set"`
 }
 
 // TxnOutput is a transaction call output.
@@ -18,4 +16,10 @@ type TxnOutput struct {
 	Success interface{}
 	// Error is a string describing the error message.
 	Error *string
+}
+
+// TxnCheckResult is the result of a successful CheckTx call.
+type TxnCheckResult struct {
+	// PredictedReadWriteSet is the predicted read/write set.
+	PredictedReadWriteSet ReadWriteSet `codec:"predicted_rw_set"`
 }

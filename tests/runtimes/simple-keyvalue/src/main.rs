@@ -46,7 +46,7 @@ fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
         return Err(format_err!("Value too big to be inserted."));
     }
     if ctx.check_only {
-        return Err(CheckOnlySuccess.into());
+        return Err(CheckOnlySuccess::default().into());
     }
     ctx.emit_txn_tag(b"kv_op", b"insert");
     ctx.emit_txn_tag(b"kv_key", args.key.as_bytes());
@@ -64,7 +64,7 @@ fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
 /// Retrieve a key/value pair.
 fn get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     if ctx.check_only {
-        return Err(CheckOnlySuccess.into());
+        return Err(CheckOnlySuccess::default().into());
     }
     ctx.emit_txn_tag(b"kv_op", b"get");
     ctx.emit_txn_tag(b"kv_key", args.as_bytes());
@@ -78,7 +78,7 @@ fn get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
 /// Remove a key/value pair.
 fn remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     if ctx.check_only {
-        return Err(CheckOnlySuccess.into());
+        return Err(CheckOnlySuccess::default().into());
     }
     ctx.emit_txn_tag(b"kv_op", b"remove");
     ctx.emit_txn_tag(b"kv_key", args.as_bytes());
