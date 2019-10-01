@@ -80,16 +80,14 @@ var (
 //
 // These are the artifacts that are stored CBOR-serialized in the Merkle tree.
 type inputArtifacts struct {
-	_struct struct{} `codec:",toarray"` // nolint
-
 	// Input is the transaction input.
-	Input []byte
+	Input []byte `json:"input,omitempty"`
 	// BatchOrder is the transaction order within the batch.
 	//
 	// This is only relevant within the committee that is processing the batch
 	// and should be ignored once transactions from multiple committees are
 	// merged together.
-	BatchOrder uint32
+	BatchOrder uint32 `json:"batch_order"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -106,10 +104,8 @@ func (ia *inputArtifacts) UnmarshalCBOR(data []byte) error {
 //
 // These are the artifacts that are stored CBOR-serialized in the Merkle tree.
 type outputArtifacts struct {
-	_struct struct{} `codec:",toarray"` // nolint
-
 	// Output is the transaction output (if available).
-	Output []byte
+	Output []byte `json:"output,omitempty"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
