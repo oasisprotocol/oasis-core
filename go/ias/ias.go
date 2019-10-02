@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"time"
 
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -52,13 +51,41 @@ func (s *IAS) Close() error {
 	return nil
 }
 
+func (s *IAS) fetchSPIDInfo(ctx context.Context) error {
+	if s.spidInfo != nil || s.client == nil {
+		return nil
+	}
+
+	// Request SPID info from the proxy.
+	info, err := s.client.GetSPIDInfo(ctx, &iasGrpc.GetSPIDInfoRequest{}, grpc.WaitForReady(true))
+	if err != nil {
+		return err
+	}
+
+	spidInfo := &ias.SPIDInfo{
+		QuoteSignatureType: ias.SignatureType(info.QuoteSignatureType),
+	}
+	if err := spidInfo.SPID.UnmarshalBinary(info.Spid); err != nil {
+		return err
+	}
+
+	s.spidInfo = spidInfo
+	return nil
+}
+
 // GetSPID returns the SPID associated with the IAS proxy.
 func (s *IAS) GetSPID(ctx context.Context) (ias.SPID, error) {
+	if err := s.fetchSPIDInfo(ctx); err != nil {
+		return ias.SPID{}, err
+	}
 	return s.spidInfo.SPID, nil
 }
 
 // GetQuoteSignatureType returns the quote signature type associated with the SPID.
 func (s *IAS) GetQuoteSignatureType(ctx context.Context) (*ias.SignatureType, error) {
+	if err := s.fetchSPIDInfo(ctx); err != nil {
+		return nil, err
+	}
 	return &s.spidInfo.QuoteSignatureType, nil
 }
 
@@ -100,7 +127,7 @@ func (s *IAS) VerifyEvidence(ctx context.Context, runtimeID signature.PublicKey,
 			Evidence: signedEvidence.ToProto(),
 		}
 		var resp *iasGrpc.VerifyEvidenceResponse
-		resp, err = s.client.VerifyEvidence(ctx, &req)
+		resp, err = s.client.VerifyEvidence(ctx, &req, grpc.WaitForReady(true))
 		if err != nil {
 			return
 		}
@@ -180,21 +207,6 @@ func New(identity *identity.Identity) (*IAS, error) {
 		}
 		s.conn = conn
 		s.client = iasGrpc.NewIASClient(conn)
-
-		// Request SPID info from the proxy.
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer cancel()
-		info, err := s.client.GetSPIDInfo(ctx, &iasGrpc.GetSPIDInfoRequest{})
-		if err != nil {
-			return nil, err
-		}
-
-		s.spidInfo = &ias.SPIDInfo{
-			QuoteSignatureType: ias.SignatureType(info.QuoteSignatureType),
-		}
-		if err := s.spidInfo.SPID.UnmarshalBinary(info.Spid); err != nil {
-			return nil, err
-		}
 	}
 
 	if viper.GetBool(cfgDebugSkipVerify) {
