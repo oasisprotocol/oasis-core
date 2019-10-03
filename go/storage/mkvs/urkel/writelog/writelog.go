@@ -19,14 +19,14 @@ type LogEntry struct {
 	Value []byte
 }
 
-func (le *LogEntry) UnmarshalJSON(src []byte) error {
+func (k *LogEntry) UnmarshalJSON(src []byte) error {
 	var kv [2][]byte
 	if err := json.Unmarshal(src, &kv); err != nil {
 		return err
 	}
 
-	le.Key = kv[0]
-	le.Value = kv[1]
+	k.Key = kv[0]
+	k.Value = kv[1]
 
 	return nil
 }
