@@ -5,10 +5,14 @@
 //! This **MUST** be kept in sync with go/roothash/api/block.
 //!
 use serde_derive::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use super::{
     cbor,
-    crypto::{hash::Hash, signature::SignatureBundle},
+    crypto::{
+        hash::Hash,
+        signature::{PublicKey, SignatureBundle},
+    },
 };
 
 /// Block.
@@ -20,10 +24,26 @@ pub struct Block {
 
 impl_bytes!(Namespace, 32, "Chain namespace.");
 
+/// Operation used in `StakingGeneralAdjustmentRoothashMessage`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum AdjustmentOp {
+    INCREASE = 1,
+    DECREASE = 2,
+}
+
 /// Roothash message.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RoothashMessage {
-    DummyRoothashMessage { greeting: String },
+    DummyRoothashMessage {
+        greeting: String,
+    },
+    StakingGeneralAdjustmentRoothashMessage {
+        account: PublicKey,
+        op: AdjustmentOp,
+        #[serde(with = "serde_bytes")]
+        amount: Vec<u8>,
+    },
 }
 
 /// Block header.

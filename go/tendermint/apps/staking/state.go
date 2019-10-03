@@ -37,6 +37,8 @@ var (
 	//
 	// Value is a little endian encoding of an uint64.
 	debondingIntervalKeyFmt = keyformat.New(0x54)
+
+	logger = logging.GetLogger("tendermint/staking")
 )
 
 type ledgerEntry struct {
@@ -307,12 +309,40 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 	return ret, nil
 }
 
+func (s *MutableState) isAcceptableTransferPeer(runtimeID signature.PublicKey) bool {
+	logger.Warn("INSECURE: dummy implementation of isAcceptableTransferPeer allowing any runtime")
+	return true
+}
+
 func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, message *block.RoothashMessage) (error, error) {
 	if message.DummyRoothashMessage != nil {
-		logging.GetLogger("tendermint/staking").Info("dummy message from roothash",
+		logger.Info("dummy message from roothash",
 			"from_runtime", runtimeID,
 			"greeting", message.DummyRoothashMessage.Greeting,
 		)
+	} else if message.DummyRejectRoothashMessage != nil {
+		return errors.Errorf("encountered dummy reject message from roothash"), nil
+	} else if message.StakingGeneralAdjustmentRoothashMessage != nil {
+		if !s.isAcceptableTransferPeer(runtimeID) {
+			return errors.Errorf("staking general adjustment message received from unacceptable runtime %s", runtimeID), nil
+		}
+
+		account := s.account(message.StakingGeneralAdjustmentRoothashMessage.Account)
+
+		var err error
+		switch message.StakingGeneralAdjustmentRoothashMessage.Op {
+		case block.Increase:
+			err = account.GeneralBalance.Add(message.StakingGeneralAdjustmentRoothashMessage.Amount)
+		case block.Decrease:
+			err = account.GeneralBalance.Sub(message.StakingGeneralAdjustmentRoothashMessage.Amount)
+		default:
+			return errors.Errorf("staking general adjustment message has invalid op"), nil
+		}
+		if err != nil {
+			return errors.Wrapf(err, "couldn't apply adjustment in staking general adjustment message"), nil
+		}
+
+		s.setAccount(message.StakingGeneralAdjustmentRoothashMessage.Account, account)
 	}
 
 	return nil, nil
