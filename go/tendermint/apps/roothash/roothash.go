@@ -28,6 +28,7 @@ import (
 	"github.com/oasislabs/ekiden/go/tendermint/api"
 	registryapp "github.com/oasislabs/ekiden/go/tendermint/apps/registry"
 	schedulerapp "github.com/oasislabs/ekiden/go/tendermint/apps/scheduler"
+	stakingapp "github.com/oasislabs/ekiden/go/tendermint/apps/staking"
 )
 
 var (
@@ -74,7 +75,7 @@ func (app *rootHashApplication) Blessed() bool {
 }
 
 func (app *rootHashApplication) Dependencies() []string {
-	return []string{schedulerapp.AppName}
+	return []string{schedulerapp.AppName, stakingapp.AppName}
 }
 
 func (app *rootHashApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
@@ -539,7 +540,16 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	defer state.updateRuntimeState(rtState)
 
 	if rtState.Round.MergePool.IsTimeout(ctx.Now()) {
-		app.tryFinalizeMerge(ctx, runtime, rtState, true)
+		finalizedBlock := app.tryFinalizeMerge(ctx, runtime, rtState, true)
+		if finalizedBlock != nil {
+			if err := app.postProcessFinalizedBlock(ctx, state.tree, rtState, finalizedBlock); err != nil {
+				app.logger.Error("failed while postprocessing finalized block",
+					"err", err,
+					"block", finalizedBlock,
+				)
+				panic(err)
+			}
+		}
 	}
 	for _, pool := range rtState.Round.ComputePool.GetTimeoutCommittees(ctx.Now()) {
 		app.tryFinalizeCompute(ctx, runtime, rtState, pool, true)
@@ -655,7 +665,16 @@ func (app *rootHashApplication) commit(
 
 		// Try to finalize round.
 		if !ctx.IsCheckOnly() {
-			app.tryFinalizeMerge(ctx, runtime, rtState, false)
+			finalizedBlock := app.tryFinalizeMerge(ctx, runtime, rtState, false)
+			if finalizedBlock != nil {
+				if err = app.postProcessFinalizedBlock(ctx, state.tree, rtState, finalizedBlock); err != nil {
+					logger.Error("failed while postprocessing finalized block",
+						"err", err,
+						"block", finalizedBlock,
+					)
+					return err
+				}
+			}
 		}
 	case tx.TxComputeCommit != nil:
 		pools := make(map[*commitment.Pool]bool)
@@ -791,7 +810,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 	runtime *registry.Runtime,
 	rtState *runtimeState,
 	forced bool,
-) {
+) *block.Block {
 	latestBlock := rtState.CurrentBlock
 	blockNr := latestBlock.Header.Round
 	id, _ := runtime.ID.MarshalBinary()
@@ -802,7 +821,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		app.logger.Error("attempted to finalize merge when block already finalized",
 			"round", blockNr,
 		)
-		return
+		return nil
 	}
 
 	commit, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), app.roundTimeout, forced, true)
@@ -821,22 +840,15 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		rtState.Round.MergePool.ResetCommitments()
 		rtState.Round.ComputePool.ResetCommitments()
 		rtState.Round.Finalized = true
-		rtState.CurrentBlock = blk
 
-		ctx.EmitTag(TagUpdate, TagUpdateValue)
-		tagV := ValueFinalized{
-			ID:    id,
-			Round: blk.Header.Round,
-		}
-		ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
-		return
+		return blk
 	case commitment.ErrStillWaiting:
 		// Need more commits.
 		app.logger.Debug("insufficient commitments for finality, waiting",
 			"round", blockNr,
 		)
 
-		return
+		return nil
 	case commitment.ErrDiscrepancyDetected:
 		// Discrepancy has been detected.
 		app.logger.Warn("merge discrepancy detected",
@@ -850,7 +862,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 			Event: roothash.MergeDiscrepancyDetectedEvent{},
 		}
 		ctx.EmitTag(TagMergeDiscrepancyDetected, tagV.MarshalCBOR())
-		return
+		return nil
 	default:
 	}
 
@@ -862,6 +874,45 @@ func (app *rootHashApplication) tryFinalizeMerge(
 	)
 
 	app.emitEmptyBlock(ctx, rtState, block.RoundFailed)
+	return nil
+}
+
+func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, tree *iavl.MutableTree, rtState *runtimeState, blk *block.Block) error {
+	stateBackup := *tree.ImmutableTree
+	for _, message := range blk.Header.RoothashMessages {
+		// Check with staking.
+		stakingState := stakingapp.NewMutableState(tree)
+		unsat, err := stakingState.HandleRoothashMessage(rtState.Runtime.ID, message)
+		if err != nil {
+			return err
+		}
+		if unsat != nil {
+			app.logger.Error("staking not satisfied with roothash message",
+				"roothash_message", message,
+				"err", unsat,
+			)
+
+			// Roll back changes from message handling.
+			tree.ImmutableTree = &stateBackup
+
+			// Substitute empty block.
+			app.emitEmptyBlock(ctx, rtState, block.RoundFailed)
+
+			return nil
+		}
+	}
+
+	// All good. Hook up the new block.
+	rtState.CurrentBlock = blk
+
+	ctx.EmitTag(TagUpdate, TagUpdateValue)
+	tagV := ValueFinalized{
+		ID:    rtState.Runtime.ID,
+		Round: blk.Header.Round,
+	}
+	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
+
+	return nil
 }
 
 // New constructs a new roothash application instance.

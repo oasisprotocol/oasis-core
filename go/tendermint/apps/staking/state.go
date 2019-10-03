@@ -10,6 +10,8 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/keyformat"
+	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	staking "github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
@@ -303,6 +305,17 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 	}
 
 	return ret, nil
+}
+
+func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, message *block.RoothashMessage) (error, error) {
+	if message.DummyRoothashMessage != nil {
+		logging.GetLogger("tendermint/staking").Info("dummy message from roothash",
+			"from_runtime", runtimeID,
+			"greeting", message.DummyRoothashMessage.Greeting,
+		)
+	}
+
+	return nil, nil
 }
 
 // NewMutableState creates a new mutable staking state wrapper.
