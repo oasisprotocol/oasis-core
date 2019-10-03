@@ -17,6 +17,8 @@ build: generate
 	@env -u GOPATH $(EKIDEN_GO) build -v -o ./ekiden/ekiden ./ekiden
 	@echo "Building Ekiden test harness"
 	@env -u GOPATH $(EKIDEN_GO) build -v -o ./ekiden-test-runner/ekiden-test-runner ./ekiden-test-runner
+	@echo "Building Ekiden local network runner"
+	@env -u GOPATH $(EKIDEN_GO) build -v -o ./ekiden-net-runner/ekiden-net-runner ./ekiden-net-runner
 
 # Run go fmt.
 fmt:

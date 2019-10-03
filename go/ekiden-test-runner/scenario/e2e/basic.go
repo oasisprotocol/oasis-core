@@ -101,7 +101,7 @@ func (sc *basicImpl) Fixture() (*ekiden.NetworkFixture, error) {
 			ekiden.ValidatorFixture{Entity: 1},
 		},
 		Keymanagers: []ekiden.KeymanagerFixture{
-			ekiden.KeymanagerFixture{Runtime: 0, Entity: 1, Restartable: true},
+			ekiden.KeymanagerFixture{Runtime: 0, Entity: 1},
 		},
 		StorageWorkers: []ekiden.StorageWorkerFixture{
 			ekiden.StorageWorkerFixture{Backend: "badger", Entity: 1},

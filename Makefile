@@ -32,7 +32,7 @@ ECHO = echo
 endif
 
 
-.PHONY: all tools runtimes rust go clean clean-runtimes clean-go fmt test test-unit test-e2e regenerate-single-node
+.PHONY: all tools runtimes rust go clean clean-runtimes clean-go fmt test test-unit test-e2e
 
 all: tools runtimes rust go
 	@$(ECHO) "$(CYAN)*** Everything built successfully!$(OFF)"
@@ -101,6 +101,3 @@ clean: clean-go clean-runtimes
 	@$(ECHO) "$(CYAN)*** Cleaning up...$(OFF)"
 	@cargo clean
 
-regenerate-single-node: go runtimes
-	@$(ECHO) "$(CYAN)*** Regenerating single node config artifacts...$(OFF)"
-	@./scripts/regenerate_single_node.sh

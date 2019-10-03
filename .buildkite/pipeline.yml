@@ -177,26 +177,6 @@ steps:
     plugins:
       <<: *docker_plugin
 
-  - label: Test Ekiden tools
-    command:
-      - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/go/test_ekiden_tools.sh
-    agents:
-      buildkite_agent_size: medium
-    plugins:
-      <<: *docker_plugin
-
-  #########################
-  # Test single node config
-  #########################
-  - label: Test single node config
-    timeout_in_minutes: 20
-    command:
-      - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/scripts/test_config.sh single_node
-    plugins:
-      <<: *docker_plugin
-
   ###############
   # E2E test jobs
   ###############

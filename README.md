@@ -140,29 +140,26 @@ and perform this automatically.
 
 ## Running an Ekiden node (non-SGX)
 
-These instructions specify how to run a single-node "network" for development
-purposes. For more complex setups, see E2E test helpers [here](.buildkite/scripts/common_e2e.sh).
+These instructions specify how to run a simple network for development purposes.
 
 First, make sure that you have built everything as described in the [*Building* section](
 #building) before proceeding and move to the top-level directory.
 
-Before we can launch an Ekiden node, we need to copy over the identity keys
-that are configured in the genesis file (instead of doing this, you could
-also generate your own keys) and set correct permissions. Make sure that the
-directory `/tmp/ekiden-single-node` does not exist.
+To start a simple Ekiden network as defined by [the default network fixture](go/ekiden-net-runner/fixtures/default.go)
+running the `simple-keyvalue` test runtime, do:
 ```
-cp -R configs/single_node /tmp/ekiden-single-node
-chmod -R go-rwx /tmp/ekiden-single-node
+./go/ekiden-net-runner/ekiden-net-runner \
+  --net.ekiden.binary go/ekiden/ekiden \
+  --net.runtime.binary target/debug/simple-keyvalue \
+  --net.runtime.loader target/debug/ekiden-runtime-loader \
+  --net.keymanager.binary target/debug/ekiden-keymanager-runtime
 ```
-The pre-configured Ekiden node stores data in `/tmp/ekiden-single-node`
-regardless of the loaded runtime. In case you restart it, you may need to
-remove this directory first and repeat the above steps for copying over the
-identity keys. More information on the Ekiden node is available [here](go/README.md).
 
-Second, we launch a single Ekiden node with an example `simple-keyvalue`
-runtime loaded to trusted enclave as defined in `configs/single_node.yml`:
+Wait for the network to start, there should be messages about nodes being started
+and at the end the following message should appear:
 ```
-./go/ekiden/ekiden --config configs/single_node.yml
+level=info module=ekiden/net-runner caller=ekiden.go:319 ts=2019-10-03T10:47:30.776566482Z msg="network started"
+level=info module=net-runner caller=root.go:145 ts=2019-10-03T10:47:30.77662061Z msg="client node socket available" path=/tmp/ekiden-net-runner530668299/net-runner/network/client-0/internal.sock
 ```
 
 The `simple-keyvalue` runtime implements a key-value hash map in the enclave
@@ -173,11 +170,12 @@ example [here](tests/runtimes/simple-keyvalue).
 Finally, to test Ekiden node, we will run a test client written specifically
 for the `simple-keyvalue` runtime. The client sends a few keys with associated
 values and fetches them back over RPC defined in the runtime's API. Execute the
-client as follows:
+client as follows (substituting the socket path from your log output) in a different
+terminal:
 ```
 ./target/debug/simple-keyvalue-client \
   --runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-  --node-address unix:/tmp/ekiden-single-node/internal.sock
+  --node-address unix:/tmp/ekiden-net-runner530668299/net-runner/network/client-0/internal.sock
 ```
 
 By default, Ekiden node is configured with a 30-second epoch, so you may
@@ -208,10 +206,14 @@ In order to run under SGX there are some additional prerequisites:
 Run `sgx-detect` to verify that everything is configured correctly.
 
 The instructions for running an Ekiden node under SGX are the same as above,
-you only need to replace:
-* `configs/single_node` with `configs/single_node_sgx`
-* `configs/single_node.yml` with `configs/single_node_sgx.yml`
-* `/tmp/ekiden-single-node` with `/tmp/ekiden-single-node-sgx`
+you only need to change the `ekiden-net-runner` invocation:
+```
+./go/ekiden-net-runner/ekiden-net-runner \
+  --net.ekiden.binary go/ekiden/ekiden \
+  --net.runtime.binary target/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue \
+  --net.runtime.loader target/debug/ekiden-runtime-loader \
+  --net.keymanager.binary target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime
+```
 
 ## Running tests and benchmarks
 
@@ -255,7 +257,6 @@ See our [contributing guidelines](CONTRIBUTING.md).
 ## Directories
 
 * `client`: Client library for talking with the runtimes.
-* `configs`: Example configurations for development and testing.
 * `docker`: Docker environment definitions.
 * `go`: Ekiden node.
 * `keymanager-client`: Client crate for the key manager.
