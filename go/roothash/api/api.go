@@ -102,9 +102,9 @@ type AnnotatedBlock struct {
 type ComputeDiscrepancyDetectedEvent struct {
 	// CommitteeID is the identifier of the compute committee where a
 	// discrepancy has been detected.
-	CommitteeID hash.Hash `codec:"cid"`
+	CommitteeID hash.Hash `json:"cid"`
 	// Timeout signals whether the discrepancy was due to a timeout.
-	Timeout bool `codec:"timeout"`
+	Timeout bool `json:"timeout"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -158,5 +158,5 @@ type PrunedBlock struct {
 // Genesis is the roothash genesis state.
 type Genesis struct {
 	// Blocks is the per-runtime map of genesis blocks.
-	Blocks map[signature.MapKey]*block.Block `codec:"blocks,omit_empty"`
+	Blocks map[signature.MapKey]*block.Block `json:"blocks,omit_empty"`
 }

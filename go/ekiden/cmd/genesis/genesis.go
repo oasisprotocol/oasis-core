@@ -3,6 +3,7 @@ package genesis
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"math/big"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common"
@@ -127,7 +127,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	// TODO: Ensure consistency/sanity.
 
-	b := json.Marshal(doc)
+	b, _ := json.Marshal(doc)
 	if err := ioutil.WriteFile(f, b, 0600); err != nil {
 		logger.Error("failed to save generated genesis document",
 			"err", err,

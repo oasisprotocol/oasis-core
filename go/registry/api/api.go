@@ -639,17 +639,17 @@ func VerifyTimestamp(timestamp uint64, now uint64) error {
 // Genesis is the registry genesis state.
 type Genesis struct {
 	// Entities is the initial list of entities.
-	Entities []*entity.SignedEntity `codec:"entities,omit_empty"`
+	Entities []*entity.SignedEntity `json:"entities,omit_empty"`
 
 	// Runtimes is the initial list of runtimes.
-	Runtimes []*SignedRuntime `codec:"runtimes,omit_empty"`
+	Runtimes []*SignedRuntime `json:"runtimes,omit_empty"`
 
 	// Nodes is the initial list of nodes.
-	Nodes []*node.SignedNode `codec:"nodes,omit_empty"`
+	Nodes []*node.SignedNode `json:"nodes,omit_empty"`
 
 	// KeyManagerOperator is the ID of the entity that is allowed to operate
 	// key manager nodes.
-	KeyManagerOperator signature.PublicKey `codec:"km_operator"`
+	KeyManagerOperator signature.PublicKey `json:"km_operator"`
 }
 
 // Config is the per-backend common configuration.

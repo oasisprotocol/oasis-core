@@ -1,16 +1,15 @@
 package ias
 
 import (
+	"encoding/json"
 	"time"
-
-	"github.com/oasislabs/ekiden/go/common/json"
 )
 
 type mockAVR struct {
-	Timestamp             string `codec:"timestamp"`
-	ISVEnclaveQuoteStatus string `codec:"isvEnclaveQuoteStatus"`
-	ISVEnclaveQuoteBody   []byte `codec:"isvEnclaveQuoteBody"`
-	Nonce                 string `codec:"nonce,omitempty"`
+	Timestamp             string `json:"timestamp"`
+	ISVEnclaveQuoteStatus string `json:"isvEnclaveQuoteStatus"`
+	ISVEnclaveQuoteBody   []byte `json:"isvEnclaveQuoteBody"`
+	Nonce                 string `json:"nonce,omitempty"`
 }
 
 // NewMockAVR returns a mock AVR for the given quote and nonce, after doing
@@ -34,5 +33,5 @@ func NewMockAVR(quote []byte, nonce string) ([]byte, error) {
 		return nil, err
 	}
 
-	return json.Marshal(mockAVR), nil
+	return json.Marshal(mockAVR)
 }

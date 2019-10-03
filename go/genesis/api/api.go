@@ -19,20 +19,20 @@ var (
 // Document is a genesis document.
 type Document struct {
 	// Height is the block height at which the document was generated.
-	Height int64 `codec:"height"`
+	Height int64 `json:"height"`
 	// Time is the time the genesis block was constructed.
-	Time time.Time `codec:"genesis_time"`
+	Time time.Time `json:"genesis_time"`
 	// Registry is the registry genesis state.
-	Registry registry.Genesis `codec:"registry"`
+	Registry registry.Genesis `json:"registry"`
 	// RootHash is the roothash genesis state.
-	RootHash roothash.Genesis `codec:"roothash"`
+	RootHash roothash.Genesis `json:"roothash"`
 	// Staking is the staking genesis state.
-	Staking staking.Genesis `codec:"staking"`
+	Staking staking.Genesis `json:"staking"`
 	// KeyManager is the key manager genesis state.
-	KeyManager keymanager.Genesis `codec:"keymanager"`
+	KeyManager keymanager.Genesis `json:"keymanager"`
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by Ekiden.
-	ExtraData map[string][]byte `codec:"extra_data"`
+	ExtraData map[string][]byte `json:"extra_data"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.

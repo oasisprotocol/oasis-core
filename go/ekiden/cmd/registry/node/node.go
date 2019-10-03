@@ -3,6 +3,7 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -19,7 +20,6 @@ import (
 	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/entity"
 	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
@@ -246,7 +246,7 @@ func doInit(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	b := json.Marshal(signed)
+	b, _ := json.Marshal(signed)
 	if err = ioutil.WriteFile(filepath.Join(dataDir, nodeGenesisFilename), b, 0600); err != nil {
 		logger.Error("failed to write signed node genesis registration",
 			"err", err,
@@ -308,7 +308,8 @@ func doList(cmd *cobra.Command, args []string) {
 		var s string
 		switch cmdFlags.Verbose() {
 		case true:
-			s = string(json.Marshal(&node))
+			b, _ := json.Marshal(&node)
+			s = string(b)
 		default:
 			s = node.ID.String()
 		}

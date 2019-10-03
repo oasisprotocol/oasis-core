@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/sgx"
 )
 
@@ -178,9 +178,9 @@ func (r CRLReason) String() string {
 // AVRBundle is a serialized Attestation Verification Report bundled
 // with additional data required to allow offline verification.
 type AVRBundle struct {
-	Body             []byte `codec:"body"`
-	CertificateChain []byte `codec:"certificate_chain"`
-	Signature        []byte `codec:"signature"`
+	Body             []byte `json:"body"`
+	CertificateChain []byte `json:"certificate_chain"`
+	Signature        []byte `json:"signature"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -202,17 +202,17 @@ func (b *AVRBundle) Open(trustRoots *x509.CertPool, ts time.Time) (*AttestationV
 // AttestationVerificationReport is a deserialized Attestation Verification
 // Report (AVR).
 type AttestationVerificationReport struct {
-	ID                    string                `codec:"id"`
-	Timestamp             string                `codec:"timestamp"`
-	Version               int                   `codec:"version"`
-	ISVEnclaveQuoteStatus ISVEnclaveQuoteStatus `codec:"isvEnclaveQuoteStatus"`
-	ISVEnclaveQuoteBody   []byte                `codec:"isvEnclaveQuoteBody"`
-	RevocationReason      *CRLReason            `codec:"revocationReason"`
-	PSEManifestStatus     *PSEManifestStatus    `codec:"pseManifestStatus"`
-	PSEManifestHash       string                `codec:"pseManifestHash"`
-	PlatformInfoBlob      string                `codec:"platformInfoBlob"`
-	Nonce                 string                `codec:"nonce"`
-	EPIDPseudonym         []byte                `codec:"epidPseudonym"`
+	ID                    string                `json:"id"`
+	Timestamp             string                `json:"timestamp"`
+	Version               int                   `json:"version"`
+	ISVEnclaveQuoteStatus ISVEnclaveQuoteStatus `json:"isvEnclaveQuoteStatus"`
+	ISVEnclaveQuoteBody   []byte                `json:"isvEnclaveQuoteBody"`
+	RevocationReason      *CRLReason            `json:"revocationReason"`
+	PSEManifestStatus     *PSEManifestStatus    `json:"pseManifestStatus"`
+	PSEManifestHash       string                `json:"pseManifestHash"`
+	PlatformInfoBlob      string                `json:"platformInfoBlob"`
+	Nonce                 string                `json:"nonce"`
+	EPIDPseudonym         []byte                `json:"epidPseudonym"`
 }
 
 // Quote decodes and returns the enclave quote component of an Attestation

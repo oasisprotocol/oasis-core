@@ -4,6 +4,7 @@ package registry
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
@@ -12,7 +13,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
@@ -203,8 +203,9 @@ func (app *registryApplication) ForeignCheckTx(ctx *abci.Context, other abci.App
 func (app *registryApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.Registry
 
+	b, _ := json.Marshal(st)
 	app.logger.Debug("InitChain: Genesis state",
-		"state", string(json.Marshal(st)),
+		"state", string(b),
 	)
 
 	state := NewMutableState(app.state.DeliverTxTree())

@@ -3,6 +3,7 @@ package stake
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -11,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	cmdFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
@@ -199,16 +199,17 @@ func doList(cmd *cobra.Command, args []string) {
 		}
 
 		ai := getAccountInfo(ctx, cmd, v, client)
-		fmt.Printf("%v\n", string(json.Marshal(ai)))
+		b, _ := json.Marshal(ai)
+		fmt.Printf("%v\n", string(b))
 	}
 }
 
 type accountInfo struct {
-	ID              signature.PublicKey `codec:"id"`
-	GeneralBalance  api.Quantity        `codec:"general_balance"`
-	EscrowBalance   api.Quantity        `codec:"escrow_balance"`
-	DebondStartTime uint64              `codec:"debond_start_time"`
-	Nonce           uint64              `codec:"nonce"`
+	ID              signature.PublicKey `json:"id"`
+	GeneralBalance  api.Quantity        `json:"general_balance"`
+	EscrowBalance   api.Quantity        `json:"escrow_balance"`
+	DebondStartTime uint64              `json:"debond_start_time"`
+	Nonce           uint64              `json:"nonce"`
 }
 
 func getAccountInfo(ctx context.Context, cmd *cobra.Command, id signature.PublicKey, client grpcStaking.StakingClient) *accountInfo {

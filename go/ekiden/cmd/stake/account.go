@@ -2,6 +2,7 @@ package stake
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/json"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	cmdFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
@@ -80,15 +80,21 @@ var (
 )
 
 type serializedTx struct {
-	Transfer      *api.SignedTransfer      `codec:"tranfer"`
-	Burn          *api.SignedBurn          `codec:"burn"`
-	Escrow        *api.SignedEscrow        `codec:"escrow"`
-	ReclaimEscrow *api.SignedReclaimEscrow `codec:"reclaim_escrow"`
+	Transfer      *api.SignedTransfer      `json:"tranfer"`
+	Burn          *api.SignedBurn          `json:"burn"`
+	Escrow        *api.SignedEscrow        `json:"escrow"`
+	ReclaimEscrow *api.SignedReclaimEscrow `json:"reclaim_escrow"`
 }
 
 func (tx *serializedTx) MustSave() {
-	rawTx := json.Marshal(tx)
-	if err := ioutil.WriteFile(viper.GetString(cfgTxFile), rawTx, 0600); err != nil {
+	rawTx, err := json.Marshal(tx)
+	if err != nil {
+		logger.Error("failed to marshal transaction",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if err = ioutil.WriteFile(viper.GetString(cfgTxFile), rawTx, 0600); err != nil {
 		logger.Error("failed to save transaction",
 			"err", err,
 		)
@@ -124,7 +130,8 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 	ai := getAccountInfo(ctx, cmd, id, client)
-	fmt.Printf("%v\n", string(json.Marshal(ai)))
+	b, _ := json.Marshal(ai)
+	fmt.Printf("%v\n", string(b))
 }
 
 func doAccountSubmit(cmd *cobra.Command, args []string) {

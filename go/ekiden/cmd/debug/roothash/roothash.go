@@ -4,6 +4,7 @@ package roothash
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -11,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	cmdGrpc "github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
@@ -141,7 +141,8 @@ func doExport(cmd *cobra.Command, args []string) {
 		defer w.Close()
 	}
 
-	if _, err = w.Write(json.Marshal(genesisBlocks)); err != nil {
+	b, _ := json.Marshal(genesisBlocks)
+	if _, err = w.Write(b); err != nil {
 		logger.Error("failed to write genesis blocks",
 			"err", err,
 		)

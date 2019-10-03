@@ -3,6 +3,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -20,7 +21,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/ekiden/go/common/entity"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/sgx"
@@ -123,7 +123,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	}
 
 	// Write out the signed runtime registration.
-	b := json.Marshal(signed)
+	b, _ := json.Marshal(signed)
 	if err = ioutil.WriteFile(filepath.Join(dataDir, viper.GetString(cfgOutput)), b, 0600); err != nil {
 		logger.Error("failed to write signed runtime genesis registration",
 			"err", err,
@@ -216,7 +216,8 @@ func doList(cmd *cobra.Command, args []string) {
 		var s string
 		switch cmdFlags.Verbose() {
 		case true:
-			s = string(json.Marshal(&rt))
+			b, _ := json.Marshal(&rt)
+			s = string(b)
 		default:
 			s = rt.ID.String()
 		}

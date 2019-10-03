@@ -144,44 +144,44 @@ type EscrowBackend interface {
 // TransferEvent is the event emitted when a balance is transfered, either by
 // a call to Transfer or Withdraw.
 type TransferEvent struct {
-	From   signature.PublicKey `codec:"from"`
-	To     signature.PublicKey `codec:"to"`
-	Tokens Quantity            `codec:"tokens"`
+	From   signature.PublicKey `json:"from"`
+	To     signature.PublicKey `json:"to"`
+	Tokens Quantity            `json:"tokens"`
 }
 
 // BurnEvent is the event emitted when tokens are destroyed via a call to Burn.
 type BurnEvent struct {
-	Owner  signature.PublicKey `codec:"owner"`
-	Tokens Quantity            `codec:"tokens"`
+	Owner  signature.PublicKey `json:"owner"`
+	Tokens Quantity            `json:"tokens"`
 }
 
 // EscrowEvent is the event emitted when a balance is transfered into a escrow
 // balance.
 type EscrowEvent struct {
-	Owner  signature.PublicKey `codec:"owner"`
-	Tokens Quantity            `codec:"tokens"`
+	Owner  signature.PublicKey `json:"owner"`
+	Tokens Quantity            `json:"tokens"`
 }
 
 // TakeEscrowEvent is the event emitted when balanace is deducted from a escrow
 // balance (stake is slashed).
 type TakeEscrowEvent struct {
-	Owner  signature.PublicKey `codec:"owner"`
-	Tokens Quantity            `codec:"tokens"`
+	Owner  signature.PublicKey `json:"owner"`
+	Tokens Quantity            `json:"tokens"`
 }
 
 // ReclaimEscrowEvent is the event emitted when tokens are relaimed from a
 // escrow balance back into the entitie's general balance.
 type ReclaimEscrowEvent struct {
-	Owner  signature.PublicKey `codec:"owner"`
-	Tokens Quantity            `codec:"tokens"`
+	Owner  signature.PublicKey `json:"owner"`
+	Tokens Quantity            `json:"tokens"`
 }
 
 // Transfer is a token transfer.
 type Transfer struct {
-	Nonce uint64 `codec:"nonce"`
+	Nonce uint64 `json:"nonce"`
 
-	To     signature.PublicKey `codec:"xfer_to"`
-	Tokens Quantity            `codec:"xfer_tokens"`
+	To     signature.PublicKey `json:"xfer_to"`
+	Tokens Quantity            `json:"xfer_tokens"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -196,9 +196,9 @@ func (x *Transfer) UnmarshalCBOR(data []byte) error {
 
 // Burn is a token burn (destruction).
 type Burn struct {
-	Nonce uint64 `codec:"nonce"`
+	Nonce uint64 `json:"nonce"`
 
-	Tokens Quantity `codec:"burn_tokens"`
+	Tokens Quantity `json:"burn_tokens"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -213,9 +213,9 @@ func (b *Burn) UnmarshalCBOR(data []byte) error {
 
 // Escrow is a token escrow.
 type Escrow struct {
-	Nonce uint64 `codec:"nonce"`
+	Nonce uint64 `json:"nonce"`
 
-	Tokens Quantity `codec:"escrow_tokens"`
+	Tokens Quantity `json:"escrow_tokens"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -230,9 +230,9 @@ func (e *Escrow) UnmarshalCBOR(data []byte) error {
 
 // ReclaimEscrow is a token escrow reclimation.
 type ReclaimEscrow struct {
-	Nonce uint64 `codec:"nonce"`
+	Nonce uint64 `json:"nonce"`
 
-	Tokens Quantity `codec:"reclaim_tokens"`
+	Tokens Quantity `json:"reclaim_tokens"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -373,18 +373,18 @@ func (k ThresholdKind) String() string {
 // Genesis is the initial ledger balances at genesis for use in the genesis
 // block and test cases.
 type Genesis struct {
-	TotalSupply       Quantity                   `codec:"total_supply"`
-	CommonPool        Quantity                   `codec:"common_pool"`
-	Thresholds        map[ThresholdKind]Quantity `codec:"thresholds,omitempty"`
-	DebondingInterval uint64                     `codec:"debonding_interval"`
+	TotalSupply       Quantity                   `json:"total_supply"`
+	CommonPool        Quantity                   `json:"common_pool"`
+	Thresholds        map[ThresholdKind]Quantity `json:"thresholds,omitempty"`
+	DebondingInterval uint64                     `json:"debonding_interval"`
 
-	Ledger map[signature.MapKey]*GenesisLedgerEntry `codec:"ledger"`
+	Ledger map[signature.MapKey]*GenesisLedgerEntry `json:"ledger"`
 }
 
 // GenesisLedgerEntry is the per-account ledger entry for the genesis block.
 type GenesisLedgerEntry struct {
-	GeneralBalance  Quantity `codec:"general_balance"`
-	EscrowBalance   Quantity `codec:"escrow_balance"`
-	DebondStartTime uint64   `codec:"debond_start"`
-	Nonce           uint64   `codec:"nonce"`
+	GeneralBalance  Quantity `json:"general_balance"`
+	EscrowBalance   Quantity `json:"escrow_balance"`
+	DebondStartTime uint64   `json:"debond_start"`
+	Nonce           uint64   `json:"nonce"`
 }

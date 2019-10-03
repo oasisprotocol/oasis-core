@@ -3,6 +3,7 @@ package byzantine
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"net"
 	"time"
@@ -14,7 +15,6 @@ import (
 	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/node"
 	"github.com/oasislabs/ekiden/go/common/sgx/ias"
 )
@@ -59,14 +59,15 @@ func init() {
 	binary.LittleEndian.PutUint16(quote[0:], 1)
 	rakHash := node.RAKHash(fakeRAK.Public())
 	copy(quote[ias.QuoteBodyLen+ias.OffsetReportReportData:], rakHash[:])
+	body, _ := json.Marshal(&ias.AttestationVerificationReport{
+		Timestamp:             time.Now().UTC().Format(ias.TimestampFormat),
+		ISVEnclaveQuoteStatus: ias.QuoteOK,
+		ISVEnclaveQuoteBody:   quote,
+	})
 	fakeCapabilitiesSGX.TEE = &node.CapabilityTEE{
 		Hardware: node.TEEHardwareIntelSGX,
 		Attestation: cbor.Marshal(ias.AVRBundle{
-			Body: json.Marshal(&ias.AttestationVerificationReport{
-				Timestamp:             time.Now().UTC().Format(ias.TimestampFormat),
-				ISVEnclaveQuoteStatus: ias.QuoteOK,
-				ISVEnclaveQuoteBody:   quote,
-			}),
+			Body: body,
 			// Everything we do is simulated, and we wouldn't be able to get a real signed AVR.
 		}),
 		RAK: fakeRAK.Public(),

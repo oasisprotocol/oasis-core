@@ -4,6 +4,7 @@ package keymanager
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -17,7 +18,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/file"
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/common/sgx"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
@@ -302,7 +302,8 @@ func verifyPolicyFromFlags() error {
 
 	// Output policy content in JSON, if verbose switch given.
 	if cmdFlags.Verbose() {
-		fmt.Printf("%s\n", json.Marshal(policy))
+		c, _ := json.Marshal(policy)
+		fmt.Printf("%s\n", string(c))
 	}
 
 	// Check the signatures of the policy. Public key is taken from the PEM
@@ -357,7 +358,7 @@ func doInitStatus(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	c := json.Marshal(s)
+	c, _ := json.Marshal(s)
 	if err = ioutil.WriteFile(viper.GetString(cfgStatusFile), c, 0666); err != nil {
 		logger.Error("failed to write key manager status json file",
 			"err", err,

@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -19,7 +20,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context/ctxhttp"
 
-	"github.com/oasislabs/ekiden/go/common/json"
 	"github.com/oasislabs/ekiden/go/common/logging"
 )
 
@@ -101,11 +101,14 @@ func (e *httpEndpoint) VerifyEvidence(ctx context.Context, quote, pseManifest []
 	}
 
 	// Encode the payload in the format that IAS wants.
-	reqPayload := json.Marshal(&iasEvidencePayload{
+	reqPayload, err := json.Marshal(&iasEvidencePayload{
 		ISVEnclaveQuote: quote,
 		PSEManifest:     pseManifest,
 		Nonce:           nonce,
 	})
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "ias: failed to marshal")
+	}
 
 	// Dispatch the request via HTTP.
 	u := *e.baseURL
@@ -182,9 +185,9 @@ func (e *httpEndpoint) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, er
 }
 
 type iasEvidencePayload struct {
-	ISVEnclaveQuote []byte `codec:"isvEnclaveQuote"`
-	PSEManifest     []byte `codec:"pseManifest,omitempty"`
-	Nonce           string `codec:"string,omitempty"`
+	ISVEnclaveQuote []byte `json:"isvEnclaveQuote"`
+	PSEManifest     []byte `json:"pseManifest,omitempty"`
+	Nonce           string `json:"nonce,omitempty"`
 }
 
 type mockEndpoint struct {

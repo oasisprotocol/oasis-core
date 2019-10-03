@@ -35,22 +35,22 @@ var (
 // Status is the current key manager status.
 type Status struct {
 	// ID is the runtime ID of the key manager.
-	ID signature.PublicKey `codec:"id"`
+	ID signature.PublicKey `json:"id"`
 
 	// IsInitialized is true iff the key manager is done initializing.
-	IsInitialized bool `codec:"is_initialized"`
+	IsInitialized bool `json:"is_initialized"`
 
 	// IsSecure is true iff the key manger is secure.
-	IsSecure bool `codec:"is_secure"`
+	IsSecure bool `json:"is_secure"`
 
 	// Checksum is the key manager master secret verification checksum.
-	Checksum []byte `codec:"checksum"`
+	Checksum []byte `json:"checksum"`
 
 	// Nodes is the list of currently active key manager node IDs.
-	Nodes []signature.PublicKey `codec:"nodes"`
+	Nodes []signature.PublicKey `json:"nodes"`
 
 	// Policy is the key manager policy.
-	Policy *SignedPolicySGX `codec:"policy"`
+	Policy *SignedPolicySGX `json:"policy"`
 }
 
 // Backend is a key manager management implementation.
@@ -74,16 +74,16 @@ type Backend interface {
 // InitResponse is the initialization RPC response, returned as part of a
 // SignedInitResponse from the key manager enclave.
 type InitResponse struct {
-	IsSecure       bool   `codec:"is_secure"`
-	Checksum       []byte `codec:"checksum"`
-	PolicyChecksum []byte `codec:"policy_checksum"`
+	IsSecure       bool   `json:"is_secure"`
+	Checksum       []byte `json:"checksum"`
+	PolicyChecksum []byte `json:"policy_checksum"`
 }
 
 // SignedInitResponse is the signed initialization RPC response, returned
 // from the key manager enclave.
 type SignedInitResponse struct {
-	InitResponse InitResponse `codec:"init_response"`
-	Signature    []byte       `codec:"signature"`
+	InitResponse InitResponse `json:"init_response"`
+	Signature    []byte       `json:"signature"`
 }
 
 func (r *SignedInitResponse) Verify(pk signature.PublicKey) error {
@@ -125,7 +125,7 @@ func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime) (*InitResponse,
 
 // Genesis is the key manager management genesis state.
 type Genesis struct {
-	Statuses []*Status `codec:"statuses,omit_empty"`
+	Statuses []*Status `json:"statuses,omit_empty"`
 }
 
 func init() {

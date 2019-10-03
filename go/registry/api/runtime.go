@@ -40,41 +40,41 @@ const (
 // Runtime represents a runtime.
 type Runtime struct {
 	// ID is a globally unique long term identifier of the runtime.
-	ID signature.PublicKey `codec:"id"`
+	ID signature.PublicKey `json:"id"`
 
 	// Genesis is the runtime genesis information.
-	Genesis RuntimeGenesis `codec:"genesis"`
+	Genesis RuntimeGenesis `json:"genesis"`
 
 	// ReplicaGroupSize is the size of the computation group.
-	ReplicaGroupSize uint64 `codec:"replica_group_size"`
+	ReplicaGroupSize uint64 `json:"replica_group_size"`
 
 	// ReplicaGroupBackupSize is the size of the discrepancy resolution
 	// replica group.
-	ReplicaGroupBackupSize uint64 `codec:"replica_group_backup_size"`
+	ReplicaGroupBackupSize uint64 `json:"replica_group_backup_size"`
 
 	// ReplicaAllowedStragglers is the number of allowed stragglers.
-	ReplicaAllowedStragglers uint64 `codec:"replica_allowed_stragglers"`
+	ReplicaAllowedStragglers uint64 `json:"replica_allowed_stragglers"`
 
 	// StorageGroupSize is the size of the storage group.
-	StorageGroupSize uint64 `codec:"storage_group_size"`
+	StorageGroupSize uint64 `json:"storage_group_size"`
 
 	// RegistrationTime is the time of registration of the runtime.
-	RegistrationTime uint64 `codec:"registration_time"`
+	RegistrationTime uint64 `json:"registration_time"`
 
 	// TransactionSchedulerGroupSize the size of the TransactionScheduler group.
-	TransactionSchedulerGroupSize uint64 `codec:"transaction_scheduler_group_size"`
+	TransactionSchedulerGroupSize uint64 `json:"transaction_scheduler_group_size"`
 
 	// Kind is the type of runtime.
-	Kind RuntimeKind `codec:"kind"`
+	Kind RuntimeKind `json:"kind"`
 
 	// TEEHardware specifies the runtime's TEE hardware requirements.
-	TEEHardware node.TEEHardware `codec:"tee_hardware"`
+	TEEHardware node.TEEHardware `json:"tee_hardware"`
 
 	// Version is the runtime version information.
-	Version VersionInfo `codec:"versions"`
+	Version VersionInfo `json:"versions"`
 
 	// KeyManager is the key manager runtime ID for this runtime.
-	KeyManager signature.PublicKey `codec:"key_manager"`
+	KeyManager signature.PublicKey `json:"key_manager"`
 }
 
 // String returns a string representation of itself.
@@ -200,11 +200,11 @@ func SignRuntime(signer signature.Signer, context []byte, runtime *Runtime) (*Si
 // VersionInfo is the per-runtime version information.
 type VersionInfo struct {
 	// Version of the runtime.
-	Version version.Version `codec:"version"`
+	Version version.Version `json:"version"`
 
 	// TEE is the enclave version information, in an enclave provider specific
 	// format if any.
-	TEE []byte `codec:"tee,omit_empty"`
+	TEE []byte `json:"tee,omit_empty"`
 }
 
 func (v *VersionInfo) fromProto(pb *pbRegistry.VersionInfo) error {
@@ -223,7 +223,7 @@ func (v *VersionInfo) toProto() *pbRegistry.VersionInfo {
 // VersionInfoIntelSGX is the SGX TEE version information.
 type VersionInfoIntelSGX struct {
 	// Enclaves is the allowed MRSIGNER/MRENCLAVE pairs.
-	Enclaves []sgx.EnclaveIdentity `codec:"enclaves"`
+	Enclaves []sgx.EnclaveIdentity `json:"enclaves"`
 }
 
 // RuntimeGenesis is the runtime genesis information that is used to
@@ -232,13 +232,13 @@ type RuntimeGenesis struct {
 	// StateRoot is the state root that should be used at genesis time. If
 	// the runtime should start with empty state, this must be set to the
 	// empty hash.
-	StateRoot hash.Hash `codec:"state_root"`
+	StateRoot hash.Hash `json:"state_root"`
 
 	// State is the state identified by the StateRoot. It may be empty iff
 	// the StorageReceipt is not invalid or StateRoot is an empty hash.
-	State storage.WriteLog `codec:"state"`
+	State storage.WriteLog `json:"state"`
 
 	// StorageReceipt is the storage receipt for the state root. It may be
 	// invalid iff the State is non-empty or StateRoot is an empty hash.
-	StorageReceipt signature.Signature `codec:"storage_receipt"`
+	StorageReceipt signature.Signature `json:"storage_receipt"`
 }
