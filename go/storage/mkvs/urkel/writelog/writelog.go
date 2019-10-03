@@ -1,6 +1,8 @@
 package writelog
 
 import (
+	"encoding/json"
+
 	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
 )
 
@@ -15,6 +17,18 @@ type LogEntry struct {
 
 	Key   []byte
 	Value []byte
+}
+
+func (k *LogEntry) UnmarshalJSON(src []byte) error {
+	var kv [2][]byte
+	if err := json.Unmarshal(src, &kv); err != nil {
+		return err
+	}
+
+	k.Key = kv[0]
+	k.Value = kv[1]
+
+	return nil
 }
 
 // LogEntryType is a type of a write log entry.
