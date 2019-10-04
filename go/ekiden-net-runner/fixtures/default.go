@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	cfgEkidenBinary     = "net.ekiden.binary"
-	cfgRuntimeBinary    = "net.runtime.binary"
-	cfgRuntimeLoader    = "net.runtime.loader"
-	cfgKeymanagerBinary = "net.keymanager.binary"
-	cfgTEEHardware      = "net.tee_hardware"
+	cfgEkidenBinary        = "net.ekiden.binary"
+	cfgRuntimeBinary       = "net.runtime.binary"
+	cfgRuntimeGenesisState = "net.runtime.genesis_state"
+	cfgRuntimeLoader       = "net.runtime.loader"
+	cfgKeymanagerBinary    = "net.keymanager.binary"
+	cfgTEEHardware         = "net.tee_hardware"
 )
 
 var (
@@ -76,6 +77,7 @@ func NewDefaultFixture() (*ekiden.NetworkFixture, error) {
 				ReplicaGroupSize:       2,
 				ReplicaGroupBackupSize: 1,
 				StorageGroupSize:       1,
+				GenesisState:           viper.GetString(cfgRuntimeGenesisState),
 			},
 		},
 		Validators: []ekiden.ValidatorFixture{
@@ -101,6 +103,7 @@ func NewDefaultFixture() (*ekiden.NetworkFixture, error) {
 func init() {
 	Flags.String(cfgEkidenBinary, "ekiden", "path to the ekiden binary")
 	Flags.String(cfgRuntimeBinary, "simple-keyvalue", "path to the runtime binary")
+	Flags.String(cfgRuntimeGenesisState, "", "path to the runtime genesis state")
 	Flags.String(cfgRuntimeLoader, "ekiden-runtime-loader", "path to the runtime loader")
 	Flags.String(cfgKeymanagerBinary, "ekiden-keymanager-runtime", "path to the keymanager runtime")
 	Flags.String(cfgTEEHardware, "", "TEE hardware to use")
