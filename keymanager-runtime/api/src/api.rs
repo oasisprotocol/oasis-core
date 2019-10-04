@@ -147,7 +147,7 @@ impl ContractKey {
     /// Create a set of `ContractKey`.
     pub fn new(pk: PublicKey, sk: PrivateKey, k: StateKey, sum: Vec<u8>) -> Self {
         Self {
-            input_keypair: InputKeyPair { pk, sk },
+            input_keypair: InputKeyPair::new(pk, sk),
             state_key: k,
             checksum: sum,
         }
@@ -156,10 +156,7 @@ impl ContractKey {
     /// Create a set of `ContractKey` with only the public key.
     pub fn from_public_key(k: PublicKey, sum: Vec<u8>) -> Self {
         Self {
-            input_keypair: InputKeyPair {
-                pk: k,
-                sk: PrivateKey::default(),
-            },
+            input_keypair: InputKeyPair::new(k, PrivateKey::default()),
             state_key: StateKey::default(),
             checksum: sum,
         }
