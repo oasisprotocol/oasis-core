@@ -26,10 +26,17 @@ var (
 	_ signature.SignerFactory     = (*Factory)(nil)
 	_ signature.Signer            = (*Signer)(nil)
 
+	// FileEntityKey is the entity key filename.
+	FileEntityKey = "entity.pem"
+	// FileIdentityKey is the identity key filename.
+	FileIdentityKey = "identity.pem"
+	// FileP2PKey is the P2P key filename.
+	FileP2PKey = "p2p.pem"
+
 	rolePEMFiles = map[signature.SignerRole]string{
-		signature.SignerEntity: "entity.pem",
-		signature.SignerNode:   "identity.pem",
-		signature.SignerP2P:    "p2p.pem",
+		signature.SignerEntity: FileEntityKey,
+		signature.SignerNode:   FileIdentityKey,
+		signature.SignerP2P:    FileP2PKey,
 	}
 )
 

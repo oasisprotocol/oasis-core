@@ -1,8 +1,9 @@
 *.swp
 *~
 
-common/crypto/mrae/gen_vectors/gen_vectors
 ekiden/ekiden
+ekiden-test-runner/ekiden-test-runner
+ekiden-net-runner/ekiden-net-runner
 storage/mkvs/urkel/interop/urkel_test_helpers
 
 # Ignore output from protoc created via `go generate`.

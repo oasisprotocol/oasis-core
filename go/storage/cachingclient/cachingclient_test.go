@@ -110,7 +110,7 @@ func requireNewClient(t *testing.T, remote api.Backend) (api.Backend, string) {
 	cacheDir, err := ioutil.TempDir("", "ekiden-cachingclient-test_")
 	require.NoError(t, err, "create cache dir")
 
-	viper.Set(cfgCacheFile, filepath.Join(cacheDir, "db"))
+	viper.Set(CfgCacheFile, filepath.Join(cacheDir, "db"))
 	viper.Set(cfgCacheSize, 1024768)
 
 	client, err := New(remote, false)

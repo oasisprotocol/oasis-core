@@ -16,8 +16,10 @@ import (
 )
 
 const (
-	cfgGRPCPort  = "grpc.port"
-	cfgDebugPort = "grpc.debug.port"
+	// CfgServerPort configures the server port.
+	CfgServerPort = "grpc.port"
+	// CfgDebugPort configures the internal debug port.
+	CfgDebugPort = "grpc.debug.port"
 	cfgAddress   = "address"
 
 	defaultAddress      = "127.0.0.1:42261"
@@ -41,7 +43,7 @@ var (
 func NewServerTCP(cert *tls.Certificate, installWrapper bool) (*cmnGrpc.Server, error) {
 	config := &cmnGrpc.ServerConfig{
 		Name:           "internal",
-		Port:           uint16(viper.GetInt(cfgGRPCPort)),
+		Port:           uint16(viper.GetInt(CfgServerPort)),
 		Certificate:    cert,
 		InstallWrapper: installWrapper,
 	}
@@ -60,7 +62,7 @@ func NewServerLocal(installWrapper bool) (*cmnGrpc.Server, error) {
 	}
 	path := filepath.Join(dataDir, localSocketFilename)
 
-	debugPort := uint16(viper.GetInt(cfgDebugPort))
+	debugPort := uint16(viper.GetInt(CfgDebugPort))
 
 	config := &cmnGrpc.ServerConfig{
 		Name:           "internal",
@@ -85,11 +87,11 @@ func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
 }
 
 func init() {
-	ServerTCPFlags.Uint16(cfgGRPCPort, 9001, "gRPC server port")
+	ServerTCPFlags.Uint16(CfgServerPort, 9001, "gRPC server port")
 	_ = viper.BindPFlags(ServerTCPFlags)
 	ServerTCPFlags.AddFlagSet(cmnGrpc.Flags)
 
-	ServerLocalFlags.Uint16(cfgDebugPort, 0, "gRPC server debug port (INSECURE/UNSAFE)")
+	ServerLocalFlags.Uint16(CfgDebugPort, 0, "gRPC server debug port (INSECURE/UNSAFE)")
 	_ = viper.BindPFlags(ServerLocalFlags)
 	ServerLocalFlags.AddFlagSet(cmnGrpc.Flags)
 

@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	cfgWorkerEnabled = "worker.compute.enabled"
+	// CfgWorkerEnabled enables the compute worker.
+	CfgWorkerEnabled = "worker.compute.enabled"
 
 	cfgStorageCommitTimeout = "worker.compute.storage_commit_timeout"
 )
@@ -23,7 +24,7 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Enabled reads our enabled flag from viper.
 func Enabled() bool {
-	return viper.GetBool(cfgWorkerEnabled)
+	return viper.GetBool(CfgWorkerEnabled)
 }
 
 // New creates a new compute worker.
@@ -43,7 +44,7 @@ func New(
 }
 
 func init() {
-	Flags.Bool(cfgWorkerEnabled, false, "Enable compute worker process")
+	Flags.Bool(CfgWorkerEnabled, false, "Enable compute worker process")
 
 	Flags.Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 

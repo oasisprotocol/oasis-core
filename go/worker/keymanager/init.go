@@ -4,7 +4,6 @@ package keymanager
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
@@ -20,13 +19,19 @@ import (
 )
 
 const (
-	cfgEnabled = "worker.keymanager.enabled"
+	// CfgEnabled enables the key manager worker.
+	CfgEnabled = "worker.keymanager.enabled"
 
-	cfgTEEHardware   = "worker.keymanager.tee_hardware"
-	cfgRuntimeLoader = "worker.keymanager.runtime.loader"
-	cfgRuntimeBinary = "worker.keymanager.runtime.binary"
-	cfgRuntimeID     = "worker.keymanager.runtime.id"
-	cfgMayGenerate   = "worker.keymanager.may_generate"
+	// CfgTEEHardware configures the enclave TEE hardware.
+	CfgTEEHardware = "worker.keymanager.tee_hardware"
+	// CfgRuntimeLoader configures the runtime loader.
+	CfgRuntimeLoader = "worker.keymanager.runtime.loader"
+	// CfgRuntimeBinary configures the runtime binary.
+	CfgRuntimeBinary = "worker.keymanager.runtime.binary"
+	// CfgRuntimeID configures the runtime ID.
+	CfgRuntimeID = "worker.keymanager.runtime.id"
+	// CfgMayGenerate allows the enclave to generate a master secret.
+	CfgMayGenerate = "worker.keymanager.may_generate"
 )
 
 // Flags has the configuration flags.
@@ -34,7 +39,7 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Enabled reads our enabled flag from viper.
 func Enabled() bool {
-	return viper.GetBool(cfgEnabled)
+	return viper.GetBool(CfgEnabled)
 }
 
 // New constructs a new key manager worker.
@@ -46,17 +51,13 @@ func New(
 	backend api.Backend,
 ) (*Worker, error) {
 	var teeHardware node.TEEHardware
-	s := viper.GetString(cfgTEEHardware)
-	switch strings.ToLower(s) {
-	case "", "invalid":
-	case "intel-sgx":
-		teeHardware = node.TEEHardwareIntelSGX
-	default:
+	s := viper.GetString(CfgTEEHardware)
+	if err := teeHardware.FromString(s); err != nil {
 		return nil, fmt.Errorf("invalid TEE hardware: %s", s)
 	}
 
-	workerRuntimeLoaderBinary := viper.GetString(cfgRuntimeLoader)
-	runtimeBinary := viper.GetString(cfgRuntimeBinary)
+	workerRuntimeLoaderBinary := viper.GetString(CfgRuntimeLoader)
+	runtimeBinary := viper.GetString(CfgRuntimeBinary)
 
 	ctx, cancelFn := context.WithCancel(context.Background())
 
@@ -71,7 +72,7 @@ func New(
 		registration: r,
 		backend:      backend,
 		enabled:      Enabled(),
-		mayGenerate:  viper.GetBool(cfgMayGenerate),
+		mayGenerate:  viper.GetBool(CfgMayGenerate),
 	}
 
 	if w.enabled {
@@ -79,7 +80,7 @@ func New(
 			panic("common worker should have been enabled for key manager worker")
 		}
 
-		if err := w.runtimeID.UnmarshalHex(viper.GetString(cfgRuntimeID)); err != nil {
+		if err := w.runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID)); err != nil {
 			return nil, errors.Wrap(err, "worker/keymanager: failed to parse runtime ID")
 		}
 
@@ -111,13 +112,13 @@ func New(
 func init() {
 	emptyRoot.Empty()
 
-	Flags.Bool(cfgEnabled, false, "Enable key manager worker")
+	Flags.Bool(CfgEnabled, false, "Enable key manager worker")
 
-	Flags.String(cfgTEEHardware, "", "TEE hardware to use for the key manager")
-	Flags.String(cfgRuntimeLoader, "", "Path to key manager worker process binary")
-	Flags.String(cfgRuntimeBinary, "", "Path to key manager runtime binary")
-	Flags.String(cfgRuntimeID, "", "Key manager Runtime ID")
-	Flags.Bool(cfgMayGenerate, false, "Key manager may generate new master secret")
+	Flags.String(CfgTEEHardware, "", "TEE hardware to use for the key manager")
+	Flags.String(CfgRuntimeLoader, "", "Path to key manager worker process binary")
+	Flags.String(CfgRuntimeBinary, "", "Path to key manager runtime binary")
+	Flags.String(CfgRuntimeID, "", "Key manager Runtime ID")
+	Flags.Bool(CfgMayGenerate, false, "Key manager may generate new master secret")
 
 	_ = viper.BindPFlags(Flags)
 }

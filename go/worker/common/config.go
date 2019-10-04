@@ -14,14 +14,19 @@ import (
 )
 
 var (
-	cfgClientPort      = "worker.client.port"
+	// CfgClientPort configures the worker client port.
+	CfgClientPort = "worker.client.port"
+
 	cfgClientAddresses = "worker.client.addresses"
 
-	cfgRuntimeID = "worker.runtime.id"
-
-	cfgRuntimeBackend = "worker.runtime.backend"
-	cfgRuntimeLoader  = "worker.runtime.loader"
-	cfgRuntimeBinary  = "worker.runtime.binary"
+	// CfgRuntimeID configures the worker runtime ID(s).
+	CfgRuntimeID = "worker.runtime.id"
+	// CfgRuntimeBackend configures the runtime backend.
+	CfgRuntimeBackend = "worker.runtime.backend"
+	// CfgRuntimeLoader configures the runtime loader binary.
+	CfgRuntimeLoader = "worker.runtime.loader"
+	// CfgRuntimeBinary confgures the runtime binary.
+	CfgRuntimeBinary = "worker.runtime.binary"
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -86,27 +91,27 @@ func newConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	runtimes, err := configparser.GetRuntimes(viper.GetStringSlice(cfgRuntimeID))
+	runtimes, err := configparser.GetRuntimes(viper.GetStringSlice(CfgRuntimeID))
 	if err != nil {
 		return nil, err
 	}
 
 	cfg := Config{
-		ClientPort:      uint16(viper.GetInt(cfgClientPort)),
+		ClientPort:      uint16(viper.GetInt(CfgClientPort)),
 		ClientAddresses: clientAddresses,
 		Runtimes:        runtimes,
 		logger:          logging.GetLogger("worker/config"),
 	}
 
 	// Check if runtime host is configured for the runtimes.
-	if runtimeLoader := viper.GetString(cfgRuntimeLoader); runtimeLoader != "" {
-		runtimeBinaries := viper.GetStringSlice(cfgRuntimeBinary)
+	if runtimeLoader := viper.GetString(CfgRuntimeLoader); runtimeLoader != "" {
+		runtimeBinaries := viper.GetStringSlice(CfgRuntimeBinary)
 		if len(runtimeBinaries) != len(runtimes) {
 			return nil, fmt.Errorf("runtime binary/id count mismatch")
 		}
 
 		cfg.RuntimeHost = &RuntimeHostConfig{
-			Backend:  viper.GetString(cfgRuntimeBackend),
+			Backend:  viper.GetString(CfgRuntimeBackend),
 			Loader:   runtimeLoader,
 			Runtimes: make(map[signature.MapKey]RuntimeHostRuntimeConfig),
 		}
@@ -125,14 +130,14 @@ func newConfig() (*Config, error) {
 }
 
 func init() {
-	Flags.Uint16(cfgClientPort, 9100, "Port to use for incoming gRPC client connections")
+	Flags.Uint16(CfgClientPort, 9100, "Port to use for incoming gRPC client connections")
 	Flags.StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 
-	Flags.StringSlice(cfgRuntimeID, []string{}, "List of IDs (hex) of runtimes that this node will participate in")
+	Flags.StringSlice(CfgRuntimeID, []string{}, "List of IDs (hex) of runtimes that this node will participate in")
 
-	Flags.String(cfgRuntimeBackend, "sandboxed", "Runtime worker host backend")
-	Flags.String(cfgRuntimeLoader, "", "Path to runtime loader binary")
-	Flags.StringSlice(cfgRuntimeBinary, nil, "Path to runtime binary")
+	Flags.String(CfgRuntimeBackend, "sandboxed", "Runtime worker host backend")
+	Flags.String(CfgRuntimeLoader, "", "Path to runtime loader binary")
+	Flags.StringSlice(CfgRuntimeBinary, nil, "Path to runtime binary")
 
 	_ = viper.BindPFlags(Flags)
 }

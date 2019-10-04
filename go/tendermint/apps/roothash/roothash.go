@@ -481,6 +481,10 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		panic(err)
 	}
 
+	app.logger.Warn("FireTimer: timer fired",
+		logging.LogEvent, roothash.LogEventTimerFired,
+	)
+
 	tree := app.state.DeliverTxTree()
 	state := newMutableState(tree)
 	rtState, err := state.getRuntimeState(tCtx.ID)
@@ -753,6 +757,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 		app.logger.Warn("compute discrepancy detected",
 			"round", blockNr,
 			"committee_id", committeeID,
+			logging.LogEvent, roothash.LogEventComputeDiscrepancyDetected,
 		)
 
 		ctx.EmitTag(TagUpdate, TagUpdateValue)
@@ -775,6 +780,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 	app.logger.Error("worker: round failed",
 		"round", blockNr,
 		"err", err,
+		logging.LogEvent, roothash.LogEventRoundFailed,
 	)
 
 	app.emitEmptyBlock(ctx, rtState, block.RoundFailed)
@@ -835,6 +841,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		// Discrepancy has been detected.
 		app.logger.Warn("merge discrepancy detected",
 			"round", blockNr,
+			logging.LogEvent, roothash.LogEventMergeDiscrepancyDetected,
 		)
 
 		ctx.EmitTag(TagUpdate, TagUpdateValue)
@@ -851,6 +858,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 	app.logger.Error("worker: round failed",
 		"round", blockNr,
 		"err", err,
+		logging.LogEvent, roothash.LogEventRoundFailed,
 	)
 
 	app.emitEmptyBlock(ctx, rtState, block.RoundFailed)

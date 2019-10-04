@@ -86,7 +86,7 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 		cert *tls.Certificate
 		err  error
 	)
-	tlsCertPath, tlsKeyPath := tlsCertPaths(dataDir)
+	tlsCertPath, tlsKeyPath := TLSCertPaths(dataDir)
 	if shouldGenerate {
 		cert, err = tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, CommonName)
 	} else {
@@ -104,7 +104,9 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 	}, nil
 }
 
-func tlsCertPaths(dataDir string) (string, string) {
+// TLSCertPaths returns the TLS private key and certificate paths relative
+// to the passed data directory.
+func TLSCertPaths(dataDir string) (string, string) {
 	var (
 		tlsKeyPath  = filepath.Join(dataDir, tlsKeyFilename)
 		tlsCertPath = filepath.Join(dataDir, tlsCertFilename)

@@ -3,3 +3,5 @@ ignore:
   # TODO: At some point, fliter out debug stuff out of `ekiden/cmd`.
   - "storage/mkvs/urkel/interop" # Urkel interoperability test helpers.
   - "ekiden/cmd/debug" # Debug and test utilities.
+  - "ekiden-test-runner" # E2E test runner.
+  - "ekiden-net-runner" # Test local network runner.

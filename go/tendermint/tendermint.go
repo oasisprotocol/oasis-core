@@ -46,22 +46,27 @@ import (
 const (
 	configDir = "config"
 
-	cfgCoreListenAddress   = "tendermint.core.listen_address"
+	// CfgCoreListenAddress configures the tendermint core network listen address.
+	CfgCoreListenAddress   = "tendermint.core.listen_address"
 	cfgCoreExternalAddress = "tendermint.core.external_address"
 
-	cfgConsensusTimeoutCommit      = "tendermint.consensus.timeout_commit"
+	// CfgConsensusTimeoutCommit configures the tendermint timeout commit.
+	CfgConsensusTimeoutCommit      = "tendermint.consensus.timeout_commit"
 	cfgConsensusSkipTimeoutCommit  = "tendermint.consensus.skip_timeout_commit"
 	cfgConsensusEmptyBlockInterval = "tendermint.consensus.empty_block_interval"
 
 	cfgABCIPruneStrategy = "tendermint.abci.prune.strategy"
 	cfgABCIPruneNumKept  = "tendermint.abci.prune.num_kept"
 
-	cfgP2PSeeds    = "tendermint.seeds"
-	cfgP2PSeedMode = "tendermint.seed_mode"
+	// CfgP@PSeeds configures the tendermint seed nodes.
+	CfgP2PSeeds = "tendermint.seeds"
+	// CfgP2PSeedMode enables the tendermint seed mode.
+	CfgP2PSeedMode = "tendermint.seed_mode"
 
 	cfgLogDebug = "tendermint.log.debug"
 
-	cfgDebugP2PAddrBookLenient = "tendermint.debug.addr_book_lenient"
+	// CfgDebugP2PAddrBookLenient configures allowing non-routable addresses.
+	CfgDebugP2PAddrBookLenient = "tendermint.debug.addr_book_lenient"
 
 	defaultChainID = "0xa515"
 )
@@ -113,7 +118,7 @@ func newFailMonitor(logger *logging.Logger, fn func()) *failMonitor {
 
 // IsSeed retuns true iff the node is configured as a seed node.
 func IsSeed() bool {
-	return viper.GetBool(cfgP2PSeedMode)
+	return viper.GetBool(CfgP2PSeedMode)
 }
 
 type tendermintService struct {
@@ -218,7 +223,7 @@ func (t *tendermintService) Synced() <-chan struct{} {
 func (t *tendermintService) GetAddresses() ([]node.Address, error) {
 	addrURI := viper.GetString(cfgCoreExternalAddress)
 	if addrURI == "" {
-		addrURI = viper.GetString(cfgCoreListenAddress)
+		addrURI = viper.GetString(CfgCoreListenAddress)
 	}
 	if addrURI == "" {
 		return nil, fmt.Errorf("tendermint: no external address configured")
@@ -516,7 +521,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig := tmconfig.DefaultConfig()
 	_ = viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(tendermintDataDir)
-	timeoutCommit := viper.GetDuration(cfgConsensusTimeoutCommit)
+	timeoutCommit := viper.GetDuration(CfgConsensusTimeoutCommit)
 	emptyBlockInterval := viper.GetDuration(cfgConsensusEmptyBlockInterval)
 	tenderConfig.Consensus.TimeoutCommit = timeoutCommit
 	tenderConfig.Consensus.SkipTimeoutCommit = viper.GetBool(cfgConsensusSkipTimeoutCommit)
@@ -525,16 +530,16 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.Instrumentation.PrometheusListenAddr = ""
 	tenderConfig.TxIndex.Indexer = "null"
-	tenderConfig.P2P.ListenAddress = viper.GetString(cfgCoreListenAddress)
+	tenderConfig.P2P.ListenAddress = viper.GetString(CfgCoreListenAddress)
 	tenderConfig.P2P.ExternalAddress = viper.GetString(cfgCoreExternalAddress)
 	tenderConfig.P2P.AllowDuplicateIP = true // HACK: e2e tests need this.
-	tenderConfig.P2P.SeedMode = viper.GetBool(cfgP2PSeedMode)
+	tenderConfig.P2P.SeedMode = viper.GetBool(CfgP2PSeedMode)
 	// Seed Ids need to be Lowecase as p2p/transport.go:MultiplexTransport.upgrade()
 	// uses a case sensitive string comparision to validate public keys
 	// Since Seeds is expected to be in comma-delimited id@host:port format,
 	// lowercasing the whole string is ok.
-	tenderConfig.P2P.Seeds = strings.ToLower(viper.GetString(cfgP2PSeeds))
-	tenderConfig.P2P.AddrBookStrict = !viper.GetBool(cfgDebugP2PAddrBookLenient)
+	tenderConfig.P2P.Seeds = strings.ToLower(viper.GetString(CfgP2PSeeds))
+	tenderConfig.P2P.AddrBookStrict = !viper.GetBool(CfgDebugP2PAddrBookLenient)
 	tenderConfig.RPC.ListenAddress = ""
 
 	tendermintPV, err := crypto.LoadOrGeneratePrivVal(tendermintDataDir, t.nodeSigner)
@@ -658,7 +663,7 @@ func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.
 
 	// HACK: Certain test cases use TimeoutCommit < 1 sec, and care about the
 	// BFT view of time pulling ahead.
-	timeoutCommit := viper.GetDuration(cfgConsensusTimeoutCommit)
+	timeoutCommit := viper.GetDuration(CfgConsensusTimeoutCommit)
 	tmGenDoc.ConsensusParams.Block.TimeIotaMs = int64(timeoutCommit / time.Millisecond)
 
 	return tmGenDoc, nil
@@ -861,17 +866,17 @@ func newLogAdapter(suppressDebug bool) tmlog.Logger {
 }
 
 func init() {
-	Flags.String(cfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
+	Flags.String(CfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
 	Flags.String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
-	Flags.Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
+	Flags.Duration(CfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
 	Flags.Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
 	Flags.Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
 	Flags.String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 	Flags.Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
-	Flags.Bool(cfgP2PSeedMode, false, "run the tendermint node in seed mode")
-	Flags.String(cfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
+	Flags.Bool(CfgP2PSeedMode, false, "run the tendermint node in seed mode")
+	Flags.String(CfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
 	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
-	Flags.Bool(cfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
+	Flags.Bool(CfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(db.Flags)
 }

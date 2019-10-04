@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -15,6 +16,9 @@ import (
 )
 
 var (
+	// ErrInvalidRuntimeKind is the error returned when the parsed runtime
+	// kind is malformed.
+	ErrInvalidRuntimeKind = errors.New("runtime: invalid runtime kind")
 	// ErrMalformedStoreID is the error returned when a storage service
 	// ID is malformed.
 	ErrMalformedStoreID = errors.New("runtime: Malformed store ID")
@@ -35,7 +39,36 @@ const (
 
 	// KindKeyManager is a key manager runtime.
 	KindKeyManager RuntimeKind = 1
+
+	kindCompute    = "compute"
+	kindKeyManager = "keymanager"
 )
+
+// String returns a string representation of a runtime kind.
+func (k RuntimeKind) String() string {
+	switch k {
+	case KindCompute:
+		return kindCompute
+	case KindKeyManager:
+		return kindKeyManager
+	default:
+		return "[unsupported runtime kind]"
+	}
+}
+
+// FromString deserializes a string into a RuntimeKind.
+func (k *RuntimeKind) FromString(str string) error {
+	switch strings.ToLower(str) {
+	case kindCompute:
+		*k = KindCompute
+	case kindKeyManager:
+		*k = KindKeyManager
+	default:
+		return ErrInvalidRuntimeKind
+	}
+
+	return nil
+}
 
 // Runtime represents a runtime.
 type Runtime struct {

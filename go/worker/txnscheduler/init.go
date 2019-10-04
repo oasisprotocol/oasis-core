@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	cfgWorkerEnabled = "worker.txnscheduler.enabled"
-	cfgFlushTimeout  = "worker.txnscheduler.flush_timeout"
+	// CfgWorkerEnabled enables the tx scheduler worker.
+	CfgWorkerEnabled = "worker.txnscheduler.enabled"
+
+	cfgFlushTimeout = "worker.txnscheduler.flush_timeout"
 	// XXX: algorithm should eventually become a consensus parameter, as all nodes should use
 	// the same algorithm.
 	cfgAlgorithm = "worker.txnscheduler.algorithm"
@@ -25,7 +27,7 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Enabled reads our enabled flag from viper.
 func Enabled() bool {
-	return viper.GetBool(cfgWorkerEnabled)
+	return viper.GetBool(CfgWorkerEnabled)
 }
 
 // New creates a new worker.
@@ -59,7 +61,7 @@ func New(
 }
 
 func init() {
-	Flags.Bool(cfgWorkerEnabled, false, "Enable transaction scheduler process")
+	Flags.Bool(CfgWorkerEnabled, false, "Enable transaction scheduler process")
 
 	Flags.String(cfgAlgorithm, "batching", "Transaction scheduling algorithm")
 	Flags.Duration(cfgFlushTimeout, 1*time.Second, "Maximum amount of time to wait for a scheduled batch")

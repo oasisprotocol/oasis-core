@@ -2,7 +2,9 @@
 package staking
 
 import (
+	"bytes"
 	"encoding/hex"
+	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
@@ -86,6 +88,28 @@ func (app *stakingApplication) ForeignCheckTx(ctx *abci.Context, other abci.Appl
 	return nil
 }
 
+type thresholdUpdate struct {
+	k staking.ThresholdKind
+	v staking.Quantity
+}
+
+type thresholdUpdates []thresholdUpdate
+
+func (u thresholdUpdates) Len() int           { return len(u) }
+func (u thresholdUpdates) Swap(i, j int)      { u[i], u[j] = u[j], u[i] }
+func (u thresholdUpdates) Less(i, j int) bool { return u[i].k < u[j].k }
+
+type ledgerUpdate struct {
+	id      signature.PublicKey
+	account *ledgerEntry
+}
+
+type ledgerUpdates []ledgerUpdate
+
+func (u ledgerUpdates) Len() int           { return len(u) }
+func (u ledgerUpdates) Swap(i, j int)      { u[i], u[j] = u[j], u[i] }
+func (u ledgerUpdates) Less(i, j int) bool { return bytes.Compare(u[i].id[:], u[j].id[:]) < 0 }
+
 func (app *stakingApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := &doc.Staking
 	if app.debugGenesisState != nil {
@@ -104,6 +128,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	state.setDebondingInterval(st.DebondingInterval)
 
 	if st.Thresholds != nil {
+		var ups thresholdUpdates
 		for k, v := range st.Thresholds {
 			if !v.IsValid() {
 				app.logger.Error("InitChain: invalid threshold",
@@ -112,7 +137,13 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 				)
 				return errors.New("staking/tendermint: invalid genesis threshold")
 			}
-			state.setThreshold(k, &v)
+			ups = append(ups, thresholdUpdate{k, v})
+		}
+
+		// Make sure that we apply threshold updates in a canonical order.
+		sort.Stable(ups)
+		for _, u := range ups {
+			state.setThreshold(u.k, &u.v)
 		}
 	}
 
@@ -126,6 +157,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		return errors.Wrap(err, "staking/tendermint: failed to add common pool")
 	}
 
+	var ups ledgerUpdates
 	for k, v := range st.Ledger {
 		var id signature.PublicKey
 		_ = id.UnmarshalBinary(k[:])
@@ -151,7 +183,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 			DebondStartTime: v.DebondStartTime,
 			Nonce:           v.Nonce,
 		}
-		state.setAccount(id, account)
+		ups = append(ups, ledgerUpdate{id, account})
 		if err := totalSupply.Add(&account.GeneralBalance); err != nil {
 			app.logger.Error("InitChain: failed to add general balance",
 				"err", err,
@@ -164,6 +196,12 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 			)
 			return errors.Wrap(err, "staking/tendermint: failed to add escrow balance")
 		}
+	}
+
+	// Make sure that we apply ledger updates in a canonical order.
+	sort.Stable(ups)
+	for _, u := range ups {
+		state.setAccount(u.id, u.account)
 	}
 
 	if totalSupply.Cmp(&st.TotalSupply) != 0 {

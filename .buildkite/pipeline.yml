@@ -94,6 +94,8 @@ steps:
       # Upload the built artifacts.
       - cd /workdir/go/ekiden
       - buildkite-agent artifact upload ekiden
+      - cd /workdir/go/ekiden-test-runner
+      - buildkite-agent artifact upload ekiden-test-runner
     plugins:
       <<: *docker_plugin
 
@@ -175,51 +177,17 @@ steps:
     plugins:
       <<: *docker_plugin
 
-  - label: Test Ekiden tools
-    command:
-      - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/go/test_ekiden_tools.sh
-    agents:
-      buildkite_agent_size: medium
-    plugins:
-      <<: *docker_plugin
-
-  #########################
-  # Test single node config
-  #########################
-  - label: Test single node config
-    timeout_in_minutes: 20
-    command:
-      - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/scripts/test_config.sh single_node
-    plugins:
-      <<: *docker_plugin
-
   ###############
   # E2E test jobs
   ###############
-  - label: E2E tests (%n)
-    parallelism: 5
+  - label: E2E tests
+    parallelism: 6
     timeout_in_minutes: 9
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
-      - e2e/*/*.log
-    env:
-      TEST_BASE_DIR: e2e
-    agents:
-      buildkite_agent_size: large
-    plugins:
-      <<: *docker_plugin
-
-  - label: E2E migration tests
-    timeout_in_minutes: 10
-    command:
-      - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/scripts/test_migration.sh
-    artifact_paths:
-      - e2e/*/*.log
+      - e2e/**/*.log
     env:
       TEST_BASE_DIR: e2e
     agents:
@@ -230,28 +198,14 @@ steps:
   ###########################
   # E2E test jobs - intel-sgx
   ###########################
-  - label: E2E tests - intel-sgx (%n)
-    parallelism: 5
+  - label: E2E tests - intel-sgx
+    parallelism: 6
     timeout_in_minutes: 9
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
-      - e2e/*/*.log
-    env:
-      TEST_BASE_DIR: e2e
-    agents:
-      queue: intel-sgx
-    plugins:
-      <<: *docker_plugin_sgx
-
-  - label: E2E migration tests - intel-sgx
-    timeout_in_minutes: 15
-    command:
-      - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/scripts/test_migration.sh
-    artifact_paths:
-      - e2e/*/*.log
+      - e2e/**/*.log
     env:
       TEST_BASE_DIR: e2e
     agents:

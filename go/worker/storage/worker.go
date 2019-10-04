@@ -26,10 +26,13 @@ import (
 )
 
 const (
-	cfgWorkerEnabled      = "worker.storage.enabled"
+	// CfgWorkerEnabled enables the storage worker.
+	CfgWorkerEnabled      = "worker.storage.enabled"
 	cfgWorkerFetcherCount = "worker.storage.fetcher_count"
 
-	cfgWorkerDebugIgnoreApply = "worker.debug.storage.ignore_apply"
+	// CfgWorkerDebugIgnoreApply is a debug option that makes the worker ignore
+	// all apply operations.
+	CfgWorkerDebugIgnoreApply = "worker.debug.storage.ignore_apply"
 )
 
 var (
@@ -41,7 +44,7 @@ var (
 
 // Enabled reads our enabled flag from viper.
 func Enabled() bool {
-	return viper.GetBool(cfgWorkerEnabled)
+	return viper.GetBool(CfgWorkerEnabled)
 }
 
 // Worker is a worker handling storage operations.
@@ -72,7 +75,7 @@ func New(
 ) (*Worker, error) {
 
 	s := &Worker{
-		enabled:      viper.GetBool(cfgWorkerEnabled),
+		enabled:      viper.GetBool(CfgWorkerEnabled),
 		commonWorker: commonWorker,
 		logger:       logging.GetLogger("worker/storage"),
 		initCh:       make(chan struct{}),
@@ -118,7 +121,7 @@ func New(
 
 		// Attach storage interface to gRPC server.
 		s.grpcPolicy = grpc.NewDynamicRuntimePolicyChecker()
-		storage.NewGRPCServer(s.commonWorker.Grpc.Server(), s.commonWorker.Storage, s.grpcPolicy, viper.GetBool(cfgWorkerDebugIgnoreApply))
+		storage.NewGRPCServer(s.commonWorker.Grpc.Server(), s.commonWorker.Storage, s.grpcPolicy, viper.GetBool(CfgWorkerDebugIgnoreApply))
 
 		// Register storage worker role.
 		s.registration.RegisterRole(func(n *node.Node) error {
@@ -275,10 +278,10 @@ func (s *Worker) initGenesis(gen *genesis.Document) error {
 }
 
 func init() {
-	Flags.Bool(cfgWorkerEnabled, false, "Enable storage worker")
+	Flags.Bool(CfgWorkerEnabled, false, "Enable storage worker")
 	Flags.Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
-	Flags.Bool(cfgWorkerDebugIgnoreApply, false, "Ignore Apply operations (for debugging purposes)")
-	_ = Flags.MarkHidden(cfgWorkerDebugIgnoreApply)
+	Flags.Bool(CfgWorkerDebugIgnoreApply, false, "Ignore Apply operations (for debugging purposes)")
+	_ = Flags.MarkHidden(CfgWorkerDebugIgnoreApply)
 
 	_ = viper.BindPFlags(Flags)
 }

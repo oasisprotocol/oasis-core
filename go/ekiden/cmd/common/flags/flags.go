@@ -13,18 +13,20 @@ import (
 )
 
 const (
+	// CfgDebugTestEntity is the command line flag to enable the debug test
+	// entity.
+	CfgDebugTestEntity = "debug.test_entity"
+	// CfgGenesisFile is the flag used to specify a genesis file.
+	CfgGenesisFile = "genesis.file"
+	// CfgConsesusBackend is the flag used to specify a consensus backend.
+	CfgConsensusBackend = "consensus.backend"
+	// CfgConsensusValidator is the flag used to opt-in to being a validator.
+	CfgConsensusValidator = "consensus.validator"
+
 	cfgVerbose = "verbose"
 	cfgForce   = "force"
 	cfgRetries = "retries"
 	cfgEntity  = "entity"
-
-	cfgConsensusBackend   = "consensus.backend"
-	cfgConsensusValidator = "consensus.validator"
-
-	cfgDebugTestEntity = "debug.test_entity"
-
-	// CfgGenesisFile is the flag used to specify a genesis file.
-	CfgGenesisFile = "genesis.file"
 )
 
 var (
@@ -64,7 +66,7 @@ func Retries() int {
 
 // ConsensusBackend returns the set consensus backend.
 func ConsensusBackend() string {
-	backend := viper.GetString(cfgConsensusBackend)
+	backend := viper.GetString(CfgConsensusBackend)
 
 	switch strings.ToLower(backend) {
 	case tmapi.BackendName:
@@ -77,12 +79,12 @@ func ConsensusBackend() string {
 // ConsensusValidator returns true iff the node is opting in to be a consensus
 // validator.
 func ConsensusValidator() bool {
-	return viper.GetBool(cfgConsensusValidator)
+	return viper.GetBool(CfgConsensusValidator)
 }
 
 // DebugTestEntity returns true iff the test entity enable flag is set.
 func DebugTestEntity() bool {
-	return viper.GetBool(cfgDebugTestEntity)
+	return viper.GetBool(CfgDebugTestEntity)
 }
 
 // Entity returns the set entity directory.
@@ -102,10 +104,10 @@ func init() {
 
 	RetriesFlags.Int(cfgRetries, 0, "retries (-1 = forever)")
 
-	ConsensusBackendFlag.String(cfgConsensusBackend, tmapi.BackendName, "consensus backend")
-	ConsensusValidatorFlag.Bool(cfgConsensusValidator, false, "node is a consensus validator")
+	ConsensusBackendFlag.String(CfgConsensusBackend, tmapi.BackendName, "consensus backend")
+	ConsensusValidatorFlag.Bool(CfgConsensusValidator, false, "node is a consensus validator")
 
-	DebugTestEntityFlags.Bool(cfgDebugTestEntity, false, "use the test entity (UNSAFE)")
+	DebugTestEntityFlags.Bool(CfgDebugTestEntity, false, "use the test entity (UNSAFE)")
 
 	EntityFlags.String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
 
