@@ -82,22 +82,22 @@ lazy_static! {
             let maybe_secure = true;
 
             // AVR signature verification MUST be enabled.
-            let maybe_secure = maybe_secure & option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_none();
+            let maybe_secure = maybe_secure && option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_none();
 
             // IAS `GROUP_OUT_OF_DATE` and `CONFIGRUATION_NEEDED` responses
             // MUST count as IAS failure.
             //
             // Rationale: This is how IAS signifies that the host environment
             // is insecure (eg: SMT is enabled when it should not be).
-            let maybe_secure = maybe_secure & option_env!("EKIDEN_STRICT_AVR_VERIFY").is_some();
+            let maybe_secure = maybe_secure && option_env!("EKIDEN_STRICT_AVR_VERIFY").is_some();
 
             // The enclave MUST NOT be a debug one.
-            let maybe_secure = maybe_secure & !Report::for_self().attributes.flags.contains(AttributesFlags::DEBUG);
+            let maybe_secure = maybe_secure && !Report::for_self().attributes.flags.contains(AttributesFlags::DEBUG);
 
             // The enclave MUST NOT be signed by a test key,
             let enclave_identity = EnclaveIdentity::current().unwrap();
             let fortanix_mrsigner = MrSigner::from("9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a");
-            let maybe_secure = maybe_secure & (enclave_identity.mr_signer != fortanix_mrsigner);
+            let maybe_secure = maybe_secure && (enclave_identity.mr_signer != fortanix_mrsigner);
 
             maybe_secure
         };
