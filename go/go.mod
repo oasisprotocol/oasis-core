@@ -1,6 +1,10 @@
 module github.com/oasislabs/oasis-core/go
 
-replace github.com/tendermint/iavl => github.com/oasislabs/iavl v0.12.0-ekiden3
+replace (
+	github.com/tendermint/iavl => github.com/oasislabs/iavl v0.12.0-ekiden3
+	golang.org/x/crypto/curve25519 => github.com/oasislabs/ed25519/extra/x25519 v0.0.0-20191022155220-a426dcc8ad5f
+	golang.org/x/crypto/ed25519 => github.com/oasislabs/ed25519 v0.0.0-20191022155220-a426dcc8ad5f
+)
 
 require (
 	github.com/RoaringBitmap/roaring v0.4.18 // indirect
@@ -39,6 +43,7 @@ require (
 	github.com/multiformats/go-multiaddr-net v0.0.1
 	github.com/multiformats/go-multihash v0.0.6 // indirect
 	github.com/oasislabs/deoxysii v0.0.0-20190807103041-6159f99c2236
+	github.com/oasislabs/ed25519 v0.0.0-20191022155220-a426dcc8ad5f
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pelletier/go-toml v1.4.0 // indirect
 	github.com/pkg/errors v0.8.1

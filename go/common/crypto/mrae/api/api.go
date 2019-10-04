@@ -11,7 +11,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/curve25519"
+
+	curve25519 "github.com/oasislabs/ed25519/extra/x25519"
 )
 
 // Resetable is the interface implemented by cipher.AEAD implementations

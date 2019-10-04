@@ -5,7 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/curve25519"
+
+	curve25519 "github.com/oasislabs/ed25519/extra/x25519"
 )
 
 func Test_GenerateKeypair(t *testing.T) {

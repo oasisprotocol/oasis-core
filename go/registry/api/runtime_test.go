@@ -3,11 +3,12 @@ package api
 import (
 	"testing"
 
+	"github.com/oasislabs/ed25519"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/version"
+
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/ed25519"
 )
 
 func TestSerialization(t *testing.T) {

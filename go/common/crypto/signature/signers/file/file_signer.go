@@ -9,8 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"golang.org/x/crypto/ed25519"
-
+	"github.com/oasislabs/ed25519"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pem"
 )
