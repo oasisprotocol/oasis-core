@@ -354,7 +354,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 				continue
 			}
 
-			// Can't direcly compare headers, some backends rewrite the timestamp.
+			// Can't directly compare headers, some backends rewrite the timestamp.
 			require.EqualValues(parent.Header.Version, header.Version, "block version")
 			require.EqualValues(parent.Header.Namespace, header.Namespace, "block namespace")
 			require.EqualValues(parent.Header.Round, header.Round, "block round")
