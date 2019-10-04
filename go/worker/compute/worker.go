@@ -276,8 +276,13 @@ func newWorker(
 					continue
 				}
 
-				// NOTE: Worker host must not be nil as we waited for initialization.
 				workerHost := workerRT.GetNode().GetWorkerHost()
+				if workerHost == nil {
+					w.logger.Debug("runtime has shut down",
+						"runtime", rt.ID,
+					)
+					continue
+				}
 				if rt.Capabilities.TEE, err = workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
 					w.logger.Error("failed to obtain CapabilityTEE",
 						"err", err,
