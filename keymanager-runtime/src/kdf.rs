@@ -8,7 +8,6 @@ use lru::LruCache;
 use rand::{rngs::OsRng, Rng};
 use sgx_isa::Keypolicy;
 use sp800_185::{CShake, KMac};
-use tiny_keccak::sha3_256;
 use x25519_dalek;
 use zeroize::Zeroize;
 
@@ -25,6 +24,7 @@ use ekiden_runtime::{
             mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
             signature,
         },
+        runtime::RuntimeId,
         sgx::egetkey::egetkey,
     },
     executor::Executor,
@@ -60,6 +60,13 @@ lazy_static! {
             false => b"ekiden-derive-contract-keys-insecure",
         }
     };
+
+    static ref RUNTIME_CHECKSUM_CUSTOM: &'static [u8] = {
+        match BUILD_INFO.is_secure {
+            true => b"ekiden-checksum-master-secret",
+            false => b"ekiden-checksum-master-secret-insecure",
+        }
+    };
 }
 
 /// A dummy key for use in non-SGX tests where integrity is not needed.
@@ -79,6 +86,7 @@ struct Inner {
     /// Master secret.
     master_secret: Option<MasterSecret>,
     checksum: Option<Vec<u8>>,
+    runtime_id: Option<RuntimeId>,
     signer: Option<Arc<dyn signature::Signer>>,
     cache: LruCache<Vec<u8>, ContractKey>,
 }
@@ -87,6 +95,7 @@ impl Inner {
     fn reset(&mut self) {
         self.master_secret = None;
         self.checksum = None;
+        self.runtime_id = None;
         self.signer = None;
         self.cache.clear();
     }
@@ -151,6 +160,7 @@ impl Kdf {
             inner: RwLock::new(Inner {
                 master_secret: None,
                 checksum: None,
+                runtime_id: None,
                 signer: None,
                 cache: LruCache::new(1024),
             }),
@@ -171,6 +181,20 @@ impl Kdf {
         policy_checksum: Vec<u8>,
     ) -> Fallible<SignedInitResponse> {
         let mut inner = self.inner.write().unwrap();
+
+        let rctx = runtime_context!(ctx, KmContext);
+        if inner.runtime_id.is_some() {
+            // Whowa, the caller's idea of our runtime ID has changed,
+            // something really screwed up is going on.
+            if rctx.runtime_id != inner.runtime_id.unwrap() {
+                inner.reset();
+                return Err(KeyManagerError::StateCorrupted.into());
+            }
+        } else {
+            inner.runtime_id = Some(rctx.runtime_id);
+        }
+
+        let km_runtime_id = inner.runtime_id.unwrap();
 
         // How initialization proceeds depends on the state and the request.
         //
@@ -218,7 +242,7 @@ impl Kdf {
                 }
             };
 
-            let checksum = Self::checksum_master_secret(&master_secret);
+            let checksum = Self::checksum_master_secret(&master_secret, &km_runtime_id);
             if req.checksum != checksum {
                 // We either loaded or replicated something that does
                 // not match the rest of the world.
@@ -255,7 +279,7 @@ impl Kdf {
             // Loaded or generated a master secret.  There is no checksum to
             // compare against, but that is expected when bootstrapping or
             // lagging.
-            inner.checksum = Some(Self::checksum_master_secret(&master_secret));
+            inner.checksum = Some(Self::checksum_master_secret(&master_secret, &km_runtime_id));
             inner.master_secret = Some(master_secret);
         }
 
@@ -413,13 +437,15 @@ impl Kdf {
         master_secret
     }
 
-    fn checksum_master_secret(master_secret: &MasterSecret) -> Vec<u8> {
-        let mut tmp = master_secret.as_ref().to_vec().clone();
-        tmp.extend_from_slice(&CHECKSUM_CUSTOM);
-        let checksum = sha3_256(&tmp);
-        tmp.zeroize();
+    fn checksum_master_secret(master_secret: &MasterSecret, runtime_id: &RuntimeId) -> Vec<u8> {
+        let mut k = [0u8; 32];
 
-        checksum.to_vec()
+        // KMAC256(master_secret, kmRuntimeID, 32, "ekiden-checksum-master-secret")
+        let mut f = KMac::new_kmac256(master_secret.as_ref(), &RUNTIME_CHECKSUM_CUSTOM);
+        f.update(runtime_id.as_ref());
+        f.finalize(&mut k);
+
+        k.to_vec()
     }
 
     fn new_d2() -> DeoxysII {

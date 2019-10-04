@@ -118,7 +118,12 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 		)
 
 		// Make sure the Nodes field is empty when applying genesis state.
-		v.Nodes = nil
+		if v.Nodes != nil {
+			app.logger.Error("InitChain: Genesis key manager has nodes",
+				"id", v.ID,
+			)
+			return errors.New("tendermint/keymanager: genesis key manager has nodes")
+		}
 
 		// Set, enqueue for emit.
 		state.setStatus(v)

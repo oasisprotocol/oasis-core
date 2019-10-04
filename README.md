@@ -134,6 +134,7 @@ If you set any of the following environment variables:
 ```
 EKIDEN_UNSAFE_SKIP_AVR_VERIFY
 EKIDEN_UNSAFE_SKIP_KM_POLICY
+EKIDEN_UNSAFE_KM_POLICY_KEYS
 ```
 you need to run `make clean` before running `make` since the tools won't detect
 and perform this automatically.

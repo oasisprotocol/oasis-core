@@ -50,7 +50,7 @@ lazy_static! {
         set
     };
 }
-const MULTISIG_THRESHOLD: usize = 0; // TODO: Set this to a real value.
+const MULTISIG_THRESHOLD: usize = 9001; // TODO: Set this to a real value.
 
 const POLICY_STORAGE_KEY: &'static [u8] = b"keymanager_policy";
 const POLICY_SEAL_CONTEXT: &'static [u8] = b"Ekiden Keymanager Seal policy v0";
