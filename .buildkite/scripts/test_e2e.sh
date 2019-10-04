@@ -32,7 +32,7 @@ fi
 ${WORKDIR}/go/oasis-test-runner/oasis-test-runner \
     ${BUILDKITE:+--basedir ${WORKDIR}/e2e} \
     --basedir.no_cleanup \
-    --e2e.node.binary ${WORKDIR}/go/oasis-node/oasis-node \
+    --e2e.node.binary ${WORKDIR}/scripts/integrationrunner-wrapper.sh \
     --e2e.client.binary_dir ${WORKDIR}/target/debug \
     --e2e.runtime.binary_dir ${WORKDIR}/target/${runtime_target}/debug \
     --e2e.runtime.loader ${WORKDIR}/target/debug/oasis-core-runtime-loader \
