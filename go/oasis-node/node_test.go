@@ -31,6 +31,7 @@ import (
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	storageClientTests "github.com/oasislabs/oasis-core/go/storage/client/tests"
 	storageTests "github.com/oasislabs/oasis-core/go/storage/tests"
+	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	computeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/committee"
 	computeWorkerTests "github.com/oasislabs/oasis-core/go/worker/compute/tests"
 	storageWorkerTests "github.com/oasislabs/oasis-core/go/worker/storage/tests"
@@ -181,6 +182,8 @@ func TestNode(t *testing.T) {
 
 	// NOTE: Order of test cases is important.
 	testCases := []*testCase{
+		{"AwaitFirstBlock", testAwaitFirstBlock},
+
 		// Register the test entity and runtime used by every single test,
 		// including the worker tests.
 		{"RegisterTestEntityRuntime", testRegisterEntityRuntime},
@@ -303,6 +306,24 @@ WaitLoop:
 	}
 
 	registryTests.EnsureRegistryEmpty(t, node.Node.Registry)
+}
+
+func testAwaitFirstBlock(t *testing.T, node *testNode) {
+	timeSource := node.Epochtime
+
+	for {
+		epoch, err := timeSource.GetEpoch(context.Background(), 0)
+		if err != nil {
+			if err != abci.ErrNoCommittedBlocks {
+				require.NoError(t, err, "GetEpoch")
+				return
+			}
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		t.Log("ah, epoch", epoch)
+		break
+	}
 }
 
 func testEpochTime(t *testing.T, node *testNode) {
