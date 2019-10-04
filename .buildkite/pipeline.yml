@@ -93,6 +93,8 @@ steps:
       # Upload the built artifacts.
       - cd /workdir/go/oasis-node
       - buildkite-agent artifact upload oasis-node
+      - cd /workdir/go/oasis-node/integrationrunner
+      - buildkite-agent artifact upload integrationrunner.test
       - cd /workdir/go/oasis-test-runner
       - buildkite-agent artifact upload oasis-test-runner
       - cd /workdir/go/oasis-net-runner
@@ -186,6 +188,7 @@ steps:
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
+      - .buildkite/scripts/upload_coverage.sh
     artifact_paths:
       - e2e/**/*.log
     env:
