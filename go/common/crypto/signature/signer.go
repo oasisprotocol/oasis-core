@@ -85,7 +85,11 @@ func PrepareSignerMessage(context, message []byte) ([]byte, error) {
 		return nil, errMalformedContext
 	}
 
-	// TODO: This is stupid and we should just sign context || message instead.
+	// This is stupid, and we should be using RFC 8032's Ed25519ph instead
+	// but when an attempt was made to switch to it (See: #2103), people
+	// complained that certain HSM offerings doesn't support it.
+	//
+	// Blame YubiHSM and Ledger, not me.
 	h := sha512.New512_256()
 	_, _ = h.Write(context)
 	_, _ = h.Write(message)
