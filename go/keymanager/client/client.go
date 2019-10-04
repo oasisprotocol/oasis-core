@@ -223,6 +223,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 	manualResolver, address, cleanupFn := manual.NewManualResolver()
 	conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name))
 	if err != nil {
+		cleanupFn()
 		c.logger.Error("failed to create new gRPC client",
 			"err", err,
 		)
