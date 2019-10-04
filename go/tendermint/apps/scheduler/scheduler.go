@@ -200,7 +200,9 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 			)
 			return fmt.Errorf("scheduler: genesis validator not in registry")
 		}
-
+		app.logger.Debug("adding validator to current validator set",
+			"id", id,
+		)
 		currentValidators = append(currentValidators, n.ID)
 	}
 
@@ -366,6 +368,9 @@ func (app *schedulerApplication) EndBlock(req types.RequestEndBlock) (types.Resp
 		case false:
 			// Existing validator is not part of the new set, reduce it's
 			// voting power to 0, to indicate removal.
+			app.logger.Debug("removing existing validator from validator set",
+				"id", v,
+			)
 			updates = append(updates, api.PublicKeyToValidatorUpdate(v, 0))
 		case true:
 			// Existing validator is part of the new set, remove it from
@@ -379,7 +384,14 @@ func (app *schedulerApplication) EndBlock(req types.RequestEndBlock) (types.Resp
 
 		if pendingMap[mk] {
 			// This is a validator that is not part of the current set.
+			app.logger.Debug("adding new validator to validator set",
+				"id", v,
+			)
 			updates = append(updates, api.PublicKeyToValidatorUpdate(v, api.VotingPower))
+		} else {
+			app.logger.Debug("keeping existing validator in the validator set",
+				"id", v,
+			)
 		}
 	}
 

@@ -183,10 +183,20 @@ func (p *P2P) Publish(ctx context.Context, node *node.Node, msg *Message) {
 		bctx := backoff.WithContext(backoff.NewExponentialBackOff(), ctx)
 
 		err := backoff.Retry(func() error {
-			return p.publishImpl(ctx, node, msg)
+			p.logger.Debug("publishing message",
+				"node_id", node.ID,
+			)
+			perr := p.publishImpl(ctx, node, msg)
+			if perr != nil {
+				p.logger.Warn("failed to publish message",
+					"err", perr,
+					"node_id", node.ID,
+				)
+			}
+			return perr
 		}, bctx)
 		if err != nil {
-			p.logger.Warn("failed to publish message",
+			p.logger.Warn("failed to publish message, not retrying",
 				"err", err,
 				"node_id", node.ID,
 			)
@@ -220,6 +230,9 @@ func (p *P2P) handleStreamMessages(stream *Stream) {
 	}()
 
 	peerID := stream.Conn().RemotePeer()
+	p.logger.Debug("new message from peer",
+		"peer_id", peerID,
+	)
 	id, err := peerIDToPublicKey(peerID)
 	if err != nil {
 		p.logger.Error("error while extracting public key from peer ID",
