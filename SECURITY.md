@@ -3,7 +3,7 @@
 Bugs should be reported to
 [security@oasislabs.com](mailto:security@oasislabs.com).  We prefer
 that reports to be encrypted using the [security GnuPG key on our
-website](https://oasislabs.com/security/).
+website](https://www.oasis-protocol.org/security).
 
 We sketch out the general classification of the kinds of errors
 below.  This is not intended to be an exhaustive list.
