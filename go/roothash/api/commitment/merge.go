@@ -88,7 +88,3 @@ func SignMergeCommitment(signer signature.Signer, body *MergeBody) (*MergeCommit
 		Signed: *signed,
 	}, nil
 }
-
-func init() {
-	cbor.RegisterType(OpenMergeCommitment{}, "com.oasislabs/OpenMergeCommitment")
-}
