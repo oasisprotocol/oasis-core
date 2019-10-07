@@ -253,7 +253,7 @@ func (b *storageClientBackend) writeWithClient(
 		// e.g. storage/leveldb, actually returns a single storage receipt in a
 		// list.
 		receiptInAList := make([]api.Receipt, 1)
-		if err = cbor.Unmarshal(receiptsRaw, receiptInAList); err != nil {
+		if err = cbor.Unmarshal(receiptsRaw, &receiptInAList); err != nil {
 			b.logger.Error("failed to unmarshal receipt in a list from a storage node",
 				"node", response.node,
 				"err", err,

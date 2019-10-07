@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -120,12 +119,6 @@ func (c *Runtime) IsCompute() bool {
 	return c.Kind == KindCompute
 }
 
-// Clone returns a copy of itself.
-func (c *Runtime) Clone() common.Cloneable {
-	runtimeCopy := *c
-	return &runtimeCopy
-}
-
 // FromProto deserializes a protobuf into a Runtime.
 func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 	if pb == nil {
@@ -207,10 +200,13 @@ type SignedRuntime struct {
 	signature.Signed
 }
 
-// Clone returns a copy of itself.
-func (s *SignedRuntime) Clone() common.Cloneable {
-	signedRuntimeCopy := *s
-	return &signedRuntimeCopy
+// FromCBOR returns a new SignedRuntime from the CBOR representation.
+func (s *SignedRuntime) FromCBOR(data []byte) (interface{}, error) {
+	var sr SignedRuntime
+	if err := cbor.Unmarshal(data, &sr); err != nil {
+		return nil, err
+	}
+	return &sr, nil
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.

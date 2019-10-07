@@ -113,10 +113,6 @@ type PublicKey ed25519.PublicKey
 // Verify returns true iff the signature is valid for the public key
 // over the context and message.
 func (k PublicKey) Verify(context, message, sig []byte) bool {
-	// XXX: Does this need to deal with attestation at all?  The
-	// Rust code just returns false if it's set, so for now this
-	// will totally ignore it and leave it up to the caller.
-
 	if len(k) != PublicKeySize {
 		return false
 	}
@@ -143,6 +139,16 @@ func (k PublicKey) MarshalBinary() (data []byte, err error) {
 
 // UnmarshalBinary decodes a binary marshaled public key.
 func (k *PublicKey) UnmarshalBinary(data []byte) error {
+	// HACK: go-codec apparently was skipping calls to UnmarshalBinary
+	// or something, while the new library will always call it.
+	//
+	// We have approximately 3 million different places where we use
+	// the default value for public keys, so special case it.
+	if len(data) == 0 {
+		*k = nil
+		return nil
+	}
+
 	if len(data) != PublicKeySize {
 		return ErrMalformedPublicKey
 	}

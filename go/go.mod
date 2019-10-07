@@ -24,6 +24,7 @@ require (
 	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
 	github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870 // indirect
 	github.com/fortytw2/leaktest v1.3.0 // indirect
+	github.com/fxamacker/cbor v1.0.1-0.20191004235024-602ddc7eedd4
 	github.com/glycerine/goconvey v0.0.0-20190410193231-58a59202ab31 // indirect
 	github.com/go-kit/kit v0.8.0
 	github.com/golang/protobuf v1.3.1
@@ -40,7 +41,6 @@ require (
 	github.com/multiformats/go-multiaddr-net v0.0.1
 	github.com/multiformats/go-multihash v0.0.6 // indirect
 	github.com/oasislabs/deoxysii v0.0.0-20190807103041-6159f99c2236
-	github.com/oasislabs/go-codec v0.0.0-20190612072255-497cc071f728
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pelletier/go-toml v1.4.0 // indirect
 	github.com/pkg/errors v0.8.1

@@ -21,9 +21,9 @@ type Proof struct {
 	// UntrustedRoot is the root hash this proof is for. This should only be
 	// used as a quick sanity check and proof verification MUST use an
 	// independently obtained root hash as the prover can provide any root.
-	UntrustedRoot hash.Hash `codec:"untrusted_root"`
+	UntrustedRoot hash.Hash `json:"untrusted_root"`
 	// Entries are the proof entries in pre-order traversal.
-	Entries [][]byte `codec:"entries"`
+	Entries [][]byte `json:"entries"`
 }
 
 type proofNode struct {

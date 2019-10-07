@@ -1,9 +1,8 @@
 //! Transaction I/O tree.
 use failure::{format_err, Fallible};
 use io_context::Context;
-use serde::{self, ser::SerializeSeq, Serializer};
-use serde_bytes::{self, Bytes};
-use serde_derive::Deserialize;
+use serde_bytes;
+use serde_derive::{Deserialize, Serialize};
 
 use super::tags::Tags;
 use crate::{
@@ -101,7 +100,7 @@ impl KeyFormat for TagKeyFormat {
 /// The input transaction artifacts.
 ///
 /// These are the artifacts that are stored CBOR-serialized in the Merkle tree.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct InputArtifacts {
     /// Transaction input.
     #[serde(with = "serde_bytes")]
@@ -114,37 +113,14 @@ struct InputArtifacts {
     pub batch_order: u32,
 }
 
-impl serde::Serialize for InputArtifacts {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(2))?;
-        seq.serialize_element(&Bytes::new(&self.input))?;
-        seq.serialize_element(&self.batch_order)?;
-        seq.end()
-    }
-}
-
 /// The output transaction artifacts.
 ///
 /// These are the artifacts that are stored CBOR-serialized in the Merkle tree.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct OutputArtifacts {
     /// Transaction output.
     #[serde(with = "serde_bytes")]
     pub output: Vec<u8>,
-}
-
-impl serde::Serialize for OutputArtifacts {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(1))?;
-        seq.serialize_element(&Bytes::new(&self.output))?;
-        seq.end()
-    }
 }
 
 /// A Merkle tree containing transaction artifacts.
@@ -277,7 +253,7 @@ mod test {
         let (_, root_hash) = tree.commit(Context::background()).unwrap();
         assert_eq!(
             format!("{:?}", root_hash),
-            "4cc8bb6bdb377cc7f1ff8fe972004e1d66fa2c6726ec9e5f870865c190b6a47d"
+            "3a8e64c7842599c2e27acce0bdebe000e9f47cf130f88ca79379e4e775f310d6",
         );
     }
 }

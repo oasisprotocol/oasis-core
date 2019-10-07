@@ -42,8 +42,8 @@ type SignatureVerifier interface {
 // NodeInfo contains information about a node that is member of a committee.
 type NodeInfo struct {
 	// CommitteeNode is an index into the Committee.Members structure.
-	CommitteeNode int           `codec:"committee_node"`
-	Runtime       *node.Runtime `codec:"runtime"`
+	CommitteeNode int           `json:"committee_node"`
+	Runtime       *node.Runtime `json:"runtime"`
 }
 
 // Pool is a serializable pool of commiments that can be used to perform
@@ -53,22 +53,23 @@ type NodeInfo struct {
 type Pool struct {
 	// Runtime is the runtime descriptor this pool is collecting the
 	// commitments for.
-	Runtime *registry.Runtime `codec:"runtime"`
+	Runtime *registry.Runtime `json:"runtime"`
 	// Committee is the committee this pool is collecting the commitments for.
-	Committee *scheduler.Committee `codec:"committee"`
+	Committee *scheduler.Committee `json:"committee"`
 	// NodeInfo contains node information about committee members.
-	NodeInfo map[signature.MapKey]NodeInfo `codec:"node_info"`
-	// Commitments are the commitments in the pool.
-	//
-	// The type of conrete commitments depends on Committee.Kind and all
-	// commitments in the pool MUST be of the same type.
-	Commitments map[signature.MapKey]OpenCommitment `codec:"commitments"`
+	NodeInfo map[signature.MapKey]NodeInfo `json:"node_info"`
+	// ComputeCommitments are the commitments in the pool iff Committee.Kind
+	// is scheduler.KindCompute.
+	ComputeCommitments map[signature.MapKey]OpenComputeCommitment `json:"compute_commitments,omitempty"`
+	// MergeCommitments are the commitments in the pool iff Committee.Kind
+	// is scheduler.KindMerge.
+	MergeCommitments map[signature.MapKey]OpenMergeCommitment `json:"merge_commitments,omitempty"`
 	// Discrepancy is a flag signalling that a discrepancy has been detected.
-	Discrepancy bool `codec:"discrepancy"`
+	Discrepancy bool `json:"discrepancy"`
 	// NextTimeout is the time when the next call to TryFinalize(true) should
 	// be scheduled to be executed. Zero timestamp means that no timeout is
 	// to be scheduled.
-	NextTimeout time.Time `codec:"next_timeout"`
+	NextTimeout time.Time `json:"next_timeout"`
 }
 
 // GetCommitteeID returns the identifier of the committee this pool is collecting
@@ -80,11 +81,36 @@ func (p *Pool) GetCommitteeID() hash.Hash {
 // ResetCommitments resets the commitments in the pool and clears the discrepancy
 // flag.
 func (p *Pool) ResetCommitments() {
-	if p.Commitments == nil || len(p.Commitments) > 0 {
-		p.Commitments = make(map[signature.MapKey]OpenCommitment)
+	if p.ComputeCommitments == nil || len(p.ComputeCommitments) > 0 {
+		p.ComputeCommitments = make(map[signature.MapKey]OpenComputeCommitment)
+	}
+	if p.MergeCommitments == nil || len(p.MergeCommitments) > 0 {
+		p.MergeCommitments = make(map[signature.MapKey]OpenMergeCommitment)
 	}
 	p.Discrepancy = false
 	p.NextTimeout = time.Time{}
+}
+
+func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
+	if p.Committee == nil {
+		panic("roothash/commitment: query commitements: " + ErrNoCommittee.Error())
+	}
+
+	var (
+		com OpenCommitment
+		ok  bool
+	)
+
+	mk := id.ToMapKey()
+	switch p.Committee.Kind {
+	case scheduler.KindCompute:
+		com, ok = p.ComputeCommitments[mk]
+	case scheduler.KindMerge:
+		com, ok = p.MergeCommitments[mk]
+	default:
+		panic("roothash/commitment: unknown committee kind: " + p.Committee.Kind.String())
+	}
+	return com, ok
 }
 
 func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, openCom *OpenComputeCommitment) error {
@@ -108,7 +134,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 	// TODO: Check for signs of double signing (#1804).
 
 	// Ensure the node did not already submit a commitment.
-	if _, ok := p.Commitments[id]; ok {
+	if _, ok := p.ComputeCommitments[id]; ok {
 		return ErrAlreadyCommitted
 	}
 
@@ -183,8 +209,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 
 	// Go through existing commitments and check if the txn scheduler signed
 	// different batches for the same committee.
-	for _, c := range p.Commitments {
-		com := c.(OpenComputeCommitment)
+	for _, com := range p.ComputeCommitments {
 		cb := com.Body
 		if cID.Equal(&cb.CommitteeID) {
 			existingTxnSchedSig := cb.TxnSchedSig
@@ -199,10 +224,10 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 		}
 	}
 
-	if p.Commitments == nil {
-		p.Commitments = make(map[signature.MapKey]OpenCommitment)
+	if p.ComputeCommitments == nil {
+		p.ComputeCommitments = make(map[signature.MapKey]OpenComputeCommitment)
 	}
-	p.Commitments[id] = *openCom
+	p.ComputeCommitments[id] = *openCom
 
 	return nil
 }
@@ -238,7 +263,7 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 		}
 
 		required++
-		if _, ok := p.Commitments[n.PublicKey.ToMapKey()]; ok {
+		if _, ok := p.getCommitment(n.PublicKey); ok {
 			commits++
 		}
 	}
@@ -279,7 +304,7 @@ func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
 			continue
 		}
 
-		c, ok := p.Commitments[n.PublicKey.ToMapKey()]
+		c, ok := p.getCommitment(n.PublicKey)
 		if !ok {
 			continue
 		}
@@ -322,7 +347,7 @@ func (p *Pool) ResolveDiscrepancy() (OpenCommitment, error) {
 		}
 		backupNodes++
 
-		c, ok := p.Commitments[n.PublicKey.ToMapKey()]
+		c, ok := p.getCommitment(n.PublicKey)
 		if !ok {
 			continue
 		}
@@ -447,7 +472,7 @@ func (p *Pool) AddMergeCommitment(
 	}
 
 	// Ensure the node did not already submit a commitment.
-	if _, ok := p.Commitments[id]; ok {
+	if _, ok := p.MergeCommitments[id]; ok {
 		return ErrAlreadyCommitted
 	}
 
@@ -547,10 +572,10 @@ func (p *Pool) AddMergeCommitment(
 		return err
 	}
 
-	if p.Commitments == nil {
-		p.Commitments = make(map[signature.MapKey]OpenCommitment)
+	if p.MergeCommitments == nil {
+		p.MergeCommitments = make(map[signature.MapKey]OpenMergeCommitment)
 	}
-	p.Commitments[id] = *openCom
+	p.MergeCommitments[id] = *openCom
 
 	return nil
 }
@@ -566,12 +591,9 @@ func (p *Pool) GetCommitteeNode(id signature.PublicKey) (*scheduler.CommitteeNod
 }
 
 // GetComputeCommitments returns a list of compute commitments in the pool.
-//
-// Panics if the pool contains non-compute commitments.
 func (p *Pool) GetComputeCommitments() (result []ComputeCommitment) {
-	for _, c := range p.Commitments {
-		commit := c.(OpenComputeCommitment)
-		result = append(result, commit.ComputeCommitment)
+	for _, c := range p.ComputeCommitments {
+		result = append(result, c.ComputeCommitment)
 	}
 	return
 }
@@ -584,7 +606,7 @@ func (p *Pool) IsTimeout(now time.Time) bool {
 // MultiPool contains pools for multiple committees and routes operations to
 // multiple committees based on commitments' committee IDs.
 type MultiPool struct {
-	Committees map[hash.Hash]*Pool `codec:"committees"`
+	Committees map[hash.Hash]*Pool `json:"committees"`
 }
 
 // AddComputeCommitment verifies and adds a new compute commitment to the pool.
@@ -618,13 +640,10 @@ func (m *MultiPool) CheckEnoughCommitments() error {
 }
 
 // GetComputeCommitments returns a list of compute commitments in the pool.
-//
-// Panics if the pool contains non-compute commitments.
 func (m *MultiPool) GetComputeCommitments() (result []ComputeCommitment) {
 	for _, p := range m.Committees {
-		for _, c := range p.Commitments {
-			commit := c.(OpenComputeCommitment)
-			result = append(result, commit.ComputeCommitment)
+		for _, c := range p.ComputeCommitments {
+			result = append(result, c.ComputeCommitment)
 		}
 	}
 	return

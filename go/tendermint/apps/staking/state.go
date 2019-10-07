@@ -25,10 +25,10 @@ var (
 )
 
 type ledgerEntry struct {
-	GeneralBalance  staking.Quantity `codec:"general_balance"`
-	EscrowBalance   staking.Quantity `codec:"escrow_balance"`
-	DebondStartTime uint64           `codec:"debond_start_time"`
-	Nonce           uint64           `codec:"nonce"`
+	GeneralBalance  staking.Quantity `json:"general_balance"`
+	EscrowBalance   staking.Quantity `json:"escrow_balance"`
+	DebondStartTime uint64           `json:"debond_start_time"`
+	Nonce           uint64           `json:"nonce"`
 }
 
 type immutableState struct {

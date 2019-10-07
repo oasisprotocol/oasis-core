@@ -174,15 +174,15 @@ func testCheckTxRequest(t *testing.T, host Host) {
 	defer cancel()
 
 	type KeyValue struct {
-		Key   string `codec:"key"`
-		Value string `codec:"value"`
+		Key   string `json:"key"`
+		Value string `json:"value"`
 	}
 
 	// TxnCall is meant for deserializing CBOR of the corresponding Rust struct and is specific
 	// to the simple-keyvalue runtime.
 	type TxnCall struct {
-		Method string   `codec:"method"`
-		Args   KeyValue `codec:"args"`
+		Method string   `json:"method"`
+		Args   KeyValue `json:"args"`
 	}
 
 	// Create a batch of transactions, including a valid one, an invalid one and one where the

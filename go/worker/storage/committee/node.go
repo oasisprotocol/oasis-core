@@ -110,10 +110,10 @@ func (d *fetchedDiff) GetRound() uint64 {
 
 // blockSummary is a short summary of a single block.Block.
 type blockSummary struct {
-	Namespace common.Namespace `codec:"namespace"`
-	Round     uint64           `codec:"round"`
-	IORoot    urkelNode.Root   `codec:"io_root"`
-	StateRoot urkelNode.Root   `codec:"state_root"`
+	Namespace common.Namespace `json:"namespace"`
+	Round     uint64           `json:"round"`
+	IORoot    urkelNode.Root   `json:"io_root"`
+	StateRoot urkelNode.Root   `json:"state_root"`
 }
 
 func (s *blockSummary) GetRound() uint64 {
@@ -139,7 +139,7 @@ func summaryFromBlock(blk *block.Block) *blockSummary {
 
 // watcherState is the (persistent) watcher state.
 type watcherState struct {
-	LastBlock blockSummary `codec:"last_block"`
+	LastBlock blockSummary `json:"last_block"`
 }
 
 // Node watches blocks for storage changes.

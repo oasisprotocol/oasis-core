@@ -32,9 +32,9 @@ var (
 //
 // Keep the roothash RAK validation in sync with changes to this structure.
 type ComputeResultsHeader struct {
-	PreviousHash hash.Hash `codec:"previous_hash"`
-	IORoot       hash.Hash `codec:"io_root"`
-	StateRoot    hash.Hash `codec:"state_root"`
+	PreviousHash hash.Hash `json:"previous_hash"`
+	IORoot       hash.Hash `json:"io_root"`
+	StateRoot    hash.Hash `json:"state_root"`
 }
 
 // IsParentOf returns true iff the header is the parent of a child header.
@@ -64,14 +64,14 @@ func (h *ComputeResultsHeader) UnmarshalCBOR(data []byte) error {
 
 // ComputeBody holds the data signed in a compute worker commitment.
 type ComputeBody struct {
-	CommitteeID       hash.Hash              `codec:"cid"`
-	Header            ComputeResultsHeader   `codec:"header"`
-	StorageSignatures []signature.Signature  `codec:"storage_signatures"`
-	RakSig            signature.RawSignature `codec:"rak_sig"`
+	CommitteeID       hash.Hash              `json:"cid"`
+	Header            ComputeResultsHeader   `json:"header"`
+	StorageSignatures []signature.Signature  `json:"storage_signatures"`
+	RakSig            signature.RawSignature `json:"rak_sig"`
 
-	TxnSchedSig      signature.Signature   `codec:"txn_sched_sig"`
-	InputRoot        hash.Hash             `codec:"input_root"`
-	InputStorageSigs []signature.Signature `codec:"input_storage_sigs"`
+	TxnSchedSig      signature.Signature   `json:"txn_sched_sig"`
+	InputRoot        hash.Hash             `json:"input_root"`
+	InputStorageSigs []signature.Signature `json:"input_storage_sigs"`
 }
 
 // VerifyTxnSchedSignature rebuilds the batch dispatch message from the data
@@ -174,7 +174,7 @@ type ComputeCommitment struct {
 type OpenComputeCommitment struct {
 	ComputeCommitment
 
-	Body *ComputeBody `codec:"body"`
+	Body *ComputeBody `json:"body"`
 }
 
 // MostlyEqual returns true if the commitment is mostly equal to another
@@ -221,8 +221,4 @@ func SignComputeCommitment(signer signature.Signer, body *ComputeBody) (*Compute
 	return &ComputeCommitment{
 		Signed: *signed,
 	}, nil
-}
-
-func init() {
-	cbor.RegisterType(OpenComputeCommitment{}, "com.oasislabs/OpenComputeCommitment")
 }

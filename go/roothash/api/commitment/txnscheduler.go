@@ -18,17 +18,17 @@ var TxnSchedulerBatchDispatchSigCtx = []byte("EkTscBat")
 // if you change anything in this struct.
 type TxnSchedulerBatchDispatch struct {
 	// CommitteeID is the committee ID of the target compute committee.
-	CommitteeID hash.Hash `codec:"cid"`
+	CommitteeID hash.Hash `json:"cid"`
 
 	// IORoot is the I/O root containing the inputs (transactions) that
 	// the compute node should use.
-	IORoot hash.Hash `codec:"io_root"`
+	IORoot hash.Hash `json:"io_root"`
 
 	// StorageSignatures are the storage receipt signatures for the I/O root.
-	StorageSignatures []signature.Signature `codec:"storage_signatures"`
+	StorageSignatures []signature.Signature `json:"storage_signatures"`
 
 	// Header is the block header on which the batch should be based.
-	Header block.Header `codec:"header"`
+	Header block.Header `json:"header"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.

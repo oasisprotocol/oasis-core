@@ -179,13 +179,13 @@ func (w *Worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 func (w *Worker) updateStatus(status *api.Status) error {
 	// Initialize the key manager.
 	type InitRequest struct {
-		Checksum    []byte `codec:"checksum"`
-		Policy      []byte `codec:"policy"`
-		MayGenerate bool   `codec:"may_generate"`
+		Checksum    []byte `json:"checksum"`
+		Policy      []byte `json:"policy"`
+		MayGenerate bool   `json:"may_generate"`
 	}
 	type InitCall struct { // nolint: maligned
-		Method string      `codec:"method"`
-		Args   InitRequest `codec:"args"`
+		Method string      `json:"method"`
+		Args   InitRequest `json:"args"`
 	}
 
 	var policy []byte
@@ -298,7 +298,7 @@ func extractMessageResponsePayload(raw []byte) ([]byte, error) {
 	}
 	type MessageResponse struct {
 		Response *struct {
-			Body MessageResponseBody `codec:"body"`
+			Body MessageResponseBody `json:"body"`
 		}
 	}
 

@@ -58,10 +58,10 @@ func (r Role) String() string {
 // CommitteeNode is a node participating in a committee.
 type CommitteeNode struct {
 	// Role is the node's role in a committee.
-	Role Role `codec:"role"`
+	Role Role `json:"role"`
 
 	// PublicKey is the node's public key.
-	PublicKey signature.PublicKey `codec:"public_key"`
+	PublicKey signature.PublicKey `json:"public_key"`
 }
 
 // CommitteeKind is the functionality a committee exists to provide.
@@ -117,16 +117,16 @@ func (k CommitteeKind) String() string {
 // Committee is a per-runtime (instance) committee.
 type Committee struct {
 	// Kind is the functionality a committee exists to provide.
-	Kind CommitteeKind `codec:"kind"`
+	Kind CommitteeKind `json:"kind"`
 
 	// Members is the committee members.
-	Members []*CommitteeNode `codec:"members"`
+	Members []*CommitteeNode `json:"members"`
 
 	// RuntimeID is the runtime ID that this committee is for.
-	RuntimeID signature.PublicKey `codec:"runtime_id"`
+	RuntimeID signature.PublicKey `json:"runtime_id"`
 
 	// ValidFor is the epoch for which the committee is valid.
-	ValidFor epochtime.EpochTime `codec:"valid_for"`
+	ValidFor epochtime.EpochTime `json:"valid_for"`
 }
 
 // String returns a string representation of a Committee.

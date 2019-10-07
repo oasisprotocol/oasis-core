@@ -58,11 +58,11 @@ var (
 // Root is a storage root.
 type Root struct {
 	// Namespace is the chain namespace under which the root is stored.
-	Namespace common.Namespace `codec:"ns"`
+	Namespace common.Namespace `json:"ns"`
 	// Round is the chain round in which the root is stored.
-	Round uint64 `codec:"round"`
+	Round uint64 `json:"round"`
 	// Hash is the merkle root hash.
-	Hash hash.Hash `codec:"hash"`
+	Hash hash.Hash `json:"hash"`
 }
 
 // String returns the string representation of a storage root.
