@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/ekiden-test-runner/env"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	storageClient "github.com/oasislabs/ekiden/go/storage/client"
 )
 
 // Client is an ekiden client node.
@@ -32,7 +33,7 @@ func (client *Client) startNode() error {
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(client.consensusPort).
 		roothashTendermintIndexBlocks().
-		storageCachingclient(client.dir).
+		storageBackend(storageClient.BackendName).
 		appendNetwork(client.net)
 	for _, v := range client.net.runtimes {
 		if v.kind != registry.KindCompute {

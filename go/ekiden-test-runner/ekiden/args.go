@@ -11,7 +11,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	commonGrpc "github.com/oasislabs/ekiden/go/common/grpc"
 	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/ekiden-test-runner/env"
 	cmdCommon "github.com/oasislabs/ekiden/go/ekiden/cmd/common"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
 	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/grpc"
@@ -19,7 +18,6 @@ import (
 	"github.com/oasislabs/ekiden/go/epochtime"
 	roothashTm "github.com/oasislabs/ekiden/go/roothash/tendermint"
 	"github.com/oasislabs/ekiden/go/storage"
-	"github.com/oasislabs/ekiden/go/storage/cachingclient"
 	"github.com/oasislabs/ekiden/go/tendermint"
 	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
 	"github.com/oasislabs/ekiden/go/worker/common/p2p"
@@ -123,18 +121,6 @@ func (args *argBuilder) storageBackend(backend string) *argBuilder {
 		"--" + storage.CfgBackend, backend,
 	}...)
 	return args
-}
-
-func (args *argBuilder) storageCachingclientFile(dir *env.Dir, fn string) *argBuilder {
-	args.vec = append(args.vec, []string{
-		"--" + cachingclient.CfgCacheFile, filepath.Join(dir.String(), "storage-cache"),
-	}...)
-	return args
-}
-
-func (args *argBuilder) storageCachingclient(dir *env.Dir) *argBuilder {
-	return args.storageBackend(cachingclient.BackendName).
-		storageCachingclientFile(dir, "storage-cache")
 }
 
 func (args *argBuilder) clientIndexRuntimes(id signature.PublicKey) *argBuilder {
