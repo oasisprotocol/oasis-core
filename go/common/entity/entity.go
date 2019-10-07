@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
@@ -55,12 +54,6 @@ type Entity struct {
 // String returns a string representation of itself.
 func (e *Entity) String() string {
 	return "<Entity id=" + e.ID.String() + ">"
-}
-
-// Clone returns a copy of itself.
-func (e *Entity) Clone() common.Cloneable {
-	entityCopy := *e
-	return &entityCopy
 }
 
 // FromProto deserializes a protobuf into an Entity.
@@ -201,10 +194,13 @@ type SignedEntity struct {
 	signature.Signed
 }
 
-// Clone returns a copy of itself.
-func (s *SignedEntity) Clone() common.Cloneable {
-	signedEntityCopy := *s
-	return &signedEntityCopy
+// FromCBOR returns a new SignedEntity from the CBOR representation.
+func (s *SignedEntity) FromCBOR(data []byte) (interface{}, error) {
+	var se SignedEntity
+	if err := cbor.Unmarshal(data, &se); err != nil {
+		return nil, err
+	}
+	return &se, nil
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.

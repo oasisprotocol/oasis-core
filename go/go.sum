@@ -331,8 +331,6 @@ github.com/oasislabs/deoxysii v0.0.0-20190610083944-a3e81dcb2dde h1:VtFvwkYI10rP
 github.com/oasislabs/deoxysii v0.0.0-20190610083944-a3e81dcb2dde/go.mod h1:PyjqElilQd4b7CBW+PT+ylPW06zHsb2Cr6ifPL6pWgM=
 github.com/oasislabs/deoxysii v0.0.0-20190807103041-6159f99c2236 h1:eTbRemVO4uAXU5RlqqQ/OiPtBcB3tBez28rV0JusKss=
 github.com/oasislabs/deoxysii v0.0.0-20190807103041-6159f99c2236/go.mod h1:gFIu170Sklo1wPRTYMTDxA664TYdgrl9NENFXfC+u3g=
-github.com/oasislabs/go-codec v0.0.0-20190612072255-497cc071f728 h1:eI04906rkucxxL9iEC8kSfyDSSelEanTLNpUjRgPdWM=
-github.com/oasislabs/go-codec v0.0.0-20190612072255-497cc071f728/go.mod h1:sw77L03j15GtDZvGIZ0WzaiGa6k+mIBkhpey8GhgoYI=
 github.com/oasislabs/iavl v0.12.0-ekiden2 h1:kzdp6OTHYrn8TXlAo+2NsL84Qi2gqydFvjhWQZ/H9GM=
 github.com/oasislabs/iavl v0.12.0-ekiden2/go.mod h1:B/tMpl5cg7n42n3xYQTCckJzQezoI75jedkc8FOiOF0=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
