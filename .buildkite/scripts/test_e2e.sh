@@ -38,5 +38,5 @@ ${WORKDIR}/go/ekiden-test-runner/ekiden-test-runner \
     --e2e.runtime.loader ${WORKDIR}/target/debug/ekiden-runtime-loader \
     --e2e.tee_hardware ${EKIDEN_TEE_HARDWARE:-""} \
     --log.level info \
-    --parallel.job_count ${BUILDKITE_PARALLEL_JOB_COUNT} \
-    --parallel.job_index ${BUILDKITE_PARALLEL_JOB}
+    ${BUILDKITE_PARALLEL_JOB_COUNT:+--parallel.job_count ${BUILDKITE_PARALLEL_JOB_COUNT}} \
+    ${BUILDKITE_PARALLEL_JOB:+--parallel.job_index ${BUILDKITE_PARALLEL_JOB}}

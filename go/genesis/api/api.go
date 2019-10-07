@@ -22,6 +22,8 @@ type Document struct {
 	Height int64 `json:"height"`
 	// Time is the time the genesis block was constructed.
 	Time time.Time `json:"genesis_time"`
+	// ChainID is the ID of the chain.
+	ChainID string `json:"chain_id"`
 	// Registry is the registry genesis state.
 	Registry registry.Genesis `json:"registry"`
 	// RootHash is the roothash genesis state.

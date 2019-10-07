@@ -67,8 +67,6 @@ const (
 
 	// CfgDebugP2PAddrBookLenient configures allowing non-routable addresses.
 	CfgDebugP2PAddrBookLenient = "tendermint.debug.addr_book_lenient"
-
-	defaultChainID = "0xa515"
 )
 
 var (
@@ -611,7 +609,7 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 		return nil, errors.Wrap(err, "tendermint: failed to serialize genesis doc")
 	}
 	doc := tmtypes.GenesisDoc{
-		ChainID:         defaultChainID,
+		ChainID:         d.ChainID,
 		GenesisTime:     d.Time,
 		ConsensusParams: tmtypes.DefaultConsensusParams(),
 		AppState:        b,
