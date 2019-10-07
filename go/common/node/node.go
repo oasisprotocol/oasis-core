@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -483,12 +482,6 @@ func (n *Node) String() string {
 	return "<Node id=" + n.ID.String() + ">"
 }
 
-// Clone returns a copy of itself.
-func (n *Node) Clone() common.Cloneable {
-	nodeCopy := *n
-	return &nodeCopy
-}
-
 // FromProto deserializes a protobuf into a Node.
 func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 	if pb == nil {
@@ -578,10 +571,13 @@ type SignedNode struct {
 	signature.Signed
 }
 
-// Clone returns a copy of itself.
-func (s *SignedNode) Clone() common.Cloneable {
-	signedNodeCopy := *s
-	return &signedNodeCopy
+// FromCBOR returns a new SignedNode from the CBOR representation.
+func (s *SignedNode) FromCBOR(data []byte) (interface{}, error) {
+	var sn SignedNode
+	if err := cbor.Unmarshal(data, &sn); err != nil {
+		return nil, err
+	}
+	return &sn, nil
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.

@@ -6,7 +6,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
 
-	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/entity"
@@ -248,7 +247,7 @@ func (s *immutableState) getSignedRuntimes() ([]*registry.SignedRuntime, error) 
 
 func (s *immutableState) getAll(
 	stateKey string,
-	item common.Cloneable,
+	item cbor.Fromable,
 ) ([]interface{}, error) {
 	var items []interface{}
 	s.Snapshot.IterateRangeInclusive(
@@ -256,10 +255,12 @@ func (s *immutableState) getAll(
 		[]byte(fmt.Sprintf(stateKey, abci.LastID)),
 		true,
 		func(key, value []byte, version int64) bool {
-			itemCopy := item.Clone()
-			cbor.MustUnmarshal(value, &itemCopy)
+			newItem, err := item.FromCBOR(value)
+			if err != nil {
+				panic("tendermint/registry: corrupted state: " + err.Error())
+			}
+			items = append(items, newItem)
 
-			items = append(items, itemCopy)
 			return false
 		},
 	)

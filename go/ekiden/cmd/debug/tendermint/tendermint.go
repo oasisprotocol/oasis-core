@@ -2,11 +2,12 @@
 package tendermint
 
 import (
+	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 
-	"github.com/oasislabs/go-codec/codec"
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
@@ -59,7 +60,7 @@ func doDumpMuxState(cmd *cobra.Command, args []string) {
 	state.Tree().Iterate(func(key, value []byte) bool {
 		// Try to decode as CBOR and if that fails, output as hex.
 		var decoded interface{}
-		if err := cbor.Unmarshal(value, &decoded); err != nil {
+		if err = cbor.Unmarshal(value, &decoded); err != nil {
 			decoded = hex.EncodeToString(value)
 		}
 
@@ -67,16 +68,19 @@ func doDumpMuxState(cmd *cobra.Command, args []string) {
 		return false
 	})
 
-	handle := new(codec.JsonHandle)
-	handle.Indent = 2
-	handle.HTMLCharsAsIs = true
-	handle.MapKeyAsString = true
+	buf := bytes.NewBuffer(nil)
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "   ")
 
-	var b []byte
-	enc := codec.NewEncoderBytes(&b, handle)
-	defer enc.Release()
-	enc.MustEncode(output)
-	fmt.Printf("%s\n", b)
+	if err = enc.Encode(output); err != nil {
+		logger.Error("failed to encode ABCI mux state",
+			"err", err,
+		)
+		return
+	}
+
+	fmt.Printf("%s\n", buf.Bytes())
 }
 
 func showNodeID(cmd *cobra.Command, args []string) {

@@ -23,36 +23,36 @@ var (
 // TreeID identifies a specific tree and a position within that tree.
 type TreeID struct {
 	// Root is the Merkle tree root.
-	Root node.Root `codec:"root"`
+	Root node.Root `json:"root"`
 	// Position is the caller's position in the tree structure to allow
 	// returning partial proofs if possible.
-	Position hash.Hash `codec:"position"`
+	Position hash.Hash `json:"position"`
 }
 
 // GetRequest is a request for the SyncGet operation.
 type GetRequest struct {
-	Tree            TreeID `codec:"tree"`
-	Key             []byte `codec:"key"`
-	IncludeSiblings bool   `codec:"include_siblings,omitempty"`
+	Tree            TreeID `json:"tree"`
+	Key             []byte `json:"key"`
+	IncludeSiblings bool   `json:"include_siblings,omitempty"`
 }
 
 // GetPrefixesRequest is a request for the SyncGetPrefixes operation.
 type GetPrefixesRequest struct {
-	Tree     TreeID   `codec:"tree"`
-	Prefixes [][]byte `codec:"prefixes"`
-	Limit    uint16   `codec:"limit"`
+	Tree     TreeID   `json:"tree"`
+	Prefixes [][]byte `json:"prefixes"`
+	Limit    uint16   `json:"limit"`
 }
 
 // IterateRequest is a request for the SyncIterate operation.
 type IterateRequest struct {
-	Tree     TreeID `codec:"tree"`
-	Key      []byte `codec:"key"`
-	Prefetch uint16 `codec:"prefetch"`
+	Tree     TreeID `json:"tree"`
+	Key      []byte `json:"key"`
+	Prefetch uint16 `json:"prefetch"`
 }
 
 // ProofResponse is a response for requests that produce proofs.
 type ProofResponse struct {
-	Proof Proof `codec:"proof"`
+	Proof Proof `json:"proof"`
 }
 
 // ReadSyncer is the interface for synchronizing the in-memory cache

@@ -64,13 +64,11 @@ const (
 
 // Tx is a transaction to be accepted by the registry app.
 type Tx struct {
-	_struct struct{} `codec:",omitempty"` // nolint
+	*TxRegisterEntity   `json:"RegisterEntity,omitempty"`
+	*TxDeregisterEntity `json:"DeregisterEntity,omitempty"`
+	*TxRegisterNode     `json:"RegisterNode,omitempty"`
 
-	*TxRegisterEntity   `codec:"RegisterEntity"`
-	*TxDeregisterEntity `codec:"DeregisterEntity"`
-	*TxRegisterNode     `codec:"RegisterNode"`
-
-	*TxRegisterRuntime `codec:"RegisterRuntime"`
+	*TxRegisterRuntime `json:"RegisterRuntime,omitempty"`
 }
 
 // TxRegisterEntity is a transaction for registering a new entity.
@@ -95,13 +93,11 @@ type TxRegisterRuntime struct {
 
 // Output is an output of an registry app transaction.
 type Output struct {
-	_struct struct{} `codec:",omitempty"` // nolint
+	*OutputRegisterEntity   `json:"RegisterEntity.omitempty"`
+	*OutputDeregisterEntity `json:"DeregisterEntity,omitempty"`
+	*OutputRegisterNode     `json:"RegisterNode,omitempty"`
 
-	*OutputRegisterEntity   `codec:"RegisterEntity"`
-	*OutputDeregisterEntity `codec:"DeregisterEntity"`
-	*OutputRegisterNode     `codec:"RegisterNode"`
-
-	*OutputRegisterRuntime `codec:"RegisterRuntime"`
+	*OutputRegisterRuntime `json:"RegisterRuntime,omitempty"`
 }
 
 // OutputRegisterEntity is an output of registering a new entity.

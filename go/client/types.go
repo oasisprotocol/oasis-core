@@ -30,11 +30,11 @@ type QueryCondition = indexer.Condition
 
 // TxnResult is the transaction query result.
 type TxnResult struct {
-	Block     *block.Block `codec:"block"`
-	BlockHash hash.Hash    `codec:"block_hash"`
-	Index     uint32       `codec:"index"`
-	Input     []byte       `codec:"input"`
-	Output    []byte       `codec:"output"`
+	Block     *block.Block `json:"block"`
+	BlockHash hash.Hash    `json:"block_hash"`
+	Index     uint32       `json:"index"`
+	Input     []byte       `json:"input"`
+	Output    []byte       `json:"output"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.

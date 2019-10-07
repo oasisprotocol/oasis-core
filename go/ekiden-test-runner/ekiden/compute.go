@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/ekiden-test-runner/env"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
+	storageClient "github.com/oasislabs/ekiden/go/storage/client"
 	workerHost "github.com/oasislabs/ekiden/go/worker/common/host"
 )
 
@@ -63,7 +64,7 @@ func (worker *Compute) startNode() error {
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
 		roothashTendermintIndexBlocks().
-		storageCachingclient(worker.dir).
+		storageBackend(storageClient.BackendName).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
 		workerComputeEnabled().

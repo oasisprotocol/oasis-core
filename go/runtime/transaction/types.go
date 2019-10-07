@@ -5,9 +5,11 @@ package transaction
 // TxnCall is a transaction call.
 type TxnCall struct {
 	// Method is the called method name.
-	Method string `codec:"method"`
+	Method string `json:"method"`
 	// Args are the method arguments.
-	Args interface{} `codec:"args"`
+	Args interface{} `json:"args"`
+	// PredictedReadWriteSet is the predicted read/write set.
+	PredictedReadWriteSet ReadWriteSet `json:"predicted_rw_set"`
 }
 
 // TxnOutput is a transaction call output.
@@ -21,5 +23,5 @@ type TxnOutput struct {
 // TxnCheckResult is the result of a successful CheckTx call.
 type TxnCheckResult struct {
 	// PredictedReadWriteSet is the predicted read/write set.
-	PredictedReadWriteSet ReadWriteSet `codec:"predicted_rw_set"`
+	PredictedReadWriteSet ReadWriteSet `json:"predicted_rw_set"`
 }

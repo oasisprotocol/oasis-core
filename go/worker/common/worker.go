@@ -249,7 +249,7 @@ func (w *Worker) registerRuntime(id signature.PublicKey) error {
 	// If using a storage client, it should watch the configured runtimes.
 	if storageClient, ok := w.Storage.(storage.ClientBackend); ok {
 		if err := storageClient.WatchRuntime(id); err != nil {
-			w.logger.Warn("common/worker: error watching storage runtime, expected if using cachingclient with local backend",
+			w.logger.Warn("common/worker: error watching storage runtime",
 				"err", err,
 				"runtime_id", id,
 			)

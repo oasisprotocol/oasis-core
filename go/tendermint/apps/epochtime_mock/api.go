@@ -31,9 +31,7 @@ var (
 
 // Tx is a transaction to be accepted by the mock epochtime app.
 type Tx struct {
-	_struct struct{} `codec:",omitempty"` // nolint
-
-	*TxSetEpoch `codec:"SetEpoch"`
+	*TxSetEpoch `json:"SetEpoch,omitempty"`
 }
 
 // TxSetEpoch is a transaction for submitting an epoch to be set.

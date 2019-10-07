@@ -16,7 +16,6 @@ import (
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
 	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/cachingclient"
 	"github.com/oasislabs/ekiden/go/storage/client"
 	"github.com/oasislabs/ekiden/go/storage/database"
 )
@@ -64,13 +63,6 @@ func New(
 		impl, err = database.New(cfg)
 	case client.BackendName:
 		impl, err = client.New(ctx, identity, schedulerBackend, registryBackend)
-	case cachingclient.BackendName:
-		var remote api.Backend
-		remote, err = client.New(ctx, identity, schedulerBackend, registryBackend)
-		if err != nil {
-			return nil, err
-		}
-		impl, err = cachingclient.New(remote, cfg.InsecureSkipChecks)
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
 	}
@@ -99,5 +91,4 @@ func init() {
 	_ = viper.BindPFlags(Flags)
 
 	Flags.AddFlagSet(client.Flags)
-	Flags.AddFlagSet(cachingclient.Flags)
 }

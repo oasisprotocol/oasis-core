@@ -57,12 +57,10 @@ const (
 
 // Tx is a transaction to be accepted by the staking app.
 type Tx struct {
-	_struct struct{} `codec:",omitempty"` // nolint
-
-	*TxTransfer      `codec:"Transfer"`
-	*TxBurn          `codec:"Burn"`
-	*TxAddEscrow     `codec:"AddEscrow"`
-	*TxReclaimEscrow `codec:"ReclaimEscrow"`
+	*TxTransfer      `json:"Transfer,omitempty"`
+	*TxBurn          `json:"Burn,omitempty"`
+	*TxAddEscrow     `json:"AddEscrow,omitempty"`
+	*TxReclaimEscrow `json:"ReclaimEscrow,omitempty"`
 }
 
 // TxTransfer is a transaction for a transfer.
@@ -87,18 +85,16 @@ type TxReclaimEscrow struct {
 
 // Output is an output of a staking transaction.
 type Output struct {
-	_struct struct{} `codec:",omitemtpy"` // nolint
-
-	OutputTransfer      *staking.TransferEvent      `codec:"Transfer"`
-	OutputBurn          *staking.BurnEvent          `codec:"Burn"`
-	OutputAddEscrow     *staking.EscrowEvent        `codec:"AddEscrow"`
-	OutputReclaimEscrow *staking.ReclaimEscrowEvent `codec:"ReclaimEscrow"`
+	OutputTransfer      *staking.TransferEvent      `json:"Transfer,omitempty"`
+	OutputBurn          *staking.BurnEvent          `json:"Burn,omitempty"`
+	OutputAddEscrow     *staking.EscrowEvent        `json:"AddEscrow,omitempty"`
+	OutputReclaimEscrow *staking.ReclaimEscrowEvent `json:"ReclaimEscrow,omitempty"`
 }
 
 // QueryAccountInfoResponse is a response to QueryAccountInfo.
 type QueryAccountInfoResponse struct {
-	GeneralBalance  staking.Quantity `codec:"general_balance"`
-	EscrowBalance   staking.Quantity `codec:"escrow_balance"`
-	DebondStartTime uint64           `codec:"debond_start_time"`
-	Nonce           uint64           `codec:"nonce"`
+	GeneralBalance  staking.Quantity `json:"general_balance"`
+	EscrowBalance   staking.Quantity `json:"escrow_balance"`
+	DebondStartTime uint64           `json:"debond_start_time"`
+	Nonce           uint64           `json:"nonce"`
 }

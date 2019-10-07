@@ -192,8 +192,9 @@ func NewRootCache(
 		return nil, errors.Wrap(err, "storage/rootcache: failed to create applyLocks")
 	}
 
-	// In the cachingclient, we want to persist everything that we obtain
-	// from the remote syncer in our local database.
+	// When we implement a caching client again, we want to persist
+	// everything that we obtain from the remote syncer in our local
+	// database.
 	persistEverything := urkel.PersistEverythingFromSyncer(remoteSyncer != nil)
 
 	return &RootCache{

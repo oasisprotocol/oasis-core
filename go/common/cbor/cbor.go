@@ -5,46 +5,7 @@
 // to always have the same serialization.
 package cbor
 
-import (
-	"crypto/sha512"
-	"encoding/binary"
-	"reflect"
-
-	"github.com/oasislabs/go-codec/codec"
-)
-
-// tagBase is a base tag for all Ekiden CBOR extensions.
-const tagBase = 0x4515
-
-var typeRegistry map[uint64]bool
-
-// Extension is a type that can be registered as a CBOR extension.
-type Extension interface {
-}
-
-// RegisterType registers a new CBOR extension.
-//
-// This function MUST only be called during package init, before the
-// CBOR handle is used.
-func RegisterType(t Extension, id string) {
-	// Derive tag based on given string identifier.
-	tagHash := sha512.Sum512_256([]byte(id))
-	tag := uint64(tagBase + binary.LittleEndian.Uint32(tagHash[:4]))
-	if _, ok := typeRegistry[tag]; ok {
-		panic("cbor: duplicate type tag")
-	}
-
-	h := Handle.(*codec.CborHandle)
-	err := h.SetInterfaceExt(reflect.TypeOf(t), tag, codec.SelfExt)
-	if err != nil {
-		panic(err)
-	}
-
-	if typeRegistry == nil {
-		typeRegistry = make(map[uint64]bool)
-	}
-	typeRegistry[tag] = true
-}
+import "github.com/fxamacker/cbor"
 
 // FixSliceForSerde will convert `nil` to `[]byte` to work around serde
 // brain damage.
@@ -54,9 +15,6 @@ func FixSliceForSerde(b []byte) []byte {
 	}
 	return []byte{}
 }
-
-// Handle is the CBOR codec Handle used to encode/decode CBOR blobs.
-var Handle codec.Handle
 
 // Marshaler allows a type to be serialized into CBOR.
 type Marshaler interface {
@@ -70,30 +28,31 @@ type Unmarshaler interface {
 	UnmarshalCBOR([]byte) error
 }
 
+// Fromable allows a type to be deserialized from CBOR, into a new
+// copy of the type.
+type Fromable interface {
+	FromCBOR([]byte) (interface{}, error)
+}
+
 // Marshal serializes a given type into a CBOR byte vector.
 func Marshal(src interface{}) []byte {
-	var b []byte
-	enc := codec.NewEncoderBytes(&b, Handle)
-	defer enc.Release()
-	enc.MustEncode(src)
+	b, err := cbor.Marshal(src, cbor.EncOptions{
+		Canonical:   true,
+		TimeRFC3339: false, // Second granular unix timestamps
+	})
+	if err != nil {
+		panic("common/cbor: failed to marshal: " + err.Error())
+	}
 	return b
 }
 
 // Unmarshal deserializes a CBOR byte vector into a given type.
 func Unmarshal(data []byte, dst interface{}) error {
-	// NewDecoderBytes will fail to correctly initialize the decoder
-	// if data is nil.
 	if data == nil {
 		return nil
 	}
 
-	dec := codec.NewDecoderBytes(data, Handle)
-	defer dec.Release()
-	if err := dec.Decode(dst); err != nil {
-		return err
-	}
-
-	return nil
+	return cbor.Unmarshal(data, dst)
 }
 
 // MustUnmarshal deserializes a CBOR byte vector into a given type.
@@ -102,13 +61,4 @@ func MustUnmarshal(data []byte, dst interface{}) {
 	if err := Unmarshal(data, dst); err != nil {
 		panic(err)
 	}
-}
-
-func init() {
-	h := new(codec.CborHandle)
-	h.EncodeOptions.Canonical = true
-	h.EncodeOptions.ChanRecvTimeout = -1 // Till chan is closed.
-	h.EncodeOptions.ForceNoNatural = true
-
-	Handle = h
 }
