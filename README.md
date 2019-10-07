@@ -4,6 +4,21 @@
 [![Coverage Status](https://coveralls.io/repos/github/oasislabs/ekiden/badge.svg?t=HsLWgi)](https://coveralls.io/github/oasislabs/ekiden) Rust
 [![codecov](https://codecov.io/gh/oasislabs/ekiden/branch/master/graph/badge.svg?token=DqjRsufMqf)](https://codecov.io/gh/oasislabs/ekiden) Go
 
+## Note
+
+* **Ekiden is in active development so all APIs, protocols and data structures
+  are subject to change.**
+* **The code has not yet been fully audited. For security issues and other
+  security-related topics, see [Security](#security).**
+
+## Contributing
+
+See our [Contributing Guidelines](CONTRIBUTING.md).
+
+## Security
+
+Read our [Security](SECURITY.md) document.
+
 ## Developing and building the Ekiden system
 
 Prerequisites:
@@ -22,11 +37,11 @@ Prerequisites:
   * [OpenSSL](https://www.openssl.org/) development package.
   * [libseccomp](https://github.com/seccomp/libseccomp) development package.
 
-  On Fedora 29, you can install all the above with:
+  On Fedora 29+, you can install all the above with:
   ```
   sudo dnf install bubblewrap gcc gcc-c++ protobuf-compiler cmake openssl-devel libseccomp-devel
   ```
-  On Ubuntu 18.10, you can install all the above with:
+  On Ubuntu 18.10+, you can install all the above with:
   ```
   sudo apt install bubblewrap gcc g++ protobuf-compiler cmake libssl-dev libseccomp-dev
   ```
@@ -49,12 +64,6 @@ Prerequisites:
     `EKIDEN_GO` environment variable in your `~/.bashrc`:
     ```
     export EKIDEN_GO=go1.13
-    ```
-  * since some oasis repositories are currently private, you need to set
-    the `GONOSUMDB` environment variable appropriately - as above it is
-    best to set it in your `~/.bashrc`:
-    ```
-    export GONOSUMDB=github.com/oasislabs
     ```
 
 * [protoc-gen-go](https://github.com/golang/protobuf).
@@ -234,7 +243,7 @@ make test-e2e
 
 To run end-to-end tests locally without SGX, first make sure the following
 environment variables are set before building the code (for more details, see
-[Building](#building)):_
+[Building](#building)):
 ```
 EKIDEN_UNSAFE_SKIP_AVR_VERIFY="1"
 EKIDEN_UNSAFE_SKIP_KM_POLICY="1"
@@ -250,10 +259,6 @@ To run all tests:
 ```
 make test
 ```
-
-## Contributing
-
-See our [contributing guidelines](CONTRIBUTING.md).
 
 ## Directories
 
