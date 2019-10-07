@@ -96,6 +96,8 @@ steps:
       - buildkite-agent artifact upload ekiden
       - cd /workdir/go/ekiden-test-runner
       - buildkite-agent artifact upload ekiden-test-runner
+      - cd /workdir/go/ekiden-net-runner
+      - buildkite-agent artifact upload ekiden-net-runner
     plugins:
       <<: *docker_plugin
 
