@@ -220,9 +220,9 @@ you only need to change the `ekiden-net-runner` invocation:
 ```
 ./go/ekiden-net-runner/ekiden-net-runner \
   --net.ekiden.binary go/ekiden/ekiden \
-  --net.runtime.binary target/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue \
+  --net.runtime.binary target/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs \
   --net.runtime.loader target/debug/ekiden-runtime-loader \
-  --net.keymanager.binary target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime
+  --net.keymanager.binary target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs
 ```
 
 ## Running tests and benchmarks
