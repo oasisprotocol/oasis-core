@@ -235,8 +235,6 @@ func Initialize(w io.Writer, format Format, defaultLvl Level, moduleLvls map[str
 		case FmtLogfmt:
 			logger = log.NewLogfmtLogger(w)
 		case FmtJSON:
-			// TODO: This uses encoding/json, which may be too slow.
-			// The go-codec encoder should be faster.
 			logger = log.NewJSONLogger(w)
 		default:
 			return fmt.Errorf("logging: unsupported log format: %v", format)
