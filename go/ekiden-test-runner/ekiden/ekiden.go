@@ -435,6 +435,7 @@ func (net *Network) makeGenesis() error {
 	args := []string{
 		"genesis", "init",
 		"--genesis.file", net.genesisPath(),
+		"--chain.id", "ekiden-test-runner",
 	}
 	for _, v := range net.entities {
 		args = append(args, v.toGenesisDescriptorArgs()...)

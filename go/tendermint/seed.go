@@ -103,6 +103,11 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 		PrivKey: crypto.UnsafeSignerToTendermint(identity.NodeSigner),
 	}
 
+	doc, err := genesisProvider.GetGenesisDocument()
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint/seed: failed to get genesis document")
+	}
+
 	nodeInfo := p2p.DefaultNodeInfo{
 		ProtocolVersion: p2p.NewProtocolVersion(
 			version.P2PProtocol,
@@ -111,7 +116,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 		),
 		ID_:        nodeKey.ID(),
 		ListenAddr: viper.GetString(CfgCoreListenAddress),
-		Network:    defaultChainID,
+		Network:    doc.ChainID,
 		Version:    "0.0.1",
 		Channels:   []byte{pex.PexChannel},
 		Moniker:    "ekiden-seed-" + identity.NodeSigner.Public().String(),
@@ -130,7 +135,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 	if err = srv.addrBook.Start(); err != nil {
 		return nil, errors.Wrap(err, "tendermint/seed: failed to start address book")
 	}
-	if err = populateAddrBookFromGenesis(srv.addrBook, genesisProvider, srv.addr); err != nil {
+	if err = populateAddrBookFromGenesis(srv.addrBook, doc, srv.addr); err != nil {
 		return nil, errors.Wrap(err, "tendermint/seed: failed to populate address book from genesis")
 	}
 
@@ -147,17 +152,13 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 	return srv, nil
 }
 
-func populateAddrBookFromGenesis(addrBook p2p.AddrBook, genesisProvider genesis.Provider, ourAddr *p2p.NetAddress) error {
-	doc, err := genesisProvider.GetGenesisDocument()
-	if err != nil {
-		return errors.Wrap(err, "tendermint/seed: failed to get genesis document")
-	}
+func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, ourAddr *p2p.NetAddress) error {
 
 	// Convert to a representation suitable for address book population.
 	var addrs []*p2p.NetAddress
 	for _, v := range doc.Registry.Nodes {
 		var openedNode node.Node
-		if err = v.Open(registry.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
+		if err := v.Open(registry.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
 			return errors.Wrap(err, "tendermint/seed: failed to verify validator")
 		}
 		// TODO: This should cross check that the entity is valid.
@@ -166,7 +167,7 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, genesisProvider genesis.
 		}
 
 		var tmvAddr *p2p.NetAddress
-		tmvAddr, err = api.NodeToP2PAddr(&openedNode)
+		tmvAddr, err := api.NodeToP2PAddr(&openedNode)
 		if err != nil {
 			return errors.Wrap(err, "tendermint/seed: failed to reformat genesis validator address")
 		}
@@ -181,7 +182,7 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, genesisProvider genesis.
 		// may not actually add the new address.
 		addrBook.RemoveAddress(v)
 
-		if err = addrBook.AddAddress(v, ourAddr); err != nil {
+		if err := addrBook.AddAddress(v, ourAddr); err != nil {
 			return errors.Wrap(err, "tendermint/seed: failed to add genesis validator to address book")
 		}
 	}

@@ -39,6 +39,16 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 		}
 	}
 
+	// Get genesis doc.
+	genesisProvider, err := New()
+	if err != nil {
+		return nil, err
+	}
+	genesisDoc, err := genesisProvider.GetGenesisDocument()
+	if err != nil {
+		return nil, err
+	}
+
 	// Call ToGenesis on all backends and merge the results together.
 	registryGenesis, err := s.registryBackend.ToGenesis(ctx, height)
 	if err != nil {
@@ -58,7 +68,10 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 	}
 
 	doc := api.Document{
+		// XXX: Tendermint doesn't support restoring from non-0 height.
+		// https://github.com/tendermint/tendermint/issues/2543
 		Height:     0,
+		ChainID:    genesisDoc.ChainID,
 		Time:       time.Now(),
 		Registry:   *registryGenesis,
 		RootHash:   *roothashGenesis,

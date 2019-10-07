@@ -39,6 +39,7 @@ const (
 	cfgKeyManagerOperator = "keymanager.operator"
 	cfgStaking            = "staking"
 	cfgBlockHeight        = "height"
+	cfgChainID            = "chain.id"
 
 	// Our 'entity' flag overlaps with the common flag 'entity'.
 	// We bind it to a separate Viper key to disambiguate at runtime.
@@ -87,9 +88,16 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	chainID := viper.GetString(cfgChainID)
+	if chainID == "" {
+		logger.Error("genesis chain id missing")
+		return
+	}
+
 	// Build the genesis state, if any.
 	doc := &genesis.Document{
-		Time: time.Now(),
+		ChainID: chainID,
+		Time:    time.Now(),
 	}
 	entities := viper.GetStringSlice(viperEntity)
 	runtimes := viper.GetStringSlice(cfgRuntime)
@@ -507,6 +515,7 @@ func init() {
 	initGenesisFlags.String(cfgStaking, "", "path to staking genesis file")
 	initGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
 	initGenesisFlags.String(cfgKeyManagerOperator, "", "path to key manager operator entity registration file")
+	initGenesisFlags.String(cfgChainID, "", "genesis chain id")
 	_ = viper.BindPFlags(initGenesisFlags)
 	initGenesisFlags.StringSlice(cfgEntity, nil, "path to entity registration file")
 	_ = viper.BindPFlag(viperEntity, initGenesisFlags.Lookup(cfgEntity))
