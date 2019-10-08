@@ -373,10 +373,11 @@ func (k ThresholdKind) String() string {
 // Genesis is the initial ledger balances at genesis for use in the genesis
 // block and test cases.
 type Genesis struct {
-	TotalSupply       Quantity                   `json:"total_supply"`
-	CommonPool        Quantity                   `json:"common_pool"`
-	Thresholds        map[ThresholdKind]Quantity `json:"thresholds,omitempty"`
-	DebondingInterval uint64                     `json:"debonding_interval"`
+	TotalSupply             Quantity                   `json:"total_supply"`
+	CommonPool              Quantity                   `json:"common_pool"`
+	Thresholds              map[ThresholdKind]Quantity `json:"thresholds,omitempty"`
+	DebondingInterval       uint64                     `json:"debonding_interval"`
+	AcceptableTransferPeers map[signature.MapKey]bool  `json:"acceptable_transfer_peers"`
 
 	Ledger map[signature.MapKey]*GenesisLedgerEntry `json:"ledger"`
 }

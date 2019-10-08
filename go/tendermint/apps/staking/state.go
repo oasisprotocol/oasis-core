@@ -37,6 +37,10 @@ var (
 	//
 	// Value is a little endian encoding of an uint64.
 	debondingIntervalKeyFmt = keyformat.New(0x54)
+	// acceptableTransferPeersKeyFmt is the key format used for the acceptable transfer peers set.
+	//
+	// Value is a CBOR-serialized map from acceptable runtime IDs the boolean true.
+	acceptableTransferPeersKeyFmt = keyformat.New(0x55)
 
 	logger = logging.GetLogger("tendermint/staking")
 )
@@ -234,6 +238,10 @@ func (s *MutableState) setDebondingInterval(interval uint64) {
 	s.tree.Set(debondingIntervalKeyFmt.Encode(), tmp[:])
 }
 
+func (s *MutableState) setAcceptableTransferPeers(peers map[signature.MapKey]bool) {
+	s.tree.Set(acceptableTransferPeersKeyFmt.Encode(), cbor.Marshal(peers))
+}
+
 func (s *MutableState) setThreshold(kind staking.ThresholdKind, q *staking.Quantity) {
 	s.tree.Set(thresholdKeyFmt.Encode(uint64(kind)), cbor.Marshal(q))
 }
@@ -309,9 +317,17 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 	return ret, nil
 }
 
-func (s *MutableState) isAcceptableTransferPeer(runtimeID signature.PublicKey) bool {
-	logger.Warn("INSECURE: dummy implementation of isAcceptableTransferPeer allowing any runtime")
-	return true
+func (s *MutableState) isAcceptableTransferPeer(runtimeID signature.PublicKey) (bool, error) {
+	_, value := s.Snapshot.Get(acceptableTransferPeersKeyFmt.Encode())
+	if value == nil {
+		return false, nil
+	}
+
+	var peers map[signature.MapKey]bool
+	if err := cbor.Unmarshal(value, &peers); err != nil {
+		return false, err
+	}
+	return peers[runtimeID.ToMapKey()], nil
 }
 
 func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, message *block.RoothashMessage) (error, error) {
@@ -323,13 +339,16 @@ func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, mess
 	} else if message.DummyRejectRoothashMessage != nil {
 		return errors.Errorf("encountered dummy reject message from roothash"), nil
 	} else if message.StakingGeneralAdjustmentRoothashMessage != nil {
-		if !s.isAcceptableTransferPeer(runtimeID) {
+		acceptable, err := s.isAcceptableTransferPeer(runtimeID)
+		if err != nil {
+			return nil, errors.Wrap(err, "state corrupted")
+		}
+		if !acceptable {
 			return errors.Errorf("staking general adjustment message received from unacceptable runtime %s", runtimeID), nil
 		}
 
 		account := s.account(message.StakingGeneralAdjustmentRoothashMessage.Account)
 
-		var err error
 		switch message.StakingGeneralAdjustmentRoothashMessage.Op {
 		case block.Increase:
 			err = account.GeneralBalance.Add(message.StakingGeneralAdjustmentRoothashMessage.Amount)
