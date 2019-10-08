@@ -35,9 +35,6 @@ pub enum AdjustmentOp {
 /// Roothash message.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RoothashMessage {
-    DummyRoothashMessage {
-        greeting: String,
-    },
     StakingGeneralAdjustmentRoothashMessage {
         account: PublicKey,
         op: AdjustmentOp,
@@ -119,14 +116,18 @@ mod tests {
             previous_hash: empty.encoded_hash(),
             io_root: Hash::empty_hash(),
             state_root: Hash::empty_hash(),
-            roothash_messages: Some(vec![RoothashMessage::DummyRoothashMessage {
-                greeting: "hi".to_owned(),
-            }]),
+            roothash_messages: Some(vec![
+                RoothashMessage::StakingGeneralAdjustmentRoothashMessage {
+                    account: PublicKey(*b"UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU"),
+                    op: AdjustmentOp::INCREASE,
+                    amount: vec![0x01, 0x0f, 0x00],
+                },
+            ]),
             ..Default::default()
         };
         assert_eq!(
             populated.encoded_hash(),
-            Hash::from("036e67a988b0ea6371a4482f708138322c3f7c4dd4ae4610e4018f96d78e1153")
+            Hash::from("480a773c029e57cc9f4c520ae659de28eba69bde92371a0dd0f076725382515e")
         );
     }
 }

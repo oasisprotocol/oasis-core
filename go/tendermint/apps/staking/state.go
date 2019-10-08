@@ -10,7 +10,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 	"github.com/oasislabs/ekiden/go/common/keyformat"
-	"github.com/oasislabs/ekiden/go/common/logging"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	staking "github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
@@ -41,8 +40,6 @@ var (
 	//
 	// Value is a CBOR-serialized map from acceptable runtime IDs the boolean true.
 	acceptableTransferPeersKeyFmt = keyformat.New(0x55)
-
-	logger = logging.GetLogger("tendermint/staking")
 )
 
 type ledgerEntry struct {
@@ -331,14 +328,7 @@ func (s *MutableState) isAcceptableTransferPeer(runtimeID signature.PublicKey) (
 }
 
 func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, message *block.RoothashMessage) (error, error) {
-	if message.DummyRoothashMessage != nil {
-		logger.Info("dummy message from roothash",
-			"from_runtime", runtimeID,
-			"greeting", message.DummyRoothashMessage.Greeting,
-		)
-	} else if message.DummyRejectRoothashMessage != nil {
-		return errors.Errorf("encountered dummy reject message from roothash"), nil
-	} else if message.StakingGeneralAdjustmentRoothashMessage != nil {
+	if message.StakingGeneralAdjustmentRoothashMessage != nil {
 		acceptable, err := s.isAcceptableTransferPeer(runtimeID)
 		if err != nil {
 			return nil, errors.Wrap(err, "state corrupted")

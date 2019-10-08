@@ -47,16 +47,6 @@ const (
 	Decrease AdjustmentOp = 2
 )
 
-// DummyRoothashMessage is a no-effect message for testing.
-// Mux app in charge: staking
-type DummyRoothashMessage struct {
-	Greeting string `json:"greeting"`
-}
-
-// DummyRejectRoothashMessage is a message for testing that causes staking not to be satisfied.
-// Mux app in charge: staking
-type DummyRejectRoothashMessage struct{}
-
 // StakingGeneralAdjustmentRoothashMessage is a message that changes an account's general balance.
 // Mux app in charge: staking
 type StakingGeneralAdjustmentRoothashMessage struct {
@@ -67,8 +57,6 @@ type StakingGeneralAdjustmentRoothashMessage struct {
 
 // RoothashMessage is a roothash message.
 type RoothashMessage struct {
-	DummyRoothashMessage                    *DummyRoothashMessage
-	DummyRejectRoothashMessage              *DummyRejectRoothashMessage
 	StakingGeneralAdjustmentRoothashMessage *StakingGeneralAdjustmentRoothashMessage
 }
 

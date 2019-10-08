@@ -1,12 +1,15 @@
 package block
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/staking/api"
 )
 
 func TestConsistentHash(t *testing.T) {
@@ -18,13 +21,19 @@ func TestConsistentHash(t *testing.T) {
 	require.EqualValues(t, emptyHeaderHash, empty.EncodedHash())
 
 	var populatedHeaderHash hash.Hash
-	_ = populatedHeaderHash.UnmarshalHex("036e67a988b0ea6371a4482f708138322c3f7c4dd4ae4610e4018f96d78e1153")
+	_ = populatedHeaderHash.UnmarshalHex("480a773c029e57cc9f4c520ae659de28eba69bde92371a0dd0f076725382515e")
 
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 
 	var ns common.Namespace
 	_ = ns.UnmarshalBinary(emptyRoot[:])
+
+	var account signature.PublicKey
+	require.NoError(t, account.UnmarshalHex("5555555555555555555555555555555555555555555555555555555555555555"), "PublicKey UnmarshalHex")
+
+	var amount api.Quantity
+	require.NoError(t, amount.FromBigInt(big.NewInt(69376)), "Quantity FromBigInt")
 
 	populated := Header{
 		Version:      42,
@@ -37,7 +46,11 @@ func TestConsistentHash(t *testing.T) {
 		StateRoot:    emptyRoot,
 		RoothashMessages: []*RoothashMessage{
 			{
-				DummyRoothashMessage: &DummyRoothashMessage{Greeting: "hi"},
+				StakingGeneralAdjustmentRoothashMessage: &StakingGeneralAdjustmentRoothashMessage{
+					Account: account,
+					Op:      Increase,
+					Amount:  &amount,
+				},
 			},
 		},
 	}
