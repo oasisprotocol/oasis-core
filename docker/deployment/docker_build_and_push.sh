@@ -21,7 +21,7 @@ context=$3
 #################
 # Local variables
 #################
-docker_image_name=oasislabs/testnet
+docker_image_name=oasislabs/oasis-node
 
 ####################################
 # Build and publish the docker image

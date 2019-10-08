@@ -49,7 +49,6 @@ docker_plugin_sgx_config: &docker_plugin_sgx_config
     - "GOPROXY=https://athens.ops.oasiscloud.io/"
     - "GONOSUMDB=github.com/oasislabs"
 
-
 docker_plugin: &docker_plugin
   oasislabs/docker#v3.0.1-oasis1:
     <<: *docker_plugin_default_config
@@ -236,7 +235,7 @@ steps:
   - wait
 
   - label: ":rocket: Deploy image"
-    trigger: ekiden-deploy-image
+    trigger: oasis-core-build-image-context
     async: true
     branches: master devnet2
     build:
