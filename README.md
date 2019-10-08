@@ -125,37 +125,27 @@ docker run -t -i \
   bash
 ```
 
-All the following commands can then be used from inside the container. See the Docker
-documentation for detailed instructions on working with Docker containers.
+All the following commands can then be used from inside the container. See the
+Docker documentation for detailed instructions on working with Docker
+containers.
 
-## Building
+## Unsafe non-SGX environment: Building and Running an Ekiden node
 
-To build everything required for running an Ekiden node, simply execute in
-the top-level directory:
+To build everything required for running an Ekiden node locally, simply execute
+in the top-level directory:
 ```
+export EKIDEN_UNSAFE_SKIP_AVR_VERIFY="1"
+export EKIDEN_UNSAFE_SKIP_KM_POLICY="1"
 make
 ```
 
-This will build all the required parts (build tools, Ekiden node, runtime libraries,
-runtime loader, key manager and test runtimes).
+This will build all the required parts (build tools, Ekiden node, runtime
+libraries, runtime loader, key manager and test runtimes). The AVR and KM flags
+are supported on production SGX systems only and these features must be disabled
+in our environment.
 
-If you set any of the following environment variables:
-```
-EKIDEN_UNSAFE_SKIP_AVR_VERIFY
-EKIDEN_UNSAFE_SKIP_KM_POLICY
-EKIDEN_UNSAFE_KM_POLICY_KEYS
-```
-you need to run `make clean` before running `make` since the tools won't detect
-and perform this automatically.
-
-## Running an Ekiden node (non-SGX)
-
-These instructions specify how to run a simple network for development purposes.
-
-First, make sure that you have built everything as described in the [*Building* section](
-#building) before proceeding and move to the top-level directory.
-
-To start a simple Ekiden network as defined by [the default network fixture](go/ekiden-net-runner/fixtures/default.go)
+Next we specify how to run a simple network for development purposes. To start a
+simple Ekiden network as defined by [the default network fixture](go/ekiden-net-runner/fixtures/default.go)
 running the `simple-keyvalue` test runtime, do:
 ```
 ./go/ekiden-net-runner/ekiden-net-runner \
@@ -193,14 +183,29 @@ initially need to wait for the first epoch to pass before the test client will
 make any progress. For more information on writing your own client, see the
 `simple-keyvalue` client sources [here](tests/clients/simple-keyvalue).
 
-## Running under SGX
+## SGX environment: Building and Running an Ekiden node
 
-In order to run under SGX there are some additional prerequisites:
-* Your hardware needs to have SGX support.
-* You either need to explicitly enable SGX in BIOS or make a
+Compilation procedure under SGX environment is similiar to the non-SGX with
+slightly different environmental variables set:
+```
+export EKIDEN_UNSAFE_SKIP_AVR_VERIFY="1"
+export EKIDEN_UNSAFE_KM_POLICY_KEYS="1"
+export EKIDEN_TEE_HARDWARE=intel-sgx
+make
+```
+
+The AVR flag is there because we are running Ekiden in a local development
+environment and we will not do any attestation with Intel's remote servers. The
+KM policy keys flag allows testing keys to be used while verifying the security
+policy of the node. TEE hardware flag denotes the trusted execution environment
+engine for running the Ekiden node and the tests below.
+
+To run Ekiden under SGX make sure:
+* Your hardware has SGX support.
+* You either explicitly enabled SGX in BIOS or made a
   `sgx_cap_enable_device()` system call, if SGX is in software controlled state.
-* You need to install Intel's SGX driver.
-* You need the AESM daemon running. The easiest way is to just run it in a
+* You installed Intel's SGX driver (check that `/dev/isgx` exists).
+* You have the AESM daemon running. The easiest way is to just run it in a
   Docker container by doing (this will keep the container running and it will
   be automatically started on boot):
   ```
@@ -213,10 +218,11 @@ In order to run under SGX there are some additional prerequisites:
     fortanix/aesmd
   ```
 
-Run `sgx-detect` to verify that everything is configured correctly.
+Run `sgx-detect` (part of fortanix rust tools) to verify that everything is
+configured correctly.
 
-The instructions for running an Ekiden node under SGX are the same as above,
-you only need to change the `ekiden-net-runner` invocation:
+Finally, to run an Ekiden node under SGX follow the same steps as for non-SGX,
+except the `ekiden-net-runner` invocation:
 ```
 ./go/ekiden-net-runner/ekiden-net-runner \
   --net.ekiden.binary go/ekiden/ekiden \
@@ -227,30 +233,14 @@ you only need to change the `ekiden-net-runner` invocation:
 
 ## Running tests and benchmarks
 
-After you have run `make` and built everything, you can use the following
-commands to run tests.
+After you built everything, you can use the following commands to run tests.
 
 To run all unit tests:
 ```
 make test-unit
 ```
 
-To run end-to-end tests locally with SGX:
-```
-export EKIDEN_TEE_HARDWARE=intel-sgx
-make test-e2e
-```
-
-To run end-to-end tests locally without SGX, first make sure the following
-environment variables are set before building the code (for more details, see
-[Building](#building)):
-```
-EKIDEN_UNSAFE_SKIP_AVR_VERIFY="1"
-EKIDEN_UNSAFE_SKIP_KM_POLICY="1"
-```
-
-and then run end-to-end tests:
-
+To run end-to-end tests locally:
 ```
 make test-e2e
 ```
@@ -259,6 +249,9 @@ To run all tests:
 ```
 make test
 ```
+
+Do not forget to set `EKIDEN_TEE_HARDWARE` flag (see above), if you want to
+execute tests under SGX.
 
 ## Directories
 
