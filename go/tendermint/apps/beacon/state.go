@@ -6,10 +6,16 @@ import (
 	"github.com/tendermint/iavl"
 
 	beacon "github.com/oasislabs/ekiden/go/beacon/api"
+	"github.com/oasislabs/ekiden/go/common/keyformat"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
-const stateBeacon = "beacon/beacon"
+var (
+	// beaconKeyFmt is the random beacon key format.
+	//
+	// Value is raw random beacon.
+	beaconKeyFmt = keyformat.New(0x40)
+)
 
 type immutableState struct {
 	*abci.ImmutableState
@@ -26,7 +32,7 @@ func newImmutableState(state *abci.ApplicationState, version int64) (*immutableS
 
 // GetBeacon gets the beacon for the node.
 func (s *immutableState) GetBeacon() ([]byte, error) {
-	_, b := s.Snapshot.Get([]byte(stateBeacon))
+	_, b := s.Snapshot.Get(beaconKeyFmt.Encode())
 	if b == nil {
 		return nil, beacon.ErrBeaconNotAvailable
 	}
@@ -46,10 +52,7 @@ func (s *MutableState) setBeacon(newBeacon []byte) error {
 		return fmt.Errorf("tendermint/beacon: unexpected beacon size: %d", l)
 	}
 
-	s.tree.Set(
-		[]byte(stateBeacon),
-		newBeacon,
-	)
+	s.tree.Set(beaconKeyFmt.Encode(), newBeacon)
 
 	return nil
 }

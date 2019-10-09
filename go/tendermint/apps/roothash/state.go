@@ -1,21 +1,22 @@
 package roothash
 
 import (
-	"fmt"
-
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/keyformat"
 	registry "github.com/oasislabs/ekiden/go/registry/api"
 	"github.com/oasislabs/ekiden/go/roothash/api/block"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
-// Per-runtime state.
-const stateRuntimeMap = "roothash/%s"
-
 var (
+	// runtimeKeyFmt is the key format used for per-runtime roothash state.
+	//
+	// Value is CBOR-serialized runtime state.
+	runtimeKeyFmt = keyformat.New(0x20, &signature.MapKey{})
+
 	_ cbor.Marshaler   = (*runtimeState)(nil)
 	_ cbor.Unmarshaler = (*runtimeState)(nil)
 )
@@ -50,7 +51,7 @@ func newImmutableState(state *abci.ApplicationState, version int64) (*immutableS
 }
 
 func (s *immutableState) getRuntimeState(id signature.PublicKey) (*runtimeState, error) {
-	_, raw := s.Snapshot.Get([]byte(fmt.Sprintf(stateRuntimeMap, id.String())))
+	_, raw := s.Snapshot.Get(runtimeKeyFmt.Encode(&id))
 	if raw == nil {
 		return nil, nil
 	}
@@ -62,11 +63,15 @@ func (s *immutableState) getRuntimeState(id signature.PublicKey) (*runtimeState,
 
 func (s *immutableState) getRuntimes() []*runtimeState {
 	var runtimes []*runtimeState
-	s.Snapshot.IterateRangeInclusive(
-		[]byte(fmt.Sprintf(stateRuntimeMap, abci.FirstID)),
-		[]byte(fmt.Sprintf(stateRuntimeMap, abci.LastID)),
+	s.Snapshot.IterateRange(
+		runtimeKeyFmt.Encode(),
+		nil,
 		true,
-		func(key, value []byte, version int64) bool {
+		func(key, value []byte) bool {
+			if !runtimeKeyFmt.Decode(key) {
+				return true
+			}
+
 			var state runtimeState
 			cbor.MustUnmarshal(value, &state)
 
@@ -94,8 +99,5 @@ func newMutableState(tree *iavl.MutableTree) *mutableState {
 }
 
 func (s *mutableState) updateRuntimeState(state *runtimeState) {
-	s.tree.Set(
-		[]byte(fmt.Sprintf(stateRuntimeMap, state.Runtime.ID.String())),
-		state.MarshalCBOR(),
-	)
+	s.tree.Set(runtimeKeyFmt.Encode(&state.Runtime.ID), state.MarshalCBOR())
 }

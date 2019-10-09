@@ -9,19 +9,32 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/ekiden/go/common/keyformat"
 	staking "github.com/oasislabs/ekiden/go/staking/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
-const (
-	stateAccountsMap   = "staking/accounts/%s"
-	stateThresholdsMap = "staking/thresholds/%d"
-)
-
 var (
-	stateTotalSupply       = []byte("staking/total_supply")
-	stateCommonPool        = []byte("staking/common_pool")
-	stateDebondingInterval = []byte("staking/debonding_interval")
+	// accountKeyFmt is the key format used for accounts.
+	//
+	// Value is a CBOR-serialized account.
+	accountKeyFmt = keyformat.New(0x50, &signature.MapKey{})
+	// thresholdKeyFmt is the key format used for thresholds.
+	//
+	// Value is a CBOR-serialized threshold.
+	thresholdKeyFmt = keyformat.New(0x51, uint64(0))
+	// totalSupplyKeyFmt is the key format used for the total supply.
+	//
+	// Value is a CBOR-serialized quantity.
+	totalSupplyKeyFmt = keyformat.New(0x52)
+	// commonPoolKeyFmt is the key format used for the common pool balance.
+	//
+	// Value is a CBOR-serialized quantity.
+	commonPoolKeyFmt = keyformat.New(0x53)
+	// debondingIntervalKeyFmt is the key format used for the debonding interval parameter.
+	//
+	// Value is a little endian encoding of an uint64.
+	debondingIntervalKeyFmt = keyformat.New(0x54)
 )
 
 type ledgerEntry struct {
@@ -36,7 +49,7 @@ type immutableState struct {
 }
 
 func (s *immutableState) totalSupply() (*staking.Quantity, error) {
-	_, value := s.Snapshot.Get(stateTotalSupply)
+	_, value := s.Snapshot.Get(totalSupplyKeyFmt.Encode())
 	if value == nil {
 		return &staking.Quantity{}, nil
 	}
@@ -60,7 +73,7 @@ func (s *immutableState) rawTotalSupply() ([]byte, error) {
 
 // CommonPool returns the balance of the global common pool.
 func (s *immutableState) CommonPool() (*staking.Quantity, error) {
-	_, value := s.Snapshot.Get(stateCommonPool)
+	_, value := s.Snapshot.Get(commonPoolKeyFmt.Encode())
 	if value == nil {
 		return &staking.Quantity{}, nil
 	}
@@ -83,7 +96,7 @@ func (s *immutableState) rawCommonPool() ([]byte, error) {
 }
 
 func (s *immutableState) debondingInterval() (uint64, error) {
-	_, value := s.Snapshot.Get(stateDebondingInterval)
+	_, value := s.Snapshot.Get(debondingIntervalKeyFmt.Encode())
 	if len(value) != 8 {
 		return 0, fmt.Errorf("staking: corrupt debonding interval")
 	}
@@ -103,14 +116,14 @@ func (s *immutableState) rawDebondingInterval() ([]byte, error) {
 // Thresholds returns the currently configured thresholds if any.
 func (s *immutableState) Thresholds() (map[staking.ThresholdKind]staking.Quantity, error) {
 	m := make(map[staking.ThresholdKind]staking.Quantity)
-	s.Snapshot.IterateRangeInclusive(
-		[]byte(fmt.Sprintf(stateThresholdsMap, staking.KindValidator)),
-		[]byte(fmt.Sprintf(stateThresholdsMap, staking.KindMax)),
+	s.Snapshot.IterateRange(
+		thresholdKeyFmt.Encode(),
+		nil,
 		true,
-		func(key, value []byte, version int64) bool {
-			var k staking.ThresholdKind
-			if _, err := fmt.Sscanf(string(key), stateThresholdsMap, &k); err != nil {
-				panic("staking: corrupt key: " + err.Error())
+		func(key, value []byte) bool {
+			var k uint64
+			if !thresholdKeyFmt.Decode(key, &k) {
+				return true
 			}
 
 			var q staking.Quantity
@@ -118,7 +131,7 @@ func (s *immutableState) Thresholds() (map[staking.ThresholdKind]staking.Quantit
 				panic("staking: corrput state: " + err.Error())
 			}
 
-			m[k] = q
+			m[staking.ThresholdKind(k)] = q
 
 			return false
 		},
@@ -129,20 +142,16 @@ func (s *immutableState) Thresholds() (map[staking.ThresholdKind]staking.Quantit
 
 func (s *immutableState) accounts() ([]signature.PublicKey, error) {
 	var accounts []signature.PublicKey
-	s.Snapshot.IterateRangeInclusive(
-		[]byte(fmt.Sprintf(stateAccountsMap, abci.FirstID)),
-		[]byte(fmt.Sprintf(stateAccountsMap, abci.LastID)),
+	s.Snapshot.IterateRange(
+		accountKeyFmt.Encode(),
+		nil,
 		true,
-		func(key, value []byte, version int64) bool {
-			var hexID string
-			if _, err := fmt.Sscanf(string(key), stateAccountsMap, &hexID); err != nil {
-				panic("staking: corrupt key" + err.Error())
+		func(key, value []byte) bool {
+			var id signature.PublicKey
+			if !accountKeyFmt.Decode(key, &id) {
+				return true
 			}
 
-			var id signature.PublicKey
-			if err := id.UnmarshalHex(hexID); err != nil {
-				panic("staking: corrupt state: " + err.Error())
-			}
 			accounts = append(accounts, id)
 
 			return false
@@ -162,7 +171,7 @@ func (s *immutableState) rawAccounts() ([]byte, error) {
 }
 
 func (s *immutableState) account(id signature.PublicKey) *ledgerEntry {
-	_, value := s.Snapshot.Get([]byte(fmt.Sprintf(stateAccountsMap, id)))
+	_, value := s.Snapshot.Get(accountKeyFmt.Encode(&id))
 	if value == nil {
 		return &ledgerEntry{}
 	}
@@ -197,7 +206,7 @@ type MutableState struct {
 }
 
 func (s *MutableState) setAccount(id signature.PublicKey, account *ledgerEntry) {
-	s.tree.Set([]byte(fmt.Sprintf(stateAccountsMap, id)), cbor.Marshal(account))
+	s.tree.Set(accountKeyFmt.Encode(&id), cbor.Marshal(account))
 }
 
 // SetDebondStartTime sets the debonding start time of an account to ts.
@@ -208,21 +217,21 @@ func (s *MutableState) SetDebondStartTime(id signature.PublicKey, ts uint64) {
 }
 
 func (s *MutableState) setTotalSupply(q *staking.Quantity) {
-	s.tree.Set(stateTotalSupply, cbor.Marshal(q))
+	s.tree.Set(totalSupplyKeyFmt.Encode(), cbor.Marshal(q))
 }
 
 func (s *MutableState) setCommonPool(q *staking.Quantity) {
-	s.tree.Set(stateCommonPool, cbor.Marshal(q))
+	s.tree.Set(commonPoolKeyFmt.Encode(), cbor.Marshal(q))
 }
 
 func (s *MutableState) setDebondingInterval(interval uint64) {
 	var tmp [8]byte
 	binary.LittleEndian.PutUint64(tmp[:], interval)
-	s.tree.Set(stateDebondingInterval, tmp[:])
+	s.tree.Set(debondingIntervalKeyFmt.Encode(), tmp[:])
 }
 
 func (s *MutableState) setThreshold(kind staking.ThresholdKind, q *staking.Quantity) {
-	s.tree.Set([]byte(fmt.Sprintf(stateThresholdsMap, kind)), cbor.Marshal(q))
+	s.tree.Set(thresholdKeyFmt.Encode(uint64(kind)), cbor.Marshal(q))
 }
 
 // SlashEscrow slashes up to the amount from the escrow balance of the account,
