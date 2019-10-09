@@ -8,7 +8,6 @@ import (
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	staking "github.com/oasislabs/ekiden/go/staking/api"
 	storage "github.com/oasislabs/ekiden/go/storage/api"
 )
 
@@ -23,9 +22,6 @@ var (
 // HeaderType is the type of header.
 type HeaderType uint8
 
-// AdjustmentOp is the Op in StakingGeneralAdjustmentRoothashMessage
-type AdjustmentOp uint8
-
 const (
 	// Normal is a normal header.
 	Normal HeaderType = 0
@@ -39,26 +35,7 @@ const (
 	// Such a header contains no transactions but advances the round as
 	// normal.
 	EpochTransition HeaderType = 2
-
-	// Increase adds the amount to the general balance.
-	Increase AdjustmentOp = 1
-
-	// Decrease subtracts the amount from the general balance.
-	Decrease AdjustmentOp = 2
 )
-
-// StakingGeneralAdjustmentRoothashMessage is a message that changes an account's general balance.
-// Mux app in charge: staking
-type StakingGeneralAdjustmentRoothashMessage struct {
-	Account signature.PublicKey `json:"account"`
-	Op      AdjustmentOp        `json:"op"`
-	Amount  *staking.Quantity   `json:"amount"`
-}
-
-// RoothashMessage is a roothash message.
-type RoothashMessage struct {
-	StakingGeneralAdjustmentRoothashMessage *StakingGeneralAdjustmentRoothashMessage
-}
 
 // Header is a block header.
 //
