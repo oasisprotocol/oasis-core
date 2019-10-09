@@ -134,8 +134,6 @@ steps:
     command:
       - .buildkite/scripts/setup_gitconfig.sh
       - .buildkite/rust/build_runtime.sh keymanager-runtime
-      # The test runtime must be built here as it requires the keymanager enclave hash.
-      - export KM_ENCLAVE_PATH=/tmp/artifacts/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
 
       # Upload the built artifacts.

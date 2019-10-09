@@ -29,9 +29,6 @@ use ekiden_runtime::{
 };
 use simple_keyvalue_api::{with_api, KeyValue};
 
-// Include key manager enclave hash.
-include!(concat!(env!("OUT_DIR"), "/km_enclave_hash.rs"));
-
 struct Context {
     km_client: Arc<dyn KeyManagerClient>,
 }
