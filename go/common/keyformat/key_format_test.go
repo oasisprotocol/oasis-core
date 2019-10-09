@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/ekiden/go/common/crypto/signature"
 )
 
 func TestKeyFormat(t *testing.T) {
@@ -57,6 +58,25 @@ func TestKeyFormat(t *testing.T) {
 	// Test with incorrect key type.
 	ok = fmt1.Decode(enc, &decNs, &decH)
 	require.False(t, ok, "Decode")
+}
+
+func TestPublicKey(t *testing.T) {
+	// NOTE: When using a signature.PublicKey we must use MapKey in the format
+	//       specification to get the correct size. Then we can use PublicKey
+	//       during actual serialization/deserialization.
+	fmt := New('S', &signature.MapKey{})
+	require.Equal(t, 1+32, fmt.Size(), "format size")
+
+	var pk signature.PublicKey
+	err := pk.UnmarshalHex("47aadd91516ac548decdb436fde957992610facc09ba2f850da0fe1b2be96119")
+	require.NoError(t, err, "UnmarshalHex")
+
+	enc := fmt.Encode(&pk)
+
+	var decPk signature.PublicKey
+	ok := fmt.Decode(enc, &decPk)
+	require.True(t, ok, "Decode")
+	require.EqualValues(t, pk, decPk, "decoded public key must be correct")
 }
 
 func TestVariableSize(t *testing.T) {
