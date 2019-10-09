@@ -540,15 +540,11 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	defer state.updateRuntimeState(rtState)
 
 	if rtState.Round.MergePool.IsTimeout(ctx.Now()) {
-		finalizedBlock := app.tryFinalizeMerge(ctx, runtime, rtState, true)
-		if finalizedBlock != nil {
-			if err := app.postProcessFinalizedBlock(ctx, state.tree, rtState, finalizedBlock); err != nil {
-				app.logger.Error("failed while postprocessing finalized block",
-					"err", err,
-					"block", finalizedBlock,
-				)
-				panic(err)
-			}
+		if err := app.tryFinalizeBlock(ctx, runtime, rtState, true); err != nil {
+			app.logger.Error("failed to finalize block",
+				"err", err,
+			)
+			panic(err)
 		}
 	}
 	for _, pool := range rtState.Round.ComputePool.GetTimeoutCommittees(ctx.Now()) {
@@ -665,15 +661,11 @@ func (app *rootHashApplication) commit(
 
 		// Try to finalize round.
 		if !ctx.IsCheckOnly() {
-			finalizedBlock := app.tryFinalizeMerge(ctx, runtime, rtState, false)
-			if finalizedBlock != nil {
-				if err = app.postProcessFinalizedBlock(ctx, state.tree, rtState, finalizedBlock); err != nil {
-					logger.Error("failed while postprocessing finalized block",
-						"err", err,
-						"block", finalizedBlock,
-					)
-					return err
-				}
+			if err = app.tryFinalizeBlock(ctx, runtime, rtState, false); err != nil {
+				logger.Error("failed to finalize block",
+					"err", err,
+				)
+				return err
 			}
 		}
 	case tx.TxComputeCommit != nil:
@@ -911,6 +903,24 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, tre
 		Round: blk.Header.Round,
 	}
 	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
+
+	return nil
+}
+
+func (app *rootHashApplication) tryFinalizeBlock(
+	ctx *abci.Context,
+	runtime *registry.Runtime,
+	rtState *runtimeState,
+	mergeForced bool,
+) error {
+	finalizedBlock := app.tryFinalizeMerge(ctx, runtime, rtState, mergeForced)
+	if finalizedBlock == nil {
+		return nil
+	}
+
+	if err := app.postProcessFinalizedBlock(ctx, app.state.DeliverTxTree(), rtState, finalizedBlock); err != nil {
+		return err
+	}
 
 	return nil
 }
