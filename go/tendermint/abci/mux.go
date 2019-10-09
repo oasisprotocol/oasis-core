@@ -20,7 +20,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
-	dbm "github.com/tendermint/tendermint/libs/db"
+	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/logging"
@@ -875,13 +875,16 @@ func (s *ApplicationState) doCommit() error {
 		s.blockHeight = blockHeight
 		s.blockLock.Unlock()
 
-		// Reset CheckTx state to latest version. This is safe because Tendermint
-		// holds a lock on the mempool for commit.
+		// Reset CheckTx state to latest version. This is safe because
+		// Tendermint holds a lock on the mempool for commit.
 		//
 		// WARNING: deliverTxTree and checkTxTree do not share internal
 		// state beyond the backing database.  The `LoadVersion`
 		// implementation MUST be written in a way to avoid relying on
 		// cached metadata.
+		//
+		// This makes the upstream `LazyLoadVersion` and `LoadVersion`
+		// unsuitable for our use case.
 		_, cerr := s.checkTxTree.LoadVersion(blockHeight)
 		if cerr != nil {
 			panic(cerr)

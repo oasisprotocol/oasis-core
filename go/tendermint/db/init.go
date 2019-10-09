@@ -8,8 +8,8 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	dbm "github.com/tendermint/tendermint/libs/db"
 	"github.com/tendermint/tendermint/node"
+	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasislabs/ekiden/go/tendermint/db/badger"
 	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
