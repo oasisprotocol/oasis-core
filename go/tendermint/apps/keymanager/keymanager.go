@@ -146,7 +146,7 @@ func (app *keymanagerApplication) ForeignExecuteTx(ctx *abci.Context, other abci
 	return nil
 }
 
-func (app *keymanagerApplication) EndBlock(request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *keymanagerApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 

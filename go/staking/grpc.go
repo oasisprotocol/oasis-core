@@ -101,16 +101,15 @@ func (s *grpcServer) GetAccountInfo(ctx context.Context, req *pb.GetAccountInfoR
 		return nil, err
 	}
 
-	general, escrow, debondStart, nonce, err := s.backend.AccountInfo(ctx, id)
+	account, err := s.backend.AccountInfo(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	var resp pb.GetAccountInfoResponse
-	resp.GeneralBalance, _ = general.MarshalBinary()
-	resp.EscrowBalance, _ = escrow.MarshalBinary()
-	resp.DebondStartTime = debondStart
-	resp.Nonce = nonce
+	resp.GeneralBalance, _ = account.General.Balance.MarshalBinary()
+	resp.EscrowBalance, _ = account.Escrow.Balance.MarshalBinary()
+	resp.Nonce = account.General.Nonce
 
 	return &resp, nil
 }

@@ -95,7 +95,7 @@ func (app *beaconApplication) ForeignExecuteTx(ctx *abci.Context, other abci.App
 	return nil
 }
 
-func (app *beaconApplication) EndBlock(req types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *beaconApplication) EndBlock(ctx *abci.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 

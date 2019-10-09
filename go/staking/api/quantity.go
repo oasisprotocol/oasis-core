@@ -127,6 +127,28 @@ func (q *Quantity) SubUpTo(n *Quantity) (*Quantity, error) {
 	return &Quantity{inner: amount}, nil
 }
 
+// Mul multiplies n with q, returning an error if n < 0 or n == nil.
+func (q *Quantity) Mul(n *Quantity) error {
+	if n == nil || !n.IsValid() {
+		return ErrInvalidArgument
+	}
+
+	q.inner.Mul(&q.inner, &n.inner)
+
+	return nil
+}
+
+// Quo divides q with n, returning an error if n <= 0 or n == nil.
+func (q *Quantity) Quo(n *Quantity) error {
+	if n == nil || !n.IsValid() || n.IsZero() {
+		return ErrInvalidArgument
+	}
+
+	q.inner.Quo(&q.inner, &n.inner)
+
+	return nil
+}
+
 // Cmp returns -1 if q < n, 0 if q == n, and 1 if q > n.
 func (q *Quantity) Cmp(n *Quantity) int {
 	return q.inner.Cmp(&n.inner)

@@ -276,7 +276,7 @@ func (app *registryApplication) ForeignExecuteTx(ctx *abci.Context, other abci.A
 	return nil
 }
 
-func (app *registryApplication) EndBlock(request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *registryApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 

@@ -76,8 +76,7 @@ message GetAccountInfoRequest {
 message GetAccountInfoResponse {
 	bytes general_balance = 1;
 	bytes escrow_balance = 2;
-	uint64 debond_start_time = 3;
-	uint64 nonce = 4;
+	uint64 nonce = 3;
 }
 
 message TransferRequest {

@@ -10,6 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	commonFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/staking/tendermint"
@@ -24,7 +25,7 @@ const (
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
-func New(ctx context.Context, tmService service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
 	var (
 		impl    api.Backend
 		err     error
@@ -43,7 +44,7 @@ func New(ctx context.Context, tmService service.TendermintService) (api.Backend,
 
 	switch strings.ToLower(backend) {
 	case tendermint.BackendName:
-		impl, err = tendermint.New(ctx, debugGenesisState, tmService)
+		impl, err = tendermint.New(ctx, timeSource, debugGenesisState, tmService)
 	default:
 		err = fmt.Errorf("staking: unsupported backend: '%v'", backend)
 	}

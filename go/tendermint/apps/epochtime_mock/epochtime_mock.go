@@ -129,7 +129,7 @@ func (app *epochTimeMockApplication) ForeignExecuteTx(ctx *abci.Context, other a
 	return nil
 }
 
-func (app *epochTimeMockApplication) EndBlock(request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *epochTimeMockApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 

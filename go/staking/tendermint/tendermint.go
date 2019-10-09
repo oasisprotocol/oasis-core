@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 	app "github.com/oasislabs/oasis-core/go/tendermint/apps/staking"
@@ -102,21 +103,38 @@ func (b *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey
 	return data, nil
 }
 
-func (b *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey) (*api.Quantity, *api.Quantity, uint64, uint64, error) {
+func (b *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey) (*api.Account, error) {
 	query := tmapi.QueryGetByIDRequest{
 		ID: owner,
 	}
 	response, err := b.service.Query(app.QueryAccountInfo, query, 0)
 	if err != nil {
-		return nil, nil, 0, 0, errors.Wrap(err, "staking: account info query failed")
+		return nil, errors.Wrap(err, "staking: account info query failed")
 	}
 
-	var data app.QueryAccountInfoResponse
-	if err := cbor.Unmarshal(response, &data); err != nil {
-		return nil, nil, 0, 0, errors.Wrap(err, "staking: account info query malformed response")
+	var a api.Account
+	if err := cbor.Unmarshal(response, &a); err != nil {
+		return nil, errors.Wrap(err, "staking: account info query malformed response")
 	}
 
-	return &data.GeneralBalance, &data.EscrowBalance, data.DebondStartTime, data.Nonce, nil
+	return &a, nil
+}
+
+func (b *tendermintBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey) (map[signature.MapKey][]*api.DebondingDelegation, error) {
+	query := tmapi.QueryGetByIDRequest{
+		ID: owner,
+	}
+	response, err := b.service.Query(app.QueryDebondingDelegations, query, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "staking: debonding delegations query failed")
+	}
+
+	var debs map[signature.MapKey][]*api.DebondingDelegation
+	if err := cbor.Unmarshal(response, &debs); err != nil {
+		return nil, errors.Wrap(err, "staking: debonding delegations query malformed response")
+	}
+
+	return debs, nil
 }
 
 func (b *tendermintBackend) Transfer(ctx context.Context, signedXfer *api.SignedTransfer) error {
@@ -125,7 +143,7 @@ func (b *tendermintBackend) Transfer(ctx context.Context, signedXfer *api.Signed
 			SignedTransfer: *signedXfer,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
+	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "staking: transfer transaction failed")
 	}
 
@@ -138,7 +156,7 @@ func (b *tendermintBackend) Burn(ctx context.Context, signedBurn *api.SignedBurn
 			SignedBurn: *signedBurn,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
+	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "staking: burn transaction failed")
 	}
 
@@ -151,7 +169,7 @@ func (b *tendermintBackend) AddEscrow(ctx context.Context, signedEscrow *api.Sig
 			SignedEscrow: *signedEscrow,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
+	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "staking: add escrow transaction failed")
 	}
 
@@ -164,7 +182,7 @@ func (b *tendermintBackend) ReclaimEscrow(ctx context.Context, signedReclaim *ap
 			SignedReclaimEscrow: *signedReclaim,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
+	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "staking: reclaim escrow transaction failed")
 	}
 
@@ -213,14 +231,14 @@ func (b *tendermintBackend) Cleanup() {
 func (b *tendermintBackend) worker(ctx context.Context) {
 	defer close(b.closedCh)
 
-	sub, err := b.service.Subscribe("staking-worker", app.QueryApp)
+	sub, err := b.service.Subscribe("staking-worker", app.QueryUpdate)
 	if err != nil {
 		b.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer b.service.Unsubscribe("staking-worker", app.QueryApp) // nolint: errcheck
+	defer b.service.Unsubscribe("staking-worker", app.QueryUpdate) // nolint: errcheck
 
 	for {
 		var event interface{}
@@ -275,6 +293,16 @@ func (b *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.
 				}
 
 				b.transferNotifier.Broadcast(&e)
+			} else if bytes.Equal(pair.GetKey(), app.TagReclaimEscrow) {
+				var e api.ReclaimEscrowEvent
+				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
+					b.logger.Error("worker: failed to get reclaim escrow event from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				b.escrowNotifier.Broadcast(&e)
 			}
 		}
 	}
@@ -295,15 +323,18 @@ func (b *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventD
 		b.burnNotifier.Broadcast(e)
 	} else if e := output.OutputAddEscrow; e != nil {
 		b.escrowNotifier.Broadcast(e)
-	} else if e := output.OutputReclaimEscrow; e != nil {
-		b.escrowNotifier.Broadcast(e)
 	}
 }
 
 // New constructs a new tendermint backed staking Backend instance.
-func New(ctx context.Context, debugGenesisState *api.Genesis, service service.TendermintService) (api.Backend, error) {
+func New(
+	ctx context.Context,
+	timeSource epochtime.Backend,
+	debugGenesisState *api.Genesis,
+	service service.TendermintService,
+) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
-	app := app.New(debugGenesisState)
+	app := app.New(timeSource, debugGenesisState)
 	if err := service.RegisterApplication(app); err != nil {
 		return nil, err
 	}

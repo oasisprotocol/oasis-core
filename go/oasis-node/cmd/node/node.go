@@ -134,7 +134,7 @@ func (n *Node) initBackends() error {
 	if n.Beacon, err = beacon.New(n.svcMgr.Ctx, n.Epochtime, n.svcTmnt); err != nil {
 		return err
 	}
-	if n.Staking, err = staking.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
+	if n.Staking, err = staking.New(n.svcMgr.Ctx, n.Epochtime, n.svcTmnt); err != nil {
 		return err
 	}
 	if n.Registry, err = registry.New(n.svcMgr.Ctx, n.Epochtime, n.svcTmnt); err != nil {

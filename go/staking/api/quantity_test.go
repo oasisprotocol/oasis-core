@@ -119,6 +119,41 @@ func TestQuantitySubUpTo(t *testing.T) {
 	require.True(n.eqInt(77), "SubUpTo(9000) subtracted")
 }
 
+func TestQuantityMul(t *testing.T) {
+	require := require.New(t)
+
+	q := fromInt(100)
+
+	err := q.Mul(nil)
+	require.Equal(ErrInvalidArgument, err, "Mul(nil)")
+
+	err = q.Mul(fromInt(-1))
+	require.Equal(ErrInvalidArgument, err, "Mul(-1)")
+
+	err = q.Mul(fromInt(23))
+	require.NoError(err, "Mul")
+	require.True(q.eqInt(2300), "Mul(23) value")
+}
+
+func TestQuantityQuo(t *testing.T) {
+	require := require.New(t)
+
+	q := fromInt(100)
+
+	err := q.Quo(nil)
+	require.Equal(ErrInvalidArgument, err, "Quo(nil)")
+
+	err = q.Quo(fromInt(-1))
+	require.Equal(ErrInvalidArgument, err, "Quo(-1)")
+
+	err = q.Quo(fromInt(0))
+	require.Equal(ErrInvalidArgument, err, "Quo(0)")
+
+	err = q.Quo(fromInt(50))
+	require.NoError(err, "Quo")
+	require.True(q.eqInt(2), "Quo(50) value")
+}
+
 func TestQuantityCmp(t *testing.T) {
 	require := require.New(t)
 
