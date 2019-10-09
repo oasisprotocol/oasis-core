@@ -44,7 +44,7 @@ RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
     rustup target add x86_64-fortanix-unknown-sgx && \
     rustup component add rustfmt && \
     cargo install fortanix-sgx-tools sgxs-tools && \
-    cargo install xargo
+    cargo install cargo-audit
 
 # Install Go and utilities.
 RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
