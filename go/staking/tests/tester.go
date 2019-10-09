@@ -309,16 +309,6 @@ func testEscrow(t *testing.T, backend api.Backend) {
 	require.NoError(err, "AccountInfo - escrowed")
 	require.Equal(tmpBalance, generalBalance, "dest: generalBalance == oldGeneralBalance")
 	require.True(escrowBalance.IsZero(), "dest: escrowBalance == 0")
-
-	escrowBackend, ok := backend.(api.EscrowBackend)
-	if !ok {
-		// Can't test Take/Release escrow in a generic manner.
-		t.Logf("non-EscrowBackend, skipping Take/ReleaseEscrow tests")
-		return
-	}
-
-	// Nothing implements EscrowBackend, punt on running tests for now.
-	_ = escrowBackend
 }
 
 func mustGenerateSigner() signature.Signer {

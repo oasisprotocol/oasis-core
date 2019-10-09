@@ -26,12 +26,6 @@ var (
 	// TransferSignatureContext is the context used for transfers.
 	TransferSignatureContext = []byte("EkStaXfr")
 
-	// ApproveSignatureContext is the context used for approvals.
-	ApproveSignatureContext = []byte("EkStaApr")
-
-	// WithdrawSignatureContext is the context used for withdrawals.
-	WithdrawSignatureContext = []byte("EkStaWit")
-
 	// BurnSignatureContext is the context used for burns.
 	BurnSignatureContext = []byte("EkStaBur")
 
@@ -131,18 +125,6 @@ type Backend interface {
 
 	// Cleanup cleans up the backend.
 	Cleanup()
-}
-
-// EscrowBackend is the interface implemented by implementations that have a
-// TakeEscrow implementation that is not tightly coupled with the BFT
-// consensus.
-type EscrowBackend interface {
-	// TakeEscrow deducts up to the amount of tokens from the owner's escrow
-	// balance.
-	//
-	// This should only be called by the roothash (?) committee to penalize
-	// a misbehaving entity.
-	TakeEscrow(ctx context.Context, owner signature.PublicKey, tokens *Quantity) error
 }
 
 // TransferEvent is the event emitted when a balance is transfered, either by
