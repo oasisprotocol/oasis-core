@@ -571,15 +571,6 @@ type SignedNode struct {
 	signature.Signed
 }
 
-// FromCBOR returns a new SignedNode from the CBOR representation.
-func (s *SignedNode) FromCBOR(data []byte) (interface{}, error) {
-	var sn SignedNode
-	if err := cbor.Unmarshal(data, &sn); err != nil {
-		return nil, err
-	}
-	return &sn, nil
-}
-
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedNode) Open(context []byte, node *Node) error { // nolint: interfacer
 	return s.Signed.Open(context, node)

@@ -5,17 +5,21 @@ import (
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/ekiden/go/common/keyformat"
 	"github.com/oasislabs/ekiden/go/epochtime/api"
 	"github.com/oasislabs/ekiden/go/tendermint/abci"
 )
 
-const (
-	// Mock epochtime state.
-	stateCurrentEpoch = "epochtime_mock/current"
-	stateFutureEpoch  = "epochtime_mock/future"
-)
-
 var (
+	// epochCurrentKeyFmt is the current epoch key format.
+	//
+	// Value is CBOR-serialized mock epoch time state.
+	epochCurrentKeyFmt = keyformat.New(0x30)
+	// epochFutureKeyFmt is the future epoch key format.
+	//
+	// Value is CBOR-serialized mock epoch time state.
+	epochFutureKeyFmt = keyformat.New(0x31)
+
 	_ cbor.Marshaler   = (*mockEpochTimeState)(nil)
 	_ cbor.Unmarshaler = (*mockEpochTimeState)(nil)
 )
@@ -38,7 +42,7 @@ type immutableState struct {
 }
 
 func (s *immutableState) getEpoch() (api.EpochTime, int64, error) {
-	_, raw := s.Snapshot.Get([]byte(stateCurrentEpoch))
+	_, raw := s.Snapshot.Get(epochCurrentKeyFmt.Encode())
 	if raw == nil {
 		return api.EpochTime(0), 0, nil
 	}
@@ -49,7 +53,7 @@ func (s *immutableState) getEpoch() (api.EpochTime, int64, error) {
 }
 
 func (s *immutableState) getFutureEpoch() (*mockEpochTimeState, error) {
-	_, raw := s.Snapshot.Get([]byte(stateFutureEpoch))
+	_, raw := s.Snapshot.Get(epochFutureKeyFmt.Encode())
 	if raw == nil {
 		return nil, nil
 	}
@@ -78,11 +82,7 @@ type mutableState struct {
 
 func (s *mutableState) setEpoch(epoch api.EpochTime, height int64) {
 	state := mockEpochTimeState{Epoch: epoch, Height: height}
-
-	s.tree.Set(
-		[]byte(stateCurrentEpoch),
-		state.MarshalCBOR(),
-	)
+	s.tree.Set(epochCurrentKeyFmt.Encode(), state.MarshalCBOR())
 }
 
 func (s *mutableState) setFutureEpoch(epoch api.EpochTime, height int64) error {
@@ -95,17 +95,13 @@ func (s *mutableState) setFutureEpoch(epoch api.EpochTime, height int64) error {
 	}
 
 	state := mockEpochTimeState{Epoch: epoch, Height: height}
-
-	s.tree.Set(
-		[]byte(stateFutureEpoch),
-		state.MarshalCBOR(),
-	)
+	s.tree.Set(epochFutureKeyFmt.Encode(), state.MarshalCBOR())
 
 	return nil
 }
 
 func (s *mutableState) clearFutureEpoch() {
-	s.tree.Remove([]byte(stateFutureEpoch))
+	s.tree.Remove(epochFutureKeyFmt.Encode())
 }
 
 func newMutableState(tree *iavl.MutableTree) *mutableState {

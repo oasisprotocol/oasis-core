@@ -194,15 +194,6 @@ type SignedEntity struct {
 	signature.Signed
 }
 
-// FromCBOR returns a new SignedEntity from the CBOR representation.
-func (s *SignedEntity) FromCBOR(data []byte) (interface{}, error) {
-	var se SignedEntity
-	if err := cbor.Unmarshal(data, &se); err != nil {
-		return nil, err
-	}
-	return &se, nil
-}
-
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedEntity) Open(context []byte, entity *Entity) error { // nolint: interfacer
 	return s.Signed.Open(context, entity)
