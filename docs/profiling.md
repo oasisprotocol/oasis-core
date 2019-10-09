@@ -36,11 +36,7 @@ $ callgrind_annotate callgrind.out
    (setup recommends, but we have to profile as superuser anyway)
 
 ### Building the project
-1. container: `export SGX_MODE=HW`
-   (scripts/sgx-enter-hw.sh sets this)
-1. add `-C opt-level=3` to `RUSTFLAGS` in `tasks.env-debug.env` and `tasks.env-sgx-xargo` in Makefile.toml
-   (see d826188ca5232cb9b342a46ebe67a90db2726afe for how to undo this)
-1. container: `cargo make`
+1. container: `make`
 
 ### Collecting a profile
 1. start container
