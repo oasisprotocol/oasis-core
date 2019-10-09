@@ -1,6 +1,6 @@
 package api
 
-import dbm "github.com/tendermint/tendermint/libs/db"
+import dbm "github.com/tendermint/tm-db"
 
 // SizeableDB is a tendermint database abstraction DB that supports
 // reporting it's database size for metrics purposes.

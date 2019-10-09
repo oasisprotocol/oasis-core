@@ -221,7 +221,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 	// before populating addresses, dialing is defered till use, which can't
 	// happen.
 	manualResolver, address, cleanupFn := manual.NewManualResolver()
-	conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name))
+	conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name)) //nolint: staticcheck
 	if err != nil {
 		cleanupFn()
 		c.logger.Error("failed to create new gRPC client",

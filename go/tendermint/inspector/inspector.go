@@ -3,7 +3,7 @@ package inspector
 
 import (
 	"github.com/tendermint/iavl"
-	dbm "github.com/tendermint/tendermint/libs/db"
+	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasislabs/ekiden/go/tendermint/db"
 )

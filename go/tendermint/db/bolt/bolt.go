@@ -11,8 +11,8 @@ import (
 
 	bolt "github.com/etcd-io/bbolt"
 	"github.com/golang/snappy"
-	dbm "github.com/tendermint/tendermint/libs/db"
 	"github.com/tendermint/tendermint/node"
+	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasislabs/ekiden/go/common"
 	"github.com/oasislabs/ekiden/go/common/logging"

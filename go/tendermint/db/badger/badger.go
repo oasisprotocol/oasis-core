@@ -12,8 +12,8 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
-	dbm "github.com/tendermint/tendermint/libs/db"
 	"github.com/tendermint/tendermint/node"
+	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasislabs/ekiden/go/common/logging"
 	ekbadger "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/badger"
