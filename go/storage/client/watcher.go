@@ -42,7 +42,7 @@ func DialOptionForNode(ourCerts []tls.Certificate, node *node.Node) (grpc.DialOp
 func DialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, func(), error) {
 	manualResolver, address, cleanupCb := manual.NewManualResolver()
 
-	conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name))
+	conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name)) //nolint: staticcheck
 	if err != nil {
 		cleanupCb()
 		return nil, nil, errors.Wrap(err, "failed dialing node")

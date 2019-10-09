@@ -73,7 +73,7 @@ func (t *txnschedulerClientState) updateConnection(node *node.Node) error {
 	t.resolverCleanupCb = cleanup
 
 	// Dial.
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(creds), grpc.WithBalancerName(roundrobin.Name))
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(creds), grpc.WithBalancerName(roundrobin.Name)) //nolint: staticcheck
 	if err != nil {
 		return errors.Wrap(err, "client/watcher: failed to dial txnscheduler leader")
 	}
