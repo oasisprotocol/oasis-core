@@ -28,12 +28,6 @@ type Unmarshaler interface {
 	UnmarshalCBOR([]byte) error
 }
 
-// Fromable allows a type to be deserialized from CBOR, into a new
-// copy of the type.
-type Fromable interface {
-	FromCBOR([]byte) (interface{}, error)
-}
-
 // Marshal serializes a given type into a CBOR byte vector.
 func Marshal(src interface{}) []byte {
 	b, err := cbor.Marshal(src, cbor.EncOptions{

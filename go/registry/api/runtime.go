@@ -200,15 +200,6 @@ type SignedRuntime struct {
 	signature.Signed
 }
 
-// FromCBOR returns a new SignedRuntime from the CBOR representation.
-func (s *SignedRuntime) FromCBOR(data []byte) (interface{}, error) {
-	var sr SignedRuntime
-	if err := cbor.Unmarshal(data, &sr); err != nil {
-		return nil, err
-	}
-	return &sr, nil
-}
-
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedRuntime) Open(context []byte, runtime *Runtime) error { // nolint: interfacer
 	return s.Signed.Open(context, runtime)
