@@ -17,6 +17,11 @@ type LogEntry struct {
 	Value []byte `json:"value,omitempty"`
 }
 
+func (k *LogEntry) MarshalJSON() ([]byte, error) {
+	kv := [2][]byte{k.Key, k.Value}
+	return json.Marshal(kv)
+}
+
 func (k *LogEntry) UnmarshalJSON(src []byte) error {
 	var kv [2][]byte
 	if err := json.Unmarshal(src, &kv); err != nil {

@@ -43,6 +43,16 @@ func (n *Namespace) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// UnmarshalHex deserializes a hexadecimal text string into the given type.
+func (n *Namespace) UnmarshalHex(text string) error {
+	b, err := hex.DecodeString(text)
+	if err != nil {
+		return err
+	}
+
+	return n.UnmarshalBinary(b)
+}
+
 // Equal compares vs another namespace for equality.
 func (n *Namespace) Equal(cmp *Namespace) bool {
 	if cmp == nil {

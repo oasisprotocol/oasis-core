@@ -292,7 +292,10 @@ func Register(parentCmd *cobra.Command) {
 	storageForceFinalizeCmd.Flags().Uint64Var(&finalizeRound, "round", committee.RoundLatest, "the round to force finalize; default latest")
 	storageForceFinalizeCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 
+	storageExportCmd.Flags().AddFlagSet(ExportFlags)
+
 	storageCmd.AddCommand(storageCheckRootsCmd)
 	storageCmd.AddCommand(storageForceFinalizeCmd)
+	storageCmd.AddCommand(storageExportCmd)
 	parentCmd.AddCommand(storageCmd)
 }
