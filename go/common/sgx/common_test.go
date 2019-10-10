@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMrsignerDerivation(t *testing.T) {
+func TestMrSignerDerivation(t *testing.T) {
 	require := require.New(t)
 
 	rawPem, err := ioutil.ReadFile("testdata/dummy.pub.pem")
@@ -24,7 +24,7 @@ func TestMrsignerDerivation(t *testing.T) {
 
 	rsaPubKey := nakedPubKey.(*rsa.PublicKey)
 
-	var mrsigner Mrsigner
+	var mrsigner MrSigner
 	err = mrsigner.FromPublicKey(rsaPubKey)
 	require.NoError(err, "Derive MRSIGNER")
 

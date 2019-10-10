@@ -13,8 +13,6 @@ dst=$1
 
 EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1
 export EKIDEN_UNSAFE_SKIP_AVR_VERIFY
-EKIDEN_UNSAFE_SKIP_KM_POLICY=1
-export EKIDEN_UNSAFE_SKIP_KM_POLICY
 
 # Install ekiden-tools
 cargo install --force --path tools
@@ -24,7 +22,9 @@ make -C go
 cargo build -p ekiden-runtime-loader --release
 
 pushd keymanager-runtime
-    cargo build --release
+    EKIDEN_UNSAFE_SKIP_KM_POLICY=1 cargo build --release
+
+    unset EKIDEN_UNSAFE_SKIP_KM_POLICY
     cargo build --release --target x86_64-fortanix-unknown-sgx
     cargo elf2sgxs --release
 popd

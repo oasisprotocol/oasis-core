@@ -7,4 +7,3 @@ extern crate sgxs as fortanix_sgxs;
 extern crate toml;
 
 pub mod cargo;
-pub mod sgxs;

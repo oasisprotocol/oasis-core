@@ -1,7 +1,6 @@
 package ias
 
 import (
-	"bytes"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -34,11 +33,13 @@ func (st *enclaveStore) verifyEvidence(evidence *ias.Evidence) error {
 		return errors.Wrap(err, "ias: evidence contains an invalid quote")
 	}
 
-	var id sgx.EnclaveIdentity
-	id.FromComponents(quote.Report.MRSIGNER, quote.Report.MRENCLAVE)
+	id := sgx.EnclaveIdentity{
+		MrEnclave: quote.Report.MRENCLAVE,
+		MrSigner:  quote.Report.MRSIGNER,
+	}
 
 	for _, v := range enclaveIDs {
-		if bytes.Equal(v[:], id[:]) {
+		if v == id {
 			return nil
 		}
 	}

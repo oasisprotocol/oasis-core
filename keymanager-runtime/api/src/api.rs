@@ -9,7 +9,7 @@ use ekiden_runtime::{
     common::{
         crypto::signature::{Signature, SignatureBundle},
         runtime::RuntimeId,
-        sgx::avr::{EnclaveIdentity, MrEnclave, MrSigner},
+        sgx::avr::EnclaveIdentity,
     },
     impl_bytes, runtime_api,
 };
@@ -19,26 +19,6 @@ impl_bytes!(PrivateKey, 32, "A private key.");
 impl_bytes!(PublicKey, 32, "A public key.");
 impl_bytes!(StateKey, 32, "A state key.");
 impl_bytes!(MasterSecret, 32, "A 256 bit master secret.");
-impl_bytes!(RawEnclaveId, 64, "MRSIGNER | MRENCLAVE.");
-
-impl Into<EnclaveIdentity> for RawEnclaveId {
-    fn into(self) -> EnclaveIdentity {
-        let raw = self.as_ref();
-        EnclaveIdentity {
-            mr_signer: MrSigner::from(&raw[0..32]),
-            mr_enclave: MrEnclave::from(&raw[32..64]),
-        }
-    }
-}
-
-impl From<EnclaveIdentity> for RawEnclaveId {
-    fn from(id: EnclaveIdentity) -> Self {
-        let mut tmp = vec![];
-        tmp.extend_from_slice(id.mr_signer.as_ref());
-        tmp.extend_from_slice(id.mr_enclave.as_ref());
-        RawEnclaveId::from(tmp)
-    }
-}
 
 /// Key manager initialization request.
 #[derive(Clone, Serialize, Deserialize)]
@@ -230,14 +210,14 @@ pub enum KeyManagerError {
 pub struct PolicySGX {
     pub serial: u32,
     pub id: RuntimeId,
-    pub enclaves: HashMap<RawEnclaveId, EnclavePolicySGX>,
+    pub enclaves: HashMap<EnclaveIdentity, EnclavePolicySGX>,
 }
 
 /// Per enclave key manager access control policy.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EnclavePolicySGX {
-    pub may_query: HashMap<RuntimeId, Vec<RawEnclaveId>>,
-    pub may_replicate: Vec<RawEnclaveId>,
+    pub may_query: HashMap<RuntimeId, Vec<EnclaveIdentity>>,
+    pub may_replicate: Vec<EnclaveIdentity>,
 }
 
 /// Signed key manager access control policy.

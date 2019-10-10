@@ -153,7 +153,7 @@ func normalizePath(f string) string {
 func initPublicKeyBlacklist() error {
 	allowTestKeys := viper.GetBool(CfgDebugAllowTestKeys)
 	signature.BuildPublicKeyBlacklist(allowTestKeys)
-	ias.BuildMrsignerBlacklist(allowTestKeys)
+	ias.BuildMrSignerBlacklist(allowTestKeys)
 	return nil
 }
 

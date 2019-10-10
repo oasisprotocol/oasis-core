@@ -12,27 +12,28 @@ import (
 )
 
 const (
-	// MrenclaveSize is the size of an Mrenclave in bytes.
-	MrenclaveSize = sha256.Size
+	// MrEnclaveSize is the size of an MrEnclave in bytes.
+	MrEnclaveSize = sha256.Size
 
-	// MrsignerSize is the size of an Mrsigner in bytes.
-	MrsignerSize = sha256.Size
+	// MrSignerSize is the size of an MrSigner in bytes.
+	MrSignerSize = sha256.Size
 
-	enclaveIdentitySize = MrsignerSize + MrenclaveSize
+	// enclaveIdentitySize is the total size of EnclaveIdentity in bytes.
+	enclaveIdentitySize = MrSignerSize + MrEnclaveSize
 )
 
 // Mrenclave is a SGX enclave identity register value (MRENCLAVE).
-type Mrenclave [MrenclaveSize]byte
+type MrEnclave [MrEnclaveSize]byte
 
 // MarshalBinary encodes a Mrenclave into binary form.
-func (m *Mrenclave) MarshalBinary() (data []byte, err error) {
+func (m *MrEnclave) MarshalBinary() (data []byte, err error) {
 	data = append([]byte{}, m[:]...)
 	return
 }
 
 // UnmarshalBinary decodes a binary marshaled Mrenclave.
-func (m *Mrenclave) UnmarshalBinary(data []byte) error {
-	if len(data) != MrenclaveSize {
+func (m *MrEnclave) UnmarshalBinary(data []byte) error {
+	if len(data) != MrEnclaveSize {
 		return errors.New("sgx: malformed MRENCLAVE")
 	}
 
@@ -41,8 +42,8 @@ func (m *Mrenclave) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-// UnmarshalHex decodes a hex marshaled Mrenclave.
-func (m *Mrenclave) UnmarshalHex(text string) error {
+// UnmarshalHex decodes a hex marshaled MrEnclave.
+func (m *MrEnclave) UnmarshalHex(text string) error {
 	b, err := hex.DecodeString(text)
 	if err != nil {
 		return err
@@ -51,9 +52,9 @@ func (m *Mrenclave) UnmarshalHex(text string) error {
 	return m.UnmarshalBinary(b)
 }
 
-// FromSgxs derives a Mrenclave from r, under the assumption that r will
+// FromSgxs derives a MrEnclave from r, under the assumption that r will
 // provide the entire `.sgxs` file.
-func (m *Mrenclave) FromSgxs(r io.Reader) error {
+func (m *MrEnclave) FromSgxs(r io.Reader) error {
 	// A `.sgxs` file's SHA256 digest is conveniently the MRENCLAVE.
 	var buf [32768]byte
 
@@ -77,30 +78,30 @@ readLoop:
 	return m.UnmarshalBinary(sum)
 }
 
-// FromSgxsBytes dervies a Mrenclave from a byte slice containing a `.sgxs`
+// FromSgxsBytes dervies a MrEnclave from a byte slice containing a `.sgxs`
 // file.
-func (m *Mrenclave) FromSgxsBytes(data []byte) error {
+func (m *MrEnclave) FromSgxsBytes(data []byte) error {
 	sum := sha256.Sum256(data)
 	return m.UnmarshalBinary(sum[:])
 }
 
-// String returns the string representation of a Mrenclave.
-func (m Mrenclave) String() string {
+// String returns the string representation of a MrEnclave.
+func (m MrEnclave) String() string {
 	return hex.EncodeToString(m[:])
 }
 
-// Mrsigner is a SGX enclave signer register value (MRSIGNER).
-type Mrsigner [MrsignerSize]byte
+// MrSigner is a SGX enclave signer register value (MRSIGNER).
+type MrSigner [MrSignerSize]byte
 
-// MarshalBinary encodes a Mrsigner into binary form.
-func (m *Mrsigner) MarshalBinary() (data []byte, err error) {
+// MarshalBinary encodes a MrSigner into binary form.
+func (m *MrSigner) MarshalBinary() (data []byte, err error) {
 	data = append([]byte{}, m[:]...)
 	return
 }
 
-// UnmarshalBinary decodes a binary marshaled Mrsigner.
-func (m *Mrsigner) UnmarshalBinary(data []byte) error {
-	if len(data) != MrsignerSize {
+// UnmarshalBinary decodes a binary marshaled MrSigner.
+func (m *MrSigner) UnmarshalBinary(data []byte) error {
+	if len(data) != MrSignerSize {
 		return errors.New("sgx: malformed MRSIGNER")
 	}
 
@@ -109,8 +110,8 @@ func (m *Mrsigner) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-// UnmarshalHex decodes a hex marshaled Mrsigner.
-func (m *Mrsigner) UnmarshalHex(text string) error {
+// UnmarshalHex decodes a hex marshaled MrSigner.
+func (m *MrSigner) UnmarshalHex(text string) error {
 	b, err := hex.DecodeString(text)
 	if err != nil {
 		return err
@@ -119,8 +120,8 @@ func (m *Mrsigner) UnmarshalHex(text string) error {
 	return m.UnmarshalBinary(b)
 }
 
-// FromPublicKey derives a Mrsigner from a RSA public key.
-func (m *Mrsigner) FromPublicKey(pk *rsa.PublicKey) error {
+// FromPublicKey derives a MrSigner from a RSA public key.
+func (m *MrSigner) FromPublicKey(pk *rsa.PublicKey) error {
 	const modulusBits = 3072 // Hardware constraint.
 	if pk.Size() != modulusBits/8 {
 		return errors.New("sgx: invalid RSA public key for SGX signing")
@@ -137,34 +138,20 @@ func (m *Mrsigner) FromPublicKey(pk *rsa.PublicKey) error {
 	return m.UnmarshalBinary(sum[:])
 }
 
-// String returns the string representation of a Mrsigner.
-func (m Mrsigner) String() string {
+// String returns the string representation of a MrSigner.
+func (m MrSigner) String() string {
 	return hex.EncodeToString(m[:])
 }
 
 // EnclaveIdentity is a byte serialized MRSIGNER/MRENCLAVE pair.
-type EnclaveIdentity [enclaveIdentitySize]byte
-
-// MarshalBinary encodes an EnclaveIdentity into binary form.
-func (id *EnclaveIdentity) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, id[:]...)
-	return
-}
-
-// UnmarshalBinary decodes a binary marshaled EnclaveIdentity.
-func (id *EnclaveIdentity) UnmarshalBinary(data []byte) error {
-	if len(data) != enclaveIdentitySize {
-		return errors.New("sgx: malformed EnclaveIdentity")
-	}
-
-	copy(id[:], data)
-
-	return nil
+type EnclaveIdentity struct {
+	MrEnclave MrEnclave `json:"mr_enclave"`
+	MrSigner  MrSigner  `json:"mr_signer"`
 }
 
 // MarshalText encodes an EnclaveIdentity into text form.
 func (id EnclaveIdentity) MarshalText() (data []byte, err error) {
-	return []byte(base64.StdEncoding.EncodeToString(id[:])), nil
+	return []byte(base64.StdEncoding.EncodeToString(append(id.MrEnclave[:], id.MrSigner[:]...))), nil
 }
 
 // UnmarshalText decodes a text marshaled EnclaveIdentity.
@@ -173,42 +160,30 @@ func (id *EnclaveIdentity) UnmarshalText(text []byte) error {
 	if err != nil {
 		return errors.Wrap(err, "sgx: malformed EnclaveIdentity")
 	}
+	if err := id.MrEnclave.UnmarshalBinary(b[:MrEnclaveSize]); err != nil {
+		return errors.Wrap(err, "sgx: malformed MrEnclave in EnclaveIdentity")
+	}
+	if err := id.MrSigner.UnmarshalBinary(b[MrEnclaveSize:]); err != nil {
+		return errors.Wrap(err, "sgx: malformed MrSigner in EnclaveIdentity")
+	}
 
-	return id.UnmarshalBinary(b)
+	return nil
 }
 
 // UnmarshalHex decodes a hex marshaled EnclaveIdentity.
 func (id *EnclaveIdentity) UnmarshalHex(text string) error {
 	b, err := hex.DecodeString(text)
-	if err != nil {
+	if err != nil || len(b) != enclaveIdentitySize {
 		return errors.Wrap(err, "sgx: malformed EnclaveIdentity")
 	}
 
-	return id.UnmarshalBinary(b)
-}
+	copy(id.MrEnclave[:], b[:MrEnclaveSize])
+	copy(id.MrSigner[:], b[MrEnclaveSize:])
 
-// FromComponents constructs an EnclaveIdentity from it's component
-// parts.
-func (id *EnclaveIdentity) FromComponents(mrsigner Mrsigner, mrenclave Mrenclave) {
-	copy(id[0:], mrsigner[:])
-	copy(id[MrsignerSize:], mrenclave[:])
-}
-
-// Mrsigner returns the MRSIGNER component of an EnclaveIdentity.
-func (id *EnclaveIdentity) Mrsigner() Mrsigner {
-	var ret Mrsigner
-	_ = ret.UnmarshalBinary(id[:MrsignerSize])
-	return ret
-}
-
-// Mrenclave returns the MRENCLAVE component of an EnclaveIdentity.
-func (id *EnclaveIdentity) Mrenclave() Mrenclave {
-	var ret Mrenclave
-	_ = ret.UnmarshalBinary(id[MrsignerSize:])
-	return ret
+	return nil
 }
 
 // String returns the string representation of a EnclaveIdentity.
 func (id EnclaveIdentity) String() string {
-	return hex.EncodeToString(id[:])
+	return hex.EncodeToString(id.MrEnclave[:]) + hex.EncodeToString(id.MrSigner[:])
 }

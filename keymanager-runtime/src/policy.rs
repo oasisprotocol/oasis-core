@@ -15,10 +15,7 @@ use ekiden_keymanager_api::*;
 use ekiden_runtime::{
     common::{
         cbor,
-        crypto::{
-            mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
-            signature::{PrivateKey, PublicKey},
-        },
+        crypto::mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
         runtime::RuntimeId,
         sgx::{avr::EnclaveIdentity, egetkey::egetkey},
     },
@@ -31,30 +28,9 @@ use crate::context::Context as KmContext;
 
 lazy_static! {
     static ref POLICY: Policy = Policy::new();
-    static ref MULTISIG_KEYS: HashSet<PublicKey> = {
-        let mut set = HashSet::new();
-        if option_env!("EKIDEN_UNSAFE_KM_POLICY_KEYS").is_some() {
-            for seed in [
-                "ekiden key manager test multisig key 0",
-                "ekiden key manager test multisig key 1",
-                "ekiden key manager test multisig key 2",
-            ].iter() {
-                let private_key = PrivateKey::from_test_seed(
-                    seed.to_string(),
-                );
-                set.insert(private_key.public_key());
-            }
-        }
-
-        // TODO: Populate with the production keys as well.
-        set
-    };
 }
-const MULTISIG_THRESHOLD: usize = 9001; // TODO: Set this to a real value.
-
 const POLICY_STORAGE_KEY: &'static [u8] = b"keymanager_policy";
 const POLICY_SEAL_CONTEXT: &'static [u8] = b"Ekiden Keymanager Seal policy v0";
-const POLICY_SIGN_CONTEXT: [u8; 8] = *b"EkKmPolS";
 
 /// Policy, which manages the key manager policy.
 pub struct Policy {
@@ -149,13 +125,13 @@ impl Policy {
         }
     }
 
-    /// Check if the MRSIGNER/MRENCLAVE may replicate.
+    /// Check if the MRENCLAVE/MRSIGNER may replicate.
     pub fn may_replicate_master_secret(&self, remote_enclave: &EnclaveIdentity) -> Fallible<()> {
         // Always allow replication to ourselves, if it is possible to do so in
         // an authenticated manner.
         #[cfg(target_env = "sgx")]
         {
-            let our_id = EnclaveIdentity::current().expect("failed to query MRSIGNER/MRENCLAVE");
+            let our_id = EnclaveIdentity::current().expect("failed to query MRENCLAVE/MRSIGNER");
             if our_id == *remote_enclave {
                 return Ok(());
             }
@@ -261,37 +237,8 @@ impl CachedPolicy {
     fn parse(raw: &Vec<u8>) -> Fallible<Self> {
         // Parse out the signed policy.
         let untrusted_policy: SignedPolicySGX = cbor::from_slice(&raw)?;
+        let policy = untrusted_policy.verify()?;
 
-        // Verify the signatures.
-        let untrusted_policy_raw = cbor::to_vec(&untrusted_policy.policy);
-        let mut signers: HashSet<PublicKey> = HashSet::new();
-        for sig in untrusted_policy.signatures {
-            let public_key = match sig.public_key {
-                Some(public_key) => public_key,
-                None => return Err(KeyManagerError::PolicyInvalid.into()),
-            };
-
-            if !sig
-                .signature
-                .verify(&public_key, &POLICY_SIGN_CONTEXT, &untrusted_policy_raw)
-                .is_ok()
-            {
-                return Err(KeyManagerError::PolicyInvalidSignature.into());
-            }
-            signers.insert(public_key);
-        }
-
-        // Ensure that enough valid signatures from trusted signers are present.
-        let signers: HashSet<_> = MULTISIG_KEYS.intersection(&signers).collect();
-        let multisig_threshold = match option_env!("EKIDEN_UNSAFE_KM_POLICY_KEYS") {
-            Some(_) => 2,
-            None => MULTISIG_THRESHOLD,
-        };
-        if signers.len() < multisig_threshold {
-            return Err(KeyManagerError::PolicyInsufficientSignatures.into());
-        }
-
-        let policy = untrusted_policy.policy;
         let mut cached_policy = Self::default();
         cached_policy.checksum = sha3_256(&raw).to_vec();
         cached_policy.serial = policy.serial;
@@ -302,7 +249,7 @@ impl CachedPolicy {
         // TODO: Need a mock enclave identity for non-sgx builds if we want to
         // ever test policies with such a build.
         let enclave_identity = match EnclaveIdentity::current() {
-            Some(enclave_identity) => RawEnclaveId::from(enclave_identity),
+            Some(enclave_identity) => enclave_identity,
             None => return Ok(cached_policy),
         };
         let enclave_policy = match policy.enclaves.get(&enclave_identity) {
@@ -311,17 +258,17 @@ impl CachedPolicy {
         };
         for (rt_id, ids) in &enclave_policy.may_query {
             let mut query_ids = HashSet::new();
-            for raw_id in ids {
-                query_ids.insert((*raw_id).into());
+            for e_id in ids {
+                query_ids.insert(e_id.clone());
             }
             cached_policy.may_query.insert(*rt_id, query_ids);
         }
-        for raw_id in &enclave_policy.may_replicate {
-            cached_policy.may_replicate.insert((*raw_id).into());
+        for e_id in &enclave_policy.may_replicate {
+            cached_policy.may_replicate.insert(e_id.clone());
         }
-        for (raw_id, other_policy) in &policy.enclaves {
+        for (e_id, other_policy) in &policy.enclaves {
             if other_policy.may_replicate.contains(&enclave_identity) {
-                cached_policy.may_replicate_from.insert((*raw_id).into());
+                cached_policy.may_replicate_from.insert(e_id.clone());
             }
         }
 

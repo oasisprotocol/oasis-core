@@ -1,3 +1,4 @@
+extern crate ekiden_keymanager_api;
 extern crate ekiden_keymanager_client;
 extern crate ekiden_runtime;
 extern crate failure;
@@ -27,14 +28,6 @@ use ekiden_runtime::{
     version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 use simple_keyvalue_api::{with_api, KeyValue};
-
-#[cfg(target_env = "sgx")]
-use ekiden_runtime::common::sgx::avr::EnclaveIdentity;
-#[cfg(target_env = "sgx")]
-use std::collections::HashSet;
-
-// Include key manager enclave hash.
-include!(concat!(env!("OUT_DIR"), "/km_enclave_hash.rs"));
 
 struct Context {
     km_client: Arc<dyn KeyManagerClient>,
@@ -265,20 +258,9 @@ fn main() {
                 txn: &mut TxnDispatcher| {
         with_api! { register_runtime_txn_methods!(txn, api); }
 
-        #[cfg(target_env = "sgx")]
-        let remote_enclaves: Option<HashSet<EnclaveIdentity>> = Some(
-            [EnclaveIdentity::fortanix_test(KM_ENCLAVE_HASH)]
-                .iter()
-                .cloned()
-                .collect(),
-        );
-        #[cfg(not(target_env = "sgx"))]
-        let remote_enclaves = None;
-
         // Create the key manager client.
         let km_client = Arc::new(ekiden_keymanager_client::RemoteClient::new_runtime(
             RuntimeId::default(), // HACK: Tests always use the all 0 runtime ID.
-            remote_enclaves,
             protocol.clone(),
             rak.clone(),
             1024,

@@ -29,8 +29,8 @@ type NetworkFixture struct {
 // Create instantiates the network described by the fixture.
 func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 	// Use default MRSIGNER if not provided.
-	if f.TEE.Hardware == node.TEEHardwareIntelSGX && f.TEE.Mrsigner == nil {
-		f.TEE.Mrsigner = &ias.FortanixTestMrSigner
+	if f.TEE.Hardware == node.TEEHardwareIntelSGX && f.TEE.MrSigner == nil {
+		f.TEE.MrSigner = &ias.FortanixTestMrSigner
 	}
 
 	// Create the top level ekiden network.
@@ -102,7 +102,7 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 // TEEFixture is a TEE configuration fixture.
 type TEEFixture struct {
 	Hardware node.TEEHardware `json:"hardware"`
-	Mrsigner *sgx.Mrsigner    `json:"mrsigner"`
+	MrSigner *sgx.MrSigner    `json:"mrsigner"`
 }
 
 // ValidatorFixture is a validator fixture.
@@ -162,7 +162,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		Entity:                 entity,
 		Keymanager:             km,
 		TEEHardware:            netFixture.TEE.Hardware,
-		Mrsigner:               netFixture.TEE.Mrsigner,
+		MrSigner:               netFixture.TEE.MrSigner,
 		ReplicaGroupSize:       f.ReplicaGroupSize,
 		ReplicaGroupBackupSize: f.ReplicaGroupBackupSize,
 		StorageGroupSize:       f.StorageGroupSize,

@@ -55,7 +55,7 @@ func (sc *basicImpl) Fixture() (*ekiden.NetworkFixture, error) {
 	if err != nil {
 		return nil, err
 	}
-	var mrsigner *sgx.Mrsigner
+	var mrsigner *sgx.MrSigner
 	if tee == node.TEEHardwareIntelSGX {
 		mrsigner = &ias.FortanixTestMrSigner
 	}
@@ -63,7 +63,7 @@ func (sc *basicImpl) Fixture() (*ekiden.NetworkFixture, error) {
 	return &ekiden.NetworkFixture{
 		TEE: ekiden.TEEFixture{
 			Hardware: tee,
-			Mrsigner: mrsigner,
+			MrSigner: mrsigner,
 		},
 		Network: ekiden.NetworkCfg{
 			EkidenBinary:        viper.GetString(cfgEkidenBinary),

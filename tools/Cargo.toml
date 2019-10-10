@@ -17,9 +17,5 @@ clap = "2.29.1"
 ansi_term = "0.11.0"
 
 [[bin]]
-name = "ekiden-sgxs-hash"
-path ="bin/ekiden-sgxs-hash.rs"
-
-[[bin]]
 name = "cargo-elf2sgxs"
 path ="bin/cargo-elf2sgxs.rs"

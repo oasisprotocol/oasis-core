@@ -63,12 +63,12 @@ var (
 		ReasonAACompromise:         "aACompromise",
 	}
 
-	mrsignerBlacklist = make(map[sgx.Mrsigner]bool)
+	mrsignerBlacklist = make(map[sgx.MrSigner]bool)
 
 	// FortanixTestMrSigner is the MRSIGNER value corresponding to the Fortanix
 	// test signing key that is used by default if no other signing key is
 	// specified.
-	FortanixTestMrSigner sgx.Mrsigner
+	FortanixTestMrSigner sgx.MrSigner
 
 	_ cbor.Marshaler   = (*AVRBundle)(nil)
 	_ cbor.Unmarshaler = (*AVRBundle)(nil)
@@ -402,13 +402,13 @@ func SetSkipVerify() {
 	unsafeSkipVerify = true
 }
 
-// BuildMrsignerBlacklist builds the MRSIGNER blacklist.
-func BuildMrsignerBlacklist(allowTestKeys bool) {
+// BuildMrSignerBlacklist builds the MRSIGNER blacklist.
+func BuildMrSignerBlacklist(allowTestKeys bool) {
 	if !allowTestKeys {
 		for _, v := range []string{
 			FortanixTestMrSigner.String(),
 		} {
-			var signer sgx.Mrsigner
+			var signer sgx.MrSigner
 			if err := signer.UnmarshalHex(v); err != nil {
 				panic("ias/avr: failed to decode MRSIGNER: " + v)
 			}
