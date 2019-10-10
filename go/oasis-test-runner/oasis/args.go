@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
+	"github.com/oasislabs/oasis-core/go/registry"
 	roothashTm "github.com/oasislabs/oasis-core/go/roothash/tendermint"
 	"github.com/oasislabs/oasis-core/go/storage"
 	"github.com/oasislabs/oasis-core/go/tendermint"
@@ -109,6 +110,11 @@ func (args *argBuilder) beaconDeterministic(deterministic bool) *argBuilder {
 	if deterministic {
 		args.vec = append(args.vec, "--"+beacon.CfgDebugDeterministic)
 	}
+	return args
+}
+
+func (args *argBuilder) registryDebugAllowUnroutableAddresses() *argBuilder {
+	args.vec = append(args.vec, "--"+registry.CfgDebugAllowUnroutableAddresses)
 	return args
 }
 

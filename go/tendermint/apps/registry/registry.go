@@ -473,7 +473,7 @@ func (app *registryApplication) registerNode(
 		)
 		return err
 	}
-	newNode, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), kmOperator, regRuntimes)
+	newNode, err := registry.VerifyRegisterNodeArgs(app.cfg, app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), kmOperator, regRuntimes)
 	if err != nil {
 		return err
 	}

@@ -118,6 +118,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication staking")
 	}
 	if err := ht.service.RegisterApplication(registryapp.New(timeSource, &registry.Config{
+		DebugAllowUnroutableAddresses: true,
 		DebugAllowRuntimeRegistration: false,
 		DebugBypassStake:              false,
 	})); err != nil {
