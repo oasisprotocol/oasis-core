@@ -16,6 +16,9 @@ func (t *Tree) Remove(ctx context.Context, key []byte) error {
 		return ErrClosed
 	}
 
+	// Remember where the path from root to target node ends (will end).
+	t.cache.markPosition()
+
 	var changed bool
 	newRoot, changed, err := t.doRemove(ctx, t.cache.pendingRoot, 0, key, 0)
 	if err != nil {

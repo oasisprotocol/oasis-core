@@ -3,6 +3,7 @@ package urkel
 import (
 	"container/list"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
 )
+
+var errRemoveLocked = errors.New("urkel: tried to remove locked pointer")
 
 // cache handles the in-memory tree cache.
 type cache struct {
@@ -40,8 +43,10 @@ type cache struct {
 	// Persist all the nodes and values we obtain from the remote syncer?
 	persistEverythingFromSyncer bool
 
-	lruInternal *list.List
-	lruLeaf     *list.List
+	lruInternal    *list.List
+	lruInternalPos *list.Element
+	lruLeaf        *list.List
+	lruLeafPos     *list.Element
 }
 
 // MaxPrefetchDepth is the maximum depth of the prefeteched tree.
@@ -69,7 +74,9 @@ func (c *cache) close() {
 	c.rs = nil
 	c.pendingRoot = nil
 	c.lruInternal = nil
+	c.lruInternalPos = nil
 	c.lruLeaf = nil
+	c.lruLeafPos = nil
 
 	// Reset sync root.
 	c.syncRoot = node.Root{}
@@ -137,38 +144,66 @@ func (c *cache) useNode(ptr *node.Pointer) {
 	}
 }
 
-// commitNode makes the node eligible for eviction.
-func (c *cache) commitNode(ptr *node.Pointer) {
+// markPosition marks the current LRU queue positions as the ones before
+// any nodes are visited. Any new nodes committed into the cache after
+// this is called will be inserted after the marked position.
+//
+// This makes it possible to keep the path from the root to the derefed
+// node in the cache instead of evicting it.
+func (c *cache) markPosition() {
+	c.lruInternalPos = c.lruInternal.Front()
+	c.lruLeafPos = c.lruLeaf.Front()
+}
+
+func (c *cache) tryCommitNode(ptr *node.Pointer, lockedPtr *node.Pointer) error {
 	if !ptr.IsClean() {
 		panic("urkel: commitNode called on dirty node")
 	}
 	if ptr == nil || ptr.Node == nil {
-		return
+		return nil
 	}
 	if ptr.LRU != nil {
 		c.useNode(ptr)
-		return
+		return nil
 	}
 
 	// Evict nodes till there is enough capacity.
 	switch n := ptr.Node.(type) {
 	case *node.InternalNode:
 		if c.nodeCapacity > 0 && c.internalNodeCount+1 > c.nodeCapacity {
-			c.evictInternal(1)
+			if err := c.tryEvictInternal(1, lockedPtr); err != nil {
+				return err
+			}
 		}
 
-		ptr.LRU = c.lruInternal.PushFront(ptr)
+		if c.lruInternalPos != nil {
+			ptr.LRU = c.lruInternal.InsertAfter(ptr, c.lruInternalPos)
+		} else {
+			ptr.LRU = c.lruInternal.PushFront(ptr)
+		}
 		c.internalNodeCount++
 	case *node.LeafNode:
 		valueSize := n.Size()
 
 		if c.valueCapacity > 0 && c.valueSize+valueSize > c.valueCapacity {
-			c.evictLeaf(valueSize)
+			if err := c.tryEvictLeaf(valueSize, lockedPtr); err != nil {
+				return err
+			}
 		}
 
-		ptr.LRU = c.lruLeaf.PushFront(ptr)
+		if c.lruLeafPos != nil {
+			ptr.LRU = c.lruLeaf.InsertAfter(ptr, c.lruLeafPos)
+		} else {
+			ptr.LRU = c.lruLeaf.PushFront(ptr)
+		}
 		c.valueSize += valueSize
 	}
+	return nil
+}
+
+// commitNode makes the node eligible for eviction.
+func (c *cache) commitNode(ptr *node.Pointer) {
+	_ = c.tryCommitNode(ptr, nil)
 }
 
 // rollbackNode marks a tree node as no longer being eligible for
@@ -181,9 +216,15 @@ func (c *cache) rollbackNode(ptr *node.Pointer) {
 
 	switch n := ptr.Node.(type) {
 	case *node.InternalNode:
+		if c.lruInternalPos == ptr.LRU {
+			c.lruInternalPos = nil
+		}
 		c.lruInternal.Remove(ptr.LRU)
 		c.internalNodeCount--
 	case *node.LeafNode:
+		if c.lruLeafPos == ptr.LRU {
+			c.lruLeafPos = nil
+		}
 		c.lruLeaf.Remove(ptr.LRU)
 		c.valueSize -= n.Size()
 	}
@@ -191,59 +232,88 @@ func (c *cache) rollbackNode(ptr *node.Pointer) {
 	ptr.LRU = nil
 }
 
-// removeNode removes a tree node.
-func (c *cache) removeNode(ptr *node.Pointer) {
+func (c *cache) tryRemoveNode(ptr *node.Pointer, lockedPtr *node.Pointer) error {
+	if lockedPtr != nil && lockedPtr == ptr {
+		return errRemoveLocked
+	}
 	if ptr.LRU == nil {
 		// Node has not yet been committed to cache.
-		return
+		return nil
 	}
 
 	switch n := ptr.Node.(type) {
 	case *node.InternalNode:
 		// Remove leaf node and subtrees first.
 		if n.LeafNode != nil && n.LeafNode.Node != nil {
-			c.removeNode(n.LeafNode)
+			if err := c.tryRemoveNode(n.LeafNode, lockedPtr); err != nil {
+				return err
+			}
 			n.LeafNode = nil
 		}
 		if n.Left != nil && n.Left.Node != nil {
-			c.removeNode(n.Left)
+			if err := c.tryRemoveNode(n.Left, lockedPtr); err != nil {
+				return err
+			}
 			n.Left = nil
 		}
 		if n.Right != nil && n.Right.Node != nil {
-			c.removeNode(n.Right)
+			if err := c.tryRemoveNode(n.Right, lockedPtr); err != nil {
+				return err
+			}
 			n.Right = nil
 		}
 
+		if c.lruInternalPos == ptr.LRU {
+			c.lruInternalPos = nil
+		}
 		c.lruInternal.Remove(ptr.LRU)
 		c.internalNodeCount--
 	case *node.LeafNode:
+		if c.lruLeafPos == ptr.LRU {
+			c.lruLeafPos = nil
+		}
 		c.lruLeaf.Remove(ptr.LRU)
 		c.valueSize -= n.Size()
 	}
 
 	ptr.Node = nil
 	ptr.LRU = nil
+	return nil
 }
 
-// evictLeaf tries to evict leaf nodes from the cache.
-func (c *cache) evictLeaf(targetCapacity uint64) {
+// removeNode removes a tree node.
+func (c *cache) removeNode(ptr *node.Pointer) {
+	_ = c.tryRemoveNode(ptr, nil)
+}
+
+// tryEvictLeaf tries to evict leaf nodes from the cache.
+func (c *cache) tryEvictLeaf(targetCapacity uint64, lockedPtr *node.Pointer) error {
 	for c.lruLeaf.Len() > 0 && c.valueSize+targetCapacity > c.valueCapacity {
 		elem := c.lruLeaf.Back()
-		v := elem.Value.(*node.Pointer)
-		c.removeNode(v)
+		n := elem.Value.(*node.Pointer)
+		if !n.Clean {
+			panic(fmt.Errorf("urkel: tried to evict dirty node %v", n))
+		}
+		if err := c.tryRemoveNode(n, lockedPtr); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-// evictInternal tries to evict internal nodes from the cache.
-func (c *cache) evictInternal(targetCapacity uint64) {
+// tryEvictInternal tries to evict internal nodes from the cache.
+func (c *cache) tryEvictInternal(targetCapacity uint64, lockedPtr *node.Pointer) error {
 	for c.lruInternal.Len() > 0 && c.internalNodeCount+targetCapacity > c.nodeCapacity {
 		elem := c.lruInternal.Back()
 		n := elem.Value.(*node.Pointer)
 		if !n.Clean {
 			panic(fmt.Errorf("urkel: tried to evict dirty node %v", n))
 		}
-		c.removeNode(n)
+		if err := c.tryRemoveNode(n, lockedPtr); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // readSyncFetcher is a function that is used to fetch proofs from a remote
@@ -263,6 +333,8 @@ func (c *cache) derefNodePtr(
 		return nil, nil
 	}
 
+	c.useNode(ptr)
+
 	if ptr.Node != nil {
 		var refetch bool
 		switch n := ptr.Node.(type) {
@@ -276,7 +348,6 @@ func (c *cache) derefNodePtr(
 		}
 
 		if !refetch {
-			c.useNode(ptr)
 			return ptr.Node, nil
 		}
 	}
@@ -300,6 +371,10 @@ func (c *cache) derefNodePtr(
 
 		if err = c.remoteSync(ctx, ptr, fetcher); err != nil {
 			return nil, err
+		}
+
+		if ptr.Node == nil {
+			return nil, fmt.Errorf("urkel: received result did not contain node (or cache too small)")
 		}
 	default:
 		return nil, err
@@ -347,26 +422,38 @@ func (c *cache) remoteSync(ctx context.Context, ptr *node.Pointer, fetcher readS
 		batch = c.db.NewBatch(c.syncRoot.Namespace, c.syncRoot.Round, c.syncRoot)
 		dbSubtree = batch.MaybeStartSubtree(nil, 0, subtree)
 	}
-	var commitNode func(*node.Pointer)
-	commitNode = func(p *node.Pointer) {
+
+	var commitNode func(*node.Pointer) error
+	commitNode = func(p *node.Pointer) error {
 		if p == nil || p.Node == nil {
-			return
+			return nil
+		}
+
+		// Try to commit the node. If we fail this means that there is not enough
+		// space in the cache to keep the node that we are trying to dereference.
+		if err := c.tryCommitNode(p, ptr); err != nil {
+			// Failed to commit, make sure to not keep the subtree in memory.
+			p.Node = nil
+			return err
 		}
 
 		// Commit all children.
 		if n, ok := p.Node.(*node.InternalNode); ok {
-			commitNode(n.Left)
-			commitNode(n.Right)
+			if err := commitNode(n.Left); err != nil {
+				return err
+			}
+			if err := commitNode(n.Right); err != nil {
+				return err
+			}
 		}
 
-		// Commit the node itself.
-		c.commitNode(p)
 		// Persist synced nodes to local node database when configured. We assume that
 		// in this case the node database backend is a cache-only backend and does not
 		// perform any subtree aggregation.
 		if c.persistEverythingFromSyncer {
 			_ = dbSubtree.PutNode(0, p)
 		}
+		return nil
 	}
 	// Persist synced nodes to local node database when configured.
 	if c.persistEverythingFromSyncer {
@@ -379,6 +466,10 @@ func (c *cache) remoteSync(ctx context.Context, ptr *node.Pointer, fetcher readS
 	}
 
 	if err := c.MergeVerifiedSubtree(ctx, dstPtr, subtree, commitNode); err != nil {
+		if err == errRemoveLocked {
+			// Cache is too small, ignore.
+			return nil
+		}
 		return err
 	}
 	return nil

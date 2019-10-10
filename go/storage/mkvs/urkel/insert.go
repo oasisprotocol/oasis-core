@@ -17,6 +17,9 @@ func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
 		return ErrClosed
 	}
 
+	// Remember where the path from root to target node ends (will end).
+	t.cache.markPosition()
+
 	var result insertResult
 	result, err := t.doInsert(ctx, t.cache.pendingRoot, 0, key, value, 0)
 	if err != nil {

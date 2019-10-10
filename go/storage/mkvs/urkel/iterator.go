@@ -212,6 +212,12 @@ func (it *treeIterator) Next() {
 		atom := it.pos[0]
 		remainder := it.pos[1:]
 
+		// Remember where the path from root to target node ends (will end).
+		it.tree.cache.markPosition()
+		for _, a := range remainder {
+			it.tree.cache.useNode(a.ptr)
+		}
+
 		// Try to proceed with the current node. If we don't succeed, proceed to the
 		// next node.
 		key := it.key
