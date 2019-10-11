@@ -273,12 +273,12 @@ func init() {
 	logFmt := logging.FmtLogfmt
 	logLevel := logging.LevelWarn
 
-	// logging flags
+	// Register flags.
 	rootFlags.StringVar(&cfgFile, cfgConfigFile, "", "config file")
 	rootFlags.Var(&logFmt, cfgLogFmt, "log format")
 	rootFlags.Var(&logLevel, cfgLogLevel, "log level")
 	rootFlags.Bool(cfgLogNoStdout, false, "do not mutiplex logs to stdout")
-	rootFlags.StringSlice(cfgTest, nil, "test(s) to run")
+	rootFlags.StringSliceP(cfgTest, "t", nil, "test(s) to run")
 	rootFlags.Int(cfgParallelJobCount, 1, "(for CI) number of overall parallel jobs")
 	rootFlags.Int(cfgParallelJobIndex, 0, "(for CI) index of this parallel job")
 	_ = viper.BindPFlags(rootFlags)
