@@ -26,10 +26,13 @@ if [[ "${EKIDEN_TEE_HARDWARE:-""}" == "intel-sgx" ]]; then
 fi
 
 # We need a directory in the workdir so that Buildkite can fetch artifacts.
-mkdir -p ${WORKDIR}/e2e
+if [[ "${BUILDKITE:-""}" != "" ]]; then
+    mkdir -p ${WORKDIR}/e2e
+fi
+
 # Run ekiden test runner.
 ${WORKDIR}/go/ekiden-test-runner/ekiden-test-runner \
-    --basedir ${WORKDIR}/e2e \
+    ${BUILDKITE:+--basedir ${WORKDIR}/e2e} \
     --basedir.no_cleanup \
     --e2e.ekiden.binary ${WORKDIR}/go/ekiden/ekiden \
     --e2e.client.binary_dir ${WORKDIR}/target/debug \
