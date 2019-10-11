@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 )
 
 // DumpLocal dumps the tree in the local memory into the given writer.

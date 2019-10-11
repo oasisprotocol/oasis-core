@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
 )
 
 // PrefetchPrefixes populates the in-memory tree with nodes for keys

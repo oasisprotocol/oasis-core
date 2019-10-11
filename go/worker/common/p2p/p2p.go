@@ -17,12 +17,12 @@ import (
 	"github.com/multiformats/go-multiaddr-net"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/version"
-	"github.com/oasislabs/ekiden/go/worker/common/configparser"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/version"
+	"github.com/oasislabs/oasis-core/go/worker/common/configparser"
 )
 
 var protocolName = core.ProtocolID("/p2p/oasislabs.com/committee/" + version.CommitteeProtocol.String())

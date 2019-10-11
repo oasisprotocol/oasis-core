@@ -1,4 +1,4 @@
-//! Ekiden runtime loader.
+//! Oasis runtime loader.
 extern crate aesm_client;
 extern crate enclave_runner;
 extern crate failure;

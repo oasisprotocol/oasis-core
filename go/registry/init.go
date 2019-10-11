@@ -9,11 +9,11 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/registry/api"
-	"github.com/oasislabs/ekiden/go/registry/tendermint"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	commonFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/registry/tendermint"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 const (

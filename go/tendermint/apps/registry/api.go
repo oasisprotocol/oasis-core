@@ -1,11 +1,11 @@
 package registry
 
 import (
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/entity"
-	"github.com/oasislabs/ekiden/go/common/node"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 const (

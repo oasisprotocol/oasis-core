@@ -7,10 +7,10 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/entity"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/registry/api"
 )
 
 const metricsUpdateInterval = 10 * time.Second
@@ -18,26 +18,26 @@ const metricsUpdateInterval = 10 * time.Second
 var (
 	registryFailures = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_registry_failures",
+			Name: "oasis_registry_failures",
 			Help: "Number of registry failures.",
 		},
 		[]string{"call"},
 	)
 	registryNodes = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "ekiden_registry_nodes",
+			Name: "oasis_registry_nodes",
 			Help: "Number of registry nodes.",
 		},
 	)
 	registryEntities = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "ekiden_registry_entities",
+			Name: "oasis_registry_entities",
 			Help: "Number of registry entities.",
 		},
 	)
 	registryRuntimes = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "ekiden_registry_runtimes",
+			Name: "oasis_registry_runtimes",
 			Help: "Number of registry runtimes.",
 		},
 	)

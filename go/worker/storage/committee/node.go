@@ -13,23 +13,23 @@ import (
 
 	bolt "github.com/etcd-io/bbolt"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/accessctl"
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/grpc"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/workerpool"
-	roothashApi "github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	storageApi "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/client"
-	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/worker/common/committee"
-	"github.com/oasislabs/ekiden/go/worker/common/p2p"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/accessctl"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/common/workerpool"
+	roothashApi "github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/client"
+	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/worker/common/committee"
+	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
 
 var (
@@ -293,7 +293,7 @@ func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
 		mergeCommitteePolicy.AddRulesForCommittee(&policy, mc)
 	}
 	// TODO: Query registry only for storage nodes after
-	// https://github.com/oasislabs/ekiden/issues/1923 is implemented.
+	// https://github.com/oasislabs/oasis-core/issues/1923 is implemented.
 	nodes, err := n.commonNode.Registry.GetNodes(context.Background())
 	if nodes != nil {
 		storageNodesPolicy.AddRulesForNodeRoles(&policy, nodes, node.RoleStorageWorker)

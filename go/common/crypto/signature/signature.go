@@ -15,9 +15,9 @@ import (
 
 	"golang.org/x/crypto/ed25519"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/pem"
-	"github.com/oasislabs/ekiden/go/grpc/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/pem"
+	"github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
 const (

@@ -9,21 +9,21 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/ias"
-	"github.com/oasislabs/ekiden/go/runtime/transaction"
-	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/ias"
+	"github.com/oasislabs/oasis-core/go/runtime/transaction"
+	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
 const recvTimeout = 5 * time.Second
 
 var (
-	envWorkerHostWorkerBinary  = os.Getenv("EKIDEN_TEST_WORKER_HOST_WORKER_BINARY")
-	envWorkerHostRuntimeBinary = os.Getenv("EKIDEN_TEST_WORKER_HOST_RUNTIME_BINARY")
-	envWorkerHostTEE           = os.Getenv("EKIDEN_TEST_WORKER_HOST_TEE")
+	envWorkerHostWorkerBinary  = os.Getenv("OASIS_TEST_WORKER_HOST_WORKER_BINARY")
+	envWorkerHostRuntimeBinary = os.Getenv("OASIS_TEST_WORKER_HOST_RUNTIME_BINARY")
+	envWorkerHostTEE           = os.Getenv("OASIS_TEST_WORKER_HOST_TEE")
 )
 
 type mockHostHandler struct{}
@@ -40,12 +40,12 @@ func skipIfMissingDeps(t *testing.T) {
 
 	// Skip test if there is no worker binary configured.
 	if envWorkerHostWorkerBinary == "" {
-		t.Skip("skipping as EKIDEN_TEST_WORKER_HOST_WORKER_BINARY is not set")
+		t.Skip("skipping as OASIS_TEST_WORKER_HOST_WORKER_BINARY is not set")
 	}
 
 	// Skip test if there is no runtime configured.
 	if envWorkerHostRuntimeBinary == "" {
-		t.Skip("skipping as EKIDEN_TEST_WORKER_HOST_RUNTIME_BINARY is not set")
+		t.Skip("skipping as OASIS_TEST_WORKER_HOST_RUNTIME_BINARY is not set")
 	}
 }
 
@@ -168,7 +168,7 @@ func testSimpleRequest(t *testing.T, host Host) {
 	}
 }
 
-// NOTE: This test only works with Ekiden's simple-keyvalue runtime.
+// NOTE: This test only works with Oasis Core's simple-keyvalue runtime.
 func testCheckTxRequest(t *testing.T, host Host) {
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()

@@ -6,12 +6,12 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/runtime/transaction"
-	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/runtime/transaction"
+	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
 // StateName is a symbolic state without the attached values.

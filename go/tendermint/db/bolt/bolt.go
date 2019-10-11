@@ -14,9 +14,9 @@ import (
 	"github.com/tendermint/tendermint/node"
 	dbm "github.com/tendermint/tm-db"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 const (

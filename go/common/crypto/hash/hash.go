@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 )
 
 // Size is the size of the cryptographic hash in bytes.

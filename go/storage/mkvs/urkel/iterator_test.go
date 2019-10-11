@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
 func TestIterator(t *testing.T) {

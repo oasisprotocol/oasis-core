@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/runtime/transaction"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 )
 
 func testOperations(t *testing.T, backend Backend) {
@@ -179,7 +179,7 @@ func testLoadIndex(t *testing.T, backend Backend) {
 
 func testBackend(t *testing.T, factory func(string) (Backend, error)) {
 	// Create a new random temporary directory under /tmp.
-	dataDir, err := ioutil.TempDir("", "ekiden-client-indexer-test_")
+	dataDir, err := ioutil.TempDir("", "oasis-client-indexer-test_")
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(dataDir)
 

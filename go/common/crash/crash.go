@@ -11,9 +11,9 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/common/debug"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/random"
+	"github.com/oasislabs/oasis-core/go/common/debug"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/random"
 )
 
 // defaultCLIPrefix is the default CLI prefix used to configure crash points in

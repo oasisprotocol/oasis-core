@@ -1,14 +1,14 @@
-// Package api defines the Ekiden genesis block.
+// Package api defines the Oasis genesis block.
 package api
 
 import (
 	"time"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	keymanager "github.com/oasislabs/ekiden/go/keymanager/api"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	staking "github.com/oasislabs/ekiden/go/staking/api"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 var (
@@ -33,7 +33,7 @@ type Document struct {
 	// KeyManager is the key manager genesis state.
 	KeyManager keymanager.Genesis `json:"keymanager"`
 	// Extra data is arbitrary extra data that is part of the
-	// genesis block but is otherwise ignored by Ekiden.
+	// genesis block but is otherwise ignored by the protocol.
 	ExtraData map[string][]byte `json:"extra_data"`
 }
 

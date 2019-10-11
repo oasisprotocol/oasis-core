@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ############################################################
-# This script checks that ekiden crates have the same
+# This script checks that oasis core crates have the same
 # version configured in Cargo.toml.
 #
 # Usage:

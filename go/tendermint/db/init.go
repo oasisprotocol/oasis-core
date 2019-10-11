@@ -11,8 +11,8 @@ import (
 	"github.com/tendermint/tendermint/node"
 	dbm "github.com/tendermint/tm-db"
 
-	"github.com/oasislabs/ekiden/go/tendermint/db/badger"
-	"github.com/oasislabs/ekiden/go/tendermint/db/bolt"
+	"github.com/oasislabs/oasis-core/go/tendermint/db/badger"
+	"github.com/oasislabs/oasis-core/go/tendermint/db/bolt"
 )
 
 const cfgBackend = "tendermint.db.backend"

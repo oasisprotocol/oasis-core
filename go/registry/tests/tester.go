@@ -11,16 +11,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/ekiden/go/common/crypto/tls"
-	"github.com/oasislabs/ekiden/go/common/entity"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
-	"github.com/oasislabs/ekiden/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/crypto/tls"
+	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
+	"github.com/oasislabs/oasis-core/go/registry/api"
 )
 
 const recvTimeout = 5 * time.Second

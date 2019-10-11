@@ -10,17 +10,17 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/grpc/resolver/manual"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/service"
-	"github.com/oasislabs/ekiden/go/grpc/txnscheduler"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/runtime/transaction"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/service"
+	"github.com/oasislabs/oasis-core/go/grpc/txnscheduler"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/runtime/transaction"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
 type watchRequest struct {

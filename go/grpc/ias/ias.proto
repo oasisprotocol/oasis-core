@@ -3,7 +3,7 @@ syntax = "proto3";
 import "common/common.proto";
 
 package ias;
-option go_package = "github.com/oasislabs/ekiden/go/grpc/ias";
+option go_package = "github.com/oasislabs/oasis-core/go/grpc/ias";
 
 service IAS {
     // Get SPID-related information.

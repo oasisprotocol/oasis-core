@@ -9,11 +9,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/tests"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/tests"
 )
 
 var testNs common.Namespace
@@ -43,7 +43,7 @@ func doTestImpl(t *testing.T, backend string) {
 	cfg.Signer, err = memorySigner.NewSigner(rand.Reader)
 	require.NoError(err, "NewSigner()")
 
-	cfg.DB, err = ioutil.TempDir("", "ekiden-storage-database-test")
+	cfg.DB, err = ioutil.TempDir("", "oasis-storage-database-test")
 	require.NoError(err, "TempDir()")
 	defer os.RemoveAll(cfg.DB)
 
@@ -57,6 +57,6 @@ func doTestImpl(t *testing.T, backend string) {
 
 func init() {
 	var ns hash.Hash
-	ns.FromBytes([]byte("ekiden storage badger test ns"))
+	ns.FromBytes([]byte("oasis storage badger test ns"))
 	copy(testNs[:], ns[:])
 }

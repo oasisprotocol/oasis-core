@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/ekiden/go/common/identity"
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 )
 
 func TestPolicy(t *testing.T) {
@@ -45,7 +45,7 @@ func TestPolicy(t *testing.T) {
 func TestSubjectFromCertificate(t *testing.T) {
 	require := require.New(t)
 
-	dataDir, err := ioutil.TempDir("", "ekiden-storage-grpc-test_")
+	dataDir, err := ioutil.TempDir("", "oasis-storage-grpc-test_")
 	require.NoError(err, "Failed to create a temporary directory")
 	defer os.RemoveAll(dataDir)
 

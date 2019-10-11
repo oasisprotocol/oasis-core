@@ -6,13 +6,13 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/cache/lru"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
-	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cache/lru"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
+	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
 // RootCache is a LRU based tree cache.

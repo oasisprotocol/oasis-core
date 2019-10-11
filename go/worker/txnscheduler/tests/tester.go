@@ -8,16 +8,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/runtime/transaction"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/txnscheduler"
-	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/runtime/transaction"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
+	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/committee"
 )
 
 const recvTimeout = 5 * time.Second

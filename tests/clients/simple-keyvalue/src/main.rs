@@ -1,9 +1,9 @@
 #[macro_use]
 extern crate clap;
-extern crate ekiden_client;
-extern crate ekiden_runtime;
 extern crate grpcio;
 extern crate io_context;
+extern crate oasis_core_client;
+extern crate oasis_core_runtime;
 extern crate simple_keyvalue_api;
 extern crate tokio;
 
@@ -14,12 +14,12 @@ use grpcio::EnvBuilder;
 use io_context::Context;
 use tokio::runtime::Runtime;
 
-use ekiden_client::{
+use oasis_core_client::{
     create_txn_api_client,
     transaction::{Query, QueryCondition},
     Node, TxnClient,
 };
-use ekiden_runtime::{common::runtime::RuntimeId, storage::MKVS};
+use oasis_core_runtime::{common::runtime::RuntimeId, storage::MKVS};
 use simple_keyvalue_api::{with_api, KeyValue};
 
 with_api! {

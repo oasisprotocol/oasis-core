@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
 )
 
 // Get looks up an existing key.

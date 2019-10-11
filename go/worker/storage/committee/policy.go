@@ -1,8 +1,8 @@
 package committee
 
 import (
-	"github.com/oasislabs/ekiden/go/common/accessctl"
-	"github.com/oasislabs/ekiden/go/worker/common/committee"
+	"github.com/oasislabs/oasis-core/go/common/accessctl"
+	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 )
 
 // Define storage access policies for all the relevant committees and node

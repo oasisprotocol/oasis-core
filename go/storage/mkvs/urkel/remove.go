@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 )
 
 // Remove removes a key from the tree.

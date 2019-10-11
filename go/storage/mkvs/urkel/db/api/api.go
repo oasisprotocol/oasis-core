@@ -5,10 +5,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
 var (

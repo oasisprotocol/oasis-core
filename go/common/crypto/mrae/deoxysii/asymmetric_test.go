@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/oasislabs/deoxysii"
-	"github.com/oasislabs/ekiden/go/common/crypto/mrae/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/mrae/api"
 )
 
 func TestDeoxysII_Box_Integration(t *testing.T) {

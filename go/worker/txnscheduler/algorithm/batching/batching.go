@@ -7,10 +7,10 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/worker/common/committee"
-	"github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/worker/common/committee"
+	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
 )
 
 const (

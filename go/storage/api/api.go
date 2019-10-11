@@ -5,15 +5,15 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/node"
-	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
+	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
 var (

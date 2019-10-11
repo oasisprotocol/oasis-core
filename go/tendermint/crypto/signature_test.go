@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	tmed "github.com/tendermint/tendermint/crypto/ed25519"
 
-	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 )
 
 func TestSignatureConversions(t *testing.T) {

@@ -12,7 +12,7 @@
 
 set -o errexit -o nounset -o pipefail
 
-# Get the full path to the root of the ekiden repository.
+# Get the full path to the root of the oasis-core repository.
 ROOT="$(cd $(dirname $0)/..; pwd -P)"
 
 # Select storage backend to test.
@@ -32,8 +32,8 @@ if [[ "$(which gnuplot)" == "" ]]; then
 	echo "ERROR: gnuplot not installed.  Install it and try again."
 	exit 1
 fi
-if [[ ! -x ${ROOT}/go/ekiden/ekiden ]]; then
-	echo "ERROR: ekiden command isn't built.  Run 'make' in '${ROOT}/go' and try again."
+if [[ ! -x ${ROOT}/go/oasis-node/oasis-node ]]; then
+	echo "ERROR: oasis-node command isn't built.  Run 'make' in '${ROOT}/go' and try again."
 fi
 
 # Run benchmarks.
@@ -42,7 +42,7 @@ if [[ -n ${DATADIR+x} ]]; then
 	ARGS="${ARGS} --datadir ${DATADIR}"
 fi
 OUT="$(mktemp)"
-${ROOT}/go/ekiden/ekiden ${ARGS} > ${OUT}
+${ROOT}/go/oasis-node/oasis-node ${ARGS} > ${OUT}
 
 
 # MKVS single Apply.

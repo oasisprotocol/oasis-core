@@ -1,7 +1,7 @@
 //! Methods exported to remote clients via EnclaveRPC.
-use ekiden_keymanager_api::*;
-use ekiden_runtime::rpc::Context as RpcContext;
 use failure::Fallible;
+use oasis_core_keymanager_api::*;
+use oasis_core_runtime::rpc::Context as RpcContext;
 
 use crate::{kdf::Kdf, policy::Policy};
 

@@ -3,14 +3,14 @@ package host
 import (
 	"context"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/version"
-	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
-	"github.com/oasislabs/ekiden/go/runtime/transaction"
-	urkelNode "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/version"
+	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
+	"github.com/oasislabs/oasis-core/go/runtime/transaction"
+	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
 var (

@@ -4,9 +4,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 )
 
 var (

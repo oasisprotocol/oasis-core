@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
-	"github.com/oasislabs/ekiden/go/worker/compute"
-	"github.com/oasislabs/ekiden/go/worker/compute/committee"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
+	"github.com/oasislabs/oasis-core/go/worker/compute"
+	"github.com/oasislabs/oasis-core/go/worker/compute/committee"
 )
 
 const recvTimeout = 5 * time.Second

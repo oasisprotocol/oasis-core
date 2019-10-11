@@ -1,10 +1,10 @@
-extern crate ekiden_keymanager_api;
-extern crate ekiden_keymanager_client;
-extern crate ekiden_runtime;
 extern crate failure;
 extern crate io_context;
 extern crate lazy_static;
 extern crate lru;
+extern crate oasis_core_keymanager_api;
+extern crate oasis_core_keymanager_client;
+extern crate oasis_core_runtime;
 extern crate rand;
 extern crate sp800_185;
 extern crate tiny_keccak;
@@ -20,8 +20,8 @@ mod policy;
 
 use failure::Fallible;
 
-use ekiden_keymanager_api::*;
-use ekiden_runtime::{
+use oasis_core_keymanager_api::*;
+use oasis_core_runtime::{
     common::{runtime::RuntimeId, version::Version},
     rak::RAK,
     register_runtime_rpc_methods,
@@ -82,5 +82,5 @@ fn main() {
     };
 
     // Start the runtime.
-    ekiden_runtime::start_runtime(Some(Box::new(init)), version_from_cargo!());
+    oasis_core_runtime::start_runtime(Some(Box::new(init)), version_from_cargo!());
 }

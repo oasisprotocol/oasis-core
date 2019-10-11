@@ -1,11 +1,11 @@
-// Package accessctl implements access control for Ekiden.
+// Package accessctl implements access control for an Oasis node.
 package accessctl
 
 import (
 	"crypto/x509"
 	"fmt"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 )
 
 // Subject is an access control subject.

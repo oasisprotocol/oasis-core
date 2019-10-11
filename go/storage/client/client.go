@@ -1,4 +1,4 @@
-// Package client implements a client for Ekiden storage nodes.
+// Package client implements a client for Oasis storage nodes.
 // The client obtains storage info by following scheduler committees.
 package client
 
@@ -15,19 +15,19 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/mathrand"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/grpc/storage"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/grpc/storage"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	"github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
 var (
@@ -270,7 +270,7 @@ func (b *storageClientBackend) writeWithClient(
 		receipt := receiptInAList[0]
 		// TODO: After we switch to https://github.com/oasislabs/ed25519, use
 		// batch verification. This should be implemented as part of:
-		// https://github.com/oasislabs/ekiden/issues/1351.
+		// https://github.com/oasislabs/oasis-core/issues/1351.
 		var receiptBody api.ReceiptBody
 		if err = receipt.Open(&receiptBody); err != nil {
 			b.logger.Error("failed to open receipt for a storage node",
@@ -309,7 +309,7 @@ func (b *storageClientBackend) writeWithClient(
 		}
 		successes++
 		// TODO: Only wait for F+1 successful writes:
-		// https://github.com/oasislabs/ekiden/issues/1821.
+		// https://github.com/oasislabs/oasis-core/issues/1821.
 		receipts = append(receipts, &receipt)
 	}
 	if successes == 0 {
@@ -489,7 +489,7 @@ func (b *storageClientBackend) readWithClient(
 
 	// TODO: Use a more clever approach to choose the order in which to read
 	// from the connected nodes:
-	// https://github.com/oasislabs/ekiden/issues/1815.
+	// https://github.com/oasislabs/oasis-core/issues/1815.
 	rng := rand.New(mathrand.New(cryptorand.Reader))
 
 	var resp interface{}

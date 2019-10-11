@@ -2,7 +2,7 @@
 package main
 
 import (
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/interop/cmd"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/interop/cmd"
 )
 
 func main() {

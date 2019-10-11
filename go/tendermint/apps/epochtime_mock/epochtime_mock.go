@@ -8,12 +8,12 @@ import (
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	genesis "github.com/oasislabs/ekiden/go/genesis/api"
-	"github.com/oasislabs/ekiden/go/tendermint/abci"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/abci"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 var _ abci.Application = (*epochTimeMockApplication)(nil)

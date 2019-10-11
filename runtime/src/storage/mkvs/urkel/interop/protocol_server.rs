@@ -23,7 +23,7 @@ use crate::{
 };
 
 /// Location of the protocol server binary.
-const PROTOCOL_SERVER_BINARY: &'static str = env!("EKIDEN_PROTOCOL_SERVER_BINARY");
+const PROTOCOL_SERVER_BINARY: &'static str = env!("OASIS_STORAGE_PROTOCOL_SERVER_BINARY");
 
 /// Interoperability protocol server for testing storage.
 pub struct ProtocolServer {
@@ -41,7 +41,7 @@ impl ProtocolServer {
     /// Create a new protocol server for testing.
     pub fn new() -> Self {
         let datadir = tempfile::Builder::new()
-            .prefix("ekiden-test-storage-protocol-server")
+            .prefix("oasis-test-storage-protocol-server")
             .tempdir()
             .expect("failed to create temporary data directory");
         let socket_path = datadir.path().join("socket");

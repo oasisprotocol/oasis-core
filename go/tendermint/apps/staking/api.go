@@ -1,8 +1,8 @@
 package staking
 
 import (
-	staking "github.com/oasislabs/ekiden/go/staking/api"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 const (

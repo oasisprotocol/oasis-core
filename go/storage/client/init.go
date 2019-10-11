@@ -9,15 +9,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
-	commonGrpc "github.com/oasislabs/ekiden/go/common/grpc"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/grpc/storage"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	"github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	commonGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/grpc/storage"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	"github.com/oasislabs/oasis-core/go/storage/api"
 )
 
 const (
@@ -32,7 +32,7 @@ const (
 )
 
 // In debug mode, we connect to the provided node and save it to the fake runtime.
-const debugModeFakeRuntimeSeed = "ekiden storage client debug runtime"
+const debugModeFakeRuntimeSeed = "oasis storage client debug runtime"
 
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)

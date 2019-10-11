@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
 var (

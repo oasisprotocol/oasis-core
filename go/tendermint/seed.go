@@ -11,12 +11,12 @@ import (
 	"github.com/tendermint/tendermint/p2p/pex"
 	"github.com/tendermint/tendermint/version"
 
-	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/node"
-	genesis "github.com/oasislabs/ekiden/go/genesis/api"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
-	"github.com/oasislabs/ekiden/go/tendermint/crypto"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/crypto"
 )
 
 // SeedService is a Tendermint seed service.
@@ -119,7 +119,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 		Network:    doc.ChainID,
 		Version:    "0.0.1",
 		Channels:   []byte{pex.PexChannel},
-		Moniker:    "ekiden-seed-" + identity.NodeSigner.Public().String(),
+		Moniker:    "oasis-seed-" + identity.NodeSigner.Public().String(),
 	}
 
 	// Carve out all of the services.

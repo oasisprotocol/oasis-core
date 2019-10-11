@@ -1,7 +1,7 @@
 package grpc
 
 import (
-	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 )
 
 // CBORCodec implements gRPC's encoding.Codec interface.

@@ -8,17 +8,17 @@ import (
 	opentracingExt "github.com/opentracing/opentracing-go/ext"
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/tracing"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	"github.com/oasislabs/ekiden/go/worker/common/p2p"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/tracing"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
 
 // MessageHandler handles messages from other nodes.

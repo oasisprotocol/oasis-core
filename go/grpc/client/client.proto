@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package client;
-option go_package = "github.com/oasislabs/ekiden/go/grpc/client";
+option go_package = "github.com/oasislabs/oasis-core/go/grpc/client";
 
 service Runtime {
     // Submit a transaction to leader.

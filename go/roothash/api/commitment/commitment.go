@@ -1,7 +1,7 @@
 package commitment
 
 import (
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 )
 
 // OpenCommitment is a verified roothash commitment.

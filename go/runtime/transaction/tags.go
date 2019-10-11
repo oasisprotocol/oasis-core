@@ -1,6 +1,6 @@
 package transaction
 
-import "github.com/oasislabs/ekiden/go/common/crypto/hash"
+import "github.com/oasislabs/oasis-core/go/common/crypto/hash"
 
 // Tag is a key/value pair of arbitrary byte blobs with runtime-dependent
 // semantics which can be indexed to allow easier lookup of transactions

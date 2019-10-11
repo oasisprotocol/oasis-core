@@ -1,13 +1,13 @@
 package protocol
 
 import (
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/sgx/ias"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
-	"github.com/oasislabs/ekiden/go/runtime/transaction"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
+	"github.com/oasislabs/oasis-core/go/runtime/transaction"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
 // NOTE: Bump RuntimeProtocol version in go/common/version if you

@@ -11,8 +11,8 @@ use sgx_isa::Keypolicy;
 use tiny_keccak::sha3_256;
 use zeroize::Zeroize;
 
-use ekiden_keymanager_api::*;
-use ekiden_runtime::{
+use oasis_core_keymanager_api::*;
+use oasis_core_runtime::{
     common::{
         cbor,
         crypto::mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
@@ -49,7 +49,7 @@ impl Policy {
     }
 
     pub fn unsafe_skip() -> bool {
-        option_env!("EKIDEN_UNSAFE_SKIP_KM_POLICY").is_some()
+        option_env!("OASIS_UNSAFE_SKIP_KM_POLICY").is_some()
     }
 
     /// Global Policy instance.

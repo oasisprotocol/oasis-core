@@ -9,12 +9,12 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/crypto/sha3"
 
-	beacon "github.com/oasislabs/ekiden/go/beacon/api"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	genesis "github.com/oasislabs/ekiden/go/genesis/api"
-	"github.com/oasislabs/ekiden/go/tendermint/abci"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
+	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/abci"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 var (

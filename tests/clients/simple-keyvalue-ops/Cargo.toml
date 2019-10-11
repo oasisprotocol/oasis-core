@@ -5,8 +5,8 @@ authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Simple key value operation test client"
 
 [dependencies]
-ekiden-client = { path = "../../../client" }
-ekiden-runtime = { path = "../../../runtime" }
+oasis-core-client = { path = "../../../client" }
+oasis-core-runtime = { path = "../../../runtime" }
 simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
 clap = "2.29.1"
 tokio = "0.1.17"

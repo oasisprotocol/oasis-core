@@ -10,15 +10,15 @@ import (
 	"github.com/pkg/errors"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/keymanager/api"
-	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
-	app "github.com/oasislabs/ekiden/go/tendermint/apps/keymanager"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasislabs/oasis-core/go/keymanager/api"
+	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
+	app "github.com/oasislabs/oasis-core/go/tendermint/apps/keymanager"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 // BackendName is the name of the backend.
@@ -123,7 +123,7 @@ func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 	events = append(events, ev.ResultEndBlock.GetEvents()...)
 
 	for _, tmEv := range events {
-		if tmEv.GetType() != tmapi.EventTypeEkiden {
+		if tmEv.GetType() != tmapi.EventTypeOasis {
 			continue
 		}
 

@@ -3,7 +3,7 @@ package keymanager
 import (
 	"context"
 
-	pb "github.com/oasislabs/ekiden/go/grpc/enclaverpc"
+	pb "github.com/oasislabs/oasis-core/go/grpc/enclaverpc"
 )
 
 var _ pb.EnclaveRpcServer = (*grpcServer)(nil)

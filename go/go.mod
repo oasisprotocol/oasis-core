@@ -1,4 +1,4 @@
-module github.com/oasislabs/ekiden/go
+module github.com/oasislabs/oasis-core/go
 
 replace github.com/tendermint/iavl => github.com/oasislabs/iavl v0.12.0-ekiden3
 

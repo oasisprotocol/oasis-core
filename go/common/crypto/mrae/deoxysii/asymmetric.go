@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 
 	"github.com/oasislabs/deoxysii"
-	"github.com/oasislabs/ekiden/go/common/crypto/mrae/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/mrae/api"
 )
 
 var (

@@ -1,6 +1,6 @@
 package beacon
 
-import "github.com/oasislabs/ekiden/go/tendermint/api"
+import "github.com/oasislabs/oasis-core/go/tendermint/api"
 
 const (
 	// TransactionTag is a unique byte used to identify transactions

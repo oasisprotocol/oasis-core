@@ -11,13 +11,13 @@ use sp800_185::{CShake, KMac};
 use x25519_dalek;
 use zeroize::Zeroize;
 
-use ekiden_keymanager_api::{
+use oasis_core_keymanager_api::{
     ContractKey, InitRequest, InitResponse, KeyManagerError, MasterSecret, PrivateKey, PublicKey,
     ReplicateResponse, RequestIds, SignedInitResponse, SignedPublicKey, StateKey,
     INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,
 };
-use ekiden_keymanager_client::{KeyManagerClient, RemoteClient};
-use ekiden_runtime::{
+use oasis_core_keymanager_client::{KeyManagerClient, RemoteClient};
+use oasis_core_runtime::{
     common::{
         cbor,
         crypto::{

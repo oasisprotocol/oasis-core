@@ -1,20 +1,20 @@
 //! Key manager client.
-extern crate ekiden_client;
-extern crate ekiden_keymanager_api;
-extern crate ekiden_runtime;
 extern crate failure;
 extern crate futures;
 #[cfg(not(target_env = "sgx"))]
 extern crate grpcio;
 extern crate io_context;
 extern crate lru;
+extern crate oasis_core_client;
+extern crate oasis_core_keymanager_api;
+extern crate oasis_core_runtime;
 
 pub mod client;
 pub mod mock;
 
 use std::sync::Arc;
 
-use self::{ekiden_client::BoxFuture, io_context::Context};
+use self::{io_context::Context, oasis_core_client::BoxFuture};
 
 /// Key manager client interface.
 pub trait KeyManagerClient: Send + Sync {
@@ -64,4 +64,4 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
 }
 
 // Re-exports.
-pub use self::{client::RemoteClient, ekiden_keymanager_api::*};
+pub use self::{client::RemoteClient, oasis_core_keymanager_api::*};

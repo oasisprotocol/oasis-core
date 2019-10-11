@@ -7,13 +7,13 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/ekiden/go/genesis/api"
-	pb "github.com/oasislabs/ekiden/go/grpc/genesis"
-	keymanager "github.com/oasislabs/ekiden/go/keymanager/api"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	staking "github.com/oasislabs/ekiden/go/staking/api"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	"github.com/oasislabs/oasis-core/go/genesis/api"
+	pb "github.com/oasislabs/oasis-core/go/grpc/genesis"
+	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 var (

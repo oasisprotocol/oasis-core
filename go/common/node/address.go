@@ -6,7 +6,7 @@ import (
 	"math"
 	"net"
 
-	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
+	pbCommon "github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
 var (

@@ -26,21 +26,21 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	cmservice "github.com/oasislabs/ekiden/go/common/service"
-	genesis "github.com/oasislabs/ekiden/go/genesis/api"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	"github.com/oasislabs/ekiden/go/tendermint/abci"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
-	"github.com/oasislabs/ekiden/go/tendermint/crypto"
-	"github.com/oasislabs/ekiden/go/tendermint/db"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	cmservice "github.com/oasislabs/oasis-core/go/common/service"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/abci"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/crypto"
+	"github.com/oasislabs/oasis-core/go/tendermint/db"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 const (
@@ -94,7 +94,7 @@ func newFailMonitor(logger *logging.Logger, fn func()) *failMonitor {
 	// consensus fails, instead opting to "just" log, and tear down
 	// the ConsensusState.  Since this behavior is stupid, watch for
 	// unexpected ConsensusState termination, and panic to kill the
-	// ekiden node.
+	// Oasis node.
 
 	var m failMonitor
 	go func() {
@@ -509,7 +509,7 @@ func (t *tendermintService) lazyInit() error {
 
 	// Tendermint needs the on-disk directories to be present when
 	// launched like this, so create the relevant sub-directories
-	// under the ekiden DataDir.
+	// under the node DataDir.
 	tendermintDataDir := filepath.Join(t.dataDir, "tendermint")
 	if err = initDataDir(tendermintDataDir); err != nil {
 		return err
@@ -596,7 +596,7 @@ func (t *tendermintService) lazyInit() error {
 	return nil
 }
 
-// genesisToTendermint converts the Ekiden genesis block to tendermint's format.
+// genesisToTendermint converts the Oasis genesis block to Tendermint's format.
 func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 	// WARNING: The AppState MUST be encoded as JSON since its type is
 	// json.RawMessage which requires it to be valid JSON. It may appear
@@ -631,7 +631,7 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 			Address: pk.Address(),
 			PubKey:  pk,
 			Power:   api.VotingPower,
-			Name:    "ekiden-validator-" + openedNode.ID.String(),
+			Name:    "oasis-validator-" + openedNode.ID.String(),
 		}
 		tmValidators = append(tmValidators, validator)
 	}
@@ -767,7 +767,7 @@ type logAdapter struct {
 }
 
 func (a *logAdapter) With(keyvals ...interface{}) tmlog.Logger {
-	// Tendermint uses `module` like ekiden does, and to add insult to
+	// Tendermint uses `module` like oasis-node does, and to add insult to
 	// injury will cave off child loggers with subsequence calls to
 	// `With()`, resulting in multiple `module` keys.
 	//

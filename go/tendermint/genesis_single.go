@@ -6,10 +6,10 @@ import (
 
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/ekiden/go/common/identity"
-	genesis "github.com/oasislabs/ekiden/go/genesis/api"
-	"github.com/oasislabs/ekiden/go/tendermint/crypto"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/crypto"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 var _ service.GenesisProvider = (*singleNodeGenesisProvider)(nil)
@@ -38,7 +38,7 @@ func NewSingleNodeGenesisProvider(identity *identity.Identity) (genesis.Provider
 		return nil, err
 	}
 	tmDoc := &tmtypes.GenesisDoc{
-		ChainID:         "ekiden-test-chain",
+		ChainID:         "oasis-test-chain",
 		GenesisTime:     doc.Time,
 		ConsensusParams: tmtypes.DefaultConsensusParams(),
 		AppState:        b,
@@ -50,7 +50,7 @@ func NewSingleNodeGenesisProvider(identity *identity.Identity) (genesis.Provider
 		Address: pk.Address(),
 		PubKey:  pk,
 		Power:   1,
-		Name:    "ekiden-test-validator-" + nodeID.String(),
+		Name:    "oasis-test-validator-" + nodeID.String(),
 	}
 
 	tmDoc.Validators = append(tmDoc.Validators, validator)
