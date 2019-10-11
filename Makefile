@@ -76,8 +76,6 @@ test-unit:
 test-e2e:
 	@$(ECHO) "$(CYAN)*** Running E2E tests...$(OFF)"
 	@.buildkite/scripts/test_e2e.sh
-	@$(ECHO) "$(CYAN)*** Running E2E migration tests...$(OFF)"
-	@.buildkite/scripts/test_migration.sh
 
 clean-runtimes:
 	@$(ECHO) "$(CYAN)*** Cleaning up runtimes...$(OFF)"

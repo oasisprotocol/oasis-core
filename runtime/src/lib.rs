@@ -13,7 +13,6 @@
 #![feature(test)]
 #![feature(box_into_pin)]
 #![feature(pin_into_inner)]
-#![feature(const_vec_new)]
 
 #[macro_use]
 extern crate slog;
