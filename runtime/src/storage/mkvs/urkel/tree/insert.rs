@@ -15,6 +15,9 @@ impl UrkelTree {
         let boxed_key = key.to_vec();
         let boxed_val = value.to_vec();
 
+        // Remember where the path from root to target node ends (will end).
+        self.cache.borrow_mut().mark_position();
+
         let (new_root, old_val) =
             self._insert(&ctx, pending_root, 0, &boxed_key, boxed_val.clone(), 0)?;
         let existed = old_val != None;
