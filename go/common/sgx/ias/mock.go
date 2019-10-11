@@ -21,11 +21,12 @@ func NewMockAVR(quote []byte, nonce string) ([]byte, error) {
 	mockAVR := &mockAVR{
 		Timestamp:             time.Now().UTC().Format(TimestampFormat),
 		ISVEnclaveQuoteStatus: "OK",
-		ISVEnclaveQuoteBody:   quote[:QuoteLen],
+		ISVEnclaveQuoteBody:   quote[:quoteLen],
 		Nonce:                 nonce,
 	}
 
-	q, err := DecodeQuote(mockAVR.ISVEnclaveQuoteBody)
+	var q Quote
+	err := q.UnmarshalBinary(mockAVR.ISVEnclaveQuoteBody)
 	if err != nil {
 		return nil, err
 	}

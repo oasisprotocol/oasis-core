@@ -28,8 +28,8 @@ func (st *enclaveStore) verifyEvidence(evidence *ias.Evidence) error {
 		return errors.New("ias: unknown runtime")
 	}
 
-	quote, err := ias.DecodeQuote(evidence.Quote)
-	if err != nil {
+	var quote ias.Quote
+	if err := quote.UnmarshalBinary(evidence.Quote); err != nil {
 		return errors.Wrap(err, "ias: evidence contains an invalid quote")
 	}
 

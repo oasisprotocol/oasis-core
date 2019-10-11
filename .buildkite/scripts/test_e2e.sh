@@ -39,4 +39,5 @@ ${WORKDIR}/go/ekiden-test-runner/ekiden-test-runner \
     --e2e.tee_hardware ${EKIDEN_TEE_HARDWARE:-""} \
     --log.level info \
     ${BUILDKITE_PARALLEL_JOB_COUNT:+--parallel.job_count ${BUILDKITE_PARALLEL_JOB_COUNT}} \
-    ${BUILDKITE_PARALLEL_JOB:+--parallel.job_index ${BUILDKITE_PARALLEL_JOB}}
+    ${BUILDKITE_PARALLEL_JOB:+--parallel.job_index ${BUILDKITE_PARALLEL_JOB}} \
+    "$@"

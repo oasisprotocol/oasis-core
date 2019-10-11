@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/oasislabs/ekiden/go/common/cbor"
 	"github.com/oasislabs/ekiden/go/common/crypto/signature"
@@ -96,7 +97,7 @@ func (r *SignedInitResponse) Verify(pk signature.PublicKey) error {
 
 // VerifyExtraInfo verifies and parses the per-node + per-runtime ExtraInfo
 // blob for a key manager.
-func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime) (*InitResponse, error) {
+func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime, ts time.Time) (*InitResponse, error) {
 	var (
 		hw  node.TEEHardware
 		rak signature.PublicKey
@@ -105,12 +106,13 @@ func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime) (*InitResponse,
 		hw = node.TEEHardwareInvalid
 		rak = TestPublicKey
 	} else {
-		// TODO: MRENCLAVE/MRSIGNER.
 		hw = nodeRt.Capabilities.TEE.Hardware
 		rak = nodeRt.Capabilities.TEE.RAK
 	}
 	if hw != rt.TEEHardware {
 		return nil, errors.New("keymanger: TEEHardware mismatch")
+	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(nil, nodeRt, []*registry.Runtime{rt}, ts); err != nil {
+		return nil, err
 	}
 
 	var untrustedSignedInitResponse SignedInitResponse
@@ -125,7 +127,7 @@ func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime) (*InitResponse,
 
 // Genesis is the key manager management genesis state.
 type Genesis struct {
-	Statuses []*Status `json:"statuses,omit_empty"`
+	Statuses []*Status `json:"statuses,omitempty"`
 }
 
 func init() {

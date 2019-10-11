@@ -479,9 +479,9 @@ impl EnclaveIdentity {
         None
     }
 
-    pub fn fortanix_test(mrenclave: MrEnclave) -> Self {
+    pub fn fortanix_test(mr_enclave: MrEnclave) -> Self {
         Self {
-            mr_enclave: mrenclave,
+            mr_enclave: mr_enclave,
             mr_signer: MrSigner::from(
                 "9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a",
             ),

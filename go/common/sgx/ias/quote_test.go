@@ -15,8 +15,9 @@ func TestQuote(t *testing.T) {
 	require.NoError(t, err, "DecodeAVR")
 
 	rawQuote := avr.ISVEnclaveQuoteBody
-	quote, err := DecodeQuote(rawQuote)
-	require.NoError(t, err, "DecodeQuote")
+	var quote Quote
+	err = quote.UnmarshalBinary(rawQuote)
+	require.NoError(t, err, "UnmarshalBinary")
 
 	require.EqualValues(t, 2, quote.Body.Version, "VERSION")
 	require.Equal(t, SignatureLinkable, quote.Body.SignatureType, "SIGNATURE_TYPE")
@@ -63,4 +64,9 @@ func TestQuote(t *testing.T) {
 		hex.EncodeToString(quote.Report.ReportData[:]),
 		"ReportData",
 	)
+
+	// Test Quote encoding.
+	bQuote, err := quote.MarshalBinary()
+	require.NoError(t, err, "EncodeQuote")
+	require.Equal(t, rawQuote, bQuote, "BinaryQuote")
 }

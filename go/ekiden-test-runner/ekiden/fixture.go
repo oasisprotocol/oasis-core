@@ -102,7 +102,7 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 // TEEFixture is a TEE configuration fixture.
 type TEEFixture struct {
 	Hardware node.TEEHardware `json:"hardware"`
-	MrSigner *sgx.MrSigner    `json:"mrsigner"`
+	MrSigner *sgx.MrSigner    `json:"mr_signer"`
 }
 
 // ValidatorFixture is a validator fixture.

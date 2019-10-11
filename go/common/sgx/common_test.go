@@ -24,9 +24,9 @@ func TestMrSignerDerivation(t *testing.T) {
 
 	rsaPubKey := nakedPubKey.(*rsa.PublicKey)
 
-	var mrsigner MrSigner
-	err = mrsigner.FromPublicKey(rsaPubKey)
+	var mrSigner MrSigner
+	err = mrSigner.FromPublicKey(rsaPubKey)
 	require.NoError(err, "Derive MRSIGNER")
 
-	require.Equal(mrsigner.String(), "9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a")
+	require.Equal(mrSigner.String(), "9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a")
 }

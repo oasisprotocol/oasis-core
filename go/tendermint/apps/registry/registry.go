@@ -465,7 +465,15 @@ func (app *registryApplication) registerNode(
 	}
 
 	kmOperator := state.getKeyManagerOperator()
-	newNode, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), kmOperator)
+	regRuntimes, err := state.GetRuntimes()
+	if err != nil {
+		app.logger.Error("RegisterNode: failed to obtain registry runtimes",
+			"err", err,
+			"signed_node", sigNode,
+		)
+		return err
+	}
+	newNode, err := registry.VerifyRegisterNodeArgs(app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), kmOperator, regRuntimes)
 	if err != nil {
 		return err
 	}
@@ -580,6 +588,20 @@ func (app *registryApplication) registerRuntime(
 				"now", uint64(ctx.Now().Unix()),
 			)
 			return err
+		}
+	}
+
+	// If TEE is required, check if runtime provided at least one enclave ID.
+	if rt.TEEHardware != node.TEEHardwareInvalid {
+		switch rt.TEEHardware {
+		case node.TEEHardwareIntelSGX:
+			var vi registry.VersionInfoIntelSGX
+			if err = cbor.Unmarshal(rt.Version.TEE, &vi); err != nil {
+				return err
+			}
+			if len(vi.Enclaves) == 0 {
+				return registry.ErrNoEnclaveForRuntime
+			}
 		}
 	}
 

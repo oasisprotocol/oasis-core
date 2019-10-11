@@ -88,11 +88,11 @@ mod tests {
     #[test]
     fn test_egetkey() {
         // Ensure key policies works.
-        let mrsigner_key = egetkey(Keypolicy::MRSIGNER, b"MRSIGNER");
-        assert!(mrsigner_key != [0u8; 32]);
-        let mrenclave_key = egetkey(Keypolicy::MRENCLAVE, b"MRENCLAVE");
-        assert!(mrenclave_key != [0u8; 32]);
-        assert!(mrsigner_key != mrenclave_key);
+        let mr_signer_key = egetkey(Keypolicy::MRSIGNER, b"MRSIGNER");
+        assert!(mr_signer_key != [0u8; 32]);
+        let mr_enclave_key = egetkey(Keypolicy::MRENCLAVE, b"MRENCLAVE");
+        assert!(mr_enclave_key != [0u8; 32]);
+        assert!(mr_signer_key != mr_enclave_key);
 
         // Ensure the context does something.
         let a_key = egetkey(Keypolicy::MRENCLAVE, b"Context A");
