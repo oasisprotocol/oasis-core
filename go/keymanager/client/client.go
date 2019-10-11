@@ -7,14 +7,18 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"sync"
+	"time"
 
+	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
@@ -31,6 +35,9 @@ const (
 	cfgDebugClientCert    = "keymanager.debug.client.certificate"
 
 	kmEndpoint = "key-manager"
+
+	maxRetryElapsedTime = 5 * time.Second
+	maxRetryInterval    = 1 * time.Second
 )
 
 var (
@@ -106,7 +113,24 @@ func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, 
 		return nil, ErrKeyManagerNotAvailable
 	}
 
-	return st.client.CallEnclave(ctx, data)
+	var resp []byte
+	call := func() error {
+		var err error
+		resp, err = st.client.CallEnclave(ctx, data)
+		if status.Code(err) == codes.PermissionDenied {
+			// Calls can fail around epoch transitions, as the access policy
+			// is being updated, so we must retry.
+			return err
+		}
+		return backoff.Permanent(err)
+	}
+
+	retry := backoff.NewExponentialBackOff()
+	retry.MaxInterval = maxRetryInterval
+	retry.MaxElapsedTime = maxRetryElapsedTime
+	err := backoff.Retry(call, backoff.WithContext(retry, ctx))
+
+	return resp, err
 }
 
 func (c *Client) worker() {
