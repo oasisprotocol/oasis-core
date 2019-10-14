@@ -21,15 +21,15 @@ context=$3
 #################
 # Local variables
 #################
-docker_image_name=oasislabs/testnet
+docker_image_name=oasislabs/oasis-node
 
 ####################################
 # Build and publish the docker image
 ####################################
 
 docker build --pull --rm --force-rm \
-  --build-arg EKIDEN_COMMIT_SHA=${git_commit_sha} \
-  --build-arg EKIDEN_BUILD_IMAGE_TAG=${docker_image_tag} \
+  --build-arg OASIS_CORE_COMMIT_SHA=${git_commit_sha} \
+  --build-arg OASIS_CORE_BUILD_IMAGE_TAG=${docker_image_tag} \
   -t ${docker_image_name}:${docker_image_tag} \
   --file=docker/deployment/Dockerfile \
   - <"$context"

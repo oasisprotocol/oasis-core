@@ -7,13 +7,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/ekiden/go/client/indexer"
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	pbClient "github.com/oasislabs/ekiden/go/grpc/client"
-	pbEnRPC "github.com/oasislabs/ekiden/go/grpc/enclaverpc"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/client/indexer"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	pbClient "github.com/oasislabs/oasis-core/go/grpc/client"
+	pbEnRPC "github.com/oasislabs/oasis-core/go/grpc/enclaverpc"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 )
 
 var (

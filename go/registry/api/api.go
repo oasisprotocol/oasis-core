@@ -9,13 +9,13 @@ import (
 	"sort"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/entity"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/sgx/ias"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 )
 
 const (
@@ -285,7 +285,7 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
-func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool, kmOperator signature.PublicKey, regRuntimes []*Runtime) (*node.Node, error) {
+func VerifyRegisterNodeArgs(cfg *Config, logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool, kmOperator signature.PublicKey, regRuntimes []*Runtime) (*node.Node, error) {
 	var n node.Node
 	if sigNode == nil {
 		return nil, ErrInvalidArgument
@@ -397,12 +397,13 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, en
 
 	// If node is a validator, ensure it has ConensusInfo.
 	if n.HasRoles(node.RoleValidator) {
-		// Verify that addresses are non-empty.
-		if len(n.Consensus.Addresses) == 0 {
-			logger.Error("RegisterNode: missing consensus addresses",
+		if err := verifyAddresses(cfg, n.Consensus.Addresses); err != nil {
+			addrs, _ := json.Marshal(n.Consensus.Addresses)
+			logger.Error("RegisterNode: missing/invalid consensus addresses",
 				"node", n,
+				"consensus_addrs", addrs,
 			)
-			return nil, ErrInvalidArgument
+			return nil, err
 		}
 	}
 
@@ -419,12 +420,21 @@ func VerifyRegisterNodeArgs(logger *logging.Logger, sigNode *node.SignedNode, en
 
 	// If node is a worker, ensure it has CommitteeInfo and P2PInfo.
 	if n.HasRoles(node.RoleComputeWorker | node.RoleStorageWorker | node.RoleTransactionScheduler | node.RoleKeyManager | node.RoleMergeWorker) {
-		// Verify that addresses are non-empty.
-		if len(n.Committee.Addresses) == 0 || len(n.P2P.Addresses) == 0 {
-			logger.Error("RegisterNode: missing committee or p2p addresses",
+		if err := verifyAddresses(cfg, n.Committee.Addresses); err != nil {
+			addrs, _ := json.Marshal(n.Committee.Addresses)
+			logger.Error("RegisterNode: missing/invalid committee addresses",
 				"node", n,
+				"committee_addrs", addrs,
 			)
-			return nil, ErrInvalidArgument
+			return nil, err
+		}
+		if err := verifyAddresses(cfg, n.P2P.Addresses); err != nil {
+			addrs, _ := json.Marshal(n.P2P.Addresses)
+			logger.Error("RegisterNode: missing/invald P2P addresses",
+				"node", n,
+				"p2p_addrs", addrs,
+			)
+			return nil, err
 		}
 
 		// Verify that certificate is well-formed.
@@ -529,6 +539,37 @@ func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRu
 			"err", err,
 		)
 		return err
+	}
+
+	return nil
+}
+
+// VerifyAddress verifies a node address.
+func VerifyAddress(addr node.Address, allowUnroutable bool) error {
+	if !allowUnroutable {
+		// Use the runtime to reject clearly invalid addresses.
+		if !addr.IP.IsGlobalUnicast() {
+			return ErrInvalidArgument
+		}
+
+		if !addr.IsRoutable() {
+			return ErrInvalidArgument
+		}
+	}
+
+	return nil
+}
+
+func verifyAddresses(cfg *Config, addrs []node.Address) error {
+	// Treat having no addresses as invalid, regardless.
+	if len(addrs) == 0 {
+		return ErrInvalidArgument
+	}
+
+	for _, v := range addrs {
+		if err := VerifyAddress(v, cfg.DebugAllowUnroutableAddresses); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -761,6 +802,10 @@ type Genesis struct {
 
 // Config is the per-backend common configuration.
 type Config struct {
+	// DebugAllowUnroutableAddresses is true iff node registration should
+	// allow unroutable addreses.
+	DebugAllowUnroutableAddresses bool
+
 	// DebugAllowRuntimeRegistration is true iff runtime registration should be
 	// allowed outside of the genesis block.
 	DebugAllowRuntimeRegistration bool

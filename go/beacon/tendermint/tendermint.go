@@ -6,12 +6,12 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/beacon/api"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
-	app "github.com/oasislabs/ekiden/go/tendermint/apps/beacon"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	"github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
+	app "github.com/oasislabs/oasis-core/go/tendermint/apps/beacon"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 // BackendName is the name of this implementation.

@@ -71,6 +71,9 @@ func FindAllAddresses() ([]net.IP, error) {
 			case *net.IPNet:
 				ip = a.IP
 			}
+			if !ip.IsGlobalUnicast() {
+				continue
+			}
 
 			if ip != nil {
 				addresses = append(addresses, ip)

@@ -12,13 +12,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	tlsCert "github.com/oasislabs/ekiden/go/common/crypto/tls"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/sgx/ias"
-	iasGrpc "github.com/oasislabs/ekiden/go/grpc/ias"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	iasGrpc "github.com/oasislabs/oasis-core/go/grpc/ias"
 )
 
 const (

@@ -1,7 +1,7 @@
 package committee
 
 import (
-	"github.com/oasislabs/ekiden/go/common/crash"
+	"github.com/oasislabs/oasis-core/go/common/crash"
 )
 
 const (

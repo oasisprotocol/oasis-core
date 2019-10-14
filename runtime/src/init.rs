@@ -31,7 +31,7 @@ pub fn start_runtime(initializer: Option<Box<dyn Initializer>>, version: Version
     info!(logger, "Establishing connection with the worker host");
 
     #[cfg(not(target_env = "sgx"))]
-    let stream = match Stream::connect(env::var("EKIDEN_WORKER_HOST").unwrap_or_default()) {
+    let stream = match Stream::connect(env::var("OASIS_WORKER_HOST").unwrap_or_default()) {
         Err(error) => {
             error!(logger, "Failed to connect with the worker host"; "err" => %error);
             return;

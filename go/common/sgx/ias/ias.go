@@ -20,7 +20,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context/ctxhttp"
 
-	"github.com/oasislabs/ekiden/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 )
 
 var (

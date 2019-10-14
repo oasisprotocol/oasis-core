@@ -1,10 +1,10 @@
 [package]
-name = "ekiden-keymanager-api"
+name = "oasis-core-keymanager-api"
 version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 
 [dependencies]
-ekiden-runtime = { path = "../../runtime" }
+oasis-core-runtime = { path = "../../runtime" }
 serde = "1.0.71"
 serde_derive = "1.0"
 serde_bytes = "~0.10"

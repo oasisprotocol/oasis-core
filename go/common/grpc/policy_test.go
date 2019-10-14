@@ -15,11 +15,11 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/accessctl"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/ekiden/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/accessctl"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 )
 
 var (
@@ -32,7 +32,7 @@ var (
 func CreateCertificate(t *testing.T) (*tls.Certificate, *x509.Certificate) {
 	require := require.New(t)
 
-	dataDir, err := ioutil.TempDir("", "ekiden-common-grpc-test_")
+	dataDir, err := ioutil.TempDir("", "oasis-common-grpc-test_")
 	require.NoError(err, "Failed to create a temporary directory")
 	defer os.RemoveAll(dataDir)
 
@@ -178,12 +178,12 @@ func TestAccessPolicy(t *testing.T) {
 
 	clientTLSCredsWithoutCert := credentials.NewTLS(&tls.Config{
 		RootCAs:    serverCertPool,
-		ServerName: "ekiden-node",
+		ServerName: "oasis-node",
 	})
 	clientTLSCreds := credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{*clientTLSCert},
 		RootCAs:      serverCertPool,
-		ServerName:   "ekiden-node",
+		ServerName:   "oasis-node",
 	})
 	address := fmt.Sprintf("%s:%d", host, port)
 
@@ -209,7 +209,7 @@ func TestAccessPolicy(t *testing.T) {
 	_, err = client.Ping(ctx, &PingQuery{testNs})
 	require.EqualError(
 		err,
-		"rpc error: code = PermissionDenied desc = grpc: calling Ping method for runtime 832b5e638ea386ece9b747d25fedd5f559af6e2049db1998212b187a64303798 not allowed for client CN=ekiden-node",
+		"rpc error: code = PermissionDenied desc = grpc: calling Ping method for runtime 06956b25ae9fabb8295ce6879f0995c7ad02f8b2a1b22cbade17960a70d765ea not allowed for client CN=oasis-node",
 		"Calling Ping with an empty access policy should not be allowed",
 	)
 	require.Equal(codes.PermissionDenied, status.Code(err), "returned gRPC error should be PermissionDenied")
@@ -227,6 +227,6 @@ func TestAccessPolicy(t *testing.T) {
 
 func init() {
 	var ns hash.Hash
-	ns.FromBytes([]byte("ekiden common grpc policy test ns"))
+	ns.FromBytes([]byte("oasis common grpc policy test ns"))
 	copy(testNs[:], ns[:])
 }

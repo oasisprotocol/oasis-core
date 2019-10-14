@@ -11,18 +11,18 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/common/committee"
-	"github.com/oasislabs/ekiden/go/worker/common/p2p"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/worker/common/committee"
+	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
 
 var (
@@ -34,28 +34,28 @@ var (
 var (
 	discrepancyDetectedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_merge_discrepancy_detected_count",
+			Name: "oasis_worker_merge_discrepancy_detected_count",
 			Help: "Number of detected merge discrepancies",
 		},
 		[]string{"runtime"},
 	)
 	roothashCommitLatency = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_worker_roothash_merge_commit_latency",
+			Name: "oasis_worker_roothash_merge_commit_latency",
 			Help: "Latency of roothash merge commit",
 		},
 		[]string{"runtime"},
 	)
 	abortedMergeCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_aborted_merge_count",
+			Name: "oasis_worker_aborted_merge_count",
 			Help: "Number of aborted merges",
 		},
 		[]string{"runtime"},
 	)
 	inconsistentMergeRootCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_inconsistent_merge_root_count",
+			Name: "oasis_worker_inconsistent_merge_root_count",
 			Help: "Number of inconsistent merge roots",
 		},
 		[]string{"runtime"},

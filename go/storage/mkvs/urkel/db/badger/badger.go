@@ -11,14 +11,14 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/keyformat"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/keyformat"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
 const (
@@ -981,7 +981,7 @@ func (s *badgerSubtree) Commit() error {
 	return nil
 }
 
-// NewLogAdapter returns a badger.Logger backed by an ekiden logger.
+// NewLogAdapter returns a badger.Logger backed by an oasis-node logger.
 func NewLogAdapter(logger *logging.Logger) badger.Logger {
 	return &badgerLogger{
 		logger: logger,

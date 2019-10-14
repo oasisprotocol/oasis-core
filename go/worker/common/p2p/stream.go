@@ -5,7 +5,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-core"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 )
 
 // Stream is a CBOR message stream wrapper.

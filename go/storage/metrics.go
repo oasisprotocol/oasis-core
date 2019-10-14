@@ -9,51 +9,51 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/storage/api"
 )
 
 var (
 	storageFailures = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_storage_failures",
+			Name: "oasis_storage_failures",
 			Help: "Number of storage failures.",
 		},
 		[]string{"call"},
 	)
 	storageCalls = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_storage_successes",
+			Name: "oasis_storage_successes",
 			Help: "Number of storage successes.",
 		},
 		[]string{"call"},
 	)
 	storageLatency = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_storage_latency",
+			Name: "oasis_storage_latency",
 			Help: "Storage call latency",
 		},
 		[]string{"call"},
 	)
 	storageValueSize = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_storage_value_size",
+			Name: "oasis_storage_value_size",
 			Help: "Storage call value size",
 		},
 		[]string{"call"},
 	)
 	storagePrunedCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Name: "ekiden_storage_pruned",
+			Name: "oasis_storage_pruned",
 			Help: "Number of pruned nodes.",
 		},
 	)
 	storageFinalizedCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Name: "ekiden_storage_finalized",
+			Name: "oasis_storage_finalized",
 			Help: "Number of finalized rounds.",
 		},
 	)

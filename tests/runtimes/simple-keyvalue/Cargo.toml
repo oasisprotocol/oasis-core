@@ -10,13 +10,13 @@ stack-size = 2097152
 threads = 2
 
 [dependencies]
-ekiden-runtime = { path = "../../../runtime" }
-ekiden-client = { path = "../../../client" }
-ekiden-keymanager-client = { path = "../../../keymanager-client" }
-ekiden-keymanager-api = { path = "../../../keymanager-runtime/api" }
+oasis-core-runtime = { path = "../../../runtime" }
+oasis-core-client = { path = "../../../client" }
+oasis-core-keymanager-client = { path = "../../../keymanager-client" }
+oasis-core-keymanager-api = { path = "../../../keymanager-runtime/api" }
 simple-keyvalue-api = { path = "./api" }
 failure = "0.1.5"
 io-context = "0.2.0"
 
 [build-dependencies]
-ekiden-tools = { path = "../../../tools" }
+oasis-core-tools = { path = "../../../tools" }

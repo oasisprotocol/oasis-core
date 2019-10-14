@@ -3,7 +3,7 @@ syntax = "proto3";
 import "common/common.proto";
 
 package registry;
-option go_package = "github.com/oasislabs/ekiden/go/grpc/registry";
+option go_package = "github.com/oasislabs/oasis-core/go/grpc/registry";
 
 message Runtime {
     bytes id = 1;

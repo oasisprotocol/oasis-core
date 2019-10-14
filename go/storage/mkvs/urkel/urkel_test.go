@@ -11,15 +11,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	badgerDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/badger"
-	levelDb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/leveldb"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	db "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
+	badgerDb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
+	levelDb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/leveldb"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
 const (
@@ -1991,7 +1991,7 @@ func generateKeyValuePairs() ([][]byte, [][]byte) {
 
 func init() {
 	var ns hash.Hash
-	ns.FromBytes([]byte("ekiden urkel test ns"))
+	ns.FromBytes([]byte("oasis urkel test ns"))
 	copy(testNs[:], ns[:])
 }
 

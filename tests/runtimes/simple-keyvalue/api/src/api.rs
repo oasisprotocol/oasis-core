@@ -1,6 +1,6 @@
 use serde_derive::{Deserialize, Serialize};
 
-use ekiden_runtime::runtime_api;
+use oasis_core_runtime::runtime_api;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct KeyValue {

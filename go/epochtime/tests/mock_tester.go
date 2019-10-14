@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/epochtime/api"
+	"github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
 const recvTimeout = 5 * time.Second

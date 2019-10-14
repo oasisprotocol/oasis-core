@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/beacon/api"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
+	"github.com/oasislabs/oasis-core/go/beacon/api"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 )
 
 // BeaconImplementationTests exercises the basic functionality of a

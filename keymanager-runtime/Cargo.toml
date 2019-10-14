@@ -1,5 +1,5 @@
 [package]
-name = "ekiden-keymanager-runtime"
+name = "oasis-core-keymanager-runtime"
 version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 edition = "2018"
@@ -10,9 +10,9 @@ stack-size = 2097152
 threads = 2
 
 [dependencies]
-ekiden-runtime = { path = "../runtime" }
-ekiden-keymanager-api = { path = "./api" }
-ekiden-keymanager-client = { path = "../keymanager-client" }
+oasis-core-runtime = { path = "../runtime" }
+oasis-core-keymanager-api = { path = "./api" }
+oasis-core-keymanager-client = { path = "../keymanager-client" }
 failure = "0.1.5"
 lazy_static = "1.3.0"
 lru = "0.1.15"

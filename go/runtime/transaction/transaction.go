@@ -8,13 +8,13 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/keyformat"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/keyformat"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
 // NOTE: This should be kept in sync with runtime/src/transaction/tree.rs.
@@ -168,7 +168,7 @@ type Tree struct {
 func NewTree(rs syncer.ReadSyncer, ioRoot node.Root) *Tree {
 	return &Tree{
 		ioRoot: ioRoot,
-		tree:   urkel.NewWithRoot(rs, nil, ioRoot),
+		tree:   urkel.NewWithRoot(rs, nil, ioRoot, urkel.Capacity(50000, 16*1024*1024)),
 	}
 }
 

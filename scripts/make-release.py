@@ -13,7 +13,7 @@ DOCKER_TESTING_IMAGE = 'oasislabs/testing'
 SECTION = re.compile(r'^\[(.+)\]')
 VERSION = re.compile(r'(version\s*=\s*")(.+)(")')
 DEPENDENCIES = re.compile(r'^(?:dependencies|build-dependencies|dev-dependencies|target\..+?\.dependencies|dependencies\.(\w+))$')
-INTERNAL_CRATES = re.compile(r'ekiden-.*')
+INTERNAL_CRATES = re.compile(r'oasis-core-.*')
 DOCKER_FROM = re.compile(r'FROM (.+?)(:.+)?$')
 CI_IMAGE = re.compile(r'(\s*-\s*image:\s*)(.+?)$')
 DOCKER_IMAGE = re.compile(r'(%s:).+(})' % DOCKER_DEVELOPMENT_IMAGE)
@@ -210,7 +210,7 @@ def script_update_version(root_dir, script, template, tag):
         dev_file.write(''.join(output))
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Make an Ekiden release")
+    parser = argparse.ArgumentParser(description="Make an Oasis Core release")
     parser.add_argument('version', type=str,
                         help="New version to release as")
     parser.add_argument('--dev-version', type=str,

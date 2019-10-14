@@ -1,5 +1,5 @@
 [package]
-name = "ekiden-runtime"
+name = "oasis-core-runtime"
 version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 edition = "2018"

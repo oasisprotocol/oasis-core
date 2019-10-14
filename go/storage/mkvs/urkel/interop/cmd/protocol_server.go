@@ -5,14 +5,14 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/ekiden/go/common/grpc"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/background"
-	"github.com/oasislabs/ekiden/go/storage"
-	storageApi "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/database"
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/background"
+	"github.com/oasislabs/oasis-core/go/storage"
+	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/database"
 )
 
 const (

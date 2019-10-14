@@ -6,22 +6,22 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/roothash/api"
 )
 
 var (
 	rootHashFinalizedRounds = prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Name: "ekiden_finalized_rounds",
+			Name: "oasis_finalized_rounds",
 			Help: "Number of finalized rounds",
 		},
 	)
 	rootHashBlockInterval = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_roothash_block_interval",
+			Name: "oasis_roothash_block_interval",
 			Help: "Time between roothash blocks",
 		},
 		[]string{"runtime"},

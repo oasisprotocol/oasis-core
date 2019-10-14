@@ -3,7 +3,7 @@ name: ✨ Feature request
 about: Suggest an idea for this project
 ---
 <!--- First, verify that your feature was not already discussed on GitHub -->
-<!--- This template is only for *small* changes. For more complex features, please follow instructions in https://github.com/oasislabs/ekiden/blob/master/CONTRIBUTING.md#feature-requests -->
+<!--- This template is only for *small* changes. For more complex features, please follow instructions in https://github.com/oasislabs/oasis-core/blob/master/CONTRIBUTING.md#feature-requests -->
 <!--- Complete *all* sections as described, this form is processed automatically -->
 
 ##### SUMMARY

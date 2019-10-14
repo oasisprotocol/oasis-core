@@ -1,5 +1,5 @@
 // Package manual contains a threadsafe method for creating manual grpc resolver
-// for context see: https://github.com/oasislabs/ekiden/issues/1622
+// for context see: https://github.com/oasislabs/oasis-core/issues/1622
 package manual
 
 import (
@@ -13,7 +13,7 @@ import (
 )
 
 // Scheme is the name of this resolver.
-const Scheme = "ekiden-resolver"
+const Scheme = "oasis-core-resolver"
 
 // global is the global resolver registry instance.
 var global *registry

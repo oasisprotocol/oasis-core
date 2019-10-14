@@ -1,5 +1,5 @@
 SHELL = /bin/bash
-EKIDEN_GO ?= go
+OASIS_GO ?= go
 
 all: generate build
 
@@ -9,20 +9,20 @@ all: generate build
 # compiler plugin supports modules.
 generate:
 	@echo "Running go generate"
-	@env -u GOPATH $(EKIDEN_GO) generate -v ./...
+	@env -u GOPATH $(OASIS_GO) generate -v ./...
 
-# Build the Ekiden node.
+# Build all the things.
 build: generate
-	@echo "Building Ekiden node"
-	@env -u GOPATH $(EKIDEN_GO) build -v -o ./ekiden/ekiden ./ekiden
-	@echo "Building Ekiden test harness"
-	@env -u GOPATH $(EKIDEN_GO) build -v -o ./ekiden-test-runner/ekiden-test-runner ./ekiden-test-runner
-	@echo "Building Ekiden local network runner"
-	@env -u GOPATH $(EKIDEN_GO) build -v -o ./ekiden-net-runner/ekiden-net-runner ./ekiden-net-runner
+	@echo "Building Oasis node"
+	@env -u GOPATH $(OASIS_GO) build -v -o ./oasis-node/oasis-node ./oasis-node
+	@echo "Building Oasis test harness"
+	@env -u GOPATH $(OASIS_GO) build -v -o ./oasis-test-runner/oasis-test-runner ./oasis-test-runner
+	@echo "Building Oasis local network runner"
+	@env -u GOPATH $(OASIS_GO) build -v -o ./oasis-net-runner/oasis-net-runner ./oasis-net-runner
 
 # Run go fmt.
 fmt:
-	@env -u GOPATH $(EKIDEN_GO) fmt ./...
+	@env -u GOPATH $(OASIS_GO) fmt ./...
 
 # Lint.
 lint:
@@ -30,14 +30,14 @@ lint:
 
 # Test.
 test: generate
-	@env -u GOPATH $(EKIDEN_GO) test -race -v ./...
+	@env -u GOPATH $(OASIS_GO) test -race -v ./...
 
 # Urkel interoperability test helpers.
 urkel-test-helpers: generate
-	@env -u GOPATH $(EKIDEN_GO) build -v -o ./storage/mkvs/urkel/interop/urkel_test_helpers ./storage/mkvs/urkel/interop
+	@env -u GOPATH $(OASIS_GO) build -v -o ./storage/mkvs/urkel/interop/urkel_test_helpers ./storage/mkvs/urkel/interop
 
 # Clean.
 clean:
-	@env -u GOPATH $(EKIDEN_GO) clean
+	@env -u GOPATH $(OASIS_GO) clean
 
 .PHONY: all generate build lint test clean

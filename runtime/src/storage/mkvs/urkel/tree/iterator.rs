@@ -150,6 +150,14 @@ impl<'tree> TreeIterator<'tree> {
             let atom = self.pos.pop_front().expect("not empty");
             let mut remainder = replace(&mut self.pos, VecDeque::new());
 
+            // Remember where the path from root to target node ends (will end).
+            let mut cache = self.tree.cache.borrow_mut();
+            cache.mark_position();
+            for atom in &remainder {
+                cache.use_node(atom.ptr.clone());
+            }
+            drop(cache);
+
             // Try to proceed with the current node. If we don't succeed, proceed to the
             // next node.
             let key = self.key.take().expect("iterator is valid");
@@ -332,7 +340,7 @@ impl UrkelTree {
 mod test {
     use io_context::Context;
 
-    use super::*;
+    use super::{tree_test::generate_key_value_pairs_ex, *};
     use crate::storage::mkvs::urkel::interop::{Driver, ProtocolServer};
 
     #[test]
@@ -372,41 +380,6 @@ mod test {
             tree.insert(Context::background(), key, value).unwrap();
         }
 
-        // Direct.
-        test_iterator_with(&items, &mut tree);
-
-        // Remote.
-        let (write_log, hash) =
-            UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
-                .expect("commit");
-        server.apply(&write_log, hash, Default::default(), 0);
-
-        let mut remote_tree = UrkelTree::make()
-            .with_capacity(0, 0)
-            .with_root(Root {
-                hash,
-                ..Default::default()
-            })
-            .new(server.read_sync());
-
-        test_iterator_with(&items, &mut remote_tree);
-    }
-
-    fn test_iterator_with(items: &Vec<(Vec<u8>, Vec<u8>)>, tree: &mut UrkelTree) {
-        // Iterate through the whole tree.
-        let mut it = tree.iter(Context::background());
-        let mut iterations = 0;
-        it.rewind();
-        for (idx, (key, value)) in it.enumerate() {
-            assert_eq!(items[idx].0, key, "iterator should have the correct key");
-            assert_eq!(
-                items[idx].1, value,
-                "iterator should have the correct value"
-            );
-            iterations += 1;
-        }
-        assert_eq!(iterations, items.len(), "iterator should go over all items");
-
         let tests = vec![
             (b"k".to_vec(), 0),
             (b"key 1".to_vec(), 1),
@@ -420,15 +393,152 @@ mod test {
             (b"key A".to_vec(), -1),
         ];
 
+        // Direct.
+        let it = tree.iter(Context::background());
+        test_iterator_with(&items, it, &tests);
+
+        // Remote.
+        let (write_log, hash) =
+            UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+                .expect("commit");
+        server.apply(&write_log, hash, Default::default(), 0);
+
+        let remote_tree = UrkelTree::make()
+            .with_capacity(0, 0)
+            .with_root(Root {
+                hash,
+                ..Default::default()
+            })
+            .new(server.read_sync());
+
+        let it = remote_tree.iter(Context::background());
+        test_iterator_with(&items, it, &tests);
+
+        // Remote with prefetch (10).
+        let stats = StatsCollector::new(server.read_sync());
+        let remote_tree = UrkelTree::make()
+            .with_capacity(0, 0)
+            .with_root(Root {
+                hash,
+                ..Default::default()
+            })
+            .new(Box::new(stats));
+
+        let mut it = remote_tree.iter(Context::background());
+        it.set_prefetch(10);
+        test_iterator_with(&items, it, &tests);
+
+        let cache = remote_tree.cache.borrow();
+        let stats = cache
+            .get_read_syncer()
+            .as_any()
+            .downcast_ref::<StatsCollector>()
+            .expect("stats");
+        assert_eq!(0, stats.sync_get_count, "sync_get_count");
+        assert_eq!(0, stats.sync_get_prefixes_count, "sync_get_prefixes_count");
+        assert_eq!(1, stats.sync_iterate_count, "sync_iterate_count");
+
+        // Remote with prefetch (3).
+        let stats = StatsCollector::new(server.read_sync());
+        let remote_tree = UrkelTree::make()
+            .with_capacity(0, 0)
+            .with_root(Root {
+                hash,
+                ..Default::default()
+            })
+            .new(Box::new(stats));
+
+        let mut it = remote_tree.iter(Context::background());
+        it.set_prefetch(3);
+        test_iterator_with(&items, it, &tests);
+
+        let cache = remote_tree.cache.borrow();
+        let stats = cache
+            .get_read_syncer()
+            .as_any()
+            .downcast_ref::<StatsCollector>()
+            .expect("stats");
+        assert_eq!(0, stats.sync_get_count, "sync_get_count");
+        assert_eq!(0, stats.sync_get_prefixes_count, "sync_get_prefixes_count");
+        assert_eq!(2, stats.sync_iterate_count, "sync_iterate_count");
+    }
+
+    #[test]
+    fn test_iterator_eviction() {
+        let server = ProtocolServer::new();
+
+        let mut tree = UrkelTree::make()
+            .with_capacity(0, 0)
+            .new(Box::new(NoopReadSyncer {}));
+
+        let (keys, values) = generate_key_value_pairs_ex("T".to_owned(), 100);
+        let items: Vec<(Vec<u8>, Vec<u8>)> = keys.into_iter().zip(values.into_iter()).collect();
+        for (key, value) in &items {
+            tree.insert(Context::background(), &key, &value).unwrap();
+        }
+
+        let (write_log, hash) =
+            UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0)
+                .expect("commit");
+        server.apply(&write_log, hash, Default::default(), 0);
+
+        // Create a remote tree with limited cache capacity so that nodes will
+        // be evicted while iterating.
+        let stats = StatsCollector::new(server.read_sync());
+        let remote_tree = UrkelTree::make()
+            .with_capacity(50, 16 * 1024 * 1024)
+            .with_root(Root {
+                hash,
+                ..Default::default()
+            })
+            .new(Box::new(stats));
+
+        let mut it = remote_tree.iter(Context::background());
+        it.set_prefetch(1000);
+        test_iterator_with(&items, it, &vec![]);
+
+        let cache = remote_tree.cache.borrow();
+        let stats = cache
+            .get_read_syncer()
+            .as_any()
+            .downcast_ref::<StatsCollector>()
+            .expect("stats");
+        assert_eq!(0, stats.sync_get_count, "sync_get_count");
+        assert_eq!(0, stats.sync_get_prefixes_count, "sync_get_prefixes_count");
+        // We require multiple fetches as we can only store a limited amount of
+        // results per fetch due to the cache being too small.
+        assert_eq!(2, stats.sync_iterate_count, "sync_iterate_count");
+    }
+
+    fn test_iterator_with(
+        items: &Vec<(Vec<u8>, Vec<u8>)>,
+        mut it: TreeIterator,
+        tests: &Vec<(Vec<u8>, isize)>,
+    ) {
+        // Iterate through the whole tree.
+        let mut iterations = 0;
+        it.rewind();
+        for (idx, (key, value)) in it.by_ref().enumerate() {
+            if !tests.is_empty() {
+                assert_eq!(items[idx].0, key, "iterator should have the correct key");
+                assert_eq!(
+                    items[idx].1, value,
+                    "iterator should have the correct value"
+                );
+            }
+            iterations += 1;
+        }
+        assert!(it.error().is_none(), "iterator should not error");
+        assert_eq!(iterations, items.len(), "iterator should go over all items");
+
         for (seek, pos) in tests {
-            let mut it = tree.iter(Context::background());
             it.seek(&seek);
-            if pos == -1 {
+            if *pos == -1 {
                 assert!(!it.is_valid(), "iterator should not be valid after seek");
                 continue;
             }
 
-            for expected in &items[pos as usize..] {
+            for expected in &items[*pos as usize..] {
                 let item = Iterator::next(&mut it);
                 assert_eq!(
                     Some(expected.clone()),

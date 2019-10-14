@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 )
 
 // Remove removes a key from the tree.
@@ -15,6 +15,9 @@ func (t *Tree) Remove(ctx context.Context, key []byte) error {
 	if t.cache.isClosed() {
 		return ErrClosed
 	}
+
+	// Remember where the path from root to target node ends (will end).
+	t.cache.markPosition()
 
 	var changed bool
 	newRoot, changed, err := t.doRemove(ctx, t.cache.pendingRoot, 0, key, 0)

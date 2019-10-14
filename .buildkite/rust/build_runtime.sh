@@ -31,9 +31,9 @@ extra_args=$*
 
 source .buildkite/rust/common.sh
 
-#################################################################
-# Ensure we have ekiden-tools installed, needed to build enclaves
-#################################################################
+#####################################################################
+# Ensure we have oasis-core-tools installed, needed to build enclaves
+#####################################################################
 if [ ! -x ${CARGO_INSTALL_ROOT}/bin/cargo-elf2sgxs ]; then
     cargo install \
         --force \
@@ -46,10 +46,10 @@ fi
 ###############
 pushd $src_dir
     # Build non-SGX runtime. Checking KM policy requires SGX, disable it.
-    EKIDEN_UNSAFE_SKIP_KM_POLICY="1" cargo build --locked
+    OASIS_UNSAFE_SKIP_KM_POLICY="1" cargo build --locked
 
     # Build SGX runtime.
-    unset EKIDEN_UNSAFE_SKIP_KM_POLICY
+    unset OASIS_UNSAFE_SKIP_KM_POLICY
     cargo build --locked --target x86_64-fortanix-unknown-sgx
     cargo elf2sgxs
 popd

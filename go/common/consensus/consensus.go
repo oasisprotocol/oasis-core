@@ -2,7 +2,7 @@
 // backend.
 package consensus
 
-import "github.com/oasislabs/ekiden/go/common/node"
+import "github.com/oasislabs/oasis-core/go/common/node"
 
 // Backend is an interface that a consensus backend must provide.
 type Backend interface {

@@ -7,8 +7,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/oasislabs/ekiden/go/common/identity"
-	erpcGrpc "github.com/oasislabs/ekiden/go/grpc/enclaverpc"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	erpcGrpc "github.com/oasislabs/oasis-core/go/grpc/enclaverpc"
 )
 
 // Client is an enclave RPC client.

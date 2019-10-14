@@ -8,11 +8,11 @@ import (
 	"github.com/eapache/channels"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/epochtime/api"
-	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/epochtime/api"
+	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 const (

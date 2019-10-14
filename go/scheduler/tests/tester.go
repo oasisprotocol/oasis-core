@@ -9,13 +9,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/node"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/ekiden/go/epochtime/tests"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	registryTests "github.com/oasislabs/ekiden/go/registry/tests"
-	"github.com/oasislabs/ekiden/go/scheduler/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	registryTests "github.com/oasislabs/oasis-core/go/registry/tests"
+	"github.com/oasislabs/oasis-core/go/scheduler/api"
 )
 
 const recvTimeout = 5 * time.Second

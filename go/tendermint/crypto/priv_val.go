@@ -209,7 +209,7 @@ import (
 	"github.com/tendermint/tendermint/privval"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 )
 
 // This derives heavily from `tendermint/privval/file.go` for reasons that should
@@ -225,7 +225,7 @@ func checkVotesOnlyDifferByTimestamp(lastSignBytes, newSignBytes []byte) (time.T
 //go:linkname checkProposalsOnlyDifferByTimestamp github.com/tendermint/tendermint/privval.checkProposalsOnlyDifferByTimestamp
 func checkProposalsOnlyDifferByTimestamp(lastSignBytes, newSignBytes []byte) (time.Time, bool)
 
-const privValFileName = "ekiden_priv_validator.json"
+const privValFileName = "oasis_priv_validator.json"
 
 const (
 	// stepNone      int8 = 0
@@ -345,7 +345,7 @@ func (pv *privVal) save() error {
 }
 
 // LoadOrGeneratePrivVal loads or generates a tendermint PrivValidator for an
-// ekiden signature signer.
+// Oasis node signature signer.
 func LoadOrGeneratePrivVal(baseDir string, signer signature.Signer) (tmtypes.PrivValidator, error) {
 	fn := filepath.Join(baseDir, privValFileName)
 

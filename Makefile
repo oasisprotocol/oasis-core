@@ -4,9 +4,6 @@
 RUNTIMES = keymanager-runtime \
 	tests/runtimes/simple-keyvalue
 
-# Ekiden cargo target directory.
-EKIDEN_CARGO_TARGET_DIR := $(if $(CARGO_TARGET_DIR),$(CARGO_TARGET_DIR),$$(pwd)/target)
-
 # Check if we're running in an interactive terminal.
 ISATTY := $(shell [ -t 0 ] && echo 1)
 
@@ -40,7 +37,7 @@ tools:
 	@cargo install --path tools >/dev/null 2>&1 || true
 
 runtimes:
-	@$(ECHO) "$(CYAN)*** Building runtimes...$(OFF)"
+	@$(ECHO) "$(CYAN)*** Building test runtimes...$(OFF)"
 	@for e in $(RUNTIMES); do \
 		$(ECHO) "$(MAGENTA)*** Building runtime: $$e$(OFF)"; \
 		(cd $$e && \
@@ -55,7 +52,7 @@ rust:
 	@cargo build
 
 go:
-	@$(ECHO) "$(CYAN)*** Building Go node...$(OFF)"
+	@$(ECHO) "$(CYAN)*** Building Go binaries...$(OFF)"
 	@$(MAKE) -C go
 
 fmt:
@@ -68,7 +65,7 @@ test-unit:
 	@$(ECHO) "$(CYAN)*** Building storage interoperability test helpers...$(OFF)"
 	@$(MAKE) -C go urkel-test-helpers
 	@$(ECHO) "$(CYAN)*** Running Rust unit tests...$(OFF)"
-	@export EKIDEN_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers) && \
+	@export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers) && \
 		cargo test
 	@$(ECHO) "$(CYAN)*** Running Go unit tests...$(OFF)"
 	@$(MAKE) -C go test

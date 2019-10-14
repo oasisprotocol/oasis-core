@@ -1,7 +1,7 @@
 //! Key manager API.
-extern crate ekiden_runtime;
 extern crate failure;
 extern crate lazy_static;
+extern crate oasis_core_runtime;
 extern crate rand;
 extern crate rustc_hex;
 extern crate serde;
@@ -13,9 +13,9 @@ use failure::Fallible;
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 
-use ekiden_runtime::common::{
+use oasis_core_runtime::common::{
     cbor,
-    crypto::signature::{PrivateKey as EkidenPrivateKey, PublicKey as EkidenPublicKey},
+    crypto::signature::{PrivateKey as OasisPrivateKey, PublicKey as OasisPublicKey},
 };
 
 #[macro_use]
@@ -25,15 +25,15 @@ mod api;
 pub use api::*;
 
 lazy_static! {
-    static ref MULTISIG_KEYS: HashSet<EkidenPublicKey> = {
+    static ref MULTISIG_KEYS: HashSet<OasisPublicKey> = {
         let mut set = HashSet::new();
-        if option_env!("EKIDEN_UNSAFE_KM_POLICY_KEYS").is_some() {
+        if option_env!("OASIS_UNSAFE_KM_POLICY_KEYS").is_some() {
             for seed in [
                 "ekiden key manager test multisig key 0",
                 "ekiden key manager test multisig key 1",
                 "ekiden key manager test multisig key 2",
             ].iter() {
-                let private_key = EkidenPrivateKey::from_test_seed(
+                let private_key = OasisPrivateKey::from_test_seed(
                     seed.to_string(),
                 );
                 set.insert(private_key.public_key());
@@ -53,7 +53,7 @@ impl SignedPolicySGX {
     pub fn verify(&self) -> Fallible<PolicySGX> {
         // Verify the signatures.
         let untrusted_policy_raw = cbor::to_vec(&self.policy);
-        let mut signers: HashSet<EkidenPublicKey> = HashSet::new();
+        let mut signers: HashSet<OasisPublicKey> = HashSet::new();
         for sig in &self.signatures {
             let public_key = match sig.public_key {
                 Some(public_key) => public_key,
@@ -72,7 +72,7 @@ impl SignedPolicySGX {
 
         // Ensure that enough valid signatures from trusted signers are present.
         let signers: HashSet<_> = MULTISIG_KEYS.intersection(&signers).collect();
-        let multisig_threshold = match option_env!("EKIDEN_UNSAFE_KM_POLICY_KEYS") {
+        let multisig_threshold = match option_env!("OASIS_UNSAFE_KM_POLICY_KEYS") {
             Some(_) => 2,
             None => MULTISIG_THRESHOLD,
         };

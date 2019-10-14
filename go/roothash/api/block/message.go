@@ -1,8 +1,8 @@
 package block
 
 import (
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	staking "github.com/oasislabs/ekiden/go/staking/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 // AdjustmentOp is the Op in StakingGeneralAdjustmentRoothashMessage

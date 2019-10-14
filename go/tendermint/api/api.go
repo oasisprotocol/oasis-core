@@ -1,4 +1,4 @@
-// Package api implements the API between Ekiden ABCI application and Ekiden core.
+// Package api implements the API between Oasis ABCI application and Oasis core.
 package api
 
 import (
@@ -13,9 +13,9 @@ import (
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
 	tmp2p "github.com/tendermint/tendermint/p2p"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/tendermint/crypto"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/tendermint/crypto"
 )
 
 // Conesnus Backend Name
@@ -36,7 +36,7 @@ const (
 )
 
 // The ABCI event type to denote ABCI mux applications.
-const EventTypeEkiden = "ekiden"
+const EventTypeOasis = "oasis"
 
 // ToInt returns an integer representation of the status code.
 func (c Code) ToInt() uint32 {
@@ -84,7 +84,7 @@ func GetTag(tags []tmcommon.KVPair, tag []byte) []byte {
 
 // QueryForEvent generates a tmquery.Query for a specific event type.
 func QueryForEvent(eventApp []byte, eventType []byte) tmpubsub.Query {
-	return tmquery.MustParse(fmt.Sprintf("%s.%s='%s'", EventTypeEkiden, eventApp, eventType))
+	return tmquery.MustParse(fmt.Sprintf("%s.%s='%s'", EventTypeOasis, eventApp, eventType))
 }
 
 // QueryGetByIDRequest is a request for fetching things by ids.
@@ -95,7 +95,7 @@ type QueryGetByIDRequest struct {
 // VotingPower is the default voting power for all validator nodes.
 const VotingPower = 1
 
-// PublicKeyToValidatorUpdate converts an ekiden node public key to a
+// PublicKeyToValidatorUpdate converts an Oasis node public key to a
 // tendermint validator update.
 func PublicKeyToValidatorUpdate(id signature.PublicKey, power int64) types.ValidatorUpdate {
 	pk, _ := id.MarshalBinary()
@@ -109,7 +109,7 @@ func PublicKeyToValidatorUpdate(id signature.PublicKey, power int64) types.Valid
 	}
 }
 
-// NodeToP2PAddr converts an ekiden node descriptor to a tendermint p2p
+// NodeToP2PAddr converts an Oasis node descriptor to a tendermint p2p
 // address book entry.
 func NodeToP2PAddr(n *node.Node) (*tmp2p.NetAddress, error) {
 	// WARNING: p2p/transport.go:MultiplexTransport.upgrade() uses

@@ -9,13 +9,13 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/ias"
-	"github.com/oasislabs/ekiden/go/keymanager/api"
-	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
-	"github.com/oasislabs/ekiden/go/worker/common/host"
-	"github.com/oasislabs/ekiden/go/worker/registration"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/ias"
+	"github.com/oasislabs/oasis-core/go/keymanager/api"
+	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
+	"github.com/oasislabs/oasis-core/go/worker/common/host"
+	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 
 const (

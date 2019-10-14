@@ -1,13 +1,13 @@
 [package]
-name = "ekiden-keymanager-client"
+name = "oasis-core-keymanager-client"
 version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 edition = "2018"
 
 [dependencies]
-ekiden-client = { path = "../client" }
-ekiden-runtime = { path = "../runtime" }
-ekiden-keymanager-api = { path = "../keymanager-runtime/api" }
+oasis-core-client = { path = "../client" }
+oasis-core-runtime = { path = "../runtime" }
+oasis-core-keymanager-api = { path = "../keymanager-runtime/api" }
 failure = "0.1.5"
 futures = "0.1.25"
 io-context = "0.2.0"

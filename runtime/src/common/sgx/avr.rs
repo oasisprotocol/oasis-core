@@ -260,8 +260,8 @@ impl ParsedAVR {
 
 /// Verify attestation report.
 pub fn verify(avr: &AVR) -> Fallible<AuthenticatedAVR> {
-    let unsafe_skip_avr_verification = option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_some();
-    let strict_avr_verification = option_env!("EKIDEN_STRICT_AVR_VERIFY").is_some();
+    let unsafe_skip_avr_verification = option_env!("OASIS_UNSAFE_SKIP_AVR_VERIFY").is_some();
+    let strict_avr_verification = option_env!("OASIS_STRICT_AVR_VERIFY").is_some();
 
     // Get the time.
     let timestamp_now = insecure_posix_time();

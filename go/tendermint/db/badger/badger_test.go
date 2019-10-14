@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/tendermint/db/tests"
+	"github.com/oasislabs/oasis-core/go/tendermint/db/tests"
 )
 
 func TestBadgerTendermintDB(t *testing.T) {
 	// Create a temporary directory to store the test database.
-	tmpDir, err := ioutil.TempDir("", "ekiden-go-tendermint-db-test")
+	tmpDir, err := ioutil.TempDir("", "oasis-go-tendermint-db-test")
 	require.NoError(t, err, "Failed to create temporary directory.")
 	defer os.RemoveAll(tmpDir)
 

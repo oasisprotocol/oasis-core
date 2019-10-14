@@ -1,7 +1,7 @@
 // Package keymanager implementes the key manager management applicaiton.
 package keymanager
 
-import tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
+import tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 
 const (
 	// TransactionTag is a unique byte to identify transactions for

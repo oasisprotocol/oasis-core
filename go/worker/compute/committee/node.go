@@ -11,24 +11,24 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/ekiden/go/common/crash"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/tracing"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
-	"github.com/oasislabs/ekiden/go/runtime/transaction"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
-	commonWorker "github.com/oasislabs/ekiden/go/worker/common"
-	"github.com/oasislabs/ekiden/go/worker/common/committee"
-	"github.com/oasislabs/ekiden/go/worker/common/host"
-	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
-	"github.com/oasislabs/ekiden/go/worker/common/p2p"
-	mergeCommittee "github.com/oasislabs/ekiden/go/worker/merge/committee"
+	"github.com/oasislabs/oasis-core/go/common/crash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/common/tracing"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
+	"github.com/oasislabs/oasis-core/go/runtime/transaction"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	commonWorker "github.com/oasislabs/oasis-core/go/worker/common"
+	"github.com/oasislabs/oasis-core/go/worker/common/committee"
+	"github.com/oasislabs/oasis-core/go/worker/common/host"
+	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
+	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
+	mergeCommittee "github.com/oasislabs/oasis-core/go/worker/merge/committee"
 )
 
 var (
@@ -45,56 +45,56 @@ var (
 var (
 	discrepancyDetectedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_compute_discrepancy_detected_count",
+			Name: "oasis_worker_compute_discrepancy_detected_count",
 			Help: "Number of detected compute discrepancies",
 		},
 		[]string{"runtime"},
 	)
 	abortedBatchCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_aborted_batch_count",
+			Name: "oasis_worker_aborted_batch_count",
 			Help: "Number of aborted batches",
 		},
 		[]string{"runtime"},
 	)
 	storageCommitLatency = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_worker_storage_commit_latency",
+			Name: "oasis_worker_storage_commit_latency",
 			Help: "Latency of storage commit calls (state + outputs)",
 		},
 		[]string{"runtime"},
 	)
 	batchReadTime = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_worker_batch_read_time",
+			Name: "oasis_worker_batch_read_time",
 			Help: "Time it takes to read a batch from storage",
 		},
 		[]string{"runtime"},
 	)
 	batchProcessingTime = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_worker_batch_processing_time",
+			Name: "oasis_worker_batch_processing_time",
 			Help: "Time it takes for a batch to finalize",
 		},
 		[]string{"runtime"},
 	)
 	batchRuntimeProcessingTime = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_worker_batch_runtime_processing_time",
+			Name: "oasis_worker_batch_runtime_processing_time",
 			Help: "Time it takes for a batch to be processed by the runtime",
 		},
 		[]string{"runtime"},
 	)
 	batchSize = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_worker_batch_size",
+			Name: "oasis_worker_batch_size",
 			Help: "Number of transactions is a batch",
 		},
 		[]string{"runtime"},
 	)
 	roothashCommitLatency = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_worker_roothash_commit_latency",
+			Name: "oasis_worker_roothash_commit_latency",
 			Help: "Latency of roothash commit",
 		},
 		[]string{"runtime"},

@@ -7,10 +7,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/runtime/transaction"
-	"github.com/oasislabs/ekiden/go/worker/common/committee"
-	"github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/runtime/transaction"
+	"github.com/oasislabs/oasis-core/go/worker/common/committee"
+	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
 )
 
 type testDispatcher struct {

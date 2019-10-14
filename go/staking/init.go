@@ -10,10 +10,10 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
-	"github.com/oasislabs/ekiden/go/staking/api"
-	"github.com/oasislabs/ekiden/go/staking/tendermint"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	commonFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasislabs/oasis-core/go/staking/tendermint"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 const (

@@ -10,13 +10,13 @@ import (
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	genesis "github.com/oasislabs/ekiden/go/genesis/api"
-	staking "github.com/oasislabs/ekiden/go/staking/api"
-	"github.com/oasislabs/ekiden/go/tendermint/abci"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/abci"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 var (

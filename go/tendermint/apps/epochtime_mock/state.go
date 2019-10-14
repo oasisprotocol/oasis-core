@@ -4,10 +4,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/keyformat"
-	"github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/tendermint/abci"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/keyformat"
+	"github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
 
 var (

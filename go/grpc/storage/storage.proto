@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package storage;
-option go_package = "github.com/oasislabs/ekiden/go/grpc/storage";
+option go_package = "github.com/oasislabs/oasis-core/go/grpc/storage";
 
 service StorageWorker {
     rpc GetLastSyncedRound(GetLastSyncedRoundRequest) returns (GetLastSyncedRoundResponse) {}

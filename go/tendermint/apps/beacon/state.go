@@ -5,9 +5,9 @@ import (
 
 	"github.com/tendermint/iavl"
 
-	beacon "github.com/oasislabs/ekiden/go/beacon/api"
-	"github.com/oasislabs/ekiden/go/common/keyformat"
-	"github.com/oasislabs/ekiden/go/tendermint/abci"
+	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common/keyformat"
+	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
 
 var (

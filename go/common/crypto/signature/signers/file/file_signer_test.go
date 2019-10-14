@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 )
 
 func TestFileSigner(t *testing.T) {
@@ -17,7 +17,7 @@ func TestFileSigner(t *testing.T) {
 	var zeroSigner Signer
 	var zeroPubKey signature.PublicKey
 
-	tmpDir, err := ioutil.TempDir("", "ekiden-signature-test")
+	tmpDir, err := ioutil.TempDir("", "oasis-signature-test")
 	require.NoError(err, "TempDir()")
 	defer os.RemoveAll(tmpDir)
 

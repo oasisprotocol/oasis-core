@@ -7,8 +7,8 @@ import (
 	"crypto/tls"
 	"path/filepath"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	tlsCert "github.com/oasislabs/ekiden/go/common/crypto/tls"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 	P2PKeyPubFilename = "p2p_pub.pem"
 
 	// CommonName is the CommonName to use when generating TLS certificates.
-	CommonName = "ekiden-node"
+	CommonName = "oasis-node"
 
 	tlsKeyFilename  = "tls_identity.pem"
 	tlsCertFilename = "tls_identity_cert.pem"

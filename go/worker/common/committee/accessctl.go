@@ -1,8 +1,8 @@
 package committee
 
 import (
-	"github.com/oasislabs/ekiden/go/common/accessctl"
-	"github.com/oasislabs/ekiden/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/accessctl"
+	"github.com/oasislabs/oasis-core/go/common/node"
 )
 
 // AccessPolicy defines a list of actions that are allowed by the policy.

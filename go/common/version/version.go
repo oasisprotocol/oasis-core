@@ -1,4 +1,4 @@
-// Package version implements Ekiden protocol and runtime versioning.
+// Package version implements Oasis protocol and runtime versioning.
 package version
 
 import (
@@ -50,7 +50,7 @@ func (v Version) MajorMinor() Version {
 }
 
 var (
-	// RuntimeProtocol versions the protocol between the Ekiden node(s) and
+	// RuntimeProtocol versions the protocol between the Oasis node(s) and
 	// the runtime.
 	//
 	// NOTE: This version must be synced with runtime/src/common/version.rs.

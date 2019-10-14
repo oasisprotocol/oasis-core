@@ -7,46 +7,46 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/ekiden/go/common/consensus"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	keymanagerApi "github.com/oasislabs/ekiden/go/keymanager/api"
-	keymanagerClient "github.com/oasislabs/ekiden/go/keymanager/client"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/common/host"
-	"github.com/oasislabs/ekiden/go/worker/common/p2p"
+	"github.com/oasislabs/oasis-core/go/common/consensus"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
+	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/worker/common/host"
+	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
 
 var (
 	processedBlockCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_processed_block_count",
+			Name: "oasis_worker_processed_block_count",
 			Help: "Number of processed roothash blocks",
 		},
 		[]string{"runtime"},
 	)
 	processedEventCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_processed_event_count",
+			Name: "oasis_worker_processed_event_count",
 			Help: "Number of processed roothash events",
 		},
 		[]string{"runtime"},
 	)
 	failedRoundCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_failed_round_count",
+			Name: "oasis_worker_failed_round_count",
 			Help: "Number of failed roothash rounds",
 		},
 		[]string{"runtime"},
 	)
 	epochTransitionCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_worker_epoch_transition_count",
+			Name: "oasis_worker_epoch_transition_count",
 			Help: "Number of epoch transitions",
 		},
 		[]string{"runtime"},

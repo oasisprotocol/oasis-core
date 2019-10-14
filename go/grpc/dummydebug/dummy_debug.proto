@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package dummy_debug;
-option go_package = "github.com/oasislabs/ekiden/go/grpc/dummydebug";
+option go_package = "github.com/oasislabs/oasis-core/go/grpc/dummydebug";
 
 service DummyDebug {
     // Manually set the epoch and notify subscribers.

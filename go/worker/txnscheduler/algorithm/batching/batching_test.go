@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/tests"
+	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/tests"
 )
 
 func TestBatchingAlgorithm(t *testing.T) {

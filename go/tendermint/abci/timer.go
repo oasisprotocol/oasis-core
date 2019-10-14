@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 )
 
 const (

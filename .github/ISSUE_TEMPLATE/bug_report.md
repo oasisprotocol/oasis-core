@@ -15,8 +15,8 @@ about: Tell us what doesn't work as it should
 ##### COMPONENT NAME
 <!--- Write the name of the component the issue applies to (e.g. go/worker/storage) below, use your best guess if unsure -->
 
-##### EKIDEN VERSION
-<!--- Paste verbatim output from "ekiden --version" between quotes -->
+##### OASIS NODE VERSION
+<!--- Paste verbatim output from "oasis-node --version" between quotes -->
 ```paste below
 
 ```

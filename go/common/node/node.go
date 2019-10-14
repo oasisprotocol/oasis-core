@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/sgx/ias"
-	"github.com/oasislabs/ekiden/go/common/version"
-	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	"github.com/oasislabs/oasis-core/go/common/version"
+	pbCommon "github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 	_ cbor.Unmarshaler = (*Node)(nil)
 )
 
-// Node represents public connectivity information about an Ekiden node.
+// Node represents public connectivity information about an Oasis node.
 type Node struct {
 	// ID is the public key identifying the node.
 	ID signature.PublicKey `json:"id"`
@@ -68,24 +68,24 @@ type Node struct {
 	Roles RolesMask `json:"roles"`
 }
 
-// RolesMask is Ekiden Node roles bitmask.
+// RolesMask is Oasis node roles bitmask.
 type RolesMask uint32
 
 const (
-	// RoleComputeWorker is Ekiden Compute Worker role.
+	// RoleComputeWorker is Oasis compute worker role.
 	RoleComputeWorker RolesMask = 1 << 0
-	// RoleStorageWorker is Ekiden Storage Worker role.
+	// RoleStorageWorker is Oasis storage worker role.
 	RoleStorageWorker RolesMask = 1 << 1
-	// RoleTransactionScheduler is Ekiden Transaction Scheduler role.
+	// RoleTransactionScheduler is Oasis transaction scheduler role.
 	RoleTransactionScheduler RolesMask = 1 << 2
-	// RoleKeyManager is the Ekiden Key Manager role.
+	// RoleKeyManager is the Oasis key manager role.
 	RoleKeyManager RolesMask = 1 << 3
-	// RoleMergeWorker is the Ekiden Merge Worker role.
+	// RoleMergeWorker is the Oasis merge worker role.
 	RoleMergeWorker RolesMask = 1 << 4
-	// RoleValidator is the Ekiden validator role.
+	// RoleValidator is the Oasis validator role.
 	RoleValidator RolesMask = 1 << 5
 
-	// RoleReserved are all the bits of the Eiden Node roles bitmask
+	// RoleReserved are all the bits of the Oasis node roles bitmask
 	// that are reserved and must not be used.
 	RoleReserved RolesMask = ((1 << 32) - 1) & ^((RoleValidator << 1) - 1)
 )
@@ -128,7 +128,7 @@ func (n *Node) HasRoles(r RolesMask) bool {
 	return n.Roles&r != 0
 }
 
-// Runtime represents the runtimes supported by a given Ekiden node.
+// Runtime represents the runtimes supported by a given Oasis node.
 type Runtime struct {
 	// ID is the public key identifying the runtime.
 	ID signature.PublicKey `json:"id"`

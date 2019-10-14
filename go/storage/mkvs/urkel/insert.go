@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 )
 
 // Insert inserts a key/value pair into the tree.
@@ -16,6 +16,9 @@ func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
 	if t.cache.isClosed() {
 		return ErrClosed
 	}
+
+	// Remember where the path from root to target node ends (will end).
+	t.cache.markPosition()
 
 	var result insertResult
 	result, err := t.doInsert(ctx, t.cache.pendingRoot, 0, key, value, 0)

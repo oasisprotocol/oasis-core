@@ -6,13 +6,15 @@ import (
 	"math"
 	"net"
 
-	pbCommon "github.com/oasislabs/ekiden/go/grpc/common"
+	pbCommon "github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
 var (
 	// ErrInvalidAddress is the error returned when a transport address is
 	// invalid.
 	ErrInvalidAddress = errors.New("node: invalid transport address")
+
+	unroutableNetworks []net.IPNet
 
 	_ encoding.TextMarshaler   = (*Address)(nil)
 	_ encoding.TextUnmarshaler = (*Address)(nil)
@@ -54,6 +56,16 @@ func (a *Address) FromIP(ip net.IP, port uint16) error {
 	a.Zone = ""
 
 	return nil
+}
+
+// IsRoutable returns true iff the address is likely to be globally routable.
+func (a *Address) IsRoutable() bool {
+	for _, v := range unroutableNetworks {
+		if v.Contains(a.IP) {
+			return false
+		}
+	}
+	return true
 }
 
 // ToProtoAddresses converts a list of Addresses to protocol buffers.
@@ -109,4 +121,43 @@ func toProtoAddress(addr Address) *pbCommon.Address {
 	pbAddr.Port = uint32(addr.Port)
 
 	return pbAddr
+}
+
+func init() {
+	// List taken from RFC 6890.  This is different from what tendermint
+	// does (more restrictive).
+	for _, v := range []string{
+		"0.0.0.0/8",          // RFC 1122
+		"10.0.0.0/8",         // RFC 1918: Private-Use
+		"100.64.0.0/10",      // RFC 6598: Shared Address Space
+		"127.0.0.0/8",        // RFC 1122: Loopback
+		"169.254.0.0/16",     // RFC 3927: Link Local
+		"172.16.0.0/12",      // RFC 1918: Private-Use
+		"192.0.0.0/24",       // RFC 6890
+		"192.0.0.0/29",       // RFC 6333: DS-Lite
+		"192.0.2.0/24",       // RFC 5737: Documentation (TEST-NET-1)
+		"192.168.0.0/16",     // RFC 1918: Private-Use
+		"192.18.0.0/15",      // RFC 2544: Benchmarking
+		"198.51.100.0/24",    // RFC 5737: TEST-NET-2
+		"203.0.113.0/24",     // RFC 5737: TEST-NET-3
+		"240.0.0.0/4",        // RFC 1112: Reserved
+		"255.255.255.255/32", // RFC 919: Limited Broadcast
+		"::1/128",            // RFC 4291: Loopback Address
+		"::/128",             // RFC 4291: Unspecified Address
+		"::ffff:0:0/96",      // RFC 4291: IPv4-mapped Address
+		"100::/64",           // RFC 6666: Discard-Only Address Block
+		"2001::/32",          // RFC 4380: TEREDO
+		"2001:2::/48",        // RFC 5180: Benchmarking
+		"2001:db8::/32",      // RFC 3849: Documentation
+		"2001:10::/28",       // RFC 4843: ORCHID
+		"2002::/16",          // RFC 3056: 6to4
+		"fc00::/7",           // RFC 4193: Unique-Local
+		"fe80::/10",          // RFC 4291: Linked-Scoped Unicast
+	} {
+		_, ipNet, err := net.ParseCIDR(v)
+		if err != nil {
+			panic("node: failed to parse reserved net: " + err.Error())
+		}
+		unroutableNetworks = append(unroutableNetworks, *ipNet)
+	}
 }

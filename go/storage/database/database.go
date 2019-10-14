@@ -6,13 +6,13 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/storage/api"
-	nodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	badgerNodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/badger"
-	levelNodedb "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/leveldb"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/storage/api"
+	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
+	badgerNodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
+	levelNodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/leveldb"
 )
 
 const (

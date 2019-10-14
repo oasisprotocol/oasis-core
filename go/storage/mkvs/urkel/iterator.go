@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
 )
 
 var errClosed = errors.New("iterator: use of closed iterator")
@@ -211,6 +211,12 @@ func (it *treeIterator) Next() {
 		// Start where we left off.
 		atom := it.pos[0]
 		remainder := it.pos[1:]
+
+		// Remember where the path from root to target node ends (will end).
+		it.tree.cache.markPosition()
+		for _, a := range remainder {
+			it.tree.cache.useNode(a.ptr)
+		}
 
 		// Try to proceed with the current node. If we don't succeed, proceed to the
 		// next node.

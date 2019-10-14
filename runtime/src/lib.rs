@@ -1,11 +1,11 @@
-//! Ekiden runtime SDK.
+//! Oasis Core runtime SDK.
 //!
 //! # Examples
 //!
 //! To create a minimal runtime that doesn't expose any APIs to the
 //! outside world, you need to call the `start_runtime` function:
 //! ```rust,ignore
-//! ekiden_runtime::start_runtime(Some(Box::new(reg)));
+//! oasis_core_runtime::start_runtime(Some(Box::new(reg)));
 //! ```
 //!
 //! This will start the required services needed to communicate with
@@ -82,14 +82,14 @@ lazy_static! {
             let maybe_secure = true;
 
             // AVR signature verification MUST be enabled.
-            let maybe_secure = maybe_secure && option_env!("EKIDEN_UNSAFE_SKIP_AVR_VERIFY").is_none();
+            let maybe_secure = maybe_secure && option_env!("OASIS_UNSAFE_SKIP_AVR_VERIFY").is_none();
 
             // IAS `GROUP_OUT_OF_DATE` and `CONFIGRUATION_NEEDED` responses
             // MUST count as IAS failure.
             //
             // Rationale: This is how IAS signifies that the host environment
             // is insecure (eg: SMT is enabled when it should not be).
-            let maybe_secure = maybe_secure && option_env!("EKIDEN_STRICT_AVR_VERIFY").is_some();
+            let maybe_secure = maybe_secure && option_env!("OASIS_STRICT_AVR_VERIFY").is_some();
 
             // The enclave MUST NOT be a debug one.
             let maybe_secure = maybe_secure && !Report::for_self().attributes.flags.contains(AttributesFlags::DEBUG);

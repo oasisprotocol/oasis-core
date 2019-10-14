@@ -9,14 +9,18 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/registry/api"
-	"github.com/oasislabs/ekiden/go/registry/tendermint"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	commonFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/registry/tendermint"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 const (
+	// CfgDebugAllowUnroutableAddresses allows unroutable addresses in node
+	// registration.
+	CfgDebugAllowUnroutableAddresses = "registry.debug.allow_unroutable_addresses"
+
 	cfgDebugAllowRuntimeRegistration = "registry.debug.allow_runtime_registration"
 	cfgDebugBypassStake              = "registry.debug.bypass_stake" // nolint: gosec
 )
@@ -46,12 +50,14 @@ func New(ctx context.Context, timeSource epochtime.Backend, tmService service.Te
 
 func flagsToConfig() *api.Config {
 	return &api.Config{
+		DebugAllowUnroutableAddresses: viper.GetBool(CfgDebugAllowUnroutableAddresses),
 		DebugAllowRuntimeRegistration: viper.GetBool(cfgDebugAllowRuntimeRegistration),
 		DebugBypassStake:              viper.GetBool(cfgDebugBypassStake),
 	}
 }
 
 func init() {
+	Flags.Bool(CfgDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
 	Flags.Bool(cfgDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
 	Flags.Bool(cfgDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 

@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
 var (
@@ -126,7 +126,7 @@ func (h *Header) RootsForStorageReceipt() []hash.Hash {
 //
 // TODO: After we switch to https://github.com/oasislabs/ed25519, use batch
 // verification. This should be implemented as part of:
-// https://github.com/oasislabs/ekiden/issues/1351.
+// https://github.com/oasislabs/oasis-core/issues/1351.
 func (h *Header) VerifyStorageReceiptSignatures() error {
 	receiptBody := storage.ReceiptBody{
 		Version:   1,

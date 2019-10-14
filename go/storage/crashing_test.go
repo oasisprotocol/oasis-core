@@ -8,13 +8,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/crash"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/database"
-	"github.com/oasislabs/ekiden/go/storage/tests"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/database"
+	"github.com/oasislabs/oasis-core/go/storage/tests"
 )
 
 var testNs common.Namespace
@@ -52,6 +52,6 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 
 func init() {
 	var ns hash.Hash
-	ns.FromBytes([]byte("ekiden storage crashing test ns"))
+	ns.FromBytes([]byte("oasis storage crashing test ns"))
 	copy(testNs[:], ns[:])
 }

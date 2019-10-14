@@ -9,7 +9,7 @@ use crate::storage::mkvs::urkel::{cache::lru_cache::CacheItemBox, sync::*, tree:
 #[derive(Debug, Default)]
 pub struct CacheStats {
     /// Count of internal nodes held by the cache.
-    pub internal_node_count: u64,
+    pub internal_node_count: usize,
     /// Total size of values held by the cache.
     pub leaf_value_size: usize,
 }
@@ -93,6 +93,9 @@ pub trait Cache {
         fetcher: F,
     ) -> Fallible<()>;
 
+    /// Mark that a tree node was just used.
+    fn use_node(&mut self, ptr: NodePtrRef) -> bool;
+
     /// Commit a node into the cache.
     ///
     /// This method may evict some nodes in order to make space
@@ -102,6 +105,14 @@ pub trait Cache {
     // Mark a tree node as no longer being eligible for eviction
     // due to it becoming dirty.
     fn rollback_node(&mut self, ptr: NodePtrRef, kind: NodeKind);
+
+    /// Mark the current LRU queue positions as the ones before any nodes are
+    /// visited. Any new nodes committed into the cache after this is called
+    /// will be inserted after the marked position.
+    ///
+    /// This makes it possible to keep the path from the root to the derefed
+    /// node in the cache instead of evicting it.
+    fn mark_position(&mut self);
 }
 
 /// Shorthand for the type that cacheable items must hold to aid caching.

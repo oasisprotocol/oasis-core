@@ -5,10 +5,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/grpc"
-	pb "github.com/oasislabs/ekiden/go/grpc/storage"
-	"github.com/oasislabs/ekiden/go/worker/storage/committee"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/grpc"
+	pb "github.com/oasislabs/oasis-core/go/grpc/storage"
+	"github.com/oasislabs/oasis-core/go/worker/storage/committee"
 )
 
 var (

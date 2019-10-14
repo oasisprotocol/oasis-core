@@ -1,11 +1,11 @@
 [package]
-name = "ekiden-client"
+name = "oasis-core-client"
 version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 edition = "2018"
 
 [dependencies]
-ekiden-runtime = { path = "../runtime" }
+oasis-core-runtime = { path = "../runtime" }
 serde = "1.0.71"
 serde_bytes = "~0.10"
 serde_derive = "1.0"

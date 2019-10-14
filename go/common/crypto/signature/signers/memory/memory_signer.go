@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/crypto/ed25519"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 )
 
 var (

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 )
 
 type SubtreeMerger struct {
@@ -17,7 +17,7 @@ func (m *SubtreeMerger) MergeVerifiedSubtree(
 	ctx context.Context,
 	dst *node.Pointer,
 	subtree *node.Pointer,
-	committer func(*node.Pointer),
+	committer func(*node.Pointer) error,
 ) error {
 	if dst == nil || subtree == nil {
 		return nil
@@ -47,7 +47,9 @@ func (m *SubtreeMerger) MergeVerifiedSubtree(
 	// If destination node is nil, we can simply replace the whole subtree.
 	if dst.Node == nil {
 		dst.Node = subtree.Node
-		committer(dst)
+		if err := committer(dst); err != nil {
+			return err
+		}
 		return nil
 	}
 

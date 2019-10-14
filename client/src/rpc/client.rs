@@ -16,7 +16,7 @@ use io_context::Context;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio_executor::spawn;
 
-use ekiden_runtime::{
+use oasis_core_runtime::{
     common::cbor,
     protocol::Protocol,
     rpc::{

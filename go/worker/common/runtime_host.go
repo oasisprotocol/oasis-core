@@ -8,16 +8,16 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/node"
-	keymanagerApi "github.com/oasislabs/ekiden/go/keymanager/api"
-	keymanagerClient "github.com/oasislabs/ekiden/go/keymanager/client"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/common/committee"
-	"github.com/oasislabs/ekiden/go/worker/common/host"
-	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
+	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/worker/common/committee"
+	"github.com/oasislabs/oasis-core/go/worker/common/host"
+	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
 var (

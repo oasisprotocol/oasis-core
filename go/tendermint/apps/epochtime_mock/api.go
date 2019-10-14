@@ -1,8 +1,8 @@
 package epochtimemock
 
 import (
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 const (

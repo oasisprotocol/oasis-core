@@ -1,9 +1,9 @@
-// Package genesis defines the Ekiden genesis block.
+// Package genesis defines the Oasis genesis block.
 package genesis
 
 import (
-	"github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
-	"github.com/oasislabs/ekiden/go/genesis/api"
+	"github.com/oasislabs/oasis-core/go/genesis/api"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 // New creates a new genesis document provider.

@@ -10,20 +10,20 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/ekiden/go/common/crash"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/tracing"
-	roothash "github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/runtime/transaction"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/worker/common/committee"
-	"github.com/oasislabs/ekiden/go/worker/common/p2p"
-	computeCommittee "github.com/oasislabs/ekiden/go/worker/compute/committee"
-	txnScheduler "github.com/oasislabs/ekiden/go/worker/txnscheduler/algorithm/api"
+	"github.com/oasislabs/oasis-core/go/common/crash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/common/tracing"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/runtime/transaction"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/worker/common/committee"
+	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
+	computeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/committee"
+	txnScheduler "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 var (
 	incomingQueueSize = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "ekiden_worker_txnscheduler_incoming_queue_size",
+			Name: "oasis_worker_txnscheduler_incoming_queue_size",
 			Help: "Size of the incoming queue (number of entries)",
 		},
 		[]string{"runtime"},

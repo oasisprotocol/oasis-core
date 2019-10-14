@@ -9,10 +9,10 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/epochtime/tendermint"
-	"github.com/oasislabs/ekiden/go/epochtime/tendermint_mock"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	"github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasislabs/oasis-core/go/epochtime/tendermint"
+	"github.com/oasislabs/oasis-core/go/epochtime/tendermint_mock"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 const (
