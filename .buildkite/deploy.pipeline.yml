@@ -9,7 +9,6 @@ docker_plugin: &docker_plugin_configuration
     volumes:
       - .:/workdir
       - /var/lib/buildkite-agent/.ssh:/root/.ssh
-      - /var/lib/buildkite-agent/.ekiden:/root/.ekiden
       # Shared Rust incremental compile caches.
       - /tmp/cargo_ic/release:/workdir/target/release/incremental
       - /tmp/cargo_ic/release_sgx:/workdir/target/x86_64-unknown-linux-sgx/release/incremental
@@ -31,9 +30,10 @@ docker_plugin: &docker_plugin_configuration
 
 steps:
   - label: Get docker tag and save it as metadata for use later
+    branches: master devnet2
     command: .buildkite/scripts/set_docker_tag_meta_data.sh
 
-  - label: Build artifacts (master and devnet2)
+  - label: Build artifacts
     branches: master devnet2
     command:
       - .buildkite/scripts/setup_gitconfig.sh
@@ -47,73 +47,27 @@ steps:
     plugins:
       <<: *docker_plugin_configuration
 
-  - label: Build production-track artifacts (master and devnet2)
-    branches: master devnet2
-    command:
-      - .buildkite/scripts/setup_gitconfig.sh
-      - eval $(ssh-agent -s)
-      - ssh-add
-      - docker/deployment/build_context.sh context-prod.tar.gz
-    artifact_paths:
-      - context-prod.tar.gz
-    agents:
-      buildkite_agent_size: large
-    plugins:
-      <<: *docker_plugin_configuration
-
   - wait
 
-  - label: Build docker image (master branches only)
+  - label: ":rocket: Publish docker images"
+    trigger: private-ops-oasis-core-publish-image
+    async: true
     branches: master
-    command:
-      - .buildkite/scripts/build_tag_push_deployment_image.sh context.tar.gz
-    env:
-      DEPLOYMENT_VARIANT: testing
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      env:
+        OASIS_CORE_JOB_ID: "${BUILDKITE_JOB_ID}"
+        OASIS_CORE_COMMIT: "${BUILDKITE_COMMIT}"
+        OASIS_CORE_BRANCH: "${BUILDKITE_BRANCH}"
 
-  - label: Build docker image (devnet2 branch only)
+  - label: ":rocket: Publish docker images"
+    trigger: private-ops-oasis-core-publish-image
+    async: true
     branches: devnet2
-    command:
-      - .buildkite/scripts/build_tag_push_deployment_image.sh context.tar.gz
-    env:
-      DEPLOYMENT_VARIANT: testing-devnet2
-
-  - label: Build production-track docker image (master branches only)
-    branches: master
-    command:
-      - .buildkite/scripts/build_tag_push_deployment_image.sh context-prod.tar.gz
-
-  - label: Build production-track docker image (devnet2 branch only)
-    branches: devnet2
-    command:
-      - .buildkite/scripts/build_tag_push_deployment_image.sh context-prod.tar.gz
-    env:
-      DEPLOYMENT_VARIANT: devnet2
-
-  - block: Human approval required to deploy docker image
-    branches: "*"
-    prompt: |
-      Clicking "OK" below will unblock this step and
-      permit the docker image to be tagged as latest
-      which means that the image will be used as a
-      base image for all runtime builds.
-
-      NOTE: This will NOT deploy the image to any testnet.
-
-  - label: Deploy docker image (master branches only)
-    branches: master
-    command:
-      - .buildkite/scripts/promote_deployment_image_to.sh latest-testing
-    env:
-      DEPLOYMENT_VARIANT: testing
-
-  - label: Deploy production-track docker image (master branches only)
-    branches: master
-    command:
-      - .buildkite/scripts/promote_deployment_image_to.sh latest
-
-  - label: Deploy production-track docker image (devnet2 branch only)
-    branches: devnet2
-    command:
-      - .buildkite/scripts/promote_deployment_image_to.sh latest-devnet2
-    env:
-      DEPLOYMENT_VARIANT: devnet2
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      env:
+        OASIS_CORE_JOB_ID: "${BUILDKITE_JOB_ID}"
+        OASIS_CORE_COMMIT: "${BUILDKITE_COMMIT}"
+        OASIS_CORE_BRANCH: "${BUILDKITE_BRANCH}"
+        IMAGE_VARIANT: devnet2
