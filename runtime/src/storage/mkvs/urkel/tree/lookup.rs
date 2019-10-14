@@ -48,6 +48,10 @@ impl UrkelTree {
         let ctx = ctx.freeze();
         let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
+
+        // Remember where the path from root to target node ends (will end).
+        self.cache.borrow_mut().mark_position();
+
         Ok(self._get(&ctx, pending_root, 0, &boxed_key, 0)?)
     }
 

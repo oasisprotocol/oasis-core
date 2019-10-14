@@ -14,6 +14,9 @@ impl UrkelTree {
         let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
 
+        // Remember where the path from root to target node ends (will end).
+        self.cache.borrow_mut().mark_position();
+
         let (new_root, changed, old_val) = self._remove(&ctx, pending_root, 0, &boxed_key, 0)?;
         match self.pending_write_log.get_mut(&boxed_key) {
             None => {

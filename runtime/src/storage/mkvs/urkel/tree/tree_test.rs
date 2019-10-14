@@ -22,7 +22,7 @@ const LONG_VALUE: &str = "The platform that puts data privacy first. From sharin
 const ALL_LONG_ITEMS_ROOT: &str =
     "51ab169f7362d3261a63883e8a4011108784108107c93e8a1693c26fbeed4715";
 
-fn generate_key_value_pairs_ex(prefix: String, count: usize) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
+pub fn generate_key_value_pairs_ex(prefix: String, count: usize) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
     let mut keys: Vec<Vec<u8>> = Vec::with_capacity(count);
     let mut values: Vec<Vec<u8>> = Vec::with_capacity(count);
 
@@ -836,7 +836,7 @@ fn test_node_eviction() {
         "cache.internal_node_count"
     );
     assert_eq!(
-        300,
+        124,
         tree.cache.borrow().stats().leaf_value_size,
         "cache.leaf_value_size"
     );

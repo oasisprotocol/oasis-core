@@ -17,6 +17,9 @@ func (t *Tree) Get(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, ErrClosed
 	}
 
+	// Remember where the path from root to target node ends (will end).
+	t.cache.markPosition()
+
 	return t.doGet(ctx, t.cache.pendingRoot, 0, key, doGetOptions{}, false)
 }
 
@@ -34,6 +37,9 @@ func (t *Tree) SyncGet(ctx context.Context, request *syncer.GetRequest) (*syncer
 	if !t.cache.pendingRoot.IsClean() {
 		return nil, syncer.ErrDirtyRoot
 	}
+
+	// Remember where the path from root to target node ends (will end).
+	t.cache.markPosition()
 
 	pb := syncer.NewProofBuilder(request.Tree.Position)
 	opts := doGetOptions{

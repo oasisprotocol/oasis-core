@@ -168,7 +168,7 @@ type Tree struct {
 func NewTree(rs syncer.ReadSyncer, ioRoot node.Root) *Tree {
 	return &Tree{
 		ioRoot: ioRoot,
-		tree:   urkel.NewWithRoot(rs, nil, ioRoot),
+		tree:   urkel.NewWithRoot(rs, nil, ioRoot, urkel.Capacity(50000, 16*1024*1024)),
 	}
 }
 

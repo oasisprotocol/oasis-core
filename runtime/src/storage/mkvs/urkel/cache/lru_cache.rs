@@ -6,6 +6,10 @@ use io_context::Context;
 
 use crate::storage::mkvs::urkel::{cache::*, sync::*, tree::*};
 
+#[derive(Debug, Fail)]
+#[fail(display = "urkel: tried to remove locked node")]
+struct RemoveLockedError;
+
 #[derive(Clone, Default)]
 pub struct CacheItemBox<Item: CacheItem + Default> {
     item: Rc<RefCell<Item>>,
@@ -38,6 +42,7 @@ where
     pub list: LinkedList<CacheItemAdapter<V>>,
     pub size: usize,
     pub capacity: usize,
+    pub mark: CacheExtra<V>,
 }
 
 impl<V> LRUList<V>
@@ -49,10 +54,21 @@ where
             list: LinkedList::new(CacheItemAdapter::new()),
             size: 0,
             capacity: capacity,
+            mark: None,
         }
     }
 
-    fn add_to_front(&mut self, val: Rc<RefCell<V>>) {
+    fn mark(&mut self) {
+        self.mark = self.list.front().get().map(|front| {
+            front
+                .item
+                .borrow()
+                .get_cache_extra()
+                .expect("item was just retrieved from list, cache extra must exist")
+        });
+    }
+
+    fn add(&mut self, val: Rc<RefCell<V>>) {
         let mut val_ref = val.borrow_mut();
         if val_ref.get_cache_extra().is_none() {
             self.size += val_ref.get_cached_size();
@@ -61,13 +77,19 @@ where
                 link: LinkedListLink::new(),
             });
             val_ref.set_cache_extra(NonNull::new(&mut *item_box));
-            self.list.push_front(item_box);
+            if let Some(non_null_pos) = &self.mark {
+                let mut pos_cursor =
+                    unsafe { self.list.cursor_mut_from_ptr(non_null_pos.as_ptr()) };
+                pos_cursor.insert_after(item_box);
+            } else {
+                self.list.push_front(item_box);
+            }
         } else {
-            self.move_to_front(val.clone());
+            self.use_val(val.clone());
         }
     }
 
-    fn move_to_front(&mut self, val: Rc<RefCell<V>>) -> bool {
+    fn use_val(&mut self, val: Rc<RefCell<V>>) -> bool {
         let val_ref = val.borrow();
         match val_ref.get_cache_extra() {
             None => false,
@@ -85,6 +107,12 @@ where
         match extra {
             None => false,
             Some(non_null) => {
+                if let Some(non_null_mark) = self.mark {
+                    if non_null.as_ptr() == non_null_mark.as_ptr() {
+                        self.mark = None;
+                    }
+                }
+
                 let mut item_cursor = unsafe { self.list.cursor_mut_from_ptr(non_null.as_ptr()) };
                 match item_cursor.remove() {
                     None => false,
@@ -99,18 +127,27 @@ where
         }
     }
 
-    fn evict_for_val(&mut self, val: Rc<RefCell<V>>) -> Vec<Rc<RefCell<V>>> {
+    fn evict_for_val(
+        &mut self,
+        val: Rc<RefCell<V>>,
+        locked_val: Option<&Rc<RefCell<V>>>,
+    ) -> Result<Vec<Rc<RefCell<V>>>, RemoveLockedError> {
         let mut evicted: Vec<Rc<RefCell<V>>> = Vec::new();
         if self.capacity > 0 {
             let target_size = val.borrow().get_cached_size();
             while !self.list.is_empty() && self.size + target_size > self.capacity {
                 let back = (*self.list.back().get().unwrap()).item.clone();
+                if let Some(locked_val) = locked_val {
+                    if back.as_ptr() == locked_val.as_ptr() {
+                        return Err(RemoveLockedError);
+                    }
+                }
                 if self.remove(back.clone()) {
                     evicted.push(back);
                 }
             }
         }
-        evicted
+        Ok(evicted)
     }
 }
 
@@ -120,8 +157,6 @@ pub struct LRUCache {
 
     pending_root: NodePtrRef,
     sync_root: Root,
-
-    internal_node_count: u64,
 
     lru_leaf: LRUList<NodePointer>,
     lru_internal: LRUList<NodePointer>,
@@ -149,8 +184,6 @@ impl LRUCache {
             })),
             sync_root: Root::default(),
 
-            internal_node_count: 0,
-
             lru_leaf: LRUList::new(value_capacity),
             lru_internal: LRUList::new(node_capacity),
         })
@@ -170,44 +203,146 @@ impl LRUCache {
         }))
     }
 
-    fn use_node(&mut self, ptr: NodePtrRef) -> bool {
+    fn try_commit_node(
+        &mut self,
+        ptr: NodePtrRef,
+        locked_ptr: Option<&NodePtrRef>,
+    ) -> Result<(), RemoveLockedError> {
+        if !ptr.borrow().clean {
+            panic!("urkel: commit_node called on dirty node");
+        }
+        if ptr.borrow().node.is_none() {
+            return Ok(());
+        }
+        if self.use_node(ptr.clone()) {
+            return Ok(());
+        }
+
         match classify_noderef!(? ptr.borrow().node) {
-            NodeKind::Internal => self.lru_internal.move_to_front(ptr),
-            NodeKind::Leaf => self.lru_leaf.move_to_front(ptr),
-            NodeKind::None => false,
-        }
-    }
-
-    fn subtract_node(&mut self, ptr: NodePtrRef) {
-        let mut ptr = ptr.borrow_mut();
-        if ptr.is_null() {
-            return;
-        }
-        if let Some(ref node) = ptr.node {
-            match *node.borrow() {
-                NodeBox::Internal(_) => {
-                    self.internal_node_count -= 1;
+            NodeKind::Internal => {
+                let evicted = self
+                    .lru_internal
+                    .evict_for_val(ptr.clone(), locked_ptr.clone())?;
+                for node in evicted {
+                    self.try_remove_node(node.clone(), locked_ptr.clone())?;
                 }
-                NodeBox::Leaf(_) => {}
-            };
-            ptr.node = None;
-        }
+                self.lru_internal.add(ptr.clone());
+            }
+            NodeKind::Leaf => {
+                let evicted = self
+                    .lru_leaf
+                    .evict_for_val(ptr.clone(), locked_ptr.clone())?;
+                for node in evicted {
+                    self.try_remove_node(node.clone(), locked_ptr.clone())?;
+                }
+                self.lru_leaf.add(ptr.clone());
+            }
+            NodeKind::None => return Ok(()),
+        };
+
+        Ok(())
     }
 
-    fn commit_merged_node(&mut self, ptr: NodePtrRef) {
+    fn try_remove_node(
+        &mut self,
+        ptr: NodePtrRef,
+        locked_ptr: Option<&NodePtrRef>,
+    ) -> Result<(), RemoveLockedError> {
+        #[derive(Clone, Copy)]
+        enum VisitState {
+            Unvisited,
+            VisitedLeaf,
+            VisitedLeft,
+            VisitedRight,
+        }
+        #[derive(Clone)]
+        struct PendingNode(NodePtrRef, VisitState);
+
+        let mut stack: Vec<PendingNode> = Vec::new();
+        stack.push(PendingNode(ptr, VisitState::Unvisited));
+        'stack: while !stack.is_empty() {
+            let top_idx = stack.len() - 1;
+            let top = stack[top_idx].clone();
+
+            if let Some(locked_ptr) = locked_ptr {
+                if locked_ptr.as_ptr() == top.0.as_ptr() {
+                    return Err(RemoveLockedError);
+                }
+            }
+
+            // Perform removal in depth-first order. We do not remove the node from
+            // the stack until all of its subtrees have been fully removed.
+            if let Some(ref node_ref) = top.0.borrow().node {
+                if let NodeBox::Internal(ref n) = *node_ref.borrow() {
+                    match top.1 {
+                        VisitState::Unvisited => {
+                            stack[top_idx].1 = VisitState::VisitedLeaf;
+                            stack.push(PendingNode(n.leaf_node.clone(), VisitState::Unvisited));
+                            continue 'stack;
+                        }
+                        VisitState::VisitedLeaf => {
+                            stack[top_idx].1 = VisitState::VisitedLeft;
+                            stack.push(PendingNode(n.left.clone(), VisitState::Unvisited));
+                            continue 'stack;
+                        }
+                        VisitState::VisitedLeft => {
+                            stack[top_idx].1 = VisitState::VisitedRight;
+                            stack.push(PendingNode(n.right.clone(), VisitState::Unvisited));
+                            continue 'stack;
+                        }
+                        VisitState::VisitedRight => {
+                            // Now it can finally be removed.
+                        }
+                    }
+                }
+            }
+
+            stack.pop();
+
+            match classify_noderef!(? top.0.borrow().node) {
+                NodeKind::Internal => {
+                    self.lru_internal.remove(top.0.clone());
+                    top.0.borrow_mut().node = None;
+                }
+                NodeKind::Leaf => {
+                    self.lru_leaf.remove(top.0.clone());
+                    top.0.borrow_mut().node = None;
+                }
+                NodeKind::None => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    fn commit_merged_node(
+        &mut self,
+        ptr: NodePtrRef,
+        locked_ptr: &NodePtrRef,
+    ) -> Result<(), RemoveLockedError> {
+        // Try to commit the node. If we fail this means that there is not enough
+        // space in the cache to keep the node that we are trying to dereference.
+        if let Err(error) = self.try_commit_node(ptr.clone(), Some(locked_ptr)) {
+            // Failed to commit, make sure to not keep the subtree in memory.
+            ptr.borrow_mut().node = None;
+            return Err(error);
+        }
+
         // Commit all children.
         match classify_noderef!(? ptr.borrow().node) {
             NodeKind::Internal => {
                 let node_ref = ptr.borrow().get_node();
-                self.commit_merged_node(noderef_as!(node_ref, Internal).left.clone());
-                self.commit_merged_node(noderef_as!(node_ref, Internal).right.clone());
+                self.commit_merged_node(noderef_as!(node_ref, Internal).left.clone(), &locked_ptr)?;
+                self.commit_merged_node(
+                    noderef_as!(node_ref, Internal).right.clone(),
+                    &locked_ptr,
+                )?;
             }
             NodeKind::Leaf => {}
             NodeKind::None => {}
         }
 
-        // Commit the node itself.
-        self.commit_node(ptr);
+        Ok(())
     }
 }
 
@@ -218,7 +353,7 @@ impl Cache for LRUCache {
 
     fn stats(&self) -> CacheStats {
         CacheStats {
-            internal_node_count: self.internal_node_count,
+            internal_node_count: self.lru_internal.size,
             leaf_value_size: self.lru_leaf.size,
         }
     }
@@ -272,47 +407,8 @@ impl Cache for LRUCache {
     }
 
     fn remove_node(&mut self, ptr: NodePtrRef) {
-        let mut stack: Vec<NodePtrRef> = Vec::new();
-        stack.push(ptr);
-        while !stack.is_empty() {
-            let top = stack[stack.len() - 1].clone();
-
-            if top.borrow().get_cache_extra().is_none() {
-                stack.pop();
-                continue;
-            }
-
-            if let Some(ref node_ref) = top.borrow().node {
-                if let NodeBox::Internal(ref n) = *node_ref.borrow() {
-                    if n.left.borrow().has_node() {
-                        stack.push(n.left.clone());
-                        n.left.borrow_mut().node = None;
-                        continue;
-                    }
-                    if n.right.borrow().has_node() {
-                        stack.push(n.right.clone());
-                        n.right.borrow_mut().node = None;
-                        continue;
-                    }
-                }
-            }
-
-            stack.pop();
-
-            match classify_noderef!(? top.borrow().node) {
-                NodeKind::Internal => {
-                    if self.lru_internal.remove(top.clone()) {
-                        self.subtract_node(top);
-                    }
-                }
-                NodeKind::Leaf => {
-                    if self.lru_leaf.remove(top.clone()) {
-                        self.subtract_node(top);
-                    }
-                }
-                NodeKind::None => {}
-            }
-        }
+        self.try_remove_node(ptr, None)
+            .expect("no locked pointer passed, cannot fail");
     }
 
     fn deref_node_ptr<F: ReadSyncFetcher>(
@@ -323,6 +419,9 @@ impl Cache for LRUCache {
     ) -> Fallible<Option<NodeRef>> {
         let ptr_ref = ptr;
         let ptr = ptr_ref.borrow();
+
+        self.use_node(ptr_ref.clone());
+
         if let Some(ref node) = &ptr.node {
             let refetch = match *node.borrow() {
                 NodeBox::Internal(ref n) => {
@@ -338,7 +437,6 @@ impl Cache for LRUCache {
                 drop(ptr);
                 self.remove_node(ptr_ref.clone());
             } else {
-                self.use_node(ptr_ref.clone());
                 return Ok(Some(node.clone()));
             }
         } else {
@@ -352,6 +450,11 @@ impl Cache for LRUCache {
         self.remote_sync(ctx, ptr_ref.clone(), fetcher)?;
 
         let ptr = ptr_ref.borrow();
+        if ptr.node.is_none() {
+            return Err(format_err!(
+                "urkel: received result did not contain node (or cache too small)"
+            ));
+        }
         Ok(ptr.node.clone())
     }
 
@@ -373,7 +476,7 @@ impl Cache for LRUCache {
         // the c.syncRoot.Hash in case it contains nodes outside the subtree.
         let ptr_hash = ptr.borrow().hash;
         let (dst_ptr, expected_root) = if proof.untrusted_root == ptr_hash {
-            (ptr, ptr_hash)
+            (ptr.clone(), ptr_hash)
         } else if proof.untrusted_root == self.sync_root.hash {
             (self.pending_root.clone(), self.sync_root.hash)
         } else {
@@ -390,38 +493,33 @@ impl Cache for LRUCache {
         // Merge resulting nodes.
         let mut merged_nodes: Vec<NodePtrRef> = Vec::new();
         merge_verified_subtree(dst_ptr, subtree, &mut merged_nodes)?;
+        let mut remove = false;
         for node_ref in merged_nodes {
-            self.commit_merged_node(node_ref);
+            if remove {
+                // Do not keep subtrees that we failed to commit in memory.
+                node_ref.borrow_mut().node = None;
+            }
+
+            if let Err(RemoveLockedError) = self.commit_merged_node(node_ref, &ptr) {
+                // Cache is too small, ignore.
+                remove = true;
+            }
         }
 
         Ok(())
     }
 
+    fn use_node(&mut self, ptr: NodePtrRef) -> bool {
+        match classify_noderef!(? ptr.borrow().node) {
+            NodeKind::Internal => self.lru_internal.use_val(ptr),
+            NodeKind::Leaf => self.lru_leaf.use_val(ptr),
+            NodeKind::None => false,
+        }
+    }
+
     fn commit_node(&mut self, ptr: NodePtrRef) {
-        if !ptr.borrow().clean {
-            panic!("urkel: commit_node called on dirty node");
-        }
-        if ptr.borrow().node.is_none() {
-            return;
-        }
-        if self.use_node(ptr.clone()) {
-            return;
-        }
-
-        let lru = match classify_noderef!(? ptr.borrow().node) {
-            NodeKind::Internal => {
-                self.internal_node_count += 1;
-                &mut self.lru_internal
-            }
-            NodeKind::Leaf => &mut self.lru_leaf,
-            NodeKind::None => return,
-        };
-
-        let evicted = lru.evict_for_val(ptr.clone());
-        lru.add_to_front(ptr.clone());
-        for node in evicted {
-            self.subtract_node(node.clone());
-        }
+        self.try_commit_node(ptr, None)
+            .expect("no locked pointer passed, cannot fail");
     }
 
     fn rollback_node(&mut self, ptr: NodePtrRef, kind: NodeKind) {
@@ -431,15 +529,17 @@ impl Cache for LRUCache {
         }
 
         let lru = match kind {
-            NodeKind::Internal => {
-                self.internal_node_count -= 1;
-                &mut self.lru_internal
-            }
+            NodeKind::Internal => &mut self.lru_internal,
             NodeKind::Leaf => &mut self.lru_leaf,
             NodeKind::None => panic!("lru_cache: rollback works only for Internal and Leaf nodes!"),
         };
         lru.remove(ptr.clone());
 
         ptr.borrow_mut().set_cache_extra(None);
+    }
+
+    fn mark_position(&mut self) {
+        self.lru_internal.mark();
+        self.lru_leaf.mark();
     }
 }
