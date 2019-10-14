@@ -293,8 +293,8 @@ func (w *Worker) updateStatus(status *api.Status) error {
 func extractMessageResponsePayload(raw []byte) ([]byte, error) {
 	// See: runtime/src/rpc/types.rs
 	type MessageResponseBody struct {
-		Success interface{}
-		Error   *string
+		Success interface{} `json:",omitempty"`
+		Error   *string     `json:",omitempty"`
 	}
 	type MessageResponse struct {
 		Response *struct {
