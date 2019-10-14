@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/beacon"
 	"github.com/oasislabs/oasis-core/go/client"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	commonGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -34,6 +35,11 @@ import (
 
 type argBuilder struct {
 	vec []string
+}
+
+func (args *argBuilder) debugStrictCBOR() *argBuilder {
+	args.vec = append(args.vec, "--"+cbor.CfgDebugStrictCBOR)
+	return args
 }
 
 func (args *argBuilder) debugAllowTestKeys() *argBuilder {

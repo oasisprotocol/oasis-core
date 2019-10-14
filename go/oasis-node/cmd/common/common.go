@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
@@ -95,6 +96,9 @@ func init() {
 	RootFlags.Bool(CfgDebugAllowTestKeys, false, "Allow test keys (UNSAFE)")
 	_ = viper.BindPFlags(RootFlags)
 	RootFlags.AddFlagSet(loggingFlags)
+
+	// Common debugging flags.
+	RootFlags.AddFlagSet(cbor.Flags)
 }
 
 // InitConfig initializes the command configuration.

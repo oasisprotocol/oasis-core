@@ -380,6 +380,7 @@ func (net *Network) startOasisNode(
 			registryDebugAllowUnroutableAddresses().
 			tendermintDebugAddrBookLenient()
 	}
+	extraArgs = extraArgs.debugStrictCBOR()
 	args := append([]string{}, subCmd...)
 	args = append(args, baseArgs...)
 	args = append(args, extraArgs.vec...)
