@@ -12,8 +12,8 @@ use std::{
 
 use ansi_term::Color::{Green, Red, White};
 use clap::{App, Arg, SubCommand};
-use ekiden_tools::cargo;
 use failure::{format_err, Fail, Fallible, ResultExt};
+use oasis_core_tools::cargo;
 
 /// Target tripe for SGX platform.
 const TARGET_TRIPLE: &'static str = "x86_64-fortanix-unknown-sgx";

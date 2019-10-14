@@ -1,7 +1,7 @@
 //! Tracing helpers.
 use io_context::Context;
 
-const TRACING_SPAN_CONTEXT_KEY: &'static str = "EKIDEN_TRACING_SPAN_CONTEXT";
+const TRACING_SPAN_CONTEXT_KEY: &'static str = "OASIS_TRACING_SPAN_CONTEXT";
 
 /// Add a tracing span context to the provided `Context`.
 pub fn add_span_context(ctx: &mut Context, span_context: Vec<u8>) {

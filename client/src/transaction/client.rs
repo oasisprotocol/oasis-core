@@ -8,7 +8,7 @@ use rustracing::{sampler::AllSampler, tag};
 use rustracing_jaeger::{span::Span, Tracer};
 use serde::{de::DeserializeOwned, Serialize};
 
-use ekiden_runtime::{
+use oasis_core_runtime::{
     common::{cbor, crypto::hash::Hash, runtime::RuntimeId},
     transaction::types::{TxnBatch, TxnCall, TxnOutput},
 };
@@ -453,7 +453,7 @@ impl TxnClient {
     }
 
     fn prepare_options(&self, span_name: &'static str) -> (Span, grpcio::CallOption) {
-        // TODO: Use ekiden_tracing to get the tracer.
+        // TODO: Use oasis_core_tracing to get the tracer.
         let (tracer, _) = Tracer::new(AllSampler);
 
         let span = tracer

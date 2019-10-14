@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"strings"
 
-	commonFlags "github.com/oasislabs/ekiden/go/ekiden/cmd/common/flags"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/keymanager/api"
-	"github.com/oasislabs/ekiden/go/keymanager/tendermint"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasislabs/oasis-core/go/keymanager/api"
+	"github.com/oasislabs/oasis-core/go/keymanager/tendermint"
+	commonFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 // New constructs a new Backend based on the configuration flags.

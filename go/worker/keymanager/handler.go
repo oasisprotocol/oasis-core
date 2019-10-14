@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
+	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
 var (

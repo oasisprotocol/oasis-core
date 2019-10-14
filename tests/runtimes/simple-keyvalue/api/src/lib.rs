@@ -1,7 +1,7 @@
 extern crate serde;
 extern crate serde_derive;
 
-extern crate ekiden_runtime;
+extern crate oasis_core_runtime;
 
 #[macro_use]
 mod api;

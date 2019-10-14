@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/drbg"
+	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
 
 	"github.com/stretchr/testify/require"
 )

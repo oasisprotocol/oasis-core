@@ -1,8 +1,8 @@
-extern crate ekiden_keymanager_api;
-extern crate ekiden_keymanager_client;
-extern crate ekiden_runtime;
 extern crate failure;
 extern crate io_context;
+extern crate oasis_core_keymanager_api;
+extern crate oasis_core_keymanager_client;
+extern crate oasis_core_runtime;
 extern crate simple_keyvalue_api;
 
 use std::sync::Arc;
@@ -10,8 +10,8 @@ use std::sync::Arc;
 use failure::{format_err, Fallible};
 use io_context::Context as IoContext;
 
-use ekiden_keymanager_client::{ContractId, KeyManagerClient};
-use ekiden_runtime::{
+use oasis_core_keymanager_client::{ContractId, KeyManagerClient};
+use oasis_core_runtime::{
     common::{
         crypto::{
             hash::Hash,
@@ -259,7 +259,7 @@ fn main() {
         with_api! { register_runtime_txn_methods!(txn, api); }
 
         // Create the key manager client.
-        let km_client = Arc::new(ekiden_keymanager_client::RemoteClient::new_runtime(
+        let km_client = Arc::new(oasis_core_keymanager_client::RemoteClient::new_runtime(
             RuntimeId::default(), // HACK: Tests always use the all 0 runtime ID.
             protocol.clone(),
             rak.clone(),
@@ -274,5 +274,5 @@ fn main() {
     };
 
     // Start the runtime.
-    ekiden_runtime::start_runtime(Some(Box::new(init)), version_from_cargo!());
+    oasis_core_runtime::start_runtime(Some(Box::new(init)), version_from_cargo!());
 }

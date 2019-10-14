@@ -1,7 +1,7 @@
 package scheduler
 
 import (
-	"github.com/oasislabs/ekiden/go/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 const (

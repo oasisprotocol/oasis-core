@@ -5,7 +5,7 @@ use rand::{rngs::OsRng, Rng};
 use serde_derive::{Deserialize, Serialize};
 use x25519_dalek;
 
-use ekiden_runtime::{
+use oasis_core_runtime::{
     common::{
         crypto::signature::{Signature, SignatureBundle},
         runtime::RuntimeId,

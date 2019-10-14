@@ -6,7 +6,7 @@ import (
 	libp2pCrypto "github.com/libp2p/go-libp2p-core/crypto"
 	libp2pCryptoPb "github.com/libp2p/go-libp2p-core/crypto/pb"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 )
 
 var (

@@ -3,7 +3,7 @@ package node
 import (
 	"testing"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ed25519"
 )

@@ -11,13 +11,13 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	memorySigner "github.com/oasislabs/ekiden/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/ekiden/go/common/identity"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	scheduler "github.com/oasislabs/ekiden/go/scheduler/api"
-	"github.com/oasislabs/ekiden/go/storage/api"
-	"github.com/oasislabs/ekiden/go/storage/client"
-	"github.com/oasislabs/ekiden/go/storage/database"
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	"github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/client"
+	"github.com/oasislabs/oasis-core/go/storage/database"
 )
 
 const (

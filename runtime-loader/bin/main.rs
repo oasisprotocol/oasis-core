@@ -5,10 +5,10 @@ use std::path::Path;
 
 use clap::{App, Arg};
 
-use ekiden_runtime_loader::{ElfLoader, Loader, SgxsLoader};
+use oasis_core_runtime_loader::{ElfLoader, Loader, SgxsLoader};
 
 fn main() {
-    let matches = App::new("Ekiden runtime loader")
+    let matches = App::new("Oasis runtime loader")
         .arg(
             Arg::with_name("type")
                 .long("type")

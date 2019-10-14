@@ -1,7 +1,9 @@
 //! A block snapshot.
 use std::any::Any;
 
-use ekiden_runtime::{
+use failure::{Fallible, ResultExt};
+use io_context::Context;
+use oasis_core_runtime::{
     common::{
         cbor,
         crypto::hash::Hash,
@@ -16,8 +18,6 @@ use ekiden_runtime::{
     },
     transaction::types::{TxnCall, TxnOutput},
 };
-use failure::{Fallible, ResultExt};
-use io_context::Context;
 
 use super::{api, client::TxnClientError};
 

@@ -5,7 +5,7 @@ import (
 	"github.com/tendermint/iavl"
 	dbm "github.com/tendermint/tm-db"
 
-	"github.com/oasislabs/ekiden/go/tendermint/db"
+	"github.com/oasislabs/oasis-core/go/tendermint/db"
 )
 
 // MuxState is an open ABCI mux state database.

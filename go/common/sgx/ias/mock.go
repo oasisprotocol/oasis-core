@@ -16,7 +16,7 @@ type mockAVR struct {
 // some light sanity checking on the quote.
 //
 // This is only useful for runtimes with with AVR verification disabled at
-// compile time (ie: built with `EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1`).
+// compile time (ie: built with `OASIS_UNSAFE_SKIP_AVR_VERIFY=1`).
 func NewMockAVR(quote []byte, nonce string) ([]byte, error) {
 	mockAVR := &mockAVR{
 		Timestamp:             time.Now().UTC().Format(TimestampFormat),

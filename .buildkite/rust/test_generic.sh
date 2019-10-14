@@ -1,10 +1,10 @@
 #!/bin/bash
 
 ############################################################
-# This script tests the Ekiden rust project.
+# This script tests the Rust parts.
 #
 # Usage:
-# test_ekiden.sh
+# test_generic.sh <src-dir>
 ############################################################
 
 # Helpful tips on writing build scripts:

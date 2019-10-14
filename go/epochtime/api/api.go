@@ -4,7 +4,7 @@ package api
 import (
 	"context"
 
-	"github.com/oasislabs/ekiden/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 )
 
 // EpochTime is the number of intervals (epochs) since a fixed instant

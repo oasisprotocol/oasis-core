@@ -61,7 +61,7 @@ impl From<u64> for Version {
     }
 }
 
-// Version of the protocol used for communication between the Ekiden node(s)
+// Version of the protocol used for communication between the Oasis node(s)
 // and the runtime. This version MUST be compatible with the one supported by
 // the worker host.
 pub const PROTOCOL_VERSION: Version = Version {

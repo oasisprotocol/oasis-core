@@ -1,6 +1,6 @@
 package transaction
 
-import "github.com/oasislabs/ekiden/go/common/cbor"
+import "github.com/oasislabs/oasis-core/go/common/cbor"
 
 var (
 	_ cbor.Marshaler   = (*RawBatch)(nil)

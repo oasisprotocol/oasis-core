@@ -15,19 +15,19 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	beacon "github.com/oasislabs/ekiden/go/beacon/api"
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	"github.com/oasislabs/ekiden/go/roothash/api"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
-	"github.com/oasislabs/ekiden/go/roothash/api/commitment"
-	tmapi "github.com/oasislabs/ekiden/go/tendermint/api"
-	app "github.com/oasislabs/ekiden/go/tendermint/apps/roothash"
-	"github.com/oasislabs/ekiden/go/tendermint/service"
+	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
+	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
+	app "github.com/oasislabs/oasis-core/go/tendermint/apps/roothash"
+	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 const (
@@ -351,7 +351,7 @@ func (r *tendermintBackend) reindexBlocks() error {
 			tmEvents = append(tmEvents, txResults.GetEvents()...)
 		}
 		for _, tmEv := range tmEvents {
-			if tmEv.GetType() != tmapi.EventTypeEkiden {
+			if tmEv.GetType() != tmapi.EventTypeOasis {
 				continue
 			}
 
@@ -470,7 +470,7 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 		r.Unlock()
 
 		for _, tmEv := range tmEvents {
-			if tmEv.GetType() != tmapi.EventTypeEkiden {
+			if tmEv.GetType() != tmapi.EventTypeOasis {
 				continue
 			}
 

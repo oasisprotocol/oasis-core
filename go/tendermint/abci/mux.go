@@ -22,13 +22,13 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	dbm "github.com/tendermint/tm-db"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/version"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	genesis "github.com/oasislabs/ekiden/go/genesis/api"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
-	"github.com/oasislabs/ekiden/go/tendermint/db"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/version"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/db"
 )
 
 const (
@@ -49,7 +49,7 @@ const (
 var (
 	abciSize = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "ekiden_abci_db_size",
+			Name: "oasis_abci_db_size",
 			Help: "Total size of the ABCI database (MiB)",
 		},
 	)

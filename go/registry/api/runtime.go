@@ -4,14 +4,14 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/sgx"
-	"github.com/oasislabs/ekiden/go/common/version"
-	pbRegistry "github.com/oasislabs/ekiden/go/grpc/registry"
-	storage "github.com/oasislabs/ekiden/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/sgx"
+	"github.com/oasislabs/oasis-core/go/common/version"
+	pbRegistry "github.com/oasislabs/oasis-core/go/grpc/registry"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
 var (

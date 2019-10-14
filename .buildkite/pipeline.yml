@@ -40,7 +40,7 @@ docker_plugin_sgx_config: &docker_plugin_sgx_config
     # Intel SGX device.
     - /dev/isgx
   environment:
-    - "EKIDEN_TEE_HARDWARE=intel-sgx"
+    - "OASIS_TEE_HARDWARE=intel-sgx"
     # Copy of environment variables defined in docker_plugin_default_config.
     - "LC_ALL=C.UTF-8"
     - "LANG=C.UTF-8"
@@ -70,7 +70,7 @@ steps:
   - label: Lint Go node
     command:
       - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/go/lint_ekiden.sh
+      - .buildkite/go/lint.sh
     agents:
       buildkite_agent_size: large
     plugins:
@@ -89,15 +89,15 @@ steps:
   - label: Build Go node
     command:
       - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/go/build_ekiden.sh
+      - .buildkite/go/build.sh
 
       # Upload the built artifacts.
-      - cd /workdir/go/ekiden
-      - buildkite-agent artifact upload ekiden
-      - cd /workdir/go/ekiden-test-runner
-      - buildkite-agent artifact upload ekiden-test-runner
-      - cd /workdir/go/ekiden-net-runner
-      - buildkite-agent artifact upload ekiden-net-runner
+      - cd /workdir/go/oasis-node
+      - buildkite-agent artifact upload oasis-node
+      - cd /workdir/go/oasis-test-runner
+      - buildkite-agent artifact upload oasis-test-runner
+      - cd /workdir/go/oasis-net-runner
+      - buildkite-agent artifact upload oasis-net-runner
     plugins:
       <<: *docker_plugin
 
@@ -106,7 +106,7 @@ steps:
   - label: Build Rust runtime loader
     command:
       - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/rust/build_generic.sh /workdir -p ekiden-runtime-loader
+      - .buildkite/rust/build_generic.sh /workdir -p oasis-core-runtime-loader
       - .buildkite/rust/build_generic.sh /workdir -p test-long-term-client
       - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-client
       - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-enc-client
@@ -114,7 +114,7 @@ steps:
 
       # Upload the built artifacts.
       - cd /tmp/artifacts/debug
-      - buildkite-agent artifact upload ekiden-runtime-loader
+      - buildkite-agent artifact upload oasis-core-runtime-loader
       # Clients for E2E tests.
       - buildkite-agent artifact upload test-long-term-client
       - buildkite-agent artifact upload simple-keyvalue-client
@@ -138,10 +138,10 @@ steps:
 
       # Upload the built artifacts.
       - cd /tmp/artifacts/x86_64-fortanix-unknown-sgx/debug
-      - buildkite-agent artifact upload ekiden-keymanager-runtime.sgxs
+      - buildkite-agent artifact upload oasis-core-keymanager-runtime.sgxs
       - buildkite-agent artifact upload simple-keyvalue.sgxs
       - cd /tmp/artifacts/debug
-      - buildkite-agent artifact upload ekiden-keymanager-runtime
+      - buildkite-agent artifact upload oasis-core-keymanager-runtime
       - buildkite-agent artifact upload simple-keyvalue
     agents:
       buildkite_agent_size: large
@@ -156,7 +156,7 @@ steps:
       - .buildkite/scripts/setup_gitconfig.sh
       # Build storage interoperability test helpers first.
       - make -C go urkel-test-helpers
-      - export EKIDEN_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers)
+      - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers)
       - .buildkite/rust/test_generic.sh .
     agents:
       buildkite_agent_size: large
@@ -173,7 +173,7 @@ steps:
   - label: Test Go node
     command:
       - .buildkite/scripts/setup_gitconfig.sh
-      - .buildkite/go/test_and_coverage_ekiden.sh
+      - .buildkite/go/test_and_coverage.sh
     plugins:
       <<: *docker_plugin
 

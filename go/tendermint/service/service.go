@@ -8,14 +8,14 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/ekiden/go/common/consensus"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/pubsub"
-	"github.com/oasislabs/ekiden/go/common/service"
-	"github.com/oasislabs/ekiden/go/tendermint/abci"
+	"github.com/oasislabs/oasis-core/go/common/consensus"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/common/service"
+	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
 
-// TendermintService provides Tendermint access to Ekiden backends.
+// TendermintService provides Tendermint access to Oasis core backends.
 type TendermintService interface {
 	service.BackgroundService
 	consensus.Backend
@@ -55,7 +55,7 @@ type TendermintService interface {
 	// that you would pass to BroadcastTx.
 	MarshalTx(tag byte, tx interface{}) tmtypes.Tx
 
-	// BroadcastTx broadcasts a transaction for Ekiden ABCI application.
+	// BroadcastTx broadcasts a transaction for Oasis ABCI application.
 	//
 	// The CBOR-encodable transaction together with the given application
 	// tag is first marshalled and then transmitted using BroadcastTxSync.

@@ -13,11 +13,11 @@ use lru::LruCache;
 use std::iter::FromIterator;
 
 #[cfg(target_env = "sgx")]
-use ekiden_runtime::{common::cbor, protocol::ProtocolError, types::Body};
+use oasis_core_runtime::{common::cbor, protocol::ProtocolError, types::Body};
 
-use ekiden_client::{create_rpc_api_client, BoxFuture, RpcClient};
-use ekiden_keymanager_api::*;
-use ekiden_runtime::{
+use oasis_core_client::{create_rpc_api_client, BoxFuture, RpcClient};
+use oasis_core_keymanager_api::*;
+use oasis_core_runtime::{
     common::{runtime::RuntimeId, sgx::avr::EnclaveIdentity},
     protocol::Protocol,
     rak::RAK,

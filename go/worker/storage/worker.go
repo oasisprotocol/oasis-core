@@ -10,19 +10,19 @@ import (
 
 	bolt "github.com/etcd-io/bbolt"
 
-	"github.com/oasislabs/ekiden/go/common"
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/grpc"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/workerpool"
-	genesis "github.com/oasislabs/ekiden/go/genesis/api"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
-	"github.com/oasislabs/ekiden/go/storage"
-	workerCommon "github.com/oasislabs/ekiden/go/worker/common"
-	"github.com/oasislabs/ekiden/go/worker/registration"
-	"github.com/oasislabs/ekiden/go/worker/storage/committee"
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/workerpool"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/storage"
+	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
+	"github.com/oasislabs/oasis-core/go/worker/registration"
+	"github.com/oasislabs/oasis-core/go/worker/storage/committee"
 )
 
 const (

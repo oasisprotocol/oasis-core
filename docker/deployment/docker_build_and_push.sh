@@ -28,8 +28,8 @@ docker_image_name=oasislabs/testnet
 ####################################
 
 docker build --pull --rm --force-rm \
-  --build-arg EKIDEN_COMMIT_SHA=${git_commit_sha} \
-  --build-arg EKIDEN_BUILD_IMAGE_TAG=${docker_image_tag} \
+  --build-arg OASIS_CORE_COMMIT_SHA=${git_commit_sha} \
+  --build-arg OASIS_CORE_BUILD_IMAGE_TAG=${docker_image_tag} \
   -t ${docker_image_name}:${docker_image_tag} \
   --file=docker/deployment/Dockerfile \
   - <"$context"

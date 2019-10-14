@@ -8,10 +8,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	pb "github.com/oasislabs/ekiden/go/grpc/txnscheduler"
-	"github.com/oasislabs/ekiden/go/worker/txnscheduler/committee"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	pb "github.com/oasislabs/oasis-core/go/grpc/txnscheduler"
+	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/committee"
 )
 
 var _ pb.TransactionSchedulerServer = (*grpcServer)(nil)

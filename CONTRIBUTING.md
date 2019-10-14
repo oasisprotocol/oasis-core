@@ -3,7 +3,7 @@
 Oasis Labs is building the next generation blockchain technology for scalable,
 privacy-preserving, and distributed applications/services.
 
-Thank you for your interest in contributing to Ekiden! There are many ways to
+Thank you for your interest in contributing to Oasis Core! There are many ways to
 contribute, and this document should not be considered encompassing.
 
 If you have a general question on how to use and deploy our software, please
@@ -36,7 +36,7 @@ most effective at receiving input and making progress.
 If the feature is **small** - a change to a single piece of functionality, or an
 addition that can be expressed clearly and succinctly in a few sentences, then
 the most appropriate place to propose it is as a [new Feature request](
-https://github.com/oasislabs/ekiden/issues/new?template=feature_request.md) in
+https://github.com/oasislabs/oasis-core/issues/new?template=feature_request.md) in
 this repository.
 Such issues will typically receive `p:3` priority in their initial triage.
 
@@ -64,16 +64,16 @@ issue or posting it to a public forum.
 We will get back to you promptly.
 
 Otherwise, please, first search between [existing issues in our repository](
-https://github.com/oasislabs/ekiden/issues) and if the issue is not reported
+https://github.com/oasislabs/oasis-core/issues) and if the issue is not reported
 yet, [file a new one](
-https://github.com/oasislabs/ekiden/issues/new?template=bug_report.md).
+https://github.com/oasislabs/oasis-core/issues/new?template=bug_report.md).
 
 ## Development
 
 ### Building
 
 Our development environment is documented in our [README](
-https://github.com/oasislabs/ekiden/blob/master/README.md).
+https://github.com/oasislabs/oasis-core/blob/master/README.md).
 
 ### Contributing Code
 
@@ -195,7 +195,7 @@ import (
   "github.com/opentracing/opentracing-go"
 
   // Internal imports.
-  "github.com/oasislabs/ekiden/go/common/crypto/hash"
+  "github.com/oasislabs/oasis-core/go/common/crypto/hash"
 )
 ```
 

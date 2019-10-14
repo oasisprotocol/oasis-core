@@ -16,16 +16,16 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/common/ctxsync"
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/node"
-	"github.com/oasislabs/ekiden/go/common/sgx/aesm"
-	cias "github.com/oasislabs/ekiden/go/common/sgx/ias"
-	"github.com/oasislabs/ekiden/go/common/version"
-	"github.com/oasislabs/ekiden/go/ias"
-	"github.com/oasislabs/ekiden/go/worker/common/host/protocol"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/ctxsync"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/sgx/aesm"
+	cias "github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	"github.com/oasislabs/oasis-core/go/common/version"
+	"github.com/oasislabs/oasis-core/go/ias"
+	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
 const (
@@ -52,7 +52,7 @@ const (
 	// Path to bubblewrap sandbox.
 	workerBubblewrapBinary = "/usr/bin/bwrap"
 	// Worker hostname
-	workerHostname = "ekiden-worker"
+	workerHostname = "oasis-worker"
 
 	workerMountHostSocket = "/host.sock"
 	workerMountWorkerBin  = "/worker"
@@ -602,7 +602,7 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { //nolint: gocyclo
 	)
 
 	// Create a temporary worker directory.
-	workerDir, err := ioutil.TempDir("", "ekiden-worker")
+	workerDir, err := ioutil.TempDir("", "oasis-worker")
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: failed to create temporary directory")
 	}

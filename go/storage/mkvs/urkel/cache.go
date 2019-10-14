@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/hash"
-	db "github.com/oasislabs/ekiden/go/storage/mkvs/urkel/db/api"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	db "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
 )
 
 // cache handles the in-memory tree cache.

@@ -7,13 +7,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/ekiden/go/common/crypto/signature"
-	"github.com/oasislabs/ekiden/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 )
 
 func TestBlockIndexer(t *testing.T) {
 	// Create a new random temporary directory under /tmp.
-	dataDir, err := ioutil.TempDir("", "ekiden-roothash-block-idx-test_")
+	dataDir, err := ioutil.TempDir("", "oasis-roothash-block-idx-test_")
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(dataDir)
 

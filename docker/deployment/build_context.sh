@@ -11,27 +11,27 @@ set -euxo pipefail
 ###############
 dst=$1
 
-EKIDEN_UNSAFE_SKIP_AVR_VERIFY=1
-export EKIDEN_UNSAFE_SKIP_AVR_VERIFY
+OASIS_UNSAFE_SKIP_AVR_VERIFY=1
+export OASIS_UNSAFE_SKIP_AVR_VERIFY
 
-# Install ekiden-tools
+# Install oasis-core-tools
 cargo install --force --path tools
 
 # Build the worker, compute node and key manager
 make -C go
-cargo build -p ekiden-runtime-loader --release
+cargo build -p oasis-core-runtime-loader --release
 
 pushd keymanager-runtime
-    EKIDEN_UNSAFE_SKIP_KM_POLICY=1 cargo build --release
+    OASIS_UNSAFE_SKIP_KM_POLICY=1 cargo build --release
 
-    unset EKIDEN_UNSAFE_SKIP_KM_POLICY
+    unset OASIS_UNSAFE_SKIP_KM_POLICY
     cargo build --release --target x86_64-fortanix-unknown-sgx
     cargo elf2sgxs --release
 popd
 
 tar -czf "$dst" \
-    go/ekiden/ekiden \
-    target/release/ekiden-runtime-loader \
-    target/release/ekiden-keymanager-runtime \
-    target/x86_64-fortanix-unknown-sgx/release/ekiden-keymanager-runtime.sgxs \
+    go/oasis-node/oasis-node \
+    target/release/oasis-core-runtime-loader \
+    target/release/oasis-core-keymanager-runtime \
+    target/x86_64-fortanix-unknown-sgx/release/oasis-core-keymanager-runtime.sgxs \
     docker/deployment/Dockerfile

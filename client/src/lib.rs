@@ -1,8 +1,8 @@
-//! Ekiden client library.
-extern crate ekiden_runtime;
+//! Oasis Core client library.
 extern crate futures;
 #[cfg(not(target_env = "sgx"))]
 extern crate grpcio;
+extern crate oasis_core_runtime;
 #[cfg(not(target_env = "sgx"))]
 extern crate protobuf;
 #[cfg(not(target_env = "sgx"))]

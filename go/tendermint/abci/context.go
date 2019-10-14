@@ -7,8 +7,8 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 // ContextType is a context type.
@@ -100,7 +100,7 @@ func (c *Context) GetEvents() []types.Event {
 
 	return []types.Event{
 		types.Event{
-			Type:       api.EventTypeEkiden,
+			Type:       api.EventTypeOasis,
 			Attributes: c.tags,
 		},
 	}

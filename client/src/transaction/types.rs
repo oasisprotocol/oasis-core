@@ -2,7 +2,7 @@
 use serde_bytes::ByteBuf;
 use serde_derive::{Deserialize, Serialize};
 
-use ekiden_runtime::common::{crypto::hash::Hash, roothash::Block};
+use oasis_core_runtime::common::{crypto::hash::Hash, roothash::Block};
 
 /// Special round number always referring to the latest round.
 pub const ROUND_LATEST: u64 = u64::max_value();

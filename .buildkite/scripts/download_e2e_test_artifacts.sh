@@ -12,14 +12,14 @@ set -euxo pipefail
 
 source .buildkite/scripts/common.sh
 
-# Ekiden node, worker and compute node.
-download_artifact ekiden go/ekiden 755
-download_artifact ekiden-test-runner go/ekiden-test-runner 755
-download_artifact ekiden-runtime-loader target/debug 755
+# Oasis node, test runner and runtime loader.
+download_artifact oasis-node go/oasis-node 755
+download_artifact oasis-test-runner go/oasis-test-runner 755
+download_artifact oasis-core-runtime-loader target/debug 755
 
 # Key manager runtime.
-download_artifact ekiden-keymanager-runtime.sgxs target/x86_64-fortanix-unknown-sgx/debug 755
-download_artifact ekiden-keymanager-runtime target/debug 755
+download_artifact oasis-core-keymanager-runtime.sgxs target/x86_64-fortanix-unknown-sgx/debug 755
+download_artifact oasis-core-keymanager-runtime target/debug 755
 
 # Test simple-keyvalue runtime and clients.
 download_artifact test-long-term-client target/debug 755

@@ -1,12 +1,12 @@
-# Ekiden
+# Oasis Core
 
-[![Build status](https://badge.buildkite.com/c9c541df92d421106cdf041e36fafe45677c5be63d330509d1.svg?branch=master)](https://buildkite.com/oasislabs/ekiden)
-[![Coverage Status](https://coveralls.io/repos/github/oasislabs/ekiden/badge.svg?t=HsLWgi)](https://coveralls.io/github/oasislabs/ekiden) Rust
-[![codecov](https://codecov.io/gh/oasislabs/ekiden/branch/master/graph/badge.svg?token=DqjRsufMqf)](https://codecov.io/gh/oasislabs/ekiden) Go
+[![Build status](https://badge.buildkite.com/c9c541df92d421106cdf041e36fafe45677c5be63d330509d1.svg?branch=master)](https://buildkite.com/oasislabs/oasis-core)
+[![Coverage Status](https://coveralls.io/repos/github/oasislabs/oasis-core/badge.svg?t=HsLWgi)](https://coveralls.io/github/oasislabs/oasis-core) Rust
+[![codecov](https://codecov.io/gh/oasislabs/oasis-core/branch/master/graph/badge.svg?token=DqjRsufMqf)](https://codecov.io/gh/oasislabs/oasis-core) Go
 
 ## Note
 
-* **Ekiden is in active development so all APIs, protocols and data structures
+* **Oasis Core is in active development so all APIs, protocols and data structures
   are subject to change.**
 * **The code has not yet been fully audited. For security issues and other
   security-related topics, see [Security](#security).**
@@ -19,7 +19,7 @@ See our [Contributing Guidelines](CONTRIBUTING.md).
 
 Read our [Security](SECURITY.md) document.
 
-## Developing and building the Ekiden system
+## Developing and building the system
 
 Prerequisites:
 
@@ -60,10 +60,10 @@ Prerequisites:
     go get golang.org/dl/go1.13
     go1.13 download
     ```
-  * instruct Ekiden to use this particular version of Go by setting the
-    `EKIDEN_GO` environment variable in your `~/.bashrc`:
+  * instruct the build system to use this particular version of Go by setting the
+    `OASIS_GO` environment variable in your `~/.bashrc`:
     ```
-    export EKIDEN_GO=go1.13
+    export OASIS_GO=go1.13
     ```
 
 * [protoc-gen-go](https://github.com/golang/protobuf).
@@ -74,9 +74,9 @@ Prerequisites:
   ```
 
   _NOTE: If you use a particular version of Go, i.e. the one set in
-  `EKIDEN_GO`, then install it with:_
+  `OASIS_GO`, then install it with:_
   ```
-  $EKIDEN_GO get github.com/golang/protobuf/protoc-gen-go
+  $OASIS_GO get github.com/golang/protobuf/protoc-gen-go
   ```
 
 * [Rust](https://www.rust-lang.org) and the nightly toolchain.
@@ -111,12 +111,12 @@ If for some reason you don't want or can't install the specified prerequisites o
 host system, you can use our development Docker image. This requires that you have a
 [recent version of Docker installed](https://docs.docker.com/install/).
 
-Ekiden development environment with all the dependencies preinstalled is available
+Oasis development environment with all the dependencies preinstalled is available
 in the `oasislabs/development:0.3.0` image. To run a container do something like the
 following in the top-level directory:
 ```
 docker run -t -i \
-  --name ekiden \
+  --name oasis-core \
   --security-opt apparmor:unconfined \
   --security-opt seccomp=unconfined \
   -v $(pwd):/code \
@@ -129,37 +129,37 @@ All the following commands can then be used from inside the container. See the
 Docker documentation for detailed instructions on working with Docker
 containers.
 
-## Unsafe non-SGX environment: Building and Running an Ekiden node
+## Unsafe non-SGX environment: Building and Running an Oasis node
 
-To build everything required for running an Ekiden node locally, simply execute
+To build everything required for running an Oasis node locally, simply execute
 in the top-level directory:
 ```
-export EKIDEN_UNSAFE_SKIP_AVR_VERIFY="1"
-export EKIDEN_UNSAFE_SKIP_KM_POLICY="1"
+export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
+export OASIS_UNSAFE_SKIP_KM_POLICY="1"
 make
 ```
 
-This will build all the required parts (build tools, Ekiden node, runtime
+This will build all the required parts (build tools, Oasis node, runtime
 libraries, runtime loader, key manager and test runtimes). The AVR and KM flags
 are supported on production SGX systems only and these features must be disabled
 in our environment.
 
 Next we specify how to run a simple network for development purposes. To start a
-simple Ekiden network as defined by [the default network fixture](go/ekiden-net-runner/fixtures/default.go)
+simple Oasis network as defined by [the default network fixture](go/oasis-net-runner/fixtures/default.go)
 running the `simple-keyvalue` test runtime, do:
 ```
-./go/ekiden-net-runner/ekiden-net-runner \
-  --net.ekiden.binary go/ekiden/ekiden \
+./go/oasis-net-runner/oasis-net-runner \
+  --net.node.binary go/oasis-node/oasis-node \
   --net.runtime.binary target/debug/simple-keyvalue \
-  --net.runtime.loader target/debug/ekiden-runtime-loader \
-  --net.keymanager.binary target/debug/ekiden-keymanager-runtime
+  --net.runtime.loader target/debug/oasis-core-runtime-loader \
+  --net.keymanager.binary target/debug/oasis-core-keymanager-runtime
 ```
 
 Wait for the network to start, there should be messages about nodes being started
 and at the end the following message should appear:
 ```
-level=info module=ekiden/net-runner caller=ekiden.go:319 ts=2019-10-03T10:47:30.776566482Z msg="network started"
-level=info module=net-runner caller=root.go:145 ts=2019-10-03T10:47:30.77662061Z msg="client node socket available" path=/tmp/ekiden-net-runner530668299/net-runner/network/client-0/internal.sock
+level=info module=oasis/net-runner caller=oasis.go:319 ts=2019-10-03T10:47:30.776566482Z msg="network started"
+level=info module=net-runner caller=root.go:145 ts=2019-10-03T10:47:30.77662061Z msg="client node socket available" path=/tmp/oasis-net-runner530668299/net-runner/network/client-0/internal.sock
 ```
 
 The `simple-keyvalue` runtime implements a key-value hash map in the enclave
@@ -167,7 +167,7 @@ and supports reading, writing, and fetching string values associated with the
 given key. To learn how to create your own runtime, see the sources of the
 example [here](tests/runtimes/simple-keyvalue).
 
-Finally, to test Ekiden node, we will run a test client written specifically
+Finally, to test Oasis node, we will run a test client written specifically
 for the `simple-keyvalue` runtime. The client sends a few keys with associated
 values and fetches them back over RPC defined in the runtime's API. Execute the
 client as follows (substituting the socket path from your log output) in a different
@@ -175,32 +175,32 @@ terminal:
 ```
 ./target/debug/simple-keyvalue-client \
   --runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
-  --node-address unix:/tmp/ekiden-net-runner530668299/net-runner/network/client-0/internal.sock
+  --node-address unix:/tmp/oasis-net-runner530668299/net-runner/network/client-0/internal.sock
 ```
 
-By default, Ekiden node is configured with a 30-second epoch, so you may
+By default, Oasis node is configured with a 30-second epoch, so you may
 initially need to wait for the first epoch to pass before the test client will
 make any progress. For more information on writing your own client, see the
 `simple-keyvalue` client sources [here](tests/clients/simple-keyvalue).
 
-## SGX environment: Building and Running an Ekiden node
+## SGX environment: Building and Running an Oasis node
 
 Compilation procedure under SGX environment is similiar to the non-SGX with
 slightly different environmental variables set:
 ```
-export EKIDEN_UNSAFE_SKIP_AVR_VERIFY="1"
-export EKIDEN_UNSAFE_KM_POLICY_KEYS="1"
-export EKIDEN_TEE_HARDWARE=intel-sgx
+export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
+export OASIS_UNSAFE_KM_POLICY_KEYS="1"
+export OASIS_TEE_HARDWARE=intel-sgx
 make
 ```
 
-The AVR flag is there because we are running Ekiden in a local development
+The AVR flag is there because we are running a node in a local development
 environment and we will not do any attestation with Intel's remote servers. The
 KM policy keys flag allows testing keys to be used while verifying the security
 policy of the node. TEE hardware flag denotes the trusted execution environment
-engine for running the Ekiden node and the tests below.
+engine for running the Oasis node and the tests below.
 
-To run Ekiden under SGX make sure:
+To run an Oasis node under SGX make sure:
 * Your hardware has SGX support.
 * You either explicitly enabled SGX in BIOS or made a
   `sgx_cap_enable_device()` system call, if SGX is in software controlled state.
@@ -221,14 +221,14 @@ To run Ekiden under SGX make sure:
 Run `sgx-detect` (part of fortanix rust tools) to verify that everything is
 configured correctly.
 
-Finally, to run an Ekiden node under SGX follow the same steps as for non-SGX,
-except the `ekiden-net-runner` invocation:
+Finally, to run an Oasis node under SGX follow the same steps as for non-SGX,
+except the `oasis-net-runner` invocation:
 ```
-./go/ekiden-net-runner/ekiden-net-runner \
-  --net.ekiden.binary go/ekiden/ekiden \
+./go/oasis-net-runner/oasis-net-runner \
+  --net.node.binary go/oasis-node/oasis-node \
   --net.runtime.binary target/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs \
-  --net.runtime.loader target/debug/ekiden-runtime-loader \
-  --net.keymanager.binary target/x86_64-fortanix-unknown-sgx/debug/ekiden-keymanager-runtime.sgxs
+  --net.runtime.loader target/debug/oasis-core-runtime-loader \
+  --net.keymanager.binary target/x86_64-fortanix-unknown-sgx/debug/oasis-core-keymanager-runtime.sgxs
 ```
 
 ## Running tests and benchmarks
@@ -250,14 +250,14 @@ To run all tests:
 make test
 ```
 
-Do not forget to set `EKIDEN_TEE_HARDWARE` flag (see above), if you want to
+Do not forget to set `OASIS_TEE_HARDWARE` flag (see above), if you want to
 execute tests under SGX.
 
 ## Directories
 
 * `client`: Client library for talking with the runtimes.
 * `docker`: Docker environment definitions.
-* `go`: Ekiden node.
+* `go`: Oasis node.
 * `keymanager-client`: Client crate for the key manager.
 * `keymanager-runtime`: (INSECURE) key manager implementation.
 * `runtime`: The runtime library that simplifies writing SGX and non-SGX runtimes.

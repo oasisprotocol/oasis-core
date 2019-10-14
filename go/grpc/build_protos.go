@@ -17,7 +17,7 @@ import (
 
 // protoFiles is the vector of vectors containing the protobuf source file(s)
 // that will be passed to each invocation of protoc, relative to the
-// `ekiden/go/grpc` directory.
+// `oasis-core/go/grpc` directory.
 //
 // It is assumed that each proto file explicitly specifies the Go package
 // via the `option go_package` directive.

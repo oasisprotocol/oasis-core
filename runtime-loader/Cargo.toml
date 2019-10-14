@@ -1,5 +1,5 @@
 [package]
-name = "ekiden-runtime-loader"
+name = "oasis-core-runtime-loader"
 version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 edition = "2018"
@@ -12,5 +12,5 @@ clap = "2.29.1"
 failure = "0.1.5"
 
 [[bin]]
-name = "ekiden-runtime-loader"
+name = "oasis-core-runtime-loader"
 path ="bin/main.rs"

@@ -1,11 +1,11 @@
 //! Mock key manager client which stores everything locally.
 use std::{collections::HashMap, sync::Mutex};
 
-use ekiden_client::BoxFuture;
-use ekiden_keymanager_api::*;
-use ekiden_runtime::common::crypto::signature::Signature;
 use futures::{future, Future};
 use io_context::Context;
+use oasis_core_client::BoxFuture;
+use oasis_core_keymanager_api::*;
+use oasis_core_runtime::common::crypto::signature::Signature;
 
 use super::KeyManagerClient;
 

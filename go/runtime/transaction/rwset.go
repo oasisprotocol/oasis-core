@@ -3,7 +3,7 @@ package transaction
 import (
 	"bytes"
 
-	"github.com/oasislabs/ekiden/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 )
 
 var (

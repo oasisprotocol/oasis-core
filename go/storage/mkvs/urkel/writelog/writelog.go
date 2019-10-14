@@ -3,7 +3,7 @@ package writelog
 import (
 	"encoding/json"
 
-	"github.com/oasislabs/ekiden/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 )
 
 // WriteLog is a write log.

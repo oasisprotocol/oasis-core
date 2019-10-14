@@ -1,17 +1,17 @@
-//! Connection to the Ekiden node.
+//! Connection to an Oasis node.
 use std::sync::Arc;
 
 use grpcio::{Channel, ChannelBuilder, Environment};
 
-/// An Ekiden node connection.
+/// An Oasis node connection.
 pub struct Node {
     channel: Channel,
 }
 
 impl Node {
-    /// Create a new Ekiden node connection.
+    /// Create a new Oasis node connection.
     pub fn new(environment: Arc<Environment>, address: &str) -> Self {
-        // Create a gRPC channel with the Ekiden node.
+        // Create a gRPC channel with the Oasis node.
         let channel = ChannelBuilder::new(environment)
             .max_receive_message_len(i32::max_value())
             .max_send_message_len(i32::max_value())
@@ -20,7 +20,7 @@ impl Node {
         Self { channel }
     }
 
-    /// gRPC channel to Ekiden node.
+    /// gRPC channel to Oasis node.
     pub fn channel(&self) -> Channel {
         self.channel.clone()
     }

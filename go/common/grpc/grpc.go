@@ -22,8 +22,8 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 
-	"github.com/oasislabs/ekiden/go/common/logging"
-	"github.com/oasislabs/ekiden/go/common/service"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/service"
 )
 
 const (
@@ -43,21 +43,21 @@ var (
 
 	grpcCalls = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_grpc_calls",
+			Name: "oasis_grpc_calls",
 			Help: "Number of gRPC calls.",
 		},
 		[]string{"call"},
 	)
 	grpcLatency = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "ekiden_grpc_latency",
+			Name: "oasis_grpc_latency",
 			Help: "gRPC call latency.",
 		},
 		[]string{"call"},
 	)
 	grpcStreamWrites = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "ekiden_grpc_stream_writes",
+			Name: "oasis_grpc_stream_writes",
 			Help: "Number of gRPC stream writes",
 		},
 		[]string{"call"},

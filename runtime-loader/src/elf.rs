@@ -11,7 +11,7 @@ pub struct ElfLoader;
 impl Loader for ElfLoader {
     fn run(&self, filename: String, host_socket: String) -> Fallible<()> {
         Command::new(filename)
-            .env("EKIDEN_WORKER_HOST", host_socket)
+            .env("OASIS_WORKER_HOST", host_socket)
             .spawn()?
             .wait()
             .map_err(|err| err.into())

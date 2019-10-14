@@ -6,11 +6,11 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/ekiden/go/common/logging"
-	epochtime "github.com/oasislabs/ekiden/go/epochtime/api"
-	registry "github.com/oasislabs/ekiden/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
 
-	dbgPB "github.com/oasislabs/ekiden/go/grpc/dummydebug"
+	dbgPB "github.com/oasislabs/oasis-core/go/grpc/dummydebug"
 )
 
 var (
