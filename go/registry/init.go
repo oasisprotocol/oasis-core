@@ -17,6 +17,10 @@ import (
 )
 
 const (
+	// CfgDebugAllowUnroutableAddresses allows unroutable addresses in node
+	// registration.
+	CfgDebugAllowUnroutableAddresses = "registry.debug.allow_unroutable_addresses"
+
 	cfgDebugAllowRuntimeRegistration = "registry.debug.allow_runtime_registration"
 	cfgDebugBypassStake              = "registry.debug.bypass_stake" // nolint: gosec
 )
@@ -46,12 +50,14 @@ func New(ctx context.Context, timeSource epochtime.Backend, tmService service.Te
 
 func flagsToConfig() *api.Config {
 	return &api.Config{
+		DebugAllowUnroutableAddresses: viper.GetBool(CfgDebugAllowUnroutableAddresses),
 		DebugAllowRuntimeRegistration: viper.GetBool(cfgDebugAllowRuntimeRegistration),
 		DebugBypassStake:              viper.GetBool(cfgDebugBypassStake),
 	}
 }
 
 func init() {
+	Flags.Bool(CfgDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
 	Flags.Bool(cfgDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
 	Flags.Bool(cfgDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 

@@ -377,6 +377,7 @@ func (net *Network) startOasisNode(
 	if len(subCmd) == 0 {
 		extraArgs = extraArgs.
 			appendIASProxy(net.iasProxy).
+			registryDebugAllowUnroutableAddresses().
 			tendermintDebugAddrBookLenient()
 	}
 	args := append([]string{}, subCmd...)

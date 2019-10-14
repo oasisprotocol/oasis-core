@@ -85,3 +85,7 @@ func (ph *p2pHandle) stop() error {
 
 	return nil
 }
+
+func init() {
+	p2p.DebugForceAllowUnroutableAddresses()
+}

@@ -22,10 +22,23 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/version"
+	registry "github.com/oasislabs/oasis-core/go/registry"
+	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/configparser"
 )
 
-var protocolName = core.ProtocolID("/p2p/oasislabs.com/committee/" + version.CommitteeProtocol.String())
+var (
+	protocolName = core.ProtocolID("/p2p/oasislabs.com/committee/" + version.CommitteeProtocol.String())
+
+	forceAllowUnroutableAddresses bool
+)
+
+// DebugForceAllowUnroutableAddresses exists entirely for the benefit
+// of the byzantine node, which doesn't use viper properly to configure
+// various subcomponent behavior.
+func DebugForceAllowUnroutableAddresses() {
+	forceAllowUnroutableAddresses = true
+}
 
 // Handler is a handler for P2P messages.
 type Handler interface {
@@ -87,6 +100,11 @@ func (p *P2P) Info() node.P2PInfo {
 		addrs = p.registerAddresses
 	}
 
+	allowUnroutable := viper.GetBool(registry.CfgDebugAllowUnroutableAddresses)
+	if forceAllowUnroutableAddresses {
+		allowUnroutable = forceAllowUnroutableAddresses
+	}
+
 	var addresses []node.Address
 	for _, v := range addrs {
 		netAddr, err := manet.ToNetAddr(v)
@@ -94,7 +112,12 @@ func (p *P2P) Info() node.P2PInfo {
 			panic(err)
 		}
 		tcpAddr := (netAddr).(*net.TCPAddr)
-		addresses = append(addresses, node.Address{TCPAddr: *tcpAddr})
+		nodeAddr := node.Address{TCPAddr: *tcpAddr}
+		if err := registryAPI.VerifyAddress(nodeAddr, allowUnroutable); err != nil {
+			continue
+		}
+
+		addresses = append(addresses, nodeAddr)
 	}
 
 	id, err := peerIDToPublicKey(p.host.ID())
