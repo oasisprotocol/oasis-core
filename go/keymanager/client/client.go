@@ -36,8 +36,8 @@ const (
 
 	kmEndpoint = "key-manager"
 
-	maxRetryElapsedTime = 5 * time.Second
-	maxRetryInterval    = 1 * time.Second
+	retryInterval = 1 * time.Second
+	maxRetries    = 15
 )
 
 var (
@@ -113,21 +113,23 @@ func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, 
 		return nil, ErrKeyManagerNotAvailable
 	}
 
-	var resp []byte
+	var (
+		resp       []byte
+		numRetries int
+	)
 	call := func() error {
 		var err error
 		resp, err = st.client.CallEnclave(ctx, data)
-		if status.Code(err) == codes.PermissionDenied {
+		if status.Code(err) == codes.PermissionDenied && numRetries < maxRetries {
 			// Calls can fail around epoch transitions, as the access policy
-			// is being updated, so we must retry.
+			// is being updated, so we must retry (up to maxRetries).
+			numRetries++
 			return err
 		}
 		return backoff.Permanent(err)
 	}
 
-	retry := backoff.NewExponentialBackOff()
-	retry.MaxInterval = maxRetryInterval
-	retry.MaxElapsedTime = maxRetryElapsedTime
+	retry := backoff.NewConstantBackOff(retryInterval)
 	err := backoff.Retry(call, backoff.WithContext(retry, ctx))
 
 	return resp, err
