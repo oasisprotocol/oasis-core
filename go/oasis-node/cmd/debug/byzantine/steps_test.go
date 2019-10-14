@@ -14,5 +14,6 @@ func TestFakeCapabilitySGX(t *testing.T) {
 	require.NoError(t, err, "initFakeCapabilitiesSGX failed")
 
 	ias.SetSkipVerify()
+	ias.SetAllowDebugEnclaves()
 	require.NoError(t, fakeCapabilitiesSGX.TEE.Verify(time.Now()), "fakeCapabilitiesSGX not valid")
 }

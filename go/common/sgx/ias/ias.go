@@ -101,6 +101,10 @@ func (e *httpEndpoint) VerifyEvidence(ctx context.Context, quoteBinary, pseManif
 		return nil, nil, nil, fmt.Errorf("ias: invalid nonce length")
 	}
 
+	if err := quote.Verify(); err != nil {
+		return nil, nil, nil, err
+	}
+
 	// Encode the payload in the format that IAS wants.
 	reqPayload, err := json.Marshal(&iasEvidencePayload{
 		ISVEnclaveQuote: quoteBinary,
@@ -253,7 +257,8 @@ func NewIASEndpoint(cfg *EndpointConfig) (Endpoint, error) {
 	if cfg.DebugIsMock {
 		logger.Warn("DebugSkipVerify set, VerifyEvidence calls will be mocked")
 
-		SetSkipVerify() // Intel isn't signing anything.
+		SetSkipVerify()         // Intel isn't signing anything.
+		SetAllowDebugEnclaves() // Debug enclaves are used for testing.
 		return &mockEndpoint{
 			spidInfo: SPIDInfo{
 				SPID:               spidBin,

@@ -13,6 +13,8 @@ dst=$1
 
 OASIS_UNSAFE_SKIP_AVR_VERIFY=1
 export OASIS_UNSAFE_SKIP_AVR_VERIFY
+OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES=1
+export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES
 
 # Install oasis-core-tools
 cargo install --force --path tools

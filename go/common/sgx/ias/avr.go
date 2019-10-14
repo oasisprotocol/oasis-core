@@ -19,7 +19,10 @@ import (
 
 const nonceMaxLen = 32
 
-var unsafeSkipVerify bool
+var (
+	unsafeSkipVerify         bool
+	unsafeAllowDebugEnclaves bool
+)
 
 // TimestampFormat is the format of the AVR timestamp, suitable for use with
 // time.Parse.
@@ -404,6 +407,18 @@ func validateAVRSignature(data, encodedSignature, encodedCertChain []byte, trust
 // of the process' lifetime.
 func SetSkipVerify() {
 	unsafeSkipVerify = true
+}
+
+// SetAllowDebugEnclave will enable running and communicating with enclaves
+// with debug flag enabled in AVR for the remainder of the process' lifetime.
+func SetAllowDebugEnclaves() {
+	unsafeAllowDebugEnclaves = true
+}
+
+// UnsetAllowDebugEnclave will disable running and communicating with enclaves
+// with debug flag enabled in AVR for the remainder of the process' lifetime.
+func UnsetAllowDebugEnclaves() {
+	unsafeAllowDebugEnclaves = false
 }
 
 // BuildMrSignerBlacklist builds the MRSIGNER blacklist.

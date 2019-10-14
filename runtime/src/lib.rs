@@ -84,6 +84,9 @@ lazy_static! {
             // AVR signature verification MUST be enabled.
             let maybe_secure = maybe_secure && option_env!("OASIS_UNSAFE_SKIP_AVR_VERIFY").is_none();
 
+            // Disallow debug enclaves MUST be enabled.
+            let maybe_secure = maybe_secure && option_env!("OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES").is_none();
+
             // IAS `GROUP_OUT_OF_DATE` and `CONFIGRUATION_NEEDED` responses
             // MUST count as IAS failure.
             //
