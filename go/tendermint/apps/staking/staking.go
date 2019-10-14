@@ -75,22 +75,10 @@ type thresholdUpdate struct {
 	v staking.Quantity
 }
 
-type thresholdUpdates []thresholdUpdate
-
-func (u thresholdUpdates) Len() int           { return len(u) }
-func (u thresholdUpdates) Swap(i, j int)      { u[i], u[j] = u[j], u[i] }
-func (u thresholdUpdates) Less(i, j int) bool { return u[i].k < u[j].k }
-
 type ledgerUpdate struct {
 	id      signature.PublicKey
 	account *ledgerEntry
 }
-
-type ledgerUpdates []ledgerUpdate
-
-func (u ledgerUpdates) Len() int           { return len(u) }
-func (u ledgerUpdates) Swap(i, j int)      { u[i], u[j] = u[j], u[i] }
-func (u ledgerUpdates) Less(i, j int) bool { return bytes.Compare(u[i].id[:], u[j].id[:]) < 0 }
 
 func (app *stakingApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := &doc.Staking
@@ -111,7 +99,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	state.setAcceptableTransferPeers(st.AcceptableTransferPeers)
 
 	if st.Thresholds != nil {
-		var ups thresholdUpdates
+		var ups []thresholdUpdate
 		for k, v := range st.Thresholds {
 			if !v.IsValid() {
 				app.logger.Error("InitChain: invalid threshold",
@@ -124,7 +112,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		}
 
 		// Make sure that we apply threshold updates in a canonical order.
-		sort.Stable(ups)
+		sort.SliceStable(ups, func(i, j int) bool { return ups[i].k < ups[j].k })
 		for _, u := range ups {
 			state.setThreshold(u.k, &u.v)
 		}
@@ -140,7 +128,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		return errors.Wrap(err, "staking/tendermint: failed to add common pool")
 	}
 
-	var ups ledgerUpdates
+	var ups []ledgerUpdate
 	for k, v := range st.Ledger {
 		var id signature.PublicKey
 		_ = id.UnmarshalBinary(k[:])
@@ -182,7 +170,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	}
 
 	// Make sure that we apply ledger updates in a canonical order.
-	sort.Stable(ups)
+	sort.SliceStable(ups, func(i, j int) bool { return bytes.Compare(ups[i].id[:], ups[j].id[:]) < 0 })
 	for _, u := range ups {
 		state.setAccount(u.id, u.account)
 	}
