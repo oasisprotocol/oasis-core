@@ -1,0 +1,11 @@
+{
+  "total_supply": "1",
+  "acceptable_transfer_peers": {
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=": true
+  },
+  "ledger": {
+    "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=": {
+      "general_balance": "1"
+    }
+  }
+}
