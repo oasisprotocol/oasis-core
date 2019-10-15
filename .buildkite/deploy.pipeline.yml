@@ -8,7 +8,6 @@ docker_plugin: &docker_plugin_configuration
     workdir: /workdir
     volumes:
       - .:/workdir
-      - /var/lib/buildkite-agent/.ssh:/root/.ssh
       # Shared Rust incremental compile caches.
       - /tmp/cargo_ic/release:/workdir/target/release/incremental
       - /tmp/cargo_ic/release_sgx:/workdir/target/x86_64-unknown-linux-sgx/release/incremental
@@ -24,8 +23,7 @@ docker_plugin: &docker_plugin_configuration
       - "LANG=C.UTF-8"
       - "CARGO_TARGET_DIR=/workdir/target"
       - "CARGO_INSTALL_ROOT=/root/.cargo"
-      - "GOPROXY=https://athens.ops.oasiscloud.io/"
-      - "GONOSUMDB=github.com/oasislabs"
+      - "GOPROXY=https://proxy.golang.org/"
     propagate-environment: true
 
 steps:
@@ -36,9 +34,6 @@ steps:
   - label: Build artifacts
     branches: master devnet2
     command:
-      - .buildkite/scripts/setup_gitconfig.sh
-      - eval $(ssh-agent -s)
-      - ssh-add
       - docker/deployment/build_context.sh context.tar.gz
     artifact_paths:
       - context.tar.gz

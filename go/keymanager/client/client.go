@@ -3,17 +3,22 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"sync"
+	"time"
 
+	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
@@ -30,6 +35,9 @@ const (
 	cfgDebugClientCert    = "keymanager.debug.client.certificate"
 
 	kmEndpoint = "key-manager"
+
+	retryInterval = 1 * time.Second
+	maxRetries    = 15
 )
 
 var (
@@ -44,6 +52,8 @@ type Client struct {
 	sync.RWMutex
 
 	logger *logging.Logger
+
+	nodeIdentity *identity.Identity
 
 	backend  api.Backend
 	registry registry.Backend
@@ -75,7 +85,7 @@ func (st *clientState) kill() {
 // CallRemote calls a runtime-specific key manager via remote EnclaveRPC.
 func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, data []byte) ([]byte, error) {
 	if c.debugClient != nil {
-		return c.debugClient.CallEnclave(ctx, data)
+		return c.debugClient.CallEnclave(ctx, data, runtimeID)
 	}
 
 	c.logger.Debug("remote query",
@@ -103,7 +113,26 @@ func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, 
 		return nil, ErrKeyManagerNotAvailable
 	}
 
-	return st.client.CallEnclave(ctx, data)
+	var (
+		resp       []byte
+		numRetries int
+	)
+	call := func() error {
+		var err error
+		resp, err = st.client.CallEnclave(ctx, data, runtimeID)
+		if status.Code(err) == codes.PermissionDenied && numRetries < maxRetries {
+			// Calls can fail around epoch transitions, as the access policy
+			// is being updated, so we must retry (up to maxRetries).
+			numRetries++
+			return err
+		}
+		return backoff.Permanent(err)
+	}
+
+	retry := backoff.NewConstantBackOff(retryInterval)
+	err := backoff.Retry(call, backoff.WithContext(retry, ctx))
+
+	return resp, err
 }
 
 func (c *Client) worker() {
@@ -206,7 +235,12 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 		}
 	}
 
-	creds := credentials.NewClientTLSFromCert(certPool, identity.CommonName)
+	// Open a gRPC connection using the node's TLS certificate.
+	creds := credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{*c.nodeIdentity.TLSCertificate},
+		RootCAs:      certPool,
+		ServerName:   identity.CommonName,
+	})
 	opts := grpc.WithTransportCredentials(creds)
 
 	// TODO: This probably could skip updating the connection sometimes.
@@ -260,11 +294,12 @@ func (c *Client) updateNodes(nodeList []*node.Node) {
 }
 
 // New creates a new key manager client instance.
-func New(backend api.Backend, registryBackend registry.Backend) (*Client, error) {
+func New(backend api.Backend, registryBackend registry.Backend, nodeIdentity *identity.Identity) (*Client, error) {
 	c := &Client{
-		logger: logging.GetLogger("keymanager/client"),
-		state:  make(map[signature.MapKey]*clientState),
-		kmMap:  make(map[signature.MapKey]signature.PublicKey),
+		logger:       logging.GetLogger("keymanager/client"),
+		nodeIdentity: nodeIdentity,
+		state:        make(map[signature.MapKey]*clientState),
+		kmMap:        make(map[signature.MapKey]signature.PublicKey),
 	}
 
 	if debugAddress := viper.GetString(cfgDebugClientAddress); debugAddress != "" {

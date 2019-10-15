@@ -6,7 +6,6 @@ docker_plugin_default_config: &docker_plugin_default_config
   always_pull: true
   workdir: /workdir
   volumes:
-    - /var/lib/buildkite-agent/.ssh:/root/.ssh
     - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
     - /var/lib/buildkite-agent/.codecov:/root/.codecov
     # Shared Rust incremental compile caches.
@@ -29,8 +28,7 @@ docker_plugin_default_config: &docker_plugin_default_config
     - "LANG=C.UTF-8"
     - "CARGO_TARGET_DIR=/tmp/artifacts"
     - "CARGO_INSTALL_ROOT=/root/.cargo"
-    - "GOPROXY=https://athens.ops.oasiscloud.io/"
-    - "GONOSUMDB=github.com/oasislabs"
+    - "GOPROXY=https://proxy.golang.org/"
   propagate-environment: true
   unconfined: true
 
@@ -46,8 +44,7 @@ docker_plugin_sgx_config: &docker_plugin_sgx_config
     - "LANG=C.UTF-8"
     - "CARGO_TARGET_DIR=/tmp/artifacts"
     - "CARGO_INSTALL_ROOT=/root/.cargo"
-    - "GOPROXY=https://athens.ops.oasiscloud.io/"
-    - "GONOSUMDB=github.com/oasislabs"
+    - "GOPROXY=https://proxy.golang.org/"
 
 docker_plugin: &docker_plugin
   oasislabs/docker#v3.0.1-oasis1:
@@ -68,7 +65,6 @@ steps:
 
   - label: Lint Go node
     command:
-      - .buildkite/scripts/setup_gitconfig.sh
       - .buildkite/go/lint.sh
     agents:
       buildkite_agent_size: large
@@ -87,7 +83,6 @@ steps:
   # .buildkite/scripts/download_utils.sh.
   - label: Build Go node
     command:
-      - .buildkite/scripts/setup_gitconfig.sh
       - .buildkite/go/build.sh
 
       # Upload the built artifacts.
@@ -104,7 +99,6 @@ steps:
   # .buildkite/scripts/download_utils.sh.
   - label: Build Rust runtime loader
     command:
-      - .buildkite/scripts/setup_gitconfig.sh
       - .buildkite/rust/build_generic.sh /workdir -p oasis-core-runtime-loader
       - .buildkite/rust/build_generic.sh /workdir -p test-long-term-client
       - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-client
@@ -133,7 +127,6 @@ steps:
   # .buildkite/rust/test_runtime_and_gateway.sh and .buildkite/scripts/download_utils.sh.
   - label: Build key manager runtime
     command:
-      - .buildkite/scripts/setup_gitconfig.sh
       - .buildkite/rust/build_runtime.sh keymanager-runtime
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
       - .buildkite/rust/build_runtime.sh tests/runtimes/staking-arbitrary
@@ -157,7 +150,6 @@ steps:
   ###########
   - label: Test Rust crates
     command:
-      - .buildkite/scripts/setup_gitconfig.sh
       # Build storage interoperability test helpers first.
       - make -C go urkel-test-helpers
       - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers)
@@ -176,7 +168,6 @@ steps:
   #####################################
   - label: Test Go node
     command:
-      - .buildkite/scripts/setup_gitconfig.sh
       - .buildkite/go/test_and_coverage.sh
     plugins:
       <<: *docker_plugin
@@ -224,7 +215,6 @@ steps:
   - label: Coverage Rust crates
     branches: master
     command:
-      - .buildkite/scripts/setup_gitconfig.sh
       - .buildkite/rust/coverage.sh
     agents:
       buildkite_agent_size: large

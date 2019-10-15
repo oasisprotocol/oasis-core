@@ -54,10 +54,12 @@ trait Transport: Send + Sync {
         ctx: Context,
         session_id: types::SessionID,
         data: Vec<u8>,
+        untrusted_plaintext: String,
     ) -> BoxFuture<Vec<u8>> {
         // Frame message.
         let frame = types::Frame {
             session: session_id,
+            untrusted_plaintext: untrusted_plaintext,
             payload: data,
         };
 
@@ -306,7 +308,7 @@ impl RpcClient {
             Box::new(
                 inner
                     .transport
-                    .write_message(ctx, inner.session_id, buffer)
+                    .write_message(ctx, inner.session_id, buffer, String::new())
                     .and_then(move |data| -> BoxFuture<()> {
                         let mut session = inner.session.lock().unwrap();
                         let mut buffer = vec![];
@@ -319,7 +321,7 @@ impl RpcClient {
                         Box::new(
                             inner
                                 .transport
-                                .write_message(ctx, inner.session_id, buffer)
+                                .write_message(ctx, inner.session_id, buffer, String::new())
                                 .map(|_| ()),
                         )
                     })
@@ -347,7 +349,7 @@ impl RpcClient {
         Box::new(
             inner
                 .transport
-                .write_message(ctx, inner.session_id, buffer)
+                .write_message(ctx, inner.session_id, buffer, String::new())
                 .and_then(move |data| {
                     // Verify that session is closed.
                     let mut session = inner.session.lock().unwrap();
@@ -371,6 +373,7 @@ impl RpcClient {
         ctx: Context,
         request: types::Request,
     ) -> BoxFuture<types::Response> {
+        let method = request.method.clone();
         let msg = types::Message::Request(request);
         let mut session = inner.session.lock().unwrap();
         let mut buffer = vec![];
@@ -383,7 +386,7 @@ impl RpcClient {
         Box::new(
             inner
                 .transport
-                .write_message(ctx, inner.session_id, buffer)
+                .write_message(ctx, inner.session_id, buffer, method)
                 .and_then(move |data| {
                     let mut session = inner.session.lock().unwrap();
                     let msg = session

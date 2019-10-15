@@ -429,7 +429,7 @@ impl Dispatcher {
         };
 
         let protocol_response;
-        if let Some((session_id, session_info, message)) = result {
+        if let Some((session_id, session_info, message, untrusted_plaintext)) = result {
             // Dispatch request.
             assert!(
                 buffer.is_empty(),
@@ -438,6 +438,21 @@ impl Dispatcher {
 
             match message {
                 RpcMessage::Request(req) => {
+                    // First make sure that the untrusted_plaintext matches
+                    // the request's method!
+                    if untrusted_plaintext != req.method {
+                        error!(self.logger, "Request methods don't match!";
+                            "untrusted_plaintext" => ?untrusted_plaintext,
+                            "method" => ?req.method
+                        );
+                        let err_reponse = Body::Error {
+                            message: "Request's method doesn't match untrusted_plaintext copy."
+                                .to_string(),
+                        };
+                        protocol.send_response(id, err_reponse).unwrap();
+                        return;
+                    }
+
                     // Request, dispatch.
                     let ctx = ctx.freeze();
                     let read_syncer = HostReadSyncer::new(protocol.clone());

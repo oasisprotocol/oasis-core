@@ -23,7 +23,7 @@ source .buildkite/rust/common.sh
 ###############
 # Optional args
 ###############
-path_to_coveralls_api_token=${1:-~/.coveralls/ekiden_api_token}
+path_to_coveralls_api_token=${1:-~/.coveralls/oasis_core_api_token}
 
 ############
 # Local vars
