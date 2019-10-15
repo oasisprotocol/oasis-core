@@ -557,6 +557,7 @@ func (app *registryApplication) registerNode(
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("RegisterNode: registered",
 			"node", newNode,
+			"roles", newNode.Roles,
 		)
 
 		ctx.EmitData(&Output{
