@@ -8,11 +8,11 @@ use std::sync::Arc;
 
 use clap::{value_t_or_exit, App, Arg};
 use grpcio::EnvBuilder;
+use tokio::runtime::Runtime;
 
 use oasis_core_client::{create_txn_api_client, Node, TxnClient};
 use oasis_core_runtime::common::{crypto::signature::PublicKey, runtime::RuntimeId};
 use staking_arbitrary_api::{with_api, AccountAmount};
-use tokio::runtime::Runtime;
 
 with_api! {
     create_txn_api_client!(StakingArbitraryClient, api);
