@@ -4,12 +4,34 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Maximum message size.
 const maxMessageSize = 104857600 // 100MB
 
-var errMessageTooLarge = errors.New("codec: message too large")
+var (
+	errMessageTooLarge = errors.New("codec: message too large")
+
+	codecValueSize = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "oasis_codec_size",
+			Help: "CBOR codec message size",
+		},
+		[]string{"call"},
+	)
+
+	codecCollectors = []prometheus.Collector{
+		codecValueSize,
+	}
+
+	labelRead  = prometheus.Labels{"call": "read"}
+	labelWrite = prometheus.Labels{"call": "write"}
+
+	metricsOnce sync.Once
+)
 
 // MessageReader is a reader wrapper that decodes CBOR-encoded Message structures.
 type MessageReader struct {
@@ -25,6 +47,7 @@ func (c *MessageReader) Read(msg interface{}) error {
 	}
 
 	length := binary.BigEndian.Uint32(rawLength)
+	codecValueSize.With(labelRead).Observe(float64(length))
 	if length > maxMessageSize {
 		return errMessageTooLarge
 	}
@@ -52,13 +75,15 @@ type MessageWriter struct {
 func (c *MessageWriter) Write(msg interface{}) error {
 	// Encode into CBOR.
 	data := Marshal(msg)
-	if len(data) > maxMessageSize {
+	length := len(data)
+	codecValueSize.With(labelWrite).Observe(float64(length))
+	if length > maxMessageSize {
 		return errMessageTooLarge
 	}
 
 	// Write 32-bit length prefix and encoded data.
 	rawLength := make([]byte, 4)
-	binary.BigEndian.PutUint32(rawLength, uint32(len(data)))
+	binary.BigEndian.PutUint32(rawLength, uint32(length))
 	if _, err := c.writer.Write(rawLength); err != nil {
 		return err
 	}
@@ -77,6 +102,10 @@ type MessageCodec struct {
 
 // NewMessageCodec constructs a new Message encoder/decoder.
 func NewMessageCodec(rw io.ReadWriter) *MessageCodec {
+	metricsOnce.Do(func() {
+		prometheus.MustRegister(codecCollectors...)
+	})
+
 	return &MessageCodec{
 		MessageReader: MessageReader{reader: rw},
 		MessageWriter: MessageWriter{writer: rw},
