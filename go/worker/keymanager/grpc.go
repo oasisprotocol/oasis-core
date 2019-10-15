@@ -21,7 +21,7 @@ type grpcServer struct {
 func (s *grpcServer) CallEnclave(ctx context.Context, req *pb.CallEnclaveRequest) (*pb.CallEnclaveResponse, error) {
 	if mustAllow := s.w.mustAllowAccess(ctx, req.Payload); !mustAllow {
 		var ns common.Namespace
-		copy(ns[:], s.w.runtimeID)
+		copy(ns[:], req.Runtime)
 
 		if err := s.CheckAccessAllowed(ctx, accessctl.Action("CallEnclave"), ns); err != nil {
 			return nil, err

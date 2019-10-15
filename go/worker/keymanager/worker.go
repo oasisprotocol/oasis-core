@@ -587,8 +587,7 @@ func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committee
 		kmNodesPolicy.AddRulesForNodeRoles(&policy, kmNodes, node.RoleKeyManager)
 	}
 
-	// TODO: #2261 -- Add support for multiple runtimes using the same KM.
-	crw.w.grpcPolicy.SetAccessPolicy(policy, crw.w.runtimeID)
+	crw.w.grpcPolicy.SetAccessPolicy(policy, crw.node.RuntimeID)
 	crw.w.logger.Debug("worker/keymanager: new access policy in effect", "policy", policy)
 }
 

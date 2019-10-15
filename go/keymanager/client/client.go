@@ -85,7 +85,7 @@ func (st *clientState) kill() {
 // CallRemote calls a runtime-specific key manager via remote EnclaveRPC.
 func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, data []byte) ([]byte, error) {
 	if c.debugClient != nil {
-		return c.debugClient.CallEnclave(ctx, data)
+		return c.debugClient.CallEnclave(ctx, data, runtimeID)
 	}
 
 	c.logger.Debug("remote query",
@@ -119,7 +119,7 @@ func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, 
 	)
 	call := func() error {
 		var err error
-		resp, err = st.client.CallEnclave(ctx, data)
+		resp, err = st.client.CallEnclave(ctx, data, runtimeID)
 		if status.Code(err) == codes.PermissionDenied && numRetries < maxRetries {
 			// Calls can fail around epoch transitions, as the access policy
 			// is being updated, so we must retry (up to maxRetries).

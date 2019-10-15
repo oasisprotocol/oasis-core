@@ -13,6 +13,8 @@ message CallEnclaveRequest {
     bytes payload = 1;
     // Endpoint identifier for cases where a single node supports multiple endpoints.
     string endpoint = 2;
+    // Runtime is the runtime ID.
+    bytes runtime = 3;
 }
 
 message CallEnclaveResponse {

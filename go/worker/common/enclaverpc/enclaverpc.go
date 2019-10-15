@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	erpcGrpc "github.com/oasislabs/oasis-core/go/grpc/enclaverpc"
 )
@@ -29,10 +30,11 @@ func (c *Client) Close() error {
 }
 
 // CallEnclave sends the request bytes to the target enclave.
-func (c *Client) CallEnclave(ctx context.Context, request []byte) ([]byte, error) {
+func (c *Client) CallEnclave(ctx context.Context, request []byte, runtimeID signature.PublicKey) ([]byte, error) {
 	req := erpcGrpc.CallEnclaveRequest{
 		Endpoint: c.endpoint,
 		Payload:  request,
+		Runtime:  runtimeID,
 	}
 	res, err := c.client.CallEnclave(ctx, &req)
 	if err != nil {
