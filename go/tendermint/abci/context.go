@@ -1,13 +1,12 @@
 package abci
 
 import (
-	"sort"
 	"time"
 
+	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
@@ -27,28 +26,21 @@ const (
 	ContextEndBlock
 )
 
-// OnCommitHook is a function used as a on commit hook.
-type OnCommitHook func(*ApplicationState)
-
 // Context is the context of processing a transaction/block.
 type Context struct {
 	outputType  ContextType
 	data        interface{}
 	tags        []tmcmn.KVPair
 	currentTime time.Time
-
-	onCommitHooks map[string]OnCommitHook
-
-	timerLogger *logging.Logger
+	state       *ApplicationState
 }
 
 // NewContext creates a new Context of the given type.
-func NewContext(outputType ContextType, now time.Time) *Context {
+func NewContext(outputType ContextType, now time.Time, state *ApplicationState) *Context {
 	return &Context{
-		outputType:    outputType,
-		currentTime:   now,
-		onCommitHooks: make(map[string]OnCommitHook),
-		timerLogger:   logging.GetLogger("tendermint/context/timer"),
+		outputType:  outputType,
+		currentTime: now,
+		state:       state,
 	}
 }
 
@@ -111,19 +103,10 @@ func (c *Context) Now() time.Time {
 	return c.currentTime
 }
 
-// RegisterOnCommitHook registers a new on commit hook.
-func (c *Context) RegisterOnCommitHook(id string, hook OnCommitHook) {
-	c.onCommitHooks[id] = hook
-}
-
-func (c *Context) fireOnCommitHooks(state *ApplicationState) {
-	hookOrder := make([]string, 0, len(c.onCommitHooks))
-	for id := range c.onCommitHooks {
-		hookOrder = append(hookOrder, id)
+// State returns the mutable state tree.
+func (c *Context) State() *iavl.MutableTree {
+	if c.IsCheckOnly() {
+		return c.state.CheckTxTree()
 	}
-	sort.Strings(hookOrder)
-
-	for _, id := range hookOrder {
-		c.onCommitHooks[id](state)
-	}
+	return c.state.DeliverTxTree()
 }

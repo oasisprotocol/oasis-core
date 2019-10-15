@@ -150,7 +150,9 @@ type Application interface {
 
 	// FireTimer is called within BeginBlock before any other processing
 	// takes place for each timer that should fire.
-	FireTimer(*Context, *Timer)
+	//
+	// Note: Errors are irrecoverable and will result in a panic.
+	FireTimer(*Context, *Timer) error
 
 	// Commit is omitted because Applications will work on a cache of
 	// the state bound to the multiplexer.
@@ -349,7 +351,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 		"tx", base64.StdEncoding.EncodeToString(tx),
 	)
 
-	ctx := NewContext(ContextCheckTx, mux.currentTime)
+	ctx := NewContext(ContextCheckTx, mux.currentTime, mux.state)
 	if err := app.CheckTx(ctx, tx[1:]); err != nil {
 		return types.ResponseCheckTx{
 			Code: api.CodeTransactionFailed.ToInt(),
@@ -381,8 +383,6 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	mux.logger.Debug("InitChain",
 		"req", req,
 	)
-
-	ctx := NewContext(ContextInitChain, req.Time)
 
 	// Sanity-check the genesis application state.
 	st, err := parseGenesisAppState(req)
@@ -425,8 +425,6 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		resp.ConsensusParams = req.ConsensusParams
 	}
 
-	ctx.fireOnCommitHooks(mux.state)
-
 	// Dispatch registered genesis hooks.
 	mux.RLock()
 	defer mux.RUnlock()
@@ -456,7 +454,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	mux.lastBeginBlock = blockHeight
 	mux.currentTime = req.Header.Time
 
-	ctx := NewContext(ContextBeginBlock, mux.currentTime)
+	ctx := NewContext(ContextBeginBlock, mux.currentTime, mux.state)
 
 	// HACK: Our entire system is driven with a tag backed pub-sub
 	// interface gluing the various components together.  While we
@@ -516,8 +514,6 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		}
 	}
 
-	ctx.fireOnCommitHooks(mux.state)
-
 	response := mux.BaseApplication.BeginBlock(req)
 	response.Events = ctx.GetEvents()
 
@@ -543,7 +539,7 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 	)
 
 	// Append application name tag.
-	ctx := NewContext(ContextDeliverTx, mux.currentTime)
+	ctx := NewContext(ContextDeliverTx, mux.currentTime, mux.state)
 	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 
 	err = app.DeliverTx(ctx, tx[1:])
@@ -569,8 +565,6 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 		}
 	}
 
-	ctx.fireOnCommitHooks(mux.state)
-
 	return types.ResponseDeliverTx{
 		Code:   api.CodeOK.ToInt(),
 		Data:   cbor.Marshal(ctx.Data()),
@@ -584,11 +578,17 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 		"block_height", mux.state.BlockHeight(),
 	)
 
-	ctx := NewContext(ContextEndBlock, mux.currentTime)
+	ctx := NewContext(ContextEndBlock, mux.currentTime, mux.state)
 
 	// Fire all application timers first.
 	for _, app := range mux.appsByLexOrder {
-		fireTimers(ctx, mux.state, app)
+		if err := fireTimers(ctx, app); err != nil {
+			mux.logger.Error("EndBlock: fatal error during timer fire",
+				"err", err,
+				"app", app.Name(),
+			)
+			panic("mux: EndBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
+		}
 	}
 
 	// Dispatch EndBlock to all applications.
@@ -606,8 +606,6 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 			resp = newResp
 		}
 	}
-
-	ctx.fireOnCommitHooks(mux.state)
 
 	// Update tags.
 	resp.Events = ctx.GetEvents()

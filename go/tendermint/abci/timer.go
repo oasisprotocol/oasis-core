@@ -2,205 +2,192 @@ package abci
 
 import (
 	"encoding/hex"
-	"fmt"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/keyformat"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 )
 
-const (
-	stateTimerMap = "timers/id/%s"
+// deadlineDisarmed is a special deadline value for disarmed timers.
+const deadlineDisarmed uint64 = 0xffffffffffffffff
 
-	stateTimerDeadlineMap      = "timers/deadline/%d/%s"
-	stateTimerDeadlineMapStart = "timers/deadline/"
-	stateTimerDeadlineMapEnd   = "timers/deadline/%d"
+var (
+	// timerKeyFmt is the timer key format (deadline, app-id, timer-kind-id, timer-id).
+	//
+	// Value is CBOR-serialized custom timer data.
+	timerKeyFmt = keyformat.New(0xF0, uint64(0), uint8(0), uint8(0), []byte{})
+
+	logger = logging.GetLogger("tendermint/abci/timer")
 )
 
 type timerState struct {
-	ID       string    `json:"id"`
-	App      string    `json:"app"`
-	Armed    bool      `json:"armed"`
-	Deadline time.Time `json:"deadline"`
-	Data     []byte    `json:"data"`
+	app      uint8
+	kind     uint8
+	id       []byte
+	deadline uint64
+
+	data []byte
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (s *timerState) MarshalCBOR() []byte {
-	return cbor.Marshal(s)
+func (s *timerState) getKey() []byte {
+	return timerKeyFmt.Encode(s.deadline, s.app, s.kind, s.id)
 }
 
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (s *timerState) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, s)
-}
-
-func (s *timerState) getDeadlineMapKey() []byte {
-	// Ensure that deadline is rounded to the nearest second to prevent
-	// serialization round trip issues as the map key MUST be stable.
-	if s.Deadline != s.Deadline.Round(time.Second) {
-		panic("getDeadlineMapKey: deadline must be rounded to the nearest second")
+func (s *timerState) fromKeyValue(key, value []byte) {
+	var deadline uint64
+	var app, kind uint8
+	var id []byte
+	if !timerKeyFmt.Decode(key, &deadline, &app, &kind, &id) {
+		panic("timer: corrupted key: " + hex.EncodeToString(key))
 	}
 
-	return []byte(fmt.Sprintf(stateTimerDeadlineMap, s.Deadline.Unix(), s.ID))
+	*s = timerState{
+		app:      app,
+		kind:     kind,
+		id:       id,
+		deadline: deadline,
+		data:     value,
+	}
 }
 
 // Timer is a serializable timer that can be used in ABCI applications.
 type Timer struct {
-	ID string `json:"id"`
+	ID []byte `json:"id"`
 
-	currentState *timerState
-	pendingState *timerState
+	state *timerState
 }
 
 // NewTimer creates a new timer.
-func NewTimer(ctx *Context, app Application, id string, data []byte) *Timer {
+func NewTimer(ctx *Context, app Application, kind uint8, id []byte, data []byte) *Timer {
+	if data == nil {
+		data = []byte{}
+	}
+
 	state := &timerState{
-		ID:    fmt.Sprintf("%s:%s", app.Name(), id),
-		App:   app.Name(),
-		Armed: false,
-		Data:  data,
+		app:      app.TransactionTag(),
+		kind:     kind,
+		id:       id,
+		data:     data,
+		deadline: deadlineDisarmed,
 	}
 
-	t := &Timer{
-		ID:           state.ID,
-		currentState: state,
-		pendingState: state,
+	return &Timer{
+		ID:    state.getKey(),
+		state: state,
 	}
-	t.registerOnCommitHook(ctx)
+}
 
-	return t
+func (t *Timer) refreshState() {
+	if t.state != nil {
+		return
+	}
+
+	var ts timerState
+	ts.fromKeyValue(t.ID, nil)
+	t.state = &ts
+}
+
+// Kind returns the timer kind.
+func (t *Timer) Kind() uint8 {
+	t.refreshState()
+	return t.state.kind
+}
+
+// CustomID returns the custom ID of the timer provided by the timer creator.
+func (t *Timer) CustomID() []byte {
+	t.refreshState()
+	return t.state.id
 }
 
 // Data returns custom data associated with the timer.
-func (t *Timer) Data() []byte {
-	if t.pendingState != nil && t.pendingState.Data != nil {
-		return t.pendingState.Data
+func (t *Timer) Data(ctx *Context) []byte {
+	t.refreshState()
+
+	if t.state.data == nil {
+		_, value := ctx.State().Get(t.ID)
+		if value == nil {
+			logger.Error("timer not found",
+				"id", hex.EncodeToString(t.ID),
+			)
+			panic("timer: not found")
+		}
+
+		t.state.data = value
 	}
-	if t.currentState == nil {
-		return nil
-	}
-	return t.currentState.Data
+	return t.state.data
 }
 
 // Reset resets the timer, rearming it.
 //
 // The timer's custom data will be set to the new value iff it is non-nil,
 // otherwise it will be left unaltered.
-func (t *Timer) Reset(ctx *Context, duration time.Duration, newData []byte) {
-	t.pendingState = &timerState{
-		Armed: true,
-		// Round deadline to the nearest second to ensure that serialization only
-		// uses integers and not floats.
-		Deadline: ctx.Now().Add(duration).Round(time.Second),
-		Data:     newData,
+func (t *Timer) Reset(ctx *Context, duration time.Duration, data []byte) {
+	if data == nil {
+		// Load previous data.
+		_ = t.Data(ctx)
 	}
-	t.registerOnCommitHook(ctx)
+	// Remove previous timer entry (if any).
+	t.remove(ctx)
+
+	deadline := ctx.Now().Add(duration).Unix()
+	if deadline < 0 {
+		deadline = 0
+	}
+	t.state.deadline = uint64(deadline)
+	if data != nil {
+		t.state.data = data
+	}
+
+	// Create timer entry.
+	ctx.State().Set(t.state.getKey(), t.state.data)
+	t.ID = t.state.getKey()
 }
 
 // Stop stops the timer.
 func (t *Timer) Stop(ctx *Context) {
-	t.pendingState = &timerState{
-		Armed: false,
-	}
-	t.registerOnCommitHook(ctx)
+	// Remove previous timer entry (if any).
+	t.remove(ctx)
+
+	t.state.deadline = deadlineDisarmed
+	t.ID = t.state.getKey()
 }
 
-func (t *Timer) getMapKey() []byte {
-	return []byte(fmt.Sprintf(stateTimerMap, t.ID))
-}
+func (t *Timer) remove(ctx *Context) {
+	t.refreshState()
 
-func (t *Timer) registerOnCommitHook(ctx *Context) {
-	ctx.RegisterOnCommitHook(t.ID, func(state *ApplicationState) {
-		t.persist(ctx, state)
-	})
-}
-
-func (t *Timer) persist(ctx *Context, state *ApplicationState) {
-	if t.pendingState == nil {
+	if t.state.deadline == deadlineDisarmed {
 		return
 	}
 
-	tree := state.DeliverTxTree()
-
-	// Load current timer state and update it.
-	var currentState timerState
-	_, data := tree.Get(t.getMapKey())
-	if data == nil {
-		// This should only happen when timer is first created.
-		if t.currentState == nil {
-			panic("timer: no state in tree and current state not available")
-		}
-		currentState = *t.currentState
-	} else {
-		if err := currentState.UnmarshalCBOR(data); err != nil {
-			ctx.timerLogger.Error("state corruption",
-				"data", hex.EncodeToString(data),
-			)
-			panic("timer: state corruption")
-		}
+	if _, removed := ctx.State().Remove(t.ID); !removed {
+		logger.Error("timer not removed",
+			"id", hex.EncodeToString(t.ID),
+		)
+		panic("timer: not removed")
 	}
-
-	t.pendingState.ID = currentState.ID
-	t.pendingState.App = currentState.App
-	if t.pendingState.Data == nil {
-		t.pendingState.Data = currentState.Data
-	}
-
-	tree.Set(t.getMapKey(), t.pendingState.MarshalCBOR())
-
-	// Update deadline state.
-	if currentState.Armed {
-		if _, removed := tree.Remove(currentState.getDeadlineMapKey()); !removed {
-			ctx.timerLogger.Error("armed timer not removed from deadline map",
-				"key", currentState.getDeadlineMapKey(),
-			)
-			panic("timer: armed timer not removed from deadline map")
-		}
-	}
-	if t.pendingState.Armed {
-		tree.Set(t.pendingState.getDeadlineMapKey(), []byte(t.ID))
-	}
-
-	t.pendingState = nil
 }
 
-func fireTimers(ctx *Context, state *ApplicationState, app Application) {
-	now := ctx.Now()
-	tree := state.DeliverTxTree()
-
+func fireTimers(ctx *Context, app Application) (err error) {
 	// Iterate through all timers which have already expired.
-	tree.IterateRange(
-		[]byte(stateTimerDeadlineMapStart),
-		[]byte(fmt.Sprintf(stateTimerDeadlineMapEnd, now.Unix()+1)),
+	ctx.State().IterateRange(
+		timerKeyFmt.Encode(),
+		timerKeyFmt.Encode(uint64(ctx.Now().Unix())+1),
 		true,
 		func(key, value []byte) bool {
-			_, data := tree.Get([]byte(fmt.Sprintf(stateTimerMap, value)))
-			if data == nil {
-				panic("timer: state corruption (missing timer state)")
-			}
-
 			var ts timerState
-			if err := ts.UnmarshalCBOR(data); err != nil {
-				ctx.timerLogger.Error("state corruption",
-					"data", hex.EncodeToString(data),
-				)
-				panic("timer: state corruption")
-			}
+			ts.fromKeyValue(key, value)
 
-			if !ts.Armed {
-				panic("timer: attempted to fire an unarmed timer")
-			}
-
-			if ts.App != app.Name() {
+			// Skip timers that are not for this application.
+			if app.TransactionTag() != ts.app {
 				return false
 			}
 
-			app.FireTimer(ctx, &Timer{
-				ID:           ts.ID,
-				currentState: &ts,
-			})
+			if err = app.FireTimer(ctx, &Timer{ID: key, state: &ts}); err != nil {
+				return true
+			}
 
 			return false
 		},
 	)
+	return
 }

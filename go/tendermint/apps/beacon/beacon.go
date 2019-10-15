@@ -19,6 +19,7 @@ import (
 
 var (
 	errUnexpectedTransaction = errors.New("beacon: unexpected transaction")
+	errUnexpectedTimer       = errors.New("beacon: unexpected timer")
 
 	prodEntropyCtx  = []byte("EkB-tmnt")
 	debugEntropyCtx = []byte("Ekb-Dumm")
@@ -106,7 +107,8 @@ func (app *beaconApplication) EndBlock(req types.RequestEndBlock) (types.Respons
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *beaconApplication) FireTimer(ctx *abci.Context, t *abci.Timer) {
+func (app *beaconApplication) FireTimer(ctx *abci.Context, t *abci.Timer) error {
+	return errUnexpectedTimer
 }
 
 func (app *beaconApplication) queryGetBeacon(s interface{}, r interface{}) ([]byte, error) {

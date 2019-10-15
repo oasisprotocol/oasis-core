@@ -31,6 +31,9 @@ import (
 	stakingapp "github.com/oasislabs/oasis-core/go/tendermint/apps/staking"
 )
 
+// timerKindRound is the round timer kind.
+const timerKindRound = 0x01
+
 var (
 	errNoSuchRuntime = errors.New("tendermint/roothash: no such runtime")
 	errNoRound       = errors.New("tendermint/roothash: no round in progress")
@@ -455,7 +458,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.Mutab
 		Runtime:      runtime,
 		CurrentBlock: genesisBlock,
 		GenesisBlock: genesisBlock,
-		Timer:        *abci.NewTimer(ctx, app, "round-"+runtime.ID.String(), timerCtx.MarshalCBOR()),
+		Timer:        *abci.NewTimer(ctx, app, timerKindRound, runtime.ID[:], timerCtx.MarshalCBOR()),
 	})
 
 	app.logger.Debug("onNewRuntime: created genesis state for runtime",
@@ -476,10 +479,14 @@ func (app *rootHashApplication) EndBlock(request types.RequestEndBlock) (types.R
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {
+func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) error {
+	if timer.Kind() != timerKindRound {
+		return errors.New("tendermint/roothash: unexpected timer")
+	}
+
 	var tCtx timerContext
-	if err := tCtx.UnmarshalCBOR(timer.Data()); err != nil {
-		panic(err)
+	if err := tCtx.UnmarshalCBOR(timer.Data(ctx)); err != nil {
+		return err
 	}
 
 	app.logger.Warn("FireTimer: timer fired",
@@ -493,7 +500,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		app.logger.Error("FireTimer: failed to get state associated with timer",
 			"err", err,
 		)
-		panic(err)
+		return err
 	}
 	runtime := rtState.Runtime
 
@@ -514,11 +521,11 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		// is nothing lost with being extra defensive.
 
 		var rsCtx timerContext
-		if err := rsCtx.UnmarshalCBOR(rtState.Timer.Data()); err != nil {
+		if err := rsCtx.UnmarshalCBOR(rtState.Timer.Data(ctx)); err != nil {
 			app.logger.Error("FireTimer: Failed to unmarshal runtime state timer",
 				"err", err,
 			)
-			return
+			return err
 		}
 
 		app.logger.Error("FireTimer: runtime state timer",
@@ -529,7 +536,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		rtState.Timer.Stop(ctx)
 		state.updateRuntimeState(rtState)
 
-		return
+		return nil
 	}
 
 	app.logger.Warn("FireTimer: round timeout expired, forcing finalization",
@@ -550,6 +557,8 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	for _, pool := range rtState.Round.ComputePool.GetTimeoutCommittees(ctx.Now()) {
 		app.tryFinalizeCompute(ctx, runtime, rtState, pool, true)
 	}
+
+	return nil
 }
 
 func (app *rootHashApplication) executeTx(

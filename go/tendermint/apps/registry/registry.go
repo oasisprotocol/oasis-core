@@ -287,7 +287,8 @@ func (app *registryApplication) EndBlock(request types.RequestEndBlock) (types.R
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) {
+func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) error {
+	return errors.New("tendermint/registry: unexpected timer")
 }
 
 func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, registryEpoch epochtime.EpochTime) error {

@@ -159,7 +159,9 @@ func (app *keymanagerApplication) EndBlock(request types.RequestEndBlock) (types
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *keymanagerApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {}
+func (app *keymanagerApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) error {
+	return errors.New("tendermint/keymanager: unexpected timer")
+}
 
 func (app *keymanagerApplication) queryGetStatus(s interface{}, r interface{}) ([]byte, error) {
 	state := s.(*immutableState)

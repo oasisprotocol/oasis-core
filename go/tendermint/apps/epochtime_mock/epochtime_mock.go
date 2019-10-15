@@ -149,7 +149,8 @@ func (app *epochTimeMockApplication) EndBlock(request types.RequestEndBlock) (ty
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *epochTimeMockApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {
+func (app *epochTimeMockApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) error {
+	return errors.New("tendermint/epochtime_mock: unexpected timer")
 }
 
 func (app *epochTimeMockApplication) executeTx(

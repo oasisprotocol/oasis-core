@@ -406,7 +406,9 @@ func (app *schedulerApplication) EndBlock(req types.RequestEndBlock) (types.Resp
 	return resp, nil
 }
 
-func (app *schedulerApplication) FireTimer(ctx *abci.Context, t *abci.Timer) {}
+func (app *schedulerApplication) FireTimer(ctx *abci.Context, t *abci.Timer) error {
+	return errors.New("tendermint/scheduler: unexpected timer")
+}
 
 func (app *schedulerApplication) queryAllCommittees(s interface{}, r interface{}) ([]byte, error) {
 	state := s.(*immutableState)
