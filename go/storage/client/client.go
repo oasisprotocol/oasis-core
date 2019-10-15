@@ -43,8 +43,8 @@ var (
 )
 
 const (
-	maxRetryElapsedTime = 5 * time.Second
-	maxRetryInterval    = 1 * time.Second
+	retryInterval = 1 * time.Second
+	maxRetries    = 15
 )
 
 // storageClientBackend contains all information about the client storage API
@@ -189,21 +189,23 @@ func (b *storageClientBackend) writeWithClient(
 		client, node := clientState.client, clientState.node
 
 		go func() {
-			var resp interface{}
+			var (
+				resp       interface{}
+				numRetries int
+			)
 			op := func() error {
 				var err error
 				resp, err = fn(ctx, client, node)
-				if status.Code(err) == codes.PermissionDenied {
+				if status.Code(err) == codes.PermissionDenied && numRetries < maxRetries {
 					// Writes can fail around an epoch transition due to policy errors,
-					// make sure to retry in this case.
+					// make sure to retry in this case (up to maxRetries).
+					numRetries++
 					return err
 				}
 				return backoff.Permanent(err)
 			}
 
-			sched := backoff.NewExponentialBackOff()
-			sched.MaxInterval = maxRetryInterval
-			sched.MaxElapsedTime = maxRetryElapsedTime
+			sched := backoff.NewConstantBackOff(retryInterval)
 			err := backoff.Retry(op, backoff.WithContext(sched, ctx))
 
 			ch <- &grpcResponse{
