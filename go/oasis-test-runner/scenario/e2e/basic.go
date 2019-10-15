@@ -59,6 +59,14 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if tee == node.TEEHardwareIntelSGX {
 		mrSigner = &ias.FortanixTestMrSigner
 	}
+	keyManagerBinary, err := resolveDefaultKeyManagerBinary()
+	if err != nil {
+		return nil, err
+	}
+	runtimeBinary, err := resolveRuntimeBinary("simple-keyvalue")
+	if err != nil {
+		return nil, err
+	}
 
 	return &oasis.NetworkFixture{
 		TEE: oasis.TEEFixture{
@@ -81,7 +89,7 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 				Kind:       registry.KindKeyManager,
 				Entity:     0,
 				Keymanager: -1,
-				Binary:     viper.GetString(cfgKeymanagerBinary),
+				Binary:     keyManagerBinary,
 			},
 			// Compute runtime.
 			oasis.RuntimeFixture{
@@ -89,7 +97,7 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 				Kind:                   registry.KindCompute,
 				Entity:                 0,
 				Keymanager:             0,
-				Binary:                 viper.GetString(cfgRuntimeBinary),
+				Binary:                 runtimeBinary,
 				ReplicaGroupSize:       2,
 				ReplicaGroupBackupSize: 1,
 				StorageGroupSize:       2,

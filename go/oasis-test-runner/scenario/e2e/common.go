@@ -13,6 +13,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 )
@@ -20,9 +21,8 @@ import (
 const (
 	cfgNodeBinary       = "e2e.node.binary"
 	cfgClientBinaryDir  = "e2e.client.binary_dir"
-	cfgRuntimeBinary    = "e2e.runtime.binary"
+	cfgRuntimeBinaryDir = "e2e.runtime.binary_dir"
 	cfgRuntimeLoader    = "e2e.runtime.loader"
-	cfgKeymanagerBinary = "e2e.keymanager.binary"
 	cfgTEEHardware      = "e2e.tee_hardware"
 )
 
@@ -35,6 +35,32 @@ var (
 
 	logger = logging.GetLogger("e2e/common")
 )
+
+func resolveClientBinary(clientBinary string) string {
+	return filepath.Join(viper.GetString(cfgClientBinaryDir), clientBinary)
+}
+
+func resolveRuntimeBinary(runtimeBinary string) (string, error) {
+	var tee node.TEEHardware
+	err := tee.FromString(viper.GetString(cfgTEEHardware))
+	if err != nil {
+		return "", err
+	}
+
+	var runtimeExt string
+	switch tee {
+	case node.TEEHardwareInvalid:
+		runtimeExt = ""
+	case node.TEEHardwareIntelSGX:
+		runtimeExt = ".sgxs"
+	}
+
+	return filepath.Join(viper.GetString(cfgRuntimeBinaryDir), runtimeBinary+runtimeExt), nil
+}
+
+func resolveDefaultKeyManagerBinary() (string, error) {
+	return resolveRuntimeBinary("oasis-core-keymanager-runtime")
+}
 
 func startClient(env *env.Env, net *oasis.Network, clientBinary string, clientArgs []string) (*exec.Cmd, error) {
 	clients := net.Clients()
@@ -52,7 +78,7 @@ func startClient(env *env.Env, net *oasis.Network, clientBinary string, clientAr
 		return nil, err
 	}
 
-	binary := filepath.Join(viper.GetString(cfgClientBinaryDir), clientBinary)
+	binary := resolveClientBinary(clientBinary)
 	args := []string{
 		"--node-address", "unix:" + clients[0].SocketPath(),
 		"--runtime-id", runtimeID.String(),
@@ -117,9 +143,8 @@ func runSubCommand(env *env.Env, name, binary string, args []string) error {
 func init() {
 	Flags.String(cfgNodeBinary, "oasis-node", "path to the node binary")
 	Flags.String(cfgClientBinaryDir, "", "path to the client binaries directory")
-	Flags.String(cfgRuntimeBinary, "simple-keyvalue", "path to the runtime binary")
+	Flags.String(cfgRuntimeBinaryDir, "", "path to the runtime binaries directory")
 	Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
-	Flags.String(cfgKeymanagerBinary, "oasis-core-keymanager-runtime", "path to the keymanager runtime")
 	Flags.String(cfgTEEHardware, "", "TEE hardware to use")
 	_ = viper.BindPFlags(Flags)
 
