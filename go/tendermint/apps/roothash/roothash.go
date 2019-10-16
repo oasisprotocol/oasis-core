@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
@@ -158,7 +157,7 @@ func (app *rootHashApplication) CheckTx(ctx *abci.Context, tx []byte) error {
 		return errors.Wrap(err, "roothash: failed to unmarshal")
 	}
 
-	if err := app.executeTx(ctx, app.state.CheckTxTree(), &request); err != nil {
+	if err := app.executeTx(ctx, &request); err != nil {
 		return err
 	}
 
@@ -179,15 +178,13 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 	// Note: This could use the genesis state, but the registry has already
 	// carved out it's entries by this point.
 
-	tree := app.state.DeliverTxTree()
-
-	regState := registryapp.NewMutableState(tree)
+	regState := registryapp.NewMutableState(ctx.State())
 	runtimes, _ := regState.GetRuntimes()
 	for _, v := range runtimes {
 		app.logger.Info("InitChain: allocating per-runtime state",
 			"runtime", v.ID,
 		)
-		app.onNewRuntime(ctx, tree, v, &st)
+		app.onNewRuntime(ctx, v, &st)
 	}
 
 	return nil
@@ -202,11 +199,10 @@ func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.Requ
 }
 
 func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error { // nolint: gocyclo
-	tree := app.state.DeliverTxTree()
-	state := newMutableState(tree)
+	state := newMutableState(ctx.State())
 
 	// Query the updated runtime list.
-	regState := registryapp.NewMutableState(tree)
+	regState := registryapp.NewMutableState(ctx.State())
 	runtimes, _ := regState.GetRuntimes()
 	newDescriptors := make(map[signature.MapKey]*registry.Runtime)
 	for _, v := range runtimes {
@@ -215,7 +211,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		}
 	}
 
-	schedState := schedulerapp.NewMutableState(tree)
+	schedState := schedulerapp.NewMutableState(ctx.State())
 	for _, rtState := range state.getRuntimes() {
 		rtID := rtState.Runtime.ID
 
@@ -385,7 +381,7 @@ func (app *rootHashApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
 		return errors.Wrap(err, "roothash: failed to unmarshal")
 	}
 
-	return app.executeTx(ctx, app.state.DeliverTxTree(), request)
+	return app.executeTx(ctx, request)
 }
 
 func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
@@ -404,17 +400,15 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 					"runtime", hex.EncodeToString(runtime),
 				)
 
-				tree := app.state.DeliverTxTree()
-
 				// New runtime has been registered, create its roothash state.
-				regState := registryapp.NewMutableState(tree)
+				regState := registryapp.NewMutableState(ctx.State())
 				rt, err := regState.GetRuntime(runtime)
 				if err != nil {
 					return errors.Wrap(err, "roothash: failed to fetch new runtime")
 				}
 
 				ensureGenesis()
-				app.onNewRuntime(ctx, tree, rt, st)
+				app.onNewRuntime(ctx, rt, st)
 			}
 		}
 	}
@@ -422,8 +416,8 @@ func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.A
 	return nil
 }
 
-func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, tree *iavl.MutableTree, runtime *registry.Runtime, genesis *roothash.Genesis) {
-	state := newMutableState(tree)
+func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registry.Runtime, genesis *roothash.Genesis) {
+	state := newMutableState(ctx.State())
 
 	if !runtime.IsCompute() {
 		app.logger.Warn("onNewRuntime: ignoring non-compute runtime",
@@ -493,8 +487,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		logging.LogEvent, roothash.LogEventTimerFired,
 	)
 
-	tree := app.state.DeliverTxTree()
-	state := newMutableState(tree)
+	state := newMutableState(ctx.State())
 	rtState, err := state.getRuntimeState(tCtx.ID)
 	if err != nil {
 		app.logger.Error("FireTimer: failed to get state associated with timer",
@@ -561,17 +554,13 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	return nil
 }
 
-func (app *rootHashApplication) executeTx(
-	ctx *abci.Context,
-	tree *iavl.MutableTree,
-	tx *Tx,
-) error {
-	state := newMutableState(tree)
+func (app *rootHashApplication) executeTx(ctx *abci.Context, tx *Tx) error {
+	state := newMutableState(ctx.State())
 
 	if tx.TxMergeCommit != nil {
-		return app.commit(ctx, tree, state, tx.TxMergeCommit.ID, tx)
+		return app.commit(ctx, state, tx.TxMergeCommit.ID, tx)
 	} else if tx.TxComputeCommit != nil {
-		return app.commit(ctx, tree, state, tx.TxComputeCommit.ID, tx)
+		return app.commit(ctx, state, tx.TxComputeCommit.ID, tx)
 	}
 	return roothash.ErrInvalidArgument
 }
@@ -614,7 +603,6 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 
 func (app *rootHashApplication) commit(
 	ctx *abci.Context,
-	tree *iavl.MutableTree,
 	state *mutableState,
 	id signature.PublicKey,
 	tx *Tx,
@@ -652,7 +640,7 @@ func (app *rootHashApplication) commit(
 	// Create storage signature verifier.
 	sv := &roothashSignatureVerifier{
 		runtimeID: id,
-		scheduler: schedulerapp.NewMutableState(tree),
+		scheduler: schedulerapp.NewMutableState(ctx.State()),
 	}
 
 	// Add the commitments.
@@ -878,11 +866,13 @@ func (app *rootHashApplication) tryFinalizeMerge(
 	return nil
 }
 
-func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, tree *iavl.MutableTree, rtState *runtimeState, blk *block.Block) error {
-	stateBackup := *tree.ImmutableTree
+func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, rtState *runtimeState, blk *block.Block) error {
+	checkpoint := ctx.NewStateCheckpoint()
+	defer checkpoint.Close()
+
 	for _, message := range blk.Header.RoothashMessages {
 		// Check with staking.
-		stakingState := stakingapp.NewMutableState(tree)
+		stakingState := stakingapp.NewMutableState(ctx.State())
 		unsat, err := stakingState.HandleRoothashMessage(rtState.Runtime.ID, message)
 		if err != nil {
 			return err
@@ -895,7 +885,7 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, tre
 			)
 
 			// Roll back changes from message handling.
-			tree.ImmutableTree = &stateBackup
+			checkpoint.Rollback()
 
 			// Substitute empty block.
 			app.emitEmptyBlock(ctx, rtState, block.RoundFailed)
@@ -928,7 +918,7 @@ func (app *rootHashApplication) tryFinalizeBlock(
 		return nil
 	}
 
-	if err := app.postProcessFinalizedBlock(ctx, app.state.DeliverTxTree(), rtState, finalizedBlock); err != nil {
+	if err := app.postProcessFinalizedBlock(ctx, rtState, finalizedBlock); err != nil {
 		return err
 	}
 

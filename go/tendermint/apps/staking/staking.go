@@ -7,7 +7,6 @@ import (
 	"sort"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -81,7 +80,7 @@ func (app *stakingApplication) CheckTx(ctx *abci.Context, tx []byte) error {
 		return errors.Wrap(err, "staking/tendermint: failed to unmarshal tx")
 	}
 
-	return app.executeTx(ctx, app.state.CheckTxTree(), request)
+	return app.executeTx(ctx, request)
 }
 
 func (app *stakingApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
@@ -238,7 +237,7 @@ func (app *stakingApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
 		return errors.Wrap(err, "staking/tendermint: failed to unmarshal tx")
 	}
 
-	return app.executeTx(ctx, app.state.DeliverTxTree(), request)
+	return app.executeTx(ctx, request)
 }
 
 func (app *stakingApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
@@ -344,8 +343,8 @@ func (app *stakingApplication) queryGenesis(s, r interface{}) ([]byte, error) {
 	return cbor.Marshal(gen), nil
 }
 
-func (app *stakingApplication) executeTx(ctx *abci.Context, tree *iavl.MutableTree, tx *Tx) error {
-	state := NewMutableState(tree)
+func (app *stakingApplication) executeTx(ctx *abci.Context, tx *Tx) error {
+	state := NewMutableState(ctx.State())
 
 	if tx.TxTransfer != nil {
 		return app.transfer(ctx, state, &tx.TxTransfer.SignedTransfer)
@@ -607,12 +606,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *MutableSt
 // can have multiple instances of the same threshold kind specified, in which
 // case it will be factored in repeatedly.
 func EnsureSufficientStake(appState *abci.ApplicationState, ctx *abci.Context, id signature.PublicKey, thresholds []staking.ThresholdKind) error {
-	var state *MutableState
-	if ctx.IsCheckOnly() {
-		state = NewMutableState(appState.CheckTxTree())
-	} else {
-		state = NewMutableState(appState.DeliverTxTree())
-	}
+	state := NewMutableState(ctx.State())
 
 	m, err := state.Thresholds()
 	if err != nil {
@@ -670,13 +664,8 @@ func (snap *Snapshot) EnsureSufficientStake(id signature.PublicKey, thresholds [
 }
 
 // NewSnapshot creates a new staking snapshot.
-func NewSnapshot(appState *abci.ApplicationState, ctx *abci.Context) (*Snapshot, error) {
-	var state *MutableState
-	if ctx.IsCheckOnly() {
-		state = NewMutableState(appState.CheckTxTree())
-	} else {
-		state = NewMutableState(appState.DeliverTxTree())
-	}
+func NewSnapshot(ctx *abci.Context) (*Snapshot, error) {
+	state := NewMutableState(ctx.State())
 
 	thresholds, err := state.Thresholds()
 	if err != nil {

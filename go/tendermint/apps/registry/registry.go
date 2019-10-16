@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -189,7 +188,7 @@ func (app *registryApplication) CheckTx(ctx *abci.Context, tx []byte) error {
 		return errors.Wrap(err, "registry: failed to unmarshal")
 	}
 
-	if err := app.executeTx(ctx, app.state.CheckTxTree(), request); err != nil {
+	if err := app.executeTx(ctx, request); err != nil {
 		return err
 	}
 
@@ -208,7 +207,7 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 		"state", string(b),
 	)
 
-	state := NewMutableState(app.state.DeliverTxTree())
+	state := NewMutableState(ctx.State())
 
 	state.setKeyManagerOperator(st.KeyManagerOperator)
 	app.logger.Debug("InitChain: Registering key manager operator",
@@ -276,7 +275,7 @@ func (app *registryApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
 		return errors.Wrap(err, "registry: failed to unmarshal")
 	}
 
-	return app.executeTx(ctx, app.state.DeliverTxTree(), request)
+	return app.executeTx(ctx, request)
 }
 
 func (app *registryApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
@@ -292,7 +291,7 @@ func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) error {
 }
 
 func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, registryEpoch epochtime.EpochTime) error {
-	state := NewMutableState(app.state.DeliverTxTree())
+	state := NewMutableState(ctx.State())
 
 	nodes, err := state.GetNodes()
 	if err != nil {
@@ -328,12 +327,8 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 }
 
 // Execute transaction against given state.
-func (app *registryApplication) executeTx(
-	ctx *abci.Context,
-	tree *iavl.MutableTree,
-	tx *Tx,
-) error {
-	state := NewMutableState(tree)
+func (app *registryApplication) executeTx(ctx *abci.Context, tx *Tx) error {
+	state := NewMutableState(ctx.State())
 
 	if tx.TxRegisterEntity != nil {
 		return app.registerEntity(ctx, state, &tx.TxRegisterEntity.Entity)

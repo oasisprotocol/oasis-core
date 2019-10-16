@@ -104,7 +104,7 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 	}
 
 	var toEmit []*api.Status
-	state := NewMutableState(app.state.DeliverTxTree())
+	state := NewMutableState(ctx.State())
 	for _, v := range st.Statuses {
 		rt := rtMap[v.ID.ToMapKey()]
 		if rt == nil {
@@ -202,10 +202,8 @@ func (app *keymanagerApplication) queryGenesis(s interface{}, r interface{}) ([]
 }
 
 func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error {
-	tree := app.state.DeliverTxTree()
-
 	// Query the runtime and node lists.
-	regState := registryapp.NewMutableState(tree)
+	regState := registryapp.NewMutableState(ctx.State())
 	runtimes, _ := regState.GetRuntimes()
 	nodes, _ := regState.GetNodes()
 	registry.SortNodeList(nodes)
@@ -214,7 +212,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 	//
 	// Note: This assumes that once a runtime is registered, it never expires.
 	var toEmit []*api.Status
-	state := NewMutableState(app.state.DeliverTxTree())
+	state := NewMutableState(ctx.State())
 	for _, rt := range runtimes {
 		if rt.Kind != registry.KindKeyManager {
 			continue

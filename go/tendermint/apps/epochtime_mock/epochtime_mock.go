@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -81,7 +80,7 @@ func (app *epochTimeMockApplication) CheckTx(ctx *abci.Context, tx []byte) error
 		return errors.Wrap(err, "epochtime_mock: failed to unmarshal")
 	}
 
-	if err := app.executeTx(ctx, app.state.CheckTxTree(), request); err != nil {
+	if err := app.executeTx(ctx, request); err != nil {
 		return err
 	}
 
@@ -97,7 +96,7 @@ func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.
 }
 
 func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
-	state := newMutableState(app.state.DeliverTxTree())
+	state := newMutableState(ctx.State())
 
 	future, err := state.getFutureEpoch()
 	if err != nil {
@@ -138,7 +137,7 @@ func (app *epochTimeMockApplication) DeliverTx(ctx *abci.Context, tx []byte) err
 		return errors.Wrap(err, "epochtime_mock: failed to unmarshal")
 	}
 
-	return app.executeTx(ctx, app.state.DeliverTxTree(), request)
+	return app.executeTx(ctx, request)
 }
 
 func (app *epochTimeMockApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
@@ -153,12 +152,8 @@ func (app *epochTimeMockApplication) FireTimer(ctx *abci.Context, timer *abci.Ti
 	return errors.New("tendermint/epochtime_mock: unexpected timer")
 }
 
-func (app *epochTimeMockApplication) executeTx(
-	ctx *abci.Context,
-	tree *iavl.MutableTree,
-	tx *Tx,
-) error {
-	state := newMutableState(tree)
+func (app *epochTimeMockApplication) executeTx(ctx *abci.Context, tx *Tx) error {
+	state := newMutableState(ctx.State())
 
 	if tx.TxSetEpoch != nil {
 		return app.setEpoch(ctx, state, tx.TxSetEpoch.Epoch)

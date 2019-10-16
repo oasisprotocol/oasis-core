@@ -162,7 +162,7 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 }
 
 func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) error {
-	state := NewMutableState(app.state.DeliverTxTree())
+	state := NewMutableState(ctx.State())
 
 	if err := state.setBeacon(beacon); err != nil {
 		app.logger.Error("onNewBeacon: failed to set beacon",

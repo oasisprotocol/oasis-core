@@ -110,3 +110,31 @@ func (c *Context) State() *iavl.MutableTree {
 	}
 	return c.state.DeliverTxTree()
 }
+
+// NewStateCheckpoint creates a new state checkpoint.
+func (c *Context) NewStateCheckpoint() *StateCheckpoint {
+	return &StateCheckpoint{
+		ImmutableTree: *c.State().ImmutableTree,
+		ctx:           c,
+	}
+}
+
+// StateCheckpoint is a state checkpoint that can be used to rollback state.
+type StateCheckpoint struct {
+	iavl.ImmutableTree
+
+	ctx *Context
+}
+
+// Close releases resources associated with the checkpoint.
+func (sc *StateCheckpoint) Close() {
+	sc.ctx = nil
+}
+
+// Rollback rolls back the active state to the one from the checkpoint.
+func (sc *StateCheckpoint) Rollback() {
+	if sc.ctx == nil {
+		return
+	}
+	sc.ctx.State().ImmutableTree = &sc.ImmutableTree
+}

@@ -80,8 +80,8 @@ func (acc *stakeAccumulator) checkThreshold(id signature.PublicKey, kind staking
 	return nil
 }
 
-func newStakeAccumulator(appState *abci.ApplicationState, ctx *abci.Context, unsafeBypass bool) (*stakeAccumulator, error) {
-	snapshot, err := stakingapp.NewSnapshot(appState, ctx)
+func newStakeAccumulator(ctx *abci.Context, unsafeBypass bool) (*stakeAccumulator, error) {
+	snapshot, err := stakingapp.NewSnapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +250,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
 		}
 
-		entityStake, err := newStakeAccumulator(app.state, ctx, app.cfg.DebugBypassStake)
+		entityStake, err := newStakeAccumulator(ctx, app.cfg.DebugBypassStake)
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get stake snapshot")
 		}
