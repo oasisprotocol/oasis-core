@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"fmt"
 	"os/exec"
 
 	"github.com/spf13/viper"
@@ -155,7 +154,6 @@ func (sc *basicImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan e
 	case err = <-sc.net.Errors():
 		_ = cmd.Process.Kill()
 	case err = <-clientErrCh:
-		fmt.Printf("client terminated\n")
 	}
 	if err != nil {
 		return err

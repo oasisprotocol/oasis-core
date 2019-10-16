@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
@@ -145,7 +144,6 @@ func (sc *roothashMessagesImpl) Run(childEnv *env.Env) error {
 		_ = client.Process.Kill()
 		return errors.Wrapf(err, "network")
 	case err = <-clientErrCh:
-		fmt.Println("client terminated")
 		if err != nil {
 			return errors.Wrap(err, "waiting for client")
 		}
