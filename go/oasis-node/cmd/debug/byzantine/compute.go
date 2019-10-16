@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -161,6 +162,8 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 		PreviousHash: cbc.bd.Header.EncodedHash(),
 		IORoot:       cbc.newIORoot,
 		StateRoot:    cbc.newStateRoot,
+		// TODO: allow script to set roothash messages?
+		RoothashMessages: []*block.RoothashMessage{},
 	}
 	computeBody := &commitment.ComputeBody{
 		CommitteeID:       committeeID,

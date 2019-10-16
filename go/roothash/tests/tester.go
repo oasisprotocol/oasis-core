@@ -22,6 +22,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
@@ -43,7 +45,7 @@ type runtimeState struct {
 
 // RootHashImplementationTests exercises the basic functionality of a
 // roothash backend.
-func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, storage storage.Backend, registry registry.Backend) {
+func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, storage storage.Backend, registry registry.Backend, stakingBackend staking.Backend) {
 	seedBase := []byte("RootHashImplementationTests")
 
 	require := require.New(t)
@@ -96,6 +98,10 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 		// committees set to nil and cause a crash.
 		t.Run("SucessfulRound", func(t *testing.T) {
 			testSucessfulRound(t, backend, storage, rtStates)
+		})
+
+		t.Run("RoothashMessages", func(t *testing.T) {
+			testRoothashMessages(t, backend, rtStates, stakingBackend)
 		})
 	}
 
@@ -354,7 +360,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 				continue
 			}
 
-			// Can't direcly compare headers, some backends rewrite the timestamp.
+			// Can't directly compare headers, some backends rewrite the timestamp.
 			require.EqualValues(parent.Header.Version, header.Version, "block version")
 			require.EqualValues(parent.Header.Namespace, header.Namespace, "block namespace")
 			require.EqualValues(parent.Header.Round, header.Round, "block round")
@@ -378,6 +384,274 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive block")
 		}
+	}
+}
+
+func hashFromHex(t *testing.T, text string) hash.Hash {
+	var h hash.Hash
+	require.NoError(t, h.UnmarshalHex(text), "hash UnmarshalHex")
+	return h
+}
+
+func testRoothashMessages(t *testing.T, backend api.Backend, states []*runtimeState, stakingBackend staking.Backend) {
+	require := require.New(t)
+
+	var emptyRoot hash.Hash
+	emptyRoot.Empty()
+
+	adjustmentAmount := stakingTests.QtyFromInt(1004)
+	srcStartBalance, _, _, _, err := stakingBackend.AccountInfo(context.Background(), stakingTests.SrcID)
+	require.NoError(err, "AccountInfo %s", stakingTests.SrcID)
+	srcPlusAdjustment := srcStartBalance.Clone()
+	require.NoError(srcPlusAdjustment.Add(&adjustmentAmount), "Quantity Add")
+	destStartBalance, _, _, _, err := stakingBackend.AccountInfo(context.Background(), stakingTests.DestID)
+	require.NoError(err, "AccountInfo %s", stakingTests.DestID)
+	require.True(adjustmentAmount.Cmp(destStartBalance) > 0, "adjustment large enough for overdraw")
+
+	for _, testCase := range []struct {
+		name                string
+		runtimeState        *runtimeState
+		commitStateRoot     hash.Hash
+		roothashMessages    []*block.RoothashMessage
+		shouldSucceed       bool
+		checkStakingAccount signature.PublicKey
+		checkStakingBalance *staking.Quantity
+	}{
+		{
+			name:            "increase",
+			runtimeState:    states[0],
+			commitStateRoot: hashFromHex(t, "0100000000000000000000000000000000000000000000000000000000000000"),
+			roothashMessages: []*block.RoothashMessage{
+				{
+					StakingGeneralAdjustmentRoothashMessage: &block.StakingGeneralAdjustmentRoothashMessage{
+						Account: stakingTests.SrcID,
+						Op:      block.Increase,
+						Amount:  &adjustmentAmount,
+					},
+				},
+			},
+			shouldSucceed:       true,
+			checkStakingAccount: stakingTests.SrcID,
+			checkStakingBalance: srcPlusAdjustment,
+		},
+
+		{
+			name:            "decrease",
+			runtimeState:    states[0],
+			commitStateRoot: hashFromHex(t, "0200000000000000000000000000000000000000000000000000000000000000"),
+			roothashMessages: []*block.RoothashMessage{
+				{
+					StakingGeneralAdjustmentRoothashMessage: &block.StakingGeneralAdjustmentRoothashMessage{
+						Account: stakingTests.SrcID,
+						Op:      block.Decrease,
+						Amount:  &adjustmentAmount,
+					},
+				},
+			},
+			shouldSucceed:       true,
+			checkStakingAccount: stakingTests.SrcID,
+			checkStakingBalance: srcStartBalance,
+		},
+
+		{
+			name:            "invalid op",
+			runtimeState:    states[0],
+			commitStateRoot: hashFromHex(t, "0300000000000000000000000000000000000000000000000000000000000000"),
+			roothashMessages: []*block.RoothashMessage{
+				{
+					StakingGeneralAdjustmentRoothashMessage: &block.StakingGeneralAdjustmentRoothashMessage{
+						Account: stakingTests.SrcID,
+						Op:      99,
+						Amount:  &adjustmentAmount,
+					},
+				},
+			},
+			shouldSucceed:       false,
+			checkStakingAccount: stakingTests.SrcID,
+			checkStakingBalance: srcStartBalance,
+		},
+
+		{
+			name:            "insufficient balance",
+			runtimeState:    states[0],
+			commitStateRoot: hashFromHex(t, "0400000000000000000000000000000000000000000000000000000000000000"),
+			roothashMessages: []*block.RoothashMessage{
+				{
+					StakingGeneralAdjustmentRoothashMessage: &block.StakingGeneralAdjustmentRoothashMessage{
+						Account: stakingTests.DestID,
+						Op:      block.Decrease,
+						Amount:  &adjustmentAmount,
+					},
+				},
+			},
+			shouldSucceed:       false,
+			checkStakingAccount: stakingTests.DestID,
+			checkStakingBalance: destStartBalance,
+		},
+
+		{
+			name:            "all or nothing",
+			runtimeState:    states[0],
+			commitStateRoot: hashFromHex(t, "0500000000000000000000000000000000000000000000000000000000000000"),
+			roothashMessages: []*block.RoothashMessage{
+				{
+					StakingGeneralAdjustmentRoothashMessage: &block.StakingGeneralAdjustmentRoothashMessage{
+						Account: stakingTests.DestID,
+						Op:      block.Increase,
+						Amount:  &adjustmentAmount,
+					},
+				},
+				{
+					StakingGeneralAdjustmentRoothashMessage: &block.StakingGeneralAdjustmentRoothashMessage{
+						Account: stakingTests.SrcID,
+						Op:      99,
+						Amount:  &adjustmentAmount,
+					},
+				},
+			},
+			shouldSucceed:       false,
+			checkStakingAccount: stakingTests.DestID,
+			checkStakingBalance: destStartBalance,
+		},
+
+		{
+			name:            "unacceptable transfer peer",
+			runtimeState:    states[1],
+			commitStateRoot: hashFromHex(t, "0600000000000000000000000000000000000000000000000000000000000000"),
+			roothashMessages: []*block.RoothashMessage{
+				{
+					StakingGeneralAdjustmentRoothashMessage: &block.StakingGeneralAdjustmentRoothashMessage{
+						Account: stakingTests.DestID,
+						Op:      block.Increase,
+						Amount:  &adjustmentAmount,
+					},
+				},
+			},
+			shouldSucceed:       false,
+			checkStakingAccount: stakingTests.DestID,
+			checkStakingBalance: destStartBalance,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			rt, computeCommittee, mergeCommittee := testCase.runtimeState.rt, testCase.runtimeState.computeCommittee, testCase.runtimeState.mergeCommittee
+
+			child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID)
+			require.NoError(err, "GetLatestBlock")
+			require.NotEqual(testCase.commitStateRoot, child.Header.StateRoot, "trying to commit to a different state root")
+
+			ch, sub, err := backend.WatchBlocks(rt.Runtime.ID)
+			require.NoError(err, "WatchBlocks")
+			defer sub.Close()
+
+			// Create the new block header that the leader and nodes will commit to.
+			parent := &block.Block{
+				Header: block.Header{
+					Version:      0,
+					Namespace:    child.Header.Namespace,
+					Round:        child.Header.Round + 1,
+					Timestamp:    uint64(time.Now().Unix()),
+					HeaderType:   block.Normal,
+					PreviousHash: child.Header.EncodedHash(),
+					IORoot:       emptyRoot,
+					StateRoot:    testCase.commitStateRoot,
+				},
+			}
+			require.True(parent.Header.IsParentOf(&child.Header), "parent is parent of child")
+
+			// Generate all the compute commitments.
+			var toCommit []*registryTests.TestNode
+			var computeCommits []commitment.ComputeCommitment
+			toCommit = append(toCommit, computeCommittee.workers...)
+			for _, node := range toCommit {
+				commitBody := commitment.ComputeBody{
+					CommitteeID: computeCommittee.committee.EncodedMembersHash(),
+					Header: commitment.ComputeResultsHeader{
+						PreviousHash:     parent.Header.PreviousHash,
+						IORoot:           parent.Header.IORoot,
+						StateRoot:        parent.Header.StateRoot,
+						RoothashMessages: testCase.roothashMessages,
+					},
+					StorageSignatures: parent.Header.StorageSignatures,
+					InputRoot:         hash.Hash{},
+					InputStorageSigs:  []signature.Signature{},
+				}
+
+				// Fake txn scheduler signature.
+				dispatch := &commitment.TxnSchedulerBatchDispatch{
+					CommitteeID:       commitBody.CommitteeID,
+					IORoot:            commitBody.InputRoot,
+					StorageSignatures: commitBody.InputStorageSigs,
+					Header:            child.Header,
+				}
+				signer := testCase.runtimeState.txnSchedCommittee.leader.Signer
+				var signedDispatch *signature.Signed
+				signedDispatch, err = signature.SignSigned(signer, commitment.TxnSchedulerBatchDispatchSigCtx, dispatch)
+				require.NoError(err, "SignSigned")
+				commitBody.TxnSchedSig = signedDispatch.Signature
+
+				// `err` shadows outside.
+				commit, err := commitment.SignComputeCommitment(node.Signer, &commitBody) // nolint: vetshadow
+				require.NoError(err, "SignSigned")
+
+				computeCommits = append(computeCommits, *commit)
+			}
+
+			// Generate all the merge commitments.
+			var mergeCommits []commitment.MergeCommitment
+			toCommit = nil
+			toCommit = append(toCommit, mergeCommittee.workers...)
+			mergedHeader := parent.Header
+			mergedHeader.RoothashMessages = testCase.roothashMessages
+			for _, node := range toCommit {
+				commitBody := commitment.MergeBody{
+					ComputeCommits: computeCommits,
+					Header:         mergedHeader,
+				}
+				// `err` shadows outside.
+				commit, err := commitment.SignMergeCommitment(node.Signer, &commitBody) // nolint: vetshadow
+				require.NoError(err, "SignSigned")
+
+				mergeCommits = append(mergeCommits, *commit)
+			}
+
+			err = backend.MergeCommit(context.Background(), rt.Runtime.ID, mergeCommits)
+			require.NoError(err, "MergeCommit")
+
+			// Ensure that the round was finalized.
+			for {
+				select {
+				case blk := <-ch:
+					header := blk.Block.Header
+
+					// Ensure that WatchBlocks uses the correct latest block.
+					require.True(header.Round >= child.Header.Round, "WatchBlocks must start at child block")
+
+					if header.Round == child.Header.Round {
+						require.EqualValues(child.Header, header, "old block is equal")
+						continue
+					}
+
+					// Ensure that we properly committed or reverted.
+					if testCase.shouldSucceed {
+						require.EqualValues(parent.Header.HeaderType, header.HeaderType, "block header type")
+						require.EqualValues(parent.Header.StateRoot, header.StateRoot, "block root hash")
+					} else {
+						require.EqualValues(block.RoundFailed, header.HeaderType, "block header type")
+						require.EqualValues(child.Header.StateRoot, header.StateRoot, "block root hash")
+					}
+
+					// Ensure that staking balances are correct.
+					genBal, _, _, _, err := stakingBackend.AccountInfo(context.Background(), testCase.checkStakingAccount)
+					require.NoError(err, "AccountInfo %s", testCase.checkStakingAccount)
+					require.Equal(testCase.checkStakingBalance, genBal, "staking balance matches")
+
+					// Nothing more to do after the block was received.
+					return
+				case <-time.After(recvTimeout):
+					t.Fatalf("failed to receive block")
+				}
+			}
+		})
 	}
 }
 

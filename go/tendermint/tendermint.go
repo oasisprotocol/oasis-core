@@ -303,6 +303,12 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 	if err != nil {
 		return err
 	}
+	if ptrSub, ok := txSub.(*tmpubsub.Subscription); ok && ptrSub == nil {
+		t.Logger.Debug("broadcastTx: service has shut down. Cancel our context to recover")
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
 	// This should be simple, but Tenermint's unbuffered pubsub is very dangerous
 	// as if you don't drain the subscription channel, the whole pubsub system can
 	// get blocked forever. So make sure to process events immediately.

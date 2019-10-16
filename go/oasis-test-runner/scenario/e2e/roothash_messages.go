@@ -1,54 +1,36 @@
 package e2e
 
 import (
-	"os/exec"
-
+	"context"
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	tendermintmock "github.com/oasislabs/oasis-core/go/epochtime/tendermint_mock"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 var (
-	// Basic is the basic network + client test case.
-	Basic scenario.Scenario = &basicImpl{
-		name:         "basic",
-		clientBinary: "simple-keyvalue-client",
-	}
-	// BasicEncryption is the basic network + client with encryption test case.
-	BasicEncryption scenario.Scenario = &basicImpl{
-		name:         "basic_encryption",
-		clientBinary: "simple-keyvalue-enc-client",
-	}
-
-	// DefaultBasicLogWatcherHandlers is a list of default basic log watcher handlers.
-	DefaultBasicLogWatcherHandlers = []log.WatcherHandler{
-		oasis.LogAssertNoTimeouts(),
-		oasis.LogAssertNoRoundFailures(),
-		oasis.LogAssertNoComputeDiscrepancyDetected(),
-		oasis.LogAssertNoMergeDiscrepancyDetected(),
-	}
+	RoothashMessages scenario.Scenario = &roothashMessagesImpl{}
 )
 
-type basicImpl struct {
+type roothashMessagesImpl struct {
 	net *oasis.Network
-
-	name         string
-	clientBinary string
-	clientArgs   []string
 }
 
-func (sc *basicImpl) Name() string {
-	return sc.name
+func (sc *roothashMessagesImpl) Name() string {
+	return "roothash-messages"
 }
 
-func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
+func (sc *roothashMessagesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	var tee node.TEEHardware
 	err := tee.FromString(viper.GetString(cfgTEEHardware))
 	if err != nil {
@@ -62,7 +44,7 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if err != nil {
 		return nil, err
 	}
-	runtimeBinary, err := resolveRuntimeBinary("simple-keyvalue")
+	runtimeBinary, err := resolveRuntimeBinary("staking-arbitrary")
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +57,12 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 		Network: oasis.NetworkCfg{
 			NodeBinary:          viper.GetString(cfgNodeBinary),
 			RuntimeLoaderBinary: viper.GetString(cfgRuntimeLoader),
-			LogWatcherHandlers:  DefaultBasicLogWatcherHandlers,
+			EpochtimeBackend:    tendermintmock.BackendName,
+			StakingGenesis:      "tests/fixture-data/roothash-messages/staking-genesis.json",
+			LogWatcherHandlers: append([]log.WatcherHandler{
+				oasis.LogAssertNotEvent(roothash.LogEventMessageUnsat, "unsatisfactory roothash message detected"),
+				oasis.LogAssertEvent(staking.LogEventGeneralAdjustment, "balance adjustment not detected"),
+			}, DefaultBasicLogWatcherHandlers...),
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},
@@ -97,14 +84,12 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 				Entity:                 0,
 				Keymanager:             0,
 				Binary:                 runtimeBinary,
-				ReplicaGroupSize:       2,
-				ReplicaGroupBackupSize: 1,
-				StorageGroupSize:       2,
+				ReplicaGroupSize:       1,
+				ReplicaGroupBackupSize: 0,
+				StorageGroupSize:       1,
 			},
 		},
 		Validators: []oasis.ValidatorFixture{
-			oasis.ValidatorFixture{Entity: 1},
-			oasis.ValidatorFixture{Entity: 1},
 			oasis.ValidatorFixture{Entity: 1},
 		},
 		Keymanagers: []oasis.KeymanagerFixture{
@@ -112,11 +97,8 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 		StorageWorkers: []oasis.StorageWorkerFixture{
 			oasis.StorageWorkerFixture{Backend: "badger", Entity: 1},
-			oasis.StorageWorkerFixture{Backend: "badger", Entity: 1},
 		},
 		ComputeWorkers: []oasis.ComputeWorkerFixture{
-			oasis.ComputeWorkerFixture{Entity: 1},
-			oasis.ComputeWorkerFixture{Entity: 1},
 			oasis.ComputeWorkerFixture{Entity: 1},
 		},
 		Clients: []oasis.ClientFixture{
@@ -125,38 +107,46 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}, nil
 }
 
-func (sc *basicImpl) Init(childEnv *env.Env, net *oasis.Network) error {
+func (sc *roothashMessagesImpl) Init(childEnv *env.Env, net *oasis.Network) error {
 	sc.net = net
 	return nil
 }
 
-func (sc *basicImpl) start(childEnv *env.Env) (<-chan error, *exec.Cmd, error) {
-	var err error
-	if err = sc.net.Start(); err != nil {
-		return nil, nil, err
+func (sc *roothashMessagesImpl) Run(childEnv *env.Env) error {
+	if err := sc.net.Start(); err != nil {
+		return err
 	}
 
-	cmd, err := startClient(childEnv, sc.net, sc.clientBinary, sc.clientArgs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	clientErrCh := make(chan error)
-	go func() {
-		clientErrCh <- cmd.Wait()
-	}()
-	return clientErrCh, cmd, nil
-}
-
-func (sc *basicImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan error) error {
-	var err error
-	select {
-	case err = <-sc.net.Errors():
-		_ = cmd.Process.Kill()
-	case err = <-clientErrCh:
-	}
+	client, err := startClient(childEnv, sc.net, "staking-arbitrary-client", nil)
 	if err != nil {
 		return err
+	}
+	clientErrCh := make(chan error)
+	go func() {
+		clientErrCh <- client.Wait()
+	}()
+
+	ctx := context.Background()
+	logger.Info("waiting for nodes to register")
+	if err = sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
+		return errors.Wrap(err, "waiting for nodes to register")
+	}
+	logger.Info("nodes registered")
+
+	logger.Info("triggering epoch transition")
+	if err = sc.net.Controller().SetEpoch(ctx, 1); err != nil {
+		return errors.Wrap(err, "setting epoch")
+	}
+	logger.Info("epoch transition done")
+
+	select {
+	case err = <-sc.net.Errors():
+		_ = client.Process.Kill()
+		return errors.Wrapf(err, "network")
+	case err = <-clientErrCh:
+		if err != nil {
+			return errors.Wrap(err, "waiting for client")
+		}
 	}
 
 	if err = sc.net.CheckLogWatchers(); err != nil {
@@ -164,13 +154,4 @@ func (sc *basicImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan e
 	}
 
 	return nil
-}
-
-func (sc *basicImpl) Run(childEnv *env.Env) error {
-	clientErrCh, cmd, err := sc.start(childEnv)
-	if err != nil {
-		return err
-	}
-
-	return sc.wait(childEnv, cmd, clientErrCh)
 }

@@ -28,6 +28,8 @@ const (
 	LogEventTimerFired = "roothash/timer_fired"
 	// LogEventRoundFailed is a log event value that signals a round has failed.
 	LogEventRoundFailed = "roothash/round_failed"
+	// LogEventMessageUnsat is a log event value that signals a roothash message was not satisfactory.
+	LogEventMessageUnsat = "roothash/message_unsat"
 )
 
 var (

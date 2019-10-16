@@ -126,6 +126,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	)
 
 	state.setDebondingInterval(st.DebondingInterval)
+	state.setAcceptableTransferPeers(st.AcceptableTransferPeers)
 
 	if st.Thresholds != nil {
 		var ups thresholdUpdates

@@ -10,6 +10,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
@@ -35,6 +37,12 @@ var (
 	//
 	// Value is a little endian encoding of an uint64.
 	debondingIntervalKeyFmt = keyformat.New(0x54)
+	// acceptableTransferPeersKeyFmt is the key format used for the acceptable transfer peers set.
+	//
+	// Value is a CBOR-serialized map from acceptable runtime IDs to the boolean true.
+	acceptableTransferPeersKeyFmt = keyformat.New(0x55)
+
+	logger = logging.GetLogger("tendermint/staking")
 )
 
 type ledgerEntry struct {
@@ -230,6 +238,10 @@ func (s *MutableState) setDebondingInterval(interval uint64) {
 	s.tree.Set(debondingIntervalKeyFmt.Encode(), tmp[:])
 }
 
+func (s *MutableState) setAcceptableTransferPeers(peers map[signature.MapKey]bool) {
+	s.tree.Set(acceptableTransferPeersKeyFmt.Encode(), cbor.Marshal(peers))
+}
+
 func (s *MutableState) setThreshold(kind staking.ThresholdKind, q *staking.Quantity) {
 	s.tree.Set(thresholdKeyFmt.Encode(uint64(kind)), cbor.Marshal(q))
 }
@@ -303,6 +315,54 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 	}
 
 	return ret, nil
+}
+
+func (s *MutableState) isAcceptableTransferPeer(runtimeID signature.PublicKey) (bool, error) {
+	_, value := s.Snapshot.Get(acceptableTransferPeersKeyFmt.Encode())
+	if value == nil {
+		return false, nil
+	}
+
+	var peers map[signature.MapKey]bool
+	if err := cbor.Unmarshal(value, &peers); err != nil {
+		return false, err
+	}
+	return peers[runtimeID.ToMapKey()], nil
+}
+
+func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, message *block.RoothashMessage) (error, error) {
+	if message.StakingGeneralAdjustmentRoothashMessage != nil {
+		acceptable, err := s.isAcceptableTransferPeer(runtimeID)
+		if err != nil {
+			return nil, errors.Wrap(err, "state corrupted")
+		}
+		if !acceptable {
+			return errors.Errorf("staking general adjustment message received from unacceptable runtime %s", runtimeID), nil
+		}
+
+		account := s.account(message.StakingGeneralAdjustmentRoothashMessage.Account)
+
+		switch message.StakingGeneralAdjustmentRoothashMessage.Op {
+		case block.Increase:
+			err = account.GeneralBalance.Add(message.StakingGeneralAdjustmentRoothashMessage.Amount)
+		case block.Decrease:
+			err = account.GeneralBalance.Sub(message.StakingGeneralAdjustmentRoothashMessage.Amount)
+		default:
+			return errors.Errorf("staking general adjustment message has invalid op"), nil
+		}
+		if err != nil {
+			return errors.Wrapf(err, "couldn't apply adjustment in staking general adjustment message"), nil
+		}
+
+		s.setAccount(message.StakingGeneralAdjustmentRoothashMessage.Account, account)
+		logger.Debug("handled StakingGeneralAdjustmentRoothashMessage",
+			logging.LogEvent, staking.LogEventGeneralAdjustment,
+			"account", message.StakingGeneralAdjustmentRoothashMessage.Account,
+			"general_balance_after", account.GeneralBalance,
+		)
+	}
+
+	return nil, nil
 }
 
 // NewMutableState creates a new mutable staking state wrapper.

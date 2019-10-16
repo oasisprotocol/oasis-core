@@ -5,10 +5,14 @@
 //! This **MUST** be kept in sync with go/roothash/api/block.
 //!
 use serde_derive::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use super::{
     cbor,
-    crypto::{hash::Hash, signature::SignatureBundle},
+    crypto::{
+        hash::Hash,
+        signature::{PublicKey, SignatureBundle},
+    },
 };
 
 /// Block.
@@ -19,6 +23,25 @@ pub struct Block {
 }
 
 impl_bytes!(Namespace, 32, "Chain namespace.");
+
+/// Operation used in `StakingGeneralAdjustmentRoothashMessage`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum AdjustmentOp {
+    INCREASE = 1,
+    DECREASE = 2,
+}
+
+/// Roothash message.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RoothashMessage {
+    StakingGeneralAdjustmentRoothashMessage {
+        account: PublicKey,
+        op: AdjustmentOp,
+        #[serde(with = "serde_bytes")]
+        amount: Vec<u8>,
+    },
+}
 
 /// Block header.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -39,6 +62,8 @@ pub struct Header {
     pub io_root: Hash,
     /// State merkle root.
     pub state_root: Hash,
+    /// Roothash messages sent this round.
+    pub roothash_messages: Option<Vec<RoothashMessage>>,
     /// Storage receipt signatures.
     pub storage_signatures: Option<Vec<SignatureBundle>>,
 }
@@ -65,6 +90,8 @@ pub struct ComputeResultsHeader {
     pub io_root: Hash,
     /// The root hash of the state after computing this batch.
     pub state_root: Hash,
+    /// Roothash messages sent from this batch.
+    pub roothash_messages: Vec<RoothashMessage>,
 }
 
 #[cfg(test)]
@@ -77,7 +104,7 @@ mod tests {
         let empty = Header::default();
         assert_eq!(
             empty.encoded_hash(),
-            Hash::from("fb1a6451509ddc17e94582df50e0fd1842ffce903a9a8d362ff90a3084e8dbdd")
+            Hash::from("96227abf446627117cd990023d9201f79ee2e3cc5119eded59259b913a1d79f5")
         );
 
         let populated = Header {
@@ -89,11 +116,18 @@ mod tests {
             previous_hash: empty.encoded_hash(),
             io_root: Hash::empty_hash(),
             state_root: Hash::empty_hash(),
+            roothash_messages: Some(vec![
+                RoothashMessage::StakingGeneralAdjustmentRoothashMessage {
+                    account: PublicKey(*b"UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU"),
+                    op: AdjustmentOp::INCREASE,
+                    amount: vec![0x01, 0x0f, 0x00],
+                },
+            ]),
             ..Default::default()
         };
         assert_eq!(
             populated.encoded_hash(),
-            Hash::from("091d12549887474e7fc6651c73711bf1da4dc567cdc845f6b14afd7f376305fc")
+            Hash::from("480a773c029e57cc9f4c520ae659de28eba69bde92371a0dd0f076725382515e")
         );
     }
 }

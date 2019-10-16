@@ -2,7 +2,8 @@
 
 # List of paths to runtimes that we should build.
 RUNTIMES = keymanager-runtime \
-	tests/runtimes/simple-keyvalue
+	tests/runtimes/simple-keyvalue \
+	tests/runtimes/staking-arbitrary
 
 # Check if we're running in an interactive terminal.
 ISATTY := $(shell [ -t 0 ] && echo 1)

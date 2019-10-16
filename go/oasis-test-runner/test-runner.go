@@ -35,6 +35,8 @@ func main() {
 	_ = cmd.Register(e2e.KeymanagerRestart)
 	// Dump/restore test.
 	_ = cmd.Register(e2e.DumpRestore)
+	// Roothash messages test.
+	_ = cmd.Register(e2e.RoothashMessages)
 
 	// Execute the command, now that everything has been initialized.
 	cmd.Execute()

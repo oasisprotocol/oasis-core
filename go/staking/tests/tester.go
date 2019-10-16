@@ -27,25 +27,29 @@ var (
 	debugGenesisState = api.Genesis{
 		TotalSupply: testTotalSupply,
 		Ledger: map[signature.MapKey]*api.GenesisLedgerEntry{
-			srcID.ToMapKey(): &api.GenesisLedgerEntry{
+			SrcID.ToMapKey(): &api.GenesisLedgerEntry{
 				GeneralBalance: testTotalSupply,
 			},
 		},
 		Thresholds: map[api.ThresholdKind]api.Quantity{
-			api.KindEntity:    qtyFromInt(1),
-			api.KindValidator: qtyFromInt(2),
-			api.KindCompute:   qtyFromInt(3),
-			api.KindStorage:   qtyFromInt(4),
+			api.KindEntity:    QtyFromInt(1),
+			api.KindValidator: QtyFromInt(2),
+			api.KindCompute:   QtyFromInt(3),
+			api.KindStorage:   QtyFromInt(4),
+		},
+		AcceptableTransferPeers: map[signature.MapKey]bool{
+			// test runtime 0 from roothash tester
+			publicKeyFromHex("612b31ddd66fc99e41cc9996f4029ea84752785d7af329d4595c4bcf8f5e4215").ToMapKey(): true,
 		},
 	}
 
-	testTotalSupply = qtyFromInt(math.MaxInt64)
-	qtyOne          = qtyFromInt(1)
+	testTotalSupply = QtyFromInt(math.MaxInt64)
+	qtyOne          = QtyFromInt(1)
 
 	srcSigner  = mustGenerateSigner()
-	srcID      = srcSigner.Public()
+	SrcID      = srcSigner.Public()
 	destSigner = mustGenerateSigner()
-	destID     = destSigner.Public()
+	DestID     = destSigner.Public()
 )
 
 // StakingImplementationTests exercises the basic functionality of a
@@ -75,9 +79,9 @@ func testInitialEnv(t *testing.T, backend api.Backend) {
 	accounts, err := backend.Accounts(context.Background())
 	require.NoError(err, "Accounts")
 	require.Len(accounts, 1, "Accounts - nr entries")
-	require.Equal(srcID, accounts[0], "Accounts[0] == testID")
+	require.Equal(SrcID, accounts[0], "Accounts[0] == testID")
 
-	generalBalance, escrowBalance, debond, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	generalBalance, escrowBalance, debond, nonce, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo")
 	require.Equal(&testTotalSupply, generalBalance, "src: generalBalance")
 	require.True(escrowBalance.IsZero(), "src: escrowBalance")
@@ -103,12 +107,12 @@ func testInitialEnv(t *testing.T, backend api.Backend) {
 func testTransfer(t *testing.T, backend api.Backend) {
 	require := require.New(t)
 
-	destBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), destID)
+	destBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), DestID)
 	require.NoError(err, "dest: AccountInfo")
 	require.True(destBalance.IsZero(), "dest: generalBalance - before")
 	require.EqualValues(0, nonce, "dest: nonce - before")
 
-	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo - before")
 
 	ch, sub := backend.WatchTransfers()
@@ -116,8 +120,8 @@ func testTransfer(t *testing.T, backend api.Backend) {
 
 	xfer := &api.Transfer{
 		Nonce:  nonce,
-		To:     destID,
-		Tokens: qtyFromInt(math.MaxUint8),
+		To:     DestID,
+		Tokens: QtyFromInt(math.MaxUint8),
 	}
 	signed, err := api.SignTransfer(srcSigner, xfer)
 	require.NoError(err, "Sign xfer")
@@ -127,20 +131,20 @@ func testTransfer(t *testing.T, backend api.Backend) {
 
 	select {
 	case ev := <-ch:
-		require.Equal(srcID, ev.From, "Event: from")
-		require.Equal(destID, ev.To, "Event: to")
+		require.Equal(SrcID, ev.From, "Event: from")
+		require.Equal(DestID, ev.To, "Event: to")
 		require.Equal(xfer.Tokens, ev.Tokens, "Event: tokens")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive transfer event")
 	}
 
 	_ = srcBalance.Sub(&xfer.Tokens)
-	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo - after")
 	require.Equal(srcBalance, newSrcBalance, "src: generalBalance")
 	require.Equal(xfer.Nonce+1, nonce, "src: nonce")
 
-	destBalance, _, _, nonce, err = backend.AccountInfo(context.Background(), destID)
+	destBalance, _, _, nonce, err = backend.AccountInfo(context.Background(), DestID)
 	require.NoError(err, "dest: AccountInfo - after")
 	require.Equal(&xfer.Tokens, destBalance, "dest: generalBalance - after")
 	require.EqualValues(0, nonce, "dest: nonce - after")
@@ -160,7 +164,7 @@ func testTransfer(t *testing.T, backend api.Backend) {
 func testSelfTransfer(t *testing.T, backend api.Backend) {
 	require := require.New(t)
 
-	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo - before")
 
 	ch, sub := backend.WatchTransfers()
@@ -168,8 +172,8 @@ func testSelfTransfer(t *testing.T, backend api.Backend) {
 
 	xfer := &api.Transfer{
 		Nonce:  nonce,
-		To:     srcID,
-		Tokens: qtyFromInt(math.MaxUint8),
+		To:     SrcID,
+		Tokens: QtyFromInt(math.MaxUint8),
 	}
 	signed, err := api.SignTransfer(srcSigner, xfer)
 	require.NoError(err, "Sign xfer")
@@ -179,14 +183,14 @@ func testSelfTransfer(t *testing.T, backend api.Backend) {
 
 	select {
 	case ev := <-ch:
-		require.Equal(srcID, ev.From, "Event: from")
-		require.Equal(srcID, ev.To, "Event: to")
+		require.Equal(SrcID, ev.From, "Event: from")
+		require.Equal(SrcID, ev.To, "Event: to")
 		require.Equal(xfer.Tokens, ev.Tokens, "Event: tokens")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive transfer event")
 	}
 
-	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo - after")
 	require.Equal(srcBalance, newSrcBalance, "src: generalBalance")
 	require.Equal(xfer.Nonce+1, nonce, "src: nonce")
@@ -209,7 +213,7 @@ func testBurn(t *testing.T, backend api.Backend) {
 	totalSupply, err := backend.TotalSupply(context.Background())
 	require.NoError(err, "TotalSupply - before")
 
-	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo")
 
 	ch, sub := backend.WatchBurns()
@@ -217,7 +221,7 @@ func testBurn(t *testing.T, backend api.Backend) {
 
 	burn := &api.Burn{
 		Nonce:  nonce,
-		Tokens: qtyFromInt(math.MaxUint32),
+		Tokens: QtyFromInt(math.MaxUint32),
 	}
 	signed, err := api.SignBurn(srcSigner, burn)
 	require.NoError(err, "Sign burn")
@@ -227,7 +231,7 @@ func testBurn(t *testing.T, backend api.Backend) {
 
 	select {
 	case ev := <-ch:
-		require.Equal(srcID, ev.Owner, "Event: owner")
+		require.Equal(SrcID, ev.Owner, "Event: owner")
 		require.Equal(burn.Tokens, ev.Tokens, "Event: tokens")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive burn event")
@@ -239,7 +243,7 @@ func testBurn(t *testing.T, backend api.Backend) {
 	require.Equal(totalSupply, newTotalSupply, "totalSupply is reduced by burn")
 
 	_ = srcBalance.Sub(&burn.Tokens)
-	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), srcID)
+	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo")
 	require.Equal(srcBalance, newSrcBalance, "src: generalBalance - after")
 	require.EqualValues(burn.Nonce+1, nonce, "src: nonce - after")
@@ -248,7 +252,7 @@ func testBurn(t *testing.T, backend api.Backend) {
 func testEscrow(t *testing.T, backend api.Backend) {
 	require := require.New(t)
 
-	generalBalance, escrowBalance, _, nonce, err := backend.AccountInfo(context.Background(), destID)
+	generalBalance, escrowBalance, _, nonce, err := backend.AccountInfo(context.Background(), DestID)
 	require.NoError(err, "AccountInfo - before")
 	require.False(generalBalance.IsZero(), "dest: generalBalance != 0")
 	require.True(escrowBalance.IsZero(), "dest: escrowBalance == 0")
@@ -269,7 +273,7 @@ func testEscrow(t *testing.T, backend api.Backend) {
 	select {
 	case rawEv := <-ch:
 		ev := rawEv.(*api.EscrowEvent)
-		require.Equal(destID, ev.Owner, "Event: owner")
+		require.Equal(DestID, ev.Owner, "Event: owner")
 		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive escrow event")
@@ -277,7 +281,7 @@ func testEscrow(t *testing.T, backend api.Backend) {
 
 	tmpBalance := generalBalance
 
-	generalBalance, escrowBalance, _, _, err = backend.AccountInfo(context.Background(), destID)
+	generalBalance, escrowBalance, _, _, err = backend.AccountInfo(context.Background(), DestID)
 	require.NoError(err, "AccountInfo - escrowed")
 	require.True(generalBalance.IsZero(), "dest: generalBalance == 0")
 	require.Equal(tmpBalance, escrowBalance, "dest: escrowBalance == oldGeneralBalance")
@@ -295,13 +299,13 @@ func testEscrow(t *testing.T, backend api.Backend) {
 	select {
 	case rawEv := <-ch:
 		ev := rawEv.(*api.ReclaimEscrowEvent)
-		require.Equal(destID, ev.Owner, "Event: owner")
+		require.Equal(DestID, ev.Owner, "Event: owner")
 		require.Equal(reclaim.Tokens, ev.Tokens, "Event: tokens")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive escrow event")
 	}
 
-	generalBalance, escrowBalance, _, _, err = backend.AccountInfo(context.Background(), destID)
+	generalBalance, escrowBalance, _, _, err = backend.AccountInfo(context.Background(), DestID)
 	require.NoError(err, "AccountInfo - escrowed")
 	require.Equal(tmpBalance, generalBalance, "dest: generalBalance == oldGeneralBalance")
 	require.True(escrowBalance.IsZero(), "dest: escrowBalance == 0")
@@ -326,12 +330,20 @@ func mustGenerateSigner() signature.Signer {
 	return k
 }
 
-func qtyFromInt(n int) api.Quantity {
+func QtyFromInt(n int) api.Quantity {
 	q := api.NewQuantity()
 	if err := q.FromBigInt(big.NewInt(int64(n))); err != nil {
 		panic(err)
 	}
 	return *q
+}
+
+func publicKeyFromHex(s string) signature.PublicKey {
+	var pk signature.PublicKey
+	if err := pk.UnmarshalHex(s); err != nil {
+		panic(err)
+	}
+	return pk
 }
 
 func init() {

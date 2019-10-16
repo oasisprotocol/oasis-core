@@ -1,30 +1,39 @@
 package block
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 func TestConsistentHash(t *testing.T) {
 	// NOTE: These hashes MUST be synced with runtime/src/common/roothash.rs.
 	var emptyHeaderHash hash.Hash
-	_ = emptyHeaderHash.UnmarshalHex("fb1a6451509ddc17e94582df50e0fd1842ffce903a9a8d362ff90a3084e8dbdd")
+	_ = emptyHeaderHash.UnmarshalHex("96227abf446627117cd990023d9201f79ee2e3cc5119eded59259b913a1d79f5")
 
 	var empty Header
 	require.EqualValues(t, emptyHeaderHash, empty.EncodedHash())
 
 	var populatedHeaderHash hash.Hash
-	_ = populatedHeaderHash.UnmarshalHex("091d12549887474e7fc6651c73711bf1da4dc567cdc845f6b14afd7f376305fc")
+	_ = populatedHeaderHash.UnmarshalHex("480a773c029e57cc9f4c520ae659de28eba69bde92371a0dd0f076725382515e")
 
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 
 	var ns common.Namespace
 	_ = ns.UnmarshalBinary(emptyRoot[:])
+
+	var account signature.PublicKey
+	require.NoError(t, account.UnmarshalHex("5555555555555555555555555555555555555555555555555555555555555555"), "PublicKey UnmarshalHex")
+
+	var amount api.Quantity
+	require.NoError(t, amount.FromBigInt(big.NewInt(69376)), "Quantity FromBigInt")
 
 	populated := Header{
 		Version:      42,
@@ -35,6 +44,15 @@ func TestConsistentHash(t *testing.T) {
 		PreviousHash: emptyHeaderHash,
 		IORoot:       emptyRoot,
 		StateRoot:    emptyRoot,
+		RoothashMessages: []*RoothashMessage{
+			{
+				StakingGeneralAdjustmentRoothashMessage: &StakingGeneralAdjustmentRoothashMessage{
+					Account: account,
+					Op:      Increase,
+					Amount:  &amount,
+				},
+			},
+		},
 	}
 	require.EqualValues(t, populatedHeaderHash, populated.EncodedHash())
 }

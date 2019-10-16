@@ -22,6 +22,7 @@ extern crate serde_bytes;
 extern crate serde_cbor;
 extern crate serde_derive;
 extern crate serde_json;
+extern crate serde_repr;
 extern crate slog_json;
 extern crate slog_scope;
 extern crate slog_stdlog;

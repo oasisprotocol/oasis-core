@@ -103,6 +103,9 @@ type NetworkCfg struct {
 
 	// XXX: Config for IAS proxy
 
+	// StakingGenesis is the name of a file with a staking genesis document to use if GenesisFile isn't set.
+	StakingGenesis string `json:"staking_genesis"`
+
 	// A set of log watcher handlers used by default on all nodes created in
 	// this test network.
 	LogWatcherHandlers []log.WatcherHandler `json:"-"`
@@ -454,6 +457,9 @@ func (net *Network) makeGenesis() error {
 			return err
 		}
 		args = append(args, net.keymanager.toGenesisArgs()...)
+	}
+	if net.cfg.StakingGenesis != "" {
+		args = append(args, "--staking", net.cfg.StakingGenesis)
 	}
 
 	w, err := net.baseDir.NewLogWriter("genesis_provision.log")

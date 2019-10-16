@@ -313,7 +313,7 @@ func testStaking(t *testing.T, node *testNode) {
 func testRootHash(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
-	roothashTests.RootHashImplementationTests(t, node.RootHash, timeSource, node.Scheduler, node.Storage, node.Registry)
+	roothashTests.RootHashImplementationTests(t, node.RootHash, timeSource, node.Scheduler, node.Storage, node.Registry, node.Staking)
 }
 
 func testComputeWorker(t *testing.T, node *testNode) {

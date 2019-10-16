@@ -157,7 +157,7 @@ fn test_depth_type() {
     dt.unmarshal_binary(&[0x0a, 0x00]).expect("unmarshal");
     assert_eq! {(10 as Depth), dt};
     assert_eq! {[0x04 as u8, 0x01].to_vec(), (260 as Depth).marshal_binary().unwrap()};
-    dt.unmarshal_binary(&[0x04, 0x01]).expect("unmarshal");;
+    dt.unmarshal_binary(&[0x04, 0x01]).expect("unmarshal");
     assert_eq! {(260 as Depth), dt};
 }
 
