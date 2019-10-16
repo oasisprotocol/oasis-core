@@ -39,7 +39,7 @@ var (
 	debondingIntervalKeyFmt = keyformat.New(0x54)
 	// acceptableTransferPeersKeyFmt is the key format used for the acceptable transfer peers set.
 	//
-	// Value is a CBOR-serialized map from acceptable runtime IDs the boolean true.
+	// Value is a CBOR-serialized map from acceptable runtime IDs to the boolean true.
 	acceptableTransferPeersKeyFmt = keyformat.New(0x55)
 
 	logger = logging.GetLogger("tendermint/staking")
