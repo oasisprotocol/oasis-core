@@ -77,6 +77,8 @@ impl<'a> Context<'a> {
             .push(Tag::new(key.as_ref().to_vec(), value.as_ref().to_vec()))
     }
 
+    /// Send a roothash message as part of the block that contains this transaction.
+    /// See RFC 0065 for information on roothash messages.
     pub fn send_roothash_message(&mut self, roothash_message: RoothashMessage) {
         self.roothash_messages.push(roothash_message);
     }
