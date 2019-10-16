@@ -103,19 +103,15 @@ type Application interface {
 	// followed by a '/' (eg: `foo/<some key here>`).
 	SetOption(types.RequestSetOption) types.ResponseSetOption
 
-	// CheckTx validates a transaction via the mempool.
-	//
-	// Implementations MUST only alter the ApplicationState CheckTxTree.
-	CheckTx(*Context, []byte) error
+	// ExecuteTx executes a transaction.
+	ExecuteTx(*Context, []byte) error
 
-	// ForeignCheckTx validates a transaction of another application via
-	// the mempool.
+	// ForeignExecuteTx delivers a transaction of another application for
+	// processing.
 	//
 	// This can be used to run post-tx hooks when dependencies exist
 	// between applications.
-	//
-	// Implementations MUST only alter the ApplicationState CheckTxTree.
-	ForeignCheckTx(*Context, Application, []byte) error
+	ForeignExecuteTx(*Context, Application, []byte) error
 
 	// InitChain initializes the blockchain with validators and other
 	// info from TendermintCore.
@@ -129,18 +125,6 @@ type Application interface {
 	//
 	// Note: Errors are irrecoverable and will result in a panic.
 	BeginBlock(*Context, types.RequestBeginBlock) error
-
-	// DeliverTx delivers a transaction for full processing.
-	DeliverTx(*Context, []byte) error
-
-	// ForeignDeliverTx delivers a transaction of another application for
-	// full processing.
-	//
-	// This can be used to run post-tx hooks when dependencies exist
-	// between applications.
-	//
-	// This method may mutate state.
-	ForeignDeliverTx(*Context, Application, []byte) error
 
 	// EndBlock signals the end of a block, returning changes to the
 	// validator set.
@@ -352,21 +336,21 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	)
 
 	ctx := NewContext(ContextCheckTx, mux.currentTime, mux.state)
-	if err := app.CheckTx(ctx, tx[1:]); err != nil {
+	if err := app.ExecuteTx(ctx, tx[1:]); err != nil {
 		return types.ResponseCheckTx{
 			Code: api.CodeTransactionFailed.ToInt(),
 			Info: err.Error(),
 		}
 	}
 
-	// Run ForeignCheckTx on all other applications so they can
+	// Run ForeignExecuteTx on all other applications so they can
 	// run their post-tx hooks.
 	for _, foreignApp := range mux.appsByLexOrder {
 		if foreignApp == app {
 			continue
 		}
 
-		if err := foreignApp.ForeignCheckTx(ctx, app, tx[1:]); err != nil {
+		if err := foreignApp.ForeignExecuteTx(ctx, app, tx[1:]); err != nil {
 			return types.ResponseCheckTx{
 				Code: api.CodeTransactionFailed.ToInt(),
 				Info: err.Error(),
@@ -542,7 +526,7 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 	ctx := NewContext(ContextDeliverTx, mux.currentTime, mux.state)
 	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 
-	err = app.DeliverTx(ctx, tx[1:])
+	err = app.ExecuteTx(ctx, tx[1:])
 	if err != nil {
 		return types.ResponseDeliverTx{
 			Code: api.CodeTransactionFailed.ToInt(),
@@ -557,7 +541,7 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 			continue
 		}
 
-		if err := foreignApp.ForeignDeliverTx(ctx, app, tx[1:]); err != nil {
+		if err := foreignApp.ForeignExecuteTx(ctx, app, tx[1:]); err != nil {
 			return types.ResponseDeliverTx{
 				Code: api.CodeTransactionFailed.ToInt(),
 				Info: err.Error(),

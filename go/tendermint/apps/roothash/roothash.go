@@ -148,26 +148,6 @@ func (app *rootHashApplication) queryGenesis(s interface{}, r interface{}) ([]by
 	return cbor.Marshal(gen), nil
 }
 
-func (app *rootHashApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	var request Tx
-	if err := cbor.Unmarshal(tx, &request); err != nil {
-		app.logger.Error("CheckTx: failed to unmarshal",
-			"tx", hex.EncodeToString(tx),
-		)
-		return errors.Wrap(err, "roothash: failed to unmarshal")
-	}
-
-	if err := app.executeTx(ctx, &request); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (app *rootHashApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
-	return nil
-}
-
 func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.RootHash
 
@@ -372,19 +352,26 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *runti
 	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
 }
 
-func (app *rootHashApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
-	request := &Tx{}
-	if err := cbor.Unmarshal(tx, request); err != nil {
+func (app *rootHashApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error {
+	var tx Tx
+	if err := cbor.Unmarshal(rawTx, &tx); err != nil {
 		app.logger.Error("DeliverTx: failed to unmarshal",
-			"tx", hex.EncodeToString(tx),
+			"tx", hex.EncodeToString(rawTx),
 		)
 		return errors.Wrap(err, "roothash: failed to unmarshal")
 	}
 
-	return app.executeTx(ctx, request)
+	state := newMutableState(ctx.State())
+
+	if tx.TxMergeCommit != nil {
+		return app.commit(ctx, state, tx.TxMergeCommit.ID, &tx)
+	} else if tx.TxComputeCommit != nil {
+		return app.commit(ctx, state, tx.TxComputeCommit.ID, &tx)
+	}
+	return roothash.ErrInvalidArgument
 }
 
-func (app *rootHashApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *rootHashApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
 	var st *roothash.Genesis
 	ensureGenesis := func() {
 		st = &app.state.Genesis().RootHash
@@ -552,17 +539,6 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	}
 
 	return nil
-}
-
-func (app *rootHashApplication) executeTx(ctx *abci.Context, tx *Tx) error {
-	state := newMutableState(ctx.State())
-
-	if tx.TxMergeCommit != nil {
-		return app.commit(ctx, state, tx.TxMergeCommit.ID, tx)
-	} else if tx.TxComputeCommit != nil {
-		return app.commit(ctx, state, tx.TxComputeCommit.ID, tx)
-	}
-	return roothash.ErrInvalidArgument
 }
 
 type roothashSignatureVerifier struct {

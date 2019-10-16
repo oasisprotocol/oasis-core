@@ -138,14 +138,6 @@ func (app *schedulerApplication) SetOption(req types.RequestSetOption) types.Res
 	return types.ResponseSetOption{}
 }
 
-func (app *schedulerApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	return errUnexpectedTransaction
-}
-
-func (app *schedulerApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
-	return nil
-}
-
 func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) error {
 	if app.cfg.DebugStaticValidators {
 		app.logger.Warn("static validators are configured")
@@ -319,11 +311,11 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 	return nil
 }
 
-func (app *schedulerApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
+func (app *schedulerApplication) ExecuteTx(ctx *abci.Context, tx []byte) error {
 	return errUnexpectedTransaction
 }
 
-func (app *schedulerApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *schedulerApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
 	return nil
 }
 

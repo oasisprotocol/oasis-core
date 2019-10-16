@@ -67,15 +67,6 @@ func (app *keymanagerApplication) SetOption(request types.RequestSetOption) type
 	return types.ResponseSetOption{}
 }
 
-func (app *keymanagerApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	// TODO: Add policy support.
-	return errors.New("tendermint/keymanager: transactions not supported yet")
-}
-
-func (app *keymanagerApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
-	return nil
-}
-
 func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.KeyManager
 
@@ -146,12 +137,12 @@ func (app *keymanagerApplication) BeginBlock(ctx *abci.Context, request types.Re
 	return nil
 }
 
-func (app *keymanagerApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
+func (app *keymanagerApplication) ExecuteTx(ctx *abci.Context, tx []byte) error {
 	// TODO: Add policy support.
 	return errors.New("tendermint/keymanager: transactions not supported yet")
 }
 
-func (app *keymanagerApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *keymanagerApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
 	return nil
 }
 
