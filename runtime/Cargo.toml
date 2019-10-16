@@ -48,7 +48,7 @@ intrusive-collections = "0.7"
 [dev-dependencies]
 # For storage interoperability tests only.
 grpcio = "0.4.4"
-protobuf = "~2.4"
+protobuf = "~2.6"
 tempfile = "3.0.7"
 
 [build-dependencies]
