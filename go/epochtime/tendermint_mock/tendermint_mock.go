@@ -39,6 +39,10 @@ type tendermintMockBackend struct {
 	currentBlock int64
 }
 
+func (t *tendermintMockBackend) GetBaseEpoch(context.Context) (api.EpochTime, error) {
+	return 0, nil
+}
+
 func (t *tendermintMockBackend) GetEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
 	response, err := t.service.Query(app.QueryGetEpoch, nil, height)
 	if err != nil {
@@ -75,6 +79,17 @@ func (t *tendermintMockBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Sub
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
+}
+
+func (t *tendermintMockBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	now, err := t.GetEpoch(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.Genesis{
+		Base: now,
+	}, nil
 }
 
 func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTime) error {
@@ -218,6 +233,12 @@ func New(ctx context.Context, service service.TendermintService) (api.SetableBac
 			ch.In() <- r.epoch
 		}
 	})
+
+	if base := service.GetGenesis().EpochTime.Base; base != 0 {
+		r.logger.Warn("ignoring non-zero base genesis epoch",
+			"base", base,
+		)
+	}
 
 	go r.worker(ctx)
 

@@ -131,7 +131,8 @@ type tendermintService struct {
 	blockNotifier *pubsub.Broker
 	failMonitor   *failMonitor
 
-	genesis                  genesis.Provider
+	genesis                  *genesis.Document
+	genesisProvider          genesis.Provider
 	nodeSigner               signature.Signer
 	dataDir                  string
 	isInitialized, isStarted bool
@@ -431,6 +432,10 @@ func (t *tendermintService) RegisterApplication(app abci.Application) error {
 	return t.mux.Register(app)
 }
 
+func (t *tendermintService) GetGenesis() *genesis.Document {
+	return t.genesis
+}
+
 func (t *tendermintService) ForceInitialize() error {
 	t.Lock()
 	defer t.Unlock()
@@ -551,7 +556,7 @@ func (t *tendermintService) lazyInit() error {
 		return err
 	}
 
-	tmGenDoc, err := t.getGenesis(tenderConfig)
+	tmGenDoc, err := t.getTendermintGenesis()
 	if err != nil {
 		t.Logger.Error("failed to obtain genesis document",
 			"err", err,
@@ -647,19 +652,17 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 	return &doc, nil
 }
 
-func (t *tendermintService) getGenesis(tenderConfig *tmconfig.Config) (*tmtypes.GenesisDoc, error) {
-	doc, err := t.genesis.GetGenesisDocument()
-	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to get genesis doc")
-	}
-
-	var tmGenDoc *tmtypes.GenesisDoc
-	if tmProvider, ok := t.genesis.(service.GenesisProvider); ok {
+func (t *tendermintService) getTendermintGenesis() (*tmtypes.GenesisDoc, error) {
+	var (
+		tmGenDoc *tmtypes.GenesisDoc
+		err      error
+	)
+	if tmProvider, ok := t.genesisProvider.(service.GenesisProvider); ok {
 		// This is a single node config, because the genesis document was
 		// missing, probably in unit tests.
 		tmGenDoc, err = tmProvider.GetTendermintGenesisDocument()
 	} else {
-		tmGenDoc, err = genesisToTendermint(doc)
+		tmGenDoc, err = genesisToTendermint(t.genesis)
 	}
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint: failed to create genesis doc")
@@ -731,17 +734,25 @@ func (t *tendermintService) worker() {
 }
 
 // New creates a new Tendermint service.
-func New(ctx context.Context, dataDir string, identity *identity.Identity, genesis genesis.Provider) service.TendermintService {
+func New(ctx context.Context, dataDir string, identity *identity.Identity, genesisProvider genesis.Provider) (service.TendermintService, error) {
+	// Retrive the genesis document early so that it is possible to
+	// use it while initializing other things.
+	genesisDoc, err := genesisProvider.GetGenesisDocument()
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint: failed to get genesis doc")
+	}
+
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
 		nodeSigner:            identity.NodeSigner,
-		genesis:               genesis,
+		genesis:               genesisDoc,
+		genesisProvider:       genesisProvider,
 		ctx:                   ctx,
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
 		syncedCh:              make(chan struct{}),
-	}
+	}, nil
 }
 
 func initDataDir(dataDir string) error {

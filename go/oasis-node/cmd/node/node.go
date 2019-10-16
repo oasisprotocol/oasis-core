@@ -165,7 +165,7 @@ func (n *Node) initBackends() error {
 	staking.NewGRPCServer(grpcSrv, n.Staking)
 	storage.NewGRPCServer(grpcSrv, n.Storage, &grpc.AllowAllRuntimePolicyChecker{}, false)
 	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
-	genesis.NewGRPCServer(grpcSrv, n.svcTmnt, n.KeyManager, n.Registry, n.RootHash, n.Staking)
+	genesis.NewGRPCServer(grpcSrv, n.svcTmnt, n.Epochtime, n.KeyManager, n.Registry, n.RootHash, n.Staking)
 
 	cmdCommon.Logger().Debug("backends initialized")
 
@@ -462,7 +462,13 @@ func NewNode() (*Node, error) {
 		}
 		node.svcMgr.Register(node.svcTmntSeed)
 	} else {
-		node.svcTmnt = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Genesis)
+		node.svcTmnt, err = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Genesis)
+		if err != nil {
+			logger.Error("failed to initialize tendermint service",
+				"err", err,
+			)
+			return nil, err
+		}
 		node.svcMgr.Register(node.svcTmnt)
 
 		// Initialize the various node backends.

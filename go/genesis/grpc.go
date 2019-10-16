@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/genesis/api"
 	pb "github.com/oasislabs/oasis-core/go/grpc/genesis"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
@@ -23,6 +24,7 @@ var (
 type grpcServer struct {
 	tendermintService service.TendermintService
 
+	epochtimeBackend  epochtime.Backend
 	keymanagerBackend keymanager.Backend
 	registryBackend   registry.Backend
 	roothashBackend   roothash.Backend
@@ -50,6 +52,10 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 	}
 
 	// Call ToGenesis on all backends and merge the results together.
+	epochtimeGenesis, err := s.epochtimeBackend.ToGenesis(ctx, height)
+	if err != nil {
+		return nil, err
+	}
 	registryGenesis, err := s.registryBackend.ToGenesis(ctx, height)
 	if err != nil {
 		return nil, err
@@ -73,6 +79,7 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 		Height:     0,
 		ChainID:    genesisDoc.ChainID,
 		Time:       time.Now(),
+		EpochTime:  *epochtimeGenesis,
 		Registry:   *registryGenesis,
 		RootHash:   *roothashGenesis,
 		Staking:    *stakingGenesis,
@@ -90,9 +97,10 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 	return &resp, nil
 }
 
-func NewGRPCServer(grpc *grpc.Server, tm service.TendermintService, km keymanager.Backend, reg registry.Backend, rh roothash.Backend, s staking.Backend) {
+func NewGRPCServer(grpc *grpc.Server, tm service.TendermintService, et epochtime.Backend, km keymanager.Backend, reg registry.Backend, rh roothash.Backend, s staking.Backend) {
 	srv := &grpcServer{
 		tendermintService: tm,
+		epochtimeBackend:  et,
 		keymanagerBackend: km,
 		registryBackend:   reg,
 		roothashBackend:   rh,

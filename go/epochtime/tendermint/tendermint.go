@@ -3,6 +3,7 @@ package tendermint
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/eapache/channels"
@@ -33,6 +34,11 @@ type tendermintBackend struct {
 	interval     int64
 	lastNotified api.EpochTime
 	epoch        api.EpochTime
+	base         api.EpochTime
+}
+
+func (t *tendermintBackend) GetBaseEpoch(context.Context) (api.EpochTime, error) {
+	return t.base, nil
 }
 
 func (t *tendermintBackend) GetEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
@@ -41,13 +47,16 @@ func (t *tendermintBackend) GetEpoch(ctx context.Context, height int64) (api.Epo
 		defer t.RUnlock()
 		return t.epoch, nil
 	}
-	epoch := api.EpochTime(height / t.interval)
+	epoch := t.base + api.EpochTime(height/t.interval)
 
 	return epoch, nil
 }
 
 func (t *tendermintBackend) GetEpochBlock(ctx context.Context, epoch api.EpochTime) (int64, error) {
-	height := int64(epoch) * t.interval
+	if epoch < t.base {
+		return 0, fmt.Errorf("epochtime/tendermint: epoch predates base")
+	}
+	height := int64(epoch-t.base) * t.interval
 
 	return height, nil
 }
@@ -58,6 +67,17 @@ func (t *tendermintBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscri
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
+}
+
+func (t *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	now, err := t.GetEpoch(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.Genesis{
+		Base: now,
+	}, nil
 }
 
 func (t *tendermintBackend) worker(ctx context.Context) {
@@ -103,10 +123,13 @@ func New(ctx context.Context, service service.TendermintService, interval int64)
 		return nil, err
 	}
 
+	base := service.GetGenesis().EpochTime.Base
 	r := &tendermintBackend{
 		logger:   logging.GetLogger("epochtime/tendermint"),
 		service:  service,
 		interval: interval,
+		base:     base,
+		epoch:    base,
 	}
 	r.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		r.RLock()

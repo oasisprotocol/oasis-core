@@ -165,8 +165,11 @@ func New(ctx context.Context,
 	cfg *api.Config,
 ) (api.Backend, error) {
 	// Initialze and register the tendermint service component.
-	app := app.New(timeSource, cfg)
-	if err := service.RegisterApplication(app); err != nil {
+	app, err := app.New(timeSource, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err = service.RegisterApplication(app); err != nil {
 		return nil, err
 	}
 

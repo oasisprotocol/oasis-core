@@ -37,6 +37,13 @@ type fakeTimeBackend struct {
 	useMockEpochTime bool
 }
 
+// GetBaseEpoch implements epochtime Backend.
+func (t *fakeTimeBackend) GetBaseEpoch(ctx context.Context) (epochtime.EpochTime, error) {
+	// XXX: This will need to honor the base epoch if this is ever used in
+	// conjunction with the real timekeeping backend, and a dump/restore.
+	return 0, nil
+}
+
 // GetEpoch implements epochtime Backend.
 func (t *fakeTimeBackend) GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error) {
 	if height == 0 {
@@ -73,6 +80,10 @@ func (*fakeTimeBackend) WatchEpochs() (<-chan epochtime.EpochTime, *pubsub.Subsc
 	panic("WatchEpochs not supported")
 }
 
+func (*fakeTimeBackend) ToGenesis(ctx context.Context, height int64) (*epochtime.Genesis, error) {
+	panic("ToGenesis not supported")
+}
+
 type honestTendermint struct {
 	service service.TendermintService
 }
@@ -90,9 +101,12 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	if err != nil {
 		return errors.Wrap(err, "genesis New")
 	}
-	ht.service = tendermint.New(context.Background(), dataDir, id, genesis)
+	ht.service, err = tendermint.New(context.Background(), dataDir, id, genesis)
+	if err != nil {
+		return errors.Wrap(err, "tendermint New")
+	}
 
-	if err := ht.service.ForceInitialize(); err != nil {
+	if err = ht.service.ForceInitialize(); err != nil {
 		return errors.Wrap(err, "honest Tendermint service ForceInitialize")
 	}
 
@@ -105,35 +119,39 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 		useMockEpochTime: useMockEpochTime,
 	}
 	if useMockEpochTime {
-		if err := ht.service.RegisterApplication(epochtime_mockapp.New()); err != nil {
+		if err = ht.service.RegisterApplication(epochtime_mockapp.New()); err != nil {
 			return errors.Wrap(err, "honest Tendermint service RegisterApplication epochtime_mock")
 		}
 	}
-	if err := ht.service.RegisterApplication(beaconapp.New(timeSource, &beacon.Config{
+	if err = ht.service.RegisterApplication(beaconapp.New(timeSource, &beacon.Config{
 		DebugDeterministic: true,
 	})); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication beacon")
 	}
-	if err := ht.service.RegisterApplication(stakingapp.New(nil)); err != nil {
+	if err = ht.service.RegisterApplication(stakingapp.New(nil)); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication staking")
 	}
-	if err := ht.service.RegisterApplication(registryapp.New(timeSource, &registry.Config{
+	if err = ht.service.RegisterApplication(registryapp.New(timeSource, &registry.Config{
 		DebugAllowUnroutableAddresses: true,
 		DebugAllowRuntimeRegistration: false,
 		DebugBypassStake:              false,
 	})); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication registry")
 	}
-	if err := ht.service.RegisterApplication(keymanagerapp.New(timeSource)); err != nil {
+	if err = ht.service.RegisterApplication(keymanagerapp.New(timeSource)); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication keymanager")
 	}
-	if err := ht.service.RegisterApplication(schedulerapp.New(timeSource, &scheduler.Config{
+	schedApp, err := schedulerapp.New(timeSource, &scheduler.Config{
 		DebugBypassStake: false,
-	})); err != nil {
+	})
+	if err != nil {
+		return errors.Wrap(err, "honest Tendermint service New scheduler")
+	}
+	if err = ht.service.RegisterApplication(schedApp); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication scheduler")
 	}
 	// storage has no registration
-	if err := ht.service.RegisterApplication(roothashapp.New(context.Background(), timeSource, nil, 10*time.Second)); err != nil {
+	if err = ht.service.RegisterApplication(roothashapp.New(context.Background(), timeSource, nil, 10*time.Second)); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication roothash")
 	}
 
@@ -151,7 +169,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 		close(blockOne)
 	}()
 
-	if err := ht.service.Start(); err != nil {
+	if err = ht.service.Start(); err != nil {
 		return errors.Wrap(err, "honest Tendermint service Start")
 	}
 	logger.Debug("honest Tendermint service waiting for Tendermint start")
