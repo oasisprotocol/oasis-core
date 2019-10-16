@@ -11,9 +11,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	tendermintmock "github.com/oasislabs/oasis-core/go/epochtime/tendermint_mock"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 var (
@@ -57,7 +60,10 @@ func (sc *roothashMessagesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			RuntimeLoaderBinary: viper.GetString(cfgRuntimeLoader),
 			EpochtimeBackend:    tendermintmock.BackendName,
 			StakingGenesis:      "tests/fixture-data/roothash-messages/staking-genesis.json",
-			LogWatcherHandlers:  DefaultBasicLogWatcherHandlers,
+			LogWatcherHandlers: append([]log.WatcherHandler{
+				oasis.LogAssertNotEvent(roothash.LogEventMessageUnsat, "unsatisfactory roothash message detected"),
+				oasis.LogAssertEvent(staking.LogEventGeneralAdjustment, "balance adjustment not detected"),
+			}, DefaultBasicLogWatcherHandlers...),
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},

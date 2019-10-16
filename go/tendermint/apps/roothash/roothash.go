@@ -882,6 +882,7 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, tre
 			app.logger.Error("staking not satisfied with roothash message",
 				"roothash_message", message,
 				"err", unsat,
+				logging.LogEvent, roothash.LogEventMessageUnsat,
 			)
 
 			// Roll back changes from message handling.

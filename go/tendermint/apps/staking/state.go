@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
@@ -40,6 +41,8 @@ var (
 	//
 	// Value is a CBOR-serialized map from acceptable runtime IDs the boolean true.
 	acceptableTransferPeersKeyFmt = keyformat.New(0x55)
+
+	logger = logging.GetLogger("tendermint/staking")
 )
 
 type ledgerEntry struct {
@@ -352,6 +355,11 @@ func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, mess
 		}
 
 		s.setAccount(message.StakingGeneralAdjustmentRoothashMessage.Account, account)
+		logger.Debug("handled StakingGeneralAdjustmentRoothashMessage",
+			logging.LogEvent, staking.LogEventGeneralAdjustment,
+			"account", message.StakingGeneralAdjustmentRoothashMessage.Account,
+			"general_balance_after", account.GeneralBalance,
+		)
 	}
 
 	return nil, nil
