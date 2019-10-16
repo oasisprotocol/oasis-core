@@ -16,6 +16,10 @@ const (
 
 	// TokenSymbol is the symbol of the staking token.
 	TokenSymbol = "BUF"
+
+	// LogEventGeneralAdjustment is a log event value that signals adjustment
+	// of an account's general balance due to a roothash message.
+	LogEventGeneralAdjustment = "staking/general_adjustment"
 )
 
 var (
@@ -352,10 +356,6 @@ const (
 	KindStorage   ThresholdKind = 3
 
 	KindMax = KindStorage
-
-	// LogEventGeneralAdjustment is a log event value that signals adjustment
-	// of an account's general balance due to a roothash message.
-	LogEventGeneralAdjustment = "staking/general_adjustment"
 )
 
 // String returns the string representation of a ThresholdKind.
