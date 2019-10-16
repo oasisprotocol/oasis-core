@@ -317,52 +317,6 @@ func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
 	return mux.queryRouter.Route(req)
 }
 
-func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
-	tx := req.Tx
-
-	app, err := mux.extractAppFromTx(tx)
-	if err != nil {
-		mux.logger.Error("CheckTx: failed to de-multiplex",
-			"tx", base64.StdEncoding.EncodeToString(tx),
-		)
-		return types.ResponseCheckTx{
-			Code: api.CodeInvalidApplication.ToInt(),
-		}
-	}
-
-	mux.logger.Debug("CheckTx: dispatching",
-		"app", app.Name(),
-		"tx", base64.StdEncoding.EncodeToString(tx),
-	)
-
-	ctx := NewContext(ContextCheckTx, mux.currentTime, mux.state)
-	if err := app.ExecuteTx(ctx, tx[1:]); err != nil {
-		return types.ResponseCheckTx{
-			Code: api.CodeTransactionFailed.ToInt(),
-			Info: err.Error(),
-		}
-	}
-
-	// Run ForeignExecuteTx on all other applications so they can
-	// run their post-tx hooks.
-	for _, foreignApp := range mux.appsByLexOrder {
-		if foreignApp == app {
-			continue
-		}
-
-		if err := foreignApp.ForeignExecuteTx(ctx, app, tx[1:]); err != nil {
-			return types.ResponseCheckTx{
-				Code: api.CodeTransactionFailed.ToInt(),
-				Info: err.Error(),
-			}
-		}
-	}
-
-	return types.ResponseCheckTx{
-		Code: api.CodeOK.ToInt(),
-	}
-}
-
 func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChain {
 	mux.logger.Debug("InitChain",
 		"req", req,
@@ -504,34 +458,27 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	return response
 }
 
-func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
-	tx := req.Tx
+func (mux *abciMux) executeTx(ctx *Context, tx []byte) error {
+	logger := mux.logger.With("is_check_only", ctx.IsCheckOnly())
 
 	app, err := mux.extractAppFromTx(tx)
 	if err != nil {
-		mux.logger.Error("DeliverTx: failed to de-multiplex",
+		logger.Error("failed to de-multiplex",
 			"tx", base64.StdEncoding.EncodeToString(tx),
 		)
-		return types.ResponseDeliverTx{
-			Code: api.CodeInvalidApplication.ToInt(),
-		}
+		return err
 	}
 
-	mux.logger.Debug("DeliverTx: dispatching",
+	logger.Debug("dispatching",
 		"app", app.Name(),
 		"tx", base64.StdEncoding.EncodeToString(tx),
 	)
 
 	// Append application name tag.
-	ctx := NewContext(ContextDeliverTx, mux.currentTime, mux.state)
 	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 
-	err = app.ExecuteTx(ctx, tx[1:])
-	if err != nil {
-		return types.ResponseDeliverTx{
-			Code: api.CodeTransactionFailed.ToInt(),
-			Info: err.Error(),
-		}
+	if err = app.ExecuteTx(ctx, tx[1:]); err != nil {
+		return err
 	}
 
 	// Run ForeignDeliverTx on all other applications so they can
@@ -541,11 +488,36 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 			continue
 		}
 
-		if err := foreignApp.ForeignExecuteTx(ctx, app, tx[1:]); err != nil {
-			return types.ResponseDeliverTx{
-				Code: api.CodeTransactionFailed.ToInt(),
-				Info: err.Error(),
-			}
+		if err = foreignApp.ForeignExecuteTx(ctx, app, tx[1:]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
+	ctx := NewContext(ContextCheckTx, mux.currentTime, mux.state)
+
+	if err := mux.executeTx(ctx, req.Tx); err != nil {
+		return types.ResponseCheckTx{
+			Code: api.CodeTransactionFailed.ToInt(),
+			Info: err.Error(),
+		}
+	}
+
+	return types.ResponseCheckTx{
+		Code: api.CodeOK.ToInt(),
+	}
+}
+
+func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
+	ctx := NewContext(ContextDeliverTx, mux.currentTime, mux.state)
+
+	if err := mux.executeTx(ctx, req.Tx); err != nil {
+		return types.ResponseDeliverTx{
+			Code: api.CodeTransactionFailed.ToInt(),
+			Info: err.Error(),
 		}
 	}
 
