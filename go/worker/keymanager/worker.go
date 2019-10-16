@@ -141,6 +141,11 @@ func (w *Worker) mustAllowAccess(ctx context.Context, data []byte) bool {
 		return false
 	}
 
+	if frame.UntrustedPlaintext == "" {
+		// Anyone can connect.
+		return true
+	}
+
 	if frame.UntrustedPlaintext == getPublicKeyRequestMethod {
 		// Anyone can get public keys.
 		// Note that this is also checked in the enclave, so if the node lied
