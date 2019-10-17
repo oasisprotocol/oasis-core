@@ -67,15 +67,6 @@ func (app *keymanagerApplication) SetOption(request types.RequestSetOption) type
 	return types.ResponseSetOption{}
 }
 
-func (app *keymanagerApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	// TODO: Add policy support.
-	return errors.New("tendermint/keymanager: transactions not supported yet")
-}
-
-func (app *keymanagerApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
-	return nil
-}
-
 func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.KeyManager
 
@@ -104,7 +95,7 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 	}
 
 	var toEmit []*api.Status
-	state := NewMutableState(app.state.DeliverTxTree())
+	state := NewMutableState(ctx.State())
 	for _, v := range st.Statuses {
 		rt := rtMap[v.ID.ToMapKey()]
 		if rt == nil {
@@ -146,12 +137,12 @@ func (app *keymanagerApplication) BeginBlock(ctx *abci.Context, request types.Re
 	return nil
 }
 
-func (app *keymanagerApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
+func (app *keymanagerApplication) ExecuteTx(ctx *abci.Context, tx []byte) error {
 	// TODO: Add policy support.
 	return errors.New("tendermint/keymanager: transactions not supported yet")
 }
 
-func (app *keymanagerApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *keymanagerApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
 	return nil
 }
 
@@ -159,7 +150,9 @@ func (app *keymanagerApplication) EndBlock(request types.RequestEndBlock) (types
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *keymanagerApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {}
+func (app *keymanagerApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) error {
+	return errors.New("tendermint/keymanager: unexpected timer")
+}
 
 func (app *keymanagerApplication) queryGetStatus(s interface{}, r interface{}) ([]byte, error) {
 	state := s.(*immutableState)
@@ -200,10 +193,8 @@ func (app *keymanagerApplication) queryGenesis(s interface{}, r interface{}) ([]
 }
 
 func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error {
-	tree := app.state.DeliverTxTree()
-
 	// Query the runtime and node lists.
-	regState := registryapp.NewMutableState(tree)
+	regState := registryapp.NewMutableState(ctx.State())
 	runtimes, _ := regState.GetRuntimes()
 	nodes, _ := regState.GetNodes()
 	registry.SortNodeList(nodes)
@@ -212,7 +203,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 	//
 	// Note: This assumes that once a runtime is registered, it never expires.
 	var toEmit []*api.Status
-	state := NewMutableState(app.state.DeliverTxTree())
+	state := NewMutableState(ctx.State())
 	for _, rt := range runtimes {
 		if rt.Kind != registry.KindKeyManager {
 			continue

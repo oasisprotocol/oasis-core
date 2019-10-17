@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -180,26 +179,6 @@ func (app *registryApplication) queryGenesis(s interface{}, r interface{}) ([]by
 	return cbor.Marshal(gen), nil
 }
 
-func (app *registryApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	request := &Tx{}
-	if err := cbor.Unmarshal(tx, request); err != nil {
-		app.logger.Error("CheckTx: failed to unmarshal",
-			"tx", hex.EncodeToString(tx),
-		)
-		return errors.Wrap(err, "registry: failed to unmarshal")
-	}
-
-	if err := app.executeTx(ctx, app.state.CheckTxTree(), request); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (app *registryApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
-	return nil
-}
-
 func (app *registryApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.Registry
 
@@ -208,7 +187,7 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 		"state", string(b),
 	)
 
-	state := NewMutableState(app.state.DeliverTxTree())
+	state := NewMutableState(ctx.State())
 
 	state.setKeyManagerOperator(st.KeyManagerOperator)
 	app.logger.Debug("InitChain: Registering key manager operator",
@@ -267,19 +246,33 @@ func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.Requ
 	return nil
 }
 
-func (app *registryApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
-	request := &Tx{}
-	if err := cbor.Unmarshal(tx, request); err != nil {
-		app.logger.Error("DeliverTx: failed to unmarshal",
-			"tx", hex.EncodeToString(tx),
+func (app *registryApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error {
+	var tx Tx
+	if err := cbor.Unmarshal(rawTx, &tx); err != nil {
+		app.logger.Error("failed to unmarshal",
+			"tx", hex.EncodeToString(rawTx),
 		)
 		return errors.Wrap(err, "registry: failed to unmarshal")
 	}
 
-	return app.executeTx(ctx, app.state.DeliverTxTree(), request)
+	state := NewMutableState(ctx.State())
+
+	if tx.TxRegisterEntity != nil {
+		return app.registerEntity(ctx, state, &tx.TxRegisterEntity.Entity)
+	} else if tx.TxDeregisterEntity != nil {
+		return app.deregisterEntity(ctx, state, &tx.TxDeregisterEntity.Timestamp)
+	} else if tx.TxRegisterNode != nil {
+		return app.registerNode(ctx, state, &tx.TxRegisterNode.Node)
+	} else if tx.TxRegisterRuntime != nil {
+		if !app.cfg.DebugAllowRuntimeRegistration {
+			return registry.ErrForbidden
+		}
+		return app.registerRuntime(ctx, state, &tx.TxRegisterRuntime.Runtime)
+	}
+	return registry.ErrInvalidArgument
 }
 
-func (app *registryApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *registryApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
 	return nil
 }
 
@@ -287,11 +280,12 @@ func (app *registryApplication) EndBlock(request types.RequestEndBlock) (types.R
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) {
+func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) error {
+	return errors.New("tendermint/registry: unexpected timer")
 }
 
 func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, registryEpoch epochtime.EpochTime) error {
-	state := NewMutableState(app.state.DeliverTxTree())
+	state := NewMutableState(ctx.State())
 
 	nodes, err := state.GetNodes()
 	if err != nil {
@@ -324,30 +318,6 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 	ctx.EmitTag(TagNodesExpired, cbor.Marshal(expiredNodes))
 
 	return nil
-}
-
-// Execute transaction against given state.
-func (app *registryApplication) executeTx(
-	ctx *abci.Context,
-	tree *iavl.MutableTree,
-	tx *Tx,
-) error {
-	state := NewMutableState(tree)
-
-	if tx.TxRegisterEntity != nil {
-		return app.registerEntity(ctx, state, &tx.TxRegisterEntity.Entity)
-	} else if tx.TxDeregisterEntity != nil {
-		return app.deregisterEntity(ctx, state, &tx.TxDeregisterEntity.Timestamp)
-	} else if tx.TxRegisterNode != nil {
-		return app.registerNode(ctx, state, &tx.TxRegisterNode.Node)
-	} else if tx.TxRegisterRuntime != nil {
-		if !app.cfg.DebugAllowRuntimeRegistration {
-			return registry.ErrForbidden
-		}
-		return app.registerRuntime(ctx, state, &tx.TxRegisterRuntime.Runtime)
-	} else {
-		return registry.ErrInvalidArgument
-	}
 }
 
 // Perform actual entity registration.

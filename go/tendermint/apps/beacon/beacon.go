@@ -19,6 +19,7 @@ import (
 
 var (
 	errUnexpectedTransaction = errors.New("beacon: unexpected transaction")
+	errUnexpectedTimer       = errors.New("beacon: unexpected timer")
 
 	prodEntropyCtx  = []byte("EkB-tmnt")
 	debugEntropyCtx = []byte("Ekb-Dumm")
@@ -69,14 +70,6 @@ func (app *beaconApplication) SetOption(req types.RequestSetOption) types.Respon
 	return types.ResponseSetOption{}
 }
 
-func (app *beaconApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	return errUnexpectedTransaction
-}
-
-func (app *beaconApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
-	return nil
-}
-
 func (app *beaconApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) error {
 	// Note: If we ever decide that we need a beacon for the 0th epoch
 	// (that is *only* for the genesis state), it should be initiailized
@@ -94,11 +87,11 @@ func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeg
 	return nil
 }
 
-func (app *beaconApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
+func (app *beaconApplication) ExecuteTx(ctx *abci.Context, tx []byte) error {
 	return errUnexpectedTransaction
 }
 
-func (app *beaconApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *beaconApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
 	return nil
 }
 
@@ -106,7 +99,8 @@ func (app *beaconApplication) EndBlock(req types.RequestEndBlock) (types.Respons
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *beaconApplication) FireTimer(ctx *abci.Context, t *abci.Timer) {
+func (app *beaconApplication) FireTimer(ctx *abci.Context, t *abci.Timer) error {
+	return errUnexpectedTimer
 }
 
 func (app *beaconApplication) queryGetBeacon(s interface{}, r interface{}) ([]byte, error) {
@@ -160,7 +154,7 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 }
 
 func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) error {
-	state := NewMutableState(app.state.DeliverTxTree())
+	state := NewMutableState(ctx.State())
 
 	if err := state.setBeacon(beacon); err != nil {
 		app.logger.Error("onNewBeacon: failed to set beacon",

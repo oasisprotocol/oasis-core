@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -72,32 +71,12 @@ func (app *epochTimeMockApplication) queryGetEpoch(s interface{}, r interface{})
 	return cbor.Marshal(response), nil
 }
 
-func (app *epochTimeMockApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	request := &Tx{}
-	if err := cbor.Unmarshal(tx, request); err != nil {
-		app.logger.Error("CheckTx: failed to unmarshal",
-			"tx", hex.EncodeToString(tx),
-		)
-		return errors.Wrap(err, "epochtime_mock: failed to unmarshal")
-	}
-
-	if err := app.executeTx(ctx, app.state.CheckTxTree(), request); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (app *epochTimeMockApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
-	return nil
-}
-
 func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	return nil
 }
 
 func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
-	state := newMutableState(app.state.DeliverTxTree())
+	state := newMutableState(ctx.State())
 
 	future, err := state.getFutureEpoch()
 	if err != nil {
@@ -129,19 +108,24 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types
 	return nil
 }
 
-func (app *epochTimeMockApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
-	request := &Tx{}
-	if err := cbor.Unmarshal(tx, request); err != nil {
-		app.logger.Error("DeliverTx: failed to unmarshal",
-			"tx", hex.EncodeToString(tx),
+func (app *epochTimeMockApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error {
+	var tx Tx
+	if err := cbor.Unmarshal(rawTx, &tx); err != nil {
+		app.logger.Error("failed to unmarshal",
+			"tx", hex.EncodeToString(rawTx),
 		)
 		return errors.Wrap(err, "epochtime_mock: failed to unmarshal")
 	}
 
-	return app.executeTx(ctx, app.state.DeliverTxTree(), request)
+	state := newMutableState(ctx.State())
+
+	if tx.TxSetEpoch != nil {
+		return app.setEpoch(ctx, state, tx.TxSetEpoch.Epoch)
+	}
+	return errors.New("epochtime_mock: invalid argument")
 }
 
-func (app *epochTimeMockApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *epochTimeMockApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
 	return nil
 }
 
@@ -149,20 +133,8 @@ func (app *epochTimeMockApplication) EndBlock(request types.RequestEndBlock) (ty
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *epochTimeMockApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {
-}
-
-func (app *epochTimeMockApplication) executeTx(
-	ctx *abci.Context,
-	tree *iavl.MutableTree,
-	tx *Tx,
-) error {
-	state := newMutableState(tree)
-
-	if tx.TxSetEpoch != nil {
-		return app.setEpoch(ctx, state, tx.TxSetEpoch.Epoch)
-	}
-	return errors.New("epochtime_mock: invalid argument")
+func (app *epochTimeMockApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) error {
+	return errors.New("tendermint/epochtime_mock: unexpected timer")
 }
 
 func (app *epochTimeMockApplication) setEpoch(

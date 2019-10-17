@@ -103,19 +103,15 @@ type Application interface {
 	// followed by a '/' (eg: `foo/<some key here>`).
 	SetOption(types.RequestSetOption) types.ResponseSetOption
 
-	// CheckTx validates a transaction via the mempool.
-	//
-	// Implementations MUST only alter the ApplicationState CheckTxTree.
-	CheckTx(*Context, []byte) error
+	// ExecuteTx executes a transaction.
+	ExecuteTx(*Context, []byte) error
 
-	// ForeignCheckTx validates a transaction of another application via
-	// the mempool.
+	// ForeignExecuteTx delivers a transaction of another application for
+	// processing.
 	//
 	// This can be used to run post-tx hooks when dependencies exist
 	// between applications.
-	//
-	// Implementations MUST only alter the ApplicationState CheckTxTree.
-	ForeignCheckTx(*Context, Application, []byte) error
+	ForeignExecuteTx(*Context, Application, []byte) error
 
 	// InitChain initializes the blockchain with validators and other
 	// info from TendermintCore.
@@ -130,18 +126,6 @@ type Application interface {
 	// Note: Errors are irrecoverable and will result in a panic.
 	BeginBlock(*Context, types.RequestBeginBlock) error
 
-	// DeliverTx delivers a transaction for full processing.
-	DeliverTx(*Context, []byte) error
-
-	// ForeignDeliverTx delivers a transaction of another application for
-	// full processing.
-	//
-	// This can be used to run post-tx hooks when dependencies exist
-	// between applications.
-	//
-	// This method may mutate state.
-	ForeignDeliverTx(*Context, Application, []byte) error
-
 	// EndBlock signals the end of a block, returning changes to the
 	// validator set.
 	//
@@ -150,7 +134,9 @@ type Application interface {
 
 	// FireTimer is called within BeginBlock before any other processing
 	// takes place for each timer that should fire.
-	FireTimer(*Context, *Timer)
+	//
+	// Note: Errors are irrecoverable and will result in a panic.
+	FireTimer(*Context, *Timer) error
 
 	// Commit is omitted because Applications will work on a cache of
 	// the state bound to the multiplexer.
@@ -331,58 +317,10 @@ func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
 	return mux.queryRouter.Route(req)
 }
 
-func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
-	tx := req.Tx
-
-	app, err := mux.extractAppFromTx(tx)
-	if err != nil {
-		mux.logger.Error("CheckTx: failed to de-multiplex",
-			"tx", base64.StdEncoding.EncodeToString(tx),
-		)
-		return types.ResponseCheckTx{
-			Code: api.CodeInvalidApplication.ToInt(),
-		}
-	}
-
-	mux.logger.Debug("CheckTx: dispatching",
-		"app", app.Name(),
-		"tx", base64.StdEncoding.EncodeToString(tx),
-	)
-
-	ctx := NewContext(ContextCheckTx, mux.currentTime)
-	if err := app.CheckTx(ctx, tx[1:]); err != nil {
-		return types.ResponseCheckTx{
-			Code: api.CodeTransactionFailed.ToInt(),
-			Info: err.Error(),
-		}
-	}
-
-	// Run ForeignCheckTx on all other applications so they can
-	// run their post-tx hooks.
-	for _, foreignApp := range mux.appsByLexOrder {
-		if foreignApp == app {
-			continue
-		}
-
-		if err := foreignApp.ForeignCheckTx(ctx, app, tx[1:]); err != nil {
-			return types.ResponseCheckTx{
-				Code: api.CodeTransactionFailed.ToInt(),
-				Info: err.Error(),
-			}
-		}
-	}
-
-	return types.ResponseCheckTx{
-		Code: api.CodeOK.ToInt(),
-	}
-}
-
 func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChain {
 	mux.logger.Debug("InitChain",
 		"req", req,
 	)
-
-	ctx := NewContext(ContextInitChain, req.Time)
 
 	// Sanity-check the genesis application state.
 	st, err := parseGenesisAppState(req)
@@ -425,8 +363,6 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		resp.ConsensusParams = req.ConsensusParams
 	}
 
-	ctx.fireOnCommitHooks(mux.state)
-
 	// Dispatch registered genesis hooks.
 	mux.RLock()
 	defer mux.RUnlock()
@@ -456,7 +392,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	mux.lastBeginBlock = blockHeight
 	mux.currentTime = req.Header.Time
 
-	ctx := NewContext(ContextBeginBlock, mux.currentTime)
+	ctx := NewContext(ContextBeginBlock, mux.currentTime, mux.state)
 
 	// HACK: Our entire system is driven with a tag backed pub-sub
 	// interface gluing the various components together.  While we
@@ -516,42 +452,33 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		}
 	}
 
-	ctx.fireOnCommitHooks(mux.state)
-
 	response := mux.BaseApplication.BeginBlock(req)
 	response.Events = ctx.GetEvents()
 
 	return response
 }
 
-func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
-	tx := req.Tx
+func (mux *abciMux) executeTx(ctx *Context, tx []byte) error {
+	logger := mux.logger.With("is_check_only", ctx.IsCheckOnly())
 
 	app, err := mux.extractAppFromTx(tx)
 	if err != nil {
-		mux.logger.Error("DeliverTx: failed to de-multiplex",
+		logger.Error("failed to de-multiplex",
 			"tx", base64.StdEncoding.EncodeToString(tx),
 		)
-		return types.ResponseDeliverTx{
-			Code: api.CodeInvalidApplication.ToInt(),
-		}
+		return err
 	}
 
-	mux.logger.Debug("DeliverTx: dispatching",
+	logger.Debug("dispatching",
 		"app", app.Name(),
 		"tx", base64.StdEncoding.EncodeToString(tx),
 	)
 
 	// Append application name tag.
-	ctx := NewContext(ContextDeliverTx, mux.currentTime)
 	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 
-	err = app.DeliverTx(ctx, tx[1:])
-	if err != nil {
-		return types.ResponseDeliverTx{
-			Code: api.CodeTransactionFailed.ToInt(),
-			Info: err.Error(),
-		}
+	if err = app.ExecuteTx(ctx, tx[1:]); err != nil {
+		return err
 	}
 
 	// Run ForeignDeliverTx on all other applications so they can
@@ -561,15 +488,38 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 			continue
 		}
 
-		if err := foreignApp.ForeignDeliverTx(ctx, app, tx[1:]); err != nil {
-			return types.ResponseDeliverTx{
-				Code: api.CodeTransactionFailed.ToInt(),
-				Info: err.Error(),
-			}
+		if err = foreignApp.ForeignExecuteTx(ctx, app, tx[1:]); err != nil {
+			return err
 		}
 	}
 
-	ctx.fireOnCommitHooks(mux.state)
+	return nil
+}
+
+func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
+	ctx := NewContext(ContextCheckTx, mux.currentTime, mux.state)
+
+	if err := mux.executeTx(ctx, req.Tx); err != nil {
+		return types.ResponseCheckTx{
+			Code: api.CodeTransactionFailed.ToInt(),
+			Info: err.Error(),
+		}
+	}
+
+	return types.ResponseCheckTx{
+		Code: api.CodeOK.ToInt(),
+	}
+}
+
+func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
+	ctx := NewContext(ContextDeliverTx, mux.currentTime, mux.state)
+
+	if err := mux.executeTx(ctx, req.Tx); err != nil {
+		return types.ResponseDeliverTx{
+			Code: api.CodeTransactionFailed.ToInt(),
+			Info: err.Error(),
+		}
+	}
 
 	return types.ResponseDeliverTx{
 		Code:   api.CodeOK.ToInt(),
@@ -584,11 +534,17 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 		"block_height", mux.state.BlockHeight(),
 	)
 
-	ctx := NewContext(ContextEndBlock, mux.currentTime)
+	ctx := NewContext(ContextEndBlock, mux.currentTime, mux.state)
 
 	// Fire all application timers first.
 	for _, app := range mux.appsByLexOrder {
-		fireTimers(ctx, mux.state, app)
+		if err := fireTimers(ctx, app); err != nil {
+			mux.logger.Error("EndBlock: fatal error during timer fire",
+				"err", err,
+				"app", app.Name(),
+			)
+			panic("mux: EndBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
+		}
 	}
 
 	// Dispatch EndBlock to all applications.
@@ -606,8 +562,6 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 			resp = newResp
 		}
 	}
-
-	ctx.fireOnCommitHooks(mux.state)
 
 	// Update tags.
 	resp.Events = ctx.GetEvents()

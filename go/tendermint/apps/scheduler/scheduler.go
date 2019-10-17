@@ -80,8 +80,8 @@ func (acc *stakeAccumulator) checkThreshold(id signature.PublicKey, kind staking
 	return nil
 }
 
-func newStakeAccumulator(appState *abci.ApplicationState, ctx *abci.Context, unsafeBypass bool) (*stakeAccumulator, error) {
-	snapshot, err := stakingapp.NewSnapshot(appState, ctx)
+func newStakeAccumulator(ctx *abci.Context, unsafeBypass bool) (*stakeAccumulator, error) {
+	snapshot, err := stakingapp.NewSnapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -136,14 +136,6 @@ func (app *schedulerApplication) OnCleanup() {}
 
 func (app *schedulerApplication) SetOption(req types.RequestSetOption) types.ResponseSetOption {
 	return types.ResponseSetOption{}
-}
-
-func (app *schedulerApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	return errUnexpectedTransaction
-}
-
-func (app *schedulerApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
-	return nil
 }
 
 func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) error {
@@ -250,7 +242,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
 		}
 
-		entityStake, err := newStakeAccumulator(app.state, ctx, app.cfg.DebugBypassStake)
+		entityStake, err := newStakeAccumulator(ctx, app.cfg.DebugBypassStake)
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get stake snapshot")
 		}
@@ -319,11 +311,11 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 	return nil
 }
 
-func (app *schedulerApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
+func (app *schedulerApplication) ExecuteTx(ctx *abci.Context, tx []byte) error {
 	return errUnexpectedTransaction
 }
 
-func (app *schedulerApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *schedulerApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
 	return nil
 }
 
@@ -406,7 +398,9 @@ func (app *schedulerApplication) EndBlock(req types.RequestEndBlock) (types.Resp
 	return resp, nil
 }
 
-func (app *schedulerApplication) FireTimer(ctx *abci.Context, t *abci.Timer) {}
+func (app *schedulerApplication) FireTimer(ctx *abci.Context, t *abci.Timer) error {
+	return errors.New("tendermint/scheduler: unexpected timer")
+}
 
 func (app *schedulerApplication) queryAllCommittees(s interface{}, r interface{}) ([]byte, error) {
 	state := s.(*immutableState)

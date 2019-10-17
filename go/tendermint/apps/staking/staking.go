@@ -7,7 +7,6 @@ import (
 	"sort"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -69,23 +68,6 @@ func (app *stakingApplication) OnCleanup() {
 
 func (app *stakingApplication) SetOption(types.RequestSetOption) types.ResponseSetOption {
 	return types.ResponseSetOption{}
-}
-
-func (app *stakingApplication) CheckTx(ctx *abci.Context, tx []byte) error {
-	request := &Tx{}
-	if err := cbor.Unmarshal(tx, request); err != nil {
-		app.logger.Error("CheckTx: failed to unmarshal",
-			"err", err,
-			"tx", hex.EncodeToString(tx),
-		)
-		return errors.Wrap(err, "staking/tendermint: failed to unmarshal tx")
-	}
-
-	return app.executeTx(ctx, app.state.CheckTxTree(), request)
-}
-
-func (app *stakingApplication) ForeignCheckTx(ctx *abci.Context, other abci.Application, tx []byte) error {
-	return nil
 }
 
 type thresholdUpdate struct {
@@ -228,20 +210,31 @@ func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.Reque
 	return nil
 }
 
-func (app *stakingApplication) DeliverTx(ctx *abci.Context, tx []byte) error {
-	request := &Tx{}
-	if err := cbor.Unmarshal(tx, request); err != nil {
-		app.logger.Error("DeliverTx: failed to unmarshal",
+func (app *stakingApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error {
+	var tx Tx
+	if err := cbor.Unmarshal(rawTx, &tx); err != nil {
+		app.logger.Error("failed to unmarshal",
 			"err", err,
-			"tx", hex.EncodeToString(tx),
+			"tx", hex.EncodeToString(rawTx),
 		)
 		return errors.Wrap(err, "staking/tendermint: failed to unmarshal tx")
 	}
 
-	return app.executeTx(ctx, app.state.DeliverTxTree(), request)
+	state := NewMutableState(ctx.State())
+
+	if tx.TxTransfer != nil {
+		return app.transfer(ctx, state, &tx.TxTransfer.SignedTransfer)
+	} else if tx.TxBurn != nil {
+		return app.burn(ctx, state, &tx.TxBurn.SignedBurn)
+	} else if tx.TxAddEscrow != nil {
+		return app.addEscrow(ctx, state, &tx.TxAddEscrow.SignedEscrow)
+	} else if tx.TxReclaimEscrow != nil {
+		return app.reclaimEscrow(ctx, state, &tx.TxReclaimEscrow.SignedReclaimEscrow)
+	}
+	return staking.ErrInvalidArgument
 }
 
-func (app *stakingApplication) ForeignDeliverTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *stakingApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
 	return nil
 }
 
@@ -249,7 +242,8 @@ func (app *stakingApplication) EndBlock(request types.RequestEndBlock) (types.Re
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *stakingApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) {
+func (app *stakingApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) error {
+	return errors.New("tendermint/staking: unexpected timer")
 }
 
 func (app *stakingApplication) queryTotalSupply(s, r interface{}) ([]byte, error) {
@@ -342,22 +336,6 @@ func (app *stakingApplication) queryGenesis(s, r interface{}) ([]byte, error) {
 		Ledger:            ledger,
 	}
 	return cbor.Marshal(gen), nil
-}
-
-func (app *stakingApplication) executeTx(ctx *abci.Context, tree *iavl.MutableTree, tx *Tx) error {
-	state := NewMutableState(tree)
-
-	if tx.TxTransfer != nil {
-		return app.transfer(ctx, state, &tx.TxTransfer.SignedTransfer)
-	} else if tx.TxBurn != nil {
-		return app.burn(ctx, state, &tx.TxBurn.SignedBurn)
-	} else if tx.TxAddEscrow != nil {
-		return app.addEscrow(ctx, state, &tx.TxAddEscrow.SignedEscrow)
-	} else if tx.TxReclaimEscrow != nil {
-		return app.reclaimEscrow(ctx, state, &tx.TxReclaimEscrow.SignedReclaimEscrow)
-	} else {
-		return staking.ErrInvalidArgument
-	}
 }
 
 func (app *stakingApplication) transfer(ctx *abci.Context, state *MutableState, signedXfer *staking.SignedTransfer) error {
@@ -607,12 +585,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *MutableSt
 // can have multiple instances of the same threshold kind specified, in which
 // case it will be factored in repeatedly.
 func EnsureSufficientStake(appState *abci.ApplicationState, ctx *abci.Context, id signature.PublicKey, thresholds []staking.ThresholdKind) error {
-	var state *MutableState
-	if ctx.IsCheckOnly() {
-		state = NewMutableState(appState.CheckTxTree())
-	} else {
-		state = NewMutableState(appState.DeliverTxTree())
-	}
+	state := NewMutableState(ctx.State())
 
 	m, err := state.Thresholds()
 	if err != nil {
@@ -670,13 +643,8 @@ func (snap *Snapshot) EnsureSufficientStake(id signature.PublicKey, thresholds [
 }
 
 // NewSnapshot creates a new staking snapshot.
-func NewSnapshot(appState *abci.ApplicationState, ctx *abci.Context) (*Snapshot, error) {
-	var state *MutableState
-	if ctx.IsCheckOnly() {
-		state = NewMutableState(appState.CheckTxTree())
-	} else {
-		state = NewMutableState(appState.DeliverTxTree())
-	}
+func NewSnapshot(ctx *abci.Context) (*Snapshot, error) {
+	state := NewMutableState(ctx.State())
 
 	thresholds, err := state.Thresholds()
 	if err != nil {
