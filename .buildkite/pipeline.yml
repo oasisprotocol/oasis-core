@@ -76,6 +76,11 @@ steps:
     plugins:
       <<: *docker_plugin
 
+  - label: Audit Rust dependencies for vulnerabilities
+    command: .buildkite/rust/cargo_audit.sh
+    plugins:
+      <<: *docker_plugin
+
   ############
   # Build jobs
   ############
