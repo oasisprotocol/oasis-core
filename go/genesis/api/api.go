@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -24,6 +25,8 @@ type Document struct {
 	Time time.Time `json:"genesis_time"`
 	// ChainID is the ID of the chain.
 	ChainID string `json:"chain_id"`
+	// EpochTime is the timekeeping genesis state.
+	EpochTime epochtime.Genesis `json:"epochtime"`
 	// Registry is the registry genesis state.
 	Registry registry.Genesis `json:"registry"`
 	// RootHash is the roothash genesis state.

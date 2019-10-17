@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"encoding/hex"
 	"fmt"
@@ -99,6 +100,8 @@ type schedulerApplication struct {
 	timeSource epochtime.Backend
 
 	cfg *scheduler.Config
+
+	baseEpoch epochtime.EpochTime
 }
 
 func (app *schedulerApplication) Name() string {
@@ -224,7 +227,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
 		// The 0th epoch will not have suitable entropy for elections, nor
 		// will it have useful node registrations.
-		if epoch == 0 {
+		if epoch == app.baseEpoch {
 			app.logger.Info("system in bootstrap period, skipping election",
 				"epoch", epoch,
 			)
@@ -693,10 +696,16 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 func New(
 	timeSource epochtime.Backend,
 	cfg *scheduler.Config,
-) abci.Application {
+) (abci.Application, error) {
+	baseEpoch, err := timeSource.GetBaseEpoch(context.Background())
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint/scheduler: couldn't query base epoch")
+	}
+
 	return &schedulerApplication{
 		logger:     logging.GetLogger("tendermint/scheduler"),
 		timeSource: timeSource,
 		cfg:        cfg,
-	}
+		baseEpoch:  baseEpoch,
+	}, nil
 }

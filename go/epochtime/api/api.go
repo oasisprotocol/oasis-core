@@ -16,10 +16,13 @@ const EpochInvalid EpochTime = 0xffffffffffffffff // ~50 quadrillion years away.
 
 // Backend is a timekeeping implementation.
 type Backend interface {
+	// GetBaseEPoch returns the base epoch.
+	GetBaseEpoch(context.Context) (EpochTime, error)
+
 	// GetEpoch returns the epoch at the specified block height.
 	// Calling this method with height `0`, should return the
 	// epoch of latest known block.
-	GetEpoch(context.Context, int64) (epoch EpochTime, err error)
+	GetEpoch(context.Context, int64) (EpochTime, error)
 
 	// GetEpochBlock returns the block height at the start of the said
 	// epoch.
@@ -30,6 +33,9 @@ type Backend interface {
 	//
 	// Upon subscription the current epoch is sent immediately.
 	WatchEpochs() (<-chan EpochTime, *pubsub.Subscription)
+
+	// ToGenesis returns the genesis state at the specified block height.
+	ToGenesis(ctx context.Context, height int64) (*Genesis, error)
 }
 
 // SetableBackend is a Backend that supports setting the current epoch.
@@ -38,4 +44,10 @@ type SetableBackend interface {
 
 	// SetEpoch sets the current epoch.
 	SetEpoch(context.Context, EpochTime) error
+}
+
+// Genesis is the initial genesis state for allowing configurable timekeeping.
+type Genesis struct {
+	// Base is the starting epoch.
+	Base EpochTime `json:"base"`
 }

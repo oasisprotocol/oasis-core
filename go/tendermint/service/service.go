@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/service"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
 
@@ -28,6 +29,9 @@ type TendermintService interface {
 	// with this service instance and check that its dependencies are
 	// registered.
 	RegisterApplication(abci.Application) error
+
+	// GetGenesis will return the oasis genesis document.
+	GetGenesis() *genesis.Document
 
 	// ForceInitialize force-initializes the Tendermint service iff
 	// it has not been started.  Otherwise the routine has no effect
