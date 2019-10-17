@@ -42,7 +42,7 @@ var (
 )
 
 type stakeAccumulator struct {
-	snapshot       *stakingapp.Snapshot
+	stakeCache     *stakingapp.StakeCache
 	perEntityStake map[signature.MapKey][]staking.ThresholdKind
 
 	unsafeBypass bool
@@ -65,7 +65,7 @@ func (acc *stakeAccumulator) checkThreshold(id signature.PublicKey, kind staking
 	}
 	kinds = append(kinds, kind)
 
-	if err := acc.snapshot.EnsureSufficientStake(id, kinds); err != nil {
+	if err := acc.stakeCache.EnsureSufficientStake(id, kinds); err != nil {
 		return err
 	}
 
@@ -79,13 +79,13 @@ func (acc *stakeAccumulator) checkThreshold(id signature.PublicKey, kind staking
 }
 
 func newStakeAccumulator(ctx *abci.Context, unsafeBypass bool) (*stakeAccumulator, error) {
-	snapshot, err := stakingapp.NewSnapshot(ctx)
+	stakeCache, err := stakingapp.NewStakeCache(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return &stakeAccumulator{
-		snapshot:       snapshot,
+		stakeCache:     stakeCache,
 		perEntityStake: make(map[signature.MapKey][]staking.ThresholdKind),
 		unsafeBypass:   unsafeBypass,
 	}, nil

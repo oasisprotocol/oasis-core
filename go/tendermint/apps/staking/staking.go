@@ -528,35 +528,21 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *MutableSt
 // stake to meet the sum of the thresholds specified.  The thresholds vector
 // can have multiple instances of the same threshold kind specified, in which
 // case it will be factored in repeatedly.
-func EnsureSufficientStake(appState *abci.ApplicationState, ctx *abci.Context, id signature.PublicKey, thresholds []staking.ThresholdKind) error {
-	state := NewMutableState(ctx.State())
-
-	m, err := state.Thresholds()
+func EnsureSufficientStake(ctx *abci.Context, id signature.PublicKey, thresholds []staking.ThresholdKind) error {
+	sc, err := NewStakeCache(ctx)
 	if err != nil {
-		return errors.Wrap(err, "staking/tendermint: failed to query thresholds")
+		return err
 	}
-	escrowBalance := state.EscrowBalance(id)
-
-	var targetThreshold staking.Quantity
-	for _, v := range thresholds {
-		qty := m[v]
-		if err = targetThreshold.Add(&qty); err != nil {
-			return errors.Wrap(err, "staking/tendermint: failed to accumulate threshold")
-		}
-	}
-
-	if escrowBalance.Cmp(&targetThreshold) < 0 {
-		return staking.ErrInsufficientStake
-	}
-
-	return nil
+	return sc.EnsureSufficientStake(id, thresholds)
 }
 
-// Snapshot is a snapshot of the escrow balances and thresholds that can be
-// used in lieu of repeated queries to `EnsureSufficientStake` at a given
-// height.  This should be favored when repeated queries are going to
+// StakeCache is a lookup cache for escrow balances and thresholds that
+// can be used in lieu of repeated queries to `EnsureSufficientStake` at a
+// given height.  This should be favored when repeated queries are going to
 // be made.
-type Snapshot struct {
+type StakeCache struct {
+	ctx *abci.Context
+
 	thresholds map[staking.ThresholdKind]staking.Quantity
 	balances   map[signature.MapKey]*staking.Quantity
 }
@@ -565,15 +551,17 @@ type Snapshot struct {
 // stake to meet the sum of the thresholds specified.  The thresholds vector
 // can have multiple instances of the same threshold kind specified, in which
 // case it will be factored in repeatedly.
-func (snap *Snapshot) EnsureSufficientStake(id signature.PublicKey, thresholds []staking.ThresholdKind) error {
-	escrowBalance := snap.balances[id.ToMapKey()]
+func (sc *StakeCache) EnsureSufficientStake(id signature.PublicKey, thresholds []staking.ThresholdKind) error {
+	escrowBalance := sc.balances[id.ToMapKey()]
 	if escrowBalance == nil {
-		escrowBalance = staking.NewQuantity()
+		state := NewMutableState(sc.ctx.State())
+		escrowBalance = state.EscrowBalance(id)
+		sc.balances[id.ToMapKey()] = escrowBalance
 	}
 
 	var targetThreshold staking.Quantity
 	for _, v := range thresholds {
-		qty := snap.thresholds[v]
+		qty := sc.thresholds[v]
 		if err := targetThreshold.Add(&qty); err != nil {
 			return errors.Wrap(err, "staking/tendermint: failed to accumulate threshold")
 		}
@@ -586,8 +574,8 @@ func (snap *Snapshot) EnsureSufficientStake(id signature.PublicKey, thresholds [
 	return nil
 }
 
-// NewSnapshot creates a new staking snapshot.
-func NewSnapshot(ctx *abci.Context) (*Snapshot, error) {
+// NewStakeCache creates a new staking lookup cache.
+func NewStakeCache(ctx *abci.Context) (*StakeCache, error) {
 	state := NewMutableState(ctx.State())
 
 	thresholds, err := state.Thresholds()
@@ -595,21 +583,10 @@ func NewSnapshot(ctx *abci.Context) (*Snapshot, error) {
 		return nil, errors.Wrap(err, "staking/tendermint: failed to query thresholds")
 	}
 
-	accounts, err := state.accounts()
-	if err != nil {
-		return nil, errors.Wrap(err, "staking/tendermint: failed to query accounts")
-	}
-
-	balances := make(map[signature.MapKey]*staking.Quantity)
-	for _, v := range accounts {
-		if balance := state.EscrowBalance(v); !balance.IsZero() {
-			balances[v.ToMapKey()] = balance
-		}
-	}
-
-	return &Snapshot{
+	return &StakeCache{
+		ctx:        ctx,
 		thresholds: thresholds,
-		balances:   balances,
+		balances:   make(map[signature.MapKey]*staking.Quantity),
 	}, nil
 }
 
