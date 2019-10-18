@@ -218,7 +218,7 @@ steps:
   ####################################
 
   - label: Coverage Rust crates
-    branches: master
+    branches: ptrus/fix/tarpaulin-0.9 # TODO: master
     command:
       # Build storage interoperability test helpers first.
       - make -C go urkel-test-helpers

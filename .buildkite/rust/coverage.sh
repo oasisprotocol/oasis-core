@@ -59,5 +59,8 @@ cargo tarpaulin \
   --exclude-files tests \
   --exclude-files runtime/src/storage/mkvs/urkel/interop \
   --coveralls ${coveralls_api_token} \
-  -v
+  -v \
+  # Revert to pre-0.9 behaviour
+  # https://github.com/xd009642/tarpaulin/issues/264
+  -- --test-threads=1
 set -x
