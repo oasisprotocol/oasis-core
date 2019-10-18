@@ -157,11 +157,6 @@ func (r *tendermintBackend) GetNodes(ctx context.Context) ([]*node.Node, error) 
 	return nodes, nil
 }
 
-func (r *tendermintBackend) GetNodesForEntity(ctx context.Context, id signature.PublicKey) []*node.Node {
-	// TODO: Need support for range queries on previous versions of the tree.
-	return nil
-}
-
 func (r *tendermintBackend) WatchNodes() (<-chan *api.NodeEvent, *pubsub.Subscription) {
 	typedCh := make(chan *api.NodeEvent)
 	sub := r.nodeNotifier.Subscribe()

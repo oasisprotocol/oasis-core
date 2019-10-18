@@ -162,21 +162,6 @@ func (s *grpcServer) GetNodes(ctx context.Context, req *pb.NodesRequest) (*pb.No
 	return &pb.NodesResponse{Node: pbNodes}, nil
 }
 
-func (s *grpcServer) GetNodesForEntity(ctx context.Context, req *pb.EntityNodesRequest) (*pb.EntityNodesResponse, error) {
-	var id signature.PublicKey
-	if err := id.UnmarshalBinary(req.GetId()); err != nil {
-		return nil, err
-	}
-
-	nodes := s.backend.GetNodesForEntity(ctx, id)
-	pbNodes := make([]*commonPB.Node, 0, len(nodes))
-	for _, v := range nodes {
-		pbNodes = append(pbNodes, v.ToProto())
-	}
-
-	return &pb.EntityNodesResponse{Node: pbNodes}, nil
-}
-
 func (s *grpcServer) WatchNodes(req *pb.WatchNodeRequest, stream pb.EntityRegistry_WatchNodesServer) error {
 	ch, sub := s.backend.WatchNodes()
 	defer sub.Close()
