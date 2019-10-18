@@ -220,6 +220,9 @@ steps:
   - label: Coverage Rust crates
     branches: master
     command:
+      # Build storage interoperability test helpers first.
+      - make -C go urkel-test-helpers
+      - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers)
       - .buildkite/rust/coverage.sh
     agents:
       buildkite_agent_size: large
