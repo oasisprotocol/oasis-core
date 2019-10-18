@@ -456,7 +456,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
 }
 
-func (app *rootHashApplication) EndBlock(request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *rootHashApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 

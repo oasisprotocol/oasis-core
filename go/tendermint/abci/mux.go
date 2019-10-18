@@ -130,7 +130,7 @@ type Application interface {
 	// validator set.
 	//
 	// Note: Errors are irrecoverable and will result in a panic.
-	EndBlock(types.RequestEndBlock) (types.ResponseEndBlock, error)
+	EndBlock(*Context, types.RequestEndBlock) (types.ResponseEndBlock, error)
 
 	// FireTimer is called within BeginBlock before any other processing
 	// takes place for each timer that should fire.
@@ -550,7 +550,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	// Dispatch EndBlock to all applications.
 	resp := mux.BaseApplication.EndBlock(req)
 	for _, app := range mux.appsByLexOrder {
-		newResp, err := app.EndBlock(req)
+		newResp, err := app.EndBlock(ctx, req)
 		if err != nil {
 			mux.logger.Error("EndBlock: fatal error in application",
 				"err", err,
@@ -813,6 +813,7 @@ func (s *ApplicationState) Genesis() *genesis.Document {
 	if err != nil {
 		s.logger.Error("failed to unmarshal genesis application state",
 			"err", err,
+			"state", req.AppStateBytes,
 		)
 		panic("Genesis: invalid genesis application state")
 	}

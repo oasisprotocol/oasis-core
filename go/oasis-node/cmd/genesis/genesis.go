@@ -382,7 +382,7 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 // AppendStakingState appens the staking gensis state given a state file name.
 func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) error {
 	stakingSt := staking.Genesis{
-		Ledger: make(map[signature.MapKey]*staking.GenesisLedgerEntry),
+		Ledger: make(map[signature.MapKey]*staking.Account),
 	}
 
 	if state != "" {
@@ -423,10 +423,14 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 			return err
 		}
 
-		stakingSt.Ledger[ent.ID.ToMapKey()] = &staking.GenesisLedgerEntry{
-			GeneralBalance: q,
-			EscrowBalance:  q,
-			Nonce:          0,
+		stakingSt.Ledger[ent.ID.ToMapKey()] = &staking.Account{
+			General: staking.GeneralAccount{
+				Balance: q,
+				Nonce:   0,
+			},
+			Escrow: staking.EscrowAccount{
+				Balance: q,
+			},
 		}
 
 		// Inflate the TotalSupply to account for the account's general and

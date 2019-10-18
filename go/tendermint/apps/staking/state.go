@@ -11,17 +11,18 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
 
 var (
-	// accountKeyFmt is the key format used for accounts.
+	// accountKeyFmt is the key format used for accounts (account id).
 	//
 	// Value is a CBOR-serialized account.
 	accountKeyFmt = keyformat.New(0x50, &signature.MapKey{})
-	// thresholdKeyFmt is the key format used for thresholds.
+	// thresholdKeyFmt is the key format used for thresholds (kind).
 	//
 	// Value is a CBOR-serialized threshold.
 	thresholdKeyFmt = keyformat.New(0x51, uint64(0))
@@ -37,20 +38,27 @@ var (
 	//
 	// Value is a little endian encoding of an uint64.
 	debondingIntervalKeyFmt = keyformat.New(0x54)
+	// delegationKeyFmt is the key format used for delegations (escrow id, delegator id).
+	//
+	// Value is CBOR-serialized delegation.
+	delegationKeyFmt = keyformat.New(0x55, &signature.MapKey{}, &signature.MapKey{})
+	// debondingDelegationKeyFmt is the key format used for debonding delegations
+	// (delegator id, escrow id, seq no).
+	//
+	// Value is CBOR-serialized debonding delegation.
+	debondingDelegationKeyFmt = keyformat.New(0x56, &signature.MapKey{}, &signature.MapKey{}, uint64(0))
+	// debondingQueueKeyFmt is the debonding queue key format (epoch, delegator id,
+	// escrow id, seq no).
+	//
+	// Value is empty.
+	debondingQueueKeyFmt = keyformat.New(0x57, uint64(0), &signature.MapKey{}, &signature.MapKey{}, uint64(0))
 	// acceptableTransferPeersKeyFmt is the key format used for the acceptable transfer peers set.
 	//
 	// Value is a CBOR-serialized map from acceptable runtime IDs to the boolean true.
-	acceptableTransferPeersKeyFmt = keyformat.New(0x55)
+	acceptableTransferPeersKeyFmt = keyformat.New(0x58)
 
 	logger = logging.GetLogger("tendermint/staking")
 )
-
-type ledgerEntry struct {
-	GeneralBalance  staking.Quantity `json:"general_balance"`
-	EscrowBalance   staking.Quantity `json:"escrow_balance"`
-	DebondStartTime uint64           `json:"debond_start_time"`
-	Nonce           uint64           `json:"nonce"`
-}
 
 type immutableState struct {
 	*abci.ImmutableState
@@ -178,13 +186,18 @@ func (s *immutableState) rawAccounts() ([]byte, error) {
 	return cbor.Marshal(accounts), nil
 }
 
-func (s *immutableState) account(id signature.PublicKey) *ledgerEntry {
+func (s *immutableState) accountRaw(id signature.PublicKey) []byte {
 	_, value := s.Snapshot.Get(accountKeyFmt.Encode(&id))
+	return value
+}
+
+func (s *immutableState) account(id signature.PublicKey) *staking.Account {
+	value := s.accountRaw(id)
 	if value == nil {
-		return &ledgerEntry{}
+		return &staking.Account{}
 	}
 
-	var ent ledgerEntry
+	var ent staking.Account
 	if err := cbor.Unmarshal(value, &ent); err != nil {
 		panic("staking: corrupt account state: " + err.Error())
 	}
@@ -194,7 +207,173 @@ func (s *immutableState) account(id signature.PublicKey) *ledgerEntry {
 // EscrowBalance returns the escrow balance for the ID.
 func (s *immutableState) EscrowBalance(id signature.PublicKey) *staking.Quantity {
 	account := s.account(id)
-	return account.EscrowBalance.Clone()
+
+	balance := account.Escrow.Balance.Clone()
+	// Subtract the amount currently undergoing debonding.
+	debonding, err := staking.TokensForShares(&account.Escrow, &account.Escrow.DebondingShares)
+	if err != nil {
+		panic("staking: failed to compute escrow balance: " + err.Error())
+	}
+	if err = balance.Sub(debonding); err != nil {
+		panic("staking: failed to compute escrow balance: " + err.Error())
+	}
+
+	return balance
+}
+
+func (s *immutableState) delegations() (map[signature.MapKey]map[signature.MapKey]*staking.Delegation, error) {
+	delegations := make(map[signature.MapKey]map[signature.MapKey]*staking.Delegation)
+	s.Snapshot.IterateRange(
+		delegationKeyFmt.Encode(),
+		nil,
+		true,
+		func(key, value []byte) bool {
+			var escrowID signature.MapKey
+			var delegatorID signature.MapKey
+			if !delegationKeyFmt.Decode(key, &escrowID, &delegatorID) {
+				return true
+			}
+
+			var del staking.Delegation
+			if err := cbor.Unmarshal(value, &del); err != nil {
+				panic("staking: corrupt delegation state: " + err.Error())
+			}
+
+			if delegations[escrowID] == nil {
+				delegations[escrowID] = make(map[signature.MapKey]*staking.Delegation)
+			}
+			delegations[escrowID][delegatorID] = &del
+
+			return false
+		},
+	)
+
+	return delegations, nil
+}
+
+func (s *immutableState) delegationRaw(delegatorID, escrowID signature.PublicKey) []byte {
+	_, value := s.Snapshot.Get(delegationKeyFmt.Encode(&escrowID, &delegatorID))
+	return value
+}
+
+func (s *immutableState) delegation(delegatorID, escrowID signature.PublicKey) *staking.Delegation {
+	value := s.delegationRaw(delegatorID, escrowID)
+	if value == nil {
+		return &staking.Delegation{}
+	}
+
+	var del staking.Delegation
+	if err := cbor.Unmarshal(value, &del); err != nil {
+		panic("staking: corrupt delegation state: " + err.Error())
+	}
+	return &del
+}
+
+func (s *immutableState) debondingDelegations() (map[signature.MapKey]map[signature.MapKey][]*staking.DebondingDelegation, error) {
+	delegations := make(map[signature.MapKey]map[signature.MapKey][]*staking.DebondingDelegation)
+	s.Snapshot.IterateRange(
+		debondingDelegationKeyFmt.Encode(),
+		nil,
+		true,
+		func(key, value []byte) bool {
+			var escrowID signature.MapKey
+			var delegatorID signature.MapKey
+			if !debondingDelegationKeyFmt.Decode(key, &delegatorID, &escrowID) {
+				return true
+			}
+
+			var deb staking.DebondingDelegation
+			if err := cbor.Unmarshal(value, &deb); err != nil {
+				panic("staking: corrupt debonding delegation state: " + err.Error())
+			}
+
+			if delegations[escrowID] == nil {
+				delegations[escrowID] = make(map[signature.MapKey][]*staking.DebondingDelegation)
+			}
+			delegations[escrowID][delegatorID] = append(delegations[escrowID][delegatorID], &deb)
+
+			return false
+		},
+	)
+
+	return delegations, nil
+}
+
+func (s *immutableState) debondingDelegationsFor(delegatorID signature.PublicKey) (map[signature.MapKey][]*staking.DebondingDelegation, error) {
+	delegations := make(map[signature.MapKey][]*staking.DebondingDelegation)
+	s.Snapshot.IterateRange(
+		debondingDelegationKeyFmt.Encode(&delegatorID),
+		nil,
+		true,
+		func(key, value []byte) bool {
+			var escrowID signature.MapKey
+			var decDelegatorID signature.PublicKey
+			if !debondingDelegationKeyFmt.Decode(key, &decDelegatorID, &escrowID) || !decDelegatorID.Equal(delegatorID) {
+				return true
+			}
+
+			var deb staking.DebondingDelegation
+			if err := cbor.Unmarshal(value, &deb); err != nil {
+				panic("staking: corrupt debonding delegation state: " + err.Error())
+			}
+
+			delegations[escrowID] = append(delegations[escrowID], &deb)
+
+			return false
+		},
+	)
+
+	return delegations, nil
+}
+
+func (s *immutableState) debondingDelegation(delegatorID, escrowID signature.PublicKey, seq uint64) *staking.DebondingDelegation {
+	_, value := s.Snapshot.Get(debondingDelegationKeyFmt.Encode(&delegatorID, &escrowID, seq))
+	if value == nil {
+		return &staking.DebondingDelegation{}
+	}
+
+	var deb staking.DebondingDelegation
+	if err := cbor.Unmarshal(value, &deb); err != nil {
+		panic("staking: corrupt debonding delegation state: " + err.Error())
+	}
+	return &deb
+}
+
+type debondingQueueEntry struct {
+	epoch       epochtime.EpochTime
+	delegatorID signature.PublicKey
+	escrowID    signature.PublicKey
+	seq         uint64
+	delegation  *staking.DebondingDelegation
+}
+
+func (s *immutableState) expiredDebondingQueue(epoch epochtime.EpochTime) []*debondingQueueEntry {
+	var entries []*debondingQueueEntry
+	s.Snapshot.IterateRange(
+		debondingQueueKeyFmt.Encode(),
+		debondingQueueKeyFmt.Encode(uint64(epoch)+1),
+		true,
+		func(key, value []byte) bool {
+			var decEpoch, seq uint64
+			var escrowID signature.PublicKey
+			var delegatorID signature.PublicKey
+			if !debondingQueueKeyFmt.Decode(key, &decEpoch, &delegatorID, &escrowID, &seq) {
+				return true
+			}
+
+			deb := s.debondingDelegation(delegatorID, escrowID, seq)
+			entries = append(entries, &debondingQueueEntry{
+				epoch:       epochtime.EpochTime(decEpoch),
+				delegatorID: delegatorID,
+				escrowID:    escrowID,
+				seq:         seq,
+				delegation:  deb,
+			})
+
+			return false
+		},
+	)
+	return entries
 }
 
 func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
@@ -213,15 +392,8 @@ type MutableState struct {
 	tree *iavl.MutableTree
 }
 
-func (s *MutableState) setAccount(id signature.PublicKey, account *ledgerEntry) {
+func (s *MutableState) setAccount(id signature.PublicKey, account *staking.Account) {
 	s.tree.Set(accountKeyFmt.Encode(&id), cbor.Marshal(account))
-}
-
-// SetDebondStartTime sets the debonding start time of an account to ts.
-func (s *MutableState) SetDebondStartTime(id signature.PublicKey, ts uint64) {
-	account := s.account(id)
-	account.DebondStartTime = ts
-	s.setAccount(id, account)
 }
 
 func (s *MutableState) setTotalSupply(q *staking.Quantity) {
@@ -246,6 +418,35 @@ func (s *MutableState) setThreshold(kind staking.ThresholdKind, q *staking.Quant
 	s.tree.Set(thresholdKeyFmt.Encode(uint64(kind)), cbor.Marshal(q))
 }
 
+func (s *MutableState) setDelegation(delegatorID, escrowID signature.PublicKey, d *staking.Delegation) {
+	// Remove delegation if there are no more shares in it.
+	if d.Shares.IsZero() {
+		s.tree.Remove(delegationKeyFmt.Encode(&escrowID, &delegatorID))
+		return
+	}
+
+	s.tree.Set(delegationKeyFmt.Encode(&escrowID, &delegatorID), cbor.Marshal(d))
+}
+
+func (s *MutableState) setDebondingDelegation(delegatorID, escrowID signature.PublicKey, seq uint64, d *staking.DebondingDelegation) {
+	key := debondingDelegationKeyFmt.Encode(&delegatorID, &escrowID, seq)
+
+	if d == nil {
+		// Remove descriptor.
+		s.tree.Remove(key)
+		return
+	}
+
+	// Add to debonding queue.
+	s.tree.Set(debondingQueueKeyFmt.Encode(uint64(d.DebondEndTime), &delegatorID, &escrowID, seq), []byte{})
+	// Add descriptor.
+	s.tree.Set(key, cbor.Marshal(d))
+}
+
+func (s *MutableState) removeFromDebondingQueue(epoch epochtime.EpochTime, delegatorID, escrowID signature.PublicKey, seq uint64) {
+	s.tree.Remove(debondingQueueKeyFmt.Encode(uint64(epoch), &delegatorID, &escrowID, seq))
+}
+
 // SlashEscrow slashes up to the amount from the escrow balance of the account,
 // transfering it to the global common pool, returning true iff the amount
 // actually slashed is > 0.
@@ -259,7 +460,7 @@ func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey
 	}
 
 	from := s.account(fromID)
-	slashed, err := staking.MoveUpTo(commonPool, &from.EscrowBalance, amount)
+	slashed, err := staking.MoveUpTo(commonPool, &from.Escrow.Balance, amount)
 	if err != nil {
 		return false, errors.Wrap(err, "staking: failed to slash")
 	}
@@ -294,7 +495,7 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 	}
 
 	to := s.account(toID)
-	transfered, err := staking.MoveUpTo(&to.GeneralBalance, commonPool, amount)
+	transfered, err := staking.MoveUpTo(&to.General.Balance, commonPool, amount)
 	if err != nil {
 		return false, errors.Wrap(err, "staking: failed to transfer from common pool")
 	}
@@ -344,9 +545,9 @@ func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, mess
 
 		switch message.StakingGeneralAdjustmentRoothashMessage.Op {
 		case block.Increase:
-			err = account.GeneralBalance.Add(message.StakingGeneralAdjustmentRoothashMessage.Amount)
+			err = account.General.Balance.Add(message.StakingGeneralAdjustmentRoothashMessage.Amount)
 		case block.Decrease:
-			err = account.GeneralBalance.Sub(message.StakingGeneralAdjustmentRoothashMessage.Amount)
+			err = account.General.Balance.Sub(message.StakingGeneralAdjustmentRoothashMessage.Amount)
 		default:
 			return errors.Errorf("staking general adjustment message has invalid op"), nil
 		}
@@ -358,7 +559,7 @@ func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, mess
 		logger.Debug("handled StakingGeneralAdjustmentRoothashMessage",
 			logging.LogEvent, staking.LogEventGeneralAdjustment,
 			"account", message.StakingGeneralAdjustmentRoothashMessage.Account,
-			"general_balance_after", account.GeneralBalance,
+			"general_balance_after", account.General.Balance,
 		)
 	}
 

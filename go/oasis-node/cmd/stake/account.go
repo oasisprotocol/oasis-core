@@ -28,6 +28,8 @@ const (
 	cfgTxFile   = "stake.transaction.file"
 
 	cfgTransferDestination = "stake.transfer.destination"
+
+	cfgEscrowAccount = "stake.escrow.account"
 )
 
 var (
@@ -35,6 +37,7 @@ var (
 	accountSubmitFlags   = flag.NewFlagSet("", flag.ContinueOnError)
 	txFlags              = flag.NewFlagSet("", flag.ContinueOnError)
 	txFileFlags          = flag.NewFlagSet("", flag.ContinueOnError)
+	escrowFlags          = flag.NewFlagSet("", flag.ContinueOnError)
 	accountTransferFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	accountCmd = &cobra.Command{
@@ -276,6 +279,12 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 	assertTxFileOK()
 
 	var escrow api.Escrow
+	if err := escrow.Account.UnmarshalHex(viper.GetString(cfgEscrowAccount)); err != nil {
+		logger.Error("failed to parse escrow account",
+			"err", err,
+		)
+		os.Exit(1)
+	}
 	if err := escrow.Tokens.UnmarshalText([]byte(viper.GetString(cfgTxAmount))); err != nil {
 		logger.Error("failed to parse escrow amount",
 			"err", err,
@@ -315,7 +324,13 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 	assertTxFileOK()
 
 	var reclaim api.ReclaimEscrow
-	if err := reclaim.Tokens.UnmarshalText([]byte(viper.GetString(cfgTxAmount))); err != nil {
+	if err := reclaim.Account.UnmarshalHex(viper.GetString(cfgEscrowAccount)); err != nil {
+		logger.Error("failed to parse escrow account",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if err := reclaim.Shares.UnmarshalText([]byte(viper.GetString(cfgTxAmount))); err != nil {
 		logger.Error("failed to parse escrow reclaim amount",
 			"err", err,
 		)
@@ -352,6 +367,7 @@ func registerAccountCmd() {
 		accountSubmitCmd,
 		accountTransferCmd,
 		accountBurnCmd,
+		accountEscrowCmd,
 		accountReclaimEscrowCmd,
 	} {
 		accountCmd.AddCommand(v)
@@ -361,8 +377,8 @@ func registerAccountCmd() {
 	accountSubmitCmd.Flags().AddFlagSet(accountSubmitFlags)
 	accountTransferCmd.Flags().AddFlagSet(accountTransferFlags)
 	accountBurnCmd.Flags().AddFlagSet(txFlags)
-	accountEscrowCmd.Flags().AddFlagSet(txFlags)
-	accountReclaimEscrowCmd.Flags().AddFlagSet(txFlags)
+	accountEscrowCmd.Flags().AddFlagSet(escrowFlags)
+	accountReclaimEscrowCmd.Flags().AddFlagSet(escrowFlags)
 }
 
 func init() {
@@ -388,4 +404,8 @@ func init() {
 	accountTransferFlags.String(cfgTransferDestination, "", "transfer destination account ID")
 	_ = viper.BindPFlags(accountTransferFlags)
 	accountTransferFlags.AddFlagSet(txFlags)
+
+	escrowFlags.String(cfgEscrowAccount, "", "ID of the escrow account")
+	_ = viper.BindPFlags(escrowFlags)
+	escrowFlags.AddFlagSet(txFlags)
 }

@@ -22,7 +22,7 @@ var (
 	// which have been processed by roothash (value is TagUpdateValue).
 	TagUpdate = []byte("roothash.update")
 	// TagUpdateValue is the only allowed value for TagUpdate.
-	TagUpdateValue = []byte("1")
+	TagUpdateValue = []byte{0x01}
 
 	// TagMergeDiscrepancyDetected is an ABCI transaction tag for merge discrepancy
 	// detected events (value is a CBOR serialized ValueMergeDiscrepancyDetected).
@@ -35,13 +35,9 @@ var (
 	// (value is a CBOR serialized ValueFinalized).
 	TagFinalized = []byte("roothash.finalized")
 
-	// QueryApp is a query for filtering transactions processed by
-	// the root hash application.
-	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
-
 	// QueryUpdate is a query for filtering transactions where root hash
 	// application state has been updated. This is required as state can
-	//  change as part of foreign application transactions.
+	// change as part of foreign application transactions.
 	QueryUpdate = api.QueryForEvent(TagUpdate, TagUpdateValue)
 )
 

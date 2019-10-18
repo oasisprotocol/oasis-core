@@ -276,7 +276,7 @@ func (app *registryApplication) ForeignExecuteTx(ctx *abci.Context, other abci.A
 	return nil
 }
 
-func (app *registryApplication) EndBlock(request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *registryApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 
@@ -343,7 +343,7 @@ func (app *registryApplication) registerEntity(
 	}
 
 	if !app.cfg.DebugBypassStake {
-		if err = stakingapp.EnsureSufficientStake(app.state, ctx, ent.ID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+		if err = stakingapp.EnsureSufficientStake(ctx, ent.ID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
 			app.logger.Error("RegisterEntity: Insufficent stake",
 				"err", err,
 				"id", ent.ID,
@@ -462,7 +462,7 @@ func (app *registryApplication) registerNode(
 	// Re-check that the entity has at least sufficient stake to still be an
 	// entity.  The node thresholds should be enforced in the scheduler.
 	if !app.cfg.DebugBypassStake {
-		if err = stakingapp.EnsureSufficientStake(app.state, ctx, newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+		if err = stakingapp.EnsureSufficientStake(ctx, newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
 			app.logger.Error("RegisterNode: Insufficent stake",
 				"err", err,
 				"id", newNode.EntityID,

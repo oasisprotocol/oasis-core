@@ -14,6 +14,8 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 )
 
@@ -25,10 +27,13 @@ var (
 	DebugGenesisState string
 
 	debugGenesisState = api.Genesis{
-		TotalSupply: testTotalSupply,
-		Ledger: map[signature.MapKey]*api.GenesisLedgerEntry{
-			SrcID.ToMapKey(): &api.GenesisLedgerEntry{
-				GeneralBalance: testTotalSupply,
+		TotalSupply:       testTotalSupply,
+		DebondingInterval: 1,
+		Ledger: map[signature.MapKey]*api.Account{
+			SrcID.ToMapKey(): &api.Account{
+				General: api.GeneralAccount{
+					Balance: testTotalSupply,
+				},
 			},
 		},
 		Thresholds: map[api.ThresholdKind]api.Quantity{
@@ -54,10 +59,10 @@ var (
 
 // StakingImplementationTests exercises the basic functionality of a
 // staking token backend.
-func StakingImplementationTests(t *testing.T, backend api.Backend) {
+func StakingImplementationTests(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
 	for _, tc := range []struct {
 		n  string
-		fn func(*testing.T, api.Backend)
+		fn func(*testing.T, api.Backend, epochtime.SetableBackend)
 	}{
 		{"InitialEnv", testInitialEnv},
 		{"Transfer", testTransfer},
@@ -65,11 +70,11 @@ func StakingImplementationTests(t *testing.T, backend api.Backend) {
 		{"Burn", testBurn},
 		{"Escrow", testEscrow},
 	} {
-		t.Run(tc.n, func(t *testing.T) { tc.fn(t, backend) })
+		t.Run(tc.n, func(t *testing.T) { tc.fn(t, backend, timeSource) })
 	}
 }
 
-func testInitialEnv(t *testing.T, backend api.Backend) {
+func testInitialEnv(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
 	require := require.New(t)
 
 	totalSupply, err := backend.TotalSupply(context.Background())
@@ -81,12 +86,11 @@ func testInitialEnv(t *testing.T, backend api.Backend) {
 	require.Len(accounts, 1, "Accounts - nr entries")
 	require.Equal(SrcID, accounts[0], "Accounts[0] == testID")
 
-	generalBalance, escrowBalance, debond, nonce, err := backend.AccountInfo(context.Background(), SrcID)
+	acc, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo")
-	require.Equal(&testTotalSupply, generalBalance, "src: generalBalance")
-	require.True(escrowBalance.IsZero(), "src: escrowBalance")
-	require.EqualValues(0, debond, "src: debond start time")
-	require.EqualValues(0, nonce, "src: nonce")
+	require.Equal(testTotalSupply, acc.General.Balance, "src: general balance")
+	require.True(acc.Escrow.Balance.IsZero(), "src: escrow balance")
+	require.EqualValues(0, acc.General.Nonce, "src: nonce")
 
 	commonPool, err := backend.CommonPool(context.Background())
 	require.NoError(err, "CommonPool")
@@ -104,22 +108,22 @@ func testInitialEnv(t *testing.T, backend api.Backend) {
 	}
 }
 
-func testTransfer(t *testing.T, backend api.Backend) {
+func testTransfer(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
 	require := require.New(t)
 
-	destBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), DestID)
+	dstAcc, err := backend.AccountInfo(context.Background(), DestID)
 	require.NoError(err, "dest: AccountInfo")
-	require.True(destBalance.IsZero(), "dest: generalBalance - before")
-	require.EqualValues(0, nonce, "dest: nonce - before")
+	require.True(dstAcc.General.Balance.IsZero(), "dest: general balance - before")
+	require.EqualValues(0, dstAcc.General.Nonce, "dest: nonce - before")
 
-	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
+	srcAcc, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo - before")
 
 	ch, sub := backend.WatchTransfers()
 	defer sub.Close()
 
 	xfer := &api.Transfer{
-		Nonce:  nonce,
+		Nonce:  srcAcc.General.Nonce,
 		To:     DestID,
 		Tokens: QtyFromInt(math.MaxUint8),
 	}
@@ -138,21 +142,21 @@ func testTransfer(t *testing.T, backend api.Backend) {
 		t.Fatalf("failed to receive transfer event")
 	}
 
-	_ = srcBalance.Sub(&xfer.Tokens)
-	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
+	_ = srcAcc.General.Balance.Sub(&xfer.Tokens)
+	newSrcAcc, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo - after")
-	require.Equal(srcBalance, newSrcBalance, "src: generalBalance")
-	require.Equal(xfer.Nonce+1, nonce, "src: nonce")
+	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
+	require.Equal(xfer.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 
-	destBalance, _, _, nonce, err = backend.AccountInfo(context.Background(), DestID)
+	dstAcc, err = backend.AccountInfo(context.Background(), DestID)
 	require.NoError(err, "dest: AccountInfo - after")
-	require.Equal(&xfer.Tokens, destBalance, "dest: generalBalance - after")
-	require.EqualValues(0, nonce, "dest: nonce - after")
+	require.Equal(xfer.Tokens, dstAcc.General.Balance, "dest: general balance - after")
+	require.EqualValues(0, dstAcc.General.Nonce, "dest: nonce - after")
 
 	// Transfers that exceed available balance should fail.
-	xfer.Nonce = nonce
-	_ = newSrcBalance.Add(&qtyOne)
-	xfer.Tokens = *newSrcBalance
+	xfer.Nonce = newSrcAcc.General.Nonce
+	_ = newSrcAcc.General.Balance.Add(&qtyOne)
+	xfer.Tokens = newSrcAcc.General.Balance
 
 	signed, err = api.SignTransfer(srcSigner, xfer)
 	require.NoError(err, "Sign xfer - fail test")
@@ -161,17 +165,17 @@ func testTransfer(t *testing.T, backend api.Backend) {
 	require.Error(err, "Transfer - more than available balance")
 }
 
-func testSelfTransfer(t *testing.T, backend api.Backend) {
+func testSelfTransfer(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
 	require := require.New(t)
 
-	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
+	srcAcc, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo - before")
 
 	ch, sub := backend.WatchTransfers()
 	defer sub.Close()
 
 	xfer := &api.Transfer{
-		Nonce:  nonce,
+		Nonce:  srcAcc.General.Nonce,
 		To:     SrcID,
 		Tokens: QtyFromInt(math.MaxUint8),
 	}
@@ -190,15 +194,15 @@ func testSelfTransfer(t *testing.T, backend api.Backend) {
 		t.Fatalf("failed to receive transfer event")
 	}
 
-	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
+	newSrcAcc, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo - after")
-	require.Equal(srcBalance, newSrcBalance, "src: generalBalance")
-	require.Equal(xfer.Nonce+1, nonce, "src: nonce")
+	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
+	require.Equal(xfer.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 
 	// Self transfers that are more than the balance should fail.
-	xfer.Nonce = nonce
-	_ = newSrcBalance.Add(&qtyOne)
-	xfer.Tokens = *newSrcBalance
+	xfer.Nonce = newSrcAcc.General.Nonce
+	_ = newSrcAcc.General.Balance.Add(&qtyOne)
+	xfer.Tokens = newSrcAcc.General.Balance
 
 	signed, err = api.SignTransfer(srcSigner, xfer)
 	require.NoError(err, "Sign xfer - fail test")
@@ -207,20 +211,20 @@ func testSelfTransfer(t *testing.T, backend api.Backend) {
 	require.Error(err, "Transfer - more than available balance")
 }
 
-func testBurn(t *testing.T, backend api.Backend) {
+func testBurn(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
 	require := require.New(t)
 
 	totalSupply, err := backend.TotalSupply(context.Background())
 	require.NoError(err, "TotalSupply - before")
 
-	srcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
+	srcAcc, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo")
 
 	ch, sub := backend.WatchBurns()
 	defer sub.Close()
 
 	burn := &api.Burn{
-		Nonce:  nonce,
+		Nonce:  srcAcc.General.Nonce,
 		Tokens: QtyFromInt(math.MaxUint32),
 	}
 	signed, err := api.SignBurn(srcSigner, burn)
@@ -242,29 +246,37 @@ func testBurn(t *testing.T, backend api.Backend) {
 	require.NoError(err, "TotalSupply - after")
 	require.Equal(totalSupply, newTotalSupply, "totalSupply is reduced by burn")
 
-	_ = srcBalance.Sub(&burn.Tokens)
-	newSrcBalance, _, _, nonce, err := backend.AccountInfo(context.Background(), SrcID)
+	_ = srcAcc.General.Balance.Sub(&burn.Tokens)
+	newSrcAcc, err := backend.AccountInfo(context.Background(), SrcID)
 	require.NoError(err, "src: AccountInfo")
-	require.Equal(srcBalance, newSrcBalance, "src: generalBalance - after")
-	require.EqualValues(burn.Nonce+1, nonce, "src: nonce - after")
+	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
+	require.EqualValues(burn.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 }
 
-func testEscrow(t *testing.T, backend api.Backend) {
+func testEscrow(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
 	require := require.New(t)
 
-	generalBalance, escrowBalance, _, nonce, err := backend.AccountInfo(context.Background(), DestID)
-	require.NoError(err, "AccountInfo - before")
-	require.False(generalBalance.IsZero(), "dest: generalBalance != 0")
-	require.True(escrowBalance.IsZero(), "dest: escrowBalance == 0")
+	srcAcc, err := backend.AccountInfo(context.Background(), SrcID)
+	require.NoError(err, "src: AccountInfo - before")
+	require.False(srcAcc.General.Balance.IsZero(), "src: general balance != 0")
+	require.True(srcAcc.Escrow.Balance.IsZero(), "src: escrow balance == 0")
+
+	dstAcc, err := backend.AccountInfo(context.Background(), DestID)
+	require.NoError(err, "dst: AccountInfo - before")
+	require.True(dstAcc.Escrow.Balance.IsZero(), "dst: escrow balance == 0")
+	require.True(dstAcc.Escrow.TotalShares.IsZero(), "dst: escrow total shares == 0")
+	require.True(dstAcc.Escrow.DebondingShares.IsZero(), "dst: escrow debonding shares == 0")
 
 	ch, sub := backend.WatchEscrows()
 	defer sub.Close()
 
+	// Escrow.
 	escrow := &api.Escrow{
-		Nonce:  nonce,
-		Tokens: *generalBalance,
+		Nonce:   srcAcc.General.Nonce,
+		Account: DestID,
+		Tokens:  QtyFromInt(math.MaxUint32),
 	}
-	signed, err := api.SignEscrow(destSigner, escrow)
+	signed, err := api.SignEscrow(srcSigner, escrow)
 	require.NoError(err, "Sign escrow")
 
 	err = backend.AddEscrow(context.Background(), signed)
@@ -273,52 +285,101 @@ func testEscrow(t *testing.T, backend api.Backend) {
 	select {
 	case rawEv := <-ch:
 		ev := rawEv.(*api.EscrowEvent)
-		require.Equal(DestID, ev.Owner, "Event: owner")
+		require.Equal(SrcID, ev.Owner, "Event: owner")
+		require.Equal(DestID, ev.Escrow, "Event: escrow")
 		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive escrow event")
 	}
 
-	tmpBalance := generalBalance
+	_ = srcAcc.General.Balance.Sub(&escrow.Tokens)
+	newSrcAcc, err := backend.AccountInfo(context.Background(), SrcID)
+	require.NoError(err, "src: AccountInfo - after")
+	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
+	require.True(srcAcc.Escrow.Balance.IsZero(), "src: escrow balance == 0 - after")
+	require.Equal(escrow.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 
-	generalBalance, escrowBalance, _, _, err = backend.AccountInfo(context.Background(), DestID)
-	require.NoError(err, "AccountInfo - escrowed")
-	require.True(generalBalance.IsZero(), "dest: generalBalance == 0")
-	require.Equal(tmpBalance, escrowBalance, "dest: escrowBalance == oldGeneralBalance")
+	_ = dstAcc.Escrow.Balance.Add(&escrow.Tokens)
+	newDstAcc, err := backend.AccountInfo(context.Background(), DestID)
+	require.NoError(err, "dst: AccountInfo - after")
+	require.Equal(dstAcc.General.Balance, newDstAcc.General.Balance, "dst: general balance - after")
+	require.Equal(dstAcc.General.Nonce, newDstAcc.General.Nonce, "dst: nonce - after")
+	require.Equal(dstAcc.Escrow.Balance, newDstAcc.Escrow.Balance, "dst: escrow balance - after")
+	require.Equal(dstAcc.Escrow.Balance, newDstAcc.Escrow.TotalShares, "dst: escrow total shares - after")
+	require.True(newDstAcc.Escrow.DebondingShares.IsZero(), "dst: escrow debonding shares == 0 - after")
+
+	// Reclaim escrow (subject to debonding).
+	debs, err := backend.DebondingDelegations(context.Background(), SrcID)
+	require.NoError(err, "DebondingDelegations - before")
+	require.Len(debs, 0, "no debonding delegations before reclaiming escrow")
 
 	reclaim := &api.ReclaimEscrow{
-		Nonce:  nonce + 1,
-		Tokens: *escrowBalance,
+		Nonce:   newSrcAcc.General.Nonce,
+		Account: DestID,
+		Shares:  newDstAcc.Escrow.TotalShares,
 	}
-	signedReclaim, err := api.SignReclaimEscrow(destSigner, reclaim)
+	signedReclaim, err := api.SignReclaimEscrow(srcSigner, reclaim)
 	require.NoError(err, "Sign ReclaimEscrow")
 
 	err = backend.ReclaimEscrow(context.Background(), signedReclaim)
 	require.NoError(err, "ReclaimEscrow")
 
+	// Query debonding delegations.
+	debs, err = backend.DebondingDelegations(context.Background(), SrcID)
+	require.NoError(err, "DebondingDelegations - after (in debonding)")
+	require.Len(debs, 1, "one debonding delegation after reclaiming escrow")
+	require.Len(debs[DestID.ToMapKey()], 1, "one debonding delegation after reclaiming escrow")
+	require.Equal(reclaim.Shares, debs[DestID.ToMapKey()][0].Shares, "DebondingDelegation: shares")
+
+	// Advance epoch to trigger debonding.
+	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+
+	// Wait for debonding period to pass.
 	select {
 	case rawEv := <-ch:
 		ev := rawEv.(*api.ReclaimEscrowEvent)
-		require.Equal(DestID, ev.Owner, "Event: owner")
-		require.Equal(reclaim.Tokens, ev.Tokens, "Event: tokens")
+		require.Equal(SrcID, ev.Owner, "Event: owner")
+		require.Equal(DestID, ev.Escrow, "Event: escrow")
+		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
 	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive escrow event")
+		t.Fatalf("failed to receive reclaim escrow event")
 	}
 
-	generalBalance, escrowBalance, _, _, err = backend.AccountInfo(context.Background(), DestID)
-	require.NoError(err, "AccountInfo - escrowed")
-	require.Equal(tmpBalance, generalBalance, "dest: generalBalance == oldGeneralBalance")
-	require.True(escrowBalance.IsZero(), "dest: escrowBalance == 0")
+	_ = srcAcc.General.Balance.Add(&escrow.Tokens)
+	newSrcAcc, err = backend.AccountInfo(context.Background(), SrcID)
+	require.NoError(err, "src: AccountInfo - after debond")
+	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after debond")
+	require.True(srcAcc.Escrow.Balance.IsZero(), "src: escrow balance == 0 - after debond")
+	require.Equal(reclaim.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after debond")
 
-	escrowBackend, ok := backend.(api.EscrowBackend)
-	if !ok {
-		// Can't test Take/Release escrow in a generic manner.
-		t.Logf("non-EscrowBackend, skipping Take/ReleaseEscrow tests")
-		return
+	_ = dstAcc.Escrow.Balance.Sub(&escrow.Tokens)
+	newDstAcc, err = backend.AccountInfo(context.Background(), DestID)
+	require.NoError(err, "dst: AccountInfo - after debond")
+	require.Equal(dstAcc.General.Balance, newDstAcc.General.Balance, "dst: general balance - after debond")
+	require.Equal(dstAcc.General.Nonce, newDstAcc.General.Nonce, "dst: nonce - after debond")
+	require.True(newDstAcc.Escrow.Balance.IsZero(), "dst: escrow balance == 0 - after debond")
+	require.True(newDstAcc.Escrow.TotalShares.IsZero(), "dst: escrow total shares == 0 - after debond")
+	require.True(newDstAcc.Escrow.DebondingShares.IsZero(), "dst: escrow debonding shares == 0 - after debond")
+
+	debs, err = backend.DebondingDelegations(context.Background(), SrcID)
+	require.NoError(err, "DebondingDelegations - after (debonding completed)")
+	require.Len(debs, 0, "no debonding delegations after debonding has completed")
+
+	// Reclaim escrow (without enough shares).
+	reclaim = &api.ReclaimEscrow{
+		Nonce:   newSrcAcc.General.Nonce,
+		Account: DestID,
+		Shares:  reclaim.Shares,
 	}
+	signedReclaim, err = api.SignReclaimEscrow(srcSigner, reclaim)
+	require.NoError(err, "Sign ReclaimEscrow")
 
-	// Nothing implements EscrowBackend, punt on running tests for now.
-	_ = escrowBackend
+	err = backend.ReclaimEscrow(context.Background(), signedReclaim)
+	require.Error(err, "ReclaimEscrow")
+
+	debs, err = backend.DebondingDelegations(context.Background(), SrcID)
+	require.NoError(err, "DebondingDelegations")
+	require.Len(debs, 0, "no debonding delegations after failed reclaim")
 }
 
 func mustGenerateSigner() signature.Signer {

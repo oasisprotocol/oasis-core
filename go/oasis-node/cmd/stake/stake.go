@@ -205,11 +205,10 @@ func doList(cmd *cobra.Command, args []string) {
 }
 
 type accountInfo struct {
-	ID              signature.PublicKey `json:"id"`
-	GeneralBalance  api.Quantity        `json:"general_balance"`
-	EscrowBalance   api.Quantity        `json:"escrow_balance"`
-	DebondStartTime uint64              `json:"debond_start_time"`
-	Nonce           uint64              `json:"nonce"`
+	ID             signature.PublicKey `json:"id"`
+	GeneralBalance api.Quantity        `json:"general_balance"`
+	EscrowBalance  api.Quantity        `json:"escrow_balance"`
+	Nonce          uint64              `json:"nonce"`
 }
 
 func getAccountInfo(ctx context.Context, cmd *cobra.Command, id signature.PublicKey, client grpcStaking.StakingClient) *accountInfo {
@@ -222,7 +221,6 @@ func getAccountInfo(ctx context.Context, cmd *cobra.Command, id signature.Public
 		if err != nil {
 			return err
 		}
-		// TODO: Query allowances when that is possible (#2000).
 
 		ai.ID = id
 		if err = ai.GeneralBalance.UnmarshalBinary(resp.GetGeneralBalance()); err != nil {
@@ -231,7 +229,6 @@ func getAccountInfo(ctx context.Context, cmd *cobra.Command, id signature.Public
 		if err = ai.EscrowBalance.UnmarshalBinary(resp.GetEscrowBalance()); err != nil {
 			return err
 		}
-		ai.DebondStartTime = resp.DebondStartTime
 		ai.Nonce = resp.Nonce
 
 		return nil

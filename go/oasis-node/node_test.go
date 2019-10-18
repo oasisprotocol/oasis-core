@@ -307,7 +307,9 @@ func testScheduler(t *testing.T, node *testNode) {
 }
 
 func testStaking(t *testing.T, node *testNode) {
-	stakingTests.StakingImplementationTests(t, node.Staking)
+	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+
+	stakingTests.StakingImplementationTests(t, node.Staking, timeSource)
 }
 
 func testRootHash(t *testing.T, node *testNode) {

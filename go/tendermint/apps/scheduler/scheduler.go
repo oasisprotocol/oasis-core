@@ -1,13 +1,11 @@
 package scheduler
 
 import (
-	"bytes"
 	"context"
 	"crypto"
 	"encoding/hex"
 	"fmt"
 	"math/rand"
-	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -44,7 +42,7 @@ var (
 )
 
 type stakeAccumulator struct {
-	snapshot       *stakingapp.Snapshot
+	stakeCache     *stakingapp.StakeCache
 	perEntityStake map[signature.MapKey][]staking.ThresholdKind
 
 	unsafeBypass bool
@@ -67,7 +65,7 @@ func (acc *stakeAccumulator) checkThreshold(id signature.PublicKey, kind staking
 	}
 	kinds = append(kinds, kind)
 
-	if err := acc.snapshot.EnsureSufficientStake(id, kinds); err != nil {
+	if err := acc.stakeCache.EnsureSufficientStake(id, kinds); err != nil {
 		return err
 	}
 
@@ -81,13 +79,13 @@ func (acc *stakeAccumulator) checkThreshold(id signature.PublicKey, kind staking
 }
 
 func newStakeAccumulator(ctx *abci.Context, unsafeBypass bool) (*stakeAccumulator, error) {
-	snapshot, err := stakingapp.NewSnapshot(ctx)
+	stakeCache, err := stakingapp.NewStakeCache(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return &stakeAccumulator{
-		snapshot:       snapshot,
+		stakeCache:     stakeCache,
 		perEntityStake: make(map[signature.MapKey][]staking.ThresholdKind),
 		unsafeBypass:   unsafeBypass,
 	}, nil
@@ -267,33 +265,6 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 		ctx.EmitTag(TagElected, cbor.Marshal(kinds))
 
-		// Set the debonding period start time for all of the entities that
-		// have nodes scheduled.
-		if !app.cfg.DebugBypassStake {
-			stakingState := stakingapp.NewMutableState(app.state.DeliverTxTree())
-			now := uint64(ctx.Now().Unix())
-
-			toUpdate := make([]signature.PublicKey, 0, len(entityStake.perEntityStake))
-			for k, v := range entityStake.perEntityStake {
-				if len(v) == 0 {
-					continue
-				}
-
-				var id signature.PublicKey
-				id.FromMapKey(k)
-				toUpdate = append(toUpdate, id)
-			}
-
-			sort.Slice(toUpdate, func(i, j int) bool {
-				return bytes.Compare(toUpdate[i], toUpdate[j]) == -1
-			})
-
-			for _, v := range toUpdate {
-				stakingState.SetDebondStartTime(v, now)
-			}
-
-		}
-
 		var kindNames []string
 		for _, kind := range kinds {
 			kindNames = append(kindNames, kind.String())
@@ -319,7 +290,7 @@ func (app *schedulerApplication) ForeignExecuteTx(ctx *abci.Context, other abci.
 	return nil
 }
 
-func (app *schedulerApplication) EndBlock(req types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
 
 	state := NewMutableState(app.state.DeliverTxTree())

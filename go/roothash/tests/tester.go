@@ -400,12 +400,14 @@ func testRoothashMessages(t *testing.T, backend api.Backend, states []*runtimeSt
 	emptyRoot.Empty()
 
 	adjustmentAmount := stakingTests.QtyFromInt(1004)
-	srcStartBalance, _, _, _, err := stakingBackend.AccountInfo(context.Background(), stakingTests.SrcID)
+	srcAcc, err := stakingBackend.AccountInfo(context.Background(), stakingTests.SrcID)
 	require.NoError(err, "AccountInfo %s", stakingTests.SrcID)
+	srcStartBalance := &srcAcc.General.Balance
 	srcPlusAdjustment := srcStartBalance.Clone()
 	require.NoError(srcPlusAdjustment.Add(&adjustmentAmount), "Quantity Add")
-	destStartBalance, _, _, _, err := stakingBackend.AccountInfo(context.Background(), stakingTests.DestID)
+	destAcc, err := stakingBackend.AccountInfo(context.Background(), stakingTests.DestID)
 	require.NoError(err, "AccountInfo %s", stakingTests.DestID)
+	destStartBalance := &destAcc.General.Balance
 	require.True(adjustmentAmount.Cmp(destStartBalance) > 0, "adjustment large enough for overdraw")
 
 	for _, testCase := range []struct {
@@ -641,9 +643,9 @@ func testRoothashMessages(t *testing.T, backend api.Backend, states []*runtimeSt
 					}
 
 					// Ensure that staking balances are correct.
-					genBal, _, _, _, err := stakingBackend.AccountInfo(context.Background(), testCase.checkStakingAccount)
+					acc, err := stakingBackend.AccountInfo(context.Background(), testCase.checkStakingAccount)
 					require.NoError(err, "AccountInfo %s", testCase.checkStakingAccount)
-					require.Equal(testCase.checkStakingBalance, genBal, "staking balance matches")
+					require.Equal(testCase.checkStakingBalance, &acc.General.Balance, "staking balance matches")
 
 					// Nothing more to do after the block was received.
 					return

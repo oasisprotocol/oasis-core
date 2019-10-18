@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
 const (
@@ -25,12 +26,6 @@ const (
 var (
 	// TransferSignatureContext is the context used for transfers.
 	TransferSignatureContext = []byte("EkStaXfr")
-
-	// ApproveSignatureContext is the context used for approvals.
-	ApproveSignatureContext = []byte("EkStaApr")
-
-	// WithdrawSignatureContext is the context used for withdrawals.
-	WithdrawSignatureContext = []byte("EkStaWit")
 
 	// BurnSignatureContext is the context used for burns.
 	BurnSignatureContext = []byte("EkStaBur")
@@ -62,10 +57,6 @@ var (
 	// due to insufficient stake.
 	ErrInsufficientStake = errors.New("staking: insufficient stake")
 
-	// ErrDebonding is the error returned when an operation fails due
-	// to the debonding period.
-	ErrDebonding = errors.New("staking: in debonding period")
-
 	_ cbor.Marshaler   = (*Transfer)(nil)
 	_ cbor.Unmarshaler = (*Transfer)(nil)
 	_ cbor.Marshaler   = (*Burn)(nil)
@@ -95,9 +86,12 @@ type Backend interface {
 	// or escrow balance.
 	Accounts(ctx context.Context) ([]signature.PublicKey, error)
 
-	// AccountInfo returns the general balance, escrow balance, debond
-	// start time, and account nonce for the specified account.
-	AccountInfo(ctx context.Context, owner signature.PublicKey) (*Quantity, *Quantity, uint64, uint64, error)
+	// AccountInfo returns the account descriptor for the given account.
+	AccountInfo(ctx context.Context, owner signature.PublicKey) (*Account, error)
+
+	// DebondingDelegations returns the list of debonding delegations for
+	// the given owner (delegator).
+	DebondingDelegations(ctx context.Context, owner signature.PublicKey) (map[signature.MapKey][]*DebondingDelegation, error)
 
 	// Transfer executes a SignedTransfer.
 	Transfer(ctx context.Context, signedXfer *SignedTransfer) error
@@ -133,18 +127,6 @@ type Backend interface {
 	Cleanup()
 }
 
-// EscrowBackend is the interface implemented by implementations that have a
-// TakeEscrow implementation that is not tightly coupled with the BFT
-// consensus.
-type EscrowBackend interface {
-	// TakeEscrow deducts up to the amount of tokens from the owner's escrow
-	// balance.
-	//
-	// This should only be called by the roothash (?) committee to penalize
-	// a misbehaving entity.
-	TakeEscrow(ctx context.Context, owner signature.PublicKey, tokens *Quantity) error
-}
-
 // TransferEvent is the event emitted when a balance is transfered, either by
 // a call to Transfer or Withdraw.
 type TransferEvent struct {
@@ -163,6 +145,7 @@ type BurnEvent struct {
 // balance.
 type EscrowEvent struct {
 	Owner  signature.PublicKey `json:"owner"`
+	Escrow signature.PublicKey `json:"escrow"`
 	Tokens Quantity            `json:"tokens"`
 }
 
@@ -177,6 +160,7 @@ type TakeEscrowEvent struct {
 // escrow balance back into the entitie's general balance.
 type ReclaimEscrowEvent struct {
 	Owner  signature.PublicKey `json:"owner"`
+	Escrow signature.PublicKey `json:"escrow"`
 	Tokens Quantity            `json:"tokens"`
 }
 
@@ -219,7 +203,8 @@ func (b *Burn) UnmarshalCBOR(data []byte) error {
 type Escrow struct {
 	Nonce uint64 `json:"nonce"`
 
-	Tokens Quantity `json:"escrow_tokens"`
+	Account signature.PublicKey `json:"escrow_account"`
+	Tokens  Quantity            `json:"escrow_tokens"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -236,7 +221,8 @@ func (e *Escrow) UnmarshalCBOR(data []byte) error {
 type ReclaimEscrow struct {
 	Nonce uint64 `json:"nonce"`
 
-	Tokens Quantity `json:"reclaim_tokens"`
+	Account signature.PublicKey `json:"escrow_account"`
+	Shares  Quantity            `json:"reclaim_shares"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -346,6 +332,71 @@ func MoveUpTo(dst, src, n *Quantity) (*Quantity, error) {
 	return amount, nil
 }
 
+// IssueShares tries to issue shares for the given amount of delegated tokens.
+// On failures, dst and dsc are not modified.
+func IssueShares(dst *EscrowAccount, amount *Quantity, dsc *Delegation) (*Quantity, error) {
+	var issuedShares *Quantity
+	if dst.TotalShares.IsZero() {
+		// No existing shares, exchange rate is 1:1.
+		issuedShares = amount.Clone()
+	} else {
+		// Exchange rate is based on issued shares and the total balance as:
+		//
+		//     shares = amount * total_shares / balance
+		//
+		q := amount.Clone()
+		// Multiply first.
+		if err := q.Mul(&dst.TotalShares); err != nil {
+			return nil, err
+		}
+		// NOTE: This currently assumes that the slashing code will make sure
+		//       that the exchange rate is maintained such that no tokens are
+		//       lost due to loss of precision.
+		if err := q.Quo(&dst.Balance); err != nil {
+			// This can happen if the escrow account has no balance due to
+			// losing everything through slashing. In this case there is no
+			// way to delegate more.
+			return nil, err
+		}
+
+		issuedShares = q
+	}
+	if err := dst.TotalShares.Add(issuedShares); err != nil {
+		return nil, err
+	}
+	// We can skip the error check as we checked the exact same quantity above.
+	_ = dsc.Shares.Add(issuedShares)
+
+	return issuedShares, nil
+}
+
+// TokensForShares computes the amount of tokens to be received for shares in the
+// given escrow account.
+func TokensForShares(acc *EscrowAccount, amount *Quantity) (*Quantity, error) {
+	if amount.IsZero() || acc.Balance.IsZero() || acc.TotalShares.IsZero() {
+		// No existing shares or no balance means no tokens.
+		return NewQuantity(), nil
+	}
+
+	// Exchange rate is based on issued shares and the total balance as:
+	//
+	//     tokens = shares * balance / total_shares
+	//
+	q := amount.Clone()
+	// Multiply first.
+	if err := q.Mul(&acc.Balance); err != nil {
+		return nil, err
+	}
+	// NOTE: This currently assumes that the slashing code will make sure
+	//       that the exchange rate is maintained such that no tokens are
+	//       lost due to loss of precision.
+	if err := q.Quo(&acc.TotalShares); err != nil {
+		return nil, err
+	}
+
+	return q, nil
+}
+
 // ThresholdKind is the kind of staking threshold.
 type ThresholdKind int
 
@@ -374,22 +425,51 @@ func (k ThresholdKind) String() string {
 	}
 }
 
+// GeneralAccount is a general-purpose account.
+type GeneralAccount struct {
+	Balance Quantity `json:"balance"`
+	Nonce   uint64   `json:"nonce"`
+}
+
+// EscrowAccount is an escrow account the balance of which is subject to
+// special delegation provisions and a debonding period.
+type EscrowAccount struct {
+	Balance         Quantity `json:"balance"`
+	TotalShares     Quantity `json:"total_shares"`
+	DebondingShares Quantity `json:"debonding_shares"`
+}
+
+// Account is an entry in the staking ledger.
+//
+// The same ledger entry can hold both general and escrow accounts. Escrow
+// acounts are used to hold funds delegated for staking.
+type Account struct {
+	General GeneralAccount `json:"general"`
+	Escrow  EscrowAccount  `json:"escrow"`
+}
+
+// Delegation is a delegation descriptor.
+type Delegation struct {
+	Shares Quantity `json:"shares"`
+}
+
+// DebondingDelegation is a debonding delegation descriptor.
+type DebondingDelegation struct {
+	Shares        Quantity            `json:"shares"`
+	DebondEndTime epochtime.EpochTime `json:"debond_end"`
+}
+
 // Genesis is the initial ledger balances at genesis for use in the genesis
 // block and test cases.
 type Genesis struct {
 	TotalSupply             Quantity                   `json:"total_supply"`
 	CommonPool              Quantity                   `json:"common_pool"`
 	Thresholds              map[ThresholdKind]Quantity `json:"thresholds,omitempty"`
-	DebondingInterval       uint64                     `json:"debonding_interval"`
-	AcceptableTransferPeers map[signature.MapKey]bool  `json:"acceptable_transfer_peers"`
+	DebondingInterval       epochtime.EpochTime        `json:"debonding_interval,omitempty"`
+	AcceptableTransferPeers map[signature.MapKey]bool  `json:"acceptable_transfer_peers,omitempty"`
 
-	Ledger map[signature.MapKey]*GenesisLedgerEntry `json:"ledger"`
-}
+	Ledger map[signature.MapKey]*Account `json:"ledger,omitempty"`
 
-// GenesisLedgerEntry is the per-account ledger entry for the genesis block.
-type GenesisLedgerEntry struct {
-	GeneralBalance  Quantity `json:"general_balance"`
-	EscrowBalance   Quantity `json:"escrow_balance"`
-	DebondStartTime uint64   `json:"debond_start"`
-	Nonce           uint64   `json:"nonce"`
+	Delegations          map[signature.MapKey]map[signature.MapKey]*Delegation            `json:"delegations,omitempty"`
+	DebondingDelegations map[signature.MapKey]map[signature.MapKey][]*DebondingDelegation `json:"debonding_delegations,omitempty"`
 }

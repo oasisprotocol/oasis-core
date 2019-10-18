@@ -15,6 +15,12 @@ const (
 )
 
 var (
+	// TagUpdate is an ABCI transaction tag for marking transactions
+	// which have been processed by staking (value is TagUpdateValue).
+	TagUpdate = []byte("staking.update")
+	// TagUpdateValue is the only allowed value for TagUpdate.
+	TagUpdateValue = []byte{0x01}
+
 	// TagTakeEscrow is an ABCI transaction tag for TakeEscrow calls
 	// (value is an app.TakeEscrowEvent).
 	TagTakeEscrow = []byte("staking.take_escrow")
@@ -27,9 +33,10 @@ var (
 	// in a non-staking app (value is an app.TransferEvent).
 	TagTransfer = []byte("staking.transfer")
 
-	// QueryApp is a query for filtering transactions processed by
-	// the staking application.
-	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
+	// QueryUpdate is a query for filtering transactions/blocks where staking
+	// application state has been updated. This is required as state can
+	// change as part of timers firing.
+	QueryUpdate = api.QueryForEvent(TagUpdate, TagUpdateValue)
 )
 
 const (
@@ -50,6 +57,10 @@ const (
 
 	// QueryDebondingInterval is the path for a DebondingInterval query.
 	QueryDebondingInterval = AppName + "/debonding_interval"
+
+	// QueryDebondingDelegations is the path for a DebondingDelegations
+	// query.
+	QueryDebondingDelegations = AppName + "/debonding_delegations"
 
 	// QueryGenesis is the path for a Genesis query.
 	QueryGenesis = AppName + "/genesis"
@@ -85,16 +96,7 @@ type TxReclaimEscrow struct {
 
 // Output is an output of a staking transaction.
 type Output struct {
-	OutputTransfer      *staking.TransferEvent      `json:"Transfer,omitempty"`
-	OutputBurn          *staking.BurnEvent          `json:"Burn,omitempty"`
-	OutputAddEscrow     *staking.EscrowEvent        `json:"AddEscrow,omitempty"`
-	OutputReclaimEscrow *staking.ReclaimEscrowEvent `json:"ReclaimEscrow,omitempty"`
-}
-
-// QueryAccountInfoResponse is a response to QueryAccountInfo.
-type QueryAccountInfoResponse struct {
-	GeneralBalance  staking.Quantity `json:"general_balance"`
-	EscrowBalance   staking.Quantity `json:"escrow_balance"`
-	DebondStartTime uint64           `json:"debond_start_time"`
-	Nonce           uint64           `json:"nonce"`
+	OutputTransfer  *staking.TransferEvent `json:"Transfer,omitempty"`
+	OutputBurn      *staking.BurnEvent     `json:"Burn,omitempty"`
+	OutputAddEscrow *staking.EscrowEvent   `json:"AddEscrow,omitempty"`
 }
