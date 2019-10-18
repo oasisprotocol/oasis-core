@@ -224,6 +224,8 @@ steps:
       - make -C go urkel-test-helpers
       - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers)
       - .buildkite/rust/coverage.sh
+    # Don't cause the build to fail, as tarpaulin is pretty unstable at the moment.
+    soft_fail: true
     agents:
       buildkite_agent_size: large
     plugins:
