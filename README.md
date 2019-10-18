@@ -1,6 +1,6 @@
 # Oasis Core
 
-[![Build status](https://badge.buildkite.com/c9c541df92d421106cdf041e36fafe45677c5be63d330509d1.svg?branch=master)](https://buildkite.com/oasislabs/oasis-core)
+[![Build status](https://badge.buildkite.com/15a8faccee0d5b5ab1af7e75eb6f9daf2d493c543fbc67dce5.svg)](https://buildkite.com/oasislabs/oasis-core-ci)
 [![Coverage Status](https://coveralls.io/repos/github/oasislabs/oasis-core/badge.svg?t=HsLWgi)](https://coveralls.io/github/oasislabs/oasis-core) Rust
 [![codecov](https://codecov.io/gh/oasislabs/oasis-core/branch/master/graph/badge.svg?token=DqjRsufMqf)](https://codecov.io/gh/oasislabs/oasis-core) Go
 
