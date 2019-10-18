@@ -38,11 +38,8 @@ func (app *epochTimeMockApplication) Dependencies() []string {
 	return nil
 }
 
-func (app *epochTimeMockApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
+func (app *epochTimeMockApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
-
-	// Register query handlers.
-	queryRouter.AddRoute(QueryGetEpoch, nil, app.queryGetEpoch)
 }
 
 func (app *epochTimeMockApplication) OnCleanup() {
@@ -54,21 +51,6 @@ func (app *epochTimeMockApplication) SetOption(request types.RequestSetOption) t
 
 func (app *epochTimeMockApplication) GetState(height int64) (interface{}, error) {
 	return newImmutableState(app.state, height)
-}
-
-func (app *epochTimeMockApplication) queryGetEpoch(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-
-	var (
-		response QueryGetEpochResponse
-		err      error
-	)
-	response.Epoch, response.Height, err = state.getEpoch()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(response), nil
 }
 
 func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {

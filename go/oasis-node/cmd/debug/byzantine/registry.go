@@ -1,17 +1,16 @@
 package byzantine
 
 import (
+	"context"
 	"time"
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 	registryapp "github.com/oasislabs/oasis-core/go/tendermint/apps/registry"
 	"github.com/oasislabs/oasis-core/go/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
@@ -62,18 +61,11 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 	return nil
 }
 
-func registryGetNode(svc service.TendermintService, height int64, runtimeID signature.PublicKey) (*node.Node, error) {
-	response, err := svc.Query(registryapp.QueryGetNode, tmapi.QueryGetByIDRequest{
-		ID: runtimeID,
-	}, height)
+func registryGetNode(ht *honestTendermint, height int64, runtimeID signature.PublicKey) (*node.Node, error) {
+	q, err := ht.registryQuery.QueryAt(height)
 	if err != nil {
-		return nil, errors.Wrapf(err, "Tendermint Query %s", registryapp.QueryGetNode)
+		return nil, err
 	}
 
-	var node node.Node
-	if err := cbor.Unmarshal(response, &node); err != nil {
-		return nil, errors.Wrap(err, "CBOR Unmarshal node")
-	}
-
-	return &node, nil
+	return q.Node(context.Background(), runtimeID)
 }

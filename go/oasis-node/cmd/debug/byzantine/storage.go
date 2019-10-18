@@ -18,7 +18,6 @@ import (
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	storageclient "github.com/oasislabs/oasis-core/go/storage/client"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
-	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
 var _ storage.Backend = (*honestNodeStorage)(nil)
@@ -229,9 +228,9 @@ func (hns *honestNodeStorage) Initialized() <-chan struct{} {
 	return hns.initCh
 }
 
-func storageConnectToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, id *identity.Identity) ([]*honestNodeStorage, error) {
+func storageConnectToCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, id *identity.Identity) ([]*honestNodeStorage, error) {
 	var hnss []*honestNodeStorage
-	if err := schedulerForRoleInCommittee(svc, height, committee, role, func(n *node.Node) error {
+	if err := schedulerForRoleInCommittee(ht, height, committee, role, func(n *node.Node) error {
 		hns, err := newHonestNodeStorage(id, n)
 		if err != nil {
 			return errors.Wrapf(err, "new honest node storage %s", n.ID)

@@ -9,7 +9,6 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -18,7 +17,7 @@ import (
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/tendermint"
 	beaconapp "github.com/oasislabs/oasis-core/go/tendermint/apps/beacon"
-	epochtime_mockapp "github.com/oasislabs/oasis-core/go/tendermint/apps/epochtime_mock"
+	epochtimemockapp "github.com/oasislabs/oasis-core/go/tendermint/apps/epochtime_mock"
 	keymanagerapp "github.com/oasislabs/oasis-core/go/tendermint/apps/keymanager"
 	registryapp "github.com/oasislabs/oasis-core/go/tendermint/apps/registry"
 	roothashapp "github.com/oasislabs/oasis-core/go/tendermint/apps/roothash"
@@ -32,7 +31,7 @@ var _ epochtime.Backend = (*fakeTimeBackend)(nil)
 // fakeTimeBackend is like TendermintBackend (of epochtime), but without
 // any workers.
 type fakeTimeBackend struct {
-	service service.TendermintService
+	service *honestTendermint
 
 	useMockEpochTime bool
 }
@@ -52,17 +51,16 @@ func (t *fakeTimeBackend) GetEpoch(ctx context.Context, height int64) (epochtime
 
 	if t.useMockEpochTime {
 		// Query the epochtime_mock Tendermint application.
-		response, err := t.service.Query(epochtime_mockapp.QueryGetEpoch, nil, height)
+		q, err := t.service.epochtimeMockQuery.QueryAt(height)
 		if err != nil {
-			return 0, errors.Wrap(err, "epochtime: get block epoch query failed")
+			return epochtime.EpochInvalid, errors.Wrap(err, "epochtime: epoch query failed")
 		}
 
-		var data epochtime_mockapp.QueryGetEpochResponse
-		if err := cbor.Unmarshal(response, &data); err != nil {
-			return 0, errors.Wrap(err, "epochtime: get block epoch malformed response")
+		epoch, _, err := q.Epoch(ctx)
+		if err != nil {
+			return epochtime.EpochInvalid, errors.Wrap(err, "epochtime: epoch query failed")
 		}
-
-		return data.Epoch, nil
+		return epoch, nil
 	}
 
 	// Use the the epoch interval that we have in E2E tests.
@@ -86,6 +84,11 @@ func (*fakeTimeBackend) ToGenesis(ctx context.Context, height int64) (*epochtime
 
 type honestTendermint struct {
 	service service.TendermintService
+
+	schedulerQuery     *schedulerapp.QueryFactory
+	roothashQuery      *roothashapp.QueryFactory
+	registryQuery      *registryapp.QueryFactory
+	epochtimeMockQuery *epochtimemockapp.QueryFactory
 }
 
 func newHonestTendermint() *honestTendermint {
@@ -115,13 +118,15 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	// And we do that mostly by hardcoding options. We could make this more flexible with command
 	// line flags in future work.
 	timeSource := &fakeTimeBackend{
-		service:          ht.service,
+		service:          ht,
 		useMockEpochTime: useMockEpochTime,
 	}
 	if useMockEpochTime {
-		if err = ht.service.RegisterApplication(epochtime_mockapp.New()); err != nil {
+		epochtimeMockApp := epochtimemockapp.New()
+		if err = ht.service.RegisterApplication(epochtimeMockApp); err != nil {
 			return errors.Wrap(err, "honest Tendermint service RegisterApplication epochtime_mock")
 		}
+		ht.epochtimeMockQuery = epochtimeMockApp.QueryFactory().(*epochtimemockapp.QueryFactory)
 	}
 	if err = ht.service.RegisterApplication(beaconapp.New(timeSource, &beacon.Config{
 		DebugDeterministic: true,
@@ -131,13 +136,15 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	if err = ht.service.RegisterApplication(stakingapp.New(timeSource, nil)); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication staking")
 	}
-	if err = ht.service.RegisterApplication(registryapp.New(timeSource, &registry.Config{
+	registryApp := registryapp.New(timeSource, &registry.Config{
 		DebugAllowUnroutableAddresses: true,
 		DebugAllowRuntimeRegistration: false,
 		DebugBypassStake:              false,
-	})); err != nil {
+	})
+	if err = ht.service.RegisterApplication(registryApp); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication registry")
 	}
+	ht.registryQuery = registryApp.QueryFactory().(*registryapp.QueryFactory)
 	if err = ht.service.RegisterApplication(keymanagerapp.New(timeSource)); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication keymanager")
 	}
@@ -150,10 +157,13 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	if err = ht.service.RegisterApplication(schedApp); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication scheduler")
 	}
+	ht.schedulerQuery = schedApp.QueryFactory().(*schedulerapp.QueryFactory)
 	// storage has no registration
-	if err = ht.service.RegisterApplication(roothashapp.New(context.Background(), timeSource, nil, 10*time.Second)); err != nil {
+	roothashApp := roothashapp.New(context.Background(), timeSource, nil, 10*time.Second)
+	if err = ht.service.RegisterApplication(roothashApp); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication roothash")
 	}
+	ht.roothashQuery = roothashApp.QueryFactory().(*roothashapp.QueryFactory)
 
 	// Wait for height=1 to pass, during which mux apps perform deferred initialization.
 	blockOne := make(chan struct{})

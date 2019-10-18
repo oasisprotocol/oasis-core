@@ -85,13 +85,13 @@ type Application interface {
 	// depends on.
 	Dependencies() []string
 
-	// GetState returns an application-specific state structure for the
-	// given block height.
-	GetState(int64) (interface{}, error)
+	// QueryFactory returns an application-specific query factory that
+	// can be used to construct new queries at specific block heights.
+	QueryFactory() interface{}
 
 	// OnRegister is the function that is called when the Application
 	// is registered with the multiplexer instance.
-	OnRegister(state *ApplicationState, queryRouter QueryRouter)
+	OnRegister(state *ApplicationState)
 
 	// OnCleanup is the function that is called when the ApplicationServer
 	// has been halted.
@@ -227,9 +227,8 @@ type abciMux struct {
 	sync.RWMutex
 	types.BaseApplication
 
-	logger      *logging.Logger
-	state       *ApplicationState
-	queryRouter QueryRouter
+	logger *logging.Logger
+	state  *ApplicationState
 
 	appsByName     map[string]Application
 	appsByTxTag    map[byte]Application
@@ -284,14 +283,8 @@ func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
 	// by source address and or link(?) public key.  Offload the
 	// responsiblity onto the blessed app.
 	if isP2PFilterQuery(queryPath) {
-		if mux.appBlessed != nil {
-			mux.logger.Debug("Query: dispatching p2p/filter query",
-				"req", req,
-			)
-			return mux.queryRouter.WithApp(mux.appBlessed).Route(req)
-		}
+		// TODO: Handle P2P filter queries.
 
-		// There's no blessed app set, blindly allow everything.
 		mux.logger.Debug("Query: allowing p2p/filter query",
 			"req", req,
 		)
@@ -300,21 +293,9 @@ func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
 		}
 	}
 
-	if mux.state.BlockHeight() == 0 {
-		mux.logger.Error("Query: no committed blocks",
-			"req", req,
-		)
-		return types.ResponseQuery{
-			Code: api.CodeNoCommittedBlocks.ToInt(),
-		}
+	return types.ResponseQuery{
+		Code: api.CodeInvalidQuery.ToInt(),
 	}
-
-	mux.logger.Debug("Query: dispatching",
-		"path", queryPath,
-		"req", req,
-	)
-
-	return mux.queryRouter.Route(req)
 }
 
 func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChain {
@@ -613,7 +594,7 @@ func (mux *abciMux) doRegister(app Application) error {
 	mux.appsByTxTag[app.TransactionTag()] = app
 	mux.rebuildAppLexOrdering() // Inefficient but not a lot of apps.
 
-	app.OnRegister(mux.state, mux.queryRouter.WithApp(app))
+	app.OnRegister(mux.state)
 	mux.logger.Debug("Registered new application",
 		"app", app.Name(),
 	)
@@ -687,7 +668,6 @@ func newABCIMux(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*ab
 	mux := &abciMux{
 		logger:         logging.GetLogger("abci-mux"),
 		state:          state,
-		queryRouter:    NewQueryRouter(),
 		appsByName:     make(map[string]Application),
 		appsByTxTag:    make(map[byte]Application),
 		lastBeginBlock: -1,

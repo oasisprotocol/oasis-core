@@ -29,6 +29,7 @@ type tendermintBackend struct {
 	logger *logging.Logger
 
 	service service.TendermintService
+	querier *app.QueryFactory
 
 	transferNotifier *pubsub.Broker
 	approvalNotifier *pubsub.Broker
@@ -47,94 +48,57 @@ func (b *tendermintBackend) Symbol() string {
 }
 
 func (b *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, error) {
-	response, err := b.service.Query(app.QueryTotalSupply, nil, 0)
+	q, err := b.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "staking: total supply query failed")
+		return nil, err
 	}
 
-	var data api.Quantity
-	if err = cbor.Unmarshal(response, &data); err != nil {
-		return nil, errors.Wrap(err, "staking: total supply malformed response")
-	}
-
-	return &data, nil
+	return q.TotalSupply(ctx)
 }
 
 func (b *tendermintBackend) CommonPool(ctx context.Context) (*api.Quantity, error) {
-	response, err := b.service.Query(app.QueryCommonPool, nil, 0)
+	q, err := b.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "staking: common pool query failed")
+		return nil, err
 	}
 
-	var data api.Quantity
-	if err = cbor.Unmarshal(response, &data); err != nil {
-		return nil, errors.Wrap(err, "staking: common pool malformed response")
-	}
-
-	return &data, nil
+	return q.CommonPool(ctx)
 }
 
 func (b *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKind) (*api.Quantity, error) {
-	response, err := b.service.Query(app.QueryThresholds, nil, 0)
+	q, err := b.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "staking: thresholds query failed")
+		return nil, err
 	}
 
-	data := make(map[api.ThresholdKind]api.Quantity)
-	if err = cbor.Unmarshal(response, &data); err != nil {
-		return nil, errors.Wrap(err, "staking: thresholds malformed response")
-	}
-	qty := data[kind]
-
-	return &qty, nil
+	return q.Threshold(ctx, kind)
 }
 
 func (b *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey, error) {
-	response, err := b.service.Query(app.QueryAccounts, nil, 0)
+	q, err := b.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "staking: accounts query failed")
+		return nil, err
 	}
 
-	var data []signature.PublicKey
-	if err = cbor.Unmarshal(response, &data); err != nil {
-		return nil, errors.Wrap(err, "staking: accounts query malformed response")
-	}
-
-	return data, nil
+	return q.Accounts(ctx)
 }
 
 func (b *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey) (*api.Account, error) {
-	query := tmapi.QueryGetByIDRequest{
-		ID: owner,
-	}
-	response, err := b.service.Query(app.QueryAccountInfo, query, 0)
+	q, err := b.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "staking: account info query failed")
+		return nil, err
 	}
 
-	var a api.Account
-	if err := cbor.Unmarshal(response, &a); err != nil {
-		return nil, errors.Wrap(err, "staking: account info query malformed response")
-	}
-
-	return &a, nil
+	return q.AccountInfo(ctx, owner)
 }
 
 func (b *tendermintBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey) (map[signature.MapKey][]*api.DebondingDelegation, error) {
-	query := tmapi.QueryGetByIDRequest{
-		ID: owner,
-	}
-	response, err := b.service.Query(app.QueryDebondingDelegations, query, 0)
+	q, err := b.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "staking: debonding delegations query failed")
+		return nil, err
 	}
 
-	var debs map[signature.MapKey][]*api.DebondingDelegation
-	if err := cbor.Unmarshal(response, &debs); err != nil {
-		return nil, errors.Wrap(err, "staking: debonding delegations query malformed response")
-	}
-
-	return debs, nil
+	return q.DebondingDelegations(ctx, owner)
 }
 
 func (b *tendermintBackend) Transfer(ctx context.Context, signedXfer *api.SignedTransfer) error {
@@ -211,17 +175,12 @@ func (b *tendermintBackend) WatchEscrows() (<-chan interface{}, *pubsub.Subscrip
 }
 
 func (b *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	response, err := b.service.Query(app.QueryGenesis, nil, height)
+	q, err := b.querier.QueryAt(height)
 	if err != nil {
-		return nil, errors.Wrap(err, "staking/tendermint: genesis query failed")
+		return nil, err
 	}
 
-	var genesis api.Genesis
-	if err = cbor.Unmarshal(response, &genesis); err != nil {
-		return nil, errors.Wrap(err, "staking/tendermint: genesis malformed response")
-	}
-
-	return &genesis, nil
+	return q.Genesis(ctx)
 }
 
 func (b *tendermintBackend) Cleanup() {
@@ -334,14 +293,15 @@ func New(
 	service service.TendermintService,
 ) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
-	app := app.New(timeSource, debugGenesisState)
-	if err := service.RegisterApplication(app); err != nil {
+	a := app.New(timeSource, debugGenesisState)
+	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
 	b := &tendermintBackend{
 		logger:           logging.GetLogger("staking/tendermint"),
 		service:          service,
+		querier:          a.QueryFactory().(*app.QueryFactory),
 		transferNotifier: pubsub.NewBroker(false),
 		approvalNotifier: pubsub.NewBroker(false),
 		burnNotifier:     pubsub.NewBroker(false),

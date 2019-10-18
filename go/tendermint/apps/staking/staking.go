@@ -14,7 +14,6 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
-	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 var (
@@ -50,18 +49,8 @@ func (app *stakingApplication) GetState(height int64) (interface{}, error) {
 	return newImmutableState(app.state, height)
 }
 
-func (app *stakingApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
+func (app *stakingApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
-
-	// Register the query handlers.
-	queryRouter.AddRoute(QueryTotalSupply, nil, app.queryTotalSupply)
-	queryRouter.AddRoute(QueryCommonPool, nil, app.queryCommonPool)
-	queryRouter.AddRoute(QueryThresholds, nil, app.queryThresholds)
-	queryRouter.AddRoute(QueryAccounts, nil, app.queryAccounts)
-	queryRouter.AddRoute(QueryAccountInfo, api.QueryGetByIDRequest{}, app.queryAccountInfo)
-	queryRouter.AddRoute(QueryDebondingInterval, nil, app.queryDebondingInterval)
-	queryRouter.AddRoute(QueryDebondingDelegations, api.QueryGetByIDRequest{}, app.queryDebondingDelegations)
-	queryRouter.AddRoute(QueryGenesis, nil, app.queryGenesis)
 }
 
 func (app *stakingApplication) OnCleanup() {
@@ -188,59 +177,6 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 
 func (app *stakingApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) error {
 	return errors.New("tendermint/staking: unexpected timer")
-}
-
-func (app *stakingApplication) queryTotalSupply(s, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	return state.rawTotalSupply()
-}
-
-func (app *stakingApplication) queryCommonPool(s, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	return state.rawCommonPool()
-}
-
-func (app *stakingApplication) queryThresholds(s, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-
-	thresholds, err := state.Thresholds()
-	if err != nil {
-		return nil, err
-	}
-	return cbor.Marshal(thresholds), nil
-}
-
-func (app *stakingApplication) queryAccounts(s, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	return state.rawAccounts()
-}
-
-func (app *stakingApplication) queryAccountInfo(s, r interface{}) ([]byte, error) {
-	request := r.(*api.QueryGetByIDRequest)
-	state := s.(*immutableState)
-
-	account := state.accountRaw(request.ID)
-	if account == nil {
-		account = cbor.Marshal(staking.Account{})
-	}
-
-	return account, nil
-}
-
-func (app *stakingApplication) queryDebondingInterval(s, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	return state.rawDebondingInterval()
-}
-
-func (app *stakingApplication) queryDebondingDelegations(s, r interface{}) ([]byte, error) {
-	request := r.(*api.QueryGetByIDRequest)
-	state := s.(*immutableState)
-
-	delegations, err := state.debondingDelegationsFor(request.ID)
-	if err != nil {
-		return nil, err
-	}
-	return cbor.Marshal(delegations), nil
 }
 
 func (app *stakingApplication) transfer(ctx *abci.Context, state *MutableState, signedXfer *staking.SignedTransfer) error {

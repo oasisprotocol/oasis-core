@@ -56,11 +56,8 @@ func (app *beaconApplication) GetState(height int64) (interface{}, error) {
 	return newImmutableState(app.state, height)
 }
 
-func (app *beaconApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
+func (app *beaconApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
-
-	// Register query handlers.
-	queryRouter.AddRoute(QueryGetBeacon, nil, app.queryGetBeacon)
 }
 
 func (app *beaconApplication) OnCleanup() {
@@ -101,11 +98,6 @@ func (app *beaconApplication) EndBlock(ctx *abci.Context, req types.RequestEndBl
 
 func (app *beaconApplication) FireTimer(ctx *abci.Context, t *abci.Timer) error {
 	return errUnexpectedTimer
-}
-
-func (app *beaconApplication) queryGetBeacon(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	return state.GetBeacon()
 }
 
 func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {

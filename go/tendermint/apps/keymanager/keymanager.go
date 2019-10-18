@@ -3,7 +3,6 @@ package keymanager
 import (
 	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"time"
 
 	"github.com/pkg/errors"
@@ -11,11 +10,9 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
@@ -52,82 +49,14 @@ func (app *keymanagerApplication) GetState(height int64) (interface{}, error) {
 	return newImmutableState(app.state, height)
 }
 
-func (app *keymanagerApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
+func (app *keymanagerApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
-
-	// Register query handlers.
-	queryRouter.AddRoute(QueryGetStatus, tmapi.QueryGetByIDRequest{}, app.queryGetStatus)
-	queryRouter.AddRoute(QueryGetStatuses, nil, app.queryGetStatuses)
-	queryRouter.AddRoute(QueryGenesis, nil, app.queryGenesis)
 }
 
 func (app *keymanagerApplication) OnCleanup() {}
 
 func (app *keymanagerApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
 	return types.ResponseSetOption{}
-}
-
-func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
-	st := doc.KeyManager
-
-	b, _ := json.Marshal(st)
-	app.logger.Debug("InitChain: Genesis state",
-		"state", string(b),
-	)
-
-	// TODO: The better thing to do would be to move the registry init
-	// before the keymanager, and just query the registry for the runtime
-	// list.
-	regSt := doc.Registry
-	rtMap := make(map[signature.MapKey]*registry.Runtime)
-	for _, v := range regSt.Runtimes {
-		rt, err := registry.VerifyRegisterRuntimeArgs(app.logger, v, true)
-		if err != nil {
-			app.logger.Error("InitChain: Invalid runtime",
-				"err", err,
-			)
-			continue
-		}
-
-		if rt.Kind == registry.KindKeyManager {
-			rtMap[rt.ID.ToMapKey()] = rt
-		}
-	}
-
-	var toEmit []*api.Status
-	state := NewMutableState(ctx.State())
-	for _, v := range st.Statuses {
-		rt := rtMap[v.ID.ToMapKey()]
-		if rt == nil {
-			app.logger.Error("InitChain: State for unknown runtime",
-				"id", v.ID,
-			)
-			continue
-		}
-
-		app.logger.Debug("InitChain: Registering genesis key manager",
-			"id", v.ID,
-		)
-
-		// Make sure the Nodes field is empty when applying genesis state.
-		if v.Nodes != nil {
-			app.logger.Error("InitChain: Genesis key manager has nodes",
-				"id", v.ID,
-			)
-			return errors.New("tendermint/keymanager: genesis key manager has nodes")
-		}
-
-		// Set, enqueue for emit.
-		state.setStatus(v)
-		toEmit = append(toEmit, v)
-	}
-
-	if len(toEmit) > 0 {
-		ctx.EmitTag([]byte(app.Name()), tmapi.TagAppNameValue)
-		ctx.EmitTag(TagStatusUpdate, cbor.Marshal(toEmit))
-	}
-
-	return nil
 }
 
 func (app *keymanagerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
@@ -152,44 +81,6 @@ func (app *keymanagerApplication) EndBlock(ctx *abci.Context, request types.Requ
 
 func (app *keymanagerApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) error {
 	return errors.New("tendermint/keymanager: unexpected timer")
-}
-
-func (app *keymanagerApplication) queryGetStatus(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	request := r.(*tmapi.QueryGetByIDRequest)
-
-	status, err := state.GetStatus(request.ID)
-	if err != nil {
-		return nil, err
-	}
-	return cbor.Marshal(status), nil
-}
-
-func (app *keymanagerApplication) queryGetStatuses(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-
-	statuses, err := state.GetStatuses()
-	if err != nil {
-		return nil, err
-	}
-	return cbor.Marshal(statuses), nil
-}
-
-func (app *keymanagerApplication) queryGenesis(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-
-	statuses, err := state.GetStatuses()
-	if err != nil {
-		return nil, err
-	}
-
-	// Remove the Nodes field of each Status.
-	for _, status := range statuses {
-		status.Nodes = nil
-	}
-
-	gen := api.Genesis{Statuses: statuses}
-	return cbor.Marshal(gen), nil
 }
 
 func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error {

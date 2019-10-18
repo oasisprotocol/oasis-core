@@ -39,33 +39,6 @@ var (
 	QueryUpdate = api.QueryForEvent(TagUpdate, TagUpdateValue)
 )
 
-const (
-	// QueryTotalSupply is the path for a TotalSupply query.
-	QueryTotalSupply = AppName + "/total_supply"
-
-	// QueryCommonPool is the path for a CommonPool query.
-	QueryCommonPool = AppName + "/common_pool"
-
-	// QueryThresholds is the path for a Thresholds query.
-	QueryThresholds = AppName + "/thresholds"
-
-	// QueryAccounts is the path for an Accounts query.
-	QueryAccounts = AppName + "/accounts"
-
-	// QueryAccountInfo is the path for an AccountInfo query.
-	QueryAccountInfo = AppName + "/account_info"
-
-	// QueryDebondingInterval is the path for a DebondingInterval query.
-	QueryDebondingInterval = AppName + "/debonding_interval"
-
-	// QueryDebondingDelegations is the path for a DebondingDelegations
-	// query.
-	QueryDebondingDelegations = AppName + "/debonding_delegations"
-
-	// QueryGenesis is the path for a Genesis query.
-	QueryGenesis = AppName + "/genesis"
-)
-
 // Tx is a transaction to be accepted by the staking app.
 type Tx struct {
 	*TxTransfer      `json:"Transfer,omitempty"`

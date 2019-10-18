@@ -15,9 +15,6 @@ const (
 	// Note: It must be lexographically before any application that
 	// uses time keeping.
 	AppName string = "000_epochtime_mock"
-
-	// QueryGetEpoch is a path for GetLatestBlock query.
-	QueryGetEpoch = AppName + "/epoch"
 )
 
 var (
@@ -37,10 +34,4 @@ type Tx struct {
 // TxSetEpoch is a transaction for submitting an epoch to be set.
 type TxSetEpoch struct {
 	Epoch epochtime.EpochTime
-}
-
-// QueryGetEpochResponse is a response to QueryGetEpoch.
-type QueryGetEpochResponse struct {
-	Epoch  epochtime.EpochTime
-	Height int64
 }

@@ -98,15 +98,6 @@ func (s *immutableState) getEntities() ([]*entity.Entity, error) {
 	return entities, nil
 }
 
-func (s *immutableState) getEntitiesRaw() ([]byte, error) {
-	entities, err := s.getEntities()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(entities), nil
-}
-
 func (s *immutableState) getSignedEntities() ([]*entity.SignedEntity, error) {
 	var entities []*entity.SignedEntity
 	s.Snapshot.IterateRange(
@@ -186,15 +177,6 @@ func (s *immutableState) GetNodes() ([]*node.Node, error) {
 	return nodes, nil
 }
 
-func (s *immutableState) getNodesRaw() ([]byte, error) {
-	nodes, err := s.GetNodes()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(nodes), nil
-}
-
 func (s *immutableState) getSignedNodes() ([]*node.SignedNode, error) {
 	var nodes []*node.SignedNode
 	s.Snapshot.IterateRange(
@@ -271,15 +253,6 @@ func (s *immutableState) GetRuntimes() ([]*registry.Runtime, error) {
 	)
 
 	return runtimes, nil
-}
-
-func (s *immutableState) getRuntimesRaw() ([]byte, error) {
-	runtimes, err := s.GetRuntimes()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(runtimes), nil
 }
 
 func (s *immutableState) getSignedRuntimes() ([]*registry.SignedRuntime, error) {

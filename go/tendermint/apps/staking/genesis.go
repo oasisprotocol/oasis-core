@@ -2,12 +2,12 @@ package staking
 
 import (
 	"bytes"
+	"context"
 	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
@@ -239,45 +239,43 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	return nil
 }
 
-// queryGenesis exports current state in genesis format.
-func (app *stakingApplication) queryGenesis(s, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-
-	totalSupply, err := state.totalSupply()
+// Genesis exports current state in genesis format.
+func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error) {
+	totalSupply, err := sq.state.totalSupply()
 	if err != nil {
 		return nil, err
 	}
 
-	commonPool, err := state.CommonPool()
+	commonPool, err := sq.state.CommonPool()
 	if err != nil {
 		return nil, err
 	}
 
-	thresholds, err := state.Thresholds()
+	thresholds, err := sq.state.Thresholds()
 	if err != nil {
 		return nil, err
 	}
 
-	debondingInterval, err := state.debondingInterval()
+	debondingInterval, err := sq.state.debondingInterval()
 	if err != nil {
 		return nil, err
 	}
 
-	accounts, err := state.accounts()
+	accounts, err := sq.state.accounts()
 	if err != nil {
 		return nil, err
 	}
 	ledger := make(map[signature.MapKey]*staking.Account)
 	for _, acctID := range accounts {
-		acct := state.account(acctID)
+		acct := sq.state.account(acctID)
 		ledger[acctID.ToMapKey()] = acct
 	}
 
-	delegations, err := state.delegations()
+	delegations, err := sq.state.delegations()
 	if err != nil {
 		return nil, err
 	}
-	debondingDelegations, err := state.debondingDelegations()
+	debondingDelegations, err := sq.state.debondingDelegations()
 	if err != nil {
 		return nil, err
 	}
@@ -291,5 +289,5 @@ func (app *stakingApplication) queryGenesis(s, r interface{}) ([]byte, error) {
 		Delegations:          delegations,
 		DebondingDelegations: debondingDelegations,
 	}
-	return cbor.Marshal(gen), nil
+	return &gen, nil
 }

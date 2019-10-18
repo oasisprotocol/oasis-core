@@ -17,7 +17,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
-	"github.com/oasislabs/oasis-core/go/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
 
@@ -190,8 +189,8 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 	return nil
 }
 
-func (cbc *computeBatchContext) publishToCommittee(svc service.TendermintService, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, runtimeID signature.PublicKey, groupVersion int64) error {
-	if err := schedulerPublishToCommittee(svc, height, committee, role, ph, &p2p.Message{
+func (cbc *computeBatchContext) publishToCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, runtimeID signature.PublicKey, groupVersion int64) error {
+	if err := schedulerPublishToCommittee(ht, height, committee, role, ph, &p2p.Message{
 		RuntimeID:    runtimeID,
 		GroupVersion: groupVersion,
 		SpanContext:  nil,

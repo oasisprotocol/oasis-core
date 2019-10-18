@@ -27,43 +27,28 @@ const BackendName = tmapi.BackendName
 type tendermintBackend struct {
 	logger *logging.Logger
 
-	service  service.TendermintService
+	service service.TendermintService
+	querier *app.QueryFactory
+
 	notifier *pubsub.Broker
 }
 
 func (r *tendermintBackend) GetStatus(ctx context.Context, id signature.PublicKey) (*api.Status, error) {
-	query := tmapi.QueryGetByIDRequest{
-		ID: id,
-	}
-
-	response, err := r.service.Query(app.QueryGetStatus, query, 0)
+	q, err := r.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "keymanager/tendermint: get status query failed")
-	}
-	if response == nil {
-		return nil, api.ErrNoSuchKeyManager
+		return nil, err
 	}
 
-	var status api.Status
-	if err = cbor.Unmarshal(response, &status); err != nil {
-		return nil, errors.Wrap(err, "keymanager/tendermint: get status malformed response")
-	}
-
-	return &status, nil
+	return q.Status(ctx, id)
 }
 
 func (r *tendermintBackend) GetStatuses(ctx context.Context) ([]*api.Status, error) {
-	response, err := r.service.Query(app.QueryGetStatuses, nil, 0)
+	q, err := r.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "keymanager/tendermint: get statuses query failed")
+		return nil, err
 	}
 
-	var statuses []*api.Status
-	if err = cbor.Unmarshal(response, &statuses); err != nil {
-		return nil, errors.Wrap(err, "keymanager/tendermint: get statuses malformed response")
-	}
-
-	return statuses, nil
+	return q.Statuses(ctx)
 }
 
 func (r *tendermintBackend) WatchStatuses() (<-chan *api.Status, *pubsub.Subscription) {
@@ -75,17 +60,12 @@ func (r *tendermintBackend) WatchStatuses() (<-chan *api.Status, *pubsub.Subscri
 }
 
 func (r *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	response, err := r.service.Query(app.QueryGenesis, nil, height)
+	q, err := r.querier.QueryAt(height)
 	if err != nil {
-		return nil, errors.Wrap(err, "keymanager/tendermint: genesis query failed")
+		return nil, err
 	}
 
-	var genesis api.Genesis
-	if err = cbor.Unmarshal(response, &genesis); err != nil {
-		return nil, errors.Wrap(err, "keymanager/tendermint: genesis malformed response")
-	}
-
-	return &genesis, nil
+	return q.Genesis(ctx)
 }
 
 func (r *tendermintBackend) worker(ctx context.Context) {
@@ -148,14 +128,15 @@ func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 // New constructs a new tendermint backed key manager management Backend
 // instance.
 func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
-	app := app.New(timeSource)
-	if err := service.RegisterApplication(app); err != nil {
+	a := app.New(timeSource)
+	if err := service.RegisterApplication(a); err != nil {
 		return nil, errors.Wrap(err, "keymanager/tendermint: failed to register app")
 	}
 
 	r := &tendermintBackend{
 		logger:  logging.GetLogger("keymanager/tendermint"),
 		service: service,
+		querier: a.QueryFactory().(*app.QueryFactory),
 	}
 	r.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		statuses, err := r.GetStatuses(ctx)

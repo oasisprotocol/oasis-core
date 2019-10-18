@@ -4,8 +4,6 @@ package tendermint
 import (
 	"context"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -17,22 +15,22 @@ import (
 // BackendName is the name of this implementation.
 const BackendName = tmapi.BackendName
 
-var _ api.Backend = (*Backend)(nil)
+var _ api.Backend = (*tendermintBackend)(nil)
 
-// Backend is a tendermint backed random beacon.
-type Backend struct {
+type tendermintBackend struct {
 	logger *logging.Logger
 
 	service service.TendermintService
+	querier *app.QueryFactory
 }
 
-func (t *Backend) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
-	resp, err := t.service.Query(app.QueryGetBeacon, nil, height)
+func (t *tendermintBackend) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
+	q, err := t.querier.QueryAt(height)
 	if err != nil {
-		return nil, errors.Wrap(err, "beacon: failed to query beacon")
+		return nil, err
 	}
 
-	return resp, nil
+	return q.Beacon(ctx)
 }
 
 // New constructs a new tendermint backed beacon Backend instance.
@@ -42,14 +40,15 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 	}
 
 	// Initialize and register the tendermint service component.
-	app := app.New(timeSource, cfg)
-	if err := service.RegisterApplication(app); err != nil {
+	a := app.New(timeSource, cfg)
+	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
-	t := &Backend{
+	t := &tendermintBackend{
 		logger:  logging.GetLogger("beacon/tendermint"),
 		service: service,
+		querier: a.QueryFactory().(*app.QueryFactory),
 	}
 
 	return t, nil

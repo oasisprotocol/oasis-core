@@ -16,7 +16,6 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -64,6 +63,7 @@ type tendermintBackend struct {
 	logger *logging.Logger
 
 	service         service.TendermintService
+	querier         *app.QueryFactory
 	lastBlockHeight int64
 
 	allBlockNotifier *pubsub.Broker
@@ -96,26 +96,22 @@ func (r *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.Pu
 	}
 	r.RUnlock()
 
-	query := tmapi.QueryGetByIDRequest{
-		ID: id,
-	}
-
-	response, err := r.service.Query(app.QueryGetGenesisBlock, query, 0)
+	q, err := r.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrapf(err, "roothash: get genesis block query failed")
+		return nil, err
 	}
 
-	var blk block.Block
-	if err := cbor.Unmarshal(response, &blk); err != nil {
-		return nil, errors.Wrapf(err, "roothash: get genesis block malformed response")
+	blk, err := q.GenesisBlock(ctx, id)
+	if err != nil {
+		return nil, err
 	}
 
 	// Update the genesis block cache.
 	r.Lock()
-	r.genesisBlocks[id.ToMapKey()] = &blk
+	r.genesisBlocks[id.ToMapKey()] = blk
 	r.Unlock()
 
-	return &blk, nil
+	return blk, nil
 }
 
 func (r *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
@@ -123,21 +119,12 @@ func (r *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.Pub
 }
 
 func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int64) (*block.Block, error) {
-	query := tmapi.QueryGetByIDRequest{
-		ID: id,
-	}
-
-	response, err := r.service.Query(app.QueryGetLatestBlock, query, height)
+	q, err := r.querier.QueryAt(height)
 	if err != nil {
-		return nil, errors.Wrapf(err, "roothash: get block query failed (height: %d)", height)
+		return nil, err
 	}
 
-	var block block.Block
-	if err := cbor.Unmarshal(response, &block); err != nil {
-		return nil, errors.Wrapf(err, "roothash: get block malformed response (height: %d)", height)
-	}
-
-	return &block, nil
+	return q.LatestBlock(context.TODO(), id)
 }
 
 func (r *tendermintBackend) GetBlock(ctx context.Context, id signature.PublicKey, round uint64) (*block.Block, error) {
@@ -256,17 +243,12 @@ func (r *tendermintBackend) ComputeCommit(ctx context.Context, id signature.Publ
 }
 
 func (r *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	response, err := r.service.Query(app.QueryGenesis, nil, height)
+	q, err := r.querier.QueryAt(height)
 	if err != nil {
-		return nil, errors.Wrap(err, "roothash: genesis query failed")
+		return nil, err
 	}
 
-	var genesis api.Genesis
-	if err := cbor.Unmarshal(response, &genesis); err != nil {
-		return nil, errors.Wrap(err, "roothash: genesis malformed response")
-	}
-
-	return &genesis, nil
+	return q.Genesis(ctx)
 }
 
 func (r *tendermintBackend) Cleanup() {
@@ -554,8 +536,8 @@ func New(
 	roundTimeout time.Duration,
 ) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
-	app := app.New(ctx, timeSource, beac, roundTimeout)
-	if err := service.RegisterApplication(app); err != nil {
+	a := app.New(ctx, timeSource, beac, roundTimeout)
+	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
@@ -563,6 +545,7 @@ func New(
 		ctx:              ctx,
 		logger:           logging.GetLogger("roothash/tendermint"),
 		service:          service,
+		querier:          a.QueryFactory().(*app.QueryFactory),
 		allBlockNotifier: pubsub.NewBroker(false),
 		pruneNotifier:    pubsub.NewBroker(false),
 		runtimeNotifiers: make(map[signature.MapKey]*runtimeBrokers),

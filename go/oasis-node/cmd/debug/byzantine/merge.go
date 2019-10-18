@@ -27,9 +27,9 @@ func newMergeBatchContext() *mergeBatchContext {
 	return &mergeBatchContext{}
 }
 
-func (mbc *mergeBatchContext) loadCurrentBlock(svc service.TendermintService, runtimeID signature.PublicKey) error {
+func (mbc *mergeBatchContext) loadCurrentBlock(ht *honestTendermint, runtimeID signature.PublicKey) error {
 	var err error
-	mbc.currentBlock, err = roothashGetLatestBlock(svc, 0, runtimeID)
+	mbc.currentBlock, err = roothashGetLatestBlock(ht, 0, runtimeID)
 	if err != nil {
 		return errors.Wrap(err, "roothash get latest block")
 	}

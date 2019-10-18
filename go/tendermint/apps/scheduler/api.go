@@ -11,12 +11,6 @@ const (
 
 	// AppName is the ABCI application name.
 	AppName string = "200_scheduler"
-
-	// QueryAllCommittees is a query path for getting all committees.
-	QueryAllCommittees = AppName + "/all-committees"
-
-	// QueryKindsCommittees is a query path for getting the committees of given kinds.
-	QueryKindsCommittees = AppName + "/kinds-committees"
 )
 
 var (

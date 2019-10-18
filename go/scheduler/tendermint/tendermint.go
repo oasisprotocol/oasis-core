@@ -28,7 +28,9 @@ var (
 type tendermintScheduler struct {
 	logger *logging.Logger
 
-	service  service.TendermintService
+	service service.TendermintService
+	querier *app.QueryFactory
+
 	notifier *pubsub.Broker
 }
 
@@ -36,13 +38,12 @@ func (s *tendermintScheduler) Cleanup() {
 }
 
 func (s *tendermintScheduler) GetCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) {
-	raw, err := s.service.Query(app.QueryAllCommittees, id, height)
+	q, err := s.querier.QueryAt(0)
 	if err != nil {
 		return nil, err
 	}
 
-	var committees []*api.Committee
-	err = cbor.Unmarshal(raw, &committees)
+	committees, err := q.AllCommittees(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +55,7 @@ func (s *tendermintScheduler) GetCommittees(ctx context.Context, id signature.Pu
 		}
 	}
 
-	return runtimeCommittees, err
+	return runtimeCommittees, nil
 }
 
 func (s *tendermintScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.Subscription) {
@@ -66,14 +67,12 @@ func (s *tendermintScheduler) WatchCommittees() (<-chan *api.Committee, *pubsub.
 }
 
 func (s *tendermintScheduler) getCurrentCommittees() ([]*api.Committee, error) {
-	raw, err := s.service.Query(app.QueryAllCommittees, nil, 0)
+	q, err := s.querier.QueryAt(0)
 	if err != nil {
 		return nil, err
 	}
 
-	var committees []*api.Committee
-	err = cbor.Unmarshal(raw, &committees)
-	return committees, err
+	return q.AllCommittees(context.TODO())
 }
 
 func (s *tendermintScheduler) worker(ctx context.Context) {
@@ -134,7 +133,7 @@ func (s *tendermintScheduler) onEventDataNewBlock(ctx context.Context, ev tmtype
 					continue
 				}
 
-				raw, err := s.service.Query(app.QueryKindsCommittees, kinds, ev.Block.Header.Height)
+				q, err := s.querier.QueryAt(ev.Block.Header.Height)
 				if err != nil {
 					s.logger.Error("worker: couldn't query elected committees",
 						"err", err,
@@ -142,9 +141,9 @@ func (s *tendermintScheduler) onEventDataNewBlock(ctx context.Context, ev tmtype
 					continue
 				}
 
-				var committees []*api.Committee
-				if err := cbor.Unmarshal(raw, &committees); err != nil {
-					s.logger.Error("worker: malformed elected committees",
+				committees, err := q.KindsCommittees(context.TODO(), kinds)
+				if err != nil {
+					s.logger.Error("worker: couldn't query elected committees",
 						"err", err,
 					)
 					continue
@@ -165,17 +164,18 @@ func New(ctx context.Context,
 	cfg *api.Config,
 ) (api.Backend, error) {
 	// Initialze and register the tendermint service component.
-	app, err := app.New(timeSource, cfg)
+	a, err := app.New(timeSource, cfg)
 	if err != nil {
 		return nil, err
 	}
-	if err = service.RegisterApplication(app); err != nil {
+	if err = service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
 	s := &tendermintScheduler{
 		logger:  logging.GetLogger("scheduler/tendermint"),
 		service: service,
+		querier: a.QueryFactory().(*app.QueryFactory),
 	}
 	s.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		currentCommittees, err := s.getCurrentCommittees()

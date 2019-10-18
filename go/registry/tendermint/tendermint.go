@@ -34,6 +34,7 @@ type tendermintBackend struct {
 	logger *logging.Logger
 
 	service service.TendermintService
+	querier *app.QueryFactory
 
 	cfg *api.Config
 
@@ -72,35 +73,21 @@ func (r *tendermintBackend) DeregisterEntity(ctx context.Context, sigTimestamp *
 }
 
 func (r *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
-	query := tmapi.QueryGetByIDRequest{
-		ID: id,
-	}
-
-	response, err := r.service.Query(app.QueryGetEntity, query, 0)
+	q, err := r.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: get entity query failed")
+		return nil, err
 	}
 
-	var ent entity.Entity
-	if err := cbor.Unmarshal(response, &ent); err != nil {
-		return nil, errors.Wrap(err, "registry: get entity malformed response")
-	}
-
-	return &ent, nil
+	return q.Entity(ctx, id)
 }
 
 func (r *tendermintBackend) GetEntities(ctx context.Context) ([]*entity.Entity, error) {
-	response, err := r.service.Query(app.QueryGetEntities, nil, 0)
+	q, err := r.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: get entities query failed")
+		return nil, err
 	}
 
-	var ents []*entity.Entity
-	if err := cbor.Unmarshal(response, &ents); err != nil {
-		return nil, errors.Wrap(err, "registry: get entities malformed response")
-	}
-
-	return ents, nil
+	return q.Entities(ctx)
 }
 
 func (r *tendermintBackend) WatchEntities() (<-chan *api.EntityEvent, *pubsub.Subscription) {
@@ -126,35 +113,21 @@ func (r *tendermintBackend) RegisterNode(ctx context.Context, sigNode *node.Sign
 }
 
 func (r *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
-	query := tmapi.QueryGetByIDRequest{
-		ID: id,
-	}
-
-	response, err := r.service.Query(app.QueryGetNode, query, 0)
+	q, err := r.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: get node query failed")
+		return nil, err
 	}
 
-	var node node.Node
-	if err := cbor.Unmarshal(response, &node); err != nil {
-		return nil, errors.Wrap(err, "registry: get node malformed response")
-	}
-
-	return &node, nil
+	return q.Node(ctx, id)
 }
 
 func (r *tendermintBackend) GetNodes(ctx context.Context) ([]*node.Node, error) {
-	response, err := r.service.Query(app.QueryGetNodes, nil, 0)
+	q, err := r.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: get nodes query failed")
+		return nil, err
 	}
 
-	var nodes []*node.Node
-	if err := cbor.Unmarshal(response, &nodes); err != nil {
-		return nil, errors.Wrap(err, "registry: get nodes malformed response")
-	}
-
-	return nodes, nil
+	return q.Nodes(ctx)
 }
 
 func (r *tendermintBackend) WatchNodes() (<-chan *api.NodeEvent, *pubsub.Subscription) {
@@ -192,21 +165,12 @@ func (r *tendermintBackend) RegisterRuntime(ctx context.Context, sigCon *api.Sig
 }
 
 func (r *tendermintBackend) GetRuntime(ctx context.Context, id signature.PublicKey) (*api.Runtime, error) {
-	query := tmapi.QueryGetByIDRequest{
-		ID: id,
-	}
-
-	response, err := r.service.Query(app.QueryGetRuntime, query, 0)
+	q, err := r.querier.QueryAt(0)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: get runtime query failed")
+		return nil, err
 	}
 
-	var con api.Runtime
-	if err := cbor.Unmarshal(response, &con); err != nil {
-		return nil, errors.Wrap(err, "registry: get runtime malformed response")
-	}
-
-	return &con, nil
+	return q.Runtime(ctx, id)
 }
 
 func (r *tendermintBackend) WatchRuntimes() (<-chan *api.Runtime, *pubsub.Subscription) {
@@ -225,31 +189,21 @@ func (r *tendermintBackend) Cleanup() {
 }
 
 func (r *tendermintBackend) GetRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
-	response, err := r.service.Query(app.QueryGetRuntimes, nil, height)
+	q, err := r.querier.QueryAt(height)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: get runtimes query failed")
+		return nil, err
 	}
 
-	var runtimes []*api.Runtime
-	if err := cbor.Unmarshal(response, &runtimes); err != nil {
-		return nil, errors.Wrap(err, "registry: get runtimes malformed response")
-	}
-
-	return runtimes, nil
+	return q.Runtimes(ctx)
 }
 
 func (r *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	response, err := r.service.Query(app.QueryGenesis, nil, height)
+	q, err := r.querier.QueryAt(height)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: genesis query failed")
+		return nil, err
 	}
 
-	var genesis api.Genesis
-	if err := cbor.Unmarshal(response, &genesis); err != nil {
-		return nil, errors.Wrap(err, "registry: genesis malformed response")
-	}
-
-	return &genesis, nil
+	return q.Genesis(ctx)
 }
 
 func (r *tendermintBackend) worker(ctx context.Context) {
@@ -410,14 +364,14 @@ func (r *tendermintBackend) onEventDataTx(tx tmtypes.EventDataTx) {
 
 func (r *tendermintBackend) getNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
 	// Generate the nodelist.
-	response, err := r.service.Query(app.QueryGetNodes, nil, height)
+	q, err := r.querier.QueryAt(height)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: failed to query nodes")
+		return nil, err
 	}
 
-	var nodes []*node.Node
-	if err := cbor.Unmarshal(response, &nodes); err != nil {
-		return nil, errors.Wrap(err, "registry: failed node deserialization")
+	nodes, err := q.Nodes(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "registry: failed to query nodes")
 	}
 
 	api.SortNodeList(nodes)
@@ -430,14 +384,15 @@ func (r *tendermintBackend) getNodeList(ctx context.Context, height int64) (*api
 // New constructs a new tendermint backed registry Backend instance.
 func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService, cfg *api.Config) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
-	app := app.New(timeSource, cfg)
-	if err := service.RegisterApplication(app); err != nil {
+	a := app.New(timeSource, cfg)
+	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
 	r := &tendermintBackend{
 		logger:           logging.GetLogger("registry/tendermint"),
 		service:          service,
+		querier:          a.QueryFactory().(*app.QueryFactory),
 		cfg:              cfg,
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),
