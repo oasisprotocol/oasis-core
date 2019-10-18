@@ -162,18 +162,6 @@ func (r *tendermintBackend) GetNodesForEntity(ctx context.Context, id signature.
 	return nil
 }
 
-func (r *tendermintBackend) GetNodeTransport(ctx context.Context, id signature.PublicKey) (*api.NodeTransport, error) {
-	node, err := r.GetNode(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.NodeTransport{
-		Certificate: node.Committee.Certificate,
-		Addresses:   node.Committee.Addresses,
-	}, nil
-}
-
 func (r *tendermintBackend) WatchNodes() (<-chan *api.NodeEvent, *pubsub.Subscription) {
 	typedCh := make(chan *api.NodeEvent)
 	sub := r.nodeNotifier.Subscribe()
