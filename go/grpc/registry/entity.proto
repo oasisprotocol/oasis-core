@@ -14,8 +14,6 @@ service EntityRegistry {
     rpc RegisterNode (RegisterNodeRequest) returns (RegisterNodeResponse) {}
     rpc GetNode (NodeRequest) returns (NodeResponse) {}
     rpc GetNodes (NodesRequest) returns (NodesResponse) {}
-    rpc GetNodesForEntity (EntityNodesRequest) returns (EntityNodesResponse) {}
-    rpc GetNodeTransport (NodeRequest) returns (NodeTransportResponse) {}
     rpc WatchNodes (WatchNodeRequest) returns (stream WatchNodeResponse) {}
     rpc WatchNodeList (WatchNodeListRequest) returns (stream WatchNodeListResponse) {}
 }

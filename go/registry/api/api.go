@@ -141,12 +141,6 @@ type Backend interface {
 	// GetNodes gets a list of all registered nodes.
 	GetNodes(context.Context) ([]*node.Node, error)
 
-	// GetNodesForEntity gets a list of nodes registered to an entity ID.
-	GetNodesForEntity(context.Context, signature.PublicKey) []*node.Node
-
-	// GetNodeTransport gets a registered node's transport information.
-	GetNodeTransport(context.Context, signature.PublicKey) (*NodeTransport, error)
-
 	// WatchNodes returns a channel that produces a stream of
 	// NodeEvent on node registration changes.
 	WatchNodes() (<-chan *NodeEvent, *pubsub.Subscription)
