@@ -144,7 +144,6 @@ func init() {
 		"255.255.255.255/32", // RFC 919: Limited Broadcast
 		"::1/128",            // RFC 4291: Loopback Address
 		"::/128",             // RFC 4291: Unspecified Address
-		"::ffff:0:0/96",      // RFC 4291: IPv4-mapped Address
 		"100::/64",           // RFC 6666: Discard-Only Address Block
 		"2001::/32",          // RFC 4380: TEREDO
 		"2001:2::/48",        // RFC 5180: Benchmarking
