@@ -79,24 +79,24 @@ type tendermintBackend struct {
 	roundTimeout time.Duration
 }
 
-func (r *tendermintBackend) Info() api.Info {
+func (tb *tendermintBackend) Info() api.Info {
 	return api.Info{
-		ComputeRoundTimeout: r.roundTimeout,
-		MergeRoundTimeout:   r.roundTimeout,
+		ComputeRoundTimeout: tb.roundTimeout,
+		MergeRoundTimeout:   tb.roundTimeout,
 	}
 }
 
-func (r *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
+func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
 	// First check if we have the genesis blocks cached. They are immutable so easy
 	// to cache to avoid repeated requests to the Tendermint app.
-	r.RLock()
-	if blk := r.genesisBlocks[id.ToMapKey()]; blk != nil {
-		r.RUnlock()
+	tb.RLock()
+	if blk := tb.genesisBlocks[id.ToMapKey()]; blk != nil {
+		tb.RUnlock()
 		return blk, nil
 	}
-	r.RUnlock()
+	tb.RUnlock()
 
-	q, err := r.querier.QueryAt(0)
+	q, err := tb.querier.QueryAt(0)
 	if err != nil {
 		return nil, err
 	}
@@ -107,19 +107,19 @@ func (r *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.Pu
 	}
 
 	// Update the genesis block cache.
-	r.Lock()
-	r.genesisBlocks[id.ToMapKey()] = blk
-	r.Unlock()
+	tb.Lock()
+	tb.genesisBlocks[id.ToMapKey()] = blk
+	tb.Unlock()
 
 	return blk, nil
 }
 
-func (r *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
-	return r.getLatestBlockAt(id, 0)
+func (tb *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
+	return tb.getLatestBlockAt(id, 0)
 }
 
-func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int64) (*block.Block, error) {
-	q, err := r.querier.QueryAt(height)
+func (tb *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int64) (*block.Block, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -127,28 +127,28 @@ func (r *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int6
 	return q.LatestBlock(context.TODO(), id)
 }
 
-func (r *tendermintBackend) GetBlock(ctx context.Context, id signature.PublicKey, round uint64) (*block.Block, error) {
-	if r.blockIndex == nil {
+func (tb *tendermintBackend) GetBlock(ctx context.Context, id signature.PublicKey, round uint64) (*block.Block, error) {
+	if tb.blockIndex == nil {
 		return nil, errors.New("roothash: block indexer not enabled for tendermint backend")
 	}
 
 	// Make sure we are initialized before querying the index.
 	select {
-	case <-r.initCh:
-	case <-r.ctx.Done():
-		return nil, r.ctx.Err()
+	case <-tb.initCh:
+	case <-tb.ctx.Done():
+		return nil, tb.ctx.Err()
 	}
 
-	height, err := r.blockIndex.GetBlockHeight(id, round)
+	height, err := tb.blockIndex.GetBlockHeight(id, round)
 	if err != nil {
 		return nil, err
 	}
 
-	return r.getLatestBlockAt(id, height)
+	return tb.getLatestBlockAt(id, height)
 }
 
-func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
-	notifiers := r.getRuntimeNotifiers(id)
+func (tb *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
+	notifiers := tb.getRuntimeNotifiers(id)
 
 	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
 		// Replay the latest block if it exists.  This isn't handled by
@@ -169,13 +169,13 @@ func (r *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.Ann
 	return ch, sub, nil
 }
 
-func (r *tendermintBackend) getBlockFromFinalizedTag(rawValue []byte, height int64) (*block.Block, *app.ValueFinalized, error) {
+func (tb *tendermintBackend) getBlockFromFinalizedTag(rawValue []byte, height int64) (*block.Block, *app.ValueFinalized, error) {
 	var value app.ValueFinalized
 	if err := value.UnmarshalCBOR(rawValue); err != nil {
 		return nil, nil, errors.Wrap(err, "roothash: corrupt finalized tag")
 	}
 
-	block, err := r.getLatestBlockAt(value.ID, height)
+	block, err := tb.getLatestBlockAt(value.ID, height)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "roothash: failed to fetch block")
 	}
@@ -187,16 +187,16 @@ func (r *tendermintBackend) getBlockFromFinalizedTag(rawValue []byte, height int
 	return block, &value, nil
 }
 
-func (r *tendermintBackend) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription) {
-	sub := r.allBlockNotifier.Subscribe()
+func (tb *tendermintBackend) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription) {
+	sub := tb.allBlockNotifier.Subscribe()
 	ch := make(chan *block.Block)
 	sub.Unwrap(ch)
 
 	return ch, sub
 }
 
-func (r *tendermintBackend) WatchEvents(id signature.PublicKey) (<-chan *api.Event, *pubsub.Subscription, error) {
-	notifiers := r.getRuntimeNotifiers(id)
+func (tb *tendermintBackend) WatchEvents(id signature.PublicKey) (<-chan *api.Event, *pubsub.Subscription, error) {
+	notifiers := tb.getRuntimeNotifiers(id)
 	sub := notifiers.eventNotifier.Subscribe()
 	ch := make(chan *api.Event)
 	sub.Unwrap(ch)
@@ -204,15 +204,15 @@ func (r *tendermintBackend) WatchEvents(id signature.PublicKey) (<-chan *api.Eve
 	return ch, sub, nil
 }
 
-func (r *tendermintBackend) WatchPrunedBlocks() (<-chan *api.PrunedBlock, *pubsub.Subscription, error) {
-	sub := r.pruneNotifier.Subscribe()
+func (tb *tendermintBackend) WatchPrunedBlocks() (<-chan *api.PrunedBlock, *pubsub.Subscription, error) {
+	sub := tb.pruneNotifier.Subscribe()
 	ch := make(chan *api.PrunedBlock)
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
 }
 
-func (r *tendermintBackend) MergeCommit(ctx context.Context, id signature.PublicKey, commits []commitment.MergeCommitment) error {
+func (tb *tendermintBackend) MergeCommit(ctx context.Context, id signature.PublicKey, commits []commitment.MergeCommitment) error {
 	tx := app.Tx{
 		TxMergeCommit: &app.TxMergeCommit{
 			ID:      id,
@@ -220,14 +220,14 @@ func (r *tendermintBackend) MergeCommit(ctx context.Context, id signature.Public
 		},
 	}
 
-	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
+	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "roothash: merge commit failed")
 	}
 
 	return nil
 }
 
-func (r *tendermintBackend) ComputeCommit(ctx context.Context, id signature.PublicKey, commits []commitment.ComputeCommitment) error {
+func (tb *tendermintBackend) ComputeCommit(ctx context.Context, id signature.PublicKey, commits []commitment.ComputeCommitment) error {
 	tx := app.Tx{
 		TxComputeCommit: &app.TxComputeCommit{
 			ID:      id,
@@ -235,15 +235,15 @@ func (r *tendermintBackend) ComputeCommit(ctx context.Context, id signature.Publ
 		},
 	}
 
-	if err := r.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
+	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "roothash: compute commit failed")
 	}
 
 	return nil
 }
 
-func (r *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := r.querier.QueryAt(height)
+func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -251,22 +251,22 @@ func (r *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.G
 	return q.Genesis(ctx)
 }
 
-func (r *tendermintBackend) Cleanup() {
-	r.closeOnce.Do(func() {
-		<-r.closedCh
+func (tb *tendermintBackend) Cleanup() {
+	tb.closeOnce.Do(func() {
+		<-tb.closedCh
 	})
 }
 
-func (r *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtimeBrokers {
+func (tb *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtimeBrokers {
 	k := id.ToMapKey()
 
-	r.Lock()
-	defer r.Unlock()
+	tb.Lock()
+	defer tb.Unlock()
 
-	notifiers := r.runtimeNotifiers[k]
+	notifiers := tb.runtimeNotifiers[k]
 	if notifiers == nil {
 		// Fetch the latest block.
-		block, _ := r.GetLatestBlock(r.ctx, id)
+		block, _ := tb.GetLatestBlock(tb.ctx, id)
 
 		notifiers = &runtimeBrokers{
 			blockNotifier: pubsub.NewBroker(false),
@@ -274,21 +274,21 @@ func (r *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtime
 			lastBlock:     block,
 		}
 
-		r.runtimeNotifiers[k] = notifiers
+		tb.runtimeNotifiers[k] = notifiers
 	}
 
 	return notifiers
 }
 
-func (r *tendermintBackend) reindexBlocks() error {
-	if r.blockIndex == nil {
+func (tb *tendermintBackend) reindexBlocks() error {
+	if tb.blockIndex == nil {
 		return nil
 	}
 
 	var err error
 	var lastHeight int64
-	if lastHeight, err = r.blockIndex.GetLastHeight(); err != nil {
-		r.logger.Error("failed to get last indexed height",
+	if lastHeight, err = tb.blockIndex.GetLastHeight(); err != nil {
+		tb.logger.Error("failed to get last indexed height",
 			"err", err,
 		)
 		return err
@@ -298,8 +298,8 @@ func (r *tendermintBackend) reindexBlocks() error {
 	// we can safely snapshot the current height as we have already subscribed
 	// to new blocks.
 	var currentBlk *tmtypes.Block
-	if currentBlk, err = r.service.GetBlock(nil); err != nil {
-		r.logger.Error("failed to get latest block",
+	if currentBlk, err = tb.service.GetBlock(nil); err != nil {
+		tb.logger.Error("failed to get latest block",
 			"err", err,
 		)
 		return err
@@ -310,7 +310,7 @@ func (r *tendermintBackend) reindexBlocks() error {
 		return nil
 	}
 
-	r.logger.Debug("reindexing blocks",
+	tb.logger.Debug("reindexing blocks",
 		"last_indexed_height", lastHeight,
 		"current_height", currentBlk.Height,
 	)
@@ -318,9 +318,9 @@ func (r *tendermintBackend) reindexBlocks() error {
 	// TODO: Take pruning policy into account (e.g., skip heights).
 	for height := lastHeight + 1; height <= currentBlk.Height; height++ {
 		var results *tmrpctypes.ResultBlockResults
-		results, err = r.service.GetBlockResults(&height)
+		results, err = tb.service.GetBlockResults(&height)
 		if err != nil {
-			r.logger.Error("failed to get tendermint block",
+			tb.logger.Error("failed to get tendermint block",
 				"err", err,
 				"height", height,
 			)
@@ -340,17 +340,17 @@ func (r *tendermintBackend) reindexBlocks() error {
 			for _, pair := range tmEv.GetAttributes() {
 				if bytes.Equal(pair.GetKey(), app.TagFinalized) {
 					var blk *block.Block
-					blk, _, err := r.getBlockFromFinalizedTag(pair.GetValue(), height)
+					blk, _, err := tb.getBlockFromFinalizedTag(pair.GetValue(), height)
 					if err != nil {
-						r.logger.Error("failed to get block from tag",
+						tb.logger.Error("failed to get block from tag",
 							"err", err,
 						)
 						continue
 					}
 
-					err = r.blockIndex.Index(blk, height)
+					err = tb.blockIndex.Index(blk, height)
 					if err != nil {
-						r.logger.Error("worker: failed to index block",
+						tb.logger.Error("worker: failed to index block",
 							"err", err,
 						)
 						return err
@@ -360,31 +360,31 @@ func (r *tendermintBackend) reindexBlocks() error {
 		}
 	}
 
-	r.logger.Debug("block reindex complete")
+	tb.logger.Debug("block reindex complete")
 
 	return nil
 }
 
-func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
-	defer close(r.closedCh)
+func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
+	defer close(tb.closedCh)
 
 	// Subscribe to transactions which modify state.
-	sub, err := r.service.Subscribe("roothash-worker", app.QueryUpdate)
+	sub, err := tb.service.Subscribe("roothash-worker", app.QueryUpdate)
 	if err != nil {
-		r.logger.Error("failed to subscribe",
+		tb.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer r.service.Unsubscribe("roothash-worker", app.QueryUpdate) // nolint: errcheck
+	defer tb.service.Unsubscribe("roothash-worker", app.QueryUpdate) // nolint: errcheck
 
 	// Subscribe to prune events if a block indexer is configured.
 	var pruneCh <-chan int64
-	if r.blockIndex != nil {
+	if tb.blockIndex != nil {
 		var pruneSub *pubsub.Subscription
-		pruneCh, pruneSub, err = r.service.Pruner().Subscribe()
+		pruneCh, pruneSub, err = tb.service.Pruner().Subscribe()
 		if err != nil {
-			r.logger.Error("failed to subscribe to prune events",
+			tb.logger.Error("failed to subscribe to prune events",
 				"err", err,
 			)
 			return
@@ -394,15 +394,15 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 		}
 
 		// Check if we need to resync any missed blocks.
-		if err = r.reindexBlocks(); err != nil {
-			r.logger.Error("failed to reindex blocks",
+		if err = tb.reindexBlocks(); err != nil {
+			tb.logger.Error("failed to reindex blocks",
 				"err", err,
 			)
 			return
 		}
 	}
 
-	close(r.initCh)
+	close(tb.initCh)
 
 	// Process transactions and emit notifications for our subscribers.
 	for {
@@ -412,20 +412,20 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 		case msg := <-sub.Out():
 			event = msg.Data()
 		case <-sub.Cancelled():
-			r.logger.Debug("worker: terminating, subsription closed")
+			tb.logger.Debug("worker: terminating, subsription closed")
 			return
 		case height := <-pruneCh:
-			if r.blockIndex != nil {
+			if tb.blockIndex != nil {
 				var blocks []*api.PrunedBlock
-				blocks, err = r.blockIndex.Prune(height)
+				blocks, err = tb.blockIndex.Prune(height)
 				if err != nil {
-					r.logger.Error("worker: failed to prune block index",
+					tb.logger.Error("worker: failed to prune block index",
 						"err", err,
 					)
 				}
 
 				for _, p := range blocks {
-					r.pruneNotifier.Broadcast(p)
+					tb.pruneNotifier.Broadcast(p)
 				}
 			}
 			continue
@@ -447,9 +447,9 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 			continue
 		}
 
-		r.Lock()
-		r.lastBlockHeight = height
-		r.Unlock()
+		tb.Lock()
+		tb.lastBlockHeight = height
+		tb.Unlock()
 
 		for _, tmEv := range tmEvents {
 			if tmEv.GetType() != tmapi.EventTypeOasis {
@@ -458,15 +458,15 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 
 			for _, pair := range tmEv.GetAttributes() {
 				if bytes.Equal(pair.GetKey(), app.TagFinalized) {
-					block, value, err := r.getBlockFromFinalizedTag(pair.GetValue(), height)
+					block, value, err := tb.getBlockFromFinalizedTag(pair.GetValue(), height)
 					if err != nil {
-						r.logger.Error("worker: failed to get block from tag",
+						tb.logger.Error("worker: failed to get block from tag",
 							"err", err,
 						)
 						continue
 					}
 
-					notifiers := r.getRuntimeNotifiers(value.ID)
+					notifiers := tb.getRuntimeNotifiers(value.ID)
 
 					// Ensure latest block is set.
 					notifiers.Lock()
@@ -475,12 +475,12 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 					notifiers.Unlock()
 
 					// Index the block when an indexer is configured.
-					if r.blockIndex != nil {
+					if tb.blockIndex != nil {
 						crash.Here(crashPointBlockBeforeIndex)
 
-						err = r.blockIndex.Index(block, height)
+						err = tb.blockIndex.Index(block, height)
 						if err != nil {
-							r.logger.Error("worker: failed to index block",
+							tb.logger.Error("worker: failed to index block",
 								"err", err,
 								"height", height,
 							)
@@ -493,7 +493,7 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 					}
 
 					// Broadcast new block.
-					r.allBlockNotifier.Broadcast(block)
+					tb.allBlockNotifier.Broadcast(block)
 					notifiers.blockNotifier.Broadcast(&api.AnnotatedBlock{
 						Height: height,
 						Block:  block,
@@ -501,24 +501,24 @@ func (r *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 				} else if bytes.Equal(pair.GetKey(), app.TagMergeDiscrepancyDetected) {
 					var value app.ValueMergeDiscrepancyDetected
 					if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
-						r.logger.Error("worker: failed to get discrepancy from tag",
+						tb.logger.Error("worker: failed to get discrepancy from tag",
 							"err", err,
 						)
 						continue
 					}
 
-					notifiers := r.getRuntimeNotifiers(value.ID)
+					notifiers := tb.getRuntimeNotifiers(value.ID)
 					notifiers.eventNotifier.Broadcast(&api.Event{MergeDiscrepancyDetected: &value.Event})
 				} else if bytes.Equal(pair.GetKey(), app.TagComputeDiscrepancyDetected) {
 					var value app.ValueComputeDiscrepancyDetected
 					if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
-						r.logger.Error("worker: failed to get discrepancy from tag",
+						tb.logger.Error("worker: failed to get discrepancy from tag",
 							"err", err,
 						)
 						continue
 					}
 
-					notifiers := r.getRuntimeNotifiers(value.ID)
+					notifiers := tb.getRuntimeNotifiers(value.ID)
 					notifiers.eventNotifier.Broadcast(&api.Event{ComputeDiscrepancyDetected: &value.Event})
 				}
 			}
@@ -541,7 +541,7 @@ func New(
 		return nil, err
 	}
 
-	r := &tendermintBackend{
+	tb := &tendermintBackend{
 		ctx:              ctx,
 		logger:           logging.GetLogger("roothash/tendermint"),
 		service:          service,
@@ -558,15 +558,15 @@ func New(
 	// Check if we need to index roothash blocks.
 	if viper.GetBool(CfgIndexBlocks) {
 		var err error
-		r.blockIndex, err = newBlockIndex(dataDir)
+		tb.blockIndex, err = newBlockIndex(dataDir)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	go r.worker(ctx)
+	go tb.worker(ctx)
 
-	return r, nil
+	return tb, nil
 }
 
 func init() {

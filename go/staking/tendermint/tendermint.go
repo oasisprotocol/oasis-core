@@ -39,16 +39,16 @@ type tendermintBackend struct {
 	closedCh chan struct{}
 }
 
-func (b *tendermintBackend) Name() string {
+func (tb *tendermintBackend) Name() string {
 	return api.TokenName
 }
 
-func (b *tendermintBackend) Symbol() string {
+func (tb *tendermintBackend) Symbol() string {
 	return api.TokenSymbol
 }
 
-func (b *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, error) {
-	q, err := b.querier.QueryAt(0)
+func (tb *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, error) {
+	q, err := tb.querier.QueryAt(0)
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +56,8 @@ func (b *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, err
 	return q.TotalSupply(ctx)
 }
 
-func (b *tendermintBackend) CommonPool(ctx context.Context) (*api.Quantity, error) {
-	q, err := b.querier.QueryAt(0)
+func (tb *tendermintBackend) CommonPool(ctx context.Context) (*api.Quantity, error) {
+	q, err := tb.querier.QueryAt(0)
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +65,8 @@ func (b *tendermintBackend) CommonPool(ctx context.Context) (*api.Quantity, erro
 	return q.CommonPool(ctx)
 }
 
-func (b *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKind) (*api.Quantity, error) {
-	q, err := b.querier.QueryAt(0)
+func (tb *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKind) (*api.Quantity, error) {
+	q, err := tb.querier.QueryAt(0)
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +74,8 @@ func (b *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKin
 	return q.Threshold(ctx, kind)
 }
 
-func (b *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey, error) {
-	q, err := b.querier.QueryAt(0)
+func (tb *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey, error) {
+	q, err := tb.querier.QueryAt(0)
 	if err != nil {
 		return nil, err
 	}
@@ -83,8 +83,8 @@ func (b *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey
 	return q.Accounts(ctx)
 }
 
-func (b *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey) (*api.Account, error) {
-	q, err := b.querier.QueryAt(0)
+func (tb *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey) (*api.Account, error) {
+	q, err := tb.querier.QueryAt(0)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +92,8 @@ func (b *tendermintBackend) AccountInfo(ctx context.Context, owner signature.Pub
 	return q.AccountInfo(ctx, owner)
 }
 
-func (b *tendermintBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey) (map[signature.MapKey][]*api.DebondingDelegation, error) {
-	q, err := b.querier.QueryAt(0)
+func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey) (map[signature.MapKey][]*api.DebondingDelegation, error) {
+	q, err := tb.querier.QueryAt(0)
 	if err != nil {
 		return nil, err
 	}
@@ -101,81 +101,81 @@ func (b *tendermintBackend) DebondingDelegations(ctx context.Context, owner sign
 	return q.DebondingDelegations(ctx, owner)
 }
 
-func (b *tendermintBackend) Transfer(ctx context.Context, signedXfer *api.SignedTransfer) error {
+func (tb *tendermintBackend) Transfer(ctx context.Context, signedXfer *api.SignedTransfer) error {
 	tx := app.Tx{
 		TxTransfer: &app.TxTransfer{
 			SignedTransfer: *signedXfer,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
+	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "staking: transfer transaction failed")
 	}
 
 	return nil
 }
 
-func (b *tendermintBackend) Burn(ctx context.Context, signedBurn *api.SignedBurn) error {
+func (tb *tendermintBackend) Burn(ctx context.Context, signedBurn *api.SignedBurn) error {
 	tx := app.Tx{
 		TxBurn: &app.TxBurn{
 			SignedBurn: *signedBurn,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
+	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "staking: burn transaction failed")
 	}
 
 	return nil
 }
 
-func (b *tendermintBackend) AddEscrow(ctx context.Context, signedEscrow *api.SignedEscrow) error {
+func (tb *tendermintBackend) AddEscrow(ctx context.Context, signedEscrow *api.SignedEscrow) error {
 	tx := app.Tx{
 		TxAddEscrow: &app.TxAddEscrow{
 			SignedEscrow: *signedEscrow,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
+	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "staking: add escrow transaction failed")
 	}
 
 	return nil
 }
 
-func (b *tendermintBackend) ReclaimEscrow(ctx context.Context, signedReclaim *api.SignedReclaimEscrow) error {
+func (tb *tendermintBackend) ReclaimEscrow(ctx context.Context, signedReclaim *api.SignedReclaimEscrow) error {
 	tx := app.Tx{
 		TxReclaimEscrow: &app.TxReclaimEscrow{
 			SignedReclaimEscrow: *signedReclaim,
 		},
 	}
-	if err := b.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
+	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
 		return errors.Wrap(err, "staking: reclaim escrow transaction failed")
 	}
 
 	return nil
 }
 
-func (b *tendermintBackend) WatchTransfers() (<-chan *api.TransferEvent, *pubsub.Subscription) {
+func (tb *tendermintBackend) WatchTransfers() (<-chan *api.TransferEvent, *pubsub.Subscription) {
 	typedCh := make(chan *api.TransferEvent)
-	sub := b.transferNotifier.Subscribe()
+	sub := tb.transferNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
 }
 
-func (b *tendermintBackend) WatchBurns() (<-chan *api.BurnEvent, *pubsub.Subscription) {
+func (tb *tendermintBackend) WatchBurns() (<-chan *api.BurnEvent, *pubsub.Subscription) {
 	typedCh := make(chan *api.BurnEvent)
-	sub := b.burnNotifier.Subscribe()
+	sub := tb.burnNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
 }
 
-func (b *tendermintBackend) WatchEscrows() (<-chan interface{}, *pubsub.Subscription) {
-	sub := b.escrowNotifier.Subscribe()
+func (tb *tendermintBackend) WatchEscrows() (<-chan interface{}, *pubsub.Subscription) {
+	sub := tb.escrowNotifier.Subscribe()
 	return sub.Untyped(), sub
 }
 
-func (b *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := b.querier.QueryAt(height)
+func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -183,21 +183,21 @@ func (b *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.G
 	return q.Genesis(ctx)
 }
 
-func (b *tendermintBackend) Cleanup() {
-	<-b.closedCh
+func (tb *tendermintBackend) Cleanup() {
+	<-tb.closedCh
 }
 
-func (b *tendermintBackend) worker(ctx context.Context) {
-	defer close(b.closedCh)
+func (tb *tendermintBackend) worker(ctx context.Context) {
+	defer close(tb.closedCh)
 
-	sub, err := b.service.Subscribe("staking-worker", app.QueryUpdate)
+	sub, err := tb.service.Subscribe("staking-worker", app.QueryUpdate)
 	if err != nil {
-		b.logger.Error("failed to subscribe",
+		tb.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer b.service.Unsubscribe("staking-worker", app.QueryUpdate) // nolint: errcheck
+	defer tb.service.Unsubscribe("staking-worker", app.QueryUpdate) // nolint: errcheck
 
 	for {
 		var event interface{}
@@ -206,7 +206,7 @@ func (b *tendermintBackend) worker(ctx context.Context) {
 		case msg := <-sub.Out():
 			event = msg.Data()
 		case <-sub.Cancelled():
-			b.logger.Debug("worker: terminating, subscription closed")
+			tb.logger.Debug("worker: terminating, subscription closed")
 			return
 		case <-ctx.Done():
 			return
@@ -214,15 +214,15 @@ func (b *tendermintBackend) worker(ctx context.Context) {
 
 		switch ev := event.(type) {
 		case tmtypes.EventDataNewBlock:
-			b.onEventDataNewBlock(ctx, ev)
+			tb.onEventDataNewBlock(ctx, ev)
 		case tmtypes.EventDataTx:
-			b.onEventDataTx(ctx, ev)
+			tb.onEventDataTx(ctx, ev)
 		default:
 		}
 	}
 }
 
-func (b *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
+func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
 	events := ev.ResultBeginBlock.GetEvents()
 	events = append(events, ev.ResultEndBlock.GetEvents()...)
 
@@ -235,53 +235,53 @@ func (b *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.
 			if bytes.Equal(pair.GetKey(), app.TagTakeEscrow) {
 				var e api.TakeEscrowEvent
 				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
-					b.logger.Error("worker: failed to get take escrow event from tag",
+					tb.logger.Error("worker: failed to get take escrow event from tag",
 						"err", err,
 					)
 					continue
 				}
 
-				b.escrowNotifier.Broadcast(&e)
+				tb.escrowNotifier.Broadcast(&e)
 			} else if bytes.Equal(pair.GetKey(), app.TagTransfer) {
 				var e api.TransferEvent
 				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
-					b.logger.Error("worker: failed to get transfer event from tag",
+					tb.logger.Error("worker: failed to get transfer event from tag",
 						"err", err,
 					)
 					continue
 				}
 
-				b.transferNotifier.Broadcast(&e)
+				tb.transferNotifier.Broadcast(&e)
 			} else if bytes.Equal(pair.GetKey(), app.TagReclaimEscrow) {
 				var e api.ReclaimEscrowEvent
 				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
-					b.logger.Error("worker: failed to get reclaim escrow event from tag",
+					tb.logger.Error("worker: failed to get reclaim escrow event from tag",
 						"err", err,
 					)
 					continue
 				}
 
-				b.escrowNotifier.Broadcast(&e)
+				tb.escrowNotifier.Broadcast(&e)
 			}
 		}
 	}
 }
 
-func (b *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventDataTx) {
+func (tb *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventDataTx) {
 	output := &app.Output{}
 	if err := cbor.Unmarshal(ev.Result.GetData(), output); err != nil {
-		b.logger.Error("worker: malformed transaction ouytput",
+		tb.logger.Error("worker: malformed transaction ouytput",
 			"tx", hex.EncodeToString(ev.Result.GetData()),
 		)
 		return
 	}
 
 	if e := output.OutputTransfer; e != nil {
-		b.transferNotifier.Broadcast(e)
+		tb.transferNotifier.Broadcast(e)
 	} else if e := output.OutputBurn; e != nil {
-		b.burnNotifier.Broadcast(e)
+		tb.burnNotifier.Broadcast(e)
 	} else if e := output.OutputAddEscrow; e != nil {
-		b.escrowNotifier.Broadcast(e)
+		tb.escrowNotifier.Broadcast(e)
 	}
 }
 
@@ -298,7 +298,7 @@ func New(
 		return nil, err
 	}
 
-	b := &tendermintBackend{
+	tb := &tendermintBackend{
 		logger:           logging.GetLogger("staking/tendermint"),
 		service:          service,
 		querier:          a.QueryFactory().(*app.QueryFactory),
@@ -309,7 +309,7 @@ func New(
 		closedCh:         make(chan struct{}),
 	}
 
-	go b.worker(ctx)
+	go tb.worker(ctx)
 
-	return b, nil
+	return tb, nil
 }

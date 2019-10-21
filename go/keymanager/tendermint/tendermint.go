@@ -33,8 +33,8 @@ type tendermintBackend struct {
 	notifier *pubsub.Broker
 }
 
-func (r *tendermintBackend) GetStatus(ctx context.Context, id signature.PublicKey) (*api.Status, error) {
-	q, err := r.querier.QueryAt(0)
+func (tb *tendermintBackend) GetStatus(ctx context.Context, id signature.PublicKey) (*api.Status, error) {
+	q, err := tb.querier.QueryAt(0)
 	if err != nil {
 		return nil, err
 	}
@@ -42,8 +42,8 @@ func (r *tendermintBackend) GetStatus(ctx context.Context, id signature.PublicKe
 	return q.Status(ctx, id)
 }
 
-func (r *tendermintBackend) GetStatuses(ctx context.Context) ([]*api.Status, error) {
-	q, err := r.querier.QueryAt(0)
+func (tb *tendermintBackend) GetStatuses(ctx context.Context) ([]*api.Status, error) {
+	q, err := tb.querier.QueryAt(0)
 	if err != nil {
 		return nil, err
 	}
@@ -51,16 +51,16 @@ func (r *tendermintBackend) GetStatuses(ctx context.Context) ([]*api.Status, err
 	return q.Statuses(ctx)
 }
 
-func (r *tendermintBackend) WatchStatuses() (<-chan *api.Status, *pubsub.Subscription) {
-	sub := r.notifier.Subscribe()
+func (tb *tendermintBackend) WatchStatuses() (<-chan *api.Status, *pubsub.Subscription) {
+	sub := tb.notifier.Subscribe()
 	ch := make(chan *api.Status)
 	sub.Unwrap(ch)
 
 	return ch, sub
 }
 
-func (r *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := r.querier.QueryAt(height)
+func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -68,15 +68,15 @@ func (r *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.G
 	return q.Genesis(ctx)
 }
 
-func (r *tendermintBackend) worker(ctx context.Context) {
-	sub, err := r.service.Subscribe("keymanager-worker", app.QueryApp)
+func (tb *tendermintBackend) worker(ctx context.Context) {
+	sub, err := tb.service.Subscribe("keymanager-worker", app.QueryApp)
 	if err != nil {
-		r.logger.Error("failed to subscribe",
+		tb.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer r.service.Unsubscribe("keymanager-worker", app.QueryApp) // nolint: errcheck
+	defer tb.service.Unsubscribe("keymanager-worker", app.QueryApp) // nolint: errcheck
 
 	for {
 		var event interface{}
@@ -92,13 +92,13 @@ func (r *tendermintBackend) worker(ctx context.Context) {
 
 		switch ev := event.(type) {
 		case tmtypes.EventDataNewBlock:
-			r.onEventDataNewBlock(ev)
+			tb.onEventDataNewBlock(ev)
 		default:
 		}
 	}
 }
 
-func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
+func (tb *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 	events := ev.ResultBeginBlock.GetEvents()
 	events = append(events, ev.ResultEndBlock.GetEvents()...)
 
@@ -111,14 +111,14 @@ func (r *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 			if bytes.Equal(pair.GetKey(), app.TagStatusUpdate) {
 				var statuses []*api.Status
 				if err := cbor.Unmarshal(pair.GetValue(), &statuses); err != nil {
-					r.logger.Error("worker: failed to get statuses from tag",
+					tb.logger.Error("worker: failed to get statuses from tag",
 						"err", err,
 					)
 					continue
 				}
 
 				for _, status := range statuses {
-					r.notifier.Broadcast(status)
+					tb.notifier.Broadcast(status)
 				}
 			}
 		}
@@ -133,15 +133,15 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 		return nil, errors.Wrap(err, "keymanager/tendermint: failed to register app")
 	}
 
-	r := &tendermintBackend{
+	tb := &tendermintBackend{
 		logger:  logging.GetLogger("keymanager/tendermint"),
 		service: service,
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
-	r.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
-		statuses, err := r.GetStatuses(ctx)
+	tb.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+		statuses, err := tb.GetStatuses(ctx)
 		if err != nil {
-			r.logger.Error("status notifier: unable to get a list of statuses",
+			tb.logger.Error("status notifier: unable to get a list of statuses",
 				"err", err,
 			)
 			return
@@ -152,7 +152,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 			wr <- v
 		}
 	})
-	go r.worker(ctx)
+	go tb.worker(ctx)
 
-	return r, nil
+	return tb, nil
 }
