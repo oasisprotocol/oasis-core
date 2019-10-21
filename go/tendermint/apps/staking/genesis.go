@@ -261,6 +261,11 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		return nil, err
 	}
 
+	acceptableTransferPeers, err := sq.state.acceptableTransferPeers()
+	if err != nil {
+		return nil, err
+	}
+
 	accounts, err := sq.state.accounts()
 	if err != nil {
 		return nil, err
@@ -281,13 +286,14 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 	}
 
 	gen := staking.Genesis{
-		TotalSupply:          *totalSupply,
-		CommonPool:           *commonPool,
-		Thresholds:           thresholds,
-		DebondingInterval:    epochtime.EpochTime(debondingInterval),
-		Ledger:               ledger,
-		Delegations:          delegations,
-		DebondingDelegations: debondingDelegations,
+		TotalSupply:             *totalSupply,
+		CommonPool:              *commonPool,
+		Thresholds:              thresholds,
+		DebondingInterval:       epochtime.EpochTime(debondingInterval),
+		AcceptableTransferPeers: acceptableTransferPeers,
+		Ledger:                  ledger,
+		Delegations:             delegations,
+		DebondingDelegations:    debondingDelegations,
 	}
 	return &gen, nil
 }
