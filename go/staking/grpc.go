@@ -31,7 +31,7 @@ func (s *grpcServer) GetSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*
 }
 
 func (s *grpcServer) GetTotalSupply(ctx context.Context, req *pb.GetTotalSupplyRequest) (*pb.GetTotalSupplyResponse, error) {
-	totalSupply, err := s.backend.TotalSupply(ctx)
+	totalSupply, err := s.backend.TotalSupply(ctx, req.GetHeight())
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (s *grpcServer) GetTotalSupply(ctx context.Context, req *pb.GetTotalSupplyR
 }
 
 func (s *grpcServer) GetCommonPool(ctx context.Context, req *pb.GetCommonPoolRequest) (*pb.GetCommonPoolResponse, error) {
-	commonPool, err := s.backend.CommonPool(ctx)
+	commonPool, err := s.backend.CommonPool(ctx, req.GetHeight())
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (s *grpcServer) GetThreshold(ctx context.Context, req *pb.GetThresholdReque
 		return nil, fmt.Errorf("staking/grpc: invalid threshold kind: %v", req.GetThresholdKind())
 	}
 
-	qty, err := s.backend.Threshold(ctx, kind)
+	qty, err := s.backend.Threshold(ctx, kind, req.GetHeight())
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (s *grpcServer) GetThreshold(ctx context.Context, req *pb.GetThresholdReque
 }
 
 func (s *grpcServer) GetAccounts(ctx context.Context, req *pb.GetAccountsRequest) (*pb.GetAccountsResponse, error) {
-	accounts, err := s.backend.Accounts(ctx)
+	accounts, err := s.backend.Accounts(ctx, req.GetHeight())
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func (s *grpcServer) GetAccountInfo(ctx context.Context, req *pb.GetAccountInfoR
 		return nil, err
 	}
 
-	account, err := s.backend.AccountInfo(ctx, id)
+	account, err := s.backend.AccountInfo(ctx, id, req.GetHeight())
 	if err != nil {
 		return nil, err
 	}

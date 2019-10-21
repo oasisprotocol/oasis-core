@@ -55,7 +55,7 @@ func (s *grpcServer) GetEntity(ctx context.Context, req *pb.EntityRequest) (*pb.
 		return nil, err
 	}
 
-	ent, err := s.backend.GetEntity(ctx, id)
+	ent, err := s.backend.GetEntity(ctx, id, req.GetHeight())
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (s *grpcServer) GetEntity(ctx context.Context, req *pb.EntityRequest) (*pb.
 }
 
 func (s *grpcServer) GetEntities(ctx context.Context, req *pb.EntitiesRequest) (*pb.EntitiesResponse, error) {
-	ents, err := s.backend.GetEntities(ctx)
+	ents, err := s.backend.GetEntities(ctx, req.GetHeight())
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (s *grpcServer) GetNode(ctx context.Context, req *pb.NodeRequest) (*pb.Node
 		return nil, err
 	}
 
-	node, err := s.backend.GetNode(ctx, id)
+	node, err := s.backend.GetNode(ctx, id, req.GetHeight())
 	if err != nil {
 		return nil, err
 	}
@@ -146,13 +146,10 @@ func (s *grpcServer) GetNode(ctx context.Context, req *pb.NodeRequest) (*pb.Node
 }
 
 func (s *grpcServer) GetNodes(ctx context.Context, req *pb.NodesRequest) (*pb.NodesResponse, error) {
-	nodes, err := s.backend.GetNodes(ctx)
+	nodes, err := s.backend.GetNodes(ctx, req.GetHeight())
 	if err != nil {
 		return nil, err
 	}
-
-	// XXX: Epoch????  The underlying implementation doesn't take this
-	// argument.
 
 	pbNodes := make([]*commonPB.Node, 0, len(nodes))
 	for _, v := range nodes {
@@ -243,7 +240,7 @@ func (s *grpcServer) GetRuntime(ctx context.Context, req *pb.RuntimeRequest) (*p
 		return nil, err
 	}
 
-	con, err := s.backend.GetRuntime(ctx, id)
+	con, err := s.backend.GetRuntime(ctx, id, req.GetHeight())
 	if err != nil {
 		return nil, err
 	}

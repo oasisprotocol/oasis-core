@@ -72,8 +72,8 @@ func (tb *tendermintBackend) DeregisterEntity(ctx context.Context, sigTimestamp 
 	return nil
 }
 
-func (tb *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicKey, height int64) (*entity.Entity, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +81,8 @@ func (tb *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicK
 	return q.Entity(ctx, id)
 }
 
-func (tb *tendermintBackend) GetEntities(ctx context.Context) ([]*entity.Entity, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) GetEntities(ctx context.Context, height int64) ([]*entity.Entity, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +112,8 @@ func (tb *tendermintBackend) RegisterNode(ctx context.Context, sigNode *node.Sig
 	return nil
 }
 
-func (tb *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey, height int64) (*node.Node, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -121,8 +121,8 @@ func (tb *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey
 	return q.Node(ctx, id)
 }
 
-func (tb *tendermintBackend) GetNodes(ctx context.Context) ([]*node.Node, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) GetNodes(ctx context.Context, height int64) ([]*node.Node, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -164,8 +164,8 @@ func (tb *tendermintBackend) RegisterRuntime(ctx context.Context, sigCon *api.Si
 	return nil
 }
 
-func (tb *tendermintBackend) GetRuntime(ctx context.Context, id signature.PublicKey) (*api.Runtime, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) GetRuntime(ctx context.Context, id signature.PublicKey, height int64) (*api.Runtime, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +273,7 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 					continue
 				}
 
-				rt, err := tb.GetRuntime(ctx, id)
+				rt, err := tb.GetRuntime(ctx, id, ev.Block.Header.Height)
 				if err != nil {
 					tb.logger.Error("worker: failed to get runtime from registry",
 						"err", err,
@@ -292,7 +292,7 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 					continue
 				}
 
-				ent, err := tb.GetEntity(ctx, id)
+				ent, err := tb.GetEntity(ctx, id, ev.Block.Header.Height)
 				if err != nil {
 					tb.logger.Error("worker: failed to get entity from registry",
 						"err", err,

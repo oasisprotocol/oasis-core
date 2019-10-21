@@ -121,10 +121,10 @@ type Backend interface {
 	DeregisterEntity(context.Context, *signature.Signed) error
 
 	// GetEntity gets an entity by ID.
-	GetEntity(context.Context, signature.PublicKey) (*entity.Entity, error)
+	GetEntity(context.Context, signature.PublicKey, int64) (*entity.Entity, error)
 
 	// GetEntities gets a list of all registered entities.
-	GetEntities(context.Context) ([]*entity.Entity, error)
+	GetEntities(context.Context, int64) ([]*entity.Entity, error)
 
 	// WatchEntities returns a channel that produces a stream of
 	// EntityEvent on entity registration changes.
@@ -136,10 +136,10 @@ type Backend interface {
 	RegisterNode(context.Context, *node.SignedNode) error
 
 	// GetNode gets a node by ID.
-	GetNode(context.Context, signature.PublicKey) (*node.Node, error)
+	GetNode(context.Context, signature.PublicKey, int64) (*node.Node, error)
 
 	// GetNodes gets a list of all registered nodes.
-	GetNodes(context.Context) ([]*node.Node, error)
+	GetNodes(context.Context, int64) ([]*node.Node, error)
 
 	// WatchNodes returns a channel that produces a stream of
 	// NodeEvent on node registration changes.
@@ -157,7 +157,7 @@ type Backend interface {
 	RegisterRuntime(context.Context, *SignedRuntime) error
 
 	// GetRuntime gets a runtime by ID.
-	GetRuntime(context.Context, signature.PublicKey) (*Runtime, error)
+	GetRuntime(context.Context, signature.PublicKey, int64) (*Runtime, error)
 
 	// GetRuntimes returns the registered Runtimes at the specified
 	// block height.

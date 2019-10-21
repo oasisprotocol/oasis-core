@@ -36,6 +36,7 @@ message DeregisterResponse {
 
 message EntityRequest {
     bytes id = 1;
+    int64 height = 2;
 }
 
 message EntityResponse {
@@ -43,6 +44,7 @@ message EntityResponse {
 }
 
 message EntitiesRequest {
+    int64 height = 1;
 }
 
 message EntitiesResponse {
@@ -71,6 +73,7 @@ message RegisterNodeResponse {
 
 message NodeRequest {
     bytes id = 1;
+    int64 height = 2;
 }
 
 message NodeResponse {
@@ -78,7 +81,7 @@ message NodeResponse {
 }
 
 message NodesRequest {
-    uint64 epoch = 1;
+    int64 height = 1;
 }
 
 message NodesResponse {
@@ -87,6 +90,7 @@ message NodesResponse {
 
 message EntityNodesRequest {
     bytes id = 1;
+    int64 height = 2;
 }
 
 message EntityNodesResponse {
@@ -96,6 +100,7 @@ message EntityNodesResponse {
 message NodeTransportResponse {
     repeated common.Address addresses = 1;
     bytes certificate = 2;
+    int64 height = 3;
 }
 
 message WatchNodeRequest {

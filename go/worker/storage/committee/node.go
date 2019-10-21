@@ -294,7 +294,7 @@ func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
 	}
 	// TODO: Query registry only for storage nodes after
 	// https://github.com/oasislabs/oasis-core/issues/1923 is implemented.
-	nodes, err := n.commonNode.Registry.GetNodes(context.Background())
+	nodes, err := n.commonNode.Registry.GetNodes(context.Background(), snapshot.GetGroupVersion())
 	if nodes != nil {
 		storageNodesPolicy.AddRulesForNodeRoles(&policy, nodes, node.RoleStorageWorker)
 	} else {
@@ -344,7 +344,7 @@ func (n *Node) ForceFinalize(ctx context.Context, runtimeID signature.PublicKey,
 	var err error
 
 	if round == RoundLatest {
-		block, err = n.commonNode.Roothash.GetLatestBlock(ctx, runtimeID)
+		block, err = n.commonNode.Roothash.GetLatestBlock(ctx, runtimeID, 0)
 	} else {
 		block, err = n.commonNode.Roothash.GetBlock(ctx, runtimeID, round)
 	}
@@ -458,7 +458,7 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	n.logger.Info("starting committee node")
 
-	genesisBlock, err := n.commonNode.Roothash.GetGenesisBlock(n.ctx, n.commonNode.RuntimeID)
+	genesisBlock, err := n.commonNode.Roothash.GetGenesisBlock(n.ctx, n.commonNode.RuntimeID, 0)
 	if err != nil {
 		n.logger.Error("can't retrieve genesis block", "err", err)
 		return

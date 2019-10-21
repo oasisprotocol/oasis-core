@@ -71,6 +71,8 @@ type epoch struct {
 
 // EpochSnapshot is an immutable snapshot of epoch state.
 type EpochSnapshot struct {
+	groupVersion int64
+
 	computeCommitteeID hash.Hash
 
 	computeRole      scheduler.Role
@@ -96,6 +98,12 @@ func NewMockEpochSnapshot() *EpochSnapshot {
 			computeCommitteeID: &CommitteeInfo{},
 		},
 	}
+}
+
+// GetGroupVersion returns the consensus backend block height of the last
+// processed committee election.
+func (e *EpochSnapshot) GetGroupVersion() int64 {
+	return e.groupVersion
 }
 
 // GetRuntime returns the current runtime descriptor.
@@ -276,7 +284,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 			// Fetch peer node information from the registry.
 			var n *node.Node
-			n, err = g.registry.GetNode(ctx, member.PublicKey)
+			n, err = g.registry.GetNode(ctx, member.PublicKey, height)
 			if err != nil {
 				return errors.Wrap(err, "group: failed to fetch node info")
 			}
@@ -337,7 +345,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	}
 
 	// Fetch current runtime descriptor.
-	runtime, err := g.registry.GetRuntime(ctx, g.runtimeID)
+	runtime, err := g.registry.GetRuntime(ctx, g.runtimeID, height)
 	if err != nil {
 		return err
 	}
@@ -387,6 +395,7 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 	}
 
 	s := &EpochSnapshot{
+		groupVersion: g.activeEpoch.groupVersion,
 		// NOTE: Transaction scheduler and merge committees are always set.
 		txnSchedulerRole:      g.activeEpoch.txnSchedulerCommittee.Role,
 		mergeRole:             g.activeEpoch.mergeCommittee.Role,

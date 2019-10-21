@@ -50,6 +50,7 @@ message RegisterRuntimeResponse {
 
 message RuntimeRequest {
     bytes id = 1;
+    int64 height = 2;
 }
 
 message RuntimeResponse {

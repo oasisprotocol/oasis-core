@@ -47,8 +47,8 @@ func (tb *tendermintBackend) Symbol() string {
 	return api.TokenSymbol
 }
 
-func (tb *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*api.Quantity, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +56,8 @@ func (tb *tendermintBackend) TotalSupply(ctx context.Context) (*api.Quantity, er
 	return q.TotalSupply(ctx)
 }
 
-func (tb *tendermintBackend) CommonPool(ctx context.Context) (*api.Quantity, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) CommonPool(ctx context.Context, height int64) (*api.Quantity, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +65,8 @@ func (tb *tendermintBackend) CommonPool(ctx context.Context) (*api.Quantity, err
 	return q.CommonPool(ctx)
 }
 
-func (tb *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKind) (*api.Quantity, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKind, height int64) (*api.Quantity, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +74,8 @@ func (tb *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKi
 	return q.Threshold(ctx, kind)
 }
 
-func (tb *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKey, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) Accounts(ctx context.Context, height int64) ([]signature.PublicKey, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -83,8 +83,8 @@ func (tb *tendermintBackend) Accounts(ctx context.Context) ([]signature.PublicKe
 	return q.Accounts(ctx)
 }
 
-func (tb *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey) (*api.Account, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey, height int64) (*api.Account, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +92,8 @@ func (tb *tendermintBackend) AccountInfo(ctx context.Context, owner signature.Pu
 	return q.AccountInfo(ctx, owner)
 }
 
-func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey) (map[signature.MapKey][]*api.DebondingDelegation, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.MapKey][]*api.DebondingDelegation, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}

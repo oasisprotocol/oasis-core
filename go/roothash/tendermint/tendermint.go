@@ -86,7 +86,7 @@ func (tb *tendermintBackend) Info() api.Info {
 	}
 }
 
-func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
+func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.PublicKey, height int64) (*block.Block, error) {
 	// First check if we have the genesis blocks cached. They are immutable so easy
 	// to cache to avoid repeated requests to the Tendermint app.
 	tb.RLock()
@@ -96,7 +96,7 @@ func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.P
 	}
 	tb.RUnlock()
 
-	q, err := tb.querier.QueryAt(0)
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -114,17 +114,17 @@ func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.P
 	return blk, nil
 }
 
-func (tb *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
-	return tb.getLatestBlockAt(id, 0)
+func (tb *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey, height int64) (*block.Block, error) {
+	return tb.getLatestBlockAt(ctx, id, height)
 }
 
-func (tb *tendermintBackend) getLatestBlockAt(id signature.PublicKey, height int64) (*block.Block, error) {
+func (tb *tendermintBackend) getLatestBlockAt(ctx context.Context, id signature.PublicKey, height int64) (*block.Block, error) {
 	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.LatestBlock(context.TODO(), id)
+	return q.LatestBlock(ctx, id)
 }
 
 func (tb *tendermintBackend) GetBlock(ctx context.Context, id signature.PublicKey, round uint64) (*block.Block, error) {
@@ -144,7 +144,7 @@ func (tb *tendermintBackend) GetBlock(ctx context.Context, id signature.PublicKe
 		return nil, err
 	}
 
-	return tb.getLatestBlockAt(id, height)
+	return tb.getLatestBlockAt(ctx, id, height)
 }
 
 func (tb *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
@@ -169,13 +169,13 @@ func (tb *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.An
 	return ch, sub, nil
 }
 
-func (tb *tendermintBackend) getBlockFromFinalizedTag(rawValue []byte, height int64) (*block.Block, *app.ValueFinalized, error) {
+func (tb *tendermintBackend) getBlockFromFinalizedTag(ctx context.Context, rawValue []byte, height int64) (*block.Block, *app.ValueFinalized, error) {
 	var value app.ValueFinalized
 	if err := value.UnmarshalCBOR(rawValue); err != nil {
 		return nil, nil, errors.Wrap(err, "roothash: corrupt finalized tag")
 	}
 
-	block, err := tb.getLatestBlockAt(value.ID, height)
+	block, err := tb.getLatestBlockAt(ctx, value.ID, height)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "roothash: failed to fetch block")
 	}
@@ -266,7 +266,7 @@ func (tb *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtim
 	notifiers := tb.runtimeNotifiers[k]
 	if notifiers == nil {
 		// Fetch the latest block.
-		block, _ := tb.GetLatestBlock(tb.ctx, id)
+		block, _ := tb.GetLatestBlock(tb.ctx, id, 0)
 
 		notifiers = &runtimeBrokers{
 			blockNotifier: pubsub.NewBroker(false),
@@ -340,7 +340,7 @@ func (tb *tendermintBackend) reindexBlocks() error {
 			for _, pair := range tmEv.GetAttributes() {
 				if bytes.Equal(pair.GetKey(), app.TagFinalized) {
 					var blk *block.Block
-					blk, _, err := tb.getBlockFromFinalizedTag(pair.GetValue(), height)
+					blk, _, err := tb.getBlockFromFinalizedTag(tb.ctx, pair.GetValue(), height)
 					if err != nil {
 						tb.logger.Error("failed to get block from tag",
 							"err", err,
@@ -458,7 +458,7 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 
 			for _, pair := range tmEv.GetAttributes() {
 				if bytes.Equal(pair.GetKey(), app.TagFinalized) {
-					block, value, err := tb.getBlockFromFinalizedTag(pair.GetValue(), height)
+					block, value, err := tb.getBlockFromFinalizedTag(tb.ctx, pair.GetValue(), height)
 					if err != nil {
 						tb.logger.Error("worker: failed to get block from tag",
 							"err", err,

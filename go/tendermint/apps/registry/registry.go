@@ -308,7 +308,7 @@ func (app *registryApplication) registerNode(
 	// Check if node exists
 	existingNode, err := state.GetNode(newNode.ID)
 	if err != nil {
-		if err == errNodeNotFound {
+		if err == registry.ErrNoSuchNode {
 			// Node doesn't exist. Create node.
 			err = state.createNode(newNode, sigNode)
 			if err != nil {

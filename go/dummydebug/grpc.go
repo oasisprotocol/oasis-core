@@ -47,7 +47,7 @@ func (s *grpcServer) WaitNodes(ctx context.Context, req *dbgPB.WaitNodesRequest)
 
 	// Check if there is already enough nodes registered. Note that this request may
 	// fail if there is nothing committed yet, so ignore the error.
-	nodes, err := s.registry.GetNodes(ctx)
+	nodes, err := s.registry.GetNodes(ctx, 0)
 	if err == nil {
 		if len(nodes) >= int(req.GetNodes()) {
 			return &dbgPB.WaitNodesResponse{}, nil
@@ -62,7 +62,7 @@ Loop:
 			if ev.IsRegistration {
 				s.logger.Debug("WaitNodes: got new node registration event")
 
-				nodes, err = s.registry.GetNodes(ctx)
+				nodes, err = s.registry.GetNodes(ctx, 0)
 				if err != nil {
 					return nil, err
 				}

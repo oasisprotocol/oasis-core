@@ -73,12 +73,12 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		}
 
 		for _, v := range entities {
-			ent, err := backend.GetEntity(context.Background(), v.Entity.ID)
+			ent, err := backend.GetEntity(context.Background(), v.Entity.ID, 0)
 			require.NoError(err, "GetEntity")
 			require.EqualValues(v.Entity, ent, "retrieved entity")
 		}
 
-		registeredEntities, err := backend.GetEntities(context.Background())
+		registeredEntities, err := backend.GetEntities(context.Background(), 0)
 		require.NoError(err, "GetEntities")
 		require.Len(registeredEntities, len(entities), "entities after registration")
 
@@ -144,7 +144,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 					t.Fatalf("failed to receive node registration event")
 				}
 
-				nod, err := backend.GetNode(context.Background(), v.Node.ID)
+				nod, err := backend.GetNode(context.Background(), v.Node.ID, 0)
 				require.NoError(err, "GetNode")
 				require.EqualValues(v.Node, nod, "retrieved node")
 
@@ -184,7 +184,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		expectedNodeList := getExpectedNodeList()
 		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
-		registeredNodes, nerr := backend.GetNodes(context.Background())
+		registeredNodes, nerr := backend.GetNodes(context.Background(), 0)
 		require.NoError(nerr, "GetNodes")
 		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 	})
@@ -224,7 +224,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 
 		// Ensure the node list doesn't have the expired nodes.
 		expectedNodeList := getExpectedNodeList()
-		registeredNodes, nerr := backend.GetNodes(context.Background())
+		registeredNodes, nerr := backend.GetNodes(context.Background(), 0)
 		require.NoError(nerr, "GetNodes")
 		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 
@@ -250,9 +250,8 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		}
 
 		for _, v := range entities {
-			_, err := backend.GetEntity(context.Background(), v.Entity.ID)
-			// require.Equal(registry.ErrNoSuchEntity, err, "GetEntity")
-			require.Error(err, "GetEntity") // XXX: tendermint backend doesn't use api errors.
+			_, err := backend.GetEntity(context.Background(), v.Entity.ID, 0)
+			require.Equal(api.ErrNoSuchEntity, err, "GetEntity")
 		}
 	})
 
@@ -346,11 +345,11 @@ func testRegistryRuntime(t *testing.T, backend api.Backend) {
 //
 // Note: Runtimes are allowed, as there is no way to deregister them.
 func EnsureRegistryEmpty(t *testing.T, backend api.Backend) {
-	registeredEntities, err := backend.GetEntities(context.Background())
+	registeredEntities, err := backend.GetEntities(context.Background(), 0)
 	require.NoError(t, err, "GetEntities")
 	require.Len(t, registeredEntities, 0, "registered entities")
 
-	registeredNodes, err := backend.GetNodes(context.Background())
+	registeredNodes, err := backend.GetNodes(context.Background(), 0)
 	require.NoError(t, err, "GetNodes")
 	require.Len(t, registeredNodes, 0, "registered nodes")
 }

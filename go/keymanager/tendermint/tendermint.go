@@ -33,8 +33,8 @@ type tendermintBackend struct {
 	notifier *pubsub.Broker
 }
 
-func (tb *tendermintBackend) GetStatus(ctx context.Context, id signature.PublicKey) (*api.Status, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) GetStatus(ctx context.Context, id signature.PublicKey, height int64) (*api.Status, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -42,8 +42,8 @@ func (tb *tendermintBackend) GetStatus(ctx context.Context, id signature.PublicK
 	return q.Status(ctx, id)
 }
 
-func (tb *tendermintBackend) GetStatuses(ctx context.Context) ([]*api.Status, error) {
-	q, err := tb.querier.QueryAt(0)
+func (tb *tendermintBackend) GetStatuses(ctx context.Context, height int64) ([]*api.Status, error) {
+	q, err := tb.querier.QueryAt(height)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
 	tb.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
-		statuses, err := tb.GetStatuses(ctx)
+		statuses, err := tb.GetStatuses(ctx, 0)
 		if err != nil {
 			tb.logger.Error("status notifier: unable to get a list of statuses",
 				"err", err,
