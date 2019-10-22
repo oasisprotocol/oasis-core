@@ -111,7 +111,7 @@ type Node struct {
 	TransactionSchedulerWorker *txnscheduler.Worker
 	MergeWorker                *merge.Worker
 	P2P                        *p2p.P2P
-	WorkerRegistration         *registration.Registration
+	RegistrationWorker         *registration.Worker
 }
 
 // Cleanup cleans up after the node has terminated.
@@ -231,7 +231,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 	// Initialize the worker registration.
 	workerCommonCfg := n.CommonWorker.GetConfig()
-	n.WorkerRegistration, err = registration.New(
+	n.RegistrationWorker, err = registration.New(
 		dataDir,
 		n.Epochtime,
 		n.Registry,
@@ -246,14 +246,14 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		)
 		return err
 	}
-	n.svcMgr.Register(n.WorkerRegistration)
+	n.svcMgr.Register(n.RegistrationWorker)
 
 	// Initialize the key manager worker service.
 	kmSvc, err := keymanagerWorker.New(
 		dataDir,
 		n.CommonWorker,
 		n.IAS,
-		n.WorkerRegistration,
+		n.RegistrationWorker,
 		n.KeyManager,
 	)
 	if err != nil {
@@ -265,7 +265,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	n.StorageWorker, err = workerStorage.New(
 		n.grpcInternal,
 		n.CommonWorker,
-		n.WorkerRegistration,
+		n.RegistrationWorker,
 		n.Genesis,
 		cmdCommon.DataDir(),
 	)
@@ -277,7 +277,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	// Initialize the merge worker.
 	n.MergeWorker, err = merge.New(
 		n.CommonWorker,
-		n.WorkerRegistration,
+		n.RegistrationWorker,
 	)
 	if err != nil {
 		return err
@@ -289,7 +289,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		dataDir,
 		n.CommonWorker,
 		n.MergeWorker,
-		n.WorkerRegistration,
+		n.RegistrationWorker,
 	)
 	if err != nil {
 		return err
@@ -300,7 +300,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	n.TransactionSchedulerWorker, err = txnscheduler.New(
 		n.CommonWorker,
 		n.ComputeWorker,
-		n.WorkerRegistration,
+		n.RegistrationWorker,
 	)
 	if err != nil {
 		return err
@@ -338,7 +338,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 
 	// Start the worker registration service.
-	if err = n.WorkerRegistration.Start(); err != nil {
+	if err = n.RegistrationWorker.Start(); err != nil {
 		return err
 	}
 

@@ -48,7 +48,7 @@ func New(
 	dataDir string,
 	commonWorker *workerCommon.Worker,
 	ias *ias.IAS,
-	r *registration.Registration,
+	r *registration.Worker,
 	backend api.Backend,
 ) (*Worker, error) {
 	var teeHardware node.TEEHardware

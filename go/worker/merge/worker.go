@@ -35,8 +35,8 @@ type Worker struct {
 	enabled bool
 	cfg     Config
 
-	commonWorker *workerCommon.Worker
-	registration *registration.Registration
+	commonWorker       *workerCommon.Worker
+	registrationWorker *registration.Worker
 
 	runtimes map[signature.MapKey]*Runtime
 
@@ -80,7 +80,7 @@ func (w *Worker) Start() error {
 			<-rt.node.Initialized()
 		}
 
-		<-w.registration.InitialRegistrationCh()
+		<-w.registrationWorker.InitialRegistrationCh()
 
 		close(w.initCh)
 	}()
@@ -189,22 +189,22 @@ func (w *Worker) registerRuntime(id signature.PublicKey) error {
 func newWorker(
 	enabled bool,
 	commonWorker *workerCommon.Worker,
-	registration *registration.Registration,
+	registrationWorker *registration.Worker,
 	cfg Config,
 ) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
-		enabled:      enabled,
-		cfg:          cfg,
-		commonWorker: commonWorker,
-		registration: registration,
-		runtimes:     make(map[signature.MapKey]*Runtime),
-		ctx:          ctx,
-		cancelCtx:    cancelCtx,
-		quitCh:       make(chan struct{}),
-		initCh:       make(chan struct{}),
-		logger:       logging.GetLogger("worker/merge"),
+		enabled:            enabled,
+		cfg:                cfg,
+		commonWorker:       commonWorker,
+		registrationWorker: registrationWorker,
+		runtimes:           make(map[signature.MapKey]*Runtime),
+		ctx:                ctx,
+		cancelCtx:          cancelCtx,
+		quitCh:             make(chan struct{}),
+		initCh:             make(chan struct{}),
+		logger:             logging.GetLogger("worker/merge"),
 	}
 
 	if enabled {
@@ -220,7 +220,7 @@ func newWorker(
 		}
 
 		// Register merge worker role.
-		w.registration.RegisterRole(func(n *node.Node) error {
+		w.registrationWorker.RegisterRole(func(n *node.Node) error {
 			n.AddRoles(node.RoleMergeWorker)
 			return nil
 		})

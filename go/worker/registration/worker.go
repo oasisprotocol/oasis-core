@@ -34,8 +34,8 @@ const (
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
-// Registration is a service handling worker node registration.
-type Registration struct {
+// Worker is a service handling worker node registration.
+type Worker struct {
 	sync.Mutex
 
 	workerCommonCfg *workerCommon.Config
@@ -58,23 +58,23 @@ type Registration struct {
 	consensus consensus.Backend
 }
 
-func (r *Registration) doNodeRegistration() {
-	defer close(r.quitCh)
+func (w *Worker) doNodeRegistration() {
+	defer close(w.quitCh)
 
 	// Delay node registration till after the consensus service has
 	// finished initial synchronization if applicable.
-	if r.consensus != nil {
+	if w.consensus != nil {
 		select {
-		case <-r.stopCh:
+		case <-w.stopCh:
 			return
-		case <-r.consensus.Synced():
+		case <-w.consensus.Synced():
 		}
 	}
 
 	// (re-)register the node on each epoch transition. This doesn't
 	// need to be strict block-epoch time, since it just serves to
 	// extend the node's expiration.
-	ch, sub := r.epochtime.WatchEpochs()
+	ch, sub := w.epochtime.WatchEpochs()
 	defer sub.Close()
 
 	regFn := func(epoch epochtime.EpochTime, retry bool) error {
@@ -88,7 +88,7 @@ func (r *Registration) doNodeRegistration() {
 		case false:
 			off = &backoff.StopBackOff{}
 		}
-		off = backoff.WithContext(off, r.ctx)
+		off = backoff.WithContext(off, w.ctx)
 
 		// WARNING: This can potentially infinite loop, on certain
 		// "shouldn't be possible" pathological failures.
@@ -100,7 +100,7 @@ func (r *Registration) doNodeRegistration() {
 			// Update the epoch if it happens to change while retrying.
 			var ok bool
 			select {
-			case <-r.stopCh:
+			case <-w.stopCh:
 				return context.Canceled
 			case epoch, ok = <-ch:
 				if !ok {
@@ -109,19 +109,19 @@ func (r *Registration) doNodeRegistration() {
 			default:
 			}
 
-			return r.registerNode(epoch)
+			return w.registerNode(epoch)
 		}, off)
 	}
 
 	first := true
 	for {
 		select {
-		case <-r.stopCh:
+		case <-w.stopCh:
 			return
 		case epoch := <-ch:
 			if err := regFn(epoch, first); err != nil {
 				if first {
-					r.logger.Error("failed to register node",
+					w.logger.Error("failed to register node",
 						"err", err,
 					)
 					// This is by definition a cancellation as the first
@@ -130,13 +130,13 @@ func (r *Registration) doNodeRegistration() {
 					// and abort early.
 					return
 				}
-				r.logger.Error("failed to re-register node",
+				w.logger.Error("failed to re-register node",
 					"err", err,
 				)
 				continue
 			}
 			if first {
-				close(r.regCh)
+				close(w.regCh)
 				first = false
 			}
 		}
@@ -144,97 +144,97 @@ func (r *Registration) doNodeRegistration() {
 }
 
 // InitialRegistrationCh returns the initial registration channel.
-func (r *Registration) InitialRegistrationCh() chan struct{} {
-	return r.regCh
+func (w *Worker) InitialRegistrationCh() chan struct{} {
+	return w.regCh
 }
 
 // RegisterRole enables registering Node roles.
 // hook is a callback that does the following:
 // - Use AddRole to add a role to the node descriptor
 // - Make other changes specific to the role, e.g. setting compute capabilities
-func (r *Registration) RegisterRole(hook func(*node.Node) error) {
-	r.Lock()
-	defer r.Unlock()
+func (w *Worker) RegisterRole(hook func(*node.Node) error) {
+	w.Lock()
+	defer w.Unlock()
 
-	r.roleHooks = append(r.roleHooks, hook)
+	w.roleHooks = append(w.roleHooks, hook)
 }
 
-func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
-	r.logger.Info("performing node (re-)registration",
+func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
+	w.logger.Info("performing node (re-)registration",
 		"epoch", epoch,
 	)
 
-	addresses, err := r.workerCommonCfg.GetNodeAddresses()
+	addresses, err := w.workerCommonCfg.GetNodeAddresses()
 	if err != nil {
-		r.logger.Error("failed to register node: unable to get addresses",
+		w.logger.Error("failed to register node: unable to get addresses",
 			"err", err,
 		)
 		return err
 	}
-	identityPublic := r.identity.NodeSigner.Public()
+	identityPublic := w.identity.NodeSigner.Public()
 	nodeDesc := node.Node{
 		ID:         identityPublic,
-		EntityID:   r.entityID,
+		EntityID:   w.entityID,
 		Expiration: uint64(epoch) + 2,
 		Committee: node.CommitteeInfo{
-			Certificate: r.identity.TLSCertificate.Certificate[0],
+			Certificate: w.identity.TLSCertificate.Certificate[0],
 			Addresses:   addresses,
 		},
-		P2P: r.p2p.Info(),
+		P2P: w.p2p.Info(),
 		Consensus: node.ConsensusInfo{
-			ID: r.consensus.ConsensusKey(),
+			ID: w.consensus.ConsensusKey(),
 		},
 		RegistrationTime: uint64(time.Now().Unix()),
 	}
-	for _, runtime := range r.workerCommonCfg.Runtimes {
+	for _, runtime := range w.workerCommonCfg.Runtimes {
 		nodeDesc.Runtimes = append(nodeDesc.Runtimes, &node.Runtime{
 			ID: runtime,
 		})
 	}
 
-	r.Lock()
-	defer r.Unlock()
+	w.Lock()
+	defer w.Unlock()
 
 	// Apply worker role hooks:
-	for _, h := range r.roleHooks {
+	for _, h := range w.roleHooks {
 		if err := h(&nodeDesc); err != nil {
-			r.logger.Error("failed to apply role hook",
+			w.logger.Error("failed to apply role hook",
 				"err", err)
 		}
 	}
 
 	// Only register node if hooks exist.
-	if len(r.roleHooks) > 0 {
-		signedNode, err := node.SignNode(r.registrationSigner, registry.RegisterNodeSignatureContext, &nodeDesc)
+	if len(w.roleHooks) > 0 {
+		signedNode, err := node.SignNode(w.registrationSigner, registry.RegisterNodeSignatureContext, &nodeDesc)
 		if err != nil {
-			r.logger.Error("failed to register node: unable to sign node descriptor",
+			w.logger.Error("failed to register node: unable to sign node descriptor",
 				"err", err,
 			)
 			return err
 		}
-		if err := r.registry.RegisterNode(r.ctx, signedNode); err != nil {
-			r.logger.Error("failed to register node",
+		if err := w.registry.RegisterNode(w.ctx, signedNode); err != nil {
+			w.logger.Error("failed to register node",
 				"err", err,
 			)
 			return err
 		}
 
-		r.logger.Info("node registered with the registry")
+		w.logger.Info("node registered with the registry")
 	} else {
-		r.logger.Info("skipping node registration as no registerted role hooks")
+		w.logger.Info("skipping node registration as no registerted role hooks")
 	}
 
 	return nil
 }
 
-func (r *Registration) consensusValidatorHook(n *node.Node) error {
-	addrs, err := r.consensus.GetAddresses()
+func (w *Worker) consensusValidatorHook(n *node.Node) error {
+	addrs, err := w.consensus.GetAddresses()
 	if err != nil {
 		return errors.Wrap(err, "worker/registration: failed to get consensus validator addresses")
 	}
 
 	if len(addrs) == 0 {
-		r.logger.Error("node has no consensus addresses, not registering as validator")
+		w.logger.Error("node has no consensus addresses, not registering as validator")
 		return nil
 	}
 
@@ -328,7 +328,7 @@ func New(
 	consensus consensus.Backend,
 	p2p *p2p.P2P,
 	workerCommonCfg *workerCommon.Config,
-) (*Registration, error) {
+) (*Worker, error) {
 	logger := logging.GetLogger("worker/registration")
 
 	entityID, registrationSigner, err := GetRegistrationSigner(logger, dataDir, identity)
@@ -336,7 +336,7 @@ func New(
 		return nil, err
 	}
 
-	r := &Registration{
+	w := &Worker{
 		workerCommonCfg:    workerCommonCfg,
 		entityID:           entityID,
 		registrationSigner: registrationSigner,
@@ -354,53 +354,53 @@ func New(
 	}
 
 	if flags.ConsensusValidator() {
-		r.RegisterRole(r.consensusValidatorHook)
+		w.RegisterRole(w.consensusValidatorHook)
 	}
 
-	return r, nil
+	return w, nil
 }
 
 // Name returns the service name.
-func (r *Registration) Name() string {
+func (w *Worker) Name() string {
 	return "worker node registration service"
 }
 
 // Start starts the registration service.
-func (r *Registration) Start() error {
-	r.logger.Info("starting node registration service")
+func (w *Worker) Start() error {
+	w.logger.Info("starting node registration service")
 
 	// HACK: This can be ok in certain configurations.
-	if r.entityID == nil || r.registrationSigner == nil {
-		r.logger.Warn("no entity/signer for this node, registration will NEVER succeed")
+	if w.entityID == nil || w.registrationSigner == nil {
+		w.logger.Warn("no entity/signer for this node, registration will NEVER succeed")
 		// Make sure the node is stopped on quit.
 		go func() {
-			<-r.stopCh
-			close(r.quitCh)
+			<-w.stopCh
+			close(w.quitCh)
 		}()
 		return nil
 	}
 
-	go r.doNodeRegistration()
+	go w.doNodeRegistration()
 
 	return nil
 }
 
 // Stop halts the service.
-func (r *Registration) Stop() {
-	if r.stopped {
+func (w *Worker) Stop() {
+	if w.stopped {
 		return
 	}
-	r.stopped = true
-	close(r.stopCh)
+	w.stopped = true
+	close(w.stopCh)
 }
 
 // Quit returns a channel that will be closed when the service terminates.
-func (r *Registration) Quit() <-chan struct{} {
-	return r.quitCh
+func (w *Worker) Quit() <-chan struct{} {
+	return w.quitCh
 }
 
 // Cleanup performs the service specific post-termination cleanup.
-func (r *Registration) Cleanup() {
+func (w *Worker) Cleanup() {
 }
 
 func init() {

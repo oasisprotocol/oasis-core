@@ -51,12 +51,12 @@ func Enabled() bool {
 type Worker struct {
 	enabled bool
 
-	commonWorker *workerCommon.Worker
-	logger       *logging.Logger
+	commonWorker       *workerCommon.Worker
+	registrationWorker *registration.Worker
+	logger             *logging.Logger
 
-	initCh       chan struct{}
-	quitCh       chan struct{}
-	registration *registration.Registration
+	initCh chan struct{}
+	quitCh chan struct{}
 
 	runtimes   map[signature.MapKey]*committee.Node
 	watchState *bolt.DB
@@ -69,19 +69,19 @@ type Worker struct {
 func New(
 	grpcInternal *grpc.Server,
 	commonWorker *workerCommon.Worker,
-	registration *registration.Registration,
+	registrationWorker *registration.Worker,
 	genesis genesis.Provider,
 	dataDir string,
 ) (*Worker, error) {
 
 	s := &Worker{
-		enabled:      viper.GetBool(CfgWorkerEnabled),
-		commonWorker: commonWorker,
-		logger:       logging.GetLogger("worker/storage"),
-		initCh:       make(chan struct{}),
-		quitCh:       make(chan struct{}),
-		registration: registration,
-		runtimes:     make(map[signature.MapKey]*committee.Node),
+		enabled:            viper.GetBool(CfgWorkerEnabled),
+		commonWorker:       commonWorker,
+		registrationWorker: registrationWorker,
+		logger:             logging.GetLogger("worker/storage"),
+		initCh:             make(chan struct{}),
+		quitCh:             make(chan struct{}),
+		runtimes:           make(map[signature.MapKey]*committee.Node),
 	}
 
 	if s.enabled {
@@ -124,7 +124,7 @@ func New(
 		storage.NewGRPCServer(s.commonWorker.Grpc.Server(), s.commonWorker.Storage, s.grpcPolicy, viper.GetBool(CfgWorkerDebugIgnoreApply))
 
 		// Register storage worker role.
-		s.registration.RegisterRole(func(n *node.Node) error {
+		s.registrationWorker.RegisterRole(func(n *node.Node) error {
 			n.AddRoles(node.RoleStorageWorker)
 
 			return nil
@@ -206,7 +206,7 @@ func (s *Worker) Start() error {
 			<-r.Initialized()
 		}
 
-		<-s.registration.InitialRegistrationCh()
+		<-s.registrationWorker.InitialRegistrationCh()
 
 		s.logger.Info("storage worker started")
 

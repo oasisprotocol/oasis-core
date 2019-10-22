@@ -29,7 +29,7 @@ func Enabled() bool {
 // New creates a new worker.
 func New(
 	commonWorker *workerCommon.Worker,
-	registration *registration.Registration,
+	registration *registration.Worker,
 ) (*Worker, error) {
 	cfg := Config{
 		Committee: committee.Config{

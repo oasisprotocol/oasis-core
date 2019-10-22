@@ -49,7 +49,7 @@ type Worker struct {
 	cfg     Config
 
 	commonWorker *workerCommon.Worker
-	registration *registration.Registration
+	registration *registration.Worker
 	compute      *compute.Worker
 
 	runtimes map[signature.MapKey]*Runtime
@@ -213,7 +213,7 @@ func newWorker(
 	enabled bool,
 	commonWorker *workerCommon.Worker,
 	compute *compute.Worker,
-	registration *registration.Registration,
+	registration *registration.Worker,
 	cfg Config,
 ) (*Worker, error) {
 	w := &Worker{

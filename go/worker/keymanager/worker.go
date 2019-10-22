@@ -67,7 +67,7 @@ type Worker struct {
 	workerHostCfg host.Config
 
 	commonWorker  *workerCommon.Worker
-	registration  *registration.Registration
+	registration  *registration.Worker
 	enclaveStatus *api.SignedInitResponse
 	backend       api.Backend
 
