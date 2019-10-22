@@ -565,6 +565,68 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 	return ret, nil
 }
 
+func (s *MutableState) AddRewards(time epochtime.EpochTime) error {
+	steps, err := s.RewardSchedule()
+	if err != nil {
+		return err
+	}
+	var stepStart epochtime.EpochTime
+	var activeStep *staking.RewardStep
+	for _, step := range steps {
+		if time < step.Until {
+			activeStep = &step
+			break
+		}
+		stepStart = step.Until
+	}
+	if activeStep == nil {
+		// We're past the end of the schedule.
+		return nil
+	}
+
+	stepRelativeTime := time - stepStart
+	if stepRelativeTime%activeStep.Interval != 0 {
+		return nil
+	}
+
+	s.Snapshot.IterateRange(accountKeyFmt.Encode(), nil, true, func(key, value []byte) bool {
+		var id signature.PublicKey
+		if !accountKeyFmt.Decode(key, &id) {
+			return true
+		}
+
+		var ent staking.Account
+		if err1 := cbor.Unmarshal(value, &ent); err1 != nil {
+			panic("staking: corrupt account state: " + err1.Error())
+		}
+
+		q := ent.Escrow.Active.Balance.Clone()
+		// Multiply first.
+		if err1 := q.Mul(&activeStep.Numerator); err1 != nil {
+			err = errors.Wrap(err1, "multiplying by reward step numerator")
+			return true
+		}
+		if err1 := q.Quo(&activeStep.Denominator); err1 != nil {
+			err = errors.Wrap(err1, "dividing by reward step denominator")
+			return true
+		}
+
+		if q.IsZero() {
+			return false
+		}
+
+		if err1 := ent.Escrow.Active.Balance.Add(q); err1 != nil {
+			err = errors.Wrap(err1, "increasing active escrow balance")
+			return true
+		}
+
+		s.SetAccount(id, &ent)
+
+		return false
+	})
+	return err
+}
+
 func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, message *block.RoothashMessage) (error, error) {
 	if message.StakingGeneralAdjustmentRoothashMessage != nil {
 		acceptable, err := s.isAcceptableTransferPeer(runtimeID)
