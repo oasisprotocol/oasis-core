@@ -99,6 +99,11 @@ func (c *Context) State() *iavl.MutableTree {
 	return c.state.DeliverTxTree()
 }
 
+// BlockHeight returns the current block height.
+func (c *Context) BlockHeight() int64 {
+	return c.state.BlockHeight()
+}
+
 // NewStateCheckpoint creates a new state checkpoint.
 func (c *Context) NewStateCheckpoint() *StateCheckpoint {
 	return &StateCheckpoint{

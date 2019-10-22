@@ -112,6 +112,20 @@ func (tb *tendermintBackend) RegisterNode(ctx context.Context, sigNode *node.Sig
 	return nil
 }
 
+func (tb *tendermintBackend) UnfreezeNode(ctx context.Context, sigUnfreeze *api.SignedUnfreezeNode) error {
+	tx := app.Tx{
+		TxUnfreezeNode: &app.TxUnfreezeNode{
+			UnfreezeNode: *sigUnfreeze,
+		},
+	}
+
+	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
+		return errors.Wrap(err, "registry: unfreeze node failed")
+	}
+
+	return nil
+}
+
 func (tb *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey, height int64) (*node.Node, error) {
 	q, err := tb.querier.QueryAt(height)
 	if err != nil {

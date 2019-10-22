@@ -1,13 +1,16 @@
 package registry
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -67,6 +70,28 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 		}
 	}
 
+	type nodeStatus struct {
+		id     signature.PublicKey
+		status *registry.NodeStatus
+	}
+	var ns []*nodeStatus
+	for k, v := range st.NodeStatuses {
+		var id signature.PublicKey
+		id.FromMapKey(k)
+
+		ns = append(ns, &nodeStatus{id, v})
+	}
+	// Make sure that we apply node status updates in a canonical order.
+	sort.SliceStable(ns, func(i, j int) bool { return bytes.Compare(ns[i].id[:], ns[j].id[:]) < 0 })
+	for _, s := range ns {
+		if err := state.SetNodeStatus(s.id, s.status); err != nil {
+			app.logger.Error("InitChain: failed to set node status",
+				"err", err,
+			)
+			return errors.Wrap(err, "registry: genesis node status set failure")
+		}
+	}
+
 	return nil
 }
 
@@ -98,11 +123,17 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 		}
 	}
 
+	nodeStatuses, err := rq.state.NodeStatuses()
+	if err != nil {
+		return nil, err
+	}
+
 	gen := registry.Genesis{
 		Entities:           signedEntities,
 		Runtimes:           signedRuntimes,
 		Nodes:              validatorNodes,
 		KeyManagerOperator: rq.state.KeyManagerOperator(),
+		NodeStatuses:       nodeStatuses,
 	}
 	return &gen, nil
 }

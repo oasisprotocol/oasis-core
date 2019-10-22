@@ -197,6 +197,9 @@ func TestNode(t *testing.T) {
 		// Client tests also need a functional runtime.
 		{"Client", testClient},
 
+		// Staking requires a registered node that is a validator.
+		{"Staking", testStaking},
+
 		// Clean up and ensure the registry is empty for the following tests.
 		{"DeregisterTestEntityRuntime", testDeregisterEntityRuntime},
 
@@ -205,7 +208,6 @@ func TestNode(t *testing.T) {
 		{"Storage", testStorage},
 		{"Registry", testRegistry},
 		{"Scheduler", testScheduler},
-		{"Staking", testStaking},
 		{"RootHash", testRootHash},
 
 		// TestStorageClient runs storage tests against a storage client connected to this node.
@@ -309,7 +311,7 @@ func testScheduler(t *testing.T, node *testNode) {
 func testStaking(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
-	stakingTests.StakingImplementationTests(t, node.Staking, timeSource)
+	stakingTests.StakingImplementationTests(t, node.Staking, timeSource, node.Identity, node.entity)
 }
 
 func testRootHash(t *testing.T, node *testNode) {

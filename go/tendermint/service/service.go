@@ -67,6 +67,9 @@ type TendermintService interface {
 	// sure to cancel the context.
 	BroadcastTx(ctx context.Context, tag byte, tx interface{}, wait bool) error
 
+	// BroadcastEvidence broadcasts evidence of Tendermint node misbehavior.
+	BroadcastEvidence(ctx context.Context, evidence tmtypes.Evidence) error
+
 	// Subscribe subscribes to tendermint events.
 	Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error)
 

@@ -66,6 +66,10 @@ var (
 	//
 	// Value is a CBOR-serialized map from acceptable runtime IDs to the boolean true.
 	acceptableTransferPeersKeyFmt = keyformat.New(0x58)
+	// slashingKeyFmt is the key format used for the slashing table.
+	//
+	// Value is CBOR-serialized map from slash reason to slash descriptor.
+	slashingKeyFmt = keyformat.New(0x59)
 
 	logger = logging.GetLogger("tendermint/staking")
 )
@@ -352,6 +356,19 @@ func (s *ImmutableState) ExpiredDebondingQueue(epoch epochtime.EpochTime) []*Deb
 	return entries
 }
 
+func (s *ImmutableState) Slashing() (map[staking.SlashReason]staking.Slash, error) {
+	_, value := s.Snapshot.Get(slashingKeyFmt.Encode())
+	if value == nil {
+		return make(map[staking.SlashReason]staking.Slash), nil
+	}
+
+	var st map[staking.SlashReason]staking.Slash
+	if err := cbor.Unmarshal(value, &st); err != nil {
+		return nil, err
+	}
+	return st, nil
+}
+
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -423,17 +440,17 @@ func (s *MutableState) RemoveFromDebondingQueue(epoch epochtime.EpochTime, deleg
 	s.tree.Remove(debondingQueueKeyFmt.Encode(uint64(epoch), &delegatorID, &escrowID, seq))
 }
 
-func slashPool(dst *staking.Quantity, p *staking.SharePool, keepNumerator, denominator *staking.Quantity) error {
+func (s *MutableState) SetSlashing(value map[staking.SlashReason]staking.Slash) {
+	s.tree.Set(slashingKeyFmt.Encode(), cbor.Marshal(value))
+}
+
+func slashPool(dst *staking.Quantity, p *staking.SharePool, share *staking.Quantity) error {
 	slashAmount := p.Balance.Clone()
-	keepAmount := p.Balance.Clone()
-	if err := keepAmount.Mul(keepNumerator); err != nil {
-		return errors.Wrap(err, "keepAmount.Mul")
+	if err := slashAmount.Mul(share); err != nil {
+		return errors.Wrap(err, "slashAmount.Mul")
 	}
-	if err := keepAmount.Quo(denominator); err != nil {
-		return errors.Wrap(err, "keepAmount.Quo")
-	}
-	if err := slashAmount.Sub(keepAmount); err != nil {
-		return errors.Wrap(err, "slashAmount.Sub")
+	if err := slashAmount.Quo(staking.SlashAmountDenominator); err != nil {
+		return errors.Wrap(err, "slashAmount.Quo")
 	}
 
 	if err := staking.Move(dst, &p.Balance, slashAmount); err != nil {
@@ -443,25 +460,26 @@ func slashPool(dst *staking.Quantity, p *staking.SharePool, keepNumerator, denom
 	return nil
 }
 
-// SlashEscrow slashes the escrow balance and the escrow-but-undergoing-debonding balance of the account,
-// transferring it to the global common pool, returning true iff the amount
-// actually slashed is > 0.
+// SlashEscrow slashes the escrow balance and the escrow-but-undergoing-debonding
+// balance of the account, transferring it to the global common pool, returning
+// true iff the amount actually slashed is > 0.
 //
 // WARNING: This is an internal routine to be used to implement staking policy,
 // and MUST NOT be exposed outside of backend implementations.
-func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey, keepNumerator, denominator *staking.Quantity) (bool, error) {
+func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey, share *staking.Quantity) (bool, error) {
 	commonPool, err := s.CommonPool()
 	if err != nil {
-		return false, errors.Wrap(err, "staking: failed to query common pool for slash ")
+		return false, fmt.Errorf("staking: failed to query common pool for slash: %w", err)
 	}
 
+	// Compute actual token amount based on passed percentage.
 	from := s.Account(fromID)
 
 	var slashed staking.Quantity
-	if err = slashPool(&slashed, &from.Escrow.Active, keepNumerator, denominator); err != nil {
+	if err = slashPool(&slashed, &from.Escrow.Active, share); err != nil {
 		return false, errors.Wrap(err, "slashing active escrow")
 	}
-	if err = slashPool(&slashed, &from.Escrow.Debonding, keepNumerator, denominator); err != nil {
+	if err = slashPool(&slashed, &from.Escrow.Debonding, share); err != nil {
 		return false, errors.Wrap(err, "slashing debonding escrow")
 	}
 

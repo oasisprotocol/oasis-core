@@ -231,9 +231,26 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get runtimes")
 		}
-		nodes, err := regState.Nodes()
+		allNodes, err := regState.Nodes()
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
+		}
+
+		// Filter nodes.
+		var nodes []*node.Node
+		for _, node := range allNodes {
+			var status *registry.NodeStatus
+			status, err = regState.NodeStatus(node.ID)
+			if err != nil {
+				return errors.Wrap(err, "tendermint/scheduler: couldn't get node status")
+			}
+
+			// Nodes which are currently frozen cannot be scheduled.
+			if status.IsFrozen() {
+				continue
+			}
+
+			nodes = append(nodes, node)
 		}
 
 		entityStake, err := newStakeAccumulator(ctx, app.cfg.DebugBypassStake)
@@ -252,7 +269,12 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			}
 		}
 
-		kinds := []scheduler.CommitteeKind{scheduler.KindCompute, scheduler.KindStorage, scheduler.KindTransactionScheduler, scheduler.KindMerge}
+		kinds := []scheduler.CommitteeKind{
+			scheduler.KindCompute,
+			scheduler.KindStorage,
+			scheduler.KindTransactionScheduler,
+			scheduler.KindMerge,
+		}
 		for _, kind := range kinds {
 			if err = app.electAllCommittees(ctx, request, epoch, beacon, entityStake, runtimes, nodes, kind); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("tendermint/scheduler: couldn't elect %s committees", kind))

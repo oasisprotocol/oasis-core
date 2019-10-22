@@ -153,6 +153,23 @@ func (tb *tendermintBackend) ReclaimEscrow(ctx context.Context, signedReclaim *a
 	return nil
 }
 
+func (tb *tendermintBackend) SubmitEvidence(ctx context.Context, evidence api.Evidence) error {
+	if evidence.Kind() != api.EvidenceKindConsensus {
+		return errors.New("staking: unsupported evidence kind")
+	}
+
+	tmEvidence, ok := evidence.Unwrap().(tmtypes.Evidence)
+	if !ok {
+		return errors.New("staking: expected tendermint evidence, got something else")
+	}
+
+	if err := tb.service.BroadcastEvidence(ctx, tmEvidence); err != nil {
+		return errors.Wrap(err, "staking: broadcast evidence failed")
+	}
+
+	return nil
+}
+
 func (tb *tendermintBackend) WatchTransfers() (<-chan *api.TransferEvent, *pubsub.Subscription) {
 	typedCh := make(chan *api.TransferEvent)
 	sub := tb.transferNotifier.Subscribe()

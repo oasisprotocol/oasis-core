@@ -14,8 +14,11 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 )
 
@@ -46,6 +49,12 @@ var (
 			// test runtime 0 from roothash tester
 			publicKeyFromHex("612b31ddd66fc99e41cc9996f4029ea84752785d7af329d4595c4bcf8f5e4215").ToMapKey(): true,
 		},
+		Slashing: map[api.SlashReason]api.Slash{
+			api.SlashDoubleSigning: api.Slash{
+				Share:          QtyFromInt(100_000), // Slash everything.
+				FreezeInterval: registry.FreezeForever,
+			},
+		},
 	}
 
 	testTotalSupply = QtyFromInt(math.MaxInt64)
@@ -59,7 +68,13 @@ var (
 
 // StakingImplementationTests exercises the basic functionality of a
 // staking token backend.
-func StakingImplementationTests(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
+func StakingImplementationTests(
+	t *testing.T,
+	backend api.Backend,
+	timeSource epochtime.SetableBackend,
+	ident *identity.Identity,
+	ent *entity.Entity,
+) {
 	for _, tc := range []struct {
 		n  string
 		fn func(*testing.T, api.Backend, epochtime.SetableBackend)
@@ -73,6 +88,11 @@ func StakingImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 	} {
 		t.Run(tc.n, func(t *testing.T) { tc.fn(t, backend, timeSource) })
 	}
+
+	// Separate test as it requires some arguments that others don't.
+	t.Run("SlashDoubleSigning", func(t *testing.T) {
+		testSlashDoubleSigning(t, backend, timeSource, ident, ent)
+	})
 }
 
 func testInitialEnv(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
@@ -256,14 +276,21 @@ func testBurn(t *testing.T, backend api.Backend, timeSource epochtime.SetableBac
 }
 
 func testEscrow(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
-	testEscrowEx(t, backend, timeSource, SrcID, DestID)
+	testEscrowEx(t, backend, timeSource, SrcID, srcSigner, DestID)
 }
 
 func testSelfEscrow(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
-	testEscrowEx(t, backend, timeSource, SrcID, SrcID)
+	testEscrowEx(t, backend, timeSource, SrcID, srcSigner, SrcID)
 }
 
-func testEscrowEx(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend, srcID signature.PublicKey, dstID signature.PublicKey) {
+func testEscrowEx(
+	t *testing.T,
+	backend api.Backend,
+	timeSource epochtime.SetableBackend,
+	srcID signature.PublicKey,
+	srcSigner signature.Signer,
+	dstID signature.PublicKey,
+) {
 	require := require.New(t)
 
 	srcAcc, err := backend.AccountInfo(context.Background(), srcID, 0)

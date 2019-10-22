@@ -192,6 +192,69 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 	})
 
+	t.Run("NodeUnfreeze", func(t *testing.T) {
+		require := require.New(t)
+
+		entity := entities[0]
+		node := nodes[0][0]
+
+		ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+		defer cancel()
+
+		// Try to unfreeze a node.
+		unfreeze := api.UnfreezeNode{
+			NodeID:    node.Node.ID,
+			Timestamp: uint64(time.Now().Unix()),
+		}
+		signedUnfreeze, err := api.SignUnfreezeNode(entity.Signer, api.RegisterUnfreezeNodeSignatureContext, &unfreeze)
+		require.NoError(err, "SignUnfreezeNode")
+		err = backend.UnfreezeNode(ctx, signedUnfreeze)
+		require.NoError(err, "UnfreezeNode")
+
+		// Try to unfreeze an invalid node (should fail).
+		unfreeze = api.UnfreezeNode{
+			Timestamp: uint64(time.Now().Unix()),
+		}
+		// Generate arbitrary invalid node ID.
+		err = unfreeze.NodeID.UnmarshalHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+		require.NoError(err, "UnmarshalHex")
+		signedUnfreeze, err = api.SignUnfreezeNode(entity.Signer, api.RegisterUnfreezeNodeSignatureContext, &unfreeze)
+		require.NoError(err, "SignUnfreezeNode")
+		err = backend.UnfreezeNode(ctx, signedUnfreeze)
+		require.Error(err, "UnfreezeNode (with invalid node)")
+
+		// Try to unfreeze with an invalid timestamp (should fail).
+		unfreeze = api.UnfreezeNode{
+			NodeID:    node.Node.ID,
+			Timestamp: 0,
+		}
+		signedUnfreeze, err = api.SignUnfreezeNode(entity.Signer, api.RegisterUnfreezeNodeSignatureContext, &unfreeze)
+		require.NoError(err, "SignUnfreezeNode")
+		err = backend.UnfreezeNode(ctx, signedUnfreeze)
+		require.Error(err, "UnfreezeNode (with invalid timestamp)")
+
+		// Try to unfreeze a node using the node signing key (should fail
+		// as unfreeze must be signed by entity signing key).
+		unfreeze = api.UnfreezeNode{
+			NodeID:    node.Node.ID,
+			Timestamp: uint64(time.Now().Unix()),
+		}
+		signedUnfreeze, err = api.SignUnfreezeNode(node.Signer, api.RegisterUnfreezeNodeSignatureContext, &unfreeze)
+		require.NoError(err, "SignUnfreezeNode")
+		err = backend.UnfreezeNode(ctx, signedUnfreeze)
+		require.Error(err, "UnfreezeNode (with invalid signer)")
+
+		// Try to unfreeze a node using an invalid context (should fail).
+		unfreeze = api.UnfreezeNode{
+			NodeID:    node.Node.ID,
+			Timestamp: uint64(time.Now().Unix()),
+		}
+		signedUnfreeze, err = api.SignUnfreezeNode(node.Signer, api.RegisterNodeSignatureContext, &unfreeze)
+		require.NoError(err, "SignUnfreezeNode")
+		err = backend.UnfreezeNode(ctx, signedUnfreeze)
+		require.Error(err, "UnfreezeNode (with invalid context)")
+	})
+
 	t.Run("NodeExpiration", func(t *testing.T) {
 		require := require.New(t)
 

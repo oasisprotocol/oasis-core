@@ -86,6 +86,8 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error
 		return app.deregisterEntity(ctx, state, &tx.TxDeregisterEntity.Timestamp)
 	} else if tx.TxRegisterNode != nil {
 		return app.registerNode(ctx, state, &tx.TxRegisterNode.Node)
+	} else if tx.TxUnfreezeNode != nil {
+		return app.unfreezeNode(ctx, state, &tx.TxUnfreezeNode.UnfreezeNode)
 	} else if tx.TxRegisterRuntime != nil {
 		if !app.cfg.DebugAllowRuntimeRegistration {
 			return registry.ErrForbidden
@@ -289,7 +291,7 @@ func (app *registryApplication) registerNode(
 	}
 
 	// Ensure node is not expired.
-	epoch, err := app.timeSource.GetEpoch(context.Background(), app.state.BlockHeight())
+	epoch, err := app.timeSource.GetEpoch(context.Background(), ctx.BlockHeight())
 	if err != nil {
 		return err
 	}
@@ -309,6 +311,13 @@ func (app *registryApplication) registerNode(
 					"entity", newNode.EntityID,
 				)
 				return registry.ErrBadEntityForNode
+			}
+
+			if err = state.SetNodeStatus(newNode.ID, &registry.NodeStatus{}); err != nil {
+				app.logger.Error("RegisterNode: failed to set node status",
+					"err", err,
+				)
+				return registry.ErrInvalidArgument
 			}
 		} else {
 			app.logger.Error("RegisterNode: failed to register node",
@@ -347,6 +356,77 @@ func (app *registryApplication) registerNode(
 		)
 
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeRegistered, cbor.Marshal(newNode)))
+	}
+
+	return nil
+}
+
+func (app *registryApplication) unfreezeNode(
+	ctx *abci.Context,
+	state *registryState.MutableState,
+	sigUnfreeze *registry.SignedUnfreezeNode,
+) error {
+	var unfreeze registry.UnfreezeNode
+	if err := sigUnfreeze.Open(registry.RegisterUnfreezeNodeSignatureContext, &unfreeze); err != nil {
+		return err
+	}
+
+	// Verify timestamp.
+	if err := registry.VerifyTimestamp(unfreeze.Timestamp, uint64(ctx.Now().Unix())); err != nil {
+		app.logger.Error("UnfreezeNode: INVALID TIMESTAMP",
+			"unfreeze_timestamp", unfreeze.Timestamp,
+			"now", uint64(ctx.Now().Unix()),
+		)
+		return err
+	}
+
+	// Fetch node descriptor.
+	node, err := state.Node(unfreeze.NodeID)
+	if err != nil {
+		app.logger.Error("UnfreezeNode: failed to fetch node",
+			"err", err,
+			"node_id", unfreeze.NodeID,
+			"entity_id", sigUnfreeze.Signature.PublicKey,
+		)
+		return err
+	}
+	// Make sure that the unfreeze request was signed by the owning entity.
+	if !sigUnfreeze.Signature.PublicKey.Equal(node.EntityID) {
+		return registry.ErrBadEntityForNode
+	}
+
+	// Fetch node status.
+	status, err := state.NodeStatus(unfreeze.NodeID)
+	if err != nil {
+		app.logger.Error("UnfreezeNode: failed to fetch node status",
+			"err", err,
+			"node_id", unfreeze.NodeID,
+			"entity_id", node.EntityID,
+		)
+		return err
+	}
+
+	// Ensure if we can actually unfreeze.
+	epoch, err := app.timeSource.GetEpoch(context.Background(), ctx.BlockHeight())
+	if err != nil {
+		return err
+	}
+	if status.FreezeEndTime > epoch {
+		return registry.ErrNodeCannotBeUnfrozen
+	}
+
+	// Reset frozen status.
+	status.Unfreeze()
+	if err = state.SetNodeStatus(node.ID, status); err != nil {
+		return err
+	}
+
+	if !ctx.IsCheckOnly() {
+		app.logger.Debug("UnfreezeNode: unfrozen",
+			"node_id", node.ID,
+		)
+
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeUnfrozen, cbor.Marshal(node.ID)))
 	}
 
 	return nil

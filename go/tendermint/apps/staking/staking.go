@@ -7,6 +7,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
+	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -58,6 +59,21 @@ func (app *stakingApplication) SetOption(types.RequestSetOption) types.ResponseS
 }
 
 func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
+	// Iterate over any submitted evidence of a validator misbehaving. Note that
+	// the actual evidence has already been verified by Tendermint to be valid.
+	for _, evidence := range request.ByzantineValidators {
+		switch evidence.Type {
+		case tmtypes.ABCIEvidenceTypeDuplicateVote:
+			if err := app.onEvidenceDoubleSign(ctx, evidence.Validator.Address, evidence.Height, evidence.Time, evidence.Validator.Power); err != nil {
+				return err
+			}
+		default:
+			app.logger.Warn("ignoring unknown evidence type",
+				"evidence_type", evidence.Type,
+			)
+		}
+	}
+
 	return nil
 }
 
@@ -405,7 +421,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 		)
 		return err
 	}
-	epoch, err := app.timeSource.GetEpoch(context.Background(), app.state.BlockHeight())
+	epoch, err := app.timeSource.GetEpoch(context.Background(), ctx.BlockHeight())
 	if err != nil {
 		return err
 	}
