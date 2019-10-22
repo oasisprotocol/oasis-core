@@ -437,8 +437,7 @@ func (g *Group) IsPeerAuthorized(peerID signature.PublicKey) bool {
 
 	// If we are in the merge committee, we accept messages from any compute committee member.
 	if g.activeEpoch.mergeCommittee.Role != scheduler.Invalid {
-		_, ok := g.activeEpoch.computeCommitteesByPeer[peerID.ToMapKey()]
-		authorized = authorized || ok
+		authorized = authorized || g.activeEpoch.computeCommitteesByPeer[peerID.ToMapKey()]
 	}
 
 	return authorized

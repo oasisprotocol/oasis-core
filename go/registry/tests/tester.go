@@ -118,8 +118,11 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 
 		for _, vec := range nodes {
 			for _, v := range vec {
-				err := backend.RegisterNode(context.Background(), v.SignedInvalidRegistration1)
-				require.Error(err, "register committee node without P2P addresses")
+				var err error
+				if v.Node.Roles&node.RoleComputeWorker != 0 {
+					err = backend.RegisterNode(context.Background(), v.SignedInvalidRegistration1)
+					require.Error(err, "register committee node without P2P addresses")
+				}
 
 				err = backend.RegisterNode(context.Background(), v.SignedInvalidRegistration2)
 				require.Error(err, "register committee node without committee addresses")

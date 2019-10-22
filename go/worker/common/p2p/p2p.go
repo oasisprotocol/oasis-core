@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core"
 	"github.com/libp2p/go-libp2p-core/helpers"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/multiformats/go-multiaddr"
@@ -318,9 +319,45 @@ func (p *P2P) handleStream(rawStream core.Stream) {
 }
 
 func (p *P2P) handleConnection(conn core.Conn) {
+	if conn.Stat().Direction != network.DirInbound {
+		return
+	}
+
+	var allowed bool
+	defer func() {
+		if !allowed {
+			// Close connection if not allowed.
+			p.logger.Error("closing connection from unauthorized peer",
+				"peer_id", conn.RemotePeer(),
+			)
+
+			_ = conn.Close()
+		}
+	}()
+
 	p.logger.Debug("new connection from peer",
 		"peer_id", conn.RemotePeer(),
 	)
+
+	id, err := peerIDToPublicKey(conn.RemotePeer())
+	if err != nil {
+		p.logger.Error("error while extracting public key from peer ID",
+			"err", err,
+			"peer_id", conn.RemotePeer(),
+		)
+		return
+	}
+
+	// Make sure that connection is allowed by at least one handler.
+	p.RLock()
+	defer p.RUnlock()
+
+	for _, handler := range p.handlers {
+		if handler.IsPeerAuthorized(id) {
+			allowed = true
+			return
+		}
+	}
 }
 
 // New creates a new P2P node.
