@@ -22,6 +22,7 @@ type NetworkFixture struct {
 	Keymanagers    []KeymanagerFixture    `json:"keymanagers,omitempty"`
 	StorageWorkers []StorageWorkerFixture `json:"storage_workers,omitempty"`
 	ComputeWorkers []ComputeWorkerFixture `json:"compute_workers,omitempty"`
+	Sentries       []SentryFixture        `json:"sentries,omitempty"`
 	Clients        []ClientFixture        `json:"clients,omitempty"`
 	ByzantineNodes []ByzantineFixture     `json:"byzantine_nodes,omitempty"`
 }
@@ -50,6 +51,13 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 	// Provision runtimes.
 	for _, fx := range f.Runtimes {
 		if _, err = fx.Create(f, net); err != nil {
+			return nil, err
+		}
+	}
+
+	// Provision the sentry nodes.
+	for _, fx := range f.Sentries {
+		if _, err = fx.Create(net); err != nil {
 			return nil, err
 		}
 	}
@@ -112,11 +120,17 @@ type ValidatorFixture struct {
 	Entity int `json:"entity"`
 
 	MinGasPrice uint64 `json:"min_gas_price"`
+
+	Sentries []int `json:"sentries,omitempty"`
 }
 
 // Create instantiates the validator described by the fixture.
 func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 	entity, err := resolveEntity(net, f.Entity)
+	if err != nil {
+		return nil, err
+	}
+	sentries, err := resolveSentries(net, f.Sentries)
 	if err != nil {
 		return nil, err
 	}
@@ -127,6 +141,7 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 		},
 		Entity:      entity,
 		MinGasPrice: f.MinGasPrice,
+		Sentries:    sentries,
 	})
 }
 
@@ -254,6 +269,18 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 	})
 }
 
+// SentryFixture is a sentry node fixture.
+type SentryFixture struct {
+	Validators []int `json:"validators"`
+}
+
+// Create instantiates the client node described by the fixture.
+func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
+	return net.NewSentry(&SentryCfg{
+		ValidatorIndices: f.Validators,
+	})
+}
+
 // ClientFixture is a client node fixture.
 type ClientFixture struct {
 }
@@ -292,6 +319,18 @@ func resolveEntity(net *Network, index int) (*Entity, error) {
 	return entities[index], nil
 }
 
+func resolveValidators(net *Network, indices []int) ([]*Validator, error) {
+	allValidators := net.Validators()
+	var validators []*Validator
+	for _, index := range indices {
+		if index < 0 || index >= len(allValidators) {
+			return nil, fmt.Errorf("invalid validator index: %d", index)
+		}
+		validators = append(validators, allValidators[index])
+	}
+	return validators, nil
+}
+
 func resolveRuntime(net *Network, index int) (*Runtime, error) {
 	runtimes := net.Runtimes()
 	if index < 0 || index >= len(runtimes) {
@@ -313,4 +352,16 @@ func resolveRuntimeOfKind(net *Network, index int, kind registry.RuntimeKind) (*
 		)
 	}
 	return runtime, nil
+}
+
+func resolveSentries(net *Network, indices []int) ([]*Sentry, error) {
+	allSentries := net.Sentries()
+	var sentries []*Sentry
+	for _, index := range indices {
+		if index < 0 || index >= len(allSentries) {
+			return nil, fmt.Errorf("invalid sentry index: %d", index)
+		}
+		sentries = append(sentries, allSentries[index])
+	}
+	return sentries, nil
 }

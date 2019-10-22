@@ -121,6 +121,7 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 			oasis.ComputeWorkerFixture{Entity: 1},
 			oasis.ComputeWorkerFixture{Entity: 1},
 		},
+		Sentries: []oasis.SentryFixture{},
 		Clients: []oasis.ClientFixture{
 			oasis.ClientFixture{},
 		},

@@ -2,6 +2,7 @@ package oasis
 
 import (
 	"encoding/hex"
+	"fmt"
 	"path/filepath"
 	"strconv"
 
@@ -285,6 +286,35 @@ func (args *argBuilder) iasSPID(spid []byte) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--ias.spid", hex.EncodeToString(spid),
 	}...)
+	return args
+}
+
+func (args *argBuilder) addSentries(sentries []*Sentry) *argBuilder {
+	var addrs, certFiles []string
+	for _, sentry := range sentries {
+		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", sentry.controlPort))
+		certFiles = append(certFiles, sentry.TLSCertPath())
+	}
+	args = args.workerCommonSentryAddresses(addrs)
+	args = args.workerCommonSentryCertFiles(certFiles)
+	return args
+}
+
+func (args *argBuilder) addSentriesAsPersistentPeers(sentries []*Sentry) *argBuilder {
+	var peers []string
+	for _, sentry := range sentries {
+		peers = append(peers, fmt.Sprintf("%s@127.0.0.1:%d", sentry.tmAddress, sentry.consensusPort))
+	}
+	args = args.tendermintPersistentPeer(peers)
+	return args
+}
+
+func (args *argBuilder) addValidatorsAsPrivatePeers(validators []*Validator) *argBuilder {
+	var peers []string
+	for _, val := range validators {
+		peers = append(peers, fmt.Sprintf("%s@127.0.0.1:%d", val.tmAddress, val.consensusPort))
+	}
+	args = args.tendermintPrivatePeer(peers)
 	return args
 }
 
