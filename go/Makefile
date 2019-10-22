@@ -1,6 +1,16 @@
 SHELL = /bin/bash
 OASIS_GO ?= go
 
+# The following flags enable additional behavior for deterministic builds.
+#
+# * -trimpath as of Go 1.13 will strip all host dependent filesystem paths
+#   from binaries.
+#
+# * -ldflags=-buildid= will set the `.note.go.buildid` section to empty,
+#   to work around https://github.com/golang/go/issues/33772.  Once we
+#   migrate to a version of Go that has the fix, it can be removed.
+GOFLAGS ?= -trimpath -ldflags=-buildid= -v
+
 all: generate build
 
 # Generate required files.
@@ -14,11 +24,11 @@ generate:
 # Build all the things.
 build: generate
 	@echo "Building Oasis node"
-	@env -u GOPATH $(OASIS_GO) build -v -o ./oasis-node/oasis-node ./oasis-node
+	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) -o ./oasis-node/oasis-node ./oasis-node
 	@echo "Building Oasis test harness"
-	@env -u GOPATH $(OASIS_GO) build -v -o ./oasis-test-runner/oasis-test-runner ./oasis-test-runner
+	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) -o ./oasis-test-runner/oasis-test-runner ./oasis-test-runner
 	@echo "Building Oasis local network runner"
-	@env -u GOPATH $(OASIS_GO) build -v -o ./oasis-net-runner/oasis-net-runner ./oasis-net-runner
+	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) -o ./oasis-net-runner/oasis-net-runner ./oasis-net-runner
 
 # Run go fmt.
 fmt:
@@ -34,7 +44,7 @@ test: generate
 
 # Urkel interoperability test helpers.
 urkel-test-helpers: generate
-	@env -u GOPATH $(OASIS_GO) build -v -o ./storage/mkvs/urkel/interop/urkel_test_helpers ./storage/mkvs/urkel/interop
+	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) -o ./storage/mkvs/urkel/interop/urkel_test_helpers ./storage/mkvs/urkel/interop
 
 # Clean.
 clean:
