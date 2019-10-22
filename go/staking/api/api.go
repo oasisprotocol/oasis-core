@@ -501,6 +501,14 @@ type DebondingDelegation struct {
 	DebondEndTime epochtime.EpochTime `json:"debond_end"`
 }
 
+// RewardStep is one of the time periods in the reward schedule.
+type RewardStep struct {
+	Until       epochtime.EpochTime `json:"until"`
+	Interval    epochtime.EpochTime `json:"interval"`
+	Numerator   Quantity            `json:"numerator"`
+	Denominator Quantity            `json:"denominator"`
+}
+
 // Genesis is the initial ledger balances at genesis for use in the genesis
 // block and test cases.
 type Genesis struct {
@@ -519,6 +527,7 @@ type Genesis struct {
 type ConsensusParameters struct {
 	Thresholds              map[ThresholdKind]Quantity `json:"thresholds,omitempty"`
 	DebondingInterval       epochtime.EpochTime        `json:"debonding_interval,omitempty"`
+	RewardSchedule          []RewardStep               `json:"reward_schedule,omitempty"`
 	AcceptableTransferPeers map[signature.MapKey]bool  `json:"acceptable_transfer_peers,omitempty"`
 	Slashing                map[SlashReason]Slash      `json:"slashing,omitempty"`
 }
