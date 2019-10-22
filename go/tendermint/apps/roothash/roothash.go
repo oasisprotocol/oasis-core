@@ -24,7 +24,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
-	"github.com/oasislabs/oasis-core/go/tendermint/api"
 	registryapp "github.com/oasislabs/oasis-core/go/tendermint/apps/registry"
 	schedulerapp "github.com/oasislabs/oasis-core/go/tendermint/apps/scheduler"
 	stakingapp "github.com/oasislabs/oasis-core/go/tendermint/apps/staking"
@@ -80,13 +79,8 @@ func (app *rootHashApplication) Dependencies() []string {
 	return []string{schedulerapp.AppName, stakingapp.AppName}
 }
 
-func (app *rootHashApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
+func (app *rootHashApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
-
-	// Register query handlers.
-	queryRouter.AddRoute(QueryGetLatestBlock, api.QueryGetByIDRequest{}, app.queryGetLatestBlock)
-	queryRouter.AddRoute(QueryGetGenesisBlock, api.QueryGetByIDRequest{}, app.queryGetGenesisBlock)
-	queryRouter.AddRoute(QueryGenesis, nil, app.queryGenesis)
 }
 
 func (app *rootHashApplication) OnCleanup() {
@@ -98,54 +92,6 @@ func (app *rootHashApplication) SetOption(request types.RequestSetOption) types.
 
 func (app *rootHashApplication) GetState(height int64) (interface{}, error) {
 	return newImmutableState(app.state, height)
-}
-
-func (app *rootHashApplication) queryGetLatestBlock(s interface{}, r interface{}) ([]byte, error) {
-	request := r.(*api.QueryGetByIDRequest)
-	state := s.(*immutableState)
-
-	runtime, err := state.getRuntimeState(request.ID)
-	if err != nil {
-		return nil, err
-	}
-	if runtime == nil {
-		return nil, errNoSuchRuntime
-	}
-
-	block := runtime.CurrentBlock.MarshalCBOR()
-
-	return block, nil
-}
-
-func (app *rootHashApplication) queryGetGenesisBlock(s interface{}, r interface{}) ([]byte, error) {
-	request := r.(*api.QueryGetByIDRequest)
-	state := s.(*immutableState)
-
-	runtime, err := state.getRuntimeState(request.ID)
-	if err != nil {
-		return nil, err
-	}
-	if runtime == nil {
-		return nil, errNoSuchRuntime
-	}
-
-	block := runtime.GenesisBlock.MarshalCBOR()
-
-	return block, nil
-}
-
-func (app *rootHashApplication) queryGenesis(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	runtimes := state.getRuntimes()
-
-	// Get per-runtime blocks.
-	blocks := make(map[signature.MapKey]*block.Block)
-	for _, rt := range runtimes {
-		blocks[rt.Runtime.ID.ToMapKey()] = rt.CurrentBlock
-	}
-
-	gen := roothash.Genesis{Blocks: blocks}
-	return cbor.Marshal(gen), nil
 }
 
 func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {

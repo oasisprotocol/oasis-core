@@ -62,15 +62,15 @@ type Backend interface {
 	Info() Info
 
 	// GetGenesisBlock returns the genesis block.
-	GetGenesisBlock(context.Context, signature.PublicKey) (*block.Block, error)
+	GetGenesisBlock(context.Context, signature.PublicKey, int64) (*block.Block, error)
 
 	// GetLatestBlock returns the latest block.
 	//
 	// The metadata contained in this block can be further used to get
 	// the latest state from the storage backend.
-	GetLatestBlock(context.Context, signature.PublicKey) (*block.Block, error)
+	GetLatestBlock(context.Context, signature.PublicKey, int64) (*block.Block, error)
 
-	// GetBlock returns the block at a specific height.
+	// GetBlock returns the block at a specific round.
 	GetBlock(context.Context, signature.PublicKey, uint64) (*block.Block, error)
 
 	// WatchBlocks returns a channel that produces a stream of

@@ -1,7 +1,6 @@
 package registry
 
 import (
-	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -36,11 +35,6 @@ var (
 	//
 	// Value is key manager operator public key.
 	keyManagerOperatorKeyFmt = keyformat.New(0x14)
-
-	// errEntityNotFound is the error returned when an entity is not found.
-	errEntityNotFound = errors.New("registry state: entity not found")
-	// errNodeNotFound is the error returned when node is not found.
-	errNodeNotFound = errors.New("registry state: node not found")
 )
 
 type immutableState struct {
@@ -55,7 +49,7 @@ func (s *immutableState) getSignedEntityRaw(id signature.PublicKey) ([]byte, err
 func (s *immutableState) getEntity(id signature.PublicKey) (*entity.Entity, error) {
 	signedEntityRaw, err := s.getSignedEntityRaw(id)
 	if err != nil || signedEntityRaw == nil {
-		return nil, errEntityNotFound
+		return nil, registry.ErrNoSuchEntity
 	}
 
 	var signedEntity entity.SignedEntity
@@ -98,15 +92,6 @@ func (s *immutableState) getEntities() ([]*entity.Entity, error) {
 	return entities, nil
 }
 
-func (s *immutableState) getEntitiesRaw() ([]byte, error) {
-	entities, err := s.getEntities()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(entities), nil
-}
-
 func (s *immutableState) getSignedEntities() ([]*entity.SignedEntity, error) {
 	var entities []*entity.SignedEntity
 	s.Snapshot.IterateRange(
@@ -143,7 +128,7 @@ func (s *immutableState) GetNode(id signature.PublicKey) (*node.Node, error) {
 		return nil, err
 	}
 	if signedNodeRaw == nil {
-		return nil, errNodeNotFound
+		return nil, registry.ErrNoSuchNode
 	}
 
 	var signedNode node.SignedNode
@@ -184,15 +169,6 @@ func (s *immutableState) GetNodes() ([]*node.Node, error) {
 	)
 
 	return nodes, nil
-}
-
-func (s *immutableState) getNodesRaw() ([]byte, error) {
-	nodes, err := s.GetNodes()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(nodes), nil
 }
 
 func (s *immutableState) getSignedNodes() ([]*node.SignedNode, error) {
@@ -271,15 +247,6 @@ func (s *immutableState) GetRuntimes() ([]*registry.Runtime, error) {
 	)
 
 	return runtimes, nil
-}
-
-func (s *immutableState) getRuntimesRaw() ([]byte, error) {
-	runtimes, err := s.GetRuntimes()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(runtimes), nil
 }
 
 func (s *immutableState) getSignedRuntimes() ([]*registry.SignedRuntime, error) {
@@ -383,7 +350,7 @@ func (s *MutableState) createNode(node *node.Node, signedNode *node.SignedNode) 
 	// Ensure that the entity exists.
 	ent, err := s.getSignedEntityRaw(node.EntityID)
 	if ent == nil || err != nil {
-		return errEntityNotFound
+		return registry.ErrNoSuchEntity
 	}
 
 	s.tree.Set(signedNodeKeyFmt.Encode(&node.ID), signedNode.MarshalCBOR())
@@ -401,7 +368,7 @@ func (s *MutableState) createRuntime(rt *registry.Runtime, sigRt *registry.Signe
 	entID := sigRt.Signature.PublicKey
 	ent, err := s.getSignedEntityRaw(entID)
 	if ent == nil || err != nil {
-		return errEntityNotFound
+		return registry.ErrNoSuchEntity
 	}
 
 	s.tree.Set(signedRuntimeKeyFmt.Encode(&rt.ID), sigRt.MarshalCBOR())

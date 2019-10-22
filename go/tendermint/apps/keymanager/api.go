@@ -21,14 +21,3 @@ var (
 	// key manager application.
 	QueryApp = tmapi.QueryForEvent([]byte(AppName), tmapi.TagAppNameValue)
 )
-
-const (
-	// QueryGetStatus is a path for a GetStatus query.
-	QueryGetStatus = AppName + "/status"
-
-	// QueryGetStatuses is a path for a GetStatuses query.
-	QueryGetStatuses = AppName + "/statuses"
-
-	// QueryGenesis is a path for a Genesis query.
-	QueryGenesis = AppName + "/genesis"
-)

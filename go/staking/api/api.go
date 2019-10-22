@@ -74,24 +74,24 @@ type Backend interface {
 	Symbol() string
 
 	// TotalSupply returns the total nmber of tokens.
-	TotalSupply(ctx context.Context) (*Quantity, error)
+	TotalSupply(ctx context.Context, height int64) (*Quantity, error)
 
 	// CommonPool returns the common pool balance.
-	CommonPool(ctx context.Context) (*Quantity, error)
+	CommonPool(ctx context.Context, height int64) (*Quantity, error)
 
 	// Threshold returns the specific staking threshold by kind.
-	Threshold(ctx context.Context, kind ThresholdKind) (*Quantity, error)
+	Threshold(ctx context.Context, kind ThresholdKind, height int64) (*Quantity, error)
 
 	// Accounts returns the IDs of all accounts with a non-zero general
 	// or escrow balance.
-	Accounts(ctx context.Context) ([]signature.PublicKey, error)
+	Accounts(ctx context.Context, height int64) ([]signature.PublicKey, error)
 
 	// AccountInfo returns the account descriptor for the given account.
-	AccountInfo(ctx context.Context, owner signature.PublicKey) (*Account, error)
+	AccountInfo(ctx context.Context, owner signature.PublicKey, height int64) (*Account, error)
 
 	// DebondingDelegations returns the list of debonding delegations for
 	// the given owner (delegator).
-	DebondingDelegations(ctx context.Context, owner signature.PublicKey) (map[signature.MapKey][]*DebondingDelegation, error)
+	DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.MapKey][]*DebondingDelegation, error)
 
 	// Transfer executes a SignedTransfer.
 	Transfer(ctx context.Context, signedXfer *SignedTransfer) error

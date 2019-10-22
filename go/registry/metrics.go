@@ -138,12 +138,12 @@ func (w *metricsWrapper) worker(ctx context.Context) {
 }
 
 func (w *metricsWrapper) updatePeriodicMetrics(ctx context.Context) {
-	nodes, err := w.Backend.GetNodes(ctx)
+	nodes, err := w.Backend.GetNodes(ctx, 0)
 	if err == nil {
 		registryNodes.Set(float64(len(nodes)))
 	}
 
-	entities, err := w.Backend.GetEntities(ctx)
+	entities, err := w.Backend.GetEntities(ctx, 0)
 	if err == nil {
 		registryEntities.Set(float64(len(entities)))
 	}

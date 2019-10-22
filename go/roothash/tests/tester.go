@@ -131,7 +131,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 		t.Fatalf("failed to receive block")
 	}
 
-	blk, err := backend.GetLatestBlock(context.Background(), id)
+	blk, err := backend.GetLatestBlock(context.Background(), id, 0)
 	require.NoError(err, "GetLatestBlock")
 	require.EqualValues(genesisBlock, blk, "retreived block is genesis block")
 
@@ -143,7 +143,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	require.NoError(err, "GetBlock")
 	require.EqualValues(genesisBlock, blk, "retreived block is genesis block")
 
-	blk, err = backend.GetGenesisBlock(context.Background(), id)
+	blk, err = backend.GetGenesisBlock(context.Background(), id, 0)
 	require.NoError(err, "GetGenesisBlock")
 	require.EqualValues(genesisBlock, blk, "retrieved block is genesis block")
 }
@@ -153,7 +153,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 
 	// Before an epoch transition there should just be a genesis block.
 	for _, v := range states {
-		genesisBlock, err := backend.GetLatestBlock(context.Background(), v.rt.Runtime.ID)
+		genesisBlock, err := backend.GetLatestBlock(context.Background(), v.rt.Runtime.ID, 0)
 		require.NoError(err, "GetLatestBlock")
 		require.EqualValues(0, genesisBlock.Header.Round, "genesis block round")
 
@@ -189,7 +189,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	// Check if GetGenesisBlock still returns the correct genesis block.
 	for i := range states {
 		var blk *block.Block
-		blk, err = backend.GetGenesisBlock(context.Background(), states[i].rt.Runtime.ID)
+		blk, err = backend.GetGenesisBlock(context.Background(), states[i].rt.Runtime.ID, 0)
 		require.NoError(err, "GetGenesisBlock")
 		require.EqualValues(0, blk.Header.Round, "retrieved block is genesis block")
 	}
@@ -238,7 +238,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 
 	rt, computeCommittee, mergeCommittee := s.rt, s.computeCommittee, s.mergeCommittee
 
-	child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID)
+	child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID, 0)
 	require.NoError(err, "GetLatestBlock")
 
 	ch, sub, err := backend.WatchBlocks(rt.Runtime.ID)
@@ -400,12 +400,12 @@ func testRoothashMessages(t *testing.T, backend api.Backend, states []*runtimeSt
 	emptyRoot.Empty()
 
 	adjustmentAmount := stakingTests.QtyFromInt(1004)
-	srcAcc, err := stakingBackend.AccountInfo(context.Background(), stakingTests.SrcID)
+	srcAcc, err := stakingBackend.AccountInfo(context.Background(), stakingTests.SrcID, 0)
 	require.NoError(err, "AccountInfo %s", stakingTests.SrcID)
 	srcStartBalance := &srcAcc.General.Balance
 	srcPlusAdjustment := srcStartBalance.Clone()
 	require.NoError(srcPlusAdjustment.Add(&adjustmentAmount), "Quantity Add")
-	destAcc, err := stakingBackend.AccountInfo(context.Background(), stakingTests.DestID)
+	destAcc, err := stakingBackend.AccountInfo(context.Background(), stakingTests.DestID, 0)
 	require.NoError(err, "AccountInfo %s", stakingTests.DestID)
 	destStartBalance := &destAcc.General.Balance
 	require.True(adjustmentAmount.Cmp(destStartBalance) > 0, "adjustment large enough for overdraw")
@@ -537,7 +537,7 @@ func testRoothashMessages(t *testing.T, backend api.Backend, states []*runtimeSt
 		t.Run(testCase.name, func(t *testing.T) {
 			rt, computeCommittee, mergeCommittee := testCase.runtimeState.rt, testCase.runtimeState.computeCommittee, testCase.runtimeState.mergeCommittee
 
-			child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID)
+			child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID, 0)
 			require.NoError(err, "GetLatestBlock")
 			require.NotEqual(testCase.commitStateRoot, child.Header.StateRoot, "trying to commit to a different state root")
 
@@ -643,7 +643,7 @@ func testRoothashMessages(t *testing.T, backend api.Backend, states []*runtimeSt
 					}
 
 					// Ensure that staking balances are correct.
-					acc, err := stakingBackend.AccountInfo(context.Background(), testCase.checkStakingAccount)
+					acc, err := stakingBackend.AccountInfo(context.Background(), testCase.checkStakingAccount, 0)
 					require.NoError(err, "AccountInfo %s", testCase.checkStakingAccount)
 					require.Equal(testCase.checkStakingBalance, &acc.General.Balance, "staking balance matches")
 

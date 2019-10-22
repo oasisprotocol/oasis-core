@@ -572,7 +572,8 @@ func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committee
 	}
 
 	// Fetch current KM node public keys, get their nodes, apply rules.
-	status, err := crw.w.backend.GetStatus(crw.w.ctx, crw.w.runtimeID)
+	height := snapshot.GetGroupVersion()
+	status, err := crw.w.backend.GetStatus(crw.w.ctx, crw.w.runtimeID, height)
 	if err != nil {
 		crw.w.logger.Error("worker/keymanager: unable to get KM status",
 			"runtimeID", crw.w.runtimeID,
@@ -581,7 +582,7 @@ func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committee
 		var kmNodes []*node.Node
 
 		for _, pk := range status.Nodes {
-			n, err := crw.node.Registry.GetNode(crw.w.ctx, pk)
+			n, err := crw.node.Registry.GetNode(crw.w.ctx, pk, height)
 			if err != nil {
 				crw.w.logger.Error("worker/keymanager: unable to get KM node info", "err", err)
 			} else {

@@ -122,12 +122,8 @@ func (app *schedulerApplication) GetState(height int64) (interface{}, error) {
 	return newImmutableState(app.state, height)
 }
 
-func (app *schedulerApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
+func (app *schedulerApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
-
-	// Register query handlers.
-	queryRouter.AddRoute(QueryAllCommittees, nil, app.queryAllCommittees)
-	queryRouter.AddRoute(QueryKindsCommittees, []scheduler.CommitteeKind{}, app.queryKindsCommittees)
 }
 
 func (app *schedulerApplication) OnCleanup() {}
@@ -371,25 +367,6 @@ func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEn
 
 func (app *schedulerApplication) FireTimer(ctx *abci.Context, t *abci.Timer) error {
 	return errors.New("tendermint/scheduler: unexpected timer")
-}
-
-func (app *schedulerApplication) queryAllCommittees(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	committees, err := state.getAllCommittees()
-	if err != nil {
-		return nil, err
-	}
-	return cbor.Marshal(committees), nil
-}
-
-func (app *schedulerApplication) queryKindsCommittees(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	request := *r.(*[]scheduler.CommitteeKind)
-	committees, err := state.getKindsCommittees(request)
-	if err != nil {
-		return nil, err
-	}
-	return cbor.Marshal(committees), nil
 }
 
 func (app *schedulerApplication) isSuitableComputeWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {

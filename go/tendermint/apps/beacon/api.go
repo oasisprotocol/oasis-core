@@ -10,9 +10,6 @@ const (
 	// AppName is the ABCI application name.
 	// Run before the scheduler application.
 	AppName string = "100_beacon"
-
-	// QueryGetBeacon is a path for a Get query.
-	QueryGetBeacon string = AppName + "/beacon"
 )
 
 var (

@@ -4,7 +4,6 @@ package registry
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
@@ -15,7 +14,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
@@ -50,17 +48,8 @@ func (app *registryApplication) Dependencies() []string {
 	return []string{stakingapp.AppName}
 }
 
-func (app *registryApplication) OnRegister(state *abci.ApplicationState, queryRouter abci.QueryRouter) {
+func (app *registryApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
-
-	// Register query handlers.
-	queryRouter.AddRoute(QueryGetEntity, api.QueryGetByIDRequest{}, app.queryGetEntity)
-	queryRouter.AddRoute(QueryGetEntities, nil, app.queryGetEntities)
-	queryRouter.AddRoute(QueryGetNode, api.QueryGetByIDRequest{}, app.queryGetNode)
-	queryRouter.AddRoute(QueryGetNodes, nil, app.queryGetNodes)
-	queryRouter.AddRoute(QueryGetRuntime, api.QueryGetByIDRequest{}, app.queryGetRuntime)
-	queryRouter.AddRoute(QueryGetRuntimes, nil, app.queryGetRuntimes)
-	queryRouter.AddRoute(QueryGenesis, nil, app.queryGenesis)
 }
 
 func (app *registryApplication) OnCleanup() {
@@ -72,170 +61,6 @@ func (app *registryApplication) SetOption(request types.RequestSetOption) types.
 
 func (app *registryApplication) GetState(height int64) (interface{}, error) {
 	return newImmutableState(app.state, height)
-}
-
-func (app *registryApplication) queryGetEntity(s interface{}, r interface{}) ([]byte, error) {
-	request := r.(*api.QueryGetByIDRequest)
-	state := s.(*immutableState)
-
-	signedEntityRaw, err := state.getSignedEntityRaw(request.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	var signedEntity entity.SignedEntity
-	if err = cbor.Unmarshal(signedEntityRaw, &signedEntity); err != nil {
-		return nil, err
-	}
-
-	return signedEntity.Blob, nil
-}
-
-func (app *registryApplication) queryGetEntities(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	return state.getEntitiesRaw()
-}
-
-func (app *registryApplication) queryGetNode(s interface{}, r interface{}) ([]byte, error) {
-	request := r.(*api.QueryGetByIDRequest)
-	state := s.(*immutableState)
-
-	signedNodeRaw, err := state.getSignedNodeRaw(request.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	var signedNode node.SignedNode
-	if err = cbor.Unmarshal(signedNodeRaw, &signedNode); err != nil {
-		return nil, err
-	}
-
-	return signedNode.Blob, nil
-}
-
-func (app *registryApplication) queryGetNodes(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	return state.getNodesRaw()
-}
-
-func (app *registryApplication) queryGetRuntime(s interface{}, r interface{}) ([]byte, error) {
-	request := r.(*api.QueryGetByIDRequest)
-	state := s.(*immutableState)
-
-	signedRuntimeRaw, err := state.getSignedRuntimeRaw(request.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	var signedRuntime registry.SignedRuntime
-	if err = cbor.Unmarshal(signedRuntimeRaw, &signedRuntime); err != nil {
-		return nil, err
-	}
-
-	return signedRuntime.Blob, nil
-}
-
-func (app *registryApplication) queryGetRuntimes(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-	return state.getRuntimesRaw()
-}
-
-func (app *registryApplication) queryGenesis(s interface{}, r interface{}) ([]byte, error) {
-	state := s.(*immutableState)
-
-	// Fetch entities, runtimes, and nodes from state.
-	signedEntities, err := state.getSignedEntities()
-	if err != nil {
-		return nil, err
-	}
-	signedRuntimes, err := state.getSignedRuntimes()
-	if err != nil {
-		return nil, err
-	}
-	signedNodes, err := state.getSignedNodes()
-	if err != nil {
-		return nil, err
-	}
-
-	// We only want to keep the nodes that are validators.
-	validatorNodes := make([]*node.SignedNode, 0)
-	for _, sn := range signedNodes {
-		var n node.Node
-		if err = cbor.Unmarshal(sn.Blob, &n); err != nil {
-			return nil, err
-		}
-
-		if n.HasRoles(node.RoleValidator) {
-			validatorNodes = append(validatorNodes, sn)
-		}
-	}
-
-	gen := registry.Genesis{
-		Entities:           signedEntities,
-		Runtimes:           signedRuntimes,
-		Nodes:              validatorNodes,
-		KeyManagerOperator: state.getKeyManagerOperator(),
-	}
-	return cbor.Marshal(gen), nil
-}
-
-func (app *registryApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
-	st := doc.Registry
-
-	b, _ := json.Marshal(st)
-	app.logger.Debug("InitChain: Genesis state",
-		"state", string(b),
-	)
-
-	state := NewMutableState(ctx.State())
-
-	state.setKeyManagerOperator(st.KeyManagerOperator)
-	app.logger.Debug("InitChain: Registering key manager operator",
-		"id", st.KeyManagerOperator,
-	)
-
-	for _, v := range st.Entities {
-		app.logger.Debug("InitChain: Registering genesis entity",
-			"entity", v.Signature.PublicKey,
-		)
-		if err := app.registerEntity(ctx, state, v); err != nil {
-			app.logger.Error("InitChain: failed to register entity",
-				"err", err,
-				"entity", v,
-			)
-			return errors.Wrap(err, "registry: genesis entity registration failure")
-		}
-	}
-	for _, v := range st.Runtimes {
-		app.logger.Debug("InitChain: Registering genesis runtime",
-			"runtime_owner", v.Signature.PublicKey,
-		)
-		if err := app.registerRuntime(ctx, state, v); err != nil {
-			app.logger.Error("InitChain: failed to register runtime",
-				"err", err,
-				"runtime", v,
-			)
-			return errors.Wrap(err, "registry: genesis runtime registration failure")
-		}
-	}
-	for _, v := range st.Nodes {
-		app.logger.Debug("InitChain: Registering genesis node",
-			"node_owner", v.Signature.PublicKey,
-		)
-		if err := app.registerNode(ctx, state, v); err != nil {
-			app.logger.Error("InitChain: failed to register node",
-				"err", err,
-				"node", v,
-			)
-			return errors.Wrap(err, "registry: genesis node registration failure")
-		}
-	}
-
-	if len(st.Entities) > 0 || len(st.Runtimes) > 0 || len(st.Nodes) > 0 {
-		ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
-	}
-
-	return nil
 }
 
 func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
@@ -483,7 +308,7 @@ func (app *registryApplication) registerNode(
 	// Check if node exists
 	existingNode, err := state.GetNode(newNode.ID)
 	if err != nil {
-		if err == errNodeNotFound {
+		if err == registry.ErrNoSuchNode {
 			// Node doesn't exist. Create node.
 			err = state.createNode(newNode, sigNode)
 			if err != nil {

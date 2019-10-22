@@ -244,7 +244,7 @@ func (c *Client) WatchBlocks(ctx context.Context, runtimeID signature.PublicKey)
 // Pass RoundLatest to get the latest block.
 func (c *Client) GetBlock(ctx context.Context, runtimeID signature.PublicKey, round uint64) (*block.Block, error) {
 	if round == RoundLatest {
-		return c.common.roothash.GetLatestBlock(ctx, runtimeID)
+		return c.common.roothash.GetLatestBlock(ctx, runtimeID, 0)
 	}
 	return c.common.roothash.GetBlock(ctx, runtimeID, round)
 }

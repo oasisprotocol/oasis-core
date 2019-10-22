@@ -37,13 +37,17 @@ message GetSymbolResponse {
 	string symbol = 1;
 }
 
-message GetTotalSupplyRequest {}
+message GetTotalSupplyRequest {
+	int64 height = 1;
+}
 
 message GetTotalSupplyResponse {
 	bytes total_supply = 1;
 }
 
-message GetCommonPoolRequest {}
+message GetCommonPoolRequest {
+	int64 height = 1;
+}
 
 message GetCommonPoolResponse {
 	bytes common_pool = 1;
@@ -57,13 +61,16 @@ message GetThresholdRequest {
 		STORAGE = 3;
 	}
 	ThresholdKind threshold_kind = 1;
+	int64 height = 2;
 }
 
 message GetThresholdResponse {
 	bytes threshold = 1;
 }
 
-message GetAccountsRequest {}
+message GetAccountsRequest {
+	int64 height = 1;
+}
 
 message GetAccountsResponse {
 	repeated bytes ids = 1;
@@ -71,6 +78,7 @@ message GetAccountsResponse {
 
 message GetAccountInfoRequest {
 	bytes id = 1;
+	int64 height = 2;
 }
 
 message GetAccountInfoResponse {

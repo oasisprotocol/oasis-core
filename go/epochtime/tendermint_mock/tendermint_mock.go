@@ -32,6 +32,7 @@ type tendermintMockBackend struct {
 	logger *logging.Logger
 
 	service  service.TendermintService
+	querier  *app.QueryFactory
 	notifier *pubsub.Broker
 
 	lastNotified api.EpochTime
@@ -44,17 +45,13 @@ func (t *tendermintMockBackend) GetBaseEpoch(context.Context) (api.EpochTime, er
 }
 
 func (t *tendermintMockBackend) GetEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
-	response, err := t.service.Query(app.QueryGetEpoch, nil, height)
+	q, err := t.querier.QueryAt(height)
 	if err != nil {
-		return 0, errors.Wrap(err, "epochtime: get block epoch query failed")
+		return api.EpochInvalid, err
 	}
 
-	var data app.QueryGetEpochResponse
-	if err := cbor.Unmarshal(response, &data); err != nil {
-		return 0, errors.Wrap(err, "epochtime: get block epoch malformed response")
-	}
-
-	return data.Epoch, nil
+	epoch, _, err := q.Epoch(ctx)
+	return epoch, err
 }
 
 func (t *tendermintMockBackend) GetEpochBlock(ctx context.Context, epoch api.EpochTime) (int64, error) {
@@ -133,16 +130,21 @@ func (t *tendermintMockBackend) worker(ctx context.Context) {
 	defer t.service.Unsubscribe("epochtime-worker", app.QueryApp) // nolint: errcheck
 
 	// Populate current epoch (if available).
-	response, err := t.service.Query(app.QueryGetEpoch, nil, 0)
+	q, err := t.querier.QueryAt(0)
 	if err == nil {
-		var data app.QueryGetEpochResponse
-		if err := cbor.Unmarshal(response, &data); err != nil {
-			panic("worker: malformed current epoch response")
+		var epoch api.EpochTime
+		var height int64
+		epoch, height, err = q.Epoch(ctx)
+		if err != nil {
+			t.logger.Error("failed to query epoch",
+				"err", err,
+			)
+			return
 		}
 
 		t.Lock()
-		t.epoch = data.Epoch
-		t.currentBlock = data.Height
+		t.epoch = epoch
+		t.currentBlock = height
 		t.notifier.Broadcast(t.epoch)
 		t.Unlock()
 	}
@@ -216,14 +218,15 @@ func (t *tendermintMockBackend) updateCached(height int64, epoch api.EpochTime) 
 // New constructs a new mock tendermint backed epochtime Backend instance.
 func New(ctx context.Context, service service.TendermintService) (api.SetableBackend, error) {
 	// Initialze and register the tendermint service component.
-	app := app.New()
-	if err := service.RegisterApplication(app); err != nil {
+	a := app.New()
+	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
 	r := &tendermintMockBackend{
 		logger:  logging.GetLogger("epochtime/tendermint_mock"),
 		service: service,
+		querier: a.QueryFactory().(*app.QueryFactory),
 	}
 	r.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
 		r.RLock()

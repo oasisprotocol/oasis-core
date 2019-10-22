@@ -128,7 +128,7 @@ func (w *blockWatcher) refreshCommittee(height int64) error {
 		if node.Role != scheduler.Leader {
 			continue
 		}
-		leaderNode, err = w.common.registry.GetNode(w.common.ctx, node.PublicKey)
+		leaderNode, err = w.common.registry.GetNode(w.common.ctx, node.PublicKey, height)
 		if err != nil {
 			return err
 		}

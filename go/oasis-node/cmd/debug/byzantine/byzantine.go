@@ -123,7 +123,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
-	computeCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
 	}
@@ -131,17 +131,17 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("compute honest: compute schedule ok")
-	storageCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindStorage, defaultRuntimeID)
+	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
 	}
-	mergeCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindMerge, defaultRuntimeID)
+	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindMerge, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindMerge, err))
 	}
 
 	logger.Debug("compute honest: connecting to storage committee")
-	hnss, err := storageConnectToCommittee(ht.service, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
+	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
 	if err != nil {
 		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
 	}
@@ -190,7 +190,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
 
-	if err = cbc.publishToCommittee(ht.service, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight); err != nil {
+	if err = cbc.publishToCommittee(ht, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight); err != nil {
 		panic(fmt.Sprintf("compute publish to committee merge worker failed: %+v", err))
 	}
 	logger.Debug("compute honest: commitment sent")
@@ -242,7 +242,7 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
-	computeCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
 	}
@@ -250,17 +250,17 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("compute wrong: compute schedule ok")
-	storageCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindStorage, defaultRuntimeID)
+	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
 	}
-	mergeCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindMerge, defaultRuntimeID)
+	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindMerge, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindMerge, err))
 	}
 
 	logger.Debug("compute honest: connecting to storage committee")
-	hnss, err := storageConnectToCommittee(ht.service, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
+	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
 	if err != nil {
 		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
 	}
@@ -309,7 +309,7 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
 
-	if err = cbc.publishToCommittee(ht.service, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight); err != nil {
+	if err = cbc.publishToCommittee(ht, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight); err != nil {
 		panic(fmt.Sprintf("compute publish to committee merge worker failed: %+v", err))
 	}
 	logger.Debug("compute wrong: commitment sent")
@@ -360,7 +360,7 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
-	computeCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
 	}
@@ -418,7 +418,7 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
-	mergeCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindMerge, defaultRuntimeID)
+	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindMerge, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindMerge, err))
 	}
@@ -426,13 +426,13 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("merge honest: merge schedule ok")
-	storageCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindStorage, defaultRuntimeID)
+	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
 	}
 
 	logger.Debug("merge honest: connecting to storage committee")
-	hnss, err := storageConnectToCommittee(ht.service, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
+	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
 	if err != nil {
 		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
 	}
@@ -440,7 +440,7 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 
 	mbc := newMergeBatchContext()
 
-	if err = mbc.loadCurrentBlock(ht.service, defaultRuntimeID); err != nil {
+	if err = mbc.loadCurrentBlock(ht, defaultRuntimeID); err != nil {
 		panic(fmt.Sprintf("merge load current block failed: %+v", err))
 	}
 
@@ -509,7 +509,7 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
-	mergeCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindMerge, defaultRuntimeID)
+	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindMerge, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindMerge, err))
 	}
@@ -517,13 +517,13 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("merge wrong: merge schedule ok")
-	storageCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindStorage, defaultRuntimeID)
+	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
 	}
 
 	logger.Debug("merge wrong: connecting to storage committee")
-	hnss, err := storageConnectToCommittee(ht.service, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
+	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
 	if err != nil {
 		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
 	}
@@ -531,7 +531,7 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 
 	mbc := newMergeBatchContext()
 
-	if err = mbc.loadCurrentBlock(ht.service, defaultRuntimeID); err != nil {
+	if err = mbc.loadCurrentBlock(ht, defaultRuntimeID); err != nil {
 		panic(fmt.Sprintf("merge load current block failed: %+v", err))
 	}
 
@@ -624,7 +624,7 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
-	mergeCommittee, err := schedulerGetCommittee(ht.service, electionHeight, scheduler.KindMerge, defaultRuntimeID)
+	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindMerge, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindMerge, err))
 	}

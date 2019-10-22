@@ -148,7 +148,7 @@ func (c *Client) worker() {
 	for {
 		select {
 		case st := <-stCh:
-			nl, err := c.registry.GetNodes(context.TODO())
+			nl, err := c.registry.GetNodes(context.TODO(), 0)
 			if err != nil {
 				c.logger.Error("failed to poll node list",
 					"err", err,

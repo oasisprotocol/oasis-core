@@ -288,7 +288,7 @@ func testBeacon(t *testing.T, node *testNode) {
 func testStorage(t *testing.T, node *testNode) {
 	// Determine the current round. This is required so that we can commit into
 	// storage at the next (non-finalized) round.
-	blk, err := node.RootHash.GetLatestBlock(context.Background(), testRuntimeID)
+	blk, err := node.RootHash.GetLatestBlock(context.Background(), testRuntimeID, 0)
 	require.NoError(t, err, "GetLatestBlock")
 
 	storageTests.StorageImplementationTests(t, node.Storage, testNamespace, blk.Header.Round+1)
@@ -363,7 +363,7 @@ func testStorageClient(t *testing.T, node *testNode) {
 
 	// Determine the current round. This is required so that we can commit into
 	// storage at the next (non-finalized) round.
-	blk, err := node.RootHash.GetLatestBlock(ctx, testRuntimeID)
+	blk, err := node.RootHash.GetLatestBlock(ctx, testRuntimeID, 0)
 	require.NoError(t, err, "GetLatestBlock")
 
 	storageTests.StorageImplementationTests(t, debugClient, testNamespace, blk.Header.Round+1)

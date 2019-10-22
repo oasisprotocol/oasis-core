@@ -41,17 +41,6 @@ var (
 	QueryUpdate = api.QueryForEvent(TagUpdate, TagUpdateValue)
 )
 
-const (
-	// QueryGetLatestBlock is a path for GetLatestBlock query.
-	QueryGetLatestBlock = AppName + "/block"
-
-	// QueryGetGenesisBlock is a path for GetGenesisBlock query.
-	QueryGetGenesisBlock = AppName + "/genesis_block"
-
-	// QueryGenesis is a path for Genesis query.
-	QueryGenesis = AppName + "/genesis"
-)
-
 // Tx is a transaction to be accepted by the roothash app.
 type Tx struct {
 	*TxComputeCommit `json:"ComputeCommit,omitempty"`

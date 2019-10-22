@@ -39,29 +39,6 @@ var (
 	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
 )
 
-const (
-	// QueryGetEntity is a path for GetEntity query.
-	QueryGetEntity = AppName + "/entity"
-
-	// QueryGetEntities is a path for GetEntities query.
-	QueryGetEntities = AppName + "/entities"
-
-	// QueryGetNode is a path for GetNode query.
-	QueryGetNode = AppName + "/node"
-
-	// QueryGetNodes is a path for GetNodes query.
-	QueryGetNodes = AppName + "/nodes"
-
-	// QueryGetRuntime is a path for GetRuntime query.
-	QueryGetRuntime = AppName + "/runtime"
-
-	// QueryGetRuntimes is a path for GetRuntimes query.
-	QueryGetRuntimes = AppName + "/runtimes"
-
-	// QueryGenesis is a path for Genesis query.
-	QueryGenesis = AppName + "/genesis"
-)
-
 // Tx is a transaction to be accepted by the registry app.
 type Tx struct {
 	*TxRegisterEntity   `json:"RegisterEntity,omitempty"`

@@ -78,15 +78,6 @@ func (s *immutableState) totalSupply() (*staking.Quantity, error) {
 	return &q, nil
 }
 
-func (s *immutableState) rawTotalSupply() ([]byte, error) {
-	q, err := s.totalSupply()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(q), nil
-}
-
 // CommonPool returns the balance of the global common pool.
 func (s *immutableState) CommonPool() (*staking.Quantity, error) {
 	_, value := s.Snapshot.Get(commonPoolKeyFmt.Encode())
@@ -102,15 +93,6 @@ func (s *immutableState) CommonPool() (*staking.Quantity, error) {
 	return &q, nil
 }
 
-func (s *immutableState) rawCommonPool() ([]byte, error) {
-	q, err := s.CommonPool()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(q), nil
-}
-
 func (s *immutableState) debondingInterval() (uint64, error) {
 	_, value := s.Snapshot.Get(debondingIntervalKeyFmt.Encode())
 	if len(value) != 8 {
@@ -118,15 +100,6 @@ func (s *immutableState) debondingInterval() (uint64, error) {
 	}
 
 	return binary.LittleEndian.Uint64(value), nil
-}
-
-func (s *immutableState) rawDebondingInterval() ([]byte, error) {
-	q, err := s.debondingInterval()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(q), nil
 }
 
 // Thresholds returns the currently configured thresholds if any.
@@ -177,22 +150,8 @@ func (s *immutableState) accounts() ([]signature.PublicKey, error) {
 	return accounts, nil
 }
 
-func (s *immutableState) rawAccounts() ([]byte, error) {
-	accounts, err := s.accounts()
-	if err != nil {
-		return nil, err
-	}
-
-	return cbor.Marshal(accounts), nil
-}
-
-func (s *immutableState) accountRaw(id signature.PublicKey) []byte {
-	_, value := s.Snapshot.Get(accountKeyFmt.Encode(&id))
-	return value
-}
-
 func (s *immutableState) account(id signature.PublicKey) *staking.Account {
-	value := s.accountRaw(id)
+	_, value := s.Snapshot.Get(accountKeyFmt.Encode(&id))
 	if value == nil {
 		return &staking.Account{}
 	}
@@ -251,13 +210,8 @@ func (s *immutableState) delegations() (map[signature.MapKey]map[signature.MapKe
 	return delegations, nil
 }
 
-func (s *immutableState) delegationRaw(delegatorID, escrowID signature.PublicKey) []byte {
-	_, value := s.Snapshot.Get(delegationKeyFmt.Encode(&escrowID, &delegatorID))
-	return value
-}
-
 func (s *immutableState) delegation(delegatorID, escrowID signature.PublicKey) *staking.Delegation {
-	value := s.delegationRaw(delegatorID, escrowID)
+	_, value := s.Snapshot.Get(delegationKeyFmt.Encode(&escrowID, &delegatorID))
 	if value == nil {
 		return &staking.Delegation{}
 	}
