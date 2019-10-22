@@ -102,6 +102,28 @@ func (s *immutableState) debondingInterval() (uint64, error) {
 	return binary.LittleEndian.Uint64(value), nil
 }
 
+func (s *immutableState) acceptableTransferPeers() (map[signature.MapKey]bool, error) {
+	_, value := s.Snapshot.Get(acceptableTransferPeersKeyFmt.Encode())
+	if value == nil {
+		return make(map[signature.MapKey]bool), nil
+	}
+
+	var peers map[signature.MapKey]bool
+	if err := cbor.Unmarshal(value, &peers); err != nil {
+		return nil, err
+	}
+
+	return peers, nil
+}
+
+func (s *immutableState) isAcceptableTransferPeer(runtimeID signature.PublicKey) (bool, error) {
+	peers, err := s.acceptableTransferPeers()
+	if err != nil {
+		return false, err
+	}
+	return peers[runtimeID.ToMapKey()], nil
+}
+
 // Thresholds returns the currently configured thresholds if any.
 func (s *immutableState) Thresholds() (map[staking.ThresholdKind]staking.Quantity, error) {
 	m := make(map[staking.ThresholdKind]staking.Quantity)
@@ -470,19 +492,6 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 	}
 
 	return ret, nil
-}
-
-func (s *MutableState) isAcceptableTransferPeer(runtimeID signature.PublicKey) (bool, error) {
-	_, value := s.Snapshot.Get(acceptableTransferPeersKeyFmt.Encode())
-	if value == nil {
-		return false, nil
-	}
-
-	var peers map[signature.MapKey]bool
-	if err := cbor.Unmarshal(value, &peers); err != nil {
-		return false, err
-	}
-	return peers[runtimeID.ToMapKey()], nil
 }
 
 func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, message *block.RoothashMessage) (error, error) {
