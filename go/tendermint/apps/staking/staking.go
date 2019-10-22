@@ -169,6 +169,12 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		}
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyReclaimEscrow, cbor.Marshal(evt)))
 	}
+
+	// Earned rewards.
+	if err := state.AddRewards(epoch); err != nil {
+		return err
+	}
+
 	return nil
 }
 
