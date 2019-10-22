@@ -13,8 +13,7 @@ import (
 	"os"
 	"sync"
 
-	"golang.org/x/crypto/ed25519"
-
+	"github.com/oasislabs/ed25519"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/pem"
 	"github.com/oasislabs/oasis-core/go/grpc/common"
