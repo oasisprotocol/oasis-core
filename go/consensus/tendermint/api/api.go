@@ -34,6 +34,12 @@ const (
 	CodeNotFound           Code = Code(6)
 )
 
+const (
+	// LogEventPeerExchangeDisable is a log event that indicates that
+	// Tendermint's peer exchange has been disabled.
+	LogEventPeerExchangeDisabled = "tendermint/peer_exchange_disabled"
+)
+
 // ToInt returns an integer representation of the status code.
 func (c Code) ToInt() uint32 {
 	return uint32(c)

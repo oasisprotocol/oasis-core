@@ -791,6 +791,12 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.P2P.AddrBookStrict = !viper.GetBool(CfgDebugP2PAddrBookLenient)
 	tenderConfig.RPC.ListenAddress = ""
 
+	if !tenderConfig.P2P.PexReactor {
+		t.Logger.Info("pex reactor disabled",
+			logging.LogEvent, api.LogEventPeerExchangeDisabled,
+		)
+	}
+
 	tendermintPV, err := crypto.LoadOrGeneratePrivVal(tendermintDataDir, t.consensusSigner)
 	if err != nil {
 		return err
