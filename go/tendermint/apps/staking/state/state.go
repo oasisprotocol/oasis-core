@@ -62,14 +62,18 @@ var (
 	//
 	// Value is empty.
 	debondingQueueKeyFmt = keyformat.New(0x57, uint64(0), &signature.MapKey{}, &signature.MapKey{}, uint64(0))
+	// rewardScheduleKeyFmt is the key format used for the reward schedule.
+	//
+	// Value is a CBOR-serialized slice of staking.RewardStep
+	rewardScheduleKeyFmt = keyformat.New(0x58)
 	// acceptableTransferPeersKeyFmt is the key format used for the acceptable transfer peers set.
 	//
 	// Value is a CBOR-serialized map from acceptable runtime IDs to the boolean true.
-	acceptableTransferPeersKeyFmt = keyformat.New(0x58)
+	acceptableTransferPeersKeyFmt = keyformat.New(0x59)
 	// slashingKeyFmt is the key format used for the slashing table.
 	//
 	// Value is CBOR-serialized map from slash reason to slash descriptor.
-	slashingKeyFmt = keyformat.New(0x59)
+	slashingKeyFmt = keyformat.New(0x5a)
 
 	logger = logging.GetLogger("tendermint/staking")
 )
@@ -114,6 +118,20 @@ func (s *ImmutableState) DebondingInterval() (uint64, error) {
 	}
 
 	return binary.LittleEndian.Uint64(value), nil
+}
+
+func (s *ImmutableState) RewardSchedule() ([]staking.RewardStep, error) {
+	_, value := s.Snapshot.Get(rewardScheduleKeyFmt.Encode())
+	if value == nil {
+		return nil, nil
+	}
+
+	var steps []staking.RewardStep
+	if err := cbor.Unmarshal(value, &steps); err != nil {
+		return nil, err
+	}
+
+	return steps, nil
 }
 
 func (s *ImmutableState) AcceptableTransferPeers() (map[signature.MapKey]bool, error) {
@@ -401,6 +419,10 @@ func (s *MutableState) SetDebondingInterval(interval uint64) {
 	var tmp [8]byte
 	binary.LittleEndian.PutUint64(tmp[:], interval)
 	s.tree.Set(debondingIntervalKeyFmt.Encode(), tmp[:])
+}
+
+func (s *MutableState) SetRewardSchedule(schedule []staking.RewardStep) {
+	s.tree.Set(rewardScheduleKeyFmt.Encode(), cbor.Marshal(schedule))
 }
 
 func (s *MutableState) SetAcceptableTransferPeers(peers map[signature.MapKey]bool) {

@@ -18,6 +18,7 @@ import (
 
 func (app *stakingApplication) initParameters(state *stakingState.MutableState, st *staking.Genesis) {
 	state.SetDebondingInterval(uint64(st.Parameters.DebondingInterval))
+	state.SetRewardSchedule(st.Parameters.RewardSchedule)
 	state.SetAcceptableTransferPeers(st.Parameters.AcceptableTransferPeers)
 	state.SetSlashing(st.Parameters.Slashing)
 }
@@ -305,6 +306,11 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		return nil, err
 	}
 
+	rewardSchedule, err := sq.state.RewardSchedule()
+	if err != nil {
+		return nil, err
+	}
+
 	acceptableTransferPeers, err := sq.state.AcceptableTransferPeers()
 	if err != nil {
 		return nil, err
@@ -338,6 +344,7 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		Parameters: staking.ConsensusParameters{
 			Thresholds:              thresholds,
 			DebondingInterval:       epochtime.EpochTime(debondingInterval),
+			RewardSchedule:          rewardSchedule,
 			AcceptableTransferPeers: acceptableTransferPeers,
 			Slashing:                slashing,
 		},
