@@ -78,6 +78,31 @@ func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
 	return args
 }
 
+func (args *argBuilder) tendermintPersistentPeer(peers []string) *argBuilder {
+	for _, peer := range peers {
+		args.vec = append(args.vec, []string{
+			"--" + tendermint.CfgP2PPersistentPeer, peer,
+		}...)
+	}
+	return args
+}
+
+func (args *argBuilder) tendermintPrivatePeer(peers []string) *argBuilder {
+	for _, peer := range peers {
+		args.vec = append(args.vec, []string{
+			"--" + tendermint.CfgP2PPrivatePeer, peer,
+		}...)
+	}
+	return args
+}
+
+func (args *argBuilder) tendermintDisablePeerExchange() *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + tendermint.CfgP2PDisablePeerExchange,
+	}...)
+	return args
+}
+
 func (args *argBuilder) tendermintSeedMode() *argBuilder {
 	args.vec = append(args.vec, "--"+tendermint.CfgP2PSeedMode)
 	return args
