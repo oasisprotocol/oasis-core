@@ -46,10 +46,6 @@ func (app *stakingApplication) Dependencies() []string {
 	return nil
 }
 
-func (app *stakingApplication) GetState(height int64) (interface{}, error) {
-	return newImmutableState(app.state, height)
-}
-
 func (app *stakingApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
 }

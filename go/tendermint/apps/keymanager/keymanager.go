@@ -45,10 +45,6 @@ func (app *keymanagerApplication) Dependencies() []string {
 	return []string{registryapp.AppName}
 }
 
-func (app *keymanagerApplication) GetState(height int64) (interface{}, error) {
-	return newImmutableState(app.state, height)
-}
-
 func (app *keymanagerApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
 }

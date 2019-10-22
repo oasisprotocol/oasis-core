@@ -91,10 +91,6 @@ func (app *rootHashApplication) SetOption(request types.RequestSetOption) types.
 	return types.ResponseSetOption{}
 }
 
-func (app *rootHashApplication) GetState(height int64) (interface{}, error) {
-	return newImmutableState(app.state, height)
-}
-
 func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.RootHash
 

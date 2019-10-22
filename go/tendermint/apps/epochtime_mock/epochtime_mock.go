@@ -49,10 +49,6 @@ func (app *epochTimeMockApplication) SetOption(request types.RequestSetOption) t
 	return types.ResponseSetOption{}
 }
 
-func (app *epochTimeMockApplication) GetState(height int64) (interface{}, error) {
-	return newImmutableState(app.state, height)
-}
-
 func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	return nil
 }

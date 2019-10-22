@@ -59,10 +59,6 @@ func (app *registryApplication) SetOption(request types.RequestSetOption) types.
 	return types.ResponseSetOption{}
 }
 
-func (app *registryApplication) GetState(height int64) (interface{}, error) {
-	return newImmutableState(app.state, height)
-}
-
 func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// XXX: With PR#1889 this can be a differnet interval.
 	if changed, registryEpoch := app.state.EpochChanged(app.timeSource); changed {
