@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -96,7 +97,7 @@ type NetworkCfg struct {
 	EpochtimeBackend string `json:"epochtime_backend"`
 
 	// EpochtimeTendermintInterval is the tendermint epochtime block interval.
-	EpochtimeTendermintInterval uint `json:"epochtime_tendermint_interval"`
+	EpochtimeTendermintInterval int64 `json:"epochtime_tendermint_interval"`
 
 	// DeterministicIdentities is the deterministic identities flag.
 	DeterministicIdentities bool `json:"deterministic_identities"`
@@ -380,7 +381,6 @@ func (net *Network) startOasisNode(
 	if len(subCmd) == 0 {
 		extraArgs = extraArgs.
 			appendIASProxy(net.iasProxy).
-			registryDebugAllowUnroutableAddresses().
 			tendermintDebugAddrBookLenient()
 	}
 	args := append([]string{}, subCmd...)
@@ -442,6 +442,13 @@ func (net *Network) makeGenesis() error {
 		"genesis", "init",
 		"--genesis.file", net.genesisPath(),
 		"--chain.id", "oasis-test-runner",
+		"--consensus.backend", net.cfg.ConsensusBackend,
+		"--beacon.debug.deterministic", strconv.FormatBool(net.cfg.DeterministicIdentities),
+		"--epochtime.backend", net.cfg.EpochtimeBackend,
+		"--epochtime.tendermint.interval", strconv.FormatInt(net.cfg.EpochtimeTendermintInterval, 10),
+		"--consensus.tendermint.timeout_commit", net.cfg.ConsensusTimeoutCommit.String(),
+		"--worker.txnscheduler.batching.max_batch_size", "1",
+		"--registry.debug.allow_unroutable_addresses", "true",
 	}
 	for _, v := range net.entities {
 		args = append(args, v.toGenesisDescriptorArgs()...)

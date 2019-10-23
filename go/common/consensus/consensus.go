@@ -3,6 +3,8 @@
 package consensus
 
 import (
+	"time"
+
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 )
@@ -26,4 +28,12 @@ type Backend interface {
 	// Note that these hooks block consensus genesis from completing
 	// while they are running.
 	RegisterGenesisHook(func())
+}
+
+// Genesis contains various consensus config flags that should be part of the genesis state.
+type Genesis struct {
+	Backend            string        `json:"backend"`
+	TimeoutCommit      time.Duration `json:"timeout_commit"`
+	SkipTimeoutCommit  bool          `json:"skip_timeout_commit"`
+	EmptyBlockInterval time.Duration `json:"empty_block_interval"`
 }

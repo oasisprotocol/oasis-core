@@ -74,7 +74,17 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothash.Genesis, erro
 		blocks[rt.Runtime.ID.ToMapKey()] = rt.CurrentBlock
 	}
 
-	return &roothash.Genesis{Blocks: blocks}, nil
+	roundTimeout, err := rq.state.RoundTimeout()
+	if err != nil {
+		return nil, err
+	}
+
+	genesis := &roothash.Genesis{
+		Blocks:       blocks,
+		RoundTimeout: roundTimeout,
+	}
+
+	return genesis, nil
 }
 
 func (app *rootHashApplication) QueryFactory() interface{} {

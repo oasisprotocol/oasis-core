@@ -14,10 +14,14 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common/consensus"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	epochtimeTendermint "github.com/oasislabs/oasis-core/go/epochtime/tendermint"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisGrpc "github.com/oasislabs/oasis-core/go/grpc/genesis"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
@@ -27,7 +31,9 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	tendermint "github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 const (
@@ -40,6 +46,37 @@ const (
 	cfgStaking            = "staking"
 	cfgBlockHeight        = "height"
 	cfgChainID            = "chain.id"
+
+	// Registry config flags.
+	cfgRegistryDebugAllowUnroutableAddresses = "registry.debug.allow_unroutable_addresses"
+	cfgRegistryDebugAllowRuntimeRegistration = "registry.debug.allow_runtime_registration"
+	cfgRegistryDebugBypassStake              = "registry.debug.bypass_stake" // nolint: gosec
+
+	// Roothash config flags.
+	cfgRoundTimeout               = "roothash.round_timeout"
+	cfgSchedulerAlgorithm         = "worker.txnscheduler.algorithm"
+	cfgSchedulerBatchFlushTimeout = "worker.txnscheduler.flush_timeout"
+	cfgSchedulerMaxBatchSize      = "worker.txnscheduler.batching.max_batch_size"
+	cfgSchedulerMaxBatchSizeBytes = "worker.txnscheduler.batching.max_batch_size_bytes"
+
+	// Scheduler config flags.
+	cfgSchedulerDebugBypassStake      = "scheduler.debug.bypass_stake" // nolint: gosec
+	cfgSchedulerDebugStaticValidators = "scheduler.debug.static_validators"
+
+	// Beacon config flags.
+	cfgBeaconDebugDeterministic = "beacon.debug.deterministic"
+
+	// EpochTime config flags.
+	cfgEpochTimeBackend            = "epochtime.backend"
+	cfgEpochTimeTendermintInterval = "epochtime.tendermint.interval"
+
+	// Tendermint config flags.
+	cfgConsensusTimeoutCommit      = "consensus.tendermint.timeout_commit"
+	cfgConsensusSkipTimeoutCommit  = "consensus.tendermint.skip_timeout_commit"
+	cfgConsensusEmptyBlockInterval = "consensus.tendermint.empty_block_interval"
+
+	// Consensus backend config flag.
+	cfgConsensusBackend = "consensus.backend"
 
 	// Our 'entity' flag overlaps with the common flag 'entity'.
 	// We bind it to a separate Viper key to disambiguate at runtime.
@@ -102,19 +139,32 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	entities := viper.GetStringSlice(viperEntity)
 	runtimes := viper.GetStringSlice(cfgRuntime)
 	nodes := viper.GetStringSlice(cfgNode)
-	if err := AppendRegistryState(doc, entities, runtimes, nodes, logger); err != nil {
+	config := &registry.Genesis{
+		DebugAllowUnroutableAddresses: viper.GetBool(cfgRegistryDebugAllowUnroutableAddresses),
+		DebugAllowRuntimeRegistration: viper.GetBool(cfgRegistryDebugAllowRuntimeRegistration),
+		DebugBypassStake:              viper.GetBool(cfgRegistryDebugBypassStake),
+	}
+	if err := AppendRegistryState(doc, entities, runtimes, nodes, config, logger); err != nil {
 		logger.Error("failed to parse registry genesis state",
 			"err", err,
 		)
 		return
 	}
 
-	roothash := viper.GetStringSlice(cfgRootHash)
-	if err := AppendRootHashState(doc, roothash, logger); err != nil {
+	rh := viper.GetStringSlice(cfgRootHash)
+	roundTimeout := viper.GetDuration(cfgRoundTimeout)
+	if err := AppendRootHashState(doc, rh, roundTimeout, logger); err != nil {
 		logger.Error("failed to parse roothash genesis state",
 			"err", err,
 		)
 		return
+	}
+
+	doc.RootHash.TransactionScheduler = roothash.TransactionSchedulerGenesis{
+		Algorithm:         viper.GetString(cfgSchedulerAlgorithm),
+		BatchFlushTimeout: viper.GetDuration(cfgSchedulerBatchFlushTimeout),
+		MaxBatchSize:      viper.GetUint64(cfgSchedulerMaxBatchSize),
+		MaxBatchSizeBytes: uint64(viper.GetSizeInBytes(cfgSchedulerMaxBatchSizeBytes)),
 	}
 
 	keymanager := viper.GetStringSlice(cfgKeyManager)
@@ -133,6 +183,27 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	doc.Scheduler = scheduler.Genesis{
+		DebugBypassStake:      viper.GetBool(cfgSchedulerDebugBypassStake),
+		DebugStaticValidators: viper.GetBool(cfgSchedulerDebugStaticValidators),
+	}
+
+	doc.Beacon = beacon.Genesis{
+		DebugDeterministic: viper.GetBool(cfgBeaconDebugDeterministic),
+	}
+
+	doc.EpochTime = epochtime.Genesis{
+		Interval: viper.GetInt64(cfgEpochTimeTendermintInterval),
+		Backend:  viper.GetString(cfgEpochTimeBackend),
+	}
+
+	doc.Consensus = consensus.Genesis{
+		Backend:            viper.GetString(cfgConsensusBackend),
+		TimeoutCommit:      viper.GetDuration(cfgConsensusTimeoutCommit),
+		SkipTimeoutCommit:  viper.GetBool(cfgConsensusSkipTimeoutCommit),
+		EmptyBlockInterval: viper.GetDuration(cfgConsensusEmptyBlockInterval),
+	}
+
 	// TODO: Ensure consistency/sanity.
 
 	b, _ := json.Marshal(doc)
@@ -148,11 +219,14 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 // AppendRegistryState appends the registry genesis state given a vector
 // of entity registrations and runtime registrations.
-func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []string, l *logging.Logger) error {
+func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []string, config *registry.Genesis, l *logging.Logger) error {
 	regSt := registry.Genesis{
-		Entities: make([]*entity.SignedEntity, 0, len(entities)),
-		Runtimes: make([]*registry.SignedRuntime, 0, len(runtimes)),
-		Nodes:    make([]*node.SignedNode, 0, len(nodes)),
+		Entities:                      make([]*entity.SignedEntity, 0, len(entities)),
+		Runtimes:                      make([]*registry.SignedRuntime, 0, len(runtimes)),
+		Nodes:                         make([]*node.SignedNode, 0, len(nodes)),
+		DebugAllowUnroutableAddresses: config.DebugAllowUnroutableAddresses,
+		DebugAllowRuntimeRegistration: config.DebugAllowRuntimeRegistration,
+		DebugBypassStake:              config.DebugBypassStake,
 	}
 
 	entMap := make(map[signature.MapKey]bool)
@@ -303,10 +377,11 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 }
 
 // AppendRootHashState appends the roothash genesis state given a vector
-// of exported roothash blocks.
-func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Logger) error {
+// of exported roothash blocks and the round timeout.
+func AppendRootHashState(doc *genesis.Document, exports []string, roundTimeout time.Duration, l *logging.Logger) error {
 	rootSt := roothash.Genesis{
-		Blocks: make(map[signature.MapKey]*block.Block),
+		Blocks:       make(map[signature.MapKey]*block.Block),
+		RoundTimeout: roundTimeout,
 	}
 
 	for _, v := range exports {
@@ -522,10 +597,41 @@ func init() {
 	initGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
 	initGenesisFlags.String(cfgKeyManagerOperator, "", "path to key manager operator entity registration file")
 	initGenesisFlags.String(cfgChainID, "", "genesis chain id")
+
+	// Registry config flags.
+	initGenesisFlags.Bool(cfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
+	initGenesisFlags.Bool(cfgRegistryDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
+	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
+
+	// Roothash config flags.
+	initGenesisFlags.Duration(cfgRoundTimeout, 10*time.Second, "Root hash round timeout")
+	initGenesisFlags.String(cfgSchedulerAlgorithm, "batching", "Transaction scheduling algorithm")
+	initGenesisFlags.Duration(cfgSchedulerBatchFlushTimeout, 1*time.Second, "Maximum amount of time to wait for a scheduled batch")
+	initGenesisFlags.Uint64(cfgSchedulerMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
+	initGenesisFlags.String(cfgSchedulerMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
+
+	// Scheduler config flags.
+	initGenesisFlags.Bool(cfgSchedulerDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
+	initGenesisFlags.Bool(cfgSchedulerDebugStaticValidators, false, "bypass all validator elections (UNSAFE)")
+
+	// Beacon config flags.
+	initGenesisFlags.Bool(cfgBeaconDebugDeterministic, false, "enable deterministic beacon output (UNSAFE)")
+
+	// EpochTime config flags.
+	initGenesisFlags.String(cfgEpochTimeBackend, epochtimeTendermint.BackendName, "Epoch time backend")
+	initGenesisFlags.Int64(cfgEpochTimeTendermintInterval, 86400, "Epoch interval (in blocks)")
+
+	// Tendermint config flags.
+	initGenesisFlags.Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
+	initGenesisFlags.Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
+	initGenesisFlags.Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
+
+	// Consensus backend flag.
+	initGenesisFlags.String(cfgConsensusBackend, tendermint.BackendName, "consensus backend")
+
 	_ = viper.BindPFlags(initGenesisFlags)
 	initGenesisFlags.StringSlice(cfgEntity, nil, "path to entity registration file")
 	_ = viper.BindPFlag(viperEntity, initGenesisFlags.Lookup(cfgEntity))
 	initGenesisFlags.AddFlagSet(flags.DebugTestEntityFlags)
-	initGenesisFlags.AddFlagSet(flags.ConsensusBackendFlag)
 	initGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
 }

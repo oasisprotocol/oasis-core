@@ -39,7 +39,6 @@ func (worker *Byzantine) startNode() error {
 	args := newArgBuilder().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
-		tendermintConsensusTimeoutCommit(worker.net.cfg.ConsensusTimeoutCommit).
 		tendermintDebugAddrBookLenient().
 		workerP2pPort(worker.p2pPort).
 		appendSeedNodes(worker.net).

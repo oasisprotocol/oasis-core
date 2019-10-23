@@ -1,6 +1,9 @@
 package state
 
 import (
+	"errors"
+	"time"
+
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -16,6 +19,10 @@ var (
 	//
 	// Value is CBOR-serialized runtime state.
 	runtimeKeyFmt = keyformat.New(0x20, &signature.MapKey{})
+	// roundTimeoutKeyFmt is the key format used for round timeout value.
+	//
+	// Value is CBOR-serialized round timeout.
+	roundTimeoutKeyFmt = keyformat.New(0x21)
 
 	_ cbor.Marshaler   = (*RuntimeState)(nil)
 	_ cbor.Unmarshaler = (*RuntimeState)(nil)
@@ -83,6 +90,17 @@ func (s *ImmutableState) Runtimes() []*RuntimeState {
 	return runtimes
 }
 
+func (s *ImmutableState) RoundTimeout() (time.Duration, error) {
+	_, raw := s.Snapshot.Get(roundTimeoutKeyFmt.Encode())
+	if raw == nil {
+		panic(errors.New("tendermint/roothash: expected round timeout to be present in app state"))
+	}
+
+	var rt time.Duration
+	err := cbor.Unmarshal(raw, &rt)
+	return rt, err
+}
+
 type MutableState struct {
 	*ImmutableState
 
@@ -100,4 +118,8 @@ func NewMutableState(tree *iavl.MutableTree) *MutableState {
 
 func (s *MutableState) SetRuntimeState(state *RuntimeState) {
 	s.tree.Set(runtimeKeyFmt.Encode(&state.Runtime.ID), state.MarshalCBOR())
+}
+
+func (s *MutableState) SetRoundTimeout(rt time.Duration) {
+	s.tree.Set(roundTimeoutKeyFmt.Encode(), cbor.Marshal(rt))
 }

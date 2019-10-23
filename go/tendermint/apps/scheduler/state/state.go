@@ -1,6 +1,8 @@
 package state
 
 import (
+	"errors"
+
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -26,6 +28,8 @@ var (
 	//
 	// Value is CBOR-serialized list of validator public keys.
 	validatorsPendingKeyFmt = keyformat.New(0x62)
+	// genesisKeyFmt is the key format used for genesis.
+	genesisKeyFmt = keyformat.New(0x63)
 
 	logger = logging.GetLogger("tendermint/scheduler")
 )
@@ -126,6 +130,17 @@ func (s *ImmutableState) PendingValidators() ([]signature.PublicKey, error) {
 	return validators, err
 }
 
+func (s *ImmutableState) GetGenesis() (*api.Genesis, error) {
+	_, raw := s.Snapshot.Get(genesisKeyFmt.Encode())
+	if raw == nil {
+		panic(errors.New("tendermint/scheduler: expected genesis to be present in app state"))
+	}
+
+	var genesis api.Genesis
+	err := cbor.Unmarshal(raw, &genesis)
+	return &genesis, err
+}
+
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -160,6 +175,10 @@ func (s *MutableState) PutPendingValidators(validators []signature.PublicKey) {
 		return
 	}
 	s.tree.Set(validatorsPendingKeyFmt.Encode(), cbor.Marshal(validators))
+}
+
+func (s *MutableState) PutGenesis(g *api.Genesis) {
+	s.tree.Set(genesisKeyFmt.Encode(), cbor.Marshal(g))
 }
 
 // NewMutableState creates a new mutable scheduler state wrapper.

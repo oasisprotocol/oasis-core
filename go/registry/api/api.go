@@ -303,7 +303,7 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
-func VerifyRegisterNodeArgs(cfg *Config, logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool, kmOperator signature.PublicKey, regRuntimes []*Runtime) (*node.Node, error) {
+func VerifyRegisterNodeArgs(cfg *Genesis, logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool, kmOperator signature.PublicKey, regRuntimes []*Runtime) (*node.Node, error) {
 	var n node.Node
 	if sigNode == nil {
 		return nil, ErrInvalidArgument
@@ -582,7 +582,7 @@ func VerifyAddress(addr node.Address, allowUnroutable bool) error {
 	return nil
 }
 
-func verifyAddresses(cfg *Config, addrs []node.Address) error {
+func verifyAddresses(cfg *Genesis, addrs []node.Address) error {
 	// Treat having no addresses as invalid, regardless.
 	if len(addrs) == 0 {
 		return ErrInvalidArgument
@@ -832,19 +832,16 @@ type Genesis struct {
 
 	// NodeStatuses is a set of node statuses.
 	NodeStatuses map[signature.MapKey]*NodeStatus `json:"node_statuses,omitempty"`
-}
 
-// Config is the per-backend common configuration.
-type Config struct {
 	// DebugAllowUnroutableAddresses is true iff node registration should
 	// allow unroutable addreses.
-	DebugAllowUnroutableAddresses bool
+	DebugAllowUnroutableAddresses bool `json:"debug_allow_unroutable_addresses"`
 
 	// DebugAllowRuntimeRegistration is true iff runtime registration should be
 	// allowed outside of the genesis block.
-	DebugAllowRuntimeRegistration bool
+	DebugAllowRuntimeRegistration bool `json:"debug_allow_runtime_registration"`
 
 	// DebugBypassStake is true iff the registry should bypass all of the staking
 	// related checks and operations.
-	DebugBypassStake bool
+	DebugBypassStake bool `json:"debug_bypass_stake"`
 }

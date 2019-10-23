@@ -1,4 +1,4 @@
-// Package api implements the scheduler API.
+// Package api defines the committee scheduler API.
 package api
 
 import (
@@ -163,17 +163,20 @@ type Backend interface {
 	// be sent immediately.
 	WatchCommittees() (<-chan *Committee, *pubsub.Subscription)
 
+	// ToGenesis returns the genesis state at specified block height.
+	ToGenesis(context.Context, int64) (*Genesis, error)
+
 	// Cleanup cleans up the scheduler backend.
 	Cleanup()
 }
 
-// Config is the per-backend common configuration.
-type Config struct {
+// Genesis is the committee scheduler genesis state.
+type Genesis struct {
 	// DebugBypassStake is true iff the scheduler should bypass all of
 	// the staking related checks and operations.
-	DebugBypassStake bool
+	DebugBypassStake bool `json:"debug_bypass_stake"`
 
 	// DebugStaticValidators is true iff the scheduler should use
 	// a static validator set instead of electing anything.
-	DebugStaticValidators bool
+	DebugStaticValidators bool `json:"debug_static_validators"`
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/viper"
 
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	commonFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/staking/tendermint"
 	"github.com/oasislabs/oasis-core/go/tendermint/service"
@@ -26,10 +25,12 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new Backend based on the configuration flags.
 func New(ctx context.Context, timeSource epochtime.Backend, tmService service.TendermintService) (api.Backend, error) {
+	// XXX: It looks funny to query the Tendermint service to give us the name
+	// of the consensus backend, but this will be fixed once issue #1879 is done.
 	var (
 		impl    api.Backend
 		err     error
-		backend = commonFlags.ConsensusBackend()
+		backend = tmService.GetGenesis().Consensus.Backend
 	)
 
 	// Pull in the debug genesis state if configured.

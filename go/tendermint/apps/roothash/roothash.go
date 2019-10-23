@@ -97,6 +97,10 @@ func (app *rootHashApplication) SetOption(request types.RequestSetOption) types.
 func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.RootHash
 
+	// Store initial round timeout from the genesis document.
+	rhState := roothashState.NewMutableState(ctx.State())
+	rhState.SetRoundTimeout(st.RoundTimeout)
+
 	// The per-runtime roothash state is done primarily via DeliverTx, but
 	// also needs to be done here since the genesis state can have runtime
 	// registrations.

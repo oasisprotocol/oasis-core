@@ -101,7 +101,7 @@ type schedulerApplication struct {
 
 	timeSource epochtime.Backend
 
-	cfg *scheduler.Config
+	cfg *scheduler.Genesis
 
 	baseEpoch epochtime.EpochTime
 }
@@ -204,6 +204,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 
 	state := schedulerState.NewMutableState(ctx.State())
 	state.PutCurrentValidators(currentValidators)
+	state.PutGenesis(&doc.Scheduler)
 
 	return nil
 }
@@ -669,7 +670,7 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 // New constructs a new scheduler application instance.
 func New(
 	timeSource epochtime.Backend,
-	cfg *scheduler.Config,
+	cfg *scheduler.Genesis,
 ) (abci.Application, error) {
 	baseEpoch, err := timeSource.GetBaseEpoch(context.Background())
 	if err != nil {

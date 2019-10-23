@@ -33,14 +33,26 @@ func (t *tendermintBackend) GetBeacon(ctx context.Context, height int64) ([]byte
 	return q.Beacon(ctx)
 }
 
+func (t *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	q, err := t.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.Genesis(ctx)
+}
+
 // New constructs a new tendermint backed beacon Backend instance.
-func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService, cfg *api.Config) (api.Backend, error) {
+func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
 	if err := service.ForceInitialize(); err != nil {
 		return nil, err
 	}
 
+	// Fetch config from genesis document.
+	cfg := service.GetGenesis().Beacon
+
 	// Initialize and register the tendermint service component.
-	a := app.New(timeSource, cfg)
+	a := app.New(timeSource, &cfg)
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}

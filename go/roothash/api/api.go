@@ -172,4 +172,26 @@ type PrunedBlock struct {
 type Genesis struct {
 	// Blocks is the per-runtime map of genesis blocks.
 	Blocks map[signature.MapKey]*block.Block `json:"blocks,omitempty"`
+
+	// RoundTimeout is the round timeout.
+	RoundTimeout time.Duration `json:"round_timeout"`
+
+	// TransactionScheduler is the transaction scheduler configuration.
+	TransactionScheduler TransactionSchedulerGenesis `json:"txn_scheduler"`
+}
+
+// TransactionSchedulerGenesis is the transaction scheduler genesis state.
+type TransactionSchedulerGenesis struct {
+	// Algorithm is the transaction scheduling algorithm.
+	Algorithm string `json:"algorithm"`
+
+	// If using the "batching" algoritm, how long to wait for a scheduled batch.
+	BatchFlushTimeout time.Duration `json:"batch_flush_timeout"`
+
+	// If using the "batching" algorithm, what is the max size of a batch.
+	MaxBatchSize uint64 `json:"max_batch_size"`
+
+	// If using the "batching" algorithm, what is the max size of a batch
+	// in bytes.
+	MaxBatchSizeBytes uint64 `json:"max_batch_size_bytes"`
 }

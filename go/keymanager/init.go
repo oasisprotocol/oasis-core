@@ -9,7 +9,6 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/tendermint"
-	commonFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
@@ -21,7 +20,9 @@ func New(
 	registry registry.Backend,
 	service service.TendermintService,
 ) (api.Backend, error) {
-	backend := commonFlags.ConsensusBackend()
+	// XXX: It looks funny to query the Tendermint service to give us the name
+	// of the consensus backend, but this will be fixed once issue #1879 is done.
+	backend := service.GetGenesis().Consensus.Backend
 
 	var (
 		impl api.Backend

@@ -12,6 +12,7 @@ import (
 type Query interface {
 	AllCommittees(context.Context) ([]*scheduler.Committee, error)
 	KindsCommittees(context.Context, []scheduler.CommitteeKind) ([]*scheduler.Committee, error)
+	Genesis(context.Context) (*scheduler.Genesis, error)
 }
 
 // QueryFactory is the scheduler query factory.
@@ -44,6 +45,10 @@ func (sq *schedulerQuerier) AllCommittees(ctx context.Context) ([]*scheduler.Com
 
 func (sq *schedulerQuerier) KindsCommittees(ctx context.Context, kinds []scheduler.CommitteeKind) ([]*scheduler.Committee, error) {
 	return sq.state.KindsCommittees(kinds)
+}
+
+func (sq *schedulerQuerier) Genesis(ctx context.Context) (*scheduler.Genesis, error) {
+	return sq.state.GetGenesis()
 }
 
 func (app *schedulerApplication) QueryFactory() interface{} {

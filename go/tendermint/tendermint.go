@@ -49,15 +49,10 @@ const (
 	CfgCoreListenAddress   = "tendermint.core.listen_address"
 	cfgCoreExternalAddress = "tendermint.core.external_address"
 
-	// CfgConsensusTimeoutCommit configures the tendermint timeout commit.
-	CfgConsensusTimeoutCommit      = "tendermint.consensus.timeout_commit"
-	cfgConsensusSkipTimeoutCommit  = "tendermint.consensus.skip_timeout_commit"
-	cfgConsensusEmptyBlockInterval = "tendermint.consensus.empty_block_interval"
-
 	cfgABCIPruneStrategy = "tendermint.abci.prune.strategy"
 	cfgABCIPruneNumKept  = "tendermint.abci.prune.num_kept"
 
-	// CfgP@PSeeds configures the tendermint seed nodes.
+	// CfgP2PSeeds configures the tendermint seed nodes.
 	CfgP2PSeeds = "tendermint.seeds"
 	// CfgP2PSeedMode enables the tendermint seed mode.
 	CfgP2PSeedMode = "tendermint.seed_mode"
@@ -506,10 +501,10 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig := tmconfig.DefaultConfig()
 	_ = viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(tendermintDataDir)
-	timeoutCommit := viper.GetDuration(CfgConsensusTimeoutCommit)
-	emptyBlockInterval := viper.GetDuration(cfgConsensusEmptyBlockInterval)
+	timeoutCommit := t.genesis.Consensus.TimeoutCommit
+	emptyBlockInterval := t.genesis.Consensus.EmptyBlockInterval
 	tenderConfig.Consensus.TimeoutCommit = timeoutCommit
-	tenderConfig.Consensus.SkipTimeoutCommit = viper.GetBool(cfgConsensusSkipTimeoutCommit)
+	tenderConfig.Consensus.SkipTimeoutCommit = t.genesis.Consensus.SkipTimeoutCommit
 	tenderConfig.Consensus.CreateEmptyBlocks = true
 	tenderConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
 	tenderConfig.Instrumentation.Prometheus = true
@@ -647,7 +642,7 @@ func (t *tendermintService) getTendermintGenesis() (*tmtypes.GenesisDoc, error) 
 
 	// HACK: Certain test cases use TimeoutCommit < 1 sec, and care about the
 	// BFT view of time pulling ahead.
-	timeoutCommit := viper.GetDuration(CfgConsensusTimeoutCommit)
+	timeoutCommit := t.genesis.Consensus.TimeoutCommit
 	tmGenDoc.ConsensusParams.Block.TimeIotaMs = int64(timeoutCommit / time.Millisecond)
 
 	return tmGenDoc, nil
@@ -860,9 +855,6 @@ func newLogAdapter(suppressDebug bool) tmlog.Logger {
 func init() {
 	Flags.String(CfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
 	Flags.String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
-	Flags.Duration(CfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
-	Flags.Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
-	Flags.Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
 	Flags.String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 	Flags.Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
 	Flags.Bool(CfgP2PSeedMode, false, "run the tendermint node in seed mode")

@@ -84,7 +84,8 @@ func (t *tendermintMockBackend) ToGenesis(ctx context.Context, height int64) (*a
 	}
 
 	return &api.Genesis{
-		Base: now,
+		Base:    now,
+		Backend: BackendName,
 	}, nil
 }
 

@@ -1,6 +1,8 @@
 package state
 
 import (
+	"errors"
+
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -49,6 +51,18 @@ var (
 	//
 	// Value is CBOR-serialized node status.
 	nodeStatusKeyFmt = keyformat.New(0x16, &signature.MapKey{})
+	// debugAllowUnroutableAddressesKeyFmt is the key format used for the DebugAllowUnroutableAddresses boolean flag.
+	//
+	// Value is CBOR-serialized boolean.
+	debugAllowUnroutableAddressesKeyFmt = keyformat.New(0x17)
+	// debugAllowRuntimeRegistrationKeyFmt is the key format used for the DebugAllowRuntimeRegistration boolean flag.
+	//
+	// Value is CBOR-serialized boolean.
+	debugAllowRuntimeRegistrationKeyFmt = keyformat.New(0x18)
+	// debugBypassStakeKeyFmt is the key format used for the DebugBypassStake boolean flag.
+	//
+	// Value is CBOR-serialized boolean.
+	debugBypassStakeKeyFmt = keyformat.New(0x19)
 )
 
 type ImmutableState struct {
@@ -372,6 +386,48 @@ func (s *ImmutableState) HasEntityNodes(id signature.PublicKey) (bool, error) {
 	return result, nil
 }
 
+func (s *ImmutableState) DebugAllowUnroutableAddresses() bool {
+	_, value := s.Snapshot.Get(debugAllowUnroutableAddressesKeyFmt.Encode())
+	if value == nil {
+		panic(errors.New("tendermint/registry: expected DebugAllowUnroutableAddresses to be present in app state"))
+	}
+
+	var ret bool
+	if err := cbor.Unmarshal(value, &ret); err != nil {
+		panic("tendermint/registry: corrupted DebugAllowUnroutableAddresses: " + err.Error())
+	}
+
+	return ret
+}
+
+func (s *ImmutableState) DebugAllowRuntimeRegistration() bool {
+	_, value := s.Snapshot.Get(debugAllowRuntimeRegistrationKeyFmt.Encode())
+	if value == nil {
+		panic(errors.New("tendermint/registry: expected DebugAllowRuntimeRegistration to be present in app state"))
+	}
+
+	var ret bool
+	if err := cbor.Unmarshal(value, &ret); err != nil {
+		panic("tendermint/registry: corrupted DebugAllowRuntimeRegistration: " + err.Error())
+	}
+
+	return ret
+}
+
+func (s *ImmutableState) DebugBypassStake() bool {
+	_, value := s.Snapshot.Get(debugBypassStakeKeyFmt.Encode())
+	if value == nil {
+		panic(errors.New("tendermint/registry: expected DebugBypassStake to be present in app state"))
+	}
+
+	var ret bool
+	if err := cbor.Unmarshal(value, &ret); err != nil {
+		panic("tendermint/registry: corrupted DebugBypassStake: " + err.Error())
+	}
+
+	return ret
+}
+
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -458,6 +514,21 @@ func (s *MutableState) SetKeyManagerOperator(id signature.PublicKey) {
 func (s *MutableState) SetNodeStatus(id signature.PublicKey, status *registry.NodeStatus) error {
 	s.tree.Set(nodeStatusKeyFmt.Encode(&id), cbor.Marshal(status))
 	return nil
+}
+
+func (s *MutableState) SetDebugAllowUnroutableAddresses(flag bool) {
+	value := cbor.Marshal(flag)
+	s.tree.Set(debugAllowUnroutableAddressesKeyFmt.Encode(), value)
+}
+
+func (s *MutableState) SetDebugAllowRuntimeRegistration(flag bool) {
+	value := cbor.Marshal(flag)
+	s.tree.Set(debugAllowRuntimeRegistrationKeyFmt.Encode(), value)
+}
+
+func (s *MutableState) SetDebugBypassStake(flag bool) {
+	value := cbor.Marshal(flag)
+	s.tree.Set(debugBypassStakeKeyFmt.Encode(), value)
 }
 
 // NewMutableState creates a new mutable registry state wrapper.

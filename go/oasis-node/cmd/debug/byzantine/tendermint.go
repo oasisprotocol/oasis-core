@@ -128,7 +128,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 		}
 		ht.epochtimeMockQuery = epochtimeMockApp.QueryFactory().(*epochtimemockapp.QueryFactory)
 	}
-	if err = ht.service.RegisterApplication(beaconapp.New(timeSource, &beacon.Config{
+	if err = ht.service.RegisterApplication(beaconapp.New(timeSource, &beacon.Genesis{
 		DebugDeterministic: true,
 	})); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication beacon")
@@ -136,7 +136,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	if err = ht.service.RegisterApplication(stakingapp.New(timeSource, nil)); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication staking")
 	}
-	registryApp := registryapp.New(timeSource, &registry.Config{
+	registryApp := registryapp.New(timeSource, &registry.Genesis{
 		DebugAllowUnroutableAddresses: true,
 		DebugAllowRuntimeRegistration: false,
 		DebugBypassStake:              false,
@@ -148,7 +148,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	if err = ht.service.RegisterApplication(keymanagerapp.New(timeSource)); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication keymanager")
 	}
-	schedApp, err := schedulerapp.New(timeSource, &scheduler.Config{
+	schedApp, err := schedulerapp.New(timeSource, &scheduler.Genesis{
 		DebugBypassStake: false,
 	})
 	if err != nil {

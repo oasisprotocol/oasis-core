@@ -36,7 +36,7 @@ type tendermintBackend struct {
 	service service.TendermintService
 	querier *app.QueryFactory
 
-	cfg *api.Config
+	cfg *api.Genesis
 
 	entityNotifier   *pubsub.Broker
 	nodeNotifier     *pubsub.Broker
@@ -381,9 +381,12 @@ func (tb *tendermintBackend) getNodeList(ctx context.Context, height int64) (*ap
 }
 
 // New constructs a new tendermint backed registry Backend instance.
-func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService, cfg *api.Config) (api.Backend, error) {
+func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
+	// Fetch config from genesis document.
+	cfg := service.GetGenesis().Registry
+
 	// Initialize and register the tendermint service component.
-	a := app.New(timeSource, cfg)
+	a := app.New(timeSource, &cfg)
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
@@ -392,7 +395,7 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 		logger:           logging.GetLogger("registry/tendermint"),
 		service:          service,
 		querier:          a.QueryFactory().(*app.QueryFactory),
-		cfg:              cfg,
+		cfg:              &cfg,
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),

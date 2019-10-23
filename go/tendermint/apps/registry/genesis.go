@@ -28,6 +28,10 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 
 	state := registryState.NewMutableState(ctx.State())
 
+	state.SetDebugAllowUnroutableAddresses(st.DebugAllowUnroutableAddresses)
+	state.SetDebugAllowRuntimeRegistration(st.DebugAllowRuntimeRegistration)
+	state.SetDebugBypassStake(st.DebugBypassStake)
+
 	state.SetKeyManagerOperator(st.KeyManagerOperator)
 	app.logger.Debug("InitChain: Registering key manager operator",
 		"id", st.KeyManagerOperator,
@@ -129,11 +133,14 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 	}
 
 	gen := registry.Genesis{
-		Entities:           signedEntities,
-		Runtimes:           signedRuntimes,
-		Nodes:              validatorNodes,
-		KeyManagerOperator: rq.state.KeyManagerOperator(),
-		NodeStatuses:       nodeStatuses,
+		Entities:                      signedEntities,
+		Runtimes:                      signedRuntimes,
+		Nodes:                         validatorNodes,
+		KeyManagerOperator:            rq.state.KeyManagerOperator(),
+		NodeStatuses:                  nodeStatuses,
+		DebugAllowUnroutableAddresses: rq.state.DebugAllowUnroutableAddresses(),
+		DebugAllowRuntimeRegistration: rq.state.DebugAllowRuntimeRegistration(),
+		DebugBypassStake:              rq.state.DebugBypassStake(),
 	}
 	return &gen, nil
 }

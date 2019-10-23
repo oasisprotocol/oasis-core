@@ -34,7 +34,7 @@ type beaconApplication struct {
 
 	timeSource epochtime.Backend
 
-	cfg *beacon.Config
+	cfg *beacon.Genesis
 }
 
 func (app *beaconApplication) Name() string {
@@ -71,6 +71,8 @@ func (app *beaconApplication) InitChain(ctx *abci.Context, req types.RequestInit
 	//
 	// It is not super important for now as the epoch will transition
 	// immediately on the first block under normal circumstances.
+	state := beaconState.NewMutableState(ctx.State())
+	state.PutGenesis(&doc.Beacon)
 	return nil
 }
 
@@ -158,7 +160,7 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) erro
 }
 
 // New constructs a new beacon application instance.
-func New(timeSource epochtime.Backend, cfg *beacon.Config) abci.Application {
+func New(timeSource epochtime.Backend, cfg *beacon.Genesis) abci.Application {
 	app := &beaconApplication{
 		logger:     logging.GetLogger("tendermint/beacon"),
 		timeSource: timeSource,
