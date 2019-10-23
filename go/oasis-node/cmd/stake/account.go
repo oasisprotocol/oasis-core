@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/consensus/gas"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	grpcStaking "github.com/oasislabs/oasis-core/go/grpc/staking"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -21,15 +22,29 @@ import (
 )
 
 const (
-	cfgAccountID = "stake.account.id"
+	// CfgAccountID configures the account address.
+	CfgAccountID = "stake.account.id"
 
-	cfgTxNonce  = "stake.transaction.nonce"
-	cfgTxAmount = "stake.transaction.amount"
-	cfgTxFile   = "stake.transaction.file"
+	// CfgTxNonce configures the nonce.
+	CfgTxNonce = "stake.transaction.nonce"
 
-	cfgTransferDestination = "stake.transfer.destination"
+	// CfgTxAmount configures the amount of tokens.
+	CfgTxAmount = "stake.transaction.amount"
 
-	cfgEscrowAccount = "stake.escrow.account"
+	// CfgTxFeeAmount configures the fee amount in tokens.
+	CfgTxFeeAmount = "stake.transaction.fee.amount"
+
+	// CfgTxFeeGas configures the maximum gas limit.
+	CfgTxFeeGas = "stake.transaction.fee.gas"
+
+	// CfgTxFile configures the filename for the transaction.
+	CfgTxFile = "stake.transaction.file"
+
+	// CfgTransferDestination configures the transfer destination address.
+	CfgTransferDestination = "stake.transfer.destination"
+
+	// CfgEscrowAccount configures the escrow address.
+	CfgEscrowAccount = "stake.escrow.account"
 )
 
 var (
@@ -97,7 +112,7 @@ func (tx *serializedTx) MustSave() {
 		)
 		os.Exit(1)
 	}
-	if err = ioutil.WriteFile(viper.GetString(cfgTxFile), rawTx, 0600); err != nil {
+	if err = ioutil.WriteFile(viper.GetString(CfgTxFile), rawTx, 0600); err != nil {
 		logger.Error("failed to save transaction",
 			"err", err,
 		)
@@ -106,7 +121,7 @@ func (tx *serializedTx) MustSave() {
 }
 
 func assertTxFileOK() {
-	f := viper.GetString(cfgTxFile)
+	f := viper.GetString(CfgTxFile)
 	if f == "" {
 		logger.Error("failed to determine tx file")
 		os.Exit(1)
@@ -121,7 +136,7 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	}
 
 	var id signature.PublicKey
-	if err := id.UnmarshalHex(viper.GetString(cfgAccountID)); err != nil {
+	if err := id.UnmarshalHex(viper.GetString(CfgAccountID)); err != nil {
 		logger.Error("failed to parse account ID",
 			"err", err,
 		)
@@ -145,7 +160,7 @@ func doAccountSubmit(cmd *cobra.Command, args []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
-	rawTx, err := ioutil.ReadFile(viper.GetString(cfgTxFile))
+	rawTx, err := ioutil.ReadFile(viper.GetString(CfgTxFile))
 	if err != nil {
 		logger.Error("failed to read raw serialized transaction",
 			"err", err,
@@ -195,19 +210,26 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 	assertTxFileOK()
 
 	var xfer api.Transfer
-	if err := xfer.To.UnmarshalHex(viper.GetString(cfgTransferDestination)); err != nil {
+	if err := xfer.To.UnmarshalHex(viper.GetString(CfgTransferDestination)); err != nil {
 		logger.Error("failed to parse transfer destination ID",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	if err := xfer.Tokens.UnmarshalText([]byte(viper.GetString(cfgTxAmount))); err != nil {
+	if err := xfer.Tokens.UnmarshalText([]byte(viper.GetString(CfgTxAmount))); err != nil {
 		logger.Error("failed to parse transfer amount",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	xfer.Nonce = viper.GetUint64(cfgTxNonce)
+	xfer.Nonce = viper.GetUint64(CfgTxNonce)
+	if err := xfer.Fee.Amount.UnmarshalText([]byte(viper.GetString(CfgTxFeeAmount))); err != nil {
+		logger.Error("failed to parse fee amount",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	xfer.Fee.Gas = gas.Gas(viper.GetUint64(CfgTxFeeGas))
 
 	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Entity())
 	if err != nil {
@@ -240,13 +262,20 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 	assertTxFileOK()
 
 	var burn api.Burn
-	if err := burn.Tokens.UnmarshalText([]byte(viper.GetString(cfgTxAmount))); err != nil {
+	if err := burn.Tokens.UnmarshalText([]byte(viper.GetString(CfgTxAmount))); err != nil {
 		logger.Error("failed to parse burn amount",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	burn.Nonce = viper.GetUint64(cfgTxNonce)
+	burn.Nonce = viper.GetUint64(CfgTxNonce)
+	if err := burn.Fee.Amount.UnmarshalText([]byte(viper.GetString(CfgTxFeeAmount))); err != nil {
+		logger.Error("failed to parse fee amount",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	burn.Fee.Gas = gas.Gas(viper.GetUint64(CfgTxFeeGas))
 
 	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Entity())
 	if err != nil {
@@ -279,19 +308,26 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 	assertTxFileOK()
 
 	var escrow api.Escrow
-	if err := escrow.Account.UnmarshalHex(viper.GetString(cfgEscrowAccount)); err != nil {
+	if err := escrow.Account.UnmarshalHex(viper.GetString(CfgEscrowAccount)); err != nil {
 		logger.Error("failed to parse escrow account",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	if err := escrow.Tokens.UnmarshalText([]byte(viper.GetString(cfgTxAmount))); err != nil {
+	if err := escrow.Tokens.UnmarshalText([]byte(viper.GetString(CfgTxAmount))); err != nil {
 		logger.Error("failed to parse escrow amount",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	escrow.Nonce = viper.GetUint64(cfgTxNonce)
+	escrow.Nonce = viper.GetUint64(CfgTxNonce)
+	if err := escrow.Fee.Amount.UnmarshalText([]byte(viper.GetString(CfgTxFeeAmount))); err != nil {
+		logger.Error("failed to parse fee amount",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	escrow.Fee.Gas = gas.Gas(viper.GetUint64(CfgTxFeeGas))
 
 	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Entity())
 	if err != nil {
@@ -324,19 +360,26 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 	assertTxFileOK()
 
 	var reclaim api.ReclaimEscrow
-	if err := reclaim.Account.UnmarshalHex(viper.GetString(cfgEscrowAccount)); err != nil {
+	if err := reclaim.Account.UnmarshalHex(viper.GetString(CfgEscrowAccount)); err != nil {
 		logger.Error("failed to parse escrow account",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	if err := reclaim.Shares.UnmarshalText([]byte(viper.GetString(cfgTxAmount))); err != nil {
+	if err := reclaim.Shares.UnmarshalText([]byte(viper.GetString(CfgTxAmount))); err != nil {
 		logger.Error("failed to parse escrow reclaim amount",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	reclaim.Nonce = viper.GetUint64(cfgTxNonce)
+	reclaim.Nonce = viper.GetUint64(CfgTxNonce)
+	if err := reclaim.Fee.Amount.UnmarshalText([]byte(viper.GetString(CfgTxFeeAmount))); err != nil {
+		logger.Error("failed to parse fee amount",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	reclaim.Fee.Gas = gas.Gas(viper.GetUint64(CfgTxFeeGas))
 
 	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Entity())
 	if err != nil {
@@ -382,30 +425,33 @@ func registerAccountCmd() {
 }
 
 func init() {
-	accountInfoFlags.String(cfgAccountID, "", "ID of the account")
+	accountInfoFlags.String(CfgAccountID, "", "ID of the account")
 	_ = viper.BindPFlags(accountInfoFlags)
 	accountInfoFlags.AddFlagSet(cmdFlags.RetriesFlags)
 	accountInfoFlags.AddFlagSet(cmdGrpc.ClientFlags)
 
+	txFileFlags.String(CfgTxFile, "", "path to the transaction")
+	_ = viper.BindPFlags(txFileFlags)
+
 	accountSubmitFlags.AddFlagSet(accountInfoFlags)
 	accountSubmitFlags.AddFlagSet(cmdFlags.RetriesFlags)
 	accountSubmitFlags.AddFlagSet(cmdGrpc.ClientFlags)
+	accountSubmitFlags.AddFlagSet(txFileFlags)
 
-	txFileFlags.String(cfgTxFile, "", "path to the transaction")
-	_ = viper.BindPFlags(txFileFlags)
-
-	txFlags.Uint64(cfgTxNonce, 0, "nonce of the source account")
-	txFlags.String(cfgTxAmount, "0", "amount of tokens for the transaction")
+	txFlags.Uint64(CfgTxNonce, 0, "nonce of the source account")
+	txFlags.String(CfgTxAmount, "0", "amount of tokens for the transaction")
+	txFlags.Uint64(CfgTxFeeAmount, 0, "transaction fee in tokens")
+	txFlags.String(CfgTxFeeGas, "0", "maximum gas limit")
 	_ = viper.BindPFlags(txFlags)
 	txFlags.AddFlagSet(txFileFlags)
 	txFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	txFlags.AddFlagSet(cmdFlags.EntityFlags)
 
-	accountTransferFlags.String(cfgTransferDestination, "", "transfer destination account ID")
+	accountTransferFlags.String(CfgTransferDestination, "", "transfer destination account ID")
 	_ = viper.BindPFlags(accountTransferFlags)
 	accountTransferFlags.AddFlagSet(txFlags)
 
-	escrowFlags.String(cfgEscrowAccount, "", "ID of the escrow account")
+	escrowFlags.String(CfgEscrowAccount, "", "ID of the escrow account")
 	_ = viper.BindPFlags(escrowFlags)
 	escrowFlags.AddFlagSet(txFlags)
 }
