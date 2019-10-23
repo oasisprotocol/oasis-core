@@ -51,23 +51,6 @@ func (s *grpcServer) WaitEpoch(ctx context.Context, req *pbClient.WaitEpochReque
 	return &pbClient.WaitEpochResponse{}, nil
 }
 
-func (s *grpcServer) WaitSync(ctx context.Context, req *pbClient.WaitSyncRequest) (*pbClient.WaitSyncResponse, error) {
-	if err := s.client.WaitSync(ctx); err != nil {
-		return nil, err
-	}
-	return &pbClient.WaitSyncResponse{}, nil
-}
-
-func (s *grpcServer) IsSynced(ctx context.Context, req *pbClient.IsSyncedRequest) (*pbClient.IsSyncedResponse, error) {
-	synced, err := s.client.IsSynced(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &pbClient.IsSyncedResponse{
-		Synced: synced,
-	}, nil
-}
-
 func (s *grpcServer) WatchBlocks(req *pbClient.WatchBlocksRequest, stream pbClient.Runtime_WatchBlocksServer) error {
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(req.GetRuntimeId()); err != nil {

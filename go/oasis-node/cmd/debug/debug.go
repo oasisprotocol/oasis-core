@@ -5,7 +5,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/client"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/dummy"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/roothash"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/storage"
@@ -19,7 +18,6 @@ var debugCmd = &cobra.Command{
 
 // Register registers the debug sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	client.Register(debugCmd)
 	dummy.Register(debugCmd)
 	roothash.Register(debugCmd)
 	storage.Register(debugCmd)

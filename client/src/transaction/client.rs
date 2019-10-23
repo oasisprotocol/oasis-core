@@ -36,6 +36,8 @@ pub enum TxnClientError {
 pub struct TxnClient {
     /// The underlying client gRPC interface.
     client: api::client::RuntimeClient,
+    /// The underlying node control gRPC interface.
+    control_client: api::control::ControlClient,
     /// The underlying storage gRPC interface.
     storage_client: api::storage::StorageClient,
     /// Runtime identifier.
@@ -51,6 +53,7 @@ impl TxnClient {
     pub fn new(channel: Channel, runtime_id: RuntimeId, timeout: Option<Duration>) -> Self {
         Self {
             client: api::client::RuntimeClient::new(channel.clone()),
+            control_client: api::control::ControlClient::new(channel.clone()),
             storage_client: api::storage::StorageClient::new(channel),
             runtime_id: runtime_id.clone(),
             timeout: timeout,
@@ -103,9 +106,10 @@ impl TxnClient {
     /// Wait for the node to finish syncing.
     pub fn wait_sync(&self) -> BoxFuture<()> {
         let (span, options) = self.prepare_options("TxnClient::wait_sync");
-        let request = api::client::WaitSyncRequest::new();
+        let request = api::control::WaitSyncRequest::new();
 
-        let result: BoxFuture<()> = match self.client.wait_sync_async_opt(&request, options) {
+        let result: BoxFuture<()> = match self.control_client.wait_sync_async_opt(&request, options)
+        {
             Ok(resp) => Box::new(
                 resp.map(|_| ())
                     .map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into()),
@@ -121,17 +125,18 @@ impl TxnClient {
     /// Check if the node is finished syncing.
     pub fn is_synced(&self) -> BoxFuture<bool> {
         let (span, options) = self.prepare_options("TxnClient::is_synced");
-        let request = api::client::IsSyncedRequest::new();
+        let request = api::control::IsSyncedRequest::new();
 
-        let result: BoxFuture<bool> = match self.client.is_synced_async_opt(&request, options) {
-            Ok(resp) => Box::new(
-                resp.map(|r| r.synced)
-                    .map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into()),
-            ),
-            Err(error) => Box::new(future::err(
-                TxnClientError::CallFailed(format!("{}", error)).into(),
-            )),
-        };
+        let result: BoxFuture<bool> =
+            match self.control_client.is_synced_async_opt(&request, options) {
+                Ok(resp) => Box::new(
+                    resp.map(|r| r.synced)
+                        .map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into()),
+                ),
+                Err(error) => Box::new(future::err(
+                    TxnClientError::CallFailed(format!("{}", error)).into(),
+                )),
+            };
         drop(span);
         result
     }

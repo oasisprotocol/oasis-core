@@ -1,5 +1,5 @@
-// Package client implements the client debug sub-commands.
-package client
+// Package control implements the control sub-commands.
+package control
 
 import (
 	"context"
@@ -9,34 +9,34 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	clientGrpc "github.com/oasislabs/oasis-core/go/grpc/client"
+	controlGrpc "github.com/oasislabs/oasis-core/go/grpc/control"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 )
 
 var (
-	clientCmd = &cobra.Command{
-		Use:   "client",
-		Short: "node client interface utilities",
+	controlCmd = &cobra.Command{
+		Use:   "control",
+		Short: "node control interface utilities",
 	}
 
-	clientIsSyncedCmd = &cobra.Command{
+	controlIsSyncedCmd = &cobra.Command{
 		Use:   "is-synced",
 		Short: "exit with 0 if the node completed initial syncing, 1 if not",
 		Run:   doIsSynced,
 	}
 
-	clientWaitSyncCmd = &cobra.Command{
+	controlWaitSyncCmd = &cobra.Command{
 		Use:   "wait-sync",
 		Short: "wait for the node to complete initial syncing",
 		Run:   doWaitSync,
 	}
 
-	logger = logging.GetLogger("cmd/client")
+	logger = logging.GetLogger("cmd/control")
 )
 
 // DoConnect connects to the runtime client grpc server.
-func DoConnect(cmd *cobra.Command) (*grpc.ClientConn, clientGrpc.RuntimeClient) {
+func DoConnect(cmd *cobra.Command) (*grpc.ClientConn, controlGrpc.ControlClient) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -49,7 +49,7 @@ func DoConnect(cmd *cobra.Command) (*grpc.ClientConn, clientGrpc.RuntimeClient) 
 		os.Exit(1)
 	}
 
-	client := clientGrpc.NewRuntimeClient(conn)
+	client := controlGrpc.NewControlClient(conn)
 
 	return conn, client
 }
@@ -61,7 +61,7 @@ func doIsSynced(cmd *cobra.Command, args []string) {
 	logger.Debug("querying synced status")
 
 	// Use background context to block until the result comes in.
-	result, err := client.IsSynced(context.Background(), &clientGrpc.IsSyncedRequest{})
+	result, err := client.IsSynced(context.Background(), &controlGrpc.IsSyncedRequest{})
 	if err != nil {
 		logger.Error("failed to query synced status",
 			"err", err,
@@ -82,7 +82,7 @@ func doWaitSync(cmd *cobra.Command, args []string) {
 	logger.Debug("waiting for sync status")
 
 	// Use background context to block until the result comes in.
-	_, err := client.WaitSync(context.Background(), &clientGrpc.WaitSyncRequest{})
+	_, err := client.WaitSync(context.Background(), &controlGrpc.WaitSyncRequest{})
 	if err != nil {
 		logger.Error("failed to wait for sync status",
 			"err", err,
@@ -93,9 +93,10 @@ func doWaitSync(cmd *cobra.Command, args []string) {
 
 // Register registers the client sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	clientCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
+	controlCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 
-	clientCmd.AddCommand(clientIsSyncedCmd)
-	clientCmd.AddCommand(clientWaitSyncCmd)
-	parentCmd.AddCommand(clientCmd)
+
+	controlCmd.AddCommand(controlIsSyncedCmd)
+	controlCmd.AddCommand(controlWaitSyncCmd)
+	parentCmd.AddCommand(controlCmd)
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/persistent"
 	"github.com/oasislabs/oasis-core/go/common/service"
+	"github.com/oasislabs/oasis-core/go/control"
 	"github.com/oasislabs/oasis-core/go/dummydebug"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/genesis"
@@ -648,6 +649,9 @@ func newNode(testNode bool) (*Node, error) {
 		)
 		return nil, err
 	}
+
+	// Start the node control server.
+	control.NewGRPCServer(node.grpcInternal, node.Client)
 
 	// Start the tendermint service.
 	//

@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package control;
+option go_package = "github.com/oasislabs/oasis-core/go/grpc/control";
+
+service Control {
+    // Wait for the node to finish syncing.
+    rpc WaitSync (WaitSyncRequest) returns (WaitSyncResponse) {}
+    // Check if the node is finished syncing.
+    rpc IsSynced (IsSyncedRequest) returns (IsSyncedResponse) {}
+}
+
+message WaitSyncRequest {}
+
+message WaitSyncResponse {}
+
+message IsSyncedRequest {}
+
+message IsSyncedResponse {
+	// True if the node finished the initial sync.
+	bool synced = 1;
+}
