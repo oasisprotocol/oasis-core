@@ -41,6 +41,11 @@ func (s *timerState) fromKeyValue(key, value []byte) {
 		panic("timer: corrupted key: " + hex.EncodeToString(key))
 	}
 
+	// Disarmed timers have no associated data.
+	if value == nil && deadline == deadlineDisarmed {
+		value = []byte{}
+	}
+
 	*s = timerState{
 		app:      app,
 		kind:     kind,
@@ -144,6 +149,8 @@ func (t *Timer) Reset(ctx *Context, duration time.Duration, data []byte) {
 }
 
 // Stop stops the timer.
+//
+// This removes any data associated with the timer.
 func (t *Timer) Stop(ctx *Context) {
 	// Remove previous timer entry (if any).
 	t.remove(ctx)

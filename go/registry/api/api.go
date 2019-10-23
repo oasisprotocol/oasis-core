@@ -412,21 +412,13 @@ func VerifyRegisterNodeArgs(cfg *Config, logger *logging.Logger, sigNode *node.S
 		}
 	}
 
-	// If node is a worker, ensure it has CommitteeInfo and P2PInfo.
+	// If node is a worker, ensure it has CommitteeInfo.
 	if n.HasRoles(node.RoleComputeWorker | node.RoleStorageWorker | node.RoleTransactionScheduler | node.RoleKeyManager | node.RoleMergeWorker) {
 		if err := verifyAddresses(cfg, n.Committee.Addresses); err != nil {
 			addrs, _ := json.Marshal(n.Committee.Addresses)
 			logger.Error("RegisterNode: missing/invalid committee addresses",
 				"node", n,
 				"committee_addrs", addrs,
-			)
-			return nil, err
-		}
-		if err := verifyAddresses(cfg, n.P2P.Addresses); err != nil {
-			addrs, _ := json.Marshal(n.P2P.Addresses)
-			logger.Error("RegisterNode: missing/invald P2P addresses",
-				"node", n,
-				"p2p_addrs", addrs,
 			)
 			return nil, err
 		}
@@ -438,6 +430,18 @@ func VerifyRegisterNodeArgs(cfg *Config, logger *logging.Logger, sigNode *node.S
 				"err", err,
 			)
 			return nil, ErrInvalidArgument
+		}
+	}
+
+	// If node is a compute/txnscheduler/merge worker, ensure it has P2PInfo.
+	if n.HasRoles(node.RoleComputeWorker | node.RoleTransactionScheduler | node.RoleMergeWorker) {
+		if err := verifyAddresses(cfg, n.P2P.Addresses); err != nil {
+			addrs, _ := json.Marshal(n.P2P.Addresses)
+			logger.Error("RegisterNode: missing/invald P2P addresses",
+				"node", n,
+				"p2p_addrs", addrs,
+			)
+			return nil, err
 		}
 	}
 

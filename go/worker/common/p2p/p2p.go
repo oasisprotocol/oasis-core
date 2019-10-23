@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/cenkalti/backoff"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core"
 	"github.com/libp2p/go-libp2p-core/helpers"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/libp2p/go-libp2p-core/transport"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multiaddr-net"
 	"github.com/spf13/viper"
@@ -93,6 +96,10 @@ func peerIDToPublicKey(peerID core.PeerID) (signature.PublicKey, error) {
 // Info returns the information needed to establish connections to this
 // node via the P2P transport.
 func (p *P2P) Info() node.P2PInfo {
+	if p == nil {
+		return node.P2PInfo{}
+	}
+
 	var addrs []multiaddr.Multiaddr
 	if len(p.registerAddresses) == 0 {
 		addrs = p.host.Addrs()
@@ -318,9 +325,45 @@ func (p *P2P) handleStream(rawStream core.Stream) {
 }
 
 func (p *P2P) handleConnection(conn core.Conn) {
+	if conn.Stat().Direction != network.DirInbound {
+		return
+	}
+
+	var allowed bool
+	defer func() {
+		if !allowed {
+			// Close connection if not allowed.
+			p.logger.Error("closing connection from unauthorized peer",
+				"peer_id", conn.RemotePeer(),
+			)
+
+			_ = conn.Close()
+		}
+	}()
+
 	p.logger.Debug("new connection from peer",
 		"peer_id", conn.RemotePeer(),
 	)
+
+	id, err := peerIDToPublicKey(conn.RemotePeer())
+	if err != nil {
+		p.logger.Error("error while extracting public key from peer ID",
+			"err", err,
+			"peer_id", conn.RemotePeer(),
+		)
+		return
+	}
+
+	// Make sure that connection is allowed by at least one handler.
+	p.RLock()
+	defer p.RUnlock()
+
+	for _, handler := range p.handlers {
+		if handler.IsPeerAuthorized(id) {
+			allowed = true
+			return
+		}
+	}
 }
 
 // New creates a new P2P node.
@@ -384,4 +427,9 @@ func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
 	)
 
 	return p, nil
+}
+
+func init() {
+	// Make sure to decrease (global!) transport timeouts.
+	transport.AcceptTimeout = 5 * time.Second
 }
