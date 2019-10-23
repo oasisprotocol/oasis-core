@@ -288,6 +288,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *runtimeState, hdrType block.HeaderType) {
 	blk := block.NewEmptyBlock(runtime.CurrentBlock, uint64(ctx.Now().Unix()), hdrType)
 
+	runtime.Timer.Stop(ctx)
 	runtime.CurrentBlock = blk
 
 	ctx.EmitTag(TagUpdate, TagUpdateValue)
@@ -432,8 +433,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 
 	latestBlock := rtState.CurrentBlock
 	if latestBlock.Header.Round != tCtx.Round {
-		// Note: This should NEVER happen, but it does and causes massive
-		// problems (#1047).
+		// Note: This should NEVER happen.
 		app.logger.Error("FireTimer: spurious timeout detected",
 			"runtime", tCtx.ID,
 			"timer_round", tCtx.Round,
@@ -442,27 +442,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 
 		timer.Stop(ctx)
 
-		// WARNING: `timer` != rtState.Timer, while the ID shouldn't
-		// change and the difference in structs should be harmless, there
-		// is nothing lost with being extra defensive.
-
-		var rsCtx timerContext
-		if err := rsCtx.UnmarshalCBOR(rtState.Timer.Data(ctx)); err != nil {
-			app.logger.Error("FireTimer: Failed to unmarshal runtime state timer",
-				"err", err,
-			)
-			return err
-		}
-
-		app.logger.Error("FireTimer: runtime state timer",
-			"runtime", rsCtx.ID,
-			"timer_round", rsCtx.Round,
-		)
-
-		rtState.Timer.Stop(ctx)
-		state.updateRuntimeState(rtState)
-
-		return nil
+		return errors.New("tendermint/roothash: spurious timeout")
 	}
 
 	app.logger.Warn("FireTimer: round timeout expired, forcing finalization",
@@ -621,6 +601,11 @@ func (app *rootHashApplication) updateTimer(
 	rtState *runtimeState,
 	blockNr uint64,
 ) {
+	// Do not re-arm the timer if the round has already changed.
+	if blockNr != rtState.CurrentBlock.Header.Round {
+		return
+	}
+
 	nextTimeout := rtState.Round.getNextTimeout()
 	if nextTimeout.IsZero() {
 		// Disarm timer.
@@ -817,6 +802,7 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, rtS
 	}
 
 	// All good. Hook up the new block.
+	rtState.Timer.Stop(ctx)
 	rtState.CurrentBlock = blk
 
 	ctx.EmitTag(TagUpdate, TagUpdateValue)
