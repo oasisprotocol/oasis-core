@@ -177,13 +177,19 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 	var err error
 
-	// Initialize the worker P2P.
-	p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
-	n.P2P, err = p2p.New(p2pCtx, n.Identity)
-	if err != nil {
-		return err
+	// Initialize the worker P2P if any workers are enabled. Since the P2P layer
+	// does not have a separate Start method and starts listening immediately
+	// when created, make sure that we don't start if if not needed.
+	//
+	// Only compute, txn scheduler and merge workers need P2P transport.
+	if compute.Enabled() || txnscheduler.Enabled() || merge.Enabled() {
+		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
+		n.P2P, err = p2p.New(p2pCtx, n.Identity)
+		if err != nil {
+			return err
+		}
+		n.svcMgr.RegisterCleanupOnly(p2pSvc, "worker p2p")
 	}
-	n.svcMgr.RegisterCleanupOnly(p2pSvc, "worker p2p")
 
 	// Start common worker.
 	n.CommonWorker, err = workerCommon.New(

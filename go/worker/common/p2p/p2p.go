@@ -94,6 +94,10 @@ func peerIDToPublicKey(peerID core.PeerID) (signature.PublicKey, error) {
 // Info returns the information needed to establish connections to this
 // node via the P2P transport.
 func (p *P2P) Info() node.P2PInfo {
+	if p == nil {
+		return node.P2PInfo{}
+	}
+
 	var addrs []multiaddr.Multiaddr
 	if len(p.registerAddresses) == 0 {
 		addrs = p.host.Addrs()
