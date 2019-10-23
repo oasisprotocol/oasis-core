@@ -31,6 +31,8 @@ func main() {
 	_ = cmd.Register(e2e.ByzantineMergeStraggler)
 	// Storage sync test.
 	_ = cmd.Register(e2e.StorageSync)
+	// Sentry test.
+	_ = cmd.Register(e2e.Sentry)
 	// Keymanager restart test.
 	_ = cmd.Register(e2e.KeymanagerRestart)
 	// Dump/restore test.
