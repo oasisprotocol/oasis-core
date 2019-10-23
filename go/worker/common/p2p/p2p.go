@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/cenkalti/backoff"
 	"github.com/libp2p/go-libp2p"
@@ -14,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/libp2p/go-libp2p-core/transport"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multiaddr-net"
 	"github.com/spf13/viper"
@@ -425,4 +427,9 @@ func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
 	)
 
 	return p, nil
+}
+
+func init() {
+	// Make sure to decrease (global!) transport timeouts.
+	transport.AcceptTimeout = 5 * time.Second
 }
