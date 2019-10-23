@@ -103,12 +103,12 @@ func (tb *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 	events = append(events, ev.ResultEndBlock.GetEvents()...)
 
 	for _, tmEv := range events {
-		if tmEv.GetType() != tmapi.EventTypeOasis {
+		if tmEv.GetType() != app.EventType {
 			continue
 		}
 
 		for _, pair := range tmEv.GetAttributes() {
-			if bytes.Equal(pair.GetKey(), app.TagStatusUpdate) {
+			if bytes.Equal(pair.GetKey(), app.KeyStatusUpdate) {
 				var statuses []*api.Status
 				if err := cbor.Unmarshal(pair.GetValue(), &statuses); err != nil {
 					tb.logger.Error("worker: failed to get statuses from tag",

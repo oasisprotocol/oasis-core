@@ -455,9 +455,6 @@ func (mux *abciMux) executeTx(ctx *Context, tx []byte) error {
 		"tx", base64.StdEncoding.EncodeToString(tx),
 	)
 
-	// Append application name tag.
-	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
-
 	if err = app.ExecuteTx(ctx, tx[1:]); err != nil {
 		return err
 	}

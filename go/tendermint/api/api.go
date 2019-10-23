@@ -2,13 +2,12 @@
 package api
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
-	tmcommon "github.com/tendermint/tendermint/libs/common"
+	tmcmn "github.com/tendermint/tendermint/libs/common"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
 	tmp2p "github.com/tendermint/tendermint/p2p"
@@ -34,9 +33,6 @@ const (
 	CodeInvalidQuery       Code = Code(5)
 	CodeNotFound           Code = Code(6)
 )
-
-// The ABCI event type to denote ABCI mux applications.
-const EventTypeOasis = "oasis"
 
 // ToInt returns an integer representation of the status code.
 func (c Code) ToInt() uint32 {
@@ -65,32 +61,7 @@ func (c Code) String() string {
 	}
 }
 
-// TagAppNameValue is the value that should be used in the `AppName` tag
-// used for denoting which application processed the given transaction.
-var TagAppNameValue = []byte("1")
-
-// GetTag looks up a specific tag in a list of tags and returns its value if any.
-//
-// When no tag exists it returns nil.
-func GetTag(tags []tmcommon.KVPair, tag []byte) []byte {
-	for _, pair := range tags {
-		if bytes.Equal(pair.GetKey(), tag) {
-			return pair.GetValue()
-		}
-	}
-
-	return nil
-}
-
-// QueryForEvent generates a tmquery.Query for a specific event type.
-func QueryForEvent(eventApp []byte, eventType []byte) tmpubsub.Query {
-	return tmquery.MustParse(fmt.Sprintf("%s.%s='%s'", EventTypeOasis, eventApp, eventType))
-}
-
-// QueryGetByIDRequest is a request for fetching things by ids.
-type QueryGetByIDRequest struct {
-	ID signature.PublicKey
-}
+var tagAppNameValue = []byte("1")
 
 // VotingPower is the default voting power for all validator nodes.
 const VotingPower = 1
@@ -137,4 +108,66 @@ func NodeToP2PAddr(n *node.Node) (*tmp2p.NetAddress, error) {
 	}
 
 	return tmAddr, nil
+}
+
+const eventTypeOasis = "oasis"
+
+// EventBuilder is a helper for constructing ABCI events.
+type EventBuilder struct {
+	app []byte
+	ev  types.Event
+}
+
+// Attribute appends a key/value pair to the event.
+func (bld *EventBuilder) Attribute(key, value []byte) *EventBuilder {
+	bld.ev.Attributes = append(bld.ev.Attributes, tmcmn.KVPair{
+		Key:   key,
+		Value: value,
+	})
+
+	return bld
+}
+
+// Dirty returns true iff the EventBuilder has attributes.
+func (bld *EventBuilder) Dirty() bool {
+	return len(bld.ev.Attributes) > 0
+}
+
+// Event returns the event from the EventBuilder.
+func (bld *EventBuilder) Event() types.Event {
+	// Return a copy to support emitting incrementally.
+	ev := types.Event{
+		Type: bld.ev.Type,
+		Attributes: []tmcmn.KVPair{
+			tmcmn.KVPair{
+				Key:   []byte("updated"),
+				Value: tagAppNameValue,
+			},
+		},
+	}
+	ev.Attributes = append(ev.Attributes, bld.ev.Attributes...)
+
+	return ev
+}
+
+// NewEventBuilder returns a new EventBuilder for the given ABCI app.
+func NewEventBuilder(app string) *EventBuilder {
+	return &EventBuilder{
+		app: []byte(app),
+		ev: types.Event{
+			Type: EventTypeForApp(app),
+		},
+	}
+}
+
+// EventTypeForApp generates the ABCI event type for events belonging
+// to the specified App.
+func EventTypeForApp(eventApp string) string {
+	return eventTypeOasis + "." + eventApp
+}
+
+// QueryForApp generates a tmquery.Query for events belonging to the
+// specified App.
+func QueryForApp(eventApp string) tmpubsub.Query {
+	return tmquery.MustParse(fmt.Sprintf("%s.updated='%s'", EventTypeForApp(eventApp), tagAppNameValue))
 }

@@ -129,18 +129,18 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 		state.removeNode(node)
 	}
 
-	// Emit the TagRegistryNodeListEpoch notification.
-	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
-	// Dummy value, should be ignored.
-	ctx.EmitTag(TagRegistryNodeListEpoch, []byte("1"))
+	// Emit the RegistryNodeListEpoch notification event.
+	evb := api.NewEventBuilder(app.Name())
+	// (Dummy value, should be ignored.)
+	evb = evb.Attribute(KeyRegistryNodeListEpoch, []byte("1"))
 
-	if len(expiredNodes) == 0 {
-		return nil
+	if len(expiredNodes) > 0 {
+		// Iff any nodes have expired, force-emit the NodesExpired event
+		// so the change is picked up.
+		evb = evb.Attribute(KeyNodesExpired, cbor.Marshal(expiredNodes))
 	}
 
-	// Iff any nodes have expired, force-emit the application tag so
-	// the change is picked up.
-	ctx.EmitTag(TagNodesExpired, cbor.Marshal(expiredNodes))
+	ctx.EmitEvent(evb)
 
 	return nil
 }
@@ -184,12 +184,7 @@ func (app *registryApplication) registerEntity(
 			"entity", ent,
 		)
 
-		ctx.EmitTag(TagEntityRegistered, ent.ID)
-		ctx.EmitData(&Output{
-			OutputRegisterEntity: &OutputRegisterEntity{
-				Entity: *ent,
-			},
-		})
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEntityRegistered, cbor.Marshal(ent)))
 	}
 
 	return nil
@@ -224,12 +219,11 @@ func (app *registryApplication) deregisterEntity(
 			"entity_id", id,
 		)
 
-		ctx.EmitData(&Output{
-			OutputDeregisterEntity: &OutputDeregisterEntity{
-				Entity: removedEntity,
-				Nodes:  removedNodes,
-			},
-		})
+		tagV := &EntityDeregistration{
+			Entity: removedEntity,
+			Nodes:  removedNodes,
+		}
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEntityDeregistered, cbor.Marshal(tagV)))
 	}
 
 	return nil
@@ -355,11 +349,7 @@ func (app *registryApplication) registerNode(
 			"roles", newNode.Roles,
 		)
 
-		ctx.EmitData(&Output{
-			OutputRegisterNode: &OutputRegisterNode{
-				Node: *newNode,
-			},
-		})
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeRegistered, cbor.Marshal(newNode)))
 	}
 
 	return nil
@@ -415,12 +405,7 @@ func (app *registryApplication) registerRuntime(
 			"runtime", rt,
 		)
 
-		ctx.EmitTag(TagRuntimeRegistered, rt.ID)
-		ctx.EmitData(&Output{
-			OutputRegisterRuntime: &OutputRegisterRuntime{
-				Runtime: *rt,
-			},
-		})
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
 	}
 
 	return nil

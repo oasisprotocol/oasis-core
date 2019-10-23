@@ -119,12 +119,12 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 	events := ev.ResultBeginBlock.GetEvents()
 
 	for _, tmEv := range events {
-		if tmEv.GetType() != tmapi.EventTypeOasis {
+		if tmEv.GetType() != app.EventType {
 			continue
 		}
 
 		for _, pair := range tmEv.GetAttributes() {
-			if bytes.Equal(pair.GetKey(), app.TagElected) {
+			if bytes.Equal(pair.GetKey(), app.KeyElected) {
 				var kinds []api.CommitteeKind
 				if err := cbor.Unmarshal(pair.GetValue(), &kinds); err != nil {
 					tb.logger.Error("worker: malformed elected committee types list",

@@ -72,8 +72,7 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 	}
 
 	if len(toEmit) > 0 {
-		ctx.EmitTag([]byte(app.Name()), tmapi.TagAppNameValue)
-		ctx.EmitTag(TagStatusUpdate, cbor.Marshal(toEmit))
+		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyStatusUpdate, cbor.Marshal(toEmit)))
 	}
 
 	return nil

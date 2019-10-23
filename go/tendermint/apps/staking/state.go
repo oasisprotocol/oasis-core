@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 var (
@@ -451,7 +452,7 @@ func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey
 				Owner:  fromID,
 				Tokens: *slashed,
 			})
-			ctx.EmitTag(TagTakeEscrow, ev)
+			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTakeEscrow, ev))
 		}
 	}
 
@@ -487,7 +488,7 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 				To:     toID,
 				Tokens: *transfered,
 			})
-			ctx.EmitTag(TagTransfer, ev)
+			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
 		}
 	}
 

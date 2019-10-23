@@ -18,27 +18,24 @@ const (
 )
 
 var (
-	// TagUpdate is an ABCI transaction tag for marking transactions
-	// which have been processed by roothash (value is TagUpdateValue).
-	TagUpdate = []byte("roothash.update")
-	// TagUpdateValue is the only allowed value for TagUpdate.
-	TagUpdateValue = []byte{0x01}
+	// EventType is the ABCI event type for roothash events.
+	EventType = api.EventTypeForApp(AppName)
 
-	// TagMergeDiscrepancyDetected is an ABCI transaction tag for merge discrepancy
-	// detected events (value is a CBOR serialized ValueMergeDiscrepancyDetected).
-	TagMergeDiscrepancyDetected = []byte("roothash.merge-discrepancy")
-	// TagComputeDiscrepancyDetected is an ABCI transaction tag for merge discrepancy
-	// detected events (value is a CBOR serialized ValueComputeDiscrepancyDetected).
-	TagComputeDiscrepancyDetected = []byte("roothash.compute-discrepancy")
+	// QueryApp is a query for filtering transactions processed by the
+	// roothash application.
+	QueryApp = api.QueryForApp(AppName)
 
-	// TagFinalized is an ABCI transaction tag for finalized blocks
+	// KeyMergeDiscrepancyDetected is an ABCI event attribute key for
+	// merge discrepancy detected events (value is a CBOR serialized
+	// ValueMergeDiscrepancyDetected).
+	KeyMergeDiscrepancyDetected = []byte("merge-discrepancy")
+	// KeyComputeDiscrepancyDetected is an ABCI event attribute key for
+	// merge discrepancy detected events (value is a CBOR serialized
+	// ValueComputeDiscrepancyDetected).
+	KeyComputeDiscrepancyDetected = []byte("compute-discrepancy")
+	// KeyFinalized is an ABCI event attribute key for finalized blocks
 	// (value is a CBOR serialized ValueFinalized).
-	TagFinalized = []byte("roothash.finalized")
-
-	// QueryUpdate is a query for filtering transactions where root hash
-	// application state has been updated. This is required as state can
-	// change as part of foreign application transactions.
-	QueryUpdate = api.QueryForEvent(TagUpdate, TagUpdateValue)
+	KeyFinalized = []byte("finalized")
 )
 
 // Tx is a transaction to be accepted by the roothash app.
