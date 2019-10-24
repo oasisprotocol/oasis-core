@@ -328,6 +328,17 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 	// Fetch delegation.
 	delegation := state.delegation(id, escrow.Account)
 
+	// Issue shares.
+	if _, err := staking.IssueShares(&to.Escrow, &escrow.Tokens, delegation); err != nil {
+		app.logger.Error("AddEscrow: failed to escrow tokens",
+			"err", err,
+			"from", id,
+			"to", escrow.Account,
+			"amount", escrow.Tokens,
+		)
+		return err
+	}
+
 	// Remove tokens from the delegator account and put them into escrow.
 	if err := staking.Move(&to.Escrow.Balance, &from.General.Balance, &escrow.Tokens); err != nil {
 		app.logger.Error("AddEscrow: failed to escrow tokens",
@@ -339,17 +350,6 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 		return err
 	}
 	from.General.Nonce++
-
-	// Issue shares.
-	if _, err := staking.IssueShares(&to.Escrow, &escrow.Tokens, delegation); err != nil {
-		app.logger.Error("AddEscrow: failed to escrow tokens",
-			"err", err,
-			"from", id,
-			"to", escrow.Account,
-			"amount", escrow.Tokens,
-		)
-		return err
-	}
 
 	// Commit accounts.
 	state.setAccount(id, from)
