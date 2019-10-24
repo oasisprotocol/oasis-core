@@ -106,8 +106,15 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 	// Delegation unbonding after debonding period elapses.
 	for _, e := range state.expiredDebondingQueue(epoch) {
 		deb := e.delegation
-		escrow := state.account(e.escrowID)
 		delegator := state.account(e.delegatorID)
+		// NOTE: Could be the same account, so make sure to not have two duplicate
+		//       copies of it and overwrite it later.
+		var escrow *staking.Account
+		if e.delegatorID.Equal(e.escrowID) {
+			escrow = delegator
+		} else {
+			escrow = state.account(e.escrowID)
+		}
 
 		// Compute amount of debonded tokens.
 		tokens, err := staking.TokensForShares(&escrow.Escrow, &deb.Shares)
@@ -156,8 +163,10 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		// Update state.
 		state.removeFromDebondingQueue(e.epoch, e.delegatorID, e.escrowID, e.seq)
 		state.setDebondingDelegation(e.delegatorID, e.escrowID, e.seq, nil)
-		state.setAccount(e.escrowID, escrow)
 		state.setAccount(e.delegatorID, delegator)
+		if !e.delegatorID.Equal(e.escrowID) {
+			state.setAccount(e.escrowID, escrow)
+		}
 
 		app.logger.Debug("released tokens",
 			"escrow_id", e.escrowID,
@@ -323,7 +332,15 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 	}
 
 	// Fetch escrow account.
-	to := state.account(escrow.Account)
+	//
+	// NOTE: Could be the same account, so make sure to not have two duplicate
+	//       copies of it and overwrite it later.
+	var to *staking.Account
+	if id.Equal(escrow.Account) {
+		to = from
+	} else {
+		to = state.account(escrow.Account)
+	}
 
 	// Fetch delegation.
 	delegation := state.delegation(id, escrow.Account)
@@ -353,7 +370,9 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 
 	// Commit accounts.
 	state.setAccount(id, from)
-	state.setAccount(escrow.Account, to)
+	if !id.Equal(escrow.Account) {
+		state.setAccount(escrow.Account, to)
+	}
 	// Commit delegation descriptor.
 	state.setDelegation(id, escrow.Account, delegation)
 
@@ -402,7 +421,15 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *MutableSt
 	}
 
 	// Fetch escrow account.
-	from := state.account(reclaim.Account)
+	//
+	// NOTE: Could be the same account, so make sure to not have two duplicate
+	//       copies of it and overwrite it later.
+	var from *staking.Account
+	if id.Equal(reclaim.Account) {
+		from = to
+	} else {
+		from = state.account(reclaim.Account)
+	}
 
 	// Fetch delegation.
 	delegation := state.delegation(id, reclaim.Account)
@@ -449,7 +476,9 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *MutableSt
 	to.General.Nonce++
 	state.setDelegation(id, reclaim.Account, delegation)
 	state.setAccount(id, to)
-	state.setAccount(reclaim.Account, from)
+	if !id.Equal(reclaim.Account) {
+		state.setAccount(reclaim.Account, from)
+	}
 
 	return nil
 }
