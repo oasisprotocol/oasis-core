@@ -1,4 +1,4 @@
-package keymanager
+package state
 
 import (
 	"github.com/tendermint/iavl"
@@ -17,11 +17,11 @@ var (
 	statusKeyFmt = keyformat.New(0x70, &signature.MapKey{})
 )
 
-type immutableState struct {
+type ImmutableState struct {
 	*abci.ImmutableState
 }
 
-func (st *immutableState) GetStatuses() ([]*api.Status, error) {
+func (st *ImmutableState) Statuses() ([]*api.Status, error) {
 	rawStatuses, err := st.getStatusesRaw()
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func (st *immutableState) GetStatuses() ([]*api.Status, error) {
 	return statuses, nil
 }
 
-func (st *immutableState) getStatusesRaw() ([][]byte, error) {
+func (st *ImmutableState) getStatusesRaw() ([][]byte, error) {
 	var rawVec [][]byte
 	st.Snapshot.IterateRange(
 		statusKeyFmt.Encode(),
@@ -57,7 +57,7 @@ func (st *immutableState) getStatusesRaw() ([][]byte, error) {
 	return rawVec, nil
 }
 
-func (st *immutableState) GetStatus(id signature.PublicKey) (*api.Status, error) {
+func (st *ImmutableState) Status(id signature.PublicKey) (*api.Status, error) {
 	_, raw := st.Snapshot.Get(statusKeyFmt.Encode(&id))
 	if raw == nil {
 		return nil, nil
@@ -70,22 +70,22 @@ func (st *immutableState) GetStatus(id signature.PublicKey) (*api.Status, error)
 	return &status, nil
 }
 
-func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
+func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
 		return nil, err
 	}
-	return &immutableState{inner}, nil
+	return &ImmutableState{inner}, nil
 }
 
 // MutableState is a mutable key manager state wrapper.
 type MutableState struct {
-	*immutableState
+	*ImmutableState
 
 	tree *iavl.MutableTree
 }
 
-func (st *MutableState) setStatus(status *api.Status) {
+func (st *MutableState) SetStatus(status *api.Status) {
 	st.tree.Set(statusKeyFmt.Encode(&status.ID), cbor.Marshal(status))
 }
 
@@ -94,7 +94,7 @@ func NewMutableState(tree *iavl.MutableTree) *MutableState {
 	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
 
 	return &MutableState{
-		immutableState: &immutableState{inner},
+		ImmutableState: &ImmutableState{inner},
 		tree:           tree,
 	}
 }

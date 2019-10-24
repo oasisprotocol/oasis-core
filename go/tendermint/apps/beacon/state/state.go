@@ -1,4 +1,4 @@
-package beacon
+package state
 
 import (
 	"fmt"
@@ -17,21 +17,21 @@ var (
 	beaconKeyFmt = keyformat.New(0x40)
 )
 
-type immutableState struct {
+type ImmutableState struct {
 	*abci.ImmutableState
 }
 
-func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
+func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
 		return nil, err
 	}
 
-	return &immutableState{inner}, nil
+	return &ImmutableState{inner}, nil
 }
 
-// GetBeacon gets the beacon for the node.
-func (s *immutableState) GetBeacon() ([]byte, error) {
+// Beacon gets the current random beacon value.
+func (s *ImmutableState) Beacon() ([]byte, error) {
 	_, b := s.Snapshot.Get(beaconKeyFmt.Encode())
 	if b == nil {
 		return nil, beacon.ErrBeaconNotAvailable
@@ -42,12 +42,12 @@ func (s *immutableState) GetBeacon() ([]byte, error) {
 
 // MutableState is a mutable beacon state wrapper.
 type MutableState struct {
-	*immutableState
+	*ImmutableState
 
 	tree *iavl.MutableTree
 }
 
-func (s *MutableState) setBeacon(newBeacon []byte) error {
+func (s *MutableState) SetBeacon(newBeacon []byte) error {
 	if l := len(newBeacon); l != beacon.BeaconSize {
 		return fmt.Errorf("tendermint/beacon: unexpected beacon size: %d", l)
 	}
@@ -62,7 +62,7 @@ func NewMutableState(tree *iavl.MutableTree) *MutableState {
 	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
 
 	return &MutableState{
-		immutableState: &immutableState{inner},
+		ImmutableState: &ImmutableState{inner},
 		tree:           tree,
 	}
 }

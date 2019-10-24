@@ -15,6 +15,7 @@ import (
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
+	beaconState "github.com/oasislabs/oasis-core/go/tendermint/apps/beacon/state"
 )
 
 var (
@@ -142,9 +143,9 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 }
 
 func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) error {
-	state := NewMutableState(ctx.State())
+	state := beaconState.NewMutableState(ctx.State())
 
-	if err := state.setBeacon(beacon); err != nil {
+	if err := state.SetBeacon(beacon); err != nil {
 		app.logger.Error("onNewBeacon: failed to set beacon",
 			"err", err,
 		)

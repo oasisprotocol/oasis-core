@@ -2,6 +2,8 @@ package beacon
 
 import (
 	"context"
+
+	beaconState "github.com/oasislabs/oasis-core/go/tendermint/apps/beacon/state"
 )
 
 // Query is the beacon query interface.
@@ -16,7 +18,7 @@ type QueryFactory struct {
 
 // QueryAt returns the beacon query interface for a specific height.
 func (sf *QueryFactory) QueryAt(height int64) (Query, error) {
-	state, err := newImmutableState(sf.app.state, height)
+	state, err := beaconState.NewImmutableState(sf.app.state, height)
 	if err != nil {
 		return nil, err
 	}
@@ -24,11 +26,11 @@ func (sf *QueryFactory) QueryAt(height int64) (Query, error) {
 }
 
 type beaconQuerier struct {
-	state *immutableState
+	state *beaconState.ImmutableState
 }
 
 func (bq *beaconQuerier) Beacon(ctx context.Context) ([]byte, error) {
-	return bq.state.GetBeacon()
+	return bq.state.Beacon()
 }
 
 func (app *beaconApplication) QueryFactory() interface{} {

@@ -6,6 +6,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	roothashState "github.com/oasislabs/oasis-core/go/tendermint/apps/roothash/state"
 )
 
 // Query is the roothash query interface.
@@ -22,7 +23,7 @@ type QueryFactory struct {
 
 // QueryAt returns the roothash query interface for a specific height.
 func (sf *QueryFactory) QueryAt(height int64) (Query, error) {
-	state, err := newImmutableState(sf.app.state, height)
+	state, err := roothashState.NewImmutableState(sf.app.state, height)
 	if err != nil {
 		return nil, err
 	}
@@ -30,11 +31,11 @@ func (sf *QueryFactory) QueryAt(height int64) (Query, error) {
 }
 
 type rootHashQuerier struct {
-	state *immutableState
+	state *roothashState.ImmutableState
 }
 
 func (rq *rootHashQuerier) LatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
-	runtime, err := rq.state.getRuntimeState(id)
+	runtime, err := rq.state.RuntimeState(id)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +47,7 @@ func (rq *rootHashQuerier) LatestBlock(ctx context.Context, id signature.PublicK
 }
 
 func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
-	runtime, err := rq.state.getRuntimeState(id)
+	runtime, err := rq.state.RuntimeState(id)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +59,7 @@ func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id signature.Public
 }
 
 func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothash.Genesis, error) {
-	runtimes := rq.state.getRuntimes()
+	runtimes := rq.state.Runtimes()
 
 	// Get per-runtime blocks.
 	blocks := make(map[signature.MapKey]*block.Block)

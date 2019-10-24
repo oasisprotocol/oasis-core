@@ -12,6 +12,7 @@ import (
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
+	registryState "github.com/oasislabs/oasis-core/go/tendermint/apps/registry/state"
 )
 
 func (app *registryApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
@@ -22,9 +23,9 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 		"state", string(b),
 	)
 
-	state := NewMutableState(ctx.State())
+	state := registryState.NewMutableState(ctx.State())
 
-	state.setKeyManagerOperator(st.KeyManagerOperator)
+	state.SetKeyManagerOperator(st.KeyManagerOperator)
 	app.logger.Debug("InitChain: Registering key manager operator",
 		"id", st.KeyManagerOperator,
 	)
@@ -71,15 +72,15 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 
 func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, error) {
 	// Fetch entities, runtimes, and nodes from state.
-	signedEntities, err := rq.state.getSignedEntities()
+	signedEntities, err := rq.state.SignedEntities()
 	if err != nil {
 		return nil, err
 	}
-	signedRuntimes, err := rq.state.getSignedRuntimes()
+	signedRuntimes, err := rq.state.SignedRuntimes()
 	if err != nil {
 		return nil, err
 	}
-	signedNodes, err := rq.state.getSignedNodes()
+	signedNodes, err := rq.state.SignedNodes()
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +102,7 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 		Entities:           signedEntities,
 		Runtimes:           signedRuntimes,
 		Nodes:              validatorNodes,
-		KeyManagerOperator: rq.state.getKeyManagerOperator(),
+		KeyManagerOperator: rq.state.KeyManagerOperator(),
 	}
 	return &gen, nil
 }

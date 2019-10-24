@@ -9,12 +9,12 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
+	stakingState "github.com/oasislabs/oasis-core/go/tendermint/apps/staking/state"
 )
 
 var (
@@ -71,7 +71,7 @@ func (app *stakingApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error 
 		return errors.Wrap(err, "staking/tendermint: failed to unmarshal tx")
 	}
 
-	state := NewMutableState(ctx.State())
+	state := stakingState.NewMutableState(ctx.State())
 
 	if tx.TxTransfer != nil {
 		return app.transfer(ctx, state, &tx.TxTransfer.SignedTransfer)
@@ -97,19 +97,19 @@ func (app *stakingApplication) EndBlock(ctx *abci.Context, request types.Request
 }
 
 func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error {
-	state := NewMutableState(ctx.State())
+	state := stakingState.NewMutableState(ctx.State())
 
 	// Delegation unbonding after debonding period elapses.
-	for _, e := range state.expiredDebondingQueue(epoch) {
-		deb := e.delegation
-		delegator := state.account(e.delegatorID)
+	for _, e := range state.ExpiredDebondingQueue(epoch) {
+		deb := e.Delegation
+		delegator := state.Account(e.DelegatorID)
 		// NOTE: Could be the same account, so make sure to not have two duplicate
 		//       copies of it and overwrite it later.
 		var escrow *staking.Account
-		if e.delegatorID.Equal(e.escrowID) {
+		if e.DelegatorID.Equal(e.EscrowID) {
 			escrow = delegator
 		} else {
-			escrow = state.account(e.escrowID)
+			escrow = state.Account(e.EscrowID)
 		}
 
 		// Compute amount of debonded tokens.
@@ -117,8 +117,8 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		if err != nil {
 			app.logger.Error("failed to compute amount of tokens from shares",
 				"err", err,
-				"escrow_id", e.escrowID,
-				"delegator_id", e.delegatorID,
+				"escrow_id", e.EscrowID,
+				"delegator_id", e.DelegatorID,
 				"shares", deb.Shares,
 			)
 			return errors.Wrap(err, "staking/tendermint: failed to compute amount of tokens")
@@ -127,8 +127,8 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		if err := escrow.Escrow.TotalShares.Sub(&deb.Shares); err != nil {
 			app.logger.Error("failed to subtract total shares",
 				"err", err,
-				"escrow_id", e.escrowID,
-				"delegator_id", e.delegatorID,
+				"escrow_id", e.EscrowID,
+				"delegator_id", e.DelegatorID,
 				"shares", deb.Shares,
 				"total_shares", escrow.Escrow.TotalShares,
 			)
@@ -138,8 +138,8 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		if err := escrow.Escrow.DebondingShares.Sub(&deb.Shares); err != nil {
 			app.logger.Error("failed to subtract debonding shares",
 				"err", err,
-				"escrow_id", e.escrowID,
-				"delegator_id", e.delegatorID,
+				"escrow_id", e.EscrowID,
+				"delegator_id", e.DelegatorID,
 				"shares", deb.Shares,
 				"debonding_shares", escrow.Escrow.DebondingShares,
 			)
@@ -149,30 +149,30 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		if err := staking.Move(&delegator.General.Balance, &escrow.Escrow.Balance, tokens); err != nil {
 			app.logger.Error("failed to move balance",
 				"err", err,
-				"escrow_id", e.escrowID,
-				"delegator_id", e.delegatorID,
+				"escrow_id", e.EscrowID,
+				"delegator_id", e.DelegatorID,
 				"amount", tokens,
 			)
 			return errors.Wrap(err, "staking/tendermint: failed to move balance")
 		}
 
 		// Update state.
-		state.removeFromDebondingQueue(e.epoch, e.delegatorID, e.escrowID, e.seq)
-		state.setDebondingDelegation(e.delegatorID, e.escrowID, e.seq, nil)
-		state.setAccount(e.delegatorID, delegator)
-		if !e.delegatorID.Equal(e.escrowID) {
-			state.setAccount(e.escrowID, escrow)
+		state.RemoveFromDebondingQueue(e.Epoch, e.DelegatorID, e.EscrowID, e.Seq)
+		state.SetDebondingDelegation(e.DelegatorID, e.EscrowID, e.Seq, nil)
+		state.SetAccount(e.DelegatorID, delegator)
+		if !e.DelegatorID.Equal(e.EscrowID) {
+			state.SetAccount(e.EscrowID, escrow)
 		}
 
 		app.logger.Debug("released tokens",
-			"escrow_id", e.escrowID,
-			"delegator_id", e.delegatorID,
+			"escrow_id", e.EscrowID,
+			"delegator_id", e.DelegatorID,
 			"amount", tokens,
 		)
 
 		evt := staking.ReclaimEscrowEvent{
-			Owner:  e.delegatorID,
-			Escrow: e.escrowID,
+			Owner:  e.DelegatorID,
+			Escrow: e.EscrowID,
 			Tokens: *tokens,
 		}
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyReclaimEscrow, cbor.Marshal(evt)))
@@ -184,7 +184,7 @@ func (app *stakingApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) e
 	return errors.New("tendermint/staking: unexpected timer")
 }
 
-func (app *stakingApplication) transfer(ctx *abci.Context, state *MutableState, signedXfer *staking.SignedTransfer) error {
+func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.MutableState, signedXfer *staking.SignedTransfer) error {
 	var xfer staking.Transfer
 	if err := signedXfer.Open(staking.TransferSignatureContext, &xfer); err != nil {
 		app.logger.Error("Transfer: invalid signature",
@@ -194,7 +194,7 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *MutableState, 
 	}
 
 	fromID := signedXfer.Signature.PublicKey
-	from := state.account(fromID)
+	from := state.Account(fromID)
 	if from.General.Nonce != xfer.Nonce {
 		app.logger.Error("Transfer: invalid account nonce",
 			"from", fromID,
@@ -219,7 +219,7 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *MutableState, 
 	} else {
 		// Source and destination MUST be separate accounts with how
 		// staking.Move is implemented.
-		to := state.account(xfer.To)
+		to := state.Account(xfer.To)
 		if err := staking.Move(&to.General.Balance, &from.General.Balance, &xfer.Tokens); err != nil {
 			app.logger.Error("Transfer: failed to move balance",
 				"err", err,
@@ -230,11 +230,11 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *MutableState, 
 			return err
 		}
 
-		state.setAccount(xfer.To, to)
+		state.SetAccount(xfer.To, to)
 	}
 
 	from.General.Nonce++
-	state.setAccount(fromID, from)
+	state.SetAccount(fromID, from)
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("Transfer: executed transfer",
@@ -254,7 +254,7 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *MutableState, 
 	return nil
 }
 
-func (app *stakingApplication) burn(ctx *abci.Context, state *MutableState, signedBurn *staking.SignedBurn) error {
+func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.MutableState, signedBurn *staking.SignedBurn) error {
 	var burn staking.Burn
 	if err := signedBurn.Open(staking.BurnSignatureContext, &burn); err != nil {
 		app.logger.Error("Burn: invalid signature",
@@ -264,7 +264,7 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *MutableState, sign
 	}
 
 	id := signedBurn.Signature.PublicKey
-	from := state.account(id)
+	from := state.Account(id)
 	if from.General.Nonce != burn.Nonce {
 		app.logger.Error("Burn: invalid account nonce",
 			"from", id,
@@ -282,13 +282,13 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *MutableState, sign
 		return err
 	}
 
-	totalSupply, _ := state.totalSupply()
+	totalSupply, _ := state.TotalSupply()
 
 	from.General.Nonce++
 	_ = totalSupply.Sub(&burn.Tokens)
 
-	state.setAccount(id, from)
-	state.setTotalSupply(totalSupply)
+	state.SetAccount(id, from)
+	state.SetTotalSupply(totalSupply)
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("Burn: burnt tokens",
@@ -306,7 +306,7 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *MutableState, sign
 	return nil
 }
 
-func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState, signedEscrow *staking.SignedEscrow) error {
+func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.MutableState, signedEscrow *staking.SignedEscrow) error {
 	var escrow staking.Escrow
 	if err := signedEscrow.Open(staking.EscrowSignatureContext, &escrow); err != nil {
 		app.logger.Error("AddEscrow: invalid signature",
@@ -317,7 +317,7 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 
 	// Verify delegator account nonce.
 	id := signedEscrow.Signature.PublicKey
-	from := state.account(id)
+	from := state.Account(id)
 	if from.General.Nonce != escrow.Nonce {
 		app.logger.Error("AddEscrow: invalid account nonce",
 			"from", id,
@@ -335,11 +335,11 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 	if id.Equal(escrow.Account) {
 		to = from
 	} else {
-		to = state.account(escrow.Account)
+		to = state.Account(escrow.Account)
 	}
 
 	// Fetch delegation.
-	delegation := state.delegation(id, escrow.Account)
+	delegation := state.Delegation(id, escrow.Account)
 
 	// Issue shares.
 	if _, err := staking.IssueShares(&to.Escrow, &escrow.Tokens, delegation); err != nil {
@@ -365,12 +365,12 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 	from.General.Nonce++
 
 	// Commit accounts.
-	state.setAccount(id, from)
+	state.SetAccount(id, from)
 	if !id.Equal(escrow.Account) {
-		state.setAccount(escrow.Account, to)
+		state.SetAccount(escrow.Account, to)
 	}
 	// Commit delegation descriptor.
-	state.setDelegation(id, escrow.Account, delegation)
+	state.SetDelegation(id, escrow.Account, delegation)
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("AddEscrow: escrowed tokens",
@@ -390,7 +390,7 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 	return nil
 }
 
-func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *MutableState, signedReclaim *staking.SignedReclaimEscrow) error {
+func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingState.MutableState, signedReclaim *staking.SignedReclaimEscrow) error {
 	var reclaim staking.ReclaimEscrow
 	if err := signedReclaim.Open(staking.ReclaimEscrowSignatureContext, &reclaim); err != nil {
 		app.logger.Error("ReclaimEscrow: invalid signature",
@@ -406,7 +406,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *MutableSt
 
 	// Verify delegator account nonce.
 	id := signedReclaim.Signature.PublicKey
-	to := state.account(id)
+	to := state.Account(id)
 	if to.General.Nonce != reclaim.Nonce {
 		app.logger.Error("ReclaimEscrow: invalid account nonce",
 			"to", id,
@@ -424,11 +424,11 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *MutableSt
 	if id.Equal(reclaim.Account) {
 		from = to
 	} else {
-		from = state.account(reclaim.Account)
+		from = state.Account(reclaim.Account)
 	}
 
 	// Fetch delegation.
-	delegation := state.delegation(id, reclaim.Account)
+	delegation := state.Delegation(id, reclaim.Account)
 
 	// Update delegated shares.
 	if err := delegation.Shares.Sub(&reclaim.Shares); err != nil {
@@ -449,7 +449,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *MutableSt
 	}
 
 	// Fetch debonding interval and current epoch.
-	debondingInterval, err := state.debondingInterval()
+	debondingInterval, err := state.DebondingInterval()
 	if err != nil {
 		app.logger.Error("ReclaimEscrow: failed to query debonding interval",
 			"err", err,
@@ -467,82 +467,16 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *MutableSt
 	}
 	// Include the nonce as the final disambiguator to prevent overwriting debonding
 	// delegations.
-	state.setDebondingDelegation(id, reclaim.Account, to.General.Nonce, &deb)
+	state.SetDebondingDelegation(id, reclaim.Account, to.General.Nonce, &deb)
 
 	to.General.Nonce++
-	state.setDelegation(id, reclaim.Account, delegation)
-	state.setAccount(id, to)
+	state.SetDelegation(id, reclaim.Account, delegation)
+	state.SetAccount(id, to)
 	if !id.Equal(reclaim.Account) {
-		state.setAccount(reclaim.Account, from)
+		state.SetAccount(reclaim.Account, from)
 	}
 
 	return nil
-}
-
-// EnsureSufficientStake ensures that the account owned by id has sufficient
-// stake to meet the sum of the thresholds specified.  The thresholds vector
-// can have multiple instances of the same threshold kind specified, in which
-// case it will be factored in repeatedly.
-func EnsureSufficientStake(ctx *abci.Context, id signature.PublicKey, thresholds []staking.ThresholdKind) error {
-	sc, err := NewStakeCache(ctx)
-	if err != nil {
-		return err
-	}
-	return sc.EnsureSufficientStake(id, thresholds)
-}
-
-// StakeCache is a lookup cache for escrow balances and thresholds that
-// can be used in lieu of repeated queries to `EnsureSufficientStake` at a
-// given height.  This should be favored when repeated queries are going to
-// be made.
-type StakeCache struct {
-	ctx *abci.Context
-
-	thresholds map[staking.ThresholdKind]staking.Quantity
-	balances   map[signature.MapKey]*staking.Quantity
-}
-
-// EnsureSufficientStake ensures that the account owned by id has sufficient
-// stake to meet the sum of the thresholds specified.  The thresholds vector
-// can have multiple instances of the same threshold kind specified, in which
-// case it will be factored in repeatedly.
-func (sc *StakeCache) EnsureSufficientStake(id signature.PublicKey, thresholds []staking.ThresholdKind) error {
-	escrowBalance := sc.balances[id.ToMapKey()]
-	if escrowBalance == nil {
-		state := NewMutableState(sc.ctx.State())
-		escrowBalance = state.EscrowBalance(id)
-		sc.balances[id.ToMapKey()] = escrowBalance
-	}
-
-	var targetThreshold staking.Quantity
-	for _, v := range thresholds {
-		qty := sc.thresholds[v]
-		if err := targetThreshold.Add(&qty); err != nil {
-			return errors.Wrap(err, "staking/tendermint: failed to accumulate threshold")
-		}
-	}
-
-	if escrowBalance.Cmp(&targetThreshold) < 0 {
-		return staking.ErrInsufficientStake
-	}
-
-	return nil
-}
-
-// NewStakeCache creates a new staking lookup cache.
-func NewStakeCache(ctx *abci.Context) (*StakeCache, error) {
-	state := NewMutableState(ctx.State())
-
-	thresholds, err := state.Thresholds()
-	if err != nil {
-		return nil, errors.Wrap(err, "staking/tendermint: failed to query thresholds")
-	}
-
-	return &StakeCache{
-		ctx:        ctx,
-		thresholds: thresholds,
-		balances:   make(map[signature.MapKey]*staking.Quantity),
-	}, nil
 }
 
 // New constructs a new staking application instance.
