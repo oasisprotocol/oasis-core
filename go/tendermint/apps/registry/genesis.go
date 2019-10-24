@@ -12,7 +12,6 @@ import (
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
-	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 func (app *registryApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
@@ -65,10 +64,6 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 			)
 			return errors.Wrap(err, "registry: genesis node registration failure")
 		}
-	}
-
-	if len(st.Entities) > 0 || len(st.Runtimes) > 0 || len(st.Nodes) > 0 {
-		ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
 	}
 
 	return nil

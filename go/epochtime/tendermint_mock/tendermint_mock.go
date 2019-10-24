@@ -14,7 +14,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/epochtime/api"
-	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 	app "github.com/oasislabs/oasis-core/go/tendermint/apps/epochtime_mock"
 	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
@@ -174,12 +173,12 @@ func (t *tendermintMockBackend) onEventDataNewBlock(ctx context.Context, ev tmty
 	events := ev.ResultBeginBlock.GetEvents()
 
 	for _, tmEv := range events {
-		if tmEv.GetType() != tmapi.EventTypeOasis {
+		if tmEv.GetType() != app.EventType {
 			continue
 		}
 
 		for _, pair := range tmEv.GetAttributes() {
-			if bytes.Equal(pair.GetKey(), app.TagEpoch) {
+			if bytes.Equal(pair.GetKey(), app.KeyEpoch) {
 				var epoch api.EpochTime
 				if err := cbor.Unmarshal(pair.GetValue(), &epoch); err != nil {
 					t.logger.Error("worker: malformed mock epoch",

@@ -4,10 +4,10 @@ package tendermint
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 
 	"github.com/eapache/channels"
 	"github.com/pkg/errors"
+	abcitypes "github.com/tendermint/tendermint/abci/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -235,22 +235,31 @@ func (tb *tendermintBackend) worker(ctx context.Context) {
 		case tmtypes.EventDataNewBlock:
 			tb.onEventDataNewBlock(ctx, ev)
 		case tmtypes.EventDataTx:
-			tb.onEventDataTx(ev)
+			tb.onEventDataTx(ctx, ev)
 		default:
 		}
 	}
 }
 
 func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	events := ev.ResultBeginBlock.GetEvents()
+	events := append([]abcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
 	events = append(events, ev.ResultEndBlock.GetEvents()...)
+
+	tb.onABCIEvents(ctx, events, ev.Block.Header.Height)
+}
+
+func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.EventDataTx) {
+	tb.onABCIEvents(ctx, tx.Result.Events, tx.Height)
+}
+
+func (tb *tendermintBackend) onABCIEvents(ctx context.Context, events []abcitypes.Event, height int64) {
 	for _, tmEv := range events {
-		if tmEv.GetType() != tmapi.EventTypeOasis {
+		if tmEv.GetType() != app.EventType {
 			continue
 		}
 
 		for _, pair := range tmEv.GetAttributes() {
-			if bytes.Equal(pair.GetKey(), app.TagNodesExpired) {
+			if bytes.Equal(pair.GetKey(), app.KeyNodesExpired) {
 				var nodes []*node.Node
 				if err := cbor.Unmarshal(pair.GetValue(), &nodes); err != nil {
 					tb.logger.Error("worker: failed to get nodes from tag",
@@ -264,101 +273,77 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 						IsRegistration: false,
 					})
 				}
-			} else if bytes.Equal(pair.GetKey(), app.TagRuntimeRegistered) {
-				var id signature.PublicKey
-				if err := id.UnmarshalBinary(pair.GetValue()); err != nil {
+			} else if bytes.Equal(pair.GetKey(), app.KeyRuntimeRegistered) {
+				var rt api.Runtime
+				if err := cbor.Unmarshal(pair.GetValue(), &rt); err != nil {
 					tb.logger.Error("worker: failed to get runtime from tag",
 						"err", err,
 					)
 					continue
 				}
 
-				rt, err := tb.GetRuntime(ctx, id, ev.Block.Header.Height)
-				if err != nil {
-					tb.logger.Error("worker: failed to get runtime from registry",
-						"err", err,
-						"runtime", id,
-					)
-					continue
-				}
-
-				tb.runtimeNotifier.Broadcast(rt)
-			} else if bytes.Equal(pair.GetKey(), app.TagEntityRegistered) {
-				var id signature.PublicKey
-				if err := id.UnmarshalBinary(pair.GetValue()); err != nil {
+				tb.runtimeNotifier.Broadcast(&rt)
+			} else if bytes.Equal(pair.GetKey(), app.KeyEntityRegistered) {
+				var ent entity.Entity
+				if err := cbor.Unmarshal(pair.GetValue(), &ent); err != nil {
 					tb.logger.Error("worker: failed to get entity from tag",
 						"err", err,
 					)
 					continue
 				}
 
-				ent, err := tb.GetEntity(ctx, id, ev.Block.Header.Height)
-				if err != nil {
-					tb.logger.Error("worker: failed to get entity from registry",
+				tb.entityNotifier.Broadcast(&api.EntityEvent{
+					Entity:         &ent,
+					IsRegistration: true,
+				})
+			} else if bytes.Equal(pair.GetKey(), app.KeyEntityDeregistered) {
+				var dereg app.EntityDeregistration
+				if err := cbor.Unmarshal(pair.GetValue(), &dereg); err != nil {
+					tb.logger.Error("worker: failed to get entity deregistration from tag",
 						"err", err,
-						"entity", id,
 					)
 					continue
 				}
 
+				// Entity deregistration.
 				tb.entityNotifier.Broadcast(&api.EntityEvent{
-					Entity:         ent,
-					IsRegistration: true,
+					Entity:         &dereg.Entity,
+					IsRegistration: false,
 				})
-			} else if bytes.Equal(pair.GetKey(), app.TagRegistryNodeListEpoch) {
-				nl, err := tb.getNodeList(ctx, ev.Block.Header.Height)
+
+				// Node deregistrations.
+				for _, node := range dereg.Nodes {
+					nodeCopy := node
+					tb.nodeNotifier.Broadcast(&api.NodeEvent{
+						Node:           &nodeCopy,
+						IsRegistration: false,
+					})
+				}
+			} else if bytes.Equal(pair.GetKey(), app.KeyRegistryNodeListEpoch) {
+				nl, err := tb.getNodeList(ctx, height)
 				if err != nil {
 					tb.logger.Error("worker: failed to get node list",
-						"height", ev.Block.Header.Height,
+						"height", height,
 						"err", err,
 					)
 					continue
 				}
 				tb.nodeListNotifier.Broadcast(nl)
+			} else if bytes.Equal(pair.GetKey(), app.KeyNodeRegistered) {
+				var n node.Node
+				if err := cbor.Unmarshal(pair.GetValue(), &n); err != nil {
+					tb.logger.Error("worker: failed to get node from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				tb.nodeNotifier.Broadcast(&api.NodeEvent{
+					Node:           &n,
+					IsRegistration: true,
+				})
 			}
 		}
-	}
-}
-
-func (tb *tendermintBackend) onEventDataTx(tx tmtypes.EventDataTx) {
-	output := &app.Output{}
-	if err := cbor.Unmarshal(tx.Result.GetData(), output); err != nil {
-		tb.logger.Error("worker: malformed transaction output",
-			"tx", hex.EncodeToString(tx.Result.GetData()),
-		)
-		return
-	}
-
-	if re := output.OutputRegisterEntity; re != nil {
-		// Entity registration.
-		tb.entityNotifier.Broadcast(&api.EntityEvent{
-			Entity:         &re.Entity,
-			IsRegistration: true,
-		})
-	} else if de := output.OutputDeregisterEntity; de != nil {
-		// Entity deregistration.
-		tb.entityNotifier.Broadcast(&api.EntityEvent{
-			Entity:         &de.Entity,
-			IsRegistration: false,
-		})
-
-		// Node deregistrations.
-		for _, node := range output.Nodes {
-			nodeCopy := node
-			tb.nodeNotifier.Broadcast(&api.NodeEvent{
-				Node:           &nodeCopy,
-				IsRegistration: false,
-			})
-		}
-	} else if rn := output.OutputRegisterNode; rn != nil {
-		// Node registration.
-		tb.nodeNotifier.Broadcast(&api.NodeEvent{
-			Node:           &rn.Node,
-			IsRegistration: true,
-		})
-	} else if rc := output.OutputRegisterRuntime; rc != nil {
-		// Runtime registration.
-		tb.runtimeNotifier.Broadcast(&rc.Runtime)
 	}
 }
 

@@ -14,10 +14,14 @@ const (
 )
 
 var (
-	// TagElected is an ABCI begin block tag with which committee types were elected.
-	TagElected = []byte("scheduler.elected")
+	// EventType is the ABCI event type for scheduler events.
+	EventType = api.EventTypeForApp(AppName)
 
-	// QueryApp is a query for filtering events processed by
-	// the scheduler application.
-	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
+	// QueryApp is a query for filtering events processed by the
+	// scheduler application.
+	QueryApp = api.QueryForApp(AppName)
+
+	// KeyElected is the ABCI event attribute key for the elected
+	// committee types.
+	KeyElected = []byte("elected")
 )

@@ -258,8 +258,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 				return errors.Wrap(err, fmt.Sprintf("tendermint/scheduler: couldn't elect %s committees", kind))
 			}
 		}
-		ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
-		ctx.EmitTag(TagElected, cbor.Marshal(kinds))
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyElected, cbor.Marshal(kinds)))
 
 		var kindNames []string
 		for _, kind := range kinds {

@@ -155,8 +155,7 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) erro
 		return errors.Wrap(err, "tendermint/beacon: failed to set beacon")
 	}
 
-	ctx.EmitTag([]byte(app.Name()), api.TagAppNameValue)
-	ctx.EmitTag(TagGenerated, beacon)
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyGenerated, beacon))
 
 	return nil
 }

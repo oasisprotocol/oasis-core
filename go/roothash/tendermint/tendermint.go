@@ -333,12 +333,12 @@ func (tb *tendermintBackend) reindexBlocks() error {
 			tmEvents = append(tmEvents, txResults.GetEvents()...)
 		}
 		for _, tmEv := range tmEvents {
-			if tmEv.GetType() != tmapi.EventTypeOasis {
+			if tmEv.GetType() != app.EventType {
 				continue
 			}
 
 			for _, pair := range tmEv.GetAttributes() {
-				if bytes.Equal(pair.GetKey(), app.TagFinalized) {
+				if bytes.Equal(pair.GetKey(), app.KeyFinalized) {
 					var blk *block.Block
 					blk, _, err := tb.getBlockFromFinalizedTag(tb.ctx, pair.GetValue(), height)
 					if err != nil {
@@ -369,14 +369,14 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 	defer close(tb.closedCh)
 
 	// Subscribe to transactions which modify state.
-	sub, err := tb.service.Subscribe("roothash-worker", app.QueryUpdate)
+	sub, err := tb.service.Subscribe("roothash-worker", app.QueryApp)
 	if err != nil {
 		tb.logger.Error("failed to subscribe",
 			"err", err,
 		)
 		return
 	}
-	defer tb.service.Unsubscribe("roothash-worker", app.QueryUpdate) // nolint: errcheck
+	defer tb.service.Unsubscribe("roothash-worker", app.QueryApp) // nolint: errcheck
 
 	// Subscribe to prune events if a block indexer is configured.
 	var pruneCh <-chan int64
@@ -452,12 +452,12 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 		tb.Unlock()
 
 		for _, tmEv := range tmEvents {
-			if tmEv.GetType() != tmapi.EventTypeOasis {
+			if tmEv.GetType() != app.EventType {
 				continue
 			}
 
 			for _, pair := range tmEv.GetAttributes() {
-				if bytes.Equal(pair.GetKey(), app.TagFinalized) {
+				if bytes.Equal(pair.GetKey(), app.KeyFinalized) {
 					block, value, err := tb.getBlockFromFinalizedTag(tb.ctx, pair.GetValue(), height)
 					if err != nil {
 						tb.logger.Error("worker: failed to get block from tag",
@@ -498,7 +498,7 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 						Height: height,
 						Block:  block,
 					})
-				} else if bytes.Equal(pair.GetKey(), app.TagMergeDiscrepancyDetected) {
+				} else if bytes.Equal(pair.GetKey(), app.KeyMergeDiscrepancyDetected) {
 					var value app.ValueMergeDiscrepancyDetected
 					if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
 						tb.logger.Error("worker: failed to get discrepancy from tag",
@@ -509,7 +509,7 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 
 					notifiers := tb.getRuntimeNotifiers(value.ID)
 					notifiers.eventNotifier.Broadcast(&api.Event{MergeDiscrepancyDetected: &value.Event})
-				} else if bytes.Equal(pair.GetKey(), app.TagComputeDiscrepancyDetected) {
+				} else if bytes.Equal(pair.GetKey(), app.KeyComputeDiscrepancyDetected) {
 					var value app.ValueComputeDiscrepancyDetected
 					if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
 						tb.logger.Error("worker: failed to get discrepancy from tag",

@@ -15,28 +15,32 @@ const (
 )
 
 var (
-	// TagUpdate is an ABCI transaction tag for marking transactions
-	// which have been processed by staking (value is TagUpdateValue).
-	TagUpdate = []byte("staking.update")
-	// TagUpdateValue is the only allowed value for TagUpdate.
-	TagUpdateValue = []byte{0x01}
+	//EventType is the ABCI event type for staking events.
+	EventType = api.EventTypeForApp(AppName)
 
-	// TagTakeEscrow is an ABCI transaction tag for TakeEscrow calls
+	// QueryApp is a query for filtering events processed by the
+	// staking application.
+	QueryApp = api.QueryForApp(AppName)
+
+	// KeyTakeEscrow is an ABCI event attribute key for TakeEscrow calls
 	// (value is an app.TakeEscrowEvent).
-	TagTakeEscrow = []byte("staking.take_escrow")
+	KeyTakeEscrow = []byte("take_escrow")
 
-	// TagReclaimEscrow is an ABCI trasnsaction tag for ReclaimEscrow
+	// KeyReclaimEscrow is an ABCI event attribute key for ReclaimEscrow
 	// calls (value is an app.ReclaimEscrowEvent).
-	TagReclaimEscrow = []byte("staking.reclaim_escrow")
+	KeyReclaimEscrow = []byte("reclaim_escrow")
 
-	// TagTransfer is an ABCI transaction tag for Transfers that happen
-	// in a non-staking app (value is an app.TransferEvent).
-	TagTransfer = []byte("staking.transfer")
+	// KeyTransfer is an ABCI event attribute key for Transfers (value is
+	// an app.TransferEvent).
+	KeyTransfer = []byte("transfer")
 
-	// QueryUpdate is a query for filtering transactions/blocks where staking
-	// application state has been updated. This is required as state can
-	// change as part of timers firing.
-	QueryUpdate = api.QueryForEvent(TagUpdate, TagUpdateValue)
+	// KeyBurn is an ABCI event attribute key for Burn calls (value is
+	// an app.BurnEvent).
+	KeyBurn = []byte("burn")
+
+	// KeyAddEscrow is an ABCI event attribute key for AddEscrow calls
+	// (value is an app.EscrowEvent).
+	KeyAddEscrow = []byte("add_escrow")
 )
 
 // Tx is a transaction to be accepted by the staking app.
@@ -65,11 +69,4 @@ type TxAddEscrow struct {
 // TxReclaimEscrow is a transaction for a ReclaimEscrow.
 type TxReclaimEscrow struct {
 	SignedReclaimEscrow staking.SignedReclaimEscrow
-}
-
-// Output is an output of a staking transaction.
-type Output struct {
-	OutputTransfer  *staking.TransferEvent `json:"Transfer,omitempty"`
-	OutputBurn      *staking.BurnEvent     `json:"Burn,omitempty"`
-	OutputAddEscrow *staking.EscrowEvent   `json:"AddEscrow,omitempty"`
 }

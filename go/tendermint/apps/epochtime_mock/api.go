@@ -18,12 +18,15 @@ const (
 )
 
 var (
-	// TagEpoch is an ABCI begin block tag for specifying the set epoch.
-	TagEpoch = []byte("epochtime_mock.epoch")
+	// EventType is the ABCI event type for mock epochtime events.
+	EventType = api.EventTypeForApp(AppName)
 
 	// QueryApp is a query for filtering events processed by
 	// the mock epochtime application.
-	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
+	QueryApp = api.QueryForApp(AppName)
+
+	// KeyEpoch is an ABCI event attribute for specifying the set epoch.
+	KeyEpoch = []byte("epoch")
 )
 
 // Tx is a transaction to be accepted by the mock epochtime app.

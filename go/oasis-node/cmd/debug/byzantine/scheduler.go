@@ -12,7 +12,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 	schedulerapp "github.com/oasislabs/oasis-core/go/tendermint/apps/scheduler"
 	"github.com/oasislabs/oasis-core/go/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
@@ -32,12 +31,12 @@ func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.C
 	for {
 		ev := (<-sub.Out()).Data().(tmtypes.EventDataNewBlock)
 		for _, tmEv := range ev.ResultBeginBlock.GetEvents() {
-			if tmEv.GetType() != tmapi.EventTypeOasis {
+			if tmEv.GetType() != schedulerapp.EventType {
 				continue
 			}
 
 			for _, pair := range tmEv.GetAttributes() {
-				if bytes.Equal(pair.GetKey(), schedulerapp.TagElected) {
+				if bytes.Equal(pair.GetKey(), schedulerapp.KeyElected) {
 					var kinds []scheduler.CommitteeKind
 					if err := cbor.Unmarshal(pair.GetValue(), &kinds); err != nil {
 						return 0, errors.Wrap(err, "CBOR Unmarshal kinds")

@@ -14,6 +14,7 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
+	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 var (
@@ -164,13 +165,12 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 			"amount", tokens,
 		)
 
-		ctx.EmitTag(TagUpdate, TagUpdateValue)
 		evt := staking.ReclaimEscrowEvent{
 			Owner:  e.delegatorID,
 			Escrow: e.escrowID,
 			Tokens: *tokens,
 		}
-		ctx.EmitTag(TagReclaimEscrow, cbor.Marshal(evt))
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyReclaimEscrow, cbor.Marshal(evt)))
 	}
 	return nil
 }
@@ -238,14 +238,12 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *MutableState, 
 			"amount", xfer.Tokens,
 		)
 
-		ctx.EmitTag(TagUpdate, TagUpdateValue)
-		ctx.EmitData(&Output{
-			OutputTransfer: &staking.TransferEvent{
-				From:   fromID,
-				To:     xfer.To,
-				Tokens: xfer.Tokens,
-			},
-		})
+		evt := &staking.TransferEvent{
+			From:   fromID,
+			To:     xfer.To,
+			Tokens: xfer.Tokens,
+		}
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 	}
 
 	return nil
@@ -293,13 +291,11 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *MutableState, sign
 			"amount", burn.Tokens,
 		)
 
-		ctx.EmitTag(TagUpdate, TagUpdateValue)
-		ctx.EmitData(&Output{
-			OutputBurn: &staking.BurnEvent{
-				Owner:  id,
-				Tokens: burn.Tokens,
-			},
-		})
+		evt := &staking.BurnEvent{
+			Owner:  id,
+			Tokens: burn.Tokens,
+		}
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyBurn, cbor.Marshal(evt)))
 	}
 
 	return nil
@@ -368,14 +364,12 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *MutableState,
 			"amount", escrow.Tokens,
 		)
 
-		ctx.EmitTag(TagUpdate, TagUpdateValue)
-		ctx.EmitData(&Output{
-			OutputAddEscrow: &staking.EscrowEvent{
-				Owner:  id,
-				Escrow: escrow.Account,
-				Tokens: escrow.Tokens,
-			},
-		})
+		evt := &staking.EscrowEvent{
+			Owner:  id,
+			Escrow: escrow.Account,
+			Tokens: escrow.Tokens,
+		}
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyAddEscrow, cbor.Marshal(evt)))
 	}
 
 	return nil

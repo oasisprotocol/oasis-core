@@ -5,7 +5,6 @@ import (
 
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
-	tmcmn "github.com/tendermint/tendermint/libs/common"
 
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
@@ -29,10 +28,12 @@ const (
 // Context is the context of processing a transaction/block.
 type Context struct {
 	outputType  ContextType
-	data        interface{}
-	tags        []tmcmn.KVPair
 	currentTime time.Time
-	state       *ApplicationState
+
+	data   interface{}
+	events []types.Event
+
+	state *ApplicationState
 }
 
 // NewContext creates a new Context of the given type.
@@ -54,11 +55,6 @@ func (c *Context) Data() interface{} {
 	return c.data
 }
 
-// Tags returns the tags to be passed with this output.
-func (c *Context) Tags() []tmcmn.KVPair {
-	return c.tags
-}
-
 // IsInitChain returns true if this output is part of a InitChain.
 func (c *Context) IsInitChain() bool {
 	return c.outputType == ContextInitChain
@@ -70,32 +66,24 @@ func (c *Context) IsCheckOnly() bool {
 }
 
 // EmitData emits data to be serialized as transaction output.
+//
+// Note: The use of this has mostly been replaced with EmitEvent, please
+// think really carefully if you want to use this.
 func (c *Context) EmitData(data interface{}) {
 	c.data = data
 }
 
-// EmitTag emits a key-value tag for the current transaction/block.
-func (c *Context) EmitTag(key []byte, value []byte) {
-	c.tags = append(c.tags, tmcmn.KVPair{Key: key, Value: value})
-}
-
-// GetTag returns a specific tag's value if it exists.
-func (c *Context) GetTag(key []byte) []byte {
-	return api.GetTag(c.tags, key)
+// EmitEvent emits an ABCI event for the current transaction/block.
+// Note: If the event has no attributes, this routine will do nothing.
+func (c *Context) EmitEvent(bld *api.EventBuilder) {
+	if bld.Dirty() {
+		c.events = append(c.events, bld.Event())
+	}
 }
 
 // GetEvents returns the ABCI event vector corresponding to the tags.
 func (c *Context) GetEvents() []types.Event {
-	if len(c.tags) == 0 {
-		return nil
-	}
-
-	return []types.Event{
-		types.Event{
-			Type:       api.EventTypeOasis,
-			Attributes: c.tags,
-		},
-	}
+	return c.events
 }
 
 // Now returns the current tendermint time.

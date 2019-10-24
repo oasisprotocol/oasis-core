@@ -13,11 +13,14 @@ const (
 )
 
 var (
-	// TagGenerated is an ABCI begin block tag for new beacons.
-	// (value is a CBOR serialized beacon.GenerateEvent).
-	TagGenerated = []byte("beacon.generated")
+	// EventType is the ABCI event type for beacon events.
+	EventType = api.EventTypeForApp(AppName)
 
 	// QueryApp is a query for filtering events processed by the
 	// beacon application.
-	QueryApp = api.QueryForEvent([]byte(AppName), api.TagAppNameValue)
+	QueryApp = api.QueryForApp(AppName)
+
+	// KeyGenerated is the ABCI event attribute key for the new
+	// beacons (value is a CBOR serialized beacon.GenerateEvent).
+	KeyGenerated = []byte("generated")
 )

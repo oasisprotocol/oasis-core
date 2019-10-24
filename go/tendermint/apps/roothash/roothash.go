@@ -24,6 +24,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
+	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 	registryapp "github.com/oasislabs/oasis-core/go/tendermint/apps/registry"
 	schedulerapp "github.com/oasislabs/oasis-core/go/tendermint/apps/scheduler"
 	stakingapp "github.com/oasislabs/oasis-core/go/tendermint/apps/staking"
@@ -291,12 +292,11 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *runti
 	runtime.Timer.Stop(ctx)
 	runtime.CurrentBlock = blk
 
-	ctx.EmitTag(TagUpdate, TagUpdateValue)
 	tagV := ValueFinalized{
 		ID:    runtime.Runtime.ID,
 		Round: blk.Header.Round,
 	}
-	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
+	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, tagV.MarshalCBOR()))
 }
 
 func (app *rootHashApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error {
@@ -326,23 +326,25 @@ func (app *rootHashApplication) ForeignExecuteTx(ctx *abci.Context, other abci.A
 
 	switch other.Name() {
 	case registryapp.AppName:
-		for _, pair := range ctx.Tags() {
-			if bytes.Equal(pair.GetKey(), registryapp.TagRuntimeRegistered) {
-				runtime := pair.GetValue()
+		for _, ev := range ctx.GetEvents() {
+			if ev.Type != registryapp.EventType {
+				continue
+			}
 
-				app.logger.Debug("ForeignDeliverTx: new runtime",
-					"runtime", hex.EncodeToString(runtime),
-				)
+			for _, pair := range ev.Attributes {
+				if bytes.Equal(pair.GetKey(), registryapp.KeyRuntimeRegistered) {
+					var rt registry.Runtime
+					if err := cbor.Unmarshal(pair.GetValue(), &rt); err != nil {
+						return errors.Wrap(err, "roothash: failed to deserialize new runtime")
+					}
 
-				// New runtime has been registered, create its roothash state.
-				regState := registryapp.NewMutableState(ctx.State())
-				rt, err := regState.GetRuntime(runtime)
-				if err != nil {
-					return errors.Wrap(err, "roothash: failed to fetch new runtime")
+					app.logger.Debug("ForeignDeliverTx: new runtime",
+						"runtime", rt.ID,
+					)
+
+					ensureGenesis()
+					app.onNewRuntime(ctx, &rt, st)
 				}
-
-				ensureGenesis()
-				app.onNewRuntime(ctx, rt, st)
 			}
 		}
 	}
@@ -395,12 +397,11 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 
 	// This transaction now also includes a new block for the given runtime.
 	id, _ := runtime.ID.MarshalBinary()
-	ctx.EmitTag(TagUpdate, TagUpdateValue)
 	tagV := ValueFinalized{
 		ID:    id,
 		Round: genesisBlock.Header.Round,
 	}
-	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
+	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, tagV.MarshalCBOR()))
 }
 
 func (app *rootHashApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
@@ -675,7 +676,6 @@ func (app *rootHashApplication) tryFinalizeCompute(
 			logging.LogEvent, roothash.LogEventComputeDiscrepancyDetected,
 		)
 
-		ctx.EmitTag(TagUpdate, TagUpdateValue)
 		tagV := ValueComputeDiscrepancyDetected{
 			ID: id,
 			Event: roothash.ComputeDiscrepancyDetectedEvent{
@@ -683,7 +683,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 				Timeout:     forced,
 			},
 		}
-		ctx.EmitTag(TagComputeDiscrepancyDetected, tagV.MarshalCBOR())
+		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyComputeDiscrepancyDetected, tagV.MarshalCBOR()))
 		return
 	default:
 	}
@@ -752,12 +752,11 @@ func (app *rootHashApplication) tryFinalizeMerge(
 			logging.LogEvent, roothash.LogEventMergeDiscrepancyDetected,
 		)
 
-		ctx.EmitTag(TagUpdate, TagUpdateValue)
 		tagV := ValueMergeDiscrepancyDetected{
 			ID:    id,
 			Event: roothash.MergeDiscrepancyDetectedEvent{},
 		}
-		ctx.EmitTag(TagMergeDiscrepancyDetected, tagV.MarshalCBOR())
+		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyMergeDiscrepancyDetected, tagV.MarshalCBOR()))
 		return nil
 	default:
 	}
@@ -805,12 +804,11 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, rtS
 	rtState.Timer.Stop(ctx)
 	rtState.CurrentBlock = blk
 
-	ctx.EmitTag(TagUpdate, TagUpdateValue)
 	tagV := ValueFinalized{
 		ID:    rtState.Runtime.ID,
 		Round: blk.Header.Round,
 	}
-	ctx.EmitTag(TagFinalized, tagV.MarshalCBOR())
+	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, tagV.MarshalCBOR()))
 
 	return nil
 }
