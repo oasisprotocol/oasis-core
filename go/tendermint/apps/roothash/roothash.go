@@ -26,8 +26,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 	registryapp "github.com/oasislabs/oasis-core/go/tendermint/apps/registry"
+	registryState "github.com/oasislabs/oasis-core/go/tendermint/apps/registry/state"
+	roothashState "github.com/oasislabs/oasis-core/go/tendermint/apps/roothash/state"
 	schedulerapp "github.com/oasislabs/oasis-core/go/tendermint/apps/scheduler"
+	schedulerState "github.com/oasislabs/oasis-core/go/tendermint/apps/scheduler/state"
 	stakingapp "github.com/oasislabs/oasis-core/go/tendermint/apps/staking"
+	stakingState "github.com/oasislabs/oasis-core/go/tendermint/apps/staking/state"
 )
 
 // timerKindRound is the round timer kind.
@@ -91,10 +95,6 @@ func (app *rootHashApplication) SetOption(request types.RequestSetOption) types.
 	return types.ResponseSetOption{}
 }
 
-func (app *rootHashApplication) GetState(height int64) (interface{}, error) {
-	return newImmutableState(app.state, height)
-}
-
 func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.RootHash
 
@@ -105,8 +105,8 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 	// Note: This could use the genesis state, but the registry has already
 	// carved out it's entries by this point.
 
-	regState := registryapp.NewMutableState(ctx.State())
-	runtimes, _ := regState.GetRuntimes()
+	regState := registryState.NewMutableState(ctx.State())
+	runtimes, _ := regState.Runtimes()
 	for _, v := range runtimes {
 		app.logger.Info("InitChain: allocating per-runtime state",
 			"runtime", v.ID,
@@ -126,11 +126,11 @@ func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.Requ
 }
 
 func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error { // nolint: gocyclo
-	state := newMutableState(ctx.State())
+	state := roothashState.NewMutableState(ctx.State())
 
 	// Query the updated runtime list.
-	regState := registryapp.NewMutableState(ctx.State())
-	runtimes, _ := regState.GetRuntimes()
+	regState := registryState.NewMutableState(ctx.State())
+	runtimes, _ := regState.Runtimes()
 	newDescriptors := make(map[signature.MapKey]*registry.Runtime)
 	for _, v := range runtimes {
 		if v.Kind == registry.KindCompute {
@@ -138,8 +138,8 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		}
 	}
 
-	schedState := schedulerapp.NewMutableState(ctx.State())
-	for _, rtState := range state.getRuntimes() {
+	schedState := schedulerState.NewMutableState(ctx.State())
+	for _, rtState := range state.Runtimes() {
 		rtID := rtState.Runtime.ID
 
 		if !rtState.Runtime.IsCompute() {
@@ -150,7 +150,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		}
 
 		// There will later be multiple compute committees.
-		computeCommittee, err := schedState.GetCommittee(scheduler.KindCompute, rtID)
+		computeCommittee, err := schedState.Committee(scheduler.KindCompute, rtID)
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get compute committee from scheduler",
 				"err", err,
@@ -167,7 +167,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		computeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
 		for idx, n := range computeCommittee.Members {
 			var nodeRuntime *node.Runtime
-			node, err1 := regState.GetNode(n.PublicKey)
+			node, err1 := regState.Node(n.PublicKey)
 			if err1 != nil {
 				return errors.Wrap(err1, "checkCommittees: failed to query node")
 			}
@@ -201,7 +201,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			},
 		}
 
-		mergeCommittee, err := schedState.GetCommittee(scheduler.KindMerge, rtID)
+		mergeCommittee, err := schedState.Committee(scheduler.KindMerge, rtID)
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get merge committee from scheduler",
 				"err", err,
@@ -252,7 +252,7 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		)
 
 		rtState.Timer.Stop(ctx)
-		rtState.Round = newRound(computePool, mergePool, blk)
+		rtState.Round = roothashState.NewRound(computePool, mergePool, blk)
 
 		// Emit an empty epoch transition block in the new round. This is required so that
 		// the clients can be sure what state is final when an epoch transition occurs.
@@ -265,13 +265,13 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			delete(newDescriptors, mk)
 		}
 
-		state.updateRuntimeState(rtState)
+		state.SetRuntimeState(rtState)
 	}
 
 	// Just because a runtime didn't have committees, it doesn't mean that
 	// it's state does not need to be updated. Do so now where possible.
 	for _, v := range newDescriptors {
-		rtState, err := state.getRuntimeState(v.ID)
+		rtState, err := state.RuntimeState(v.ID)
 		if err != nil {
 			app.logger.Warn("onEpochChange: unknown runtime in update pass",
 				"runtime", v,
@@ -280,13 +280,13 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		}
 
 		rtState.Runtime = v
-		state.updateRuntimeState(rtState)
+		state.SetRuntimeState(rtState)
 	}
 
 	return nil
 }
 
-func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *runtimeState, hdrType block.HeaderType) {
+func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *roothashState.RuntimeState, hdrType block.HeaderType) {
 	blk := block.NewEmptyBlock(runtime.CurrentBlock, uint64(ctx.Now().Unix()), hdrType)
 
 	runtime.Timer.Stop(ctx)
@@ -308,7 +308,7 @@ func (app *rootHashApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error
 		return errors.Wrap(err, "roothash: failed to unmarshal")
 	}
 
-	state := newMutableState(ctx.State())
+	state := roothashState.NewMutableState(ctx.State())
 
 	if tx.TxMergeCommit != nil {
 		return app.commit(ctx, state, tx.TxMergeCommit.ID, &tx)
@@ -353,7 +353,7 @@ func (app *rootHashApplication) ForeignExecuteTx(ctx *abci.Context, other abci.A
 }
 
 func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registry.Runtime, genesis *roothash.Genesis) {
-	state := newMutableState(ctx.State())
+	state := roothashState.NewMutableState(ctx.State())
 
 	if !runtime.IsCompute() {
 		app.logger.Warn("onNewRuntime: ignoring non-compute runtime",
@@ -363,7 +363,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 	}
 
 	// Check if state already exists for the given runtime.
-	rtState, _ := state.getRuntimeState(runtime.ID)
+	rtState, _ := state.RuntimeState(runtime.ID)
 	if rtState != nil {
 		// Do not propagate the error as this would fail the transaction.
 		app.logger.Warn("onNewRuntime: state for runtime already exists",
@@ -384,7 +384,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 
 	// Create new state containing the genesis block.
 	timerCtx := &timerContext{ID: runtime.ID}
-	state.updateRuntimeState(&runtimeState{
+	state.SetRuntimeState(&roothashState.RuntimeState{
 		Runtime:      runtime,
 		CurrentBlock: genesisBlock,
 		GenesisBlock: genesisBlock,
@@ -422,8 +422,8 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		logging.LogEvent, roothash.LogEventTimerFired,
 	)
 
-	state := newMutableState(ctx.State())
-	rtState, err := state.getRuntimeState(tCtx.ID)
+	state := roothashState.NewMutableState(ctx.State())
+	rtState, err := state.RuntimeState(tCtx.ID)
 	if err != nil {
 		app.logger.Error("FireTimer: failed to get state associated with timer",
 			"err", err,
@@ -451,7 +451,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		"timer_round", tCtx.Round,
 	)
 
-	defer state.updateRuntimeState(rtState)
+	defer state.SetRuntimeState(rtState)
 
 	if rtState.Round.MergePool.IsTimeout(ctx.Now()) {
 		if err := app.tryFinalizeBlock(ctx, runtime, rtState, true); err != nil {
@@ -470,7 +470,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 
 type roothashSignatureVerifier struct {
 	runtimeID signature.PublicKey
-	scheduler *schedulerapp.MutableState
+	scheduler *schedulerState.MutableState
 }
 
 // VerifyCommitteeSignatures verifies that the given signatures come from
@@ -482,7 +482,7 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 		return nil
 	}
 
-	committee, err := sv.scheduler.GetCommittee(kind, sv.runtimeID)
+	committee, err := sv.scheduler.Committee(kind, sv.runtimeID)
 	if err != nil {
 		return err
 	}
@@ -506,13 +506,13 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 
 func (app *rootHashApplication) commit(
 	ctx *abci.Context,
-	state *mutableState,
+	state *roothashState.MutableState,
 	id signature.PublicKey,
 	tx *Tx,
 ) error {
 	logger := app.logger.With("is_check_only", ctx.IsCheckOnly())
 
-	rtState, err := state.getRuntimeState(id)
+	rtState, err := state.RuntimeState(id)
 	if err != nil {
 		return errors.Wrap(err, "roothash: failed to fetch runtime state")
 	}
@@ -529,7 +529,7 @@ func (app *rootHashApplication) commit(
 	latestBlock := rtState.CurrentBlock
 	blockNr := latestBlock.Header.Round
 
-	defer state.updateRuntimeState(rtState)
+	defer state.SetRuntimeState(rtState)
 
 	// If the round was finalized, transition.
 	if rtState.Round.CurrentBlock.Header.Round != latestBlock.Header.Round {
@@ -537,20 +537,20 @@ func (app *rootHashApplication) commit(
 			"round", blockNr,
 		)
 
-		rtState.Round.transition(latestBlock)
+		rtState.Round.Transition(latestBlock)
 	}
 
 	// Create storage signature verifier.
 	sv := &roothashSignatureVerifier{
 		runtimeID: id,
-		scheduler: schedulerapp.NewMutableState(ctx.State()),
+		scheduler: schedulerState.NewMutableState(ctx.State()),
 	}
 
 	// Add the commitments.
 	switch {
 	case tx.TxMergeCommit != nil:
 		for _, commit := range tx.TxMergeCommit.Commits {
-			if err = rtState.Round.addMergeCommitment(&commit, sv); err != nil {
+			if err = rtState.Round.AddMergeCommitment(&commit, sv); err != nil {
 				logger.Error("failed to add merge commitment to round",
 					"err", err,
 					"round", blockNr,
@@ -572,7 +572,7 @@ func (app *rootHashApplication) commit(
 		pools := make(map[*commitment.Pool]bool)
 		for _, commit := range tx.TxComputeCommit.Commits {
 			var pool *commitment.Pool
-			if pool, err = rtState.Round.addComputeCommitment(&commit, sv); err != nil {
+			if pool, err = rtState.Round.AddComputeCommitment(&commit, sv); err != nil {
 				logger.Error("failed to add compute commitment to round",
 					"err", err,
 					"round", blockNr,
@@ -599,7 +599,7 @@ func (app *rootHashApplication) commit(
 func (app *rootHashApplication) updateTimer(
 	ctx *abci.Context,
 	runtime *registry.Runtime,
-	rtState *runtimeState,
+	rtState *roothashState.RuntimeState,
 	blockNr uint64,
 ) {
 	// Do not re-arm the timer if the round has already changed.
@@ -607,7 +607,7 @@ func (app *rootHashApplication) updateTimer(
 		return
 	}
 
-	nextTimeout := rtState.Round.getNextTimeout()
+	nextTimeout := rtState.Round.GetNextTimeout()
 	if nextTimeout.IsZero() {
 		// Disarm timer.
 		app.logger.Debug("disarming round timeout")
@@ -627,7 +627,7 @@ func (app *rootHashApplication) updateTimer(
 func (app *rootHashApplication) tryFinalizeCompute(
 	ctx *abci.Context,
 	runtime *registry.Runtime,
-	rtState *runtimeState,
+	rtState *roothashState.RuntimeState,
 	pool *commitment.Pool,
 	forced bool,
 ) {
@@ -704,7 +704,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 func (app *rootHashApplication) tryFinalizeMerge(
 	ctx *abci.Context,
 	runtime *registry.Runtime,
-	rtState *runtimeState,
+	rtState *roothashState.RuntimeState,
 	forced bool,
 ) *block.Block {
 	latestBlock := rtState.CurrentBlock
@@ -772,13 +772,13 @@ func (app *rootHashApplication) tryFinalizeMerge(
 	return nil
 }
 
-func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, rtState *runtimeState, blk *block.Block) error {
+func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, rtState *roothashState.RuntimeState, blk *block.Block) error {
 	checkpoint := ctx.NewStateCheckpoint()
 	defer checkpoint.Close()
 
 	for _, message := range blk.Header.RoothashMessages {
 		// Check with staking.
-		stakingState := stakingapp.NewMutableState(ctx.State())
+		stakingState := stakingState.NewMutableState(ctx.State())
 		unsat, err := stakingState.HandleRoothashMessage(rtState.Runtime.ID, message)
 		if err != nil {
 			return err
@@ -816,7 +816,7 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, rtS
 func (app *rootHashApplication) tryFinalizeBlock(
 	ctx *abci.Context,
 	runtime *registry.Runtime,
-	rtState *runtimeState,
+	rtState *roothashState.RuntimeState,
 	mergeForced bool,
 ) error {
 	finalizedBlock := app.tryFinalizeMerge(ctx, runtime, rtState, mergeForced)

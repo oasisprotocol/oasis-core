@@ -1,4 +1,4 @@
-package roothash
+package state
 
 import (
 	"github.com/tendermint/iavl"
@@ -17,52 +17,52 @@ var (
 	// Value is CBOR-serialized runtime state.
 	runtimeKeyFmt = keyformat.New(0x20, &signature.MapKey{})
 
-	_ cbor.Marshaler   = (*runtimeState)(nil)
-	_ cbor.Unmarshaler = (*runtimeState)(nil)
+	_ cbor.Marshaler   = (*RuntimeState)(nil)
+	_ cbor.Unmarshaler = (*RuntimeState)(nil)
 )
 
-type runtimeState struct {
+type RuntimeState struct {
 	Runtime      *registry.Runtime `json:"runtime"`
 	CurrentBlock *block.Block      `json:"current_block"`
 	GenesisBlock *block.Block      `json:"genesis_block"`
-	Round        *round            `json:"round"`
+	Round        *Round            `json:"round"`
 	Timer        abci.Timer        `json:"timer"`
 }
 
-func (s *runtimeState) MarshalCBOR() []byte {
+func (s *RuntimeState) MarshalCBOR() []byte {
 	return cbor.Marshal(s)
 }
 
-func (s *runtimeState) UnmarshalCBOR(data []byte) error {
+func (s *RuntimeState) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, s)
 }
 
-type immutableState struct {
+type ImmutableState struct {
 	*abci.ImmutableState
 }
 
-func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
+func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
 		return nil, err
 	}
 
-	return &immutableState{inner}, nil
+	return &ImmutableState{inner}, nil
 }
 
-func (s *immutableState) getRuntimeState(id signature.PublicKey) (*runtimeState, error) {
+func (s *ImmutableState) RuntimeState(id signature.PublicKey) (*RuntimeState, error) {
 	_, raw := s.Snapshot.Get(runtimeKeyFmt.Encode(&id))
 	if raw == nil {
 		return nil, nil
 	}
 
-	var state runtimeState
+	var state RuntimeState
 	err := state.UnmarshalCBOR(raw)
 	return &state, err
 }
 
-func (s *immutableState) getRuntimes() []*runtimeState {
-	var runtimes []*runtimeState
+func (s *ImmutableState) Runtimes() []*RuntimeState {
+	var runtimes []*RuntimeState
 	s.Snapshot.IterateRange(
 		runtimeKeyFmt.Encode(),
 		nil,
@@ -72,7 +72,7 @@ func (s *immutableState) getRuntimes() []*runtimeState {
 				return true
 			}
 
-			var state runtimeState
+			var state RuntimeState
 			cbor.MustUnmarshal(value, &state)
 
 			runtimes = append(runtimes, &state)
@@ -83,21 +83,21 @@ func (s *immutableState) getRuntimes() []*runtimeState {
 	return runtimes
 }
 
-type mutableState struct {
-	*immutableState
+type MutableState struct {
+	*ImmutableState
 
 	tree *iavl.MutableTree
 }
 
-func newMutableState(tree *iavl.MutableTree) *mutableState {
+func NewMutableState(tree *iavl.MutableTree) *MutableState {
 	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
 
-	return &mutableState{
-		immutableState: &immutableState{inner},
+	return &MutableState{
+		ImmutableState: &ImmutableState{inner},
 		tree:           tree,
 	}
 }
 
-func (s *mutableState) updateRuntimeState(state *runtimeState) {
+func (s *MutableState) SetRuntimeState(state *RuntimeState) {
 	s.tree.Set(runtimeKeyFmt.Encode(&state.Runtime.ID), state.MarshalCBOR())
 }

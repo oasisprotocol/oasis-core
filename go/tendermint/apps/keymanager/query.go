@@ -5,6 +5,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
+	keymanagerState "github.com/oasislabs/oasis-core/go/tendermint/apps/keymanager/state"
 )
 
 // Query is the key manager query interface.
@@ -21,7 +22,7 @@ type QueryFactory struct {
 
 // QueryAt returns the key manager query interface for a specific height.
 func (sf *QueryFactory) QueryAt(height int64) (Query, error) {
-	state, err := newImmutableState(sf.app.state, height)
+	state, err := keymanagerState.NewImmutableState(sf.app.state, height)
 	if err != nil {
 		return nil, err
 	}
@@ -29,15 +30,15 @@ func (sf *QueryFactory) QueryAt(height int64) (Query, error) {
 }
 
 type keymanagerQuerier struct {
-	state *immutableState
+	state *keymanagerState.ImmutableState
 }
 
 func (kq *keymanagerQuerier) Status(ctx context.Context, id signature.PublicKey) (*keymanager.Status, error) {
-	return kq.state.GetStatus(id)
+	return kq.state.Status(id)
 }
 
 func (kq *keymanagerQuerier) Statuses(ctx context.Context) ([]*keymanager.Status, error) {
-	return kq.state.GetStatuses()
+	return kq.state.Statuses()
 }
 
 func (app *keymanagerApplication) QueryFactory() interface{} {

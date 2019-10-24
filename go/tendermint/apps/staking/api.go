@@ -3,18 +3,19 @@ package staking
 import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
+	stakingState "github.com/oasislabs/oasis-core/go/tendermint/apps/staking/state"
 )
 
 const (
 	// TransactionTag is a unique byte used to identify transactions
 	// for the staking application.
 	TransactionTag byte = 0x05
-
-	// AppName is the ABCI application name.
-	AppName string = "100_staking"
 )
 
 var (
+	// AppName is the ABCI application name.
+	AppName = stakingState.AppName
+
 	//EventType is the ABCI event type for staking events.
 	EventType = api.EventTypeForApp(AppName)
 
@@ -24,7 +25,7 @@ var (
 
 	// KeyTakeEscrow is an ABCI event attribute key for TakeEscrow calls
 	// (value is an app.TakeEscrowEvent).
-	KeyTakeEscrow = []byte("take_escrow")
+	KeyTakeEscrow = stakingState.KeyTakeEscrow
 
 	// KeyReclaimEscrow is an ABCI event attribute key for ReclaimEscrow
 	// calls (value is an app.ReclaimEscrowEvent).
@@ -32,7 +33,7 @@ var (
 
 	// KeyTransfer is an ABCI event attribute key for Transfers (value is
 	// an app.TransferEvent).
-	KeyTransfer = []byte("transfer")
+	KeyTransfer = stakingState.KeyTransfer
 
 	// KeyBurn is an ABCI event attribute key for Burn calls (value is
 	// an app.BurnEvent).

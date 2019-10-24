@@ -1,4 +1,4 @@
-package registry
+package state
 
 import (
 	"github.com/tendermint/iavl"
@@ -37,16 +37,16 @@ var (
 	keyManagerOperatorKeyFmt = keyformat.New(0x14)
 )
 
-type immutableState struct {
+type ImmutableState struct {
 	*abci.ImmutableState
 }
 
-func (s *immutableState) getSignedEntityRaw(id signature.PublicKey) ([]byte, error) {
+func (s *ImmutableState) getSignedEntityRaw(id signature.PublicKey) ([]byte, error) {
 	_, value := s.Snapshot.Get(signedEntityKeyFmt.Encode(&id))
 	return value, nil
 }
 
-func (s *immutableState) getEntity(id signature.PublicKey) (*entity.Entity, error) {
+func (s *ImmutableState) Entity(id signature.PublicKey) (*entity.Entity, error) {
 	signedEntityRaw, err := s.getSignedEntityRaw(id)
 	if err != nil || signedEntityRaw == nil {
 		return nil, registry.ErrNoSuchEntity
@@ -63,7 +63,7 @@ func (s *immutableState) getEntity(id signature.PublicKey) (*entity.Entity, erro
 	return &entity, nil
 }
 
-func (s *immutableState) getEntities() ([]*entity.Entity, error) {
+func (s *ImmutableState) Entities() ([]*entity.Entity, error) {
 	var entities []*entity.Entity
 	s.Snapshot.IterateRange(
 		signedEntityKeyFmt.Encode(),
@@ -92,7 +92,7 @@ func (s *immutableState) getEntities() ([]*entity.Entity, error) {
 	return entities, nil
 }
 
-func (s *immutableState) getSignedEntities() ([]*entity.SignedEntity, error) {
+func (s *ImmutableState) SignedEntities() ([]*entity.SignedEntity, error) {
 	var entities []*entity.SignedEntity
 	s.Snapshot.IterateRange(
 		signedEntityKeyFmt.Encode(),
@@ -117,12 +117,12 @@ func (s *immutableState) getSignedEntities() ([]*entity.SignedEntity, error) {
 	return entities, nil
 }
 
-func (s *immutableState) getSignedNodeRaw(id signature.PublicKey) ([]byte, error) {
+func (s *ImmutableState) getSignedNodeRaw(id signature.PublicKey) ([]byte, error) {
 	_, value := s.Snapshot.Get(signedNodeKeyFmt.Encode(&id))
 	return value, nil
 }
 
-func (s *immutableState) GetNode(id signature.PublicKey) (*node.Node, error) {
+func (s *ImmutableState) Node(id signature.PublicKey) (*node.Node, error) {
 	signedNodeRaw, err := s.getSignedNodeRaw(id)
 	if err != nil {
 		return nil, err
@@ -142,7 +142,7 @@ func (s *immutableState) GetNode(id signature.PublicKey) (*node.Node, error) {
 	return &node, nil
 }
 
-func (s *immutableState) GetNodes() ([]*node.Node, error) {
+func (s *ImmutableState) Nodes() ([]*node.Node, error) {
 	var nodes []*node.Node
 	s.Snapshot.IterateRange(
 		signedNodeKeyFmt.Encode(),
@@ -171,7 +171,7 @@ func (s *immutableState) GetNodes() ([]*node.Node, error) {
 	return nodes, nil
 }
 
-func (s *immutableState) getSignedNodes() ([]*node.SignedNode, error) {
+func (s *ImmutableState) SignedNodes() ([]*node.SignedNode, error) {
 	var nodes []*node.SignedNode
 	s.Snapshot.IterateRange(
 		signedNodeKeyFmt.Encode(),
@@ -196,13 +196,13 @@ func (s *immutableState) getSignedNodes() ([]*node.SignedNode, error) {
 	return nodes, nil
 }
 
-func (s *immutableState) getSignedRuntimeRaw(id signature.PublicKey) ([]byte, error) {
+func (s *ImmutableState) getSignedRuntimeRaw(id signature.PublicKey) ([]byte, error) {
 	_, value := s.Snapshot.Get(signedRuntimeKeyFmt.Encode(&id))
 	return value, nil
 }
 
 // GetRuntime looks up a runtime by its identifier and returns it.
-func (s *immutableState) GetRuntime(id signature.PublicKey) (*registry.Runtime, error) {
+func (s *ImmutableState) Runtime(id signature.PublicKey) (*registry.Runtime, error) {
 	raw, err := s.getSignedRuntimeRaw(id)
 	if err != nil {
 		return nil, err
@@ -220,7 +220,7 @@ func (s *immutableState) GetRuntime(id signature.PublicKey) (*registry.Runtime, 
 }
 
 // GetRuntimes returns a list of all registered runtimes.
-func (s *immutableState) GetRuntimes() ([]*registry.Runtime, error) {
+func (s *ImmutableState) Runtimes() ([]*registry.Runtime, error) {
 	var runtimes []*registry.Runtime
 	s.Snapshot.IterateRange(
 		signedRuntimeKeyFmt.Encode(),
@@ -249,7 +249,7 @@ func (s *immutableState) GetRuntimes() ([]*registry.Runtime, error) {
 	return runtimes, nil
 }
 
-func (s *immutableState) getSignedRuntimes() ([]*registry.SignedRuntime, error) {
+func (s *ImmutableState) SignedRuntimes() ([]*registry.SignedRuntime, error) {
 	var runtimes []*registry.SignedRuntime
 	s.Snapshot.IterateRange(
 		signedRuntimeKeyFmt.Encode(),
@@ -274,7 +274,7 @@ func (s *immutableState) getSignedRuntimes() ([]*registry.SignedRuntime, error) 
 	return runtimes, nil
 }
 
-func (s *immutableState) getKeyManagerOperator() signature.PublicKey {
+func (s *ImmutableState) KeyManagerOperator() signature.PublicKey {
 	_, value := s.Snapshot.Get(keyManagerOperatorKeyFmt.Encode())
 	if value == nil {
 		return nil
@@ -288,27 +288,27 @@ func (s *immutableState) getKeyManagerOperator() signature.PublicKey {
 	return id
 }
 
-func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
+func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
 		return nil, err
 	}
 
-	return &immutableState{inner}, nil
+	return &ImmutableState{inner}, nil
 }
 
 // MutableState is a mutable registry state wrapper.
 type MutableState struct {
-	*immutableState
+	*ImmutableState
 
 	tree *iavl.MutableTree
 }
 
-func (s *MutableState) createEntity(ent *entity.Entity, sigEnt *entity.SignedEntity) {
+func (s *MutableState) CreateEntity(ent *entity.Entity, sigEnt *entity.SignedEntity) {
 	s.tree.Set(signedEntityKeyFmt.Encode(&ent.ID), sigEnt.MarshalCBOR())
 }
 
-func (s *MutableState) removeEntity(id signature.PublicKey) (entity.Entity, []node.Node) {
+func (s *MutableState) RemoveEntity(id signature.PublicKey) (entity.Entity, []node.Node) {
 	var removedSignedEntity entity.SignedEntity
 	var removedEntity entity.Entity
 	var removedNodes []node.Node
@@ -346,7 +346,7 @@ func (s *MutableState) removeEntity(id signature.PublicKey) (entity.Entity, []no
 	return removedEntity, removedNodes
 }
 
-func (s *MutableState) createNode(node *node.Node, signedNode *node.SignedNode) error {
+func (s *MutableState) CreateNode(node *node.Node, signedNode *node.SignedNode) error {
 	// Ensure that the entity exists.
 	ent, err := s.getSignedEntityRaw(node.EntityID)
 	if ent == nil || err != nil {
@@ -359,12 +359,12 @@ func (s *MutableState) createNode(node *node.Node, signedNode *node.SignedNode) 
 	return nil
 }
 
-func (s *MutableState) removeNode(node *node.Node) {
+func (s *MutableState) RemoveNode(node *node.Node) {
 	s.tree.Remove(signedNodeKeyFmt.Encode(&node.ID))
 	s.tree.Remove(signedNodeByEntityKeyFmt.Encode(&node.EntityID, &node.ID))
 }
 
-func (s *MutableState) createRuntime(rt *registry.Runtime, sigRt *registry.SignedRuntime) error {
+func (s *MutableState) CreateRuntime(rt *registry.Runtime, sigRt *registry.SignedRuntime) error {
 	entID := sigRt.Signature.PublicKey
 	ent, err := s.getSignedEntityRaw(entID)
 	if ent == nil || err != nil {
@@ -376,7 +376,7 @@ func (s *MutableState) createRuntime(rt *registry.Runtime, sigRt *registry.Signe
 	return nil
 }
 
-func (s *MutableState) setKeyManagerOperator(id signature.PublicKey) {
+func (s *MutableState) SetKeyManagerOperator(id signature.PublicKey) {
 	if len(id) == 0 {
 		return
 	}
@@ -390,7 +390,7 @@ func NewMutableState(tree *iavl.MutableTree) *MutableState {
 	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
 
 	return &MutableState{
-		immutableState: &immutableState{inner},
+		ImmutableState: &ImmutableState{inner},
 		tree:           tree,
 	}
 }

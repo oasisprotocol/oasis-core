@@ -1,4 +1,4 @@
-package scheduler
+package state
 
 import (
 	"github.com/tendermint/iavl"
@@ -30,11 +30,11 @@ var (
 	logger = logging.GetLogger("tendermint/scheduler")
 )
 
-type immutableState struct {
+type ImmutableState struct {
 	*abci.ImmutableState
 }
 
-func (s *immutableState) GetCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) (*api.Committee, error) {
+func (s *ImmutableState) Committee(kind api.CommitteeKind, runtimeID signature.PublicKey) (*api.Committee, error) {
 	_, raw := s.Snapshot.Get(committeeKeyFmt.Encode(uint8(kind), &runtimeID))
 	if raw == nil {
 		return nil, nil
@@ -45,7 +45,7 @@ func (s *immutableState) GetCommittee(kind api.CommitteeKind, runtimeID signatur
 	return committee, err
 }
 
-func (s *immutableState) getAllCommittees() ([]*api.Committee, error) {
+func (s *ImmutableState) AllCommittees() ([]*api.Committee, error) {
 	var committees []*api.Committee
 	s.Snapshot.IterateRange(
 		committeeKeyFmt.Encode(),
@@ -73,7 +73,7 @@ func (s *immutableState) getAllCommittees() ([]*api.Committee, error) {
 	return committees, nil
 }
 
-func (s *immutableState) getKindsCommittees(kinds []api.CommitteeKind) ([]*api.Committee, error) {
+func (s *ImmutableState) KindsCommittees(kinds []api.CommitteeKind) ([]*api.Committee, error) {
 	var committees []*api.Committee
 	for _, kind := range kinds {
 		s.Snapshot.IterateRange(
@@ -104,7 +104,7 @@ func (s *immutableState) getKindsCommittees(kinds []api.CommitteeKind) ([]*api.C
 	return committees, nil
 }
 
-func (s *immutableState) getCurrentValidators() ([]signature.PublicKey, error) {
+func (s *ImmutableState) CurrentValidators() ([]signature.PublicKey, error) {
 	_, raw := s.Snapshot.Get(validatorsCurrentKeyFmt.Encode())
 	if raw == nil {
 		return nil, nil
@@ -115,7 +115,7 @@ func (s *immutableState) getCurrentValidators() ([]signature.PublicKey, error) {
 	return validators, err
 }
 
-func (s *immutableState) getPendingValidators() ([]signature.PublicKey, error) {
+func (s *ImmutableState) PendingValidators() ([]signature.PublicKey, error) {
 	_, raw := s.Snapshot.Get(validatorsPendingKeyFmt.Encode())
 	if raw == nil {
 		return nil, nil
@@ -126,35 +126,35 @@ func (s *immutableState) getPendingValidators() ([]signature.PublicKey, error) {
 	return validators, err
 }
 
-func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
+func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
 		return nil, err
 	}
 
-	return &immutableState{inner}, nil
+	return &ImmutableState{inner}, nil
 }
 
 // MutableState is a mutable scheduler state wrapper.
 type MutableState struct {
-	*immutableState
+	*ImmutableState
 
 	tree *iavl.MutableTree
 }
 
-func (s *MutableState) putCommittee(c *api.Committee) {
+func (s *MutableState) PutCommittee(c *api.Committee) {
 	s.tree.Set(committeeKeyFmt.Encode(uint8(c.Kind), &c.RuntimeID), cbor.Marshal(c))
 }
 
-func (s *MutableState) dropCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) {
+func (s *MutableState) DropCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) {
 	s.tree.Remove(committeeKeyFmt.Encode(uint8(kind), &runtimeID))
 }
 
-func (s *MutableState) putCurrentValidators(validators []signature.PublicKey) {
+func (s *MutableState) PutCurrentValidators(validators []signature.PublicKey) {
 	s.tree.Set(validatorsCurrentKeyFmt.Encode(), cbor.Marshal(validators))
 }
 
-func (s *MutableState) putPendingValidators(validators []signature.PublicKey) {
+func (s *MutableState) PutPendingValidators(validators []signature.PublicKey) {
 	if validators == nil {
 		s.tree.Remove(validatorsPendingKeyFmt.Encode())
 		return
@@ -167,7 +167,7 @@ func NewMutableState(tree *iavl.MutableTree) *MutableState {
 	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
 
 	return &MutableState{
-		immutableState: &immutableState{inner},
+		ImmutableState: &ImmutableState{inner},
 		tree:           tree,
 	}
 }

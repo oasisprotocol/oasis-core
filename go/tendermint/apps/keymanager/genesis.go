@@ -14,6 +14,7 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
+	keymanagerState "github.com/oasislabs/oasis-core/go/tendermint/apps/keymanager/state"
 )
 
 func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
@@ -44,7 +45,7 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 	}
 
 	var toEmit []*keymanager.Status
-	state := NewMutableState(ctx.State())
+	state := keymanagerState.NewMutableState(ctx.State())
 	for _, v := range st.Statuses {
 		rt := rtMap[v.ID.ToMapKey()]
 		if rt == nil {
@@ -67,7 +68,7 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 		}
 
 		// Set, enqueue for emit.
-		state.setStatus(v)
+		state.SetStatus(v)
 		toEmit = append(toEmit, v)
 	}
 
@@ -79,7 +80,7 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 }
 
 func (kq *keymanagerQuerier) Genesis(ctx context.Context) (*keymanager.Genesis, error) {
-	statuses, err := kq.state.GetStatuses()
+	statuses, err := kq.state.Statuses()
 	if err != nil {
 		return nil, err
 	}

@@ -17,7 +17,9 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
+	keymanagerState "github.com/oasislabs/oasis-core/go/tendermint/apps/keymanager/state"
 	registryapp "github.com/oasislabs/oasis-core/go/tendermint/apps/registry"
+	registryState "github.com/oasislabs/oasis-core/go/tendermint/apps/registry/state"
 )
 
 var emptyHashSha3 = sha3.Sum256(nil)
@@ -43,10 +45,6 @@ func (app *keymanagerApplication) Blessed() bool {
 
 func (app *keymanagerApplication) Dependencies() []string {
 	return []string{registryapp.AppName}
-}
-
-func (app *keymanagerApplication) GetState(height int64) (interface{}, error) {
-	return newImmutableState(app.state, height)
 }
 
 func (app *keymanagerApplication) OnRegister(state *abci.ApplicationState) {
@@ -85,23 +83,23 @@ func (app *keymanagerApplication) FireTimer(ctx *abci.Context, timer *abci.Timer
 
 func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error {
 	// Query the runtime and node lists.
-	regState := registryapp.NewMutableState(ctx.State())
-	runtimes, _ := regState.GetRuntimes()
-	nodes, _ := regState.GetNodes()
+	regState := registryState.NewMutableState(ctx.State())
+	runtimes, _ := regState.Runtimes()
+	nodes, _ := regState.Nodes()
 	registry.SortNodeList(nodes)
 
 	// Recalculate all the key manager statuses.
 	//
 	// Note: This assumes that once a runtime is registered, it never expires.
 	var toEmit []*api.Status
-	state := NewMutableState(ctx.State())
+	state := keymanagerState.NewMutableState(ctx.State())
 	for _, rt := range runtimes {
 		if rt.Kind != registry.KindKeyManager {
 			continue
 		}
 
 		var forceEmit bool
-		oldStatus, err := state.GetStatus(rt.ID)
+		oldStatus, err := state.Status(rt.ID)
 		if err != nil {
 			// This is fatal, as it suggests state corruption.
 			app.logger.Error("failed to query key manager status",
@@ -129,7 +127,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 			)
 
 			// Set, enqueue for emit.
-			state.setStatus(newStatus)
+			state.SetStatus(newStatus)
 			toEmit = append(toEmit, newStatus)
 		}
 	}

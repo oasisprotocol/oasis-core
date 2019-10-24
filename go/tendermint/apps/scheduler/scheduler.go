@@ -25,8 +25,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
 	beaconapp "github.com/oasislabs/oasis-core/go/tendermint/apps/beacon"
+	beaconState "github.com/oasislabs/oasis-core/go/tendermint/apps/beacon/state"
 	registryapp "github.com/oasislabs/oasis-core/go/tendermint/apps/registry"
+	registryState "github.com/oasislabs/oasis-core/go/tendermint/apps/registry/state"
+	schedulerState "github.com/oasislabs/oasis-core/go/tendermint/apps/scheduler/state"
 	stakingapp "github.com/oasislabs/oasis-core/go/tendermint/apps/staking"
+	stakingState "github.com/oasislabs/oasis-core/go/tendermint/apps/staking/state"
 )
 
 var (
@@ -42,7 +46,7 @@ var (
 )
 
 type stakeAccumulator struct {
-	stakeCache     *stakingapp.StakeCache
+	stakeCache     *stakingState.StakeCache
 	perEntityStake map[signature.MapKey][]staking.ThresholdKind
 
 	unsafeBypass bool
@@ -79,7 +83,7 @@ func (acc *stakeAccumulator) checkThreshold(id signature.PublicKey, kind staking
 }
 
 func newStakeAccumulator(ctx *abci.Context, unsafeBypass bool) (*stakeAccumulator, error) {
-	stakeCache, err := stakingapp.NewStakeCache(ctx)
+	stakeCache, err := stakingState.NewStakeCache(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -118,10 +122,6 @@ func (app *schedulerApplication) Dependencies() []string {
 	return []string{beaconapp.AppName, registryapp.AppName, stakingapp.AppName}
 }
 
-func (app *schedulerApplication) GetState(height int64) (interface{}, error) {
-	return newImmutableState(app.state, height)
-}
-
 func (app *schedulerApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
 }
@@ -138,8 +138,8 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 		return nil
 	}
 
-	regState := registryapp.NewMutableState(app.state.DeliverTxTree())
-	nodes, err := regState.GetNodes()
+	regState := registryState.NewMutableState(ctx.State())
+	nodes, err := regState.Nodes()
 	if err != nil {
 		return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
 	}
@@ -202,8 +202,8 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 	// Sort of stupid it needs to be done this way, but tendermint doesn't
 	// appear to pass ABCI the validator set anywhere other than InitChain.
 
-	state := NewMutableState(app.state.DeliverTxTree())
-	state.putCurrentValidators(currentValidators)
+	state := schedulerState.NewMutableState(ctx.State())
+	state.PutCurrentValidators(currentValidators)
 
 	return nil
 }
@@ -220,18 +220,18 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			return nil
 		}
 
-		beaconState := beaconapp.NewMutableState(app.state.DeliverTxTree())
-		beacon, err := beaconState.GetBeacon()
+		beacState := beaconState.NewMutableState(ctx.State())
+		beacon, err := beacState.Beacon()
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get beacon")
 		}
 
-		regState := registryapp.NewMutableState(app.state.DeliverTxTree())
-		runtimes, err := regState.GetRuntimes()
+		regState := registryState.NewMutableState(ctx.State())
+		runtimes, err := regState.Runtimes()
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get runtimes")
 		}
-		nodes, err := regState.GetNodes()
+		nodes, err := regState.Nodes()
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
 		}
@@ -288,8 +288,8 @@ func (app *schedulerApplication) ForeignExecuteTx(ctx *abci.Context, other abci.
 func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
 
-	state := NewMutableState(app.state.DeliverTxTree())
-	pendingValidators, err := state.getPendingValidators()
+	state := schedulerState.NewMutableState(ctx.State())
+	pendingValidators, err := state.PendingValidators()
 	if err != nil {
 		return resp, errors.Wrap(err, "scheduler/tendermint: failed to query pending validators")
 	}
@@ -298,13 +298,13 @@ func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEn
 		return resp, nil
 	}
 
-	currentValidators, err := state.getCurrentValidators()
+	currentValidators, err := state.CurrentValidators()
 	if err != nil {
 		return resp, errors.Wrap(err, "scheduler/tendermint: failed to query current validators")
 	}
 
 	// Clear out the pending validator update.
-	state.putPendingValidators(nil)
+	state.PutPendingValidators(nil)
 
 	// Tendermint expects a vector of ValidatorUpdate that expresses
 	// the difference between the current validator set (tracked manually
@@ -359,7 +359,7 @@ func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEn
 	resp.ValidatorUpdates = updates
 
 	// Stash the updated validator set.
-	state.putCurrentValidators(pendingValidators)
+	state.PutCurrentValidators(pendingValidators)
 
 	return resp, nil
 }
@@ -499,7 +499,7 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 			"kind", kind,
 			"runtime_id", rt.ID,
 		)
-		NewMutableState(app.state.DeliverTxTree()).dropCommittee(kind, rt.ID)
+		schedulerState.NewMutableState(ctx.State()).DropCommittee(kind, rt.ID)
 		return nil
 	}
 
@@ -512,7 +512,7 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 			"backup_size", backupSize,
 			"nr_nodes", nrNodes,
 		)
-		NewMutableState(app.state.DeliverTxTree()).dropCommittee(kind, rt.ID)
+		schedulerState.NewMutableState(ctx.State()).DropCommittee(kind, rt.ID)
 		return nil
 	}
 
@@ -556,11 +556,11 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 			"backup_size", backupSize,
 			"available", len(members),
 		)
-		NewMutableState(app.state.DeliverTxTree()).dropCommittee(kind, rt.ID)
+		schedulerState.NewMutableState(ctx.State()).DropCommittee(kind, rt.ID)
 		return nil
 	}
 
-	NewMutableState(app.state.DeliverTxTree()).putCommittee(&scheduler.Committee{
+	schedulerState.NewMutableState(ctx.State()).PutCommittee(&scheduler.Committee{
 		Kind:      kind,
 		RuntimeID: rt.ID,
 		Members:   members,
@@ -627,8 +627,8 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 
 	// Set the new pending validator set in the ABCI state.  It needs to be
 	// applied in EndBlock.
-	state := NewMutableState(app.state.DeliverTxTree())
-	state.putPendingValidators(newValidators)
+	state := schedulerState.NewMutableState(ctx.State())
+	state.PutPendingValidators(newValidators)
 
 	return nil
 }

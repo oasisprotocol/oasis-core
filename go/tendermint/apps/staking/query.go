@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	stakingState "github.com/oasislabs/oasis-core/go/tendermint/apps/staking/state"
 )
 
 // ErrInvalidThreshold is the error returned when an invalid threshold kind
@@ -31,7 +32,7 @@ type QueryFactory struct {
 
 // QueryAt returns the staking query interface for a specific height.
 func (sf *QueryFactory) QueryAt(height int64) (Query, error) {
-	state, err := newImmutableState(sf.app.state, height)
+	state, err := stakingState.NewImmutableState(sf.app.state, height)
 	if err != nil {
 		return nil, err
 	}
@@ -39,11 +40,11 @@ func (sf *QueryFactory) QueryAt(height int64) (Query, error) {
 }
 
 type stakingQuerier struct {
-	state *immutableState
+	state *stakingState.ImmutableState
 }
 
 func (sq *stakingQuerier) TotalSupply(ctx context.Context) (*staking.Quantity, error) {
-	return sq.state.totalSupply()
+	return sq.state.TotalSupply()
 }
 
 func (sq *stakingQuerier) CommonPool(ctx context.Context) (*staking.Quantity, error) {
@@ -64,19 +65,19 @@ func (sq *stakingQuerier) Threshold(ctx context.Context, kind staking.ThresholdK
 }
 
 func (sq *stakingQuerier) DebondingInterval(ctx context.Context) (uint64, error) {
-	return sq.state.debondingInterval()
+	return sq.state.DebondingInterval()
 }
 
 func (sq *stakingQuerier) Accounts(ctx context.Context) ([]signature.PublicKey, error) {
-	return sq.state.accounts()
+	return sq.state.Accounts()
 }
 
 func (sq *stakingQuerier) AccountInfo(ctx context.Context, id signature.PublicKey) (*staking.Account, error) {
-	return sq.state.account(id), nil
+	return sq.state.Account(id), nil
 }
 
 func (sq *stakingQuerier) DebondingDelegations(ctx context.Context, id signature.PublicKey) (map[signature.MapKey][]*staking.DebondingDelegation, error) {
-	return sq.state.debondingDelegationsFor(id)
+	return sq.state.DebondingDelegationsFor(id)
 }
 
 func (app *stakingApplication) QueryFactory() interface{} {

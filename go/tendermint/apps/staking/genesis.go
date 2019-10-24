@@ -13,6 +13,7 @@ import (
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
+	stakingState "github.com/oasislabs/oasis-core/go/tendermint/apps/staking/state"
 )
 
 // InitChain initializes the chain from genesis.
@@ -37,12 +38,12 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	}
 
 	var (
-		state       = NewMutableState(app.state.DeliverTxTree())
+		state       = stakingState.NewMutableState(ctx.State())
 		totalSupply staking.Quantity
 	)
 
-	state.setDebondingInterval(uint64(st.DebondingInterval))
-	state.setAcceptableTransferPeers(st.AcceptableTransferPeers)
+	state.SetDebondingInterval(uint64(st.DebondingInterval))
+	state.SetAcceptableTransferPeers(st.AcceptableTransferPeers)
 
 	// Thresholds.
 	if st.Thresholds != nil {
@@ -61,7 +62,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		// Make sure that we apply threshold updates in a canonical order.
 		sort.SliceStable(ups, func(i, j int) bool { return ups[i].k < ups[j].k })
 		for _, u := range ups {
-			state.setThreshold(u.k, &u.v)
+			state.SetThreshold(u.k, &u.v)
 		}
 	}
 
@@ -114,7 +115,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	// Make sure that we apply ledger updates in a canonical order.
 	sort.SliceStable(ups, func(i, j int) bool { return bytes.Compare(ups[i].id[:], ups[j].id[:]) < 0 })
 	for _, u := range ups {
-		state.setAccount(u.id, u.account)
+		state.SetAccount(u.id, u.account)
 	}
 
 	if totalSupply.Cmp(&st.TotalSupply) != 0 {
@@ -150,7 +151,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 			dups = append(dups, delegationUpdate{escrowID, delegatorID, delegation})
 		}
 
-		acc := state.account(escrowID)
+		acc := state.Account(escrowID)
 		if acc.Escrow.TotalShares.Cmp(delegationShares) != 0 {
 			app.logger.Error("InitChain: total shares mismatch",
 				"escrow_id", escrowID,
@@ -169,7 +170,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		return bytes.Compare(dups[i].delegatorID[:], dups[j].delegatorID[:]) < 0
 	})
 	for _, u := range dups {
-		state.setDelegation(u.delegatorID, u.escrowID, u.delegation)
+		state.SetDelegation(u.delegatorID, u.escrowID, u.delegation)
 	}
 
 	// Debonding delegations.
@@ -202,7 +203,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 			}
 		}
 
-		acc := state.account(escrowID)
+		acc := state.Account(escrowID)
 		if acc.Escrow.DebondingShares.Cmp(debondingShares) != 0 {
 			app.logger.Error("InitChain: debonding shares mismatch",
 				"escrow_id", escrowID,
@@ -224,11 +225,11 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		return deups[i].seq < deups[j].seq
 	})
 	for _, u := range deups {
-		state.setDebondingDelegation(u.delegatorID, u.escrowID, u.seq, u.delegation)
+		state.SetDebondingDelegation(u.delegatorID, u.escrowID, u.seq, u.delegation)
 	}
 
-	state.setCommonPool(&st.CommonPool)
-	state.setTotalSupply(&totalSupply)
+	state.SetCommonPool(&st.CommonPool)
+	state.SetTotalSupply(&totalSupply)
 
 	app.logger.Debug("InitChain: allocations complete",
 		"debonding_interval", st.DebondingInterval,
@@ -241,7 +242,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 
 // Genesis exports current state in genesis format.
 func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error) {
-	totalSupply, err := sq.state.totalSupply()
+	totalSupply, err := sq.state.TotalSupply()
 	if err != nil {
 		return nil, err
 	}
@@ -256,31 +257,31 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		return nil, err
 	}
 
-	debondingInterval, err := sq.state.debondingInterval()
+	debondingInterval, err := sq.state.DebondingInterval()
 	if err != nil {
 		return nil, err
 	}
 
-	acceptableTransferPeers, err := sq.state.acceptableTransferPeers()
+	acceptableTransferPeers, err := sq.state.AcceptableTransferPeers()
 	if err != nil {
 		return nil, err
 	}
 
-	accounts, err := sq.state.accounts()
+	accounts, err := sq.state.Accounts()
 	if err != nil {
 		return nil, err
 	}
 	ledger := make(map[signature.MapKey]*staking.Account)
 	for _, acctID := range accounts {
-		acct := sq.state.account(acctID)
+		acct := sq.state.Account(acctID)
 		ledger[acctID.ToMapKey()] = acct
 	}
 
-	delegations, err := sq.state.delegations()
+	delegations, err := sq.state.Delegations()
 	if err != nil {
 		return nil, err
 	}
-	debondingDelegations, err := sq.state.debondingDelegations()
+	debondingDelegations, err := sq.state.DebondingDelegations()
 	if err != nil {
 		return nil, err
 	}

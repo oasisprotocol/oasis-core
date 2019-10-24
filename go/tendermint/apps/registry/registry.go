@@ -18,7 +18,9 @@ import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
+	registryState "github.com/oasislabs/oasis-core/go/tendermint/apps/registry/state"
 	stakingapp "github.com/oasislabs/oasis-core/go/tendermint/apps/staking"
+	stakingState "github.com/oasislabs/oasis-core/go/tendermint/apps/staking/state"
 )
 
 var _ abci.Application = (*registryApplication)(nil)
@@ -59,10 +61,6 @@ func (app *registryApplication) SetOption(request types.RequestSetOption) types.
 	return types.ResponseSetOption{}
 }
 
-func (app *registryApplication) GetState(height int64) (interface{}, error) {
-	return newImmutableState(app.state, height)
-}
-
 func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// XXX: With PR#1889 this can be a differnet interval.
 	if changed, registryEpoch := app.state.EpochChanged(app.timeSource); changed {
@@ -80,7 +78,7 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error
 		return errors.Wrap(err, "registry: failed to unmarshal")
 	}
 
-	state := NewMutableState(ctx.State())
+	state := registryState.NewMutableState(ctx.State())
 
 	if tx.TxRegisterEntity != nil {
 		return app.registerEntity(ctx, state, &tx.TxRegisterEntity.Entity)
@@ -110,9 +108,9 @@ func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) error {
 }
 
 func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, registryEpoch epochtime.EpochTime) error {
-	state := NewMutableState(ctx.State())
+	state := registryState.NewMutableState(ctx.State())
 
-	nodes, err := state.GetNodes()
+	nodes, err := state.Nodes()
 	if err != nil {
 		app.logger.Error("onRegistryEpochChanged: failed to get nodes",
 			"err", err,
@@ -126,7 +124,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 			continue
 		}
 		expiredNodes = append(expiredNodes, node)
-		state.removeNode(node)
+		state.RemoveNode(node)
 	}
 
 	// Emit the RegistryNodeListEpoch notification event.
@@ -148,7 +146,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 // Perform actual entity registration.
 func (app *registryApplication) registerEntity(
 	ctx *abci.Context,
-	state *MutableState,
+	state *registryState.MutableState,
 	sigEnt *entity.SignedEntity,
 ) error {
 	ent, err := registry.VerifyRegisterEntityArgs(app.logger, sigEnt, ctx.IsInitChain())
@@ -168,7 +166,7 @@ func (app *registryApplication) registerEntity(
 	}
 
 	if !app.cfg.DebugBypassStake {
-		if err = stakingapp.EnsureSufficientStake(ctx, ent.ID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+		if err = stakingState.EnsureSufficientStake(ctx, ent.ID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
 			app.logger.Error("RegisterEntity: Insufficent stake",
 				"err", err,
 				"id", ent.ID,
@@ -177,7 +175,7 @@ func (app *registryApplication) registerEntity(
 		}
 	}
 
-	state.createEntity(ent, sigEnt)
+	state.CreateEntity(ent, sigEnt)
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("RegisterEntity: registered",
@@ -193,7 +191,7 @@ func (app *registryApplication) registerEntity(
 // Perform actual entity deregistration.
 func (app *registryApplication) deregisterEntity(
 	ctx *abci.Context,
-	state *MutableState,
+	state *registryState.MutableState,
 	sigTimestamp *signature.Signed,
 ) error {
 	id, timestamp, err := registry.VerifyDeregisterEntityArgs(app.logger, sigTimestamp)
@@ -212,7 +210,7 @@ func (app *registryApplication) deregisterEntity(
 		}
 	}
 
-	removedEntity, removedNodes := state.removeEntity(id)
+	removedEntity, removedNodes := state.RemoveEntity(id)
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("DeregisterEntity: complete",
@@ -232,7 +230,7 @@ func (app *registryApplication) deregisterEntity(
 // Perform actual node registration.
 func (app *registryApplication) registerNode(
 	ctx *abci.Context,
-	state *MutableState,
+	state *registryState.MutableState,
 	sigNode *node.SignedNode,
 ) error {
 	// Peek into the to-be-verified node to pull out the owning entity ID.
@@ -244,7 +242,7 @@ func (app *registryApplication) registerNode(
 		)
 		return err
 	}
-	untrustedEntity, err := state.getEntity(untrustedNode.EntityID)
+	untrustedEntity, err := state.Entity(untrustedNode.EntityID)
 	if err != nil {
 		app.logger.Error("RegisterNode: failed to query owning entity",
 			"err", err,
@@ -253,8 +251,8 @@ func (app *registryApplication) registerNode(
 		return err
 	}
 
-	kmOperator := state.getKeyManagerOperator()
-	regRuntimes, err := state.GetRuntimes()
+	kmOperator := state.KeyManagerOperator()
+	regRuntimes, err := state.Runtimes()
 	if err != nil {
 		app.logger.Error("RegisterNode: failed to obtain registry runtimes",
 			"err", err,
@@ -281,7 +279,7 @@ func (app *registryApplication) registerNode(
 	// Re-check that the entity has at least sufficient stake to still be an
 	// entity.  The node thresholds should be enforced in the scheduler.
 	if !app.cfg.DebugBypassStake {
-		if err = stakingapp.EnsureSufficientStake(ctx, newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+		if err = stakingState.EnsureSufficientStake(ctx, newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
 			app.logger.Error("RegisterNode: Insufficent stake",
 				"err", err,
 				"id", newNode.EntityID,
@@ -299,13 +297,12 @@ func (app *registryApplication) registerNode(
 		return registry.ErrNodeExpired
 	}
 
-	// Check if node exists
-	existingNode, err := state.GetNode(newNode.ID)
+	// Check if node exists.
+	existingNode, err := state.Node(newNode.ID)
 	if err != nil {
 		if err == registry.ErrNoSuchNode {
 			// Node doesn't exist. Create node.
-			err = state.createNode(newNode, sigNode)
-			if err != nil {
+			if err = state.CreateNode(newNode, sigNode); err != nil {
 				app.logger.Error("RegisterNode: failed to create node",
 					"err", err,
 					"node", newNode,
@@ -332,7 +329,7 @@ func (app *registryApplication) registerNode(
 			)
 			return err
 		}
-		err = state.createNode(newNode, sigNode)
+		err = state.CreateNode(newNode, sigNode)
 		if err != nil {
 			app.logger.Error("RegisterNode: failed to update node",
 				"err", err,
@@ -358,7 +355,7 @@ func (app *registryApplication) registerNode(
 // Perform actual runtime registration.
 func (app *registryApplication) registerRuntime(
 	ctx *abci.Context,
-	state *MutableState,
+	state *registryState.MutableState,
 	sigRt *registry.SignedRuntime,
 ) error {
 	rt, err := registry.VerifyRegisterRuntimeArgs(app.logger, sigRt, ctx.IsInitChain())
@@ -391,7 +388,7 @@ func (app *registryApplication) registerRuntime(
 		}
 	}
 
-	if err = state.createRuntime(rt, sigRt); err != nil {
+	if err = state.CreateRuntime(rt, sigRt); err != nil {
 		app.logger.Error("RegisterRuntime: failed to create runtime",
 			"err", err,
 			"runtime", rt,
