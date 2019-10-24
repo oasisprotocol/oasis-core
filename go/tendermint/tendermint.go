@@ -15,7 +15,6 @@ import (
 	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	tmabci "github.com/tendermint/tendermint/abci/types"
 	tmconfig "github.com/tendermint/tendermint/config"
 	tmlog "github.com/tendermint/tendermint/libs/log"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
@@ -349,33 +348,6 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-func (t *tendermintService) Query(path string, query interface{}, height int64) ([]byte, error) {
-	var data []byte
-	if query != nil {
-		data = cbor.Marshal(query)
-	}
-
-	// We submit queries directly to our application instance as going through
-	// tendermint's local client enforces a global mutex for all application
-	// requests, blocking queries from within the application itself.
-	//
-	// This is safe to do as long as all application query handlers only access
-	// state through the immutable tree.
-	request := tmabci.RequestQuery{
-		Data:   data,
-		Path:   path,
-		Height: height,
-		Prove:  false,
-	}
-	response := t.mux.Mux().Query(request)
-
-	if response.GetCode() != api.CodeOK.ToInt() {
-		return nil, fmt.Errorf("query: failed (code=%s)", api.Code(response.GetCode()))
-	}
-
-	return response.GetValue(), nil
 }
 
 func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {

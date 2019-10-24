@@ -71,9 +71,6 @@ type TendermintService interface {
 	// sure to cancel the context.
 	BroadcastTx(ctx context.Context, tag byte, tx interface{}, wait bool) error
 
-	// Query performs a query against the tendermint application.
-	Query(path string, query interface{}, height int64) ([]byte, error)
-
 	// Subscribe subscribes to tendermint events.
 	Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error)
 
