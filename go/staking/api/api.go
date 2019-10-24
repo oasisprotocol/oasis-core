@@ -332,48 +332,69 @@ func MoveUpTo(dst, src, n *Quantity) (*Quantity, error) {
 	return amount, nil
 }
 
-// IssueShares tries to issue shares for the given amount of delegated tokens.
-// On failures, dst and dsc are not modified.
-func IssueShares(dst *EscrowAccount, amount *Quantity, dsc *Delegation) (*Quantity, error) {
-	var issuedShares *Quantity
-	if dst.TotalShares.IsZero() {
-		// No existing shares, exchange rate is 1:1.
-		issuedShares = amount.Clone()
-	} else {
-		// Exchange rate is based on issued shares and the total balance as:
-		//
-		//     shares = amount * total_shares / balance
-		//
-		q := amount.Clone()
-		// Multiply first.
-		if err := q.Mul(&dst.TotalShares); err != nil {
-			return nil, err
-		}
-		// NOTE: This currently assumes that the slashing code will make sure
-		//       that the exchange rate is maintained such that no tokens are
-		//       lost due to loss of precision.
-		if err := q.Quo(&dst.Balance); err != nil {
-			// This can happen if the escrow account has no balance due to
-			// losing everything through slashing. In this case there is no
-			// way to delegate more.
-			return nil, err
-		}
-
-		issuedShares = q
-	}
-	if err := dst.TotalShares.Add(issuedShares); err != nil {
-		return nil, err
-	}
-	// We can skip the error check as we checked the exact same quantity above.
-	_ = dsc.Shares.Add(issuedShares)
-
-	return issuedShares, nil
+// SharePool is a combined balance of several entries, the relative sizes
+// of which are tracked through shares.
+type SharePool struct {
+	Balance     Quantity `json:"balance"`
+	TotalShares Quantity `json:"total_shares"`
 }
 
-// TokensForShares computes the amount of tokens to be received for shares in the
-// given escrow account.
-func TokensForShares(acc *EscrowAccount, amount *Quantity) (*Quantity, error) {
-	if amount.IsZero() || acc.Balance.IsZero() || acc.TotalShares.IsZero() {
+// sharesForTokens computes the amount of shares for the given amount of tokens.
+func (p *SharePool) sharesForTokens(amount *Quantity) (*Quantity, error) {
+	if p.TotalShares.IsZero() {
+		// No existing shares, exchange rate is 1:1.
+		return amount.Clone(), nil
+	}
+	if p.Balance.IsZero() {
+		// This can happen if the pool has no balance due to
+		// losing everything through slashing. In this case there is no
+		// way to create more shares.
+		return nil, ErrInvalidArgument
+	}
+
+	// Exchange rate is based on issued shares and the total balance as:
+	//
+	//     shares = amount * total_shares / balance
+	//
+	q := amount.Clone()
+	// Multiply first.
+	if err := q.Mul(&p.TotalShares); err != nil {
+		return nil, err
+	}
+	// NOTE: This currently assumes that the slashing code will make sure
+	//       that the exchange rate is maintained such that no tokens are
+	//       lost due to loss of precision.
+	if err := q.Quo(&p.Balance); err != nil {
+		return nil, err
+	}
+
+	return q, nil
+}
+
+func (p *SharePool) Deposit(shareDst, tokenSrc, tokenAmount *Quantity) error {
+	shares, err := p.sharesForTokens(tokenAmount)
+	if err != nil {
+		return err
+	}
+
+	if err = Move(&p.Balance, tokenSrc, tokenAmount); err != nil {
+		return err
+	}
+
+	if err = p.TotalShares.Add(shares); err != nil {
+		return err
+	}
+
+	if err = shareDst.Add(shares); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// tokensForShares computes the amount of tokens for the given amount of shares.
+func (p *SharePool) tokensForShares(amount *Quantity) (*Quantity, error) {
+	if amount.IsZero() || p.Balance.IsZero() || p.TotalShares.IsZero() {
 		// No existing shares or no balance means no tokens.
 		return NewQuantity(), nil
 	}
@@ -384,17 +405,38 @@ func TokensForShares(acc *EscrowAccount, amount *Quantity) (*Quantity, error) {
 	//
 	q := amount.Clone()
 	// Multiply first.
-	if err := q.Mul(&acc.Balance); err != nil {
+	if err := q.Mul(&p.Balance); err != nil {
 		return nil, err
 	}
 	// NOTE: This currently assumes that the slashing code will make sure
 	//       that the exchange rate is maintained such that no tokens are
 	//       lost due to loss of precision.
-	if err := q.Quo(&acc.TotalShares); err != nil {
+	if err := q.Quo(&p.TotalShares); err != nil {
 		return nil, err
 	}
 
 	return q, nil
+}
+
+func (p *SharePool) Withdraw(tokenDst, shareSrc, shareAmount *Quantity) error {
+	tokens, err := p.tokensForShares(shareAmount)
+	if err != nil {
+		return err
+	}
+
+	if err = shareSrc.Sub(shareAmount); err != nil {
+		return err
+	}
+
+	if err = p.TotalShares.Sub(shareAmount); err != nil {
+		return err
+	}
+
+	if err = Move(tokenDst, &p.Balance, tokens); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ThresholdKind is the kind of staking threshold.
@@ -434,9 +476,8 @@ type GeneralAccount struct {
 // EscrowAccount is an escrow account the balance of which is subject to
 // special delegation provisions and a debonding period.
 type EscrowAccount struct {
-	Balance         Quantity `json:"balance"`
-	TotalShares     Quantity `json:"total_shares"`
-	DebondingShares Quantity `json:"debonding_shares"`
+	Active    SharePool `json:"active"`
+	Debonding SharePool `json:"debonding"`
 }
 
 // Account is an entry in the staking ledger.

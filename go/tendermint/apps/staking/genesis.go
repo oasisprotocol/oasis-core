@@ -89,12 +89,19 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 			)
 			return errors.New("staking/tendermint: invalid genesis general balance")
 		}
-		if !v.Escrow.Balance.IsValid() {
-			app.logger.Error("InitChain: invalid genesis escrow balance",
+		if !v.Escrow.Active.Balance.IsValid() {
+			app.logger.Error("InitChain: invalid genesis active escrow balance",
 				"id", id,
-				"escrow_balance", v.Escrow.Balance,
+				"escrow_balance", v.Escrow.Active.Balance,
 			)
-			return errors.New("staking/tendermint: invalid genesis escrow balance")
+			return errors.New("staking/tendermint: invalid genesis active escrow balance")
+		}
+		if !v.Escrow.Debonding.Balance.IsValid() {
+			app.logger.Error("InitChain: invalid genesis debonding escrow balance",
+				"id", id,
+				"debonding_balance", v.Escrow.Debonding.Balance,
+			)
+			return errors.New("staking/tendermint: invalid genesis debonding escrow balance")
 		}
 
 		ups = append(ups, ledgerUpdate{id, v})
@@ -104,11 +111,17 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 			)
 			return errors.Wrap(err, "staking/tendermint: failed to add general balance")
 		}
-		if err := totalSupply.Add(&v.Escrow.Balance); err != nil {
-			app.logger.Error("InitChain: failed to add escrow balance",
+		if err := totalSupply.Add(&v.Escrow.Active.Balance); err != nil {
+			app.logger.Error("InitChain: failed to add active escrow balance",
 				"err", err,
 			)
-			return errors.Wrap(err, "staking/tendermint: failed to add escrow balance")
+			return errors.Wrap(err, "staking/tendermint: failed to add active escrow balance")
+		}
+		if err := totalSupply.Add(&v.Escrow.Debonding.Balance); err != nil {
+			app.logger.Error("InitChain: failed to add debonding escrow balance",
+				"err", err,
+			)
+			return errors.Wrap(err, "staking/tendermint: failed to add debonding escrow balance")
 		}
 	}
 
@@ -152,10 +165,10 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		}
 
 		acc := state.Account(escrowID)
-		if acc.Escrow.TotalShares.Cmp(delegationShares) != 0 {
+		if acc.Escrow.Active.TotalShares.Cmp(delegationShares) != 0 {
 			app.logger.Error("InitChain: total shares mismatch",
 				"escrow_id", escrowID,
-				"expected", acc.Escrow.TotalShares,
+				"expected", acc.Escrow.Active.TotalShares,
 				"actual", delegationShares,
 			)
 			return errors.New("staking/tendermint: total shares mismatch")
@@ -204,10 +217,10 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		}
 
 		acc := state.Account(escrowID)
-		if acc.Escrow.DebondingShares.Cmp(debondingShares) != 0 {
+		if acc.Escrow.Debonding.TotalShares.Cmp(debondingShares) != 0 {
 			app.logger.Error("InitChain: debonding shares mismatch",
 				"escrow_id", escrowID,
-				"expected", acc.Escrow.DebondingShares,
+				"expected", acc.Escrow.Debonding.TotalShares,
 				"actual", debondingShares,
 			)
 			return errors.New("staking/tendermint: debonding shares mismatch")

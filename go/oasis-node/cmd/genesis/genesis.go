@@ -379,7 +379,7 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 	return nil
 }
 
-// AppendStakingState appens the staking gensis state given a state file name.
+// AppendStakingState appends the staking genesis state given a state file name.
 func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) error {
 	stakingSt := staking.Genesis{
 		Ledger: make(map[signature.MapKey]*staking.Account),
@@ -408,7 +408,7 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 
 		ent, _, err := entity.TestEntity()
 		if err != nil {
-			l.Error("failed to retrive test entity",
+			l.Error("failed to retrieve test entity",
 				"err", err,
 			)
 			return err
@@ -429,7 +429,9 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 				Nonce:   0,
 			},
 			Escrow: staking.EscrowAccount{
-				Balance: q,
+				Active: staking.SharePool{
+					Balance: q,
+				},
 			},
 		}
 
