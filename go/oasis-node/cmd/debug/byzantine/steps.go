@@ -73,6 +73,9 @@ func initFakeCapabilitiesSGX() (signature.Signer, *node.Capabilities, error) {
 			Version: 1,
 		},
 		Report: ias.Report{
+			Attributes: ias.Attributes{
+				Flags: ias.AttributeDebug,
+			},
 			MRENCLAVE: enclaveIdentity.MrEnclave,
 			MRSIGNER:  enclaveIdentity.MrSigner,
 		},

@@ -75,6 +75,7 @@ func activateCommonConfig(cmd *cobra.Command, args []string) {
 	// This subcommand is used in networks where other nodes are honest or colluding with us.
 	// Set this so we don't reject things when we run without real IAS.
 	ias.SetSkipVerify()
+	ias.SetAllowDebugEnclaves()
 }
 
 func doComputeHonest(cmd *cobra.Command, args []string) {

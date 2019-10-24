@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/epochtime"
+	"github.com/oasislabs/oasis-core/go/ias"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
@@ -308,12 +309,13 @@ func (args *argBuilder) appendEntity(ent *Entity) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) appendIASProxy(ias *iasProxy) *argBuilder {
-	if ias != nil {
+func (args *argBuilder) appendIASProxy(iasProxy *iasProxy) *argBuilder {
+	if iasProxy != nil {
 		args.vec = append(args.vec, []string{
-			"--ias.proxy_addr", "127.0.0.1:" + strconv.Itoa(int(ias.grpcPort)),
-			"--ias.tls", ias.tlsCertPath(),
-			"--ias.debug.skip_verify",
+			"--" + ias.CfgProxyAddress, "127.0.0.1:" + strconv.Itoa(int(iasProxy.grpcPort)),
+			"--" + ias.CfgTLSCertFile, iasProxy.tlsCertPath(),
+			"--" + ias.CfgDebugSkipVerify,
+			"--" + ias.CfgAllowDebugEnclaves,
 		}...)
 	}
 	return args

@@ -22,9 +22,10 @@ import (
 )
 
 const (
-	cfgProxyAddress    = "ias.proxy_addr"
-	cfgTLSCertFile     = "ias.tls"
-	cfgDebugSkipVerify = "ias.debug.skip_verify"
+	CfgProxyAddress       = "ias.proxy_addr"
+	CfgTLSCertFile        = "ias.tls"
+	CfgDebugSkipVerify    = "ias.debug.skip_verify"
+	CfgAllowDebugEnclaves = "ias.debug.allow_debug_enclaves"
 )
 
 // Flags has the configuration flags.
@@ -164,7 +165,7 @@ func (s *IAS) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, error) {
 
 // New creates a new IAS client instance.
 func New(identity *identity.Identity) (*IAS, error) {
-	proxyAddr := viper.GetString(cfgProxyAddress)
+	proxyAddr := viper.GetString(CfgProxyAddress)
 
 	s := &IAS{
 		identity: identity,
@@ -177,7 +178,7 @@ func New(identity *identity.Identity) (*IAS, error) {
 		s.spidInfo = &ias.SPIDInfo{}
 		_ = s.spidInfo.SPID.UnmarshalBinary(make([]byte, ias.SPIDSize))
 	} else {
-		tlsCertFile := viper.GetString(cfgTLSCertFile)
+		tlsCertFile := viper.GetString(CfgTLSCertFile)
 		if tlsCertFile == "" {
 			s.logger.Error("IAS proxy TLS certificate not configured")
 			return nil, errors.New("ias: proxy TLS certificate not configured")
@@ -209,18 +210,26 @@ func New(identity *identity.Identity) (*IAS, error) {
 		s.client = iasGrpc.NewIASClient(conn)
 	}
 
-	if viper.GetBool(cfgDebugSkipVerify) {
+	if viper.GetBool(CfgDebugSkipVerify) {
 		s.logger.Warn("`ias.debug.skip_verify` set, AVR signature validation bypassed")
 		ias.SetSkipVerify()
+	}
+
+	if viper.GetBool(CfgAllowDebugEnclaves) {
+		s.logger.Warn("`ias.debug.allow_debug_enclaves` set, enclaves in debug mode will be allowed")
+		ias.SetAllowDebugEnclaves()
 	}
 
 	return s, nil
 }
 
 func init() {
-	Flags.String(cfgProxyAddress, "", "IAS proxy address")
-	Flags.String(cfgTLSCertFile, "", "IAS proxy TLS certificate")
-	Flags.Bool(cfgDebugSkipVerify, false, "skip IAS AVR signature verification (UNSAFE)")
+	Flags.String(CfgProxyAddress, "", "IAS proxy address")
+	Flags.String(CfgTLSCertFile, "", "IAS proxy TLS certificate")
+	Flags.Bool(CfgDebugSkipVerify, false, "skip IAS AVR signature verification (UNSAFE)")
+	Flags.Bool(CfgAllowDebugEnclaves, false, "allow enclaves compiled in debug mode (UNSAFE)")
+
+	_ = Flags.MarkHidden(CfgAllowDebugEnclaves)
 
 	_ = viper.BindPFlags(Flags)
 }

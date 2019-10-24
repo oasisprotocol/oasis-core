@@ -9,4 +9,5 @@ source .buildkite/scripts/common.sh
 ####################
 export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
 export OASIS_UNSAFE_KM_POLICY_KEYS="1"
+export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES="1"
 export RUST_BACKTRACE="1"

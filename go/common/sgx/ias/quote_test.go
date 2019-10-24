@@ -10,6 +10,10 @@ import (
 )
 
 func TestQuote(t *testing.T) {
+	// TODO: Generate and test production AVR without debug bit.
+	SetAllowDebugEnclaves()
+	defer UnsetAllowDebugEnclaves()
+
 	raw, sig, certs := loadAVRv2(t)
 	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, time.Now())
 	require.NoError(t, err, "DecodeAVR")
@@ -38,12 +42,8 @@ func TestQuote(t *testing.T) {
 		"CPUSVN",
 	)
 	require.EqualValues(t, 0x00000000, quote.Report.MiscSelect, "MISCSELECT")
-	require.Equal(
-		t,
-		"07000000000000000700000000000000",
-		hex.EncodeToString(quote.Report.Attributes[:]),
-		"ATTRIBUTES",
-	)
+	require.EqualValues(t, 0x0000000000000007, quote.Report.Attributes.Flags, "ATTRIBUTES.FLAGS")
+	require.EqualValues(t, 0x0000000000000007, quote.Report.Attributes.Xfrm, "ATTRIBUTES.XFRM")
 	require.Equal(
 		t,
 		"83d1607d933a8f1970fa30ac94cdb6921fd8ffb8414650af06fe63c008a4a9af",

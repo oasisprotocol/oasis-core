@@ -14,6 +14,10 @@ func TestAVR(t *testing.T) {
 }
 
 func testAVRv2(t *testing.T) {
+	// TODO: Generate and test production AVR without debug bit.
+	SetAllowDebugEnclaves()
+	defer UnsetAllowDebugEnclaves()
+
 	raw, sig, certs := loadAVRv2(t)
 
 	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, time.Now())

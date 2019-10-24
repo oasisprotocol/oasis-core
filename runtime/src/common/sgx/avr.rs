@@ -12,11 +12,9 @@ use pem_iterator::{
 use percent_encoding;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
+use sgx_isa::{AttributesFlags, Report};
 use untrusted;
 use webpki;
-
-#[cfg(target_env = "sgx")]
-use sgx_isa::Report;
 
 use crate::common::time::{insecure_posix_time, update_insecure_posix_time};
 
@@ -33,6 +31,10 @@ enum AVRError {
     TimestampOutOfRange,
     #[fail(display = "rejecting quote status ({})", status)]
     QuoteStatusInvalid { status: String },
+    #[fail(display = "debug enclaves not allowed")]
+    DebugEnclave,
+    #[fail(display = "production enclaves not allowed")]
+    ProductionEnclave,
     #[fail(display = "AVR did not contain quote status")]
     MissingQuoteStatus,
     #[fail(display = "AVR did not contain quote body")]
@@ -129,19 +131,6 @@ static IAS_SIG_ALGS: &'static [&'static webpki::SignatureAlgorithm] =
 const PEM_CERTIFICATE_LABEL: &str = "CERTIFICATE";
 const IAS_TS_FMT: &str = "%FT%T%.6f";
 
-/// Decoded report body.
-#[derive(Default, Debug)]
-struct ReportBody {
-    cpu_svn: [u8; 16],
-    misc_select: u32,
-    attributes: [u8; 16],
-    mr_enclave: MrEnclave,
-    mr_signer: MrSigner,
-    isv_prod_id: u16,
-    isv_svn: u16,
-    report_data: Vec<u8>,
-}
-
 /// Decoded quote body.
 #[derive(Default, Debug)]
 struct QuoteBody {
@@ -151,7 +140,7 @@ struct QuoteBody {
     isv_svn_qe: u16,
     isv_svn_pce: u16,
     basename: [u8; 32],
-    report_body: ReportBody,
+    report_body: Report,
 }
 
 impl QuoteBody {
@@ -172,19 +161,12 @@ impl QuoteBody {
         reader.read_exact(&mut quote_body.basename)?;
 
         // Report body.
-        reader.read_exact(&mut quote_body.report_body.cpu_svn)?;
-        quote_body.report_body.misc_select = reader.read_u32::<LittleEndian>()?;
-        reader.seek(SeekFrom::Current(28))?; // 28 reserved bytes.
-        reader.read_exact(&mut quote_body.report_body.attributes)?;
-        reader.read_exact(&mut quote_body.report_body.mr_enclave.0)?;
-        reader.seek(SeekFrom::Current(32))?; // 32 reserved bytes.
-        reader.read_exact(&mut quote_body.report_body.mr_signer.0)?;
-        reader.seek(SeekFrom::Current(96))?; // 96 reserved bytes.
-        quote_body.report_body.isv_prod_id = reader.read_u16::<LittleEndian>()?;
-        quote_body.report_body.isv_svn = reader.read_u16::<LittleEndian>()?;
-        reader.seek(SeekFrom::Current(60))?; // 60 reserved bytes.
-        quote_body.report_body.report_data = vec![0; 64];
-        reader.read_exact(&mut quote_body.report_body.report_data)?;
+        let mut report_buf = vec![0; Report::UNPADDED_SIZE];
+        reader.read(&mut report_buf)?;
+        quote_body.report_body = match Report::try_copy_from(&report_buf) {
+            Some(r) => r,
+            None => return Err(AVRError::MalformedReportBody.into()),
+        };
 
         Ok(quote_body)
     }
@@ -316,14 +298,28 @@ pub fn verify(avr: &AVR) -> Fallible<AuthenticatedAVR> {
         _ => return Err(AVRError::MalformedQuote.into()),
     };
 
+    // Disallow debug enclaves, if we are in production environment and disallow production enclaves,
+    // if we are in debug environment.
+    let is_debug = quote_body
+        .report_body
+        .attributes
+        .flags
+        .contains(AttributesFlags::DEBUG);
+    let allow_debug = option_env!("OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES").is_some();
+    if is_debug && !allow_debug {
+        return Err(AVRError::DebugEnclave.into());
+    } else if !is_debug && allow_debug {
+        return Err(AVRError::ProductionEnclave.into());
+    }
+
     // Force-ratchet the clock forward, to at least the time in the AVR.
     update_insecure_posix_time(timestamp);
 
     Ok(AuthenticatedAVR {
-        report_data: quote_body.report_body.report_data,
+        report_data: quote_body.report_body.reportdata.to_vec(),
         identity: EnclaveIdentity {
-            mr_enclave: quote_body.report_body.mr_enclave,
-            mr_signer: quote_body.report_body.mr_signer,
+            mr_enclave: MrEnclave::from(quote_body.report_body.mrenclave.to_vec()),
+            mr_signer: MrSigner::from(quote_body.report_body.mrsigner.to_vec()),
         },
         timestamp,
         nonce: nonce.to_string(),
