@@ -497,26 +497,8 @@ func (p *Pool) AddMergeCommitment(
 	// Check compute commitments -- all commitments must be valid and there
 	// must be no discrepancy as the merge committee nodes are supposed to
 	// check this.
-	var hasError bool
-	for _, cc := range body.ComputeCommits {
-		_, err = ccPool.AddComputeCommitment(blk, sv, &cc)
-		switch err {
-		case nil:
-		case ErrAlreadyCommitted:
-			// Ignore duplicate commitments.
-			continue
-		default:
-			// Only set a flag so that we add all valid compute commitments
-			// to the compute committment pool.
-			hasError = true
-
-			logger.Debug("invalid compute commitment while adding merge commitment",
-				"err", err,
-			)
-		}
-	}
-	if hasError {
-		return ErrBadComputeCommits
+	if err = ccPool.addComputeCommitments(blk, sv, body.ComputeCommits); err != nil {
+		return err
 	}
 
 	// There must be enough compute commits for all committees.
@@ -623,6 +605,59 @@ func (m *MultiPool) AddComputeCommitment(blk *block.Block, sv SignatureVerifier,
 	}
 
 	return p, p.addOpenComputeCommitment(blk, sv, openCom)
+}
+
+// addComputeCommitments verifies and adds multiple compute commitments to the pool.
+// All valid commitments will be added, redundant commitments will be ignored.
+//
+// Note that any signatures being invalid will result in no changes to the pool.
+func (m *MultiPool) addComputeCommitments(blk *block.Block, sv SignatureVerifier, commitments []ComputeCommitment) error {
+	// Batch verify all of the signatures at once.
+	msgs := make([][]byte, 0, len(commitments))
+	sigs := make([]signature.Signature, 0, len(commitments))
+	for i := range commitments {
+		v := commitments[i] // This is deliberate.
+		msgs = append(msgs, v.Blob)
+		sigs = append(sigs, v.Signature)
+	}
+
+	if !signature.VerifyBatch(ComputeSignatureContext, msgs, sigs) {
+		return signature.ErrVerifyFailed
+	}
+
+	// Ok, all of the signatures are valid, deserialize the blobs and add them
+	// serially.
+	var hadError bool
+	for _, v := range commitments {
+		var body ComputeBody
+		if err := body.UnmarshalCBOR(v.Blob); err != nil {
+			hadError = true
+			continue
+		}
+
+		openCom := &OpenComputeCommitment{
+			ComputeCommitment: v,
+			Body:              &body,
+		}
+
+		p := m.Committees[openCom.Body.CommitteeID]
+		if p == nil {
+			hadError = true
+			continue
+		}
+
+		err := p.addOpenComputeCommitment(blk, sv, openCom)
+		switch err {
+		case nil, ErrAlreadyCommitted:
+		default:
+			hadError = true
+		}
+	}
+	if hadError {
+		return ErrBadComputeCommits
+	}
+
+	return nil
 }
 
 // CheckEnoughCommitments checks if there are enough commitments in the pool to be
