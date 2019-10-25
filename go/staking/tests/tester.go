@@ -90,7 +90,8 @@ func testInitialEnv(t *testing.T, backend api.Backend, timeSource epochtime.Seta
 	acc, err := backend.AccountInfo(context.Background(), SrcID, 0)
 	require.NoError(err, "src: AccountInfo")
 	require.Equal(testTotalSupply, acc.General.Balance, "src: general balance")
-	require.True(acc.Escrow.Balance.IsZero(), "src: escrow balance")
+	require.True(acc.Escrow.Active.Balance.IsZero(), "src: active escrow balance")
+	require.True(acc.Escrow.Debonding.Balance.IsZero(), "src: debonding escrow balance")
 	require.EqualValues(0, acc.General.Nonce, "src: nonce")
 
 	commonPool, err := backend.CommonPool(context.Background(), 0)
@@ -268,16 +269,20 @@ func testEscrowEx(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	srcAcc, err := backend.AccountInfo(context.Background(), srcID, 0)
 	require.NoError(err, "src: AccountInfo - before")
 	require.False(srcAcc.General.Balance.IsZero(), "src: general balance != 0")
-	require.True(srcAcc.Escrow.Balance.IsZero(), "src: escrow balance == 0")
+	require.True(srcAcc.Escrow.Active.Balance.IsZero(), "src: active escrow balance == 0")
+	require.True(srcAcc.Escrow.Debonding.Balance.IsZero(), "src: debonding escrow balance == 0")
 
 	dstAcc, err := backend.AccountInfo(context.Background(), dstID, 0)
 	require.NoError(err, "dst: AccountInfo - before")
-	require.True(dstAcc.Escrow.Balance.IsZero(), "dst: escrow balance == 0")
-	require.True(dstAcc.Escrow.TotalShares.IsZero(), "dst: escrow total shares == 0")
-	require.True(dstAcc.Escrow.DebondingShares.IsZero(), "dst: escrow debonding shares == 0")
+	require.True(dstAcc.Escrow.Active.Balance.IsZero(), "dst: active escrow balance == 0")
+	require.True(dstAcc.Escrow.Active.TotalShares.IsZero(), "dst: active escrow total shares == 0")
+	require.True(dstAcc.Escrow.Debonding.Balance.IsZero(), "dst: debonding escrow balance == 0")
+	require.True(dstAcc.Escrow.Debonding.TotalShares.IsZero(), "dst: debonding escrow total shares == 0")
 
 	ch, sub := backend.WatchEscrows()
 	defer sub.Close()
+
+	var totalEscrowed api.Quantity
 
 	// Escrow.
 	escrow := &api.Escrow{
@@ -290,6 +295,7 @@ func testEscrowEx(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 
 	err = backend.AddEscrow(context.Background(), signed)
 	require.NoError(err, "AddEscrow")
+	require.NoError(totalEscrowed.Add(&escrow.Tokens))
 
 	select {
 	case rawEv := <-ch:
@@ -306,25 +312,29 @@ func testEscrowEx(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	require.NoError(err, "src: AccountInfo - after")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
 	if !srcID.Equal(dstID) {
-		require.True(newSrcAcc.Escrow.Balance.IsZero(), "src: escrow balance == 0 - after")
+		require.True(newSrcAcc.Escrow.Active.Balance.IsZero(), "src: active escrow balance == 0 - after")
+		require.True(newSrcAcc.Escrow.Debonding.Balance.IsZero(), "src: debonding escrow balance == 0 - after")
 	}
 	require.Equal(escrow.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 
-	_ = dstAcc.Escrow.Balance.Add(&escrow.Tokens)
+	_ = dstAcc.Escrow.Active.Balance.Add(&escrow.Tokens)
 	newDstAcc, err := backend.AccountInfo(context.Background(), dstID, 0)
 	require.NoError(err, "dst: AccountInfo - after")
 	if !srcID.Equal(dstID) {
 		require.Equal(dstAcc.General.Balance, newDstAcc.General.Balance, "dst: general balance - after")
 		require.Equal(dstAcc.General.Nonce, newDstAcc.General.Nonce, "dst: nonce - after")
 	}
-	require.Equal(dstAcc.Escrow.Balance, newDstAcc.Escrow.Balance, "dst: escrow balance - after")
-	require.Equal(dstAcc.Escrow.Balance, newDstAcc.Escrow.TotalShares, "dst: escrow total shares - after")
-	require.True(newDstAcc.Escrow.DebondingShares.IsZero(), "dst: escrow debonding shares == 0 - after")
+	require.Equal(dstAcc.Escrow.Active.Balance, newDstAcc.Escrow.Active.Balance, "dst: active escrow balance - after")
+	require.Equal(dstAcc.Escrow.Active.Balance, newDstAcc.Escrow.Active.TotalShares, "dst: active escrow total shares - after")
+	require.True(newDstAcc.Escrow.Debonding.Balance.IsZero(), "dst: debonding escrow balance == 0 - after")
+	require.True(newDstAcc.Escrow.Debonding.TotalShares.IsZero(), "dst: debonding escrow total shares == 0 - after")
 
-	// Escrow some more.
 	srcAcc = newSrcAcc
 	dstAcc = newDstAcc
+	newSrcAcc = nil
+	newDstAcc = nil
 
+	// Escrow some more.
 	escrow = &api.Escrow{
 		Nonce:   srcAcc.General.Nonce,
 		Account: dstID,
@@ -335,6 +345,7 @@ func testEscrowEx(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 
 	err = backend.AddEscrow(context.Background(), signed)
 	require.NoError(err, "AddEscrow")
+	require.NoError(totalEscrowed.Add(&escrow.Tokens))
 
 	select {
 	case rawEv := <-ch:
@@ -351,20 +362,27 @@ func testEscrowEx(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	require.NoError(err, "src: AccountInfo - after 2nd")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after 2nd")
 	if !srcID.Equal(dstID) {
-		require.True(newSrcAcc.Escrow.Balance.IsZero(), "src: escrow balance == 0 - after 2nd")
+		require.True(newSrcAcc.Escrow.Active.Balance.IsZero(), "src: active escrow balance == 0 - after 2nd")
+		require.True(newSrcAcc.Escrow.Debonding.Balance.IsZero(), "src: debonding escrow balance == 0 - after 2nd")
 	}
 	require.Equal(escrow.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after 2nd")
 
-	_ = dstAcc.Escrow.Balance.Add(&escrow.Tokens)
+	_ = dstAcc.Escrow.Active.Balance.Add(&escrow.Tokens)
 	newDstAcc, err = backend.AccountInfo(context.Background(), dstID, 0)
 	require.NoError(err, "dst: AccountInfo - after 2nd")
 	if !srcID.Equal(dstID) {
 		require.Equal(dstAcc.General.Balance, newDstAcc.General.Balance, "dst: general balance - after 2nd")
 		require.Equal(dstAcc.General.Nonce, newDstAcc.General.Nonce, "dst: nonce - after 2nd")
 	}
-	require.Equal(dstAcc.Escrow.Balance, newDstAcc.Escrow.Balance, "dst: escrow balance - after 2nd")
-	require.Equal(dstAcc.Escrow.Balance, newDstAcc.Escrow.TotalShares, "dst: escrow total shares - after 2nd")
-	require.True(newDstAcc.Escrow.DebondingShares.IsZero(), "dst: escrow debonding shares == 0 - after 2nd")
+	require.Equal(dstAcc.Escrow.Active.Balance, newDstAcc.Escrow.Active.Balance, "dst: active escrow balance - after 2nd")
+	require.Equal(dstAcc.Escrow.Active.Balance, newDstAcc.Escrow.Active.TotalShares, "dst: active escrow total shares - after 2nd")
+	require.True(newDstAcc.Escrow.Debonding.Balance.IsZero(), "dst: debonding escrow balance == 0 - after 2nd")
+	require.True(newDstAcc.Escrow.Debonding.TotalShares.IsZero(), "dst: debonding escrow total shares == 0 - after 2nd")
+
+	srcAcc = newSrcAcc
+	dstAcc = newDstAcc
+	newSrcAcc = nil
+	newDstAcc = nil
 
 	// Reclaim escrow (subject to debonding).
 	debs, err := backend.DebondingDelegations(context.Background(), srcID, 0)
@@ -372,9 +390,9 @@ func testEscrowEx(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	require.Len(debs, 0, "no debonding delegations before reclaiming escrow")
 
 	reclaim := &api.ReclaimEscrow{
-		Nonce:   newSrcAcc.General.Nonce,
+		Nonce:   srcAcc.General.Nonce,
 		Account: dstID,
-		Shares:  newDstAcc.Escrow.TotalShares,
+		Shares:  dstAcc.Escrow.Active.TotalShares,
 	}
 	signedReclaim, err := api.SignReclaimEscrow(srcSigner, reclaim)
 	require.NoError(err, "Sign ReclaimEscrow")
@@ -387,32 +405,28 @@ func testEscrowEx(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	require.NoError(err, "DebondingDelegations - after (in debonding)")
 	require.Len(debs, 1, "one debonding delegation after reclaiming escrow")
 	require.Len(debs[dstID.ToMapKey()], 1, "one debonding delegation after reclaiming escrow")
-	require.Equal(reclaim.Shares, debs[dstID.ToMapKey()][0].Shares, "DebondingDelegation: shares")
 
 	// Advance epoch to trigger debonding.
 	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Wait for debonding period to pass.
-	expectedTokens := escrow.Tokens.Clone()
-	two := QtyFromInt(2)
-	_ = expectedTokens.Mul(&two)
-
 	select {
 	case rawEv := <-ch:
 		ev := rawEv.(*api.ReclaimEscrowEvent)
 		require.Equal(srcID, ev.Owner, "Event: owner")
 		require.Equal(dstID, ev.Escrow, "Event: escrow")
-		require.Equal(expectedTokens, &ev.Tokens, "Event: tokens")
+		require.Equal(&totalEscrowed, &ev.Tokens, "Event: tokens")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive reclaim escrow event")
 	}
 
-	_ = srcAcc.General.Balance.Add(expectedTokens)
+	_ = srcAcc.General.Balance.Add(&totalEscrowed)
 	newSrcAcc, err = backend.AccountInfo(context.Background(), srcID, 0)
 	require.NoError(err, "src: AccountInfo - after debond")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after debond")
 	if !srcID.Equal(dstID) {
-		require.True(srcAcc.Escrow.Balance.IsZero(), "src: escrow balance == 0 - after debond")
+		require.True(srcAcc.Escrow.Active.Balance.IsZero(), "src: active escrow balance == 0 - after debond")
+		require.True(srcAcc.Escrow.Debonding.Balance.IsZero(), "src: debonding escrow balance == 0 - after debond")
 	}
 	require.Equal(reclaim.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after debond")
 
@@ -422,9 +436,10 @@ func testEscrowEx(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 		require.Equal(dstAcc.General.Balance, newDstAcc.General.Balance, "dst: general balance - after debond")
 		require.Equal(dstAcc.General.Nonce, newDstAcc.General.Nonce, "dst: nonce - after debond")
 	}
-	require.True(newDstAcc.Escrow.Balance.IsZero(), "dst: escrow balance == 0 - after debond")
-	require.True(newDstAcc.Escrow.TotalShares.IsZero(), "dst: escrow total shares == 0 - after debond")
-	require.True(newDstAcc.Escrow.DebondingShares.IsZero(), "dst: escrow debonding shares == 0 - after debond")
+	require.True(newDstAcc.Escrow.Active.Balance.IsZero(), "dst: active escrow balance == 0 - after debond")
+	require.True(newDstAcc.Escrow.Active.TotalShares.IsZero(), "dst: active escrow total shares == 0 - after debond")
+	require.True(newDstAcc.Escrow.Debonding.Balance.IsZero(), "dst: debonding escrow balance == 0 - after debond")
+	require.True(newDstAcc.Escrow.Debonding.TotalShares.IsZero(), "dst: debonding escrow total shares == 0 - after debond")
 
 	debs, err = backend.DebondingDelegations(context.Background(), srcID, 0)
 	require.NoError(err, "DebondingDelegations - after (debonding completed)")
