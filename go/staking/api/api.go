@@ -371,6 +371,8 @@ func (p *SharePool) sharesForTokens(amount *Quantity) (*Quantity, error) {
 	return q, nil
 }
 
+// Deposit moves tokens into the combined balance, raising the shares.
+// If an error occurs, the pool and affected accounts are left in an invalid state.
 func (p *SharePool) Deposit(shareDst, tokenSrc, tokenAmount *Quantity) error {
 	shares, err := p.sharesForTokens(tokenAmount)
 	if err != nil {
@@ -418,6 +420,8 @@ func (p *SharePool) tokensForShares(amount *Quantity) (*Quantity, error) {
 	return q, nil
 }
 
+// Withdraw moves tokens out of the combined balance, reducing the shares.
+// If an error occurs, the pool and affected accounts are left in an invalid state.
 func (p *SharePool) Withdraw(tokenDst, shareSrc, shareAmount *Quantity) error {
 	tokens, err := p.tokensForShares(shareAmount)
 	if err != nil {
