@@ -331,8 +331,12 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 
 	// HACK: Can't emit tags from InitChain, stash the genesis state
 	// so that processing can happen in BeginBlock.
+	//
+	// This is also stashed in the CheckTx tree (even though it will get
+	// rolled back), so that it is usable from the genesisHooks.
 	b, _ = req.Marshal()
 	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisRequest), b)
+	mux.state.checkTxTree.Set([]byte(stateKeyGenesisRequest), b)
 
 	resp := mux.BaseApplication.InitChain(req)
 
