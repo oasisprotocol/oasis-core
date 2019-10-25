@@ -113,6 +113,24 @@ func (args *argBuilder) workerClientPort(port uint16) *argBuilder {
 	return args
 }
 
+func (args *argBuilder) workerCommonSentryAddresses(addrs []string) *argBuilder {
+	for _, addr := range addrs {
+		args.vec = append(args.vec, []string{
+			"--" + workerCommon.CfgSentryAddresses, addr,
+		}...)
+	}
+	return args
+}
+
+func (args *argBuilder) workerCommonSentryCertFiles(certFiles []string) *argBuilder {
+	for _, certFile := range certFiles {
+		args.vec = append(args.vec, []string{
+			"--" + workerCommon.CfgSentryCertFiles, certFile,
+		}...)
+	}
+	return args
+}
+
 func (args *argBuilder) workerP2pPort(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + p2p.CfgP2pPort, strconv.Itoa(int(port)),
