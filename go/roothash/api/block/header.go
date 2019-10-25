@@ -123,10 +123,6 @@ func (h *Header) RootsForStorageReceipt() []hash.Hash {
 //
 // Note: Ensuring that the signatures are signed by keypair(s) that are
 // expected is the responsibility of the caller.
-//
-// TODO: After we switch to https://github.com/oasislabs/ed25519, use batch
-// verification. This should be implemented as part of:
-// https://github.com/oasislabs/oasis-core/issues/1351.
 func (h *Header) VerifyStorageReceiptSignatures() error {
 	receiptBody := storage.ReceiptBody{
 		Version:   1,
@@ -134,15 +130,11 @@ func (h *Header) VerifyStorageReceiptSignatures() error {
 		Round:     h.Round,
 		Roots:     h.RootsForStorageReceipt(),
 	}
-	receipt := storage.Receipt{}
-	receipt.Signed.Blob = receiptBody.MarshalCBOR()
-	for _, sig := range h.StorageSignatures {
-		receipt.Signed.Signature = sig
-		var tmp storage.ReceiptBody
-		if err := receipt.Open(&tmp); err != nil {
-			return err
-		}
+
+	if !signature.VerifyManyToOne(storage.ReceiptSignatureContext, receiptBody.MarshalCBOR(), h.StorageSignatures) {
+		return signature.ErrVerifyFailed
 	}
+
 	return nil
 }
 
