@@ -3,6 +3,7 @@ package signature
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding"
 	"encoding/base64"
 	"encoding/hex"
@@ -64,6 +65,8 @@ var (
 
 	testPublicKeys        sync.Map
 	blacklistedPublicKeys sync.Map
+
+	defaultOptions = &ed25519.Options{}
 )
 
 // MapKey is a PublicKey as a fixed sized byte array for use as a map key.
@@ -118,7 +121,7 @@ func (k PublicKey) Verify(context, message, sig []byte) bool {
 	if len(sig) != SignatureSize {
 		return false
 	}
-	if _, isBlacklisted := blacklistedPublicKeys.Load(k.ToMapKey()); isBlacklisted {
+	if k.isBlacklisted() {
 		return false
 	}
 
@@ -267,6 +270,11 @@ func (k *PublicKey) LoadPEM(fn string, signer Signer) error {
 	}
 
 	return nil
+}
+
+func (k *PublicKey) isBlacklisted() bool {
+	_, isBlacklisted := blacklistedPublicKeys.Load(k.ToMapKey())
+	return isBlacklisted
 }
 
 // RawSignature is a raw signature.
@@ -504,6 +512,77 @@ type SignedPublicKey struct {
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedPublicKey) Open(context []byte, pub *PublicKey) error { // nolint: interfacer
 	return s.Signed.Open(context, pub)
+}
+
+// VerifyManyToOne verifies multiple signatures against a single context and
+// message, returning true iff every signature is valid.
+func VerifyManyToOne(context []byte, message []byte, sigs []Signature) bool {
+	// Our batch verify supports doing Ed25519ph/Ed25519ctx in bulk,
+	// but we're stuck with this stupidity.
+	msg, err := PrepareSignerMessage(context, message)
+	if err != nil {
+		return false
+	}
+
+	// Adapt from our wrapper types to the types used by the library.
+	pks := make([]ed25519.PublicKey, 0, len(sigs))
+	rawSigs := make([][]byte, 0, len(sigs))
+	msgs := make([][]byte, 0, len(sigs))
+
+	for i := range sigs {
+		v := sigs[i] // This is deliberate.
+		if v.PublicKey.isBlacklisted() {
+			return false
+		}
+
+		pks = append(pks, ed25519.PublicKey(v.PublicKey))
+		rawSigs = append(rawSigs, v.Signature[:])
+		msgs = append(msgs, msg)
+	}
+
+	allOk, _, err := ed25519.VerifyBatch(rand.Reader, pks, msgs, rawSigs, defaultOptions)
+	if err != nil {
+		return false
+	}
+
+	return allOk
+}
+
+// VerifyBatch verifies multiple signatures, made by multiple public keys,
+// against a single context and multiple messages, returning true iff every
+// signature is valid.
+func VerifyBatch(context []byte, messages [][]byte, sigs []Signature) bool {
+	if len(messages) != len(sigs) {
+		panic("signature: VerifyBatch messages/signature count mismatch")
+	}
+
+	// Adapt from our wrapper types to the types used by the library.
+	pks := make([]ed25519.PublicKey, 0, len(sigs))
+	rawSigs := make([][]byte, 0, len(sigs))
+	msgs := make([][]byte, 0, len(sigs))
+
+	for i := range sigs {
+		v := sigs[i] // This is deliberate.
+		if v.PublicKey.isBlacklisted() {
+			return false
+		}
+		pks = append(pks, ed25519.PublicKey(v.PublicKey))
+		rawSigs = append(rawSigs, v.Signature[:])
+
+		// Sigh. :(
+		msg, err := PrepareSignerMessage(context, msgs[i])
+		if err != nil {
+			return false
+		}
+		msgs = append(msgs, msg)
+	}
+
+	allOk, _, err := ed25519.VerifyBatch(rand.Reader, pks, msgs, rawSigs, defaultOptions)
+	if err != nil {
+		return false
+	}
+
+	return allOk
 }
 
 // RegisterTestPublicKey registers a hardcoded test public key with the
