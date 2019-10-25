@@ -570,7 +570,7 @@ func VerifyBatch(context []byte, messages [][]byte, sigs []Signature) bool {
 		rawSigs = append(rawSigs, v.Signature[:])
 
 		// Sigh. :(
-		msg, err := PrepareSignerMessage(context, msgs[i])
+		msg, err := PrepareSignerMessage(context, messages[i])
 		if err != nil {
 			return false
 		}
