@@ -97,12 +97,6 @@ message EntityNodesResponse {
     repeated common.Node node = 1;
 }
 
-message NodeTransportResponse {
-    repeated common.Address addresses = 1;
-    bytes certificate = 2;
-    int64 height = 3;
-}
-
 message WatchNodeRequest {
 }
 

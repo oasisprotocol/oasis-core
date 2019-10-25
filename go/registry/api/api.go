@@ -177,13 +177,6 @@ type Backend interface {
 	Cleanup()
 }
 
-// NodeTransport is a registered node's transport information required to
-// establish a secure connection with the node.
-type NodeTransport struct {
-	Addresses   []node.Address
-	Certificate []byte
-}
-
 // EntityEvent is the event that is returned via WatchEntities to signify
 // entity registration changes and updates.
 type EntityEvent struct {
