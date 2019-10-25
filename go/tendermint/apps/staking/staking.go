@@ -102,6 +102,7 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 	// Delegation unbonding after debonding period elapses.
 	for _, e := range state.ExpiredDebondingQueue(epoch) {
 		deb := e.Delegation
+		shareAmount := deb.Shares.Clone()
 		delegator := state.Account(e.DelegatorID)
 		// NOTE: Could be the same account, so make sure to not have two duplicate
 		//       copies of it and overwrite it later.
@@ -113,7 +114,7 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		}
 
 		var tokens staking.Quantity
-		if err := escrow.Escrow.Debonding.Withdraw(&tokens, &deb.Shares, &deb.Shares); err != nil {
+		if err := escrow.Escrow.Debonding.Withdraw(&tokens, &deb.Shares, shareAmount); err != nil {
 			app.logger.Error("failed to redeem debonding shares",
 				"err", err,
 				"escrow_id", e.EscrowID,
@@ -124,7 +125,7 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		}
 		tokenAmount := tokens.Clone()
 
-		if err := staking.Move(&delegator.General.Balance, &tokens, &tokens); err != nil {
+		if err := staking.Move(&delegator.General.Balance, &tokens, tokenAmount); err != nil {
 			app.logger.Error("failed to move debonded tokens",
 				"err", err,
 				"escrow_id", e.EscrowID,
@@ -424,8 +425,9 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 		)
 		return err
 	}
+	tokenAmount := tokens.Clone()
 
-	if err := from.Escrow.Debonding.Deposit(&deb.Shares, &tokens, &tokens); err != nil {
+	if err := from.Escrow.Debonding.Deposit(&deb.Shares, &tokens, tokenAmount); err != nil {
 		app.logger.Error("ReclaimEscrow: failed to debond shares",
 			"err", err,
 			"to", id,
