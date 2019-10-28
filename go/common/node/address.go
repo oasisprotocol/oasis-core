@@ -77,6 +77,20 @@ func ToProtoAddresses(addrs []Address) []*pbCommon.Address {
 	return pbAddrs
 }
 
+// FromProtoAddresses converts a list of protocol buffer addresses to a list of
+// Addresses.
+func FromProtoAddresses(pbAddrs []*pbCommon.Address) ([]Address, error) {
+	addrs := make([]Address, 0, len(pbAddrs))
+	for _, v := range pbAddrs {
+		addr, err := parseProtoAddress(v)
+		if err != nil {
+			return nil, err
+		}
+		addrs = append(addrs, *addr)
+	}
+	return addrs, nil
+}
+
 func parseProtoAddress(pb *pbCommon.Address) (*Address, error) {
 	var ipLen int
 	switch pb.GetTransport() {
