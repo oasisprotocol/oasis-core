@@ -66,7 +66,8 @@ func (val *Validator) startNode() error {
 		tendermintCoreListenAddress(val.consensusPort).
 		grpcDebugPort(val.grpcDebugPort).
 		storageBackend("client").
-		appendNetwork(val.net)
+		appendNetwork(val.net).
+		appendEntity(val.entity)
 
 	if _, err := val.net.startOasisNode(val.dir, nil, args, "validator", false, false); err != nil {
 		return errors.Wrap(err, "oasis/validator: failed to launch node")
@@ -99,7 +100,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		"registry", "node", "init",
 		"--datadir", val.dir.String(),
 		"--node.consensus_address", fmt.Sprintf("127.0.0.1:%d", val.consensusPort),
-		"--node.expiration", "1000000",
+		"--node.expiration", "1",
 		"--node.role", "validator",
 	}
 	args = append(args, cfg.Entity.toGenesisArgs()...)
