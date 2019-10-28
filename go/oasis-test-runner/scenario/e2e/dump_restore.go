@@ -92,22 +92,26 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	for _, val := range sc.basicImpl.net.Validators() {
 		preservePath(val.IdentityKeyPath())
 		preservePath(val.P2PKeyPath())
+		preservePath(val.ConsensusKeyPath())
 	}
 	for _, sw := range sc.basicImpl.net.StorageWorkers() {
 		preservePath(sw.IdentityKeyPath())
 		preservePath(sw.P2PKeyPath())
+		preservePath(sw.ConsensusKeyPath())
 		preservePath(sw.TLSKeyPath())
 		preservePath(sw.TLSCertPath())
 	}
 	for _, cw := range sc.basicImpl.net.ComputeWorkers() {
 		preservePath(cw.IdentityKeyPath())
 		preservePath(cw.P2PKeyPath())
+		preservePath(cw.ConsensusKeyPath())
 		preservePath(cw.TLSKeyPath())
 		preservePath(cw.TLSCertPath())
 	}
 	km := sc.basicImpl.net.Keymanager()
 	preservePath(km.IdentityKeyPath())
 	preservePath(km.P2PKeyPath())
+	preservePath(km.ConsensusKeyPath())
 	preservePath(km.TLSKeyPath())
 	preservePath(km.TLSCertPath())
 	// Preserve key manager state.

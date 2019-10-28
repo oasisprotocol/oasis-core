@@ -49,6 +49,11 @@ func (worker *Compute) P2PKeyPath() string {
 	return nodeP2PKeyPath(worker.dir)
 }
 
+// ConsensusKeyPath returns the path to the node's consensus key.
+func (worker *Compute) ConsensusKeyPath() string {
+	return nodeConsensusKeyPath(worker.dir)
+}
+
 // TLSKeyPath returns the path to the node's TLS key.
 func (worker *Compute) TLSKeyPath() string {
 	return nodeTLSKeyPath(worker.dir)

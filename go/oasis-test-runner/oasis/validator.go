@@ -45,14 +45,19 @@ func (val *Validator) LogPath() string {
 	return nodeLogPath(val.dir)
 }
 
-// IdentityKeyPath returns the paths to the node's identity key.
+// IdentityKeyPath returns the path to the node's identity key.
 func (val *Validator) IdentityKeyPath() string {
 	return nodeIdentityKeyPath(val.dir)
 }
 
-// P2PKeyPath returns the paths to the node's P2P key.
+// P2PKeyPath returns the path to the node's P2P key.
 func (val *Validator) P2PKeyPath() string {
 	return nodeP2PKeyPath(val.dir)
+}
+
+// ConsensusKeyPath returns the path to the node's consensus key.
+func (val *Validator) ConsensusKeyPath() string {
+	return nodeConsensusKeyPath(val.dir)
 }
 
 func (val *Validator) startNode() error {

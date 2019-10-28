@@ -18,6 +18,10 @@ const (
 	// P2PKeyPubFilename is the filename of the PEM encoded p2p public key.
 	P2PKeyPubFilename = "p2p_pub.pem"
 
+	// ConsensusKeyPubFilename is the filename of the PEM encoded consensus
+	// public key.
+	ConsensusKeyPubFilename = "consensus_pub.pem"
+
 	// CommonName is the CommonName to use when generating TLS certificates.
 	CommonName = "oasis-node"
 
@@ -31,6 +35,8 @@ type Identity struct {
 	NodeSigner signature.Signer
 	// P2PSigner is a node P2P link key signer.
 	P2PSigner signature.Signer
+	// ConsensusSigner is a node consensus key signer.
+	ConsensusSigner signature.Signer
 	// TLSKey is a private key used for TLS connections.
 	TLSKey *ecdsa.PrivateKey
 	// TLSCertificate is a certificate that can be used for TLS.
@@ -55,6 +61,7 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 	}{
 		{signature.SignerNode, NodeKeyPubFilename},
 		{signature.SignerP2P, P2PKeyPubFilename},
+		{signature.SignerConsensus, ConsensusKeyPubFilename},
 	} {
 		signer, err := signerFactory.Load(v.role)
 		switch err {
@@ -97,10 +104,11 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 	}
 
 	return &Identity{
-		NodeSigner:     signers[0],
-		P2PSigner:      signers[1],
-		TLSKey:         cert.PrivateKey.(*ecdsa.PrivateKey),
-		TLSCertificate: cert,
+		NodeSigner:      signers[0],
+		P2PSigner:       signers[1],
+		ConsensusSigner: signers[2],
+		TLSKey:          cert.PrivateKey.(*ecdsa.PrivateKey),
+		TLSCertificate:  cert,
 	}, nil
 }
 

@@ -639,7 +639,7 @@ func verifyRuntimeCapabilities(logger *logging.Logger, currentCaps *node.Capabil
 }
 
 // VerifyNodeUpdate verifies changes while updating the node.
-func VerifyNodeUpdate(logger *logging.Logger, currentNode *node.Node, newNode *node.Node) error {
+func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) error {
 	// XXX: In future we might want to allow updating some of these fields as well. But these updates
 	//      should only happen after the epoch transition.
 	//      For now, node should un-register and re-register to update any of these fields.
@@ -679,6 +679,15 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode *node.Node, newNode *n
 		logger.Error("RegisterNode: current node registration time greater than new",
 			"current_registration_time", currentNode.RegistrationTime,
 			"new_registration_time", newNode.RegistrationTime,
+		)
+		return ErrNodeUpdateNotAllowed
+	}
+
+	// As of right now, every node has a consensus ID.
+	if !currentNode.Consensus.ID.Equal(newNode.Consensus.ID) {
+		logger.Error("RegisterNode: trying to update consensus ID",
+			"current_id", currentNode.Consensus.ID,
+			"new_id", newNode.Consensus.ID,
 		)
 		return ErrNodeUpdateNotAllowed
 	}

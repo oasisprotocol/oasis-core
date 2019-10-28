@@ -44,7 +44,7 @@ func NewSingleNodeGenesisProvider(identity *identity.Identity) (genesis.Provider
 		AppState:        b,
 	}
 
-	nodeID := identity.NodeSigner.Public()
+	nodeID := identity.ConsensusSigner.Public()
 	pk := crypto.PublicKeyToTendermint(&nodeID)
 	validator := tmtypes.GenesisValidator{
 		Address: pk.Address(),

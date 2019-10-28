@@ -33,7 +33,10 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 			Certificate: id.TLSCertificate.Certificate[0],
 			Addresses:   committeeAddresses,
 		},
-		P2P:              p2pInfo,
+		P2P: p2pInfo,
+		Consensus: node.ConsensusInfo{
+			ID: id.ConsensusSigner.Public(),
+		},
 		RegistrationTime: uint64(time.Now().Unix()),
 		Runtimes: []*node.Runtime{
 			&node.Runtime{

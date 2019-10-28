@@ -50,7 +50,7 @@ func (net *Network) newSeedNode() (*seedNode, error) {
 	// Pre-provision the node identity, so that we can figure out what
 	// to pass all the actual nodes in advance, instead of having to
 	// start the node and fork out to `oasis-node debug tendermint show-node-id`.
-	signerFactory := fileSigner.NewFactory(seedDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerEntity)
+	signerFactory := fileSigner.NewFactory(seedDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
 	seedIdentity, err := identity.LoadOrGenerate(seedDir.String(), signerFactory)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/seed: failed to provision seed identity")

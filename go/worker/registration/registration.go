@@ -180,7 +180,10 @@ func (r *Registration) registerNode(epoch epochtime.EpochTime) error {
 			Certificate: r.identity.TLSCertificate.Certificate[0],
 			Addresses:   addresses,
 		},
-		P2P:              r.p2p.Info(),
+		P2P: r.p2p.Info(),
+		Consensus: node.ConsensusInfo{
+			ID: r.consensus.ConsensusKey(),
+		},
 		RegistrationTime: uint64(time.Now().Unix()),
 	}
 	for _, runtime := range r.workerCommonCfg.Runtimes {
@@ -240,6 +243,7 @@ func (r *Registration) consensusValidatorHook(n *node.Node) error {
 	// inclination is to do it in the registry, but this would be the other
 	// location for such a thing.
 
+	// n.Consensus.ID is set for all nodes, no need to set it here.
 	n.Consensus.Addresses = addrs
 	n.AddRoles(node.RoleValidator)
 

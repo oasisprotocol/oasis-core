@@ -139,7 +139,7 @@ func doInit(cmd *cobra.Command, args []string) {
 	}
 
 	// Provision the node identity.
-	nodeSignerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P)
+	nodeSignerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
 	nodeIdentity, err := identity.LoadOrGenerate(dataDir, nodeSignerFactory)
 	if err != nil {
 		logger.Error("failed to load or generate node identity",
@@ -168,6 +168,9 @@ func doInit(cmd *cobra.Command, args []string) {
 		},
 		P2P: node.P2PInfo{
 			ID: nodeIdentity.P2PSigner.Public(),
+		},
+		Consensus: node.ConsensusInfo{
+			ID: nodeIdentity.ConsensusSigner.Public(),
 		},
 		RegistrationTime: uint64(time.Now().Unix()),
 	}

@@ -60,6 +60,11 @@ func (km *Keymanager) P2PKeyPath() string {
 	return nodeP2PKeyPath(km.dir)
 }
 
+// ConsensusKeyPath returns the path to the node's consensus key.
+func (km *Keymanager) ConsensusKeyPath() string {
+	return nodeConsensusKeyPath(km.dir)
+}
+
 // TLSKeyPath returns the path to the node's TLS key.
 func (km *Keymanager) TLSKeyPath() string {
 	return nodeTLSKeyPath(km.dir)
