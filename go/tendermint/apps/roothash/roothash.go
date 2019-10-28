@@ -59,8 +59,7 @@ type rootHashApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.Backend
-	beacon     beacon.Backend
+	beacon beacon.Backend
 }
 
 func (app *rootHashApplication) Name() string {
@@ -94,7 +93,7 @@ func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.Requ
 	// Check if rescheduling has taken place.
 	rescheduled := ctx.HasEvent(schedulerapp.AppName, schedulerapp.KeyElected)
 	// Check if there was an epoch transition.
-	epochChanged, epoch := app.state.EpochChanged(ctx, app.timeSource)
+	epochChanged, epoch := app.state.EpochChanged(ctx)
 
 	if epochChanged || rescheduled {
 		return app.onCommitteeChanged(ctx, epoch)
@@ -866,10 +865,9 @@ func (app *rootHashApplication) tryFinalizeBlock(
 }
 
 // New constructs a new roothash application instance.
-func New(timeSource epochtime.Backend, beacon beacon.Backend) abci.Application {
+func New(beacon beacon.Backend) abci.Application {
 	return &rootHashApplication{
-		logger:     logging.GetLogger("tendermint/roothash"),
-		timeSource: timeSource,
-		beacon:     beacon,
+		logger: logging.GetLogger("tendermint/roothash"),
+		beacon: beacon,
 	}
 }

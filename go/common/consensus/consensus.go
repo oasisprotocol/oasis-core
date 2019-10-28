@@ -3,10 +3,17 @@
 package consensus
 
 import (
-	"time"
+	"context"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
+	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 // Backend is an interface that a consensus backend must provide.
@@ -28,13 +35,17 @@ type Backend interface {
 	// Note that these hooks block consensus genesis from completing
 	// while they are running.
 	RegisterGenesisHook(func())
-}
 
-// Genesis contains various consensus config flags that should be part of the genesis state.
-type Genesis struct {
-	Backend            string        `json:"backend"`
-	TimeoutCommit      time.Duration `json:"timeout_commit"`
-	SkipTimeoutCommit  bool          `json:"skip_timeout_commit"`
-	EmptyBlockInterval time.Duration `json:"empty_block_interval"`
-	MaxTxSize          uint          `json:"max_tx_size"`
+	// RegisterHaltHook registers a function to be called when the
+	// consensus Halt epoch height is reached.
+	RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime))
+
+	// EpochTime returns the epochtime backend.
+	// XXX: with https://github.com/oasislabs/oasis-core/issues/1879 do similar
+	// for other backends.
+	EpochTime() epochtime.Backend
+
+	// ToGenesis returns the genesis state at the specified block height.
+	// XXX: with #1879 the ToGenesis all the backend arguments can be removed.
+	ToGenesis(ctx context.Context, blockHeight int64, km keymanager.Backend, reg registry.Backend, rh roothash.Backend, s staking.Backend, sch scheduler.Backend) (*genesisAPI.Document, error)
 }

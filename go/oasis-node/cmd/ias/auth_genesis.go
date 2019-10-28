@@ -4,7 +4,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
-	"github.com/oasislabs/oasis-core/go/genesis"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/file"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
@@ -35,7 +35,7 @@ func (auth *genesisAuthenticator) VerifyEvidence(signer signature.PublicKey, evi
 }
 
 func newGenesisAuthenticator() (ias.GRPCAuthenticator, error) {
-	genesisProvider, err := genesis.New()
+	genesisProvider, err := genesis.NewFileProvider()
 	if err != nil {
 		return nil, err
 	}

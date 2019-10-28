@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/tendermint"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -16,7 +15,6 @@ import (
 // New constructs a new Backend based on the configuration flags.
 func New(
 	ctx context.Context,
-	timeSource epochtime.Backend,
 	registry registry.Backend,
 	service service.TendermintService,
 ) (api.Backend, error) {
@@ -31,7 +29,7 @@ func New(
 
 	switch strings.ToLower(backend) {
 	case tendermint.BackendName:
-		impl, err = tendermint.New(ctx, timeSource, service)
+		impl, err = tendermint.New(ctx, service)
 	default:
 		return nil, fmt.Errorf("keymanager: unsupported backend: '%v'", backend)
 	}

@@ -29,8 +29,6 @@ var (
 type beaconApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
-
-	timeSource epochtime.Backend
 }
 
 func (app *beaconApplication) Name() string {
@@ -61,7 +59,7 @@ func (app *beaconApplication) SetOption(req types.RequestSetOption) types.Respon
 }
 
 func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeginBlock) error {
-	if changed, beaconEpoch := app.state.EpochChanged(ctx, app.timeSource); changed {
+	if changed, beaconEpoch := app.state.EpochChanged(ctx); changed {
 		return app.onBeaconEpochChange(ctx, beaconEpoch, req)
 	}
 	return nil
@@ -153,10 +151,9 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) erro
 }
 
 // New constructs a new beacon application instance.
-func New(timeSource epochtime.Backend) abci.Application {
+func New() abci.Application {
 	app := &beaconApplication{
-		logger:     logging.GetLogger("tendermint/beacon"),
-		timeSource: timeSource,
+		logger: logging.GetLogger("tendermint/beacon"),
 	}
 
 	return app

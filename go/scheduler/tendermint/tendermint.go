@@ -12,7 +12,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/scheduler/api"
 	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 	app "github.com/oasislabs/oasis-core/go/tendermint/apps/scheduler"
@@ -168,11 +167,10 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 
 // New constracts a new tendermint-based scheduler Backend instance.
 func New(ctx context.Context,
-	timeSource epochtime.Backend,
 	service service.TendermintService,
 ) (api.Backend, error) {
 	// Initialze and register the tendermint service component.
-	a, err := app.New(timeSource)
+	a, err := app.New()
 	if err != nil {
 		return nil, err
 	}

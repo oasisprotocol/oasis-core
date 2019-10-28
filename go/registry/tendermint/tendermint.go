@@ -16,7 +16,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/registry/api"
 	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 	app "github.com/oasislabs/oasis-core/go/tendermint/apps/registry"
@@ -375,9 +374,9 @@ func (tb *tendermintBackend) getNodeList(ctx context.Context, height int64) (*ap
 }
 
 // New constructs a new tendermint backed registry Backend instance.
-func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
-	a := app.New(timeSource)
+	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}

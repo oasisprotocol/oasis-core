@@ -33,12 +33,20 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	cmservice "github.com/oasislabs/oasis-core/go/common/service"
+	epochtimeAPI "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	"github.com/oasislabs/oasis-core/go/genesis/file"
+	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/crypto"
 	"github.com/oasislabs/oasis-core/go/tendermint/db"
+	"github.com/oasislabs/oasis-core/go/tendermint/epochtime"
+	"github.com/oasislabs/oasis-core/go/tendermint/epochtime_mock"
 	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
@@ -124,6 +132,8 @@ type tendermintService struct {
 	client        tmcli.Client
 	blockNotifier *pubsub.Broker
 	failMonitor   *failMonitor
+
+	epochtime epochtimeAPI.Backend
 
 	genesis                  *genesis.Document
 	genesisProvider          genesis.Provider
@@ -257,12 +267,140 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 	return []node.ConsensusAddress{addr}, nil
 }
 
+func (t *tendermintService) ToGenesis(
+	ctx context.Context,
+	blockHeight int64,
+	km keymanager.Backend,
+	reg registry.Backend,
+	rh roothash.Backend,
+	s staking.Backend,
+	sch scheduler.Backend,
+) (*genesis.Document, error) {
+	logger := logging.GetLogger("tendermint/genesis")
+
+	if blockHeight <= 0 {
+		var err error
+		if blockHeight, err = t.GetHeight(); err != nil {
+			logger.Error("failed querying height",
+				"err", err,
+				"height", blockHeight,
+			)
+			return nil, err
+		}
+	}
+
+	blk, err := t.GetBlock(&blockHeight)
+	if err != nil {
+		logger.Error("failed to get tendermint block",
+			"err", err,
+			"block_height", blockHeight,
+		)
+		return nil, err
+	}
+
+	// Get initial genesis doc.
+	genesisFileProvider, err := file.NewFileProvider()
+	if err != nil {
+		logger.Error("failed getting genesis file provider",
+			"err", err,
+		)
+		return nil, err
+	}
+	genesisDoc, err := genesisFileProvider.GetGenesisDocument()
+	if err != nil {
+		logger.Error("failed getting genesis document from file provider",
+			"err", err,
+		)
+		return nil, err
+	}
+
+	// Call ToGenesis on all backends and merge the results together.
+	epochtimeGenesis, err := t.epochtime.ToGenesis(ctx, blockHeight)
+	if err != nil {
+		logger.Error("epochtime ToGenesis failure",
+			"err", err,
+			"block_height", blockHeight,
+		)
+		return nil, err
+	}
+
+	registryGenesis, err := reg.ToGenesis(ctx, blockHeight)
+	if err != nil {
+		logger.Error("registry ToGenesis failure",
+			"err", err,
+			"block_height", blockHeight,
+		)
+		return nil, err
+	}
+
+	roothashGenesis, err := rh.ToGenesis(ctx, blockHeight)
+	if err != nil {
+		logger.Error("roothash ToGenesis failure",
+			"err", err,
+			"block_height", blockHeight,
+		)
+		return nil, err
+	}
+
+	stakingGenesis, err := s.ToGenesis(ctx, blockHeight)
+	if err != nil {
+		logger.Error("staking ToGenesis failure",
+			"err", err,
+			"block_height", blockHeight,
+		)
+		return nil, err
+	}
+
+	keymanagerGenesis, err := km.ToGenesis(ctx, blockHeight)
+	if err != nil {
+		logger.Error("keymanager ToGenesis failure",
+			"err", err,
+			"block_height", blockHeight,
+		)
+		return nil, err
+	}
+
+	schedulerGenesis, err := sch.ToGenesis(ctx, blockHeight)
+	if err != nil {
+		logger.Error("scheduler ToGenesis failure",
+			"err", err,
+			"block_height", blockHeight,
+		)
+		return nil, err
+	}
+
+	return &genesis.Document{
+		// XXX: Tendermint doesn't support restoring from non-0 height.
+		// https://github.com/tendermint/tendermint/issues/2543
+		Height:     blockHeight,
+		ChainID:    genesisDoc.ChainID,
+		HaltEpoch:  genesisDoc.HaltEpoch,
+		Time:       blk.Header.Time,
+		EpochTime:  *epochtimeGenesis,
+		Registry:   *registryGenesis,
+		RootHash:   *roothashGenesis,
+		Staking:    *stakingGenesis,
+		KeyManager: *keymanagerGenesis,
+		Scheduler:  *schedulerGenesis,
+		Beacon:     genesisDoc.Beacon,
+		Consensus:  genesisDoc.Consensus,
+	}, nil
+}
+
 func (t *tendermintService) RegisterGenesisHook(hook func()) {
 	if !t.initialized() {
 		return
 	}
 
 	t.mux.RegisterGenesisHook(hook)
+}
+
+func (t *tendermintService) RegisterHaltHook(hook func(context.Context, int64, epochtimeAPI.EpochTime)) {
+	if !t.initialized() {
+		return
+	}
+
+	t.mux.RegisterHaltHook(hook)
 }
 
 func (t *tendermintService) MarshalTx(tag byte, tx interface{}) tmtypes.Tx {
@@ -395,14 +533,11 @@ func (t *tendermintService) Pruner() abci.StatePruner {
 	return t.mux.Pruner()
 }
 
-func (t *tendermintService) RegisterApplication(app abci.Application) error {
-	if err := t.ForceInitialize(); err != nil {
-		return err
-	}
-	if t.started() {
-		return errors.New("tendermint: service already started")
-	}
+func (t *tendermintService) RegisterEpochtime(app abci.Application) error {
+	return t.mux.Register(app)
+}
 
+func (t *tendermintService) RegisterApplication(app abci.Application) error {
 	return t.mux.Register(app)
 }
 
@@ -410,17 +545,26 @@ func (t *tendermintService) GetGenesis() *genesis.Document {
 	return t.genesis
 }
 
-func (t *tendermintService) ForceInitialize() error {
+func (t *tendermintService) EpochTime() epochtimeAPI.Backend {
+	return t.epochtime
+}
+
+func (t *tendermintService) initialize() error {
 	t.Lock()
 	defer t.Unlock()
-
-	var err error
 	if !t.isInitialized {
 		t.Logger.Debug("Initializing tendermint local node.")
-		err = t.lazyInit()
+		if err := t.lazyInit(); err != nil {
+			return err
+		}
+
+		if err := t.initEpochtime(); err != nil {
+			return err
+		}
+		t.mux.SetEpochtime(t.epochtime)
 	}
 
-	return err
+	return nil
 }
 
 func (t *tendermintService) GetBlock(height *int64) (*tmtypes.Block, error) {
@@ -470,6 +614,30 @@ func (t *tendermintService) ConsensusKey() signature.PublicKey {
 	return t.consensusSigner.Public()
 }
 
+func (t *tendermintService) initEpochtime() error {
+	var epochTime epochtimeAPI.Backend
+	var err error
+	if t.genesis.EpochTime.Parameters.DebugMockBackend {
+		epochTime, err = epochtimemock.New(t.ctx, t)
+		if err != nil {
+			t.Logger.Error("initEpochtime: failed to initialize mock epochtime backend",
+				"err", err,
+			)
+			return err
+		}
+	} else {
+		epochTime, err = epochtime.New(t.ctx, t, t.genesis.EpochTime.Parameters.Interval)
+		if err != nil {
+			t.Logger.Error("initEpochtime: failed to initialize epochtime backend",
+				"err", err,
+			)
+			return err
+		}
+	}
+	t.epochtime = epochTime
+	return nil
+}
+
 func (t *tendermintService) lazyInit() error {
 	if t.isInitialized {
 		return nil
@@ -486,7 +654,7 @@ func (t *tendermintService) lazyInit() error {
 	pruneNumKept := int64(viper.GetInt(cfgABCIPruneNumKept))
 	pruneCfg.NumKept = pruneNumKept
 
-	t.mux, err = abci.NewApplicationServer(t.ctx, t.dataDir, &pruneCfg)
+	t.mux, err = abci.NewApplicationServer(t.ctx, t.dataDir, &pruneCfg, t.genesis.HaltEpoch)
 	if err != nil {
 		return err
 	}
@@ -722,7 +890,7 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 		return nil, errors.Wrap(err, "tendermint: failed to get genesis doc")
 	}
 
-	return &tendermintService{
+	t := &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
 		consensusSigner:       identity.ConsensusSigner,
@@ -733,7 +901,9 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
 		syncedCh:              make(chan struct{}),
-	}, nil
+	}
+
+	return t, t.initialize()
 }
 
 func initDataDir(dataDir string) error {
@@ -870,6 +1040,7 @@ func init() {
 	Flags.String(CfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
 	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 	Flags.Bool(CfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
+
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(db.Flags)
 }

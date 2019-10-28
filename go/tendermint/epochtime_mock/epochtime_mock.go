@@ -1,5 +1,5 @@
-// Package tendermintmock implements the mock (settable) tendermint backed epochtime backend.
-package tendermintmock
+// Package epochtimemock implements the mock (settable) tendermint backed epochtime backend.
+package epochtimemock
 
 import (
 	"bytes"
@@ -85,7 +85,7 @@ func (t *tendermintMockBackend) ToGenesis(ctx context.Context, height int64) (*a
 
 	return &api.Genesis{
 		Parameters: api.ConsensusParameters{
-			Backend: BackendName,
+			DebugMockBackend: true,
 		},
 		Base: now,
 	}, nil
@@ -219,7 +219,7 @@ func (t *tendermintMockBackend) updateCached(height int64, epoch api.EpochTime) 
 
 // New constructs a new mock tendermint backed epochtime Backend instance.
 func New(ctx context.Context, service service.TendermintService) (api.SetableBackend, error) {
-	// Initialze and register the tendermint service component.
+	// Initialize and register the tendermint service component.
 	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err

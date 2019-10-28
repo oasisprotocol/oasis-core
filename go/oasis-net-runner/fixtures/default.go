@@ -22,7 +22,7 @@ const (
 	cfgRuntimeLoader       = "net.runtime.loader"
 	cfgKeymanagerBinary    = "net.keymanager.binary"
 	cfgTEEHardware         = "net.tee_hardware"
-	cfgEpochtimeBackend    = "net.epochtime_backend"
+	cfgEpochtimeMock       = "net.epochtime_mock"
 )
 
 var (
@@ -54,7 +54,7 @@ func NewDefaultFixture() (*oasis.NetworkFixture, error) {
 			NodeBinary:             viper.GetString(cfgNodeBinary),
 			RuntimeLoaderBinary:    viper.GetString(cfgRuntimeLoader),
 			ConsensusTimeoutCommit: 1 * time.Second,
-			EpochtimeBackend:       viper.GetString(cfgEpochtimeBackend),
+			EpochtimeMock:          viper.GetBool(cfgEpochtimeMock),
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},
@@ -109,7 +109,7 @@ func init() {
 	Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	Flags.String(cfgKeymanagerBinary, "oasis-core-keymanager-runtime", "path to the keymanager runtime")
 	Flags.String(cfgTEEHardware, "", "TEE hardware to use")
-	Flags.String(cfgEpochtimeBackend, "tendermint", "epochtime backend to use")
+	Flags.Bool(cfgEpochtimeMock, false, "use mock epochtime")
 	_ = viper.BindPFlags(Flags)
 
 	_ = runtimeID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")

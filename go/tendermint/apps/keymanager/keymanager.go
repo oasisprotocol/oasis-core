@@ -27,8 +27,6 @@ var emptyHashSha3 = sha3.Sum256(nil)
 type keymanagerApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
-
-	timeSource epochtime.Backend
 }
 
 func (app *keymanagerApplication) Name() string {
@@ -58,7 +56,7 @@ func (app *keymanagerApplication) SetOption(request types.RequestSetOption) type
 }
 
 func (app *keymanagerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
-	if changed, epoch := app.state.EpochChanged(ctx, app.timeSource); changed {
+	if changed, epoch := app.state.EpochChanged(ctx); changed {
 		return app.onEpochChange(ctx, epoch)
 	}
 	return nil
@@ -261,9 +259,8 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 	return status
 }
 
-func New(timeSource epochtime.Backend) abci.Application {
+func New() abci.Application {
 	return &keymanagerApplication{
-		logger:     logging.GetLogger("tendermint/keymanager"),
-		timeSource: timeSource,
+		logger: logging.GetLogger("tendermint/keymanager"),
 	}
 }

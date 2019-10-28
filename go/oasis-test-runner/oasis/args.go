@@ -275,11 +275,6 @@ func (args *argBuilder) byzantineFakeSGX() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) byzantineMockEpochtime() *argBuilder {
-	args.vec = append(args.vec, "--"+byzantine.CfgMockEpochtime)
-	return args
-}
-
 func (args *argBuilder) byzantineVersionFakeEnclaveID(rt *Runtime) *argBuilder {
 	eid := sgx.EnclaveIdentity{
 		MrEnclave: *rt.mrEnclave,

@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -59,7 +58,7 @@ var (
 
 	metricsOnce sync.Once
 
-	errOversizedTx = errors.New("mux: oversized transaction")
+	errOversizedTx = fmt.Errorf("mux: oversized transaction")
 )
 
 // Application is the interface implemented by multiplexed Oasis-specific
@@ -149,7 +148,6 @@ type Application interface {
 type ApplicationServer struct {
 	mux         *abciMux
 	quitChannel chan struct{}
-	started     bool
 	cleanupOnce sync.Once
 }
 
@@ -188,10 +186,6 @@ func (a *ApplicationServer) Mux() types.Application {
 // called in name lexicographic order. Checks that applications named in
 // deps are already registered.
 func (a *ApplicationServer) Register(app Application) error {
-	if a.started {
-		return errors.New("mux: multiplexer already started")
-	}
-
 	return a.mux.doRegister(app)
 }
 
@@ -202,19 +196,31 @@ func (a *ApplicationServer) RegisterGenesisHook(hook func()) {
 	a.mux.registerGenesisHook(hook)
 }
 
+// RegisterHaltHook registers a function to be called when the
+// consensus Halt epoch height is reached.
+func (a *ApplicationServer) RegisterHaltHook(hook func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime)) {
+	a.mux.registerHaltHook(hook)
+}
+
 // Pruner returns the ABCI state pruner.
 func (a *ApplicationServer) Pruner() StatePruner {
 	return a.mux.state.statePruner
 }
 
+// SetEpochtime sets the mux epochtime.
+// XXX: epochtime needs to be set before mux can be used. // TODO: add check for this
+func (a *ApplicationServer) SetEpochtime(epochTime epochtime.Backend) {
+	a.mux.state.timeSource = epochTime
+}
+
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
-func NewApplicationServer(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*ApplicationServer, error) {
+func NewApplicationServer(ctx context.Context, dataDir string, pruneCfg *PruneConfig, haltEpochHeight epochtime.EpochTime) (*ApplicationServer, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(abciCollectors...)
 	})
 
-	mux, err := newABCIMux(ctx, dataDir, pruneCfg)
+	mux, err := newABCIMux(ctx, dataDir, pruneCfg, haltEpochHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -242,6 +248,7 @@ type abciMux struct {
 	maxTxSize      uint
 
 	genesisHooks []func()
+	haltHooks    []func(context.Context, int64, epochtime.EpochTime)
 }
 
 func (mux *abciMux) registerGenesisHook(hook func()) {
@@ -249,6 +256,13 @@ func (mux *abciMux) registerGenesisHook(hook func()) {
 	defer mux.Unlock()
 
 	mux.genesisHooks = append(mux.genesisHooks, hook)
+}
+
+func (mux *abciMux) registerHaltHook(hook func(context.Context, int64, epochtime.EpochTime)) {
+	mux.Lock()
+	defer mux.Unlock()
+
+	mux.haltHooks = append(mux.haltHooks, hook)
 }
 
 func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
@@ -370,6 +384,36 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	return resp
 }
 
+func (s *ApplicationState) inHaltEpoch(ctx *Context) bool {
+	blockHeight := s.BlockHeight()
+
+	currentEpoch, err := s.GetEpoch(ctx.Ctx(), blockHeight+1)
+	if err != nil {
+		s.logger.Error("inHaltEpoch: failed to get epoch",
+			"err", err,
+			"block_height", blockHeight+1,
+		)
+		return false
+	}
+	s.haltMode = currentEpoch == s.haltEpochHeight
+	return s.haltMode
+}
+
+func (s *ApplicationState) afterHaltEpoch(ctx *Context) bool {
+	blockHeight := s.BlockHeight()
+
+	currentEpoch, err := s.GetEpoch(ctx.Ctx(), blockHeight+1)
+	if err != nil {
+		s.logger.Error("afterHaltEpoch: failed to get epoch",
+			"err", err,
+			"block_height", blockHeight,
+		)
+		return false
+	}
+
+	return currentEpoch > s.haltEpochHeight
+}
+
 func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
 	blockHeight := mux.state.BlockHeight()
 	mux.logger.Debug("BeginBlock",
@@ -385,6 +429,36 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	mux.currentTime = req.Header.Time
 
 	ctx := NewContext(ContextBeginBlock, mux.currentTime, mux.state)
+
+	if !mux.state.haltMode {
+		if mux.state.inHaltEpoch(ctx) {
+			// On transition, trigger halt hooks.
+			mux.logger.Info("BeginBlock: halt mode transition, emitting empty blocks.",
+				"block_height", blockHeight,
+				"epoch", mux.state.haltEpochHeight,
+			)
+
+			mux.logger.Debug("Dispatching halt hooks")
+			for _, hook := range mux.haltHooks {
+				hook(mux.state.ctx, blockHeight, mux.state.haltEpochHeight)
+			}
+			mux.logger.Debug("Halt hook dispatch complete")
+		}
+	}
+
+	if mux.state.haltMode {
+		if mux.state.afterHaltEpoch(ctx) {
+			mux.logger.Info("BeginBlock: after halt epoch, halting",
+				"block_height", blockHeight,
+			)
+			// XXX:there is no way to stop tendermint consensus other than
+			// triggering a panic. Once possible, we should stop the consensus
+			// layer here and gracefully shutdown the node.
+			panic("tendermint: after halt epoch, halting")
+		}
+
+		return types.ResponseBeginBlock{}
+	}
 
 	// HACK: Our entire system is driven with a tag backed pub-sub
 	// interface gluing the various components together.  While we
@@ -452,6 +526,11 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 func (mux *abciMux) executeTx(ctx *Context, tx []byte) error {
 	logger := mux.logger.With("is_check_only", ctx.IsCheckOnly())
+
+	if mux.state.haltMode {
+		logger.Debug("executeTx: in halt, rejecting all transactions")
+		return fmt.Errorf("halt mode, rejecting all transactions")
+	}
 
 	if mux.maxTxSize > 0 && uint(len(tx)) > mux.maxTxSize {
 		// This deliberately avoids logging the tx since spamming the
@@ -531,6 +610,11 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 		"req", req,
 		"block_height", mux.state.BlockHeight(),
 	)
+
+	if mux.state.haltMode {
+		mux.logger.Debug("EndBlock: in halt, emitting empty block")
+		return types.ResponseEndBlock{}
+	}
 
 	ctx := NewContext(ContextEndBlock, mux.currentTime, mux.state)
 
@@ -676,8 +760,8 @@ func (mux *abciMux) extractAppFromTx(tx []byte) (Application, error) {
 	return app, nil
 }
 
-func newABCIMux(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*abciMux, error) {
-	state, err := newApplicationState(ctx, dataDir, pruneCfg)
+func newABCIMux(ctx context.Context, dataDir string, pruneCfg *PruneConfig, haltEpochHeight epochtime.EpochTime) (*abciMux, error) {
+	state, err := newApplicationState(ctx, dataDir, pruneCfg, haltEpochHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -713,6 +797,11 @@ type ApplicationState struct {
 	blockHash   []byte
 	blockHeight int64
 
+	timeSource epochtime.Backend
+
+	haltMode        bool
+	haltEpochHeight epochtime.EpochTime
+
 	metricsCloseCh  chan struct{}
 	metricsClosedCh chan struct{}
 }
@@ -747,16 +836,26 @@ func (s *ApplicationState) CheckTxTree() *iavl.MutableTree {
 	return s.checkTxTree
 }
 
+// GetBaseEpoch returns the base epoch.
+func (s *ApplicationState) GetBaseEpoch() (epochtime.EpochTime, error) {
+	return s.timeSource.GetBaseEpoch(s.ctx)
+}
+
+// GetEpoch returns current epoch at block height.
+func (s *ApplicationState) GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error) {
+	return s.timeSource.GetEpoch(ctx, blockHeight)
+}
+
 // EpochChanged returns true iff the current epoch has changed since the
 // last block.  As a matter of convenience, the current epoch is returned.
-func (s *ApplicationState) EpochChanged(ctx *Context, timeSource epochtime.Backend) (bool, epochtime.EpochTime) {
+func (s *ApplicationState) EpochChanged(ctx *Context) (bool, epochtime.EpochTime) {
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
 		return false, epochtime.EpochInvalid
 	} else if blockHeight == 1 {
 		// There is no block before the first block. For historic reasons, this is defined as not
 		// having had a transition.
-		currentEpoch, err := timeSource.GetEpoch(ctx.Ctx(), blockHeight)
+		currentEpoch, err := s.timeSource.GetEpoch(ctx.Ctx(), blockHeight)
 		if err != nil {
 			s.logger.Error("EpochChanged: failed to get current epoch",
 				"err", err,
@@ -766,14 +865,14 @@ func (s *ApplicationState) EpochChanged(ctx *Context, timeSource epochtime.Backe
 		return false, currentEpoch
 	}
 
-	previousEpoch, err := timeSource.GetEpoch(ctx.Ctx(), blockHeight)
+	previousEpoch, err := s.timeSource.GetEpoch(ctx.Ctx(), blockHeight)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get previous epoch",
 			"err", err,
 		)
 		return false, epochtime.EpochInvalid
 	}
-	currentEpoch, err := timeSource.GetEpoch(ctx.Ctx(), blockHeight+1)
+	currentEpoch, err := s.timeSource.GetEpoch(ctx.Ctx(), blockHeight+1)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get current epoch",
 			"err", err,
@@ -918,7 +1017,7 @@ func (s *ApplicationState) metricsWorker() {
 	}
 }
 
-func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneConfig) (*ApplicationState, error) {
+func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneConfig, haltEpochHeight epochtime.EpochTime) (*ApplicationState, error) {
 	db, err := db.New(filepath.Join(dataDir, "abci-mux-state"), false)
 	if err != nil {
 		return nil, err
@@ -961,6 +1060,7 @@ func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneCon
 		statePruner:     statePruner,
 		blockHash:       blockHash,
 		blockHeight:     blockHeight,
+		haltEpochHeight: haltEpochHeight,
 		metricsCloseCh:  make(chan struct{}),
 		metricsClosedCh: make(chan struct{}),
 	}

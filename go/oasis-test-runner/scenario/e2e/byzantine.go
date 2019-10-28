@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/epochtime/tendermint_mock"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
@@ -90,7 +89,7 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.DeterministicIdentities = true
 	// The byzantine scenario requires mock epochtime as the byzantine node
 	// doesn't know how to handle epochs in which it is not scheduled.
-	f.Network.EpochtimeBackend = tendermintmock.BackendName
+	f.Network.EpochtimeMock = true
 	// Change the default log watcher handlers if configured.
 	if sc.logWatcherHandlers != nil {
 		f.Network.LogWatcherHandlers = sc.logWatcherHandlers

@@ -1,5 +1,5 @@
-// Package tendermint implements the tendermint backed epochtime backend.
-package tendermint
+// Package epochtime implements the tendermint backed epochtime backend.
+package epochtime
 
 import (
 	"context"
@@ -77,8 +77,8 @@ func (t *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.G
 
 	return &api.Genesis{
 		Parameters: api.ConsensusParameters{
-			Backend:  BackendName,
-			Interval: t.interval,
+			DebugMockBackend: false,
+			Interval:         t.interval,
 		},
 		Base: now,
 	}, nil
@@ -123,10 +123,6 @@ func (t *tendermintBackend) updateCached(ctx context.Context, block *tmtypes.Blo
 // New constructs a new tendermint backed epochtime Backend instance,
 // with the specified epoch interval.
 func New(ctx context.Context, service service.TendermintService, interval int64) (api.Backend, error) {
-	if err := service.ForceInitialize(); err != nil {
-		return nil, err
-	}
-
 	base := service.GetGenesis().EpochTime.Base
 	r := &tendermintBackend{
 		logger:   logging.GetLogger("epochtime/tendermint"),

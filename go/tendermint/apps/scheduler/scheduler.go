@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"bytes"
-	"context"
 	"crypto"
 	"fmt"
 	"math/rand"
@@ -99,8 +98,6 @@ type schedulerApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
-	timeSource epochtime.Backend
-
 	baseEpoch epochtime.EpochTime
 }
 
@@ -137,7 +134,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 	slashed := ctx.HasEvent(stakingapp.AppName, stakingapp.KeyTakeEscrow)
 	// Check if epoch has changed.
 	// TODO: We'll later have this for each type of committee.
-	epochChanged, epoch := app.state.EpochChanged(ctx, app.timeSource)
+	epochChanged, epoch := app.state.EpochChanged(ctx)
 
 	if epochChanged || slashed {
 		// The 0th epoch will not have suitable entropy for elections, nor
@@ -625,15 +622,8 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 }
 
 // New constructs a new scheduler application instance.
-func New(timeSource epochtime.Backend) (abci.Application, error) {
-	baseEpoch, err := timeSource.GetBaseEpoch(context.Background())
-	if err != nil {
-		return nil, errors.Wrap(err, "tendermint/scheduler: couldn't query base epoch")
-	}
-
+func New() (abci.Application, error) {
 	return &schedulerApplication{
-		logger:     logging.GetLogger("tendermint/scheduler"),
-		timeSource: timeSource,
-		baseEpoch:  baseEpoch,
+		logger: logging.GetLogger("tendermint/scheduler"),
 	}, nil
 }

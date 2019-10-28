@@ -24,8 +24,7 @@ var (
 type stakingApplication struct {
 	logger *logging.Logger
 
-	state      *abci.ApplicationState
-	timeSource epochtime.Backend
+	state *abci.ApplicationState
 }
 
 func (app *stakingApplication) Name() string {
@@ -103,7 +102,7 @@ func (app *stakingApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Ap
 }
 
 func (app *stakingApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
-	if changed, epoch := app.state.EpochChanged(ctx, app.timeSource); changed {
+	if changed, epoch := app.state.EpochChanged(ctx); changed {
 		return types.ResponseEndBlock{}, app.onEpochChange(ctx, epoch)
 	}
 	return types.ResponseEndBlock{}, nil
@@ -419,7 +418,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 		)
 		return err
 	}
-	epoch, err := app.timeSource.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}
@@ -473,9 +472,8 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 }
 
 // New constructs a new staking application instance.
-func New(timeSource epochtime.Backend) abci.Application {
+func New() abci.Application {
 	return &stakingApplication{
-		logger:     logging.GetLogger("tendermint/staking"),
-		timeSource: timeSource,
+		logger: logging.GetLogger("tendermint/staking"),
 	}
 }

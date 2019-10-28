@@ -6,7 +6,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 	app "github.com/oasislabs/oasis-core/go/tendermint/apps/beacon"
 	"github.com/oasislabs/oasis-core/go/tendermint/service"
@@ -43,13 +42,9 @@ func (t *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.G
 }
 
 // New constructs a new tendermint backed beacon Backend instance.
-func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
-	if err := service.ForceInitialize(); err != nil {
-		return nil, err
-	}
-
+func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
-	a := app.New(timeSource)
+	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
