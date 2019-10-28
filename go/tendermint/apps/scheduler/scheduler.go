@@ -147,7 +147,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 	registeredValidators := make(map[signature.MapKey]*node.Node)
 	for _, v := range nodes {
 		if v.HasRoles(node.RoleValidator) {
-			registeredValidators[v.ID.ToMapKey()] = v
+			registeredValidators[v.Consensus.ID.ToMapKey()] = v
 		}
 	}
 
@@ -192,7 +192,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 		app.logger.Debug("adding validator to current validator set",
 			"id", id,
 		)
-		currentValidators = append(currentValidators, n.ID)
+		currentValidators = append(currentValidators, n.Consensus.ID)
 	}
 
 	// TODO/security: Enforce genesis validator staking.
@@ -615,7 +615,7 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 			continue
 		}
 
-		newValidators = append(newValidators, n.ID)
+		newValidators = append(newValidators, n.Consensus.ID)
 		if len(newValidators) >= maxValidators {
 			break
 		}

@@ -132,7 +132,7 @@ type tendermintService struct {
 
 	genesis                  *genesis.Document
 	genesisProvider          genesis.Provider
-	nodeSigner               signature.Signer
+	consensusSigner          signature.Signer
 	dataDir                  string
 	isInitialized, isStarted bool
 	startedCh                chan struct{}
@@ -464,9 +464,8 @@ func (t *tendermintService) WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscr
 	return typedCh, sub
 }
 
-func (t *tendermintService) NodeKey() *signature.PublicKey {
-	pk := t.nodeSigner.Public()
-	return &pk
+func (t *tendermintService) ConsensusKey() signature.PublicKey {
+	return t.consensusSigner.Public()
 }
 
 func (t *tendermintService) lazyInit() error {
@@ -523,7 +522,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.P2P.AddrBookStrict = !viper.GetBool(CfgDebugP2PAddrBookLenient)
 	tenderConfig.RPC.ListenAddress = ""
 
-	tendermintPV, err := crypto.LoadOrGeneratePrivVal(tendermintDataDir, t.nodeSigner)
+	tendermintPV, err := crypto.LoadOrGeneratePrivVal(tendermintDataDir, t.consensusSigner)
 	if err != nil {
 		return err
 	}
@@ -558,7 +557,7 @@ func (t *tendermintService) lazyInit() error {
 		t.node, err = tmnode.NewNode(tenderConfig,
 			tendermintPV,
 			// TODO/hsm: This needs to use a separte key.
-			&tmp2p.NodeKey{PrivKey: crypto.UnsafeSignerToTendermint(t.nodeSigner)},
+			&tmp2p.NodeKey{PrivKey: crypto.UnsafeSignerToTendermint(t.consensusSigner)},
 			tmproxy.NewLocalClientCreator(t.mux.Mux()),
 			tendermintGenesisProvider,
 			dbProvider,
@@ -609,7 +608,7 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 			continue
 		}
 
-		pk := crypto.PublicKeyToTendermint(&openedNode.ID)
+		pk := crypto.PublicKeyToTendermint(&openedNode.Consensus.ID)
 		validator := tmtypes.GenesisValidator{
 			Address: pk.Address(),
 			PubKey:  pk,
@@ -717,7 +716,7 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 	return &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
-		nodeSigner:            identity.NodeSigner,
+		consensusSigner:       identity.ConsensusSigner,
 		genesis:               genesisDoc,
 		genesisProvider:       genesisProvider,
 		ctx:                   ctx,

@@ -22,6 +22,10 @@ var (
 	// is misconfigured.
 	ErrRoleMismatch = errors.New("signature: signer factory role mismatch")
 
+	// ErrRoleAction is the error returned when the signer role mismatches
+	// the signing operations allowed by the role.
+	ErrRoleAction = errors.New("signature: signer role action mismatch")
+
 	errMalformedContext = errors.New("signature: malformed context")
 )
 
@@ -33,7 +37,17 @@ const (
 	SignerEntity
 	SignerNode
 	SignerP2P
+	SignerConsensus
 )
+
+// MustContextSign returns true iff the SignerRole must only accept ContextSign
+// operations.
+func (r SignerRole) MustContextSign() bool {
+	// Since we're stuck with PrepareSignerMessage instead of a sensible
+	// construct, ensure that only signers (aka keys) that are dedicated
+	// to consensus signing get to use vanilla Ed25519pure.
+	return r != SignerConsensus
+}
 
 // SignerFactoryCtor is an SignerFactory constructor.
 type SignerFactoryCtor func(string, ...SignerRole) SignerFactory

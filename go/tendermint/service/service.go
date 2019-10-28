@@ -9,7 +9,6 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/consensus"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/service"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
@@ -51,9 +50,6 @@ type TendermintService interface {
 	// WatchBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
 	WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
-
-	// NodeKey returns the node's P2P (link) authentication public key.
-	NodeKey() *signature.PublicKey
 
 	// MarshalTx returns the Tendermint transaction from the inputs
 	// that you would pass to BroadcastTx.

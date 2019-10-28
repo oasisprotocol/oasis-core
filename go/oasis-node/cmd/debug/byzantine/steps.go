@@ -37,7 +37,7 @@ var (
 )
 
 func initDefaultIdentity(dataDir string) (*identity.Identity, error) {
-	signerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerEntity)
+	signerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerEntity, signature.SignerConsensus)
 	id, err := identity.LoadOrGenerate(dataDir, signerFactory)
 	if err != nil {
 		return nil, errors.Wrap(err, "identity LoadOrGenerate")

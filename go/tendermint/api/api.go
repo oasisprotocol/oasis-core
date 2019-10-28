@@ -91,7 +91,7 @@ func NodeToP2PAddr(n *node.Node) (*tmp2p.NetAddress, error) {
 		return nil, fmt.Errorf("tendermint/api: node is not a validator")
 	}
 
-	pubKey := crypto.PublicKeyToTendermint(&n.ID)
+	pubKey := crypto.PublicKeyToTendermint(&n.Consensus.ID)
 	pubKeyAddrHex := strings.ToLower(pubKey.Address().String())
 
 	if len(n.Consensus.Addresses) == 0 {

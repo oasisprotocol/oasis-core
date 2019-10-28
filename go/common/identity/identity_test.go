@@ -16,7 +16,7 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.NoError(t, err, "create data dir")
 	defer os.RemoveAll(dataDir)
 
-	factory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P)
+	factory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
 
 	// Generate a new identity.
 	identity, err := LoadOrGenerate(dataDir, factory)
@@ -27,6 +27,7 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.NoError(t, err, "LoadOrGenerate (2)")
 	require.EqualValues(t, identity.NodeSigner, identity2.NodeSigner)
 	require.EqualValues(t, identity.P2PSigner, identity2.P2PSigner)
+	require.EqualValues(t, identity.ConsensusSigner, identity2.ConsensusSigner)
 	require.EqualValues(t, identity.TLSKey, identity2.TLSKey)
 	// TODO: Check that it always generates a fresh certificate once oasis-core#1541 is done.
 	require.EqualValues(t, identity.TLSCertificate, identity2.TLSCertificate)

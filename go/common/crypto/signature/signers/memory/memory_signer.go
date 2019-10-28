@@ -38,6 +38,7 @@ func (fac *Factory) Generate(role signature.SignerRole, rng io.Reader) (signatur
 
 	return &Signer{
 		privateKey: privateKey,
+		role:       role,
 	}, nil
 }
 
@@ -49,6 +50,7 @@ func (fac *Factory) Load(role signature.SignerRole) (signature.Signer, error) {
 // Signer is a memory backed Signer.
 type Signer struct {
 	privateKey ed25519.PrivateKey
+	role       signature.SignerRole
 }
 
 // Public returns the PublicKey corresponding to the signer.
@@ -58,12 +60,19 @@ func (s *Signer) Public() signature.PublicKey {
 
 // Sign generates a signature with the private key over the message.
 func (s *Signer) Sign(message []byte) ([]byte, error) {
+	if s.role.MustContextSign() {
+		return nil, signature.ErrRoleAction
+	}
 	return ed25519.Sign(s.privateKey, message), nil
 }
 
 // ContextSign generates a signature with the private key over the context and
 // message.
 func (s *Signer) ContextSign(context, message []byte) ([]byte, error) {
+	if !s.role.MustContextSign() {
+		return nil, signature.ErrRoleAction
+	}
+
 	data, err := signature.PrepareSignerMessage(context, message)
 	if err != nil {
 		return nil, err

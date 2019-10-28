@@ -52,6 +52,11 @@ func (worker *Storage) P2PKeyPath() string {
 	return nodeP2PKeyPath(worker.dir)
 }
 
+// ConsensusKeyPath returns the path to the node's consensus key.
+func (worker *Storage) ConsensusKeyPath() string {
+	return nodeConsensusKeyPath(worker.dir)
+}
+
 // TLSKeyPath returns the path to the node's TLS key.
 func (worker *Storage) TLSKeyPath() string {
 	return nodeTLSKeyPath(worker.dir)

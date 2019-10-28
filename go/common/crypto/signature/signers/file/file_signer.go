@@ -31,11 +31,14 @@ var (
 	FileIdentityKey = "identity.pem"
 	// FileP2PKey is the P2P key filename.
 	FileP2PKey = "p2p.pem"
+	// FileConsensusKey is the consensus key filename.
+	FileConsensusKey = "consensus.pem"
 
 	rolePEMFiles = map[signature.SignerRole]string{
-		signature.SignerEntity: FileEntityKey,
-		signature.SignerNode:   FileIdentityKey,
-		signature.SignerP2P:    FileP2PKey,
+		signature.SignerEntity:    FileEntityKey,
+		signature.SignerNode:      FileIdentityKey,
+		signature.SignerP2P:       FileP2PKey,
+		signature.SignerConsensus: FileConsensusKey,
 	}
 )
 
@@ -92,6 +95,7 @@ func (fac *Factory) Generate(role signature.SignerRole, rng io.Reader) (signatur
 	// Persist the private key.
 	signer := &Signer{
 		privateKey: privateKey,
+		role:       role,
 	}
 	buf, err := signer.marshalPEM()
 	if err != nil {
@@ -111,16 +115,16 @@ func (fac *Factory) Load(role signature.SignerRole) (signature.Signer, error) {
 		return nil, err
 	}
 	fn := rolePEMFiles[role]
-	return fac.doLoad(filepath.Join(fac.dataDir, fn))
+	return fac.doLoad(filepath.Join(fac.dataDir, fn), role)
 }
 
 // ForceLoad is evil and should be destroyed, however that requires
 // fixing deployment, and the entity key for node registration mess.
 func (fac *Factory) ForceLoad(fn string) (signature.Signer, error) {
-	return fac.doLoad(fn)
+	return fac.doLoad(fn, signature.SignerUnknown)
 }
 
-func (fac *Factory) doLoad(fn string) (signature.Signer, error) {
+func (fac *Factory) doLoad(fn string, role signature.SignerRole) (signature.Signer, error) {
 	f, err := os.Open(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -148,6 +152,7 @@ func (fac *Factory) doLoad(fn string) (signature.Signer, error) {
 	if err = signer.unmarshalPEM(buf); err != nil {
 		return nil, err
 	}
+	signer.role = role
 
 	return &signer, nil
 }
@@ -155,6 +160,7 @@ func (fac *Factory) doLoad(fn string) (signature.Signer, error) {
 // Signer is a PEM file backed Signer.
 type Signer struct {
 	privateKey ed25519.PrivateKey
+	role       signature.SignerRole
 }
 
 // Public returns the PublicKey corresponding to the signer.
@@ -164,12 +170,19 @@ func (s *Signer) Public() signature.PublicKey {
 
 // Sign generates a signature with the private key over the message.
 func (s *Signer) Sign(message []byte) ([]byte, error) {
+	if s.role.MustContextSign() {
+		return nil, signature.ErrRoleAction
+	}
 	return ed25519.Sign(s.privateKey, message), nil
 }
 
 // ContextSign generates a signature with the private key over the context and
 // message.
 func (s *Signer) ContextSign(context, message []byte) ([]byte, error) {
+	if !s.role.MustContextSign() {
+		return nil, signature.ErrRoleAction
+	}
+
 	data, err := signature.PrepareSignerMessage(context, message)
 	if err != nil {
 		return nil, err
