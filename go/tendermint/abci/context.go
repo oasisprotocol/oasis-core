@@ -1,6 +1,7 @@
 package abci
 
 import (
+	"context"
 	"time"
 
 	"github.com/tendermint/iavl"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
+
+type contextKey struct{}
 
 // ContextType is a context type.
 type ContextType uint
@@ -43,6 +46,18 @@ func NewContext(outputType ContextType, now time.Time, state *ApplicationState) 
 		currentTime: now,
 		state:       state,
 	}
+}
+
+// FromCtx extracts an ABCI context from a context.Context if one has been
+// set. Otherwise it returns nil.
+func FromCtx(ctx context.Context) *Context {
+	abciCtx, _ := ctx.Value(contextKey{}).(*Context)
+	return abciCtx
+}
+
+// Ctx returns a context.Context that is associated with this ABCI context.
+func (c *Context) Ctx() context.Context {
+	return context.WithValue(c.state.ctx, contextKey{}, c)
 }
 
 // Type returns the type of this output.

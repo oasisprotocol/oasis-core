@@ -44,7 +44,7 @@ func (t *tendermintMockBackend) GetBaseEpoch(context.Context) (api.EpochTime, er
 }
 
 func (t *tendermintMockBackend) GetEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
-	q, err := t.querier.QueryAt(height)
+	q, err := t.querier.QueryAt(ctx, height)
 	if err != nil {
 		return api.EpochInvalid, err
 	}
@@ -129,7 +129,7 @@ func (t *tendermintMockBackend) worker(ctx context.Context) {
 	defer t.service.Unsubscribe("epochtime-worker", app.QueryApp) // nolint: errcheck
 
 	// Populate current epoch (if available).
-	q, err := t.querier.QueryAt(0)
+	q, err := t.querier.QueryAt(ctx, 0)
 	if err == nil {
 		var epoch api.EpochTime
 		var height int64

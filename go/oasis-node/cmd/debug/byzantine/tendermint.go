@@ -51,7 +51,7 @@ func (t *fakeTimeBackend) GetEpoch(ctx context.Context, height int64) (epochtime
 
 	if t.useMockEpochTime {
 		// Query the epochtime_mock Tendermint application.
-		q, err := t.service.epochtimeMockQuery.QueryAt(height)
+		q, err := t.service.epochtimeMockQuery.QueryAt(ctx, height)
 		if err != nil {
 			return epochtime.EpochInvalid, errors.Wrap(err, "epochtime: epoch query failed")
 		}
@@ -159,7 +159,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	}
 	ht.schedulerQuery = schedApp.QueryFactory().(*schedulerapp.QueryFactory)
 	// storage has no registration
-	roothashApp := roothashapp.New(context.Background(), timeSource, nil, 10*time.Second)
+	roothashApp := roothashapp.New(timeSource, nil, 10*time.Second)
 	if err = ht.service.RegisterApplication(roothashApp); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication roothash")
 	}

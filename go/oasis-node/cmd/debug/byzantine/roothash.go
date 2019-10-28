@@ -13,7 +13,7 @@ import (
 )
 
 func roothashGetLatestBlock(ht *honestTendermint, height int64, runtimeID signature.PublicKey) (*block.Block, error) {
-	q, err := ht.roothashQuery.QueryAt(height)
+	q, err := ht.roothashQuery.QueryAt(context.Background(), height)
 	if err != nil {
 		return nil, err
 	}

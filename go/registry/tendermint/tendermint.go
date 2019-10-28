@@ -73,7 +73,7 @@ func (tb *tendermintBackend) DeregisterEntity(ctx context.Context, sigTimestamp 
 }
 
 func (tb *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicKey, height int64) (*entity.Entity, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (tb *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicK
 }
 
 func (tb *tendermintBackend) GetEntities(ctx context.Context, height int64) ([]*entity.Entity, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (tb *tendermintBackend) UnfreezeNode(ctx context.Context, sigUnfreeze *api.
 }
 
 func (tb *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey, height int64) (*node.Node, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (tb *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey
 }
 
 func (tb *tendermintBackend) GetNodes(ctx context.Context, height int64) ([]*node.Node, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func (tb *tendermintBackend) RegisterRuntime(ctx context.Context, sigCon *api.Si
 }
 
 func (tb *tendermintBackend) GetRuntime(ctx context.Context, id signature.PublicKey, height int64) (*api.Runtime, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +203,7 @@ func (tb *tendermintBackend) Cleanup() {
 }
 
 func (tb *tendermintBackend) GetRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func (tb *tendermintBackend) GetRuntimes(ctx context.Context, height int64) ([]*
 }
 
 func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +363,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, events []abcitype
 
 func (tb *tendermintBackend) getNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
 	// Generate the nodelist.
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}

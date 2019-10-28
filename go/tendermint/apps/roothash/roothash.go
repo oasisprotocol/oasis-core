@@ -3,7 +3,6 @@ package roothash
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"time"
 
@@ -58,7 +57,6 @@ func (ctx *timerContext) UnmarshalCBOR(data []byte) error {
 }
 
 type rootHashApplication struct {
-	ctx    context.Context
 	logger *logging.Logger
 	state  *abci.ApplicationState
 
@@ -119,7 +117,7 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 
 func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// Only perform checks on epoch changes.
-	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
+	if changed, epoch := app.state.EpochChanged(ctx, app.timeSource); changed {
 		return app.onEpochChange(ctx, epoch)
 	}
 	return nil
@@ -833,13 +831,11 @@ func (app *rootHashApplication) tryFinalizeBlock(
 
 // New constructs a new roothash application instance.
 func New(
-	ctx context.Context,
 	timeSource epochtime.Backend,
 	beacon beacon.Backend,
 	roundTimeout time.Duration,
 ) abci.Application {
 	return &rootHashApplication{
-		ctx:          ctx,
 		logger:       logging.GetLogger("tendermint/roothash"),
 		timeSource:   timeSource,
 		beacon:       beacon,

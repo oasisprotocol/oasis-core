@@ -38,7 +38,7 @@ func (tb *tendermintBackend) Cleanup() {
 }
 
 func (tb *tendermintBackend) GetCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) {
-	q, err := tb.querier.QueryAt(0)
+	q, err := tb.querier.QueryAt(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (tb *tendermintBackend) WatchCommittees() (<-chan *api.Committee, *pubsub.S
 }
 
 func (tb *tendermintBackend) getCurrentCommittees() ([]*api.Committee, error) {
-	q, err := tb.querier.QueryAt(0)
+	q, err := tb.querier.QueryAt(context.TODO(), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 					continue
 				}
 
-				q, err := tb.querier.QueryAt(ev.Block.Header.Height)
+				q, err := tb.querier.QueryAt(ctx, ev.Block.Header.Height)
 				if err != nil {
 					tb.logger.Error("worker: couldn't query elected committees",
 						"err", err,
@@ -141,7 +141,7 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 					continue
 				}
 
-				committees, err := q.KindsCommittees(context.TODO(), kinds)
+				committees, err := q.KindsCommittees(ctx, kinds)
 				if err != nil {
 					tb.logger.Error("worker: couldn't query elected committees",
 						"err", err,

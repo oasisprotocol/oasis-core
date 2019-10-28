@@ -2,7 +2,6 @@
 package registry
 
 import (
-	"context"
 	"encoding/hex"
 
 	"github.com/pkg/errors"
@@ -63,7 +62,7 @@ func (app *registryApplication) SetOption(request types.RequestSetOption) types.
 
 func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// XXX: With PR#1889 this can be a differnet interval.
-	if changed, registryEpoch := app.state.EpochChanged(app.timeSource); changed {
+	if changed, registryEpoch := app.state.EpochChanged(ctx, app.timeSource); changed {
 		return app.onRegistryEpochChanged(ctx, registryEpoch)
 	}
 	return nil
@@ -291,7 +290,7 @@ func (app *registryApplication) registerNode(
 	}
 
 	// Ensure node is not expired.
-	epoch, err := app.timeSource.GetEpoch(context.Background(), ctx.BlockHeight())
+	epoch, err := app.timeSource.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}
@@ -407,7 +406,7 @@ func (app *registryApplication) unfreezeNode(
 	}
 
 	// Ensure if we can actually unfreeze.
-	epoch, err := app.timeSource.GetEpoch(context.Background(), ctx.BlockHeight())
+	epoch, err := app.timeSource.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	roothashState "github.com/oasislabs/oasis-core/go/tendermint/apps/roothash/state"
 )
 
@@ -22,10 +23,16 @@ type QueryFactory struct {
 }
 
 // QueryAt returns the roothash query interface for a specific height.
-func (sf *QueryFactory) QueryAt(height int64) (Query, error) {
+func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
 	state, err := roothashState.NewImmutableState(sf.app.state, height)
 	if err != nil {
 		return nil, err
+	}
+
+	// If this request was made from an ABCI app, make sure to use the associated
+	// context for querying state instead of the default one.
+	if abciCtx := abci.FromCtx(ctx); abciCtx != nil && height == abciCtx.BlockHeight()+1 {
+		state.Snapshot = abciCtx.State().ImmutableTree
 	}
 	return &rootHashQuerier{state}, nil
 }

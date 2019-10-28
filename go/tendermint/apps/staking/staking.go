@@ -2,7 +2,6 @@
 package staking
 
 import (
-	"context"
 	"encoding/hex"
 
 	"github.com/pkg/errors"
@@ -106,7 +105,7 @@ func (app *stakingApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Ap
 }
 
 func (app *stakingApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
-	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
+	if changed, epoch := app.state.EpochChanged(ctx, app.timeSource); changed {
 		return types.ResponseEndBlock{}, app.onEpochChange(ctx, epoch)
 	}
 	return types.ResponseEndBlock{}, nil
@@ -421,7 +420,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 		)
 		return err
 	}
-	epoch, err := app.timeSource.GetEpoch(context.Background(), ctx.BlockHeight())
+	epoch, err := app.timeSource.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}

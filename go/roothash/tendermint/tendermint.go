@@ -96,7 +96,7 @@ func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.P
 	}
 	tb.RUnlock()
 
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (tb *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.Pu
 }
 
 func (tb *tendermintBackend) getLatestBlockAt(ctx context.Context, id signature.PublicKey, height int64) (*block.Block, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func (tb *tendermintBackend) ComputeCommit(ctx context.Context, id signature.Pub
 }
 
 func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -536,7 +536,7 @@ func New(
 	roundTimeout time.Duration,
 ) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
-	a := app.New(ctx, timeSource, beac, roundTimeout)
+	a := app.New(timeSource, beac, roundTimeout)
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}

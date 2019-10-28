@@ -58,7 +58,7 @@ func (app *keymanagerApplication) SetOption(request types.RequestSetOption) type
 }
 
 func (app *keymanagerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
-	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
+	if changed, epoch := app.state.EpochChanged(ctx, app.timeSource); changed {
 		return app.onEpochChange(ctx, epoch)
 	}
 	return nil

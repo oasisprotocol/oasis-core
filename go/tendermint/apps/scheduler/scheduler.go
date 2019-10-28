@@ -210,7 +210,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 
 func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// TODO: We'll later have this for each type of committee.
-	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
+	if changed, epoch := app.state.EpochChanged(ctx, app.timeSource); changed {
 		// The 0th epoch will not have suitable entropy for elections, nor
 		// will it have useful node registrations.
 		if epoch == app.baseEpoch {

@@ -7,6 +7,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	registryState "github.com/oasislabs/oasis-core/go/tendermint/apps/registry/state"
 )
 
@@ -27,12 +28,17 @@ type QueryFactory struct {
 }
 
 // QueryAt returns the registry query interface for a specific height.
-func (sf *QueryFactory) QueryAt(height int64) (Query, error) {
+func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
 	state, err := registryState.NewImmutableState(sf.app.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return &registryQuerier{state}, nil
+
+	// If this request was made from an ABCI app, make sure to use the associated
+	// context for querying state instead of the default one.
+	if abciCtx := abci.FromCtx(ctx); abciCtx != nil && height == abciCtx.BlockHeight()+1 {
+		state.Snapshot = abciCtx.State().ImmutableTree
+	}
 }
 
 type registryQuerier struct {
