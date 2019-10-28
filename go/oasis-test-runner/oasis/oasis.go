@@ -543,11 +543,11 @@ func nodeConsensusKeyPath(dir *env.Dir) string {
 }
 
 func nodeTLSKeyPath(dir *env.Dir) string {
-	path, _ := identity.TLSCertPaths(dir.String())
+	_, path := identity.TLSCertPaths(dir.String())
 	return path
 }
 
 func nodeTLSCertPath(dir *env.Dir) string {
-	_, path := identity.TLSCertPaths(dir.String())
+	path, _ := identity.TLSCertPaths(dir.String())
 	return path
 }
