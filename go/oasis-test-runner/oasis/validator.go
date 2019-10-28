@@ -63,6 +63,7 @@ func (val *Validator) ConsensusKeyPath() string {
 func (val *Validator) startNode() error {
 	args := newArgBuilder().
 		debugAllowTestKeys().
+		consensusValidator().
 		tendermintCoreListenAddress(val.consensusPort).
 		grpcDebugPort(val.grpcDebugPort).
 		storageBackend("client").

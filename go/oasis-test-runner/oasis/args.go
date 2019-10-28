@@ -68,6 +68,13 @@ func (args *argBuilder) consensusBackend(backend string) *argBuilder {
 	return args
 }
 
+func (args *argBuilder) consensusValidator() *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + flags.CfgConsensusValidator,
+	}...)
+	return args
+}
+
 func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + tendermint.CfgCoreListenAddress, "tcp://0.0.0.0:" + strconv.Itoa(int(port)),
