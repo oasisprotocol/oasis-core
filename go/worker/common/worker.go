@@ -308,6 +308,11 @@ func newWorker(
 		// Open the local storage.
 		var err error
 		if w.LocalStorage, err = host.NewLocalStorage(dataDir, LocalStorageFile); err != nil {
+			w.logger.Error("failed to initialize local storage",
+				"err", err,
+				"data_dir", dataDir,
+				"local_storage_file", LocalStorageFile,
+			)
 			return nil, err
 		}
 
@@ -339,7 +344,7 @@ func New(
 ) (*Worker, error) {
 	cfg, err := newConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("worker/common: failed to initialize config: %w", err)
 	}
 
 	// Create externally-accessible gRPC server.
