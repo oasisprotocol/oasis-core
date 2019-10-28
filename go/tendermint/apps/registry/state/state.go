@@ -354,6 +354,24 @@ func (s *ImmutableState) NodeStatuses() (map[signature.MapKey]*registry.NodeStat
 	return statuses, nil
 }
 
+func (s *ImmutableState) HasEntityNodes(id signature.PublicKey) (bool, error) {
+	result := true
+	s.Snapshot.IterateRange(
+		signedNodeByEntityKeyFmt.Encode(&id),
+		nil,
+		true,
+		func(key, value []byte) bool {
+			var entityID signature.PublicKey
+			if !signedNodeByEntityKeyFmt.Decode(key, &entityID) || !entityID.Equal(id) {
+				result = false
+			}
+			// Stop immediately as we are only interested in one result.
+			return true
+		},
+	)
+	return result, nil
+}
+
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -374,45 +392,18 @@ func (s *MutableState) CreateEntity(ent *entity.Entity, sigEnt *entity.SignedEnt
 	s.tree.Set(signedEntityKeyFmt.Encode(&ent.ID), sigEnt.MarshalCBOR())
 }
 
-func (s *MutableState) RemoveEntity(id signature.PublicKey) (entity.Entity, []node.Node) {
-	var removedSignedEntity entity.SignedEntity
-	var removedEntity entity.Entity
-	var removedNodes []node.Node
+func (s *MutableState) RemoveEntity(id signature.PublicKey) (*entity.Entity, error) {
 	data, removed := s.tree.Remove(signedEntityKeyFmt.Encode(&id))
 	if removed {
-		// Remove any associated nodes.
-		s.tree.IterateRangeInclusive(
-			signedNodeByEntityKeyFmt.Encode(&id),
-			nil,
-			true,
-			func(key, value []byte, version int64) bool {
-				// Remove all dependent nodes.
-				var entityID, nodeID signature.PublicKey
-				if !signedNodeByEntityKeyFmt.Decode(key, &entityID, &nodeID) || !entityID.Equal(id) {
-					return true
-				}
-
-				nodeData, _ := s.tree.Remove(signedNodeKeyFmt.Encode(&nodeID))
-				s.tree.Remove(key)
-
-				address := []byte(tmcrypto.PublicKeyToTendermint(&nodeID).Address())
-				s.tree.Remove(nodeByConsAddressKeyFmt.Encode(address))
-
-				var removedSignedNode node.SignedNode
-				var removedNode node.Node
-				cbor.MustUnmarshal(nodeData, &removedSignedNode)
-				cbor.MustUnmarshal(removedSignedNode.Blob, &removedNode)
-
-				removedNodes = append(removedNodes, removedNode)
-				return false
-			},
-		)
+		var removedSignedEntity entity.SignedEntity
+		var removedEntity entity.Entity
 
 		cbor.MustUnmarshal(data, &removedSignedEntity)
 		cbor.MustUnmarshal(removedSignedEntity.Blob, &removedEntity)
+		return &removedEntity, nil
 	}
 
-	return removedEntity, removedNodes
+	return nil, registry.ErrNoSuchEntity
 }
 
 func (s *MutableState) CreateNode(node *node.Node, signedNode *node.SignedNode) error {

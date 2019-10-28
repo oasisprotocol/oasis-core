@@ -249,6 +249,10 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			if status.IsFrozen() {
 				continue
 			}
+			// Expired nodes cannot be scheduled (nodes can be expired and not yet removed).
+			if node.IsExpired(uint64(epoch)) {
+				continue
+			}
 
 			nodes = append(nodes, node)
 		}

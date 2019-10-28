@@ -324,15 +324,6 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, events []abcitype
 					Entity:         &dereg.Entity,
 					IsRegistration: false,
 				})
-
-				// Node deregistrations.
-				for _, node := range dereg.Nodes {
-					nodeCopy := node
-					tb.nodeNotifier.Broadcast(&api.NodeEvent{
-						Node:           &nodeCopy,
-						IsRegistration: false,
-					})
-				}
 			} else if bytes.Equal(pair.GetKey(), app.KeyRegistryNodeListEpoch) {
 				nl, err := tb.getNodeList(ctx, height)
 				if err != nil {

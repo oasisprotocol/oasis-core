@@ -439,7 +439,8 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 		switch ev := event.(type) {
 		case tmtypes.EventDataNewBlock:
 			height = ev.Block.Header.Height
-			tmEvents = append(ev.ResultBeginBlock.GetEvents(), ev.ResultEndBlock.GetEvents()...)
+			tmEvents = append([]types.Event{}, ev.ResultBeginBlock.GetEvents()...)
+			tmEvents = append(tmEvents, ev.ResultEndBlock.GetEvents()...)
 		case tmtypes.EventDataTx:
 			height = ev.Height
 			tmEvents = ev.Result.GetEvents()

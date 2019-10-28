@@ -41,7 +41,9 @@ func ClientWorkerTests(
 	registry registry.Backend,
 	schedulerBackend scheduler.Backend,
 ) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	require := require.New(t)
 	seed := []byte("StorageClientTests")
 
@@ -49,7 +51,7 @@ func ClientWorkerTests(
 	rt, err := registryTests.NewTestRuntime(seed, nil)
 	require.NoError(err, "NewTestRuntime")
 	// Populate the registry with an entity and nodes.
-	nodes := rt.Populate(t, registry, rt, seed)
+	nodes := rt.Populate(t, registry, timeSource, rt, seed)
 
 	rt.MustRegister(t, registry)
 	// Initialize storage client
@@ -77,7 +79,11 @@ func ClientWorkerTests(
 	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Wait for initialization.
-	<-client.Initialized()
+	select {
+	case <-client.Initialized():
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to wait for client initialization")
+	}
 
 	// Get scheduled storage nodes.
 	scheduledStorageNodes := []*node.Node{}
@@ -124,5 +130,5 @@ recvLoop:
 	require.Equal(codes.Unavailable, status.Code(err), "storage client should timeout")
 	require.Nil(r, "result should be nil")
 
-	rt.Cleanup(t, registry)
+	rt.Cleanup(t, registry, timeSource)
 }

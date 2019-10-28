@@ -250,25 +250,41 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 
 func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
 	// Stop the registration service and wait for it to fully stop. This is required
-	// as otherwise it will re-register the node on each epoch
-	// transition.
+	// as otherwise it will re-register the node on each epoch transition.
 	node.WorkerRegistration.Stop()
 	<-node.WorkerRegistration.Quit()
 
-	// Deregister the entity which should also deregister the node.
+	// Subscribe to node deregistration event.
+	nodeCh, sub := node.Node.Registry.WatchNodes()
+	defer sub.Close()
+
+	// Perform an epoch transition to expire the node as otherwise there is no way
+	// to deregister the entity.
+	require.Implements(t, (*epochtime.SetableBackend)(nil), node.Epochtime, "epoch time backend is mock")
+	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	_ = epochtimeTests.MustAdvanceEpoch(t, timeSource, 2+1+1) // 2 epochs for expiry, 1 for debonding, 1 for removal.
+
+	select {
+	case ev := <-nodeCh:
+		require.False(t, ev.IsRegistration, "expected node deregistration event")
+	case <-time.After(1 * time.Second):
+		t.Fatalf("Failed to receive node deregistration event")
+	}
+
+	// Deregister the entity.
 	ts := registry.Timestamp(uint64(time.Now().Unix()))
 	signed, err := signature.SignSigned(node.entitySigner, registry.DeregisterEntitySignatureContext, &ts)
 	require.NoError(t, err, "SignSigned")
 
 	// Subscribe to entity deregistration event.
-	ch, sub := node.Node.Registry.WatchEntities()
+	entityCh, sub := node.Node.Registry.WatchEntities()
 	defer sub.Close()
 
 	err = node.Node.Registry.DeregisterEntity(context.Background(), signed)
 	require.NoError(t, err, "DeregisterEntity")
 
 	select {
-	case ev := <-ch:
+	case ev := <-entityCh:
 		require.False(t, ev.IsRegistration, "expected entity deregistration event")
 	case <-time.After(1 * time.Second):
 		t.Fatalf("Failed to receive entity deregistration event")

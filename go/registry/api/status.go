@@ -12,6 +12,12 @@ const FreezeForever epochtime.EpochTime = 0xffffffffffffffff
 
 // NodeStatus is live status of a node.
 type NodeStatus struct {
+	// ExpirationProcessed is a flag specifying whether the node expiration
+	// has already been processed.
+	//
+	// If you want to check whether a node has expired, check the node
+	// descriptor directly instead of this flag.
+	ExpirationProcessed bool `json:"expiration_processed"`
 	// FreezeEndTime is the epoch when a frozen node can become unfrozen.
 	//
 	// After the specified epoch passes, this flag needs to be explicitly

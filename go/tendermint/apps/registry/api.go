@@ -91,11 +91,8 @@ type TxRegisterRuntime struct {
 	Runtime registry.SignedRuntime `json:"runtime"`
 }
 
-// EntityDeregistration is a entity deregistration.
+// EntityDeregistration is an entity deregistration.
 type EntityDeregistration struct {
 	// Deregistered entity.
 	Entity entity.Entity `json:"entity"`
-
-	// Deregistered nodes (if any).
-	Nodes []node.Node `json:"nodes"`
 }

@@ -108,6 +108,10 @@ var (
 	// unfrozen due to the freeze period not being over yet.
 	ErrNodeCannotBeUnfrozen = errors.New("registry: node cannot be unfrozen yet")
 
+	// ErrEntityHasNodes is the error returned when an entity cannot be deregistered
+	// as it still has nodes.
+	ErrEntityHasNodes = errors.New("registry: entity still has nodes")
+
 	// ErrForbidden is the error returned when an operation is forbiden by
 	// policy.
 	ErrForbidden = errors.New("registry: forbidden by policy")

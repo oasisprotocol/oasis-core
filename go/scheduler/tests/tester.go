@@ -31,7 +31,7 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 	require.NoError(err, "NewTestRuntime")
 
 	// Populate the registry with an entity and nodes.
-	nodes := rt.Populate(t, registry, rt, seed)
+	nodes := rt.Populate(t, registry, epochtime, rt, seed)
 	rt.MustRegister(t, registry)
 
 	ch, sub := backend.WatchCommittees()
@@ -121,7 +121,7 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 	ensureValidCommittees(3, 1, int(rt.Runtime.TransactionSchedulerGroupSize))
 
 	// Cleanup the registry.
-	rt.Cleanup(t, registry)
+	rt.Cleanup(t, registry, epochtime)
 }
 
 func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtime *registry.Runtime, nodes []*node.Node) {

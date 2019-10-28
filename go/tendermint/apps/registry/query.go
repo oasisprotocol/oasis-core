@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
@@ -39,10 +40,13 @@ func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error
 	if abciCtx := abci.FromCtx(ctx); abciCtx != nil && height == abciCtx.BlockHeight()+1 {
 		state.Snapshot = abciCtx.State().ImmutableTree
 	}
+	return &registryQuerier{sf.app, state, height}, nil
 }
 
 type registryQuerier struct {
-	state *registryState.ImmutableState
+	app    *registryApplication
+	state  *registryState.ImmutableState
+	height int64
 }
 
 func (rq *registryQuerier) Entity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
@@ -54,11 +58,43 @@ func (rq *registryQuerier) Entities(ctx context.Context) ([]*entity.Entity, erro
 }
 
 func (rq *registryQuerier) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
-	return rq.state.Node(id)
+	epoch, err := rq.app.timeSource.GetEpoch(ctx, rq.height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get epoch: %w", err)
+	}
+
+	node, err := rq.state.Node(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Do not return expired nodes.
+	if node.IsExpired(uint64(epoch)) {
+		return nil, registry.ErrNoSuchNode
+	}
+	return node, nil
 }
 
 func (rq *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {
-	return rq.state.Nodes()
+	epoch, err := rq.app.timeSource.GetEpoch(ctx, rq.height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get epoch: %w", err)
+	}
+
+	nodes, err := rq.state.Nodes()
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter out expired nodes.
+	var filteredNodes []*node.Node
+	for _, n := range nodes {
+		if n.IsExpired(uint64(epoch)) {
+			continue
+		}
+		filteredNodes = append(filteredNodes, n)
+	}
+	return filteredNodes, nil
 }
 
 func (rq *registryQuerier) Runtime(ctx context.Context, id signature.PublicKey) (*registry.Runtime, error) {

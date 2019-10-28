@@ -56,7 +56,7 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 		if len(rtStates) > 0 {
 			// This is entity deregistration based, and all of the
 			// runtimes used in this test share the entity.
-			rtStates[0].rt.Cleanup(t, registry)
+			rtStates[0].rt.Cleanup(t, registry, epochtime)
 		}
 
 		registryTests.EnsureRegistryEmpty(t, registry)
@@ -78,7 +78,7 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 		})
 		runtimes = append(runtimes, rt)
 	}
-	registryTests.BulkPopulate(t, registry, runtimes, seedBase)
+	registryTests.BulkPopulate(t, registry, epochtime, runtimes, seedBase)
 	for _, rt := range runtimes {
 		rt.MustRegister(t, registry)
 	}
@@ -343,7 +343,9 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 		mergeCommits = append(mergeCommits, *commit)
 	}
 
-	err = backend.MergeCommit(context.Background(), rt.Runtime.ID, mergeCommits)
+	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+	defer cancel()
+	err = backend.MergeCommit(ctx, rt.Runtime.ID, mergeCommits)
 	require.NoError(err, "MergeCommit")
 
 	// Ensure that the round was finalized.
@@ -616,7 +618,9 @@ func testRoothashMessages(t *testing.T, backend api.Backend, states []*runtimeSt
 				mergeCommits = append(mergeCommits, *commit)
 			}
 
-			err = backend.MergeCommit(context.Background(), rt.Runtime.ID, mergeCommits)
+			ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+			defer cancel()
+			err = backend.MergeCommit(ctx, rt.Runtime.ID, mergeCommits)
 			require.NoError(err, "MergeCommit")
 
 			// Ensure that the round was finalized.

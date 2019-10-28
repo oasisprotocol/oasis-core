@@ -24,7 +24,9 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 
-	// Resolve consensus node.
+	// Resolve consensus node. Note that in order for this to work even in light
+	// of node expirations, the node descriptor must be available for at least
+	// the debonding period after expiration.
 	node, err := regState.NodeByConsensusAddress(addr)
 	if err != nil {
 		app.logger.Warn("failed to get validator node",

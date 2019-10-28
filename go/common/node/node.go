@@ -128,6 +128,12 @@ func (n *Node) HasRoles(r RolesMask) bool {
 	return n.Roles&r != 0
 }
 
+// IsExpired returns true if the node expiration epoch is strictly smaller
+// than the passed (current) epoch.
+func (n *Node) IsExpired(epoch uint64) bool {
+	return n.Expiration < epoch
+}
+
 // Runtime represents the runtimes supported by a given Oasis node.
 type Runtime struct {
 	// ID is the public key identifying the runtime.
