@@ -207,6 +207,9 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.KeyManagerClient,
 	)
 	if err != nil {
+		logger.Error("failed to start common worker",
+			"err", err,
+		)
 		return err
 	}
 	n.svcMgr.Register(n.CommonWorker.Grpc)
@@ -224,6 +227,9 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		&workerCommonCfg,
 	)
 	if err != nil {
+		logger.Error("failed to initialize worker registration",
+			"err", err,
+		)
 		return err
 	}
 	n.svcMgr.Register(n.WorkerRegistration)
