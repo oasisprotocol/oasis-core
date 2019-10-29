@@ -102,6 +102,7 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 	// Delegation unbonding after debonding period elapses.
 	for _, e := range state.ExpiredDebondingQueue(epoch) {
 		deb := e.Delegation
+		shareAmount := deb.Shares.Clone()
 		delegator := state.Account(e.DelegatorID)
 		// NOTE: Could be the same account, so make sure to not have two duplicate
 		//       copies of it and overwrite it later.
@@ -112,48 +113,26 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 			escrow = state.Account(e.EscrowID)
 		}
 
-		// Compute amount of debonded tokens.
-		tokens, err := staking.TokensForShares(&escrow.Escrow, &deb.Shares)
-		if err != nil {
-			app.logger.Error("failed to compute amount of tokens from shares",
+		var tokens staking.Quantity
+		if err := escrow.Escrow.Debonding.Withdraw(&tokens, &deb.Shares, shareAmount); err != nil {
+			app.logger.Error("failed to redeem debonding shares",
 				"err", err,
 				"escrow_id", e.EscrowID,
 				"delegator_id", e.DelegatorID,
 				"shares", deb.Shares,
 			)
-			return errors.Wrap(err, "staking/tendermint: failed to compute amount of tokens")
+			return errors.Wrap(err, "staking/tendermint: failed to redeem debonding shares")
 		}
-		// Update number of total shares.
-		if err := escrow.Escrow.TotalShares.Sub(&deb.Shares); err != nil {
-			app.logger.Error("failed to subtract total shares",
+		tokenAmount := tokens.Clone()
+
+		if err := staking.Move(&delegator.General.Balance, &tokens, tokenAmount); err != nil {
+			app.logger.Error("failed to move debonded tokens",
 				"err", err,
 				"escrow_id", e.EscrowID,
 				"delegator_id", e.DelegatorID,
 				"shares", deb.Shares,
-				"total_shares", escrow.Escrow.TotalShares,
 			)
-			return errors.Wrap(err, "staking/tendermint: failed to subtract total shares")
-		}
-		// Update number of debonding shares.
-		if err := escrow.Escrow.DebondingShares.Sub(&deb.Shares); err != nil {
-			app.logger.Error("failed to subtract debonding shares",
-				"err", err,
-				"escrow_id", e.EscrowID,
-				"delegator_id", e.DelegatorID,
-				"shares", deb.Shares,
-				"debonding_shares", escrow.Escrow.DebondingShares,
-			)
-			return errors.Wrap(err, "staking/tendermint: failed to subtract debonding shares")
-		}
-		// Transfer tokens from escrow account.
-		if err := staking.Move(&delegator.General.Balance, &escrow.Escrow.Balance, tokens); err != nil {
-			app.logger.Error("failed to move balance",
-				"err", err,
-				"escrow_id", e.EscrowID,
-				"delegator_id", e.DelegatorID,
-				"amount", tokens,
-			)
-			return errors.Wrap(err, "staking/tendermint: failed to move balance")
+			return errors.Wrap(err, "staking/tendermint: failed to redeem debonding shares")
 		}
 
 		// Update state.
@@ -167,13 +146,13 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		app.logger.Debug("released tokens",
 			"escrow_id", e.EscrowID,
 			"delegator_id", e.DelegatorID,
-			"amount", tokens,
+			"amount", tokenAmount,
 		)
 
 		evt := staking.ReclaimEscrowEvent{
 			Owner:  e.DelegatorID,
 			Escrow: e.EscrowID,
-			Tokens: *tokens,
+			Tokens: *tokenAmount,
 		}
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyReclaimEscrow, cbor.Marshal(evt)))
 	}
@@ -341,19 +320,7 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 	// Fetch delegation.
 	delegation := state.Delegation(id, escrow.Account)
 
-	// Issue shares.
-	if _, err := staking.IssueShares(&to.Escrow, &escrow.Tokens, delegation); err != nil {
-		app.logger.Error("AddEscrow: failed to escrow tokens",
-			"err", err,
-			"from", id,
-			"to", escrow.Account,
-			"amount", escrow.Tokens,
-		)
-		return err
-	}
-
-	// Remove tokens from the delegator account and put them into escrow.
-	if err := staking.Move(&to.Escrow.Balance, &from.General.Balance, &escrow.Tokens); err != nil {
+	if err := to.Escrow.Active.Deposit(&delegation.Shares, &from.General.Balance, &escrow.Tokens); err != nil {
 		app.logger.Error("AddEscrow: failed to escrow tokens",
 			"err", err,
 			"from", id,
@@ -430,24 +397,6 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	// Fetch delegation.
 	delegation := state.Delegation(id, reclaim.Account)
 
-	// Update delegated shares.
-	if err := delegation.Shares.Sub(&reclaim.Shares); err != nil {
-		app.logger.Error("ReclaimEscrow: not enough shares",
-			"to", id,
-			"from", reclaim.Account,
-			"shares", reclaim.Shares,
-			"delegation_shares", delegation.Shares,
-		)
-		return staking.ErrInsufficientBalance
-	}
-	// Update the amount of shares undergoing debonding.
-	if err := from.Escrow.DebondingShares.Add(&reclaim.Shares); err != nil {
-		app.logger.Error("ReclaimEscrow: failed to update debonding shares",
-			"err", err,
-		)
-		return err
-	}
-
 	// Fetch debonding interval and current epoch.
 	debondingInterval, err := state.DebondingInterval()
 	if err != nil {
@@ -462,9 +411,39 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	}
 
 	deb := staking.DebondingDelegation{
-		Shares:        reclaim.Shares,
 		DebondEndTime: epoch + epochtime.EpochTime(debondingInterval),
 	}
+
+	var tokens staking.Quantity
+
+	if err := from.Escrow.Active.Withdraw(&tokens, &delegation.Shares, &reclaim.Shares); err != nil {
+		app.logger.Error("ReclaimEscrow: failed to redeem escrow shares",
+			"err", err,
+			"to", id,
+			"from", reclaim.Account,
+			"shares", reclaim.Shares,
+		)
+		return err
+	}
+	tokenAmount := tokens.Clone()
+
+	if err := from.Escrow.Debonding.Deposit(&deb.Shares, &tokens, tokenAmount); err != nil {
+		app.logger.Error("ReclaimEscrow: failed to debond shares",
+			"err", err,
+			"to", id,
+			"from", reclaim.Account,
+			"shares", reclaim.Shares,
+		)
+		return err
+	}
+
+	if !tokens.IsZero() {
+		app.logger.Error("ReclaimEscrow: inconsistency in transferring tokens from active escrow to debonding",
+			"remaining", tokens,
+		)
+		return staking.ErrInvalidArgument
+	}
+
 	// Include the nonce as the final disambiguator to prevent overwriting debonding
 	// delegations.
 	state.SetDebondingDelegation(id, reclaim.Account, to.General.Nonce, &deb)

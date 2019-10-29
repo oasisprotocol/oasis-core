@@ -106,9 +106,17 @@ func (s *grpcServer) GetAccountInfo(ctx context.Context, req *pb.GetAccountInfoR
 		return nil, err
 	}
 
+	var escrowBalance api.Quantity
+	if err = escrowBalance.Add(&account.Escrow.Active.Balance); err != nil {
+		return nil, err
+	}
+	if err = escrowBalance.Add(&account.Escrow.Debonding.Balance); err != nil {
+		return nil, err
+	}
+
 	var resp pb.GetAccountInfoResponse
 	resp.GeneralBalance, _ = account.General.Balance.MarshalBinary()
-	resp.EscrowBalance, _ = account.Escrow.Balance.MarshalBinary()
+	resp.EscrowBalance, _ = escrowBalance.MarshalBinary()
 	resp.Nonce = account.General.Nonce
 
 	return &resp, nil

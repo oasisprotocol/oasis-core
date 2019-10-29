@@ -199,17 +199,7 @@ func (s *ImmutableState) Account(id signature.PublicKey) *staking.Account {
 func (s *ImmutableState) EscrowBalance(id signature.PublicKey) *staking.Quantity {
 	account := s.Account(id)
 
-	balance := account.Escrow.Balance.Clone()
-	// Subtract the amount currently undergoing debonding.
-	debonding, err := staking.TokensForShares(&account.Escrow, &account.Escrow.DebondingShares)
-	if err != nil {
-		panic("staking: failed to compute escrow balance: " + err.Error())
-	}
-	if err = balance.Sub(debonding); err != nil {
-		panic("staking: failed to compute escrow balance: " + err.Error())
-	}
-
-	return balance
+	return account.Escrow.Active.Balance.Clone()
 }
 
 func (s *ImmutableState) Delegations() (map[signature.MapKey]map[signature.MapKey]*staking.Delegation, error) {
@@ -433,44 +423,75 @@ func (s *MutableState) RemoveFromDebondingQueue(epoch epochtime.EpochTime, deleg
 	s.tree.Remove(debondingQueueKeyFmt.Encode(uint64(epoch), &delegatorID, &escrowID, seq))
 }
 
-// SlashEscrow slashes up to the amount from the escrow balance of the account,
-// transfering it to the global common pool, returning true iff the amount
+func slashPool(dst *staking.Quantity, p *staking.SharePool, keepNumerator, denominator *staking.Quantity) error {
+	slashAmount := p.Balance.Clone()
+	keepAmount := p.Balance.Clone()
+	if err := keepAmount.Mul(keepNumerator); err != nil {
+		return errors.Wrap(err, "keepAmount.Mul")
+	}
+	if err := keepAmount.Quo(denominator); err != nil {
+		return errors.Wrap(err, "keepAmount.Quo")
+	}
+	if err := slashAmount.Sub(keepAmount); err != nil {
+		return errors.Wrap(err, "slashAmount.Sub")
+	}
+
+	if err := staking.Move(dst, &p.Balance, slashAmount); err != nil {
+		return errors.Wrap(err, "moving tokens")
+	}
+
+	return nil
+}
+
+// SlashEscrow slashes the escrow balance and the escrow-but-undergoing-debonding balance of the account,
+// transferring it to the global common pool, returning true iff the amount
 // actually slashed is > 0.
 //
 // WARNING: This is an internal routine to be used to implement staking policy,
 // and MUST NOT be exposed outside of backend implementations.
-func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey, amount *staking.Quantity) (bool, error) {
+func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey, keepNumerator, denominator *staking.Quantity) (bool, error) {
 	commonPool, err := s.CommonPool()
 	if err != nil {
 		return false, errors.Wrap(err, "staking: failed to query common pool for slash ")
 	}
 
 	from := s.Account(fromID)
-	slashed, err := staking.MoveUpTo(commonPool, &from.Escrow.Balance, amount)
-	if err != nil {
-		return false, errors.Wrap(err, "staking: failed to slash")
+
+	var slashed staking.Quantity
+	if err = slashPool(&slashed, &from.Escrow.Active, keepNumerator, denominator); err != nil {
+		return false, errors.Wrap(err, "slashing active escrow")
+	}
+	if err = slashPool(&slashed, &from.Escrow.Debonding, keepNumerator, denominator); err != nil {
+		return false, errors.Wrap(err, "slashing debonding escrow")
 	}
 
-	ret := !slashed.IsZero()
-	if ret {
-		s.SetCommonPool(commonPool)
-		s.SetAccount(fromID, from)
-
-		if !ctx.IsCheckOnly() {
-			ev := cbor.Marshal(&staking.TakeEscrowEvent{
-				Owner:  fromID,
-				Tokens: *slashed,
-			})
-			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTakeEscrow, ev))
-		}
+	if slashed.IsZero() {
+		return false, nil
 	}
 
-	return ret, nil
+	totalSlashed := slashed.Clone()
+
+	if err = staking.Move(commonPool, &slashed, totalSlashed); err != nil {
+		return false, errors.Wrap(err, "moving tokens to common pool")
+	}
+
+	s.SetCommonPool(commonPool)
+	s.SetAccount(fromID, from)
+
+	if !ctx.IsCheckOnly() {
+		ev := cbor.Marshal(&staking.TakeEscrowEvent{
+			Owner:  fromID,
+			Tokens: *totalSlashed,
+		})
+		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTakeEscrow, ev))
+	}
+
+	return true, nil
 }
 
 // TransferFromCommon transfers up to the amount from the global common pool
 // to the general balance of the account, returning true iff the
-// amount transfered is > 0.
+// amount transferred is > 0.
 //
 // WARNING: This is an internal routine to be used to implement incentivization
 // policy, and MUST NOT be exposed outside of backend implementations.
