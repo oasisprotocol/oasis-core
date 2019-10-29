@@ -565,6 +565,8 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 	return ret, nil
 }
 
+// AddRewards computes and transfers the staking rewards to active escrow accounts.
+// If an error occurs, the pool and affected accounts are left in an invalid state.
 func (s *MutableState) AddRewards(time epochtime.EpochTime) error {
 	steps, err := s.RewardSchedule()
 	if err != nil {
@@ -587,6 +589,11 @@ func (s *MutableState) AddRewards(time epochtime.EpochTime) error {
 	stepRelativeTime := time - stepStart
 	if stepRelativeTime%activeStep.Interval != 0 {
 		return nil
+	}
+
+	commonPool, err := s.CommonPool()
+	if err != nil {
+		return errors.Wrap(err, "loading common pool")
 	}
 
 	s.Snapshot.IterateRange(accountKeyFmt.Encode(), nil, true, func(key, value []byte) bool {
@@ -615,8 +622,8 @@ func (s *MutableState) AddRewards(time epochtime.EpochTime) error {
 			return false
 		}
 
-		if err1 := ent.Escrow.Active.Balance.Add(q); err1 != nil {
-			err = errors.Wrap(err1, "increasing active escrow balance")
+		if err1 := staking.Move(&ent.Escrow.Active.Balance, commonPool, q); err1 != nil {
+			err = errors.Wrap(err1, "transferring to active escrow balance from common pool")
 			return true
 		}
 
@@ -624,7 +631,14 @@ func (s *MutableState) AddRewards(time epochtime.EpochTime) error {
 
 		return false
 	})
-	return err
+
+	if err != nil {
+		return err
+	}
+
+	s.SetCommonPool(commonPool)
+
+	return nil
 }
 
 func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, message *block.RoothashMessage) (error, error) {

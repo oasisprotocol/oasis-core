@@ -49,6 +49,7 @@ func TestRewardAndSlash(t *testing.T) {
 	tree := iavl.NewMutableTree(db, 128)
 	s := NewMutableState(tree)
 
+	s.SetCommonPool(mustInitQuantityP(t, 10000))
 	s.SetDebondingInterval(21)
 	s.SetRewardSchedule([]staking.RewardStep{
 		// 0 (but not triggered), 10, 20
@@ -92,6 +93,9 @@ func TestRewardAndSlash(t *testing.T) {
 	escrowAccount = s.Account(escrowID)
 	require.Equal(t, mustInitQuantity(t, 200), escrowAccount.Escrow.Active.Balance, "reward first step - escrow active escrow")
 	require.Equal(t, mustInitQuantity(t, 100), escrowAccount.Escrow.Debonding.Balance, "reward first step - escrow debonding escrow")
+	commonPool, err := s.CommonPool()
+	require.NoError(t, err, "load common pool")
+	require.Equal(t, mustInitQuantityP(t, 9900), commonPool, "reward first step - common pool")
 
 	// At epoch 30, the first step is over, and the second step is in effect.
 	require.NoError(t, s.AddRewards(30), "add rewards epoch 30")
@@ -99,6 +103,9 @@ func TestRewardAndSlash(t *testing.T) {
 	// 1/2 gain.
 	escrowAccount = s.Account(escrowID)
 	require.Equal(t, mustInitQuantity(t, 300), escrowAccount.Escrow.Active.Balance, "reward boundary epoch - escrow active escrow")
+	commonPool, err = s.CommonPool()
+	require.NoError(t, err, "load common pool")
+	require.Equal(t, mustInitQuantityP(t, 9800), commonPool, "reward first step - common pool")
 
 	// Epoch 38 is epoch 8 of the second step, which is the end of the interval.
 	require.NoError(t, s.AddRewards(38), "add rewards epoch 38")
@@ -106,6 +113,9 @@ func TestRewardAndSlash(t *testing.T) {
 	// 1/2 gain.
 	escrowAccount = s.Account(escrowID)
 	require.Equal(t, mustInitQuantity(t, 450), escrowAccount.Escrow.Active.Balance, "reward second step - escrow active escrow")
+	commonPool, err = s.CommonPool()
+	require.NoError(t, err, "load common pool")
+	require.Equal(t, mustInitQuantityP(t, 9650), commonPool, "reward first step - common pool")
 
 	// Epoch 99 is after the end of the schedule
 	require.NoError(t, s.AddRewards(99), "add rewards epoch 99")
@@ -124,7 +134,7 @@ func TestRewardAndSlash(t *testing.T) {
 	escrowAccount = s.Account(escrowID)
 	require.Equal(t, mustInitQuantity(t, 300), escrowAccount.Escrow.Active.Balance, "slash - escrow active escrow")
 	require.Equal(t, mustInitQuantity(t, 66), escrowAccount.Escrow.Debonding.Balance, "slash - escrow debonding escrow")
-	commonPool, err := s.CommonPool()
+	commonPool, err = s.CommonPool()
 	require.NoError(t, err, "load common pool")
-	require.Equal(t, mustInitQuantityP(t, 184), commonPool, "slash - common pool")
+	require.Equal(t, mustInitQuantityP(t, 9834), commonPool, "slash - common pool")
 }
