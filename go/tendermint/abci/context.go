@@ -1,6 +1,7 @@
 package abci
 
 import (
+	"bytes"
 	"context"
 	"time"
 
@@ -99,6 +100,24 @@ func (c *Context) EmitEvent(bld *api.EventBuilder) {
 // GetEvents returns the ABCI event vector corresponding to the tags.
 func (c *Context) GetEvents() []types.Event {
 	return c.events
+}
+
+// HasEvent checks if a specific event has been emitted.
+func (c *Context) HasEvent(evType string, key []byte) bool {
+	evType = api.EventTypeForApp(evType)
+
+	for _, ev := range c.events {
+		if ev.Type != evType {
+			continue
+		}
+
+		for _, pair := range ev.Attributes {
+			if bytes.Equal(pair.GetKey(), key) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Now returns the current tendermint time.

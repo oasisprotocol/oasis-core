@@ -732,8 +732,7 @@ func (s *ApplicationState) CheckTxTree() *iavl.MutableTree {
 }
 
 // EpochChanged returns true iff the current epoch has changed since the
-// last block.  As a matter of convenience, the current epoch is returned
-// iff it has changed.
+// last block.  As a matter of convenience, the current epoch is returned.
 func (s *ApplicationState) EpochChanged(ctx *Context, timeSource epochtime.Backend) (bool, epochtime.EpochTime) {
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
@@ -767,7 +766,7 @@ func (s *ApplicationState) EpochChanged(ctx *Context, timeSource epochtime.Backe
 	}
 
 	if previousEpoch == currentEpoch {
-		return false, epochtime.EpochInvalid
+		return false, currentEpoch
 	}
 
 	s.logger.Debug("EpochChanged: epoch transition detected",

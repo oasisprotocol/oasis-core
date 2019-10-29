@@ -209,8 +209,15 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 }
 
 func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
+	// Check if any stake slashing has occurred in the staking layer.
+	// NOTE: This will NOT trigger for any slashing that happens as part of
+	//       any transactions being submitted to the chain.
+	slashed := ctx.HasEvent(stakingapp.AppName, stakingapp.KeyTakeEscrow)
+	// Check if epoch has changed.
 	// TODO: We'll later have this for each type of committee.
-	if changed, epoch := app.state.EpochChanged(ctx, app.timeSource); changed {
+	epochChanged, epoch := app.state.EpochChanged(ctx, app.timeSource)
+
+	if epochChanged || slashed {
 		// The 0th epoch will not have suitable entropy for elections, nor
 		// will it have useful node registrations.
 		if epoch == app.baseEpoch {

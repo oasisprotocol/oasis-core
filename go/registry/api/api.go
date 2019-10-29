@@ -690,7 +690,7 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) e
 		)
 		return ErrNodeUpdateNotAllowed
 	}
-	if currentNode.RegistrationTime >= newNode.RegistrationTime {
+	if currentNode.RegistrationTime > newNode.RegistrationTime {
 		logger.Error("RegisterNode: current node registration time greater than new",
 			"current_registration_time", currentNode.RegistrationTime,
 			"new_registration_time", newNode.RegistrationTime,

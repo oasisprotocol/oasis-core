@@ -103,7 +103,5 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 		"entity_id", node.EntityID,
 	)
 
-	// TODO: Trigger early validator re-election?
-
 	return nil
 }

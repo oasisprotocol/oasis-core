@@ -3,6 +3,7 @@ package roothash
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"time"
 
@@ -116,14 +117,18 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 }
 
 func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
-	// Only perform checks on epoch changes.
-	if changed, epoch := app.state.EpochChanged(ctx, app.timeSource); changed {
-		return app.onEpochChange(ctx, epoch)
+	// Check if rescheduling has taken place.
+	rescheduled := ctx.HasEvent(schedulerapp.AppName, schedulerapp.KeyElected)
+	// Check if there was an epoch transition.
+	epochChanged, epoch := app.state.EpochChanged(ctx, app.timeSource)
+
+	if epochChanged || rescheduled {
+		return app.onCommitteeChanged(ctx, epoch)
 	}
 	return nil
 }
 
-func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error { // nolint: gocyclo
+func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epochtime.EpochTime) error { // nolint: gocyclo
 	state := roothashState.NewMutableState(ctx.State())
 
 	// Query the updated runtime list.
@@ -147,8 +152,31 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			continue
 		}
 
-		// There will later be multiple compute committees.
-		computeCommittee, err := schedState.Committee(scheduler.KindCompute, rtID)
+		// Derive a deterministic committee identifier that depends on memberships
+		// of all committees. We need this to be able to quickly see if any
+		// committee members have changed.
+		//
+		// We first include the current epoch, then all compute committee member
+		// hashes and then the merge committee member hash:
+		//
+		//   [little-endian epoch]
+		//   "compute committees follow"
+		//   [compute committe 1 members hash]
+		//   [compute committe 2 members hash]
+		//   ...
+		//   [compute committe n members hash]
+		//   "merge committee follows"
+		//   [merge committee members hash]
+		//
+		var committeeIDParts [][]byte
+		var rawEpoch [8]byte
+		binary.LittleEndian.PutUint64(rawEpoch[:], uint64(epoch))
+		committeeIDParts = append(committeeIDParts, rawEpoch[:])
+		committeeIDParts = append(committeeIDParts, []byte("compute committees follow"))
+
+		// NOTE: There will later be multiple compute committees.
+		var computeCommittees []*scheduler.Committee
+		cc1, err := schedState.Committee(scheduler.KindCompute, rtID)
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get compute committee from scheduler",
 				"err", err,
@@ -156,49 +184,58 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			)
 			continue
 		}
-		if computeCommittee == nil {
-			app.logger.Warn("checkCommittees: no compute committee this epoch",
-				"runtime", rtID,
-			)
-			continue
-		}
-		computeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
-		for idx, n := range computeCommittee.Members {
-			var nodeRuntime *node.Runtime
-			node, err1 := regState.Node(n.PublicKey)
-			if err1 != nil {
-				return errors.Wrap(err1, "checkCommittees: failed to query node")
-			}
-			for _, r := range node.Runtimes {
-				if !r.ID.Equal(rtID) {
-					continue
-				}
-				nodeRuntime = r
-				break
-			}
-			if nodeRuntime == nil {
-				// We currently prevent this case throughout the rest of the system.
-				// Still, it's prudent to check.
-				app.logger.Warn("checkCommittees: committee member not registered with this runtime",
-					"node", n.PublicKey,
-				)
-				continue
-			}
-			computeNodeInfo[n.PublicKey.ToMapKey()] = commitment.NodeInfo{
-				CommitteeNode: idx,
-				Runtime:       nodeRuntime,
-			}
-		}
-		computePool := &commitment.MultiPool{
-			Committees: map[hash.Hash]*commitment.Pool{
-				computeCommittee.EncodedMembersHash(): &commitment.Pool{
-					Runtime:   rtState.Runtime,
-					Committee: computeCommittee,
-					NodeInfo:  computeNodeInfo,
-				},
-			},
+		if cc1 != nil {
+			computeCommittees = append(computeCommittees, cc1)
 		}
 
+		computePool := &commitment.MultiPool{
+			Committees: make(map[hash.Hash]*commitment.Pool),
+		}
+		if len(computeCommittees) == 0 {
+			app.logger.Warn("checkCommittees: no compute committees",
+				"runtime", rtID,
+			)
+		}
+		for _, computeCommittee := range computeCommittees {
+			computeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+			for idx, n := range computeCommittee.Members {
+				var nodeRuntime *node.Runtime
+				node, err1 := regState.Node(n.PublicKey)
+				if err1 != nil {
+					return errors.Wrap(err1, "checkCommittees: failed to query node")
+				}
+				for _, r := range node.Runtimes {
+					if !r.ID.Equal(rtID) {
+						continue
+					}
+					nodeRuntime = r
+					break
+				}
+				if nodeRuntime == nil {
+					// We currently prevent this case throughout the rest of the system.
+					// Still, it's prudent to check.
+					app.logger.Warn("checkCommittees: committee member not registered with this runtime",
+						"node", n.PublicKey,
+					)
+					continue
+				}
+				computeNodeInfo[n.PublicKey.ToMapKey()] = commitment.NodeInfo{
+					CommitteeNode: idx,
+					Runtime:       nodeRuntime,
+				}
+			}
+			computeCommitteeID := computeCommittee.EncodedMembersHash()
+			committeeIDParts = append(committeeIDParts, computeCommitteeID[:])
+
+			computePool.Committees[computeCommitteeID] = &commitment.Pool{
+				Runtime:   rtState.Runtime,
+				Committee: computeCommittee,
+				NodeInfo:  computeNodeInfo,
+			}
+		}
+
+		var mergePool commitment.Pool
+		committeeIDParts = append(committeeIDParts, []byte("merge committee follows"))
 		mergeCommittee, err := schedState.Committee(scheduler.KindMerge, rtID)
 		if err != nil {
 			app.logger.Error("checkCommittees: failed to get merge committee from scheduler",
@@ -207,16 +244,24 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 			)
 			continue
 		}
-		mergeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
-		for idx, n := range mergeCommittee.Members {
-			mergeNodeInfo[n.PublicKey.ToMapKey()] = commitment.NodeInfo{
-				CommitteeNode: idx,
+		if mergeCommittee == nil {
+			app.logger.Warn("checkCommittees: no merge committee",
+				"runtime", rtID,
+			)
+		} else {
+			mergeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+			for idx, n := range mergeCommittee.Members {
+				mergeNodeInfo[n.PublicKey.ToMapKey()] = commitment.NodeInfo{
+					CommitteeNode: idx,
+				}
 			}
-		}
-		mergePool := &commitment.Pool{
-			Runtime:   rtState.Runtime,
-			Committee: mergeCommittee,
-			NodeInfo:  mergeNodeInfo,
+			mergePool = commitment.Pool{
+				Runtime:   rtState.Runtime,
+				Committee: mergeCommittee,
+				NodeInfo:  mergeNodeInfo,
+			}
+			mergeCommitteeID := mergeCommittee.EncodedMembersHash()
+			committeeIDParts = append(committeeIDParts, mergeCommitteeID[:])
 		}
 
 		app.logger.Debug("checkCommittees: updating committee for runtime",
@@ -224,13 +269,14 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 		)
 
 		// If the committee is the "same", ignore this.
-		//
-		// TODO: Use a better check to allow for things like rescheduling.
+		var committeeID hash.Hash
+		committeeID.FromBytes(committeeIDParts...)
+
 		round := rtState.Round
-		if round != nil && round.MergePool.Committee.ValidFor == mergePool.Committee.ValidFor {
-			app.logger.Debug("checkCommittees: duplicate committee or reschedule, ignoring",
+		if round != nil && round.CommitteeID.Equal(&committeeID) {
+			app.logger.Debug("checkCommittees: duplicate committee, ignoring",
 				"runtime", rtID,
-				"epoch", mergePool.Committee.ValidFor,
+				"committee_id", committeeID,
 			)
 			mk := rtID.ToMapKey()
 			if _, ok := newDescriptors[mk]; ok {
@@ -245,12 +291,12 @@ func (app *rootHashApplication) onEpochChange(ctx *abci.Context, epoch epochtime
 
 		app.logger.Debug("checkCommittees: new committee, transitioning round",
 			"runtime", rtID,
-			"epoch", mergePool.Committee.ValidFor,
+			"committee_id", committeeID,
 			"round", blockNr,
 		)
 
 		rtState.Timer.Stop(ctx)
-		rtState.Round = roothashState.NewRound(computePool, mergePool, blk)
+		rtState.Round = roothashState.NewRound(committeeID, computePool, &mergePool, blk)
 
 		// Emit an empty epoch transition block in the new round. This is required so that
 		// the clients can be sure what state is final when an epoch transition occurs.

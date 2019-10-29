@@ -71,7 +71,12 @@ func ClientWorkerTests(
 	}
 
 	// Storage should not yet be available.
-	r, err := client.SyncGet(ctx, &api.GetRequest{})
+	r, err := client.SyncGet(ctx, &api.GetRequest{
+		Tree: api.TreeID{
+			Root:     root,
+			Position: root.Hash,
+		},
+	})
 	require.EqualError(err, storageClient.ErrStorageNotAvailable.Error(), "storage client get before initialization")
 	require.Nil(r, "result should be nil")
 
