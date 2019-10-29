@@ -215,7 +215,8 @@ func (b *storageClientBackend) writeWithClient(
 			}
 		}()
 	}
-	successes := 0
+
+	// Accumulate the responses.
 	receipts := make([]*api.Receipt, 0, n)
 	for i := 0; i < n; i++ {
 		var response *grpcResponse
@@ -270,9 +271,16 @@ func (b *storageClientBackend) writeWithClient(
 			continue
 		}
 		receipt := receiptInAList[0]
-		// TODO: After we switch to https://github.com/oasislabs/ed25519, use
-		// batch verification. This should be implemented as part of:
-		// https://github.com/oasislabs/oasis-core/issues/1351.
+
+		// Validate the receipt signature, and unmarshal the body.
+		//
+		// Note: It is theoretically possible to batch the signature
+		// verifications, however the straight forward way of doing
+		// so is difficult when wanting to return early, ie: after
+		// F+1 successes.
+		//
+		// As it is likely that network delay will dominate, the
+		// signature verification is done serially here.
 		var receiptBody api.ReceiptBody
 		if err = receipt.Open(&receiptBody); err != nil {
 			b.logger.Error("failed to open receipt for a storage node",
@@ -281,6 +289,7 @@ func (b *storageClientBackend) writeWithClient(
 			)
 			continue
 		}
+
 		// Check that obtained root(s) equal the expected new root(s).
 		equal := true
 		if !receiptBody.Namespace.Equal(&ns) {
@@ -309,15 +318,15 @@ func (b *storageClientBackend) writeWithClient(
 			)
 			continue
 		}
-		successes++
 		// TODO: Only wait for F+1 successful writes:
 		// https://github.com/oasislabs/oasis-core/issues/1821.
 		receipts = append(receipts, &receipt)
 	}
+
+	successes := len(receipts)
 	if successes == 0 {
 		return nil, errors.New("storage client: failed to write to any storage node")
-	}
-	if successes < n {
+	} else if successes < n {
 		b.logger.Warn("write operation was only successfully applied to %d out of %d connected nodes", successes, n)
 	}
 
