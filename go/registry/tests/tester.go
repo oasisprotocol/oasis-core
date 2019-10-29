@@ -205,6 +205,12 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 		defer cancel()
 
+		// Get node status.
+		nodeStatus, err := backend.GetNodeStatus(ctx, node.Node.ID, 0)
+		require.NoError(err, "GetNodeStatus")
+		require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
+		require.False(nodeStatus.IsFrozen(), "IsFrozen() should return false")
+
 		// Try to unfreeze a node.
 		unfreeze := api.UnfreezeNode{
 			NodeID:    node.Node.ID,

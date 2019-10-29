@@ -135,6 +135,15 @@ func (tb *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey
 	return q.Node(ctx, id)
 }
 
+func (tb *tendermintBackend) GetNodeStatus(ctx context.Context, id signature.PublicKey, height int64) (*api.NodeStatus, error) {
+	q, err := tb.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.NodeStatus(ctx, id)
+}
+
 func (tb *tendermintBackend) GetNodes(ctx context.Context, height int64) ([]*node.Node, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {

@@ -72,6 +72,7 @@ func StakingImplementationTests(
 	t *testing.T,
 	backend api.Backend,
 	timeSource epochtime.SetableBackend,
+	registry registry.Backend,
 	ident *identity.Identity,
 	ent *entity.Entity,
 ) {
@@ -91,7 +92,7 @@ func StakingImplementationTests(
 
 	// Separate test as it requires some arguments that others don't.
 	t.Run("SlashDoubleSigning", func(t *testing.T) {
-		testSlashDoubleSigning(t, backend, timeSource, ident, ent)
+		testSlashDoubleSigning(t, backend, timeSource, registry, ident, ent)
 	})
 }
 
@@ -487,6 +488,86 @@ func testEscrowEx(
 	debs, err = backend.DebondingDelegations(context.Background(), srcID, 0)
 	require.NoError(err, "DebondingDelegations")
 	require.Len(debs, 0, "no debonding delegations after failed reclaim")
+}
+
+func testSlashDoubleSigning(
+	t *testing.T,
+	backend api.Backend,
+	timeSource epochtime.SetableBackend,
+	reg registry.Backend,
+	ident *identity.Identity,
+	ent *entity.Entity,
+) {
+	require := require.New(t)
+
+	// Delegate some stake to the validator so we can check if slashing works.
+	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
+	require.NoError(err, "AccountInfo")
+
+	escrowCh, escrowSub := backend.WatchEscrows()
+	defer escrowSub.Close()
+
+	escrow := &api.Escrow{
+		Nonce:   srcAcc.General.Nonce,
+		Account: ent.ID,
+		Tokens:  QtyFromInt(math.MaxUint32),
+	}
+	signed, err := api.SignEscrow(srcSigner, escrow)
+	require.NoError(err, "Sign escrow")
+
+	err = backend.AddEscrow(context.Background(), signed)
+	require.NoError(err, "AddEscrow")
+
+	select {
+	case rawEv := <-escrowCh:
+		ev := rawEv.(*api.EscrowEvent)
+		require.Equal(SrcID, ev.Owner, "Event: owner")
+		require.Equal(ent.ID, ev.Escrow, "Event: escrow")
+		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive escrow event")
+	}
+
+	// Subscribe to slash events.
+	slashCh, slashSub := backend.WatchEscrows()
+	defer slashSub.Close()
+
+	// Broadcast evidence. This is Tendermint-specific, if we ever have more than one
+	// consensus backend, we need to change this part.
+	err = backend.SubmitEvidence(context.Background(), tendermintMakeDoubleSignEvidence(t, ident))
+	require.NoError(err, "SubmitEvidence")
+
+	// Wait for the node to get slashed.
+WaitLoop:
+	for {
+		select {
+		case ev := <-slashCh:
+			if e, ok := ev.(*api.TakeEscrowEvent); ok {
+				require.Equal(ent.ID, e.Owner, "TakeEscrowEvent - owner must be entity")
+				// All tokens must be slashed as defined in debugGenesisState.
+				require.Equal(escrow.Tokens, e.Tokens, "TakeEscrowEvent - all tokens slashed")
+				break WaitLoop
+			}
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive slash event")
+		}
+	}
+
+	// Make sure the node is frozen.
+	nodeStatus, err := reg.GetNodeStatus(context.Background(), ident.NodeSigner.Public(), 0)
+	require.NoError(err, "GetNodeStatus")
+	require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
+	require.True(nodeStatus.IsFrozen(), "IsFrozen() should return true")
+
+	// Make sure node cannot be unfrozen.
+	unfreeze := registry.UnfreezeNode{
+		NodeID:    ident.NodeSigner.Public(),
+		Timestamp: uint64(time.Now().Unix()),
+	}
+	signedUnfreeze, err := registry.SignUnfreezeNode(ident.NodeSigner, registry.RegisterUnfreezeNodeSignatureContext, &unfreeze)
+	require.NoError(err, "SignUnfreezeNode")
+	err = reg.UnfreezeNode(context.Background(), signedUnfreeze)
+	require.Error(err, "UnfreezeNode")
 }
 
 func mustGenerateSigner() signature.Signer {

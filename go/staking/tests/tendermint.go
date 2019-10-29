@@ -1,62 +1,23 @@
 package tests
 
-// NOTE: This file contains Tendermint-specific tests.
+// NOTE: This file contains Tendermint-specific functions.
 
 import (
-	"context"
 	"io/ioutil"
-	"math"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/identity"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 	tmcrypto "github.com/oasislabs/oasis-core/go/tendermint/crypto"
 )
 
-func testSlashDoubleSigning(
-	t *testing.T,
-	backend api.Backend,
-	timeSource epochtime.SetableBackend,
-	ident *identity.Identity,
-	ent *entity.Entity,
-) {
+func tendermintMakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) api.Evidence {
 	require := require.New(t)
-
-	// Delegate some stake to the validator so we can check if slashing works.
-	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
-	require.NoError(err, "AccountInfo")
-
-	escrowCh, escrowSub := backend.WatchEscrows()
-	defer escrowSub.Close()
-
-	escrow := &api.Escrow{
-		Nonce:   srcAcc.General.Nonce,
-		Account: ent.ID,
-		Tokens:  QtyFromInt(math.MaxUint32),
-	}
-	signed, err := api.SignEscrow(srcSigner, escrow)
-	require.NoError(err, "Sign escrow")
-
-	err = backend.AddEscrow(context.Background(), signed)
-	require.NoError(err, "AddEscrow")
-
-	select {
-	case rawEv := <-escrowCh:
-		ev := rawEv.(*api.EscrowEvent)
-		require.Equal(SrcID, ev.Owner, "Event: owner")
-		require.Equal(ent.ID, ev.Escrow, "Event: escrow")
-		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive escrow event")
-	}
 
 	// Create empty directory for private validator metadata.
 	tmpDir, err := ioutil.TempDir("", "oasis-slash-test")
@@ -101,32 +62,7 @@ func testSlashDoubleSigning(
 		VoteA: makeVote(pv1, "oasis-test-chain", 0, 1, 2, 1, blockID1),
 		VoteB: makeVote(pv2, "oasis-test-chain", 0, 1, 2, 1, blockID2),
 	}
-
-	// Subscribe to slash events.
-	slashCh, slashSub := backend.WatchEscrows()
-	defer slashSub.Close()
-
-	// Broadcast evidence.
-	err = backend.SubmitEvidence(context.Background(), api.NewConsensusEvidence(ev))
-	require.NoError(err, "SubmitEvidence")
-
-	// Wait for the node to get slashed.
-WaitLoop:
-	for {
-		select {
-		case ev := <-slashCh:
-			if e, ok := ev.(*api.TakeEscrowEvent); ok {
-				require.Equal(ent.ID, e.Owner, "TakeEscrowEvent - owner must be entity")
-				// All tokens must be slashed as defined in debugGenesisState.
-				require.Equal(escrow.Tokens, e.Tokens, "TakeEscrowEvent - all tokens slashed")
-				break WaitLoop
-			}
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive slash event")
-		}
-	}
-
-	// TODO: Make sure the node is frozen.
+	return api.NewConsensusEvidence(ev)
 }
 
 // makeVote copied from Tendermint test suite.

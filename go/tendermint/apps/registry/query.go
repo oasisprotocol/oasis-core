@@ -17,6 +17,7 @@ type Query interface {
 	Entity(context.Context, signature.PublicKey) (*entity.Entity, error)
 	Entities(context.Context) ([]*entity.Entity, error)
 	Node(context.Context, signature.PublicKey) (*node.Node, error)
+	NodeStatus(context.Context, signature.PublicKey) (*registry.NodeStatus, error)
 	Nodes(context.Context) ([]*node.Node, error)
 	Runtime(context.Context, signature.PublicKey) (*registry.Runtime, error)
 	Runtimes(context.Context) ([]*registry.Runtime, error)
@@ -73,6 +74,10 @@ func (rq *registryQuerier) Node(ctx context.Context, id signature.PublicKey) (*n
 		return nil, registry.ErrNoSuchNode
 	}
 	return node, nil
+}
+
+func (rq *registryQuerier) NodeStatus(ctx context.Context, id signature.PublicKey) (*registry.NodeStatus, error) {
+	return rq.state.NodeStatus(id)
 }
 
 func (rq *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {

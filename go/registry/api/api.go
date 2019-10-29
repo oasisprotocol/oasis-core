@@ -156,6 +156,9 @@ type Backend interface {
 	// GetNode gets a node by ID.
 	GetNode(context.Context, signature.PublicKey, int64) (*node.Node, error)
 
+	// GetNodeStatus returns a node's status.
+	GetNodeStatus(context.Context, signature.PublicKey, int64) (*NodeStatus, error)
+
 	// GetNodes gets a list of all registered nodes.
 	GetNodes(context.Context, int64) ([]*node.Node, error)
 
