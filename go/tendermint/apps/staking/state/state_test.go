@@ -52,16 +52,16 @@ func TestRewardAndSlash(t *testing.T) {
 	s.SetCommonPool(mustInitQuantityP(t, 10000))
 	s.SetDebondingInterval(21)
 	s.SetRewardSchedule([]staking.RewardStep{
-		// 0 (but not triggered), 10, 20
+		// 10, 20, 30
 		{
 			Until:       30,
 			Interval:    10,
 			Numerator:   mustInitQuantity(t, 1),
 			Denominator: mustInitQuantity(t, 1),
 		},
-		// 30, 38
+		// 38
 		{
-			Until:       40,
+			Until:       38,
 			Interval:    8,
 			Numerator:   mustInitQuantity(t, 1),
 			Denominator: mustInitQuantity(t, 2),
@@ -87,7 +87,7 @@ func TestRewardAndSlash(t *testing.T) {
 	// Epoch 10 is the first interval of the first step.
 	require.NoError(t, s.AddRewards(10), "add rewards epoch 10")
 
-	// 1/1 gain.
+	// 100% gain.
 	delegatorAccount = s.Account(delegatorID)
 	require.Equal(t, mustInitQuantity(t, 100), delegatorAccount.General.Balance, "reward first step - delegator general")
 	escrowAccount = s.Account(escrowID)
@@ -97,44 +97,44 @@ func TestRewardAndSlash(t *testing.T) {
 	require.NoError(t, err, "load common pool")
 	require.Equal(t, mustInitQuantityP(t, 9900), commonPool, "reward first step - common pool")
 
-	// At epoch 30, the first step is over, and the second step is in effect.
+	// At epoch 30, we apply the last interval from the first step.
 	require.NoError(t, s.AddRewards(30), "add rewards epoch 30")
 
-	// 1/2 gain.
+	// 100% gain.
 	escrowAccount = s.Account(escrowID)
-	require.Equal(t, mustInitQuantity(t, 300), escrowAccount.Escrow.Active.Balance, "reward boundary epoch - escrow active escrow")
+	require.Equal(t, mustInitQuantity(t, 400), escrowAccount.Escrow.Active.Balance, "reward boundary epoch - escrow active escrow")
 	commonPool, err = s.CommonPool()
 	require.NoError(t, err, "load common pool")
-	require.Equal(t, mustInitQuantityP(t, 9800), commonPool, "reward first step - common pool")
+	require.Equal(t, mustInitQuantityP(t, 9700), commonPool, "reward first step - common pool")
 
 	// Epoch 38 is epoch 8 of the second step, which is the end of the interval.
 	require.NoError(t, s.AddRewards(38), "add rewards epoch 38")
 
-	// 1/2 gain.
+	// 50% gain.
 	escrowAccount = s.Account(escrowID)
-	require.Equal(t, mustInitQuantity(t, 450), escrowAccount.Escrow.Active.Balance, "reward second step - escrow active escrow")
+	require.Equal(t, mustInitQuantity(t, 600), escrowAccount.Escrow.Active.Balance, "reward second step - escrow active escrow")
 	commonPool, err = s.CommonPool()
 	require.NoError(t, err, "load common pool")
-	require.Equal(t, mustInitQuantityP(t, 9650), commonPool, "reward first step - common pool")
+	require.Equal(t, mustInitQuantityP(t, 9500), commonPool, "reward first step - common pool")
 
 	// Epoch 99 is after the end of the schedule
 	require.NoError(t, s.AddRewards(99), "add rewards epoch 99")
 
 	// No change.
 	escrowAccount = s.Account(escrowID)
-	require.Equal(t, mustInitQuantity(t, 450), escrowAccount.Escrow.Active.Balance, "reward late epoch - escrow active escrow")
+	require.Equal(t, mustInitQuantity(t, 600), escrowAccount.Escrow.Active.Balance, "reward late epoch - escrow active escrow")
 
-	slashedNonzero, err := s.SlashEscrow(abci.NewContext(abci.ContextDeliverTx, time.Now(), nil), escrowID, mustInitQuantityP(t, 2), mustInitQuantityP(t, 3))
+	slashedNonzero, err := s.SlashEscrow(abci.NewContext(abci.ContextDeliverTx, time.Now(), nil), escrowID, mustInitQuantityP(t, 10_000))
 	require.NoError(t, err, "slash escrow")
 	require.True(t, slashedNonzero, "slashed nonzero")
 
-	// 2/3 keep = 1/3 loss, kept amount rounded down, slashed amount rounded up.
+	// 10% loss.
 	delegatorAccount = s.Account(delegatorID)
 	require.Equal(t, mustInitQuantity(t, 100), delegatorAccount.General.Balance, "slash - delegator general")
 	escrowAccount = s.Account(escrowID)
-	require.Equal(t, mustInitQuantity(t, 300), escrowAccount.Escrow.Active.Balance, "slash - escrow active escrow")
-	require.Equal(t, mustInitQuantity(t, 66), escrowAccount.Escrow.Debonding.Balance, "slash - escrow debonding escrow")
+	require.Equal(t, mustInitQuantity(t, 540), escrowAccount.Escrow.Active.Balance, "slash - escrow active escrow")
+	require.Equal(t, mustInitQuantity(t, 90), escrowAccount.Escrow.Debonding.Balance, "slash - escrow debonding escrow")
 	commonPool, err = s.CommonPool()
 	require.NoError(t, err, "load common pool")
-	require.Equal(t, mustInitQuantityP(t, 9834), commonPool, "slash - common pool")
+	require.Equal(t, mustInitQuantityP(t, 9570), commonPool, "slash - common pool")
 }
