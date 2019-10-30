@@ -16,7 +16,7 @@ tokio-current-thread = "0.1.5"
 io-context = "0.2.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
-grpcio = "0.4.4"
+grpcio = "0.4.6"
 protobuf = "~2.8"
 rustracing = "0.2.0"
 rustracing_jaeger = "0.2.1"
