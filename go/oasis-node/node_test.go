@@ -197,6 +197,13 @@ func TestNode(t *testing.T) {
 		// Client tests also need a functional runtime.
 		{"Client", testClient},
 
+		// Staking requires a registered node that is a validator.
+		{"Staking", testStaking},
+
+		// TestStorageClientWithNode runs storage tests against a storage client
+		// connected to this node.
+		{"TestStorageClientWithNode", testStorageClientWithNode},
+
 		// Clean up and ensure the registry is empty for the following tests.
 		{"DeregisterTestEntityRuntime", testDeregisterEntityRuntime},
 
@@ -205,11 +212,11 @@ func TestNode(t *testing.T) {
 		{"Storage", testStorage},
 		{"Registry", testRegistry},
 		{"Scheduler", testScheduler},
-		{"Staking", testStaking},
 		{"RootHash", testRootHash},
 
-		// TestStorageClient runs storage tests against a storage client connected to this node.
-		{"TestStorageClient", testStorageClient},
+		// TestStorageClientWithoutNode runs client tests that use a mock storage
+		// node and mock committees.
+		{"TestStorageClientWithoutNode", testStorageClientWithoutNode},
 	}
 
 	for _, tc := range testCases {
@@ -248,25 +255,51 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 
 func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
 	// Stop the registration service and wait for it to fully stop. This is required
-	// as otherwise it will re-register the node on each epoch
-	// transition.
+	// as otherwise it will re-register the node on each epoch transition.
 	node.WorkerRegistration.Stop()
 	<-node.WorkerRegistration.Quit()
 
-	// Deregister the entity which should also deregister the node.
+	// Subscribe to node deregistration event.
+	nodeCh, sub := node.Node.Registry.WatchNodes()
+	defer sub.Close()
+
+	// Perform an epoch transition to expire the node as otherwise there is no way
+	// to deregister the entity.
+	require.Implements(t, (*epochtime.SetableBackend)(nil), node.Epochtime, "epoch time backend is mock")
+	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	_ = epochtimeTests.MustAdvanceEpoch(t, timeSource, 2+1+1) // 2 epochs for expiry, 1 for debonding, 1 for removal.
+
+WaitLoop:
+	for {
+		select {
+		case ev := <-nodeCh:
+			// NOTE: There can be in-flight registrations from before the registration worker
+			//       was stopped. Make sure to skip them.
+			if ev.IsRegistration {
+				continue
+			}
+
+			require.Equal(t, ev.Node.ID, node.Identity.NodeSigner.Public(), "expected node deregistration event")
+			break WaitLoop
+		case <-time.After(1 * time.Second):
+			t.Fatalf("Failed to receive node deregistration event")
+		}
+	}
+
+	// Deregister the entity.
 	ts := registry.Timestamp(uint64(time.Now().Unix()))
 	signed, err := signature.SignSigned(node.entitySigner, registry.DeregisterEntitySignatureContext, &ts)
 	require.NoError(t, err, "SignSigned")
 
 	// Subscribe to entity deregistration event.
-	ch, sub := node.Node.Registry.WatchEntities()
+	entityCh, sub := node.Node.Registry.WatchEntities()
 	defer sub.Close()
 
 	err = node.Node.Registry.DeregisterEntity(context.Background(), signed)
 	require.NoError(t, err, "DeregisterEntity")
 
 	select {
-	case ev := <-ch:
+	case ev := <-entityCh:
 		require.False(t, ev.IsRegistration, "expected entity deregistration event")
 	case <-time.After(1 * time.Second):
 		t.Fatalf("Failed to receive entity deregistration event")
@@ -309,7 +342,7 @@ func testScheduler(t *testing.T, node *testNode) {
 func testStaking(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
-	stakingTests.StakingImplementationTests(t, node.Staking, timeSource)
+	stakingTests.StakingImplementationTests(t, node.Staking, timeSource, node.Registry, node.RootHash, node.Identity, node.entity, node.entitySigner, testRuntimeID)
 }
 
 func testRootHash(t *testing.T, node *testNode) {
@@ -340,12 +373,8 @@ func testClient(t *testing.T, node *testNode) {
 	clientTests.ClientImplementationTests(t, node.Client, node.runtimeID)
 }
 
-func testStorageClient(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+func testStorageClientWithNode(t *testing.T, node *testNode) {
 	ctx := context.Background()
-
-	// Storage client tests.
-	storageClientTests.ClientWorkerTests(t, node.Identity, node.Beacon, timeSource, node.Registry, node.Scheduler)
 
 	// Client storage implementation tests.
 	config := []struct {
@@ -367,6 +396,18 @@ func testStorageClient(t *testing.T, node *testNode) {
 	require.NoError(t, err, "GetLatestBlock")
 
 	storageTests.StorageImplementationTests(t, debugClient, testNamespace, blk.Header.Round+1)
+
+	// Reset configuration flags.
+	for _, kv := range config {
+		viper.Set(kv.key, "")
+	}
+}
+
+func testStorageClientWithoutNode(t *testing.T, node *testNode) {
+	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+
+	// Storage client tests without node.
+	storageClientTests.ClientWorkerTests(t, node.Identity, node.Beacon, timeSource, node.Registry, node.Scheduler)
 }
 
 func init() {

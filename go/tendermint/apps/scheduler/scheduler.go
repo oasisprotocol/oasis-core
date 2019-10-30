@@ -209,8 +209,15 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 }
 
 func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
+	// Check if any stake slashing has occurred in the staking layer.
+	// NOTE: This will NOT trigger for any slashing that happens as part of
+	//       any transactions being submitted to the chain.
+	slashed := ctx.HasEvent(stakingapp.AppName, stakingapp.KeyTakeEscrow)
+	// Check if epoch has changed.
 	// TODO: We'll later have this for each type of committee.
-	if changed, epoch := app.state.EpochChanged(app.timeSource); changed {
+	epochChanged, epoch := app.state.EpochChanged(ctx, app.timeSource)
+
+	if epochChanged || slashed {
 		// The 0th epoch will not have suitable entropy for elections, nor
 		// will it have useful node registrations.
 		if epoch == app.baseEpoch {
@@ -231,9 +238,30 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get runtimes")
 		}
-		nodes, err := regState.Nodes()
+		allNodes, err := regState.Nodes()
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
+		}
+
+		// Filter nodes.
+		var nodes []*node.Node
+		for _, node := range allNodes {
+			var status *registry.NodeStatus
+			status, err = regState.NodeStatus(node.ID)
+			if err != nil {
+				return errors.Wrap(err, "tendermint/scheduler: couldn't get node status")
+			}
+
+			// Nodes which are currently frozen cannot be scheduled.
+			if status.IsFrozen() {
+				continue
+			}
+			// Expired nodes cannot be scheduled (nodes can be expired and not yet removed).
+			if node.IsExpired(uint64(epoch)) {
+				continue
+			}
+
+			nodes = append(nodes, node)
 		}
 
 		entityStake, err := newStakeAccumulator(ctx, app.cfg.DebugBypassStake)
@@ -252,7 +280,12 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			}
 		}
 
-		kinds := []scheduler.CommitteeKind{scheduler.KindCompute, scheduler.KindStorage, scheduler.KindTransactionScheduler, scheduler.KindMerge}
+		kinds := []scheduler.CommitteeKind{
+			scheduler.KindCompute,
+			scheduler.KindStorage,
+			scheduler.KindTransactionScheduler,
+			scheduler.KindMerge,
+		}
 		for _, kind := range kinds {
 			if err = app.electAllCommittees(ctx, request, epoch, beacon, entityStake, runtimes, nodes, kind); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("tendermint/scheduler: couldn't elect %s committees", kind))

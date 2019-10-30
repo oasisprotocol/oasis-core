@@ -106,6 +106,9 @@ type Backend interface {
 	// back into the owner's general balance.
 	ReclaimEscrow(ctx context.Context, signedReclaim *SignedReclaimEscrow) error
 
+	// SubmitEvidence submits evidence of misbehavior.
+	SubmitEvidence(ctx context.Context, evidence Evidence) error
+
 	// WatchTransfers returns a channel that produces a stream of TranserEvent
 	// on all balance transfers.
 	WatchTransfers() (<-chan *TransferEvent, *pubsub.Subscription)
@@ -361,9 +364,6 @@ func (p *SharePool) sharesForTokens(amount *Quantity) (*Quantity, error) {
 	if err := q.Mul(&p.TotalShares); err != nil {
 		return nil, err
 	}
-	// NOTE: This currently assumes that the slashing code will make sure
-	//       that the exchange rate is maintained such that no tokens are
-	//       lost due to loss of precision.
 	if err := q.Quo(&p.Balance); err != nil {
 		return nil, err
 	}
@@ -410,9 +410,6 @@ func (p *SharePool) tokensForShares(amount *Quantity) (*Quantity, error) {
 	if err := q.Mul(&p.Balance); err != nil {
 		return nil, err
 	}
-	// NOTE: This currently assumes that the slashing code will make sure
-	//       that the exchange rate is maintained such that no tokens are
-	//       lost due to loss of precision.
 	if err := q.Quo(&p.TotalShares); err != nil {
 		return nil, err
 	}
@@ -467,7 +464,7 @@ func (k ThresholdKind) String() string {
 	case KindStorage:
 		return "storage"
 	default:
-		return "[unknown]"
+		return "[unknown threshold kind]"
 	}
 }
 
@@ -517,4 +514,6 @@ type Genesis struct {
 
 	Delegations          map[signature.MapKey]map[signature.MapKey]*Delegation            `json:"delegations,omitempty"`
 	DebondingDelegations map[signature.MapKey]map[signature.MapKey][]*DebondingDelegation `json:"debonding_delegations,omitempty"`
+
+	Slashing map[SlashReason]Slash `json:"slashing,omitempty"`
 }

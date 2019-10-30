@@ -23,7 +23,11 @@ import (
 	"github.com/oasislabs/oasis-core/go/registry/api"
 )
 
-const recvTimeout = 5 * time.Second
+const (
+	recvTimeout = 5 * time.Second
+
+	testRuntimeNodeExpiration epochtime.EpochTime = 100
+)
 
 // RegistryImplementationTests exercises the basic functionality of a
 // registry backend.
@@ -192,6 +196,75 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 	})
 
+	t.Run("NodeUnfreeze", func(t *testing.T) {
+		require := require.New(t)
+
+		entity := entities[0]
+		node := nodes[0][0]
+
+		ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+		defer cancel()
+
+		// Get node status.
+		nodeStatus, err := backend.GetNodeStatus(ctx, node.Node.ID, 0)
+		require.NoError(err, "GetNodeStatus")
+		require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
+		require.False(nodeStatus.IsFrozen(), "IsFrozen() should return false")
+
+		// Try to unfreeze a node.
+		unfreeze := api.UnfreezeNode{
+			NodeID:    node.Node.ID,
+			Timestamp: uint64(time.Now().Unix()),
+		}
+		signedUnfreeze, err := api.SignUnfreezeNode(entity.Signer, api.RegisterUnfreezeNodeSignatureContext, &unfreeze)
+		require.NoError(err, "SignUnfreezeNode")
+		err = backend.UnfreezeNode(ctx, signedUnfreeze)
+		require.NoError(err, "UnfreezeNode")
+
+		// Try to unfreeze an invalid node (should fail).
+		unfreeze = api.UnfreezeNode{
+			Timestamp: uint64(time.Now().Unix()),
+		}
+		// Generate arbitrary invalid node ID.
+		err = unfreeze.NodeID.UnmarshalHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+		require.NoError(err, "UnmarshalHex")
+		signedUnfreeze, err = api.SignUnfreezeNode(entity.Signer, api.RegisterUnfreezeNodeSignatureContext, &unfreeze)
+		require.NoError(err, "SignUnfreezeNode")
+		err = backend.UnfreezeNode(ctx, signedUnfreeze)
+		require.Error(err, "UnfreezeNode (with invalid node)")
+
+		// Try to unfreeze with an invalid timestamp (should fail).
+		unfreeze = api.UnfreezeNode{
+			NodeID:    node.Node.ID,
+			Timestamp: 0,
+		}
+		signedUnfreeze, err = api.SignUnfreezeNode(entity.Signer, api.RegisterUnfreezeNodeSignatureContext, &unfreeze)
+		require.NoError(err, "SignUnfreezeNode")
+		err = backend.UnfreezeNode(ctx, signedUnfreeze)
+		require.Error(err, "UnfreezeNode (with invalid timestamp)")
+
+		// Try to unfreeze a node using the node signing key (should fail
+		// as unfreeze must be signed by entity signing key).
+		unfreeze = api.UnfreezeNode{
+			NodeID:    node.Node.ID,
+			Timestamp: uint64(time.Now().Unix()),
+		}
+		signedUnfreeze, err = api.SignUnfreezeNode(node.Signer, api.RegisterUnfreezeNodeSignatureContext, &unfreeze)
+		require.NoError(err, "SignUnfreezeNode")
+		err = backend.UnfreezeNode(ctx, signedUnfreeze)
+		require.Error(err, "UnfreezeNode (with invalid signer)")
+
+		// Try to unfreeze a node using an invalid context (should fail).
+		unfreeze = api.UnfreezeNode{
+			NodeID:    node.Node.ID,
+			Timestamp: uint64(time.Now().Unix()),
+		}
+		signedUnfreeze, err = api.SignUnfreezeNode(node.Signer, api.RegisterNodeSignatureContext, &unfreeze)
+		require.NoError(err, "SignUnfreezeNode")
+		err = backend.UnfreezeNode(ctx, signedUnfreeze)
+		require.Error(err, "UnfreezeNode (with invalid context)")
+	})
+
 	t.Run("NodeExpiration", func(t *testing.T) {
 		require := require.New(t)
 
@@ -239,7 +312,41 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 	t.Run("EntityDeregistration", func(t *testing.T) {
 		require := require.New(t)
 
+		// It shouldn't be possible to deregister any entities at this point as
+		// they all have registered nodes. While nodes for entity 0 have all
+		// expired (in NodeExpiration test), they are still present in the registry
+		// until after the debonding period (1 epoch) expires.
 		for _, v := range entities {
+			err := backend.DeregisterEntity(context.Background(), v.SignedDeregistration)
+			require.Error(err, "DeregisterEntity")
+		}
+
+		// Advance the epoch to trigger 0th entity nodes to be removed.
+		_ = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+
+		// At this point it should only be possible to deregister 0th entity nodes.
+		err := backend.DeregisterEntity(context.Background(), entities[0].SignedDeregistration)
+		require.NoError(err, "DeregisterEntity - 0th entity")
+
+		select {
+		case ev := <-entityCh:
+			require.EqualValues(entities[0].Entity, ev.Entity, "deregistered entity")
+			require.False(ev.IsRegistration, "event is deregistration")
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive entity deregistration event")
+		}
+
+		// All other entities should still fail.
+		for _, v := range entities[1:] {
+			err := backend.DeregisterEntity(context.Background(), v.SignedDeregistration)
+			require.Error(err, "DeregisterEntity")
+		}
+
+		// Advance the epoch to trigger all nodes to expire and be removed.
+		_ = epochtimeTests.MustAdvanceEpoch(t, timeSource, uint64(len(entities)+2))
+
+		// Now it should be possible to deregister all remaining entities.
+		for _, v := range entities[1:] {
 			err := backend.DeregisterEntity(context.Background(), v.SignedDeregistration)
 			require.NoError(err, "DeregisterEntity")
 
@@ -252,13 +359,14 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 			}
 		}
 
+		// There should be no more entities.
 		for _, v := range entities {
 			_, err := backend.GetEntity(context.Background(), v.Entity.ID, 0)
 			require.Equal(api.ErrNoSuchEntity, err, "GetEntity")
 		}
 	})
 
-	t.Run("NodeDeregistrationViaEntity", func(t *testing.T) {
+	t.Run("RemainingNodeExpiration", func(t *testing.T) {
 		require := require.New(t)
 
 		deregisteredNodes := make(map[signature.MapKey]*node.Node)
@@ -626,17 +734,17 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend) {
 }
 
 // Populate populates the registry for a given TestRuntime.
-func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, runtime *TestRuntime, seed []byte) []*node.Node {
+func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend, runtime *TestRuntime, seed []byte) []*node.Node {
 	require := require.New(t)
 
 	require.Nil(rt.entity, "runtime has no associated entity")
 	require.Nil(rt.nodes, "runtime has no associated nodes")
 
-	return BulkPopulate(t, backend, []*TestRuntime{runtime}, seed)
+	return BulkPopulate(t, backend, timeSource, []*TestRuntime{runtime}, seed)
 }
 
 // PopulateBulk bulk populates the registry for the given TestRuntimes.
-func BulkPopulate(t *testing.T, backend api.Backend, runtimes []*TestRuntime, seed []byte) []*node.Node {
+func BulkPopulate(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend, runtimes []*TestRuntime, seed []byte) []*node.Node {
 	require := require.New(t)
 
 	require.True(len(runtimes) > 0, "at least one runtime")
@@ -670,9 +778,12 @@ func BulkPopulate(t *testing.T, backend api.Backend, runtimes []*TestRuntime, se
 	nodeCh, nodeSub := backend.WatchNodes()
 	defer nodeSub.Close()
 
+	epoch, err := timeSource.GetEpoch(context.Background(), 0)
+	require.NoError(err, "GetEpoch")
+
 	numCompute := int(runtimes[0].Runtime.ReplicaGroupSize + runtimes[0].Runtime.ReplicaGroupBackupSize)
 	numStorage := int(runtimes[0].Runtime.StorageGroupSize)
-	nodes, err := entity.NewTestNodes(numCompute, numStorage, runtimes, epochtime.EpochInvalid)
+	nodes, err := entity.NewTestNodes(numCompute, numStorage, runtimes, epoch+testRuntimeNodeExpiration)
 	require.NoError(err, "NewTestNodes")
 
 	ret := make([]*node.Node, 0, numCompute+numStorage)
@@ -705,7 +816,7 @@ func (rt *TestRuntime) TestNodes() []*TestNode {
 }
 
 // Cleanup deregisteres the entity and nodes for a given TestRuntime.
-func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend) {
+func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
 	require := require.New(t)
 
 	require.NotNil(rt.entity, "runtime has an associated entity")
@@ -716,6 +827,9 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend) {
 
 	nodeCh, nodeSub := backend.WatchNodes()
 	defer nodeSub.Close()
+
+	// Make sure all nodes expire so we can remove the entity.
+	_ = epochtimeTests.MustAdvanceEpoch(t, timeSource, uint64(testRuntimeNodeExpiration+2))
 
 	err := backend.DeregisterEntity(context.Background(), rt.entity.SignedDeregistration)
 	require.NoError(err, "DeregisterEntity")

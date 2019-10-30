@@ -73,7 +73,7 @@ func (tb *tendermintBackend) DeregisterEntity(ctx context.Context, sigTimestamp 
 }
 
 func (tb *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicKey, height int64) (*entity.Entity, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (tb *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicK
 }
 
 func (tb *tendermintBackend) GetEntities(ctx context.Context, height int64) ([]*entity.Entity, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +112,22 @@ func (tb *tendermintBackend) RegisterNode(ctx context.Context, sigNode *node.Sig
 	return nil
 }
 
+func (tb *tendermintBackend) UnfreezeNode(ctx context.Context, sigUnfreeze *api.SignedUnfreezeNode) error {
+	tx := app.Tx{
+		TxUnfreezeNode: &app.TxUnfreezeNode{
+			UnfreezeNode: *sigUnfreeze,
+		},
+	}
+
+	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
+		return errors.Wrap(err, "registry: unfreeze node failed")
+	}
+
+	return nil
+}
+
 func (tb *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey, height int64) (*node.Node, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -121,8 +135,17 @@ func (tb *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey
 	return q.Node(ctx, id)
 }
 
+func (tb *tendermintBackend) GetNodeStatus(ctx context.Context, id signature.PublicKey, height int64) (*api.NodeStatus, error) {
+	q, err := tb.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.NodeStatus(ctx, id)
+}
+
 func (tb *tendermintBackend) GetNodes(ctx context.Context, height int64) ([]*node.Node, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +188,7 @@ func (tb *tendermintBackend) RegisterRuntime(ctx context.Context, sigCon *api.Si
 }
 
 func (tb *tendermintBackend) GetRuntime(ctx context.Context, id signature.PublicKey, height int64) (*api.Runtime, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +212,7 @@ func (tb *tendermintBackend) Cleanup() {
 }
 
 func (tb *tendermintBackend) GetRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +221,7 @@ func (tb *tendermintBackend) GetRuntimes(ctx context.Context, height int64) ([]*
 }
 
 func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -310,15 +333,6 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, events []abcitype
 					Entity:         &dereg.Entity,
 					IsRegistration: false,
 				})
-
-				// Node deregistrations.
-				for _, node := range dereg.Nodes {
-					nodeCopy := node
-					tb.nodeNotifier.Broadcast(&api.NodeEvent{
-						Node:           &nodeCopy,
-						IsRegistration: false,
-					})
-				}
 			} else if bytes.Equal(pair.GetKey(), app.KeyRegistryNodeListEpoch) {
 				nl, err := tb.getNodeList(ctx, height)
 				if err != nil {
@@ -349,7 +363,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, events []abcitype
 
 func (tb *tendermintBackend) getNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
 	// Generate the nodelist.
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}

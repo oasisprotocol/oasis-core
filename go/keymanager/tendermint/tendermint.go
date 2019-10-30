@@ -34,7 +34,7 @@ type tendermintBackend struct {
 }
 
 func (tb *tendermintBackend) GetStatus(ctx context.Context, id signature.PublicKey, height int64) (*api.Status, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (tb *tendermintBackend) GetStatus(ctx context.Context, id signature.PublicK
 }
 
 func (tb *tendermintBackend) GetStatuses(ctx context.Context, height int64) ([]*api.Status, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (tb *tendermintBackend) WatchStatuses() (<-chan *api.Status, *pubsub.Subscr
 }
 
 func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}

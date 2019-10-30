@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 )
@@ -16,6 +17,7 @@ var (
 
 // Round is a roothash round.
 type Round struct {
+	CommitteeID hash.Hash             `json:"committee_id"`
 	ComputePool *commitment.MultiPool `json:"compute_pool"`
 	MergePool   *commitment.Pool      `json:"merge_pool"`
 
@@ -67,11 +69,13 @@ func (r *Round) UnmarshalCBOR(data []byte) error {
 }
 
 func NewRound(
+	committeeID hash.Hash,
 	computePool *commitment.MultiPool,
 	mergePool *commitment.Pool,
 	blk *block.Block,
 ) *Round {
 	r := &Round{
+		CommitteeID:  committeeID,
 		CurrentBlock: blk,
 		ComputePool:  computePool,
 		MergePool:    mergePool,

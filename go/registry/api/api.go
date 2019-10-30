@@ -54,6 +54,10 @@ var (
 	// runtime registation in the genesis document.
 	RegisterGenesisRuntimeSignatureContext = []byte("EkRunGen")
 
+	// RegisterUnfreezeNodeSignatureContext is the context used for
+	// unfreezing nodes.
+	RegisterUnfreezeNodeSignatureContext = []byte("EkUzNReg")
+
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New("registry: invalid argument")
 
@@ -100,6 +104,14 @@ var (
 	// ErrNodeExpired is the error returned when a node is expired.
 	ErrNodeExpired = errors.New("registry: node expired")
 
+	// ErrNodeCannotBeUnfrozen is the error returned when a node cannot yet be
+	// unfrozen due to the freeze period not being over yet.
+	ErrNodeCannotBeUnfrozen = errors.New("registry: node cannot be unfrozen yet")
+
+	// ErrEntityHasNodes is the error returned when an entity cannot be deregistered
+	// as it still has nodes.
+	ErrEntityHasNodes = errors.New("registry: entity still has nodes")
+
 	// ErrForbidden is the error returned when an operation is forbiden by
 	// policy.
 	ErrForbidden = errors.New("registry: forbidden by policy")
@@ -135,8 +147,17 @@ type Backend interface {
 	// The signature should be made using RegisterNodeSignatureContext.
 	RegisterNode(context.Context, *node.SignedNode) error
 
+	// UnfreezeNode unfreezes a previously frozen node.
+	//
+	// The signature should be made using RegisterUnfreezeNodeSignatureContext
+	// and must be made by the owning entity key.
+	UnfreezeNode(context.Context, *SignedUnfreezeNode) error
+
 	// GetNode gets a node by ID.
 	GetNode(context.Context, signature.PublicKey, int64) (*node.Node, error)
+
+	// GetNodeStatus returns a node's status.
+	GetNodeStatus(context.Context, signature.PublicKey, int64) (*NodeStatus, error)
 
 	// GetNodes gets a list of all registered nodes.
 	GetNodes(context.Context, int64) ([]*node.Node, error)
@@ -177,13 +198,6 @@ type Backend interface {
 	Cleanup()
 }
 
-// NodeTransport is a registered node's transport information required to
-// establish a secure connection with the node.
-type NodeTransport struct {
-	Addresses   []node.Address
-	Certificate []byte
-}
-
 // EntityEvent is the event that is returned via WatchEntities to signify
 // entity registration changes and updates.
 type EntityEvent struct {
@@ -203,6 +217,7 @@ type NodeList struct {
 	Nodes []*node.Node
 }
 
+// Timestamp is a UNIX timestamp.
 type Timestamp uint64
 
 // MarshalCBOR serializes the Timestamp type into a CBOR byte vector.
@@ -675,7 +690,7 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) e
 		)
 		return ErrNodeUpdateNotAllowed
 	}
-	if currentNode.RegistrationTime >= newNode.RegistrationTime {
+	if currentNode.RegistrationTime > newNode.RegistrationTime {
 		logger.Error("RegisterNode: current node registration time greater than new",
 			"current_registration_time", currentNode.RegistrationTime,
 			"new_registration_time", newNode.RegistrationTime,
@@ -805,6 +820,9 @@ type Genesis struct {
 	// KeyManagerOperator is the ID of the entity that is allowed to operate
 	// key manager nodes.
 	KeyManagerOperator signature.PublicKey `json:"km_operator"`
+
+	// NodeStatuses is a set of node statuses.
+	NodeStatuses map[signature.MapKey]*NodeStatus `json:"node_statuses,omitempty"`
 }
 
 // Config is the per-backend common configuration.

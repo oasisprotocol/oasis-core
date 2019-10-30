@@ -732,16 +732,15 @@ func (s *ApplicationState) CheckTxTree() *iavl.MutableTree {
 }
 
 // EpochChanged returns true iff the current epoch has changed since the
-// last block.  As a matter of convenience, the current epoch is returned
-// iff it has changed.
-func (s *ApplicationState) EpochChanged(timeSource epochtime.Backend) (bool, epochtime.EpochTime) {
+// last block.  As a matter of convenience, the current epoch is returned.
+func (s *ApplicationState) EpochChanged(ctx *Context, timeSource epochtime.Backend) (bool, epochtime.EpochTime) {
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
 		return false, epochtime.EpochInvalid
 	} else if blockHeight == 1 {
 		// There is no block before the first block. For historic reasons, this is defined as not
 		// having had a transition.
-		currentEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight)
+		currentEpoch, err := timeSource.GetEpoch(ctx.Ctx(), blockHeight)
 		if err != nil {
 			s.logger.Error("EpochChanged: failed to get current epoch",
 				"err", err,
@@ -751,14 +750,14 @@ func (s *ApplicationState) EpochChanged(timeSource epochtime.Backend) (bool, epo
 		return false, currentEpoch
 	}
 
-	previousEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight-1)
+	previousEpoch, err := timeSource.GetEpoch(ctx.Ctx(), blockHeight)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get previous epoch",
 			"err", err,
 		)
 		return false, epochtime.EpochInvalid
 	}
-	currentEpoch, err := timeSource.GetEpoch(s.ctx, blockHeight)
+	currentEpoch, err := timeSource.GetEpoch(ctx.Ctx(), blockHeight+1)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get current epoch",
 			"err", err,
@@ -767,7 +766,7 @@ func (s *ApplicationState) EpochChanged(timeSource epochtime.Backend) (bool, epo
 	}
 
 	if previousEpoch == currentEpoch {
-		return false, epochtime.EpochInvalid
+		return false, currentEpoch
 	}
 
 	s.logger.Debug("EpochChanged: epoch transition detected",

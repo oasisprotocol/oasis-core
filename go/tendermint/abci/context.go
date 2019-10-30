@@ -1,6 +1,8 @@
 package abci
 
 import (
+	"bytes"
+	"context"
 	"time"
 
 	"github.com/tendermint/iavl"
@@ -8,6 +10,8 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
 )
+
+type contextKey struct{}
 
 // ContextType is a context type.
 type ContextType uint
@@ -43,6 +47,18 @@ func NewContext(outputType ContextType, now time.Time, state *ApplicationState) 
 		currentTime: now,
 		state:       state,
 	}
+}
+
+// FromCtx extracts an ABCI context from a context.Context if one has been
+// set. Otherwise it returns nil.
+func FromCtx(ctx context.Context) *Context {
+	abciCtx, _ := ctx.Value(contextKey{}).(*Context)
+	return abciCtx
+}
+
+// Ctx returns a context.Context that is associated with this ABCI context.
+func (c *Context) Ctx() context.Context {
+	return context.WithValue(c.state.ctx, contextKey{}, c)
 }
 
 // Type returns the type of this output.
@@ -86,6 +102,24 @@ func (c *Context) GetEvents() []types.Event {
 	return c.events
 }
 
+// HasEvent checks if a specific event has been emitted.
+func (c *Context) HasEvent(evType string, key []byte) bool {
+	evType = api.EventTypeForApp(evType)
+
+	for _, ev := range c.events {
+		if ev.Type != evType {
+			continue
+		}
+
+		for _, pair := range ev.Attributes {
+			if bytes.Equal(pair.GetKey(), key) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Now returns the current tendermint time.
 func (c *Context) Now() time.Time {
 	return c.currentTime
@@ -97,6 +131,11 @@ func (c *Context) State() *iavl.MutableTree {
 		return c.state.CheckTxTree()
 	}
 	return c.state.DeliverTxTree()
+}
+
+// BlockHeight returns the current block height.
+func (c *Context) BlockHeight() int64 {
+	return c.state.BlockHeight()
 }
 
 // NewStateCheckpoint creates a new state checkpoint.

@@ -47,6 +47,10 @@ var (
 	// vector of node descriptors).
 	KeyNodesExpired = []byte("nodes.expired")
 
+	// KeyNodeUnfrozen is the ABCI event attribute for when nodes
+	// become unfrozen (value is CBOR serialized node ID).
+	KeyNodeUnfrozen = []byte("nodes.unfrozen")
+
 	// KeyRegistryNodeListEpoch is the ABCI event attribute for
 	// registry epochs.
 	KeyRegistryNodeListEpoch = []byte("nodes.epoch")
@@ -57,35 +61,38 @@ type Tx struct {
 	*TxRegisterEntity   `json:"RegisterEntity,omitempty"`
 	*TxDeregisterEntity `json:"DeregisterEntity,omitempty"`
 	*TxRegisterNode     `json:"RegisterNode,omitempty"`
+	*TxUnfreezeNode     `json:"UnfreezeNode,omitempty"`
 
 	*TxRegisterRuntime `json:"RegisterRuntime,omitempty"`
 }
 
 // TxRegisterEntity is a transaction for registering a new entity.
 type TxRegisterEntity struct {
-	Entity entity.SignedEntity
+	Entity entity.SignedEntity `json:"entity"`
 }
 
 // TxDeregisterEntity is a transaction for deregistering an entity.
 type TxDeregisterEntity struct {
-	Timestamp signature.Signed
+	Timestamp signature.Signed `json:"timestamp"`
 }
 
 // TxRegisterNode is a transaction for registering a new node.
 type TxRegisterNode struct {
-	Node node.SignedNode
+	Node node.SignedNode `json:"node"`
+}
+
+// TxUnfreezeNode is a transaction for unfreezing a node.
+type TxUnfreezeNode struct {
+	UnfreezeNode registry.SignedUnfreezeNode `json:"unfreeze_node"`
 }
 
 // TxRegisterRuntime is a transaction for registering a new runtime.
 type TxRegisterRuntime struct {
-	Runtime registry.SignedRuntime
+	Runtime registry.SignedRuntime `json:"runtime"`
 }
 
-// EntityDeregistration is a entity deregistration.
+// EntityDeregistration is an entity deregistration.
 type EntityDeregistration struct {
 	// Deregistered entity.
-	Entity entity.Entity
-
-	// Deregistered nodes (if any).
-	Nodes []node.Node
+	Entity entity.Entity `json:"entity"`
 }

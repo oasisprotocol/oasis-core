@@ -19,6 +19,7 @@ import (
 func (app *stakingApplication) initParameters(state *stakingState.MutableState, st *staking.Genesis) {
 	state.SetDebondingInterval(uint64(st.DebondingInterval))
 	state.SetAcceptableTransferPeers(st.AcceptableTransferPeers)
+	state.SetSlashing(st.Slashing)
 }
 
 func (app *stakingApplication) initThresholds(state *stakingState.MutableState, st *staking.Genesis) error {
@@ -335,6 +336,11 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		return nil, err
 	}
 
+	slashing, err := sq.state.Slashing()
+	if err != nil {
+		return nil, err
+	}
+
 	gen := staking.Genesis{
 		TotalSupply:             *totalSupply,
 		CommonPool:              *commonPool,
@@ -344,6 +350,7 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		Ledger:                  ledger,
 		Delegations:             delegations,
 		DebondingDelegations:    debondingDelegations,
+		Slashing:                slashing,
 	}
 	return &gen, nil
 }

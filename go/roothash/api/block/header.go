@@ -34,6 +34,7 @@ const (
 	// EpochTransition is a header resulting from an epoch transition.
 	// Such a header contains no transactions but advances the round as
 	// normal.
+	// TODO: Consider renaming this to CommitteeTransition.
 	EpochTransition HeaderType = 2
 )
 

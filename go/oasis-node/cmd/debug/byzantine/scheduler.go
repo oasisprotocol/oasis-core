@@ -54,7 +54,7 @@ func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.C
 }
 
 func schedulerGetCommittee(ht *honestTendermint, height int64, kind scheduler.CommitteeKind, runtimeID signature.PublicKey) (*scheduler.Committee, error) {
-	q, err := ht.schedulerQuery.QueryAt(height)
+	q, err := ht.schedulerQuery.QueryAt(context.Background(), height)
 	if err != nil {
 		return nil, errors.Wrap(err, "Tendermint QueryAt scheduler")
 	}

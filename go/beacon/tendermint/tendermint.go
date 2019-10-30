@@ -25,7 +25,7 @@ type tendermintBackend struct {
 }
 
 func (t *tendermintBackend) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
-	q, err := t.querier.QueryAt(height)
+	q, err := t.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}

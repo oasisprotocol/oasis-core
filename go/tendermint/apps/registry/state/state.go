@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
+	tmcrypto "github.com/oasislabs/oasis-core/go/tendermint/crypto"
 )
 
 var (
@@ -35,6 +36,19 @@ var (
 	//
 	// Value is key manager operator public key.
 	keyManagerOperatorKeyFmt = keyformat.New(0x14)
+	// nodeByConsAddressKeyFmt is the key format used for the consensus address to
+	// node public key mapping.
+	//
+	// The only reason why this is needed is because Tendermint only gives you
+	// the validator address (which is the truncated SHA-256 of the public key) in
+	// evidence instead of the actual public key.
+	//
+	// Value is binary node public key.
+	nodeByConsAddressKeyFmt = keyformat.New(0x15, []byte{})
+	// nodeStatusKeyFmt is the key format used for node statuses.
+	//
+	// Value is CBOR-serialized node status.
+	nodeStatusKeyFmt = keyformat.New(0x16, &signature.MapKey{})
 )
 
 type ImmutableState struct {
@@ -140,6 +154,19 @@ func (s *ImmutableState) Node(id signature.PublicKey) (*node.Node, error) {
 		return nil, err
 	}
 	return &node, nil
+}
+
+func (s *ImmutableState) NodeByConsensusAddress(address []byte) (*node.Node, error) {
+	_, rawID := s.Snapshot.Get(nodeByConsAddressKeyFmt.Encode(address))
+	if rawID == nil {
+		return nil, registry.ErrNoSuchNode
+	}
+
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(rawID); err != nil {
+		return nil, err
+	}
+	return s.Node(id)
 }
 
 func (s *ImmutableState) Nodes() ([]*node.Node, error) {
@@ -288,6 +315,63 @@ func (s *ImmutableState) KeyManagerOperator() signature.PublicKey {
 	return id
 }
 
+func (s *ImmutableState) NodeStatus(id signature.PublicKey) (*registry.NodeStatus, error) {
+	_, value := s.Snapshot.Get(nodeStatusKeyFmt.Encode(&id))
+	if value == nil {
+		return nil, registry.ErrNoSuchNode
+	}
+
+	var status registry.NodeStatus
+	if err := cbor.Unmarshal(value, &status); err != nil {
+		return nil, err
+	}
+	return &status, nil
+}
+
+func (s *ImmutableState) NodeStatuses() (map[signature.MapKey]*registry.NodeStatus, error) {
+	statuses := make(map[signature.MapKey]*registry.NodeStatus)
+	s.Snapshot.IterateRange(
+		nodeStatusKeyFmt.Encode(),
+		nil,
+		true,
+		func(key, value []byte) bool {
+			var nodeID signature.MapKey
+			if !nodeStatusKeyFmt.Decode(key, &nodeID) {
+				return true
+			}
+
+			var status registry.NodeStatus
+			if err := cbor.Unmarshal(value, &status); err != nil {
+				panic("tendermint/registry: corrupted state: " + err.Error())
+			}
+
+			statuses[nodeID] = &status
+
+			return false
+		},
+	)
+
+	return statuses, nil
+}
+
+func (s *ImmutableState) HasEntityNodes(id signature.PublicKey) (bool, error) {
+	result := true
+	s.Snapshot.IterateRange(
+		signedNodeByEntityKeyFmt.Encode(&id),
+		nil,
+		true,
+		func(key, value []byte) bool {
+			var entityID signature.PublicKey
+			if !signedNodeByEntityKeyFmt.Decode(key, &entityID) || !entityID.Equal(id) {
+				result = false
+			}
+			// Stop immediately as we are only interested in one result.
+			return true
+		},
+	)
+	return result, nil
+}
+
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -308,42 +392,18 @@ func (s *MutableState) CreateEntity(ent *entity.Entity, sigEnt *entity.SignedEnt
 	s.tree.Set(signedEntityKeyFmt.Encode(&ent.ID), sigEnt.MarshalCBOR())
 }
 
-func (s *MutableState) RemoveEntity(id signature.PublicKey) (entity.Entity, []node.Node) {
-	var removedSignedEntity entity.SignedEntity
-	var removedEntity entity.Entity
-	var removedNodes []node.Node
+func (s *MutableState) RemoveEntity(id signature.PublicKey) (*entity.Entity, error) {
 	data, removed := s.tree.Remove(signedEntityKeyFmt.Encode(&id))
 	if removed {
-		// Remove any associated nodes.
-		s.tree.IterateRangeInclusive(
-			signedNodeByEntityKeyFmt.Encode(&id),
-			nil,
-			true,
-			func(key, value []byte, version int64) bool {
-				// Remove all dependent nodes.
-				var entityID, nodeID signature.PublicKey
-				if !signedNodeByEntityKeyFmt.Decode(key, &entityID, &nodeID) || !entityID.Equal(id) {
-					return true
-				}
-
-				nodeData, _ := s.tree.Remove(signedNodeKeyFmt.Encode(&nodeID))
-				s.tree.Remove(key)
-
-				var removedSignedNode node.SignedNode
-				var removedNode node.Node
-				cbor.MustUnmarshal(nodeData, &removedSignedNode)
-				cbor.MustUnmarshal(removedSignedNode.Blob, &removedNode)
-
-				removedNodes = append(removedNodes, removedNode)
-				return false
-			},
-		)
+		var removedSignedEntity entity.SignedEntity
+		var removedEntity entity.Entity
 
 		cbor.MustUnmarshal(data, &removedSignedEntity)
 		cbor.MustUnmarshal(removedSignedEntity.Blob, &removedEntity)
+		return &removedEntity, nil
 	}
 
-	return removedEntity, removedNodes
+	return nil, registry.ErrNoSuchEntity
 }
 
 func (s *MutableState) CreateNode(node *node.Node, signedNode *node.SignedNode) error {
@@ -356,12 +416,22 @@ func (s *MutableState) CreateNode(node *node.Node, signedNode *node.SignedNode) 
 	s.tree.Set(signedNodeKeyFmt.Encode(&node.ID), signedNode.MarshalCBOR())
 	s.tree.Set(signedNodeByEntityKeyFmt.Encode(&node.EntityID, &node.ID), []byte(""))
 
+	address := []byte(tmcrypto.PublicKeyToTendermint(&node.Consensus.ID).Address())
+	rawNodeID, err := node.ID.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	s.tree.Set(nodeByConsAddressKeyFmt.Encode(address), rawNodeID)
+
 	return nil
 }
 
 func (s *MutableState) RemoveNode(node *node.Node) {
 	s.tree.Remove(signedNodeKeyFmt.Encode(&node.ID))
 	s.tree.Remove(signedNodeByEntityKeyFmt.Encode(&node.EntityID, &node.ID))
+
+	address := []byte(tmcrypto.PublicKeyToTendermint(&node.Consensus.ID).Address())
+	s.tree.Remove(nodeByConsAddressKeyFmt.Encode(address))
 }
 
 func (s *MutableState) CreateRuntime(rt *registry.Runtime, sigRt *registry.SignedRuntime) error {
@@ -383,6 +453,11 @@ func (s *MutableState) SetKeyManagerOperator(id signature.PublicKey) {
 
 	value, _ := id.MarshalBinary()
 	s.tree.Set(keyManagerOperatorKeyFmt.Encode(), value)
+}
+
+func (s *MutableState) SetNodeStatus(id signature.PublicKey, status *registry.NodeStatus) error {
+	s.tree.Set(nodeStatusKeyFmt.Encode(&id), cbor.Marshal(status))
+	return nil
 }
 
 // NewMutableState creates a new mutable registry state wrapper.

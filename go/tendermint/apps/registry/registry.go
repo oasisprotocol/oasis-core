@@ -2,7 +2,6 @@
 package registry
 
 import (
-	"context"
 	"encoding/hex"
 
 	"github.com/pkg/errors"
@@ -63,7 +62,7 @@ func (app *registryApplication) SetOption(request types.RequestSetOption) types.
 
 func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// XXX: With PR#1889 this can be a differnet interval.
-	if changed, registryEpoch := app.state.EpochChanged(app.timeSource); changed {
+	if changed, registryEpoch := app.state.EpochChanged(ctx, app.timeSource); changed {
 		return app.onRegistryEpochChanged(ctx, registryEpoch)
 	}
 	return nil
@@ -86,6 +85,8 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error
 		return app.deregisterEntity(ctx, state, &tx.TxDeregisterEntity.Timestamp)
 	} else if tx.TxRegisterNode != nil {
 		return app.registerNode(ctx, state, &tx.TxRegisterNode.Node)
+	} else if tx.TxUnfreezeNode != nil {
+		return app.unfreezeNode(ctx, state, &tx.TxUnfreezeNode.UnfreezeNode)
 	} else if tx.TxRegisterRuntime != nil {
 		if !app.cfg.DebugAllowRuntimeRegistration {
 			return registry.ErrForbidden
@@ -109,6 +110,7 @@ func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) error {
 
 func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, registryEpoch epochtime.EpochTime) error {
 	state := registryState.NewMutableState(ctx.State())
+	stakeState := stakingState.NewMutableState(ctx.State())
 
 	nodes, err := state.Nodes()
 	if err != nil {
@@ -118,13 +120,48 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 		return errors.Wrap(err, "registry: onRegistryEpochChanged: failed to get nodes")
 	}
 
+	debondingInterval, err := stakeState.DebondingInterval()
+	if err != nil {
+		app.logger.Error("onRegistryEpochChanged: failed to get debonding interval",
+			"err", err,
+		)
+		return errors.Wrap(err, "registry: onRegistryEpochChanged: failed to get debonding interval")
+	}
+
+	// When a node expires, it is kept around for up to the debonding
+	// period and then removed. This is required so that expired nodes
+	// can still get slashed while inside the debonding interval as
+	// otherwise the nodes could not be resolved.
 	var expiredNodes []*node.Node
 	for _, node := range nodes {
-		if epochtime.EpochTime(node.Expiration) >= registryEpoch {
+		if !node.IsExpired(uint64(registryEpoch)) {
 			continue
 		}
-		expiredNodes = append(expiredNodes, node)
-		state.RemoveNode(node)
+
+		// Fetch node status to check whether we have already processed the
+		// node expiration (this is required so that we don't emit expiration
+		// events every epoch).
+		var status *registry.NodeStatus
+		status, err = state.NodeStatus(node.ID)
+		if err != nil {
+			return errors.Wrap(err, "registry: onRegistryEpochChanged: couldn't get node status")
+		}
+
+		if !status.ExpirationProcessed {
+			expiredNodes = append(expiredNodes, node)
+			status.ExpirationProcessed = true
+			if err = state.SetNodeStatus(node.ID, status); err != nil {
+				return errors.Wrap(err, "registry: onRegistryEpochChanged: couldn't set node status")
+			}
+		}
+
+		// If node has been expired for the debonding interval, finally remove it.
+		if node.Expiration+debondingInterval < uint64(registryEpoch) {
+			app.logger.Debug("removing expired node",
+				"node_id", node.ID,
+			)
+			state.RemoveNode(node)
+		}
 	}
 
 	// Emit the RegistryNodeListEpoch notification event.
@@ -210,7 +247,25 @@ func (app *registryApplication) deregisterEntity(
 		}
 	}
 
-	removedEntity, removedNodes := state.RemoveEntity(id)
+	// Prevent entity deregistration if there are any registered nodes.
+	hasNodes, err := state.HasEntityNodes(id)
+	if err != nil {
+		app.logger.Error("DeregisterEntity: failed to check for nodes",
+			"err", err,
+		)
+		return err
+	}
+	if hasNodes {
+		app.logger.Error("DeregisterEntity: entity still has nodes",
+			"entity_id", id,
+		)
+		return registry.ErrEntityHasNodes
+	}
+
+	removedEntity, err := state.RemoveEntity(id)
+	if err != nil {
+		return err
+	}
 
 	if !ctx.IsCheckOnly() {
 		app.logger.Debug("DeregisterEntity: complete",
@@ -218,8 +273,7 @@ func (app *registryApplication) deregisterEntity(
 		)
 
 		tagV := &EntityDeregistration{
-			Entity: removedEntity,
-			Nodes:  removedNodes,
+			Entity: *removedEntity,
 		}
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEntityDeregistered, cbor.Marshal(tagV)))
 	}
@@ -289,19 +343,19 @@ func (app *registryApplication) registerNode(
 	}
 
 	// Ensure node is not expired.
-	epoch, err := app.timeSource.GetEpoch(context.Background(), app.state.BlockHeight())
+	epoch, err := app.timeSource.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}
-	if epochtime.EpochTime(newNode.Expiration) < epoch {
+	if newNode.IsExpired(uint64(epoch)) {
 		return registry.ErrNodeExpired
 	}
 
 	// Check if node exists.
 	existingNode, err := state.Node(newNode.ID)
-	if err != nil {
-		if err == registry.ErrNoSuchNode {
-			// Node doesn't exist. Create node.
+	if err != nil || existingNode.IsExpired(uint64(epoch)) {
+		if err == registry.ErrNoSuchNode || existingNode.IsExpired(uint64(epoch)) {
+			// Node doesn't exist (or is expired). Create node.
 			if err = state.CreateNode(newNode, sigNode); err != nil {
 				app.logger.Error("RegisterNode: failed to create node",
 					"err", err,
@@ -309,6 +363,30 @@ func (app *registryApplication) registerNode(
 					"entity", newNode.EntityID,
 				)
 				return registry.ErrBadEntityForNode
+			}
+
+			var status *registry.NodeStatus
+			if existingNode != nil {
+				// Node exists but is expired, fetch existing status.
+				if status, err = state.NodeStatus(newNode.ID); err != nil {
+					app.logger.Error("RegisterNode: failed to get node status",
+						"err", err,
+					)
+					return registry.ErrInvalidArgument
+				}
+
+				// Reset expiration processed flag as the node is live again.
+				status.ExpirationProcessed = false
+			} else {
+				// Node doesn't exist, create empty status.
+				status = &registry.NodeStatus{}
+			}
+
+			if err = state.SetNodeStatus(newNode.ID, status); err != nil {
+				app.logger.Error("RegisterNode: failed to set node status",
+					"err", err,
+				)
+				return registry.ErrInvalidArgument
 			}
 		} else {
 			app.logger.Error("RegisterNode: failed to register node",
@@ -347,6 +425,77 @@ func (app *registryApplication) registerNode(
 		)
 
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeRegistered, cbor.Marshal(newNode)))
+	}
+
+	return nil
+}
+
+func (app *registryApplication) unfreezeNode(
+	ctx *abci.Context,
+	state *registryState.MutableState,
+	sigUnfreeze *registry.SignedUnfreezeNode,
+) error {
+	var unfreeze registry.UnfreezeNode
+	if err := sigUnfreeze.Open(registry.RegisterUnfreezeNodeSignatureContext, &unfreeze); err != nil {
+		return err
+	}
+
+	// Verify timestamp.
+	if err := registry.VerifyTimestamp(unfreeze.Timestamp, uint64(ctx.Now().Unix())); err != nil {
+		app.logger.Error("UnfreezeNode: INVALID TIMESTAMP",
+			"unfreeze_timestamp", unfreeze.Timestamp,
+			"now", uint64(ctx.Now().Unix()),
+		)
+		return err
+	}
+
+	// Fetch node descriptor.
+	node, err := state.Node(unfreeze.NodeID)
+	if err != nil {
+		app.logger.Error("UnfreezeNode: failed to fetch node",
+			"err", err,
+			"node_id", unfreeze.NodeID,
+			"entity_id", sigUnfreeze.Signature.PublicKey,
+		)
+		return err
+	}
+	// Make sure that the unfreeze request was signed by the owning entity.
+	if !sigUnfreeze.Signature.PublicKey.Equal(node.EntityID) {
+		return registry.ErrBadEntityForNode
+	}
+
+	// Fetch node status.
+	status, err := state.NodeStatus(unfreeze.NodeID)
+	if err != nil {
+		app.logger.Error("UnfreezeNode: failed to fetch node status",
+			"err", err,
+			"node_id", unfreeze.NodeID,
+			"entity_id", node.EntityID,
+		)
+		return err
+	}
+
+	// Ensure if we can actually unfreeze.
+	epoch, err := app.timeSource.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	if err != nil {
+		return err
+	}
+	if status.FreezeEndTime > epoch {
+		return registry.ErrNodeCannotBeUnfrozen
+	}
+
+	// Reset frozen status.
+	status.Unfreeze()
+	if err = state.SetNodeStatus(node.ID, status); err != nil {
+		return err
+	}
+
+	if !ctx.IsCheckOnly() {
+		app.logger.Debug("UnfreezeNode: unfrozen",
+			"node_id", node.ID,
+		)
+
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeUnfrozen, cbor.Marshal(node.ID)))
 	}
 
 	return nil

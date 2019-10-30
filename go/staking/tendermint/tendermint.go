@@ -48,7 +48,7 @@ func (tb *tendermintBackend) Symbol() string {
 }
 
 func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*api.Quantity, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*ap
 }
 
 func (tb *tendermintBackend) CommonPool(ctx context.Context, height int64) (*api.Quantity, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func (tb *tendermintBackend) CommonPool(ctx context.Context, height int64) (*api
 }
 
 func (tb *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKind, height int64) (*api.Quantity, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (tb *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKi
 }
 
 func (tb *tendermintBackend) Accounts(ctx context.Context, height int64) ([]signature.PublicKey, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (tb *tendermintBackend) Accounts(ctx context.Context, height int64) ([]sign
 }
 
 func (tb *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey, height int64) (*api.Account, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (tb *tendermintBackend) AccountInfo(ctx context.Context, owner signature.Pu
 }
 
 func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.MapKey][]*api.DebondingDelegation, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +153,23 @@ func (tb *tendermintBackend) ReclaimEscrow(ctx context.Context, signedReclaim *a
 	return nil
 }
 
+func (tb *tendermintBackend) SubmitEvidence(ctx context.Context, evidence api.Evidence) error {
+	if evidence.Kind() != api.EvidenceKindConsensus {
+		return errors.New("staking: unsupported evidence kind")
+	}
+
+	tmEvidence, ok := evidence.Unwrap().(tmtypes.Evidence)
+	if !ok {
+		return errors.New("staking: expected tendermint evidence, got something else")
+	}
+
+	if err := tb.service.BroadcastEvidence(ctx, tmEvidence); err != nil {
+		return errors.Wrap(err, "staking: broadcast evidence failed")
+	}
+
+	return nil
+}
+
 func (tb *tendermintBackend) WatchTransfers() (<-chan *api.TransferEvent, *pubsub.Subscription) {
 	typedCh := make(chan *api.TransferEvent)
 	sub := tb.transferNotifier.Subscribe()
@@ -175,7 +192,7 @@ func (tb *tendermintBackend) WatchEscrows() (<-chan interface{}, *pubsub.Subscri
 }
 
 func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := tb.querier.QueryAt(height)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}

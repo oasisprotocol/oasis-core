@@ -75,7 +75,7 @@ func (app *beaconApplication) InitChain(ctx *abci.Context, req types.RequestInit
 }
 
 func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeginBlock) error {
-	if changed, beaconEpoch := app.state.EpochChanged(app.timeSource); changed {
+	if changed, beaconEpoch := app.state.EpochChanged(ctx, app.timeSource); changed {
 		return app.onBeaconEpochChange(ctx, beaconEpoch, req)
 	}
 	return nil
@@ -104,7 +104,7 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 	case false:
 		entropyCtx = prodEntropyCtx
 
-		height := app.state.BlockHeight()
+		height := ctx.BlockHeight()
 		if height <= 1 {
 			// No meaningful previous commit, use the block hash.  This isn't
 			// fantastic, but it's only for one epoch.
@@ -136,7 +136,7 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 		"epoch", epoch,
 		"beacon", hex.EncodeToString(b),
 		"block_hash", hex.EncodeToString(entropy),
-		"height", app.state.BlockHeight(),
+		"height", ctx.BlockHeight(),
 	)
 
 	return app.onNewBeacon(ctx, b)

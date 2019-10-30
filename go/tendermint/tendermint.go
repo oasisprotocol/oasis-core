@@ -350,6 +350,11 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 	}
 }
 
+func (t *tendermintService) BroadcastEvidence(ctx context.Context, evidence tmtypes.Evidence) error {
+	_, err := t.client.BroadcastEvidence(evidence)
+	return err
+}
+
 func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
 	// Note: The tendermint documentation claims using SubscribeUnbuffered can
 	// freeze the server, however, the buffered Subscribe can drop events, and
@@ -591,8 +596,9 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 		return nil, errors.Wrap(err, "tendermint: failed to serialize genesis doc")
 	}
 	doc := tmtypes.GenesisDoc{
-		ChainID:         d.ChainID,
-		GenesisTime:     d.Time,
+		ChainID:     d.ChainID,
+		GenesisTime: d.Time,
+		// TODO: Configure Evidence.MaxAge once these are in genesis.
 		ConsensusParams: tmtypes.DefaultConsensusParams(),
 		AppState:        b,
 	}

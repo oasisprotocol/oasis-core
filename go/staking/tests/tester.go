@@ -14,8 +14,13 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 )
 
@@ -46,6 +51,12 @@ var (
 			// test runtime 0 from roothash tester
 			publicKeyFromHex("612b31ddd66fc99e41cc9996f4029ea84752785d7af329d4595c4bcf8f5e4215").ToMapKey(): true,
 		},
+		Slashing: map[api.SlashReason]api.Slash{
+			api.SlashDoubleSigning: api.Slash{
+				Share:          QtyFromInt(100_000), // Slash everything.
+				FreezeInterval: 1,
+			},
+		},
 	}
 
 	testTotalSupply = QtyFromInt(math.MaxInt64)
@@ -59,7 +70,17 @@ var (
 
 // StakingImplementationTests exercises the basic functionality of a
 // staking token backend.
-func StakingImplementationTests(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
+func StakingImplementationTests(
+	t *testing.T,
+	backend api.Backend,
+	timeSource epochtime.SetableBackend,
+	registry registry.Backend,
+	roothash roothash.Backend,
+	identity *identity.Identity,
+	entity *entity.Entity,
+	entitySigner signature.Signer,
+	runtimeID signature.PublicKey,
+) {
 	for _, tc := range []struct {
 		n  string
 		fn func(*testing.T, api.Backend, epochtime.SetableBackend)
@@ -73,6 +94,11 @@ func StakingImplementationTests(t *testing.T, backend api.Backend, timeSource ep
 	} {
 		t.Run(tc.n, func(t *testing.T) { tc.fn(t, backend, timeSource) })
 	}
+
+	// Separate test as it requires some arguments that others don't.
+	t.Run("SlashDoubleSigning", func(t *testing.T) {
+		testSlashDoubleSigning(t, backend, timeSource, registry, roothash, identity, entity, entitySigner, runtimeID)
+	})
 }
 
 func testInitialEnv(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
@@ -256,14 +282,21 @@ func testBurn(t *testing.T, backend api.Backend, timeSource epochtime.SetableBac
 }
 
 func testEscrow(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
-	testEscrowEx(t, backend, timeSource, SrcID, DestID)
+	testEscrowEx(t, backend, timeSource, SrcID, srcSigner, DestID)
 }
 
 func testSelfEscrow(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
-	testEscrowEx(t, backend, timeSource, SrcID, SrcID)
+	testEscrowEx(t, backend, timeSource, SrcID, srcSigner, SrcID)
 }
 
-func testEscrowEx(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend, srcID signature.PublicKey, dstID signature.PublicKey) {
+func testEscrowEx(
+	t *testing.T,
+	backend api.Backend,
+	timeSource epochtime.SetableBackend,
+	srcID signature.PublicKey,
+	srcSigner signature.Signer,
+	dstID signature.PublicKey,
+) {
 	require := require.New(t)
 
 	srcAcc, err := backend.AccountInfo(context.Background(), srcID, 0)
@@ -460,6 +493,118 @@ func testEscrowEx(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	debs, err = backend.DebondingDelegations(context.Background(), srcID, 0)
 	require.NoError(err, "DebondingDelegations")
 	require.Len(debs, 0, "no debonding delegations after failed reclaim")
+}
+
+func testSlashDoubleSigning(
+	t *testing.T,
+	backend api.Backend,
+	timeSource epochtime.SetableBackend,
+	reg registry.Backend,
+	roothash roothash.Backend,
+	ident *identity.Identity,
+	ent *entity.Entity,
+	entSigner signature.Signer,
+	runtimeID signature.PublicKey,
+) {
+	require := require.New(t)
+
+	// Delegate some stake to the validator so we can check if slashing works.
+	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
+	require.NoError(err, "AccountInfo")
+
+	escrowCh, escrowSub := backend.WatchEscrows()
+	defer escrowSub.Close()
+
+	escrow := &api.Escrow{
+		Nonce:   srcAcc.General.Nonce,
+		Account: ent.ID,
+		Tokens:  QtyFromInt(math.MaxUint32),
+	}
+	signed, err := api.SignEscrow(srcSigner, escrow)
+	require.NoError(err, "Sign escrow")
+
+	err = backend.AddEscrow(context.Background(), signed)
+	require.NoError(err, "AddEscrow")
+
+	select {
+	case rawEv := <-escrowCh:
+		ev := rawEv.(*api.EscrowEvent)
+		require.Equal(SrcID, ev.Owner, "Event: owner")
+		require.Equal(ent.ID, ev.Escrow, "Event: escrow")
+		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive escrow event")
+	}
+
+	// Subscribe to roothash blocks.
+	blocksCh, blocksSub, err := roothash.WatchBlocks(runtimeID)
+	require.NoError(err, "WatchBlocks")
+	defer blocksSub.Close()
+
+	// Subscribe to slash events.
+	slashCh, slashSub := backend.WatchEscrows()
+	defer slashSub.Close()
+
+	// Broadcast evidence. This is Tendermint-specific, if we ever have more than one
+	// consensus backend, we need to change this part.
+	err = backend.SubmitEvidence(context.Background(), tendermintMakeDoubleSignEvidence(t, ident))
+	require.NoError(err, "SubmitEvidence")
+
+	// Wait for the node to get slashed.
+WaitLoop:
+	for {
+		select {
+		case ev := <-slashCh:
+			if e, ok := ev.(*api.TakeEscrowEvent); ok {
+				require.Equal(ent.ID, e.Owner, "TakeEscrowEvent - owner must be entity")
+				// All tokens must be slashed as defined in debugGenesisState.
+				require.Equal(escrow.Tokens, e.Tokens, "TakeEscrowEvent - all tokens slashed")
+				break WaitLoop
+			}
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive slash event")
+		}
+	}
+
+	// Make sure the node is frozen.
+	nodeStatus, err := reg.GetNodeStatus(context.Background(), ident.NodeSigner.Public(), 0)
+	require.NoError(err, "GetNodeStatus")
+	require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
+	require.True(nodeStatus.IsFrozen(), "IsFrozen() should return true")
+
+	// Make sure node cannot be unfrozen.
+	unfreeze := registry.UnfreezeNode{
+		NodeID:    ident.NodeSigner.Public(),
+		Timestamp: uint64(time.Now().Unix()),
+	}
+	signedUnfreeze, err := registry.SignUnfreezeNode(entSigner, registry.RegisterUnfreezeNodeSignatureContext, &unfreeze)
+	require.NoError(err, "SignUnfreezeNode")
+	err = reg.UnfreezeNode(context.Background(), signedUnfreeze)
+	require.Error(err, "UnfreezeNode")
+
+	// Wait for roothash block as re-scheduling must have taken place due to slashing.
+	select {
+	case blk := <-blocksCh:
+		require.Equal(block.EpochTransition, blk.Block.Header.HeaderType)
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive roothash block")
+	}
+
+	// Advance epoch to make the freeze period expire.
+	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+
+	// Unfreeze node (now it should work).
+	err = reg.UnfreezeNode(context.Background(), signedUnfreeze)
+	require.NoError(err, "UnfreezeNode")
+
+	// Advance epoch to restore committees.
+	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+
+	// Make sure the node is no longer frozen.
+	nodeStatus, err = reg.GetNodeStatus(context.Background(), ident.NodeSigner.Public(), 0)
+	require.NoError(err, "GetNodeStatus")
+	require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
+	require.False(nodeStatus.IsFrozen(), "IsFrozen() should return false")
 }
 
 func mustGenerateSigner() signature.Signer {
