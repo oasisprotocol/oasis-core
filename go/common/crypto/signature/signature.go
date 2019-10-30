@@ -114,7 +114,7 @@ type PublicKey ed25519.PublicKey
 
 // Verify returns true iff the signature is valid for the public key
 // over the context and message.
-func (k PublicKey) Verify(context, message, sig []byte) bool {
+func (k PublicKey) Verify(context Context, message, sig []byte) bool {
 	if len(k) != PublicKeySize {
 		return false
 	}
@@ -339,7 +339,7 @@ type Signature struct {
 
 // Sign generates a signature with the private key over the context and
 // message.
-func Sign(signer Signer, context, message []byte) (*Signature, error) {
+func Sign(signer Signer, context Context, message []byte) (*Signature, error) {
 	signature, err := signer.ContextSign(context, message)
 	if err != nil {
 		return nil, err
@@ -355,7 +355,7 @@ func Sign(signer Signer, context, message []byte) (*Signature, error) {
 
 // Verify returns true iff the signature is valid over the given
 // context and message.
-func (s *Signature) Verify(context, message []byte) bool {
+func (s *Signature) Verify(context Context, message []byte) bool {
 	return s.PublicKey.Verify(context, message, s.Signature[:])
 }
 
@@ -456,7 +456,7 @@ type Signed struct {
 
 // SignSigned generates a Signed with the Signer over the context and
 // CBOR-serialized message.
-func SignSigned(signer Signer, context []byte, src cbor.Marshaler) (*Signed, error) {
+func SignSigned(signer Signer, context Context, src cbor.Marshaler) (*Signed, error) {
 	data := src.MarshalCBOR()
 	signature, err := Sign(signer, context, data)
 	if err != nil {
@@ -467,7 +467,7 @@ func SignSigned(signer Signer, context []byte, src cbor.Marshaler) (*Signed, err
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *Signed) Open(context []byte, dst cbor.Unmarshaler) error {
+func (s *Signed) Open(context Context, dst cbor.Unmarshaler) error {
 	// Verify signature first.
 	if !s.Signature.Verify(context, s.Blob) {
 		return ErrVerifyFailed
@@ -510,13 +510,13 @@ type SignedPublicKey struct {
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedPublicKey) Open(context []byte, pub *PublicKey) error { // nolint: interfacer
+func (s *SignedPublicKey) Open(context Context, pub *PublicKey) error { // nolint: interfacer
 	return s.Signed.Open(context, pub)
 }
 
 // VerifyManyToOne verifies multiple signatures against a single context and
 // message, returning true iff every signature is valid.
-func VerifyManyToOne(context []byte, message []byte, sigs []Signature) bool {
+func VerifyManyToOne(context Context, message []byte, sigs []Signature) bool {
 	// Our batch verify supports doing Ed25519ph/Ed25519ctx in bulk,
 	// but we're stuck with this stupidity.
 	msg, err := PrepareSignerMessage(context, message)
@@ -551,7 +551,7 @@ func VerifyManyToOne(context []byte, message []byte, sigs []Signature) bool {
 // VerifyBatch verifies multiple signatures, made by multiple public keys,
 // against a single context and multiple messages, returning true iff every
 // signature is valid.
-func VerifyBatch(context []byte, messages [][]byte, sigs []Signature) bool {
+func VerifyBatch(context Context, messages [][]byte, sigs []Signature) bool {
 	if len(messages) != len(sigs) {
 		panic("signature: VerifyBatch messages/signature count mismatch")
 	}

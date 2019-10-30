@@ -9,7 +9,7 @@ import (
 
 // TxnSchedulerBatchDispatchSigCtx is the context used for signing
 // transaction scheduler batch dispatch messages.
-var TxnSchedulerBatchDispatchSigCtx = []byte("EkTscBat")
+var TxnSchedulerBatchDispatchSigCtx = signature.NewContext("EkTscBat")
 
 // TxnSchedulerBatchDispatch is the message sent from the transaction
 // scheduler to compute workers after a batch is ready to be computed.

@@ -5,6 +5,9 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sync"
+
+	"github.com/oasislabs/ed25519"
 )
 
 // ContextSize is the size of a signature context in bytes.
@@ -26,8 +29,35 @@ var (
 	// the signing operations allowed by the role.
 	ErrRoleAction = errors.New("signature: signer role action mismatch")
 
-	errMalformedContext = errors.New("signature: malformed context")
+	errMalformedContext    = errors.New("signature: malformed context")
+	errUnregisteredContext = errors.New("signature: unregistered context")
+
+	registeredContexts sync.Map
 )
+
+// Context is a domain separation context.
+type Context string
+
+// NewContext creates and registers a new context.  This routine will panic
+// if the context is malformed or is already registered.
+func NewContext(rawContext string) Context {
+	// Even if we are not using the clearly superior RFC 8032 constructs
+	// enforce something that is compatible.
+	//
+	// Note: We disallow context lenghts of 0, since our ContextSign call
+	// is intended to enforce strict domain separation.
+	if l := len(rawContext); l == 0 || l > ed25519.ContextMaxSize {
+		panic(errMalformedContext)
+	}
+
+	ctx := Context(rawContext)
+	if _, isRegistered := registeredContexts.Load(ctx); isRegistered {
+		panic("signature: context already registered: '" + ctx + "'")
+	}
+	registeredContexts.Store(ctx, true)
+
+	return ctx
+}
 
 // SignerRole is the role of the Signer (Entity, Node, etc).
 type SignerRole int
@@ -79,7 +109,7 @@ type Signer interface {
 
 	// ContextSign generates a signature with the private key over the context and
 	// message.
-	ContextSign(context, message []byte) ([]byte, error)
+	ContextSign(context Context, message []byte) ([]byte, error)
 
 	// String returns the string representation of a Signer, which MUST not
 	// include any sensitive information.
@@ -94,9 +124,10 @@ type Signer interface {
 }
 
 // PrepareSignerMessage prepares a context and message for signing by a Signer.
-func PrepareSignerMessage(context, message []byte) ([]byte, error) {
-	if len(context) != ContextSize {
-		return nil, errMalformedContext
+func PrepareSignerMessage(context Context, message []byte) ([]byte, error) {
+	// Ensure that the context is registered for use.
+	if _, isRegistered := registeredContexts.Load(context); !isRegistered {
+		return nil, errUnregisteredContext
 	}
 
 	// This is stupid, and we should be using RFC 8032's Ed25519ph instead
@@ -105,7 +136,7 @@ func PrepareSignerMessage(context, message []byte) ([]byte, error) {
 	//
 	// Blame YubiHSM and Ledger, not me.
 	h := sha512.New512_256()
-	_, _ = h.Write(context)
+	_, _ = h.Write([]byte(context))
 	_, _ = h.Write(message)
 	sum := h.Sum(nil)
 

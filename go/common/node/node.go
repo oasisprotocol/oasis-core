@@ -586,12 +586,12 @@ type SignedNode struct {
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedNode) Open(context []byte, node *Node) error { // nolint: interfacer
+func (s *SignedNode) Open(context signature.Context, node *Node) error { // nolint: interfacer
 	return s.Signed.Open(context, node)
 }
 
 // SignNode serializes the Node and signs the result.
-func SignNode(signer signature.Signer, context []byte, node *Node) (*SignedNode, error) {
+func SignNode(signer signature.Signer, context signature.Context, node *Node) (*SignedNode, error) {
 	signed, err := signature.SignSigned(signer, context, node)
 	if err != nil {
 		return nil, err

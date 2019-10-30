@@ -58,12 +58,12 @@ type SignedUnfreezeNode struct {
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedUnfreezeNode) Open(context []byte, unfreeze *UnfreezeNode) error { // nolint: interfacer
+func (s *SignedUnfreezeNode) Open(context signature.Context, unfreeze *UnfreezeNode) error { // nolint: interfacer
 	return s.Signed.Open(context, unfreeze)
 }
 
 // SignUnfreezeNode serializes the UnfreezeNode and signs the result.
-func SignUnfreezeNode(signer signature.Signer, context []byte, unfreeze *UnfreezeNode) (*SignedUnfreezeNode, error) {
+func SignUnfreezeNode(signer signature.Signer, context signature.Context, unfreeze *UnfreezeNode) (*SignedUnfreezeNode, error) {
 	signed, err := signature.SignSigned(signer, context, unfreeze)
 	if err != nil {
 		return nil, err

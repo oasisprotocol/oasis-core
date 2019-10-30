@@ -16,11 +16,11 @@ import (
 var (
 	// ComputeSignatureContext is the signature context used to sign compute
 	// worker commitments.
-	ComputeSignatureContext = []byte("EkCommCC")
+	ComputeSignatureContext = signature.NewContext("EkCommCC")
 
 	// ComputeResultsHeaderSignatureContext is the signature context used to
 	// sign compute results headers with RAK.
-	ComputeResultsHeaderSignatureContext = []byte("EkComRHd")
+	ComputeResultsHeaderSignatureContext = signature.NewContext("EkComRHd")
 )
 
 // ComputeResultsHeader is the header of a computed batch output by a runtime. This

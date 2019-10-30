@@ -361,7 +361,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 }
 
 func signForRegistration(rt *registry.Runtime, signer signature.Signer, isGenesis bool) (*registry.SignedRuntime, error) {
-	var ctx []byte
+	var ctx signature.Context
 	switch isGenesis {
 	case false:
 		ctx = registry.RegisterRuntimeSignatureContext

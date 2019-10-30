@@ -12,7 +12,7 @@ import (
 var (
 	errCryptoNotSupported = errors.New("worker/common/p2p: crypto op not supported")
 
-	libp2pContext = []byte("EkLibP2P")
+	libp2pContext = signature.NewContext("EkLibP2P")
 )
 
 type p2pSigner struct {

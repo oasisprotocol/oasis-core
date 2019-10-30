@@ -12,7 +12,7 @@ import (
 
 // MergeSignatureContext is the signature context used to sign merge
 // worker commitments.
-var MergeSignatureContext = []byte("EkCommMC")
+var MergeSignatureContext = signature.NewContext("EkCommMC")
 
 type MergeBody struct {
 	ComputeCommits []ComputeCommitment `json:"commits"`

@@ -201,12 +201,12 @@ type SignedRuntime struct {
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedRuntime) Open(context []byte, runtime *Runtime) error { // nolint: interfacer
+func (s *SignedRuntime) Open(context signature.Context, runtime *Runtime) error { // nolint: interfacer
 	return s.Signed.Open(context, runtime)
 }
 
 // SignRuntime serializes the Runtime and signs the result.
-func SignRuntime(signer signature.Signer, context []byte, runtime *Runtime) (*SignedRuntime, error) {
+func SignRuntime(signer signature.Signer, context signature.Context, runtime *Runtime) (*SignedRuntime, error) {
 	signed, err := signature.SignSigned(signer, context, runtime)
 	if err != nil {
 		return nil, err

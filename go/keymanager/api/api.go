@@ -30,7 +30,7 @@ var (
 	// in insecure builds when a RAK is unavailable.
 	TestSigners []signature.Signer
 
-	initResponseContext = []byte("EkKmIniR")
+	initResponseContext = signature.NewContext("EkKmIniR")
 )
 
 // Status is the current key manager status.
