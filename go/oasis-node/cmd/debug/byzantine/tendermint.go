@@ -133,7 +133,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	})); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication beacon")
 	}
-	if err = ht.service.RegisterApplication(stakingapp.New(timeSource, nil)); err != nil {
+	if err = ht.service.RegisterApplication(stakingapp.New(timeSource)); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication staking")
 	}
 	registryApp := registryapp.New(timeSource, &registry.Genesis{

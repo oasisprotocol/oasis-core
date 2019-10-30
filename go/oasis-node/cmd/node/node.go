@@ -627,7 +627,6 @@ func init() {
 		cmdGrpc.ServerLocalFlags,
 		pprof.Flags,
 		roothash.Flags,
-		staking.Flags,
 		storage.Flags,
 		tendermint.Flags,
 		ias.Flags,

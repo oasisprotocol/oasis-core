@@ -244,13 +244,6 @@ func (app *stakingApplication) initDebondingDelegations(state *stakingState.Muta
 // InitChain initializes the chain from genesis.
 func (app *stakingApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := &doc.Staking
-	if app.debugGenesisState != nil {
-		if len(st.Ledger) > 0 {
-			app.logger.Error("InitChain: debug genesis state and actual genesis state provided")
-			return errors.New("staking/tendermint: multiple genesis states specified")
-		}
-		st = app.debugGenesisState
-	}
 
 	var (
 		state       = stakingState.NewMutableState(ctx.State())

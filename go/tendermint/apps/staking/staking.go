@@ -26,8 +26,6 @@ type stakingApplication struct {
 
 	state      *abci.ApplicationState
 	timeSource epochtime.Backend
-
-	debugGenesisState *staking.Genesis
 }
 
 func (app *stakingApplication) Name() string {
@@ -474,10 +472,9 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 }
 
 // New constructs a new staking application instance.
-func New(timeSource epochtime.Backend, debugGenesisState *staking.Genesis) abci.Application {
+func New(timeSource epochtime.Backend) abci.Application {
 	return &stakingApplication{
-		logger:            logging.GetLogger("tendermint/staking"),
-		timeSource:        timeSource,
-		debugGenesisState: debugGenesisState,
+		logger:     logging.GetLogger("tendermint/staking"),
+		timeSource: timeSource,
 	}
 }

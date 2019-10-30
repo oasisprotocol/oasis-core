@@ -53,7 +53,6 @@ var (
 		{"consensus.validator", true},
 		{"roothash.tendermint.index_blocks", true},
 		{"storage.backend", "leveldb"},
-		{"staking.debug.genesis_state", stakingTests.DebugGenesisState},
 		{"worker.compute.enabled", true},
 		{"worker.runtime.backend", "mock"},
 		{"worker.runtime.loader", "mock-runtime"},

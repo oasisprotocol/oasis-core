@@ -316,11 +316,10 @@ func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.Event
 func New(
 	ctx context.Context,
 	timeSource epochtime.Backend,
-	debugGenesisState *api.Genesis,
 	service service.TendermintService,
 ) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
-	a := app.New(timeSource, debugGenesisState)
+	a := app.New(timeSource)
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}

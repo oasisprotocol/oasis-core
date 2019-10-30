@@ -14,6 +14,7 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
 	tendermint "github.com/oasislabs/oasis-core/go/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/crypto"
 	"github.com/oasislabs/oasis-core/go/tendermint/service"
@@ -66,6 +67,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 			TimeoutCommit:     1 * time.Millisecond,
 			SkipTimeoutCommit: true,
 		},
+		Staking: stakingTests.DebugGenesisState,
 	}
 	b, err := json.Marshal(doc)
 	if err != nil {
