@@ -465,11 +465,11 @@ dependencies = [
 
 [[package]]
 name = "grpcio"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
- "grpcio-sys 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "grpcio-sys 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.64 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf 2.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -488,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "grpcio-sys"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "cc 1.0.46 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -715,7 +715,7 @@ version = "0.3.0-alpha"
 dependencies = [
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
- "grpcio 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-runtime 0.3.0-alpha",
  "protobuf 2.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -751,7 +751,7 @@ version = "0.3.0-alpha"
 dependencies = [
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
- "grpcio 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lru 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-client 0.3.0-alpha",
@@ -791,7 +791,7 @@ dependencies = [
  "ed25519-dalek 1.0.0-pre.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
- "grpcio 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "intrusive-collections 0.7.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1414,7 +1414,7 @@ name = "simple-keyvalue-client"
 version = "0.3.0-alpha"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "grpcio 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-client 0.3.0-alpha",
  "oasis-core-runtime 0.3.0-alpha",
@@ -1427,7 +1427,7 @@ name = "simple-keyvalue-enc-client"
 version = "0.3.0-alpha"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "grpcio 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-client 0.3.0-alpha",
  "oasis-core-runtime 0.3.0-alpha",
  "simple-keyvalue-api 0.3.0-alpha",
@@ -1439,7 +1439,7 @@ name = "simple-keyvalue-ops-client"
 version = "0.3.0-alpha"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "grpcio 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-client 0.3.0-alpha",
  "oasis-core-runtime 0.3.0-alpha",
@@ -1553,7 +1553,7 @@ name = "staking-arbitrary-client"
 version = "0.3.0-alpha"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "grpcio 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-client 0.3.0-alpha",
  "oasis-core-runtime 0.3.0-alpha",
  "staking-arbitrary-api 0.3.0-alpha",
@@ -1633,7 +1633,7 @@ name = "test-long-term-client"
 version = "0.3.0-alpha"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "grpcio 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-client 0.3.0-alpha",
  "oasis-core-runtime 0.3.0-alpha",
  "simple-keyvalue-api 0.3.0-alpha",
@@ -2062,9 +2062,9 @@ dependencies = [
 "checksum gcc 0.3.55 (registry+https://github.com/rust-lang/crates.io-index)" = "8f5f3913fa0bfe7ee1fd8248b6b9f42a5af4b9d65ec2dd2c3c26132b950ecfc2"
 "checksum generic-array 0.12.3 (registry+https://github.com/rust-lang/crates.io-index)" = "c68f0274ae0e023facc3c97b2e00f076be70e254bc851d972503b328db79b2ec"
 "checksum getrandom 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)" = "473a1265acc8ff1e808cd0a1af8cee3c2ee5200916058a2ca113c29f2d903571"
-"checksum grpcio 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)" = "cf45c98940795d83354880f073f3a2a2a995f50d3a3e43247ea23eca978d6574"
+"checksum grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)" = "211932b84a0001a88d9443bef8a95726c6e2eb1cc50e7655592e2596060ba5e1"
 "checksum grpcio-compiler 0.5.0-alpha.2 (registry+https://github.com/rust-lang/crates.io-index)" = "dd8b3213a332a2865a307e553f43d632bc4a81f0e0f5a90d194dee5b9c02d8a7"
-"checksum grpcio-sys 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)" = "f6a31d8b4769d18e20de167e3c0ccae6b7dd506dfff78d323c2166e76efbe408"
+"checksum grpcio-sys 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)" = "8402e77dd7de882c3fed55f68b2ec0ce0ce9df94de87f5c111059517f111438a"
 "checksum half 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9ff54597ea139063f4225f1ec47011b03c9de4a486957ff3fc506881dac951d0"
 "checksum hashbrown 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e1de41fb8dba9714efd92241565cdff73f78508c95697dd56787d3cba27e2353"
 "checksum hostname 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "21ceb46a83a85e824ef93669c8b390009623863b5c195d1ba747292c0c72f94e"

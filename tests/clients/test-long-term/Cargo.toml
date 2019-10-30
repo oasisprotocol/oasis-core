@@ -10,4 +10,4 @@ oasis-core-runtime = { path = "../../../runtime" }
 simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
 clap = "2.29.1"
 tokio = "0.1.17"
-grpcio = "0.4.4"
+grpcio = "0.4.6"
