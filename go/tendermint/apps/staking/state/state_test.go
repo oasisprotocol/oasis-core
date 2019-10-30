@@ -12,16 +12,17 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
 
-func mustInitQuantity(t *testing.T, i int64) (q staking.Quantity) {
+func mustInitQuantity(t *testing.T, i int64) (q quantity.Quantity) {
 	require.NoError(t, q.FromBigInt(big.NewInt(i)), "FromBigInt")
 	return
 }
 
-func mustInitQuantityP(t *testing.T, i int64) *staking.Quantity {
+func mustInitQuantityP(t *testing.T, i int64) *quantity.Quantity {
 	q := mustInitQuantity(t, i)
 	return &q
 }

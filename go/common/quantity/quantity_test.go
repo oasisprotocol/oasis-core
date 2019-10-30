@@ -1,4 +1,4 @@
-package api
+package quantity
 
 import (
 	"math/big"
@@ -36,10 +36,10 @@ func TestFromBigInt(t *testing.T) {
 
 	var q Quantity
 	err := q.FromBigInt(nil)
-	require.Equal(ErrInvalidArgument, err, "FromBigInt(nil)")
+	require.Equal(ErrInvalidQuantity, err, "FromBigInt(nil)")
 
 	err = q.FromBigInt(big.NewInt(-1))
-	require.Equal(ErrInvalidArgument, err, "FromBigInt(-1)")
+	require.Equal(ErrInvalidQuantity, err, "FromBigInt(-1)")
 
 	err = q.FromBigInt(big.NewInt(23))
 	require.NoError(err, "FromBigInt(23)")
@@ -68,10 +68,10 @@ func TestQuantityAdd(t *testing.T) {
 	q := fromInt(100)
 
 	err := q.Add(nil)
-	require.Equal(ErrInvalidArgument, err, "Add(nil)")
+	require.Equal(ErrInvalidQuantity, err, "Add(nil)")
 
 	err = q.Add(fromInt(-1))
-	require.Equal(ErrInvalidArgument, err, "Add(-1)")
+	require.Equal(ErrInvalidQuantity, err, "Add(-1)")
 
 	err = q.Add(fromInt(200))
 	require.NoError(err, "Add")
@@ -84,10 +84,10 @@ func TestQuantitySub(t *testing.T) {
 	q := fromInt(100)
 
 	err := q.Sub(nil)
-	require.Equal(ErrInvalidArgument, err, "Sub(nil)")
+	require.Equal(ErrInvalidQuantity, err, "Sub(nil)")
 
 	err = q.Sub(fromInt(-1))
-	require.Equal(ErrInvalidArgument, err, "Sub(-1)")
+	require.Equal(ErrInvalidQuantity, err, "Sub(-1)")
 
 	err = q.Sub(fromInt(200))
 	require.Equal(ErrInsufficientBalance, err, "Sub(200)")
@@ -103,10 +103,10 @@ func TestQuantitySubUpTo(t *testing.T) {
 	q := fromInt(100)
 
 	_, err := q.SubUpTo(nil)
-	require.Equal(ErrInvalidArgument, err, "SubUpTo(nil)")
+	require.Equal(ErrInvalidQuantity, err, "SubUpTo(nil)")
 
 	_, err = q.SubUpTo(fromInt(-1))
-	require.Equal(ErrInvalidArgument, err, "SubUpTo(-1)")
+	require.Equal(ErrInvalidQuantity, err, "SubUpTo(-1)")
 
 	n, err := q.SubUpTo(fromInt(23))
 	require.NoError(err, "SubUpTo")
@@ -125,10 +125,10 @@ func TestQuantityMul(t *testing.T) {
 	q := fromInt(100)
 
 	err := q.Mul(nil)
-	require.Equal(ErrInvalidArgument, err, "Mul(nil)")
+	require.Equal(ErrInvalidQuantity, err, "Mul(nil)")
 
 	err = q.Mul(fromInt(-1))
-	require.Equal(ErrInvalidArgument, err, "Mul(-1)")
+	require.Equal(ErrInvalidQuantity, err, "Mul(-1)")
 
 	err = q.Mul(fromInt(23))
 	require.NoError(err, "Mul")
@@ -141,13 +141,13 @@ func TestQuantityQuo(t *testing.T) {
 	q := fromInt(100)
 
 	err := q.Quo(nil)
-	require.Equal(ErrInvalidArgument, err, "Quo(nil)")
+	require.Equal(ErrInvalidQuantity, err, "Quo(nil)")
 
 	err = q.Quo(fromInt(-1))
-	require.Equal(ErrInvalidArgument, err, "Quo(-1)")
+	require.Equal(ErrInvalidQuantity, err, "Quo(-1)")
 
 	err = q.Quo(fromInt(0))
-	require.Equal(ErrInvalidArgument, err, "Quo(0)")
+	require.Equal(ErrInvalidQuantity, err, "Quo(0)")
 
 	err = q.Quo(fromInt(50))
 	require.NoError(err, "Quo")
@@ -182,7 +182,7 @@ func TestMove(t *testing.T) {
 	err = Move(fromInt(50), nil, fromInt(25))
 	require.Equal(err, ErrInvalidAccount, "Move(50, nil, 25)")
 	err = Move(fromInt(50), fromInt(100), nil)
-	require.Equal(err, ErrInvalidArgument, "Move(50, 100, nil)")
+	require.Equal(err, ErrInvalidQuantity, "Move(50, 100, nil)")
 
 	dst, src := fromInt(100), fromInt(300)
 	err = Move(dst, src, fromInt(9000))
@@ -203,7 +203,7 @@ func TestMoveUpTo(t *testing.T) {
 	_, err = MoveUpTo(fromInt(50), nil, fromInt(25))
 	require.Equal(err, ErrInvalidAccount, "MoveUpTo(50, nil, 25)")
 	_, err = MoveUpTo(fromInt(50), fromInt(100), nil)
-	require.Equal(err, ErrInvalidArgument, "MoveUpTo(50, 100, nil)")
+	require.Equal(err, ErrInvalidQuantity, "MoveUpTo(50, 100, nil)")
 
 	dst, src := fromInt(100), fromInt(300)
 	moved, err := MoveUpTo(dst, src, fromInt(75))

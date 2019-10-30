@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	pb "github.com/oasislabs/oasis-core/go/grpc/staking"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 )
@@ -106,7 +107,7 @@ func (s *grpcServer) GetAccountInfo(ctx context.Context, req *pb.GetAccountInfoR
 		return nil, err
 	}
 
-	var escrowBalance api.Quantity
+	var escrowBalance quantity.Quantity
 	if err = escrowBalance.Add(&account.Escrow.Active.Balance); err != nil {
 		return nil, err
 	}

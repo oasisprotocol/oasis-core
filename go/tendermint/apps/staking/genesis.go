@@ -9,6 +9,7 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
@@ -26,7 +27,7 @@ func (app *stakingApplication) initParameters(state *stakingState.MutableState, 
 func (app *stakingApplication) initThresholds(state *stakingState.MutableState, st *staking.Genesis) error {
 	type thresholdUpdate struct {
 		k staking.ThresholdKind
-		v staking.Quantity
+		v quantity.Quantity
 	}
 
 	if st.Parameters.Thresholds != nil {
@@ -52,7 +53,7 @@ func (app *stakingApplication) initThresholds(state *stakingState.MutableState, 
 	return nil
 }
 
-func (app *stakingApplication) initCommonPool(st *staking.Genesis, totalSupply *staking.Quantity) error {
+func (app *stakingApplication) initCommonPool(st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	if !st.CommonPool.IsValid() {
 		return errors.New("staking/tendermint: invalid genesis state CommonPool")
 	}
@@ -66,7 +67,7 @@ func (app *stakingApplication) initCommonPool(st *staking.Genesis, totalSupply *
 	return nil
 }
 
-func (app *stakingApplication) initLedger(state *stakingState.MutableState, st *staking.Genesis, totalSupply *staking.Quantity) error {
+func (app *stakingApplication) initLedger(state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	type ledgerUpdate struct {
 		id      signature.PublicKey
 		account *staking.Account
@@ -127,7 +128,7 @@ func (app *stakingApplication) initLedger(state *stakingState.MutableState, st *
 	return nil
 }
 
-func (app *stakingApplication) initTotalSupply(state *stakingState.MutableState, st *staking.Genesis, totalSupply *staking.Quantity) {
+func (app *stakingApplication) initTotalSupply(state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) {
 	if totalSupply.Cmp(&st.TotalSupply) != 0 {
 		app.logger.Error("InitChain: total supply mismatch",
 			"expected", st.TotalSupply,
@@ -150,7 +151,7 @@ func (app *stakingApplication) initDelegations(state *stakingState.MutableState,
 		var escrowID signature.PublicKey
 		escrowID.FromMapKey(keyEscrowID)
 
-		delegationShares := staking.NewQuantity()
+		delegationShares := quantity.NewQuantity()
 		for keyDelegatorID, delegation := range delegations {
 			var delegatorID signature.PublicKey
 			delegatorID.FromMapKey(keyDelegatorID)
@@ -199,7 +200,7 @@ func (app *stakingApplication) initDebondingDelegations(state *stakingState.Muta
 		var escrowID signature.PublicKey
 		escrowID.FromMapKey(keyEscrowID)
 
-		debondingShares := staking.NewQuantity()
+		debondingShares := quantity.NewQuantity()
 		for keyDelegatorID, delegations := range delegators {
 			var delegatorID signature.PublicKey
 			delegatorID.FromMapKey(keyDelegatorID)
@@ -248,7 +249,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 
 	var (
 		state       = stakingState.NewMutableState(ctx.State())
-		totalSupply staking.Quantity
+		totalSupply quantity.Quantity
 	)
 
 	app.initParameters(state, st)

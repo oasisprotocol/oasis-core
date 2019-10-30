@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
@@ -46,10 +47,6 @@ var (
 	// fails due to insufficient balance.
 	ErrInsufficientBalance = errors.New("staking: insufficient balance")
 
-	// ErrInvalidAccount is the error returned when an operation fails
-	// due to a missing account.
-	ErrInvalidAccount = errors.New("staking: invalid account")
-
 	// ErrInvalidNonce is the error returned when a nonce is invalid.
 	ErrInvalidNonce = errors.New("staking: invalid nonce")
 
@@ -74,13 +71,13 @@ type Backend interface {
 	Symbol() string
 
 	// TotalSupply returns the total nmber of tokens.
-	TotalSupply(ctx context.Context, height int64) (*Quantity, error)
+	TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error)
 
 	// CommonPool returns the common pool balance.
-	CommonPool(ctx context.Context, height int64) (*Quantity, error)
+	CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error)
 
 	// Threshold returns the specific staking threshold by kind.
-	Threshold(ctx context.Context, kind ThresholdKind, height int64) (*Quantity, error)
+	Threshold(ctx context.Context, kind ThresholdKind, height int64) (*quantity.Quantity, error)
 
 	// Accounts returns the IDs of all accounts with a non-zero general
 	// or escrow balance.
@@ -135,13 +132,13 @@ type Backend interface {
 type TransferEvent struct {
 	From   signature.PublicKey `json:"from"`
 	To     signature.PublicKey `json:"to"`
-	Tokens Quantity            `json:"tokens"`
+	Tokens quantity.Quantity   `json:"tokens"`
 }
 
 // BurnEvent is the event emitted when tokens are destroyed via a call to Burn.
 type BurnEvent struct {
 	Owner  signature.PublicKey `json:"owner"`
-	Tokens Quantity            `json:"tokens"`
+	Tokens quantity.Quantity   `json:"tokens"`
 }
 
 // EscrowEvent is the event emitted when a balance is transfered into a escrow
@@ -149,14 +146,14 @@ type BurnEvent struct {
 type EscrowEvent struct {
 	Owner  signature.PublicKey `json:"owner"`
 	Escrow signature.PublicKey `json:"escrow"`
-	Tokens Quantity            `json:"tokens"`
+	Tokens quantity.Quantity   `json:"tokens"`
 }
 
 // TakeEscrowEvent is the event emitted when balanace is deducted from a escrow
 // balance (stake is slashed).
 type TakeEscrowEvent struct {
 	Owner  signature.PublicKey `json:"owner"`
-	Tokens Quantity            `json:"tokens"`
+	Tokens quantity.Quantity   `json:"tokens"`
 }
 
 // ReclaimEscrowEvent is the event emitted when tokens are relaimed from a
@@ -164,7 +161,7 @@ type TakeEscrowEvent struct {
 type ReclaimEscrowEvent struct {
 	Owner  signature.PublicKey `json:"owner"`
 	Escrow signature.PublicKey `json:"escrow"`
-	Tokens Quantity            `json:"tokens"`
+	Tokens quantity.Quantity   `json:"tokens"`
 }
 
 // Transfer is a token transfer.
@@ -172,7 +169,7 @@ type Transfer struct {
 	Nonce uint64 `json:"nonce"`
 
 	To     signature.PublicKey `json:"xfer_to"`
-	Tokens Quantity            `json:"xfer_tokens"`
+	Tokens quantity.Quantity   `json:"xfer_tokens"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -189,7 +186,7 @@ func (x *Transfer) UnmarshalCBOR(data []byte) error {
 type Burn struct {
 	Nonce uint64 `json:"nonce"`
 
-	Tokens Quantity `json:"burn_tokens"`
+	Tokens quantity.Quantity `json:"burn_tokens"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -207,7 +204,7 @@ type Escrow struct {
 	Nonce uint64 `json:"nonce"`
 
 	Account signature.PublicKey `json:"escrow_account"`
-	Tokens  Quantity            `json:"escrow_tokens"`
+	Tokens  quantity.Quantity   `json:"escrow_tokens"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -225,7 +222,7 @@ type ReclaimEscrow struct {
 	Nonce uint64 `json:"nonce"`
 
 	Account signature.PublicKey `json:"escrow_account"`
-	Shares  Quantity            `json:"reclaim_shares"`
+	Shares  quantity.Quantity   `json:"reclaim_shares"`
 }
 
 // MarshalCBOR serializes the type into a CBOR byte vector.
@@ -306,44 +303,15 @@ func SignReclaimEscrow(signer signature.Signer, reclaim *ReclaimEscrow) (*Signed
 	}, nil
 }
 
-// Move moves exactly n from src to dst.  On failures neither src nor dst
-// are altered.
-func Move(dst, src, n *Quantity) error {
-	if dst == nil || src == nil {
-		return ErrInvalidAccount
-	}
-	if err := src.Sub(n); err != nil {
-		return err
-	}
-	_ = dst.Add(n)
-
-	return nil
-}
-
-// MoveUpTo moves up to n from src to dst, and returns the amount moved.
-// On failures neither src nor dst are altered.
-func MoveUpTo(dst, src, n *Quantity) (*Quantity, error) {
-	if dst == nil || src == nil {
-		return nil, ErrInvalidAccount
-	}
-	amount, err := src.SubUpTo(n)
-	if err != nil {
-		return nil, err
-	}
-	_ = dst.Add(amount)
-
-	return amount, nil
-}
-
 // SharePool is a combined balance of several entries, the relative sizes
 // of which are tracked through shares.
 type SharePool struct {
-	Balance     Quantity `json:"balance"`
-	TotalShares Quantity `json:"total_shares"`
+	Balance     quantity.Quantity `json:"balance"`
+	TotalShares quantity.Quantity `json:"total_shares"`
 }
 
 // sharesForTokens computes the amount of shares for the given amount of tokens.
-func (p *SharePool) sharesForTokens(amount *Quantity) (*Quantity, error) {
+func (p *SharePool) sharesForTokens(amount *quantity.Quantity) (*quantity.Quantity, error) {
 	if p.TotalShares.IsZero() {
 		// No existing shares, exchange rate is 1:1.
 		return amount.Clone(), nil
@@ -373,13 +341,13 @@ func (p *SharePool) sharesForTokens(amount *Quantity) (*Quantity, error) {
 
 // Deposit moves tokens into the combined balance, raising the shares.
 // If an error occurs, the pool and affected accounts are left in an invalid state.
-func (p *SharePool) Deposit(shareDst, tokenSrc, tokenAmount *Quantity) error {
+func (p *SharePool) Deposit(shareDst, tokenSrc, tokenAmount *quantity.Quantity) error {
 	shares, err := p.sharesForTokens(tokenAmount)
 	if err != nil {
 		return err
 	}
 
-	if err = Move(&p.Balance, tokenSrc, tokenAmount); err != nil {
+	if err = quantity.Move(&p.Balance, tokenSrc, tokenAmount); err != nil {
 		return err
 	}
 
@@ -395,10 +363,10 @@ func (p *SharePool) Deposit(shareDst, tokenSrc, tokenAmount *Quantity) error {
 }
 
 // tokensForShares computes the amount of tokens for the given amount of shares.
-func (p *SharePool) tokensForShares(amount *Quantity) (*Quantity, error) {
+func (p *SharePool) tokensForShares(amount *quantity.Quantity) (*quantity.Quantity, error) {
 	if amount.IsZero() || p.Balance.IsZero() || p.TotalShares.IsZero() {
 		// No existing shares or no balance means no tokens.
-		return NewQuantity(), nil
+		return quantity.NewQuantity(), nil
 	}
 
 	// Exchange rate is based on issued shares and the total balance as:
@@ -419,7 +387,7 @@ func (p *SharePool) tokensForShares(amount *Quantity) (*Quantity, error) {
 
 // Withdraw moves tokens out of the combined balance, reducing the shares.
 // If an error occurs, the pool and affected accounts are left in an invalid state.
-func (p *SharePool) Withdraw(tokenDst, shareSrc, shareAmount *Quantity) error {
+func (p *SharePool) Withdraw(tokenDst, shareSrc, shareAmount *quantity.Quantity) error {
 	tokens, err := p.tokensForShares(shareAmount)
 	if err != nil {
 		return err
@@ -433,7 +401,7 @@ func (p *SharePool) Withdraw(tokenDst, shareSrc, shareAmount *Quantity) error {
 		return err
 	}
 
-	if err = Move(tokenDst, &p.Balance, tokens); err != nil {
+	if err = quantity.Move(tokenDst, &p.Balance, tokens); err != nil {
 		return err
 	}
 
@@ -470,8 +438,8 @@ func (k ThresholdKind) String() string {
 
 // GeneralAccount is a general-purpose account.
 type GeneralAccount struct {
-	Balance Quantity `json:"balance"`
-	Nonce   uint64   `json:"nonce"`
+	Balance quantity.Quantity `json:"balance"`
+	Nonce   uint64            `json:"nonce"`
 }
 
 // EscrowAccount is an escrow account the balance of which is subject to
@@ -492,19 +460,19 @@ type Account struct {
 
 // Delegation is a delegation descriptor.
 type Delegation struct {
-	Shares Quantity `json:"shares"`
+	Shares quantity.Quantity `json:"shares"`
 }
 
 // DebondingDelegation is a debonding delegation descriptor.
 type DebondingDelegation struct {
-	Shares        Quantity            `json:"shares"`
+	Shares        quantity.Quantity   `json:"shares"`
 	DebondEndTime epochtime.EpochTime `json:"debond_end"`
 }
 
 // RewardStep is one of the time periods in the reward schedule.
 type RewardStep struct {
 	Until epochtime.EpochTime `json:"until"`
-	Scale Quantity            `json:"scale"`
+	Scale quantity.Quantity   `json:"scale"`
 }
 
 // Genesis is the initial ledger balances at genesis for use in the genesis
@@ -512,8 +480,8 @@ type RewardStep struct {
 type Genesis struct {
 	Parameters ConsensusParameters `json:"params"`
 
-	TotalSupply Quantity `json:"total_supply"`
-	CommonPool  Quantity `json:"common_pool"`
+	TotalSupply quantity.Quantity `json:"total_supply"`
+	CommonPool  quantity.Quantity `json:"common_pool"`
 
 	Ledger map[signature.MapKey]*Account `json:"ledger,omitempty"`
 
@@ -523,9 +491,9 @@ type Genesis struct {
 
 // ConsensusParameters are the staking consensus parameters.
 type ConsensusParameters struct {
-	Thresholds              map[ThresholdKind]Quantity `json:"thresholds,omitempty"`
-	DebondingInterval       epochtime.EpochTime        `json:"debonding_interval,omitempty"`
-	RewardSchedule          []RewardStep               `json:"reward_schedule,omitempty"`
-	AcceptableTransferPeers map[signature.MapKey]bool  `json:"acceptable_transfer_peers,omitempty"`
-	Slashing                map[SlashReason]Slash      `json:"slashing,omitempty"`
+	Thresholds              map[ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
+	DebondingInterval       epochtime.EpochTime                 `json:"debonding_interval,omitempty"`
+	RewardSchedule          []RewardStep                        `json:"reward_schedule,omitempty"`
+	AcceptableTransferPeers map[signature.MapKey]bool           `json:"acceptable_transfer_peers,omitempty"`
+	Slashing                map[SlashReason]Slash               `json:"slashing,omitempty"`
 }

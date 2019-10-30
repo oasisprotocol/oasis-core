@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
@@ -82,13 +83,13 @@ type ImmutableState struct {
 	*abci.ImmutableState
 }
 
-func (s *ImmutableState) TotalSupply() (*staking.Quantity, error) {
+func (s *ImmutableState) TotalSupply() (*quantity.Quantity, error) {
 	_, value := s.Snapshot.Get(totalSupplyKeyFmt.Encode())
 	if value == nil {
-		return &staking.Quantity{}, nil
+		return &quantity.Quantity{}, nil
 	}
 
-	var q staking.Quantity
+	var q quantity.Quantity
 	if err := cbor.Unmarshal(value, &q); err != nil {
 		return nil, err
 	}
@@ -97,13 +98,13 @@ func (s *ImmutableState) TotalSupply() (*staking.Quantity, error) {
 }
 
 // CommonPool returns the balance of the global common pool.
-func (s *ImmutableState) CommonPool() (*staking.Quantity, error) {
+func (s *ImmutableState) CommonPool() (*quantity.Quantity, error) {
 	_, value := s.Snapshot.Get(commonPoolKeyFmt.Encode())
 	if value == nil {
-		return &staking.Quantity{}, nil
+		return &quantity.Quantity{}, nil
 	}
 
-	var q staking.Quantity
+	var q quantity.Quantity
 	if err := cbor.Unmarshal(value, &q); err != nil {
 		return nil, err
 	}
@@ -157,8 +158,8 @@ func (s *ImmutableState) isAcceptableTransferPeer(runtimeID signature.PublicKey)
 }
 
 // Thresholds returns the currently configured thresholds if any.
-func (s *ImmutableState) Thresholds() (map[staking.ThresholdKind]staking.Quantity, error) {
-	m := make(map[staking.ThresholdKind]staking.Quantity)
+func (s *ImmutableState) Thresholds() (map[staking.ThresholdKind]quantity.Quantity, error) {
+	m := make(map[staking.ThresholdKind]quantity.Quantity)
 	s.Snapshot.IterateRange(
 		thresholdKeyFmt.Encode(),
 		nil,
@@ -169,7 +170,7 @@ func (s *ImmutableState) Thresholds() (map[staking.ThresholdKind]staking.Quantit
 				return true
 			}
 
-			var q staking.Quantity
+			var q quantity.Quantity
 			if err := cbor.Unmarshal(value, &q); err != nil {
 				panic("staking: corrput state: " + err.Error())
 			}
@@ -218,7 +219,7 @@ func (s *ImmutableState) Account(id signature.PublicKey) *staking.Account {
 }
 
 // EscrowBalance returns the escrow balance for the ID.
-func (s *ImmutableState) EscrowBalance(id signature.PublicKey) *staking.Quantity {
+func (s *ImmutableState) EscrowBalance(id signature.PublicKey) *quantity.Quantity {
 	account := s.Account(id)
 
 	return account.Escrow.Active.Balance.Clone()
@@ -407,11 +408,11 @@ func (s *MutableState) SetAccount(id signature.PublicKey, account *staking.Accou
 	s.tree.Set(accountKeyFmt.Encode(&id), cbor.Marshal(account))
 }
 
-func (s *MutableState) SetTotalSupply(q *staking.Quantity) {
+func (s *MutableState) SetTotalSupply(q *quantity.Quantity) {
 	s.tree.Set(totalSupplyKeyFmt.Encode(), cbor.Marshal(q))
 }
 
-func (s *MutableState) SetCommonPool(q *staking.Quantity) {
+func (s *MutableState) SetCommonPool(q *quantity.Quantity) {
 	s.tree.Set(commonPoolKeyFmt.Encode(), cbor.Marshal(q))
 }
 
@@ -429,7 +430,7 @@ func (s *MutableState) SetAcceptableTransferPeers(peers map[signature.MapKey]boo
 	s.tree.Set(acceptableTransferPeersKeyFmt.Encode(), cbor.Marshal(peers))
 }
 
-func (s *MutableState) SetThreshold(kind staking.ThresholdKind, q *staking.Quantity) {
+func (s *MutableState) SetThreshold(kind staking.ThresholdKind, q *quantity.Quantity) {
 	s.tree.Set(thresholdKeyFmt.Encode(uint64(kind)), cbor.Marshal(q))
 }
 
@@ -466,7 +467,7 @@ func (s *MutableState) SetSlashing(value map[staking.SlashReason]staking.Slash) 
 	s.tree.Set(slashingKeyFmt.Encode(), cbor.Marshal(value))
 }
 
-func slashPool(dst *staking.Quantity, p *staking.SharePool, share *staking.Quantity) error {
+func slashPool(dst *quantity.Quantity, p *staking.SharePool, share *quantity.Quantity) error {
 	slashAmount := p.Balance.Clone()
 	if err := slashAmount.Mul(share); err != nil {
 		return errors.Wrap(err, "slashAmount.Mul")
@@ -475,7 +476,7 @@ func slashPool(dst *staking.Quantity, p *staking.SharePool, share *staking.Quant
 		return errors.Wrap(err, "slashAmount.Quo")
 	}
 
-	if err := staking.Move(dst, &p.Balance, slashAmount); err != nil {
+	if err := quantity.Move(dst, &p.Balance, slashAmount); err != nil {
 		return errors.Wrap(err, "moving tokens")
 	}
 
@@ -488,7 +489,7 @@ func slashPool(dst *staking.Quantity, p *staking.SharePool, share *staking.Quant
 //
 // WARNING: This is an internal routine to be used to implement staking policy,
 // and MUST NOT be exposed outside of backend implementations.
-func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey, share *staking.Quantity) (bool, error) {
+func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey, share *quantity.Quantity) (bool, error) {
 	commonPool, err := s.CommonPool()
 	if err != nil {
 		return false, fmt.Errorf("staking: failed to query common pool for slash: %w", err)
@@ -497,7 +498,7 @@ func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey
 	// Compute actual token amount based on passed percentage.
 	from := s.Account(fromID)
 
-	var slashed staking.Quantity
+	var slashed quantity.Quantity
 	if err = slashPool(&slashed, &from.Escrow.Active, share); err != nil {
 		return false, errors.Wrap(err, "slashing active escrow")
 	}
@@ -511,7 +512,7 @@ func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey
 
 	totalSlashed := slashed.Clone()
 
-	if err = staking.Move(commonPool, &slashed, totalSlashed); err != nil {
+	if err = quantity.Move(commonPool, &slashed, totalSlashed); err != nil {
 		return false, errors.Wrap(err, "moving tokens to common pool")
 	}
 
@@ -535,14 +536,14 @@ func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey
 //
 // WARNING: This is an internal routine to be used to implement incentivization
 // policy, and MUST NOT be exposed outside of backend implementations.
-func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.PublicKey, amount *staking.Quantity) (bool, error) {
+func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.PublicKey, amount *quantity.Quantity) (bool, error) {
 	commonPool, err := s.CommonPool()
 	if err != nil {
 		return false, errors.Wrap(err, "staking: failed to query common pool for transfer")
 	}
 
 	to := s.Account(toID)
-	transfered, err := staking.MoveUpTo(&to.General.Balance, commonPool, amount)
+	transfered, err := quantity.MoveUpTo(&to.General.Balance, commonPool, amount)
 	if err != nil {
 		return false, errors.Wrap(err, "staking: failed to transfer from common pool")
 	}
@@ -571,7 +572,7 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 // returned error's cause will be `staking.ErrInsufficientBalance`, and it should
 // be safe for the caller to roll back to an earlier state tree and continue from
 // there.
-func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *staking.Quantity, accounts []signature.PublicKey) error {
+func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *quantity.Quantity, accounts []signature.PublicKey) error {
 	steps, err := s.RewardSchedule()
 	if err != nil {
 		return err
@@ -612,7 +613,7 @@ func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *staking.Quan
 			continue
 		}
 
-		if err := staking.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
+		if err := quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
 			return errors.Wrap(err, "transferring to active escrow balance from common pool")
 		}
 

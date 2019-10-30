@@ -21,11 +21,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisGrpc "github.com/oasislabs/oasis-core/go/grpc/genesis"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -120,8 +121,8 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err := common.Init(); err != nil {
-		common.EarlyLogAndExit(err)
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
 	}
 
 	f := flags.GenesisFile()
@@ -503,7 +504,7 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 		}
 
 		// Ok then, we hold the world ransom for One Hundred Billion Dollars.
-		var q staking.Quantity
+		var q quantity.Quantity
 		if err = q.FromBigInt(big.NewInt(100000000000)); err != nil {
 			l.Error("failed to allocate test stake",
 				"err", err,
@@ -537,8 +538,8 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 func doDumpGenesis(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 
-	if err := common.Init(); err != nil {
-		common.EarlyLogAndExit(err)
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
 	}
 
 	conn, err := cmdGrpc.NewClient(cmd)
@@ -563,7 +564,7 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	w, shouldClose, err := common.GetOutputWriter(cmd, flags.CfgGenesisFile)
+	w, shouldClose, err := cmdCommon.GetOutputWriter(cmd, flags.CfgGenesisFile)
 	if err != nil {
 		logger.Error("failed to get writer for genesis file",
 			"err", err,

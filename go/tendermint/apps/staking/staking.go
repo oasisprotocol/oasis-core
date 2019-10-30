@@ -10,6 +10,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
@@ -125,7 +126,7 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 			escrow = state.Account(e.EscrowID)
 		}
 
-		var tokens staking.Quantity
+		var tokens quantity.Quantity
 		if err := escrow.Escrow.Debonding.Withdraw(&tokens, &deb.Shares, shareAmount); err != nil {
 			app.logger.Error("failed to redeem debonding shares",
 				"err", err,
@@ -137,7 +138,7 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		}
 		tokenAmount := tokens.Clone()
 
-		if err := staking.Move(&delegator.General.Balance, &tokens, tokenAmount); err != nil {
+		if err := quantity.Move(&delegator.General.Balance, &tokens, tokenAmount); err != nil {
 			app.logger.Error("failed to move debonded tokens",
 				"err", err,
 				"escrow_id", e.EscrowID,
@@ -210,9 +211,9 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 		}
 	} else {
 		// Source and destination MUST be separate accounts with how
-		// staking.Move is implemented.
+		// quantity.Move is implemented.
 		to := state.Account(xfer.To)
-		if err := staking.Move(&to.General.Balance, &from.General.Balance, &xfer.Tokens); err != nil {
+		if err := quantity.Move(&to.General.Balance, &from.General.Balance, &xfer.Tokens); err != nil {
 			app.logger.Error("Transfer: failed to move balance",
 				"err", err,
 				"from", fromID,
@@ -427,7 +428,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 		DebondEndTime: epoch + epochtime.EpochTime(debondingInterval),
 	}
 
-	var tokens staking.Quantity
+	var tokens quantity.Quantity
 
 	if err := from.Escrow.Active.Withdraw(&tokens, &delegation.Shares, &reclaim.Shares); err != nil {
 		app.logger.Error("ReclaimEscrow: failed to redeem escrow shares",

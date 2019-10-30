@@ -13,6 +13,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	grpcStaking "github.com/oasislabs/oasis-core/go/grpc/staking"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -110,7 +111,7 @@ func doInfo(cmd *cobra.Command, args []string) {
 			return err
 		}
 
-		var q api.Quantity
+		var q quantity.Quantity
 		if err = q.UnmarshalBinary(resp.GetTotalSupply()); err != nil {
 			return err
 		}
@@ -124,7 +125,7 @@ func doInfo(cmd *cobra.Command, args []string) {
 			return err
 		}
 
-		var q api.Quantity
+		var q quantity.Quantity
 		if err = q.UnmarshalBinary(resp.GetCommonPool()); err != nil {
 			return err
 		}
@@ -138,7 +139,7 @@ func doInfo(cmd *cobra.Command, args []string) {
 		api.KindCompute,
 		api.KindStorage,
 	}
-	thresholds := make(map[api.ThresholdKind]*api.Quantity)
+	thresholds := make(map[api.ThresholdKind]*quantity.Quantity)
 	doWithRetries(cmd, "query staking threshold(s)", func() error {
 		for _, k := range thresholdsToQuery {
 			if thresholds[k] != nil {
@@ -152,7 +153,7 @@ func doInfo(cmd *cobra.Command, args []string) {
 				return err
 			}
 
-			var q api.Quantity
+			var q quantity.Quantity
 			if err = q.UnmarshalBinary(resp.GetThreshold()); err != nil {
 				return err
 			}
@@ -206,8 +207,8 @@ func doList(cmd *cobra.Command, args []string) {
 
 type accountInfo struct {
 	ID             signature.PublicKey `json:"id"`
-	GeneralBalance api.Quantity        `json:"general_balance"`
-	EscrowBalance  api.Quantity        `json:"escrow_balance"`
+	GeneralBalance quantity.Quantity   `json:"general_balance"`
+	EscrowBalance  quantity.Quantity   `json:"escrow_balance"`
 	Nonce          uint64              `json:"nonce"`
 }
 

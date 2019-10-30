@@ -1,11 +1,23 @@
-package api
+package quantity
 
 import (
 	"encoding"
+	"errors"
 	"math/big"
 )
 
 var (
+	// ErrInvalidQuantity is the error returned on malformed arguments.
+	ErrInvalidQuantity = errors.New("invalid quantity")
+
+	// ErrInsufficientBalance is the error returned when an operation
+	// fails due to insufficient balance.
+	ErrInsufficientBalance = errors.New("insufficient balance")
+
+	// ErrInvalidAccount is the error returned when an operation fails
+	// due to a missing account.
+	ErrInvalidAccount = errors.New("invalid account")
+
 	_ encoding.BinaryMarshaler   = (*Quantity)(nil)
 	_ encoding.BinaryUnmarshaler = (*Quantity)(nil)
 
@@ -36,7 +48,7 @@ func (q *Quantity) UnmarshalBinary(data []byte) error {
 	q.inner.Set(&tmp)
 
 	if !q.IsValid() {
-		return ErrInvalidArgument
+		return ErrInvalidQuantity
 	}
 
 	return nil
@@ -56,7 +68,7 @@ func (q *Quantity) UnmarshalText(text []byte) error {
 	q.inner.Set(&tmp)
 
 	if !q.IsValid() {
-		return ErrInvalidArgument
+		return ErrInvalidQuantity
 	}
 
 	return nil
@@ -65,7 +77,7 @@ func (q *Quantity) UnmarshalText(text []byte) error {
 // FromBigInt converts from a big.Int to a Quantity.
 func (q *Quantity) FromBigInt(n *big.Int) error {
 	if n == nil || !isValid(n) {
-		return ErrInvalidArgument
+		return ErrInvalidQuantity
 	}
 
 	q.inner.Set(n)
@@ -84,7 +96,7 @@ func (q *Quantity) ToBigInt() *big.Int {
 // Add adds n to q, returning an error if n < 0 or n == nil.
 func (q *Quantity) Add(n *Quantity) error {
 	if n == nil || !n.IsValid() {
-		return ErrInvalidArgument
+		return ErrInvalidQuantity
 	}
 
 	q.inner.Add(&q.inner, &n.inner)
@@ -96,7 +108,7 @@ func (q *Quantity) Add(n *Quantity) error {
 // n == nil.
 func (q *Quantity) Sub(n *Quantity) error {
 	if n == nil || !n.IsValid() {
-		return ErrInvalidArgument
+		return ErrInvalidQuantity
 	}
 	if q.inner.Cmp(&n.inner) == -1 {
 		return ErrInsufficientBalance
@@ -111,7 +123,7 @@ func (q *Quantity) Sub(n *Quantity) error {
 // returning an error if n < 0 or n == nil.
 func (q *Quantity) SubUpTo(n *Quantity) (*Quantity, error) {
 	if n == nil || !n.IsValid() {
-		return nil, ErrInvalidArgument
+		return nil, ErrInvalidQuantity
 	}
 
 	var amount big.Int
@@ -130,7 +142,7 @@ func (q *Quantity) SubUpTo(n *Quantity) (*Quantity, error) {
 // Mul multiplies n with q, returning an error if n < 0 or n == nil.
 func (q *Quantity) Mul(n *Quantity) error {
 	if n == nil || !n.IsValid() {
-		return ErrInvalidArgument
+		return ErrInvalidQuantity
 	}
 
 	q.inner.Mul(&q.inner, &n.inner)
@@ -141,7 +153,7 @@ func (q *Quantity) Mul(n *Quantity) error {
 // Quo divides q with n, returning an error if n <= 0 or n == nil.
 func (q *Quantity) Quo(n *Quantity) error {
 	if n == nil || !n.IsValid() || n.IsZero() {
-		return ErrInvalidArgument
+		return ErrInvalidQuantity
 	}
 
 	q.inner.Quo(&q.inner, &n.inner)
@@ -184,4 +196,33 @@ func NewQuantity() (q *Quantity) {
 
 func isValid(n *big.Int) bool {
 	return n.Cmp(&zero) >= 0
+}
+
+// Move moves exactly n from src to dst.  On failures neither src nor dst
+// are altered.
+func Move(dst, src, n *Quantity) error {
+	if dst == nil || src == nil {
+		return ErrInvalidAccount
+	}
+	if err := src.Sub(n); err != nil {
+		return err
+	}
+	_ = dst.Add(n)
+
+	return nil
+}
+
+// MoveUpTo moves up to n from src to dst, and returns the amount moved.
+// On failures neither src nor dst are altered.
+func MoveUpTo(dst, src, n *Quantity) (*Quantity, error) {
+	if dst == nil || src == nil {
+		return nil, ErrInvalidAccount
+	}
+	amount, err := src.SubUpTo(n)
+	if err != nil {
+		return nil, err
+	}
+	_ = dst.Add(amount)
+
+	return amount, nil
 }
