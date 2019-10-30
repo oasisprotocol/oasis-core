@@ -64,7 +64,7 @@ var (
 	debondingQueueKeyFmt = keyformat.New(0x57, uint64(0), &signature.MapKey{}, &signature.MapKey{}, uint64(0))
 	// rewardScheduleKeyFmt is the key format used for the reward schedule.
 	//
-	// Value is a CBOR-serialized slice of staking.RewardStep
+	// Value is a CBOR-serialized slice of staking.RewardStep.
 	rewardScheduleKeyFmt = keyformat.New(0x58)
 	// acceptableTransferPeersKeyFmt is the key format used for the acceptable transfer peers set.
 	//
