@@ -178,7 +178,7 @@ func (s *Signer) Sign(message []byte) ([]byte, error) {
 
 // ContextSign generates a signature with the private key over the context and
 // message.
-func (s *Signer) ContextSign(context, message []byte) ([]byte, error) {
+func (s *Signer) ContextSign(context signature.Context, message []byte) ([]byte, error) {
 	if !s.role.MustContextSign() {
 		return nil, signature.ErrRoleAction
 	}

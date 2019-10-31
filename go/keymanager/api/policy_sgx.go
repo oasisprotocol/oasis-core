@@ -6,7 +6,7 @@ import (
 )
 
 // PolicySGXSignatureContext is the context used to sign PolicySGX documents.
-var PolicySGXSignatureContext = []byte("EkKmPolS")
+var PolicySGXSignatureContext = signature.NewContext("oasis-core/keymanager: policy")
 
 // PolicySGX is a key manager access control policy for the replicated
 // SGX key manager.

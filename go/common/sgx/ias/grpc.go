@@ -20,7 +20,7 @@ var (
 	_ cbor.Unmarshaler = (*SignedEvidence)(nil)
 
 	// EvidenceSignatureContext is the signature context used for verifying evidence.
-	EvidenceSignatureContext = []byte("EkIASEvi")
+	EvidenceSignatureContext = signature.NewContext("oasis-core/sgx: ias evidence")
 
 	// CommonName is the CommonName for the IAS proxy TLS certificate.
 	CommonName = "ias-proxy"
@@ -45,7 +45,7 @@ type SignedEvidence struct {
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedEvidence) Open(context []byte, evidence *Evidence) error { // nolint: interfacer
+func (s *SignedEvidence) Open(context signature.Context, evidence *Evidence) error { // nolint: interfacer
 	return s.Signed.Open(context, evidence)
 }
 

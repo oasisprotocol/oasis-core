@@ -60,7 +60,7 @@ var (
 	ErrRootMustFollowOld = nodedb.ErrRootMustFollowOld
 
 	// ReceiptSignatureContext is the signature context used for verifying MKVS receipts.
-	ReceiptSignatureContext = []byte("EkStrRct")
+	ReceiptSignatureContext = signature.NewContext("oasis-core/storage: receipt")
 
 	_ cbor.Marshaler   = (*ReceiptBody)(nil)
 	_ cbor.Unmarshaler = (*ReceiptBody)(nil)

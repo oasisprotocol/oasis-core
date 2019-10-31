@@ -16,11 +16,11 @@ import (
 var (
 	// ComputeSignatureContext is the signature context used to sign compute
 	// worker commitments.
-	ComputeSignatureContext = []byte("EkCommCC")
+	ComputeSignatureContext = signature.NewContext("oasis-core/roothash: compute commitment")
 
 	// ComputeResultsHeaderSignatureContext is the signature context used to
 	// sign compute results headers with RAK.
-	ComputeResultsHeaderSignatureContext = []byte("EkComRHd")
+	ComputeResultsHeaderSignatureContext = signature.NewContext("oasis-core/roothash: compute results header")
 )
 
 // ComputeResultsHeader is the header of a computed batch output by a runtime. This

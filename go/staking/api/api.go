@@ -25,16 +25,16 @@ const (
 
 var (
 	// TransferSignatureContext is the context used for transfers.
-	TransferSignatureContext = []byte("EkStaXfr")
+	TransferSignatureContext = signature.NewContext("oasis-core/staking: transfer")
 
 	// BurnSignatureContext is the context used for burns.
-	BurnSignatureContext = []byte("EkStaBur")
+	BurnSignatureContext = signature.NewContext("oasis-core/staking: burn")
 
 	// EscrowSignatureContext is the context used for escrows.
-	EscrowSignatureContext = []byte("EkStaEsc")
+	EscrowSignatureContext = signature.NewContext("oasis-core/staking: escrow")
 
 	// ReclaimEscrowSignatureContext is the context used for escrow reclimation.
-	ReclaimEscrowSignatureContext = []byte("EkStaRec")
+	ReclaimEscrowSignatureContext = signature.NewContext("oasis-core/staking: reclaim escrow")
 
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New("staking: invalid argument")

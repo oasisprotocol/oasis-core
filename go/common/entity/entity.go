@@ -195,12 +195,12 @@ type SignedEntity struct {
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedEntity) Open(context []byte, entity *Entity) error { // nolint: interfacer
+func (s *SignedEntity) Open(context signature.Context, entity *Entity) error { // nolint: interfacer
 	return s.Signed.Open(context, entity)
 }
 
 // SignEntity serializes the Entity and signs the result.
-func SignEntity(signer signature.Signer, context []byte, entity *Entity) (*SignedEntity, error) {
+func SignEntity(signer signature.Signer, context signature.Context, entity *Entity) (*SignedEntity, error) {
 	signed, err := signature.SignSigned(signer, context, entity)
 	if err != nil {
 		return nil, err

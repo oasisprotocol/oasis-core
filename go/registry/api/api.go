@@ -28,35 +28,44 @@ const (
 var (
 	// RegisterEntitySignatureContext is the context used for entity
 	// registration.
-	RegisterEntitySignatureContext = []byte("EkEntReg")
+	RegisterEntitySignatureContext = signature.NewContext("oasis-core/registry: register entity")
 
 	// RegisterGenesisEntitySignatureContext is the context used for
 	// entity registration in the genesis document.
-	RegisterGenesisEntitySignatureContext = []byte("EkEntGen")
+	//
+	// Note: This is identical to non-gensis registrations to support
+	// migrating existing registrations into a new genesis document.
+	RegisterGenesisEntitySignatureContext = RegisterEntitySignatureContext
 
 	// DeregisterEntitySignatureContext is the context used for entity
 	// deregistration.
-	DeregisterEntitySignatureContext = []byte("EkEDeReg")
+	DeregisterEntitySignatureContext = signature.NewContext("oasis-core/registry: deregister entity")
 
 	// RegisterNodeSignatureContext is the context used for node
 	// registration.
-	RegisterNodeSignatureContext = []byte("EkNodReg")
+	RegisterNodeSignatureContext = signature.NewContext("oasis-core/registry: register node")
 
 	// RegisterGenesisNodeSignatureContext is the context used for
-	/// node registration in the genesis document.
-	RegisterGenesisNodeSignatureContext = []byte("EkNodReg")
+	// node registration in the genesis document.
+	//
+	// Note: This is identical to non-gensis registrations to support
+	// migrating existing registrations into a new genesis document.
+	RegisterGenesisNodeSignatureContext = RegisterNodeSignatureContext
 
 	// RegisterRuntimeSignatureContext is the context used for runtime
 	// registration.
-	RegisterRuntimeSignatureContext = []byte("EkRunReg")
+	RegisterRuntimeSignatureContext = signature.NewContext("oasis-core/registry: register runtime")
 
 	// RegisterGenesisRuntimeSignatureContext is the context used for
 	// runtime registation in the genesis document.
-	RegisterGenesisRuntimeSignatureContext = []byte("EkRunGen")
+	//
+	// Note: This is identical to non-gensis registrations to support
+	// migrating existing registrations into a new genesis document.
+	RegisterGenesisRuntimeSignatureContext = RegisterRuntimeSignatureContext
 
 	// RegisterUnfreezeNodeSignatureContext is the context used for
 	// unfreezing nodes.
-	RegisterUnfreezeNodeSignatureContext = []byte("EkUzNReg")
+	RegisterUnfreezeNodeSignatureContext = signature.NewContext("oasis-core/registry: unfreeze node")
 
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New("registry: invalid argument")
@@ -237,7 +246,7 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 		return nil, ErrInvalidArgument
 	}
 
-	var ctx []byte
+	var ctx signature.Context
 	switch isGenesis {
 	case true:
 		ctx = RegisterGenesisEntitySignatureContext
@@ -300,7 +309,7 @@ func VerifyRegisterNodeArgs(cfg *Config, logger *logging.Logger, sigNode *node.S
 		return nil, ErrInvalidArgument
 	}
 
-	var ctx []byte
+	var ctx signature.Context
 	switch isGenesis {
 	case true:
 		ctx = RegisterGenesisNodeSignatureContext
@@ -717,7 +726,7 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 		return nil, ErrInvalidArgument
 	}
 
-	var ctx []byte
+	var ctx signature.Context
 	switch isGenesis {
 	case true:
 		ctx = RegisterGenesisRuntimeSignatureContext

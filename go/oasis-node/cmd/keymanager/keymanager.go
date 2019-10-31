@@ -26,8 +26,6 @@ import (
 )
 
 const (
-	policySignContext = "EkKmPolS"
-
 	cfgPolicySerial       = "keymanager.policy.serial"
 	cfgPolicyID           = "keymanager.policy.id"
 	cfgPolicyFile         = "keymanager.policy.file"
@@ -261,7 +259,7 @@ func signPolicyFromFlags() (*signature.Signature, error) {
 		return nil, err
 	}
 
-	rawSigBytes, err := signer.ContextSign([]byte(policySignContext), policyBytes)
+	rawSigBytes, err := signer.ContextSign(kmApi.PolicySGXSignatureContext, policyBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +318,7 @@ func verifyPolicyFromFlags() error {
 				return err
 			}
 
-			if !s.Verify([]byte(policySignContext), policyBytes) {
+			if !s.Verify(kmApi.PolicySGXSignatureContext, policyBytes) {
 				return errors.New("signature is not valid for given policy")
 			}
 		}

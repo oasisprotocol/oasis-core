@@ -30,7 +30,7 @@ var (
 	// in insecure builds when a RAK is unavailable.
 	TestSigners []signature.Signer
 
-	initResponseContext = []byte("EkKmIniR")
+	initResponseContext = signature.NewContext("oasis-core/keymanager: init response")
 )
 
 // Status is the current key manager status.

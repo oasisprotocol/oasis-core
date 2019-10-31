@@ -46,8 +46,8 @@ pub struct InitResponse {
     pub policy_checksum: Vec<u8>,
 }
 
-/// Context used for th einit response signature.
-pub const INIT_RESPONSE_CONTEXT: [u8; 8] = *b"EkKmIniR";
+/// Context used for the init response signature.
+pub const INIT_RESPONSE_CONTEXT: &'static [u8] = b"oasis-core/keymanager: init response";
 
 /// Signed InitResponse.
 #[derive(Clone, Serialize, Deserialize)]
