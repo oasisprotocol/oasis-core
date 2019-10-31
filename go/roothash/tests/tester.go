@@ -79,9 +79,6 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 		runtimes = append(runtimes, rt)
 	}
 	registryTests.BulkPopulate(t, registry, epochtime, runtimes, seedBase)
-	for _, rt := range runtimes {
-		rt.MustRegister(t, registry)
-	}
 
 	// Run the various tests. (Ordering matters)
 	for _, v := range rtStates {

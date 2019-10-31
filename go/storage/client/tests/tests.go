@@ -51,9 +51,8 @@ func ClientWorkerTests(
 	rt, err := registryTests.NewTestRuntime(seed, nil)
 	require.NoError(err, "NewTestRuntime")
 	// Populate the registry with an entity and nodes.
-	nodes := rt.Populate(t, registry, timeSource, rt, seed)
+	nodes := rt.Populate(t, registry, timeSource, seed)
 
-	rt.MustRegister(t, registry)
 	// Initialize storage client
 	client, err := storageClient.New(ctx, identity, schedulerBackend, registry)
 	require.NoError(err, "NewStorageClient")

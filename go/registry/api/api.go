@@ -303,7 +303,15 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
-func VerifyRegisterNodeArgs(params *ConsensusParameters, logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool, regRuntimes []*Runtime) (*node.Node, error) {
+func VerifyRegisterNodeArgs( // nolint: gocyclo
+	params *ConsensusParameters,
+	logger *logging.Logger,
+	sigNode *node.SignedNode,
+	entity *entity.Entity,
+	now time.Time,
+	isGenesis bool,
+	regRuntimes []*Runtime,
+) (*node.Node, error) {
 	var n node.Node
 	if sigNode == nil {
 		return nil, ErrInvalidArgument
@@ -381,22 +389,30 @@ func VerifyRegisterNodeArgs(params *ConsensusParameters, logger *logging.Logger,
 
 	// TODO: Key manager nodes maybe should be restricted to only being a
 	// key manager at the expense of breaking some of our test configs.
-	needRuntimes := n.HasRoles(node.RoleComputeWorker | node.RoleKeyManager) // XXX: RoleTransactionScheduler?
+	needRuntimes := n.HasRoles(
+		node.RoleComputeWorker |
+			node.RoleStorageWorker |
+			node.RoleTransactionScheduler |
+			node.RoleKeyManager |
+			node.RoleMergeWorker,
+	)
 
 	switch len(n.Runtimes) {
 	case 0:
-		// TODO: This should be an registration failure, but the node registration
-		// integration tests do the wrong thing.
 		if needRuntimes {
 			logger.Error("RegisterNode: no runtimes in registration",
 				"node", n,
 			)
+			return nil, ErrInvalidArgument
 		}
 	default:
 		rtMap := make(map[signature.MapKey]bool)
+		regRtMap := make(map[signature.MapKey]bool)
 
-		// If the node indicates TEE support for any of it's runtimes,
-		// validate the attestation evidence.
+		for _, rt := range regRuntimes {
+			regRtMap[rt.ID.ToMapKey()] = true
+		}
+
 		for _, rt := range n.Runtimes {
 			k := rt.ID.ToMapKey()
 			if rtMap[k] {
@@ -407,6 +423,16 @@ func VerifyRegisterNodeArgs(params *ConsensusParameters, logger *logging.Logger,
 			}
 			rtMap[k] = true
 
+			// Make sure that the claimed runtime actually exists.
+			if !regRtMap[k] {
+				logger.Error("RegisterNode: runtime does not exist",
+					"id", rt.ID,
+				)
+				return nil, ErrInvalidArgument
+			}
+
+			// If the node indicates TEE support for any of it's runtimes,
+			// validate the attestation evidence.
 			if err := VerifyNodeRuntimeEnclaveIDs(logger, rt, regRuntimes, now); err != nil {
 				return nil, err
 			}
@@ -415,6 +441,13 @@ func VerifyRegisterNodeArgs(params *ConsensusParameters, logger *logging.Logger,
 
 	// If node is a validator, ensure it has ConensusInfo.
 	if n.HasRoles(node.RoleValidator) {
+		if !n.Consensus.ID.IsValid() {
+			logger.Error("RegisterNode: invalid consensus id",
+				"node", n,
+			)
+			return nil, ErrInvalidArgument
+		}
+
 		if err := verifyAddresses(params, n.Consensus.Addresses); err != nil {
 			addrs, _ := json.Marshal(n.Consensus.Addresses)
 			logger.Error("RegisterNode: missing/invalid consensus addresses",
@@ -459,6 +492,13 @@ func VerifyRegisterNodeArgs(params *ConsensusParameters, logger *logging.Logger,
 
 	// If node is a compute/txnscheduler/merge worker, ensure it has P2PInfo.
 	if n.HasRoles(node.RoleComputeWorker | node.RoleTransactionScheduler | node.RoleMergeWorker) {
+		if !n.P2P.ID.IsValid() {
+			logger.Error("RegisterNode: invalid P2P id",
+				"node", n,
+			)
+			return nil, ErrInvalidArgument
+		}
+
 		if err := verifyAddresses(params, n.P2P.Addresses); err != nil {
 			addrs, _ := json.Marshal(n.P2P.Addresses)
 			logger.Error("RegisterNode: missing/invald P2P addresses",

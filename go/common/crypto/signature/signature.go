@@ -215,6 +215,17 @@ func (k PublicKey) String() string {
 	return hexKey
 }
 
+// IsValid checks whether the public key is well-formed.
+func (k PublicKey) IsValid() bool {
+	if len(k) != PublicKeySize {
+		return false
+	}
+	if k.isBlacklisted() {
+		return false
+	}
+	return true
+}
+
 // ToMapKey returns a fixed-sized representation of the public key.
 func (k PublicKey) ToMapKey() MapKey {
 	if len(k) != PublicKeySize {
@@ -272,7 +283,7 @@ func (k *PublicKey) LoadPEM(fn string, signer Signer) error {
 	return nil
 }
 
-func (k *PublicKey) isBlacklisted() bool {
+func (k PublicKey) isBlacklisted() bool {
 	_, isBlacklisted := blacklistedPublicKeys.Load(k.ToMapKey())
 	return isBlacklisted
 }
@@ -601,4 +612,30 @@ func BuildPublicKeyBlacklist(allowTestKeys bool) {
 	}
 
 	// Explicitly forbid other keys here.
+
+	// Small order points.
+	// See: https://github.com/jedisct1/libsodium/blob/master/src/libsodium/crypto_core/ed25519/ref10/ed25519_ref10.c#L1019.
+	for _, v := range []string{
+		// 0 (order 4).
+		"0000000000000000000000000000000000000000000000000000000000000000",
+		// 1 (order 1).
+		"0100000000000000000000000000000000000000000000000000000000000000",
+		// 2707385501144840649318225287225658788936804267575313519463743609750303402022 (order 8).
+		"26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+		// 55188659117513257062467267217118295137698188065244968500265048394206261417927 (order 8).
+		"c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+		// p-1 (order 2).
+		"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+		// p (=0, order 4).
+		"edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+		// p+1 (=1, order 1).
+		"eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+	} {
+		var pk PublicKey
+		if err := pk.UnmarshalHex(v); err != nil {
+			panic(err)
+		}
+
+		blacklistedPublicKeys.Store(pk.ToMapKey(), true)
+	}
 }
