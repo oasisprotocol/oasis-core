@@ -34,3 +34,38 @@ func TestIsRoutable(t *testing.T) {
 		require.Equal(t, testCase.isRoutable, address.IsRoutable(), "Unexpected Address IsRoutable().")
 	}
 }
+
+func TestConsensusAddress(t *testing.T) {
+	type testCase struct {
+		id               string
+		addr             string
+		consensusAddrStr string
+	}
+
+	testCases := []testCase{
+		{
+			id:               "deadbeefdeadbeefdeadbeeddeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+			addr:             "127.0.0.1:8000",
+			consensusAddrStr: "deadbeefdeadbeefdeadbeeddeadbeefdeadbeefdeadbeefdeadbeefdeadbeef@127.0.0.1:8000",
+		},
+		{
+			id:               "bd51dedea0e92070d90386a85a802df6b9bc69e46f10a130caf72e3a1cd64af6",
+			addr:             "35.100.2.11:8000",
+			consensusAddrStr: "bd51dedea0e92070d90386a85a802df6b9bc69e46f10a130caf72e3a1cd64af6@35.100.2.11:8000",
+		},
+	}
+
+	for _, testCase := range testCases {
+		// Construct a ConsensusAddress object and check if text marshalling works.
+		var consensusAddr ConsensusAddress
+		require.NoError(t, consensusAddr.ID.UnmarshalHex(testCase.id), "error unmarshalling consensus address' id")
+		require.NoError(t, consensusAddr.Address.UnmarshalText([]byte(testCase.addr)), "error unmarshalling consensus address' TCP address")
+		consensusAddrBytes, err := consensusAddr.MarshalText()
+		require.NoError(t, err, "error marshalling consensus address")
+		require.Equal(t, testCase.consensusAddrStr, string(consensusAddrBytes), "marshalled consensus address does not match")
+		// Unmarshal a text ConsensusAddress object and compare it to the constructed object.
+		var consensusAddrUnmarshalled ConsensusAddress
+		require.NoError(t, consensusAddrUnmarshalled.UnmarshalText([]byte(testCase.consensusAddrStr)), "error unmarshalling consensus address")
+		require.Equal(t, consensusAddr, consensusAddrUnmarshalled)
+	}
+}

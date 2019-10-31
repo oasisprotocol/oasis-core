@@ -3,9 +3,12 @@ package node
 import (
 	"encoding"
 	"errors"
+	"fmt"
 	"math"
 	"net"
+	"strings"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	pbCommon "github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
@@ -13,11 +16,16 @@ var (
 	// ErrInvalidAddress is the error returned when a transport address is
 	// invalid.
 	ErrInvalidAddress = errors.New("node: invalid transport address")
+	// ErrConsensusAddressNoID is the error returned when a consensus address
+	// doesn't have the ID@ part.
+	ErrConsensusAddressNoID = errors.New("node: consensus address doesn't have ID@ part")
 
 	unroutableNetworks []net.IPNet
 
 	_ encoding.TextMarshaler   = (*Address)(nil)
 	_ encoding.TextUnmarshaler = (*Address)(nil)
+	_ encoding.TextMarshaler   = (*ConsensusAddress)(nil)
+	_ encoding.TextUnmarshaler = (*ConsensusAddress)(nil)
 )
 
 // Address represents a TCP address for the purpose of node descriptors.
@@ -27,7 +35,7 @@ type Address struct {
 
 // MarshalText implements the encoding.TextMarshaler interface.
 func (a *Address) MarshalText() ([]byte, error) {
-	return []byte(a.TCPAddr.String()), nil
+	return []byte(a.String()), nil
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
@@ -66,6 +74,11 @@ func (a *Address) IsRoutable() bool {
 		}
 	}
 	return true
+}
+
+// String returns the string representation of an address.
+func (a Address) String() string {
+	return a.TCPAddr.String()
 }
 
 // ToProtoAddresses converts a list of Addresses to protocol buffers.
@@ -135,6 +148,76 @@ func toProtoAddress(addr Address) *pbCommon.Address {
 	pbAddr.Port = uint32(addr.Port)
 
 	return pbAddr
+}
+
+// ConsensusAddress represents a Tendermint consensus address that includes an
+// ID and a TCP address.
+// NOTE: The consensus address ID could be different from the consensus ID
+// to allow using a sentry node's ID and address instead of the validator's.
+type ConsensusAddress struct {
+	ID      signature.PublicKey `json:"id"`
+	Address Address             `json:"address"`
+}
+
+// MarshalText implements the encoding.TextMarshaler interface.
+func (ca *ConsensusAddress) MarshalText() ([]byte, error) {
+	idStr := ca.ID.String()
+	addrStr, err := ca.Address.MarshalText()
+	if err != nil {
+		return nil, fmt.Errorf("node: error marshalling consensus address' TCP address: %w", err)
+	}
+	return []byte(fmt.Sprintf("%s@%s", idStr, addrStr)), nil
+}
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+func (ca *ConsensusAddress) UnmarshalText(text []byte) error {
+	spl := strings.Split(string(text), "@")
+	if len(spl) != 2 {
+		return ErrConsensusAddressNoID
+	}
+	if err := ca.ID.UnmarshalHex(spl[0]); err != nil {
+		return fmt.Errorf("node: unable to parse consensus address' ID: %w", err)
+	}
+	if err := ca.Address.UnmarshalText([]byte(spl[1])); err != nil {
+		return fmt.Errorf("node: unable to parse consensus address' TCP address: %w", err)
+	}
+	return nil
+}
+
+// String returns a string representation of a consensus address.
+func (ca *ConsensusAddress) String() string {
+	return fmt.Sprintf("%s@%s", ca.ID, ca.Address)
+}
+
+// ToProtoConsensusAddresses converts a list of ConsensusAddresses to protocol buffers.
+func ToProtoConsensusAddresses(addrs []ConsensusAddress) []*pbCommon.ConsensusAddress {
+	var pbConsensusAddrs []*pbCommon.ConsensusAddress
+	for _, addr := range addrs {
+		pbAddr := new(pbCommon.ConsensusAddress)
+		pbAddr.Id, _ = addr.ID.MarshalBinary()
+		pbAddr.Address = toProtoAddress(addr.Address)
+		pbConsensusAddrs = append(pbConsensusAddrs, pbAddr)
+	}
+	return pbConsensusAddrs
+}
+
+// FromProtoAddresses converts a list of protocol buffer addresses to a list of
+// Addresses.
+func FromProtoConsensusAddresses(pbAddrs []*pbCommon.ConsensusAddress) ([]ConsensusAddress, error) {
+	consensusAddrs := make([]ConsensusAddress, 0, len(pbAddrs))
+	for _, v := range pbAddrs {
+		consensusAddr := new(ConsensusAddress)
+		if err := consensusAddr.ID.UnmarshalBinary(v.GetId()); err != nil {
+			return nil, err
+		}
+		addr, err := parseProtoAddress(v.GetAddress())
+		if err != nil {
+			return nil, err
+		}
+		consensusAddr.Address = *addr
+		consensusAddrs = append(consensusAddrs, *consensusAddr)
+	}
+	return consensusAddrs, nil
 }
 
 func init() {
