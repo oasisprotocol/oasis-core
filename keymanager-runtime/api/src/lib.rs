@@ -46,7 +46,7 @@ lazy_static! {
 }
 const MULTISIG_THRESHOLD: usize = 9001; // TODO: Set this to a real value.
 
-const POLICY_SIGN_CONTEXT: [u8; 8] = *b"EkKmPolS";
+const POLICY_SIGN_CONTEXT: &'static [u8] = b"oasis-core/keymanager: policy";
 
 impl SignedPolicySGX {
     /// Verify the signatures and return the PolicySGX, if the signatures are correct.

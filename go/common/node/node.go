@@ -29,7 +29,7 @@ var (
 	// ErrNilProtobuf is the error returned when a protobuf is nil.
 	ErrNilProtobuf = errors.New("node: Protobuf is nil")
 
-	teeHashContext = []byte("EkNodReg")
+	teeHashContext = []byte("oasis-core/node: TEE RAK binding")
 
 	_ cbor.Marshaler   = (*Node)(nil)
 	_ cbor.Unmarshaler = (*Node)(nil)

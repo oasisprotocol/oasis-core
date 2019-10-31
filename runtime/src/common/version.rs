@@ -66,6 +66,6 @@ impl From<u64> for Version {
 // the worker host.
 pub const PROTOCOL_VERSION: Version = Version {
     major: 0,
-    minor: 7,
+    minor: 8,
     patch: 0,
 };

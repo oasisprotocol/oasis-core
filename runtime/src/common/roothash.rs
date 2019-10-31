@@ -77,7 +77,8 @@ impl Header {
 
 /// Compute results header signature context.
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
-pub const COMPUTE_RESULTS_HEADER_CONTEXT: [u8; 8] = *b"EkComRHd";
+pub const COMPUTE_RESULTS_HEADER_CONTEXT: &'static [u8] =
+    b"oasis-core/roothash: compute results header";
 
 /// The header of a computed batch output by a runtime. This header is a
 /// compressed representation (e.g., hashes instead of full content) of

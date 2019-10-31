@@ -21,7 +21,7 @@ use sgx_isa::Report;
 
 /// Context used for computing the RAK digest.
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
-const RAK_HASH_CONTEXT: [u8; 8] = *b"EkNodReg";
+const RAK_HASH_CONTEXT: &'static [u8] = b"oasis-core/node: TEE RAK binding";
 
 /// RAK-related error.
 #[derive(Debug, Fail)]
@@ -88,9 +88,9 @@ impl RAK {
 
     /// Generate report body = H(RAK_HASH_CONTEXT || RAK_pub).
     fn report_body_for_rak(rak: &PublicKey) -> Hash {
-        let mut message = [0; 40];
-        message[0..8].copy_from_slice(&RAK_HASH_CONTEXT);
-        message[8..40].copy_from_slice(rak.as_ref());
+        let mut message = [0; 64];
+        message[0..32].copy_from_slice(&RAK_HASH_CONTEXT);
+        message[32..64].copy_from_slice(rak.as_ref());
         Hash::digest_bytes(&message)
     }
 

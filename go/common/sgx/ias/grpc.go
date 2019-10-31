@@ -20,7 +20,7 @@ var (
 	_ cbor.Unmarshaler = (*SignedEvidence)(nil)
 
 	// EvidenceSignatureContext is the signature context used for verifying evidence.
-	EvidenceSignatureContext = signature.NewContext("EkIASEvi")
+	EvidenceSignatureContext = signature.NewContext("oasis-core/sgx: ias evidence")
 
 	// CommonName is the CommonName for the IAS proxy TLS certificate.
 	CommonName = "ias-proxy"
