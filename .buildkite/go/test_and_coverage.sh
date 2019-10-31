@@ -45,7 +45,4 @@ popd
 ############################
 # Upload coverage to codecov
 ############################
-set +x
-export CODECOV_TOKEN=$(cat ~/.codecov/oasis_core_api_token)
-set -x
-bash <(curl -s https://codecov.io/bash) -Z
+.buildkite/scripts/upload_coverage.sh
