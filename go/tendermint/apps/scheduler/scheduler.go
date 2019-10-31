@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"time"
 
@@ -39,6 +40,8 @@ var (
 	rngContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
 	rngContextMerge                = []byte("EkS-ABCI-Merge")
 	rngContextValidators           = []byte("EkS-ABCI-Validators")
+
+	RewardFactorEpochElectionAny *staking.Quantity
 
 	errUnexpectedTransaction = errors.New("tendermint/scheduler: unexpected transaction")
 )
@@ -197,10 +200,16 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get stake snapshot")
 		}
 
+		var entitiesEligibleForReward map[signature.MapKey]bool
+		if epochChanged {
+			// For elections on epoch changes, distribute rewards to entities with any eligible nodes.
+			entitiesEligibleForReward = make(map[signature.MapKey]bool)
+		}
+
 		// Handle the validator election first, because no consensus is
 		// catastrophic, while no validators is not.
 		if !params.DebugStaticValidators {
-			if err = app.electValidators(ctx, beacon, entityStake, nodes); err != nil {
+			if err = app.electValidators(ctx, beacon, entityStake, entitiesEligibleForReward, nodes); err != nil {
 				// It is unclear what the behavior should be if the validator
 				// election fails.  The system can not ensure integrity, so
 				// presumably manual intervention is required...
@@ -215,7 +224,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			scheduler.KindMerge,
 		}
 		for _, kind := range kinds {
-			if err = app.electAllCommittees(ctx, request, epoch, beacon, entityStake, runtimes, nodes, kind); err != nil {
+			if err = app.electAllCommittees(ctx, request, epoch, beacon, entityStake, entitiesEligibleForReward, runtimes, nodes, kind); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("tendermint/scheduler: couldn't elect %s committees", kind))
 			}
 		}
@@ -234,6 +243,13 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			"kinds", kindNames,
 			"runtimes", runtimeIDs,
 		)
+
+		if entitiesEligibleForReward != nil {
+			stakingSt := stakingState.NewMutableState(ctx.State())
+			if err = stakingSt.AddRewards(epoch, RewardFactorEpochElectionAny, entitiesEligibleForReward); err != nil {
+				return errors.Wrap(err, "adding rewards")
+			}
+		}
 	}
 	return nil
 }
@@ -398,7 +414,7 @@ func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registr
 // Operates on consensus connection.
 // Return error if node should crash.
 // For non-fatal problems, save a problem condition to the state and return successfully.
-func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
+func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
 	if !rt.IsCompute() && kind != scheduler.KindCompute {
 		return nil
@@ -451,6 +467,9 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 		}
 		if isSuitableFn(n, rt, request.Header.Time) {
 			nodeList = append(nodeList, n)
+			if entitiesEligibleForReward != nil {
+				entitiesEligibleForReward[n.EntityID.ToMapKey()] = true
+			}
 		}
 	}
 
@@ -531,16 +550,16 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 }
 
 // Operates on consensus connection.
-func (app *schedulerApplication) electAllCommittees(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
+func (app *schedulerApplication) electAllCommittees(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	for _, runtime := range runtimes {
-		if err := app.electCommittee(ctx, request, epoch, beacon, entityStake, runtime, nodes, kind); err != nil {
+		if err := app.electCommittee(ctx, request, epoch, beacon, entityStake, entitiesEligibleForReward, runtime, nodes, kind); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byte, entityStake *stakeAccumulator, nodes []*node.Node) error {
+func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, nodes []*node.Node) error {
 	// XXX: How many validators do we want, anyway?
 	const maxValidators = 100
 
@@ -554,6 +573,9 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 			continue
 		}
 		nodeList = append(nodeList, n)
+		if entitiesEligibleForReward != nil {
+			entitiesEligibleForReward[n.EntityID.ToMapKey()] = true
+		}
 	}
 
 	drbg, err := drbg.New(crypto.SHA512, beacon, nil, rngContextValidators)
@@ -606,4 +628,12 @@ func New(timeSource epochtime.Backend) (abci.Application, error) {
 		timeSource: timeSource,
 		baseEpoch:  baseEpoch,
 	}, nil
+}
+
+func init() {
+	RewardFactorEpochElectionAny = staking.NewQuantity()
+	err := RewardFactorEpochElectionAny.FromBigInt(big.NewInt(1))
+	if err != nil {
+		panic(err)
+	}
 }
