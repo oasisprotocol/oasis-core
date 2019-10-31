@@ -2,6 +2,8 @@
 package cmd
 
 import (
+	"syscall"
+
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/oasis-core/go/common/version"
@@ -33,6 +35,10 @@ func RootCommand() *cobra.Command {
 // Execute spawns the main entry point after handling the config file
 // and command line arguments.
 func Execute() {
+	// Only the owner should have read/write/execute permissions for
+	// anything created by the oasis-node binary.
+	syscall.Umask(0077)
+
 	if err := rootCmd.Execute(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
