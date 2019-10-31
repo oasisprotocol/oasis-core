@@ -504,16 +504,21 @@ type DebondingDelegation struct {
 // Genesis is the initial ledger balances at genesis for use in the genesis
 // block and test cases.
 type Genesis struct {
-	TotalSupply             Quantity                   `json:"total_supply"`
-	CommonPool              Quantity                   `json:"common_pool"`
-	Thresholds              map[ThresholdKind]Quantity `json:"thresholds,omitempty"`
-	DebondingInterval       epochtime.EpochTime        `json:"debonding_interval,omitempty"`
-	AcceptableTransferPeers map[signature.MapKey]bool  `json:"acceptable_transfer_peers,omitempty"`
+	Parameters ConsensusParameters `json:"params"`
+
+	TotalSupply Quantity `json:"total_supply"`
+	CommonPool  Quantity `json:"common_pool"`
 
 	Ledger map[signature.MapKey]*Account `json:"ledger,omitempty"`
 
 	Delegations          map[signature.MapKey]map[signature.MapKey]*Delegation            `json:"delegations,omitempty"`
 	DebondingDelegations map[signature.MapKey]map[signature.MapKey][]*DebondingDelegation `json:"debonding_delegations,omitempty"`
+}
 
-	Slashing map[SlashReason]Slash `json:"slashing,omitempty"`
+// ConsensusParameters are the staking consensus parameters.
+type ConsensusParameters struct {
+	Thresholds              map[ThresholdKind]Quantity `json:"thresholds,omitempty"`
+	DebondingInterval       epochtime.EpochTime        `json:"debonding_interval,omitempty"`
+	AcceptableTransferPeers map[signature.MapKey]bool  `json:"acceptable_transfer_peers,omitempty"`
+	Slashing                map[SlashReason]Slash      `json:"slashing,omitempty"`
 }

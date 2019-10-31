@@ -76,9 +76,11 @@ func (t *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.G
 	}
 
 	return &api.Genesis{
-		Base:     now,
-		Interval: t.interval,
-		Backend:  BackendName,
+		Parameters: api.ConsensusParameters{
+			Backend:  BackendName,
+			Interval: t.interval,
+		},
+		Base: now,
 	}, nil
 }
 

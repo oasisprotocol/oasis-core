@@ -42,10 +42,6 @@ func (bq *beaconQuerier) Beacon(ctx context.Context) ([]byte, error) {
 	return bq.state.Beacon()
 }
 
-func (bq *beaconQuerier) Genesis(ctx context.Context) (*beacon.Genesis, error) {
-	return bq.state.GetGenesis()
-}
-
 func (app *beaconApplication) QueryFactory() interface{} {
 	return &QueryFactory{app}
 }

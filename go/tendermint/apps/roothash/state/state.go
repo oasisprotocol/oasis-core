@@ -2,7 +2,6 @@ package state
 
 import (
 	"errors"
-	"time"
 
 	"github.com/tendermint/iavl"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
@@ -19,10 +19,10 @@ var (
 	//
 	// Value is CBOR-serialized runtime state.
 	runtimeKeyFmt = keyformat.New(0x20, &signature.MapKey{})
-	// roundTimeoutKeyFmt is the key format used for round timeout value.
+	// parametersKeyFmt is the key format used for consensus parameters.
 	//
-	// Value is CBOR-serialized round timeout.
-	roundTimeoutKeyFmt = keyformat.New(0x21)
+	// Value is CBOR-serialized roothash.ConsensusParameters.
+	parametersKeyFmt = keyformat.New(0x21)
 
 	_ cbor.Marshaler   = (*RuntimeState)(nil)
 	_ cbor.Unmarshaler = (*RuntimeState)(nil)
@@ -90,15 +90,15 @@ func (s *ImmutableState) Runtimes() []*RuntimeState {
 	return runtimes
 }
 
-func (s *ImmutableState) RoundTimeout() (time.Duration, error) {
-	_, raw := s.Snapshot.Get(roundTimeoutKeyFmt.Encode())
+func (s *ImmutableState) ConsensusParameters() (*roothash.ConsensusParameters, error) {
+	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
 	if raw == nil {
-		panic(errors.New("tendermint/roothash: expected round timeout to be present in app state"))
+		return nil, errors.New("tendermint/roothash: expected consensus parameters to be present in app state")
 	}
 
-	var rt time.Duration
-	err := cbor.Unmarshal(raw, &rt)
-	return rt, err
+	var params roothash.ConsensusParameters
+	err := cbor.Unmarshal(raw, &params)
+	return &params, err
 }
 
 type MutableState struct {
@@ -120,6 +120,6 @@ func (s *MutableState) SetRuntimeState(state *RuntimeState) {
 	s.tree.Set(runtimeKeyFmt.Encode(&state.Runtime.ID), state.MarshalCBOR())
 }
 
-func (s *MutableState) SetRoundTimeout(rt time.Duration) {
-	s.tree.Set(roundTimeoutKeyFmt.Encode(), cbor.Marshal(rt))
+func (s *MutableState) SetConsensusParameters(params *roothash.ConsensusParameters) {
+	s.tree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
 }

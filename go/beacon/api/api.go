@@ -24,8 +24,14 @@ type Backend interface {
 	ToGenesis(context.Context, int64) (*Genesis, error)
 }
 
-// Genesis is the beacon genesis state
+// Genesis is the beacon genesis state.
 type Genesis struct {
+	// Parameters are the beacon consensus parameters.
+	Parameters ConsensusParameters `json:"params"`
+}
+
+// ConsensusParameters are the beacon consensus parameters.
+type ConsensusParameters struct {
 	// DebugDeterministic is true iff the output should be deterministic.
 	DebugDeterministic bool `json:"debug_deterministic"`
 }

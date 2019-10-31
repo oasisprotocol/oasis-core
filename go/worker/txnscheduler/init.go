@@ -39,7 +39,7 @@ func New(
 	}
 
 	// Fetch config from scheduler backend.
-	genesis := commonWorker.GenesisDoc.RootHash.TransactionScheduler
+	genesis := commonWorker.GenesisDoc.RootHash.Parameters.TransactionScheduler
 
 	txAlgorithm, err := txnSchedulerAlgorithm.New(
 		genesis.Algorithm,

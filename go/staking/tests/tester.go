@@ -97,7 +97,7 @@ func testInitialEnv(t *testing.T, backend api.Backend, timeSource epochtime.Seta
 		qty, err := backend.Threshold(context.Background(), kind, 0)
 		require.NoError(err, "Threshold")
 		require.NotNil(qty, "Threshold != nil")
-		require.Equal(debugGenesisState.Thresholds[kind], *qty, "Threshold - value")
+		require.Equal(debugGenesisState.Parameters.Thresholds[kind], *qty, "Threshold - value")
 	}
 }
 

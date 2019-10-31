@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/beacon"
 	beaconAPI "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/client"
+	"github.com/oasislabs/oasis-core/go/common/consensus"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
@@ -82,6 +83,8 @@ type Node struct {
 	grpcInternal *grpc.Server
 	svcTmnt      tmService.TendermintService
 	svcTmntSeed  *tendermint.SeedService
+
+	Consensus consensus.Backend
 
 	Genesis   genesisAPI.Provider
 	Identity  *identity.Identity
@@ -190,7 +193,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	// Only compute, txn scheduler and merge workers need P2P transport.
 	if compute.Enabled() || txnscheduler.Enabled() || merge.Enabled() {
 		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
-		if genesisDoc.Registry.DebugAllowUnroutableAddresses {
+		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 			p2p.DebugForceAllowUnroutableAddresses()
 		}
 		n.P2P, err = p2p.New(p2pCtx, n.Identity)
@@ -513,6 +516,7 @@ func newNode(testNode bool) (*Node, error) {
 			return nil, err
 		}
 	}
+	node.Consensus = node.svcTmnt
 
 	// Initialize the IAS proxy client.
 	// NOTE: See reason above why this needs to happen before seed node init.

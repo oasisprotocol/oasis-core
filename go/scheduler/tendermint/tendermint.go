@@ -171,11 +171,8 @@ func New(ctx context.Context,
 	timeSource epochtime.Backend,
 	service service.TendermintService,
 ) (api.Backend, error) {
-	// Fetch config from genesis document.
-	cfg := service.GetGenesis().Scheduler
-
 	// Initialze and register the tendermint service component.
-	a, err := app.New(timeSource, &cfg)
+	a, err := app.New(timeSource)
 	if err != nil {
 		return nil, err
 	}

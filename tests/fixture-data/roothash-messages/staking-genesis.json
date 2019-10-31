@@ -1,8 +1,10 @@
 {
-  "total_supply": "1",
-  "acceptable_transfer_peers": {
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=": true
+  "params": {
+    "acceptable_transfer_peers": {
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=": true
+    }
   },
+  "total_supply": "1",
   "ledger": {
     "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=": {
       "general_balance": "1"

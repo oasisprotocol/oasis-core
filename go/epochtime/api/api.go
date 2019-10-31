@@ -48,9 +48,15 @@ type SetableBackend interface {
 
 // Genesis is the initial genesis state for allowing configurable timekeeping.
 type Genesis struct {
+	// Parameters are the epochtime consensus parameters.
+	Parameters ConsensusParameters `json:"params"`
+
 	// Base is the starting epoch.
 	Base EpochTime `json:"base"`
+}
 
+// ConsensusParameters are the epochtime consensus parameters.
+type ConsensusParameters struct {
 	// Interval is the epoch interval (in blocks).
 	Interval int64 `json:"interval"`
 

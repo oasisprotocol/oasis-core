@@ -9,10 +9,8 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/crypto/sha3"
 
-	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
 	beaconState "github.com/oasislabs/oasis-core/go/tendermint/apps/beacon/state"
@@ -33,8 +31,6 @@ type beaconApplication struct {
 	state  *abci.ApplicationState
 
 	timeSource epochtime.Backend
-
-	cfg *beacon.Genesis
 }
 
 func (app *beaconApplication) Name() string {
@@ -64,18 +60,6 @@ func (app *beaconApplication) SetOption(req types.RequestSetOption) types.Respon
 	return types.ResponseSetOption{}
 }
 
-func (app *beaconApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) error {
-	// Note: If we ever decide that we need a beacon for the 0th epoch
-	// (that is *only* for the genesis state), it should be initiailized
-	// here.
-	//
-	// It is not super important for now as the epoch will transition
-	// immediately on the first block under normal circumstances.
-	state := beaconState.NewMutableState(ctx.State())
-	state.PutGenesis(&doc.Beacon)
-	return nil
-}
-
 func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeginBlock) error {
 	if changed, beaconEpoch := app.state.EpochChanged(ctx, app.timeSource); changed {
 		return app.onBeaconEpochChange(ctx, beaconEpoch, req)
@@ -102,7 +86,16 @@ func (app *beaconApplication) FireTimer(ctx *abci.Context, t *abci.Timer) error 
 func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
 	var entropyCtx, entropy []byte
 
-	switch app.cfg.DebugDeterministic {
+	state := beaconState.NewMutableState(ctx.State())
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		app.logger.Error("failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+
+	switch params.DebugDeterministic {
 	case false:
 		entropyCtx = prodEntropyCtx
 
@@ -160,14 +153,10 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) erro
 }
 
 // New constructs a new beacon application instance.
-func New(timeSource epochtime.Backend, cfg *beacon.Genesis) abci.Application {
+func New(timeSource epochtime.Backend) abci.Application {
 	app := &beaconApplication{
 		logger:     logging.GetLogger("tendermint/beacon"),
 		timeSource: timeSource,
-		cfg:        cfg,
-	}
-	if cfg.DebugDeterministic {
-		app.logger.Warn("Determistic beacon entropy is NOT FOR PRODUCTION USE")
 	}
 
 	return app

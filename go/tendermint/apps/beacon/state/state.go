@@ -17,8 +17,10 @@ var (
 	//
 	// Value is raw random beacon.
 	beaconKeyFmt = keyformat.New(0x40)
-	// genesisKeyFmt is the key format used for genesis.
-	genesisKeyFmt = keyformat.New(0x41)
+	// parametersKeyFmt is the key format used for consensus parameters.
+	//
+	// Value is CBOR-serialized beacon.ConsensusParameters.
+	parametersKeyFmt = keyformat.New(0x41)
 )
 
 type ImmutableState struct {
@@ -44,15 +46,15 @@ func (s *ImmutableState) Beacon() ([]byte, error) {
 	return b, nil
 }
 
-func (s *ImmutableState) GetGenesis() (*beacon.Genesis, error) {
-	_, raw := s.Snapshot.Get(genesisKeyFmt.Encode())
+func (s *ImmutableState) ConsensusParameters() (*beacon.ConsensusParameters, error) {
+	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
 	if raw == nil {
-		panic(errors.New("tendermint/beacon: expected genesis to be present in app state"))
+		return nil, errors.New("tendermint/beacon: expected consensus parameters to be present in app state")
 	}
 
-	var genesis beacon.Genesis
-	err := cbor.Unmarshal(raw, &genesis)
-	return &genesis, err
+	var params beacon.ConsensusParameters
+	err := cbor.Unmarshal(raw, &params)
+	return &params, err
 }
 
 // MutableState is a mutable beacon state wrapper.
@@ -72,8 +74,8 @@ func (s *MutableState) SetBeacon(newBeacon []byte) error {
 	return nil
 }
 
-func (s *MutableState) PutGenesis(g *beacon.Genesis) {
-	s.tree.Set(genesisKeyFmt.Encode(), cbor.Marshal(g))
+func (s *MutableState) SetConsensusParameters(params *beacon.ConsensusParameters) {
+	s.tree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
 }
 
 // NewMutableState creates a new mutable beacon state wrapper.

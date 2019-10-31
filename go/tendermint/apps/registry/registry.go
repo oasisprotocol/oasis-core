@@ -29,8 +29,6 @@ type registryApplication struct {
 	state  *abci.ApplicationState
 
 	timeSource epochtime.Backend
-
-	cfg *registry.Genesis
 }
 
 func (app *registryApplication) Name() string {
@@ -88,7 +86,15 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error
 	} else if tx.TxUnfreezeNode != nil {
 		return app.unfreezeNode(ctx, state, &tx.TxUnfreezeNode.UnfreezeNode)
 	} else if tx.TxRegisterRuntime != nil {
-		if !app.cfg.DebugAllowRuntimeRegistration {
+		params, err := state.ConsensusParameters()
+		if err != nil {
+			app.logger.Error("RegisterRuntime: failed to fetch consensus parameters",
+				"err", err,
+			)
+			return err
+		}
+
+		if !params.DebugAllowRuntimeRegistration {
 			return registry.ErrForbidden
 		}
 		return app.registerRuntime(ctx, state, &tx.TxRegisterRuntime.Runtime)
@@ -202,7 +208,14 @@ func (app *registryApplication) registerEntity(
 		}
 	}
 
-	if !app.cfg.DebugBypassStake {
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		app.logger.Error("RegisterEntity: failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+	if !params.DebugBypassStake {
 		if err = stakingState.EnsureSufficientStake(ctx, ent.ID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
 			app.logger.Error("RegisterEntity: Insufficent stake",
 				"err", err,
@@ -305,7 +318,13 @@ func (app *registryApplication) registerNode(
 		return err
 	}
 
-	kmOperator := state.KeyManagerOperator()
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		app.logger.Error("RegisterNode: failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
 	regRuntimes, err := state.Runtimes()
 	if err != nil {
 		app.logger.Error("RegisterNode: failed to obtain registry runtimes",
@@ -314,7 +333,7 @@ func (app *registryApplication) registerNode(
 		)
 		return err
 	}
-	newNode, err := registry.VerifyRegisterNodeArgs(app.cfg, app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), kmOperator, regRuntimes)
+	newNode, err := registry.VerifyRegisterNodeArgs(params, app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), regRuntimes)
 	if err != nil {
 		return err
 	}
@@ -332,7 +351,7 @@ func (app *registryApplication) registerNode(
 
 	// Re-check that the entity has at least sufficient stake to still be an
 	// entity.  The node thresholds should be enforced in the scheduler.
-	if !app.cfg.DebugBypassStake {
+	if !params.DebugBypassStake {
 		if err = stakingState.EnsureSufficientStake(ctx, newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
 			app.logger.Error("RegisterNode: Insufficent stake",
 				"err", err,
@@ -558,10 +577,9 @@ func (app *registryApplication) registerRuntime(
 }
 
 // New constructs a new registry application instance.
-func New(timeSource epochtime.Backend, cfg *registry.Genesis) abci.Application {
+func New(timeSource epochtime.Backend) abci.Application {
 	return &registryApplication{
 		logger:     logging.GetLogger("tendermint/registry"),
 		timeSource: timeSource,
-		cfg:        cfg,
 	}
 }

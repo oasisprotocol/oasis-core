@@ -47,10 +47,6 @@ func (sq *schedulerQuerier) KindsCommittees(ctx context.Context, kinds []schedul
 	return sq.state.KindsCommittees(kinds)
 }
 
-func (sq *schedulerQuerier) Genesis(ctx context.Context) (*scheduler.Genesis, error) {
-	return sq.state.GetGenesis()
-}
-
 func (app *schedulerApplication) QueryFactory() interface{} {
 	return &QueryFactory{app}
 }

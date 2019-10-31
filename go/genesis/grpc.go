@@ -3,7 +3,6 @@ package genesis
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	"google.golang.org/grpc"
 
@@ -41,6 +40,11 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 		if height, err = s.tendermintService.GetHeight(); err != nil {
 			return nil, err
 		}
+	}
+
+	blk, err := s.tendermintService.GetBlock(&height)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get genesis doc.
@@ -82,9 +86,9 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 	doc := api.Document{
 		// XXX: Tendermint doesn't support restoring from non-0 height.
 		// https://github.com/tendermint/tendermint/issues/2543
-		Height:     0,
+		Height:     height,
 		ChainID:    genesisDoc.ChainID,
-		Time:       time.Now(),
+		Time:       blk.Header.Time,
 		EpochTime:  *epochtimeGenesis,
 		Registry:   *registryGenesis,
 		RootHash:   *roothashGenesis,

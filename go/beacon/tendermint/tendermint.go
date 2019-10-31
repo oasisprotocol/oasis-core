@@ -48,11 +48,8 @@ func New(ctx context.Context, timeSource epochtime.Backend, service service.Tend
 		return nil, err
 	}
 
-	// Fetch config from genesis document.
-	cfg := service.GetGenesis().Beacon
-
 	// Initialize and register the tendermint service component.
-	a := app.New(timeSource, &cfg)
+	a := app.New(timeSource)
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}

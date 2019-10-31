@@ -40,27 +40,36 @@ func (p *testNodeGenesisProvider) GetTendermintGenesisDocument() (*tmtypes.Genes
 // running a single node "network", only for testing.
 func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, error) {
 	doc := &genesis.Document{
-		Time: time.Now(),
+		ChainID: "oasis-test-chain",
+		Time:    time.Now(),
 		EpochTime: epochtime.Genesis{
-			Backend: tendermock.BackendName,
+			Parameters: epochtime.ConsensusParameters{
+				Backend: tendermock.BackendName,
+			},
 		},
 		Registry: registry.Genesis{
-			DebugAllowUnroutableAddresses: true,
-			DebugAllowRuntimeRegistration: true,
-			DebugBypassStake:              true,
+			Parameters: registry.ConsensusParameters{
+				DebugAllowUnroutableAddresses: true,
+				DebugAllowRuntimeRegistration: true,
+				DebugBypassStake:              true,
+			},
 		},
 		RootHash: roothash.Genesis{
-			RoundTimeout: 1 * time.Second,
-			TransactionScheduler: roothash.TransactionSchedulerGenesis{
-				Algorithm:         batching.Name,
-				BatchFlushTimeout: 1 * time.Second,
-				MaxBatchSize:      10,
-				MaxBatchSizeBytes: 16 * 1024 * 1024,
+			Parameters: roothash.ConsensusParameters{
+				RoundTimeout: 1 * time.Second,
+				TransactionScheduler: roothash.TransactionSchedulerParameters{
+					Algorithm:         batching.Name,
+					BatchFlushTimeout: 1 * time.Second,
+					MaxBatchSize:      10,
+					MaxBatchSizeBytes: 16 * 1024 * 1024,
+				},
 			},
 		},
 		Scheduler: scheduler.Genesis{
-			DebugBypassStake:      true,
-			DebugStaticValidators: true,
+			Parameters: scheduler.ConsensusParameters{
+				DebugBypassStake:      true,
+				DebugStaticValidators: true,
+			},
 		},
 		Consensus: consensus.Genesis{
 			Backend:           tendermint.BackendName,
@@ -74,7 +83,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 		return nil, err
 	}
 	tmDoc := &tmtypes.GenesisDoc{
-		ChainID:         "oasis-test-chain",
+		ChainID:         doc.ChainID,
 		GenesisTime:     doc.Time,
 		ConsensusParams: tmtypes.DefaultConsensusParams(),
 		AppState:        b,

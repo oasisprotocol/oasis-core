@@ -28,8 +28,10 @@ var (
 	//
 	// Value is CBOR-serialized list of validator public keys.
 	validatorsPendingKeyFmt = keyformat.New(0x62)
-	// genesisKeyFmt is the key format used for genesis.
-	genesisKeyFmt = keyformat.New(0x63)
+	// parametersKeyFmt is the key format used for consensus parameters.
+	//
+	// Value is CBOR-serialized api.ConsensusParameters.
+	parametersKeyFmt = keyformat.New(0x63)
 
 	logger = logging.GetLogger("tendermint/scheduler")
 )
@@ -130,15 +132,15 @@ func (s *ImmutableState) PendingValidators() ([]signature.PublicKey, error) {
 	return validators, err
 }
 
-func (s *ImmutableState) GetGenesis() (*api.Genesis, error) {
-	_, raw := s.Snapshot.Get(genesisKeyFmt.Encode())
+func (s *ImmutableState) ConsensusParameters() (*api.ConsensusParameters, error) {
+	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
 	if raw == nil {
-		panic(errors.New("tendermint/scheduler: expected genesis to be present in app state"))
+		return nil, errors.New("tendermint/scheduler: expected consensus parameters to be present in app state")
 	}
 
-	var genesis api.Genesis
-	err := cbor.Unmarshal(raw, &genesis)
-	return &genesis, err
+	var params api.ConsensusParameters
+	err := cbor.Unmarshal(raw, &params)
+	return &params, err
 }
 
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
@@ -177,8 +179,8 @@ func (s *MutableState) PutPendingValidators(validators []signature.PublicKey) {
 	s.tree.Set(validatorsPendingKeyFmt.Encode(), cbor.Marshal(validators))
 }
 
-func (s *MutableState) PutGenesis(g *api.Genesis) {
-	s.tree.Set(genesisKeyFmt.Encode(), cbor.Marshal(g))
+func (s *MutableState) SetConsensusParameters(params *api.ConsensusParameters) {
+	s.tree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
 }
 
 // NewMutableState creates a new mutable scheduler state wrapper.

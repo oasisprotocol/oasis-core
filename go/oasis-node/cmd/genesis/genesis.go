@@ -139,12 +139,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	entities := viper.GetStringSlice(viperEntity)
 	runtimes := viper.GetStringSlice(cfgRuntime)
 	nodes := viper.GetStringSlice(cfgNode)
-	config := &registry.Genesis{
-		DebugAllowUnroutableAddresses: viper.GetBool(cfgRegistryDebugAllowUnroutableAddresses),
-		DebugAllowRuntimeRegistration: viper.GetBool(cfgRegistryDebugAllowRuntimeRegistration),
-		DebugBypassStake:              viper.GetBool(cfgRegistryDebugBypassStake),
-	}
-	if err := AppendRegistryState(doc, entities, runtimes, nodes, config, logger); err != nil {
+	if err := AppendRegistryState(doc, entities, runtimes, nodes, logger); err != nil {
 		logger.Error("failed to parse registry genesis state",
 			"err", err,
 		)
@@ -152,19 +147,11 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	}
 
 	rh := viper.GetStringSlice(cfgRootHash)
-	roundTimeout := viper.GetDuration(cfgRoundTimeout)
-	if err := AppendRootHashState(doc, rh, roundTimeout, logger); err != nil {
+	if err := AppendRootHashState(doc, rh, logger); err != nil {
 		logger.Error("failed to parse roothash genesis state",
 			"err", err,
 		)
 		return
-	}
-
-	doc.RootHash.TransactionScheduler = roothash.TransactionSchedulerGenesis{
-		Algorithm:         viper.GetString(cfgSchedulerAlgorithm),
-		BatchFlushTimeout: viper.GetDuration(cfgSchedulerBatchFlushTimeout),
-		MaxBatchSize:      viper.GetUint64(cfgSchedulerMaxBatchSize),
-		MaxBatchSizeBytes: uint64(viper.GetSizeInBytes(cfgSchedulerMaxBatchSizeBytes)),
 	}
 
 	keymanager := viper.GetStringSlice(cfgKeyManager)
@@ -184,17 +171,23 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	}
 
 	doc.Scheduler = scheduler.Genesis{
-		DebugBypassStake:      viper.GetBool(cfgSchedulerDebugBypassStake),
-		DebugStaticValidators: viper.GetBool(cfgSchedulerDebugStaticValidators),
+		Parameters: scheduler.ConsensusParameters{
+			DebugBypassStake:      viper.GetBool(cfgSchedulerDebugBypassStake),
+			DebugStaticValidators: viper.GetBool(cfgSchedulerDebugStaticValidators),
+		},
 	}
 
 	doc.Beacon = beacon.Genesis{
-		DebugDeterministic: viper.GetBool(cfgBeaconDebugDeterministic),
+		Parameters: beacon.ConsensusParameters{
+			DebugDeterministic: viper.GetBool(cfgBeaconDebugDeterministic),
+		},
 	}
 
 	doc.EpochTime = epochtime.Genesis{
-		Interval: viper.GetInt64(cfgEpochTimeTendermintInterval),
-		Backend:  viper.GetString(cfgEpochTimeBackend),
+		Parameters: epochtime.ConsensusParameters{
+			Backend:  viper.GetString(cfgEpochTimeBackend),
+			Interval: viper.GetInt64(cfgEpochTimeTendermintInterval),
+		},
 	}
 
 	doc.Consensus = consensus.Genesis{
@@ -219,14 +212,16 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 // AppendRegistryState appends the registry genesis state given a vector
 // of entity registrations and runtime registrations.
-func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []string, config *registry.Genesis, l *logging.Logger) error {
+func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []string, l *logging.Logger) error {
 	regSt := registry.Genesis{
-		Entities:                      make([]*entity.SignedEntity, 0, len(entities)),
-		Runtimes:                      make([]*registry.SignedRuntime, 0, len(runtimes)),
-		Nodes:                         make([]*node.SignedNode, 0, len(nodes)),
-		DebugAllowUnroutableAddresses: config.DebugAllowUnroutableAddresses,
-		DebugAllowRuntimeRegistration: config.DebugAllowRuntimeRegistration,
-		DebugBypassStake:              config.DebugBypassStake,
+		Parameters: registry.ConsensusParameters{
+			DebugAllowUnroutableAddresses: viper.GetBool(cfgRegistryDebugAllowUnroutableAddresses),
+			DebugAllowRuntimeRegistration: viper.GetBool(cfgRegistryDebugAllowRuntimeRegistration),
+			DebugBypassStake:              viper.GetBool(cfgRegistryDebugBypassStake),
+		},
+		Entities: make([]*entity.SignedEntity, 0, len(entities)),
+		Runtimes: make([]*registry.SignedRuntime, 0, len(runtimes)),
+		Nodes:    make([]*node.SignedNode, 0, len(nodes)),
 	}
 
 	entMap := make(map[signature.MapKey]bool)
@@ -304,7 +299,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			return err
 		}
 
-		regSt.KeyManagerOperator = ent.ID
+		regSt.Parameters.KeyManagerOperator = ent.ID
 	}
 
 	if s := viper.GetString(cfgKeyManagerOperator); s != "" {
@@ -324,7 +319,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			return registry.ErrNoSuchEntity
 		}
 
-		regSt.KeyManagerOperator = ent.ID
+		regSt.Parameters.KeyManagerOperator = ent.ID
 	}
 
 	for _, v := range runtimes {
@@ -377,11 +372,19 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 }
 
 // AppendRootHashState appends the roothash genesis state given a vector
-// of exported roothash blocks and the round timeout.
-func AppendRootHashState(doc *genesis.Document, exports []string, roundTimeout time.Duration, l *logging.Logger) error {
+// of exported roothash blocks.
+func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Logger) error {
 	rootSt := roothash.Genesis{
-		Blocks:       make(map[signature.MapKey]*block.Block),
-		RoundTimeout: roundTimeout,
+		Parameters: roothash.ConsensusParameters{
+			RoundTimeout: viper.GetDuration(cfgRoundTimeout),
+			TransactionScheduler: roothash.TransactionSchedulerParameters{
+				Algorithm:         viper.GetString(cfgSchedulerAlgorithm),
+				BatchFlushTimeout: viper.GetDuration(cfgSchedulerBatchFlushTimeout),
+				MaxBatchSize:      viper.GetUint64(cfgSchedulerMaxBatchSize),
+				MaxBatchSizeBytes: uint64(viper.GetSizeInBytes(cfgSchedulerMaxBatchSizeBytes)),
+			},
+		},
+		Blocks: make(map[signature.MapKey]*block.Block),
 	}
 
 	for _, v := range exports {

@@ -170,18 +170,24 @@ type PrunedBlock struct {
 
 // Genesis is the roothash genesis state.
 type Genesis struct {
+	// Parameters are the roothash consensus parameters.
+	Parameters ConsensusParameters `json:"params"`
+
 	// Blocks is the per-runtime map of genesis blocks.
 	Blocks map[signature.MapKey]*block.Block `json:"blocks,omitempty"`
+}
 
+// ConsensusParameters are the roothash consensus parameters.
+type ConsensusParameters struct {
 	// RoundTimeout is the round timeout.
 	RoundTimeout time.Duration `json:"round_timeout"`
 
 	// TransactionScheduler is the transaction scheduler configuration.
-	TransactionScheduler TransactionSchedulerGenesis `json:"txn_scheduler"`
+	TransactionScheduler TransactionSchedulerParameters `json:"txn_scheduler"`
 }
 
-// TransactionSchedulerGenesis is the transaction scheduler genesis state.
-type TransactionSchedulerGenesis struct {
+// TransactionSchedulerParameters is the transaction scheduler parameters.
+type TransactionSchedulerParameters struct {
 	// Algorithm is the transaction scheduling algorithm.
 	Algorithm string `json:"algorithm"`
 

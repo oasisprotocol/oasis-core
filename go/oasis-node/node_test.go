@@ -172,6 +172,13 @@ func TestNode(t *testing.T) {
 		}
 	}()
 
+	// Wait for consensus to become ready before proceeding.
+	select {
+	case <-node.Consensus.Synced():
+	case <-time.After(5 * time.Second):
+		t.Fatalf("failed to wait for consensus to become ready")
+	}
+
 	// NOTE: Order of test cases is important.
 	testCases := []*testCase{
 		// Register the test entity and runtime used by every single test,

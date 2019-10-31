@@ -172,6 +172,12 @@ type Backend interface {
 
 // Genesis is the committee scheduler genesis state.
 type Genesis struct {
+	// Parameters are the scheduler consensus parameters.
+	Parameters ConsensusParameters `json:"params"`
+}
+
+// ConsensusParameters are the scheduler consensus parameters.
+type ConsensusParameters struct {
 	// DebugBypassStake is true iff the scheduler should bypass all of
 	// the staking related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake"`

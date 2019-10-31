@@ -536,7 +536,7 @@ func New(
 	service service.TendermintService,
 ) (api.Backend, error) {
 	// Fetch round timeout config from genesis document.
-	roundTimeout := service.GetGenesis().RootHash.RoundTimeout
+	roundTimeout := service.GetGenesis().RootHash.Parameters.RoundTimeout
 
 	// Initialize and register the tendermint service component.
 	a := app.New(timeSource, beac, roundTimeout)
