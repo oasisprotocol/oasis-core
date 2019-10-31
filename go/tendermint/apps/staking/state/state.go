@@ -567,27 +567,20 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 
 // AddRewards computes and transfers the staking rewards to active escrow accounts.
 // If an error occurs, the pool and affected accounts are left in an invalid state.
-func (s *MutableState) AddRewards(time epochtime.EpochTime) error {
+func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *staking.Quantity, accounts map[signature.MapKey]bool) error {
 	steps, err := s.RewardSchedule()
 	if err != nil {
 		return err
 	}
-	var stepStart epochtime.EpochTime
 	var activeStep *staking.RewardStep
 	for _, step := range steps {
 		if time <= step.Until {
 			activeStep = &step
 			break
 		}
-		stepStart = step.Until
 	}
 	if activeStep == nil {
 		// We're past the end of the schedule.
-		return nil
-	}
-
-	stepRelativeTime := time - stepStart
-	if stepRelativeTime == 0 || stepRelativeTime%activeStep.Interval != 0 {
 		return nil
 	}
 
@@ -596,44 +589,33 @@ func (s *MutableState) AddRewards(time epochtime.EpochTime) error {
 		return errors.Wrap(err, "loading common pool")
 	}
 
-	s.Snapshot.IterateRange(accountKeyFmt.Encode(), nil, true, func(key, value []byte) bool {
+	for mk := range accounts {
 		var id signature.PublicKey
-		if !accountKeyFmt.Decode(key, &id) {
-			return true
-		}
+		id.FromMapKey(mk)
 
-		var ent staking.Account
-		if err1 := cbor.Unmarshal(value, &ent); err1 != nil {
-			panic("staking: corrupt account state: " + err1.Error())
-		}
+		ent := s.Account(id)
 
 		q := ent.Escrow.Active.Balance.Clone()
 		// Multiply first.
-		if err1 := q.Mul(&activeStep.Numerator); err1 != nil {
-			err = errors.Wrap(err1, "multiplying by reward step numerator")
-			return true
+		if err := q.Mul(factor); err != nil {
+			return errors.Wrap(err, "multiplying by reward factor")
 		}
-		if err1 := q.Quo(&activeStep.Denominator); err1 != nil {
-			err = errors.Wrap(err1, "dividing by reward step denominator")
-			return true
+		if err := q.Mul(&activeStep.Scale); err != nil {
+			return errors.Wrap(err, "multiplying by reward step scale")
+		}
+		if err := q.Quo(staking.RewardAmountDenominator); err != nil {
+			return errors.Wrap(err, "dividing by reward amount denominator")
 		}
 
 		if q.IsZero() {
-			return false
+			continue
 		}
 
-		if err1 := staking.Move(&ent.Escrow.Active.Balance, commonPool, q); err1 != nil {
-			err = errors.Wrap(err1, "transferring to active escrow balance from common pool")
-			return true
+		if err := staking.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
+			return errors.Wrap(err, "transferring to active escrow balance from common pool")
 		}
 
-		s.SetAccount(id, &ent)
-
-		return false
-	})
-
-	if err != nil {
-		return err
+		s.SetAccount(id, ent)
 	}
 
 	s.SetCommonPool(commonPool)

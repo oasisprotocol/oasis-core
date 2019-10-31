@@ -503,10 +503,8 @@ type DebondingDelegation struct {
 
 // RewardStep is one of the time periods in the reward schedule.
 type RewardStep struct {
-	Until       epochtime.EpochTime `json:"until"`
-	Interval    epochtime.EpochTime `json:"interval"`
-	Numerator   Quantity            `json:"numerator"`
-	Denominator Quantity            `json:"denominator"`
+	Until epochtime.EpochTime `json:"until"`
+	Scale Quantity            `json:"scale"`
 }
 
 // Genesis is the initial ledger balances at genesis for use in the genesis
