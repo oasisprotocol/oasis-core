@@ -574,7 +574,7 @@ func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *staking.Quan
 	}
 	var activeStep *staking.RewardStep
 	for _, step := range steps {
-		if time <= step.Until {
+		if time < step.Until {
 			activeStep = &step
 			break
 		}
