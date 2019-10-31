@@ -195,7 +195,7 @@ func (app *registryApplication) registerEntity(
 		return err
 	}
 
-	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
+	if !ctx.IsInitChain() {
 		err = registry.VerifyTimestamp(ent.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
 			app.logger.Error("RegisterEntity: invalid timestamp",
@@ -247,15 +247,13 @@ func (app *registryApplication) deregisterEntity(
 		return err
 	}
 
-	if !ctx.IsCheckOnly() {
-		err = registry.VerifyTimestamp(timestamp, uint64(ctx.Now().Unix()))
-		if err != nil {
-			app.logger.Error("DeregisterEntity: invalid timestamp",
-				"timestamp", timestamp,
-				"now", uint64(ctx.Now().Unix()),
-			)
-			return err
-		}
+	err = registry.VerifyTimestamp(timestamp, uint64(ctx.Now().Unix()))
+	if err != nil {
+		app.logger.Error("DeregisterEntity: invalid timestamp",
+			"timestamp", timestamp,
+			"now", uint64(ctx.Now().Unix()),
+		)
+		return err
 	}
 
 	// Prevent entity deregistration if there are any registered nodes.
@@ -336,7 +334,7 @@ func (app *registryApplication) registerNode(
 		return err
 	}
 
-	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
+	if !ctx.IsInitChain() {
 		err = registry.VerifyTimestamp(newNode.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
 			app.logger.Error("RegisterNode: invalid timestamp",
@@ -571,7 +569,7 @@ func (app *registryApplication) registerRuntime(
 		return err
 	}
 
-	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
+	if !ctx.IsInitChain() {
 		err = registry.VerifyTimestamp(rt.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
 			app.logger.Error("RegisterRuntime: invalid timestamp",
