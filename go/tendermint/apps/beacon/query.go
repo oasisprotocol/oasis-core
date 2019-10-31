@@ -3,6 +3,7 @@ package beacon
 import (
 	"context"
 
+	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	beaconState "github.com/oasislabs/oasis-core/go/tendermint/apps/beacon/state"
 )
@@ -10,6 +11,7 @@ import (
 // Query is the beacon query interface.
 type Query interface {
 	Beacon(context.Context) ([]byte, error)
+	Genesis(context.Context) (*beacon.Genesis, error)
 }
 
 // QueryFactory is the beacon query factory.

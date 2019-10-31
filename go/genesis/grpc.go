@@ -3,7 +3,6 @@ package genesis
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	"google.golang.org/grpc"
 
@@ -13,6 +12,7 @@ import (
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
@@ -29,6 +29,7 @@ type grpcServer struct {
 	registryBackend   registry.Backend
 	roothashBackend   roothash.Backend
 	stakingBackend    staking.Backend
+	schedulerBackend  scheduler.Backend
 }
 
 // ToGenesis generates a genesis document based on current state at given height.
@@ -39,6 +40,11 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 		if height, err = s.tendermintService.GetHeight(); err != nil {
 			return nil, err
 		}
+	}
+
+	blk, err := s.tendermintService.GetBlock(&height)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get genesis doc.
@@ -72,18 +78,25 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 	if err != nil {
 		return nil, err
 	}
+	schedulerGenesis, err := s.schedulerBackend.ToGenesis(ctx, height)
+	if err != nil {
+		return nil, err
+	}
 
 	doc := api.Document{
 		// XXX: Tendermint doesn't support restoring from non-0 height.
 		// https://github.com/tendermint/tendermint/issues/2543
-		Height:     0,
+		Height:     height,
 		ChainID:    genesisDoc.ChainID,
-		Time:       time.Now(),
+		Time:       blk.Header.Time,
 		EpochTime:  *epochtimeGenesis,
 		Registry:   *registryGenesis,
 		RootHash:   *roothashGenesis,
 		Staking:    *stakingGenesis,
 		KeyManager: *keymanagerGenesis,
+		Scheduler:  *schedulerGenesis,
+		Beacon:     genesisDoc.Beacon,
+		Consensus:  genesisDoc.Consensus,
 	}
 
 	// Return final genesis document as JSON.
@@ -97,7 +110,7 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 	return &resp, nil
 }
 
-func NewGRPCServer(grpc *grpc.Server, tm service.TendermintService, et epochtime.Backend, km keymanager.Backend, reg registry.Backend, rh roothash.Backend, s staking.Backend) {
+func NewGRPCServer(grpc *grpc.Server, tm service.TendermintService, et epochtime.Backend, km keymanager.Backend, reg registry.Backend, rh roothash.Backend, s staking.Backend, sch scheduler.Backend) {
 	srv := &grpcServer{
 		tendermintService: tm,
 		epochtimeBackend:  et,
@@ -105,6 +118,7 @@ func NewGRPCServer(grpc *grpc.Server, tm service.TendermintService, et epochtime
 		registryBackend:   reg,
 		roothashBackend:   rh,
 		stakingBackend:    s,
+		schedulerBackend:  sch,
 	}
 	pb.RegisterGenesisServer(grpc, srv)
 }

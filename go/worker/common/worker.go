@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/version"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	"github.com/oasislabs/oasis-core/go/ias"
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
@@ -62,6 +63,7 @@ type Worker struct {
 	KeyManager       keymanagerApi.Backend
 	KeyManagerClient *keymanagerClient.Client
 	LocalStorage     *host.LocalStorage
+	GenesisDoc       *genesis.Document
 
 	runtimes map[signature.MapKey]*Runtime
 
@@ -283,6 +285,7 @@ func newWorker(
 	keyManager keymanagerApi.Backend,
 	keyManagerClient *keymanagerClient.Client,
 	cfg Config,
+	genesisDoc *genesis.Document,
 ) (*Worker, error) {
 	w := &Worker{
 		enabled:          enabled,
@@ -298,6 +301,7 @@ func newWorker(
 		IAS:              ias,
 		KeyManager:       keyManager,
 		KeyManagerClient: keyManagerClient,
+		GenesisDoc:       genesisDoc,
 		runtimes:         make(map[signature.MapKey]*Runtime),
 		quitCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
@@ -341,6 +345,7 @@ func New(
 	ias *ias.IAS,
 	keyManager keymanagerApi.Backend,
 	keyManagerClient *keymanagerClient.Client,
+	genesisDoc *genesis.Document,
 ) (*Worker, error) {
 	cfg, err := newConfig()
 	if err != nil {
@@ -358,5 +363,5 @@ func New(
 		return nil, err
 	}
 
-	return newWorker(dataDir, enabled, identity, storage, roothash, registry, scheduler, consensus, grpc, p2p, ias, keyManager, keyManagerClient, *cfg)
+	return newWorker(dataDir, enabled, identity, storage, roothash, registry, scheduler, consensus, grpc, p2p, ias, keyManager, keyManagerClient, *cfg, genesisDoc)
 }

@@ -65,18 +65,6 @@ func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id signature.Public
 	return runtime.GenesisBlock, nil
 }
 
-func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothash.Genesis, error) {
-	runtimes := rq.state.Runtimes()
-
-	// Get per-runtime blocks.
-	blocks := make(map[signature.MapKey]*block.Block)
-	for _, rt := range runtimes {
-		blocks[rt.Runtime.ID.ToMapKey()] = rt.CurrentBlock
-	}
-
-	return &roothash.Genesis{Blocks: blocks}, nil
-}
-
 func (app *rootHashApplication) QueryFactory() interface{} {
 	return &QueryFactory{app}
 }

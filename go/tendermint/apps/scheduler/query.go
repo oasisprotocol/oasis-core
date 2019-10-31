@@ -12,6 +12,7 @@ import (
 type Query interface {
 	AllCommittees(context.Context) ([]*scheduler.Committee, error)
 	KindsCommittees(context.Context, []scheduler.CommitteeKind) ([]*scheduler.Committee, error)
+	Genesis(context.Context) (*scheduler.Genesis, error)
 }
 
 // QueryFactory is the scheduler query factory.

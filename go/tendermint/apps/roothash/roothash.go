@@ -17,7 +17,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
@@ -92,28 +91,6 @@ func (app *rootHashApplication) OnCleanup() {
 
 func (app *rootHashApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
 	return types.ResponseSetOption{}
-}
-
-func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
-	st := doc.RootHash
-
-	// The per-runtime roothash state is done primarily via DeliverTx, but
-	// also needs to be done here since the genesis state can have runtime
-	// registrations.
-	//
-	// Note: This could use the genesis state, but the registry has already
-	// carved out it's entries by this point.
-
-	regState := registryState.NewMutableState(ctx.State())
-	runtimes, _ := regState.Runtimes()
-	for _, v := range runtimes {
-		app.logger.Info("InitChain: allocating per-runtime state",
-			"runtime", v.ID,
-		)
-		app.onNewRuntime(ctx, v, &st)
-	}
-
-	return nil
 }
 
 func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {

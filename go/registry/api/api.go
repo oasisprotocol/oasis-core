@@ -303,7 +303,7 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
-func VerifyRegisterNodeArgs(cfg *Config, logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool, kmOperator signature.PublicKey, regRuntimes []*Runtime) (*node.Node, error) {
+func VerifyRegisterNodeArgs(params *ConsensusParameters, logger *logging.Logger, sigNode *node.SignedNode, entity *entity.Entity, now time.Time, isGenesis bool, regRuntimes []*Runtime) (*node.Node, error) {
 	var n node.Node
 	if sigNode == nil {
 		return nil, ErrInvalidArgument
@@ -415,7 +415,7 @@ func VerifyRegisterNodeArgs(cfg *Config, logger *logging.Logger, sigNode *node.S
 
 	// If node is a validator, ensure it has ConensusInfo.
 	if n.HasRoles(node.RoleValidator) {
-		if err := verifyAddresses(cfg, n.Consensus.Addresses); err != nil {
+		if err := verifyAddresses(params, n.Consensus.Addresses); err != nil {
 			addrs, _ := json.Marshal(n.Consensus.Addresses)
 			logger.Error("RegisterNode: missing/invalid consensus addresses",
 				"node", n,
@@ -428,7 +428,7 @@ func VerifyRegisterNodeArgs(cfg *Config, logger *logging.Logger, sigNode *node.S
 	// If node is a key manager, ensure that it is owned by the key manager
 	// operator.
 	if n.HasRoles(node.RoleKeyManager) {
-		if !n.EntityID.Equal(kmOperator) {
+		if !n.EntityID.Equal(params.KeyManagerOperator) {
 			logger.Error("RegisterNode: key manager not owned by key manager operator",
 				"node", n,
 			)
@@ -438,7 +438,7 @@ func VerifyRegisterNodeArgs(cfg *Config, logger *logging.Logger, sigNode *node.S
 
 	// If node is a worker, ensure it has CommitteeInfo.
 	if n.HasRoles(node.RoleComputeWorker | node.RoleStorageWorker | node.RoleTransactionScheduler | node.RoleKeyManager | node.RoleMergeWorker) {
-		if err := verifyAddresses(cfg, n.Committee.Addresses); err != nil {
+		if err := verifyAddresses(params, n.Committee.Addresses); err != nil {
 			addrs, _ := json.Marshal(n.Committee.Addresses)
 			logger.Error("RegisterNode: missing/invalid committee addresses",
 				"node", n,
@@ -459,7 +459,7 @@ func VerifyRegisterNodeArgs(cfg *Config, logger *logging.Logger, sigNode *node.S
 
 	// If node is a compute/txnscheduler/merge worker, ensure it has P2PInfo.
 	if n.HasRoles(node.RoleComputeWorker | node.RoleTransactionScheduler | node.RoleMergeWorker) {
-		if err := verifyAddresses(cfg, n.P2P.Addresses); err != nil {
+		if err := verifyAddresses(params, n.P2P.Addresses); err != nil {
 			addrs, _ := json.Marshal(n.P2P.Addresses)
 			logger.Error("RegisterNode: missing/invald P2P addresses",
 				"node", n,
@@ -582,14 +582,14 @@ func VerifyAddress(addr node.Address, allowUnroutable bool) error {
 	return nil
 }
 
-func verifyAddresses(cfg *Config, addrs []node.Address) error {
+func verifyAddresses(params *ConsensusParameters, addrs []node.Address) error {
 	// Treat having no addresses as invalid, regardless.
 	if len(addrs) == 0 {
 		return ErrInvalidArgument
 	}
 
 	for _, v := range addrs {
-		if err := VerifyAddress(v, cfg.DebugAllowUnroutableAddresses); err != nil {
+		if err := VerifyAddress(v, params.DebugAllowUnroutableAddresses); err != nil {
 			return err
 		}
 	}
@@ -817,6 +817,9 @@ func VerifyTimestamp(timestamp uint64, now uint64) error {
 
 // Genesis is the registry genesis state.
 type Genesis struct {
+	// Parameters are the registry consensus parameters.
+	Parameters ConsensusParameters `json:"params"`
+
 	// Entities is the initial list of entities.
 	Entities []*entity.SignedEntity `json:"entities,omitempty"`
 
@@ -826,25 +829,25 @@ type Genesis struct {
 	// Nodes is the initial list of nodes.
 	Nodes []*node.SignedNode `json:"nodes,omitempty"`
 
-	// KeyManagerOperator is the ID of the entity that is allowed to operate
-	// key manager nodes.
-	KeyManagerOperator signature.PublicKey `json:"km_operator"`
-
 	// NodeStatuses is a set of node statuses.
 	NodeStatuses map[signature.MapKey]*NodeStatus `json:"node_statuses,omitempty"`
 }
 
-// Config is the per-backend common configuration.
-type Config struct {
+// ConsensusParameters are the registry consensus parameters.
+type ConsensusParameters struct {
+	// KeyManagerOperator is the ID of the entity that is allowed to operate
+	// key manager nodes.
+	KeyManagerOperator signature.PublicKey `json:"km_operator"`
+
 	// DebugAllowUnroutableAddresses is true iff node registration should
 	// allow unroutable addreses.
-	DebugAllowUnroutableAddresses bool
+	DebugAllowUnroutableAddresses bool `json:"debug_allow_unroutable_addresses"`
 
 	// DebugAllowRuntimeRegistration is true iff runtime registration should be
 	// allowed outside of the genesis block.
-	DebugAllowRuntimeRegistration bool
+	DebugAllowRuntimeRegistration bool `json:"debug_allow_runtime_registration"`
 
 	// DebugBypassStake is true iff the registry should bypass all of the staking
 	// related checks and operations.
-	DebugBypassStake bool
+	DebugBypassStake bool `json:"debug_bypass_stake"`
 }

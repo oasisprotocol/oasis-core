@@ -1,11 +1,13 @@
 package state
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/tendermint/iavl"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
@@ -15,6 +17,10 @@ var (
 	//
 	// Value is raw random beacon.
 	beaconKeyFmt = keyformat.New(0x40)
+	// parametersKeyFmt is the key format used for consensus parameters.
+	//
+	// Value is CBOR-serialized beacon.ConsensusParameters.
+	parametersKeyFmt = keyformat.New(0x41)
 )
 
 type ImmutableState struct {
@@ -40,6 +46,17 @@ func (s *ImmutableState) Beacon() ([]byte, error) {
 	return b, nil
 }
 
+func (s *ImmutableState) ConsensusParameters() (*beacon.ConsensusParameters, error) {
+	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
+	if raw == nil {
+		return nil, errors.New("tendermint/beacon: expected consensus parameters to be present in app state")
+	}
+
+	var params beacon.ConsensusParameters
+	err := cbor.Unmarshal(raw, &params)
+	return &params, err
+}
+
 // MutableState is a mutable beacon state wrapper.
 type MutableState struct {
 	*ImmutableState
@@ -55,6 +72,10 @@ func (s *MutableState) SetBeacon(newBeacon []byte) error {
 	s.tree.Set(beaconKeyFmt.Encode(), newBeacon)
 
 	return nil
+}
+
+func (s *MutableState) SetConsensusParameters(params *beacon.ConsensusParameters) {
+	s.tree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
 }
 
 // NewMutableState creates a new mutable beacon state wrapper.

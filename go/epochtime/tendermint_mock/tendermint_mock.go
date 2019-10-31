@@ -84,6 +84,9 @@ func (t *tendermintMockBackend) ToGenesis(ctx context.Context, height int64) (*a
 	}
 
 	return &api.Genesis{
+		Parameters: api.ConsensusParameters{
+			Backend: BackendName,
+		},
 		Base: now,
 	}, nil
 }

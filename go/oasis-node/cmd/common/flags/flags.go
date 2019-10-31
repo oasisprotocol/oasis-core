@@ -3,13 +3,8 @@
 package flags
 
 import (
-	"fmt"
-	"strings"
-
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
-
-	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 const (
@@ -18,8 +13,6 @@ const (
 	CfgDebugTestEntity = "debug.test_entity"
 	// CfgGenesisFile is the flag used to specify a genesis file.
 	CfgGenesisFile = "genesis.file"
-	// CfgConsesusBackend is the flag used to specify a consensus backend.
-	CfgConsensusBackend = "consensus.backend"
 	// CfgConsensusValidator is the flag used to opt-in to being a validator.
 	CfgConsensusValidator = "consensus.validator"
 
@@ -43,8 +36,6 @@ var (
 	// GenesisFileFlags has the genesis file flag.
 	GenesisFileFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
-	// ConsensusBackendFlag has the consensus backend flag.
-	ConsensusBackendFlag = flag.NewFlagSet("", flag.ContinueOnError)
 	// ConsensusValidatorFlag has the consensus validator flag.
 	ConsensusValidatorFlag = flag.NewFlagSet("", flag.ContinueOnError)
 )
@@ -62,18 +53,6 @@ func Force() bool {
 // Retries returns the retries flag value.
 func Retries() int {
 	return viper.GetInt(cfgRetries)
-}
-
-// ConsensusBackend returns the set consensus backend.
-func ConsensusBackend() string {
-	backend := viper.GetString(CfgConsensusBackend)
-
-	switch strings.ToLower(backend) {
-	case tmapi.BackendName:
-		return tmapi.BackendName
-	default:
-		panic(fmt.Sprintf("consensus: unsupported backend: '%v'", backend))
-	}
 }
 
 // ConsensusValidator returns true iff the node is opting in to be a consensus
@@ -104,7 +83,6 @@ func init() {
 
 	RetriesFlags.Int(cfgRetries, 0, "retries (-1 = forever)")
 
-	ConsensusBackendFlag.String(CfgConsensusBackend, tmapi.BackendName, "consensus backend")
 	ConsensusValidatorFlag.Bool(CfgConsensusValidator, false, "node is a consensus validator")
 
 	DebugTestEntityFlags.Bool(CfgDebugTestEntity, false, "use the test entity (UNSAFE)")
@@ -120,7 +98,6 @@ func init() {
 		DebugTestEntityFlags,
 		EntityFlags,
 		GenesisFileFlags,
-		ConsensusBackendFlag,
 		ConsensusValidatorFlag,
 	} {
 		_ = viper.BindPFlags(v)

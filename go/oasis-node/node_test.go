@@ -50,19 +50,9 @@ var (
 		value interface{}
 	}{
 		{"log.level.default", "DEBUG"},
-		{"epochtime.backend", "tendermint_mock"},
-		{"consensus.backend", "tendermint"},
 		{"consensus.validator", true},
-		{"registry.debug.allow_unroutable_addresses", true},
-		{"registry.debug.allow_runtime_registration", true},
-		{"registry.debug.bypass_stake", true},
 		{"roothash.tendermint.index_blocks", true},
-		{"scheduler.debug.bypass_stake", true},
-		{"scheduler.debug.static_validators", true},
 		{"storage.backend", "leveldb"},
-		{"staking.debug.genesis_state", stakingTests.DebugGenesisState},
-		{"tendermint.consensus.timeout_commit", 1 * time.Millisecond},
-		{"tendermint.consensus.skip_timeout_commit", true},
 		{"worker.compute.enabled", true},
 		{"worker.runtime.backend", "mock"},
 		{"worker.runtime.loader", "mock-runtime"},
@@ -147,7 +137,7 @@ func newTestNode(t *testing.T) *testNode {
 		start:        time.Now(),
 	}
 	t.Logf("starting node, data directory: %v", dataDir)
-	n.Node, err = node.NewNode()
+	n.Node, err = node.NewTestNode()
 	require.NoError(err, "start node")
 
 	// Add the testNode to the newly generated entity's list of nodes
@@ -181,6 +171,13 @@ func TestNode(t *testing.T) {
 			os.RemoveAll(node.dataDir)
 		}
 	}()
+
+	// Wait for consensus to become ready before proceeding.
+	select {
+	case <-node.Consensus.Synced():
+	case <-time.After(5 * time.Second):
+		t.Fatalf("failed to wait for consensus to become ready")
+	}
 
 	// NOTE: Order of test cases is important.
 	testCases := []*testCase{

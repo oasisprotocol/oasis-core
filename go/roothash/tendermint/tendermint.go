@@ -534,8 +534,10 @@ func New(
 	timeSource epochtime.Backend,
 	beac beacon.Backend,
 	service service.TendermintService,
-	roundTimeout time.Duration,
 ) (api.Backend, error) {
+	// Fetch round timeout config from genesis document.
+	roundTimeout := service.GetGenesis().RootHash.Parameters.RoundTimeout
+
 	// Initialize and register the tendermint service component.
 	a := app.New(timeSource, beac, roundTimeout)
 	if err := service.RegisterApplication(a); err != nil {

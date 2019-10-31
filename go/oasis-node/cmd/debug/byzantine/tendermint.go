@@ -8,13 +8,10 @@ import (
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/genesis"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/tendermint"
 	beaconapp "github.com/oasislabs/oasis-core/go/tendermint/apps/beacon"
 	epochtimemockapp "github.com/oasislabs/oasis-core/go/tendermint/apps/epochtime_mock"
@@ -128,19 +125,13 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 		}
 		ht.epochtimeMockQuery = epochtimeMockApp.QueryFactory().(*epochtimemockapp.QueryFactory)
 	}
-	if err = ht.service.RegisterApplication(beaconapp.New(timeSource, &beacon.Config{
-		DebugDeterministic: true,
-	})); err != nil {
+	if err = ht.service.RegisterApplication(beaconapp.New(timeSource)); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication beacon")
 	}
-	if err = ht.service.RegisterApplication(stakingapp.New(timeSource, nil)); err != nil {
+	if err = ht.service.RegisterApplication(stakingapp.New(timeSource)); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication staking")
 	}
-	registryApp := registryapp.New(timeSource, &registry.Config{
-		DebugAllowUnroutableAddresses: true,
-		DebugAllowRuntimeRegistration: false,
-		DebugBypassStake:              false,
-	})
+	registryApp := registryapp.New(timeSource)
 	if err = ht.service.RegisterApplication(registryApp); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication registry")
 	}
@@ -148,9 +139,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	if err = ht.service.RegisterApplication(keymanagerapp.New(timeSource)); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication keymanager")
 	}
-	schedApp, err := schedulerapp.New(timeSource, &scheduler.Config{
-		DebugBypassStake: false,
-	})
+	schedApp, err := schedulerapp.New(timeSource)
 	if err != nil {
 		return errors.Wrap(err, "honest Tendermint service New scheduler")
 	}

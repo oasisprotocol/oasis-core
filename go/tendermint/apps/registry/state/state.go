@@ -1,6 +1,8 @@
 package state
 
 import (
+	"errors"
+
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -31,11 +33,6 @@ var (
 	//
 	// Value is CBOR-serialized signed runtime.
 	signedRuntimeKeyFmt = keyformat.New(0x13, &signature.MapKey{})
-	// keyManagerOperatorKeyFmt is the key format used for the key manager
-	// operator.
-	//
-	// Value is key manager operator public key.
-	keyManagerOperatorKeyFmt = keyformat.New(0x14)
 	// nodeByConsAddressKeyFmt is the key format used for the consensus address to
 	// node public key mapping.
 	//
@@ -44,11 +41,15 @@ var (
 	// evidence instead of the actual public key.
 	//
 	// Value is binary node public key.
-	nodeByConsAddressKeyFmt = keyformat.New(0x15, []byte{})
+	nodeByConsAddressKeyFmt = keyformat.New(0x14, []byte{})
 	// nodeStatusKeyFmt is the key format used for node statuses.
 	//
 	// Value is CBOR-serialized node status.
-	nodeStatusKeyFmt = keyformat.New(0x16, &signature.MapKey{})
+	nodeStatusKeyFmt = keyformat.New(0x15, &signature.MapKey{})
+	// parametersKeyFmt is the key format used for consensus parameters.
+	//
+	// Value is CBOR-serialized roothash.ConsensusParameters.
+	parametersKeyFmt = keyformat.New(0x16)
 )
 
 type ImmutableState struct {
@@ -301,20 +302,6 @@ func (s *ImmutableState) SignedRuntimes() ([]*registry.SignedRuntime, error) {
 	return runtimes, nil
 }
 
-func (s *ImmutableState) KeyManagerOperator() signature.PublicKey {
-	_, value := s.Snapshot.Get(keyManagerOperatorKeyFmt.Encode())
-	if value == nil {
-		return nil
-	}
-
-	var id signature.PublicKey
-	if err := id.UnmarshalBinary(value); err != nil {
-		panic("tendermint/registry: corrupted key manager operator: " + err.Error())
-	}
-
-	return id
-}
-
 func (s *ImmutableState) NodeStatus(id signature.PublicKey) (*registry.NodeStatus, error) {
 	_, value := s.Snapshot.Get(nodeStatusKeyFmt.Encode(&id))
 	if value == nil {
@@ -370,6 +357,17 @@ func (s *ImmutableState) HasEntityNodes(id signature.PublicKey) (bool, error) {
 		},
 	)
 	return result, nil
+}
+
+func (s *ImmutableState) ConsensusParameters() (*registry.ConsensusParameters, error) {
+	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
+	if raw == nil {
+		return nil, errors.New("tendermint/registry: expected consensus parameters to be present in app state")
+	}
+
+	var params registry.ConsensusParameters
+	err := cbor.Unmarshal(raw, &params)
+	return &params, err
 }
 
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
@@ -446,18 +444,13 @@ func (s *MutableState) CreateRuntime(rt *registry.Runtime, sigRt *registry.Signe
 	return nil
 }
 
-func (s *MutableState) SetKeyManagerOperator(id signature.PublicKey) {
-	if len(id) == 0 {
-		return
-	}
-
-	value, _ := id.MarshalBinary()
-	s.tree.Set(keyManagerOperatorKeyFmt.Encode(), value)
-}
-
 func (s *MutableState) SetNodeStatus(id signature.PublicKey, status *registry.NodeStatus) error {
 	s.tree.Set(nodeStatusKeyFmt.Encode(&id), cbor.Marshal(status))
 	return nil
+}
+
+func (s *MutableState) SetConsensusParameters(params *registry.ConsensusParameters) {
+	s.tree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
 }
 
 // NewMutableState creates a new mutable registry state wrapper.

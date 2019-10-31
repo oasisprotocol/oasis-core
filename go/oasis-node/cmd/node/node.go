@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/beacon"
 	beaconAPI "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/client"
+	"github.com/oasislabs/oasis-core/go/common/consensus"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
@@ -48,6 +49,7 @@ import (
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/tendermint"
 	tmService "github.com/oasislabs/oasis-core/go/tendermint/service"
+	tendermintTests "github.com/oasislabs/oasis-core/go/tendermint/tests"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
@@ -81,6 +83,8 @@ type Node struct {
 	grpcInternal *grpc.Server
 	svcTmnt      tmService.TendermintService
 	svcTmntSeed  *tendermint.SeedService
+
+	Consensus consensus.Backend
 
 	Genesis   genesisAPI.Provider
 	Identity  *identity.Identity
@@ -165,7 +169,7 @@ func (n *Node) initBackends() error {
 	staking.NewGRPCServer(grpcSrv, n.Staking)
 	storage.NewGRPCServer(grpcSrv, n.Storage, &grpc.AllowAllRuntimePolicyChecker{}, false)
 	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
-	genesis.NewGRPCServer(grpcSrv, n.svcTmnt, n.Epochtime, n.KeyManager, n.Registry, n.RootHash, n.Staking)
+	genesis.NewGRPCServer(grpcSrv, n.svcTmnt, n.Epochtime, n.KeyManager, n.Registry, n.RootHash, n.Staking, n.Scheduler)
 
 	cmdCommon.Logger().Debug("backends initialized")
 
@@ -177,6 +181,11 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 	var err error
 
+	genesisDoc, errr := n.Genesis.GetGenesisDocument()
+	if errr != nil {
+		return errr
+	}
+
 	// Initialize the worker P2P if any workers are enabled. Since the P2P layer
 	// does not have a separate Start method and starts listening immediately
 	// when created, make sure that we don't start if if not needed.
@@ -184,6 +193,9 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	// Only compute, txn scheduler and merge workers need P2P transport.
 	if compute.Enabled() || txnscheduler.Enabled() || merge.Enabled() {
 		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
+		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
+			p2p.DebugForceAllowUnroutableAddresses()
+		}
 		n.P2P, err = p2p.New(p2pCtx, n.Identity)
 		if err != nil {
 			return err
@@ -205,6 +217,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.IAS,
 		n.KeyManager,
 		n.KeyManagerClient,
+		genesisDoc,
 	)
 	if err != nil {
 		logger.Error("failed to start common worker",
@@ -341,15 +354,15 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	return nil
 }
 
-func (n *Node) initGenesis() error {
+func (n *Node) initGenesis(testNode bool) error {
 	var err error
 	if n.Genesis, err = genesis.New(); err == nil {
 		return nil
 	}
-	if os.IsNotExist(err) {
-		// Well, there wasn't a genesis document, use a single node one, this
-		// is probably unit tests.
-		n.Genesis, err = tendermint.NewSingleNodeGenesisProvider(n.Identity)
+	if os.IsNotExist(err) && testNode {
+		// Well, there wasn't a genesis document and we're running unit tests,
+		// so use a test node one.
+		n.Genesis, err = tendermintTests.NewTestNodeGenesisProvider(n.Identity)
 	}
 
 	return err
@@ -360,6 +373,18 @@ func (n *Node) initGenesis() error {
 // WARNING: This will misbehave iff cmd != RootCommand().  This is exposed
 // for the benefit of tests and the interface is not guaranteed to be stable.
 func NewNode() (*Node, error) {
+	return newNode(false)
+}
+
+// NewTestNode initializes and launches the (test) Oasis node service.
+//
+// The test node uses a test genesis block and should only be used in
+// unit tests.
+func NewTestNode() (*Node, error) {
+	return newNode(true)
+}
+
+func newNode(testNode bool) (*Node, error) {
 	logger := cmdCommon.Logger()
 
 	node := &Node{
@@ -456,7 +481,7 @@ func NewNode() (*Node, error) {
 	}
 
 	// Initialize the genesis provider.
-	if err = node.initGenesis(); err != nil {
+	if err = node.initGenesis(testNode); err != nil {
 		logger.Error("failed to initialize the genesis provider",
 			"err", err,
 		)
@@ -491,6 +516,7 @@ func NewNode() (*Node, error) {
 			return nil, err
 		}
 	}
+	node.Consensus = node.svcTmnt
 
 	// Initialize the IAS proxy client.
 	// NOTE: See reason above why this needs to happen before seed node init.
@@ -595,7 +621,6 @@ func NewNode() (*Node, error) {
 
 func init() {
 	Flags.AddFlagSet(flags.DebugTestEntityFlags)
-	Flags.AddFlagSet(flags.ConsensusBackendFlag)
 	Flags.AddFlagSet(flags.ConsensusValidatorFlag)
 	Flags.AddFlagSet(flags.GenesisFileFlags)
 
@@ -605,12 +630,7 @@ func init() {
 		tracing.Flags,
 		cmdGrpc.ServerLocalFlags,
 		pprof.Flags,
-		beacon.Flags,
-		epochtime.Flags,
-		registry.Flags,
 		roothash.Flags,
-		scheduler.Flags,
-		staking.Flags,
 		storage.Flags,
 		tendermint.Flags,
 		ias.Flags,

@@ -3,17 +3,13 @@ package tests
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/json"
 	"math"
-	"math/big"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -27,45 +23,14 @@ import (
 const recvTimeout = 5 * time.Second
 
 var (
-	// DebugGenesisState is the string representation of the initial
-	// genesis state that the backend MUST be populated with.
-	DebugGenesisState string
+	debugGenesisState = DebugGenesisState
 
-	debugGenesisState = api.Genesis{
-		TotalSupply:       testTotalSupply,
-		DebondingInterval: 1,
-		Ledger: map[signature.MapKey]*api.Account{
-			SrcID.ToMapKey(): &api.Account{
-				General: api.GeneralAccount{
-					Balance: testTotalSupply,
-				},
-			},
-		},
-		Thresholds: map[api.ThresholdKind]api.Quantity{
-			api.KindEntity:    QtyFromInt(1),
-			api.KindValidator: QtyFromInt(2),
-			api.KindCompute:   QtyFromInt(3),
-			api.KindStorage:   QtyFromInt(4),
-		},
-		AcceptableTransferPeers: map[signature.MapKey]bool{
-			// test runtime 0 from roothash tester
-			publicKeyFromHex("612b31ddd66fc99e41cc9996f4029ea84752785d7af329d4595c4bcf8f5e4215").ToMapKey(): true,
-		},
-		Slashing: map[api.SlashReason]api.Slash{
-			api.SlashDoubleSigning: api.Slash{
-				Share:          QtyFromInt(100_000), // Slash everything.
-				FreezeInterval: 1,
-			},
-		},
-	}
-
-	testTotalSupply = QtyFromInt(math.MaxInt64)
+	testTotalSupply = DebugStateTestTotalSupply
 	qtyOne          = QtyFromInt(1)
 
-	srcSigner  = mustGenerateSigner()
-	SrcID      = srcSigner.Public()
-	destSigner = mustGenerateSigner()
-	DestID     = destSigner.Public()
+	srcSigner = DebugStateSrcSigner
+	SrcID     = DebugStateSrcID
+	DestID    = DebugStateDestID
 )
 
 // StakingImplementationTests exercises the basic functionality of a
@@ -132,7 +97,7 @@ func testInitialEnv(t *testing.T, backend api.Backend, timeSource epochtime.Seta
 		qty, err := backend.Threshold(context.Background(), kind, 0)
 		require.NoError(err, "Threshold")
 		require.NotNil(qty, "Threshold != nil")
-		require.Equal(debugGenesisState.Thresholds[kind], *qty, "Threshold - value")
+		require.Equal(debugGenesisState.Parameters.Thresholds[kind], *qty, "Threshold - value")
 	}
 }
 
@@ -605,34 +570,4 @@ WaitLoop:
 	require.NoError(err, "GetNodeStatus")
 	require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
 	require.False(nodeStatus.IsFrozen(), "IsFrozen() should return false")
-}
-
-func mustGenerateSigner() signature.Signer {
-	k, err := memorySigner.NewSigner(rand.Reader)
-	if err != nil {
-		panic(err)
-	}
-
-	return k
-}
-
-func QtyFromInt(n int) api.Quantity {
-	q := api.NewQuantity()
-	if err := q.FromBigInt(big.NewInt(int64(n))); err != nil {
-		panic(err)
-	}
-	return *q
-}
-
-func publicKeyFromHex(s string) signature.PublicKey {
-	var pk signature.PublicKey
-	if err := pk.UnmarshalHex(s); err != nil {
-		panic(err)
-	}
-	return pk
-}
-
-func init() {
-	b, _ := json.Marshal(debugGenesisState)
-	DebugGenesisState = string(b)
 }

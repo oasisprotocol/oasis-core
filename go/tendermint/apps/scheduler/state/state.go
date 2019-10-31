@@ -1,6 +1,8 @@
 package state
 
 import (
+	"errors"
+
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -26,6 +28,10 @@ var (
 	//
 	// Value is CBOR-serialized list of validator public keys.
 	validatorsPendingKeyFmt = keyformat.New(0x62)
+	// parametersKeyFmt is the key format used for consensus parameters.
+	//
+	// Value is CBOR-serialized api.ConsensusParameters.
+	parametersKeyFmt = keyformat.New(0x63)
 
 	logger = logging.GetLogger("tendermint/scheduler")
 )
@@ -126,6 +132,17 @@ func (s *ImmutableState) PendingValidators() ([]signature.PublicKey, error) {
 	return validators, err
 }
 
+func (s *ImmutableState) ConsensusParameters() (*api.ConsensusParameters, error) {
+	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
+	if raw == nil {
+		return nil, errors.New("tendermint/scheduler: expected consensus parameters to be present in app state")
+	}
+
+	var params api.ConsensusParameters
+	err := cbor.Unmarshal(raw, &params)
+	return &params, err
+}
+
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -160,6 +177,10 @@ func (s *MutableState) PutPendingValidators(validators []signature.PublicKey) {
 		return
 	}
 	s.tree.Set(validatorsPendingKeyFmt.Encode(), cbor.Marshal(validators))
+}
+
+func (s *MutableState) SetConsensusParameters(params *api.ConsensusParameters) {
+	s.tree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
 }
 
 // NewMutableState creates a new mutable scheduler state wrapper.

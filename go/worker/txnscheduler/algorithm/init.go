@@ -13,10 +13,10 @@ import (
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New creates a new algorithm.
-func New(name string) (api.Algorithm, error) {
+func New(name string, maxBatchSize, maxBatchSizeBytes uint64) (api.Algorithm, error) {
 	switch name {
 	case batching.Name:
-		return batching.New()
+		return batching.New(maxBatchSize, maxBatchSizeBytes)
 	default:
 		return nil, fmt.Errorf("invalid transaction scheduler algorithm: %s", name)
 	}

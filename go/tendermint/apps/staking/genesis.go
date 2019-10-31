@@ -17,9 +17,9 @@ import (
 )
 
 func (app *stakingApplication) initParameters(state *stakingState.MutableState, st *staking.Genesis) {
-	state.SetDebondingInterval(uint64(st.DebondingInterval))
-	state.SetAcceptableTransferPeers(st.AcceptableTransferPeers)
-	state.SetSlashing(st.Slashing)
+	state.SetDebondingInterval(uint64(st.Parameters.DebondingInterval))
+	state.SetAcceptableTransferPeers(st.Parameters.AcceptableTransferPeers)
+	state.SetSlashing(st.Parameters.Slashing)
 }
 
 func (app *stakingApplication) initThresholds(state *stakingState.MutableState, st *staking.Genesis) error {
@@ -28,9 +28,9 @@ func (app *stakingApplication) initThresholds(state *stakingState.MutableState, 
 		v staking.Quantity
 	}
 
-	if st.Thresholds != nil {
+	if st.Parameters.Thresholds != nil {
 		var ups []thresholdUpdate
-		for k, v := range st.Thresholds {
+		for k, v := range st.Parameters.Thresholds {
 			if !v.IsValid() {
 				app.logger.Error("InitChain: invalid threshold",
 					"threshold", k,
@@ -244,13 +244,6 @@ func (app *stakingApplication) initDebondingDelegations(state *stakingState.Muta
 // InitChain initializes the chain from genesis.
 func (app *stakingApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := &doc.Staking
-	if app.debugGenesisState != nil {
-		if len(st.Ledger) > 0 {
-			app.logger.Error("InitChain: debug genesis state and actual genesis state provided")
-			return errors.New("staking/tendermint: multiple genesis states specified")
-		}
-		st = app.debugGenesisState
-	}
 
 	var (
 		state       = stakingState.NewMutableState(ctx.State())
@@ -282,7 +275,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	}
 
 	app.logger.Debug("InitChain: allocations complete",
-		"debonding_interval", st.DebondingInterval,
+		"debonding_interval", st.Parameters.DebondingInterval,
 		"common_pool", st.CommonPool,
 		"total_supply", totalSupply,
 	)
@@ -342,15 +335,17 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 	}
 
 	gen := staking.Genesis{
-		TotalSupply:             *totalSupply,
-		CommonPool:              *commonPool,
-		Thresholds:              thresholds,
-		DebondingInterval:       epochtime.EpochTime(debondingInterval),
-		AcceptableTransferPeers: acceptableTransferPeers,
-		Ledger:                  ledger,
-		Delegations:             delegations,
-		DebondingDelegations:    debondingDelegations,
-		Slashing:                slashing,
+		Parameters: staking.ConsensusParameters{
+			Thresholds:              thresholds,
+			DebondingInterval:       epochtime.EpochTime(debondingInterval),
+			AcceptableTransferPeers: acceptableTransferPeers,
+			Slashing:                slashing,
+		},
+		TotalSupply:          *totalSupply,
+		CommonPool:           *commonPool,
+		Ledger:               ledger,
+		Delegations:          delegations,
+		DebondingDelegations: debondingDelegations,
 	}
 	return &gen, nil
 }

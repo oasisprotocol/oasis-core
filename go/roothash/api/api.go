@@ -170,6 +170,34 @@ type PrunedBlock struct {
 
 // Genesis is the roothash genesis state.
 type Genesis struct {
+	// Parameters are the roothash consensus parameters.
+	Parameters ConsensusParameters `json:"params"`
+
 	// Blocks is the per-runtime map of genesis blocks.
 	Blocks map[signature.MapKey]*block.Block `json:"blocks,omitempty"`
+}
+
+// ConsensusParameters are the roothash consensus parameters.
+type ConsensusParameters struct {
+	// RoundTimeout is the round timeout.
+	RoundTimeout time.Duration `json:"round_timeout"`
+
+	// TransactionScheduler is the transaction scheduler configuration.
+	TransactionScheduler TransactionSchedulerParameters `json:"txn_scheduler"`
+}
+
+// TransactionSchedulerParameters is the transaction scheduler parameters.
+type TransactionSchedulerParameters struct {
+	// Algorithm is the transaction scheduling algorithm.
+	Algorithm string `json:"algorithm"`
+
+	// If using the "batching" algoritm, how long to wait for a scheduled batch.
+	BatchFlushTimeout time.Duration `json:"batch_flush_timeout"`
+
+	// If using the "batching" algorithm, what is the max size of a batch.
+	MaxBatchSize uint64 `json:"max_batch_size"`
+
+	// If using the "batching" algorithm, what is the max size of a batch
+	// in bytes.
+	MaxBatchSizeBytes uint64 `json:"max_batch_size_bytes"`
 }

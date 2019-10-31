@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/eapache/channels"
+	"github.com/pkg/errors"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -32,6 +33,14 @@ type tendermintBackend struct {
 	querier *app.QueryFactory
 
 	notifier *pubsub.Broker
+}
+
+func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	q, err := tb.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, errors.Wrap(err, "scheduler: genesis query failed")
+	}
+	return q.Genesis(ctx)
 }
 
 func (tb *tendermintBackend) Cleanup() {
@@ -161,10 +170,9 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 func New(ctx context.Context,
 	timeSource epochtime.Backend,
 	service service.TendermintService,
-	cfg *api.Config,
 ) (api.Backend, error) {
 	// Initialze and register the tendermint service component.
-	a, err := app.New(timeSource, cfg)
+	a, err := app.New(timeSource)
 	if err != nil {
 		return nil, err
 	}

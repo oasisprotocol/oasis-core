@@ -6,42 +6,26 @@ import (
 	"fmt"
 	"strings"
 
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
-
 	"github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/epochtime/tendermint"
 	"github.com/oasislabs/oasis-core/go/epochtime/tendermint_mock"
 	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
-const (
-	// CfgBackend configures the epochtime backend.
-	CfgBackend = "epochtime.backend"
-	// CfgTendermintInterval configures the tendermint backend epoch interval.
-	CfgTendermintInterval = "epochtime.tendermint.interval"
-)
-
-// Flags has the configuration flags.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
-
 // New constructs a new Backend based on the configuration flags.
 func New(ctx context.Context, tmService service.TendermintService) (api.Backend, error) {
-	backend := viper.GetString(CfgBackend)
+	// Fetch config from genesis document.
+	params := tmService.GetGenesis().EpochTime.Parameters
+
+	// TODO: Change this to a simple DebugMockBackend bool flag (probably in #1879).
+	backend := params.Backend
 	switch strings.ToLower(backend) {
 	case tendermint.BackendName:
-		interval := viper.GetInt64(CfgTendermintInterval)
+		interval := params.Interval
 		return tendermint.New(ctx, tmService, interval)
 	case tendermintmock.BackendName:
 		return tendermintmock.New(ctx, tmService)
 	default:
 		return nil, fmt.Errorf("epochtime: unsupported backend: '%v'", backend)
 	}
-}
-
-func init() {
-	Flags.String(CfgBackend, tendermint.BackendName, "Epoch time backend")
-	Flags.Int64(CfgTendermintInterval, 86400, "Epoch interval (in blocks)")
-
-	_ = viper.BindPFlags(Flags)
 }

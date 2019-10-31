@@ -4,21 +4,17 @@ import (
 	"encoding/hex"
 	"path/filepath"
 	"strconv"
-	"time"
 
-	"github.com/oasislabs/oasis-core/go/beacon"
 	"github.com/oasislabs/oasis-core/go/client"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	commonGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
-	"github.com/oasislabs/oasis-core/go/epochtime"
 	"github.com/oasislabs/oasis-core/go/ias"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
-	"github.com/oasislabs/oasis-core/go/registry"
 	roothashTm "github.com/oasislabs/oasis-core/go/roothash/tendermint"
 	"github.com/oasislabs/oasis-core/go/storage"
 	"github.com/oasislabs/oasis-core/go/tendermint"
@@ -30,7 +26,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 	workerStorage "github.com/oasislabs/oasis-core/go/worker/storage"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/batching"
 )
 
 type argBuilder struct {
@@ -61,13 +56,6 @@ func (args *argBuilder) grpcVerboseDebug() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) consensusBackend(backend string) *argBuilder {
-	args.vec = append(args.vec, []string{
-		"--" + flags.CfgConsensusBackend, backend,
-	}...)
-	return args
-}
-
 func (args *argBuilder) consensusValidator() *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + flags.CfgConsensusValidator,
@@ -82,14 +70,6 @@ func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) tendermintConsensusTimeoutCommit(d time.Duration) *argBuilder {
-	timeoutCommitMs := int(d / time.Millisecond)
-	args.vec = append(args.vec, []string{
-		"--" + tendermint.CfgConsensusTimeoutCommit, strconv.Itoa(timeoutCommitMs) + "ms",
-	}...)
-	return args
-}
-
 func (args *argBuilder) tendermintSeedMode() *argBuilder {
 	args.vec = append(args.vec, "--"+tendermint.CfgP2PSeedMode)
 	return args
@@ -97,32 +77,6 @@ func (args *argBuilder) tendermintSeedMode() *argBuilder {
 
 func (args *argBuilder) tendermintDebugAddrBookLenient() *argBuilder {
 	args.vec = append(args.vec, "--"+tendermint.CfgDebugP2PAddrBookLenient)
-	return args
-}
-
-func (args *argBuilder) epochtimeBackend(backend string) *argBuilder {
-	args.vec = append(args.vec, []string{
-		"--" + epochtime.CfgBackend, backend,
-	}...)
-	return args
-}
-
-func (args *argBuilder) epochtimeTendermintInterval(blks uint) *argBuilder {
-	args.vec = append(args.vec, []string{
-		"--" + epochtime.CfgTendermintInterval, strconv.Itoa(int(blks)),
-	}...)
-	return args
-}
-
-func (args *argBuilder) beaconDeterministic(deterministic bool) *argBuilder {
-	if deterministic {
-		args.vec = append(args.vec, "--"+beacon.CfgDebugDeterministic)
-	}
-	return args
-}
-
-func (args *argBuilder) registryDebugAllowUnroutableAddresses() *argBuilder {
-	args.vec = append(args.vec, "--"+registry.CfgDebugAllowUnroutableAddresses)
 	return args
 }
 
@@ -252,13 +206,6 @@ func (args *argBuilder) workerTxnschedulerEnabled() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerTxnschedulerBatchingMaxBatchSize(sz int) *argBuilder {
-	args.vec = append(args.vec, []string{
-		"--" + batching.CfgMaxBatchSize, strconv.Itoa(sz),
-	}...)
-	return args
-}
-
 func (args *argBuilder) iasUseGenesis() *argBuilder {
 	args.vec = append(args.vec, "--ias.use_genesis")
 	return args
@@ -288,11 +235,6 @@ func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {
 
 func (args *argBuilder) appendNetwork(net *Network) *argBuilder {
 	args = args.grpcVerboseDebug().
-		consensusBackend(net.cfg.ConsensusBackend).
-		tendermintConsensusTimeoutCommit(net.cfg.ConsensusTimeoutCommit).
-		epochtimeBackend(net.cfg.EpochtimeBackend).
-		epochtimeTendermintInterval(net.cfg.EpochtimeTendermintInterval).
-		beaconDeterministic(net.cfg.DeterministicIdentities).
 		appendSeedNodes(net)
 	return args
 }

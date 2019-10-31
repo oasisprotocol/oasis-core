@@ -3,7 +3,6 @@ package scheduler
 import (
 	"context"
 	"crypto"
-	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"time"
@@ -18,7 +17,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
@@ -101,8 +99,6 @@ type schedulerApplication struct {
 
 	timeSource epochtime.Backend
 
-	cfg *scheduler.Config
-
 	baseEpoch epochtime.EpochTime
 }
 
@@ -130,82 +126,6 @@ func (app *schedulerApplication) OnCleanup() {}
 
 func (app *schedulerApplication) SetOption(req types.RequestSetOption) types.ResponseSetOption {
 	return types.ResponseSetOption{}
-}
-
-func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) error {
-	if app.cfg.DebugStaticValidators {
-		app.logger.Warn("static validators are configured")
-		return nil
-	}
-
-	regState := registryState.NewMutableState(ctx.State())
-	nodes, err := regState.Nodes()
-	if err != nil {
-		return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
-	}
-
-	registeredValidators := make(map[signature.MapKey]*node.Node)
-	for _, v := range nodes {
-		if v.HasRoles(node.RoleValidator) {
-			registeredValidators[v.Consensus.ID.ToMapKey()] = v
-		}
-	}
-
-	// Assemble the list of the tendermint genesis validators, and do some
-	// sanity checking.
-	var currentValidators []signature.PublicKey
-	for _, v := range req.Validators {
-		tmPk := v.GetPubKey()
-
-		if t := tmPk.GetType(); t != types.PubKeyEd25519 {
-			app.logger.Error("invalid genesis validator public key type",
-				"public_key", hex.EncodeToString(tmPk.GetData()),
-				"type", t,
-			)
-			return fmt.Errorf("scheduler: invalid genesus validator public key type: '%v'", t)
-		}
-
-		var id signature.PublicKey
-		if err = id.UnmarshalBinary(tmPk.GetData()); err != nil {
-			app.logger.Error("invalid genesis validator public key",
-				"err", err,
-				"public_key", hex.EncodeToString(tmPk.GetData()),
-			)
-			return errors.Wrap(err, "scheduler: invalid genesis validator public key")
-		}
-
-		if power := v.GetPower(); power != api.VotingPower {
-			app.logger.Error("invalid voting power",
-				"id", id,
-				"power", power,
-			)
-			return fmt.Errorf("scheduler: invalid genesis validator voting power: %v", power)
-		}
-
-		n := registeredValidators[id.ToMapKey()]
-		if n == nil {
-			app.logger.Error("genesis validator not in registry",
-				"id", id,
-			)
-			return fmt.Errorf("scheduler: genesis validator not in registry")
-		}
-		app.logger.Debug("adding validator to current validator set",
-			"id", id,
-		)
-		currentValidators = append(currentValidators, n.Consensus.ID)
-	}
-
-	// TODO/security: Enforce genesis validator staking.
-
-	// Add the current validator set to ABCI, so that we can alter it later.
-	//
-	// Sort of stupid it needs to be done this way, but tendermint doesn't
-	// appear to pass ABCI the validator set anywhere other than InitChain.
-
-	state := schedulerState.NewMutableState(ctx.State())
-	state.PutCurrentValidators(currentValidators)
-
-	return nil
 }
 
 func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
@@ -264,14 +184,22 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			nodes = append(nodes, node)
 		}
 
-		entityStake, err := newStakeAccumulator(ctx, app.cfg.DebugBypassStake)
+		state := schedulerState.NewMutableState(ctx.State())
+		params, err := state.ConsensusParameters()
+		if err != nil {
+			app.logger.Error("failed to fetch consensus parameters",
+				"err", err,
+			)
+			return err
+		}
+		entityStake, err := newStakeAccumulator(ctx, params.DebugBypassStake)
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get stake snapshot")
 		}
 
 		// Handle the validator election first, because no consensus is
 		// catastrophic, while no validators is not.
-		if !app.cfg.DebugStaticValidators {
+		if !params.DebugStaticValidators {
 			if err = app.electValidators(ctx, beacon, entityStake, nodes); err != nil {
 				// It is unclear what the behavior should be if the validator
 				// election fails.  The system can not ensure integrity, so
@@ -667,10 +595,7 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 }
 
 // New constructs a new scheduler application instance.
-func New(
-	timeSource epochtime.Backend,
-	cfg *scheduler.Config,
-) (abci.Application, error) {
+func New(timeSource epochtime.Backend) (abci.Application, error) {
 	baseEpoch, err := timeSource.GetBaseEpoch(context.Background())
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint/scheduler: couldn't query base epoch")
@@ -679,7 +604,6 @@ func New(
 	return &schedulerApplication{
 		logger:     logging.GetLogger("tendermint/scheduler"),
 		timeSource: timeSource,
-		cfg:        cfg,
 		baseEpoch:  baseEpoch,
 	}, nil
 }

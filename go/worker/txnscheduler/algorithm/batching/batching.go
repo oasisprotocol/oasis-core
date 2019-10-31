@@ -17,11 +17,7 @@ const (
 	// Name of the scheduling algorithm.
 	Name = "batching"
 
-	// CfgMaxBatchSize configures the max batch size.
-	CfgMaxBatchSize = "worker.txnscheduler.batching.max_batch_size"
-
-	cfgMaxQueueSize      = "worker.txnscheduler.batching.max_queue_size"
-	cfgMaxBatchSizeBytes = "worker.txnscheduler.batching.max_batch_size_bytes"
+	cfgMaxQueueSize = "worker.txnscheduler.batching.max_queue_size"
 )
 
 // Flags has the configuration flag for the batching algorithm.
@@ -156,11 +152,11 @@ func (s *batchingState) Initialize(td api.TransactionDispatcher) error {
 }
 
 // New creates a new batching algorithm.
-func New() (api.Algorithm, error) {
+func New(maxBatchSize, maxBatchSizeBytes uint64) (api.Algorithm, error) {
 	cfg := config{
 		maxQueueSize:      uint64(viper.GetInt(cfgMaxQueueSize)),
-		maxBatchSize:      uint64(viper.GetInt(CfgMaxBatchSize)),
-		maxBatchSizeBytes: uint64(viper.GetSizeInBytes(cfgMaxBatchSizeBytes)),
+		maxBatchSize:      maxBatchSize,
+		maxBatchSizeBytes: maxBatchSizeBytes,
 	}
 	batching := batchingState{
 		cfg:           cfg,
@@ -173,8 +169,6 @@ func New() (api.Algorithm, error) {
 
 func init() {
 	Flags.Uint64(cfgMaxQueueSize, 10000, "Maximum size of the batching queue")
-	Flags.Uint64(CfgMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
-	Flags.String(cfgMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
 
 	_ = viper.BindPFlags(Flags)
 }

@@ -11,10 +11,8 @@ import (
 
 func TestBatchingAlgorithm(t *testing.T) {
 	viper.Set(cfgMaxQueueSize, 100)
-	viper.Set(CfgMaxBatchSize, 10)
-	viper.Set(cfgMaxBatchSizeBytes, "16mb")
 
-	algo, err := New()
+	algo, err := New(10, 16*1024*1024)
 	require.NoError(t, err, "New()")
 
 	tests.AlgorithmImplementationTests(t, algo)

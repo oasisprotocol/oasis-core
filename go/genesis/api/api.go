@@ -4,11 +4,14 @@ package api
 import (
 	"time"
 
+	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/consensus"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
@@ -35,6 +38,12 @@ type Document struct {
 	Staking staking.Genesis `json:"staking"`
 	// KeyManager is the key manager genesis state.
 	KeyManager keymanager.Genesis `json:"keymanager"`
+	// Scheduler is the scheduler genesis state.
+	Scheduler scheduler.Genesis `json:"scheduler"`
+	// Beacon is the beacon genesis state.
+	Beacon beacon.Genesis `json:"beacon"`
+	// Consensus is the consensus genesis state.
+	Consensus consensus.Genesis `json:"consensus"`
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by the protocol.
 	ExtraData map[string][]byte `json:"extra_data"`

@@ -1,8 +1,6 @@
 package txnscheduler
 
 import (
-	"time"
-
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -15,11 +13,6 @@ import (
 const (
 	// CfgWorkerEnabled enables the tx scheduler worker.
 	CfgWorkerEnabled = "worker.txnscheduler.enabled"
-
-	cfgFlushTimeout = "worker.txnscheduler.flush_timeout"
-	// XXX: algorithm should eventually become a consensus parameter, as all nodes should use
-	// the same algorithm.
-	cfgAlgorithm = "worker.txnscheduler.algorithm"
 )
 
 // Flags has the configuration flags.
@@ -45,15 +38,21 @@ func New(
 		})
 	}
 
-	txAlgorithm, err := txnSchedulerAlgorithm.New(viper.GetString(cfgAlgorithm))
+	// Fetch config from scheduler backend.
+	genesis := commonWorker.GenesisDoc.RootHash.Parameters.TransactionScheduler
+
+	txAlgorithm, err := txnSchedulerAlgorithm.New(
+		genesis.Algorithm,
+		genesis.MaxBatchSize,
+		genesis.MaxBatchSizeBytes,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	flushTimeout := viper.GetDuration(cfgFlushTimeout)
 	cfg := Config{
 		Algorithm:    txAlgorithm,
-		FlushTimeout: flushTimeout,
+		FlushTimeout: genesis.BatchFlushTimeout,
 		Runtimes:     runtimes,
 	}
 
@@ -62,9 +61,6 @@ func New(
 
 func init() {
 	Flags.Bool(CfgWorkerEnabled, false, "Enable transaction scheduler process")
-
-	Flags.String(cfgAlgorithm, "batching", "Transaction scheduling algorithm")
-	Flags.Duration(cfgFlushTimeout, 1*time.Second, "Maximum amount of time to wait for a scheduled batch")
 
 	_ = viper.BindPFlags(Flags)
 
