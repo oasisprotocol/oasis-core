@@ -37,9 +37,7 @@ func TestRewardAndSlash(t *testing.T) {
 	escrowSigner, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "generating escrow signer")
 	escrowID := escrowSigner.Public()
-	escrowAccountOnly := map[signature.MapKey]bool{
-		escrowID.ToMapKey(): true,
-	}
+	escrowAccountOnly := []signature.PublicKey{escrowID}
 	escrowAccount := &staking.Account{}
 
 	del := &staking.Delegation{}
