@@ -206,7 +206,7 @@ steps:
   # E2E test jobs - intel-sgx
   ###########################
   - label: E2E tests - intel-sgx
-    parallelism: 6
+    parallelism: 5
     timeout_in_minutes: 9
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
