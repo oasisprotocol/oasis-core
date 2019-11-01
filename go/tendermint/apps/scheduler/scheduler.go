@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"time"
 
@@ -40,8 +39,6 @@ var (
 	rngContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
 	rngContextMerge                = []byte("EkS-ABCI-Merge")
 	rngContextValidators           = []byte("EkS-ABCI-Validators")
-
-	RewardFactorEpochElectionAny *staking.Quantity
 
 	errUnexpectedTransaction = errors.New("tendermint/scheduler: unexpected transaction")
 )
@@ -246,7 +243,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 
 		if entitiesEligibleForReward != nil {
 			stakingSt := stakingState.NewMutableState(ctx.State())
-			if err = stakingSt.AddRewards(epoch, RewardFactorEpochElectionAny, entitiesEligibleForReward); err != nil {
+			if err = stakingSt.AddRewards(epoch, scheduler.RewardFactorEpochElectionAny, entitiesEligibleForReward); err != nil {
 				return errors.Wrap(err, "adding rewards")
 			}
 		}
@@ -628,12 +625,4 @@ func New(timeSource epochtime.Backend) (abci.Application, error) {
 		timeSource: timeSource,
 		baseEpoch:  baseEpoch,
 	}, nil
-}
-
-func init() {
-	RewardFactorEpochElectionAny = staking.NewQuantity()
-	err := RewardFactorEpochElectionAny.FromBigInt(big.NewInt(1))
-	if err != nil {
-		panic(err)
-	}
 }
