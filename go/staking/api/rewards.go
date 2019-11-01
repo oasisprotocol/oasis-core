@@ -4,6 +4,7 @@ import (
 	"math/big"
 )
 
+// RewardAmountDenominator is the denominator for the reward rate.
 var RewardAmountDenominator *Quantity
 
 func init() {
