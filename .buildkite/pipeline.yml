@@ -213,6 +213,7 @@ steps:
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
       - e2e/**/*.log
+      - coverage-e2e-*.txt
     env:
       TEST_BASE_DIR: e2e
     agents:
