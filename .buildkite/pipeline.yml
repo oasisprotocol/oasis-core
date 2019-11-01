@@ -176,6 +176,10 @@ steps:
   - label: Test Go node
     command:
       - .buildkite/go/test_and_coverage.sh
+    artifact_paths:
+      - coverage-misc.txt
+      - coverage-oasis-node.txt
+      - coverage-urkel.txt
     plugins:
       <<: *docker_plugin
 
@@ -188,9 +192,9 @@ steps:
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
-      - .buildkite/scripts/upload_coverage.sh
     artifact_paths:
       - e2e/**/*.log
+      - coverage-e2e-*.txt
     env:
       TEST_BASE_DIR: e2e
     agents:
@@ -250,3 +254,19 @@ steps:
       message: "${BUILDKITE_MESSAGE}"
       commit: "${BUILDKITE_COMMIT}"
       branch: "${BUILDKITE_BRANCH}"
+
+  ###########################
+  # Merge coverage and upload
+  ###########################
+
+  - label: "Merge and upload coverage"
+    command:
+      - mkdir -p /tmp/coverage-to-merge
+      - buildkite-agent artifact download "coverage-*.txt" /tmp/coverage-to-merge
+      - type gocovmerge || go get github.com/wadey/gocovmerge
+      - gocovmerge /tmp/coverage-to-merge/coverage-*.txt >merged-coverage.txt
+      - .buildkite/scripts/upload_coverage.sh
+    artifact_paths:
+      - merged-coverage.txt
+    plugins:
+      <<: *docker_plugin
