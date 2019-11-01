@@ -1,10 +1,12 @@
 package scheduler
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"fmt"
 	"math/rand"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -242,8 +244,17 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		)
 
 		if entitiesEligibleForReward != nil {
+			accounts := make([]signature.PublicKey, len(entitiesEligibleForReward))
+			for mk := range entitiesEligibleForReward {
+				var account signature.PublicKey
+				account.FromMapKey(mk)
+				accounts = append(accounts, account)
+			}
+			sort.Slice(accounts, func(i, j int) bool {
+				return bytes.Compare(accounts[i], accounts[j]) < 0
+			})
 			stakingSt := stakingState.NewMutableState(ctx.State())
-			if err = stakingSt.AddRewards(epoch, scheduler.RewardFactorEpochElectionAny, entitiesEligibleForReward); err != nil {
+			if err = stakingSt.AddRewards(epoch, scheduler.RewardFactorEpochElectionAny, accounts); err != nil {
 				return errors.Wrap(err, "adding rewards")
 			}
 		}

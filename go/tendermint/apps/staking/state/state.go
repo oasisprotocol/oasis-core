@@ -567,7 +567,7 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 
 // AddRewards computes and transfers the staking rewards to active escrow accounts.
 // If an error occurs, the pool and affected accounts are left in an invalid state.
-func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *staking.Quantity, accounts map[signature.MapKey]bool) error {
+func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *staking.Quantity, accounts []signature.PublicKey) error {
 	steps, err := s.RewardSchedule()
 	if err != nil {
 		return err
@@ -589,10 +589,7 @@ func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *staking.Quan
 		return errors.Wrap(err, "loading common pool")
 	}
 
-	for mk := range accounts {
-		var id signature.PublicKey
-		id.FromMapKey(mk)
-
+	for _, id := range accounts {
 		ent := s.Account(id)
 
 		q := ent.Escrow.Active.Balance.Clone()
