@@ -37,16 +37,22 @@ const (
 func RegistryImplementationTests(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
 	EnsureRegistryEmpty(t, backend)
 
-	testRegistryEntityNodes(t, backend, timeSource)
-
-	// Runtime registry tests are after the entity/node tests to avoid
-	// interacting with the scheduler as much as possible.
+	// We need a runtime ID as otherwise the registry will not allow us to
+	// register nodes for roles which require runtimes.
+	var runtimeID signature.PublicKey
 	t.Run("Runtime", func(t *testing.T) {
-		testRegistryRuntime(t, backend)
+		runtimeID = testRegistryRuntime(t, backend)
 	})
+
+	testRegistryEntityNodes(t, backend, timeSource, runtimeID)
 }
 
-func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) { // nolint: gocyclo
+func testRegistryEntityNodes( // nolint: gocyclo
+	t *testing.T,
+	backend api.Backend,
+	timeSource epochtime.SetableBackend,
+	runtimeID signature.PublicKey,
+) {
 	// Generate the entities used for the test cases.
 	entities, err := NewTestEntities([]byte("testRegistryEntityNodes"), 3)
 	require.NoError(t, err, "NewTestEntities")
@@ -102,12 +108,15 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 		require.Len(seen, len(entities), "unique bulk retrived entities")
 	})
 
+	// We rely on the runtime tests running before this registering a runtime.
+	nodeRuntimes := []*node.Runtime{&node.Runtime{ID: runtimeID}}
+
 	// Node tests, because there needs to be entities.
 	var numNodes int
 	nodes := make([][]*TestNode, 0, len(entities))
 	for i, v := range entities {
 		// Stagger the expirations so that it's possible to test it.
-		entityNodes, err := v.NewTestNodes(i+1, 1, nil, epoch+epochtime.EpochTime(i)+1)
+		entityNodes, err := v.NewTestNodes(i+1, 1, nodeRuntimes, epoch+epochtime.EpochTime(i)+1)
 		require.NoError(t, err, "NewTestNodes")
 
 		nodes = append(nodes, entityNodes)
@@ -139,6 +148,17 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 
 				err = backend.RegisterNode(context.Background(), v.SignedInvalidRegistration5)
 				require.Error(err, "register node with reserved roles")
+
+				if v.Node.Roles&node.RoleComputeWorker != 0 {
+					err = backend.RegisterNode(context.Background(), v.SignedInvalidRegistration6)
+					require.Error(err, "register node without a valid p2p id")
+				}
+
+				err = backend.RegisterNode(context.Background(), v.SignedInvalidRegistration7)
+				require.Error(err, "register node without runtimes")
+
+				err = backend.RegisterNode(context.Background(), v.SignedInvalidRegistration8)
+				require.Error(err, "register node with invalid runtimes")
 
 				err = backend.RegisterNode(context.Background(), v.SignedRegistration)
 				require.NoError(err, "RegisterNode")
@@ -396,7 +416,7 @@ func testRegistryEntityNodes(t *testing.T, backend api.Backend, timeSource epoch
 	EnsureRegistryEmpty(t, backend)
 }
 
-func testRegistryRuntime(t *testing.T, backend api.Backend) {
+func testRegistryRuntime(t *testing.T, backend api.Backend) signature.PublicKey {
 	seed := []byte("testRegistryRuntime")
 
 	require := require.New(t)
@@ -449,6 +469,8 @@ func testRegistryRuntime(t *testing.T, backend api.Backend) {
 	// TODO: Test the various failures.
 
 	// No way to de-register the runtime, so it will be left there.
+
+	return rt.Runtime.ID
 }
 
 // EnsureRegistryEmpty enforces that the registry has no entities or nodes
@@ -488,13 +510,16 @@ type TestNode struct {
 	SignedInvalidRegistration3  *node.SignedNode
 	SignedInvalidRegistration4  *node.SignedNode
 	SignedInvalidRegistration5  *node.SignedNode
+	SignedInvalidRegistration6  *node.SignedNode
+	SignedInvalidRegistration7  *node.SignedNode
+	SignedInvalidRegistration8  *node.SignedNode
 	SignedValidReRegistration   *node.SignedNode
 	SignedInvalidReRegistration *node.SignedNode
 }
 
 // NewTestNodes returns the specified number of TestNodes, generated
 // deterministically using the entity's public key as the seed.
-func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*TestRuntime, expiration epochtime.EpochTime) ([]*TestNode, error) {
+func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node.Runtime, expiration epochtime.EpochTime) ([]*TestNode, error) {
 	if nCompute <= 0 || nStorage <= 0 || nCompute > 254 || nStorage > 254 {
 		return nil, errors.New("registry/tests: test node count out of bounds")
 	}
@@ -503,13 +528,6 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 	rng, err := drbg.New(crypto.SHA512, hashForDrbg(ent.Entity.ID), nil, []byte("TestNodes"))
 	if err != nil {
 		return nil, err
-	}
-
-	var nodeRts []*node.Runtime
-	for _, v := range runtimes {
-		nodeRts = append(nodeRts, &node.Runtime{
-			ID: v.Runtime.ID,
-		})
 	}
 
 	nodes := make([]*TestNode, 0, n)
@@ -531,7 +549,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 			EntityID:         ent.Entity.ID,
 			Expiration:       uint64(expiration),
 			RegistrationTime: uint64(time.Now().Unix()),
-			Runtimes:         nodeRts,
+			Runtimes:         runtimes,
 			Roles:            role,
 		}
 		addr := node.Address{
@@ -540,6 +558,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 				Port: 451,
 			},
 		}
+		nod.Node.P2P.ID = nod.Node.ID
 		nod.Node.P2P.Addresses = append(nod.Node.P2P.Addresses, addr)
 		nod.Node.Committee.Addresses = append(nod.Node.Committee.Addresses, addr)
 		// Generate dummy TLS certificate.
@@ -599,13 +618,40 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 			return nil, err
 		}
 
+		// Add a registration without a P2P ID.
+		invalid6 := *nod.Node
+		invalid6.P2P.ID = nil
+
+		nod.SignedInvalidRegistration6, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid6)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add a registration without any runtimes.
+		invalid7 := *nod.Node
+		invalid7.Runtimes = nil
+
+		nod.SignedInvalidRegistration7, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid7)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add a registration with invalid runtimes.
+		invalid8 := *nod.Node
+		invalid8.Runtimes = []*node.Runtime{&node.Runtime{ID: ent.Signer.Public()}}
+
+		nod.SignedInvalidRegistration8, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid8)
+		if err != nil {
+			return nil, err
+		}
+
 		// Add another Re-Registration with different address field.
 		nod.UpdatedNode = &node.Node{
 			ID:               nod.Signer.Public(),
 			EntityID:         ent.Entity.ID,
 			Expiration:       uint64(expiration),
 			RegistrationTime: uint64(time.Now().Unix()) + 10, // Ensure greater than initial registration.
-			Runtimes:         nodeRts,
+			Runtimes:         runtimes,
 			Roles:            role,
 		}
 		addr = node.Address{
@@ -614,6 +660,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 				Port: 452,
 			},
 		}
+		nod.UpdatedNode.P2P.ID = nod.UpdatedNode.ID
 		nod.UpdatedNode.P2P.Addresses = append(nod.UpdatedNode.P2P.Addresses, addr)
 		nod.UpdatedNode.Committee.Addresses = append(nod.UpdatedNode.Committee.Addresses, addr)
 		nod.UpdatedNode.Committee.Certificate = nod.Node.Committee.Certificate
@@ -629,7 +676,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*Test
 			EntityID:         ent.Entity.ID,
 			Expiration:       uint64(expiration),
 			RegistrationTime: uint64(time.Now().Unix()),
-			Runtimes:         append(nodeRts, &node.Runtime{ID: testRuntimeSigner.Public()}),
+			Runtimes:         append(runtimes, &node.Runtime{ID: testRuntimeSigner.Public()}),
 			Roles:            role,
 			P2P:              nod.Node.P2P,
 			Committee:        nod.Node.Committee,
@@ -734,13 +781,13 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend) {
 }
 
 // Populate populates the registry for a given TestRuntime.
-func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend, runtime *TestRuntime, seed []byte) []*node.Node {
+func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend, seed []byte) []*node.Node {
 	require := require.New(t)
 
 	require.Nil(rt.entity, "runtime has no associated entity")
 	require.Nil(rt.nodes, "runtime has no associated nodes")
 
-	return BulkPopulate(t, backend, timeSource, []*TestRuntime{runtime}, seed)
+	return BulkPopulate(t, backend, timeSource, []*TestRuntime{rt}, seed)
 }
 
 // PopulateBulk bulk populates the registry for the given TestRuntimes.
@@ -768,8 +815,11 @@ func BulkPopulate(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 		t.Fatalf("failed to receive entity registration event")
 	}
 
+	var rts []*node.Runtime
 	for _, v := range runtimes {
 		v.Signer = entity.Signer
+		v.MustRegister(t, backend)
+		rts = append(rts, &node.Runtime{ID: v.Runtime.ID})
 	}
 
 	// For the sake of simplicity, require that all runtimes have the same
@@ -783,7 +833,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 
 	numCompute := int(runtimes[0].Runtime.ReplicaGroupSize + runtimes[0].Runtime.ReplicaGroupBackupSize)
 	numStorage := int(runtimes[0].Runtime.StorageGroupSize)
-	nodes, err := entity.NewTestNodes(numCompute, numStorage, runtimes, epoch+testRuntimeNodeExpiration)
+	nodes, err := entity.NewTestNodes(numCompute, numStorage, rts, epoch+testRuntimeNodeExpiration)
 	require.NoError(err, "NewTestNodes")
 
 	ret := make([]*node.Node, 0, numCompute+numStorage)
