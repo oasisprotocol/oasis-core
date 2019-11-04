@@ -567,6 +567,10 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 
 // AddRewards computes and transfers the staking rewards to active escrow accounts.
 // If an error occurs, the pool and affected accounts are left in an invalid state.
+// This may fail due to the common pool running out of tokens. In this case, the
+// returned error's cause will be `staking.ErrInsufficientBalance`, and it should
+// be safe for the caller to roll back to an earlier state tree and continue from
+// there.
 func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *staking.Quantity, accounts []signature.PublicKey) error {
 	steps, err := s.RewardSchedule()
 	if err != nil {
