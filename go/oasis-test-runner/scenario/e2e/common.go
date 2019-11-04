@@ -3,6 +3,7 @@ package e2e
 
 import (
 	"fmt"
+	"math"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,7 @@ const (
 	cfgRuntimeBinaryDir = "e2e.runtime.binary_dir"
 	cfgRuntimeLoader    = "e2e.runtime.loader"
 	cfgTEEHardware      = "e2e.tee_hardware"
+	cfgHaltEpoch        = "e2e.halt_epoch"
 )
 
 var (
@@ -146,6 +148,7 @@ func init() {
 	Flags.String(cfgRuntimeBinaryDir, "", "path to the runtime binaries directory")
 	Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	Flags.String(cfgTEEHardware, "", "TEE hardware to use")
+	Flags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")
 	_ = viper.BindPFlags(Flags)
 
 	_ = runtimeID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")

@@ -1,10 +1,8 @@
 package e2e
 
 import (
-	"os"
+	"fmt"
 	"path/filepath"
-
-	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
@@ -64,96 +62,14 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 		"--address", "unix:" + sc.basicImpl.net.Validators()[0].SocketPath(),
 	}
 	if err = runSubCommand(childEnv, "genesis-dump", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return errors.Wrap(err, "scenario/e2e/dump_restore: failed to dump state")
+		return fmt.Errorf("scenario/e2e/dump_restore: failed to dump state: %w", err)
 	}
 
 	// Stop the network.
 	sc.logger.Info("stopping the network")
 	sc.basicImpl.net.Stop()
-
-	preservePaths := make(map[string]bool)
-	preserveComponents := make(map[string]bool)
-	preservePath := func(path string) {
-		preservePaths[path] = true
-
-		for len(path) > 1 {
-			path = filepath.Clean(path)
-			preserveComponents[path] = true
-			path, _ = filepath.Split(path)
-		}
-	}
-
-	// Preserve all identities.
-	sc.logger.Debug("preserving identities")
-	for _, ent := range sc.basicImpl.net.Entities() {
-		preservePath(ent.EntityKeyPath())
-		preservePath(ent.DescriptorPath())
-	}
-	for _, val := range sc.basicImpl.net.Validators() {
-		preservePath(val.IdentityKeyPath())
-		preservePath(val.P2PKeyPath())
-		preservePath(val.ConsensusKeyPath())
-	}
-	for _, sw := range sc.basicImpl.net.StorageWorkers() {
-		preservePath(sw.IdentityKeyPath())
-		preservePath(sw.P2PKeyPath())
-		preservePath(sw.ConsensusKeyPath())
-		preservePath(sw.TLSKeyPath())
-		preservePath(sw.TLSCertPath())
-	}
-	for _, cw := range sc.basicImpl.net.ComputeWorkers() {
-		preservePath(cw.IdentityKeyPath())
-		preservePath(cw.P2PKeyPath())
-		preservePath(cw.ConsensusKeyPath())
-		preservePath(cw.TLSKeyPath())
-		preservePath(cw.TLSCertPath())
-	}
-	km := sc.basicImpl.net.Keymanager()
-	preservePath(km.IdentityKeyPath())
-	preservePath(km.P2PKeyPath())
-	preservePath(km.ConsensusKeyPath())
-	preservePath(km.TLSKeyPath())
-	preservePath(km.TLSCertPath())
-	// Preserve key manager state.
-	preservePath(km.LocalStoragePath())
-
-	// Preserve storage.
-	sc.logger.Debug("preserving storage")
-	for _, sw := range sc.basicImpl.net.StorageWorkers() {
-		sc.logger.Debug("preserving storage database",
-			"path", sw.DatabasePath(),
-		)
-		preservePath(sw.DatabasePath())
-	}
-
-	// Remove all files except what should be preserved.
-	err = filepath.Walk(sc.basicImpl.net.BasePath(), func(path string, info os.FileInfo, fErr error) error {
-		// Preserve everything under a path.
-		if preservePaths[path] {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		// Also preserve any components of paths.
-		if preserveComponents[path] {
-			return nil
-		}
-		// Remove everything else.
-		sc.logger.Debug("removing path",
-			"path", path,
-		)
-		if err = os.RemoveAll(path); err != nil {
-			return err
-		}
-		if info.IsDir() {
-			// No need to recurse into directory as it has been removed.
-			return filepath.SkipDir
-		}
-		return nil
-	})
-	if err != nil {
-		return err
+	if err = sc.basicImpl.cleanTendermintStorage(); err != nil {
+		return fmt.Errorf("scenario/e2e/dump_restore: failed to clean tendemint storage: %w", err)
 	}
 
 	// Start the network and the client again and check that everything

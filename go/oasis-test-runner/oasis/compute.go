@@ -64,6 +64,11 @@ func (worker *Compute) TLSCertPath() string {
 	return nodeTLSCertPath(worker.dir)
 }
 
+// Exports path returns the path to the node's exports data dir.
+func (worker *Compute) ExportsPath() string {
+	return nodeExportsPath(worker.dir)
+}
+
 func (worker *Compute) startNode() error {
 	args := newArgBuilder().
 		debugAllowTestKeys().

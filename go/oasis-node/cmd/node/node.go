@@ -357,7 +357,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 func (n *Node) initGenesis(testNode bool) error {
 	var err error
-	if n.Genesis, err = genesisfile.NewFileProvider(); err == nil {
+	if n.Genesis, err = genesisfile.DefaultFileProvider(); err == nil {
 		return nil
 	}
 	if os.IsNotExist(err) && testNode {
@@ -531,6 +531,7 @@ func newNode(testNode bool) (*Node, error) {
 		}
 		node.svcMgr.Register(node.svcTmnt)
 		node.Epochtime = node.svcTmnt.EpochTime()
+
 		// Initialize the various node backends.
 		if err = node.initBackends(); err != nil {
 			logger.Error("failed to initialize backends",

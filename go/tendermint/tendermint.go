@@ -299,7 +299,7 @@ func (t *tendermintService) ToGenesis(
 	}
 
 	// Get initial genesis doc.
-	genesisFileProvider, err := file.NewFileProvider()
+	genesisFileProvider, err := file.DefaultFileProvider()
 	if err != nil {
 		logger.Error("failed getting genesis file provider",
 			"err", err,

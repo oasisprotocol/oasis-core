@@ -153,6 +153,9 @@ type ApplicationServer struct {
 
 // Start starts the ApplicationServer.
 func (a *ApplicationServer) Start() error {
+	if a.mux.state.timeSource == nil {
+		return fmt.Errorf("mux: timeSource not defined")
+	}
 	return a.mux.checkDependencies()
 }
 
@@ -208,7 +211,7 @@ func (a *ApplicationServer) Pruner() StatePruner {
 }
 
 // SetEpochtime sets the mux epochtime.
-// XXX: epochtime needs to be set before mux can be used. // TODO: add check for this
+// XXX: epochtime needs to be set before mux can be used.
 func (a *ApplicationServer) SetEpochtime(epochTime epochtime.Backend) {
 	a.mux.state.timeSource = epochTime
 }
@@ -430,34 +433,34 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	ctx := NewContext(ContextBeginBlock, mux.currentTime, mux.state)
 
-	if !mux.state.haltMode {
-		if mux.state.inHaltEpoch(ctx) {
-			// On transition, trigger halt hooks.
-			mux.logger.Info("BeginBlock: halt mode transition, emitting empty blocks.",
-				"block_height", blockHeight,
-				"epoch", mux.state.haltEpochHeight,
-			)
-
-			mux.logger.Debug("Dispatching halt hooks")
-			for _, hook := range mux.haltHooks {
-				hook(mux.state.ctx, blockHeight, mux.state.haltEpochHeight)
-			}
-			mux.logger.Debug("Halt hook dispatch complete")
+	switch mux.state.haltMode {
+	case false:
+		if !mux.state.inHaltEpoch(ctx) {
+			break
 		}
-	}
-
-	if mux.state.haltMode {
-		if mux.state.afterHaltEpoch(ctx) {
-			mux.logger.Info("BeginBlock: after halt epoch, halting",
-				"block_height", blockHeight,
-			)
-			// XXX:there is no way to stop tendermint consensus other than
-			// triggering a panic. Once possible, we should stop the consensus
-			// layer here and gracefully shutdown the node.
-			panic("tendermint: after halt epoch, halting")
+		// On transition, trigger halt hooks.
+		mux.logger.Info("BeginBlock: halt mode transition, emitting empty blocks.",
+			"block_height", blockHeight,
+			"epoch", mux.state.haltEpochHeight,
+		)
+		mux.logger.Debug("Dispatching halt hooks")
+		for _, hook := range mux.haltHooks {
+			hook(mux.state.ctx, blockHeight, mux.state.haltEpochHeight)
 		}
-
+		mux.logger.Debug("Halt hook dispatch complete")
 		return types.ResponseBeginBlock{}
+	case true:
+		if !mux.state.afterHaltEpoch(ctx) {
+			return types.ResponseBeginBlock{}
+		}
+
+		mux.logger.Info("BeginBlock: after halt epoch, halting",
+			"block_height", blockHeight,
+		)
+		// XXX: there is no way to stop tendermint consensus other than
+		// triggering a panic. Once possible, we should stop the consensus
+		// layer here and gracefully shutdown the node.
+		panic("tendermint: after halt epoch, halting")
 	}
 
 	// HACK: Our entire system is driven with a tag backed pub-sub

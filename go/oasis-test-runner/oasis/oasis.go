@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"fmt"
 	"io"
+	"math"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -32,11 +33,13 @@ const (
 	defaultConsensusBackend            = "tendermint"
 	defaultConsensusTimeoutCommit      = 250 * time.Millisecond
 	defaultEpochtimeTendermintInterval = 30
+	defaultHaltEpoch                   = math.MaxUint64
 
 	internalSocketFile = "internal.sock"
 
 	logNodeFile    = "node.log"
 	logConsoleFile = "console.log"
+	exportsDir     = "exports"
 
 	maxNodes = 32 // Arbitrary
 )
@@ -91,6 +94,9 @@ type NetworkCfg struct { // nolint: maligned
 
 	// ConsensusTimeoutCommit is the consensus commit timeout.
 	ConsensusTimeoutCommit time.Duration `json:"consensus_timeout_commit"`
+
+	// HaltEpoch is the halt epoch height flag.
+	HaltEpoch uint64 `json:"halt_epoch"`
 
 	// EpochtimeMock is the mock epochtime flag.
 	EpochtimeMock bool `json:"epochtime_mock"`
@@ -441,6 +447,7 @@ func (net *Network) makeGenesis() error {
 		"genesis", "init",
 		"--genesis.file", net.genesisPath(),
 		"--chain.id", "oasis-test-runner",
+		"--halt.epoch", strconv.FormatUint(net.cfg.HaltEpoch, 10),
 		"--consensus.backend", net.cfg.ConsensusBackend,
 		"--epochtime.tendermint.interval", strconv.FormatInt(net.cfg.EpochtimeTendermintInterval, 10),
 		"--consensus.tendermint.timeout_commit", net.cfg.ConsensusTimeoutCommit.String(),
@@ -518,6 +525,9 @@ func New(env *env.Env, cfg *NetworkCfg) (*Network, error) {
 	if cfgCopy.EpochtimeTendermintInterval == 0 {
 		cfgCopy.EpochtimeTendermintInterval = defaultEpochtimeTendermintInterval
 	}
+	if cfgCopy.HaltEpoch == 0 {
+		cfgCopy.HaltEpoch = defaultHaltEpoch
+	}
 
 	return &Network{
 		logger:       logging.GetLogger("oasis/" + env.Name()),
@@ -557,4 +567,8 @@ func nodeTLSKeyPath(dir *env.Dir) string {
 func nodeTLSCertPath(dir *env.Dir) string {
 	path, _ := identity.TLSCertPaths(dir.String())
 	return path
+}
+
+func nodeExportsPath(dir *env.Dir) string {
+	return filepath.Join(dir.String(), exportsDir)
 }

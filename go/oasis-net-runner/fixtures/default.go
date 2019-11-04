@@ -2,6 +2,7 @@
 package fixtures
 
 import (
+	"math"
 	"time"
 
 	flag "github.com/spf13/pflag"
@@ -23,6 +24,7 @@ const (
 	cfgKeymanagerBinary    = "net.keymanager.binary"
 	cfgTEEHardware         = "net.tee_hardware"
 	cfgEpochtimeMock       = "net.epochtime_mock"
+	cfgHaltEpoch           = "net.halt_epoch"
 )
 
 var (
@@ -55,6 +57,7 @@ func NewDefaultFixture() (*oasis.NetworkFixture, error) {
 			RuntimeLoaderBinary:    viper.GetString(cfgRuntimeLoader),
 			ConsensusTimeoutCommit: 1 * time.Second,
 			EpochtimeMock:          viper.GetBool(cfgEpochtimeMock),
+			HaltEpoch:              viper.GetUint64(cfgHaltEpoch),
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},
@@ -110,6 +113,7 @@ func init() {
 	Flags.String(cfgKeymanagerBinary, "oasis-core-keymanager-runtime", "path to the keymanager runtime")
 	Flags.String(cfgTEEHardware, "", "TEE hardware to use")
 	Flags.Bool(cfgEpochtimeMock, false, "use mock epochtime")
+	Flags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")
 	_ = viper.BindPFlags(Flags)
 
 	_ = runtimeID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")

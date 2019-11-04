@@ -36,9 +36,9 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 		return errors.New("honest Tendermint service already started")
 	}
 
-	genesis, err := genesis.NewFileProvider()
+	genesis, err := genesis.DefaultFileProvider()
 	if err != nil {
-		return errors.Wrap(err, "genesis NewFileProvider")
+		return errors.Wrap(err, "genesis DefaultFileProvider")
 	}
 	ht.service, err = tendermint.New(context.Background(), dataDir, id, genesis)
 	if err != nil {

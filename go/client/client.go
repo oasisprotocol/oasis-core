@@ -21,6 +21,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/grpc/txnscheduler"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/client"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -209,6 +210,26 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 		}
 
 		return resp.result, nil
+	}
+}
+
+// WaitEpoch waits on the consensus epochtime to reach provided epoch.
+func (c *Client) WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error {
+	et := c.common.consensus.EpochTime()
+	ch, sub := et.WatchEpochs()
+	defer sub.Close()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case e, ok := <-ch:
+			if !ok {
+				return context.Canceled
+			}
+			if e >= epoch {
+				return nil
+			}
+		}
 	}
 }
 

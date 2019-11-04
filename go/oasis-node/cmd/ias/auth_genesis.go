@@ -35,7 +35,7 @@ func (auth *genesisAuthenticator) VerifyEvidence(signer signature.PublicKey, evi
 }
 
 func newGenesisAuthenticator() (ias.GRPCAuthenticator, error) {
-	genesisProvider, err := genesis.NewFileProvider()
+	genesisProvider, err := genesis.DefaultFileProvider()
 	if err != nil {
 		return nil, err
 	}

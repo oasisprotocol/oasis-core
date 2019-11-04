@@ -43,6 +43,12 @@ func ClientImplementationTests(
 		err := client.WaitSync(ctx)
 		require.NoError(t, err, "WaitSync")
 	})
+	t.Run("WaitEpoch", func(t *testing.T) {
+		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
+		defer cancelFunc()
+		err := client.WaitEpoch(ctx, 0)
+		require.NoError(t, err, "WaitEpoch")
+	})
 	t.Run("IsSynced", func(t *testing.T) {
 		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
 		defer cancelFunc()

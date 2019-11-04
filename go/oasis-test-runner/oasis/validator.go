@@ -62,6 +62,11 @@ func (val *Validator) ConsensusKeyPath() string {
 	return nodeConsensusKeyPath(val.dir)
 }
 
+// Exports path returns the path to the node's exports data dir.
+func (val *Validator) ExportsPath() string {
+	return nodeExportsPath(val.dir)
+}
+
 func (val *Validator) startNode() error {
 	args := newArgBuilder().
 		debugAllowTestKeys().
