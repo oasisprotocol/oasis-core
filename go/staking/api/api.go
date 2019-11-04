@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/consensus/gas"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
@@ -167,7 +168,8 @@ type ReclaimEscrowEvent struct {
 
 // Transfer is a token transfer.
 type Transfer struct {
-	Nonce uint64 `json:"nonce"`
+	Nonce uint64  `json:"nonce"`
+	Fee   gas.Fee `json:"fee"`
 
 	To     signature.PublicKey `json:"xfer_to"`
 	Tokens quantity.Quantity   `json:"xfer_tokens"`
@@ -185,7 +187,8 @@ func (x *Transfer) UnmarshalCBOR(data []byte) error {
 
 // Burn is a token burn (destruction).
 type Burn struct {
-	Nonce uint64 `json:"nonce"`
+	Nonce uint64  `json:"nonce"`
+	Fee   gas.Fee `json:"fee"`
 
 	Tokens quantity.Quantity `json:"burn_tokens"`
 }
@@ -202,7 +205,8 @@ func (b *Burn) UnmarshalCBOR(data []byte) error {
 
 // Escrow is a token escrow.
 type Escrow struct {
-	Nonce uint64 `json:"nonce"`
+	Nonce uint64  `json:"nonce"`
+	Fee   gas.Fee `json:"fee"`
 
 	Account signature.PublicKey `json:"escrow_account"`
 	Tokens  quantity.Quantity   `json:"escrow_tokens"`
@@ -220,7 +224,8 @@ func (e *Escrow) UnmarshalCBOR(data []byte) error {
 
 // ReclaimEscrow is a token escrow reclimation.
 type ReclaimEscrow struct {
-	Nonce uint64 `json:"nonce"`
+	Nonce uint64  `json:"nonce"`
+	Fee   gas.Fee `json:"fee"`
 
 	Account signature.PublicKey `json:"escrow_account"`
 	Shares  quantity.Quantity   `json:"reclaim_shares"`
@@ -497,6 +502,7 @@ type ConsensusParameters struct {
 	RewardSchedule          []RewardStep                        `json:"reward_schedule,omitempty"`
 	AcceptableTransferPeers map[signature.MapKey]bool           `json:"acceptable_transfer_peers,omitempty"`
 	Slashing                map[SlashReason]Slash               `json:"slashing,omitempty"`
+	GasCosts                gas.Costs                           `json:"gas_costs,omitempty"`
 }
 
 // SanityCheck performs a sanity check on the consensus parameters.
@@ -512,3 +518,14 @@ func (p *ConsensusParameters) SanityCheck() error {
 
 	return nil
 }
+
+const (
+	// GasOpTransfer is the gas operation identifier for transfer.
+	GasOpTransfer gas.Op = "transfer"
+	// GasOpBurn is the gas operation identifier for burn.
+	GasOpBurn gas.Op = "burn"
+	// GasOpAddEscrow is the gas operation identifier for add escrow.
+	GasOpAddEscrow gas.Op = "add_escrow"
+	// GasOpReclaimEscrow is the gas operation identifier for reclaim escrow.
+	GasOpReclaimEscrow gas.Op = "reclaim_escrow"
+)

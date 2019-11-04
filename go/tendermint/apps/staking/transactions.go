@@ -18,15 +18,24 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 		return staking.ErrInvalidSignature
 	}
 
+	// Authenticate sender and make sure fees are paid.
 	fromID := signedXfer.Signature.PublicKey
-	from := state.Account(fromID)
-	if from.General.Nonce != xfer.Nonce {
-		app.logger.Error("Transfer: invalid account nonce",
-			"from", fromID,
-			"account_nonce", from.General.Nonce,
-			"xfer_nonce", xfer.Nonce,
-		)
-		return staking.ErrInvalidNonce
+	from, err := stakingState.AuthenticateAndPayFees(ctx, state, fromID, xfer.Nonce, &xfer.Fee)
+	if err != nil {
+		return err
+	}
+
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		return err
+	}
+	if err := ctx.Gas().UseGas(staking.GasOpTransfer, params.GasCosts); err != nil {
+		return err
 	}
 
 	if fromID.Equal(xfer.To) {
@@ -58,23 +67,20 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 		state.SetAccount(xfer.To, to)
 	}
 
-	from.General.Nonce++
 	state.SetAccount(fromID, from)
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("Transfer: executed transfer",
-			"from", fromID,
-			"to", xfer.To,
-			"amount", xfer.Tokens,
-		)
+	app.logger.Debug("Transfer: executed transfer",
+		"from", fromID,
+		"to", xfer.To,
+		"amount", xfer.Tokens,
+	)
 
-		evt := &staking.TransferEvent{
-			From:   fromID,
-			To:     xfer.To,
-			Tokens: xfer.Tokens,
-		}
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
+	evt := &staking.TransferEvent{
+		From:   fromID,
+		To:     xfer.To,
+		Tokens: xfer.Tokens,
 	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 
 	return nil
 }
@@ -88,15 +94,24 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.Mutab
 		return staking.ErrInvalidSignature
 	}
 
+	// Authenticate sender and make sure fees are paid.
 	id := signedBurn.Signature.PublicKey
-	from := state.Account(id)
-	if from.General.Nonce != burn.Nonce {
-		app.logger.Error("Burn: invalid account nonce",
-			"from", id,
-			"account_nonce", from.General.Nonce,
-			"burn_nonce", burn.Nonce,
-		)
-		return staking.ErrInvalidNonce
+	from, err := stakingState.AuthenticateAndPayFees(ctx, state, id, burn.Nonce, &burn.Fee)
+	if err != nil {
+		return err
+	}
+
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		return err
+	}
+	if err := ctx.Gas().UseGas(staking.GasOpBurn, params.GasCosts); err != nil {
+		return err
 	}
 
 	if err := from.General.Balance.Sub(&burn.Tokens); err != nil {
@@ -109,24 +124,21 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.Mutab
 
 	totalSupply, _ := state.TotalSupply()
 
-	from.General.Nonce++
 	_ = totalSupply.Sub(&burn.Tokens)
 
 	state.SetAccount(id, from)
 	state.SetTotalSupply(totalSupply)
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("Burn: burnt tokens",
-			"from", id,
-			"amount", burn.Tokens,
-		)
+	app.logger.Debug("Burn: burnt tokens",
+		"from", id,
+		"amount", burn.Tokens,
+	)
 
-		evt := &staking.BurnEvent{
-			Owner:  id,
-			Tokens: burn.Tokens,
-		}
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyBurn, cbor.Marshal(evt)))
+	evt := &staking.BurnEvent{
+		Owner:  id,
+		Tokens: burn.Tokens,
 	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyBurn, cbor.Marshal(evt)))
 
 	return nil
 }
@@ -140,16 +152,24 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 		return staking.ErrInvalidSignature
 	}
 
-	// Verify delegator account nonce.
+	// Authenticate sender and make sure fees are paid.
 	id := signedEscrow.Signature.PublicKey
-	from := state.Account(id)
-	if from.General.Nonce != escrow.Nonce {
-		app.logger.Error("AddEscrow: invalid account nonce",
-			"from", id,
-			"account_nonce", from.General.Nonce,
-			"escrow_nonce", escrow.Nonce,
-		)
-		return staking.ErrInvalidNonce
+	from, err := stakingState.AuthenticateAndPayFees(ctx, state, id, escrow.Nonce, &escrow.Fee)
+	if err != nil {
+		return err
+	}
+
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		return err
+	}
+	if err := ctx.Gas().UseGas(staking.GasOpAddEscrow, params.GasCosts); err != nil {
+		return err
 	}
 
 	// Fetch escrow account.
@@ -175,7 +195,6 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 		)
 		return err
 	}
-	from.General.Nonce++
 
 	// Commit accounts.
 	state.SetAccount(id, from)
@@ -185,20 +204,18 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 	// Commit delegation descriptor.
 	state.SetDelegation(id, escrow.Account, delegation)
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("AddEscrow: escrowed tokens",
-			"from", id,
-			"to", escrow.Account,
-			"amount", escrow.Tokens,
-		)
+	app.logger.Debug("AddEscrow: escrowed tokens",
+		"from", id,
+		"to", escrow.Account,
+		"amount", escrow.Tokens,
+	)
 
-		evt := &staking.EscrowEvent{
-			Owner:  id,
-			Escrow: escrow.Account,
-			Tokens: escrow.Tokens,
-		}
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyAddEscrow, cbor.Marshal(evt)))
+	evt := &staking.EscrowEvent{
+		Owner:  id,
+		Escrow: escrow.Account,
+		Tokens: escrow.Tokens,
 	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyAddEscrow, cbor.Marshal(evt)))
 
 	return nil
 }
@@ -217,16 +234,24 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 		return staking.ErrInvalidArgument
 	}
 
-	// Verify delegator account nonce.
+	// Authenticate sender and make sure fees are paid.
 	id := signedReclaim.Signature.PublicKey
-	to := state.Account(id)
-	if to.General.Nonce != reclaim.Nonce {
-		app.logger.Error("ReclaimEscrow: invalid account nonce",
-			"to", id,
-			"account_nonce", to.General.Nonce,
-			"reclaim_nonce", reclaim.Nonce,
-		)
-		return staking.ErrInvalidNonce
+	to, err := stakingState.AuthenticateAndPayFees(ctx, state, id, reclaim.Nonce, &reclaim.Fee)
+	if err != nil {
+		return err
+	}
+
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(staking.GasOpReclaimEscrow, params.GasCosts); err != nil {
+		return err
 	}
 
 	// Fetch escrow account.
@@ -294,7 +319,6 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	// delegations.
 	state.SetDebondingDelegation(id, reclaim.Account, to.General.Nonce, &deb)
 
-	to.General.Nonce++
 	state.SetDelegation(id, reclaim.Account, delegation)
 	state.SetAccount(id, to)
 	if !id.Equal(reclaim.Account) {

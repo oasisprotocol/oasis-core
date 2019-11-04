@@ -34,8 +34,9 @@ type Context struct {
 	outputType  ContextType
 	currentTime time.Time
 
-	data   interface{}
-	events []types.Event
+	data          interface{}
+	events        []types.Event
+	gasAccountant GasAccountant
 
 	state *ApplicationState
 }
@@ -43,9 +44,10 @@ type Context struct {
 // NewContext creates a new Context of the given type.
 func NewContext(outputType ContextType, now time.Time, state *ApplicationState) *Context {
 	return &Context{
-		outputType:  outputType,
-		currentTime: now,
-		state:       state,
+		outputType:    outputType,
+		currentTime:   now,
+		gasAccountant: NewNopGasAccountant(),
+		state:         state,
 	}
 }
 
@@ -118,6 +120,16 @@ func (c *Context) HasEvent(evType string, key []byte) bool {
 		}
 	}
 	return false
+}
+
+// SetGasAccountant configures the gas accountant on the context.
+func (c *Context) SetGasAccountant(ga GasAccountant) {
+	c.gasAccountant = ga
+}
+
+// Gas returns the gas accountant.
+func (c *Context) Gas() GasAccountant {
+	return c.gasAccountant
 }
 
 // Now returns the current tendermint time.
