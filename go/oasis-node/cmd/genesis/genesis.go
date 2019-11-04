@@ -74,6 +74,7 @@ const (
 	cfgConsensusTimeoutCommit      = "consensus.tendermint.timeout_commit"
 	cfgConsensusSkipTimeoutCommit  = "consensus.tendermint.skip_timeout_commit"
 	cfgConsensusEmptyBlockInterval = "consensus.tendermint.empty_block_interval"
+	cfgConsensusMaxTxSizeBytes     = "consensus.tendermint.max_tx_size"
 
 	// Consensus backend config flag.
 	cfgConsensusBackend = "consensus.backend"
@@ -195,6 +196,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		TimeoutCommit:      viper.GetDuration(cfgConsensusTimeoutCommit),
 		SkipTimeoutCommit:  viper.GetBool(cfgConsensusSkipTimeoutCommit),
 		EmptyBlockInterval: viper.GetDuration(cfgConsensusEmptyBlockInterval),
+		MaxTxSize:          viper.GetSizeInBytes(cfgConsensusMaxTxSizeBytes),
 	}
 
 	// TODO: Ensure consistency/sanity.
@@ -628,6 +630,7 @@ func init() {
 	initGenesisFlags.Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
 	initGenesisFlags.Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
 	initGenesisFlags.Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
+	initGenesisFlags.String(cfgConsensusMaxTxSizeBytes, "32kb", "tendermint maximum transaction size (in bytes)")
 
 	// Consensus backend flag.
 	initGenesisFlags.String(cfgConsensusBackend, tendermint.BackendName, "consensus backend")

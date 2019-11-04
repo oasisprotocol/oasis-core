@@ -36,4 +36,5 @@ type Genesis struct {
 	TimeoutCommit      time.Duration `json:"timeout_commit"`
 	SkipTimeoutCommit  bool          `json:"skip_timeout_commit"`
 	EmptyBlockInterval time.Duration `json:"empty_block_interval"`
+	MaxTxSize          uint          `json:"max_tx_size"`
 }

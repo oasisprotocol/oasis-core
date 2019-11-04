@@ -58,6 +58,8 @@ var (
 	}
 
 	metricsOnce sync.Once
+
+	errOversizedTx = errors.New("mux: oversized transaction")
 )
 
 // Application is the interface implemented by multiplexed Oasis-specific
@@ -237,6 +239,7 @@ type abciMux struct {
 
 	lastBeginBlock int64
 	currentTime    time.Time
+	maxTxSize      uint
 
 	genesisHooks []func()
 }
@@ -310,6 +313,10 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 			"err", err,
 		)
 		panic("mux: invalid genesis application state")
+	}
+
+	if mux.maxTxSize = st.Consensus.MaxTxSize; mux.maxTxSize == 0 {
+		mux.logger.Warn("maximum transaction size enforcement is disabled")
 	}
 
 	b, _ := json.Marshal(st)
@@ -445,6 +452,15 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 func (mux *abciMux) executeTx(ctx *Context, tx []byte) error {
 	logger := mux.logger.With("is_check_only", ctx.IsCheckOnly())
+
+	if mux.maxTxSize > 0 && uint(len(tx)) > mux.maxTxSize {
+		// This deliberately avoids logging the tx since spamming the
+		// logs is also bad.
+		logger.Error("received oversized transaction",
+			"tx_size", len(tx),
+		)
+		return errOversizedTx
+	}
 
 	app, err := mux.extractAppFromTx(tx)
 	if err != nil {
