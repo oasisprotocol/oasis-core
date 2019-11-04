@@ -5,12 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 var (
@@ -38,6 +40,11 @@ const (
 	// Leader indicates the node is a group leader.
 	Leader Role = 3
 )
+
+// RewardFactorEpochElectionAny is the factor for a reward
+// distributed per epoch to entities that have any node considered
+// in any election.
+var RewardFactorEpochElectionAny *staking.Quantity
 
 // String returns a string representation of a Role.
 func (r Role) String() string {
@@ -185,4 +192,12 @@ type ConsensusParameters struct {
 	// DebugStaticValidators is true iff the scheduler should use
 	// a static validator set instead of electing anything.
 	DebugStaticValidators bool `json:"debug_static_validators"`
+}
+
+func init() {
+	RewardFactorEpochElectionAny = staking.NewQuantity()
+	err := RewardFactorEpochElectionAny.FromBigInt(big.NewInt(1))
+	if err != nil {
+		panic(err)
+	}
 }

@@ -62,14 +62,18 @@ var (
 	//
 	// Value is empty.
 	debondingQueueKeyFmt = keyformat.New(0x57, uint64(0), &signature.MapKey{}, &signature.MapKey{}, uint64(0))
+	// rewardScheduleKeyFmt is the key format used for the reward schedule.
+	//
+	// Value is a CBOR-serialized slice of staking.RewardStep.
+	rewardScheduleKeyFmt = keyformat.New(0x58)
 	// acceptableTransferPeersKeyFmt is the key format used for the acceptable transfer peers set.
 	//
 	// Value is a CBOR-serialized map from acceptable runtime IDs to the boolean true.
-	acceptableTransferPeersKeyFmt = keyformat.New(0x58)
+	acceptableTransferPeersKeyFmt = keyformat.New(0x59)
 	// slashingKeyFmt is the key format used for the slashing table.
 	//
 	// Value is CBOR-serialized map from slash reason to slash descriptor.
-	slashingKeyFmt = keyformat.New(0x59)
+	slashingKeyFmt = keyformat.New(0x5a)
 
 	logger = logging.GetLogger("tendermint/staking")
 )
@@ -114,6 +118,20 @@ func (s *ImmutableState) DebondingInterval() (uint64, error) {
 	}
 
 	return binary.LittleEndian.Uint64(value), nil
+}
+
+func (s *ImmutableState) RewardSchedule() ([]staking.RewardStep, error) {
+	_, value := s.Snapshot.Get(rewardScheduleKeyFmt.Encode())
+	if value == nil {
+		return nil, nil
+	}
+
+	var steps []staking.RewardStep
+	if err := cbor.Unmarshal(value, &steps); err != nil {
+		return nil, err
+	}
+
+	return steps, nil
 }
 
 func (s *ImmutableState) AcceptableTransferPeers() (map[signature.MapKey]bool, error) {
@@ -403,6 +421,10 @@ func (s *MutableState) SetDebondingInterval(interval uint64) {
 	s.tree.Set(debondingIntervalKeyFmt.Encode(), tmp[:])
 }
 
+func (s *MutableState) SetRewardSchedule(schedule []staking.RewardStep) {
+	s.tree.Set(rewardScheduleKeyFmt.Encode(), cbor.Marshal(schedule))
+}
+
 func (s *MutableState) SetAcceptableTransferPeers(peers map[signature.MapKey]bool) {
 	s.tree.Set(acceptableTransferPeersKeyFmt.Encode(), cbor.Marshal(peers))
 }
@@ -541,6 +563,65 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 	}
 
 	return ret, nil
+}
+
+// AddRewards computes and transfers the staking rewards to active escrow accounts.
+// If an error occurs, the pool and affected accounts are left in an invalid state.
+// This may fail due to the common pool running out of tokens. In this case, the
+// returned error's cause will be `staking.ErrInsufficientBalance`, and it should
+// be safe for the caller to roll back to an earlier state tree and continue from
+// there.
+func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *staking.Quantity, accounts []signature.PublicKey) error {
+	steps, err := s.RewardSchedule()
+	if err != nil {
+		return err
+	}
+	var activeStep *staking.RewardStep
+	for _, step := range steps {
+		if time < step.Until {
+			activeStep = &step
+			break
+		}
+	}
+	if activeStep == nil {
+		// We're past the end of the schedule.
+		return nil
+	}
+
+	commonPool, err := s.CommonPool()
+	if err != nil {
+		return errors.Wrap(err, "loading common pool")
+	}
+
+	for _, id := range accounts {
+		ent := s.Account(id)
+
+		q := ent.Escrow.Active.Balance.Clone()
+		// Multiply first.
+		if err := q.Mul(factor); err != nil {
+			return errors.Wrap(err, "multiplying by reward factor")
+		}
+		if err := q.Mul(&activeStep.Scale); err != nil {
+			return errors.Wrap(err, "multiplying by reward step scale")
+		}
+		if err := q.Quo(staking.RewardAmountDenominator); err != nil {
+			return errors.Wrap(err, "dividing by reward amount denominator")
+		}
+
+		if q.IsZero() {
+			continue
+		}
+
+		if err := staking.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
+			return errors.Wrap(err, "transferring to active escrow balance from common pool")
+		}
+
+		s.SetAccount(id, ent)
+	}
+
+	s.SetCommonPool(commonPool)
+
+	return nil
 }
 
 func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, message *block.RoothashMessage) (error, error) {

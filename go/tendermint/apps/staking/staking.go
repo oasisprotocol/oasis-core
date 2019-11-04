@@ -169,6 +169,7 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		}
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyReclaimEscrow, cbor.Marshal(evt)))
 	}
+
 	return nil
 }
 
