@@ -213,7 +213,7 @@ func (t *tendermintService) Synced() <-chan struct{} {
 	return t.syncedCh
 }
 
-func (t *tendermintService) GetAddresses() ([]node.Address, error) {
+func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 	addrURI := viper.GetString(cfgCoreExternalAddress)
 	if addrURI == "" {
 		addrURI = viper.GetString(CfgCoreListenAddress)
@@ -247,12 +247,13 @@ func (t *tendermintService) GetAddresses() ([]node.Address, error) {
 		u.Host = ip.String() + ":" + port
 	}
 
-	var addr node.Address
-	if err = addr.UnmarshalText([]byte(u.Host)); err != nil {
+	var addr node.ConsensusAddress
+	if err = addr.Address.UnmarshalText([]byte(u.Host)); err != nil {
 		return nil, errors.Wrap(err, "tendermint: failed to parse external address host")
 	}
+	addr.ID = t.ConsensusKey()
 
-	return []node.Address{addr}, nil
+	return []node.ConsensusAddress{addr}, nil
 }
 
 func (t *tendermintService) RegisterGenesisHook(hook func()) {

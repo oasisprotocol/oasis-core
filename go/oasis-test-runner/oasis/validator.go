@@ -2,10 +2,15 @@ package oasis
 
 import (
 	"fmt"
+	netPkg "net"
 	"path/filepath"
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 )
 
@@ -81,26 +86,46 @@ func (val *Validator) startNode() error {
 func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	valName := fmt.Sprintf("validator-%d", len(net.validators))
 
+	valDir, err := net.baseDir.NewSubDir(valName)
+	if err != nil {
+		net.logger.Error("failed to create validator subdir",
+			"err", err,
+			"validator_name", valName,
+		)
+		return nil, fmt.Errorf("oasis/validator: failed to create validator subdir: %w", err)
+	}
+
+	// Pre-provision the node identity, so that we can pass the validator's
+	// consensus public key to the node registration command.
+	signerFactory := fileSigner.NewFactory(valDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	valIdentity, err := identity.LoadOrGenerate(valDir.String(), signerFactory)
+	if err != nil {
+		net.logger.Error("failed to provision validator identity",
+			"err", err,
+			"validator_name", valName,
+		)
+		return nil, fmt.Errorf("oasis/validator: failed to provision validator identity: %w", err)
+	}
+
 	val := &Validator{
 		net:           net,
+		dir:           valDir,
 		entity:        cfg.Entity,
 		consensusPort: net.nextNodePort,
 		grpcDebugPort: net.nextNodePort + 1,
 	}
 
-	var err error
-	if val.dir, err = net.baseDir.NewSubDir(valName); err != nil {
-		net.logger.Error("failed to create valdiator subdir",
-			"err", err,
-			"validator_name", valName,
-		)
-		return nil, errors.Wrap(err, "oasis/validator: failed to create validator subdir")
+	valConsensusAddr := node.ConsensusAddress{
+		ID: valIdentity.ConsensusSigner.Public(),
+	}
+	if err = valConsensusAddr.Address.FromIP(netPkg.ParseIP("127.0.0.1"), val.consensusPort); err != nil {
+		return nil, fmt.Errorf("oasis/validator: failed to parse IP: %w", err)
 	}
 
 	args := []string{
 		"registry", "node", "init",
 		"--datadir", val.dir.String(),
-		"--node.consensus_address", fmt.Sprintf("127.0.0.1:%d", val.consensusPort),
+		"--node.consensus_address", valConsensusAddr.String(),
 		"--node.expiration", "1",
 		"--node.role", "validator",
 	}

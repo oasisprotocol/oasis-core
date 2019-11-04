@@ -51,7 +51,7 @@ message ConsensusAddress {
 
 message ConsensusInfo {
     bytes id = 1;
-    repeated Address addresses = 2;
+    repeated ConsensusAddress addresses = 2;
 }
 
 message NodeRuntime {
