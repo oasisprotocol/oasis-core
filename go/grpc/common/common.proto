@@ -44,9 +44,14 @@ message P2PInfo {
     repeated Address addresses = 2;
 }
 
+message ConsensusAddress {
+    bytes id = 1;
+    Address address = 2;
+}
+
 message ConsensusInfo {
     bytes id = 1;
-    repeated Address addresses = 2;
+    repeated ConsensusAddress addresses = 2;
 }
 
 message NodeRuntime {

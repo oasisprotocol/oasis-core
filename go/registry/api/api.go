@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
@@ -439,7 +440,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		}
 	}
 
-	// If node is a validator, ensure it has ConensusInfo.
+	// If node is a validator, ensure it has ConsensusInfo.
 	if n.HasRoles(node.RoleValidator) {
 		if !n.Consensus.ID.IsValid() {
 			logger.Error("RegisterNode: invalid consensus id",
@@ -622,18 +623,34 @@ func VerifyAddress(addr node.Address, allowUnroutable bool) error {
 	return nil
 }
 
-func verifyAddresses(params *ConsensusParameters, addrs []node.Address) error {
-	// Treat having no addresses as invalid, regardless.
-	if len(addrs) == 0 {
-		return ErrInvalidArgument
-	}
-
-	for _, v := range addrs {
-		if err := VerifyAddress(v, params.DebugAllowUnroutableAddresses); err != nil {
-			return err
+func verifyAddresses(params *ConsensusParameters, addresses interface{}) error {
+	switch addrs := addresses.(type) {
+	case []node.ConsensusAddress:
+		// Treat having no addresses as invalid, regardless.
+		if len(addrs) == 0 {
+			return ErrInvalidArgument
 		}
+		for _, v := range addrs {
+			if !v.ID.IsValid() {
+				return ErrInvalidArgument
+			}
+			if err := VerifyAddress(v.Address, params.DebugAllowUnroutableAddresses); err != nil {
+				return err
+			}
+		}
+	case []node.Address:
+		// Treat having no addresses as invalid, regardless.
+		if len(addrs) == 0 {
+			return ErrInvalidArgument
+		}
+		for _, v := range addrs {
+			if err := VerifyAddress(v, params.DebugAllowUnroutableAddresses); err != nil {
+				return err
+			}
+		}
+	default:
+		panic(fmt.Sprintf("registry: unsupported addresses type: %T", addrs))
 	}
-
 	return nil
 }
 

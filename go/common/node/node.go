@@ -269,20 +269,20 @@ func (info *P2PInfo) fromProto(pb *pbCommon.P2PInfo) error {
 	return nil
 }
 
-// ConsensusInfo contains information for connectiong to this node as a
+// ConsensusInfo contains information for connecting to this node as a
 // consensus member.
 type ConsensusInfo struct {
 	// ID is the unique identifier of the node as a consensus member.
 	ID signature.PublicKey `json:"id"`
 
 	// Addresses is the list of addresses at which the node can be reached.
-	Addresses []Address `json:"addresses"`
+	Addresses []ConsensusAddress `json:"addresses"`
 }
 
 func (info *ConsensusInfo) toProto() *pbCommon.ConsensusInfo {
 	pb := new(pbCommon.ConsensusInfo)
 	pb.Id, _ = info.ID.MarshalBinary()
-	pb.Addresses = ToProtoAddresses(info.Addresses)
+	pb.Addresses = ToProtoConsensusAddresses(info.Addresses)
 	return pb
 }
 
@@ -291,15 +291,12 @@ func (info *ConsensusInfo) fromProto(pb *pbCommon.ConsensusInfo) error {
 		return err
 	}
 
-	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
-		info.Addresses = make([]Address, 0, len(pbAddresses))
-		for _, v := range pbAddresses {
-			addr, err := parseProtoAddress(v)
-			if err != nil {
-				return err
-			}
-			info.Addresses = append(info.Addresses, *addr)
+	if pbConsensusAddrs := pb.GetAddresses(); pbConsensusAddrs != nil {
+		consensusAddrs, err := FromProtoConsensusAddresses(pbConsensusAddrs)
+		if err != nil {
+			return err
 		}
+		info.Addresses = consensusAddrs
 	}
 
 	return nil

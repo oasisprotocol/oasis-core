@@ -230,15 +230,15 @@ func doInit(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 
-		var addr node.Address
-		if err = addr.UnmarshalText([]byte(addrStr)); err != nil {
-			logger.Error("failed to parse node consensus address",
+		var consensusAddr node.ConsensusAddress
+		if err = consensusAddr.UnmarshalText([]byte(addrStr)); err != nil {
+			logger.Error("failed to parse node's consensus address",
 				"err", err,
 				"addr", addrStr,
 			)
 			os.Exit(1)
 		}
-		n.Consensus.Addresses = append(n.Consensus.Addresses, addr)
+		n.Consensus.Addresses = append(n.Consensus.Addresses, consensusAddr)
 	}
 
 	// Sign and write out the genesis node registration.
@@ -354,7 +354,7 @@ func init() {
 	flags.Uint64(cfgExpiration, 0, "Epoch that the node registration should expire")
 	flags.StringSlice(cfgCommitteeAddress, nil, "Address(es) the node can be reached as a committee member")
 	flags.StringSlice(cfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
-	flags.String(cfgConsensusAddress, "", "Address the node can be reached as a consensus member")
+	flags.String(cfgConsensusAddress, "", "Address the node can be reached as a consensus member of the form ID@ip:port (where ID represents the consensus' public key)")
 	flags.StringSlice(cfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-scheduler\", \"key-manager\", \"merge-worker\", and \"validator\"")
 	flags.Bool(cfgSelfSigned, false, "Node registration should be self-signed")
 	flags.StringSlice(cfgNodeRuntimeID, nil, "Hex Encoded Runtime ID(s) of the node.")

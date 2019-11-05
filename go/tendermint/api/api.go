@@ -84,27 +84,31 @@ func PublicKeyToValidatorUpdate(id signature.PublicKey, power int64) types.Valid
 // address book entry.
 func NodeToP2PAddr(n *node.Node) (*tmp2p.NetAddress, error) {
 	// WARNING: p2p/transport.go:MultiplexTransport.upgrade() uses
-	// a case senstive string comparsison to validate public keys,
+	// a case sensitive string comparison to validate public keys,
 	// because tendermint.
 
 	if !n.HasRoles(node.RoleValidator) {
 		return nil, fmt.Errorf("tendermint/api: node is not a validator")
 	}
 
-	pubKey := crypto.PublicKeyToTendermint(&n.Consensus.ID)
-	pubKeyAddrHex := strings.ToLower(pubKey.Address().String())
-
 	if len(n.Consensus.Addresses) == 0 {
 		// Should never happen, but check anyway.
 		return nil, fmt.Errorf("tendermint/api: node has no consensus addresses")
 	}
-	coreAddress, _ := n.Consensus.Addresses[0].MarshalText()
+
+	// TODO: Should we extend the function to return more P2P addresses?
+	consensusAddr := n.Consensus.Addresses[0]
+
+	pubKey := crypto.PublicKeyToTendermint(&consensusAddr.ID)
+	pubKeyAddrHex := strings.ToLower(pubKey.Address().String())
+
+	coreAddress, _ := consensusAddr.Address.MarshalText()
 
 	addr := pubKeyAddrHex + "@" + string(coreAddress)
 
 	tmAddr, err := tmp2p.NewNetAddressString(addr)
 	if err != nil {
-		return nil, errors.Wrap(err, "tenderimt/api: failed to reformat validator")
+		return nil, errors.Wrap(err, "tendermint/api: failed to reformat validator")
 	}
 
 	return tmAddr, nil

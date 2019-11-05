@@ -1,4 +1,4 @@
-// Package consensus provides the implementation agnostic consesus
+// Package consensus provides the implementation agnostic consensus
 // backend.
 package consensus
 
@@ -19,7 +19,7 @@ type Backend interface {
 	ConsensusKey() signature.PublicKey
 
 	// GetAddresses returns the consensus backend addresses.
-	GetAddresses() ([]node.Address, error)
+	GetAddresses() ([]node.ConsensusAddress, error)
 
 	// RegisterGenesisHook registers a function to be called when the
 	// consensus backend is initialized from genesis (e.g., on fresh
