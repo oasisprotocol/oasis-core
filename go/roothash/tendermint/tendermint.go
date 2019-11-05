@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"sync"
-	"time"
 
 	"github.com/eapache/channels"
 	"github.com/pkg/errors"
@@ -75,15 +74,6 @@ type tendermintBackend struct {
 	closeOnce sync.Once
 	closedCh  chan struct{}
 	initCh    chan struct{}
-
-	roundTimeout time.Duration
-}
-
-func (tb *tendermintBackend) Info() api.Info {
-	return api.Info{
-		ComputeRoundTimeout: tb.roundTimeout,
-		MergeRoundTimeout:   tb.roundTimeout,
-	}
 }
 
 func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.PublicKey, height int64) (*block.Block, error) {
@@ -535,11 +525,8 @@ func New(
 	beac beacon.Backend,
 	service service.TendermintService,
 ) (api.Backend, error) {
-	// Fetch round timeout config from genesis document.
-	roundTimeout := service.GetGenesis().RootHash.Parameters.RoundTimeout
-
 	// Initialize and register the tendermint service component.
-	a := app.New(timeSource, beac, roundTimeout)
+	a := app.New(timeSource, beac)
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
@@ -555,7 +542,6 @@ func New(
 		genesisBlocks:    make(map[signature.MapKey]*block.Block),
 		closedCh:         make(chan struct{}),
 		initCh:           make(chan struct{}),
-		roundTimeout:     roundTimeout,
 	}
 
 	// Check if we need to index roothash blocks.

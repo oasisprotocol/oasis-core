@@ -48,19 +48,8 @@ var (
 	_ cbor.Unmarshaler = (*MergeDiscrepancyDetectedEvent)(nil)
 )
 
-// Info contains information about a root hash backend.
-type Info struct {
-	// ComputeRoundTimeout is the compute round timeout.
-	ComputeRoundTimeout time.Duration
-	// MergeRoundTimeout is the merge round timeout.
-	MergeRoundTimeout time.Duration
-}
-
 // Backend is a root hash implementation.
 type Backend interface {
-	// Info returns information about a root hash backend.
-	Info() Info
-
 	// GetGenesisBlock returns the genesis block.
 	GetGenesisBlock(context.Context, signature.PublicKey, int64) (*block.Block, error)
 

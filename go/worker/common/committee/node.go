@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -89,6 +90,7 @@ type Node struct {
 	Registry         registry.Backend
 	Scheduler        scheduler.Backend
 	Consensus        consensus.Backend
+	GenesisDoc       *genesis.Document
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -353,6 +355,7 @@ func NewNode(
 	registry registry.Backend,
 	scheduler scheduler.Backend,
 	consensus consensus.Backend,
+	genesisDoc *genesis.Document,
 	p2p *p2p.P2P,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
@@ -372,6 +375,7 @@ func NewNode(
 		Registry:         registry,
 		Scheduler:        scheduler,
 		Consensus:        consensus,
+		GenesisDoc:       genesisDoc,
 		ctx:              ctx,
 		cancelCtx:        cancel,
 		stopCh:           make(chan struct{}),

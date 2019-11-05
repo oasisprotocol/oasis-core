@@ -358,7 +358,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 	// NOTE: The roothash backend will start counting its timeout on its own based on
 	//       any received commits so in the worst case the actual timeout will be
 	//       2*roundTimeout.
-	roundTimeout := n.commonNode.Roothash.Info().ComputeRoundTimeout
+	roundTimeout := n.commonNode.GenesisDoc.RootHash.Parameters.RoundTimeout
 
 	// We have two kinds of timeouts -- the first is based on local monotonic time and
 	// starts counting as soon as the first commitment for a committee is received. It
