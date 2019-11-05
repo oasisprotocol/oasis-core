@@ -19,10 +19,12 @@ const (
 	// CfgConsensusValidator is the flag used to opt-in to being a validator.
 	CfgConsensusValidator = "consensus.validator"
 
-	cfgVerbose = "verbose"
-	cfgForce   = "force"
-	cfgRetries = "retries"
-	CfgEntity  = "entity"
+	cfgVerbose             = "verbose"
+	cfgForce               = "force"
+	cfgRetries             = "retries"
+	cfgSigner              = "signer"
+	cfgSignerFileDir       = "signer.file.dir"
+	cfgSignerLedgerAddress = "signer.ledger.address"
 )
 
 var (
@@ -34,8 +36,8 @@ var (
 	RetriesFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	// DebugTestEntityFlags has the test entity enable flag.
 	DebugTestEntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
-	// EntityFlags has the entity flag.
-	EntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	// SignerFlags has the signer-related flags.
+	SignerFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	// GenesisFileFlags has the genesis file flag.
 	GenesisFileFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
@@ -71,9 +73,19 @@ func DebugTestEntity() bool {
 	return DebugDontBlameOasis() && viper.GetBool(CfgDebugTestEntity)
 }
 
-// Entity returns the set entity directory.
-func Entity() string {
-	return viper.GetString(CfgEntity)
+// Signer returns the configured signer backend name.
+func Signer() string {
+	return viper.GetString(cfgSigner)
+}
+
+// SignerFileDir returns the directory with the signer keys (for file-based signer).
+func SignerFileDir() string {
+	return viper.GetString(cfgSignerFileDir)
+}
+
+// SignerLedgerAddress returns the address to search for (for Ledger-based signer).
+func SignerLedgerAddress() string {
+	return viper.GetString(cfgSignerLedgerAddress)
 }
 
 // GenesisFile returns the set genesis file.
@@ -98,7 +110,9 @@ func init() {
 	DebugTestEntityFlags.Bool(CfgDebugTestEntity, false, "use the test entity (UNSAFE)")
 	_ = DebugTestEntityFlags.MarkHidden(CfgDebugTestEntity)
 
-	EntityFlags.StringP(CfgEntity, "e", "", "Path to directory containing entity private key and descriptor")
+	SignerFlags.StringP(cfgSigner, "s", "file", "Signer backend [file, ledger]")
+	SignerFlags.String(cfgSignerFileDir, "", "File signer: path to directory containing private key")
+	SignerFlags.String(cfgSignerLedgerAddress, "", "Ledger signer: select Ledger device based on this specified address. If blank, any available Ledger device will be connected to.")
 
 	GenesisFileFlags.StringP(CfgGenesisFile, "g", "genesis.json", "path to genesis file")
 
@@ -110,7 +124,7 @@ func init() {
 		ForceFlags,
 		RetriesFlags,
 		DebugTestEntityFlags,
-		EntityFlags,
+		SignerFlags,
 		GenesisFileFlags,
 		ConsensusValidatorFlag,
 		DebugDontBlameOasisFlag,

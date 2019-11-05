@@ -273,7 +273,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	ent, signer, err := cmdCommon.LoadEntity(cmdFlags.Entity())
+	ent, signer, err := cmdCommon.LoadEntity(cmdFlags.Signer())
 	if err != nil {
 		logger.Error("failed to load entity",
 			"err", err,

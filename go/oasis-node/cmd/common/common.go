@@ -14,6 +14,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
+	ledgerSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/ledger"
+
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
@@ -191,12 +193,24 @@ func GetInputReader(cmd *cobra.Command, cfg string) (io.ReadCloser, bool, error)
 }
 
 // LoadEntity loads the entity and it's signer.
-func LoadEntity(dataDir string) (*entity.Entity, signature.Signer, error) {
+func LoadEntity(signerBackend string) (*entity.Entity, signature.Signer, error) {
 	if flags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
 
-	// TODO/hsm: Configure factory dynamically.
-	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
-	return entity.Load(dataDir, entitySignerFactory)
+	var factory signature.SignerFactory
+	switch backend {
+	case ledgerSigner.SignerName:
+		factory = ledgerSigner.NewFactory(flags.SignerFileDir(), signature.SignerEntity)
+	case fileSigner.SignerName:
+		factory = fileSigner.NewFactory(flags.SignerLedgerAddress(), signature.SignerEntity)
+	default:
+		return nil, nil, fmt.Errorf("unsupported signer backend: %s", backend)
+	}
+
+	dataDir, err := DataDirOrPwd()
+	if err != nil {
+		return nil, nil, err
+	}
+	return entity.Load(dataDir, factory)
 }

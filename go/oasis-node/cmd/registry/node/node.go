@@ -121,7 +121,7 @@ func doInit(cmd *cobra.Command, args []string) {
 
 		isSelfSigned = true
 	} else {
-		entity, signer, err = cmdCommon.LoadEntity(cmdFlags.Entity())
+		entity, signer, err = cmdCommon.LoadEntity(cmdFlags.Signer())
 		if err != nil {
 			logger.Error("failed to load entity",
 				"err", err,
@@ -337,7 +337,7 @@ func Register(parentCmd *cobra.Command) {
 		initCmd,
 	} {
 		v.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
-		v.Flags().AddFlagSet(cmdFlags.EntityFlags)
+		v.Flags().AddFlagSet(cmdFlags.SignerFlags)
 		v.Flags().AddFlagSet(flags)
 	}
 
