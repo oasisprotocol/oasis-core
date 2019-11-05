@@ -457,10 +457,13 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 
 	// Wait for the transaction to be included in a block.
 	select {
-	case <-txSub.Out():
+	case v := <-txSub.Out():
+		if result := v.Data().(tmtypes.EventDataTx).Result; !result.IsOK() {
+			return errors.New(result.GetInfo())
+		}
 		return nil
 	case <-txSub.Cancelled():
-		return nil
+		return context.Canceled
 	case <-ctx.Done():
 		return ctx.Err()
 	}
