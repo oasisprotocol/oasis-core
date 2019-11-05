@@ -2,7 +2,6 @@ package byzantine
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
@@ -148,7 +147,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	}
 	ht.schedulerQuery = schedApp.QueryFactory().(*schedulerapp.QueryFactory)
 	// storage has no registration
-	roothashApp := roothashapp.New(timeSource, nil, 10*time.Second)
+	roothashApp := roothashapp.New(timeSource, nil)
 	if err = ht.service.RegisterApplication(roothashApp); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication roothash")
 	}

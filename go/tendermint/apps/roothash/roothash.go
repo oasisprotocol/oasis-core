@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"time"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
@@ -62,8 +61,6 @@ type rootHashApplication struct {
 
 	timeSource epochtime.Backend
 	beacon     beacon.Backend
-
-	roundTimeout time.Duration
 }
 
 func (app *rootHashApplication) Name() string {
@@ -667,8 +664,16 @@ func (app *rootHashApplication) tryFinalizeCompute(
 		return
 	}
 
+	state := roothashState.NewMutableState(ctx.State())
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		app.logger.Error("failed to fetch consensus parameters",
+			"err", err,
+		)
+		return
+	}
 	// TODO: Separate timeout for compute/merge.
-	_, err := pool.TryFinalize(ctx.Now(), app.roundTimeout, forced, true)
+	_, err = pool.TryFinalize(ctx.Now(), params.RoundTimeout, forced, true)
 	switch err {
 	case nil:
 		// No error -- there is no discrepancy. But only the merge committee
@@ -741,7 +746,15 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		return nil
 	}
 
-	commit, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), app.roundTimeout, forced, true)
+	state := roothashState.NewMutableState(ctx.State())
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		app.logger.Error("failed to fetch consensus parameters",
+			"err", err,
+		)
+		return nil
+	}
+	commit, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), params.RoundTimeout, forced, true)
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -853,15 +866,10 @@ func (app *rootHashApplication) tryFinalizeBlock(
 }
 
 // New constructs a new roothash application instance.
-func New(
-	timeSource epochtime.Backend,
-	beacon beacon.Backend,
-	roundTimeout time.Duration,
-) abci.Application {
+func New(timeSource epochtime.Backend, beacon beacon.Backend) abci.Application {
 	return &rootHashApplication{
-		logger:       logging.GetLogger("tendermint/roothash"),
-		timeSource:   timeSource,
-		beacon:       beacon,
-		roundTimeout: roundTimeout,
+		logger:     logging.GetLogger("tendermint/roothash"),
+		timeSource: timeSource,
+		beacon:     beacon,
 	}
 }

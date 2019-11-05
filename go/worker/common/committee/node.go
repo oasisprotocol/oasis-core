@@ -380,7 +380,7 @@ func NewNode(
 		logger:           logging.GetLogger("worker/common/committee").With("runtime_id", runtimeID),
 	}
 
-	group, err := NewGroup(identity, runtimeID, n, registry, scheduler, p2p)
+	group, err := NewGroup(identity, runtimeID, n, registry, roothash, scheduler, p2p)
 	if err != nil {
 		return nil, err
 	}

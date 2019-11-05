@@ -39,6 +39,8 @@ func New(
 	}
 
 	// Fetch config from scheduler backend.
+	// XXX: this should query roothash ConsensusParameters and also support
+	// updating per epoch once issue #2334 is done.
 	genesis := commonWorker.GenesisDoc.RootHash.Parameters.TransactionScheduler
 
 	txAlgorithm, err := txnSchedulerAlgorithm.New(

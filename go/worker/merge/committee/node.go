@@ -355,10 +355,11 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		}
 	}()
 
+	epoch := n.commonNode.Group.GetEpochSnapshot()
 	// NOTE: The roothash backend will start counting its timeout on its own based on
 	//       any received commits so in the worst case the actual timeout will be
 	//       2*roundTimeout.
-	roundTimeout := n.commonNode.Roothash.Info().ComputeRoundTimeout
+	params := epoch.GetRoothashParams()
 
 	// We have two kinds of timeouts -- the first is based on local monotonic time and
 	// starts counting as soon as the first commitment for a committee is received. It
@@ -373,7 +374,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 	consensusTimeout := state.consensusTimeout[cid]
 
 	logger := n.logger.With("committee_id", cid)
-	commit, err := pool.TryFinalize(now, roundTimeout, didTimeout, consensusTimeout)
+	commit, err := pool.TryFinalize(now, params.RoundTimeout, didTimeout, consensusTimeout)
 	switch err {
 	case nil:
 	case commitment.ErrStillWaiting:
@@ -384,7 +385,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		// We may also be able to already perform discrepancy resolution, check if
 		// this is possible. This may be the case if we receive commits from backup
 		// workers before receiving commits from regular workers.
-		commit, err = pool.TryFinalize(now, roundTimeout, false, false)
+		commit, err = pool.TryFinalize(now, params.RoundTimeout, false, false)
 		if err == nil {
 			// Discrepancy was already resolved, proceed with merge.
 			break
@@ -428,7 +429,6 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 
 	n.logger.Info("have valid commitments from all committees, merging")
 
-	epoch := n.commonNode.Group.GetEpochSnapshot()
 	commitments := state.pool.GetComputeCommitments()
 
 	if epoch.IsMergeBackupWorker() && state.pendingEvent == nil {
