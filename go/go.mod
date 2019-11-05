@@ -8,6 +8,8 @@ replace (
 
 require (
 	github.com/RoaringBitmap/roaring v0.4.18 // indirect
+	github.com/allegro/bigcache v1.2.1 // indirect
+	github.com/aristanetworks/goarista v0.0.0-20191023202215-f096da5361bb // indirect
 	github.com/blevesearch/bleve v0.8.0
 	github.com/blevesearch/blevex v0.0.0-20180227211930-4b158bb555a3 // indirect
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
@@ -21,9 +23,10 @@ require (
 	github.com/cznic/strutil v0.0.0-20181122101858-275e90344537 // indirect
 	github.com/dgraph-io/badger v2.0.0-rc.2.0.20190625224416-e0016993b790+incompatible
 	github.com/eapache/channels v1.1.0
-	github.com/eapache/queue v1.1.0 // indirect
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
+	github.com/elastic/gosigar v0.10.5 // indirect
 	github.com/etcd-io/bbolt v1.3.3
+	github.com/ethereum/go-ethereum v1.9.6
 	github.com/facebookgo/ensure v0.0.0-20160127193407-b4ab57deab51 // indirect
 	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
 	github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870 // indirect
@@ -44,11 +47,11 @@ require (
 	github.com/multiformats/go-multihash v0.0.6 // indirect
 	github.com/oasislabs/deoxysii v0.0.0-20190807103041-6159f99c2236
 	github.com/oasislabs/ed25519 v0.0.0-20191022155220-a426dcc8ad5f
+	github.com/oasislabs/ledger-go v0.9.0
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pelletier/go-toml v1.4.0 // indirect
 	github.com/pkg/errors v0.8.1
-	github.com/prometheus/client_golang v0.9.4
-	github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a // indirect
+	github.com/prometheus/client_golang v1.1.0
 	github.com/remyoudompheng/bigfft v0.0.0-20190512091148-babf20351dd7 // indirect
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/smartystreets/assertions v1.0.0 // indirect
@@ -58,6 +61,8 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.4.0
+	github.com/steakknife/bloomfilter v0.0.0-20180922174646-6819c0d2a570 // indirect
+	github.com/steakknife/hamming v0.0.0-20180906055917-c99c65617cd3 // indirect
 	github.com/steveyen/gtreap v0.0.0-20150807155958-0abe01ef9be2 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.4.0
@@ -71,10 +76,10 @@ require (
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
 	github.com/whyrusleeping/go-logging v0.0.0-20170515211332-0457bb6b88fc
+	github.com/zondax/hid v0.9.0
 	gitlab.com/yawning/dynlib.git v0.0.0-20190911075527-1e6ab3739fd8
 	golang.org/x/crypto v0.0.0-20190611184440-5c40567a22f8
-	golang.org/x/net v0.0.0-20190628185345-da137c7871d7
-	golang.org/x/sys v0.0.0-20190912141932-bc967efca4b8 // indirect
+	golang.org/x/net v0.0.0-20190912160710-24e19bdeb0f2
 	golang.org/x/text v0.3.2 // indirect
 	google.golang.org/genproto v0.0.0-20190611190212-a7e196e89fd3 // indirect
 	google.golang.org/grpc v1.23.1
