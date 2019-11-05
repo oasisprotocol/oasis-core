@@ -1,7 +1,7 @@
 #!/bin/sh -e
 
 make
-make -C go oasis-node/integrationrunner/integrationrunner.test
+make -C go integrationrunner
 
 .buildkite/scripts/test_e2e.sh --test basic
 

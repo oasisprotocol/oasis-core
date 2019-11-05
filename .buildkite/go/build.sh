@@ -15,5 +15,5 @@ set -euxo pipefail
 # Build the Go parts
 ####################
 pushd go
-  make all oasis-node/integrationrunner/integrationrunner.test
+  make all integrationrunner
 popd
