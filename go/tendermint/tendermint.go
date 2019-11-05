@@ -547,6 +547,13 @@ func (t *tendermintService) lazyInit() error {
 		return err
 	}
 
+	// TODO/hsm: This really should be Identity.NodeSigner.
+	unsafeConsensusSigner, ok := t.consensusSigner.(signature.UnsafeSigner)
+	if !ok {
+		t.Logger.Error("consensus signer does not allow private key access")
+		return errors.New("tendermint: consensus signer does not allow private key access")
+	}
+
 	// HACK: tmnode.NewNode() triggers block replay and or ABCI chain
 	// initialization, instead of t.node.Start().  This is a problem
 	// because at the time that lazyInit() is called, none of the ABCI
@@ -557,8 +564,8 @@ func (t *tendermintService) lazyInit() error {
 	t.startFn = func() error {
 		t.node, err = tmnode.NewNode(tenderConfig,
 			tendermintPV,
-			// TODO/hsm: This needs to use a separte key.
-			&tmp2p.NodeKey{PrivKey: crypto.UnsafeSignerToTendermint(t.consensusSigner)},
+			// TODO/hsm: This needs to use a separate key or something.
+			&tmp2p.NodeKey{PrivKey: crypto.UnsafeSignerToTendermint(unsafeConsensusSigner)},
 			tmproxy.NewLocalClientCreator(t.mux.Mux()),
 			tendermintGenesisProvider,
 			dbProvider,
