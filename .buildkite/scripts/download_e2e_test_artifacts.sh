@@ -14,6 +14,7 @@ source .buildkite/scripts/common.sh
 
 # Oasis node, test runner and runtime loader.
 download_artifact oasis-node go/oasis-node 755
+download_artifact integrationrunner.test go/oasis-node/integrationrunner 755
 download_artifact oasis-test-runner go/oasis-test-runner 755
 download_artifact oasis-core-runtime-loader target/debug 755
 

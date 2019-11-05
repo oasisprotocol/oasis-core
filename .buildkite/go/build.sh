@@ -15,5 +15,5 @@ set -euxo pipefail
 # Build the Go parts
 ####################
 pushd go
-  make
+  make all integrationrunner
 popd

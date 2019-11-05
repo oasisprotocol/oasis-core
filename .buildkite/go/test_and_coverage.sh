@@ -28,24 +28,16 @@ export OASIS_TEST_WORKER_HOST_RUNTIME_BINARY=$(pwd)/target/debug/simple-keyvalue
 pushd go
   make generate
   # We need to do multiple test passes for different parts to get correct coverage.
-  env -u GOPATH go test -race -coverprofile=coverage.txt -covermode=atomic -v \
+  env -u GOPATH go test -race -coverprofile=../coverage-misc.txt -covermode=atomic -v \
     $(go list ./... | \
         grep -v github.com/oasislabs/oasis-core/go/oasis-node | \
         grep -v github.com/oasislabs/oasis-core/go/storage/mkvs/urkel )
   # Oasis node tests.
   pushd oasis-node
-    env -u GOPATH go test -race -coverpkg ../... -coverprofile=coverage.txt -covermode=atomic -v ./...
+    env -u GOPATH go test -race -coverpkg ../... -coverprofile=../../coverage-oasis-node.txt -covermode=atomic -v ./...
   popd
   # Urkel tree tests.
   pushd storage/mkvs/urkel
-    env -u GOPATH go test -race -coverpkg ./... -coverprofile=coverage.txt -covermode=atomic -v ./...
+    env -u GOPATH go test -race -coverpkg ./... -coverprofile=../../../../coverage-urkel.txt -covermode=atomic -v ./...
   popd
 popd
-
-############################
-# Upload coverage to codecov
-############################
-set +x
-export CODECOV_TOKEN=$(cat ~/.codecov/oasis_core_api_token)
-set -x
-bash <(curl -s https://codecov.io/bash) -Z

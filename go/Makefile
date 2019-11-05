@@ -30,6 +30,11 @@ build: generate
 	@echo "Building Oasis local network runner"
 	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) -o ./oasis-net-runner/oasis-net-runner ./oasis-net-runner
 
+# Oasis node with coverage.
+integrationrunner: oasis-node/integrationrunner/integrationrunner.test
+oasis-node/integrationrunner/integrationrunner.test: generate
+	env -u GOPATH $(OASIS_GO) test $(GOFLAGS) -c -covermode=atomic -coverpkg=./... -o $@ ./oasis-node/integrationrunner
+
 # Run go fmt.
 fmt:
 	@env -u GOPATH $(OASIS_GO) fmt ./...
@@ -50,4 +55,4 @@ urkel-test-helpers: generate
 clean:
 	@env -u GOPATH $(OASIS_GO) clean
 
-.PHONY: all generate build lint test clean
+.PHONY: all generate build integrationrunner lint test clean
