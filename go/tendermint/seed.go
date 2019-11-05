@@ -11,6 +11,7 @@ import (
 	"github.com/tendermint/tendermint/p2p/pex"
 	"github.com/tendermint/tendermint/version"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
@@ -99,9 +100,12 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 	cfg.AddrBookStrict = !viper.GetBool(CfgDebugP2PAddrBookLenient)
 	// MaxNumInboundPeers/MaxNumOutboundPeers
 
-	nodeKey := &p2p.NodeKey{
-		PrivKey: crypto.UnsafeSignerToTendermint(identity.NodeSigner),
+	// TODO/hsm: This really should be Identity.NodeSigner.
+	unsafeConsensusSigner, ok := identity.ConsensusSigner.(signature.UnsafeSigner)
+	if !ok {
+		return nil, errors.New("tendermint/seed: consensus signer does not allow private key access")
 	}
+	nodeKey := &p2p.NodeKey{PrivKey: crypto.UnsafeSignerToTendermint(unsafeConsensusSigner)}
 
 	doc, err := genesisProvider.GetGenesisDocument()
 	if err != nil {

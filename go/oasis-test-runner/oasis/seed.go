@@ -55,7 +55,7 @@ func (net *Network) newSeedNode() (*seedNode, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/seed: failed to provision seed identity")
 	}
-	seedPublicKey := seedIdentity.NodeSigner.Public()
+	seedPublicKey := seedIdentity.ConsensusSigner.Public()
 
 	seedNode := &seedNode{
 		net:           net,

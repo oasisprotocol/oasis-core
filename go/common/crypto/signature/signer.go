@@ -117,9 +117,13 @@ type Signer interface {
 
 	// Reset tears down the Signer and obliterates any sensitive state if any.
 	Reset()
+}
 
-	// UnsafeBytes returns the byte representation of the private key.  This
-	// MUST be removed for HSM support.
+// UnsafeSigner is a Signer that also supports access to the raw private key.
+type UnsafeSigner interface {
+	Signer
+
+	// UnsafeBytes returns the byte representation of the private key.
 	UnsafeBytes() []byte
 }
 
