@@ -16,10 +16,8 @@ import (
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/batching"
 )
 
 var _ service.GenesisProvider = (*testNodeGenesisProvider)(nil)
@@ -55,17 +53,6 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 				DebugAllowUnroutableAddresses: true,
 				DebugAllowRuntimeRegistration: true,
 				DebugBypassStake:              true,
-			},
-		},
-		RootHash: roothash.Genesis{
-			Parameters: roothash.ConsensusParameters{
-				RoundTimeout: 1 * time.Second,
-				TransactionScheduler: roothash.TransactionSchedulerParameters{
-					Algorithm:         batching.Name,
-					BatchFlushTimeout: 1 * time.Second,
-					MaxBatchSize:      10,
-					MaxBatchSizeBytes: 16 * 1024 * 1024,
-				},
 			},
 		},
 		Scheduler: scheduler.Genesis{

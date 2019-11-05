@@ -107,17 +107,17 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 			nStorage++
 		}
 	}
-	ensureValidCommittees(nCompute, nStorage, int(rt.Runtime.TransactionSchedulerGroupSize))
+	ensureValidCommittees(nCompute, nStorage, int(rt.Runtime.TxnScheduler.GroupSize))
 
 	// Re-register the runtime with less nodes.
-	rt.Runtime.ReplicaGroupSize = 2
-	rt.Runtime.ReplicaGroupBackupSize = 1
-	rt.Runtime.StorageGroupSize = 1
+	rt.Runtime.Compute.GroupSize = 2
+	rt.Runtime.Compute.GroupBackupSize = 1
+	rt.Runtime.Storage.GroupSize = 1
 	rt.MustRegister(t, registry)
 
 	epoch = epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
-	ensureValidCommittees(3, 1, int(rt.Runtime.TransactionSchedulerGroupSize))
+	ensureValidCommittees(3, 1, int(rt.Runtime.TxnScheduler.GroupSize))
 
 	// Cleanup the registry.
 	rt.Cleanup(t, registry, epochtime)
@@ -155,9 +155,12 @@ func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtim
 		require.Equal(0, leaders, fmt.Sprintf("%s committee shouldn't have a leader", committee.Kind))
 	}
 	switch committee.Kind {
-	case api.KindCompute, api.KindMerge:
-		require.EqualValues(runtime.ReplicaGroupSize, workers, fmt.Sprintf("%s committee should have the correct number of workers", committee.Kind))
-		require.EqualValues(runtime.ReplicaGroupBackupSize, backups, fmt.Sprintf("%s compute committee should have the correct number of backup workers", committee.Kind))
+	case api.KindCompute:
+		require.EqualValues(runtime.Compute.GroupSize, workers, "compute committee should have the correct number of workers")
+		require.EqualValues(runtime.Compute.GroupBackupSize, backups, "compute committee should have the correct number of backup workers")
+	case api.KindMerge:
+		require.EqualValues(runtime.Merge.GroupSize, workers, "merge committee should have the correct number of workers")
+		require.EqualValues(runtime.Merge.GroupBackupSize, backups, "merge committee should have the correct number of backup workers")
 	case api.KindStorage, api.KindTransactionScheduler:
 		numCommitteeMembersWithoutLeader := len(committee.Members)
 		if committee.Kind.NeedsLeader() {

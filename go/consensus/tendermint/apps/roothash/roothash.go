@@ -658,16 +658,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 		return
 	}
 
-	state := roothashState.NewMutableState(ctx.State())
-	params, err := state.ConsensusParameters()
-	if err != nil {
-		app.logger.Error("failed to fetch consensus parameters",
-			"err", err,
-		)
-		return
-	}
-	// TODO: Separate timeout for compute/merge.
-	_, err = pool.TryFinalize(ctx.Now(), params.RoundTimeout, forced, true)
+	_, err := pool.TryFinalize(ctx.Now(), runtime.Compute.RoundTimeout, forced, true)
 	switch err {
 	case nil:
 		// No error -- there is no discrepancy. But only the merge committee
@@ -739,15 +730,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		return nil
 	}
 
-	state := roothashState.NewMutableState(ctx.State())
-	params, err := state.ConsensusParameters()
-	if err != nil {
-		app.logger.Error("failed to fetch consensus parameters",
-			"err", err,
-		)
-		return nil
-	}
-	commit, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), params.RoundTimeout, forced, true)
+	commit, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), runtime.Merge.RoundTimeout, forced, true)
 	switch err {
 	case nil:
 		// Round has been finalized.

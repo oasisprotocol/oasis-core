@@ -2,7 +2,6 @@ package oasis
 
 import (
 	"fmt"
-
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
@@ -155,9 +154,10 @@ type RuntimeFixture struct {
 	Binary       string `json:"binary"`
 	GenesisState string `json:"genesis_state"`
 
-	ReplicaGroupSize       int `json:"replica_group_size"`
-	ReplicaGroupBackupSize int `json:"replica_group_backup_size"`
-	StorageGroupSize       int `json:"storage_group_size"`
+	Compute      registry.ComputeParameters      `json:"compute"`
+	Merge        registry.MergeParameters        `json:"merge"`
+	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
+	Storage      registry.StorageParameters      `json:"storage"`
 }
 
 // Create instantiates the runtime described by the fixture.
@@ -180,17 +180,18 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 	}
 
 	return net.NewRuntime(&RuntimeCfg{
-		ID:                     f.ID,
-		Kind:                   f.Kind,
-		Entity:                 entity,
-		Keymanager:             km,
-		TEEHardware:            netFixture.TEE.Hardware,
-		MrSigner:               netFixture.TEE.MrSigner,
-		ReplicaGroupSize:       f.ReplicaGroupSize,
-		ReplicaGroupBackupSize: f.ReplicaGroupBackupSize,
-		StorageGroupSize:       f.StorageGroupSize,
-		Binary:                 f.Binary,
-		GenesisState:           f.GenesisState,
+		ID:           f.ID,
+		Kind:         f.Kind,
+		Entity:       entity,
+		Keymanager:   km,
+		TEEHardware:  netFixture.TEE.Hardware,
+		MrSigner:     netFixture.TEE.MrSigner,
+		Compute:      f.Compute,
+		Merge:        f.Merge,
+		TxnScheduler: f.TxnScheduler,
+		Storage:      f.Storage,
+		Binary:       f.Binary,
+		GenesisState: f.GenesisState,
 	})
 }
 

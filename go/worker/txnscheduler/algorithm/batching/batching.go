@@ -9,14 +9,14 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
 )
 
 const (
 	// Name of the scheduling algorithm.
-	Name = roothash.TransactionSchedulerAlgorithmBatching
+	Name = registry.TxnSchedulerAlgorithmBatching
 
 	cfgMaxQueueSize = "worker.txnscheduler.batching.max_queue_size"
 )
@@ -152,6 +152,10 @@ func (s *batchingState) Initialize(td api.TransactionDispatcher) error {
 	return nil
 }
 
+func (s *batchingState) IsInitialized() bool {
+	return s.dispatcher != nil
+}
+
 // New creates a new batching algorithm.
 func New(maxBatchSize, maxBatchSizeBytes uint64) (api.Algorithm, error) {
 	cfg := config{
@@ -162,7 +166,7 @@ func New(maxBatchSize, maxBatchSizeBytes uint64) (api.Algorithm, error) {
 	batching := batchingState{
 		cfg:           cfg,
 		incomingQueue: newIncomingQueue(cfg.maxQueueSize, cfg.maxBatchSize, cfg.maxBatchSizeBytes),
-		logger:        logging.GetLogger("txscheduler/algo/batching"),
+		logger:        logging.GetLogger("txn_scheduler/algo/batching"),
 	}
 
 	return &batching, nil

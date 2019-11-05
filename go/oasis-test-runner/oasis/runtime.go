@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
+	regRtCmd "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/runtime"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
@@ -41,9 +42,10 @@ type RuntimeCfg struct { // nolint: maligned
 	Binary       string
 	GenesisState string
 
-	ReplicaGroupSize       int
-	ReplicaGroupBackupSize int
-	StorageGroupSize       int
+	Compute      registry.ComputeParameters
+	Merge        registry.MergeParameters
+	TxnScheduler registry.TxnSchedulerParameters
+	Storage      registry.StorageParameters
 }
 
 // ID returns the runtime ID.
@@ -70,18 +72,29 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	args := []string{
 		"registry", "runtime", "init_genesis",
 		"--datadir", rtDir.String(),
-		"--runtime.id", cfg.ID.String(),
-		"--runtime.kind", cfg.Kind.String(),
+		"--" + regRtCmd.CfgID, cfg.ID.String(),
+		"--" + regRtCmd.CfgKind, cfg.Kind.String(),
 	}
 	if cfg.Kind == registry.KindCompute {
 		args = append(args, []string{
-			"--runtime.replica_group_size", strconv.Itoa(cfg.ReplicaGroupSize),
-			"--runtime.replica_group_backup_size", strconv.Itoa(cfg.ReplicaGroupBackupSize),
-			"--runtime.storage_group_size", strconv.Itoa(cfg.StorageGroupSize),
+			"--" + regRtCmd.CfgComputeGroupSize, strconv.FormatUint(cfg.Compute.GroupSize, 10),
+			"--" + regRtCmd.CfgComputeGroupBackupSize, strconv.FormatUint(cfg.Compute.GroupBackupSize, 10),
+			"--" + regRtCmd.CfgComputeAllowedStragglers, strconv.FormatUint(cfg.Compute.AllowedStragglers, 10),
+			"--" + regRtCmd.CfgComputeRoundTimeout, cfg.Compute.RoundTimeout.String(),
+			"--" + regRtCmd.CfgMergeGroupSize, strconv.FormatUint(cfg.Merge.GroupSize, 10),
+			"--" + regRtCmd.CfgMergeGroupBackupSize, strconv.FormatUint(cfg.Merge.GroupBackupSize, 10),
+			"--" + regRtCmd.CfgMergeAllowedStragglers, strconv.FormatUint(cfg.Merge.AllowedStragglers, 10),
+			"--" + regRtCmd.CfgMergeRoundTimeout, cfg.Merge.RoundTimeout.String(),
+			"--" + regRtCmd.CfgTxnSchedulerGroupSize, strconv.FormatUint(cfg.TxnScheduler.GroupSize, 10),
+			"--" + regRtCmd.CfgTxnSchedulerMaxBatchSize, strconv.FormatUint(cfg.TxnScheduler.MaxBatchSize, 10),
+			"--" + regRtCmd.CfgTxnSchedulerMaxBatchSizeBytes, strconv.FormatUint(cfg.TxnScheduler.MaxBatchSizeBytes, 10),
+			"--" + regRtCmd.CfgTxnSchedulerAlgorithm, cfg.TxnScheduler.Algorithm,
+			"--" + regRtCmd.CfgTxnSchedulerBatchFlushTimeout, cfg.TxnScheduler.BatchFlushTimeout.String(),
+			"--" + regRtCmd.CfgStorageGroupSize, strconv.FormatUint(cfg.Storage.GroupSize, 10),
 		}...)
 
 		if cfg.GenesisState != "" {
-			args = append(args, "--runtime.genesis.state", cfg.GenesisState)
+			args = append(args, "--"+regRtCmd.CfgGenesisState, cfg.GenesisState)
 		}
 	}
 	var mrEnclave *sgx.MrEnclave
@@ -91,13 +104,13 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		}
 
 		args = append(args, []string{
-			"--runtime.tee_hardware", cfg.TEEHardware.String(),
-			"--runtime.version.enclave", mrEnclave.String() + cfg.MrSigner.String(),
+			"--" + regRtCmd.CfgTEEHardware, cfg.TEEHardware.String(),
+			"--" + regRtCmd.CfgVersionEnclave, mrEnclave.String() + cfg.MrSigner.String(),
 		}...)
 	}
 	if cfg.Keymanager != nil {
 		args = append(args, []string{
-			"--runtime.keymanager", cfg.Keymanager.id.String(),
+			"--" + regRtCmd.CfgKeyManager, cfg.Keymanager.id.String(),
 		}...)
 	}
 	args = append(args, cfg.Entity.toGenesisArgs()...)

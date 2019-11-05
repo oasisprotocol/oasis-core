@@ -21,9 +21,11 @@ import (
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	tendermintAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/roothash"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdCommonFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/node"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	registryTests "github.com/oasislabs/oasis-core/go/registry/tests"
@@ -31,12 +33,18 @@ import (
 	schedulerTests "github.com/oasislabs/oasis-core/go/scheduler/tests"
 	stakingClient "github.com/oasislabs/oasis-core/go/staking/client"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
+	"github.com/oasislabs/oasis-core/go/storage"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	storageClientTests "github.com/oasislabs/oasis-core/go/storage/client/tests"
 	storageTests "github.com/oasislabs/oasis-core/go/storage/tests"
+	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
+	computeWorker "github.com/oasislabs/oasis-core/go/worker/compute"
 	computeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/committee"
 	computeWorkerTests "github.com/oasislabs/oasis-core/go/worker/compute/tests"
+	mergeWorker "github.com/oasislabs/oasis-core/go/worker/merge"
+	storageWorker "github.com/oasislabs/oasis-core/go/worker/storage"
 	storageWorkerTests "github.com/oasislabs/oasis-core/go/worker/storage/tests"
+	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
 	txnschedulerCommittee "github.com/oasislabs/oasis-core/go/worker/txnscheduler/committee"
 	txnschedulerWorkerTests "github.com/oasislabs/oasis-core/go/worker/txnscheduler/tests"
 )
@@ -53,25 +61,40 @@ var (
 		value interface{}
 	}{
 		{"log.level.default", "DEBUG"},
-		{"consensus.validator", true},
-		{"roothash.tendermint.index_blocks", true},
-		{"storage.backend", "leveldb"},
-		{"worker.compute.enabled", true},
-		{"worker.runtime.backend", "mock"},
-		{"worker.runtime.loader", "mock-runtime"},
-		{"worker.runtime.binary", "mock-runtime"},
-		{"worker.storage.enabled", true},
-		{"worker.client.port", workerClientPort},
-		{"worker.txnscheduler.enabled", true},
-		{"worker.merge.enabled", true},
-		{"debug.allow_test_keys", true},
+		{cmdCommonFlags.CfgConsensusValidator, true},
+		{roothash.CfgIndexBlocks, true},
+		{storage.CfgBackend, "leveldb"},
+		{computeWorker.CfgWorkerEnabled, true},
+		{workerCommon.CfgRuntimeBackend, "mock"},
+		{workerCommon.CfgRuntimeLoader, "mock-runtime"},
+		{workerCommon.CfgRuntimeBinary, "mock-runtime"},
+		{workerCommon.CfgClientPort, workerClientPort},
+		{storageWorker.CfgWorkerEnabled, true},
+		{txnscheduler.CfgWorkerEnabled, true},
+		{mergeWorker.CfgWorkerEnabled, true},
+		{cmdCommon.CfgDebugAllowTestKeys, true},
 	}
 
 	testRuntime = &registry.Runtime{
 		// ID: default value,
-		ReplicaGroupSize:              1,
-		StorageGroupSize:              1,
-		TransactionSchedulerGroupSize: 1,
+		Compute: registry.ComputeParameters{
+			GroupSize:       1,
+			GroupBackupSize: 0,
+			RoundTimeout:    20 * time.Second,
+		},
+		Merge: registry.MergeParameters{
+			GroupSize:       1,
+			GroupBackupSize: 0,
+			RoundTimeout:    20 * time.Second,
+		},
+		TxnScheduler: registry.TxnSchedulerParameters{
+			Algorithm:         registry.TxnSchedulerAlgorithmBatching,
+			GroupSize:         1,
+			MaxBatchSize:      1,
+			MaxBatchSizeBytes: 1000,
+			BatchFlushTimeout: 20 * time.Second,
+		},
+		Storage: registry.StorageParameters{GroupSize: 1},
 	}
 
 	testNamespace common.Namespace

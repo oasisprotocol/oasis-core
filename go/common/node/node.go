@@ -103,7 +103,7 @@ func (m RolesMask) String() string {
 		ret = append(ret, "storage")
 	}
 	if m&RoleTransactionScheduler != 0 {
-		ret = append(ret, "tx_scheduler")
+		ret = append(ret, "txn_scheduler")
 	}
 	if m&RoleKeyManager != 0 {
 		ret = append(ret, "key_manager")

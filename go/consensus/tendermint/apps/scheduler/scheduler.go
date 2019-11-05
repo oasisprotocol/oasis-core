@@ -429,25 +429,24 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 		rngCtx = rngContextCompute
 		threshold = staking.KindCompute
 		isSuitableFn = app.isSuitableComputeWorker
-		workerSize = int(rt.ReplicaGroupSize)
-		backupSize = int(rt.ReplicaGroupBackupSize)
-	case scheduler.KindStorage:
-		rngCtx = rngContextStorage
-		threshold = staking.KindStorage
-		isSuitableFn = app.isSuitableStorageWorker
-		workerSize = int(rt.StorageGroupSize)
-	case scheduler.KindTransactionScheduler:
-		rngCtx = rngContextTransactionScheduler
-		threshold = staking.KindCompute
-		isSuitableFn = app.isSuitableTransactionScheduler
-		workerSize = int(rt.TransactionSchedulerGroupSize)
+		workerSize = int(rt.Compute.GroupSize)
+		backupSize = int(rt.Compute.GroupBackupSize)
 	case scheduler.KindMerge:
 		rngCtx = rngContextMerge
 		threshold = staking.KindCompute
 		isSuitableFn = app.isSuitableMergeWorker
-		// TODO: Allow independent group sizes.
-		workerSize = int(rt.ReplicaGroupSize)
-		backupSize = int(rt.ReplicaGroupBackupSize)
+		workerSize = int(rt.Merge.GroupSize)
+		backupSize = int(rt.Merge.GroupBackupSize)
+	case scheduler.KindTransactionScheduler:
+		rngCtx = rngContextTransactionScheduler
+		threshold = staking.KindCompute
+		isSuitableFn = app.isSuitableTransactionScheduler
+		workerSize = int(rt.TxnScheduler.GroupSize)
+	case scheduler.KindStorage:
+		rngCtx = rngContextStorage
+		threshold = staking.KindStorage
+		isSuitableFn = app.isSuitableStorageWorker
+		workerSize = int(rt.Storage.GroupSize)
 	default:
 		return fmt.Errorf("tendermint/scheduler: invalid committee type: %v", kind)
 	}

@@ -84,9 +84,6 @@ type Backend interface {
 	// ComputeCommit submits a batch of compute commitments for slashing.
 	ComputeCommit(context.Context, signature.PublicKey, []commitment.ComputeCommitment) error
 
-	// ConsensusParameters returns consensus parameters at specified block height.
-	ConsensusParameters(context.Context, int64) (*ConsensusParameters, error)
-
 	// ToGenesis returns the genesis state at specified block height.
 	ToGenesis(context.Context, int64) (*Genesis, error)
 
@@ -163,63 +160,12 @@ type PrunedBlock struct {
 
 // Genesis is the roothash genesis state.
 type Genesis struct {
-	// Parameters are the roothash consensus parameters.
-	Parameters ConsensusParameters `json:"params"`
-
 	// Blocks is the per-runtime map of genesis blocks.
 	Blocks map[signature.PublicKey]*block.Block `json:"blocks,omitempty"`
 }
 
-// ConsensusParameters are the roothash consensus parameters.
-type ConsensusParameters struct {
-	// RoundTimeout is the round timeout.
-	RoundTimeout time.Duration `json:"round_timeout"`
-
-	// TransactionScheduler is the transaction scheduler configuration.
-	TransactionScheduler TransactionSchedulerParameters `json:"txn_scheduler"`
-}
-
-// TransactionSchedulerAlgorithmBatching is the name of the batching algorithm.
-const TransactionSchedulerAlgorithmBatching = "batching"
-
-// TransactionSchedulerParameters is the transaction scheduler parameters.
-type TransactionSchedulerParameters struct {
-	// Algorithm is the transaction scheduling algorithm.
-	Algorithm string `json:"algorithm"`
-
-	// If using the "batching" algoritm, how long to wait for a scheduled batch.
-	BatchFlushTimeout time.Duration `json:"batch_flush_timeout"`
-
-	// If using the "batching" algorithm, what is the max size of a batch.
-	MaxBatchSize uint64 `json:"max_batch_size"`
-
-	// If using the "batching" algorithm, what is the max size of a batch
-	// in bytes.
-	MaxBatchSizeBytes uint64 `json:"max_batch_size_bytes"`
-}
-
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {
-	if g.Parameters.RoundTimeout < 1*time.Second {
-		return fmt.Errorf("roothash: sanity check failed: round timeout must be >= 1 second")
-	}
-
-	if g.Parameters.TransactionScheduler.Algorithm != TransactionSchedulerAlgorithmBatching {
-		return fmt.Errorf("roothash: sanity check failed: invalid txn sched algorithm")
-	}
-
-	if g.Parameters.TransactionScheduler.BatchFlushTimeout < 1*time.Second {
-		return fmt.Errorf("roothash: sanity check failed: batch flush timeout must be >= 1 second")
-	}
-
-	if g.Parameters.TransactionScheduler.MaxBatchSize < 1 {
-		return fmt.Errorf("roothash: sanity check failed: max batch size must be >= 1")
-	}
-
-	if g.Parameters.TransactionScheduler.MaxBatchSizeBytes < 1 {
-		return fmt.Errorf("roothash: sanity check failed: max batch size in bytes must be >= 1")
-	}
-
 	// Check blocks.
 	for _, blk := range g.Blocks {
 		hdr := blk.Header

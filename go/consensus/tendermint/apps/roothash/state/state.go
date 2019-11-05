@@ -1,8 +1,6 @@
 package state
 
 import (
-	"errors"
-
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -10,7 +8,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 )
 
@@ -19,10 +16,6 @@ var (
 	//
 	// Value is CBOR-serialized runtime state.
 	runtimeKeyFmt = keyformat.New(0x20, &signature.PublicKey{})
-	// parametersKeyFmt is the key format used for consensus parameters.
-	//
-	// Value is CBOR-serialized roothash.ConsensusParameters.
-	parametersKeyFmt = keyformat.New(0x21)
 
 	_ cbor.Marshaler   = (*RuntimeState)(nil)
 	_ cbor.Unmarshaler = (*RuntimeState)(nil)
@@ -90,17 +83,6 @@ func (s *ImmutableState) Runtimes() []*RuntimeState {
 	return runtimes
 }
 
-func (s *ImmutableState) ConsensusParameters() (*roothash.ConsensusParameters, error) {
-	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
-	if raw == nil {
-		return nil, errors.New("tendermint/roothash: expected consensus parameters to be present in app state")
-	}
-
-	var params roothash.ConsensusParameters
-	err := cbor.Unmarshal(raw, &params)
-	return &params, err
-}
-
 type MutableState struct {
 	*ImmutableState
 
@@ -118,8 +100,4 @@ func NewMutableState(tree *iavl.MutableTree) *MutableState {
 
 func (s *MutableState) SetRuntimeState(state *RuntimeState) {
 	s.tree.Set(runtimeKeyFmt.Encode(&state.Runtime.ID), state.MarshalCBOR())
-}
-
-func (s *MutableState) SetConsensusParameters(params *roothash.ConsensusParameters) {
-	s.tree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
 }

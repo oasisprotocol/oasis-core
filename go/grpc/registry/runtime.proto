@@ -10,22 +10,41 @@ message Runtime {
 
     common.CapabilitiesTEE.Hardware tee_hardware = 2;
 
-    uint64 replica_group_size = 3;
+    uint64 registration_time = 3;
 
-    uint64 storage_group_size = 4;
+    uint32 kind = 4;
 
-    uint64 replica_group_backup_size = 5;
+    VersionInfo version = 5;
 
-    uint64 replica_allowed_stragglers = 6;
+    bytes key_manager = 6;
 
-    uint64 registration_time = 7;
+    uint64 compute_group_size = 7;
 
-    uint32 kind = 8;
+    uint64 compute_group_backup_size = 8;
 
-    VersionInfo version = 9;
+    uint64 compute_allowed_stragglers = 9;
 
-    bytes key_manager = 10;
+    int64 compute_round_timeout = 10;
 
+    uint64 merge_group_size = 11;
+
+    uint64 merge_group_backup_size = 12;
+
+    uint64 merge_allowed_stragglers = 13;
+
+    int64 merge_round_timeout = 14;
+
+    uint64 txn_scheduler_group_size = 15;
+
+    string txn_scheduler_algorithm = 16;
+
+    int64 txn_scheduler_batch_flush_timeout = 17;
+
+    uint64 txn_scheduler_max_batch_size = 18;
+
+    uint64 txn_scheduler_max_batch_size_bytes = 19;
+
+    uint64 storage_group_size = 20;
 }
 
 message VersionInfo {

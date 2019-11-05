@@ -272,7 +272,14 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 	// After the timeout has elapsed, a limited number of stragglers
 	// are allowed.
 	if didTimeout {
-		required -= int(p.Runtime.ReplicaAllowedStragglers)
+		switch p.Committee.Kind {
+		case scheduler.KindCompute:
+			required -= int(p.Runtime.Compute.AllowedStragglers)
+		case scheduler.KindMerge:
+			required -= int(p.Runtime.Merge.AllowedStragglers)
+		default:
+			panic("roothash/commitment: unknown committee kind while checking commitments: " + p.Committee.Kind.String())
+		}
 	}
 
 	if commits < required {

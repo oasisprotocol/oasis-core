@@ -833,8 +833,8 @@ func BulkPopulate(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	epoch, err := timeSource.GetEpoch(context.Background(), 0)
 	require.NoError(err, "GetEpoch")
 
-	numCompute := int(runtimes[0].Runtime.ReplicaGroupSize + runtimes[0].Runtime.ReplicaGroupBackupSize)
-	numStorage := int(runtimes[0].Runtime.StorageGroupSize)
+	numCompute := int(runtimes[0].Runtime.Compute.GroupSize + runtimes[0].Runtime.Compute.GroupBackupSize)
+	numStorage := int(runtimes[0].Runtime.Storage.GroupSize)
 	nodes, err := entity.NewTestNodes(numCompute, numStorage, rts, epoch+testRuntimeNodeExpiration)
 	require.NoError(err, "NewTestNodes")
 
@@ -853,7 +853,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	}
 
 	for _, v := range runtimes {
-		numNodes := v.Runtime.ReplicaGroupSize + v.Runtime.ReplicaGroupBackupSize + v.Runtime.StorageGroupSize
+		numNodes := v.Runtime.Compute.GroupSize + v.Runtime.Compute.GroupBackupSize + v.Runtime.Storage.GroupSize
 		require.EqualValues(len(nodes), numNodes, "runtime wants the expected number of nodes")
 		v.entity = entity
 		v.nodes = nodes
@@ -929,12 +929,19 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 	}
 
 	rt.Runtime = &api.Runtime{
-		ID:                            rt.Signer.Public(),
-		ReplicaGroupSize:              3,
-		ReplicaGroupBackupSize:        5,
-		ReplicaAllowedStragglers:      1,
-		StorageGroupSize:              3,
-		TransactionSchedulerGroupSize: 3,
+		ID: rt.Signer.Public(),
+		Compute: api.ComputeParameters{
+			GroupSize:         3,
+			GroupBackupSize:   5,
+			AllowedStragglers: 1,
+		},
+		Merge: api.MergeParameters{
+			GroupSize:         3,
+			GroupBackupSize:   5,
+			AllowedStragglers: 1,
+		},
+		TxnScheduler: api.TxnSchedulerParameters{GroupSize: 3},
+		Storage:      api.StorageParameters{GroupSize: 3},
 		Genesis: api.RuntimeGenesis{
 			StorageReceipt: signature.Signature{
 				// We don't want an invalid public key so we pass something.

@@ -811,7 +811,7 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 		}
 
 		// Ensure there is at least one member of the transaction scheduler group.
-		if rt.TransactionSchedulerGroupSize == 0 {
+		if rt.TxnScheduler.GroupSize == 0 {
 			logger.Error("RegisterRuntime: transaction scheduler group too small",
 				"runtime", rt,
 			)
@@ -819,7 +819,7 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 		}
 
 		// Ensure there is at least one member of the storage group.
-		if rt.StorageGroupSize == 0 {
+		if rt.Storage.GroupSize == 0 {
 			logger.Error("RegisterRuntime: storage group too small",
 				"runtime", rt,
 			)
@@ -838,9 +838,17 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 		return nil, ErrInvalidArgument
 	}
 
-	// Ensure there is at least one member of the replication group.
-	if rt.ReplicaGroupSize == 0 {
-		logger.Error("RegisterRuntime: replication group too small",
+	// Ensure there is at least one member of the compute group.
+	if rt.Compute.GroupSize == 0 {
+		logger.Error("RegisterRuntime: compute group size too small",
+			"runtime", rt,
+		)
+		return nil, ErrInvalidArgument
+	}
+
+	// Ensure there is at least one member of the merge group.
+	if rt.Merge.GroupSize == 0 {
+		logger.Error("RegisterRuntime: merge group size too small",
 			"runtime", rt,
 		)
 		return nil, ErrInvalidArgument
@@ -954,6 +962,53 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 
 		if rt.RegistrationTime > uint64(time.Now().Unix()+61*60) {
 			return fmt.Errorf("registry: sanity check failed: runtime ID %s registration time is more than 1h1m in the future", rt.ID.String())
+		}
+
+		// Check runtime's Compute committee parameters.
+		if rt.Compute.GroupSize < 1 {
+			return fmt.Errorf("registry: sanity check failed: compute group size must be >= 1 node")
+		}
+
+		if rt.Compute.RoundTimeout < 1*time.Second {
+			return fmt.Errorf("registry: sanity check failed: compute round timeout must be >= 1 second")
+		}
+
+		if rt.Compute.RoundTimeout.Truncate(time.Second) != rt.Compute.RoundTimeout {
+			return fmt.Errorf("registry: sanity check failed: granularity of compute round timeout must be a second")
+		}
+
+		// Check runtime's Merge committee parameters.
+		if rt.Merge.GroupSize < 1 {
+			return fmt.Errorf("registry: sanity check failed: merge group size must be >= 1 node")
+		}
+
+		if rt.Merge.RoundTimeout < 1*time.Second {
+			return fmt.Errorf("registry: sanity check failed: merge round timeout must be >= 1 second")
+		}
+
+		if rt.Merge.RoundTimeout.Truncate(time.Second) != rt.Merge.RoundTimeout {
+			return fmt.Errorf("registry: sanity check failed: granularity of compute round timeout must be a second")
+		}
+
+		// Check runtime's Transaction scheduler committee parameters.
+		if rt.TxnScheduler.Algorithm != TxnSchedulerAlgorithmBatching {
+			return fmt.Errorf("registry: sanity check failed: invalid txn scheduler algorithm")
+		}
+
+		if rt.TxnScheduler.BatchFlushTimeout < 1*time.Second {
+			return fmt.Errorf("registry: sanity check failed: batch flush timeout must be >= 1 second")
+		}
+
+		if rt.TxnScheduler.BatchFlushTimeout.Truncate(time.Second) != rt.TxnScheduler.BatchFlushTimeout {
+			return fmt.Errorf("registry: sanity check failed: granularity of txn scheduler batch flush timeout must be a second")
+		}
+
+		if rt.TxnScheduler.MaxBatchSize < 1 {
+			return fmt.Errorf("registry: sanity check failed: max batch size must be >= 1")
+		}
+
+		if rt.TxnScheduler.MaxBatchSizeBytes < 1 {
+			return fmt.Errorf("registry: sanity check failed: max batch size in bytes must be >= 1")
 		}
 
 		// Check that the given key manager runtime is a valid key manager runtime.

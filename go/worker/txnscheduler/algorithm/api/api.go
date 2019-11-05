@@ -14,6 +14,9 @@ type Algorithm interface {
 	// scheduled transactions.
 	Initialize(td TransactionDispatcher) error
 
+	// IsInitialized returns true, if an algorithm has been initialized.
+	IsInitialized() bool
+
 	// EpochTransition notifies the transaction scheduler about a new
 	// epoch transition, passing in an epoch snapshot.
 	EpochTransition(epoch *committee.EpochSnapshot) error

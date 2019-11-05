@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -41,6 +42,9 @@ const (
 
 	kindCompute    = "compute"
 	kindKeyManager = "keymanager"
+
+	// TxnSchedulerAlgorithmBatching is the name of the batching algorithm.
+	TxnSchedulerAlgorithmBatching = "batching"
 )
 
 // String returns a string representation of a runtime kind.
@@ -69,6 +73,63 @@ func (k *RuntimeKind) FromString(str string) error {
 	return nil
 }
 
+// ComputeParameters are parameters for the compute committee.
+type ComputeParameters struct {
+	// GroupSize is the size of the committee.
+	GroupSize uint64 `json:"group_size"`
+
+	// GroupBackupSize is the size of the discrepancy resolution group.
+	GroupBackupSize uint64 `json:"group_backup_size"`
+
+	// AllowedStragglers is the number of allowed stragglers.
+	AllowedStragglers uint64 `json:"allowed_stragglers"`
+
+	// RoundTimeout is the round timeout of the nodes in the group.
+	RoundTimeout time.Duration `json:"round_timeout"`
+}
+
+// MergeParameters are parameters for the merge committee.
+type MergeParameters struct {
+	// GroupSize is the size of the committee.
+	GroupSize uint64 `json:"group_size"`
+
+	// GroupBackupSize is the size of the discrepancy resolution group.
+	GroupBackupSize uint64 `json:"group_backup_size"`
+
+	// AllowedStragglers is the number of allowed stragglers.
+	AllowedStragglers uint64 `json:"allowed_stragglers"`
+
+	// RoundTimeout is the round timeout of the nodes in the group.
+	RoundTimeout time.Duration `json:"round_timeout"`
+}
+
+// TxnSchedulerParameters are parameters for the transaction scheduler committee.
+type TxnSchedulerParameters struct {
+	// GroupSize is the size of the committee.
+	GroupSize uint64 `json:"group_size"`
+
+	// Algorithm is the transaction scheduling algorithm.
+	Algorithm string `json:"algorithm"`
+
+	// BatchFlushTimeout denotes, if using the "batching" algorithm, how long to
+	// wait for a scheduled batch.
+	BatchFlushTimeout time.Duration `json:"batch_flush_timeout"`
+
+	// MaxBatchSize denotes, if using the "batching" algorithm, what is the max
+	// size of a batch.
+	MaxBatchSize uint64 `json:"max_batch_size"`
+
+	// MaxBatchSizeBytes denotes, if using the "batching" algorithm, what is the
+	// max size of a batch in bytes.
+	MaxBatchSizeBytes uint64 `json:"max_batch_size_bytes"`
+}
+
+// StorageParameters are parameters for the storage committee.
+type StorageParameters struct {
+	// GroupSize is the size of the storage group.
+	GroupSize uint64 `json:"group_size"`
+}
+
 // Runtime represents a runtime.
 type Runtime struct {
 	// ID is a globally unique long term identifier of the runtime.
@@ -77,24 +138,8 @@ type Runtime struct {
 	// Genesis is the runtime genesis information.
 	Genesis RuntimeGenesis `json:"genesis"`
 
-	// ReplicaGroupSize is the size of the computation group.
-	ReplicaGroupSize uint64 `json:"replica_group_size"`
-
-	// ReplicaGroupBackupSize is the size of the discrepancy resolution
-	// replica group.
-	ReplicaGroupBackupSize uint64 `json:"replica_group_backup_size"`
-
-	// ReplicaAllowedStragglers is the number of allowed stragglers.
-	ReplicaAllowedStragglers uint64 `json:"replica_allowed_stragglers"`
-
-	// StorageGroupSize is the size of the storage group.
-	StorageGroupSize uint64 `json:"storage_group_size"`
-
 	// RegistrationTime is the time of registration of the runtime.
 	RegistrationTime uint64 `json:"registration_time"`
-
-	// TransactionSchedulerGroupSize the size of the TransactionScheduler group.
-	TransactionSchedulerGroupSize uint64 `json:"transaction_scheduler_group_size"`
 
 	// Kind is the type of runtime.
 	Kind RuntimeKind `json:"kind"`
@@ -107,6 +152,18 @@ type Runtime struct {
 
 	// KeyManager is the key manager runtime ID for this runtime.
 	KeyManager signature.PublicKey `json:"key_manager"`
+
+	// Compute stores parameters of the compute committee.
+	Compute ComputeParameters `json:"compute"`
+
+	// Merge stores parameters of the merge committee.
+	Merge MergeParameters `json:"merge"`
+
+	// TxnScheduler stores parameters of the transactions scheduler committee.
+	TxnScheduler TxnSchedulerParameters `json:"txn_scheduler"`
+
+	// Storage stores parameters of the storage committee.
+	Storage StorageParameters `json:"storage"`
 }
 
 // String returns a string representation of itself.
@@ -141,10 +198,20 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 		return err
 	}
 
-	c.ReplicaGroupSize = pb.GetReplicaGroupSize()
-	c.ReplicaGroupBackupSize = pb.GetReplicaGroupBackupSize()
-	c.ReplicaAllowedStragglers = pb.GetReplicaAllowedStragglers()
-	c.StorageGroupSize = pb.GetStorageGroupSize()
+	c.Compute.GroupSize = pb.GetComputeGroupSize()
+	c.Compute.GroupBackupSize = pb.GetComputeGroupBackupSize()
+	c.Compute.AllowedStragglers = pb.GetComputeAllowedStragglers()
+	c.Compute.RoundTimeout = time.Duration(pb.GetComputeRoundTimeout())
+	c.Merge.GroupSize = pb.GetMergeGroupSize()
+	c.Merge.GroupBackupSize = pb.GetMergeGroupBackupSize()
+	c.Merge.AllowedStragglers = pb.GetMergeAllowedStragglers()
+	c.Merge.RoundTimeout = time.Duration(pb.GetMergeRoundTimeout())
+	c.TxnScheduler.GroupSize = pb.GetTxnSchedulerGroupSize()
+	c.TxnScheduler.Algorithm = pb.GetTxnSchedulerAlgorithm()
+	c.TxnScheduler.MaxBatchSize = pb.GetTxnSchedulerMaxBatchSize()
+	c.TxnScheduler.MaxBatchSizeBytes = pb.GetTxnSchedulerMaxBatchSizeBytes()
+	c.TxnScheduler.BatchFlushTimeout = time.Duration(pb.GetTxnSchedulerBatchFlushTimeout())
+	c.Storage.GroupSize = pb.GetStorageGroupSize()
 	c.RegistrationTime = pb.GetRegistrationTime()
 	c.Kind = RuntimeKind(pb.GetKind())
 
@@ -166,10 +233,20 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 		panic(err)
 	}
 	pb.Version = c.Version.toProto()
-	pb.ReplicaGroupSize = c.ReplicaGroupSize
-	pb.ReplicaGroupBackupSize = c.ReplicaGroupBackupSize
-	pb.ReplicaAllowedStragglers = c.ReplicaAllowedStragglers
-	pb.StorageGroupSize = c.StorageGroupSize
+	pb.ComputeGroupSize = c.Compute.GroupSize
+	pb.ComputeGroupBackupSize = c.Compute.GroupBackupSize
+	pb.ComputeAllowedStragglers = c.Compute.AllowedStragglers
+	pb.ComputeRoundTimeout = int64(c.Compute.RoundTimeout)
+	pb.MergeGroupSize = c.Merge.GroupSize
+	pb.MergeGroupBackupSize = c.Merge.GroupBackupSize
+	pb.MergeAllowedStragglers = c.Merge.AllowedStragglers
+	pb.MergeRoundTimeout = int64(c.Merge.RoundTimeout)
+	pb.TxnSchedulerAlgorithm = c.TxnScheduler.Algorithm
+	pb.TxnSchedulerGroupSize = c.TxnScheduler.GroupSize
+	pb.TxnSchedulerMaxBatchSize = c.TxnScheduler.MaxBatchSize
+	pb.TxnSchedulerMaxBatchSizeBytes = c.TxnScheduler.MaxBatchSizeBytes
+	pb.TxnSchedulerBatchFlushTimeout = int64(c.TxnScheduler.BatchFlushTimeout)
+	pb.StorageGroupSize = c.Storage.GroupSize
 	pb.RegistrationTime = c.RegistrationTime
 	pb.Kind = uint32(c.Kind)
 

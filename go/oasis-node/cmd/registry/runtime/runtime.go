@@ -34,19 +34,36 @@ import (
 )
 
 const (
-	cfgID                            = "runtime.id"
-	cfgTEEHardware                   = "runtime.tee_hardware"
-	cfgReplicaGroupSize              = "runtime.replica_group_size"
-	cfgReplicaGroupBackupSize        = "runtime.replica_group_backup_size"
-	cfgReplicaAllowedStragglers      = "runtime.replica_allowed_stragglers"
-	cfgStorageGroupSize              = "runtime.storage_group_size"
-	cfgTransactionSchedulerGroupSize = "runtime.transaction_scheduler_group_size"
-	cfgGenesisState                  = "runtime.genesis.state"
-	cfgKind                          = "runtime.kind"
-	cfgKeyManager                    = "runtime.keymanager"
-	cfgOutput                        = "runtime.genesis.file"
-	cfgVersion                       = "runtime.version"
-	cfgVersionEnclave                = "runtime.version.enclave"
+	CfgID             = "runtime.id"
+	CfgTEEHardware    = "runtime.tee_hardware"
+	CfgGenesisState   = "runtime.genesis.state"
+	CfgKind           = "runtime.kind"
+	CfgKeyManager     = "runtime.keymanager"
+	cfgOutput         = "runtime.genesis.file"
+	cfgVersion        = "runtime.version"
+	CfgVersionEnclave = "runtime.version.enclave"
+
+	// Compute commiteee flags.
+	CfgComputeGroupSize         = "runtime.compute.group_size"
+	CfgComputeGroupBackupSize   = "runtime.compute.group_backup_size"
+	CfgComputeAllowedStragglers = "runtime.compute.allowed_stragglers"
+	CfgComputeRoundTimeout      = "runtime.compute.round_timeout"
+
+	// Merge committee flags.
+	CfgMergeGroupSize         = "runtime.merge.group_size"
+	CfgMergeGroupBackupSize   = "runtime.merge.group_backup_size"
+	CfgMergeAllowedStragglers = "runtime.merge.allowed_stragglers"
+	CfgMergeRoundTimeout      = "runtime.merge.round_timeout"
+
+	// Storage committee flags.
+	CfgStorageGroupSize = "runtime.storage.group_size"
+
+	// Transaction scheduler flags.
+	CfgTxnSchedulerGroupSize         = "runtime.txn_scheduler.group_size"
+	CfgTxnSchedulerAlgorithm         = "runtime.txn_scheduler.algorithm"
+	CfgTxnSchedulerBatchFlushTimeout = "runtime.txn_scheduler.flush_timeout"
+	CfgTxnSchedulerMaxBatchSize      = "runtime.txn_scheduler.batching.max_batch_size"
+	CfgTxnSchedulerMaxBatchSizeBytes = "runtime.txn_scheduler.batching.max_batch_size_bytes"
 
 	runtimeGenesisFilename = "runtime_genesis.json"
 )
@@ -224,7 +241,7 @@ func doList(cmd *cobra.Command, args []string) {
 
 func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 	var id signature.PublicKey
-	if err := id.UnmarshalHex(viper.GetString(cfgID)); err != nil {
+	if err := id.UnmarshalHex(viper.GetString(CfgID)); err != nil {
 		logger.Error("failed to parse runtime ID",
 			"err", err,
 		)
@@ -232,10 +249,10 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 	}
 
 	var teeHardware node.TEEHardware
-	s := viper.GetString(cfgTEEHardware)
+	s := viper.GetString(CfgTEEHardware)
 	if err := teeHardware.FromString(s); err != nil {
 		logger.Error("invalid TEE hardware",
-			cfgTEEHardware, s,
+			CfgTEEHardware, s,
 		)
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
@@ -252,16 +269,16 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		kmID signature.PublicKey
 		kind registry.RuntimeKind
 	)
-	s = viper.GetString(cfgKind)
+	s = viper.GetString(CfgKind)
 	if err = kind.FromString(s); err != nil {
 		logger.Error("invalid runtime kind",
-			cfgKind, s,
+			CfgKind, s,
 		)
 		return nil, nil, fmt.Errorf("invalid runtime kind")
 	}
 	switch kind {
 	case registry.KindCompute:
-		if err = kmID.UnmarshalHex(viper.GetString(cfgKeyManager)); err != nil {
+		if err = kmID.UnmarshalHex(viper.GetString(CfgKeyManager)); err != nil {
 			logger.Error("failed to parse key manager ID",
 				"err", err,
 			)
@@ -274,7 +291,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 
 	// TODO: Support root upload when registering.
 	gen := registry.RuntimeGenesis{}
-	switch state := viper.GetString(cfgGenesisState); state {
+	switch state := viper.GetString(CfgGenesisState); state {
 	case "":
 		gen.StateRoot.Empty()
 	default:
@@ -327,24 +344,39 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 	}
 
 	rt := &registry.Runtime{
-		ID:                            id,
-		Genesis:                       gen,
-		ReplicaGroupSize:              uint64(viper.GetInt64(cfgReplicaGroupSize)),
-		ReplicaGroupBackupSize:        uint64(viper.GetInt64(cfgReplicaGroupBackupSize)),
-		ReplicaAllowedStragglers:      uint64(viper.GetInt64(cfgReplicaAllowedStragglers)),
-		StorageGroupSize:              uint64(viper.GetInt64(cfgStorageGroupSize)),
-		TransactionSchedulerGroupSize: uint64(viper.GetInt64(cfgTransactionSchedulerGroupSize)),
-		Kind:                          kind,
-		TEEHardware:                   teeHardware,
+		ID:               id,
+		Genesis:          gen,
+		RegistrationTime: ent.RegistrationTime,
+		Kind:             kind,
+		TEEHardware:      teeHardware,
 		Version: registry.VersionInfo{
 			Version: version.FromU64(viper.GetUint64(cfgVersion)),
 		},
-		KeyManager:       kmID,
-		RegistrationTime: ent.RegistrationTime,
+		KeyManager: kmID,
+		Compute: registry.ComputeParameters{
+			GroupSize:         uint64(viper.GetInt64(CfgComputeGroupSize)),
+			GroupBackupSize:   uint64(viper.GetInt64(CfgComputeGroupBackupSize)),
+			AllowedStragglers: uint64(viper.GetInt64(CfgComputeAllowedStragglers)),
+			RoundTimeout:      viper.GetDuration(CfgComputeRoundTimeout),
+		},
+		Merge: registry.MergeParameters{
+			GroupSize:         uint64(viper.GetInt64(CfgMergeGroupSize)),
+			GroupBackupSize:   uint64(viper.GetInt64(CfgMergeGroupBackupSize)),
+			AllowedStragglers: uint64(viper.GetInt64(CfgMergeAllowedStragglers)),
+			RoundTimeout:      viper.GetDuration(CfgMergeRoundTimeout),
+		},
+		TxnScheduler: registry.TxnSchedulerParameters{
+			GroupSize:         uint64(viper.GetInt64(CfgTxnSchedulerGroupSize)),
+			Algorithm:         viper.GetString(CfgTxnSchedulerAlgorithm),
+			BatchFlushTimeout: viper.GetDuration(CfgTxnSchedulerBatchFlushTimeout),
+			MaxBatchSize:      viper.GetUint64(CfgTxnSchedulerMaxBatchSize),
+			MaxBatchSizeBytes: uint64(viper.GetSizeInBytes(CfgTxnSchedulerMaxBatchSizeBytes)),
+		},
+		Storage: registry.StorageParameters{GroupSize: uint64(viper.GetInt64(CfgStorageGroupSize))},
 	}
 	if teeHardware == node.TEEHardwareIntelSGX {
 		var vi registry.VersionInfoIntelSGX
-		for _, v := range viper.GetStringSlice(cfgVersionEnclave) {
+		for _, v := range viper.GetStringSlice(CfgVersionEnclave) {
 			var enclaveID sgx.EnclaveIdentity
 			if err := enclaveID.UnmarshalHex(v); err != nil {
 				logger.Error("failed to parse SGX enclave identity",
@@ -426,18 +458,36 @@ func init() {
 	outputFlags.String(cfgOutput, runtimeGenesisFilename, "File name of the document to be written under datadir")
 	_ = viper.BindPFlags(outputFlags)
 
-	runtimeFlags.String(cfgID, "", "Runtime ID")
-	runtimeFlags.String(cfgTEEHardware, "invalid", "Type of TEE hardware.  Supported values are \"invalid\" and \"intel-sgx\"")
-	runtimeFlags.Uint64(cfgReplicaGroupSize, 1, "Number of workers in the runtime replica group")
-	runtimeFlags.Uint64(cfgReplicaGroupBackupSize, 0, "Number of backup workers in the runtime replica group")
-	runtimeFlags.Uint64(cfgReplicaAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime replica group")
-	runtimeFlags.Uint64(cfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
-	runtimeFlags.Uint64(cfgTransactionSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
-	runtimeFlags.String(cfgGenesisState, "", "Runtime state at genesis")
-	runtimeFlags.String(cfgKeyManager, "", "Key Manager Runtime ID")
-	runtimeFlags.String(cfgKind, "compute", "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
+	runtimeFlags.String(CfgID, "", "Runtime ID")
+	runtimeFlags.String(CfgTEEHardware, "invalid", "Type of TEE hardware.  Supported values are \"invalid\" and \"intel-sgx\"")
+	runtimeFlags.String(CfgGenesisState, "", "Runtime state at genesis")
+	runtimeFlags.String(CfgKeyManager, "", "Key Manager Runtime ID")
+	runtimeFlags.String(CfgKind, "compute", "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
 	runtimeFlags.String(cfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")
-	runtimeFlags.StringSlice(cfgVersionEnclave, nil, "Runtime TEE enclave version(s)")
+	runtimeFlags.StringSlice(CfgVersionEnclave, nil, "Runtime TEE enclave version(s)")
+
+	// Init Compute commitee flags.
+	runtimeFlags.Uint64(CfgComputeGroupSize, 1, "Number of workers in the runtime compute group/committee")
+	runtimeFlags.Uint64(CfgComputeGroupBackupSize, 0, "Number of backup workers in the runtime compute group/committee")
+	runtimeFlags.Uint64(CfgComputeAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime compute group")
+	runtimeFlags.Duration(CfgComputeRoundTimeout, 10*time.Second, "Compute committee round timeout for this runtime")
+
+	// Init Merge committee flags.
+	runtimeFlags.Uint64(CfgMergeGroupSize, 1, "Number of workers in the runtime merge group/committee")
+	runtimeFlags.Uint64(CfgMergeGroupBackupSize, 0, "Number of backup workers in the runtime merge group/committee")
+	runtimeFlags.Uint64(CfgMergeAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime merge group")
+	runtimeFlags.Duration(CfgMergeRoundTimeout, 10*time.Second, "Merge committee round timeout for this runtime")
+
+	// Init Transaction scheduler flags.
+	runtimeFlags.Uint64(CfgTxnSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
+	runtimeFlags.String(CfgTxnSchedulerAlgorithm, "batching", "Transaction scheduling algorithm")
+	runtimeFlags.Duration(CfgTxnSchedulerBatchFlushTimeout, 1*time.Second, "Maximum amount of time to wait for a scheduled batch")
+	runtimeFlags.Uint64(CfgTxnSchedulerMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
+	runtimeFlags.String(CfgTxnSchedulerMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
+
+	// Init Storage committee flags.
+	runtimeFlags.Uint64(CfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
+
 	_ = viper.BindPFlags(runtimeFlags)
 	runtimeFlags.AddFlagSet(cmdFlags.EntityFlags)
 }

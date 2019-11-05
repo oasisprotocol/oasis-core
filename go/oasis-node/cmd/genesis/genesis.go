@@ -55,13 +55,6 @@ const (
 	cfgRegistryDebugAllowRuntimeRegistration = "registry.debug.allow_runtime_registration"
 	cfgRegistryDebugBypassStake              = "registry.debug.bypass_stake" // nolint: gosec
 
-	// Roothash config flags.
-	cfgRoundTimeout               = "roothash.round_timeout"
-	cfgSchedulerAlgorithm         = "worker.txnscheduler.algorithm"
-	cfgSchedulerBatchFlushTimeout = "worker.txnscheduler.flush_timeout"
-	cfgSchedulerMaxBatchSize      = "worker.txnscheduler.batching.max_batch_size"
-	cfgSchedulerMaxBatchSizeBytes = "worker.txnscheduler.batching.max_batch_size_bytes"
-
 	// Scheduler config flags.
 	cfgSchedulerMinValidators          = "scheduler.min_validators"
 	cfgSchedulerMaxValidators          = "scheduler.max_validators"
@@ -412,15 +405,6 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 // of exported roothash blocks.
 func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Logger) error {
 	rootSt := roothash.Genesis{
-		Parameters: roothash.ConsensusParameters{
-			RoundTimeout: viper.GetDuration(cfgRoundTimeout),
-			TransactionScheduler: roothash.TransactionSchedulerParameters{
-				Algorithm:         viper.GetString(cfgSchedulerAlgorithm),
-				BatchFlushTimeout: viper.GetDuration(cfgSchedulerBatchFlushTimeout),
-				MaxBatchSize:      viper.GetUint64(cfgSchedulerMaxBatchSize),
-				MaxBatchSizeBytes: uint64(viper.GetSizeInBytes(cfgSchedulerMaxBatchSizeBytes)),
-			},
-		},
 		Blocks: make(map[signature.PublicKey]*block.Block),
 	}
 
@@ -687,13 +671,6 @@ func init() {
 	initGenesisFlags.Bool(cfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
 	initGenesisFlags.Bool(cfgRegistryDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
 	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
-
-	// Roothash config flags.
-	initGenesisFlags.Duration(cfgRoundTimeout, 10*time.Second, "Root hash round timeout")
-	initGenesisFlags.String(cfgSchedulerAlgorithm, "batching", "Transaction scheduling algorithm")
-	initGenesisFlags.Duration(cfgSchedulerBatchFlushTimeout, 1*time.Second, "Maximum amount of time to wait for a scheduled batch")
-	initGenesisFlags.Uint64(cfgSchedulerMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
-	initGenesisFlags.String(cfgSchedulerMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
 
 	// Scheduler config flags.
 	initGenesisFlags.Int(cfgSchedulerMinValidators, 1, "minumum number of validators")
