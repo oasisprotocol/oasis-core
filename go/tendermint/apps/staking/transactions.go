@@ -3,7 +3,6 @@ package staking
 import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/tendermint/api"
@@ -258,7 +257,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	}
 
 	deb := staking.DebondingDelegation{
-		DebondEndTime: epoch + epochtime.EpochTime(debondingInterval),
+		DebondEndTime: epoch + debondingInterval,
 	}
 
 	var tokens quantity.Quantity

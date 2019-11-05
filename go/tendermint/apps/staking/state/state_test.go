@@ -52,18 +52,20 @@ func TestRewardAndSlash(t *testing.T) {
 	tree := iavl.NewMutableTree(db, 128)
 	s := NewMutableState(tree)
 
-	s.SetCommonPool(mustInitQuantityP(t, 10000))
-	s.SetDebondingInterval(21)
-	s.SetRewardSchedule([]staking.RewardStep{
-		{
-			Until: 30,
-			Scale: mustInitQuantity(t, 1000),
-		},
-		{
-			Until: 40,
-			Scale: mustInitQuantity(t, 500),
+	s.SetConsensusParameters(&staking.ConsensusParameters{
+		DebondingInterval: 21,
+		RewardSchedule: []staking.RewardStep{
+			{
+				Until: 30,
+				Scale: mustInitQuantity(t, 1000),
+			},
+			{
+				Until: 40,
+				Scale: mustInitQuantity(t, 500),
+			},
 		},
 	})
+	s.SetCommonPool(mustInitQuantityP(t, 10000))
 
 	s.SetAccount(delegatorID, delegatorAccount)
 	s.SetAccount(escrowID, escrowAccount)

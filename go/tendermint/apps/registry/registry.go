@@ -160,7 +160,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 		}
 
 		// If node has been expired for the debonding interval, finally remove it.
-		if node.Expiration+debondingInterval < uint64(registryEpoch) {
+		if epochtime.EpochTime(node.Expiration)+debondingInterval < registryEpoch {
 			app.logger.Debug("removing expired node",
 				"node_id", node.ID,
 			)

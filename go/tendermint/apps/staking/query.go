@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	stakingState "github.com/oasislabs/oasis-core/go/tendermint/apps/staking/state"
@@ -20,7 +21,7 @@ type Query interface {
 	TotalSupply(context.Context) (*quantity.Quantity, error)
 	CommonPool(context.Context) (*quantity.Quantity, error)
 	Threshold(context.Context, staking.ThresholdKind) (*quantity.Quantity, error)
-	DebondingInterval(context.Context) (uint64, error)
+	DebondingInterval(context.Context) (epochtime.EpochTime, error)
 	Accounts(context.Context) ([]signature.PublicKey, error)
 	AccountInfo(context.Context, signature.PublicKey) (*staking.Account, error)
 	DebondingDelegations(context.Context, signature.PublicKey) (map[signature.MapKey][]*staking.DebondingDelegation, error)
@@ -72,7 +73,7 @@ func (sq *stakingQuerier) Threshold(ctx context.Context, kind staking.ThresholdK
 	return &threshold, nil
 }
 
-func (sq *stakingQuerier) DebondingInterval(ctx context.Context) (uint64, error) {
+func (sq *stakingQuerier) DebondingInterval(ctx context.Context) (epochtime.EpochTime, error) {
 	return sq.state.DebondingInterval()
 }
 

@@ -3,6 +3,7 @@ package staking
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/pkg/errors"
@@ -10,46 +11,18 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	stakingState "github.com/oasislabs/oasis-core/go/tendermint/apps/staking/state"
 )
 
-func (app *stakingApplication) initParameters(state *stakingState.MutableState, st *staking.Genesis) {
-	state.SetDebondingInterval(uint64(st.Parameters.DebondingInterval))
-	state.SetRewardSchedule(st.Parameters.RewardSchedule)
-	state.SetAcceptableTransferPeers(st.Parameters.AcceptableTransferPeers)
-	state.SetSlashing(st.Parameters.Slashing)
-}
-
-func (app *stakingApplication) initThresholds(state *stakingState.MutableState, st *staking.Genesis) error {
-	type thresholdUpdate struct {
-		k staking.ThresholdKind
-		v quantity.Quantity
+func (app *stakingApplication) initParameters(state *stakingState.MutableState, st *staking.Genesis) error {
+	if err := st.Parameters.SanityCheck(); err != nil {
+		return fmt.Errorf("staking/tendermint: sanity check failed: %w", err)
 	}
 
-	if st.Parameters.Thresholds != nil {
-		var ups []thresholdUpdate
-		for k, v := range st.Parameters.Thresholds {
-			if !v.IsValid() {
-				app.logger.Error("InitChain: invalid threshold",
-					"threshold", k,
-					"quantity", v,
-				)
-				return errors.New("staking/tendermint: invalid genesis threshold")
-			}
-			ups = append(ups, thresholdUpdate{k, v})
-		}
-
-		// Make sure that we apply threshold updates in a canonical order.
-		sort.SliceStable(ups, func(i, j int) bool { return ups[i].k < ups[j].k })
-		for _, u := range ups {
-			state.SetThreshold(u.k, &u.v)
-		}
-	}
-
+	state.SetConsensusParameters(&st.Parameters)
 	return nil
 }
 
@@ -252,9 +225,7 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		totalSupply quantity.Quantity
 	)
 
-	app.initParameters(state, st)
-
-	if err := app.initThresholds(state, st); err != nil {
+	if err := app.initParameters(state, st); err != nil {
 		return err
 	}
 
@@ -277,7 +248,6 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	}
 
 	app.logger.Debug("InitChain: allocations complete",
-		"debonding_interval", st.Parameters.DebondingInterval,
 		"common_pool", st.CommonPool,
 		"total_supply", totalSupply,
 	)
@@ -293,26 +263,6 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 	}
 
 	commonPool, err := sq.state.CommonPool()
-	if err != nil {
-		return nil, err
-	}
-
-	thresholds, err := sq.state.Thresholds()
-	if err != nil {
-		return nil, err
-	}
-
-	debondingInterval, err := sq.state.DebondingInterval()
-	if err != nil {
-		return nil, err
-	}
-
-	rewardSchedule, err := sq.state.RewardSchedule()
-	if err != nil {
-		return nil, err
-	}
-
-	acceptableTransferPeers, err := sq.state.AcceptableTransferPeers()
 	if err != nil {
 		return nil, err
 	}
@@ -336,19 +286,13 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		return nil, err
 	}
 
-	slashing, err := sq.state.Slashing()
+	params, err := sq.state.ConsensusParameters()
 	if err != nil {
 		return nil, err
 	}
 
 	gen := staking.Genesis{
-		Parameters: staking.ConsensusParameters{
-			Thresholds:              thresholds,
-			DebondingInterval:       epochtime.EpochTime(debondingInterval),
-			RewardSchedule:          rewardSchedule,
-			AcceptableTransferPeers: acceptableTransferPeers,
-			Slashing:                slashing,
-		},
+		Parameters:           *params,
 		TotalSupply:          *totalSupply,
 		CommonPool:           *commonPool,
 		Ledger:               ledger,

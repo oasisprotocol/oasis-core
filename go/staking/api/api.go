@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -496,4 +497,18 @@ type ConsensusParameters struct {
 	RewardSchedule          []RewardStep                        `json:"reward_schedule,omitempty"`
 	AcceptableTransferPeers map[signature.MapKey]bool           `json:"acceptable_transfer_peers,omitempty"`
 	Slashing                map[SlashReason]Slash               `json:"slashing,omitempty"`
+}
+
+// SanityCheck performs a sanity check on the consensus parameters.
+func (p *ConsensusParameters) SanityCheck() error {
+	// Thresholds.
+	if p.Thresholds != nil {
+		for k, v := range p.Thresholds {
+			if !v.IsValid() {
+				return fmt.Errorf("invalid value for threshold: %s", k)
+			}
+		}
+	}
+
+	return nil
 }
