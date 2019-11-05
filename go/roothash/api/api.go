@@ -83,6 +83,9 @@ type Backend interface {
 	// ComputeCommit submits a batch of compute commitments for slashing.
 	ComputeCommit(context.Context, signature.PublicKey, []commitment.ComputeCommitment) error
 
+	// ConsensusParameters returns consensus parameters at specified block height.
+	ConsensusParameters(context.Context, int64) (*ConsensusParameters, error)
+
 	// ToGenesis returns the genesis state at specified block height.
 	ToGenesis(context.Context, int64) (*Genesis, error)
 

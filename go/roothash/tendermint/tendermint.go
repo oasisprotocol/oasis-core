@@ -232,6 +232,15 @@ func (tb *tendermintBackend) ComputeCommit(ctx context.Context, id signature.Pub
 	return nil
 }
 
+func (tb *tendermintBackend) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+	q, err := tb.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.ConsensusParameters(ctx)
+}
+
 func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {

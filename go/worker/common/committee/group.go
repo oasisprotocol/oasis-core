@@ -2,11 +2,11 @@ package committee
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/opentracing/opentracing-go"
 	opentracingExt "github.com/opentracing/opentracing-go/ext"
-	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/tracing"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -67,6 +68,9 @@ type epoch struct {
 	storageCommittee *CommitteeInfo
 
 	runtime *registry.Runtime
+
+	// roothashParams are the roothash consensus parameters for the epoch.
+	roothashParams *roothash.ConsensusParameters
 }
 
 // EpochSnapshot is an immutable snapshot of epoch state.
@@ -80,6 +84,8 @@ type EpochSnapshot struct {
 	mergeRole        scheduler.Role
 
 	runtime *registry.Runtime
+
+	roothashParams *roothash.ConsensusParameters
 
 	computeCommittees     map[hash.Hash]*CommitteeInfo
 	txnSchedulerCommittee *CommitteeInfo
@@ -109,6 +115,11 @@ func (e *EpochSnapshot) GetGroupVersion() int64 {
 // GetRuntime returns the current runtime descriptor.
 func (e *EpochSnapshot) GetRuntime() *registry.Runtime {
 	return e.runtime
+}
+
+// GetRoothashParams returns the current roothash consensus parameters.
+func (e *EpochSnapshot) GetRoothashParams() *roothash.ConsensusParameters {
+	return e.roothashParams
 }
 
 // GetComputeCommittees returns the current compute committees.
@@ -193,12 +204,12 @@ func (e *EpochSnapshot) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, 
 	case scheduler.KindTransactionScheduler:
 		committee = e.txnSchedulerCommittee
 	default:
-		return errors.Errorf("epoch: unsupported committee kind: %s", kind)
+		return fmt.Errorf("epoch: unsupported committee kind: %s", kind)
 	}
 
 	for _, sig := range sigs {
 		if !committee.PublicKeys[sig.PublicKey.ToMapKey()] {
-			return errors.New("epoch: signature is not from a valid committee member")
+			return fmt.Errorf("epoch: signature is not from a valid committee member")
 		}
 	}
 	return nil
@@ -214,6 +225,7 @@ type Group struct {
 
 	scheduler scheduler.Backend
 	registry  registry.Backend
+	roothash  roothash.Backend
 
 	handler MessageHandler
 
@@ -286,7 +298,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			var n *node.Node
 			n, err = g.registry.GetNode(ctx, member.PublicKey, height)
 			if err != nil {
-				return errors.Wrap(err, "group: failed to fetch node info")
+				return fmt.Errorf("group: failed to fetch node info: %w", err)
 			}
 
 			nodes = append(nodes, n)
@@ -310,7 +322,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			computeCommittees[cID] = ci
 			if role != scheduler.Invalid {
 				if computeCommittee != nil {
-					return errors.New("member of multiple compute committees")
+					return fmt.Errorf("member of multiple compute committees")
 				}
 
 				computeCommittee = ci
@@ -332,22 +344,27 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		}
 	}
 	if len(computeCommittees) == 0 {
-		return errors.New("no compute committees")
+		return fmt.Errorf("no compute committees")
 	}
 	if txnSchedulerCommittee == nil {
-		return errors.New("no transaction scheduler committee")
+		return fmt.Errorf("no transaction scheduler committee")
 	}
 	if mergeCommittee == nil {
-		return errors.New("no merge committee")
+		return fmt.Errorf("no merge committee")
 	}
 	if storageCommittee == nil {
-		return errors.New("no storage committee")
+		return fmt.Errorf("no storage committee")
 	}
 
 	// Fetch current runtime descriptor.
 	runtime, err := g.registry.GetRuntime(ctx, g.runtimeID, height)
 	if err != nil {
 		return err
+	}
+
+	roothashParams, err := g.roothash.ConsensusParameters(ctx, height)
+	if err != nil {
+		return fmt.Errorf("failed to get roothash consensus parameters for epoch: %w", err)
 	}
 
 	// Create round context.
@@ -367,6 +384,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		mergeCommittee,
 		storageCommittee,
 		runtime,
+		roothashParams,
 	}
 
 	// Compute committee may be nil in case we are not a member of any committee.
@@ -400,6 +418,7 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 		txnSchedulerRole:      g.activeEpoch.txnSchedulerCommittee.Role,
 		mergeRole:             g.activeEpoch.mergeCommittee.Role,
 		runtime:               g.activeEpoch.runtime,
+		roothashParams:        g.activeEpoch.roothashParams,
 		computeCommittees:     g.activeEpoch.computeCommittees,
 		txnSchedulerCommittee: g.activeEpoch.txnSchedulerCommittee,
 		mergeCommittee:        g.activeEpoch.mergeCommittee,
@@ -455,7 +474,7 @@ func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, message *p2p
 		// is not the case, this means that one of the nodes processed an epoch
 		// transition and the other one didn't.
 		if message.GroupVersion != g.activeEpoch.groupVersion {
-			return nil, errors.New("group version mismatch")
+			return nil, fmt.Errorf("group version mismatch")
 		}
 
 		return g.activeEpoch.roundCtx, nil
@@ -484,7 +503,7 @@ func (g *Group) publishLocked(
 	msg *p2p.Message,
 ) error {
 	if g.p2p == nil {
-		return errors.New("group: p2p transport is not enabled")
+		return fmt.Errorf("group: p2p transport is not enabled")
 	}
 
 	pubCtx := g.activeEpoch.roundCtx
@@ -529,12 +548,12 @@ func (g *Group) PublishScheduledBatch(
 	defer g.RUnlock()
 
 	if g.activeEpoch == nil || g.activeEpoch.txnSchedulerCommittee.Role != scheduler.Leader {
-		return nil, errors.New("group: not leader of txn scheduler committee")
+		return nil, fmt.Errorf("group: not leader of txn scheduler committee")
 	}
 
 	cc := g.activeEpoch.computeCommittees[committeeID]
 	if cc == nil {
-		return nil, errors.New("group: invalid compute committee")
+		return nil, fmt.Errorf("group: invalid compute committee")
 	}
 
 	dispatchMsg := &commitment.TxnSchedulerBatchDispatch{
@@ -546,7 +565,7 @@ func (g *Group) PublishScheduledBatch(
 
 	signedDispatchMsg, err := commitment.SignTxnSchedulerBatchDispatch(g.identity.NodeSigner, dispatchMsg)
 	if err != nil {
-		return nil, errors.Wrap(err, "group: unable to sign txn scheduler batch dispatch msg")
+		return nil, fmt.Errorf("group: unable to sign txn scheduler batch dispatch msg: %w", err)
 	}
 
 	return &signedDispatchMsg.Signature, g.publishLocked(
@@ -565,7 +584,7 @@ func (g *Group) PublishComputeFinished(spanCtx opentracing.SpanContext, c *commi
 	defer g.RUnlock()
 
 	if g.activeEpoch == nil || g.activeEpoch.computeCommittee == nil {
-		return errors.New("group: not member of compute committee")
+		return fmt.Errorf("group: not member of compute committee")
 	}
 
 	return g.publishLocked(
@@ -585,6 +604,7 @@ func NewGroup(
 	runtimeID signature.PublicKey,
 	handler MessageHandler,
 	registry registry.Backend,
+	roothash roothash.Backend,
 	scheduler scheduler.Backend,
 	p2p *p2p.P2P,
 ) (*Group, error) {
@@ -593,6 +613,7 @@ func NewGroup(
 		runtimeID: runtimeID,
 		scheduler: scheduler,
 		registry:  registry,
+		roothash:  roothash,
 		handler:   handler,
 		p2p:       p2p,
 		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtimeID),

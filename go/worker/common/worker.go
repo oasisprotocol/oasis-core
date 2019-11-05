@@ -228,7 +228,6 @@ func (w *Worker) NewUnmanagedCommitteeNode(id signature.PublicKey, enableP2P boo
 		w.Registry,
 		w.Scheduler,
 		w.Consensus,
-		w.GenesisDoc,
 		p2p,
 	)
 }
