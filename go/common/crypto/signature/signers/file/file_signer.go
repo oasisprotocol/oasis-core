@@ -168,21 +168,9 @@ func (s *Signer) Public() signature.PublicKey {
 	return signature.PublicKey(s.privateKey.Public().(ed25519.PublicKey))
 }
 
-// Sign generates a signature with the private key over the message.
-func (s *Signer) Sign(message []byte) ([]byte, error) {
-	if s.role.MustContextSign() {
-		return nil, signature.ErrRoleAction
-	}
-	return ed25519.Sign(s.privateKey, message), nil
-}
-
 // ContextSign generates a signature with the private key over the context and
 // message.
 func (s *Signer) ContextSign(context signature.Context, message []byte) ([]byte, error) {
-	if !s.role.MustContextSign() {
-		return nil, signature.ErrRoleAction
-	}
-
 	data, err := signature.PrepareSignerMessage(context, message)
 	if err != nil {
 		return nil, err

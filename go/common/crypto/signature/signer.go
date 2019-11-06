@@ -70,15 +70,6 @@ const (
 	SignerConsensus
 )
 
-// MustContextSign returns true iff the SignerRole must only accept ContextSign
-// operations.
-func (r SignerRole) MustContextSign() bool {
-	// Since we're stuck with PrepareSignerMessage instead of a sensible
-	// construct, ensure that only signers (aka keys) that are dedicated
-	// to consensus signing get to use vanilla Ed25519pure.
-	return r != SignerConsensus
-}
-
 // SignerFactoryCtor is an SignerFactory constructor.
 type SignerFactoryCtor func(string, ...SignerRole) SignerFactory
 
@@ -103,9 +94,6 @@ type SignerFactory interface {
 type Signer interface {
 	// Public returns the PublicKey corresponding to the signer.
 	Public() PublicKey
-
-	// Sign generates a signature with the private key over the message.
-	Sign(message []byte) ([]byte, error)
 
 	// ContextSign generates a signature with the private key over the context and
 	// message.

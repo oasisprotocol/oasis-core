@@ -278,7 +278,7 @@ func (pv *privVal) SignVote(chainID string, vote *tmtypes.Vote) error {
 		return err
 	}
 
-	sig, err := pv.signer.Sign(signBytes)
+	sig, err := pv.signer.ContextSign(tendermintSignatureContext, signBytes)
 	if err != nil {
 		return errors.Wrap(err, "tendermint/crypto: failed to sign vote")
 	}
@@ -311,7 +311,7 @@ func (pv *privVal) SignProposal(chainID string, proposal *tmtypes.Proposal) erro
 		return err
 	}
 
-	sig, err := pv.signer.Sign(signBytes)
+	sig, err := pv.signer.ContextSign(tendermintSignatureContext, signBytes)
 	if err != nil {
 		return errors.Wrap(err, "tendermint/crypto: failed to sign proposal")
 	}

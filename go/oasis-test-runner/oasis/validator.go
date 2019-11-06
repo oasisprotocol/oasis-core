@@ -116,7 +116,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	}
 
 	valConsensusAddr := node.ConsensusAddress{
-		ID: valIdentity.ConsensusSigner.Public(),
+		ID: valIdentity.NodeSigner.Public(),
 	}
 	if err = valConsensusAddr.Address.FromIP(netPkg.ParseIP("127.0.0.1"), val.consensusPort); err != nil {
 		return nil, fmt.Errorf("oasis/validator: failed to parse IP: %w", err)
