@@ -11,16 +11,14 @@ import (
 
 	"github.com/eapache/channels"
 
-	bolt "github.com/etcd-io/bbolt"
-
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/persistent"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/workerpool"
 	roothashApi "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -155,8 +153,7 @@ type Node struct {
 
 	fetchPool *workerpool.Pool
 
-	stateStore *bolt.DB
-	bucketName []byte
+	stateStore *persistent.ServiceStore
 
 	syncedLock  sync.RWMutex
 	syncedState watcherState
@@ -176,8 +173,7 @@ func NewNode(
 	commonNode *committee.Node,
 	grpcPolicy *grpc.DynamicRuntimePolicyChecker,
 	fetchPool *workerpool.Pool,
-	db *bolt.DB,
-	bucket []byte,
+	store *persistent.ServiceStore,
 ) (*Node, error) {
 	localStorage, ok := commonNode.Storage.(storageApi.LocalBackend)
 	if !ok {
@@ -194,8 +190,7 @@ func NewNode(
 
 		fetchPool: fetchPool,
 
-		stateStore: db,
-		bucketName: bucket,
+		stateStore: store,
 
 		blockCh:    channels.NewInfiniteChannel(),
 		diffCh:     make(chan *fetchedDiff),
@@ -206,16 +201,8 @@ func NewNode(
 	}
 
 	node.syncedState.LastBlock.Round = defaultUndefinedRound
-	err := db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bucket)
-
-		bytes := bkt.Get(commonNode.RuntimeID[:])
-		if bytes != nil {
-			return cbor.Unmarshal(bytes, &node.syncedState)
-		}
-		return nil
-	})
-	if err != nil {
+	err := store.GetCBOR(commonNode.RuntimeID[:], &node.syncedState)
+	if err != nil && err != persistent.ErrNotFound {
 		return nil, err
 	}
 
@@ -695,11 +682,7 @@ mainLoop:
 			n.syncedState.LastBlock.Round = finalized.Round
 			n.syncedState.LastBlock.IORoot = finalized.IORoot
 			n.syncedState.LastBlock.StateRoot = finalized.StateRoot
-			err = n.stateStore.Update(func(tx *bolt.Tx) error {
-				bkt := tx.Bucket(n.bucketName)
-				bytes := cbor.Marshal(&n.syncedState)
-				return bkt.Put(n.commonNode.RuntimeID[:], bytes)
-			})
+			err = n.stateStore.PutCBOR(n.commonNode.RuntimeID[:], &n.syncedState)
 			n.syncedLock.Unlock()
 			cachedLastRound = finalized.Round
 			if err != nil {

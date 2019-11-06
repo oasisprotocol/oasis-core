@@ -22,6 +22,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/persistent"
 	"github.com/oasislabs/oasis-core/go/common/service"
 	"github.com/oasislabs/oasis-core/go/dummydebug"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -88,6 +89,8 @@ type Node struct {
 	svcTmnt      tmService.TendermintService
 	svcTmntSeed  *tendermint.SeedService
 
+	commonStore *persistent.CommonStore
+
 	Consensus consensus.Backend
 
 	Genesis   genesisAPI.Provider
@@ -117,6 +120,7 @@ type Node struct {
 // Cleanup cleans up after the node has terminated.
 func (n *Node) Cleanup() {
 	n.svcMgr.Cleanup()
+	n.commonStore.Close()
 }
 
 // Stop gracefully terminates the node.
@@ -267,7 +271,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.CommonWorker,
 		n.RegistrationWorker,
 		n.Genesis,
-		cmdCommon.DataDir(),
+		n.commonStore,
 	)
 	if err != nil {
 		return err
@@ -438,6 +442,15 @@ func newNode(testNode bool) (*Node, error) {
 	crash.LoadViperArgValues()
 
 	var err error
+
+	// Open the common node store.
+	node.commonStore, err = persistent.NewCommonStore(dataDir)
+	if err != nil {
+		logger.Error("failed to open common node store",
+			"err", err,
+		)
+		return nil, err
+	}
 
 	// Generate/Load the node identity.
 	// TODO/hsm: Configure factory dynamically.

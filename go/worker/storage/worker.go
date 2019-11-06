@@ -3,12 +3,9 @@ package storage
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
-
-	bolt "github.com/etcd-io/bbolt"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -16,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/persistent"
 	"github.com/oasislabs/oasis-core/go/common/workerpool"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -36,7 +34,7 @@ const (
 )
 
 var (
-	workerStorageDBBucketName = []byte("worker/storage/watchers")
+	workerStorageDBBucketName = "worker/storage/watchers"
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -59,7 +57,7 @@ type Worker struct {
 	quitCh chan struct{}
 
 	runtimes   map[signature.MapKey]*committee.Node
-	watchState *bolt.DB
+	watchState *persistent.ServiceStore
 	fetchPool  *workerpool.Pool
 
 	grpcPolicy *grpc.DynamicRuntimePolicyChecker
@@ -71,7 +69,7 @@ func New(
 	commonWorker *workerCommon.Worker,
 	registrationWorker *registration.Worker,
 	genesis genesis.Provider,
-	dataDir string,
+	commonStore *persistent.CommonStore,
 ) (*Worker, error) {
 
 	s := &Worker{
@@ -85,21 +83,15 @@ func New(
 	}
 
 	if s.enabled {
+		var err error
+
 		s.fetchPool = workerpool.New("storage_fetch")
 		s.fetchPool.Resize(viper.GetUint(cfgWorkerFetcherCount))
 
-		watchState, err := bolt.Open(filepath.Join(dataDir, "worker-storage-watchers.db"), 0600, nil)
+		s.watchState, err = commonStore.GetServiceStore(workerStorageDBBucketName)
 		if err != nil {
 			return nil, err
 		}
-		err = watchState.Update(func(tx *bolt.Tx) error {
-			_, berr := tx.CreateBucketIfNotExists(workerStorageDBBucketName)
-			return berr
-		})
-		if err != nil {
-			return nil, err
-		}
-		s.watchState = watchState
 
 		// Populate storage from genesis.
 		s.commonWorker.Consensus.RegisterGenesisHook(func() {
@@ -146,7 +138,7 @@ func New(
 
 func (s *Worker) registerRuntime(rt *workerCommon.Runtime) error {
 	commonNode := rt.GetNode()
-	node, err := committee.NewNode(commonNode, s.grpcPolicy, s.fetchPool, s.watchState, workerStorageDBBucketName)
+	node, err := committee.NewNode(commonNode, s.grpcPolicy, s.fetchPool, s.watchState)
 	if err != nil {
 		return err
 	}
