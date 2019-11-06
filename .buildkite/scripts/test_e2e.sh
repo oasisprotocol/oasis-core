@@ -28,11 +28,18 @@ if [[ "${BUILDKITE:-""}" != "" ]]; then
     mkdir -p ${WORKDIR}/e2e
 fi
 
+# Use integrationrunner-wrapper.sh as node binary if we need to compute E2E
+# tests' coverage.
+node_binary="${WORKDIR}/go/oasis-node/oasis-node"
+if [[ ${OASIS_E2E_COVERAGE:-""} != "" ]]; then
+    node_binary="${WORKDIR}/scripts/integrationrunner-wrapper.sh"
+fi
+
 # Run Oasis test runner.
 ${WORKDIR}/go/oasis-test-runner/oasis-test-runner \
     ${BUILDKITE:+--basedir ${WORKDIR}/e2e} \
     --basedir.no_cleanup \
-    --e2e.node.binary ${WORKDIR}/scripts/integrationrunner-wrapper.sh \
+    --e2e.node.binary ${node_binary} \
     --e2e.client.binary_dir ${WORKDIR}/target/debug \
     --e2e.runtime.binary_dir ${WORKDIR}/target/${runtime_target}/debug \
     --e2e.runtime.loader ${WORKDIR}/target/debug/oasis-core-runtime-loader \
