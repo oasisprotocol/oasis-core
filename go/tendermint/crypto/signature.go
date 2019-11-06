@@ -7,6 +7,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 )
 
+var tendermintSignatureContext = signature.NewContext("oasis-core/tendermint")
+
 // PublicKeyToTendermint converts a signature.PublicKey to the
 // tendermint equivalent.
 func PublicKeyToTendermint(k *signature.PublicKey) tmed.PubKeyEd25519 {
@@ -29,4 +31,8 @@ func UnsafeSignerToTendermint(unsafeSigner signature.UnsafeSigner) tmed.PrivKeyE
 	var tk tmed.PrivKeyEd25519
 	copy(tk[:], unsafeSigner.UnsafeBytes())
 	return tk
+}
+
+func init() {
+	tmed.EnableOasisDomainSeparation(string(tendermintSignatureContext))
 }

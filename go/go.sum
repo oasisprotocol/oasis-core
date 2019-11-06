@@ -349,6 +349,8 @@ github.com/oasislabs/iavl v0.12.0-ekiden2 h1:kzdp6OTHYrn8TXlAo+2NsL84Qi2gqydFvjh
 github.com/oasislabs/iavl v0.12.0-ekiden2/go.mod h1:B/tMpl5cg7n42n3xYQTCckJzQezoI75jedkc8FOiOF0=
 github.com/oasislabs/iavl v0.12.0-ekiden3 h1:8544fXJb57urhAEpTlIwDBdTJukgpPS/FCS/yj14I8E=
 github.com/oasislabs/iavl v0.12.0-ekiden3/go.mod h1:B/tMpl5cg7n42n3xYQTCckJzQezoI75jedkc8FOiOF0=
+github.com/oasislabs/tendermint v0.32.7-oasis1 h1:m1WPCTXn0PgLHAX5YsFx52vx+bQwZP9iSM2kgtMaGVM=
+github.com/oasislabs/tendermint v0.32.7-oasis1/go.mod h1:Ex0OYkB2o7j3qghM7rEePw/drFL5M2WNRs95uiFJOxQ=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.7.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=

@@ -128,6 +128,7 @@ type tendermintService struct {
 	genesis                  *genesis.Document
 	genesisProvider          genesis.Provider
 	consensusSigner          signature.Signer
+	nodeSigner               signature.Signer
 	dataDir                  string
 	isInitialized, isStarted bool
 	startedCh                chan struct{}
@@ -251,7 +252,7 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 	if err = addr.Address.UnmarshalText([]byte(u.Host)); err != nil {
 		return nil, errors.Wrap(err, "tendermint: failed to parse external address host")
 	}
-	addr.ID = t.ConsensusKey()
+	addr.ID = t.nodeSigner.Public()
 
 	return []node.ConsensusAddress{addr}, nil
 }
@@ -547,11 +548,10 @@ func (t *tendermintService) lazyInit() error {
 		return err
 	}
 
-	// TODO/hsm: This really should be Identity.NodeSigner.
-	unsafeConsensusSigner, ok := t.consensusSigner.(signature.UnsafeSigner)
+	unsafeNodeSigner, ok := t.nodeSigner.(signature.UnsafeSigner)
 	if !ok {
-		t.Logger.Error("consensus signer does not allow private key access")
-		return errors.New("tendermint: consensus signer does not allow private key access")
+		t.Logger.Error("node signer does not allow private key access")
+		return errors.New("tendermint: node signer does not allow private key access")
 	}
 
 	// HACK: tmnode.NewNode() triggers block replay and or ABCI chain
@@ -565,7 +565,7 @@ func (t *tendermintService) lazyInit() error {
 		t.node, err = tmnode.NewNode(tenderConfig,
 			tendermintPV,
 			// TODO/hsm: This needs to use a separate key or something.
-			&tmp2p.NodeKey{PrivKey: crypto.UnsafeSignerToTendermint(unsafeConsensusSigner)},
+			&tmp2p.NodeKey{PrivKey: crypto.UnsafeSignerToTendermint(unsafeNodeSigner)},
 			tmproxy.NewLocalClientCreator(t.mux.Mux()),
 			tendermintGenesisProvider,
 			dbProvider,
@@ -726,6 +726,7 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		blockNotifier:         pubsub.NewBroker(false),
 		consensusSigner:       identity.ConsensusSigner,
+		nodeSigner:            identity.NodeSigner,
 		genesis:               genesisDoc,
 		genesisProvider:       genesisProvider,
 		ctx:                   ctx,

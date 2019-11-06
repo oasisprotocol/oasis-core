@@ -100,12 +100,11 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 	cfg.AddrBookStrict = !viper.GetBool(CfgDebugP2PAddrBookLenient)
 	// MaxNumInboundPeers/MaxNumOutboundPeers
 
-	// TODO/hsm: This really should be Identity.NodeSigner.
-	unsafeConsensusSigner, ok := identity.ConsensusSigner.(signature.UnsafeSigner)
+	unsafeNodeSigner, ok := identity.NodeSigner.(signature.UnsafeSigner)
 	if !ok {
-		return nil, errors.New("tendermint/seed: consensus signer does not allow private key access")
+		return nil, errors.New("tendermint/seed: node signer does not allow private key access")
 	}
-	nodeKey := &p2p.NodeKey{PrivKey: crypto.UnsafeSignerToTendermint(unsafeConsensusSigner)}
+	nodeKey := &p2p.NodeKey{PrivKey: crypto.UnsafeSignerToTendermint(unsafeNodeSigner)}
 
 	doc, err := genesisProvider.GetGenesisDocument()
 	if err != nil {
