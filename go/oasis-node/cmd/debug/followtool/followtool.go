@@ -13,11 +13,11 @@ import (
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // cfgEnabled enables the follow tool.
-const cfgEnabled = "followtool.enabled"
+const CfgEnabled = "followtool.enabled"
 
 // Enabled reads our enabled flag from viper.
 func Enabled() bool {
-	return viper.GetBool(cfgEnabled)
+	return viper.GetBool(CfgEnabled)
 }
 
 func New(tm service.TendermintService) error {
@@ -29,7 +29,7 @@ func New(tm service.TendermintService) error {
 }
 
 func init() {
-	Flags.Bool(cfgEnabled, false, "Enable follow tool")
+	Flags.Bool(CfgEnabled, false, "Enable follow tool")
 
 	_ = viper.BindPFlags(Flags)
 }

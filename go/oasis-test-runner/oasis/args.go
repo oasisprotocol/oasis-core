@@ -18,6 +18,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/followtool"
 	"github.com/oasislabs/oasis-core/go/storage"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
@@ -121,6 +122,11 @@ func (args *argBuilder) storageBackend(backend string) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + storage.CfgBackend, backend,
 	}...)
+	return args
+}
+
+func (args *argBuilder) followtoolEnabled() *argBuilder {
+	args.vec = append(args.vec, "--"+followtool.CfgEnabled)
 	return args
 }
 
