@@ -20,6 +20,7 @@ func checkNonzeroSupply(state *iavl.MutableTree) error {
 	if totalSupply.IsZero() {
 		return errors.New("total supply is zero")
 	}
+	logger.Debug("total supply okay")
 
 	return nil
 }
