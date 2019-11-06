@@ -7,9 +7,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
-	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 )
@@ -95,18 +92,6 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		return nil, fmt.Errorf("oasis/validator: failed to create validator subdir: %w", err)
 	}
 
-	// Pre-provision the node identity, so that we can pass the validator's
-	// consensus public key to the node registration command.
-	signerFactory := fileSigner.NewFactory(valDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
-	valIdentity, err := identity.LoadOrGenerate(valDir.String(), signerFactory)
-	if err != nil {
-		net.logger.Error("failed to provision validator identity",
-			"err", err,
-			"validator_name", valName,
-		)
-		return nil, fmt.Errorf("oasis/validator: failed to provision validator identity: %w", err)
-	}
-
 	val := &Validator{
 		net:           net,
 		dir:           valDir,
@@ -115,10 +100,8 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		grpcDebugPort: net.nextNodePort + 1,
 	}
 
-	valConsensusAddr := node.ConsensusAddress{
-		ID: valIdentity.NodeSigner.Public(),
-	}
-	if err = valConsensusAddr.Address.FromIP(netPkg.ParseIP("127.0.0.1"), val.consensusPort); err != nil {
+	var valConsensusAddr node.Address
+	if err = valConsensusAddr.FromIP(netPkg.ParseIP("127.0.0.1"), val.consensusPort); err != nil {
 		return nil, fmt.Errorf("oasis/validator: failed to parse IP: %w", err)
 	}
 
