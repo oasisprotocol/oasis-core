@@ -196,6 +196,7 @@ steps:
       - e2e/**/*.log
       - coverage-e2e-*.txt
     env:
+      OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: e2e
     agents:
       buildkite_agent_size: large
@@ -215,6 +216,7 @@ steps:
       - e2e/**/*.log
       - coverage-e2e-*.txt
     env:
+      OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: e2e
     agents:
       queue: intel-sgx
