@@ -2,6 +2,7 @@ package integrationrunner
 
 import (
 	"flag"
+	"os"
 	"testing"
 )
 
@@ -16,4 +17,7 @@ func TestIntegration(t *testing.T) {
 	}
 
 	launch()
+
+	// Suppress coverage report on stdout.
+	_ = os.Stdout.Close()
 }
