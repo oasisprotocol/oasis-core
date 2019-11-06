@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
@@ -18,6 +19,7 @@ import (
 )
 
 var (
+	// RoothashMessages is the roothash messages scenario.
 	RoothashMessages scenario.Scenario = &roothashMessagesImpl{}
 )
 
