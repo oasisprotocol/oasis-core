@@ -74,6 +74,7 @@ var (
 		{storageWorker.CfgWorkerEnabled, true},
 		{txnscheduler.CfgWorkerEnabled, true},
 		{mergeWorker.CfgWorkerEnabled, true},
+		{"followtool.enabled", true},
 		{cmdCommon.CfgDebugAllowTestKeys, true},
 	}
 
