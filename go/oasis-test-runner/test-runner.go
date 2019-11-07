@@ -39,6 +39,8 @@ func main() {
 	_ = cmd.Register(e2e.HaltRestore)
 	// Roothash messages test.
 	_ = cmd.Register(e2e.RoothashMessages)
+	// Node shutdown test.
+	_ = cmd.Register(e2e.NodeShutdown)
 
 	// Execute the command, now that everything has been initialized.
 	cmd.Execute()

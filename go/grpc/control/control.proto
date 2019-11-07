@@ -4,11 +4,20 @@ package control;
 option go_package = "github.com/oasislabs/oasis-core/go/grpc/control";
 
 service Control {
+    // Request node shutdown.
+    rpc RequestShutdown (ShutdownRequest) returns (ShutdownResponse) {}
     // Wait for the node to finish syncing.
     rpc WaitSync (WaitSyncRequest) returns (WaitSyncResponse) {}
     // Check if the node is finished syncing.
     rpc IsSynced (IsSyncedRequest) returns (IsSyncedResponse) {}
 }
+
+message ShutdownRequest {
+	// Wait for the shutdown to complete.
+	bool wait = 1;
+}
+
+message ShutdownResponse {}
 
 message WaitSyncRequest {}
 

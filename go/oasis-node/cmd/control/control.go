@@ -15,6 +15,8 @@ import (
 )
 
 var (
+	shutdownWait = false
+
 	controlCmd = &cobra.Command{
 		Use:   "control",
 		Short: "node control interface utilities",
@@ -30,6 +32,12 @@ var (
 		Use:   "wait-sync",
 		Short: "wait for the node to complete initial syncing",
 		Run:   doWaitSync,
+	}
+
+	controlShutdownCmd = &cobra.Command{
+		Use:   "shutdown",
+		Short: "request node shutdown on next epoch transition",
+		Run:   doShutdown,
 	}
 
 	logger = logging.GetLogger("cmd/control")
@@ -91,12 +99,31 @@ func doWaitSync(cmd *cobra.Command, args []string) {
 	}
 }
 
+func doShutdown(cmd *cobra.Command, args []string) {
+	conn, client := DoConnect(cmd)
+	defer conn.Close()
+
+	req := &controlGrpc.ShutdownRequest{
+		Wait: shutdownWait,
+	}
+
+	_, err := client.RequestShutdown(context.Background(), req)
+	if err != nil {
+		logger.Error("failed to send shutdown request",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+}
+
 // Register registers the client sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	controlCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 
+	controlShutdownCmd.Flags().BoolVarP(&shutdownWait, "wait", "w", false, "wait for the node to finish shutdown")
 
 	controlCmd.AddCommand(controlIsSyncedCmd)
 	controlCmd.AddCommand(controlWaitSyncCmd)
+	controlCmd.AddCommand(controlShutdownCmd)
 	parentCmd.AddCommand(controlCmd)
 }

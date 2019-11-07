@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -64,8 +65,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
 )
 
-// Flags has the configuration flags.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
+var (
+	_ control.Shutdownable = (*Node)(nil)
+
+	// Flags has the configuration flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
+)
 
 const exportsSubDir = "exports"
 
@@ -89,6 +94,8 @@ type Node struct {
 	grpcInternal *grpc.Server
 	svcTmnt      tmService.TendermintService
 	svcTmntSeed  *tendermint.SeedService
+
+	stopping uint32
 
 	commonStore *persistent.CommonStore
 
@@ -126,6 +133,9 @@ func (n *Node) Cleanup() {
 
 // Stop gracefully terminates the node.
 func (n *Node) Stop() {
+	if !atomic.CompareAndSwapUint32(&n.stopping, 0, 1) {
+		return
+	}
 	n.svcMgr.Stop()
 }
 
@@ -133,6 +143,19 @@ func (n *Node) Stop() {
 // call Cleanup() after wait returns.
 func (n *Node) Wait() {
 	n.svcMgr.Wait()
+}
+
+func (n *Node) RequestShutdown() <-chan struct{} {
+	// This returns only the registration worker's event channel,
+	// otherwise the caller (usually the control grpc server) will only
+	// get notified once everything is already torn down - perhaps
+	// including the server.
+	n.RegistrationWorker.RequestDeregistration()
+	return n.RegistrationWorker.Quit()
+}
+
+func (n *Node) RegistrationStopped() {
+	n.Stop()
 }
 
 func (n *Node) initBackends() error {
@@ -244,6 +267,8 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.svcTmnt,
 		n.P2P,
 		&workerCommonCfg,
+		n.commonStore,
+		n, // the delegate to be called on registration shutdown
 	)
 	if err != nil {
 		logger.Error("failed to initialize worker registration",
@@ -651,7 +676,7 @@ func newNode(testNode bool) (*Node, error) {
 	}
 
 	// Start the node control server.
-	control.NewGRPCServer(node.grpcInternal, node.Client)
+	control.NewGRPCServer(node.grpcInternal, node, node.Client)
 
 	// Start the tendermint service.
 	//
