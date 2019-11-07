@@ -2,6 +2,7 @@
 package pubsub
 
 import (
+	"context"
 	"errors"
 
 	"github.com/eapache/channels"
@@ -17,6 +18,29 @@ type cmdCtx struct {
 	onSubscribeHook OnSubscribeHook
 
 	isSubscribe bool
+}
+
+// ClosableSubscription is an interface for a subscription that can be
+// closed. This can be used as return value from methods instead of the
+// actual Subscription to expose a more limited interface.
+type ClosableSubscription interface {
+	// Close unsubscribes the subscription.
+	Close()
+}
+
+type contextSubscription struct {
+	cancel context.CancelFunc
+}
+
+func (s contextSubscription) Close() {
+	s.cancel()
+}
+
+// NewContextSubscription creates a subscription that cancels the context
+// when closed.
+func NewContextSubscription(ctx context.Context) (context.Context, ClosableSubscription) {
+	ctx, cancel := context.WithCancel(ctx)
+	return ctx, contextSubscription{cancel}
 }
 
 // Subscription is a Broker subscription instance.
