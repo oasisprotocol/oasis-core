@@ -167,9 +167,9 @@ type NetworkCfg struct { // nolint: maligned
 	// StakingGenesis is the name of a file with a staking genesis document to use if GenesisFile isn't set.
 	StakingGenesis string `json:"staking_genesis"`
 
-	// A set of log watcher handlers used by default on all nodes created in
-	// this test network.
-	LogWatcherHandlers []log.WatcherHandler `json:"-"`
+	// A set of log watcher handler factories used by default on all nodes
+	// created in this test network.
+	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 }
 
 // Config returns the network configuration.
@@ -489,11 +489,19 @@ func (net *Network) startOasisNode(
 		return nil, nil, errors.Wrap(err, "oasis: failed to start node")
 	}
 
-	if len(net.cfg.LogWatcherHandlers) > 0 {
+	if len(net.cfg.LogWatcherHandlerFactories) > 0 {
+		var logWatcherHandlers []log.WatcherHandler
+		for _, logWatcherHandlerFactory := range net.cfg.LogWatcherHandlerFactories {
+			logWatcherHandler, err := logWatcherHandlerFactory.New()
+			if err != nil {
+				return nil, nil, err
+			}
+			logWatcherHandlers = append(logWatcherHandlers, logWatcherHandler)
+		}
 		logFileWatcher, err := log.NewWatcher(&log.WatcherConfig{
 			Name:     fmt.Sprintf("%s/log", descr),
 			File:     nodeLogPath(dir),
-			Handlers: net.cfg.LogWatcherHandlers,
+			Handlers: logWatcherHandlers,
 		})
 		if err != nil {
 			return nil, nil, err

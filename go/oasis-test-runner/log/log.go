@@ -6,6 +6,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+// WatcherHandlerFactory is a factory interface for log file watcher handlers.
+type WatcherHandlerFactory interface {
+	// New will create and return a WatcherHandler ready for use.
+	New() (WatcherHandler, error)
+}
+
 // WatcherHandler is a log file watcher handler.
 type WatcherHandler interface {
 	// Line is called for each processed line.

@@ -61,10 +61,10 @@ func (sc *roothashMessagesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			RuntimeLoaderBinary: viper.GetString(cfgRuntimeLoader),
 			EpochtimeMock:       true,
 			StakingGenesis:      "tests/fixture-data/roothash-messages/staking-genesis.json",
-			LogWatcherHandlers: append([]log.WatcherHandler{
+			LogWatcherHandlerFactories: append([]log.WatcherHandlerFactory{
 				oasis.LogAssertNotEvent(roothash.LogEventMessageUnsat, "unsatisfactory roothash message detected"),
 				oasis.LogAssertEvent(staking.LogEventGeneralAdjustment, "balance adjustment not detected"),
-			}, DefaultBasicLogWatcherHandlers...),
+			}, DefaultBasicLogWatcherHandlerFactories...),
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},

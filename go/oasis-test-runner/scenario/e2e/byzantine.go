@@ -19,14 +19,14 @@ var (
 	// ByzantineComputeHonest is the byzantine compute honest scenario.
 	ByzantineComputeHonest scenario.Scenario = newByzantineImpl("compute-honest", nil)
 	// ByzantineComputeWrong is the byzantine compute wrong scenario.
-	ByzantineComputeWrong scenario.Scenario = newByzantineImpl("compute-wrong", []log.WatcherHandler{
+	ByzantineComputeWrong scenario.Scenario = newByzantineImpl("compute-wrong", []log.WatcherHandlerFactory{
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertComputeDiscrepancyDetected(),
 		oasis.LogAssertNoMergeDiscrepancyDetected(),
 	})
 	// ByzantineComputeStraggler is the byzantine compute straggler scenario.
-	ByzantineComputeStraggler scenario.Scenario = newByzantineImpl("compute-straggler", []log.WatcherHandler{
+	ByzantineComputeStraggler scenario.Scenario = newByzantineImpl("compute-straggler", []log.WatcherHandlerFactory{
 		oasis.LogAssertTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertComputeDiscrepancyDetected(),
@@ -36,14 +36,14 @@ var (
 	// ByzantineMergeHonest is the byzantine merge honest scenario.
 	ByzantineMergeHonest scenario.Scenario = newByzantineImpl("merge-honest", nil)
 	// ByzantineMergeWrong is the byzantine merge wrong scenario.
-	ByzantineMergeWrong scenario.Scenario = newByzantineImpl("merge-wrong", []log.WatcherHandler{
+	ByzantineMergeWrong scenario.Scenario = newByzantineImpl("merge-wrong", []log.WatcherHandlerFactory{
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertNoComputeDiscrepancyDetected(),
 		oasis.LogAssertMergeDiscrepancyDetected(),
 	})
 	// ByzantineMergeStraggler is the byzantine merge straggler scenario.
-	ByzantineMergeStraggler scenario.Scenario = newByzantineImpl("merge-straggler", []log.WatcherHandler{
+	ByzantineMergeStraggler scenario.Scenario = newByzantineImpl("merge-straggler", []log.WatcherHandlerFactory{
 		oasis.LogAssertTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertNoComputeDiscrepancyDetected(),
@@ -54,23 +54,23 @@ var (
 type byzantineImpl struct {
 	basicImpl
 
-	script             string
-	identitySeed       string
-	logWatcherHandlers []log.WatcherHandler
+	script                     string
+	identitySeed               string
+	logWatcherHandlerFactories []log.WatcherHandlerFactory
 
 	logger *logging.Logger
 }
 
-func newByzantineImpl(script string, logWatcherHandlers []log.WatcherHandler) scenario.Scenario {
+func newByzantineImpl(script string, logWatcherHandlerFactories []log.WatcherHandlerFactory) scenario.Scenario {
 	sc := &byzantineImpl{
 		basicImpl: basicImpl{
 			clientBinary: "simple-keyvalue-ops-client",
 			clientArgs:   []string{"set", "hello_key", "hello_value"},
 		},
-		script:             script,
-		identitySeed:       byzantineDefaultIdentitySeed,
-		logWatcherHandlers: logWatcherHandlers,
-		logger:             logging.GetLogger("scenario/e2e/byzantine/" + script),
+		script:                     script,
+		identitySeed:               byzantineDefaultIdentitySeed,
+		logWatcherHandlerFactories: logWatcherHandlerFactories,
+		logger:                     logging.GetLogger("scenario/e2e/byzantine/" + script),
 	}
 	return sc
 }
@@ -91,8 +91,8 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// doesn't know how to handle epochs in which it is not scheduled.
 	f.Network.EpochtimeMock = true
 	// Change the default log watcher handlers if configured.
-	if sc.logWatcherHandlers != nil {
-		f.Network.LogWatcherHandlers = sc.logWatcherHandlers
+	if sc.logWatcherHandlerFactories != nil {
+		f.Network.LogWatcherHandlerFactories = sc.logWatcherHandlerFactories
 	}
 	// Provision a Byzantine node.
 	f.ByzantineNodes = []oasis.ByzantineFixture{

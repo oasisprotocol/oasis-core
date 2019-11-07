@@ -79,8 +79,8 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 	}
 
-	f.Network.LogWatcherHandlers = append(
-		f.Network.LogWatcherHandlers,
+	f.Network.LogWatcherHandlerFactories = append(
+		f.Network.LogWatcherHandlerFactories,
 		// NOTE: This currently works because logs from all nodes are checked
 		// by the same log watcher handler.
 		// It needs to be properly implemented after:

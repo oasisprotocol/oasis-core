@@ -60,11 +60,11 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			MrSigner: mrSigner,
 		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:          viper.GetString(cfgNodeBinary),
-			RuntimeLoaderBinary: viper.GetString(cfgRuntimeLoader),
-			EpochtimeMock:       true,
-			StakingGenesis:      "tests/fixture-data/gas-fees/staking-genesis.json",
-			LogWatcherHandlers:  DefaultBasicLogWatcherHandlers,
+			NodeBinary:                 viper.GetString(cfgNodeBinary),
+			RuntimeLoaderBinary:        viper.GetString(cfgRuntimeLoader),
+			EpochtimeMock:              true,
+			StakingGenesis:             "tests/fixture-data/gas-fees/staking-genesis.json",
+			LogWatcherHandlerFactories: DefaultBasicLogWatcherHandlerFactories,
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},
