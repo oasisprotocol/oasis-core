@@ -12,11 +12,9 @@ import (
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 
-	"github.com/oasislabs/oasis-core/go/beacon"
-	beaconAPI "github.com/oasislabs/oasis-core/go/beacon/api"
+	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/client"
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/consensus"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
@@ -25,6 +23,10 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/persistent"
 	"github.com/oasislabs/oasis-core/go/common/service"
+	"github.com/oasislabs/oasis-core/go/consensus"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
+	tmService "github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
+	tendermintTests "github.com/oasislabs/oasis-core/go/consensus/tendermint/tests"
 	"github.com/oasislabs/oasis-core/go/control"
 	"github.com/oasislabs/oasis-core/go/dummydebug"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -32,7 +34,6 @@ import (
 	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisfile "github.com/oasislabs/oasis-core/go/genesis/file"
 	"github.com/oasislabs/oasis-core/go/ias"
-	"github.com/oasislabs/oasis-core/go/keymanager"
 	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -44,17 +45,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/tracing"
 	"github.com/oasislabs/oasis-core/go/registry"
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
-	"github.com/oasislabs/oasis-core/go/roothash"
-	roothashAPI "github.com/oasislabs/oasis-core/go/roothash/api"
-	"github.com/oasislabs/oasis-core/go/scheduler"
-	schedulerAPI "github.com/oasislabs/oasis-core/go/scheduler/api"
-	"github.com/oasislabs/oasis-core/go/staking"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	staking "github.com/oasislabs/oasis-core/go/staking"
 	stakingAPI "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/storage"
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/tendermint"
-	tmService "github.com/oasislabs/oasis-core/go/tendermint/service"
-	tendermintTests "github.com/oasislabs/oasis-core/go/tendermint/tests"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
@@ -103,11 +99,11 @@ type Node struct {
 
 	Genesis   genesisAPI.Provider
 	Identity  *identity.Identity
-	Beacon    beaconAPI.Backend
+	Beacon    beacon.Backend
 	Epochtime epochtime.Backend
 	Registry  registryAPI.Backend
-	RootHash  roothashAPI.Backend
-	Scheduler schedulerAPI.Backend
+	RootHash  roothash.Backend
+	Scheduler scheduler.Backend
 	Staking   stakingAPI.Backend
 	Storage   storageAPI.Backend
 	IAS       *ias.IAS
@@ -163,34 +159,10 @@ func (n *Node) initBackends() error {
 
 	var err error
 
-	// Initialize the various backends.
-	if n.Beacon, err = beacon.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
-		return err
-	}
-	if n.Staking, err = staking.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
-		return err
-	}
-	if n.Registry, err = registry.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
-		return err
-	}
-	n.svcMgr.RegisterCleanupOnly(n.Registry, "registry backend")
-	if n.KeyManager, err = keymanager.New(n.svcMgr.Ctx, n.Registry, n.svcTmnt); err != nil {
-		return err
-	}
-	n.svcMgr.RegisterCleanupOnly(n.Staking, "staking backend")
-	if n.Scheduler, err = scheduler.New(n.svcMgr.Ctx, n.Registry, n.Beacon, n.svcTmnt); err != nil {
-		return err
-	}
-	n.svcMgr.RegisterCleanupOnly(n.Scheduler, "scheduler backend")
-
 	if n.Storage, err = storage.New(n.svcMgr.Ctx, dataDir, n.Identity, n.Scheduler, n.Registry); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")
-	if n.RootHash, err = roothash.New(n.svcMgr.Ctx, dataDir, n.Scheduler, n.Registry, n.Beacon, n.svcTmnt); err != nil {
-		return err
-	}
-	n.svcMgr.RegisterCleanupOnly(n.RootHash, "roothash backend")
 
 	// Initialize and register the internal gRPC services.
 	grpcSrv := n.grpcInternal.Server()
@@ -400,7 +372,7 @@ func (n *Node) initGenesis(testNode bool) error {
 }
 
 func (n *Node) dumpGenesis(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) error {
-	doc, err := n.svcTmnt.ToGenesis(ctx, blockHeight, n.KeyManager, n.Registry, n.RootHash, n.Staking, n.Scheduler)
+	doc, err := n.svcTmnt.ToGenesis(ctx, blockHeight)
 	if err != nil {
 		return fmt.Errorf("dumpGenesis: failed to get genesis: %w", err)
 	}
@@ -570,8 +542,14 @@ func newNode(testNode bool) (*Node, error) {
 		}
 		node.svcMgr.Register(node.svcTmnt)
 		node.Epochtime = node.svcTmnt.EpochTime()
+		node.Beacon = node.svcTmnt.Beacon()
+		node.KeyManager = node.svcTmnt.KeyManager()
+		node.Registry = node.svcTmnt.Registry()
+		node.Staking = node.svcTmnt.Staking()
+		node.Scheduler = node.svcTmnt.Scheduler()
+		node.RootHash = node.svcTmnt.RootHash()
 
-		// Initialize the various node backends.
+		// Initialize node backends.
 		if err = node.initBackends(); err != nil {
 			logger.Error("failed to initialize backends",
 				"err", err,
@@ -714,7 +692,6 @@ func init() {
 		tracing.Flags,
 		cmdGrpc.ServerLocalFlags,
 		pprof.Flags,
-		roothash.Flags,
 		storage.Flags,
 		tendermint.Flags,
 		ias.Flags,

@@ -10,9 +10,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	registryapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	registryapp "github.com/oasislabs/oasis-core/go/tendermint/apps/registry"
-	"github.com/oasislabs/oasis-core/go/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 
@@ -64,11 +64,6 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 	return nil
 }
 
-func registryGetNode(ht *honestTendermint, height int64, runtimeID signature.PublicKey) (*node.Node, error) {
-	q, err := ht.registryQuery.QueryAt(context.Background(), height)
-	if err != nil {
-		return nil, err
-	}
-
-	return q.Node(context.Background(), runtimeID)
+func registryGetNode(ht *honestTendermint, height int64, nodeID signature.PublicKey) (*node.Node, error) {
+	return ht.service.Registry().GetNode(context.Background(), nodeID, height)
 }

@@ -71,7 +71,8 @@ func (w *metricsWrapper) worker() {
 	}
 }
 
-func newMetricsWrapper(base api.Backend) api.Backend {
+// NewMetricsWrapper wraps a roothash backend implementation with instrumentation.
+func NewMetricsWrapper(base api.Backend) api.Backend {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(rootHashCollectors...)
 	})

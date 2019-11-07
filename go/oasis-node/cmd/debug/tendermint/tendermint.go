@@ -14,9 +14,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/inspector"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasislabs/oasis-core/go/tendermint/crypto"
-	"github.com/oasislabs/oasis-core/go/tendermint/inspector"
 )
 
 var (

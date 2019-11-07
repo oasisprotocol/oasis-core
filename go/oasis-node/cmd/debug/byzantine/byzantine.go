@@ -13,12 +13,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	"github.com/oasislabs/oasis-core/go/tendermint"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
