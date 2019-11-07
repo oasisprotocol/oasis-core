@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
+	"math"
 	"math/big"
 	"os"
 	"time"
@@ -15,13 +16,12 @@ import (
 	"github.com/spf13/viper"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	"github.com/oasislabs/oasis-core/go/common/consensus"
+	consensus "github.com/oasislabs/oasis-core/go/common/consensus/genesis"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	epochtimeTendermint "github.com/oasislabs/oasis-core/go/epochtime/tendermint"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisGrpc "github.com/oasislabs/oasis-core/go/grpc/genesis"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
@@ -46,6 +46,7 @@ const (
 	cfgStaking            = "staking"
 	cfgBlockHeight        = "height"
 	cfgChainID            = "chain.id"
+	cfgHaltEpoch          = "halt.epoch"
 
 	// Registry config flags.
 	cfgRegistryDebugAllowUnroutableAddresses = "registry.debug.allow_unroutable_addresses"
@@ -67,7 +68,7 @@ const (
 	cfgBeaconDebugDeterministic = "beacon.debug.deterministic"
 
 	// EpochTime config flags.
-	cfgEpochTimeBackend            = "epochtime.backend"
+	cfgEpochTimeDebugMockBackend   = "epochtime.debug.mock_backend"
 	cfgEpochTimeTendermintInterval = "epochtime.tendermint.interval"
 
 	// Tendermint config flags.
@@ -134,8 +135,9 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	// Build the genesis state, if any.
 	doc := &genesis.Document{
-		ChainID: chainID,
-		Time:    time.Now(),
+		ChainID:   chainID,
+		Time:      time.Now(),
+		HaltEpoch: epochtime.EpochTime(viper.GetUint64(cfgHaltEpoch)),
 	}
 	entities := viper.GetStringSlice(viperEntity)
 	runtimes := viper.GetStringSlice(cfgRuntime)
@@ -186,8 +188,8 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	doc.EpochTime = epochtime.Genesis{
 		Parameters: epochtime.ConsensusParameters{
-			Backend:  viper.GetString(cfgEpochTimeBackend),
-			Interval: viper.GetInt64(cfgEpochTimeTendermintInterval),
+			DebugMockBackend: viper.GetBool(cfgEpochTimeDebugMockBackend),
+			Interval:         viper.GetInt64(cfgEpochTimeTendermintInterval),
 		},
 	}
 
@@ -602,6 +604,7 @@ func init() {
 	initGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
 	initGenesisFlags.String(cfgKeyManagerOperator, "", "path to key manager operator entity registration file")
 	initGenesisFlags.String(cfgChainID, "", "genesis chain id")
+	initGenesisFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "genesis halt epoch height")
 
 	// Registry config flags.
 	initGenesisFlags.Bool(cfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
@@ -623,7 +626,7 @@ func init() {
 	initGenesisFlags.Bool(cfgBeaconDebugDeterministic, false, "enable deterministic beacon output (UNSAFE)")
 
 	// EpochTime config flags.
-	initGenesisFlags.String(cfgEpochTimeBackend, epochtimeTendermint.BackendName, "Epoch time backend")
+	initGenesisFlags.Bool(cfgEpochTimeDebugMockBackend, false, "use debug mock Epoch time backend")
 	initGenesisFlags.Int64(cfgEpochTimeTendermintInterval, 86400, "Epoch interval (in blocks)")
 
 	// Tendermint config flags.

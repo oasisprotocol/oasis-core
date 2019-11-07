@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -13,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/beacon"
 	beaconAPI "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/client"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/consensus"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -22,10 +24,10 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/service"
 	"github.com/oasislabs/oasis-core/go/dummydebug"
-	"github.com/oasislabs/oasis-core/go/epochtime"
-	epochtimeAPI "github.com/oasislabs/oasis-core/go/epochtime/api"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/genesis"
 	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
+	genesisfile "github.com/oasislabs/oasis-core/go/genesis/file"
 	"github.com/oasislabs/oasis-core/go/ias"
 	"github.com/oasislabs/oasis-core/go/keymanager"
 	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
@@ -63,6 +65,8 @@ import (
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
+const exportsSubDir = "exports"
+
 // Run runs the Oasis node.
 func Run(cmd *cobra.Command, args []string) {
 	node, err := NewNode()
@@ -89,7 +93,7 @@ type Node struct {
 	Genesis   genesisAPI.Provider
 	Identity  *identity.Identity
 	Beacon    beaconAPI.Backend
-	Epochtime epochtimeAPI.Backend
+	Epochtime epochtime.Backend
 	Registry  registryAPI.Backend
 	RootHash  roothashAPI.Backend
 	Scheduler schedulerAPI.Backend
@@ -132,24 +136,21 @@ func (n *Node) initBackends() error {
 	var err error
 
 	// Initialize the various backends.
-	if n.Epochtime, err = epochtime.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
+	if n.Beacon, err = beacon.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
 		return err
 	}
-	if n.Beacon, err = beacon.New(n.svcMgr.Ctx, n.Epochtime, n.svcTmnt); err != nil {
+	if n.Staking, err = staking.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
 		return err
 	}
-	if n.Staking, err = staking.New(n.svcMgr.Ctx, n.Epochtime, n.svcTmnt); err != nil {
-		return err
-	}
-	if n.Registry, err = registry.New(n.svcMgr.Ctx, n.Epochtime, n.svcTmnt); err != nil {
+	if n.Registry, err = registry.New(n.svcMgr.Ctx, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Registry, "registry backend")
-	if n.KeyManager, err = keymanager.New(n.svcMgr.Ctx, n.Epochtime, n.Registry, n.svcTmnt); err != nil {
+	if n.KeyManager, err = keymanager.New(n.svcMgr.Ctx, n.Registry, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Staking, "staking backend")
-	if n.Scheduler, err = scheduler.New(n.svcMgr.Ctx, n.Epochtime, n.Registry, n.Beacon, n.svcTmnt); err != nil {
+	if n.Scheduler, err = scheduler.New(n.svcMgr.Ctx, n.Registry, n.Beacon, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Scheduler, "scheduler backend")
@@ -158,7 +159,7 @@ func (n *Node) initBackends() error {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")
-	if n.RootHash, err = roothash.New(n.svcMgr.Ctx, dataDir, n.Epochtime, n.Scheduler, n.Registry, n.Beacon, n.svcTmnt); err != nil {
+	if n.RootHash, err = roothash.New(n.svcMgr.Ctx, dataDir, n.Scheduler, n.Registry, n.Beacon, n.svcTmnt); err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.RootHash, "roothash backend")
@@ -169,7 +170,7 @@ func (n *Node) initBackends() error {
 	staking.NewGRPCServer(grpcSrv, n.Staking)
 	storage.NewGRPCServer(grpcSrv, n.Storage, &grpc.AllowAllRuntimePolicyChecker{}, false)
 	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
-	genesis.NewGRPCServer(grpcSrv, n.svcTmnt, n.Epochtime, n.KeyManager, n.Registry, n.RootHash, n.Staking, n.Scheduler)
+	genesis.NewGRPCServer(grpcSrv, n.svcTmnt, n.KeyManager, n.Registry, n.RootHash, n.Staking, n.Scheduler)
 
 	cmdCommon.Logger().Debug("backends initialized")
 
@@ -356,7 +357,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 func (n *Node) initGenesis(testNode bool) error {
 	var err error
-	if n.Genesis, err = genesis.New(); err == nil {
+	if n.Genesis, err = genesisfile.DefaultFileProvider(); err == nil {
 		return nil
 	}
 	if os.IsNotExist(err) && testNode {
@@ -366,6 +367,28 @@ func (n *Node) initGenesis(testNode bool) error {
 	}
 
 	return err
+}
+
+func (n *Node) dumpGenesis(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) error {
+	doc, err := n.svcTmnt.ToGenesis(ctx, blockHeight, n.KeyManager, n.Registry, n.RootHash, n.Staking, n.Scheduler)
+	if err != nil {
+		return fmt.Errorf("dumpGenesis: failed to get genesis: %w", err)
+	}
+
+	exportsDir := filepath.Join(cmdCommon.DataDir(), exportsSubDir)
+
+	if err := common.Mkdir(exportsDir); err != nil {
+		return fmt.Errorf("dumpGenesis: failed to create exports dir: %w", err)
+	}
+
+	filename := filepath.Join(exportsDir, fmt.Sprintf("genesis-%s-at-%d.json", doc.ChainID, doc.Height))
+	if nerr := doc.WriteFileJSON(filename); nerr != nil {
+		if err := common.Mkdir(exportsDir); err != nil {
+			return fmt.Errorf("dumpGenesis: failed to dump write genesis %w", err)
+		}
+	}
+
+	return nil
 }
 
 // NewNode initializes and launches the Oasis node service.
@@ -507,6 +530,7 @@ func newNode(testNode bool) (*Node, error) {
 			return nil, err
 		}
 		node.svcMgr.Register(node.svcTmnt)
+		node.Epochtime = node.svcTmnt.EpochTime()
 
 		// Initialize the various node backends.
 		if err = node.initBackends(); err != nil {
@@ -515,6 +539,24 @@ func newNode(testNode bool) (*Node, error) {
 			)
 			return nil, err
 		}
+
+		// Register dump genesis halt hook.
+		node.svcTmnt.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) {
+			logger.Info("Consensus halt hook: dumping genesis",
+				"epoch", epoch,
+				"block_height", blockHeight,
+			)
+			if err = node.dumpGenesis(ctx, blockHeight, epoch); err != nil {
+				logger.Error("halt hook: failed to dump genesis",
+					"err", err,
+				)
+				return
+			}
+			logger.Info("Consensus halt hook: genesis dumped",
+				"epoch", epoch,
+				"block_height", blockHeight,
+			)
+		})
 	}
 	node.Consensus = node.svcTmnt
 

@@ -27,8 +27,6 @@ var _ abci.Application = (*registryApplication)(nil)
 type registryApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
-
-	timeSource epochtime.Backend
 }
 
 func (app *registryApplication) Name() string {
@@ -60,7 +58,7 @@ func (app *registryApplication) SetOption(request types.RequestSetOption) types.
 
 func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// XXX: With PR#1889 this can be a differnet interval.
-	if changed, registryEpoch := app.state.EpochChanged(ctx, app.timeSource); changed {
+	if changed, registryEpoch := app.state.EpochChanged(ctx); changed {
 		return app.onRegistryEpochChanged(ctx, registryEpoch)
 	}
 	return nil
@@ -380,7 +378,7 @@ func (app *registryApplication) registerNode(
 	}
 
 	// Ensure node is not expired.
-	epoch, err := app.timeSource.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}
@@ -537,7 +535,7 @@ func (app *registryApplication) unfreezeNode(
 	}
 
 	// Ensure if we can actually unfreeze.
-	epoch, err := app.timeSource.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}
@@ -619,9 +617,8 @@ func (app *registryApplication) registerRuntime(
 }
 
 // New constructs a new registry application instance.
-func New(timeSource epochtime.Backend) abci.Application {
+func New() abci.Application {
 	return &registryApplication{
-		logger:     logging.GetLogger("tendermint/registry"),
-		timeSource: timeSource,
+		logger: logging.GetLogger("tendermint/registry"),
 	}
 }

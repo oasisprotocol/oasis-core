@@ -1,7 +1,9 @@
 package e2e
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/spf13/viper"
 
@@ -146,6 +148,92 @@ func (sc *basicImpl) start(childEnv *env.Env) (<-chan error, *exec.Cmd, error) {
 		clientErrCh <- cmd.Wait()
 	}()
 	return clientErrCh, cmd, nil
+}
+
+func (sc *basicImpl) cleanTendermintStorage() error {
+	var err error
+	preservePaths := make(map[string]bool)
+	preserveComponents := make(map[string]bool)
+	preservePath := func(path string) {
+		preservePaths[path] = true
+
+		for len(path) > 1 {
+			path = filepath.Clean(path)
+			preserveComponents[path] = true
+			path, _ = filepath.Split(path)
+		}
+	}
+
+	// Preserve all identities and exported data.
+	for _, ent := range sc.net.Entities() {
+		preservePath(ent.EntityKeyPath())
+		preservePath(ent.DescriptorPath())
+	}
+	for _, val := range sc.net.Validators() {
+		preservePath(val.IdentityKeyPath())
+		preservePath(val.P2PKeyPath())
+		preservePath(val.ConsensusKeyPath())
+		preservePath(val.ExportsPath())
+	}
+	for _, sw := range sc.net.StorageWorkers() {
+		preservePath(sw.IdentityKeyPath())
+		preservePath(sw.P2PKeyPath())
+		preservePath(sw.ConsensusKeyPath())
+		preservePath(sw.TLSKeyPath())
+		preservePath(sw.TLSCertPath())
+		preservePath(sw.ExportsPath())
+	}
+	for _, cw := range sc.net.ComputeWorkers() {
+		preservePath(cw.IdentityKeyPath())
+		preservePath(cw.P2PKeyPath())
+		preservePath(cw.ConsensusKeyPath())
+		preservePath(cw.TLSKeyPath())
+		preservePath(cw.TLSCertPath())
+		preservePath(cw.ExportsPath())
+	}
+	km := sc.net.Keymanager()
+	preservePath(km.IdentityKeyPath())
+	preservePath(km.P2PKeyPath())
+	preservePath(km.ConsensusKeyPath())
+	preservePath(km.TLSKeyPath())
+	preservePath(km.TLSCertPath())
+	preservePath(km.ExportsPath())
+	// Preserve key manager state.
+	preservePath(km.LocalStoragePath())
+
+	// Preserve storage.
+	for _, sw := range sc.net.StorageWorkers() {
+		preservePath(sw.DatabasePath())
+	}
+
+	// Remove all files except what should be preserved.
+	err = filepath.Walk(sc.net.BasePath(), func(path string, info os.FileInfo, fErr error) error {
+		// Preserve everything under a path.
+		if preservePaths[path] {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// Also preserve any components of paths.
+		if preserveComponents[path] {
+			return nil
+		}
+		// Remove everything else.
+		if err = os.RemoveAll(path); err != nil {
+			return err
+		}
+		if info.IsDir() {
+			// No need to recurse into directory as it has been removed.
+			return filepath.SkipDir
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (sc *basicImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan error) error {

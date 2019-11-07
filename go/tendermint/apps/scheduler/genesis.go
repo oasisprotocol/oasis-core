@@ -18,6 +18,12 @@ import (
 )
 
 func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) error {
+	baseEpoch, err := app.state.GetBaseEpoch()
+	if err != nil {
+		return fmt.Errorf("tendermint/scheduler: couldn't get base epoch: %w", err)
+	}
+	app.baseEpoch = baseEpoch
+
 	state := schedulerState.NewMutableState(ctx.State())
 	state.SetConsensusParameters(&doc.Scheduler.Parameters)
 

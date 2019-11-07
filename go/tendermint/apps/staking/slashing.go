@@ -70,7 +70,7 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 	// validator from being scheduled in the next epoch.
 	if penalty.FreezeInterval > 0 {
 		var epoch epochtime.EpochTime
-		epoch, err = app.timeSource.GetEpoch(context.Background(), ctx.BlockHeight()+1)
+		epoch, err = app.state.GetEpoch(context.Background(), ctx.BlockHeight()+1)
 		if err != nil {
 			return err
 		}

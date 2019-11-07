@@ -45,6 +45,12 @@ func (c *Controller) WaitReady(ctx context.Context) error {
 	return err
 }
 
+// WaitEpoch waits for epoch to be reached.
+func (c *Controller) WaitEpoch(ctx context.Context, epoch uint64) error {
+	_, err := c.rtClient.WaitEpoch(ctx, &client.WaitEpochRequest{Epoch: epoch}, c.callOpts()...)
+	return err
+}
+
 // NewController creates a new node controller given the path to
 // a node's internal socket.
 func NewController(socketPath string) (*Controller, error) {

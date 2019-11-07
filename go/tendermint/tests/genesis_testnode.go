@@ -2,14 +2,14 @@ package tendermint
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common/consensus"
+	consensus "github.com/oasislabs/oasis-core/go/common/consensus/genesis"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	tendermock "github.com/oasislabs/oasis-core/go/epochtime/tendermint_mock"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -40,11 +40,12 @@ func (p *testNodeGenesisProvider) GetTendermintGenesisDocument() (*tmtypes.Genes
 // running a single node "network", only for testing.
 func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, error) {
 	doc := &genesis.Document{
-		ChainID: "oasis-test-chain",
-		Time:    time.Now(),
+		ChainID:   "oasis-test-chain",
+		Time:      time.Now(),
+		HaltEpoch: epochtime.EpochTime(math.MaxUint64),
 		EpochTime: epochtime.Genesis{
 			Parameters: epochtime.ConsensusParameters{
-				Backend: tendermock.BackendName,
+				DebugMockBackend: true,
 			},
 		},
 		Registry: registry.Genesis{

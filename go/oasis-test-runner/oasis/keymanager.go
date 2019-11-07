@@ -75,6 +75,11 @@ func (km *Keymanager) TLSCertPath() string {
 	return nodeTLSCertPath(km.dir)
 }
 
+// Exports path returns the path to the node's exports data dir.
+func (km *Keymanager) ExportsPath() string {
+	return nodeExportsPath(km.dir)
+}
+
 // LocalStoragePath returns the path to the node's local storage.
 func (km *Keymanager) LocalStoragePath() string {
 	return filepath.Join(km.dir.String(), workerCommon.LocalStorageFile)

@@ -32,11 +32,6 @@ type TendermintService interface {
 	// GetGenesis will return the oasis genesis document.
 	GetGenesis() *genesis.Document
 
-	// ForceInitialize force-initializes the Tendermint service iff
-	// it has not been started.  Otherwise the routine has no effect
-	// and will succeed.
-	ForceInitialize() error
-
 	// GetHeight returns the Tendermint block height.
 	GetHeight() (int64, error)
 

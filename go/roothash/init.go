@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/viper"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/tendermint"
@@ -25,7 +24,6 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 func New(
 	ctx context.Context,
 	dataDir string,
-	timeSource epochtime.Backend,
 	scheduler scheduler.Backend,
 	registry registry.Backend,
 	beacon beacon.Backend,
@@ -40,7 +38,7 @@ func New(
 
 	switch strings.ToLower(backend) {
 	case tendermint.BackendName:
-		impl, err = tendermint.New(ctx, dataDir, timeSource, beacon, tmService)
+		impl, err = tendermint.New(ctx, dataDir, beacon, tmService)
 	default:
 		return nil, fmt.Errorf("roothash: unsupported backend: '%v'", backend)
 	}

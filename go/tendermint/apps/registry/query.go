@@ -59,7 +59,7 @@ func (rq *registryQuerier) Entities(ctx context.Context) ([]*entity.Entity, erro
 }
 
 func (rq *registryQuerier) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
-	epoch, err := rq.app.timeSource.GetEpoch(ctx, rq.height)
+	epoch, err := rq.app.state.GetEpoch(ctx, rq.height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get epoch: %w", err)
 	}
@@ -81,7 +81,7 @@ func (rq *registryQuerier) NodeStatus(ctx context.Context, id signature.PublicKe
 }
 
 func (rq *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {
-	epoch, err := rq.app.timeSource.GetEpoch(ctx, rq.height)
+	epoch, err := rq.app.state.GetEpoch(ctx, rq.height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get epoch: %w", err)
 	}

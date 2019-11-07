@@ -8,7 +8,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
-	tendermintmock "github.com/oasislabs/oasis-core/go/epochtime/tendermint_mock"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
@@ -57,7 +56,7 @@ func (sc *roothashMessagesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		Network: oasis.NetworkCfg{
 			NodeBinary:          viper.GetString(cfgNodeBinary),
 			RuntimeLoaderBinary: viper.GetString(cfgRuntimeLoader),
-			EpochtimeBackend:    tendermintmock.BackendName,
+			EpochtimeMock:       true,
 			StakingGenesis:      "tests/fixture-data/roothash-messages/staking-genesis.json",
 			LogWatcherHandlers: append([]log.WatcherHandler{
 				oasis.LogAssertNotEvent(roothash.LogEventMessageUnsat, "unsatisfactory roothash message detected"),

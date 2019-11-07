@@ -14,7 +14,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
 	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 	app "github.com/oasislabs/oasis-core/go/tendermint/apps/keymanager"
@@ -127,8 +126,8 @@ func (tb *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
 
 // New constructs a new tendermint backed key manager management Backend
 // instance.
-func New(ctx context.Context, timeSource epochtime.Backend, service service.TendermintService) (api.Backend, error) {
-	a := app.New(timeSource)
+func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
+	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, errors.Wrap(err, "keymanager/tendermint: failed to register app")
 	}

@@ -10,6 +10,8 @@ service Runtime {
     rpc WaitSync (WaitSyncRequest) returns (WaitSyncResponse) {}
     // Check if the node is finished syncing.
     rpc IsSynced (IsSyncedRequest) returns (IsSyncedResponse) {}
+    // Wait for consensus to reach an epoch.
+    rpc WaitEpoch (WaitEpochRequest) returns (WaitEpochResponse) {}
     // Subscribe to roothash blocks.
     rpc WatchBlocks (WatchBlocksRequest) returns (stream WatchBlocksResponse) {}
     // Get roothash block at specific round.
@@ -52,6 +54,13 @@ message IsSyncedResponse {
 	// True if the node finished the initial sync.
 	bool synced = 1;
 }
+
+message WaitEpochRequest {
+    // Epoch to wait for.
+    uint64 epoch = 1;
+}
+
+message WaitEpochResponse {}
 
 message WatchBlocksRequest {
     // Runtime identifier.

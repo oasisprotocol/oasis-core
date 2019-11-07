@@ -2,11 +2,14 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"time"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/consensus"
+	consensus "github.com/oasislabs/oasis-core/go/common/consensus/genesis"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -19,6 +22,8 @@ var (
 	_ cbor.Marshaler   = (*Document)(nil)
 	_ cbor.Unmarshaler = (*Document)(nil)
 )
+
+const filePerm = 0600
 
 // Document is a genesis document.
 type Document struct {
@@ -44,6 +49,9 @@ type Document struct {
 	Beacon beacon.Genesis `json:"beacon"`
 	// Consensus is the consensus genesis state.
 	Consensus consensus.Genesis `json:"consensus"`
+	// HaltEpoch is the epoch height at which the network will stop processing
+	// any transactions and will halt.
+	HaltEpoch epochtime.EpochTime `json:"halt_epoch"`
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by the protocol.
 	ExtraData map[string][]byte `json:"extra_data"`
@@ -57,6 +65,19 @@ func (d *Document) MarshalCBOR() []byte {
 // UnmarshalCBOR deserializes a CBOR byte vector into given type.
 func (d *Document) UnmarshalCBOR(data []byte) error {
 	return cbor.Unmarshal(data, d)
+}
+
+// WriteFileJSON writes the genesis document into a JSON file.
+func (d *Document) WriteFileJSON(filename string) error {
+	docJSON, err := json.Marshal(d)
+	if err != nil {
+		return err
+	}
+
+	if err = ioutil.WriteFile(filename, docJSON, filePerm); err != nil {
+		return fmt.Errorf("WriteFileJSON: failed to write genesis file: %w", err)
+	}
+	return nil
 }
 
 // Provider is a genesis document provider.

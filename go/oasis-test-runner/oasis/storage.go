@@ -67,6 +67,11 @@ func (worker *Storage) TLSCertPath() string {
 	return nodeTLSCertPath(worker.dir)
 }
 
+// Exports path returns the path to the node's exports data dir.
+func (worker *Storage) ExportsPath() string {
+	return nodeExportsPath(worker.dir)
+}
+
 // DatabasePath returns the path to the node's database.
 func (worker *Storage) DatabasePath() string {
 	return filepath.Join(worker.dir.String(), database.DefaultFileName(worker.backend))

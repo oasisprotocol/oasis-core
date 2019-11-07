@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	pbClient "github.com/oasislabs/oasis-core/go/grpc/client"
 	pbEnRPC "github.com/oasislabs/oasis-core/go/grpc/enclaverpc"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -43,9 +44,15 @@ func (s *grpcServer) SubmitTx(ctx context.Context, req *pbClient.SubmitTxRequest
 	return &response, nil
 }
 
+func (s *grpcServer) WaitEpoch(ctx context.Context, req *pbClient.WaitEpochRequest) (*pbClient.WaitEpochResponse, error) {
+	if err := s.client.WaitEpoch(ctx, epochtime.EpochTime(req.GetEpoch())); err != nil {
+		return nil, err
+	}
+	return &pbClient.WaitEpochResponse{}, nil
+}
+
 func (s *grpcServer) WaitSync(ctx context.Context, req *pbClient.WaitSyncRequest) (*pbClient.WaitSyncResponse, error) {
-	err := s.client.WaitSync(ctx)
-	if err != nil {
+	if err := s.client.WaitSync(ctx); err != nil {
 		return nil, err
 	}
 	return &pbClient.WaitSyncResponse{}, nil

@@ -26,8 +26,6 @@ import (
 const (
 	// CfgFakeSGX configures registering with SGX capability.
 	CfgFakeSGX = "fake_sgx"
-	// CfgMockEpochtime configures the mock epochtime backend.
-	CfgMockEpochtime = "mock_epochtime"
 	// CfgVersionFakeEnclaveID configures runtime's EnclaveIdentity.
 	CfgVersionFakeEnclaveID = "runtime.version.fake_enclave_id"
 )
@@ -88,9 +86,8 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
+	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
 	}
 	defer func() {
@@ -207,9 +204,8 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
+	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
 	}
 	defer func() {
@@ -326,9 +322,8 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
+	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
 	}
 	defer func() {
@@ -390,9 +385,8 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
+	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
 	}
 	defer func() {
@@ -481,9 +475,8 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
+	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
 	}
 	defer func() {
@@ -596,9 +589,8 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("init default identity failed: %+v", err))
 	}
 
-	useMockEpochTime := viper.GetBool(CfgMockEpochtime)
 	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir(), useMockEpochTime); err != nil {
+	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
 		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
 	}
 	defer func() {
@@ -659,7 +651,6 @@ func Register(parentCmd *cobra.Command) {
 func init() {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fs.Bool(CfgFakeSGX, false, "register with SGX capability")
-	fs.Bool(CfgMockEpochtime, false, "use the mock epochtime backend")
 	fs.String(CfgVersionFakeEnclaveID, "", "Fake runtime enclave identity")
 	_ = viper.BindPFlags(fs)
 	byzantineCmd.PersistentFlags().AddFlagSet(fs)

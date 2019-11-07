@@ -6,7 +6,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/epochtime/tendermint_mock"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
@@ -43,10 +42,6 @@ func (worker *Byzantine) startNode() error {
 		workerP2pPort(worker.p2pPort).
 		appendSeedNodes(worker.net).
 		appendEntity(worker.entity)
-
-	if worker.net.cfg.EpochtimeBackend == tendermintmock.BackendName {
-		args = args.byzantineMockEpochtime()
-	}
 
 	for _, v := range worker.net.Runtimes() {
 		if v.kind == registry.KindCompute && v.teeHardware == node.TEEHardwareIntelSGX {

@@ -19,7 +19,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
@@ -530,12 +529,11 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 func New(
 	ctx context.Context,
 	dataDir string,
-	timeSource epochtime.Backend,
 	beac beacon.Backend,
 	service service.TendermintService,
 ) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
-	a := app.New(timeSource, beac)
+	a := app.New(beac)
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}

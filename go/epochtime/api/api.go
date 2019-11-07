@@ -60,7 +60,6 @@ type ConsensusParameters struct {
 	// Interval is the epoch interval (in blocks).
 	Interval int64 `json:"interval"`
 
-	// Backend is the chosen epochtime backend.
-	// TODO: Change this to a simple DebugMockBackend bool flag (probably in #1879).
-	Backend string `json:"backend"`
+	// DebugMockBackend is flag for enabling mock epochtime backend.
+	DebugMockBackend bool `json:"debug_mock_backend"`
 }

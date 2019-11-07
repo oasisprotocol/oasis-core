@@ -8,12 +8,9 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	"github.com/oasislabs/oasis-core/go/genesis"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/file"
 	"github.com/oasislabs/oasis-core/go/tendermint"
 	beaconapp "github.com/oasislabs/oasis-core/go/tendermint/apps/beacon"
-	epochtimemockapp "github.com/oasislabs/oasis-core/go/tendermint/apps/epochtime_mock"
 	keymanagerapp "github.com/oasislabs/oasis-core/go/tendermint/apps/keymanager"
 	registryapp "github.com/oasislabs/oasis-core/go/tendermint/apps/registry"
 	roothashapp "github.com/oasislabs/oasis-core/go/tendermint/apps/roothash"
@@ -22,123 +19,48 @@ import (
 	"github.com/oasislabs/oasis-core/go/tendermint/service"
 )
 
-var _ epochtime.Backend = (*fakeTimeBackend)(nil)
-
-// fakeTimeBackend is like TendermintBackend (of epochtime), but without
-// any workers.
-type fakeTimeBackend struct {
-	service *honestTendermint
-
-	useMockEpochTime bool
-}
-
-// GetBaseEpoch implements epochtime Backend.
-func (t *fakeTimeBackend) GetBaseEpoch(ctx context.Context) (epochtime.EpochTime, error) {
-	// XXX: This will need to honor the base epoch if this is ever used in
-	// conjunction with the real timekeeping backend, and a dump/restore.
-	return 0, nil
-}
-
-// GetEpoch implements epochtime Backend.
-func (t *fakeTimeBackend) GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error) {
-	if height == 0 {
-		panic("0 height not supported")
-	}
-
-	if t.useMockEpochTime {
-		// Query the epochtime_mock Tendermint application.
-		q, err := t.service.epochtimeMockQuery.QueryAt(ctx, height)
-		if err != nil {
-			return epochtime.EpochInvalid, errors.Wrap(err, "epochtime: epoch query failed")
-		}
-
-		epoch, _, err := q.Epoch(ctx)
-		if err != nil {
-			return epochtime.EpochInvalid, errors.Wrap(err, "epochtime: epoch query failed")
-		}
-		return epoch, nil
-	}
-
-	// Use the the epoch interval that we have in E2E tests.
-	// We could make this more flexible with command line flags in future work.
-	return epochtime.EpochTime(height / 30), nil
-}
-
-// GetEpochBlock implements epochtime Backend.
-func (*fakeTimeBackend) GetEpochBlock(ctx context.Context, epoch epochtime.EpochTime) (int64, error) {
-	panic("GetEpochBlock not supported")
-}
-
-// WatchEpochs implements epochtime Backend.
-func (*fakeTimeBackend) WatchEpochs() (<-chan epochtime.EpochTime, *pubsub.Subscription) {
-	panic("WatchEpochs not supported")
-}
-
-func (*fakeTimeBackend) ToGenesis(ctx context.Context, height int64) (*epochtime.Genesis, error) {
-	panic("ToGenesis not supported")
-}
-
 type honestTendermint struct {
 	service service.TendermintService
 
-	schedulerQuery     *schedulerapp.QueryFactory
-	roothashQuery      *roothashapp.QueryFactory
-	registryQuery      *registryapp.QueryFactory
-	epochtimeMockQuery *epochtimemockapp.QueryFactory
+	schedulerQuery *schedulerapp.QueryFactory
+	roothashQuery  *roothashapp.QueryFactory
+	registryQuery  *registryapp.QueryFactory
 }
 
 func newHonestTendermint() *honestTendermint {
 	return &honestTendermint{}
 }
 
-func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMockEpochTime bool) error {
+func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 	if ht.service != nil {
 		return errors.New("honest Tendermint service already started")
 	}
 
-	genesis, err := genesis.New()
+	genesis, err := genesis.DefaultFileProvider()
 	if err != nil {
-		return errors.Wrap(err, "genesis New")
+		return errors.Wrap(err, "genesis DefaultFileProvider")
 	}
 	ht.service, err = tendermint.New(context.Background(), dataDir, id, genesis)
 	if err != nil {
 		return errors.Wrap(err, "tendermint New")
 	}
 
-	if err = ht.service.ForceInitialize(); err != nil {
-		return errors.Wrap(err, "honest Tendermint service ForceInitialize")
-	}
-
 	// Register honest mux apps.
-	// This isn't very flexible. It's configured to match what we use in end-to-end tests.
-	// And we do that mostly by hardcoding options. We could make this more flexible with command
-	// line flags in future work.
-	timeSource := &fakeTimeBackend{
-		service:          ht,
-		useMockEpochTime: useMockEpochTime,
-	}
-	if useMockEpochTime {
-		epochtimeMockApp := epochtimemockapp.New()
-		if err = ht.service.RegisterApplication(epochtimeMockApp); err != nil {
-			return errors.Wrap(err, "honest Tendermint service RegisterApplication epochtime_mock")
-		}
-		ht.epochtimeMockQuery = epochtimeMockApp.QueryFactory().(*epochtimemockapp.QueryFactory)
-	}
-	if err = ht.service.RegisterApplication(beaconapp.New(timeSource)); err != nil {
+	if err = ht.service.RegisterApplication(beaconapp.New()); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication beacon")
 	}
-	if err = ht.service.RegisterApplication(stakingapp.New(timeSource)); err != nil {
+	if err = ht.service.RegisterApplication(stakingapp.New()); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication staking")
 	}
-	registryApp := registryapp.New(timeSource)
+	registryApp := registryapp.New()
 	if err = ht.service.RegisterApplication(registryApp); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication registry")
 	}
 	ht.registryQuery = registryApp.QueryFactory().(*registryapp.QueryFactory)
-	if err = ht.service.RegisterApplication(keymanagerapp.New(timeSource)); err != nil {
+	if err = ht.service.RegisterApplication(keymanagerapp.New()); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication keymanager")
 	}
-	schedApp, err := schedulerapp.New(timeSource)
+	schedApp, err := schedulerapp.New()
 	if err != nil {
 		return errors.Wrap(err, "honest Tendermint service New scheduler")
 	}
@@ -147,7 +69,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string, useMock
 	}
 	ht.schedulerQuery = schedApp.QueryFactory().(*schedulerapp.QueryFactory)
 	// storage has no registration
-	roothashApp := roothashapp.New(timeSource, nil)
+	roothashApp := roothashapp.New(nil)
 	if err = ht.service.RegisterApplication(roothashApp); err != nil {
 		return errors.Wrap(err, "honest Tendermint service RegisterApplication roothash")
 	}
