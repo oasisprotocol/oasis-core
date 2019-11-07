@@ -200,7 +200,7 @@ func (app *registryApplication) registerEntity(
 	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
 		err = registry.VerifyTimestamp(ent.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
-			app.logger.Error("RegisterEntity: INVALID TIMESTAMP",
+			app.logger.Error("RegisterEntity: invalid timestamp",
 				"entity_timestamp", ent.RegistrationTime,
 				"now", uint64(ctx.Now().Unix()),
 			)
@@ -252,7 +252,7 @@ func (app *registryApplication) deregisterEntity(
 	if !ctx.IsCheckOnly() {
 		err = registry.VerifyTimestamp(timestamp, uint64(ctx.Now().Unix()))
 		if err != nil {
-			app.logger.Error("DeregisterEntity: INVALID TIMESTAMP",
+			app.logger.Error("DeregisterEntity: invalid timestamp",
 				"timestamp", timestamp,
 				"now", uint64(ctx.Now().Unix()),
 			)
@@ -341,7 +341,7 @@ func (app *registryApplication) registerNode(
 	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
 		err = registry.VerifyTimestamp(newNode.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
-			app.logger.Error("RegisterNode: INVALID TIMESTAMP",
+			app.logger.Error("RegisterNode: invalid timestamp",
 				"node_timestamp", newNode.RegistrationTime,
 				"now", uint64(ctx.Now().Unix()),
 			)
@@ -349,13 +349,31 @@ func (app *registryApplication) registerNode(
 		}
 	}
 
-	// Re-check that the entity has at least sufficient stake to still be an
-	// entity.  The node thresholds should be enforced in the scheduler.
+	// Re-check that the entity has at sufficient stake to still be an entity.
+	var (
+		stakeCache     *stakingState.StakeCache
+		numEntityNodes int
+	)
 	if !params.DebugBypassStake {
-		if err = stakingState.EnsureSufficientStake(ctx, newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
-			app.logger.Error("RegisterNode: Insufficent stake",
+		if stakeCache, err = stakingState.NewStakeCache(ctx); err != nil {
+			app.logger.Error("RegisterNode: failed to instantiate stake cache",
+				"err", err,
+			)
+			return err
+		}
+
+		if err = stakeCache.EnsureSufficientStake(newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+			app.logger.Error("RegisterNode: insufficent stake, entity no longer valid",
 				"err", err,
 				"id", newNode.EntityID,
+			)
+			return err
+		}
+
+		if numEntityNodes, err = state.NumEntityNodes(newNode.EntityID); err != nil {
+			app.logger.Error("RegisterNode: failed to query existing nodes for entity",
+				"err", err,
+				"entity", newNode.EntityID,
 			)
 			return err
 		}
@@ -372,52 +390,77 @@ func (app *registryApplication) registerNode(
 
 	// Check if node exists.
 	existingNode, err := state.Node(newNode.ID)
-	if err != nil || existingNode.IsExpired(uint64(epoch)) {
-		if err == registry.ErrNoSuchNode || existingNode.IsExpired(uint64(epoch)) {
-			// Node doesn't exist (or is expired). Create node.
-			if err = state.CreateNode(newNode, sigNode); err != nil {
-				app.logger.Error("RegisterNode: failed to create node",
+	isNewNode := err == registry.ErrNoSuchNode
+	isExpiredNode := err == nil && existingNode.IsExpired(uint64(epoch))
+	if isNewNode || isExpiredNode {
+		// Check that the entity has enough stake for this node registration.
+		if !params.DebugBypassStake {
+			if err = stakeCache.EnsureNodeRegistrationStake(newNode.EntityID, numEntityNodes+1); err != nil {
+				app.logger.Error("RegisterNode: insufficient stake for new node",
 					"err", err,
-					"node", newNode,
 					"entity", newNode.EntityID,
 				)
-				return registry.ErrBadEntityForNode
+				return err
 			}
+		}
 
-			var status *registry.NodeStatus
-			if existingNode != nil {
-				// Node exists but is expired, fetch existing status.
-				if status, err = state.NodeStatus(newNode.ID); err != nil {
-					app.logger.Error("RegisterNode: failed to get node status",
-						"err", err,
-					)
-					return registry.ErrInvalidArgument
-				}
+		// Node doesn't exist (or is expired). Create node.
+		if err = state.CreateNode(newNode, sigNode); err != nil {
+			app.logger.Error("RegisterNode: failed to create node",
+				"err", err,
+				"node", newNode,
+				"entity", newNode.EntityID,
+			)
+			return registry.ErrBadEntityForNode
+		}
 
-				// Reset expiration processed flag as the node is live again.
-				status.ExpirationProcessed = false
-			} else {
-				// Node doesn't exist, create empty status.
-				status = &registry.NodeStatus{}
-			}
-
-			if err = state.SetNodeStatus(newNode.ID, status); err != nil {
-				app.logger.Error("RegisterNode: failed to set node status",
+		var status *registry.NodeStatus
+		if existingNode != nil {
+			// Node exists but is expired, fetch existing status.
+			if status, err = state.NodeStatus(newNode.ID); err != nil {
+				app.logger.Error("RegisterNode: failed to get node status",
 					"err", err,
 				)
 				return registry.ErrInvalidArgument
 			}
+
+			// Reset expiration processed flag as the node is live again.
+			status.ExpirationProcessed = false
 		} else {
-			app.logger.Error("RegisterNode: failed to register node",
-				"err", err,
-				"new_node", newNode,
-				"existing_node", existingNode,
-				"entity", newNode.EntityID,
-			)
+			// Node doesn't exist, create empty status.
+			status = &registry.NodeStatus{}
 		}
+
+		if err = state.SetNodeStatus(newNode.ID, status); err != nil {
+			app.logger.Error("RegisterNode: failed to set node status",
+				"err", err,
+			)
+			return registry.ErrInvalidArgument
+		}
+	} else if err != nil {
+		// Something went horribly wrong, and we failed to query the node.
+		app.logger.Error("RegisterNode: failed to query node",
+			"err", err,
+			"new_node", newNode,
+			"existing_node", existingNode,
+			"entity", newNode.EntityID,
+		)
+		return registry.ErrInvalidArgument
 	} else {
-		err := registry.VerifyNodeUpdate(app.logger, existingNode, newNode)
-		if err != nil {
+		// Check that the entity has enough stake for the existing node
+		// registrations.
+		if !params.DebugBypassStake {
+			if err = stakeCache.EnsureNodeRegistrationStake(newNode.EntityID, numEntityNodes); err != nil {
+				app.logger.Error("RegisterNode: insufficient stake for existing nodes",
+					"err", err,
+					"entity", newNode.EntityID,
+				)
+				return err
+			}
+		}
+
+		// The node already exists, validate and update the node's entry.
+		if err = registry.VerifyNodeUpdate(app.logger, existingNode, newNode); err != nil {
 			app.logger.Error("RegisterNode: failed to verify node update",
 				"err", err,
 				"new_node", newNode,
@@ -426,8 +469,7 @@ func (app *registryApplication) registerNode(
 			)
 			return err
 		}
-		err = state.CreateNode(newNode, sigNode)
-		if err != nil {
+		if err = state.CreateNode(newNode, sigNode); err != nil {
 			app.logger.Error("RegisterNode: failed to update node",
 				"err", err,
 				"node", newNode,
@@ -461,7 +503,7 @@ func (app *registryApplication) unfreezeNode(
 
 	// Verify timestamp.
 	if err := registry.VerifyTimestamp(unfreeze.Timestamp, uint64(ctx.Now().Unix())); err != nil {
-		app.logger.Error("UnfreezeNode: INVALID TIMESTAMP",
+		app.logger.Error("UnfreezeNode: invalid timestamp",
 			"unfreeze_timestamp", unfreeze.Timestamp,
 			"now", uint64(ctx.Now().Unix()),
 		)
@@ -534,7 +576,7 @@ func (app *registryApplication) registerRuntime(
 	if !ctx.IsCheckOnly() && !ctx.IsInitChain() {
 		err = registry.VerifyTimestamp(rt.RegistrationTime, uint64(ctx.Now().Unix()))
 		if err != nil {
-			app.logger.Error("RegisterRuntime: INVALID TIMESTAMP",
+			app.logger.Error("RegisterRuntime: invalid timestamp",
 				"runtime_timestamp", rt.RegistrationTime,
 				"now", uint64(ctx.Now().Unix()),
 			)

@@ -359,6 +359,26 @@ func (s *ImmutableState) HasEntityNodes(id signature.PublicKey) (bool, error) {
 	return result, nil
 }
 
+func (s *ImmutableState) NumEntityNodes(id signature.PublicKey) (int, error) {
+	var n int
+	s.Snapshot.IterateRange(
+		signedNodeByEntityKeyFmt.Encode(&id),
+		nil,
+		true,
+		func(key, value []byte) bool {
+			var entityID signature.PublicKey
+			if !signedNodeByEntityKeyFmt.Decode(key, &entityID) || !entityID.Equal(id) {
+				return true
+			}
+
+			n++
+
+			return false
+		},
+	)
+	return n, nil
+}
+
 func (s *ImmutableState) ConsensusParameters() (*registry.ConsensusParameters, error) {
 	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
 	if raw == nil {
