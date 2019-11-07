@@ -5,27 +5,15 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 )
 
 // Client is an Oasis client node.
 type Client struct {
-	net *Network
-	dir *env.Dir
+	Node
 
 	consensusPort uint16
-}
-
-// LogPath returns the path to the node's log.
-func (client *Client) LogPath() string {
-	return nodeLogPath(client.dir)
-}
-
-// SocketPath returns the path to the client's gRPC socket.
-func (client *Client) SocketPath() string {
-	return internalSocketPath(client.dir)
 }
 
 func (client *Client) startNode() error {
@@ -42,7 +30,8 @@ func (client *Client) startNode() error {
 		args = args.clientIndexRuntimes(v.id)
 	}
 
-	if _, err := client.net.startOasisNode(client.dir, nil, args, "client", false, false); err != nil {
+	var err error
+	if client.cmd, client.exitCh, err = client.net.startOasisNode(client.dir, nil, args, "client", false, false); err != nil {
 		return errors.Wrap(err, "oasis/client: failed to launch node")
 	}
 
@@ -63,10 +52,13 @@ func (net *Network) NewClient() (*Client, error) {
 	}
 
 	client := &Client{
-		net:           net,
-		dir:           clientDir,
+		Node: Node{
+			net: net,
+			dir: clientDir,
+		},
 		consensusPort: net.nextNodePort,
 	}
+	client.doStartNode = client.startNode
 
 	net.clients = append(net.clients, client)
 	net.nextNodePort++

@@ -6,15 +6,13 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/storage/database"
 )
 
 // Storage is an Oasis storage node.
-type Storage struct {
-	net *Network
-	dir *env.Dir
+type Storage struct { // nolint: maligned
+	Node
 
 	backend       string
 	entity        *Entity
@@ -26,20 +24,11 @@ type Storage struct {
 }
 
 // StorageCfg is the Oasis storage node configuration.
-type StorageCfg struct {
+type StorageCfg struct { // nolint: maligned
+	NodeCfg
 	Backend       string
 	Entity        *Entity
 	IgnoreApplies bool
-}
-
-// SocketPath returns the path to the storage node's gRPC socket.
-func (worker *Storage) SocketPath() string {
-	return internalSocketPath(worker.dir)
-}
-
-// LogPath returns the path to the node's log.
-func (worker *Storage) LogPath() string {
-	return nodeLogPath(worker.dir)
 }
 
 // IdentityKeyPath returns the path to the node's identity key.
@@ -96,7 +85,8 @@ func (worker *Storage) startNode() error {
 		args = args.workerRuntimeID(v.id)
 	}
 
-	if _, err := worker.net.startOasisNode(worker.dir, nil, args, "storage", false, false); err != nil {
+	var err error
+	if worker.cmd, worker.exitCh, err = worker.net.startOasisNode(worker.dir, nil, args, "storage", false, false); err != nil {
 		return errors.Wrap(err, "oasis/storage: failed to launch node")
 	}
 
@@ -117,8 +107,10 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 	}
 
 	worker := &Storage{
-		net:           net,
-		dir:           storageDir,
+		Node: Node{
+			net: net,
+			dir: storageDir,
+		},
 		backend:       cfg.Backend,
 		entity:        cfg.Entity,
 		ignoreApplies: cfg.IgnoreApplies,
@@ -126,6 +118,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		clientPort:    net.nextNodePort + 1,
 		p2pPort:       net.nextNodePort + 2,
 	}
+	worker.doStartNode = worker.startNode
 
 	net.storageWorkers = append(net.storageWorkers, worker)
 	net.nextNodePort += 3

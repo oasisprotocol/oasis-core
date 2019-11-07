@@ -6,14 +6,12 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
 // Byzantine is an Oasis byzantine node.
 type Byzantine struct {
-	net *Network
-	dir *env.Dir
+	Node
 
 	script string
 	entity *Entity
@@ -24,14 +22,10 @@ type Byzantine struct {
 
 // ByzantineCfg is the Oasis byzantine node configuration.
 type ByzantineCfg struct {
+	NodeCfg
 	Script       string
 	IdentitySeed string
 	Entity       *Entity
-}
-
-// LogPath returns the path to the byzantine node's log.
-func (worker *Byzantine) LogPath() string {
-	return nodeLogPath(worker.dir)
 }
 
 func (worker *Byzantine) startNode() error {
@@ -50,7 +44,8 @@ func (worker *Byzantine) startNode() error {
 		}
 	}
 
-	if _, err := worker.net.startOasisNode(worker.dir, []string{"debug", "byzantine", worker.script}, args, "byzantine", true, false); err != nil {
+	var err error
+	if worker.cmd, worker.exitCh, err = worker.net.startOasisNode(worker.dir, []string{"debug", "byzantine", worker.script}, args, "byzantine", true, false); err != nil {
 		return errors.Wrap(err, "oasis/byzantine: failed to launch node")
 	}
 
@@ -84,13 +79,16 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 	}
 
 	worker := &Byzantine{
-		net:           net,
-		dir:           byzantineDir,
+		Node: Node{
+			net: net,
+			dir: byzantineDir,
+		},
 		script:        cfg.Script,
 		entity:        cfg.Entity,
 		consensusPort: net.nextNodePort,
 		p2pPort:       net.nextNodePort + 1,
 	}
+	worker.doStartNode = worker.startNode
 
 	net.byzantine = append(net.byzantine, worker)
 	net.nextNodePort += 2

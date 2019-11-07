@@ -8,14 +8,12 @@ import (
 	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	iasCmd "github.com/oasislabs/oasis-core/go/oasis-node/cmd/ias"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 )
 
 var mockSPID []byte
 
 type iasProxy struct {
-	net *Network
-	dir *env.Dir
+	Node
 
 	grpcPort uint16
 }
@@ -33,7 +31,8 @@ func (ias *iasProxy) startNode() error {
 		iasDebugMock().
 		iasSPID(mockSPID)
 
-	if _, err := ias.net.startOasisNode(ias.dir, []string{"ias", "proxy"}, args, "ias-proxy", false, false); err != nil {
+	var err error
+	if ias.cmd, ias.exitCh, err = ias.net.startOasisNode(ias.dir, []string{"ias", "proxy"}, args, "ias-proxy", false, false); err != nil {
 		return errors.Wrap(err, "oasis/ias: failed to launch node")
 	}
 
@@ -64,10 +63,13 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 	}
 
 	net.iasProxy = &iasProxy{
-		net:      net,
-		dir:      iasDir,
+		Node: Node{
+			net: net,
+			dir: iasDir,
+		},
 		grpcPort: net.nextNodePort,
 	}
+	net.iasProxy.doStartNode = net.iasProxy.startNode
 
 	net.nextNodePort++
 

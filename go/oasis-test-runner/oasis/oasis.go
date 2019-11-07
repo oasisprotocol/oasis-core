@@ -44,6 +44,59 @@ const (
 	maxNodes = 32 // Arbitrary
 )
 
+// Node defines the common fields for all node types.
+type Node struct {
+	net *Network
+	dir *env.Dir
+	cmd *exec.Cmd
+
+	exitCh chan error
+
+	restartable bool
+	doStartNode func() error
+}
+
+// Exit returns a channel that will close once the node shuts down.
+// If the node shut down due to an error, that error will be sent through this channel.
+func (n *Node) Exit() chan error {
+	return n.exitCh
+}
+
+// SocketPath returns the path to the node's gRPC socket.
+func (n *Node) SocketPath() string {
+	return internalSocketPath(n.dir)
+}
+
+// LogPath returns the path to the node's log.
+func (n *Node) LogPath() string {
+	return nodeLogPath(n.dir)
+}
+
+func (n *Node) stopNode() error {
+	if n.cmd == nil {
+		return nil
+	}
+
+	// Stop the node and wait for it to stop.
+	_ = n.cmd.Process.Kill()
+	_ = n.cmd.Wait()
+	n.cmd = nil
+	return nil
+}
+
+// Restart kills the node, waits for it to stop, and starts it again.
+func (n *Node) Restart() error {
+	if err := n.stopNode(); err != nil {
+		return err
+	}
+	return n.doStartNode()
+}
+
+// NodeCfg defines the common node configuration options.
+type NodeCfg struct {
+	Restartable bool
+}
+
 // CmdAttrs is the SysProcAttr that will ensure graceful cleanup.
 var CmdAttrs = &syscall.SysProcAttr{
 	Pdeathsig: syscall.SIGKILL,
@@ -375,7 +428,7 @@ func (net *Network) startOasisNode(
 	descr string,
 	termEarlyOk bool,
 	restartable bool,
-) (*exec.Cmd, error) {
+) (*exec.Cmd, chan error, error) {
 	baseArgs := []string{
 		"--datadir", dir.String(),
 		"--log.level", "debug",
@@ -394,7 +447,7 @@ func (net *Network) startOasisNode(
 
 	w, err := dir.NewLogWriter(logConsoleFile)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	net.env.AddOnCleanup(func() {
 		_ = w.Close()
@@ -411,7 +464,7 @@ func (net *Network) startOasisNode(
 	)
 
 	if err = cmd.Start(); err != nil {
-		return nil, errors.Wrap(err, "oasis: failed to start node")
+		return nil, nil, errors.Wrap(err, "oasis: failed to start node")
 	}
 
 	if len(net.cfg.LogWatcherHandlers) > 0 {
@@ -421,25 +474,31 @@ func (net *Network) startOasisNode(
 			Handlers: net.cfg.LogWatcherHandlers,
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		net.env.AddOnCleanup(logFileWatcher.Cleanup)
 		net.logWatchers = append(net.logWatchers, logFileWatcher)
 	}
 
 	doneCh := net.env.AddTermOnCleanup(cmd)
+	exitCh := make(chan error, 1)
 	go func() {
 		cmdErr := <-doneCh
 		net.logger.Debug("node terminated",
 			"err", cmdErr,
 		)
 
+		if cmdErr != nil {
+			exitCh <- cmdErr
+		}
+		close(exitCh)
+
 		if cmdErr != nil && !restartable && (cmdErr != env.ErrEarlyTerm || !termEarlyOk) {
 			net.errCh <- errors.Wrapf(cmdErr, "oasis: %s node terminated", descr)
 		}
 	}()
 
-	return cmd, nil
+	return cmd, exitCh, nil
 }
 
 func (net *Network) makeGenesis() error {

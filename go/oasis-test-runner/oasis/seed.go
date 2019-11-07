@@ -6,13 +6,11 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/tendermint/crypto"
 )
 
 type seedNode struct {
-	net *Network
-	dir *env.Dir
+	Node
 
 	tmAddress     string
 	consensusPort uint16
@@ -24,7 +22,8 @@ func (seed *seedNode) startNode() error {
 		tendermintCoreListenAddress(seed.consensusPort).
 		tendermintSeedMode()
 
-	if _, err := seed.net.startOasisNode(seed.dir, nil, args, "seed", false, false); err != nil {
+	var err error
+	if seed.cmd, seed.exitCh, err = seed.net.startOasisNode(seed.dir, nil, args, "seed", false, false); err != nil {
 		return errors.Wrap(err, "oasis/seed: failed to launch node")
 	}
 
@@ -58,11 +57,14 @@ func (net *Network) newSeedNode() (*seedNode, error) {
 	seedPublicKey := seedIdentity.NodeSigner.Public()
 
 	seedNode := &seedNode{
-		net:           net,
-		dir:           seedDir,
+		Node: Node{
+			net: net,
+			dir: seedDir,
+		},
 		tmAddress:     crypto.PublicKeyToTendermint(&seedPublicKey).Address().String(),
 		consensusPort: net.nextNodePort,
 	}
+	seedNode.doStartNode = seedNode.startNode
 	net.seedNode = seedNode
 	net.nextNodePort++
 
