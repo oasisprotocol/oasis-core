@@ -1,0 +1,19 @@
+{
+  "params": {
+    "debonding_interval": 1,
+    "gas_costs": {
+      "transfer": 10,
+      "burn": 10,
+      "add_escrow": 10,
+      "reclaim_escrow": 10
+    }
+  },
+  "total_supply": "1000",
+  "ledger": {
+    "ADoWBAua0sJigqXO82hLaC0dDahZwm8bXQHNj7/xtKQ=": {
+      "general": {
+        "balance": "1000"
+      }
+    }
+  }
+}
