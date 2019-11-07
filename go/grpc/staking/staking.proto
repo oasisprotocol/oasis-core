@@ -12,6 +12,7 @@ service Staking {
 	rpc GetThreshold(GetThresholdRequest) returns (GetThresholdResponse) {}
 	rpc GetAccounts(GetAccountsRequest) returns (GetAccountsResponse) {} // TODO: Stream this?
 	rpc GetAccountInfo(GetAccountInfoRequest) returns (GetAccountInfoResponse) {}
+	rpc GetDebondingDelegations(GetDebondingDelegationsRequest) returns (GetDebondingDelegationsResponse) {}
 
 	// Calls that mutate state.
 	rpc Transfer(TransferRequest) returns (TransferResponse) {}
@@ -82,9 +83,16 @@ message GetAccountInfoRequest {
 }
 
 message GetAccountInfoResponse {
-	bytes general_balance = 1;
-	bytes escrow_balance = 2;
-	uint64 nonce = 3;
+	bytes account = 1;
+}
+
+message GetDebondingDelegationsRequest {
+	bytes owner = 1;
+	int64 height = 2;
+}
+
+message GetDebondingDelegationsResponse {
+	bytes delegations = 1;
 }
 
 message TransferRequest {

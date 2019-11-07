@@ -110,17 +110,17 @@ type Backend interface {
 
 	// WatchTransfers returns a channel that produces a stream of TranserEvent
 	// on all balance transfers.
-	WatchTransfers() (<-chan *TransferEvent, *pubsub.Subscription)
+	WatchTransfers(ctx context.Context) (<-chan *TransferEvent, pubsub.ClosableSubscription, error)
 
 	// WatchBurns returns a channel of BurnEvent on token destruction.
-	WatchBurns() (<-chan *BurnEvent, *pubsub.Subscription)
+	WatchBurns(ctx context.Context) (<-chan *BurnEvent, pubsub.ClosableSubscription, error)
 
 	// WatchEscrows returns a channel that produces a stream of `*EscrowEvent`,
 	// `*TakeEscrowEvent`, and `*ReleaseEscrowEvent` when entities add to their
 	// escrow balance, get tokens deducted from their escrow balance, and
 	// have their escrow balance released into their general balance
 	// respectively.
-	WatchEscrows() (<-chan interface{}, *pubsub.Subscription)
+	WatchEscrows(ctx context.Context) (<-chan interface{}, pubsub.ClosableSubscription, error)
 
 	// ToGenesis returns the genesis state at specified block height.
 	ToGenesis(ctx context.Context, height int64) (*Genesis, error)

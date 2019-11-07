@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 
 	beaconTests "github.com/oasislabs/oasis-core/go/beacon/tests"
 	clientTests "github.com/oasislabs/oasis-core/go/client/tests"
@@ -27,6 +28,7 @@ import (
 	registryTests "github.com/oasislabs/oasis-core/go/registry/tests"
 	roothashTests "github.com/oasislabs/oasis-core/go/roothash/tests"
 	schedulerTests "github.com/oasislabs/oasis-core/go/scheduler/tests"
+	stakingClient "github.com/oasislabs/oasis-core/go/staking/client"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	storageClientTests "github.com/oasislabs/oasis-core/go/storage/client/tests"
@@ -196,6 +198,7 @@ func TestNode(t *testing.T) {
 
 		// Staking requires a registered node that is a validator.
 		{"Staking", testStaking},
+		{"StakingClient", testStakingClient},
 
 		// TestStorageClientWithNode runs storage tests against a storage client
 		// connected to this node.
@@ -340,6 +343,18 @@ func testStaking(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
 	stakingTests.StakingImplementationTests(t, node.Staking, timeSource, node.Registry, node.RootHash, node.Identity, node.entity, node.entitySigner, testRuntimeID)
+}
+
+func testStakingClient(t *testing.T, node *testNode) {
+	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+
+	// Create a client backend connected to the local node's internal socket.
+	conn, err := grpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"), grpc.WithInsecure())
+	require.NoError(t, err, "Dial")
+
+	client, err := stakingClient.New(conn)
+	require.NoError(t, err, "stakingClient.New")
+	stakingTests.StakingClientImplementationTests(t, client, timeSource)
 }
 
 func testRootHash(t *testing.T, node *testNode) {

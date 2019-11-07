@@ -8,7 +8,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
 	pb "github.com/oasislabs/oasis-core/go/grpc/staking"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 )
@@ -107,20 +106,25 @@ func (s *grpcServer) GetAccountInfo(ctx context.Context, req *pb.GetAccountInfoR
 		return nil, err
 	}
 
-	var escrowBalance quantity.Quantity
-	if err = escrowBalance.Add(&account.Escrow.Active.Balance); err != nil {
-		return nil, err
-	}
-	if err = escrowBalance.Add(&account.Escrow.Debonding.Balance); err != nil {
+	return &pb.GetAccountInfoResponse{
+		Account: cbor.Marshal(account),
+	}, nil
+}
+
+func (s *grpcServer) GetDebondingDelegations(ctx context.Context, req *pb.GetDebondingDelegationsRequest) (*pb.GetDebondingDelegationsResponse, error) {
+	var owner signature.PublicKey
+	if err := owner.UnmarshalBinary(req.GetOwner()); err != nil {
 		return nil, err
 	}
 
-	var resp pb.GetAccountInfoResponse
-	resp.GeneralBalance, _ = account.General.Balance.MarshalBinary()
-	resp.EscrowBalance, _ = escrowBalance.MarshalBinary()
-	resp.Nonce = account.General.Nonce
+	delegations, err := s.backend.DebondingDelegations(ctx, owner, req.GetHeight())
+	if err != nil {
+		return nil, err
+	}
 
-	return &resp, nil
+	return &pb.GetDebondingDelegationsResponse{
+		Delegations: cbor.Marshal(delegations),
+	}, nil
 }
 
 func (s *grpcServer) Transfer(ctx context.Context, req *pb.TransferRequest) (*pb.TransferResponse, error) {
@@ -176,7 +180,11 @@ func (s *grpcServer) ReclaimEscrow(ctx context.Context, req *pb.ReclaimEscrowReq
 }
 
 func (s *grpcServer) WatchTransfers(req *pb.WatchTransfersRequest, stream pb.Staking_WatchTransfersServer) error {
-	ch, sub := s.backend.WatchTransfers()
+	ctx := stream.Context()
+	ch, sub, err := s.backend.WatchTransfers(ctx)
+	if err != nil {
+		return err
+	}
 	defer sub.Close()
 
 	for {
@@ -187,7 +195,7 @@ func (s *grpcServer) WatchTransfers(req *pb.WatchTransfersRequest, stream pb.Sta
 
 		select {
 		case ev, ok = <-ch:
-		case <-stream.Context().Done():
+		case <-ctx.Done():
 		}
 		if !ok {
 			break
@@ -205,7 +213,11 @@ func (s *grpcServer) WatchTransfers(req *pb.WatchTransfersRequest, stream pb.Sta
 }
 
 func (s *grpcServer) WatchBurns(req *pb.WatchBurnsRequest, stream pb.Staking_WatchBurnsServer) error {
-	ch, sub := s.backend.WatchBurns()
+	ctx := stream.Context()
+	ch, sub, err := s.backend.WatchBurns(ctx)
+	if err != nil {
+		return err
+	}
 	defer sub.Close()
 
 	for {
@@ -216,7 +228,7 @@ func (s *grpcServer) WatchBurns(req *pb.WatchBurnsRequest, stream pb.Staking_Wat
 
 		select {
 		case ev, ok = <-ch:
-		case <-stream.Context().Done():
+		case <-ctx.Done():
 		}
 		if !ok {
 			break
@@ -234,7 +246,11 @@ func (s *grpcServer) WatchBurns(req *pb.WatchBurnsRequest, stream pb.Staking_Wat
 }
 
 func (s *grpcServer) WatchEscrows(req *pb.WatchEscrowsRequest, stream pb.Staking_WatchEscrowsServer) error {
-	ch, sub := s.backend.WatchEscrows()
+	ctx := stream.Context()
+	ch, sub, err := s.backend.WatchEscrows(ctx)
+	if err != nil {
+		return err
+	}
 	defer sub.Close()
 
 	for {
@@ -245,7 +261,7 @@ func (s *grpcServer) WatchEscrows(req *pb.WatchEscrowsRequest, stream pb.Staking
 
 		select {
 		case ev, ok = <-ch:
-		case <-stream.Context().Done():
+		case <-ctx.Done():
 		}
 		if !ok {
 			break

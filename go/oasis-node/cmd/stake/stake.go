@@ -11,6 +11,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
@@ -223,14 +224,15 @@ func getAccountInfo(ctx context.Context, cmd *cobra.Command, id signature.Public
 			return err
 		}
 
+		var account api.Account
+		if err = cbor.Unmarshal(resp.GetAccount(), &account); err != nil {
+			return err
+		}
+
 		ai.ID = id
-		if err = ai.GeneralBalance.UnmarshalBinary(resp.GetGeneralBalance()); err != nil {
-			return err
-		}
-		if err = ai.EscrowBalance.UnmarshalBinary(resp.GetEscrowBalance()); err != nil {
-			return err
-		}
-		ai.Nonce = resp.Nonce
+		ai.GeneralBalance = account.General.Balance
+		ai.EscrowBalance = account.Escrow.Active.Balance
+		ai.Nonce = account.General.Nonce
 
 		return nil
 	})
