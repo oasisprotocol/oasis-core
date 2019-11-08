@@ -427,12 +427,6 @@ type DebondingDelegation struct {
 	DebondEndTime epochtime.EpochTime `json:"debond_end"`
 }
 
-// RewardStep is one of the time periods in the reward schedule.
-type RewardStep struct {
-	Until epochtime.EpochTime `json:"until"`
-	Scale quantity.Quantity   `json:"scale"`
-}
-
 // Genesis is the initial ledger balances at genesis for use in the genesis
 // block and test cases.
 type Genesis struct {
