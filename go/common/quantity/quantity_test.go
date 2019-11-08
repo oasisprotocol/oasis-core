@@ -46,6 +46,18 @@ func TestFromBigInt(t *testing.T) {
 	require.True(q.eqInt(23), "FromBigInt(23) value")
 }
 
+func TestFromInt64(t *testing.T) {
+	require := require.New(t)
+
+	var q Quantity
+	err := q.FromInt64(-1)
+	require.Equal(ErrInvalidQuantity, err, "FromInt64(-1)")
+
+	err = q.FromInt64(23)
+	require.NoError(err, "FromInt64(23)")
+	require.True(q.eqInt(23), "FromInt64(23) value")
+}
+
 func TestQuantityBinaryRoundTrip(t *testing.T) {
 	const expected int = 0xdeadbeef
 

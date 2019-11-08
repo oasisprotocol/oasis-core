@@ -74,6 +74,11 @@ func (q *Quantity) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// FromInt64 converts from an int64 to a Quantity.
+func (q *Quantity) FromInt64(n int64) error {
+	return q.FromBigInt(big.NewInt(n))
+}
+
 // FromBigInt converts from a big.Int to a Quantity.
 func (q *Quantity) FromBigInt(n *big.Int) error {
 	if n == nil || !isValid(n) {
