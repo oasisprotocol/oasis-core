@@ -4,6 +4,8 @@ import (
 	"flag"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var run = flag.Bool("integration.run", false, "Run the node")
@@ -19,5 +21,7 @@ func TestIntegration(t *testing.T) {
 	launch()
 
 	// Suppress coverage report on stdout.
-	_ = os.Stdout.Close()
+	f, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	require.NoError(t, err, "opening %s", os.DevNull)
+	os.Stdout = f
 }
