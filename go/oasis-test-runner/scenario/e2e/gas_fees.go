@@ -71,7 +71,7 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			oasis.EntityCfg{AllowEntitySignedNodes: true},
 		},
 		Validators: []oasis.ValidatorFixture{
-			oasis.ValidatorFixture{Entity: 1},
+			oasis.ValidatorFixture{Entity: 1, MinGasPrice: 1},
 		},
 	}, nil
 }
@@ -221,6 +221,10 @@ func testStakingGas(
 	// This should be a reasonable amount that the account can pay.
 	_ = amountOk.FromInt64(10)
 
+	var amountLow quantity.Quantity
+	// This amount gives a lower gas price than accepted by the validator.
+	_ = amountLow.FromInt64(5)
+
 	for _, t := range []struct {
 		name      string
 		fee       gas.Fee
@@ -232,6 +236,8 @@ func testStakingGas(
 		{"NoFees", gas.Fee{}, 50, false, false},
 		// Free gas.
 		{"FreeGas", gas.Fee{Gas: 10}, 50, false, false},
+		// Gas price too low.
+		{"LowGasPrice", gas.Fee{Amount: amountLow, Gas: 10}, 50, false, false},
 		// Not enough gas.
 		{"OutOfGas", gas.Fee{Amount: amountOk, Gas: 9}, 50, true, false},
 		// No balance to pay for gas.

@@ -145,6 +145,11 @@ func (c *Context) State() *iavl.MutableTree {
 	return c.state.DeliverTxTree()
 }
 
+// AppState returns the application state.
+func (c *Context) AppState() *ApplicationState {
+	return c.state
+}
+
 // BlockHeight returns the current block height.
 func (c *Context) BlockHeight() int64 {
 	return c.state.BlockHeight()

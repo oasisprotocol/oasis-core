@@ -110,6 +110,8 @@ type ValidatorFixture struct {
 	Restartable bool `json:"restartable"`
 
 	Entity int `json:"entity"`
+
+	MinGasPrice uint64 `json:"min_gas_price"`
 }
 
 // Create instantiates the validator described by the fixture.
@@ -123,7 +125,8 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 		NodeCfg: NodeCfg{
 			Restartable: f.Restartable,
 		},
-		Entity: entity,
+		Entity:      entity,
+		MinGasPrice: f.MinGasPrice,
 	})
 }
 

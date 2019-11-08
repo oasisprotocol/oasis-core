@@ -69,6 +69,9 @@ const (
 
 	// CfgDebugP2PAddrBookLenient configures allowing non-routable addresses.
 	CfgDebugP2PAddrBookLenient = "tendermint.debug.addr_book_lenient"
+
+	// CfgConsensusMinGasPrice configures the minimum gas price for this validator.
+	CfgConsensusMinGasPrice = "consensus.tendermint.min_gas_price"
 )
 
 var (
@@ -646,6 +649,7 @@ func (t *tendermintService) lazyInit() error {
 		DataDir:         t.dataDir,
 		Pruning:         pruneCfg,
 		HaltEpochHeight: t.genesis.HaltEpoch,
+		MinGasPrice:     viper.GetUint64(CfgConsensusMinGasPrice),
 	}
 	t.mux, err = abci.NewApplicationServer(t.ctx, appConfig)
 	if err != nil {
@@ -1033,6 +1037,7 @@ func init() {
 	Flags.String(CfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
 	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 	Flags.Bool(CfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
+	Flags.Uint64(CfgConsensusMinGasPrice, 0, "minimum gas price")
 
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(db.Flags)

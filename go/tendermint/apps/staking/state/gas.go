@@ -36,12 +36,6 @@ func AuthenticateAndPayFees(
 		return nil, staking.ErrInvalidNonce
 	}
 
-	callerGasPrice := fee.GasPrice()
-	// Make sure that gas price is higher than zero.
-	if callerGasPrice.IsZero() {
-		return nil, gas.ErrGasPriceTooLow
-	}
-
 	if ctx.IsCheckOnly() {
 		// Check that there is enough balance to pay fees. For the non-CheckTx case
 		// this happens during Move below.
@@ -49,8 +43,13 @@ func AuthenticateAndPayFees(
 			return nil, gas.ErrInsufficientFeeBalance
 		}
 
-		// TODO: Check fee against minimum gas price if in CheckTx.
-		_ = callerGasPrice
+		// Check fee against minimum gas price if in CheckTx.
+		// NOTE: This is non-deterministic as it is derived from the local validator
+		//       configuration, but as long as it is only done in CheckTx, this is ok.
+		callerGasPrice := fee.GasPrice()
+		if callerGasPrice.Cmp(ctx.AppState().MinGasPrice()) < 0 {
+			return nil, gas.ErrGasPriceTooLow
+		}
 
 		return nil, nil
 	}

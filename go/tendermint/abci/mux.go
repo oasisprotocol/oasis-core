@@ -23,6 +23,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/version"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
@@ -66,6 +67,7 @@ type ApplicationConfig struct {
 	DataDir         string
 	Pruning         PruneConfig
 	HaltEpochHeight epochtime.EpochTime
+	MinGasPrice     uint64
 }
 
 // Application is the interface implemented by multiplexed Oasis-specific
@@ -812,6 +814,8 @@ type ApplicationState struct {
 	haltMode        bool
 	haltEpochHeight epochtime.EpochTime
 
+	minGasPrice quantity.Quantity
+
 	metricsCloseCh  chan struct{}
 	metricsClosedCh chan struct{}
 }
@@ -924,6 +928,11 @@ func (s *ApplicationState) Genesis() *genesis.Document {
 	}
 
 	return st
+}
+
+// MinGasPrice returns the configured minimum gas price.
+func (s *ApplicationState) MinGasPrice() *quantity.Quantity {
+	return &s.minGasPrice
 }
 
 func (s *ApplicationState) doCommit() error {
@@ -1061,6 +1070,11 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*Applicat
 		return nil, err
 	}
 
+	var minGasPrice quantity.Quantity
+	if err = minGasPrice.FromInt64(int64(cfg.MinGasPrice)); err != nil {
+		return nil, fmt.Errorf("state: invalid minimum gas price: %w", err)
+	}
+
 	s := &ApplicationState{
 		logger:          logging.GetLogger("abci-mux/state"),
 		ctx:             ctx,
@@ -1071,6 +1085,7 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*Applicat
 		blockHash:       blockHash,
 		blockHeight:     blockHeight,
 		haltEpochHeight: cfg.HaltEpochHeight,
+		minGasPrice:     minGasPrice,
 		metricsCloseCh:  make(chan struct{}),
 		metricsClosedCh: make(chan struct{}),
 	}

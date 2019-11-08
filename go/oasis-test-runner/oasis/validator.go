@@ -16,6 +16,8 @@ type Validator struct {
 
 	entity *Entity
 
+	minGasPrice uint64
+
 	consensusPort uint16
 	grpcDebugPort uint16
 }
@@ -24,6 +26,8 @@ type Validator struct {
 type ValidatorCfg struct {
 	NodeCfg
 	Entity *Entity
+
+	MinGasPrice uint64
 }
 
 func (val *Validator) toGenesisArgs() []string {
@@ -61,6 +65,7 @@ func (val *Validator) startNode() error {
 		debugAllowTestKeys().
 		consensusValidator().
 		tendermintCoreListenAddress(val.consensusPort).
+		tendermintMinGasPrice(val.minGasPrice).
 		grpcDebugPort(val.grpcDebugPort).
 		storageBackend("client").
 		appendNetwork(val.net).
@@ -94,6 +99,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			restartable: cfg.Restartable,
 		},
 		entity:        cfg.Entity,
+		minGasPrice:   cfg.MinGasPrice,
 		consensusPort: net.nextNodePort,
 		grpcDebugPort: net.nextNodePort + 1,
 	}
