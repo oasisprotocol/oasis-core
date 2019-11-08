@@ -403,8 +403,9 @@ type GeneralAccount struct {
 // EscrowAccount is an escrow account the balance of which is subject to
 // special delegation provisions and a debonding period.
 type EscrowAccount struct {
-	Active    SharePool `json:"active"`
-	Debonding SharePool `json:"debonding"`
+	Active             SharePool          `json:"active"`
+	Debonding          SharePool          `json:"debonding"`
+	CommissionSchedule CommissionSchedule `json:"commission_schedule"`
 }
 
 // Account is an entry in the staking ledger.
