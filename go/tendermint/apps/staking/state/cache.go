@@ -50,7 +50,7 @@ func (sc *StakeCache) EnsureNodeRegistrationStake(id signature.PublicKey, n int)
 		return fmt.Errorf("staking/tendermint: failed to derive node target threshold: %w", err)
 	}
 
-	escrowBalance := sc.getEscrowBalance(id)
+	escrowBalance := sc.GetEscrowBalance(id)
 	if escrowBalance.Cmp(targetThreshold) < 0 {
 		return staking.ErrInsufficientStake
 	}
@@ -71,7 +71,7 @@ func (sc *StakeCache) EnsureSufficientStake(id signature.PublicKey, thresholds [
 		}
 	}
 
-	escrowBalance := sc.getEscrowBalance(id)
+	escrowBalance := sc.GetEscrowBalance(id)
 	if escrowBalance.Cmp(&targetThreshold) < 0 {
 		return staking.ErrInsufficientStake
 	}
@@ -79,7 +79,8 @@ func (sc *StakeCache) EnsureSufficientStake(id signature.PublicKey, thresholds [
 	return nil
 }
 
-func (sc *StakeCache) getEscrowBalance(id signature.PublicKey) staking.Quantity {
+// GetEscrowBalance returns the escrow balance of the account owned by id.
+func (sc *StakeCache) GetEscrowBalance(id signature.PublicKey) staking.Quantity {
 	escrowBalance := sc.balances[id.ToMapKey()]
 	if escrowBalance == nil {
 		state := NewMutableState(sc.ctx.State())
