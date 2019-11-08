@@ -642,7 +642,12 @@ func (t *tendermintService) lazyInit() error {
 	pruneNumKept := int64(viper.GetInt(cfgABCIPruneNumKept))
 	pruneCfg.NumKept = pruneNumKept
 
-	t.mux, err = abci.NewApplicationServer(t.ctx, t.dataDir, &pruneCfg, t.genesis.HaltEpoch)
+	appConfig := &abci.ApplicationConfig{
+		DataDir:         t.dataDir,
+		Pruning:         pruneCfg,
+		HaltEpochHeight: t.genesis.HaltEpoch,
+	}
+	t.mux, err = abci.NewApplicationServer(t.ctx, appConfig)
 	if err != nil {
 		return err
 	}

@@ -61,6 +61,13 @@ var (
 	errOversizedTx = fmt.Errorf("mux: oversized transaction")
 )
 
+// ApplicationConfig is the configuration for the consensus application.
+type ApplicationConfig struct {
+	DataDir         string
+	Pruning         PruneConfig
+	HaltEpochHeight epochtime.EpochTime
+}
+
 // Application is the interface implemented by multiplexed Oasis-specific
 // ABCI applications.
 type Application interface {
@@ -218,12 +225,12 @@ func (a *ApplicationServer) SetEpochtime(epochTime epochtime.Backend) {
 
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
-func NewApplicationServer(ctx context.Context, dataDir string, pruneCfg *PruneConfig, haltEpochHeight epochtime.EpochTime) (*ApplicationServer, error) {
+func NewApplicationServer(ctx context.Context, cfg *ApplicationConfig) (*ApplicationServer, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(abciCollectors...)
 	})
 
-	mux, err := newABCIMux(ctx, dataDir, pruneCfg, haltEpochHeight)
+	mux, err := newABCIMux(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -763,8 +770,8 @@ func (mux *abciMux) extractAppFromTx(tx []byte) (Application, error) {
 	return app, nil
 }
 
-func newABCIMux(ctx context.Context, dataDir string, pruneCfg *PruneConfig, haltEpochHeight epochtime.EpochTime) (*abciMux, error) {
-	state, err := newApplicationState(ctx, dataDir, pruneCfg, haltEpochHeight)
+func newABCIMux(ctx context.Context, cfg *ApplicationConfig) (*abciMux, error) {
+	state, err := newApplicationState(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -1020,8 +1027,8 @@ func (s *ApplicationState) metricsWorker() {
 	}
 }
 
-func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneConfig, haltEpochHeight epochtime.EpochTime) (*ApplicationState, error) {
-	db, err := db.New(filepath.Join(dataDir, "abci-mux-state"), false)
+func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*ApplicationState, error) {
+	db, err := db.New(filepath.Join(cfg.DataDir, "abci-mux-state"), false)
 	if err != nil {
 		return nil, err
 	}
@@ -1048,7 +1055,7 @@ func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneCon
 		return nil, fmt.Errorf("state: inconsistent trees")
 	}
 
-	statePruner, err := newStatePruner(pruneCfg, deliverTxTree, blockHeight)
+	statePruner, err := newStatePruner(&cfg.Pruning, deliverTxTree, blockHeight)
 	if err != nil {
 		db.Close()
 		return nil, err
@@ -1063,7 +1070,7 @@ func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneCon
 		statePruner:     statePruner,
 		blockHash:       blockHash,
 		blockHeight:     blockHeight,
-		haltEpochHeight: haltEpochHeight,
+		haltEpochHeight: cfg.HaltEpochHeight,
 		metricsCloseCh:  make(chan struct{}),
 		metricsClosedCh: make(chan struct{}),
 	}
