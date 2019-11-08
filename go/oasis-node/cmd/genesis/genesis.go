@@ -61,6 +61,7 @@ const (
 	cfgSchedulerMaxBatchSizeBytes = "worker.txnscheduler.batching.max_batch_size_bytes"
 
 	// Scheduler config flags.
+	cfgSchedulerMinValidators         = "scheduler.min_validators"
 	cfgSchedulerDebugBypassStake      = "scheduler.debug.bypass_stake" // nolint: gosec
 	cfgSchedulerDebugStaticValidators = "scheduler.debug.static_validators"
 
@@ -175,6 +176,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	doc.Scheduler = scheduler.Genesis{
 		Parameters: scheduler.ConsensusParameters{
+			MinValidators:         viper.GetInt(cfgSchedulerMinValidators),
 			DebugBypassStake:      viper.GetBool(cfgSchedulerDebugBypassStake),
 			DebugStaticValidators: viper.GetBool(cfgSchedulerDebugStaticValidators),
 		},
@@ -619,6 +621,7 @@ func init() {
 	initGenesisFlags.String(cfgSchedulerMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
 
 	// Scheduler config flags.
+	initGenesisFlags.Int(cfgSchedulerMinValidators, 1, "minumum number of validators")
 	initGenesisFlags.Bool(cfgSchedulerDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	initGenesisFlags.Bool(cfgSchedulerDebugStaticValidators, false, "bypass all validator elections (UNSAFE)")
 

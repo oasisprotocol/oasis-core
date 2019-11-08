@@ -185,6 +185,10 @@ type Genesis struct {
 
 // ConsensusParameters are the scheduler consensus parameters.
 type ConsensusParameters struct {
+	// MinValidators is the minimum number of validators that MUST be
+	// present in elected validator sets.
+	MinValidators int `json:"min_validators"`
+
 	// DebugBypassStake is true iff the scheduler should bypass all of
 	// the staking related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake"`

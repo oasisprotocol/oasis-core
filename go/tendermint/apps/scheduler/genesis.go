@@ -32,6 +32,10 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 		return nil
 	}
 
+	if doc.Scheduler.Parameters.MinValidators <= 0 {
+		return fmt.Errorf("tendermint/scheduler: minimum number of validators not configured")
+	}
+
 	regState := registryState.NewMutableState(ctx.State())
 	nodes, err := regState.Nodes()
 	if err != nil {
