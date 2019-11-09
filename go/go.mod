@@ -2,9 +2,9 @@ module github.com/oasislabs/oasis-core/go
 
 replace (
 	github.com/tendermint/iavl => github.com/oasislabs/iavl v0.12.0-ekiden3
-	github.com/tendermint/tendermint => github.com/oasislabs/tendermint v0.32.7-oasis1
+	github.com/tendermint/tendermint => github.com/oasislabs/tendermint v0.32.7-oasis2
 	golang.org/x/crypto/curve25519 => github.com/oasislabs/ed25519/extra/x25519 v0.0.0-20191022155220-a426dcc8ad5f
-	golang.org/x/crypto/ed25519 => github.com/oasislabs/ed25519 v0.0.0-20191022155220-a426dcc8ad5f
+	golang.org/x/crypto/ed25519 => github.com/oasislabs/ed25519 v0.0.0-20191109133925-b197a691e30d
 )
 
 require (
@@ -44,7 +44,7 @@ require (
 	github.com/multiformats/go-multiaddr-net v0.0.1
 	github.com/multiformats/go-multihash v0.0.6 // indirect
 	github.com/oasislabs/deoxysii v0.0.0-20190807103041-6159f99c2236
-	github.com/oasislabs/ed25519 v0.0.0-20191022155220-a426dcc8ad5f
+	github.com/oasislabs/ed25519 v0.0.0-20191109133925-b197a691e30d
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pelletier/go-toml v1.4.0 // indirect
 	github.com/pkg/errors v0.8.1
