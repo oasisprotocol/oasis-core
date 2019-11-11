@@ -47,7 +47,9 @@ import (
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	staking "github.com/oasislabs/oasis-core/go/staking"
+	"github.com/oasislabs/oasis-core/go/sentry"
+	sentryAPI "github.com/oasislabs/oasis-core/go/sentry/api"
+	"github.com/oasislabs/oasis-core/go/staking"
 	stakingAPI "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/storage"
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
@@ -57,6 +59,7 @@ import (
 	keymanagerWorker "github.com/oasislabs/oasis-core/go/worker/keymanager"
 	"github.com/oasislabs/oasis-core/go/worker/merge"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
+	workerSentry "github.com/oasislabs/oasis-core/go/worker/sentry"
 	workerStorage "github.com/oasislabs/oasis-core/go/worker/storage"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
 )
@@ -104,6 +107,7 @@ type Node struct {
 	Registry  registryAPI.Backend
 	RootHash  roothash.Backend
 	Scheduler scheduler.Backend
+	Sentry    sentryAPI.Backend
 	Staking   stakingAPI.Backend
 	Storage   storageAPI.Backend
 	IAS       *ias.IAS
@@ -117,6 +121,7 @@ type Node struct {
 	StorageWorker              *workerStorage.Worker
 	TransactionSchedulerWorker *txnscheduler.Worker
 	MergeWorker                *merge.Worker
+	SentryWorker               *workerSentry.Worker
 	P2P                        *p2p.P2P
 	RegistrationWorker         *registration.Worker
 }
@@ -158,6 +163,10 @@ func (n *Node) initBackends() error {
 	dataDir := cmdCommon.DataDir()
 
 	var err error
+
+	if n.Sentry, err = sentry.New(n.Consensus); err != nil {
+		return err
+	}
 
 	if n.Storage, err = storage.New(n.svcMgr.Ctx, dataDir, n.Identity, n.Scheduler, n.Registry); err != nil {
 		return err
@@ -229,8 +238,9 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	n.svcMgr.Register(n.CommonWorker.Grpc)
 	n.svcMgr.Register(n.CommonWorker)
 
-	// Initialize the worker registration.
 	workerCommonCfg := n.CommonWorker.GetConfig()
+
+	// Initialize the worker registration.
 	n.RegistrationWorker, err = registration.New(
 		dataDir,
 		n.Epochtime,
@@ -298,6 +308,17 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.Register(n.ComputeWorker)
 
+	// Initialize the sentry worker.
+	n.SentryWorker, err = workerSentry.New(
+		&workerCommonCfg,
+		n.Sentry,
+		n.Identity,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.SentryWorker)
+
 	// Initialize the transaction scheduler.
 	n.TransactionSchedulerWorker, err = txnscheduler.New(
 		n.CommonWorker,
@@ -336,6 +357,11 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 	// Start the key manager worker.
 	if err = kmSvc.Start(); err != nil {
+		return err
+	}
+
+	// Start the sentry worker.
+	if err = n.SentryWorker.Start(); err != nil {
 		return err
 	}
 
@@ -491,7 +517,7 @@ func newNode(testNode bool) (*Node, error) {
 	// Depends on global tracer.
 	node.grpcInternal, err = cmdGrpc.NewServerLocal(false)
 	if err != nil {
-		logger.Error("failed to initialize gRPC server",
+		logger.Error("failed to initialize internal gRPC server",
 			"err", err,
 		)
 		return nil, err
@@ -534,8 +560,8 @@ func newNode(testNode bool) (*Node, error) {
 		return nil, err
 	}
 
-	// Initialize tendermint.
 	if tendermint.IsSeed() {
+		// Initialize Seed node.
 		node.svcTmntSeed, err = tendermint.NewSeed(dataDir, node.Identity, node.Genesis)
 		if err != nil {
 			logger.Error("failed to initialize seed node",
@@ -545,6 +571,7 @@ func newNode(testNode bool) (*Node, error) {
 		}
 		node.svcMgr.Register(node.svcTmntSeed)
 	} else {
+		// Initialize Tendermint service.
 		node.svcTmnt, err = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Genesis)
 		if err != nil {
 			logger.Error("failed to initialize tendermint service",
@@ -553,13 +580,14 @@ func newNode(testNode bool) (*Node, error) {
 			return nil, err
 		}
 		node.svcMgr.Register(node.svcTmnt)
-		node.Epochtime = node.svcTmnt.EpochTime()
-		node.Beacon = node.svcTmnt.Beacon()
-		node.KeyManager = node.svcTmnt.KeyManager()
-		node.Registry = node.svcTmnt.Registry()
-		node.Staking = node.svcTmnt.Staking()
-		node.Scheduler = node.svcTmnt.Scheduler()
-		node.RootHash = node.svcTmnt.RootHash()
+		node.Consensus = node.svcTmnt
+		node.Epochtime = node.Consensus.EpochTime()
+		node.Beacon = node.Consensus.Beacon()
+		node.KeyManager = node.Consensus.KeyManager()
+		node.Registry = node.Consensus.Registry()
+		node.Staking = node.Consensus.Staking()
+		node.Scheduler = node.Consensus.Scheduler()
+		node.RootHash = node.Consensus.RootHash()
 
 		// Initialize node backends.
 		if err = node.initBackends(); err != nil {
@@ -570,7 +598,7 @@ func newNode(testNode bool) (*Node, error) {
 		}
 
 		// Register dump genesis halt hook.
-		node.svcTmnt.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) {
+		node.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) {
 			logger.Info("Consensus halt hook: dumping genesis",
 				"epoch", epoch,
 				"block_height", blockHeight,
@@ -587,7 +615,6 @@ func newNode(testNode bool) (*Node, error) {
 			)
 		})
 	}
-	node.Consensus = node.svcTmnt
 
 	// Initialize the IAS proxy client.
 	// NOTE: See reason above why this needs to happen before seed node init.
@@ -717,6 +744,7 @@ func init() {
 		workerCommon.Flags,
 		workerStorage.Flags,
 		merge.Flags,
+		workerSentry.Flags,
 		crash.InitFlags(),
 	} {
 		Flags.AddFlagSet(v)
