@@ -206,7 +206,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		// Handle the validator election first, because no consensus is
 		// catastrophic, while no validators is not.
 		if !params.DebugStaticValidators {
-			if err = app.electValidators(ctx, beacon, entityStake, entitiesEligibleForReward, nodes, params.MinValidators); err != nil {
+			if err = app.electValidators(ctx, beacon, entityStake, entitiesEligibleForReward, nodes, params); err != nil {
 				// It is unclear what the behavior should be if the validator
 				// election fails.  The system can not ensure integrity, so
 				// presumably manual intervention is required...
@@ -557,12 +557,8 @@ func (app *schedulerApplication) electAllCommittees(ctx *abci.Context, request t
 	return nil
 }
 
-func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, nodes []*node.Node, minValidators int) error {
-	// XXX: How many validators do we want, anyway?
-	const (
-		maxValidators = 100
-		topN          = 100
-	)
+func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, nodes []*node.Node, params *scheduler.ConsensusParameters) error {
+	const topN = 100
 
 	// Filter the node list based on eligibility and minimum required
 	// entity stake.
@@ -625,7 +621,7 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 		}
 
 		newValidators = append(newValidators, n.Consensus.ID)
-		if len(newValidators) >= maxValidators {
+		if len(newValidators) >= params.MaxValidators {
 			break
 		}
 	}
@@ -633,7 +629,7 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 	if len(newValidators) == 0 {
 		return fmt.Errorf("tendermint/scheduler: failed to elect any validators")
 	}
-	if len(newValidators) < minValidators {
+	if len(newValidators) < params.MinValidators {
 		return fmt.Errorf("tendermint/scheduler: insufficient validators")
 	}
 

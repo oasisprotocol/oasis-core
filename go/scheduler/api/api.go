@@ -189,6 +189,10 @@ type ConsensusParameters struct {
 	// present in elected validator sets.
 	MinValidators int `json:"min_validators"`
 
+	// MaxValidators is the maximum number of validators that MAY be
+	// present in elected validator sets.
+	MaxValidators int `json:"max_validators"`
+
 	// DebugBypassStake is true iff the scheduler should bypass all of
 	// the staking related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake"`
