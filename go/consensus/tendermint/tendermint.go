@@ -995,6 +995,11 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 		return nil, errors.Wrap(err, "tendermint: failed to get genesis doc")
 	}
 
+	// Sanity check genesis document.
+	if err = genesisDoc.SanityCheck(); err != nil {
+		return nil, err
+	}
+
 	t := &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("tendermint/servicemanager")),

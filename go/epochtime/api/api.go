@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 )
@@ -62,4 +63,17 @@ type ConsensusParameters struct {
 
 	// DebugMockBackend is flag for enabling mock epochtime backend.
 	DebugMockBackend bool `json:"debug_mock_backend"`
+}
+
+// SanityCheck does basic sanity checking on the genesis state.
+func (g *Genesis) SanityCheck() error {
+	if g.Parameters.Interval <= 0 && !g.Parameters.DebugMockBackend {
+		return fmt.Errorf("epochtime: sanity check failed: epoch interval must be > 0")
+	}
+
+	if g.Base == EpochInvalid {
+		return fmt.Errorf("epochtime: sanity check failed: starting epoch is invalid")
+	}
+
+	return nil
 }

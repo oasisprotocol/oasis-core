@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -128,6 +129,39 @@ func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime, ts time.Time) (
 // Genesis is the key manager management genesis state.
 type Genesis struct {
 	Statuses []*Status `json:"statuses,omitempty"`
+}
+
+// SanityCheck does basic sanity checking on the genesis state.
+func (g *Genesis) SanityCheck() error {
+	for _, status := range g.Statuses {
+		// Verify key manager runtime ID.
+		if !status.ID.IsValid() {
+			return fmt.Errorf("keymanager: sanity check failed: key manager runtime ID %s is invalid", status.ID.String())
+		}
+
+		// Verify currently active key manager node IDs.
+		for _, node := range status.Nodes {
+			if !node.IsValid() {
+				return fmt.Errorf("keymanager: sanity check failed: key manager node ID %s is invalid", node.String())
+			}
+		}
+
+		// Verify SGX policy signatures if the policy exists.
+		if status.Policy != nil {
+			for _, sig := range status.Policy.Signatures {
+				if !sig.PublicKey.IsValid() {
+					return fmt.Errorf("keymanager: sanity check failed: SGX policy signature's public key %s is invalid", sig.PublicKey.String())
+				}
+
+				policy := cbor.Marshal(status.Policy.Policy)
+				if !sig.Verify(PolicySGXSignatureContext, policy) {
+					return fmt.Errorf("keymanager: sanity check failed: SGX policy signature from %s is invalid", sig.PublicKey.String())
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func init() {

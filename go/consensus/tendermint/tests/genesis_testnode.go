@@ -50,6 +50,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 		},
 		Registry: registry.Genesis{
 			Parameters: registry.ConsensusParameters{
+				KeyManagerOperator:            identity.NodeSigner.Public(),
 				DebugAllowUnroutableAddresses: true,
 				DebugAllowRuntimeRegistration: true,
 				DebugBypassStake:              true,

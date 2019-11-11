@@ -25,6 +25,7 @@ import (
 	tendermint "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
 	genesisGrpc "github.com/oasislabs/oasis-core/go/grpc/genesis"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -93,8 +94,9 @@ const (
 )
 
 var (
-	dumpGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
-	initGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	checkGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	dumpGenesisFlags  = flag.NewFlagSet("", flag.ContinueOnError)
+	initGenesisFlags  = flag.NewFlagSet("", flag.ContinueOnError)
 
 	genesisCmd = &cobra.Command{
 		Use:   "genesis",
@@ -111,6 +113,12 @@ var (
 		Use:   "dump",
 		Short: "dump state into genesis file",
 		Run:   doDumpGenesis,
+	}
+
+	checkGenesisCmd = &cobra.Command{
+		Use:   "check",
+		Short: "sanity check the genesis file",
+		Run:   doCheckGenesis,
 	}
 
 	logger = logging.GetLogger("cmd/genesis")
@@ -216,7 +224,13 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		},
 	}
 
-	// TODO: Ensure consistency/sanity.
+	// Ensure consistency/sanity.
+	if err := doc.SanityCheck(); err != nil {
+		logger.Error("genesis document failed sanity check",
+			"err", err,
+		)
+		return
+	}
 
 	b, _ := json.Marshal(doc)
 	if err := ioutil.WriteFile(f, b, 0600); err != nil {
@@ -591,15 +605,43 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 	}
 }
 
+func doCheckGenesis(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	filename := flags.GenesisFile()
+	provider, err := genesisFile.NewFileProvider(filename)
+	if err != nil {
+		logger.Error("failed to open genesis file", "err", err)
+		os.Exit(1)
+	}
+	doc, err := provider.GetGenesisDocument()
+	if err != nil {
+		logger.Error("failed to get genesis document", "err", err)
+		os.Exit(1)
+	}
+
+	err = doc.SanityCheck()
+	if err != nil {
+		logger.Error("genesis document sanity check failed", "err", err)
+		os.Exit(1)
+	}
+
+	// TODO: Pretty-print contents of genesis document.
+}
+
 // Register registers the genesis sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	initGenesisCmd.Flags().AddFlagSet(initGenesisFlags)
 	dumpGenesisCmd.Flags().AddFlagSet(dumpGenesisFlags)
 	dumpGenesisCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
+	checkGenesisCmd.Flags().AddFlagSet(checkGenesisFlags)
 
 	for _, v := range []*cobra.Command{
 		initGenesisCmd,
 		dumpGenesisCmd,
+		checkGenesisCmd,
 	} {
 		genesisCmd.AddCommand(v)
 	}
@@ -608,6 +650,9 @@ func Register(parentCmd *cobra.Command) {
 }
 
 func init() {
+	_ = viper.BindPFlags(checkGenesisFlags)
+	checkGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
+
 	dumpGenesisFlags.Int64(cfgBlockHeight, 0, "block height at which to dump state")
 	_ = viper.BindPFlags(dumpGenesisFlags)
 	dumpGenesisFlags.AddFlagSet(flags.GenesisFileFlags)

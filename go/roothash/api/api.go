@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -178,6 +179,9 @@ type ConsensusParameters struct {
 	TransactionScheduler TransactionSchedulerParameters `json:"txn_scheduler"`
 }
 
+// TransactionSchedulerAlgorithmBatching is the name of the batching algorithm.
+const TransactionSchedulerAlgorithmBatching = "batching"
+
 // TransactionSchedulerParameters is the transaction scheduler parameters.
 type TransactionSchedulerParameters struct {
 	// Algorithm is the transaction scheduling algorithm.
@@ -192,4 +196,75 @@ type TransactionSchedulerParameters struct {
 	// If using the "batching" algorithm, what is the max size of a batch
 	// in bytes.
 	MaxBatchSizeBytes uint64 `json:"max_batch_size_bytes"`
+}
+
+// SanityCheck does basic sanity checking on the genesis state.
+func (g *Genesis) SanityCheck() error {
+	if g.Parameters.RoundTimeout < 1*time.Second {
+		return fmt.Errorf("roothash: sanity check failed: round timeout must be >= 1 second")
+	}
+
+	if g.Parameters.TransactionScheduler.Algorithm != TransactionSchedulerAlgorithmBatching {
+		return fmt.Errorf("roothash: sanity check failed: invalid txn sched algorithm")
+	}
+
+	if g.Parameters.TransactionScheduler.BatchFlushTimeout < 1*time.Second {
+		return fmt.Errorf("roothash: sanity check failed: batch flush timeout must be >= 1 second")
+	}
+
+	if g.Parameters.TransactionScheduler.MaxBatchSize < 1 {
+		return fmt.Errorf("roothash: sanity check failed: max batch size must be >= 1")
+	}
+
+	if g.Parameters.TransactionScheduler.MaxBatchSizeBytes < 1 {
+		return fmt.Errorf("roothash: sanity check failed: max batch size in bytes must be >= 1")
+	}
+
+	// Check blocks.
+	for _, blk := range g.Blocks {
+		hdr := blk.Header
+
+		if hdr.HeaderType != block.Normal && hdr.HeaderType != block.RoundFailed && hdr.HeaderType != block.EpochTransition {
+			return fmt.Errorf("roothash: sanity check failed: invalid block header type")
+		}
+
+		if hdr.Timestamp > uint64(time.Now().Unix()+61*60) {
+			return fmt.Errorf("roothash: sanity check failed: block header timestamp is more than 1h1m in the future")
+		}
+
+		for _, sig := range hdr.StorageSignatures {
+			if !sig.PublicKey.IsValid() {
+				return fmt.Errorf("roothash: sanity check failed: storage signature's public key %s is invalid", sig.PublicKey.String())
+			}
+		}
+
+		err := hdr.VerifyStorageReceiptSignatures()
+		if err != nil {
+			return fmt.Errorf("roothash: sanity check failed: storage receipt signature verification failed")
+		}
+
+		for _, msg := range hdr.RoothashMessages {
+			if msg.StakingGeneralAdjustmentRoothashMessage != nil {
+				m := msg.StakingGeneralAdjustmentRoothashMessage
+
+				if !m.Account.IsValid() {
+					return fmt.Errorf("roothash: sanity check failed: staking adjustment msg account ID %s is invalid", m.Account.String())
+				}
+
+				if m.Op != block.Increase && m.Op != block.Decrease {
+					return fmt.Errorf("roothash: sanity check failed: staking adjustment msg op for account %s is invalid", m.Account.String())
+				}
+
+				if m.Amount == nil {
+					return fmt.Errorf("roothash: sanity check failed: staking adjustment msg amount is missing")
+				}
+
+				if !m.Amount.IsValid() {
+					return fmt.Errorf("roothash: sanity check failed: staking adjustment msg amount is invalid")
+				}
+			}
+		}
+	}
+
+	return nil
 }
