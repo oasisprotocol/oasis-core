@@ -503,6 +503,7 @@ type ConsensusParameters struct {
 	AcceptableTransferPeers map[signature.MapKey]bool           `json:"acceptable_transfer_peers,omitempty"`
 	Slashing                map[SlashReason]Slash               `json:"slashing,omitempty"`
 	GasCosts                gas.Costs                           `json:"gas_costs,omitempty"`
+	MinDelegationAmount     quantity.Quantity                   `json:"min_delegation,omitempty"`
 }
 
 // SanityCheck performs a sanity check on the consensus parameters.

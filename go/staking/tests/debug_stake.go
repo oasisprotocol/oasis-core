@@ -33,6 +33,7 @@ var (
 					FreezeInterval: 1,
 				},
 			},
+			MinDelegationAmount: QtyFromInt(10),
 		},
 		TotalSupply: DebugStateTestTotalSupply,
 		Ledger: map[signature.MapKey]*api.Account{
