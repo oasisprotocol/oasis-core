@@ -58,6 +58,10 @@ var (
 	//
 	// Value is CBOR-serialized staking.ConsensusParameters.
 	parametersKeyFmt = keyformat.New(0x56)
+	// lastBlockFeesKeyFmt is the accumulated fee balance for the previous block.
+	//
+	// Value is CBOR-serialized quantity.
+	lastBlockFeesKeyFmt = keyformat.New(0x57)
 
 	logger = logging.GetLogger("tendermint/staking")
 )
@@ -351,6 +355,20 @@ func (s *ImmutableState) Slashing() (map[staking.SlashReason]staking.Slash, erro
 	return params.Slashing, nil
 }
 
+func (s *ImmutableState) LastBlockFees() (*quantity.Quantity, error) {
+	_, value := s.Snapshot.Get(lastBlockFeesKeyFmt.Encode())
+	if value == nil {
+		return &quantity.Quantity{}, nil
+	}
+
+	var q quantity.Quantity
+	if err := cbor.Unmarshal(value, &q); err != nil {
+		return nil, err
+	}
+
+	return &q, nil
+}
+
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -410,6 +428,10 @@ func (s *MutableState) SetDebondingDelegation(delegatorID, escrowID signature.Pu
 
 func (s *MutableState) RemoveFromDebondingQueue(epoch epochtime.EpochTime, delegatorID, escrowID signature.PublicKey, seq uint64) {
 	s.tree.Remove(debondingQueueKeyFmt.Encode(uint64(epoch), &delegatorID, &escrowID, seq))
+}
+
+func (s *MutableState) SetLastBlockFees(q *quantity.Quantity) {
+	s.tree.Set(lastBlockFeesKeyFmt.Encode(), cbor.Marshal(q))
 }
 
 func slashPool(dst *quantity.Quantity, p *staking.SharePool, share *quantity.Quantity) error {

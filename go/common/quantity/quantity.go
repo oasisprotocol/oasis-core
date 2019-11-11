@@ -209,6 +209,9 @@ func Move(dst, src, n *Quantity) error {
 	if dst == nil || src == nil {
 		return ErrInvalidAccount
 	}
+	if src == n {
+		n = n.Clone()
+	}
 	if err := src.Sub(n); err != nil {
 		return err
 	}

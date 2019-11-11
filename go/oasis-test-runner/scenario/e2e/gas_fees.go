@@ -69,9 +69,15 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},
 			oasis.EntityCfg{AllowEntitySignedNodes: true},
+			oasis.EntityCfg{AllowEntitySignedNodes: true},
+			oasis.EntityCfg{AllowEntitySignedNodes: true},
 		},
 		Validators: []oasis.ValidatorFixture{
+			// Create three validators, each with its own entity so we can test
+			// if gas disbursement works correctly.
 			oasis.ValidatorFixture{Entity: 1, MinGasPrice: 1},
+			oasis.ValidatorFixture{Entity: 2, MinGasPrice: 1},
+			oasis.ValidatorFixture{Entity: 3, MinGasPrice: 1},
 		},
 	}, nil
 }
@@ -86,13 +92,25 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// Grab the staking client.
 	ctx := context.Background()
+
+	sc.logger.Info("waiting for network to come up")
+	if err := sc.net.Controller().WaitNodesRegistered(ctx, 3); err != nil {
+		return err
+	}
 	st := sc.net.Controller().Staking
 
+	// Determine initial entity balances.
+	totalEntityBalance, err := sc.getTotalEntityBalance(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Run some operations that charge fees.
+	var totalFees quantity.Quantity
 	for _, t := range []struct {
 		name string
-		fn   func(context.Context, signature.Signer, staking.Backend) error
+		fn   func(context.Context, signature.Signer, staking.Backend) (*quantity.Quantity, error)
 	}{
 		{"Transfer", sc.testTransfer},
 		{"Burn", sc.testBurn},
@@ -101,9 +119,51 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 	} {
 		sc.logger.Info("testing operation", "op", t.name)
 
-		if err := t.fn(ctx, srcSigner, st); err != nil {
+		var fees *quantity.Quantity
+		if fees, err = t.fn(ctx, srcSigner, st); err != nil {
 			return fmt.Errorf("%s: %w", t.name, err)
 		}
+		_ = totalFees.Add(fees)
+	}
+
+	// Make sure that fees have been transferred out.
+	newTotalEntityBalance, err := sc.getTotalEntityBalance(ctx)
+	if err != nil {
+		return err
+	}
+	_ = newTotalEntityBalance.Sub(totalEntityBalance)
+
+	// Any fees that couldn't be transferred due to loss of precision should end
+	// up in the common pool. Since in this scenario an operation costs 10 units,
+	// there is only one operation per block and there are 3 validators, each
+	// operation should put 1 unit to the common pool.
+	commonPool, err := st.CommonPool(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	sc.logger.Info("making sure that fees have been disbursed",
+		"total_fees", totalFees,
+		"disbursed_fees", newTotalEntityBalance,
+		"common_pool", commonPool,
+	)
+
+	// Ensure that at least some fees have been disbursed to entity accounts.
+	if newTotalEntityBalance.IsZero() {
+		return fmt.Errorf("no fees disbursed to entity accounts")
+	}
+	// Ensure that at least some fees ended up in the common pool due to loss
+	// of precision (see comment above).
+	if commonPool.IsZero() {
+		return fmt.Errorf("no fees disbursed to the common pool")
+	}
+	// Ensure total (entities + common pool) is correct.
+	_ = newTotalEntityBalance.Add(commonPool)
+	if newTotalEntityBalance.Cmp(&totalFees) != 0 {
+		return fmt.Errorf("fee disbursement incorrect (expected: %s actual: %s)",
+			totalFees,
+			newTotalEntityBalance,
+		)
 	}
 
 	if err := sc.net.CheckLogWatchers(); err != nil {
@@ -113,7 +173,30 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *gasFeesImpl) testTransfer(ctx context.Context, signer signature.Signer, st staking.Backend) error {
+func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Quantity, error) {
+	st := sc.net.Controller().Staking
+
+	var total quantity.Quantity
+	for _, e := range sc.net.Entities()[1:] { // Only count entities with validators.
+		ent, _ := e.Inner()
+
+		acct, err := st.AccountInfo(ctx, ent.ID, 0)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get account info: %w", err)
+		}
+
+		sc.logger.Debug("fetched balance",
+			"entity_id", ent.ID,
+			"balance", acct.General.Balance,
+		)
+
+		_ = total.Add(&acct.General.Balance)
+	}
+
+	return &total, nil
+}
+
+func (sc *gasFeesImpl) testTransfer(ctx context.Context, signer signature.Signer, st staking.Backend) (*quantity.Quantity, error) {
 	return testStakingGas(ctx, signer, st, true, func(acct *staking.Account, fee gas.Fee, amount int64) error {
 		// Generate random destination account.
 		dstSigner, err := memorySigner.NewSigner(rand.Reader)
@@ -135,7 +218,7 @@ func (sc *gasFeesImpl) testTransfer(ctx context.Context, signer signature.Signer
 	})
 }
 
-func (sc *gasFeesImpl) testBurn(ctx context.Context, signer signature.Signer, st staking.Backend) error {
+func (sc *gasFeesImpl) testBurn(ctx context.Context, signer signature.Signer, st staking.Backend) (*quantity.Quantity, error) {
 	return testStakingGas(ctx, signer, st, true, func(acct *staking.Account, fee gas.Fee, amount int64) error {
 		burn := staking.Burn{
 			Nonce: acct.General.Nonce,
@@ -150,7 +233,7 @@ func (sc *gasFeesImpl) testBurn(ctx context.Context, signer signature.Signer, st
 	})
 }
 
-func (sc *gasFeesImpl) testAddEscrow(ctx context.Context, signer signature.Signer, st staking.Backend) error {
+func (sc *gasFeesImpl) testAddEscrow(ctx context.Context, signer signature.Signer, st staking.Backend) (*quantity.Quantity, error) {
 	return testStakingGas(ctx, signer, st, true, func(acct *staking.Account, fee gas.Fee, amount int64) error {
 		escrow := staking.Escrow{
 			Nonce:   acct.General.Nonce,
@@ -166,7 +249,7 @@ func (sc *gasFeesImpl) testAddEscrow(ctx context.Context, signer signature.Signe
 	})
 }
 
-func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.Signer, st staking.Backend) error {
+func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.Signer, st staking.Backend) (*quantity.Quantity, error) {
 	return testStakingGas(ctx, signer, st, false, func(acct *staking.Account, fee gas.Fee, amount int64) error {
 		escrow := staking.ReclaimEscrow{
 			Nonce:   acct.General.Nonce,
@@ -212,7 +295,7 @@ func testStakingGas(
 	st staking.Backend,
 	subtract bool,
 	op func(*staking.Account, gas.Fee, int64) error,
-) error {
+) (*quantity.Quantity, error) {
 	var amountOverBalance quantity.Quantity
 	// This should be more than it is in the account.
 	_ = amountOverBalance.FromInt64(1_000_000)
@@ -225,6 +308,7 @@ func testStakingGas(
 	// This amount gives a lower gas price than accepted by the validator.
 	_ = amountLow.FromInt64(5)
 
+	var totalFees quantity.Quantity
 	for _, t := range []struct {
 		name      string
 		fee       gas.Fee
@@ -249,11 +333,15 @@ func testStakingGas(
 		{"Success", gas.Fee{Amount: amountOk, Gas: 10}, 100, true, true},
 	} {
 		if err := testStakingGasOp(ctx, signer, st, t.fee, t.amount, t.checkOk, t.deliverOk, subtract, op); err != nil {
-			return fmt.Errorf("%s: %w", t.name, err)
+			return nil, fmt.Errorf("%s: %w", t.name, err)
+		}
+
+		if t.checkOk {
+			_ = totalFees.Add(&t.fee.Amount)
 		}
 	}
 
-	return nil
+	return &totalFees, nil
 }
 
 func testStakingGasOp(

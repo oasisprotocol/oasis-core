@@ -155,6 +155,17 @@ func (c *Context) BlockHeight() int64 {
 	return c.state.BlockHeight()
 }
 
+// BlockContext returns the current block context.
+//
+// In case there is no current block (e.g., because the current context is not
+// an execution context), this will return nil.
+func (c *Context) BlockContext() *BlockContext {
+	if c.IsInitChain() || c.IsCheckOnly() {
+		return nil
+	}
+	return c.state.BlockContext()
+}
+
 // NewStateCheckpoint creates a new state checkpoint.
 func (c *Context) NewStateCheckpoint() *StateCheckpoint {
 	return &StateCheckpoint{
@@ -181,4 +192,37 @@ func (sc *StateCheckpoint) Rollback() {
 		return
 	}
 	sc.ctx.State().ImmutableTree = &sc.ImmutableTree
+}
+
+// BlockContextKey is an interface for a block context key.
+type BlockContextKey interface {
+	// NewDefault returns a new default value for the given key.
+	NewDefault() interface{}
+}
+
+// BlockContext can be used to store arbitrary key/value pairs for state that
+// is needed while processing a block.
+//
+// When a block is committed, this context is automatically reset.
+type BlockContext struct {
+	storage map[BlockContextKey]interface{}
+}
+
+// Get returns the value stored under the given key (if any). If no value
+// currently exists, the NewDefault method is called on the key to produce a
+// default value and that value is stored.
+func (bc *BlockContext) Get(key BlockContextKey) interface{} {
+	v, ok := bc.storage[key]
+	if !ok {
+		v = key.NewDefault()
+		bc.storage[key] = v
+	}
+	return v
+}
+
+// NewBlockContext creates an empty block context.
+func NewBlockContext() *BlockContext {
+	return &BlockContext{
+		storage: make(map[BlockContextKey]interface{}),
+	}
 }

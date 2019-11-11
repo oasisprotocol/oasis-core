@@ -440,6 +440,9 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	mux.lastBeginBlock = blockHeight
 	mux.currentTime = req.Header.Time
 
+	// Create empty block context.
+	mux.state.blockCtx = NewBlockContext()
+	// Create BeginBlock context.
 	ctx := NewContext(ContextBeginBlock, mux.currentTime, mux.state)
 
 	switch mux.state.haltMode {
@@ -660,6 +663,9 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	// Update tags.
 	resp.Events = ctx.GetEvents()
 
+	// Clear block context.
+	mux.state.blockCtx = nil
+
 	return resp
 }
 
@@ -808,6 +814,7 @@ type ApplicationState struct {
 	blockLock   sync.RWMutex
 	blockHash   []byte
 	blockHeight int64
+	blockCtx    *BlockContext
 
 	timeSource epochtime.Backend
 
@@ -834,6 +841,15 @@ func (s *ApplicationState) BlockHash() []byte {
 	defer s.blockLock.RUnlock()
 
 	return append([]byte{}, s.blockHash...)
+}
+
+// BlockContext returns the current block context which can be used
+// to store intermediate per-block results.
+//
+// This method must only be called from BeginBlock/DeliverTx/EndBlock
+// and calls from anywhere else will cause races.
+func (s *ApplicationState) BlockContext() *BlockContext {
+	return s.blockCtx
 }
 
 // DeliverTxTree returns the versioned tree to be used by queries

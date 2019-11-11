@@ -10,6 +10,19 @@ import (
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
 
+// feeAccumulatorKey is the block context key.
+type feeAccumulatorKey struct{}
+
+func (fak feeAccumulatorKey) NewDefault() interface{} {
+	return &feeAccumulator{}
+}
+
+// feeAccumulator is the per-block fee accumulator that gets all fees paid
+// in a block.
+type feeAccumulator struct {
+	balance quantity.Quantity
+}
+
 // AuthenticateAndPayFees authenticates the message signer and makes sure that
 // any gas fees are paid.
 //
@@ -54,21 +67,26 @@ func AuthenticateAndPayFees(
 		return nil, nil
 	}
 
-	// Transfer fee to common pool.
-	commonPool, err := state.CommonPool()
-	if err != nil {
-		return nil, fmt.Errorf("staking: failed to query common pool: %w", err)
-	}
-	if err = quantity.Move(commonPool, &account.General.Balance, &fee.Amount); err != nil {
+	// Transfer fee to per-block fee accumulator.
+	feeAcc := ctx.BlockContext().Get(feeAccumulatorKey{}).(*feeAccumulator)
+	if err := quantity.Move(&feeAcc.balance, &account.General.Balance, &fee.Amount); err != nil {
 		return nil, fmt.Errorf("staking: failed to pay fees: %w", err)
 	}
 
 	account.General.Nonce++
-	state.SetCommonPool(commonPool)
 	state.SetAccount(id, account)
 
 	// Configure gas accountant on the context.
 	ctx.SetGasAccountant(abci.NewGasAccountant(fee.Gas))
 
 	return account, nil
+}
+
+// PersistBlockFees persists the accumulated fee balance for the current block.
+func PersistBlockFees(ctx *abci.Context) {
+	// Fetch accumulated fees in the current block.
+	fees := ctx.BlockContext().Get(feeAccumulatorKey{}).(*feeAccumulator).balance
+
+	state := NewMutableState(ctx.State())
+	state.SetLastBlockFees(&fees)
 }

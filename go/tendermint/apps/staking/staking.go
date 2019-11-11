@@ -3,6 +3,7 @@ package staking
 
 import (
 	"encoding/hex"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
@@ -56,6 +57,11 @@ func (app *stakingApplication) SetOption(types.RequestSetOption) types.ResponseS
 }
 
 func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
+	// Disburse fees from previous block.
+	if err := app.disburseFees(ctx, request.GetLastCommitInfo()); err != nil {
+		return fmt.Errorf("staking: failed to disburse fees: %w", err)
+	}
+
 	// Iterate over any submitted evidence of a validator misbehaving. Note that
 	// the actual evidence has already been verified by Tendermint to be valid.
 	for _, evidence := range request.ByzantineValidators {
@@ -103,6 +109,9 @@ func (app *stakingApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Ap
 }
 
 func (app *stakingApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+	// Persist any block fees so we can transfer them in the next block.
+	stakingState.PersistBlockFees(ctx)
+
 	if changed, epoch := app.state.EpochChanged(ctx); changed {
 		return types.ResponseEndBlock{}, app.onEpochChange(ctx, epoch)
 	}
