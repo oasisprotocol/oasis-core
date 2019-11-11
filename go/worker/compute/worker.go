@@ -43,7 +43,7 @@ type Worker struct {
 
 	commonWorker *workerCommon.Worker
 	merge        *merge.Worker
-	registration *registration.Registration
+	registration *registration.Worker
 
 	runtimes map[signature.MapKey]*Runtime
 
@@ -217,7 +217,7 @@ func newWorker(
 	enabled bool,
 	commonWorker *workerCommon.Worker,
 	merge *merge.Worker,
-	registration *registration.Registration,
+	registration *registration.Worker,
 	cfg Config,
 ) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())

@@ -6,6 +6,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/oasis-core/go/grpc/client"
+	"github.com/oasislabs/oasis-core/go/grpc/control"
 	"github.com/oasislabs/oasis-core/go/grpc/dummydebug"
 )
 
@@ -14,6 +15,7 @@ import (
 type Controller struct {
 	debugClient dummydebug.DummyDebugClient
 	rtClient    client.RuntimeClient
+	ctrlClient  control.ControlClient
 }
 
 func (c *Controller) callOpts() []grpc.CallOption {
@@ -41,7 +43,7 @@ func (c *Controller) SetEpoch(ctx context.Context, epoch uint64) error {
 // WaitReady waits for the node to be ready to process requests.
 func (c *Controller) WaitReady(ctx context.Context) error {
 	// TODO: Use WaitReady when available (#2130).
-	_, err := c.rtClient.WaitSync(ctx, &client.WaitSyncRequest{}, c.callOpts()...)
+	_, err := c.ctrlClient.WaitSync(ctx, &control.WaitSyncRequest{}, c.callOpts()...)
 	return err
 }
 
@@ -62,5 +64,6 @@ func NewController(socketPath string) (*Controller, error) {
 	return &Controller{
 		debugClient: dummydebug.NewDummyDebugClient(conn),
 		rtClient:    client.NewRuntimeClient(conn),
+		ctrlClient:  control.NewControlClient(conn),
 	}, nil
 }

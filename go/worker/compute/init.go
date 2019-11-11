@@ -32,7 +32,7 @@ func New(
 	dataDir string,
 	commonWorker *workerCommon.Worker,
 	mergeWorker *merge.Worker,
-	registration *registration.Registration,
+	registration *registration.Worker,
 ) (*Worker, error) {
 	cfg := Config{
 		Committee: committee.Config{

@@ -14,9 +14,10 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	clientGrpc "github.com/oasislabs/oasis-core/go/grpc/client"
+	controlGrpc "github.com/oasislabs/oasis-core/go/grpc/control"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
-	cmdDebugClient "github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/client"
+	cmdControl "github.com/oasislabs/oasis-core/go/oasis-node/cmd/control"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 )
 
@@ -70,12 +71,13 @@ func ValidateRuntimeIDStr(idStr string) error {
 func doExport(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 
-	conn, client := cmdDebugClient.DoConnect(cmd)
+	conn, controlClient := cmdControl.DoConnect(cmd)
+	client := clientGrpc.NewRuntimeClient(conn)
 	defer conn.Close()
 
 	logger.Debug("waiting for sync status")
 	// Use background context to block until the result comes in.
-	_, err := client.WaitSync(ctx, &clientGrpc.WaitSyncRequest{})
+	_, err := controlClient.WaitSync(ctx, &controlGrpc.WaitSyncRequest{})
 	if err != nil {
 		logger.Error("failed to wait for sync status",
 			"err", err,

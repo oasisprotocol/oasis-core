@@ -13,6 +13,18 @@ fn main() {
     )
     .expect("Failed to compile gRPC definitions");
 
+    // Control client.
+    let proto_root = "../go/grpc/control";
+    println!("cargo:rerun-if-changed={}/control.proto", proto_root);
+
+    protoc_grpcio::compile_grpc_protos(
+        &["control.proto"],
+        &[proto_root],
+        "src/transaction/api",
+        None,
+    )
+    .expect("Failed to compile gRPC definitions");
+
     // Storage client.
     let proto_root = "../go/grpc/storage";
     println!("cargo:rerun-if-changed={}/storage.proto", proto_root);

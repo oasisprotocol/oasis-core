@@ -8,13 +8,11 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 )
 
 // Validator is an Oasis validator.
 type Validator struct {
-	net *Network
-	dir *env.Dir
+	Node
 
 	entity *Entity
 
@@ -24,6 +22,7 @@ type Validator struct {
 
 // ValidatorCfg is the Oasis validator provisioning configuration.
 type ValidatorCfg struct {
+	NodeCfg
 	Entity *Entity
 }
 
@@ -35,16 +34,6 @@ func (val *Validator) toGenesisArgs() []string {
 
 func (val *Validator) descriptorPath() string {
 	return filepath.Join(val.dir.String(), "node_genesis.json")
-}
-
-// SocketPath returns the path to the validator's gRPC socket.
-func (val *Validator) SocketPath() string {
-	return internalSocketPath(val.dir)
-}
-
-// LogPath returns the path to the node's log.
-func (val *Validator) LogPath() string {
-	return nodeLogPath(val.dir)
 }
 
 // IdentityKeyPath returns the path to the node's identity key.
@@ -77,7 +66,8 @@ func (val *Validator) startNode() error {
 		appendNetwork(val.net).
 		appendEntity(val.entity)
 
-	if _, err := val.net.startOasisNode(val.dir, nil, args, "validator", false, false); err != nil {
+	var err error
+	if val.cmd, val.exitCh, err = val.net.startOasisNode(val.dir, nil, args, "validator", false, val.restartable); err != nil {
 		return errors.Wrap(err, "oasis/validator: failed to launch node")
 	}
 
@@ -98,12 +88,16 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	}
 
 	val := &Validator{
-		net:           net,
-		dir:           valDir,
+		Node: Node{
+			net:         net,
+			dir:         valDir,
+			restartable: cfg.Restartable,
+		},
 		entity:        cfg.Entity,
 		consensusPort: net.nextNodePort,
 		grpcDebugPort: net.nextNodePort + 1,
 	}
+	val.doStartNode = val.startNode
 
 	var valConsensusAddr node.Address
 	if err = valConsensusAddr.FromIP(netPkg.ParseIP("127.0.0.1"), val.consensusPort); err != nil {

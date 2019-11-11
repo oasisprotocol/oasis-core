@@ -107,6 +107,8 @@ type TEEFixture struct {
 
 // ValidatorFixture is a validator fixture.
 type ValidatorFixture struct {
+	Restartable bool `json:"restartable"`
+
 	Entity int `json:"entity"`
 }
 
@@ -118,6 +120,9 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 	}
 
 	return net.NewValidator(&ValidatorCfg{
+		NodeCfg: NodeCfg{
+			Restartable: f.Restartable,
+		},
 		Entity: entity,
 	})
 }
@@ -191,9 +196,11 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 	}
 
 	return net.NewKeymanager(&KeymanagerCfg{
-		Runtime:     runtime,
-		Entity:      entity,
-		Restartable: f.Restartable,
+		NodeCfg: NodeCfg{
+			Restartable: f.Restartable,
+		},
+		Runtime: runtime,
+		Entity:  entity,
 	})
 }
 
@@ -224,6 +231,8 @@ type ComputeWorkerFixture struct {
 	Entity int `json:"entity"`
 
 	RuntimeBackend string `json:"runtime_backend"`
+
+	Restartable bool `json:"restartable"`
 }
 
 // Create instantiates the compute worker described by the fixture.
@@ -234,6 +243,9 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 	}
 
 	return net.NewCompute(&ComputeCfg{
+		NodeCfg: NodeCfg{
+			Restartable: f.Restartable,
+		},
 		Entity:         entity,
 		RuntimeBackend: f.RuntimeBackend,
 	})

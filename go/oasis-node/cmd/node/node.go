@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -22,7 +23,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/persistent"
 	"github.com/oasislabs/oasis-core/go/common/service"
+	"github.com/oasislabs/oasis-core/go/control"
 	"github.com/oasislabs/oasis-core/go/dummydebug"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/genesis"
@@ -62,8 +65,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
 )
 
-// Flags has the configuration flags.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
+var (
+	_ control.Shutdownable = (*Node)(nil)
+
+	// Flags has the configuration flags.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
+)
 
 const exportsSubDir = "exports"
 
@@ -88,6 +95,10 @@ type Node struct {
 	svcTmnt      tmService.TendermintService
 	svcTmntSeed  *tendermint.SeedService
 
+	stopping uint32
+
+	commonStore *persistent.CommonStore
+
 	Consensus consensus.Backend
 
 	Genesis   genesisAPI.Provider
@@ -111,16 +122,20 @@ type Node struct {
 	TransactionSchedulerWorker *txnscheduler.Worker
 	MergeWorker                *merge.Worker
 	P2P                        *p2p.P2P
-	WorkerRegistration         *registration.Registration
+	RegistrationWorker         *registration.Worker
 }
 
 // Cleanup cleans up after the node has terminated.
 func (n *Node) Cleanup() {
 	n.svcMgr.Cleanup()
+	n.commonStore.Close()
 }
 
 // Stop gracefully terminates the node.
 func (n *Node) Stop() {
+	if !atomic.CompareAndSwapUint32(&n.stopping, 0, 1) {
+		return
+	}
 	n.svcMgr.Stop()
 }
 
@@ -128,6 +143,19 @@ func (n *Node) Stop() {
 // call Cleanup() after wait returns.
 func (n *Node) Wait() {
 	n.svcMgr.Wait()
+}
+
+func (n *Node) RequestShutdown() <-chan struct{} {
+	// This returns only the registration worker's event channel,
+	// otherwise the caller (usually the control grpc server) will only
+	// get notified once everything is already torn down - perhaps
+	// including the server.
+	n.RegistrationWorker.RequestDeregistration()
+	return n.RegistrationWorker.Quit()
+}
+
+func (n *Node) RegistrationStopped() {
+	n.Stop()
 }
 
 func (n *Node) initBackends() error {
@@ -231,7 +259,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 	// Initialize the worker registration.
 	workerCommonCfg := n.CommonWorker.GetConfig()
-	n.WorkerRegistration, err = registration.New(
+	n.RegistrationWorker, err = registration.New(
 		dataDir,
 		n.Epochtime,
 		n.Registry,
@@ -239,6 +267,8 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.svcTmnt,
 		n.P2P,
 		&workerCommonCfg,
+		n.commonStore,
+		n, // the delegate to be called on registration shutdown
 	)
 	if err != nil {
 		logger.Error("failed to initialize worker registration",
@@ -246,14 +276,14 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		)
 		return err
 	}
-	n.svcMgr.Register(n.WorkerRegistration)
+	n.svcMgr.Register(n.RegistrationWorker)
 
 	// Initialize the key manager worker service.
 	kmSvc, err := keymanagerWorker.New(
 		dataDir,
 		n.CommonWorker,
 		n.IAS,
-		n.WorkerRegistration,
+		n.RegistrationWorker,
 		n.KeyManager,
 	)
 	if err != nil {
@@ -265,9 +295,9 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	n.StorageWorker, err = workerStorage.New(
 		n.grpcInternal,
 		n.CommonWorker,
-		n.WorkerRegistration,
+		n.RegistrationWorker,
 		n.Genesis,
-		cmdCommon.DataDir(),
+		n.commonStore,
 	)
 	if err != nil {
 		return err
@@ -277,7 +307,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	// Initialize the merge worker.
 	n.MergeWorker, err = merge.New(
 		n.CommonWorker,
-		n.WorkerRegistration,
+		n.RegistrationWorker,
 	)
 	if err != nil {
 		return err
@@ -289,7 +319,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		dataDir,
 		n.CommonWorker,
 		n.MergeWorker,
-		n.WorkerRegistration,
+		n.RegistrationWorker,
 	)
 	if err != nil {
 		return err
@@ -300,7 +330,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	n.TransactionSchedulerWorker, err = txnscheduler.New(
 		n.CommonWorker,
 		n.ComputeWorker,
-		n.WorkerRegistration,
+		n.RegistrationWorker,
 	)
 	if err != nil {
 		return err
@@ -338,7 +368,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 
 	// Start the worker registration service.
-	if err = n.WorkerRegistration.Start(); err != nil {
+	if err = n.RegistrationWorker.Start(); err != nil {
 		return err
 	}
 
@@ -438,6 +468,15 @@ func newNode(testNode bool) (*Node, error) {
 	crash.LoadViperArgValues()
 
 	var err error
+
+	// Open the common node store.
+	node.commonStore, err = persistent.NewCommonStore(dataDir)
+	if err != nil {
+		logger.Error("failed to open common node store",
+			"err", err,
+		)
+		return nil, err
+	}
 
 	// Generate/Load the node identity.
 	// TODO/hsm: Configure factory dynamically.
@@ -635,6 +674,9 @@ func newNode(testNode bool) (*Node, error) {
 		)
 		return nil, err
 	}
+
+	// Start the node control server.
+	control.NewGRPCServer(node.grpcInternal, node, node.Client)
 
 	// Start the tendermint service.
 	//

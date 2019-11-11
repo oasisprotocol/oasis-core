@@ -438,33 +438,12 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 	if err != nil {
 		return err
 	}
-	if ptrSub, ok := txSub.(*tmpubsub.Subscription); ok && ptrSub == nil {
+	if ptrSub, ok := txSub.(*tendermintPubsubBuffer).tmSubscription.(*tmpubsub.Subscription); ok && ptrSub == nil {
 		t.Logger.Debug("broadcastTx: service has shut down. Cancel our context to recover")
 		<-ctx.Done()
 		return ctx.Err()
 	}
 
-	// This should be simple, but Tenermint's unbuffered pubsub is very dangerous
-	// as if you don't drain the subscription channel, the whole pubsub system can
-	// get blocked forever. So make sure to process events immediately.
-	txCh := make(chan struct{})
-	go func() {
-		defer close(txCh)
-		var seen bool
-		for {
-			select {
-			case <-txSub.Out():
-				if seen {
-					// Discard any events past the first one.
-					continue
-				}
-				txCh <- struct{}{}
-				seen = true
-			case <-txSub.Cancelled():
-				return
-			}
-		}
-	}()
 	defer t.Unsubscribe(subID, query) // nolint: errcheck
 
 	// First try to broadcast.
@@ -478,7 +457,9 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 
 	// Wait for the transaction to be included in a block.
 	select {
-	case <-txCh:
+	case <-txSub.Out():
+		return nil
+	case <-txSub.Cancelled():
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -496,7 +477,11 @@ func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (
 	// force-unsubscribe the channel if processing takes too long.
 
 	subFn := func() (tmtypes.Subscription, error) {
-		return t.node.EventBus().SubscribeUnbuffered(t.ctx, subscriber, query)
+		sub, err := t.node.EventBus().SubscribeUnbuffered(t.ctx, subscriber, query)
+		if err != nil {
+			return nil, err
+		}
+		return newTendermintPubsubBuffer(sub), nil
 	}
 
 	if t.started() {

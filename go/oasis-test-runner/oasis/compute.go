@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	workerHost "github.com/oasislabs/oasis-core/go/worker/common/host"
@@ -14,9 +13,8 @@ import (
 const computeIdentitySeedTemplate = "ekiden node worker %d"
 
 // Compute is an Oasis compute node.
-type Compute struct {
-	net *Network
-	dir *env.Dir
+type Compute struct { // nolint: maligned
+	Node
 
 	entity *Entity
 
@@ -29,14 +27,11 @@ type Compute struct {
 
 // ComputeCfg is the Oasis compute node configuration.
 type ComputeCfg struct {
+	NodeCfg
+
 	Entity *Entity
 
 	RuntimeBackend string
-}
-
-// LogPath returns the path to the compute node's log.
-func (worker *Compute) LogPath() string {
-	return nodeLogPath(worker.dir)
 }
 
 // IdentityKeyPath returns the path to the node's identity key.
@@ -91,7 +86,8 @@ func (worker *Compute) startNode() error {
 		args = args.appendComputeNodeRuntime(v)
 	}
 
-	if _, err := worker.net.startOasisNode(worker.dir, nil, args, "compute", false, false); err != nil {
+	var err error
+	if worker.cmd, worker.exitCh, err = worker.net.startOasisNode(worker.dir, nil, args, "compute", false, worker.restartable); err != nil {
 		return errors.Wrap(err, "oasis/compute: failed to launch node")
 	}
 
@@ -123,14 +119,18 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 	}
 
 	worker := &Compute{
-		net:            net,
-		dir:            computeDir,
+		Node: Node{
+			net:         net,
+			dir:         computeDir,
+			restartable: cfg.Restartable,
+		},
 		entity:         cfg.Entity,
 		runtimeBackend: cfg.RuntimeBackend,
 		consensusPort:  net.nextNodePort,
 		clientPort:     net.nextNodePort + 1,
 		p2pPort:        net.nextNodePort + 2,
 	}
+	worker.doStartNode = worker.startNode
 
 	net.computeWorkers = append(net.computeWorkers, worker)
 	net.nextNodePort += 3

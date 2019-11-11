@@ -23,6 +23,7 @@ import (
 // via the `option go_package` directive.
 var protoFiles = [][]string{
 	{"common/common.proto"},
+	{"control/control.proto"},
 	{"dummydebug/dummy_debug.proto"},
 	{"ias/ias.proto"},
 	{

@@ -253,8 +253,8 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
 	// Stop the registration service and wait for it to fully stop. This is required
 	// as otherwise it will re-register the node on each epoch transition.
-	node.WorkerRegistration.Stop()
-	<-node.WorkerRegistration.Quit()
+	node.RegistrationWorker.Stop()
+	<-node.RegistrationWorker.Quit()
 
 	// Subscribe to node deregistration event.
 	nodeCh, sub := node.Node.Registry.WatchNodes()

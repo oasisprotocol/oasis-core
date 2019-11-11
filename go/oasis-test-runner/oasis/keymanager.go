@@ -2,13 +2,11 @@ package oasis
 
 import (
 	"fmt"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 )
@@ -20,13 +18,10 @@ const (
 
 // Keymanager is an Oasis key manager.
 type Keymanager struct { // nolint: maligned
-	net *Network
-	dir *env.Dir
-	cmd *exec.Cmd
+	Node
 
-	runtime     *Runtime
-	entity      *Entity
-	restartable bool
+	runtime *Runtime
+	entity  *Entity
 
 	consensusPort    uint16
 	workerClientPort uint16
@@ -34,20 +29,9 @@ type Keymanager struct { // nolint: maligned
 
 // KeymanagerCfg is the Oasis key manager provisioning configuration.
 type KeymanagerCfg struct {
+	NodeCfg
 	Runtime *Runtime
 	Entity  *Entity
-
-	Restartable bool
-}
-
-// LogPath returns the path to the node's log.
-func (km *Keymanager) LogPath() string {
-	return nodeLogPath(km.dir)
-}
-
-// SocketPath returns the path to the node's gRPC socket.
-func (km *Keymanager) SocketPath() string {
-	return internalSocketPath(km.dir)
 }
 
 // IdentityKeyPath returns the paths to the node's identity key.
@@ -202,31 +186,11 @@ func (km *Keymanager) startNode() error {
 	}
 
 	var err error
-	if km.cmd, err = km.net.startOasisNode(km.dir, nil, args, "keymanager", false, km.restartable); err != nil {
+	if km.cmd, km.exitCh, err = km.net.startOasisNode(km.dir, nil, args, "keymanager", false, km.restartable); err != nil {
 		return errors.Wrap(err, "oasis/keymanager: failed to launch node")
 	}
 
 	return nil
-}
-
-func (km *Keymanager) stopNode() error {
-	if km.cmd == nil {
-		return nil
-	}
-
-	// Stop the node and wait for it to stop.
-	_ = km.cmd.Process.Kill()
-	_ = km.cmd.Wait()
-	km.cmd = nil
-	return nil
-}
-
-// Restart kills the key manager node, waits for it to stop, and starts it again.
-func (km *Keymanager) Restart() error {
-	if err := km.stopNode(); err != nil {
-		return err
-	}
-	return km.startNode()
 }
 
 // NewKeymanger provisions a new keymanager and adds it to the network.
@@ -245,14 +209,17 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	}
 
 	km := &Keymanager{
-		net:              net,
-		dir:              kmDir,
+		Node: Node{
+			net:         net,
+			dir:         kmDir,
+			restartable: cfg.Restartable,
+		},
 		runtime:          cfg.Runtime,
 		entity:           cfg.Entity,
-		restartable:      cfg.Restartable,
 		consensusPort:    net.nextNodePort,
 		workerClientPort: net.nextNodePort + 1,
 	}
+	km.doStartNode = km.startNode
 
 	net.keymanager = km
 	net.nextNodePort += 2

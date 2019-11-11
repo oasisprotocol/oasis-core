@@ -14,6 +14,7 @@ grpc/ias/*.pb.go
 grpc/registry/*.pb.go
 grpc/storage/*.pb.go
 grpc/client/*.pb.go
+grpc/control/*.pb.go
 grpc/enclaverpc/*.pb.go
 grpc/txnscheduler/*.pb.go
 grpc/staking/*.pb.go

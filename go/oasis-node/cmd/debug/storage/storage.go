@@ -15,7 +15,7 @@ import (
 	clientGrpc "github.com/oasislabs/oasis-core/go/grpc/client"
 	storageGrpc "github.com/oasislabs/oasis-core/go/grpc/storage"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
-	cmdDebugClient "github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/client"
+	cmdControl "github.com/oasislabs/oasis-core/go/oasis-node/cmd/control"
 	cmdRoothashDebug "github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/roothash"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
@@ -126,7 +126,8 @@ func checkDiff(ctx context.Context, storageClient storageApi.Backend, root strin
 func doCheckRoots(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 
-	conn, client := cmdDebugClient.DoConnect(cmd)
+	conn, _ := cmdControl.DoConnect(cmd)
+	client := clientGrpc.NewRuntimeClient(conn)
 	storageWorkerClient := storageGrpc.NewStorageWorkerClient(conn)
 	defer conn.Close()
 
@@ -250,7 +251,7 @@ func doForceFinalize(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
-	conn, _ := cmdDebugClient.DoConnect(cmd)
+	conn, _ := cmdControl.DoConnect(cmd)
 	storageWorkerClient := storageGrpc.NewStorageWorkerClient(conn)
 	defer conn.Close()
 

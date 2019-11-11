@@ -27,7 +27,7 @@ func Enabled() bool {
 func New(
 	commonWorker *workerCommon.Worker,
 	compute *compute.Worker,
-	registration *registration.Registration,
+	registration *registration.Worker,
 ) (*Worker, error) {
 	// Setup runtimes.
 	var runtimes []RuntimeConfig

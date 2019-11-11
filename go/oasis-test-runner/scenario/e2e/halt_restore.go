@@ -9,7 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"time"
+	"reflect"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/file"
@@ -50,6 +50,9 @@ func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 	f.Network.HaltEpoch = haltEpoch
+	for _, val := range f.Validators {
+		val.Restartable = true
+	}
 	return f, nil
 }
 
@@ -141,9 +144,16 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("scenario/e2e/halt_restore: failed waiting for halt epoch: %w", err)
 	}
 
-	// Wait additional few seconds for genesis docs to be dumped.
-	// XXX: fixed in #2296 where we wait for nodes to actually shutdown.
-	time.Sleep(3 * time.Second)
+	// Wait for validators to exit so that genesis docs are dumped.
+	var exitChs []reflect.SelectCase
+	for _, val := range sc.net.Validators() {
+		exitChs = append(exitChs, reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(val.Exit()),
+		})
+	}
+	// Exit status doesn't matter, we only need one of the validators to stop existing.
+	_, _, _ = reflect.Select(exitChs)
 
 	sc.logger.Info("gathering exported genesis files")
 	files, err := sc.getExportedGenesisFiles()
