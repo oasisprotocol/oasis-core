@@ -193,6 +193,11 @@ type ConsensusParameters struct {
 	// present in elected validator sets.
 	MaxValidators int `json:"max_validators"`
 
+	// ValidatorEntityThreshold is the cutoff point (by escrow balance)
+	// of the top-N entities running validator nodes, to be eligible
+	// for the entity's nodes to be elected as a validator.
+	ValidatorEntityThreshold int `json:"validator_entity_threshold"`
+
 	// DebugBypassStake is true iff the scheduler should bypass all of
 	// the staking related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake"`

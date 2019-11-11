@@ -558,8 +558,6 @@ func (app *schedulerApplication) electAllCommittees(ctx *abci.Context, request t
 }
 
 func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, nodes []*node.Node, params *scheduler.ConsensusParameters) error {
-	const topN = 100
-
 	// Filter the node list based on eligibility and minimum required
 	// entity stake.
 	var preFilteredNodeList []*node.Node
@@ -581,8 +579,8 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 	if err != nil {
 		return err
 	}
-	if len(sortedEntities) > topN {
-		sortedEntities = sortedEntities[:topN]
+	if len(sortedEntities) > params.ValidatorEntityThreshold {
+		sortedEntities = sortedEntities[:params.ValidatorEntityThreshold]
 	}
 	entMap = make(map[signature.MapKey]bool)
 	for _, v := range sortedEntities {
