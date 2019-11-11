@@ -61,8 +61,11 @@ const (
 	cfgSchedulerMaxBatchSizeBytes = "worker.txnscheduler.batching.max_batch_size_bytes"
 
 	// Scheduler config flags.
-	cfgSchedulerDebugBypassStake      = "scheduler.debug.bypass_stake" // nolint: gosec
-	cfgSchedulerDebugStaticValidators = "scheduler.debug.static_validators"
+	cfgSchedulerMinValidators            = "scheduler.min_validators"
+	cfgSchedulerMaxValidators            = "scheduler.max_validators"
+	cfgSchedulerValidatorEntityThreshold = "scheduler.validator_entity_threshold"
+	cfgSchedulerDebugBypassStake         = "scheduler.debug.bypass_stake" // nolint: gosec
+	cfgSchedulerDebugStaticValidators    = "scheduler.debug.static_validators"
 
 	// Beacon config flags.
 	cfgBeaconDebugDeterministic = "beacon.debug.deterministic"
@@ -175,8 +178,11 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	doc.Scheduler = scheduler.Genesis{
 		Parameters: scheduler.ConsensusParameters{
-			DebugBypassStake:      viper.GetBool(cfgSchedulerDebugBypassStake),
-			DebugStaticValidators: viper.GetBool(cfgSchedulerDebugStaticValidators),
+			MinValidators:            viper.GetInt(cfgSchedulerMinValidators),
+			MaxValidators:            viper.GetInt(cfgSchedulerMaxValidators),
+			ValidatorEntityThreshold: viper.GetInt(cfgSchedulerValidatorEntityThreshold),
+			DebugBypassStake:         viper.GetBool(cfgSchedulerDebugBypassStake),
+			DebugStaticValidators:    viper.GetBool(cfgSchedulerDebugStaticValidators),
 		},
 	}
 
@@ -619,6 +625,9 @@ func init() {
 	initGenesisFlags.String(cfgSchedulerMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
 
 	// Scheduler config flags.
+	initGenesisFlags.Int(cfgSchedulerMinValidators, 1, "minumum number of validators")
+	initGenesisFlags.Int(cfgSchedulerMaxValidators, 100, "maximum number of validators")
+	initGenesisFlags.Int(cfgSchedulerValidatorEntityThreshold, 100, "validator entity threshold")
 	initGenesisFlags.Bool(cfgSchedulerDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	initGenesisFlags.Bool(cfgSchedulerDebugStaticValidators, false, "bypass all validator elections (UNSAFE)")
 

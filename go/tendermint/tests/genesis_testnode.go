@@ -68,8 +68,11 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 		},
 		Scheduler: scheduler.Genesis{
 			Parameters: scheduler.ConsensusParameters{
-				DebugBypassStake:      true,
-				DebugStaticValidators: true,
+				MinValidators:            1,
+				MaxValidators:            100,
+				ValidatorEntityThreshold: 100,
+				DebugBypassStake:         true,
+				DebugStaticValidators:    true,
 			},
 		},
 		Consensus: consensus.Genesis{

@@ -40,6 +40,7 @@ var (
 	rngContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
 	rngContextMerge                = []byte("EkS-ABCI-Merge")
 	rngContextValidators           = []byte("EkS-ABCI-Validators")
+	rngContextEntities             = []byte("EkS-ABCI-Entities")
 
 	errUnexpectedTransaction = errors.New("tendermint/scheduler: unexpected transaction")
 )
@@ -205,7 +206,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		// Handle the validator election first, because no consensus is
 		// catastrophic, while no validators is not.
 		if !params.DebugStaticValidators {
-			if err = app.electValidators(ctx, beacon, entityStake, entitiesEligibleForReward, nodes); err != nil {
+			if err = app.electValidators(ctx, beacon, entityStake, entitiesEligibleForReward, nodes, params); err != nil {
 				// It is unclear what the behavior should be if the validator
 				// election fails.  The system can not ensure integrity, so
 				// presumably manual intervention is required...
@@ -241,15 +242,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		)
 
 		if entitiesEligibleForReward != nil {
-			accounts := make([]signature.PublicKey, len(entitiesEligibleForReward))
-			for mk := range entitiesEligibleForReward {
-				var account signature.PublicKey
-				account.FromMapKey(mk)
-				accounts = append(accounts, account)
-			}
-			sort.Slice(accounts, func(i, j int) bool {
-				return bytes.Compare(accounts[i], accounts[j]) < 0
-			})
+			accounts := publicKeyMapToSortedSlice(entitiesEligibleForReward)
 			stakingSt := stakingState.NewMutableState(ctx.State())
 			if err = stakingSt.AddRewards(epoch, scheduler.RewardFactorEpochElectionAny, accounts); err != nil {
 				return errors.Wrap(err, "adding rewards")
@@ -564,17 +557,39 @@ func (app *schedulerApplication) electAllCommittees(ctx *abci.Context, request t
 	return nil
 }
 
-func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, nodes []*node.Node) error {
-	// XXX: How many validators do we want, anyway?
-	const maxValidators = 100
-
-	// Filter the node list based on eligibility and entity stake.
-	var nodeList []*node.Node
+func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, nodes []*node.Node, params *scheduler.ConsensusParameters) error {
+	// Filter the node list based on eligibility and minimum required
+	// entity stake.
+	var preFilteredNodeList []*node.Node
+	entMap := make(map[signature.MapKey]bool)
 	for _, n := range nodes {
 		if !n.HasRoles(node.RoleValidator) {
 			continue
 		}
 		if err := entityStake.checkThreshold(n.EntityID, staking.KindValidator, false); err != nil {
+			continue
+		}
+		preFilteredNodeList = append(preFilteredNodeList, n)
+		entMap[n.EntityID.ToMapKey()] = true
+	}
+
+	// Figure out the top-N staked entities, out of the set of entities that
+	// are actually running eligible validator nodes.
+	sortedEntities, err := publicKeyMapToSliceByStake(entMap, entityStake, beacon)
+	if err != nil {
+		return err
+	}
+	if len(sortedEntities) > params.ValidatorEntityThreshold {
+		sortedEntities = sortedEntities[:params.ValidatorEntityThreshold]
+	}
+	entMap = make(map[signature.MapKey]bool)
+	for _, v := range sortedEntities {
+		entMap[v.ToMapKey()] = true
+	}
+
+	var nodeList []*node.Node
+	for _, n := range preFilteredNodeList {
+		if !entMap[n.EntityID.ToMapKey()] {
 			continue
 		}
 		nodeList = append(nodeList, n)
@@ -583,6 +598,8 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 		}
 	}
 
+	// Generate the permutation assuming the entire eligible node list may
+	// need to be traversed, due to some nodes having insufficient stake.
 	drbg, err := drbg.New(crypto.SHA512, beacon, nil, rngContextValidators)
 	if err != nil {
 		return errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
@@ -590,8 +607,6 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 	rngSrc := mathrand.New(drbg)
 	rng := rand.New(rngSrc)
 
-	// Generate the permutation assuming the entire eligible node list may
-	// need to be traversed, due to some nodes having insufficient stake.
 	idxs := rng.Perm(len(nodeList))
 
 	var newValidators []signature.PublicKey
@@ -604,13 +619,16 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 		}
 
 		newValidators = append(newValidators, n.Consensus.ID)
-		if len(newValidators) >= maxValidators {
+		if len(newValidators) >= params.MaxValidators {
 			break
 		}
 	}
 
 	if len(newValidators) == 0 {
 		return fmt.Errorf("tendermint/scheduler: failed to elect any validators")
+	}
+	if len(newValidators) < params.MinValidators {
+		return fmt.Errorf("tendermint/scheduler: insufficient validators")
 	}
 
 	// Set the new pending validator set in the ABCI state.  It needs to be
@@ -619,6 +637,46 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 	state.PutPendingValidators(newValidators)
 
 	return nil
+}
+
+func publicKeyMapToSliceByStake(entMap map[signature.MapKey]bool, entityStake *stakeAccumulator, beacon []byte) ([]signature.PublicKey, error) {
+	// Convert the map of entity public keys to a lexographically
+	// sorted slice (ie: make it deterministic).
+	entities := publicKeyMapToSortedSlice(entMap)
+
+	// Shuffle the sorted slice to make tie-breaks "random".
+	drbg, err := drbg.New(crypto.SHA512, beacon, nil, rngContextEntities)
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
+	}
+	rngSrc := mathrand.New(drbg)
+	rng := rand.New(rngSrc)
+
+	rng.Shuffle(len(entities), func(i, j int) {
+		entities[i], entities[j] = entities[j], entities[i]
+	})
+
+	// Stable-sort the shuffled slice by decending escrow balance.
+	sort.SliceStable(entities, func(i, j int) bool {
+		iBal := entityStake.stakeCache.GetEscrowBalance(entities[i])
+		jBal := entityStake.stakeCache.GetEscrowBalance(entities[j])
+		return iBal.Cmp(&jBal) == 1 // Note: Not -1 to get a reversed sort.
+	})
+
+	return entities, nil
+}
+
+func publicKeyMapToSortedSlice(m map[signature.MapKey]bool) []signature.PublicKey {
+	v := make([]signature.PublicKey, 0, len(m))
+	for mk := range m {
+		var id signature.PublicKey
+		id.FromMapKey(mk)
+		v = append(v, id)
+	}
+	sort.Slice(v, func(i, j int) bool {
+		return bytes.Compare(v[i], v[j]) < 0
+	})
+	return v
 }
 
 // New constructs a new scheduler application instance.
