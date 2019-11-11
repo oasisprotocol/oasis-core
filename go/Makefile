@@ -64,6 +64,24 @@ integrationrunner:
 	@$(ECHO) "$(CYAN)*** Testing oasis-node with coverate...$(OFF)"
 	@$(GO) test $(GOFLAGS) -c -covermode=atomic -coverpkg=./... -o oasis-node/$@/$@.test ./oasis-node/$@
 
+# Fuzzing binaries.
+build-fuzz: consensus/tendermint/fuzz/fuzz-fuzz.zip
+consensus/tendermint/fuzz/fuzz-fuzz.zip: .FORCE
+	@echo "Building consensus fuzzer"
+	@cd "$$(dirname "$@")"; go-fuzz-build
+	@cd "$$(dirname "$@")/gencorpus"; env -u GOPATH $(OASIS_GO) build -tags gofuzz
+
+# Run fuzzing.
+fuzz-consensus: consensus/tendermint/fuzz/
+	set -x; cd "$<"; \
+	if ! [ -d corpus ]; then \
+		mkdir corpus; \
+		pushd corpus; \
+		../gencorpus/gencorpus; \
+		popd; \
+	fi; \
+	go-fuzz -bin=./fuzz-fuzz.zip
+
 # Clean.
 clean:
 	@$(ECHO) "$(CYAN)*** Cleaning up Go...$(OFF)"
@@ -74,3 +92,5 @@ clean:
 	generate $(go-binaries) build \
 	$(test-helpers) build-helpers $(test-vectors) gen-test-vectors \
 	fmt lint test integrationrunner clean all
+
+.FORCE:
