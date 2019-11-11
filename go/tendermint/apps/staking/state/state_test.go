@@ -12,16 +12,17 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
 
-func mustInitQuantity(t *testing.T, i int64) (q staking.Quantity) {
+func mustInitQuantity(t *testing.T, i int64) (q quantity.Quantity) {
 	require.NoError(t, q.FromBigInt(big.NewInt(i)), "FromBigInt")
 	return
 }
 
-func mustInitQuantityP(t *testing.T, i int64) *staking.Quantity {
+func mustInitQuantityP(t *testing.T, i int64) *quantity.Quantity {
 	q := mustInitQuantity(t, i)
 	return &q
 }
@@ -51,18 +52,20 @@ func TestRewardAndSlash(t *testing.T) {
 	tree := iavl.NewMutableTree(db, 128)
 	s := NewMutableState(tree)
 
-	s.SetCommonPool(mustInitQuantityP(t, 10000))
-	s.SetDebondingInterval(21)
-	s.SetRewardSchedule([]staking.RewardStep{
-		{
-			Until: 30,
-			Scale: mustInitQuantity(t, 1000),
-		},
-		{
-			Until: 40,
-			Scale: mustInitQuantity(t, 500),
+	s.SetConsensusParameters(&staking.ConsensusParameters{
+		DebondingInterval: 21,
+		RewardSchedule: []staking.RewardStep{
+			{
+				Until: 30,
+				Scale: mustInitQuantity(t, 1000),
+			},
+			{
+				Until: 40,
+				Scale: mustInitQuantity(t, 500),
+			},
 		},
 	})
+	s.SetCommonPool(mustInitQuantityP(t, 10000))
 
 	s.SetAccount(delegatorID, delegatorAccount)
 	s.SetAccount(escrowID, escrowAccount)

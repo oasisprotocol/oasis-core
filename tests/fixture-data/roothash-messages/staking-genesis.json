@@ -7,7 +7,9 @@
   "total_supply": "1",
   "ledger": {
     "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=": {
-      "general_balance": "1"
+      "general": {
+        "balance": "1"
+      }
     }
   }
 }

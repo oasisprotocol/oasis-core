@@ -3,56 +3,30 @@ package staking
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 	stakingState "github.com/oasislabs/oasis-core/go/tendermint/apps/staking/state"
 )
 
-func (app *stakingApplication) initParameters(state *stakingState.MutableState, st *staking.Genesis) {
-	state.SetDebondingInterval(uint64(st.Parameters.DebondingInterval))
-	state.SetRewardSchedule(st.Parameters.RewardSchedule)
-	state.SetAcceptableTransferPeers(st.Parameters.AcceptableTransferPeers)
-	state.SetSlashing(st.Parameters.Slashing)
-}
-
-func (app *stakingApplication) initThresholds(state *stakingState.MutableState, st *staking.Genesis) error {
-	type thresholdUpdate struct {
-		k staking.ThresholdKind
-		v staking.Quantity
+func (app *stakingApplication) initParameters(state *stakingState.MutableState, st *staking.Genesis) error {
+	if err := st.Parameters.SanityCheck(); err != nil {
+		return fmt.Errorf("staking/tendermint: sanity check failed: %w", err)
 	}
 
-	if st.Parameters.Thresholds != nil {
-		var ups []thresholdUpdate
-		for k, v := range st.Parameters.Thresholds {
-			if !v.IsValid() {
-				app.logger.Error("InitChain: invalid threshold",
-					"threshold", k,
-					"quantity", v,
-				)
-				return errors.New("staking/tendermint: invalid genesis threshold")
-			}
-			ups = append(ups, thresholdUpdate{k, v})
-		}
-
-		// Make sure that we apply threshold updates in a canonical order.
-		sort.SliceStable(ups, func(i, j int) bool { return ups[i].k < ups[j].k })
-		for _, u := range ups {
-			state.SetThreshold(u.k, &u.v)
-		}
-	}
-
+	state.SetConsensusParameters(&st.Parameters)
 	return nil
 }
 
-func (app *stakingApplication) initCommonPool(st *staking.Genesis, totalSupply *staking.Quantity) error {
+func (app *stakingApplication) initCommonPool(st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	if !st.CommonPool.IsValid() {
 		return errors.New("staking/tendermint: invalid genesis state CommonPool")
 	}
@@ -66,7 +40,7 @@ func (app *stakingApplication) initCommonPool(st *staking.Genesis, totalSupply *
 	return nil
 }
 
-func (app *stakingApplication) initLedger(state *stakingState.MutableState, st *staking.Genesis, totalSupply *staking.Quantity) error {
+func (app *stakingApplication) initLedger(state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	type ledgerUpdate struct {
 		id      signature.PublicKey
 		account *staking.Account
@@ -127,7 +101,7 @@ func (app *stakingApplication) initLedger(state *stakingState.MutableState, st *
 	return nil
 }
 
-func (app *stakingApplication) initTotalSupply(state *stakingState.MutableState, st *staking.Genesis, totalSupply *staking.Quantity) {
+func (app *stakingApplication) initTotalSupply(state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) {
 	if totalSupply.Cmp(&st.TotalSupply) != 0 {
 		app.logger.Error("InitChain: total supply mismatch",
 			"expected", st.TotalSupply,
@@ -150,7 +124,7 @@ func (app *stakingApplication) initDelegations(state *stakingState.MutableState,
 		var escrowID signature.PublicKey
 		escrowID.FromMapKey(keyEscrowID)
 
-		delegationShares := staking.NewQuantity()
+		delegationShares := quantity.NewQuantity()
 		for keyDelegatorID, delegation := range delegations {
 			var delegatorID signature.PublicKey
 			delegatorID.FromMapKey(keyDelegatorID)
@@ -199,7 +173,7 @@ func (app *stakingApplication) initDebondingDelegations(state *stakingState.Muta
 		var escrowID signature.PublicKey
 		escrowID.FromMapKey(keyEscrowID)
 
-		debondingShares := staking.NewQuantity()
+		debondingShares := quantity.NewQuantity()
 		for keyDelegatorID, delegations := range delegators {
 			var delegatorID signature.PublicKey
 			delegatorID.FromMapKey(keyDelegatorID)
@@ -248,12 +222,10 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 
 	var (
 		state       = stakingState.NewMutableState(ctx.State())
-		totalSupply staking.Quantity
+		totalSupply quantity.Quantity
 	)
 
-	app.initParameters(state, st)
-
-	if err := app.initThresholds(state, st); err != nil {
+	if err := app.initParameters(state, st); err != nil {
 		return err
 	}
 
@@ -276,7 +248,6 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 	}
 
 	app.logger.Debug("InitChain: allocations complete",
-		"debonding_interval", st.Parameters.DebondingInterval,
 		"common_pool", st.CommonPool,
 		"total_supply", totalSupply,
 	)
@@ -292,26 +263,6 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 	}
 
 	commonPool, err := sq.state.CommonPool()
-	if err != nil {
-		return nil, err
-	}
-
-	thresholds, err := sq.state.Thresholds()
-	if err != nil {
-		return nil, err
-	}
-
-	debondingInterval, err := sq.state.DebondingInterval()
-	if err != nil {
-		return nil, err
-	}
-
-	rewardSchedule, err := sq.state.RewardSchedule()
-	if err != nil {
-		return nil, err
-	}
-
-	acceptableTransferPeers, err := sq.state.AcceptableTransferPeers()
 	if err != nil {
 		return nil, err
 	}
@@ -335,19 +286,13 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		return nil, err
 	}
 
-	slashing, err := sq.state.Slashing()
+	params, err := sq.state.ConsensusParameters()
 	if err != nil {
 		return nil, err
 	}
 
 	gen := staking.Genesis{
-		Parameters: staking.ConsensusParameters{
-			Thresholds:              thresholds,
-			DebondingInterval:       epochtime.EpochTime(debondingInterval),
-			RewardSchedule:          rewardSchedule,
-			AcceptableTransferPeers: acceptableTransferPeers,
-			Slashing:                slashing,
-		},
+		Parameters:           *params,
 		TotalSupply:          *totalSupply,
 		CommonPool:           *commonPool,
 		Ledger:               ledger,

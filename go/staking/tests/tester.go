@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -66,6 +67,23 @@ func StakingImplementationTests(
 	})
 }
 
+// StakingClientImplementationTests exercises the basic functionality of a
+// staking token client backend.
+func StakingClientImplementationTests(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
+	for _, tc := range []struct {
+		n  string
+		fn func(*testing.T, api.Backend, epochtime.SetableBackend)
+	}{
+		{"Transfer", testTransfer},
+		{"TransferSelf", testSelfTransfer},
+		{"Burn", testBurn},
+		{"Escrow", testEscrow},
+		{"EscrowSelf", testSelfEscrow},
+	} {
+		t.Run(tc.n, func(t *testing.T) { tc.fn(t, backend, timeSource) })
+	}
+}
+
 func testInitialEnv(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
 	require := require.New(t)
 
@@ -84,6 +102,13 @@ func testInitialEnv(t *testing.T, backend api.Backend, timeSource epochtime.Seta
 	require.True(acc.Escrow.Active.Balance.IsZero(), "src: active escrow balance")
 	require.True(acc.Escrow.Debonding.Balance.IsZero(), "src: debonding escrow balance")
 	require.EqualValues(0, acc.General.Nonce, "src: nonce")
+
+	acc, err = backend.AccountInfo(context.Background(), DestID, 0)
+	require.NoError(err, "dest: AccountInfo")
+	require.True(acc.General.Balance.IsZero(), "dest: general balance")
+	require.True(acc.Escrow.Active.Balance.IsZero(), "dest: active escrow balance")
+	require.True(acc.Escrow.Debonding.Balance.IsZero(), "dest: debonding escrow balance")
+	require.EqualValues(0, acc.General.Nonce, "dest: nonce")
 
 	commonPool, err := backend.CommonPool(context.Background(), 0)
 	require.NoError(err, "CommonPool")
@@ -106,13 +131,12 @@ func testTransfer(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 
 	dstAcc, err := backend.AccountInfo(context.Background(), DestID, 0)
 	require.NoError(err, "dest: AccountInfo")
-	require.True(dstAcc.General.Balance.IsZero(), "dest: general balance - before")
-	require.EqualValues(0, dstAcc.General.Nonce, "dest: nonce - before")
 
 	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
 	require.NoError(err, "src: AccountInfo - before")
 
-	ch, sub := backend.WatchTransfers()
+	ch, sub, err := backend.WatchTransfers(context.Background())
+	require.NoError(err, "WatchTransfers")
 	defer sub.Close()
 
 	xfer := &api.Transfer{
@@ -141,10 +165,11 @@ func testTransfer(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
 	require.Equal(xfer.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 
-	dstAcc, err = backend.AccountInfo(context.Background(), DestID, 0)
+	_ = dstAcc.General.Balance.Add(&xfer.Tokens)
+	newDstAcc, err := backend.AccountInfo(context.Background(), DestID, 0)
 	require.NoError(err, "dest: AccountInfo - after")
-	require.Equal(xfer.Tokens, dstAcc.General.Balance, "dest: general balance - after")
-	require.EqualValues(0, dstAcc.General.Nonce, "dest: nonce - after")
+	require.Equal(dstAcc.General.Balance, newDstAcc.General.Balance, "dest: general balance - after")
+	require.EqualValues(dstAcc.General.Nonce, newDstAcc.General.Nonce, "dest: nonce - after")
 
 	// Transfers that exceed available balance should fail.
 	xfer.Nonce = newSrcAcc.General.Nonce
@@ -164,7 +189,8 @@ func testSelfTransfer(t *testing.T, backend api.Backend, timeSource epochtime.Se
 	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
 	require.NoError(err, "src: AccountInfo - before")
 
-	ch, sub := backend.WatchTransfers()
+	ch, sub, err := backend.WatchTransfers(context.Background())
+	require.NoError(err, "WatchTransfers")
 	defer sub.Close()
 
 	xfer := &api.Transfer{
@@ -213,7 +239,8 @@ func testBurn(t *testing.T, backend api.Backend, timeSource epochtime.SetableBac
 	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
 	require.NoError(err, "src: AccountInfo")
 
-	ch, sub := backend.WatchBurns()
+	ch, sub, err := backend.WatchBurns(context.Background())
+	require.NoError(err, "WatchBurns")
 	defer sub.Close()
 
 	burn := &api.Burn{
@@ -277,10 +304,11 @@ func testEscrowEx(
 	require.True(dstAcc.Escrow.Debonding.Balance.IsZero(), "dst: debonding escrow balance == 0")
 	require.True(dstAcc.Escrow.Debonding.TotalShares.IsZero(), "dst: debonding escrow total shares == 0")
 
-	ch, sub := backend.WatchEscrows()
+	ch, sub, err := backend.WatchEscrows(context.Background())
+	require.NoError(err, "WatchEscrows")
 	defer sub.Close()
 
-	var totalEscrowed api.Quantity
+	var totalEscrowed quantity.Quantity
 
 	// Escrow.
 	escrow := &api.Escrow{
@@ -477,7 +505,8 @@ func testSlashDoubleSigning(
 	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
 	require.NoError(err, "AccountInfo")
 
-	escrowCh, escrowSub := backend.WatchEscrows()
+	escrowCh, escrowSub, err := backend.WatchEscrows(context.Background())
+	require.NoError(err, "WatchEscrows")
 	defer escrowSub.Close()
 
 	escrow := &api.Escrow{
@@ -507,7 +536,8 @@ func testSlashDoubleSigning(
 	defer blocksSub.Close()
 
 	// Subscribe to slash events.
-	slashCh, slashSub := backend.WatchEscrows()
+	slashCh, slashSub, err := backend.WatchEscrows(context.Background())
+	require.NoError(err, "WatchEscrows")
 	defer slashSub.Close()
 
 	// Broadcast evidence. This is Tendermint-specific, if we ever have more than one

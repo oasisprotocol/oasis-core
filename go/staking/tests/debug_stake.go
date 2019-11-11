@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 )
 
@@ -16,7 +17,7 @@ var (
 	DebugGenesisState = api.Genesis{
 		Parameters: api.ConsensusParameters{
 			DebondingInterval: 1,
-			Thresholds: map[api.ThresholdKind]api.Quantity{
+			Thresholds: map[api.ThresholdKind]quantity.Quantity{
 				api.KindEntity:    QtyFromInt(1),
 				api.KindValidator: QtyFromInt(2),
 				api.KindCompute:   QtyFromInt(3),
@@ -49,8 +50,8 @@ var (
 	DebugStateDestID    = destSigner.Public()
 )
 
-func QtyFromInt(n int) api.Quantity {
-	q := api.NewQuantity()
+func QtyFromInt(n int) quantity.Quantity {
+	q := quantity.NewQuantity()
 	if err := q.FromBigInt(big.NewInt(int64(n))); err != nil {
 		panic(err)
 	}

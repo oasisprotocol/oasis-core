@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 	tmapi "github.com/oasislabs/oasis-core/go/tendermint/api"
 	app "github.com/oasislabs/oasis-core/go/tendermint/apps/staking"
@@ -46,7 +47,7 @@ func (tb *tendermintBackend) Symbol() string {
 	return api.TokenSymbol
 }
 
-func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*api.Quantity, error) {
+func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -55,7 +56,7 @@ func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*ap
 	return q.TotalSupply(ctx)
 }
 
-func (tb *tendermintBackend) CommonPool(ctx context.Context, height int64) (*api.Quantity, error) {
+func (tb *tendermintBackend) CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -64,7 +65,7 @@ func (tb *tendermintBackend) CommonPool(ctx context.Context, height int64) (*api
 	return q.CommonPool(ctx)
 }
 
-func (tb *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKind, height int64) (*api.Quantity, error) {
+func (tb *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKind, height int64) (*quantity.Quantity, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -169,25 +170,25 @@ func (tb *tendermintBackend) SubmitEvidence(ctx context.Context, evidence api.Ev
 	return nil
 }
 
-func (tb *tendermintBackend) WatchTransfers() (<-chan *api.TransferEvent, *pubsub.Subscription) {
+func (tb *tendermintBackend) WatchTransfers(ctx context.Context) (<-chan *api.TransferEvent, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.TransferEvent)
 	sub := tb.transferNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
-	return typedCh, sub
+	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) WatchBurns() (<-chan *api.BurnEvent, *pubsub.Subscription) {
+func (tb *tendermintBackend) WatchBurns(ctx context.Context) (<-chan *api.BurnEvent, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.BurnEvent)
 	sub := tb.burnNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
-	return typedCh, sub
+	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) WatchEscrows() (<-chan interface{}, *pubsub.Subscription) {
+func (tb *tendermintBackend) WatchEscrows(ctx context.Context) (<-chan interface{}, pubsub.ClosableSubscription, error) {
 	sub := tb.escrowNotifier.Subscribe()
-	return sub.Untyped(), sub
+	return sub.Untyped(), sub, nil
 }
 
 func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {

@@ -11,8 +11,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 var (
@@ -44,7 +44,7 @@ const (
 // RewardFactorEpochElectionAny is the factor for a reward
 // distributed per epoch to entities that have any node considered
 // in any election.
-var RewardFactorEpochElectionAny *staking.Quantity
+var RewardFactorEpochElectionAny *quantity.Quantity
 
 // String returns a string representation of a Role.
 func (r Role) String() string {
@@ -208,7 +208,7 @@ type ConsensusParameters struct {
 }
 
 func init() {
-	RewardFactorEpochElectionAny = staking.NewQuantity()
+	RewardFactorEpochElectionAny = quantity.NewQuantity()
 	err := RewardFactorEpochElectionAny.FromBigInt(big.NewInt(1))
 	if err != nil {
 		panic(err)

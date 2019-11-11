@@ -23,6 +23,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/version"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
@@ -60,6 +61,14 @@ var (
 
 	errOversizedTx = fmt.Errorf("mux: oversized transaction")
 )
+
+// ApplicationConfig is the configuration for the consensus application.
+type ApplicationConfig struct {
+	DataDir         string
+	Pruning         PruneConfig
+	HaltEpochHeight epochtime.EpochTime
+	MinGasPrice     uint64
+}
 
 // Application is the interface implemented by multiplexed Oasis-specific
 // ABCI applications.
@@ -218,12 +227,12 @@ func (a *ApplicationServer) SetEpochtime(epochTime epochtime.Backend) {
 
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
-func NewApplicationServer(ctx context.Context, dataDir string, pruneCfg *PruneConfig, haltEpochHeight epochtime.EpochTime) (*ApplicationServer, error) {
+func NewApplicationServer(ctx context.Context, cfg *ApplicationConfig) (*ApplicationServer, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(abciCollectors...)
 	})
 
-	mux, err := newABCIMux(ctx, dataDir, pruneCfg, haltEpochHeight)
+	mux, err := newABCIMux(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -431,6 +440,9 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	mux.lastBeginBlock = blockHeight
 	mux.currentTime = req.Header.Time
 
+	// Create empty block context.
+	mux.state.blockCtx = NewBlockContext()
+	// Create BeginBlock context.
 	ctx := NewContext(ContextBeginBlock, mux.currentTime, mux.state)
 
 	switch mux.state.haltMode {
@@ -651,6 +663,9 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	// Update tags.
 	resp.Events = ctx.GetEvents()
 
+	// Clear block context.
+	mux.state.blockCtx = nil
+
 	return resp
 }
 
@@ -763,8 +778,8 @@ func (mux *abciMux) extractAppFromTx(tx []byte) (Application, error) {
 	return app, nil
 }
 
-func newABCIMux(ctx context.Context, dataDir string, pruneCfg *PruneConfig, haltEpochHeight epochtime.EpochTime) (*abciMux, error) {
-	state, err := newApplicationState(ctx, dataDir, pruneCfg, haltEpochHeight)
+func newABCIMux(ctx context.Context, cfg *ApplicationConfig) (*abciMux, error) {
+	state, err := newApplicationState(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -799,11 +814,14 @@ type ApplicationState struct {
 	blockLock   sync.RWMutex
 	blockHash   []byte
 	blockHeight int64
+	blockCtx    *BlockContext
 
 	timeSource epochtime.Backend
 
 	haltMode        bool
 	haltEpochHeight epochtime.EpochTime
+
+	minGasPrice quantity.Quantity
 
 	metricsCloseCh  chan struct{}
 	metricsClosedCh chan struct{}
@@ -823,6 +841,15 @@ func (s *ApplicationState) BlockHash() []byte {
 	defer s.blockLock.RUnlock()
 
 	return append([]byte{}, s.blockHash...)
+}
+
+// BlockContext returns the current block context which can be used
+// to store intermediate per-block results.
+//
+// This method must only be called from BeginBlock/DeliverTx/EndBlock
+// and calls from anywhere else will cause races.
+func (s *ApplicationState) BlockContext() *BlockContext {
+	return s.blockCtx
 }
 
 // DeliverTxTree returns the versioned tree to be used by queries
@@ -917,6 +944,11 @@ func (s *ApplicationState) Genesis() *genesis.Document {
 	}
 
 	return st
+}
+
+// MinGasPrice returns the configured minimum gas price.
+func (s *ApplicationState) MinGasPrice() *quantity.Quantity {
+	return &s.minGasPrice
 }
 
 func (s *ApplicationState) doCommit() error {
@@ -1020,8 +1052,8 @@ func (s *ApplicationState) metricsWorker() {
 	}
 }
 
-func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneConfig, haltEpochHeight epochtime.EpochTime) (*ApplicationState, error) {
-	db, err := db.New(filepath.Join(dataDir, "abci-mux-state"), false)
+func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*ApplicationState, error) {
+	db, err := db.New(filepath.Join(cfg.DataDir, "abci-mux-state"), false)
 	if err != nil {
 		return nil, err
 	}
@@ -1048,10 +1080,15 @@ func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneCon
 		return nil, fmt.Errorf("state: inconsistent trees")
 	}
 
-	statePruner, err := newStatePruner(pruneCfg, deliverTxTree, blockHeight)
+	statePruner, err := newStatePruner(&cfg.Pruning, deliverTxTree, blockHeight)
 	if err != nil {
 		db.Close()
 		return nil, err
+	}
+
+	var minGasPrice quantity.Quantity
+	if err = minGasPrice.FromInt64(int64(cfg.MinGasPrice)); err != nil {
+		return nil, fmt.Errorf("state: invalid minimum gas price: %w", err)
 	}
 
 	s := &ApplicationState{
@@ -1063,7 +1100,8 @@ func newApplicationState(ctx context.Context, dataDir string, pruneCfg *PruneCon
 		statePruner:     statePruner,
 		blockHash:       blockHash,
 		blockHeight:     blockHeight,
-		haltEpochHeight: haltEpochHeight,
+		haltEpochHeight: cfg.HaltEpochHeight,
+		minGasPrice:     minGasPrice,
 		metricsCloseCh:  make(chan struct{}),
 		metricsClosedCh: make(chan struct{}),
 	}

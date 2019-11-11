@@ -9,7 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 )
 
 func TestConsistentHash(t *testing.T) {
@@ -32,7 +32,7 @@ func TestConsistentHash(t *testing.T) {
 	var account signature.PublicKey
 	require.NoError(t, account.UnmarshalHex("5555555555555555555555555555555555555555555555555555555555555555"), "PublicKey UnmarshalHex")
 
-	var amount api.Quantity
+	var amount quantity.Quantity
 	require.NoError(t, amount.FromBigInt(big.NewInt(69376)), "Quantity FromBigInt")
 
 	populated := Header{

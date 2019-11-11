@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/tendermint/abci"
 )
@@ -28,10 +29,10 @@ func EnsureSufficientStake(ctx *abci.Context, id signature.PublicKey, thresholds
 type StakeCache struct {
 	ctx *abci.Context
 
-	thresholds map[staking.ThresholdKind]staking.Quantity
-	balances   map[signature.MapKey]*staking.Quantity
+	thresholds map[staking.ThresholdKind]quantity.Quantity
+	balances   map[signature.MapKey]*quantity.Quantity
 
-	lowestNonZeroThreshold staking.Quantity
+	lowestNonZeroThreshold quantity.Quantity
 }
 
 // EnsureNodeRegistrationStake ensures the account owned by id has sufficient
@@ -40,7 +41,7 @@ type StakeCache struct {
 // ignores what roles the nodes actually are registering for as it is
 // intended to be a cheap check to prevent node registration Tx spam.
 func (sc *StakeCache) EnsureNodeRegistrationStake(id signature.PublicKey, n int) error {
-	var newNumNodes staking.Quantity
+	var newNumNodes quantity.Quantity
 	if err := newNumNodes.FromBigInt(big.NewInt(int64(n))); err != nil {
 		return fmt.Errorf("staking/tendermint: failed to create node multiplier: %w", err)
 	}
@@ -63,7 +64,7 @@ func (sc *StakeCache) EnsureNodeRegistrationStake(id signature.PublicKey, n int)
 // can have multiple instances of the same threshold kind specified, in which
 // case it will be factored in repeatedly.
 func (sc *StakeCache) EnsureSufficientStake(id signature.PublicKey, thresholds []staking.ThresholdKind) error {
-	var targetThreshold staking.Quantity
+	var targetThreshold quantity.Quantity
 	for _, v := range thresholds {
 		qty := sc.thresholds[v]
 		if err := targetThreshold.Add(&qty); err != nil {
@@ -80,7 +81,7 @@ func (sc *StakeCache) EnsureSufficientStake(id signature.PublicKey, thresholds [
 }
 
 // GetEscrowBalance returns the escrow balance of the account owned by id.
-func (sc *StakeCache) GetEscrowBalance(id signature.PublicKey) staking.Quantity {
+func (sc *StakeCache) GetEscrowBalance(id signature.PublicKey) quantity.Quantity {
 	escrowBalance := sc.balances[id.ToMapKey()]
 	if escrowBalance == nil {
 		state := NewMutableState(sc.ctx.State())
@@ -101,7 +102,7 @@ func NewStakeCache(ctx *abci.Context) (*StakeCache, error) {
 		return nil, fmt.Errorf("staking/tendermint: failed to query thresholds: %w", err)
 	}
 
-	lowestNonZeroThreshold := staking.NewQuantity()
+	lowestNonZeroThreshold := quantity.NewQuantity()
 	for _, v := range thresholds {
 		if lowestNonZeroThreshold.IsZero() {
 			lowestNonZeroThreshold = v.Clone()
@@ -113,7 +114,7 @@ func NewStakeCache(ctx *abci.Context) (*StakeCache, error) {
 	return &StakeCache{
 		ctx:                    ctx,
 		thresholds:             thresholds,
-		balances:               make(map[signature.MapKey]*staking.Quantity),
+		balances:               make(map[signature.MapKey]*quantity.Quantity),
 		lowestNonZeroThreshold: *lowestNonZeroThreshold,
 	}, nil
 }

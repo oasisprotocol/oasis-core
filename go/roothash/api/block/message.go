@@ -2,7 +2,7 @@ package block
 
 import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 )
 
 // AdjustmentOp is the Op in StakingGeneralAdjustmentRoothashMessage
@@ -21,7 +21,7 @@ const (
 type StakingGeneralAdjustmentRoothashMessage struct {
 	Account signature.PublicKey `json:"account"`
 	Op      AdjustmentOp        `json:"op"`
-	Amount  *staking.Quantity   `json:"amount"`
+	Amount  *quantity.Quantity  `json:"amount"`
 }
 
 // RoothashMessage is a roothash message.

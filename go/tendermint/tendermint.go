@@ -69,6 +69,9 @@ const (
 
 	// CfgDebugP2PAddrBookLenient configures allowing non-routable addresses.
 	CfgDebugP2PAddrBookLenient = "tendermint.debug.addr_book_lenient"
+
+	// CfgConsensusMinGasPrice configures the minimum gas price for this validator.
+	CfgConsensusMinGasPrice = "consensus.tendermint.min_gas_price"
 )
 
 var (
@@ -457,10 +460,13 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 
 	// Wait for the transaction to be included in a block.
 	select {
-	case <-txSub.Out():
+	case v := <-txSub.Out():
+		if result := v.Data().(tmtypes.EventDataTx).Result; !result.IsOK() {
+			return errors.New(result.GetInfo())
+		}
 		return nil
 	case <-txSub.Cancelled():
-		return nil
+		return context.Canceled
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -639,7 +645,13 @@ func (t *tendermintService) lazyInit() error {
 	pruneNumKept := int64(viper.GetInt(cfgABCIPruneNumKept))
 	pruneCfg.NumKept = pruneNumKept
 
-	t.mux, err = abci.NewApplicationServer(t.ctx, t.dataDir, &pruneCfg, t.genesis.HaltEpoch)
+	appConfig := &abci.ApplicationConfig{
+		DataDir:         t.dataDir,
+		Pruning:         pruneCfg,
+		HaltEpochHeight: t.genesis.HaltEpoch,
+		MinGasPrice:     viper.GetUint64(CfgConsensusMinGasPrice),
+	}
+	t.mux, err = abci.NewApplicationServer(t.ctx, appConfig)
 	if err != nil {
 		return err
 	}
@@ -1025,6 +1037,7 @@ func init() {
 	Flags.String(CfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
 	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 	Flags.Bool(CfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
+	Flags.Uint64(CfgConsensusMinGasPrice, 0, "minimum gas price")
 
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(db.Flags)
