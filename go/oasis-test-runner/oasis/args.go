@@ -24,6 +24,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/keymanager"
 	"github.com/oasislabs/oasis-core/go/worker/merge"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
+	workerSentry "github.com/oasislabs/oasis-core/go/worker/sentry"
 	workerStorage "github.com/oasislabs/oasis-core/go/worker/storage"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
 )
@@ -211,6 +212,20 @@ func (args *argBuilder) workerKeymanagerMayGenerate() *argBuilder {
 
 func (args *argBuilder) workerMergeEnabled() *argBuilder {
 	args.vec = append(args.vec, "--"+merge.CfgWorkerEnabled)
+	return args
+}
+
+func (args *argBuilder) workerSentryEnabled() *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + workerSentry.CfgEnabled,
+	}...)
+	return args
+}
+
+func (args *argBuilder) workerSentryControlPort(port uint16) *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + workerSentry.CfgControlPort, strconv.Itoa(int(port)),
+	}...)
 	return args
 }
 
