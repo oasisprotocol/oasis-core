@@ -80,6 +80,9 @@ const (
 	cfgConsensusSkipTimeoutCommit  = "consensus.tendermint.skip_timeout_commit"
 	cfgConsensusEmptyBlockInterval = "consensus.tendermint.empty_block_interval"
 	cfgConsensusMaxTxSizeBytes     = "consensus.tendermint.max_tx_size"
+	cfgConsensusMaxBlockSizeBytes  = "consensus.tendermint.max_block_size"
+	cfgConsensusMaxBlockGas        = "consensus.tendermint.max_block_gas"
+	cfgConsensusMaxEvidenceAge     = "consensus.tendermint.max_evidence_age"
 
 	// Consensus backend config flag.
 	cfgConsensusBackend = "consensus.backend"
@@ -201,11 +204,16 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	}
 
 	doc.Consensus = consensus.Genesis{
-		Backend:            viper.GetString(cfgConsensusBackend),
-		TimeoutCommit:      viper.GetDuration(cfgConsensusTimeoutCommit),
-		SkipTimeoutCommit:  viper.GetBool(cfgConsensusSkipTimeoutCommit),
-		EmptyBlockInterval: viper.GetDuration(cfgConsensusEmptyBlockInterval),
-		MaxTxSize:          viper.GetSizeInBytes(cfgConsensusMaxTxSizeBytes),
+		Backend: viper.GetString(cfgConsensusBackend),
+		Parameters: consensus.Parameters{
+			TimeoutCommit:      viper.GetDuration(cfgConsensusTimeoutCommit),
+			SkipTimeoutCommit:  viper.GetBool(cfgConsensusSkipTimeoutCommit),
+			EmptyBlockInterval: viper.GetDuration(cfgConsensusEmptyBlockInterval),
+			MaxTxSize:          uint64(viper.GetSizeInBytes(cfgConsensusMaxTxSizeBytes)),
+			MaxBlockSize:       uint64(viper.GetSizeInBytes(cfgConsensusMaxBlockSizeBytes)),
+			MaxBlockGas:        viper.GetUint64(cfgConsensusMaxBlockGas),
+			MaxEvidenceAge:     viper.GetUint64(cfgConsensusMaxEvidenceAge),
+		},
 	}
 
 	// TODO: Ensure consistency/sanity.
@@ -644,6 +652,9 @@ func init() {
 	initGenesisFlags.Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
 	initGenesisFlags.Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
 	initGenesisFlags.String(cfgConsensusMaxTxSizeBytes, "32kb", "tendermint maximum transaction size (in bytes)")
+	initGenesisFlags.String(cfgConsensusMaxBlockSizeBytes, "21mb", "tendermint maximum block size (in bytes)")
+	initGenesisFlags.Uint64(cfgConsensusMaxBlockGas, 0, "tendermint max gas used per block")
+	initGenesisFlags.Uint64(cfgConsensusMaxEvidenceAge, 100000, "tendermint max evidence age (in blocks)")
 
 	// Consensus backend flag.
 	initGenesisFlags.String(cfgConsensusBackend, tendermint.BackendName, "consensus backend")

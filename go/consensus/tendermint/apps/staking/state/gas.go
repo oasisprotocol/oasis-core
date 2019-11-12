@@ -50,6 +50,9 @@ func AuthenticateAndPayFees(
 	}
 
 	if ctx.IsCheckOnly() {
+		// Configure gas accountant on the context so that we can report gas wanted.
+		ctx.SetGasAccountant(abci.NewGasAccountant(fee.Gas))
+
 		// Check that there is enough balance to pay fees. For the non-CheckTx case
 		// this happens during Move below.
 		if account.General.Balance.Cmp(&fee.Amount) < 0 {
@@ -77,7 +80,10 @@ func AuthenticateAndPayFees(
 	state.SetAccount(id, account)
 
 	// Configure gas accountant on the context.
-	ctx.SetGasAccountant(abci.NewGasAccountant(fee.Gas))
+	ctx.SetGasAccountant(abci.NewCompositeGasAccountant(
+		abci.NewGasAccountant(fee.Gas),
+		ctx.BlockContext().Get(abci.GasAccountantKey{}).(abci.GasAccountant),
+	))
 
 	return account, nil
 }

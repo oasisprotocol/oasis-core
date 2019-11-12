@@ -757,10 +757,10 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig := tmconfig.DefaultConfig()
 	_ = viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(tendermintDataDir)
-	timeoutCommit := t.genesis.Consensus.TimeoutCommit
-	emptyBlockInterval := t.genesis.Consensus.EmptyBlockInterval
+	timeoutCommit := t.genesis.Consensus.Parameters.TimeoutCommit
+	emptyBlockInterval := t.genesis.Consensus.Parameters.EmptyBlockInterval
 	tenderConfig.Consensus.TimeoutCommit = timeoutCommit
-	tenderConfig.Consensus.SkipTimeoutCommit = t.genesis.Consensus.SkipTimeoutCommit
+	tenderConfig.Consensus.SkipTimeoutCommit = t.genesis.Consensus.Parameters.SkipTimeoutCommit
 	tenderConfig.Consensus.CreateEmptyBlocks = true
 	tenderConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
 	tenderConfig.Instrumentation.Prometheus = true
@@ -852,12 +852,31 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint: failed to serialize genesis doc")
 	}
+
+	// Translate special "disable block gas limit" value as Tendermint uses
+	// -1 for some reason (as if a zero limit makes sense) and we use 0.
+	maxBlockGas := int64(d.Consensus.Parameters.MaxBlockGas)
+	if maxBlockGas == 0 {
+		maxBlockGas = -1
+	}
+
 	doc := tmtypes.GenesisDoc{
 		ChainID:     d.ChainID,
 		GenesisTime: d.Time,
-		// TODO: Configure Evidence.MaxAge once these are in genesis.
-		ConsensusParams: tmtypes.DefaultConsensusParams(),
-		AppState:        b,
+		ConsensusParams: &tmtypes.ConsensusParams{
+			Block: tmtypes.BlockParams{
+				MaxBytes:   int64(d.Consensus.Parameters.MaxBlockSize),
+				MaxGas:     maxBlockGas,
+				TimeIotaMs: 1000,
+			},
+			Evidence: tmtypes.EvidenceParams{
+				MaxAge: int64(d.Consensus.Parameters.MaxEvidenceAge),
+			},
+			Validator: tmtypes.ValidatorParams{
+				PubKeyTypes: []string{tmtypes.ABCIPubKeyTypeEd25519},
+			},
+		},
+		AppState: b,
 	}
 
 	var tmValidators []tmtypes.GenesisValidator
@@ -904,7 +923,7 @@ func (t *tendermintService) getTendermintGenesis() (*tmtypes.GenesisDoc, error) 
 
 	// HACK: Certain test cases use TimeoutCommit < 1 sec, and care about the
 	// BFT view of time pulling ahead.
-	timeoutCommit := t.genesis.Consensus.TimeoutCommit
+	timeoutCommit := t.genesis.Consensus.Parameters.TimeoutCommit
 	tmGenDoc.ConsensusParams.Block.TimeIotaMs = int64(timeoutCommit / time.Millisecond)
 
 	return tmGenDoc, nil
