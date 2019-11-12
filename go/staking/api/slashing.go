@@ -1,8 +1,6 @@
 package api
 
 import (
-	"math/big"
-
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
@@ -29,12 +27,9 @@ func (s SlashReason) String() string {
 
 // Slash is the per-reason slashing configuration.
 type Slash struct {
-	Share          quantity.Quantity   `json:"share"`
+	Amount         quantity.Quantity   `json:"amount"`
 	FreezeInterval epochtime.EpochTime `json:"freeze_interval"`
 }
-
-// SlashAmountDenominator is the denominator for the slash share.
-var SlashAmountDenominator *quantity.Quantity
 
 // EvidenceKind is kind of evindence of a node misbehaving.
 type EvidenceKind int
@@ -84,13 +79,4 @@ func (ce ConsensusEvidence) Unwrap() interface{} {
 // NewConsensusEvidence creates new consensus backend-specific evidence.
 func NewConsensusEvidence(inner interface{}) ConsensusEvidence {
 	return ConsensusEvidence{inner: inner}
-}
-
-func init() {
-	// Denominated in 1000th of a percent.
-	SlashAmountDenominator = quantity.NewQuantity()
-	err := SlashAmountDenominator.FromBigInt(big.NewInt(100_000))
-	if err != nil {
-		panic(err)
-	}
 }

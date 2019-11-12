@@ -434,16 +434,17 @@ func (s *MutableState) SetLastBlockFees(q *quantity.Quantity) {
 	s.tree.Set(lastBlockFeesKeyFmt.Encode(), cbor.Marshal(q))
 }
 
-func slashPool(dst *quantity.Quantity, p *staking.SharePool, share *quantity.Quantity) error {
+func slashPool(dst *quantity.Quantity, p *staking.SharePool, amount, total *quantity.Quantity) error {
+	// slashAmount = amount * p.Balance / total
 	slashAmount := p.Balance.Clone()
-	if err := slashAmount.Mul(share); err != nil {
+	if err := slashAmount.Mul(amount); err != nil {
 		return errors.Wrap(err, "slashAmount.Mul")
 	}
-	if err := slashAmount.Quo(staking.SlashAmountDenominator); err != nil {
+	if err := slashAmount.Quo(total); err != nil {
 		return errors.Wrap(err, "slashAmount.Quo")
 	}
 
-	if err := quantity.Move(dst, &p.Balance, slashAmount); err != nil {
+	if _, err := quantity.MoveUpTo(dst, &p.Balance, slashAmount); err != nil {
 		return errors.Wrap(err, "moving tokens")
 	}
 
@@ -456,20 +457,26 @@ func slashPool(dst *quantity.Quantity, p *staking.SharePool, share *quantity.Qua
 //
 // WARNING: This is an internal routine to be used to implement staking policy,
 // and MUST NOT be exposed outside of backend implementations.
-func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey, share *quantity.Quantity) (bool, error) {
+func (s *MutableState) SlashEscrow(ctx *abci.Context, fromID signature.PublicKey, amount *quantity.Quantity) (bool, error) {
 	commonPool, err := s.CommonPool()
 	if err != nil {
 		return false, fmt.Errorf("staking: failed to query common pool for slash: %w", err)
 	}
 
-	// Compute actual token amount based on passed percentage.
 	from := s.Account(fromID)
 
+	// Compute the amount we need to slash each pool. The amount is split
+	// between the pools based on relative total balance.
+	total := from.Escrow.Active.Balance.Clone()
+	if err = total.Add(&from.Escrow.Debonding.Balance); err != nil {
+		return false, fmt.Errorf("staking: compute total balance: %w", err)
+	}
+
 	var slashed quantity.Quantity
-	if err = slashPool(&slashed, &from.Escrow.Active, share); err != nil {
+	if err = slashPool(&slashed, &from.Escrow.Active, amount, total); err != nil {
 		return false, errors.Wrap(err, "slashing active escrow")
 	}
-	if err = slashPool(&slashed, &from.Escrow.Debonding, share); err != nil {
+	if err = slashPool(&slashed, &from.Escrow.Debonding, amount, total); err != nil {
 		return false, errors.Wrap(err, "slashing debonding escrow")
 	}
 
