@@ -59,8 +59,8 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, lastCommitInfo ty
 
 		d := disbursement{
 			id: node.EntityID,
-			// For now we just disburse equally.
-			weight: 1,
+			// Disburse based on validator voting power.
+			weight: a.Validator.Power,
 		}
 		rewardAccounts = append(rewardAccounts, d)
 		totalWeight += d.weight
