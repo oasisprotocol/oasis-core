@@ -560,7 +560,7 @@ func (app *schedulerApplication) electAllCommittees(ctx *abci.Context, request t
 func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, nodes []*node.Node, params *scheduler.ConsensusParameters) error {
 	// Filter the node list based on eligibility and minimum required
 	// entity stake.
-	var preFilteredNodeList []*node.Node
+	var nodeList []*node.Node
 	entMap := make(map[signature.MapKey]bool)
 	for _, n := range nodes {
 		if !n.HasRoles(node.RoleValidator) {
@@ -569,37 +569,26 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 		if err := entityStake.checkThreshold(n.EntityID, staking.KindValidator, false); err != nil {
 			continue
 		}
-		preFilteredNodeList = append(preFilteredNodeList, n)
-		entMap[n.EntityID.ToMapKey()] = true
-	}
-
-	// Figure out the top-N staked entities, out of the set of entities that
-	// are actually running eligible validator nodes.
-	sortedEntities, err := publicKeyMapToSliceByStake(entMap, entityStake, beacon)
-	if err != nil {
-		return err
-	}
-	if len(sortedEntities) > params.ValidatorEntityThreshold {
-		sortedEntities = sortedEntities[:params.ValidatorEntityThreshold]
-	}
-	entMap = make(map[signature.MapKey]bool)
-	for _, v := range sortedEntities {
-		entMap[v.ToMapKey()] = true
-	}
-
-	var nodeList []*node.Node
-	for _, n := range preFilteredNodeList {
-		if !entMap[n.EntityID.ToMapKey()] {
-			continue
-		}
 		nodeList = append(nodeList, n)
+		entMap[n.EntityID.ToMapKey()] = true
+
+		// Everyone that "runs" a validator node is eligible for rewards.
+		//
+		// Yes, this is stupid in that, there's no proof that the node is
+		// actually running.
 		if entitiesEligibleForReward != nil {
 			entitiesEligibleForReward[n.EntityID.ToMapKey()] = true
 		}
 	}
 
-	// Generate the permutation assuming the entire eligible node list may
-	// need to be traversed, due to some nodes having insufficient stake.
+	// Sort all of the entities that are actually running eligible validator
+	// nodes by descending stake.
+	sortedEntities, err := publicKeyMapToSliceByStake(entMap, entityStake, beacon)
+	if err != nil {
+		return err
+	}
+
+	// Shuffle the node list.
 	drbg, err := drbg.New(crypto.SHA512, beacon, nil, rngContextValidators)
 	if err != nil {
 		return errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
@@ -609,18 +598,43 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 
 	idxs := rng.Perm(len(nodeList))
 
-	var newValidators []signature.PublicKey
+	// Gather all the entities nodes.  If the entity has more than one node,
+	// ordering will be determistically random due to the shuffle.
+	entityNodes := make(map[signature.MapKey][]*node.Node)
 	for i := 0; i < len(idxs); i++ {
 		n := nodeList[idxs[i]]
+		mk := n.EntityID.ToMapKey()
 
-		// Re-check and then accumulate the entity's stake.
-		if err = entityStake.checkThreshold(n.EntityID, staking.KindValidator, true); err != nil {
-			continue
-		}
+		vec := entityNodes[mk]
+		vec = append(vec, n)
+		entityNodes[mk] = vec
+	}
 
-		newValidators = append(newValidators, n.Consensus.ID)
-		if len(newValidators) >= params.MaxValidators {
-			break
+	// Go down the list of entities running nodes by stake, picking one node
+	// to act as a validator till the maximum is reached.
+	var newValidators []signature.PublicKey
+electLoop:
+	for _, v := range sortedEntities {
+		vec := entityNodes[v.ToMapKey()]
+
+		// This is usually a maximum of 1, but if more are allowed,
+		// like in certain test scenarios, then pick as many nodes
+		// as the entity's stake allows
+		for i := 0; i < params.MaxValidatorsPerEntity; i++ {
+			if i >= len(vec) {
+				break
+			}
+
+			n := vec[i]
+			// Re-check and then accumulate the entity's stake.
+			if err = entityStake.checkThreshold(n.EntityID, staking.KindValidator, true); err != nil {
+				continue electLoop
+			}
+
+			newValidators = append(newValidators, n.Consensus.ID)
+			if len(newValidators) >= params.MaxValidators {
+				break electLoop
+			}
 		}
 	}
 

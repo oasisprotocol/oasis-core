@@ -512,6 +512,7 @@ func (net *Network) makeGenesis() error {
 		"--consensus.tendermint.timeout_commit", net.cfg.ConsensusTimeoutCommit.String(),
 		"--worker.txnscheduler.batching.max_batch_size", "1",
 		"--registry.debug.allow_unroutable_addresses", "true",
+		"--scheduler.max_validators_per_entity", strconv.Itoa(len(net.Validators())),
 	}
 	if net.cfg.EpochtimeMock {
 		args = append(args, "--epochtime.debug.mock_backend")

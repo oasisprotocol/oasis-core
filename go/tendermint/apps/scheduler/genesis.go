@@ -38,8 +38,14 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 	if doc.Scheduler.Parameters.MaxValidators <= 0 {
 		return fmt.Errorf("tendermint/scheduler: maximum number of validators not configured")
 	}
-	if doc.Scheduler.Parameters.ValidatorEntityThreshold <= 0 {
-		return fmt.Errorf("tendermint/scheduler: validator entity threshold not configured")
+	if doc.Scheduler.Parameters.MaxValidatorsPerEntity <= 0 {
+		return fmt.Errorf("tendermint/scheduler: maximum number of validators per entity not configured")
+	}
+	if doc.Scheduler.Parameters.MaxValidatorsPerEntity > 1 {
+		// This should only ever be true for test deployments.
+		app.logger.Warn("maximum number of validators is non-standard, fairness not guaranteed",
+			"max_valiators_per_entity", doc.Scheduler.Parameters.MaxValidatorsPerEntity,
+		)
 	}
 
 	regState := registryState.NewMutableState(ctx.State())
