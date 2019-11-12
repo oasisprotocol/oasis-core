@@ -257,7 +257,7 @@ type abciMux struct {
 
 	lastBeginBlock int64
 	currentTime    time.Time
-	maxTxSize      uint
+	maxTxSize      uint64
 
 	genesisHooks []func()
 	haltHooks    []func(context.Context, int64, epochtime.EpochTime)
@@ -341,7 +341,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		panic("mux: invalid genesis application state")
 	}
 
-	if mux.maxTxSize = st.Consensus.MaxTxSize; mux.maxTxSize == 0 {
+	if mux.maxTxSize = st.Consensus.Parameters.MaxTxSize; mux.maxTxSize == 0 {
 		mux.logger.Warn("maximum transaction size enforcement is disabled")
 	}
 
@@ -547,7 +547,7 @@ func (mux *abciMux) executeTx(ctx *Context, tx []byte) error {
 		return fmt.Errorf("halt mode, rejecting all transactions")
 	}
 
-	if mux.maxTxSize > 0 && uint(len(tx)) > mux.maxTxSize {
+	if mux.maxTxSize > 0 && uint64(len(tx)) > mux.maxTxSize {
 		// This deliberately avoids logging the tx since spamming the
 		// logs is also bad.
 		logger.Error("received oversized transaction",

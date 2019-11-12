@@ -76,9 +76,11 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 			},
 		},
 		Consensus: consensus.Genesis{
-			Backend:           tendermint.BackendName,
-			TimeoutCommit:     1 * time.Millisecond,
-			SkipTimeoutCommit: true,
+			Backend: tendermint.BackendName,
+			Parameters: consensus.Parameters{
+				TimeoutCommit:     1 * time.Millisecond,
+				SkipTimeoutCommit: true,
+			},
 		},
 		Staking: stakingTests.DebugGenesisState,
 	}
