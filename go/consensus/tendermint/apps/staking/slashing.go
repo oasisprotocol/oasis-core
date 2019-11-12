@@ -79,7 +79,7 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 	}
 
 	// Slash validator.
-	_, err = stakeState.SlashEscrow(ctx, node.EntityID, &penalty.Share)
+	_, err = stakeState.SlashEscrow(ctx, node.EntityID, &penalty.Amount)
 	if err != nil {
 		app.logger.Error("failed to slash validator entity",
 			"err", err,

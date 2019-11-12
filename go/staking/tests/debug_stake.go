@@ -29,7 +29,7 @@ var (
 			},
 			Slashing: map[api.SlashReason]api.Slash{
 				api.SlashDoubleSigning: api.Slash{
-					Share:          QtyFromInt(100_000), // Slash everything.
+					Amount:         QtyFromInt(math.MaxInt64), // Slash everything.
 					FreezeInterval: 1,
 				},
 			},
