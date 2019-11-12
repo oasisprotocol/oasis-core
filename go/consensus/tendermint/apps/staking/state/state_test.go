@@ -40,6 +40,22 @@ func TestRewardAndSlash(t *testing.T) {
 	escrowID := escrowSigner.Public()
 	escrowAccountOnly := []signature.PublicKey{escrowID}
 	escrowAccount := &staking.Account{}
+	escrowAccount.Escrow.CommissionSchedule = staking.CommissionSchedule{
+		Rates: []staking.CommissionRateStep{
+			{
+				Start: 0,
+				Rate:  mustInitQuantity(t, 20_000), // 20%
+			},
+		},
+		Bounds: []staking.CommissionRateBoundStep{
+			{
+				Start:   0,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 100_000),
+			},
+		},
+	}
+	require.NoError(t, escrowAccount.Escrow.CommissionSchedule.PruneAndValidateForGenesis(0, 10), "commission schedule")
 
 	del := &staking.Delegation{}
 	require.NoError(t, escrowAccount.Escrow.Active.Deposit(&del.Shares, &delegatorAccount.General.Balance, mustInitQuantityP(t, 100)), "active escrow deposit")
@@ -64,6 +80,8 @@ func TestRewardAndSlash(t *testing.T) {
 				Scale: mustInitQuantity(t, 500),
 			},
 		},
+		CommissionRateChangeInterval: 10,
+		CommissionRateBoundLead:      30,
 	})
 	s.SetCommonPool(mustInitQuantityP(t, 10000))
 
@@ -81,6 +99,13 @@ func TestRewardAndSlash(t *testing.T) {
 	escrowAccount = s.Account(escrowID)
 	require.Equal(t, mustInitQuantity(t, 200), escrowAccount.Escrow.Active.Balance, "reward first step - escrow active escrow")
 	require.Equal(t, mustInitQuantity(t, 100), escrowAccount.Escrow.Debonding.Balance, "reward first step - escrow debonding escrow")
+	// Reward is 100 tokens, with 80 added to the pool and 20 deposited as commission.
+	// We add to the pool first, so the delegation becomes 100 shares : 180 tokens.
+	// Then we deposit the 20 for commission, which comes out to 11 shares.
+	del = s.Delegation(delegatorID, escrowID)
+	require.Equal(t, mustInitQuantity(t, 100), del.Shares, "reward first step - delegation shares")
+	escrowSelfDel := s.Delegation(escrowID, escrowID)
+	require.Equal(t, mustInitQuantity(t, 11), escrowSelfDel.Shares, "reward first step - escrow self delegation shares")
 	commonPool, err := s.CommonPool()
 	require.NoError(t, err, "load common pool")
 	require.Equal(t, mustInitQuantityP(t, 9900), commonPool, "reward first step - common pool")
