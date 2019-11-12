@@ -22,6 +22,7 @@ import (
 	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/consensus/gas"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/version"
@@ -258,6 +259,7 @@ type abciMux struct {
 	lastBeginBlock int64
 	currentTime    time.Time
 	maxTxSize      uint64
+	maxBlockGas    gas.Gas
 
 	genesisHooks []func()
 	haltHooks    []func(context.Context, int64, epochtime.EpochTime)
@@ -343,6 +345,9 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 
 	if mux.maxTxSize = st.Consensus.Parameters.MaxTxSize; mux.maxTxSize == 0 {
 		mux.logger.Warn("maximum transaction size enforcement is disabled")
+	}
+	if mux.maxBlockGas = gas.Gas(st.Consensus.Parameters.MaxBlockGas); mux.maxBlockGas == 0 {
+		mux.logger.Warn("maximum block gas enforcement is disabled")
 	}
 
 	b, _ := json.Marshal(st)
@@ -442,6 +447,11 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	// Create empty block context.
 	mux.state.blockCtx = NewBlockContext()
+	if mux.maxBlockGas > 0 {
+		mux.state.blockCtx.Set(GasAccountantKey{}, NewGasAccountant(mux.maxBlockGas))
+	} else {
+		mux.state.blockCtx.Set(GasAccountantKey{}, NewNopGasAccountant())
+	}
 	// Create BeginBlock context.
 	ctx := NewContext(ContextBeginBlock, mux.currentTime, mux.state)
 
@@ -593,13 +603,17 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
 		return types.ResponseCheckTx{
-			Code: api.CodeTransactionFailed.ToInt(),
-			Info: err.Error(),
+			Code:      api.CodeTransactionFailed.ToInt(),
+			Info:      err.Error(),
+			GasWanted: int64(ctx.Gas().GasWanted()),
+			GasUsed:   int64(ctx.Gas().GasUsed()),
 		}
 	}
 
 	return types.ResponseCheckTx{
-		Code: api.CodeOK.ToInt(),
+		Code:      api.CodeOK.ToInt(),
+		GasWanted: int64(ctx.Gas().GasWanted()),
+		GasUsed:   int64(ctx.Gas().GasUsed()),
 	}
 }
 
@@ -608,15 +622,19 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
 		return types.ResponseDeliverTx{
-			Code: api.CodeTransactionFailed.ToInt(),
-			Info: err.Error(),
+			Code:      api.CodeTransactionFailed.ToInt(),
+			Info:      err.Error(),
+			GasWanted: int64(ctx.Gas().GasWanted()),
+			GasUsed:   int64(ctx.Gas().GasUsed()),
 		}
 	}
 
 	return types.ResponseDeliverTx{
-		Code:   api.CodeOK.ToInt(),
-		Data:   cbor.Marshal(ctx.Data()),
-		Events: ctx.GetEvents(),
+		Code:      api.CodeOK.ToInt(),
+		Data:      cbor.Marshal(ctx.Data()),
+		Events:    ctx.GetEvents(),
+		GasWanted: int64(ctx.Gas().GasWanted()),
+		GasUsed:   int64(ctx.Gas().GasUsed()),
 	}
 }
 

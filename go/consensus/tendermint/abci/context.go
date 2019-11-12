@@ -220,6 +220,11 @@ func (bc *BlockContext) Get(key BlockContextKey) interface{} {
 	return v
 }
 
+// Set overwrites the value stored under the given key.
+func (bc *BlockContext) Set(key BlockContextKey, value interface{}) {
+	bc.storage[key] = value
+}
+
 // NewBlockContext creates an empty block context.
 func NewBlockContext() *BlockContext {
 	return &BlockContext{
