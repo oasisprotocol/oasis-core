@@ -571,14 +571,6 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 		}
 		nodeList = append(nodeList, n)
 		entMap[n.EntityID.ToMapKey()] = true
-
-		// Everyone that "runs" a validator node is eligible for rewards.
-		//
-		// Yes, this is stupid in that, there's no proof that the node is
-		// actually running.
-		if entitiesEligibleForReward != nil {
-			entitiesEligibleForReward[n.EntityID.ToMapKey()] = true
-		}
 	}
 
 	// Sort all of the entities that are actually running eligible validator
@@ -629,6 +621,13 @@ electLoop:
 			// Re-check and then accumulate the entity's stake.
 			if err = entityStake.checkThreshold(n.EntityID, staking.KindValidator, true); err != nil {
 				continue electLoop
+			}
+
+			// If the entity gets a validator elected, it is eligible
+			// for rewards, but only once regardless of the number
+			// of validators owned by the entity in the set.
+			if entitiesEligibleForReward != nil {
+				entitiesEligibleForReward[n.EntityID.ToMapKey()] = true
 			}
 
 			newValidators = append(newValidators, n.Consensus.ID)
