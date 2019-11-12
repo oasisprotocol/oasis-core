@@ -520,6 +520,95 @@ func (p *ConsensusParameters) SanityCheck() error {
 	return nil
 }
 
+// SanityCheck does basic sanity checking on the genesis state.
+func (g *Genesis) SanityCheck() error {
+	for thr, val := range g.Parameters.Thresholds {
+		if !val.IsValid() {
+			return fmt.Errorf("staking: sanity check failed: threshold '%s' has invalid value", thr.String())
+		}
+	}
+
+	if !g.TotalSupply.IsValid() {
+		return fmt.Errorf("staking: sanity check failed: total supply is invalid")
+	}
+
+	if !g.CommonPool.IsValid() {
+		return fmt.Errorf("staking: sanity check failed: common pool is invalid")
+	}
+
+	// Check if the total supply adds up (common pool + all balances in the ledger).
+	var total quantity.Quantity
+	for _, acct := range g.Ledger {
+		if !acct.General.Balance.IsValid() {
+			return fmt.Errorf("staking: sanity check failed: account balance is invalid")
+		}
+		if !acct.Escrow.Active.Balance.IsValid() {
+			return fmt.Errorf("staking: sanity check failed: escrow account active balance is invalid")
+		}
+		if !acct.Escrow.Debonding.Balance.IsValid() {
+			return fmt.Errorf("staking: sanity check failed: escrow account debonding balance is invalid")
+		}
+
+		_ = total.Add(&acct.General.Balance)
+		_ = total.Add(&acct.Escrow.Active.Balance)
+		_ = total.Add(&acct.Escrow.Debonding.Balance)
+	}
+	_ = total.Add(&g.CommonPool)
+	if total.Cmp(&g.TotalSupply) != 0 {
+		return fmt.Errorf("staking: sanity check failed: balances in accounts plus common pool (%s) does not add up to total supply (%s)", total.String(), g.TotalSupply.String())
+	}
+
+	// All shares of all delegations for a given account must add up to account's Escrow.Active.TotalShares.
+	for acct, delegations := range g.Delegations {
+		var shares quantity.Quantity
+		var numDelegations uint64
+		for _, d := range delegations {
+			_ = shares.Add(&d.Shares)
+			numDelegations++
+		}
+
+		sharesExpected := g.Ledger[acct].Escrow.Active.TotalShares
+
+		if shares.Cmp(&sharesExpected) != 0 {
+			return fmt.Errorf("staking: sanity check failed: all shares of all delegations for account don't add up to account's total active shares in escrow")
+		}
+
+		// Account's Escrow.Active.Balance must be 0 if account has no delegations.
+		if numDelegations == 0 {
+			if !g.Ledger[acct].Escrow.Active.Balance.IsZero() {
+				return fmt.Errorf("staking: sanity check failed: account has no delegations, but non-zero active escrow balance")
+			}
+		}
+	}
+
+	// All shares of all debonding delegations for a given account must add up to account's Escrow.Debonding.TotalShares.
+	for acct, delegations := range g.DebondingDelegations {
+		var shares quantity.Quantity
+		var numDebondingDelegations uint64
+		for _, dels := range delegations {
+			for _, d := range dels {
+				_ = shares.Add(&d.Shares)
+				numDebondingDelegations++
+			}
+		}
+
+		sharesExpected := g.Ledger[acct].Escrow.Debonding.TotalShares
+
+		if shares.Cmp(&sharesExpected) != 0 {
+			return fmt.Errorf("staking: sanity check failed: all shares of all debonding delegations for account don't add up to account's total debonding shares in escrow")
+		}
+
+		// Account's Escrow.Debonding.Balance must be 0 if account has no debonding delegations.
+		if numDebondingDelegations == 0 {
+			if !g.Ledger[acct].Escrow.Debonding.Balance.IsZero() {
+				return fmt.Errorf("staking: sanity check failed: account has no debonding delegations, but non-zero debonding escrow balance")
+			}
+		}
+	}
+
+	return nil
+}
+
 const (
 	// GasOpTransfer is the gas operation identifier for transfer.
 	GasOpTransfer gas.Op = "transfer"

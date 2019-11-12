@@ -9,13 +9,14 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
 )
 
 const (
 	// Name of the scheduling algorithm.
-	Name = "batching"
+	Name = roothash.TransactionSchedulerAlgorithmBatching
 
 	cfgMaxQueueSize = "worker.txnscheduler.batching.max_queue_size"
 )

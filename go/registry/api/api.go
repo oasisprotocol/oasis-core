@@ -908,3 +908,149 @@ type ConsensusParameters struct {
 	// related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake"`
 }
+
+// SanityCheck does basic sanity checking on the genesis state.
+func (g *Genesis) SanityCheck() error { // nolint: gocyclo
+	if !g.Parameters.KeyManagerOperator.IsValid() {
+		return fmt.Errorf("registry: sanity check failed: key manager operator's public key is invalid")
+	}
+
+	// Check entities.
+	seenEntities := make(map[signature.MapKey]bool)
+	for _, sent := range g.Entities {
+		var ent entity.Entity
+		if err := sent.Open(RegisterGenesisEntitySignatureContext, &ent); err != nil {
+			return fmt.Errorf("registry: sanity check failed: unable to open signed entity")
+		}
+
+		if !ent.ID.IsValid() {
+			return fmt.Errorf("registry: sanity check failed: entity ID %s is invalid", ent.ID.String())
+		}
+
+		for _, pk := range ent.Nodes {
+			if !pk.IsValid() {
+				return fmt.Errorf("registry: sanity check failed: entity ID %s has node with invalid ID %s", ent.ID.String(), pk.String())
+			}
+		}
+
+		if ent.RegistrationTime > uint64(time.Now().Unix()+61*60) {
+			return fmt.Errorf("registry: sanity check failed: entity ID %s registration time is more than 1h1m in the future", ent.ID.String())
+		}
+
+		seenEntities[ent.ID.ToMapKey()] = true
+	}
+
+	// Check runtimes.
+	seenRuntimes := make(map[signature.MapKey]*Runtime)
+	for _, srt := range g.Runtimes {
+		var rt Runtime
+		if err := srt.Open(RegisterGenesisRuntimeSignatureContext, &rt); err != nil {
+			return fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
+		}
+
+		if rt.RegistrationTime > uint64(time.Now().Unix()+61*60) {
+			return fmt.Errorf("registry: sanity check failed: runtime ID %s registration time is more than 1h1m in the future", rt.ID.String())
+		}
+
+		// Check that the given key manager runtime is a valid key manager runtime.
+		krt := seenRuntimes[rt.KeyManager.ToMapKey()]
+		if krt == nil {
+			// Not seen yet, traverse the entire runtime list (the KM runtimes
+			// aren't guaranteed to be sorted before the other runtimes).
+			var found bool
+			for _, skrt := range g.Runtimes {
+				var kmrt Runtime
+				if err := skrt.Open(RegisterGenesisRuntimeSignatureContext, &kmrt); err != nil {
+					return fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
+				}
+				if kmrt.ID.Equal(rt.KeyManager) {
+					found = true
+					krt = &kmrt
+					break
+				}
+			}
+
+			if !found {
+				return fmt.Errorf("registry: sanity check failed: runtime ID %s has an unknown key manager runtime ID", rt.ID.String())
+			}
+		}
+
+		if krt.Kind != KindKeyManager {
+			return fmt.Errorf("registry: sanity check failed: runtime ID %s specifies a key manager runtime that isn't a key manager runtime", rt.ID.String())
+		}
+
+		if rt.Kind != KindCompute && rt.Kind != KindKeyManager {
+			return fmt.Errorf("registry: sanity check failed: runtime ID %s is of invalid kind", rt.ID.String())
+		}
+
+		seenRuntimes[rt.ID.ToMapKey()] = &rt
+	}
+
+	// Check nodes.
+	for _, sn := range g.Nodes {
+		var n node.Node
+		if err := sn.Open(RegisterGenesisNodeSignatureContext, &n); err != nil {
+			return fmt.Errorf("registry: sanity check failed: unable to open signed node")
+		}
+
+		if !n.ID.IsValid() {
+			return fmt.Errorf("registry: sanity check failed: node ID %s is invalid", n.ID.String())
+		}
+
+		if !n.EntityID.IsValid() {
+			return fmt.Errorf("registry: sanity check failed: node ID %s has invalid entity ID", n.ID.String())
+		}
+
+		if !seenEntities[n.EntityID.ToMapKey()] {
+			return fmt.Errorf("registry: sanity check failed: node ID %s has unknown controlling entity", n.ID.String())
+		}
+
+		if n.RegistrationTime > uint64(time.Now().Unix()+61*60) {
+			return fmt.Errorf("registry: sanity check failed: node ID %s registration time is more than 1h1m in the future", n.ID.String())
+		}
+
+		if n.HasRoles(node.RoleReserved) {
+			return fmt.Errorf("registry: sanity check failed: node ID %s has reserved roles mask bits set", n.ID.String())
+		}
+
+		if n.HasRoles(node.RoleComputeWorker) && len(n.Runtimes) == 0 {
+			return fmt.Errorf("registry: sanity check failed: compute worker node must have runtime(s)")
+		}
+
+		if n.HasRoles(node.RoleKeyManager) && len(n.Runtimes) == 0 {
+			return fmt.Errorf("registry: sanity check failed: key manager node must have runtime(s)")
+		}
+
+		if n.HasRoles(node.RoleStorageWorker) && !n.HasRoles(node.RoleComputeWorker) && !n.HasRoles(node.RoleKeyManager) && len(n.Runtimes) > 0 {
+			return fmt.Errorf("registry: sanity check failed: storage worker node shouldn't have any runtimes")
+		}
+
+		if n.HasRoles(node.RoleTransactionScheduler) && !n.HasRoles(node.RoleComputeWorker) && !n.HasRoles(node.RoleKeyManager) && len(n.Runtimes) > 0 {
+			return fmt.Errorf("registry: sanity check failed: transaction scheduler node shouldn't have any runtimes")
+		}
+
+		if n.HasRoles(node.RoleMergeWorker) && !n.HasRoles(node.RoleComputeWorker) && !n.HasRoles(node.RoleKeyManager) && len(n.Runtimes) > 0 {
+			return fmt.Errorf("registry: sanity check failed: merge worker node shouldn't have any runtimes")
+		}
+
+		if n.HasRoles(node.RoleValidator) && !n.HasRoles(node.RoleComputeWorker) && !n.HasRoles(node.RoleKeyManager) && len(n.Runtimes) > 0 {
+			return fmt.Errorf("registry: sanity check failed: validator node shouldn't have any runtimes")
+		}
+
+		for _, rt := range n.Runtimes {
+			if seenRuntimes[rt.ID.ToMapKey()] == nil {
+				return fmt.Errorf("registry: sanity check failed: node ID %s has an unknown runtime ID", n.ID.String())
+			}
+		}
+
+		if _, err := n.Committee.ParseCertificate(); err != nil {
+			return fmt.Errorf("registry: sanity check failed: node ID %s has an invalid committee certificate", n.ID.String())
+		}
+
+		if !n.Consensus.ID.IsValid() {
+			return fmt.Errorf("registry: sanity check failed: node ID %s has an invalid consensus ID", n.ID.String())
+		}
+	}
+
+	return nil
+}

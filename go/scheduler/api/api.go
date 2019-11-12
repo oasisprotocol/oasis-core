@@ -206,6 +206,11 @@ type ConsensusParameters struct {
 	DebugStaticValidators bool `json:"debug_static_validators"`
 }
 
+// SanityCheck does basic sanity checking on the genesis state.
+func (g *Genesis) SanityCheck() error {
+	return nil
+}
+
 func init() {
 	RewardFactorEpochElectionAny = quantity.NewQuantity()
 	err := RewardFactorEpochElectionAny.FromBigInt(big.NewInt(1))

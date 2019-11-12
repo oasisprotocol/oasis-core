@@ -35,3 +35,8 @@ type ConsensusParameters struct {
 	// DebugDeterministic is true iff the output should be deterministic.
 	DebugDeterministic bool `json:"debug_deterministic"`
 }
+
+// SanityCheck does basic sanity checking on the genesis state.
+func (g *Genesis) SanityCheck() error {
+	return nil
+}
