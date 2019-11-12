@@ -605,8 +605,37 @@ func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *quantity.Qua
 			continue
 		}
 
-		if err := quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
-			return errors.Wrap(err, "transferring to active escrow balance from common pool")
+		var com *quantity.Quantity
+		rate := ent.Escrow.CommissionSchedule.CurrentRate(time)
+		if rate != nil {
+			com = q.Clone()
+			// Multiply first.
+			if err := com.Mul(rate); err != nil {
+				return errors.Wrap(err, "multiplying by commission rate")
+			}
+			if err := com.Quo(staking.CommissionRateDenominator); err != nil {
+				return errors.Wrap(err, "dividing by commission rate denominator")
+			}
+
+			if err := q.Sub(com); err != nil {
+				return errors.Wrap(err, "subtracting commission")
+			}
+		}
+
+		if !q.IsZero() {
+			if err := quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
+				return errors.Wrap(err, "transferring to active escrow balance from common pool")
+			}
+		}
+
+		if com != nil && !com.IsZero() {
+			delegation := s.Delegation(id, id)
+
+			if err := ent.Escrow.Active.Deposit(&delegation.Shares, commonPool, com); err != nil {
+				return errors.Wrap(err, "depositing commission")
+			}
+
+			s.SetDelegation(id, id, delegation)
 		}
 
 		s.SetAccount(id, ent)
