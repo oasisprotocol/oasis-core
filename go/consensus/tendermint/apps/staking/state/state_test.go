@@ -106,7 +106,7 @@ func TestRewardAndSlash(t *testing.T) {
 	require.NoError(t, err, "slash escrow")
 	require.True(t, slashedNonzero, "slashed nonzero")
 
-	// 10% loss.
+	// 40 token loss.
 	delegatorAccount = s.Account(delegatorID)
 	require.Equal(t, mustInitQuantity(t, 100), delegatorAccount.General.Balance, "slash - delegator general")
 	escrowAccount = s.Account(escrowID)
