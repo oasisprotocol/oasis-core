@@ -16,12 +16,13 @@ import (
 	"github.com/spf13/viper"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	consensus "github.com/oasislabs/oasis-core/go/common/consensus/genesis"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/genesis"
+	tendermint "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisGrpc "github.com/oasislabs/oasis-core/go/grpc/genesis"
@@ -34,7 +35,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
-	tendermint "github.com/oasislabs/oasis-core/go/tendermint/api"
 )
 
 const (

@@ -6,8 +6,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common/consensus"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/consensus"
 	pb "github.com/oasislabs/oasis-core/go/grpc/genesis"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -37,7 +37,7 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 	height := req.GetHeight()
 
 	// Get consensus state as a genesis doc.
-	genesisDoc, err := s.consensusBackend.ToGenesis(ctx, height, s.keymanagerBackend, s.registryBackend, s.roothashBackend, s.stakingBackend, s.schedulerBackend)
+	genesisDoc, err := s.consensusBackend.ToGenesis(ctx, height)
 	if err != nil {
 		s.logger.Error("failed to generate genesis document",
 			"height", height,

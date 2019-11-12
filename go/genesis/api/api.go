@@ -9,7 +9,7 @@ import (
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	consensus "github.com/oasislabs/oasis-core/go/common/consensus/genesis"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/genesis"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"

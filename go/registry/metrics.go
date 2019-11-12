@@ -149,7 +149,8 @@ func (w *metricsWrapper) updatePeriodicMetrics(ctx context.Context) {
 	}
 }
 
-func newMetricsWrapper(ctx context.Context, base api.Backend) api.Backend {
+// NewMetricsWrapper wraps a registry backend implementation with instrumentation.
+func NewMetricsWrapper(ctx context.Context, base api.Backend) api.Backend {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(registeryCollectors...)
 	})

@@ -12,8 +12,8 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/identity"
+	tmcrypto "github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasislabs/oasis-core/go/staking/api"
-	tmcrypto "github.com/oasislabs/oasis-core/go/tendermint/crypto"
 )
 
 func tendermintMakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) api.Evidence {
