@@ -2,6 +2,7 @@ package registration
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,6 +23,7 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	sentryClient "github.com/oasislabs/oasis-core/go/sentry/client"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
@@ -309,9 +311,47 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 }
 
 func (w *Worker) consensusValidatorHook(n *node.Node) error {
-	addrs, err := w.consensus.GetAddresses()
-	if err != nil {
-		return errors.Wrap(err, "worker/registration: failed to get consensus validator addresses")
+	var addrs []node.ConsensusAddress
+	var err error
+	sentryAddrs := w.workerCommonCfg.SentryAddresses
+	sentryCerts := w.workerCommonCfg.SentryCertificates
+	if len(sentryAddrs) > 0 {
+		// Query sentry nodes for their consensus address(es).
+		for i, sentryAddr := range sentryAddrs {
+			var client *sentryClient.Client
+			client, err = sentryClient.New(&sentryAddr, sentryCerts[i], w.identity)
+			if err != nil {
+				w.logger.Warn("failed to create client to a sentry node",
+					"err", err,
+					"sentry_address", sentryAddr,
+				)
+				continue
+			}
+			defer client.Close()
+			var consensusAddrs []node.ConsensusAddress
+			consensusAddrs, err = client.GetConsensusAddresses(w.ctx)
+			if err != nil {
+				w.logger.Warn("failed to obtain consensus address(es) from sentry node",
+					"err", err,
+					"sentry_address", sentryAddr,
+				)
+				continue
+			}
+			addrs = append(addrs, consensusAddrs...)
+		}
+		if len(addrs) == 0 {
+			errMsg := "failed to obtain any consensus address from the configured sentry nodes"
+			w.logger.Error(errMsg,
+				"sentry_addresses", sentryAddrs,
+			)
+			return fmt.Errorf(errMsg)
+		}
+	} else {
+		// Use validator's consensus address(es).
+		addrs, err = w.consensus.GetAddresses()
+		if err != nil {
+			return fmt.Errorf("worker/registration: failed to get validator's consensus address(es): %w", err)
+		}
 	}
 
 	if len(addrs) == 0 {
