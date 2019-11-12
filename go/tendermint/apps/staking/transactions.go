@@ -172,6 +172,11 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 		return err
 	}
 
+	// Check if sender provided at least a minimum amount of tokens.
+	if escrow.Tokens.Cmp(&params.MinDelegationAmount) < 0 {
+		return staking.ErrInvalidArgument
+	}
+
 	// Fetch escrow account.
 	//
 	// NOTE: Could be the same account, so make sure to not have two duplicate

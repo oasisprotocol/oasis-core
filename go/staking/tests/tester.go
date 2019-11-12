@@ -486,6 +486,18 @@ func testEscrowEx(
 	debs, err = backend.DebondingDelegations(context.Background(), srcID, 0)
 	require.NoError(err, "DebondingDelegations")
 	require.Len(debs, 0, "no debonding delegations after failed reclaim")
+
+	// Escrow less than the minimum amount.
+	escrow = &api.Escrow{
+		Nonce:   srcAcc.General.Nonce,
+		Account: dstID,
+		Tokens:  QtyFromInt(1), // Minimum is 10.
+	}
+	signed, err = api.SignEscrow(srcSigner, escrow)
+	require.NoError(err, "Sign escrow")
+
+	err = backend.AddEscrow(context.Background(), signed)
+	require.Error(err, "AddEscrow")
 }
 
 func testSlashDoubleSigning(
