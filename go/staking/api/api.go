@@ -472,17 +472,14 @@ type Genesis struct {
 
 // ConsensusParameters are the staking consensus parameters.
 type ConsensusParameters struct {
-	Thresholds                      map[ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
-	DebondingInterval               epochtime.EpochTime                 `json:"debonding_interval,omitempty"`
-	RewardSchedule                  []RewardStep                        `json:"reward_schedule,omitempty"`
-	CommissionRateChangeInterval    epochtime.EpochTime                 `json:"commission_rate_change_interval,omitempty"`
-	CommissionRateBoundLead         epochtime.EpochTime                 `json:"commission_rate_bound_lead,omitempty"`
-	CommissionScheduleMaxRateSteps  int                                 `json:"commission_schedule_max_rate_steps,omitempty"`
-	CommissionScheduleMaxBoundSteps int                                 `json:"commission_schedule_max_bound_steps,omitempty"`
-	AcceptableTransferPeers         map[signature.PublicKey]bool        `json:"acceptable_transfer_peers,omitempty"`
-	Slashing                        map[SlashReason]Slash               `json:"slashing,omitempty"`
-	GasCosts                        gas.Costs                           `json:"gas_costs,omitempty"`
-	MinDelegationAmount             quantity.Quantity                   `json:"min_delegation,omitempty"`
+	Thresholds              map[ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
+	DebondingInterval       epochtime.EpochTime                 `json:"debonding_interval,omitempty"`
+	RewardSchedule          []RewardStep                        `json:"reward_schedule,omitempty"`
+	CommissionScheduleRules CommissionScheduleRules             `json:"commission_schedule_rules,omitempty"`
+	AcceptableTransferPeers map[signature.PublicKey]bool        `json:"acceptable_transfer_peers,omitempty"`
+	Slashing                map[SlashReason]Slash               `json:"slashing,omitempty"`
+	GasCosts                gas.Costs                           `json:"gas_costs,omitempty"`
+	MinDelegationAmount     quantity.Quantity                   `json:"min_delegation,omitempty"`
 }
 
 // SanityCheck performs a sanity check on the consensus parameters.
@@ -534,7 +531,7 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error {
 		_ = total.Add(&acct.Escrow.Debonding.Balance)
 
 		commissionStateShallowCopy := acct.Escrow.CommissionSchedule
-		if err := commissionStateShallowCopy.PruneAndValidateForGenesis(now, g.Parameters.CommissionRateChangeInterval, g.Parameters.CommissionScheduleMaxRateSteps, g.Parameters.CommissionScheduleMaxBoundSteps); err != nil {
+		if err := commissionStateShallowCopy.PruneAndValidateForGenesis(&g.Parameters.CommissionScheduleRules, now); err != nil {
 			return fmt.Errorf("staking: sanity check failed: commission schedule for %s is invalid: %+v", id, err)
 		}
 	}

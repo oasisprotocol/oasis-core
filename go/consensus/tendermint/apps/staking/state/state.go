@@ -128,40 +128,13 @@ func (s *ImmutableState) RewardSchedule() ([]staking.RewardStep, error) {
 	return params.RewardSchedule, nil
 }
 
-func (s *ImmutableState) CommissionRateChangeInterval() (epochtime.EpochTime, error) {
+func (s *ImmutableState) CommissionScheduleRules() (*staking.CommissionScheduleRules, error) {
 	params, err := s.ConsensusParameters()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return params.CommissionRateChangeInterval, nil
-}
-
-func (s *ImmutableState) CommissionRateBoundLead() (epochtime.EpochTime, error) {
-	params, err := s.ConsensusParameters()
-	if err != nil {
-		return 0, err
-	}
-
-	return params.CommissionRateBoundLead, nil
-}
-
-func (s *ImmutableState) CommissionScheduleMaxRateSteps() (int, error) {
-	params, err := s.ConsensusParameters()
-	if err != nil {
-		return 0, err
-	}
-
-	return params.CommissionScheduleMaxRateSteps, nil
-}
-
-func (s *ImmutableState) CommissionScheduleMaxBoundSteps() (int, error) {
-	params, err := s.ConsensusParameters()
-	if err != nil {
-		return 0, err
-	}
-
-	return params.CommissionScheduleMaxBoundSteps, nil
+	return &params.CommissionScheduleRules, nil
 }
 
 func (s *ImmutableState) AcceptableTransferPeers() (map[signature.PublicKey]bool, error) {

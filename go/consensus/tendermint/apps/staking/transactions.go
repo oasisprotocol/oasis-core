@@ -367,7 +367,7 @@ func (app *stakingApplication) amendCommissionSchedule(ctx *abci.Context, state 
 		return err
 	}
 
-	if err = from.Escrow.CommissionSchedule.AmendAndPruneAndValidate(&amendCommissionSchedule.Amendment, epoch, params.CommissionRateChangeInterval, params.CommissionRateBoundLead, params.CommissionScheduleMaxRateSteps, params.CommissionScheduleMaxBoundSteps); err != nil {
+	if err = from.Escrow.CommissionSchedule.AmendAndPruneAndValidate(&amendCommissionSchedule.Amendment, &params.CommissionScheduleRules, epoch); err != nil {
 		app.logger.Error("AmendCommissionSchedule: amendment not acceptable",
 			"err", err,
 			"from", id,

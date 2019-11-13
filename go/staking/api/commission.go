@@ -12,6 +12,13 @@ import (
 // CommissionRateDenominator is the denominator for the commission rate.
 var CommissionRateDenominator *quantity.Quantity
 
+type CommissionScheduleRules struct {
+	RateChangeInterval epochtime.EpochTime `json:"rate_change_interval,omitempty"`
+	RateBoundLead      epochtime.EpochTime `json:"rate_bound_lead,omitempty"`
+	MaxRateSteps       int                 `json:"max_rate_steps,omitempty"`
+	MaxBoundSteps      int                 `json:"max_bound_steps,omitempty"`
+}
+
 type CommissionRateStep struct {
 	Start epochtime.EpochTime `json:"start"`
 	Rate  quantity.Quantity   `json:"rate"`
@@ -28,22 +35,22 @@ type CommissionSchedule struct {
 	Bounds []CommissionRateBoundStep `json:"bounds"`
 }
 
-func (cs *CommissionSchedule) validateComplexity(commissionScheduleMaxRateSteps int, commissionScheduleMaxBoundSteps int) error {
-	if len(cs.Rates) > commissionScheduleMaxRateSteps {
-		return fmt.Errorf("rate schedule %d steps exceeds maximum %d", len(cs.Rates), commissionScheduleMaxRateSteps)
+func (cs *CommissionSchedule) validateComplexity(rules *CommissionScheduleRules) error {
+	if len(cs.Rates) > rules.MaxRateSteps {
+		return fmt.Errorf("rate schedule %d steps exceeds maximum %d", len(cs.Rates), rules.MaxRateSteps)
 	}
-	if len(cs.Bounds) > commissionScheduleMaxBoundSteps {
-		return fmt.Errorf("bound schedule %d steps exceeds maximum %d", len(cs.Bounds), commissionScheduleMaxBoundSteps)
+	if len(cs.Bounds) > rules.MaxBoundSteps {
+		return fmt.Errorf("bound schedule %d steps exceeds maximum %d", len(cs.Bounds), rules.MaxBoundSteps)
 	}
 
 	return nil
 }
 
 // validateNondegenerate detects degenerate steps.
-func (cs *CommissionSchedule) validateNondegenerate(commissionRateChangeInterval epochtime.EpochTime) error {
+func (cs *CommissionSchedule) validateNondegenerate(rules *CommissionScheduleRules) error {
 	for i, step := range cs.Rates {
-		if step.Start%commissionRateChangeInterval != 0 {
-			return fmt.Errorf("rate step %d start epoch %d not aligned with commission rate change interval %d", i, step.Start, commissionRateChangeInterval)
+		if step.Start%rules.RateChangeInterval != 0 {
+			return fmt.Errorf("rate step %d start epoch %d not aligned with commission rate change interval %d", i, step.Start, rules.RateChangeInterval)
 		}
 		if i > 0 && step.Start <= cs.Rates[i-1].Start {
 			return fmt.Errorf("rate step %d start epoch %d not after previous step start epoch %d", i, step.Start, cs.Rates[i-1].Start)
@@ -54,8 +61,8 @@ func (cs *CommissionSchedule) validateNondegenerate(commissionRateChangeInterval
 	}
 
 	for i, step := range cs.Bounds {
-		if step.Start%commissionRateChangeInterval != 0 {
-			return fmt.Errorf("bound step %d start epoch %d not aligned with commission rate change interval %d", i, step.Start, commissionRateChangeInterval)
+		if step.Start%rules.RateChangeInterval != 0 {
+			return fmt.Errorf("bound step %d start epoch %d not aligned with commission rate change interval %d", i, step.Start, rules.RateChangeInterval)
 		}
 		if i > 0 && step.Start <= cs.Rates[i-1].Start {
 			return fmt.Errorf("bound step %d start epoch %d not after previous step start epoch %d", i, step.Start, cs.Rates[i-1].Start)
@@ -75,7 +82,7 @@ func (cs *CommissionSchedule) validateNondegenerate(commissionRateChangeInterval
 }
 
 // validateAmendmentAcceptable apply policy for "when" changes can be made, for CommissionSchedules that are amendments.
-func (cs *CommissionSchedule) validateAmendmentAcceptable(now epochtime.EpochTime, commissionRateBoundLead epochtime.EpochTime) error {
+func (cs *CommissionSchedule) validateAmendmentAcceptable(rules *CommissionScheduleRules, now epochtime.EpochTime) error {
 	if len(cs.Rates) != 0 {
 		if cs.Rates[0].Start <= now {
 			return fmt.Errorf("rate schedule with start epoch %d must not alter rate on or before %d", cs.Rates[0].Start, now)
@@ -83,8 +90,8 @@ func (cs *CommissionSchedule) validateAmendmentAcceptable(now epochtime.EpochTim
 	}
 
 	if len(cs.Bounds) != 0 {
-		if cs.Bounds[0].Start <= now+commissionRateBoundLead {
-			return fmt.Errorf("bound schedule with start epoch %d must not alter bound on or before %d", cs.Bounds[0].Start, now+commissionRateBoundLead)
+		if cs.Bounds[0].Start <= now+rules.RateBoundLead {
+			return fmt.Errorf("bound schedule with start epoch %d must not alter bound on or before %d", cs.Bounds[0].Start, now+rules.RateBoundLead)
 		}
 	}
 
@@ -229,11 +236,11 @@ func (cs *CommissionSchedule) validateWithinBound(now epochtime.EpochTime) error
 
 // PruneAndValidateForGenesis gets a schedule ready for use in the genesis document.
 // Returns an error if there is a validation failure. If it does, the schedule may be pruned already.
-func (cs *CommissionSchedule) PruneAndValidateForGenesis(now epochtime.EpochTime, commissionRateChangeInterval epochtime.EpochTime, commissionScheduleMaxRateSteps int, commissionScheduleMaxBoundSteps int) error {
-	if err := cs.validateComplexity(commissionScheduleMaxRateSteps, commissionScheduleMaxBoundSteps); err != nil {
+func (cs *CommissionSchedule) PruneAndValidateForGenesis(rules *CommissionScheduleRules, now epochtime.EpochTime) error {
+	if err := cs.validateComplexity(rules); err != nil {
 		return err
 	}
-	if err := cs.validateNondegenerate(commissionRateChangeInterval); err != nil {
+	if err := cs.validateNondegenerate(rules); err != nil {
 		return err
 	}
 	// If we, for example, import a snapshot as a genesis document, the current steps might not be cued up. So run a
@@ -247,19 +254,19 @@ func (cs *CommissionSchedule) PruneAndValidateForGenesis(now epochtime.EpochTime
 
 // AmendAndPruneAndValidate applies a proposed amendment to a valid schedule.
 // Returns an error if there is a validation failure. If it does, the schedule may be amended and pruned already.
-func (cs *CommissionSchedule) AmendAndPruneAndValidate(amendment *CommissionSchedule, now epochtime.EpochTime, commissionRateChangeInterval epochtime.EpochTime, commissionRateBoundLead epochtime.EpochTime, commissionScheduleMaxRateSteps int, commissionScheduleMaxBoundSteps int) error {
-	if err := amendment.validateComplexity(commissionScheduleMaxRateSteps, commissionScheduleMaxBoundSteps); err != nil {
+func (cs *CommissionSchedule) AmendAndPruneAndValidate(amendment *CommissionSchedule, rules *CommissionScheduleRules, now epochtime.EpochTime) error {
+	if err := amendment.validateComplexity(rules); err != nil {
 		return errors.Wrap(err, "amendment")
 	}
-	if err := amendment.validateNondegenerate(commissionRateChangeInterval); err != nil {
+	if err := amendment.validateNondegenerate(rules); err != nil {
 		return errors.Wrap(err, "amendment")
 	}
-	if err := amendment.validateAmendmentAcceptable(now, commissionRateBoundLead); err != nil {
+	if err := amendment.validateAmendmentAcceptable(rules, now); err != nil {
 		return errors.Wrap(err, "amendment")
 	}
 	cs.prune(now)
 	cs.amend(amendment)
-	if err := cs.validateComplexity(commissionScheduleMaxRateSteps, commissionScheduleMaxBoundSteps); err != nil {
+	if err := cs.validateComplexity(rules); err != nil {
 		return errors.Wrap(err, "after pruning and amending")
 	}
 	if err := cs.validateWithinBound(now); err != nil {
