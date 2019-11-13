@@ -146,6 +146,24 @@ func (s *ImmutableState) CommissionRateBoundLead() (epochtime.EpochTime, error) 
 	return params.CommissionRateBoundLead, nil
 }
 
+func (s *ImmutableState) CommissionScheduleMaxRateSteps() (int, error) {
+	params, err := s.ConsensusParameters()
+	if err != nil {
+		return 0, err
+	}
+
+	return params.CommissionScheduleMaxRateSteps, nil
+}
+
+func (s *ImmutableState) CommissionScheduleMaxBoundSteps() (int, error) {
+	params, err := s.ConsensusParameters()
+	if err != nil {
+		return 0, err
+	}
+
+	return params.CommissionScheduleMaxBoundSteps, nil
+}
+
 func (s *ImmutableState) AcceptableTransferPeers() (map[signature.PublicKey]bool, error) {
 	params, err := s.ConsensusParameters()
 	if err != nil {
