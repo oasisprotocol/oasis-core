@@ -604,7 +604,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
 		return types.ResponseCheckTx{
 			Code:      api.CodeTransactionFailed.ToInt(),
-			Info:      err.Error(),
+			Log:       err.Error(),
 			GasWanted: int64(ctx.Gas().GasWanted()),
 			GasUsed:   int64(ctx.Gas().GasUsed()),
 		}
@@ -623,7 +623,7 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
 		return types.ResponseDeliverTx{
 			Code:      api.CodeTransactionFailed.ToInt(),
-			Info:      err.Error(),
+			Log:       err.Error(),
 			GasWanted: int64(ctx.Gas().GasWanted()),
 			GasUsed:   int64(ctx.Gas().GasUsed()),
 		}

@@ -39,6 +39,8 @@ func main() {
 	_ = cmd.Register(e2e.HaltRestore)
 	// Roothash messages test.
 	_ = cmd.Register(e2e.RoothashMessages)
+	// Stake CLI test.
+	_ = cmd.Register(e2e.StakeCLI)
 	// Node shutdown test.
 	_ = cmd.Register(e2e.NodeShutdown)
 	// Gas fees test.

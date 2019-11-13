@@ -436,7 +436,7 @@ func (t *tendermintService) broadcastTxRaw(data []byte) error {
 	}
 
 	if response.Code != api.CodeOK.ToInt() {
-		return fmt.Errorf("broadcast tx: check tx failed: %d", response.Code)
+		return fmt.Errorf("broadcast tx: check tx failed: %d: %s", response.Code, response.Log)
 	}
 
 	return nil
@@ -476,7 +476,7 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 	select {
 	case v := <-txSub.Out():
 		if result := v.Data().(tmtypes.EventDataTx).Result; !result.IsOK() {
-			return errors.New(result.GetInfo())
+			return errors.New(result.GetLog())
 		}
 		return nil
 	case <-txSub.Cancelled():

@@ -550,6 +550,19 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 		// escrow balances.
 		_ = stakingSt.TotalSupply.Add(&q)
 		_ = stakingSt.TotalSupply.Add(&q)
+
+		// Set zero thresholds for all staking kinds, if none set.
+		if len(stakingSt.Parameters.Thresholds) == 0 {
+			var sq quantity.Quantity
+			_ = sq.FromBigInt(big.NewInt(0))
+			stakingSt.Parameters.Thresholds =
+				map[staking.ThresholdKind]quantity.Quantity{
+					staking.KindEntity:    sq,
+					staking.KindValidator: sq,
+					staking.KindCompute:   sq,
+					staking.KindStorage:   sq,
+				}
+		}
 	}
 
 	doc.Staking = stakingSt

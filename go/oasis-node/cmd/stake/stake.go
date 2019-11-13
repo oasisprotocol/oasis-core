@@ -206,15 +206,23 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-type accountInfo struct {
-	ID             signature.PublicKey `json:"id"`
-	GeneralBalance quantity.Quantity   `json:"general_balance"`
-	EscrowBalance  quantity.Quantity   `json:"escrow_balance"`
-	Nonce          uint64              `json:"nonce"`
+// AccountInfo contains aggregated information of a single account.
+type AccountInfo struct {
+	// ID is the address of account.
+	ID signature.PublicKey `json:"id"`
+
+	// GeneralBalance is the spendable balance by the account.
+	GeneralBalance quantity.Quantity `json:"general_balance"`
+
+	// EscrowBalance is the current escrow balance on this account.
+	EscrowBalance quantity.Quantity `json:"escrow_balance"`
+
+	// Nonce is a number increased each time there is an outgoing txn from this account.
+	Nonce uint64 `json:"nonce"`
 }
 
-func getAccountInfo(ctx context.Context, cmd *cobra.Command, id signature.PublicKey, client grpcStaking.StakingClient) *accountInfo {
-	var ai accountInfo
+func getAccountInfo(ctx context.Context, cmd *cobra.Command, id signature.PublicKey, client grpcStaking.StakingClient) *AccountInfo {
+	var ai AccountInfo
 	doWithRetries(cmd, "query account "+id.String(), func() error {
 		rawID, _ := id.MarshalBinary()
 		resp, err := client.GetAccountInfo(ctx, &grpcStaking.GetAccountInfoRequest{

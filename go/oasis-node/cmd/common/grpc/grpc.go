@@ -20,7 +20,8 @@ const (
 	CfgServerPort = "grpc.port"
 	// CfgDebugPort configures the internal debug port.
 	CfgDebugPort = "grpc.debug.port"
-	cfgAddress   = "address"
+	// CfgDebugPort configures the remote address.
+	CfgAddress = "address"
 
 	defaultAddress      = "127.0.0.1:42261"
 	localSocketFilename = "internal.sock"
@@ -76,7 +77,7 @@ func NewServerLocal(installWrapper bool) (*cmnGrpc.Server, error) {
 
 // NewClient connects to a remote gRPC server.
 func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
-	addr, _ := cmd.Flags().GetString(cfgAddress)
+	addr, _ := cmd.Flags().GetString(CfgAddress)
 
 	conn, err := grpc.Dial(addr, grpc.WithInsecure()) // TODO: TLS?
 	if err != nil {
@@ -95,6 +96,6 @@ func init() {
 	_ = viper.BindPFlags(ServerLocalFlags)
 	ServerLocalFlags.AddFlagSet(cmnGrpc.Flags)
 
-	ClientFlags.StringP(cfgAddress, "a", defaultAddress, "remote gRPC address")
+	ClientFlags.StringP(CfgAddress, "a", defaultAddress, "remote gRPC address")
 	_ = viper.BindPFlags(ClientFlags)
 }

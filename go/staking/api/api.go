@@ -72,7 +72,7 @@ type Backend interface {
 	// Symbol is the symbol of the token.
 	Symbol() string
 
-	// TotalSupply returns the total nmber of tokens.
+	// TotalSupply returns the total number of tokens.
 	TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error)
 
 	// CommonPool returns the common pool balance.
