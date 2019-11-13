@@ -127,7 +127,7 @@ func (cs *CommissionSchedule) amend(amendment *CommissionSchedule) {
 }
 
 // validateWithinBound detects rates out of bound.
-func (cs *CommissionSchedule) validateWithinBound(start epochtime.EpochTime) error {
+func (cs *CommissionSchedule) validateWithinBound(now epochtime.EpochTime) error {
 	if len(cs.Rates) == 0 && len(cs.Bounds) == 0 {
 		// Nothing to check.
 		return nil
@@ -138,20 +138,25 @@ func (cs *CommissionSchedule) validateWithinBound(start epochtime.EpochTime) err
 	}
 	currentRateIndex := 0
 	currentRate := &cs.Rates[currentRateIndex]
-	if currentRate.Start > start {
-		return fmt.Errorf("rate schedule start epoch %d after %d", currentRate.Start, start)
-	}
 
 	if len(cs.Bounds) == 0 {
 		return fmt.Errorf("bounds missing")
 	}
 	currentBoundIndex := 0
 	currentBound := &cs.Bounds[currentBoundIndex]
-	if currentBound.Start > start {
-		return fmt.Errorf("bound schedule start epoch %d after %d", currentBound.Start, start)
+
+	var diagnosticTime epochtime.EpochTime
+	if currentRate.Start > now || currentBound.Start > now {
+		// We only care if the two schedules start simultaneously if they will start in the future.
+		// Steps that already started my have started at different times with older steps pruned.
+		if currentRate.Start != currentBound.Start {
+			return fmt.Errorf("rate schedule start epoch %d and bound schedule start epoch %d don't match", currentRate.Start, currentBound.Start)
+		}
+		diagnosticTime = currentRate.Start
+	} else {
+		diagnosticTime = now
 	}
 
-	diagnosticTime := start
 	for {
 		if currentRate.Rate.Cmp(&currentBound.RateMin) < 0 {
 			return fmt.Errorf("rate %v/%v from rate step %d less than minimum rate %v/%v from bound step %d at epoch %d",

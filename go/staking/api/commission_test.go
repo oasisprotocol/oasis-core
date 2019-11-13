@@ -31,6 +31,41 @@ func TestCommissionSchedule(t *testing.T) {
 	}
 	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10), "empty")
 	require.Nil(t, cs.CurrentRate(0), "empty current rate")
+	require.NoError(t, cs.AmendAndPruneAndValidate(&CommissionSchedule{
+		Rates: []CommissionRateStep{
+			{
+				Start: 40,
+				Rate:  mustInitQuantity(t, 50_000),
+			},
+		},
+		Bounds: []CommissionRateBoundStep{
+			{
+				Start:   40,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 100_000),
+			},
+		},
+	}, 0, 10, 30), "amend init")
+
+	cs = CommissionSchedule{
+		Rates:  nil,
+		Bounds: nil,
+	}
+	requireErrorShowDiagnostic(t, cs.AmendAndPruneAndValidate(&CommissionSchedule{
+		Rates: []CommissionRateStep{
+			{
+				Start: 10,
+				Rate:  mustInitQuantity(t, 50_000),
+			},
+		},
+		Bounds: []CommissionRateBoundStep{
+			{
+				Start:   40,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 100_000),
+			},
+		},
+	}, 0, 10, 30), "amend init unsimultaneous")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
