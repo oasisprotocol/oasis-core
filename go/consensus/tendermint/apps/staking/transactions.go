@@ -362,13 +362,6 @@ func (app *stakingApplication) amendCommissionSchedule(ctx *abci.Context, state 
 		return err
 	}
 
-	commit := true
-	defer func() {
-		if commit {
-			state.SetAccount(id, from)
-		}
-	}()
-
 	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
 	if err != nil {
 		return err
@@ -379,8 +372,10 @@ func (app *stakingApplication) amendCommissionSchedule(ctx *abci.Context, state 
 			"err", err,
 			"from", id,
 		)
-		commit = false
+		return err
 	}
+
+	state.SetAccount(id, from)
 
 	return nil
 }
