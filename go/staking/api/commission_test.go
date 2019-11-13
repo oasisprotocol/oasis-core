@@ -201,6 +201,117 @@ func TestCommissionSchedule(t *testing.T) {
 	}, 10, 10, 30, 4, 12), "amend out of bound")
 
 	cs = CommissionSchedule{
+		Rates: make([]CommissionRateStep, 5),
+		Bounds: []CommissionRateBoundStep{
+			{
+				Start:   0,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 100_000),
+			},
+		},
+	}
+	for i := range cs.Rates {
+		// 0 through 40, inclusive.
+		cs.Rates[i].Start = epochtime.EpochTime(i * 10)
+		cs.Rates[i].Rate = mustInitQuantity(t, int64(50_000+i))
+	}
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "overlong rate schedule")
+
+	cs = CommissionSchedule{
+		Rates: []CommissionRateStep{
+			{
+				Start: 0,
+				Rate:  mustInitQuantity(t, 50_000),
+			},
+		},
+		Bounds: make([]CommissionRateBoundStep, 13),
+	}
+	for i := range cs.Bounds {
+		// 0 through 40, inclusive.
+		cs.Bounds[i].Start = epochtime.EpochTime(i * 10)
+		cs.Bounds[i].RateMin = mustInitQuantity(t, 0)
+		cs.Bounds[i].RateMax = mustInitQuantity(t, int64(100_000-i))
+	}
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "overlong bound schedule")
+
+	cs = CommissionSchedule{
+		Rates: make([]CommissionRateStep, 4),
+		Bounds: []CommissionRateBoundStep{
+			{
+				Start:   0,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 100_000),
+			},
+		},
+	}
+	for i := range cs.Rates {
+		// 0 through 30, inclusive.
+		cs.Rates[i].Start = epochtime.EpochTime(i * 10)
+		cs.Rates[i].Rate = mustInitQuantity(t, int64(50_000+i))
+	}
+	amendment := CommissionSchedule{
+		Rates:  make([]CommissionRateStep, 5),
+		Bounds: nil,
+	}
+	for i := range amendment.Rates {
+		// 40 through 80, inclusive.
+		amendment.Rates[i].Start = epochtime.EpochTime(40 + i*10)
+		amendment.Rates[i].Rate = mustInitQuantity(t, int64(60_000+i))
+	}
+	requireErrorShowDiagnostic(t, cs.AmendAndPruneAndValidate(&amendment, 0, 10, 30, 4, 12), "overlong amendment rate schedule")
+
+	cs = CommissionSchedule{
+		Rates: make([]CommissionRateStep, 4),
+		Bounds: []CommissionRateBoundStep{
+			{
+				Start:   0,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 100_000),
+			},
+		},
+	}
+	for i := range cs.Rates {
+		// 0 through 30, inclusive.
+		cs.Rates[i].Start = epochtime.EpochTime(i * 10)
+		cs.Rates[i].Rate = mustInitQuantity(t, int64(50_000+i))
+	}
+	requireErrorShowDiagnostic(t, cs.AmendAndPruneAndValidate(&CommissionSchedule{
+		Rates: []CommissionRateStep{
+			{
+				Start: 40,
+				Rate:  mustInitQuantity(t, 60_000),
+			},
+		},
+		Bounds: nil,
+	}, 0, 10, 30, 4, 12), "overlong rate schedule after amendment")
+
+	cs = CommissionSchedule{
+		Rates: make([]CommissionRateStep, 4),
+		Bounds: []CommissionRateBoundStep{
+			{
+				Start:   0,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 100_000),
+			},
+		},
+	}
+	for i := range cs.Rates {
+		// 0 through 30, inclusive.
+		cs.Rates[i].Start = epochtime.EpochTime(i * 10)
+		cs.Rates[i].Rate = mustInitQuantity(t, int64(50_000+i))
+	}
+	amendment = CommissionSchedule{
+		Rates:  make([]CommissionRateStep, 3),
+		Bounds: nil,
+	}
+	for i := range amendment.Rates {
+		// 30 through 60, inclusive.
+		amendment.Rates[i].Start = epochtime.EpochTime(30 + i*10)
+		amendment.Rates[i].Rate = mustInitQuantity(t, int64(60_000+i))
+	}
+	require.NoError(t, cs.AmendAndPruneAndValidate(&amendment, 25, 10, 30, 4, 12), "complexity acceptable after replacing and pruning")
+
+	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
 			{
 				Start: 1,
