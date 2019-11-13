@@ -22,7 +22,7 @@ var (
 	// HaltRestore is the halt and restore scenario.
 	HaltRestore scenario.Scenario = newHaltRestoreImpl()
 
-	dumpGlob = "genesis-oasis-test-runner-at-*.json"
+	dumpGlob = "genesis-*.json"
 )
 
 const haltEpoch = 3

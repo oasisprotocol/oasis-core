@@ -12,7 +12,7 @@ import (
 
 // MergeSignatureContext is the signature context used to sign merge
 // worker commitments.
-var MergeSignatureContext = signature.NewContext("oasis-core/roothash: merge commitment")
+var MergeSignatureContext = signature.NewContext("oasis-core/roothash: merge commitment", signature.WithChainSeparation())
 
 type MergeBody struct {
 	ComputeCommits []ComputeCommitment `json:"commits"`

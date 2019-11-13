@@ -381,6 +381,8 @@ func (s *stakeCLIImpl) genTransferTx(childEnv *env.Env, amount int, nonce int, d
 		"--" + stake.CfgTxFeeAmount, strconv.Itoa(feeAmount),
 		"--" + stake.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugTestEntity,
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
 	if err := runSubCommand(childEnv, "gen_transfer", s.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genTransferTx: failed to generate transfer tx: %w", err)
@@ -399,6 +401,8 @@ func (s *stakeCLIImpl) genBurnTx(childEnv *env.Env, amount int, nonce int, txPat
 		"--" + stake.CfgTxFeeAmount, strconv.Itoa(feeAmount),
 		"--" + stake.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugTestEntity,
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
 	if err := runSubCommand(childEnv, "gen_burn", s.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genBurnTx: failed to generate burn tx: %w", err)
@@ -418,6 +422,8 @@ func (s *stakeCLIImpl) genEscrowTx(childEnv *env.Env, amount int, nonce int, esc
 		"--" + stake.CfgTxFeeAmount, strconv.Itoa(feeAmount),
 		"--" + stake.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugTestEntity,
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
 	if err := runSubCommand(childEnv, "gen_escrow", s.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genEscrowTx: failed to generate escrow tx: %w", err)
@@ -437,6 +443,8 @@ func (s *stakeCLIImpl) genReclaimEscrowTx(childEnv *env.Env, amount int, nonce i
 		"--" + stake.CfgTxFeeAmount, strconv.Itoa(feeAmount),
 		"--" + stake.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugTestEntity,
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
 	if err := runSubCommand(childEnv, "gen_reclaim_escrow", s.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genReclaimEscrowTx: failed to generate reclaim escrow tx: %w", err)

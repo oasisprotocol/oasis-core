@@ -7,6 +7,7 @@ import (
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmtypes "github.com/tendermint/tendermint/types"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
@@ -30,6 +31,15 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 	if err != nil {
 		return errors.Wrap(err, "genesis DefaultFileProvider")
 	}
+
+	// Retrieve the genesis document and use it to configure the ChainID for
+	// signature domain separation. We do this as early as possible.
+	genesisDoc, err := genesis.GetGenesisDocument()
+	if err != nil {
+		return err
+	}
+	signature.SetChainContext(genesisDoc.ChainID)
+
 	ht.service, err = tendermint.New(context.Background(), dataDir, id, genesis)
 	if err != nil {
 		return errors.Wrap(err, "tendermint New")

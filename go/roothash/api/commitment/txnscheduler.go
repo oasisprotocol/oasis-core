@@ -9,7 +9,7 @@ import (
 
 // TxnSchedulerBatchDispatchSigCtx is the context used for signing
 // transaction scheduler batch dispatch messages.
-var TxnSchedulerBatchDispatchSigCtx = signature.NewContext("oasis-core/roothash: tx batch dispatch")
+var TxnSchedulerBatchDispatchSigCtx = signature.NewContext("oasis-core/roothash: tx batch dispatch", signature.WithChainSeparation())
 
 // TxnSchedulerBatchDispatch is the message sent from the transaction
 // scheduler to compute workers after a batch is ready to be computed.

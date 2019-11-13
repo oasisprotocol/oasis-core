@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -53,6 +54,8 @@ func (n *staticSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Commi
 }
 
 func TestPoolDefault(t *testing.T) {
+	genesisTests.SetTestChainContext()
+
 	// Generate a commitment.
 	sk, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "NewSigner")
@@ -86,6 +89,8 @@ func TestPoolDefault(t *testing.T) {
 }
 
 func TestPoolSingleCommitment(t *testing.T) {
+	genesisTests.SetTestChainContext()
+
 	// Generate a non-TEE runtime.
 	var rtID signature.PublicKey
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
@@ -190,6 +195,8 @@ func TestPoolSingleCommitment(t *testing.T) {
 }
 
 func TestPoolSingleCommitmentTEE(t *testing.T) {
+	genesisTests.SetTestChainContext()
+
 	// Generate a TEE runtime.
 	var rtID signature.PublicKey
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
@@ -283,6 +290,8 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 }
 
 func TestPoolTwoCommitments(t *testing.T) {
+	genesisTests.SetTestChainContext()
+
 	rt, sks, committee, nodeInfo := generateMockCommittee(t)
 	sk1 := sks[0]
 	sk2 := sks[1]
@@ -422,6 +431,8 @@ func TestPoolTwoCommitments(t *testing.T) {
 }
 
 func TestPoolSerialization(t *testing.T) {
+	genesisTests.SetTestChainContext()
+
 	// Generate a non-TEE runtime.
 	var rtID signature.PublicKey
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
@@ -490,6 +501,8 @@ func TestPoolSerialization(t *testing.T) {
 }
 
 func TestMultiPoolSerialization(t *testing.T) {
+	genesisTests.SetTestChainContext()
+
 	rt, sks1, committee1, nodeInfo1 := generateMockCommittee(t)
 	_, sks2, committee2, nodeInfo2 := generateMockCommittee(t)
 	com1ID := committee1.EncodedMembersHash()
@@ -560,6 +573,8 @@ func TestMultiPoolSerialization(t *testing.T) {
 }
 
 func TestPoolMergeCommitment(t *testing.T) {
+	genesisTests.SetTestChainContext()
+
 	rt, computeSks, computeCommittee, computeNodeInfo := generateMockCommittee(t)
 	_, mergeSks, mergeCommittee, mergeNodeInfo := generateMockCommittee(t)
 	mergeCommittee.Kind = scheduler.KindMerge
@@ -720,6 +735,8 @@ func TestPoolMergeCommitment(t *testing.T) {
 }
 
 func TestMultiPool(t *testing.T) {
+	genesisTests.SetTestChainContext()
+
 	rt, sks1, committee1, nodeInfo1 := generateMockCommittee(t)
 	_, sks2, committee2, nodeInfo2 := generateMockCommittee(t)
 	com1ID := committee1.EncodedMembersHash()
@@ -889,6 +906,8 @@ func TestMultiPool(t *testing.T) {
 }
 
 func TestTryFinalize(t *testing.T) {
+	genesisTests.SetTestChainContext()
+
 	rt, sks, committee, nodeInfo := generateMockCommittee(t)
 	sk1 := sks[0]
 	sk2 := sks[1]

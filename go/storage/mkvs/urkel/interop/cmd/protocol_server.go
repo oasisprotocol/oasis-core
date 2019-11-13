@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/background"
 	"github.com/oasislabs/oasis-core/go/storage"
 	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
@@ -41,6 +42,8 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 		logger.Error("no data directory specified")
 		return
 	}
+
+	genesisTests.SetTestChainContext()
 
 	// Generate dummy identity.
 	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory())

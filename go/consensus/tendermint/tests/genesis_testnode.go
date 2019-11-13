@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -40,7 +41,7 @@ func (p *testNodeGenesisProvider) GetTendermintGenesisDocument() (*tmtypes.Genes
 // running a single node "network", only for testing.
 func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, error) {
 	doc := &genesis.Document{
-		ChainID:   "oasis-test-chain",
+		ChainID:   genesisTests.TestChainID,
 		Time:      time.Now(),
 		HaltEpoch: epochtime.EpochTime(math.MaxUint64),
 		EpochTime: epochtime.Genesis{

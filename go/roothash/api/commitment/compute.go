@@ -16,7 +16,7 @@ import (
 var (
 	// ComputeSignatureContext is the signature context used to sign compute
 	// worker commitments.
-	ComputeSignatureContext = signature.NewContext("oasis-core/roothash: compute commitment")
+	ComputeSignatureContext = signature.NewContext("oasis-core/roothash: compute commitment", signature.WithChainSeparation())
 
 	// ComputeResultsHeaderSignatureContext is the signature context used to
 	// sign compute results headers with RAK.
