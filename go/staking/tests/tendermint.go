@@ -13,6 +13,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	tmcrypto "github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
+	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 )
 
@@ -59,8 +60,8 @@ func tendermintMakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) ap
 	ev := &tmtypes.DuplicateVoteEvidence{
 		PubKey: pv1.GetPubKey(),
 		// NOTE: ChainID must match the unit test genesis block.
-		VoteA: makeVote(pv1, "oasis-test-chain", 0, 1, 2, 1, blockID1),
-		VoteB: makeVote(pv2, "oasis-test-chain", 0, 1, 2, 1, blockID2),
+		VoteA: makeVote(pv1, genesisTests.TestChainID, 0, 1, 2, 1, blockID1),
+		VoteB: makeVote(pv2, genesisTests.TestChainID, 0, 1, 2, 1, blockID2),
 	}
 	return api.NewConsensusEvidence(ev)
 }

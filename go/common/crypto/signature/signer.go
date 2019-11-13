@@ -5,13 +5,16 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/oasislabs/ed25519"
 )
 
-// ContextSize is the size of a signature context in bytes.
-const ContextSize = 8
+const (
+	chainContextMaxSize   = 32
+	chainContextSeparator = " for chain "
+)
 
 var (
 	// ErrNotExist is the error returned when a private key does not exist.
@@ -31,32 +34,86 @@ var (
 
 	errMalformedContext    = errors.New("signature: malformed context")
 	errUnregisteredContext = errors.New("signature: unregistered context")
+	errNoChainContext      = errors.New("signature: chain domain separation context not set")
 
 	registeredContexts sync.Map
+
+	chainContextLock sync.RWMutex
+	chainContext     Context
 )
+
+type contextOptions struct {
+	chainSeparation bool
+}
+
+// ContextOption is a context configuration option.
+type ContextOption func(*contextOptions)
+
+// WithChainSeparation is a context option that enforces additional domain
+// separation based on the ChainID.
+func WithChainSeparation() ContextOption {
+	return func(o *contextOptions) {
+		o.chainSeparation = true
+	}
+}
 
 // Context is a domain separation context.
 type Context string
 
 // NewContext creates and registers a new context.  This routine will panic
 // if the context is malformed or is already registered.
-func NewContext(rawContext string) Context {
+func NewContext(rawContext string, opts ...ContextOption) Context {
+	var opt contextOptions
+	for _, v := range opts {
+		v(&opt)
+	}
+
 	// Even if we are not using the clearly superior RFC 8032 constructs
 	// enforce something that is compatible.
 	//
-	// Note: We disallow context lenghts of 0, since our ContextSign call
+	// Note: We disallow context lengths of 0, since our ContextSign call
 	// is intended to enforce strict domain separation.
-	if l := len(rawContext); l == 0 || l > ed25519.ContextMaxSize {
+	l := len(rawContext)
+	if l == 0 {
 		panic(errMalformedContext)
+	}
+	if opt.chainSeparation {
+		l += len(chainContextSeparator) + chainContextMaxSize
+	}
+	if l > ed25519.ContextMaxSize {
+		panic(errMalformedContext)
+	}
+
+	// Disallow contexts including the chain context separator as a simple
+	// way to avoid conflicts with chain-separated contexts.
+	if strings.Contains(rawContext, chainContextSeparator) {
+		panic("signature: context must not include '" + chainContextSeparator + "': '" + rawContext + "'")
 	}
 
 	ctx := Context(rawContext)
 	if _, isRegistered := registeredContexts.Load(ctx); isRegistered {
 		panic("signature: context already registered: '" + ctx + "'")
 	}
-	registeredContexts.Store(ctx, true)
+	registeredContexts.Store(ctx, &opt)
 
 	return ctx
+}
+
+// SetChainContext configures the chain domain separation context that is
+// used with any contexts constructed using the WithChainSeparation option.
+func SetChainContext(rawContext string) {
+	if l := len(rawContext); l == 0 || l > chainContextMaxSize {
+		panic(errMalformedContext)
+	}
+
+	chainContextLock.Lock()
+	defer chainContextLock.Unlock()
+
+	if chainContext != "" && rawContext != string(chainContext) {
+		panic("signature: chain domain separation context already set: '" + chainContext + "'")
+	}
+
+	chainContext = Context(rawContext)
 }
 
 // SignerRole is the role of the Signer (Entity, Node, etc).
@@ -118,8 +175,21 @@ type UnsafeSigner interface {
 // PrepareSignerMessage prepares a context and message for signing by a Signer.
 func PrepareSignerMessage(context Context, message []byte) ([]byte, error) {
 	// Ensure that the context is registered for use.
-	if _, isRegistered := registeredContexts.Load(context); !isRegistered {
+	rawOpts, isRegistered := registeredContexts.Load(context)
+	if !isRegistered {
 		return nil, errUnregisteredContext
+	}
+	opts := rawOpts.(*contextOptions)
+
+	// Include chain domain separation context if configured.
+	if opts.chainSeparation {
+		chainContextLock.RLock()
+		defer chainContextLock.RUnlock()
+
+		if chainContext == "" {
+			return nil, errNoChainContext
+		}
+		context = context + chainContextSeparator + chainContext
 	}
 
 	// This is stupid, and we should be using RFC 8032's Ed25519ph instead

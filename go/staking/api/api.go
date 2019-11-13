@@ -28,16 +28,16 @@ const (
 
 var (
 	// TransferSignatureContext is the context used for transfers.
-	TransferSignatureContext = signature.NewContext("oasis-core/staking: transfer")
+	TransferSignatureContext = signature.NewContext("oasis-core/staking: transfer", signature.WithChainSeparation())
 
 	// BurnSignatureContext is the context used for burns.
-	BurnSignatureContext = signature.NewContext("oasis-core/staking: burn")
+	BurnSignatureContext = signature.NewContext("oasis-core/staking: burn", signature.WithChainSeparation())
 
 	// EscrowSignatureContext is the context used for escrows.
-	EscrowSignatureContext = signature.NewContext("oasis-core/staking: escrow")
+	EscrowSignatureContext = signature.NewContext("oasis-core/staking: escrow", signature.WithChainSeparation())
 
 	// ReclaimEscrowSignatureContext is the context used for escrow reclimation.
-	ReclaimEscrowSignatureContext = signature.NewContext("oasis-core/staking: reclaim escrow")
+	ReclaimEscrowSignatureContext = signature.NewContext("oasis-core/staking: reclaim escrow", signature.WithChainSeparation())
 
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New("staking: invalid argument")

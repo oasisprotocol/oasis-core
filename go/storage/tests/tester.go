@@ -12,6 +12,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
@@ -82,6 +83,8 @@ func foldWriteLogIterator(t *testing.T, w api.WriteLogIterator) api.WriteLog {
 // StorageImplementationTests exercises the basic functionality of a storage
 // backend.
 func StorageImplementationTests(t *testing.T, backend api.Backend, namespace common.Namespace, round uint64) {
+	genesisTests.SetTestChainContext()
+
 	<-backend.Initialized()
 
 	t.Run("Basic", func(t *testing.T) {

@@ -359,16 +359,28 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 
 func (n *Node) initGenesis(testNode bool) error {
 	var err error
-	if n.Genesis, err = genesisfile.DefaultFileProvider(); err == nil {
-		return nil
-	}
-	if os.IsNotExist(err) && testNode {
-		// Well, there wasn't a genesis document and we're running unit tests,
-		// so use a test node one.
-		n.Genesis, err = tendermintTests.NewTestNodeGenesisProvider(n.Identity)
+	n.Genesis, err = genesisfile.DefaultFileProvider()
+	if err != nil {
+		if os.IsNotExist(err) && testNode {
+			// Well, there wasn't a genesis document and we're running unit tests,
+			// so use a test node one.
+			if n.Genesis, err = tendermintTests.NewTestNodeGenesisProvider(n.Identity); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
 	}
 
-	return err
+	// Retrieve the genesis document and use it to configure the ChainID for
+	// signature domain separation. We do this as early as possible.
+	genesisDoc, err := n.Genesis.GetGenesisDocument()
+	if err != nil {
+		return err
+	}
+	signature.SetChainContext(genesisDoc.ChainID)
+
+	return nil
 }
 
 func (n *Node) dumpGenesis(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) error {

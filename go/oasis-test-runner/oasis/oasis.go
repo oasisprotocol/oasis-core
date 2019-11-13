@@ -21,6 +21,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 )
@@ -283,6 +284,11 @@ func (net *Network) Start() error {
 		)
 	}
 
+	// Configure domain separation for cases where we do signing inside test
+	// cases and want to generate valid signatures. This assumes that the
+	// genesis file always uses the test ChainID.
+	genesisTests.SetTestChainContext()
+
 	net.logger.Debug("provisioning seed node")
 	if _, err := net.newSeedNode(); err != nil {
 		net.logger.Error("failed to provision seed node",
@@ -434,7 +440,7 @@ func (net *Network) startOasisNode(
 		"--log.level", "debug",
 		"--log.format", "json",
 		"--log.file", nodeLogPath(dir),
-		"--genesis.file", net.genesisPath(),
+		"--genesis.file", net.GenesisPath(),
 	}
 	if len(subCmd) == 0 {
 		extraArgs = extraArgs.
@@ -504,8 +510,8 @@ func (net *Network) startOasisNode(
 func (net *Network) makeGenesis() error {
 	args := []string{
 		"genesis", "init",
-		"--genesis.file", net.genesisPath(),
-		"--chain.id", "oasis-test-runner",
+		"--genesis.file", net.GenesisPath(),
+		"--chain.id", genesisTests.TestChainID,
 		"--halt.epoch", strconv.FormatUint(net.cfg.HaltEpoch, 10),
 		"--consensus.backend", net.cfg.ConsensusBackend,
 		"--epochtime.tendermint.interval", strconv.FormatInt(net.cfg.EpochtimeTendermintInterval, 10),
@@ -555,7 +561,8 @@ func (net *Network) makeGenesis() error {
 	return nil
 }
 
-func (net *Network) genesisPath() string {
+// GenesisPath returns the path to the genesis file for the network.
+func (net *Network) GenesisPath() string {
 	if net.cfg.GenesisFile != "" {
 		return net.cfg.GenesisFile
 	}

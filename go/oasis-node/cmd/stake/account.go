@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/consensus/gas"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
 	grpcStaking "github.com/oasislabs/oasis-core/go/grpc/staking"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -130,6 +131,27 @@ func assertTxFileOK() {
 	// XXX: Other checks to see if we can write to the file?
 }
 
+func initGenesis() {
+	genesis, err := genesisFile.DefaultFileProvider()
+	if err != nil {
+		logger.Error("failed to load genesis file",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	// Retrieve the genesis document and use it to configure the ChainID for
+	// signature domain separation. We do this as early as possible.
+	genesisDoc, err := genesis.GetGenesisDocument()
+	if err != nil {
+		logger.Error("failed to load genesis file",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	signature.SetChainContext(genesisDoc.ChainID)
+}
+
 func doAccountInfo(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
@@ -207,6 +229,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
+	initGenesis()
 	assertTxFileOK()
 
 	var xfer api.Transfer
@@ -259,6 +282,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
+	initGenesis()
 	assertTxFileOK()
 
 	var burn api.Burn
@@ -305,6 +329,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
+	initGenesis()
 	assertTxFileOK()
 
 	var escrow api.Escrow
@@ -357,6 +382,7 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
+	initGenesis()
 	assertTxFileOK()
 
 	var reclaim api.ReclaimEscrow
@@ -446,6 +472,7 @@ func init() {
 	txFlags.AddFlagSet(txFileFlags)
 	txFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	txFlags.AddFlagSet(cmdFlags.EntityFlags)
+	txFlags.AddFlagSet(cmdFlags.GenesisFileFlags)
 
 	accountTransferFlags.String(CfgTransferDestination, "", "transfer destination account ID")
 	_ = viper.BindPFlags(accountTransferFlags)
