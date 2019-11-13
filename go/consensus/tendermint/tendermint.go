@@ -76,8 +76,8 @@ const (
 	CfgP2PPersistentPeer = "tendermint.persistent_peer"
 	// CfgP2PDisablePeerExchange disables tendermint's peer-exchange (Pex) reactor.
 	CfgP2PDisablePeerExchange = "tendermint.disable_peer_exchange"
-	// CfgP2PSeeds configures the tendermint seed nodes.
-	CfgP2PSeeds = "tendermint.seeds"
+	// CfgP2PSeeds configures tendermint's seed node(s).
+	CfgP2PSeed = "tendermint.seed"
 	// CfgP2PSeedMode enables the tendermint seed mode.
 	CfgP2PSeedMode = "tendermint.seed_mode"
 
@@ -787,7 +787,7 @@ func (t *tendermintService) lazyInit() error {
 	// uses a case sensitive string comparision to validate public keys.
 	// Since Seeds is expected to be in comma-delimited ID@host:port format,
 	// lowercasing the whole string is ok.
-	tenderConfig.P2P.Seeds = strings.ToLower(viper.GetString(CfgP2PSeeds))
+	tenderConfig.P2P.Seeds = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PSeed), ","))
 	tenderConfig.P2P.AddrBookStrict = !viper.GetBool(CfgDebugP2PAddrBookLenient)
 	tenderConfig.RPC.ListenAddress = ""
 
@@ -1164,7 +1164,7 @@ func init() {
 	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form ID@ip:port")
 	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")
 	Flags.Bool(CfgP2PSeedMode, false, "run the tendermint node in seed mode")
-	Flags.String(CfgP2PSeeds, "", "comma-delimited id@host:port tendermint seed nodes")
+	Flags.StringSlice(CfgP2PSeed, []string{}, "Tendermint seed node(s) of the form ID@host:port")
 	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 	Flags.Bool(CfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
 	Flags.Uint64(CfgConsensusMinGasPrice, 0, "minimum gas price")

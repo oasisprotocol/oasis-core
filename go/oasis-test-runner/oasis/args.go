@@ -291,10 +291,9 @@ func (args *argBuilder) iasSPID(spid []byte) *argBuilder {
 func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {
 	if seed := net.seedNode; seed != nil {
 		args.vec = append(args.vec, []string{
-			"--" + tendermint.CfgP2PSeeds, seed.tmAddress + "@127.0.0.1:" + strconv.Itoa(int(seed.consensusPort)),
+			"--" + tendermint.CfgP2PSeed, fmt.Sprintf("%s@127.0.0.1:%d", seed.tmAddress, seed.consensusPort),
 		}...)
 	}
-
 	return args
 }
 
