@@ -37,6 +37,7 @@ func NewGenesisBlock(id signature.PublicKey, timestamp uint64) *Block {
 	blk.Header.Version = 0
 	blk.Header.Timestamp = timestamp
 	_ = blk.Header.Namespace.UnmarshalBinary(id[:])
+	blk.Header.PreviousHash.Empty()
 	blk.Header.IORoot.Empty()
 	blk.Header.StateRoot.Empty()
 

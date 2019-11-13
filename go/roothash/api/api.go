@@ -224,45 +224,24 @@ func (g *Genesis) SanityCheck() error {
 	for _, blk := range g.Blocks {
 		hdr := blk.Header
 
-		if hdr.HeaderType != block.Normal && hdr.HeaderType != block.RoundFailed && hdr.HeaderType != block.EpochTransition {
+		if hdr.HeaderType != block.Normal {
 			return fmt.Errorf("roothash: sanity check failed: invalid block header type")
+		}
+
+		if !hdr.PreviousHash.IsEmpty() {
+			return fmt.Errorf("roothash: sanity check failed: non-empty previous hash")
 		}
 
 		if hdr.Timestamp > uint64(time.Now().Unix()+61*60) {
 			return fmt.Errorf("roothash: sanity check failed: block header timestamp is more than 1h1m in the future")
 		}
 
-		for _, sig := range hdr.StorageSignatures {
-			if !sig.PublicKey.IsValid() {
-				return fmt.Errorf("roothash: sanity check failed: storage signature's public key %s is invalid", sig.PublicKey.String())
-			}
+		if len(hdr.StorageSignatures) != 0 {
+			return fmt.Errorf("roothash: sanity check failed: non-empty storage signatures")
 		}
 
-		err := hdr.VerifyStorageReceiptSignatures()
-		if err != nil {
-			return fmt.Errorf("roothash: sanity check failed: storage receipt signature verification failed")
-		}
-
-		for _, msg := range hdr.RoothashMessages {
-			if msg.StakingGeneralAdjustmentRoothashMessage != nil {
-				m := msg.StakingGeneralAdjustmentRoothashMessage
-
-				if !m.Account.IsValid() {
-					return fmt.Errorf("roothash: sanity check failed: staking adjustment msg account ID %s is invalid", m.Account.String())
-				}
-
-				if m.Op != block.Increase && m.Op != block.Decrease {
-					return fmt.Errorf("roothash: sanity check failed: staking adjustment msg op for account %s is invalid", m.Account.String())
-				}
-
-				if m.Amount == nil {
-					return fmt.Errorf("roothash: sanity check failed: staking adjustment msg amount is missing")
-				}
-
-				if !m.Amount.IsValid() {
-					return fmt.Errorf("roothash: sanity check failed: staking adjustment msg amount is invalid")
-				}
-			}
+		if len(hdr.RoothashMessages) != 0 {
+			return fmt.Errorf("roothash: sanity check failed: non-empty roothash messages")
 		}
 	}
 
