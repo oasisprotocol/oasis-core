@@ -89,7 +89,7 @@ func (d *Document) SanityCheck() error {
 	if err = d.RootHash.SanityCheck(); err != nil {
 		return err
 	}
-	if err = d.Staking.SanityCheck(); err != nil {
+	if err = d.Staking.SanityCheck(d.EpochTime.Base); err != nil {
 		return err
 	}
 	if err = d.KeyManager.SanityCheck(); err != nil {

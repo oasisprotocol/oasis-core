@@ -498,7 +498,7 @@ func (p *ConsensusParameters) SanityCheck() error {
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck() error {
+func (g *Genesis) SanityCheck(now epochtime.EpochTime) error {
 	for thr, val := range g.Parameters.Thresholds {
 		if !val.IsValid() {
 			return fmt.Errorf("staking: sanity check failed: threshold '%s' has invalid value", thr.String())
@@ -514,8 +514,9 @@ func (g *Genesis) SanityCheck() error {
 	}
 
 	// Check if the total supply adds up (common pool + all balances in the ledger).
+	// Check all commission schedules.
 	var total quantity.Quantity
-	for _, acct := range g.Ledger {
+	for id, acct := range g.Ledger {
 		if !acct.General.Balance.IsValid() {
 			return fmt.Errorf("staking: sanity check failed: account balance is invalid")
 		}
@@ -529,6 +530,11 @@ func (g *Genesis) SanityCheck() error {
 		_ = total.Add(&acct.General.Balance)
 		_ = total.Add(&acct.Escrow.Active.Balance)
 		_ = total.Add(&acct.Escrow.Debonding.Balance)
+
+		commissionStateShallowCopy := acct.Escrow.CommissionSchedule
+		if err := commissionStateShallowCopy.PruneAndValidateForGenesis(now, g.Parameters.CommissionRateChangeInterval); err != nil {
+			return fmt.Errorf("staking: sanity check failed: commission schedule for %s is invalid: %+v", id, err)
+		}
 	}
 	_ = total.Add(&g.CommonPool)
 	if total.Cmp(&g.TotalSupply) != 0 {
