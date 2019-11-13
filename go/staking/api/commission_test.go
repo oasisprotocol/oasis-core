@@ -29,7 +29,7 @@ func TestCommissionSchedule(t *testing.T) {
 		Rates:  nil,
 		Bounds: nil,
 	}
-	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10), "empty")
+	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "empty")
 	require.Nil(t, cs.CurrentRate(0), "empty current rate")
 	require.NoError(t, cs.AmendAndPruneAndValidate(&CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -45,7 +45,7 @@ func TestCommissionSchedule(t *testing.T) {
 				RateMax: mustInitQuantity(t, 100_000),
 			},
 		},
-	}, 0, 10, 30), "amend init")
+	}, 0, 10, 30, 4, 12), "amend init")
 
 	cs = CommissionSchedule{
 		Rates:  nil,
@@ -65,7 +65,7 @@ func TestCommissionSchedule(t *testing.T) {
 				RateMax: mustInitQuantity(t, 100_000),
 			},
 		},
-	}, 0, 10, 30), "amend init unsimultaneous")
+	}, 0, 10, 30, 4, 12), "amend init unsimultaneous")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -82,7 +82,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10), "valid")
+	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "valid")
 
 	requireErrorShowDiagnostic(t, cs.AmendAndPruneAndValidate(&CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -92,7 +92,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 		Bounds: nil,
-	}, 10, 10, 30), "amend unaligned")
+	}, 10, 10, 30, 4, 12), "amend unaligned")
 
 	requireErrorShowDiagnostic(t, cs.AmendAndPruneAndValidate(&CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -102,7 +102,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 		Bounds: nil,
-	}, 10, 10, 30), "amend rate start too early")
+	}, 10, 10, 30, 4, 12), "amend rate start too early")
 
 	requireErrorShowDiagnostic(t, cs.AmendAndPruneAndValidate(&CommissionSchedule{
 		Rates: nil,
@@ -113,7 +113,7 @@ func TestCommissionSchedule(t *testing.T) {
 				RateMax: mustInitQuantity(t, 100_000),
 			},
 		},
-	}, 10, 10, 30), "amend bound start too early")
+	}, 10, 10, 30, 4, 12), "amend bound start too early")
 
 	require.NoError(t, cs.AmendAndPruneAndValidate(&CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -129,7 +129,7 @@ func TestCommissionSchedule(t *testing.T) {
 				RateMax: mustInitQuantity(t, 100_000),
 			},
 		},
-	}, 10, 10, 30), "amend append")
+	}, 10, 10, 30, 4, 12), "amend append")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -173,7 +173,7 @@ func TestCommissionSchedule(t *testing.T) {
 				RateMax: mustInitQuantity(t, 100_000),
 			},
 		},
-	}, 10, 10, 30), "amend replace")
+	}, 10, 10, 30, 4, 12), "amend replace")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -198,7 +198,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 		Bounds: nil,
-	}, 10, 10, 30), "amend out of bound")
+	}, 10, 10, 30, 4, 12), "amend out of bound")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -215,7 +215,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "unaligned rate step")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "unaligned rate step")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -236,7 +236,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "reversed rate steps")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "reversed rate steps")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -257,7 +257,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "zero-duration rate step")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "zero-duration rate step")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -274,7 +274,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10), "rate unity")
+	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "rate unity")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -291,7 +291,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "rate over unity")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "rate over unity")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -308,7 +308,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "unaligned bound step")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "unaligned bound step")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -330,7 +330,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "reversed bound steps")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "reversed bound steps")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -347,7 +347,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "bound min over unity")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "bound min over unity")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -364,7 +364,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "bound max over unity")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "bound max over unity")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -381,7 +381,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10), "bound exact")
+	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "bound exact")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -398,7 +398,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "bound inverted")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "bound inverted")
 
 	cs = CommissionSchedule{
 		Rates: nil,
@@ -410,7 +410,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "no rates")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "no rates")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -427,7 +427,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "rates late start")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "rates late start")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -438,7 +438,7 @@ func TestCommissionSchedule(t *testing.T) {
 		},
 		Bounds: nil,
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "no bounds")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "no bounds")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -455,7 +455,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "bounds late start")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "bounds late start")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -472,7 +472,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "rate below min")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "rate below min")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -489,7 +489,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10), "rate above max")
+	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "rate above max")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -515,7 +515,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10), "bound change then rate change")
+	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "bound change then rate change")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -541,7 +541,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10), "rate change then bound change")
+	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "rate change then bound change")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -567,7 +567,7 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10), "simultaneous rate and bound change")
+	require.NoError(t, cs.PruneAndValidateForGenesis(0, 10, 4, 12), "simultaneous rate and bound change")
 
 	cs = CommissionSchedule{
 		Rates: []CommissionRateStep{
@@ -593,10 +593,10 @@ func TestCommissionSchedule(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, cs.PruneAndValidateForGenesis(1, 10), "prune no effect")
+	require.NoError(t, cs.PruneAndValidateForGenesis(1, 10, 4, 12), "prune no effect")
 	require.Equal(t, epochtime.EpochTime(0), cs.Rates[0].Start, "prune 1 rates start")
 	require.Equal(t, epochtime.EpochTime(0), cs.Bounds[0].Start, "prune 1 bounds start")
-	require.NoError(t, cs.PruneAndValidateForGenesis(10, 10), "prune rate step")
+	require.NoError(t, cs.PruneAndValidateForGenesis(10, 10, 4, 12), "prune rate step")
 	require.Equal(t, epochtime.EpochTime(10), cs.Rates[0].Start, "prune 10 rates start")
 	require.Equal(t, epochtime.EpochTime(10), cs.Bounds[0].Start, "prune 10 bounds start")
 }

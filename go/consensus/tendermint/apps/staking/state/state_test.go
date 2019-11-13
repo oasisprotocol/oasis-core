@@ -55,7 +55,7 @@ func TestRewardAndSlash(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, escrowAccount.Escrow.CommissionSchedule.PruneAndValidateForGenesis(0, 10), "commission schedule")
+	require.NoError(t, escrowAccount.Escrow.CommissionSchedule.PruneAndValidateForGenesis(0, 10, 4, 12), "commission schedule")
 
 	del := &staking.Delegation{}
 	require.NoError(t, escrowAccount.Escrow.Active.Deposit(&del.Shares, &delegatorAccount.General.Balance, mustInitQuantityP(t, 100)), "active escrow deposit")
@@ -80,8 +80,10 @@ func TestRewardAndSlash(t *testing.T) {
 				Scale: mustInitQuantity(t, 500),
 			},
 		},
-		CommissionRateChangeInterval: 10,
-		CommissionRateBoundLead:      30,
+		CommissionRateChangeInterval:    10,
+		CommissionRateBoundLead:         30,
+		CommissionScheduleMaxRateSteps:  4,
+		CommissionScheduleMaxBoundSteps: 12,
 	})
 	s.SetCommonPool(mustInitQuantityP(t, 10000))
 

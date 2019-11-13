@@ -534,7 +534,7 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error {
 		_ = total.Add(&acct.Escrow.Debonding.Balance)
 
 		commissionStateShallowCopy := acct.Escrow.CommissionSchedule
-		if err := commissionStateShallowCopy.PruneAndValidateForGenesis(now, g.Parameters.CommissionRateChangeInterval); err != nil {
+		if err := commissionStateShallowCopy.PruneAndValidateForGenesis(now, g.Parameters.CommissionRateChangeInterval, g.Parameters.CommissionScheduleMaxRateSteps, g.Parameters.CommissionScheduleMaxBoundSteps); err != nil {
 			return fmt.Errorf("staking: sanity check failed: commission schedule for %s is invalid: %+v", id, err)
 		}
 	}

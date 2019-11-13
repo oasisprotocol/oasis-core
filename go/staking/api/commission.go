@@ -28,6 +28,17 @@ type CommissionSchedule struct {
 	Bounds []CommissionRateBoundStep `json:"bounds"`
 }
 
+func (cs *CommissionSchedule) validateComplexity(commissionScheduleMaxRateSteps int, commissionScheduleMaxBoundSteps int) error {
+	if len(cs.Rates) > commissionScheduleMaxRateSteps {
+		return fmt.Errorf("rate schedule %d steps exceeds maximum %d", len(cs.Rates), commissionScheduleMaxRateSteps)
+	}
+	if len(cs.Bounds) > commissionScheduleMaxBoundSteps {
+		return fmt.Errorf("bound schedule %d steps exceeds maximum %d", len(cs.Bounds), commissionScheduleMaxBoundSteps)
+	}
+
+	return nil
+}
+
 // validateNondegenerate detects degenerate steps.
 func (cs *CommissionSchedule) validateNondegenerate(commissionRateChangeInterval epochtime.EpochTime) error {
 	for i, step := range cs.Rates {
@@ -218,7 +229,10 @@ func (cs *CommissionSchedule) validateWithinBound(now epochtime.EpochTime) error
 
 // PruneAndValidateForGenesis gets a schedule ready for use in the genesis document.
 // Returns an error if there is a validation failure. If it does, the schedule may be pruned already.
-func (cs *CommissionSchedule) PruneAndValidateForGenesis(now epochtime.EpochTime, commissionRateChangeInterval epochtime.EpochTime) error {
+func (cs *CommissionSchedule) PruneAndValidateForGenesis(now epochtime.EpochTime, commissionRateChangeInterval epochtime.EpochTime, commissionScheduleMaxRateSteps int, commissionScheduleMaxBoundSteps int) error {
+	if err := cs.validateComplexity(commissionScheduleMaxRateSteps, commissionScheduleMaxBoundSteps); err != nil {
+		return err
+	}
 	if err := cs.validateNondegenerate(commissionRateChangeInterval); err != nil {
 		return err
 	}
@@ -233,7 +247,10 @@ func (cs *CommissionSchedule) PruneAndValidateForGenesis(now epochtime.EpochTime
 
 // AmendAndPruneAndValidate applies a proposed amendment to a valid schedule.
 // Returns an error if there is a validation failure. If it does, the schedule may be amended and pruned already.
-func (cs *CommissionSchedule) AmendAndPruneAndValidate(amendment *CommissionSchedule, now epochtime.EpochTime, commissionRateChangeInterval epochtime.EpochTime, commissionRateBoundLead epochtime.EpochTime) error {
+func (cs *CommissionSchedule) AmendAndPruneAndValidate(amendment *CommissionSchedule, now epochtime.EpochTime, commissionRateChangeInterval epochtime.EpochTime, commissionRateBoundLead epochtime.EpochTime, commissionScheduleMaxRateSteps int, commissionScheduleMaxBoundSteps int) error {
+	if err := amendment.validateComplexity(commissionScheduleMaxRateSteps, commissionScheduleMaxBoundSteps); err != nil {
+		return errors.Wrap(err, "amendment")
+	}
 	if err := amendment.validateNondegenerate(commissionRateChangeInterval); err != nil {
 		return errors.Wrap(err, "amendment")
 	}
@@ -242,6 +259,9 @@ func (cs *CommissionSchedule) AmendAndPruneAndValidate(amendment *CommissionSche
 	}
 	cs.prune(now)
 	cs.amend(amendment)
+	if err := cs.validateComplexity(commissionScheduleMaxRateSteps, commissionScheduleMaxBoundSteps); err != nil {
+		return errors.Wrap(err, "after pruning and amending")
+	}
 	if err := cs.validateWithinBound(now); err != nil {
 		return errors.Wrap(err, "after pruning and amending")
 	}
