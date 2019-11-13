@@ -561,6 +561,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		nod.Node.P2P.ID = nod.Node.ID
 		nod.Node.P2P.Addresses = append(nod.Node.P2P.Addresses, addr)
 		nod.Node.Committee.Addresses = append(nod.Node.Committee.Addresses, addr)
+		nod.Node.Consensus.ID = nod.Node.ID
 		// Generate dummy TLS certificate.
 		tlsCert, err := tls.Generate(identity.CommonName)
 		if err != nil {
@@ -664,6 +665,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		nod.UpdatedNode.P2P.Addresses = append(nod.UpdatedNode.P2P.Addresses, addr)
 		nod.UpdatedNode.Committee.Addresses = append(nod.UpdatedNode.Committee.Addresses, addr)
 		nod.UpdatedNode.Committee.Certificate = nod.Node.Committee.Certificate
+		nod.UpdatedNode.Consensus.ID = nod.UpdatedNode.ID
 		nod.SignedValidReRegistration, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, nod.UpdatedNode)
 		if err != nil {
 			return nil, err
@@ -921,6 +923,11 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 		return nil, err
 	}
 
+	kmSigner, err := memorySigner.NewSigner(rng)
+	if err != nil {
+		return nil, err
+	}
+
 	rt.Runtime = &api.Runtime{
 		ID:                            rt.Signer.Public(),
 		ReplicaGroupSize:              3,
@@ -928,6 +935,14 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 		ReplicaAllowedStragglers:      1,
 		StorageGroupSize:              3,
 		TransactionSchedulerGroupSize: 3,
+		Genesis: api.RuntimeGenesis{
+			StorageReceipt: signature.Signature{
+				// We don't want an invalid public key so we pass something.
+				PublicKey: rt.Signer.Public(),
+			},
+		},
+		// We don't want an invalid public key so we pass something.
+		KeyManager: kmSigner.Public(),
 	}
 	if entity != nil {
 		rt.Signer = entity.Signer

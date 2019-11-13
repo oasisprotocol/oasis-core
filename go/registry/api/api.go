@@ -272,6 +272,13 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 	// Ensure the node list has no duplicates.
 	nodesMap := make(map[signature.MapKey]bool)
 	for _, v := range ent.Nodes {
+		if !v.IsValid() {
+			logger.Error("RegisterEntity: malformed node id",
+				"entity", ent,
+			)
+			return nil, ErrInvalidArgument
+		}
+
 		mk := v.ToMapKey()
 		if nodesMap[mk] {
 			logger.Error("RegisterEntity: duplicate entries in node list",
