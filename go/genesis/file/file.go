@@ -3,9 +3,8 @@ package file
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
-
-	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/genesis/api"
@@ -43,7 +42,11 @@ func NewFileProvider(filename string) (api.Provider, error) {
 
 	var doc api.Document
 	if err = json.Unmarshal(raw, &doc); err != nil {
-		return nil, errors.Wrap(err, "genesis: malformed genesis file")
+		return nil, fmt.Errorf("genesis: malformed genesis file: %w", err)
+	}
+
+	if err = doc.SanityCheck(); err != nil {
+		return nil, fmt.Errorf("genesis: bad genesis file: %w", err)
 	}
 
 	return &fileProvider{document: &doc}, nil
