@@ -46,10 +46,11 @@ var (
 
 // Tx is a transaction to be accepted by the staking app.
 type Tx struct {
-	*TxTransfer      `json:"Transfer,omitempty"`
-	*TxBurn          `json:"Burn,omitempty"`
-	*TxAddEscrow     `json:"AddEscrow,omitempty"`
-	*TxReclaimEscrow `json:"ReclaimEscrow,omitempty"`
+	*TxTransfer                `json:"Transfer,omitempty"`
+	*TxBurn                    `json:"Burn,omitempty"`
+	*TxAddEscrow               `json:"AddEscrow,omitempty"`
+	*TxReclaimEscrow           `json:"ReclaimEscrow,omitempty"`
+	*TxAmendCommissionSchedule `json:"AmendCommissionSchedule,omitempty"`
 }
 
 // TxTransfer is a transaction for a transfer.
@@ -70,4 +71,9 @@ type TxAddEscrow struct {
 // TxReclaimEscrow is a transaction for a ReclaimEscrow.
 type TxReclaimEscrow struct {
 	SignedReclaimEscrow staking.SignedReclaimEscrow
+}
+
+// TxAmendCommissionSchedule is a transaction for an AmendCommissionSchedule
+type TxAmendCommissionSchedule struct {
+	SignedAmendCommissionSchedule staking.SignedAmendCommissionSchedule
 }

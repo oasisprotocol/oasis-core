@@ -38,6 +38,9 @@ var (
 	// ReclaimEscrowSignatureContext is the context used for escrow reclimation.
 	ReclaimEscrowSignatureContext = signature.NewContext("oasis-core/staking: reclaim escrow", signature.WithChainSeparation())
 
+	// AmendCommissionScheduleSignatureContext is the context used for escrow reclimation.
+	AmendCommissionScheduleSignatureContext = signature.NewContext("oasis-core/staking: amend commission schedule")
+
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New("staking: invalid argument")
 
@@ -193,6 +196,14 @@ type ReclaimEscrow struct {
 	Shares  quantity.Quantity   `json:"reclaim_shares"`
 }
 
+// AmendCommissionSchedule is an amendment to a commission schedule.
+type AmendCommissionSchedule struct {
+	Nonce uint64  `json:"nonce"`
+	Fee   gas.Fee `json:"fee"`
+
+	Amendment CommissionSchedule `json:"amendment"`
+}
+
 // SignedTransfer is a Transfer, signed by the owner (source) entity.
 type SignedTransfer struct {
 	signature.Signed
@@ -257,6 +268,23 @@ func SignReclaimEscrow(signer signature.Signer, reclaim *ReclaimEscrow) (*Signed
 	}
 
 	return &SignedReclaimEscrow{
+		Signed: *signed,
+	}, nil
+}
+
+// SignedAmendCommissionSchedule is a ReclaimEscrow, signed by the owner entity.
+type SignedAmendCommissionSchedule struct {
+	signature.Signed
+}
+
+// SignReclaimEscrow serializes the Reclaim and signs the result.
+func SignAmendCommissionSchedule(signer signature.Signer, amendCommissionSchedule *AmendCommissionSchedule) (*SignedAmendCommissionSchedule, error) {
+	signed, err := signature.SignSigned(signer, AmendCommissionScheduleSignatureContext, amendCommissionSchedule)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SignedAmendCommissionSchedule{
 		Signed: *signed,
 	}, nil
 }
@@ -567,4 +595,6 @@ const (
 	GasOpAddEscrow gas.Op = "add_escrow"
 	// GasOpReclaimEscrow is the gas operation identifier for reclaim escrow.
 	GasOpReclaimEscrow gas.Op = "reclaim_escrow"
+	// GasOpAmendCommissionSchedule is the gas operation identifier for amend commission schedule.
+	GasOpAmendCommissionSchedule gas.Op = "amend_commission_schedule"
 )

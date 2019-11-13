@@ -332,3 +332,55 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 
 	return nil
 }
+
+func (app *stakingApplication) amendCommissionSchedule(ctx *abci.Context, state *stakingState.MutableState, signedAmendCommissionSchedule *staking.SignedAmendCommissionSchedule) error {
+	var amendCommissionSchedule staking.AmendCommissionSchedule
+	if err := signedAmendCommissionSchedule.Open(staking.AmendCommissionScheduleSignatureContext, &amendCommissionSchedule); err != nil {
+		app.logger.Error("ReclaimEscrow: invalid signature",
+			"signed_amend_commission_schedule", signedAmendCommissionSchedule,
+		)
+		return staking.ErrInvalidSignature
+	}
+
+	// Authenticate sender and make sure fees are paid.
+	id := signedAmendCommissionSchedule.Signature.PublicKey
+	from, err := stakingState.AuthenticateAndPayFees(ctx, state, id, amendCommissionSchedule.Nonce, &amendCommissionSchedule.Fee)
+	if err != nil {
+		return err
+	}
+
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(staking.GasOpAmendCommissionSchedule, params.GasCosts); err != nil {
+		return err
+	}
+
+	commit := true
+	defer func() {
+		if commit {
+			state.SetAccount(id, from)
+		}
+	}()
+
+	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	if err != nil {
+		return err
+	}
+
+	if err = from.Escrow.CommissionSchedule.AmendAndPruneAndValidate(&amendCommissionSchedule.Amendment, epoch, params.CommissionRateChangeInterval, params.CommissionRateBoundLead); err != nil {
+		app.logger.Error("AmendCommissionSchedule: amendment not acceptable",
+			"err", err,
+			"from", id,
+		)
+		commit = false
+	}
+
+	return nil
+}
