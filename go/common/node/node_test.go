@@ -20,6 +20,9 @@ func TestSerialization(t *testing.T) {
 		P2P: P2PInfo{
 			ID: signature.PublicKey(key),
 		},
+		Consensus: ConsensusInfo{
+			ID: signature.PublicKey(key),
+		},
 		Expiration: 42,
 		Roles:      RoleComputeWorker,
 	}

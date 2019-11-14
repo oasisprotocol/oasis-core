@@ -135,22 +135,22 @@ func (k PublicKey) Verify(context Context, message, sig []byte) bool {
 
 // MarshalBinary encodes a public key into binary form.
 func (k PublicKey) MarshalBinary() (data []byte, err error) {
+	// Since UnmarshalBinary will fail for incorrectly encoded keys,
+	// replace any malformed keys with an all-zero key. Note that
+	// such a key is blacklisted and will always be invalid for
+	// verification (but not malformed).
+	if len(k) != PublicKeySize {
+		var zeroKey [PublicKeySize]byte
+		data = zeroKey[:]
+		return
+	}
+
 	data = append([]byte{}, k[:]...)
 	return
 }
 
 // UnmarshalBinary decodes a binary marshaled public key.
 func (k *PublicKey) UnmarshalBinary(data []byte) error {
-	// HACK: go-codec apparently was skipping calls to UnmarshalBinary
-	// or something, while the new library will always call it.
-	//
-	// We have approximately 3 million different places where we use
-	// the default value for public keys, so special case it.
-	if len(data) == 0 {
-		*k = nil
-		return nil
-	}
-
 	if len(data) != PublicKeySize {
 		return ErrMalformedPublicKey
 	}
@@ -228,12 +228,12 @@ func (k PublicKey) IsValid() bool {
 
 // ToMapKey returns a fixed-sized representation of the public key.
 func (k PublicKey) ToMapKey() MapKey {
-	if len(k) != PublicKeySize {
-		panic("signature: public key invalid size for ID")
-	}
-
 	var mk MapKey
-	copy(mk[:], k)
+	// For malformed public keys, use an all-zero MapKey to avoid
+	// panics on conversions from malformed keys.
+	if len(k) == PublicKeySize {
+		copy(mk[:], k)
+	}
 
 	return mk
 }
