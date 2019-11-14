@@ -911,9 +911,8 @@ type ConsensusParameters struct {
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error { // nolint: gocyclo
-	if !g.Parameters.KeyManagerOperator.IsValid() {
-		return fmt.Errorf("registry: sanity check failed: key manager operator's public key is invalid")
-	}
+	// This could check KeyManagerOperator, but some configurations don't
+	// use a key manager, so the parameter is optional.
 
 	// Check entities.
 	seenEntities := make(map[signature.MapKey]bool)

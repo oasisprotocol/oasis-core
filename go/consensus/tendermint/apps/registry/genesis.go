@@ -29,9 +29,17 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	state := registryState.NewMutableState(ctx.State())
 	state.SetConsensusParameters(&st.Parameters)
 
-	app.logger.Debug("InitChain: Registering key manager operator",
-		"id", st.Parameters.KeyManagerOperator,
-	)
+	if st.Parameters.KeyManagerOperator.IsValid() {
+		app.logger.Debug("InitChain: Registering key manager operator",
+			"id", st.Parameters.KeyManagerOperator,
+		)
+	} else {
+		// This is informational for now since there are configurations
+		// that do not have a key manager.
+		app.logger.Warn("InitChain: Invalid key manager operator, key maanger will not work",
+			"id", st.Parameters.KeyManagerOperator,
+		)
+	}
 
 	for _, v := range st.Entities {
 		app.logger.Debug("InitChain: Registering genesis entity",
