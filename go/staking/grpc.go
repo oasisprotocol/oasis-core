@@ -179,6 +179,19 @@ func (s *grpcServer) ReclaimEscrow(ctx context.Context, req *pb.ReclaimEscrowReq
 	return &pb.ReclaimEscrowResponse{}, nil
 }
 
+func (s *grpcServer) AmendCommissionSchedule(ctx context.Context, req *pb.AmendCommissionScheduleRequest) (*pb.AmendCommissionScheduleResponse, error) {
+	var signedAmendCommissionSchedule api.SignedAmendCommissionSchedule
+	if err := cbor.Unmarshal(req.GetSignedAmendCommissionSchedule(), &signedAmendCommissionSchedule); err != nil {
+		return nil, err
+	}
+
+	if err := s.backend.AmendCommissionSchedule(ctx, &signedAmendCommissionSchedule); err != nil {
+		return nil, err
+	}
+
+	return &pb.AmendCommissionScheduleResponse{}, nil
+}
+
 func (s *grpcServer) WatchTransfers(req *pb.WatchTransfersRequest, stream pb.Staking_WatchTransfersServer) error {
 	ctx := stream.Context()
 	ch, sub, err := s.backend.WatchTransfers(ctx)

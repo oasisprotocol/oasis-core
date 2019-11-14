@@ -100,6 +100,9 @@ type Backend interface {
 	// back into the owner's general balance.
 	ReclaimEscrow(ctx context.Context, signedReclaim *SignedReclaimEscrow) error
 
+	// AmendCommissionSchedule amends the signer's commission schedule.
+	AmendCommissionSchedule(ctx context.Context, signedAmendCommissionSchedule *SignedAmendCommissionSchedule) error
+
 	// SubmitEvidence submits evidence of misbehavior.
 	SubmitEvidence(ctx context.Context, evidence Evidence) error
 

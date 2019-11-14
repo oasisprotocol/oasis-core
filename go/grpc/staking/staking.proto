@@ -19,6 +19,7 @@ service Staking {
 	rpc Burn(BurnRequest) returns (BurnResponse) {}
 	rpc AddEscrow(AddEscrowRequest) returns (AddEscrowResponse) {}
 	rpc ReclaimEscrow(ReclaimEscrowRequest) returns (ReclaimEscrowResponse) {}
+	rpc AmendCommissionSchedule(AmendCommissionScheduleRequest) returns (AmendCommissionScheduleResponse) {}
 
 	// Calls that watch events.
 	rpc WatchTransfers (WatchTransfersRequest) returns (stream WatchTransfersResponse) {}
@@ -118,6 +119,12 @@ message ReclaimEscrowRequest {
 }
 
 message ReclaimEscrowResponse {}
+
+message AmendCommissionScheduleRequest {
+	bytes signed_amend_commission_schedule = 1;
+}
+
+message AmendCommissionScheduleResponse {}
 
 message WatchTransfersRequest {}
 

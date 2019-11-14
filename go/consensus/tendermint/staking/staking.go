@@ -153,6 +153,19 @@ func (tb *tendermintBackend) ReclaimEscrow(ctx context.Context, signedReclaim *a
 	return nil
 }
 
+func (tb *tendermintBackend) AmendCommissionSchedule(ctx context.Context, signedAmendCommissionSchedule *api.SignedAmendCommissionSchedule) error {
+	tx := app.Tx{
+		TxAmendCommissionSchedule: &app.TxAmendCommissionSchedule{
+			SignedAmendCommissionSchedule: *signedAmendCommissionSchedule,
+		},
+	}
+	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
+		return errors.Wrap(err, "staking: amend commission schedule transaction failed")
+	}
+
+	return nil
+}
+
 func (tb *tendermintBackend) SubmitEvidence(ctx context.Context, evidence api.Evidence) error {
 	if evidence.Kind() != api.EvidenceKindConsensus {
 		return errors.New("staking: unsupported evidence kind")
