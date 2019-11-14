@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common/consensus/gas"
+	"github.com/oasislabs/oasis-core/go/consensus/gas"
 )
 
 func TestBasicGasAccountant(t *testing.T) {

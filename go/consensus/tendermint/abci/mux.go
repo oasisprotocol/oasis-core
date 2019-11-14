@@ -22,10 +22,10 @@ import (
 	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/consensus/gas"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/version"
+	"github.com/oasislabs/oasis-core/go/consensus/gas"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/db"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
