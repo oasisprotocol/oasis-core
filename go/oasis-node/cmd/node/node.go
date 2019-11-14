@@ -130,7 +130,9 @@ type Node struct {
 // Cleanup cleans up after the node has terminated.
 func (n *Node) Cleanup() {
 	n.svcMgr.Cleanup()
-	n.commonStore.Close()
+	if n.commonStore != nil {
+		n.commonStore.Close()
+	}
 }
 
 // Stop gracefully terminates the node.
