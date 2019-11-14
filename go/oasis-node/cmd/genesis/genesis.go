@@ -353,6 +353,11 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 		}
 
 		regSt.Parameters.KeyManagerOperator = ent.ID
+	} else {
+		l.Warn("no key manager operator specified")
+
+		var zeroPk [signature.PublicKeySize]byte
+		regSt.Parameters.KeyManagerOperator = signature.PublicKey(zeroPk[:])
 	}
 
 	for _, v := range runtimes {
