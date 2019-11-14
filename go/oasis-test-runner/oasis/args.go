@@ -88,10 +88,10 @@ func (args *argBuilder) tendermintPersistentPeer(peers []string) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) tendermintPrivatePeer(peers []string) *argBuilder {
-	for _, peer := range peers {
+func (args *argBuilder) tendermintPrivatePeerID(peerIDs []string) *argBuilder {
+	for _, peerID := range peerIDs {
 		args.vec = append(args.vec, []string{
-			"--" + tendermint.CfgP2PPrivatePeer, peer,
+			"--" + tendermint.CfgP2PPrivatePeerID, peerID,
 		}...)
 	}
 	return args
@@ -310,11 +310,11 @@ func (args *argBuilder) addSentriesAsPersistentPeers(sentries []*Sentry) *argBui
 }
 
 func (args *argBuilder) addValidatorsAsPrivatePeers(validators []*Validator) *argBuilder {
-	var peers []string
+	var peerIDs []string
 	for _, val := range validators {
-		peers = append(peers, fmt.Sprintf("%s@127.0.0.1:%d", val.tmAddress, val.consensusPort))
+		peerIDs = append(peerIDs, val.tmAddress)
 	}
-	args = args.tendermintPrivatePeer(peers)
+	args = args.tendermintPrivatePeerID(peerIDs)
 	return args
 }
 
