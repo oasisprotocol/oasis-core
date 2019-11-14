@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+import "common/common.proto";
+
+package sentry;
+option go_package = "github.com/oasislabs/oasis-core/go/grpc/sentry";
+
+service Sentry {
+	// Calls that query.
+	rpc GetConsensusAddresses(GetConsensusAddressesRequest) returns (GetConsensusAddressesResponse) {}
+}
+
+message GetConsensusAddressesRequest {}
+
+message GetConsensusAddressesResponse {
+	repeated common.ConsensusAddress addresses = 1;
+}

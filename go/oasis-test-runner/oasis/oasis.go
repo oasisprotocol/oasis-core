@@ -116,6 +116,7 @@ type Network struct {
 	keymanager     *Keymanager
 	storageWorkers []*Storage
 	computeWorkers []*Compute
+	sentries       []*Sentry
 	clients        []*Client
 	byzantine      []*Byzantine
 
@@ -204,6 +205,11 @@ func (net *Network) StorageWorkers() []*Storage {
 // ComputeWorkers returns the compute worker nodes associated with the network.
 func (net *Network) ComputeWorkers() []*Compute {
 	return net.computeWorkers
+}
+
+// Sentries returns the sentry nodes associated with the network.
+func (net *Network) Sentries() []*Sentry {
+	return net.sentries
 }
 
 // Clients returns the client nodes associated with the network.
@@ -364,10 +370,20 @@ func (net *Network) Start() error {
 		}
 	}
 
+	net.logger.Debug("starting sentry node(s)")
+	for _, v := range net.sentries {
+		if err := v.startNode(); err != nil {
+			net.logger.Error("failed to start sentry node",
+				"err", err,
+			)
+			return err
+		}
+	}
+
 	net.logger.Debug("starting client node(s)")
 	for _, v := range net.clients {
 		if err := v.startNode(); err != nil {
-			net.logger.Error("failed to start client worker",
+			net.logger.Error("failed to start client node",
 				"err", err,
 			)
 			return err

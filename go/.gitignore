@@ -17,6 +17,7 @@ grpc/client/*.pb.go
 grpc/control/*.pb.go
 grpc/enclaverpc/*.pb.go
 grpc/txnscheduler/*.pb.go
+grpc/sentry/*.pb.go
 grpc/staking/*.pb.go
 grpc/genesis/*.pb.go
 common/sgx/aesm/*.pb.go

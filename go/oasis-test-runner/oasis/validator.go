@@ -7,7 +7,11 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 )
 
 // Validator is an Oasis validator.
@@ -18,6 +22,9 @@ type Validator struct {
 
 	minGasPrice uint64
 
+	sentries []*Sentry
+
+	tmAddress     string
 	consensusPort uint16
 	grpcDebugPort uint16
 }
@@ -28,6 +35,8 @@ type ValidatorCfg struct {
 	Entity *Entity
 
 	MinGasPrice uint64
+
+	Sentries []*Sentry
 }
 
 func (val *Validator) toGenesisArgs() []string {
@@ -71,9 +80,15 @@ func (val *Validator) startNode() error {
 		appendNetwork(val.net).
 		appendEntity(val.entity)
 
+	if len(val.sentries) > 0 {
+		args = args.addSentries(val.sentries).
+			addSentriesAsPersistentPeers(val.sentries).
+			tendermintDisablePeerExchange()
+	}
+
 	var err error
 	if val.cmd, val.exitCh, err = val.net.startOasisNode(val.dir, nil, args, "validator", false, val.restartable); err != nil {
-		return errors.Wrap(err, "oasis/validator: failed to launch node")
+		return fmt.Errorf("oasis/validator: failed to launch node: %w", err)
 	}
 
 	return nil
@@ -100,22 +115,39 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		},
 		entity:        cfg.Entity,
 		minGasPrice:   cfg.MinGasPrice,
+		sentries:      cfg.Sentries,
 		consensusPort: net.nextNodePort,
 		grpcDebugPort: net.nextNodePort + 1,
 	}
 	val.doStartNode = val.startNode
 
-	var valConsensusAddr node.Address
-	if err = valConsensusAddr.FromIP(netPkg.ParseIP("127.0.0.1"), val.consensusPort); err != nil {
-		return nil, fmt.Errorf("oasis/validator: failed to parse IP: %w", err)
+	var consensusAddrs []interface{ String() string }
+	localhost := netPkg.ParseIP("127.0.0.1")
+	if len(val.sentries) > 0 {
+		for _, sentry := range val.sentries {
+			var consensusAddr node.ConsensusAddress
+			consensusAddr.ID = sentry.publicKey
+			if err = consensusAddr.Address.FromIP(localhost, sentry.consensusPort); err != nil {
+				return nil, fmt.Errorf("oasis/validator: failed to parse IP address: %w", err)
+			}
+			consensusAddrs = append(consensusAddrs, &consensusAddr)
+		}
+	} else {
+		var consensusAddr node.Address
+		if err = consensusAddr.FromIP(localhost, val.consensusPort); err != nil {
+			return nil, fmt.Errorf("oasis/validator: failed to parse IP address: %w", err)
+		}
+		consensusAddrs = append(consensusAddrs, &consensusAddr)
 	}
 
 	args := []string{
 		"registry", "node", "init",
 		"--datadir", val.dir.String(),
-		"--node.consensus_address", valConsensusAddr.String(),
 		"--node.expiration", "1",
 		"--node.role", "validator",
+	}
+	for _, v := range consensusAddrs {
+		args = append(args, []string{"--node.consensus_address", v.String()}...)
 	}
 	args = append(args, cfg.Entity.toGenesisArgs()...)
 
@@ -132,6 +164,21 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		)
 		return nil, errors.Wrap(err, "oasis/validator: failed to provision validator")
 	}
+
+	// Load node's identity, so that we can pass the validator's Tendermint
+	// address to sentry node(s) to configure it as a private peer.
+	signerFactory := fileSigner.NewFactory(valDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	valIdentity, err := identity.LoadOrGenerate(valDir.String(), signerFactory)
+	if err != nil {
+		net.logger.Error("failed to load validator identity",
+			"err", err,
+			"validator_name", valName,
+		)
+		return nil, fmt.Errorf("oasis/validator: failed to load validator identity: %w", err)
+	}
+
+	valPublicKey := valIdentity.NodeSigner.Public()
+	val.tmAddress = crypto.PublicKeyToTendermint(&valPublicKey).Address().String()
 
 	net.validators = append(net.validators, val)
 	net.nextNodePort += 2

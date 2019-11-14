@@ -2,6 +2,7 @@ package oasis
 
 import (
 	"encoding/hex"
+	"fmt"
 	"path/filepath"
 	"strconv"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/keymanager"
 	"github.com/oasislabs/oasis-core/go/worker/merge"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
+	workerSentry "github.com/oasislabs/oasis-core/go/worker/sentry"
 	workerStorage "github.com/oasislabs/oasis-core/go/worker/storage"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
 )
@@ -77,6 +79,31 @@ func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
 	return args
 }
 
+func (args *argBuilder) tendermintPersistentPeer(peers []string) *argBuilder {
+	for _, peer := range peers {
+		args.vec = append(args.vec, []string{
+			"--" + tendermint.CfgP2PPersistentPeer, peer,
+		}...)
+	}
+	return args
+}
+
+func (args *argBuilder) tendermintPrivatePeer(peers []string) *argBuilder {
+	for _, peer := range peers {
+		args.vec = append(args.vec, []string{
+			"--" + tendermint.CfgP2PPrivatePeer, peer,
+		}...)
+	}
+	return args
+}
+
+func (args *argBuilder) tendermintDisablePeerExchange() *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + tendermint.CfgP2PDisablePeerExchange,
+	}...)
+	return args
+}
+
 func (args *argBuilder) tendermintSeedMode() *argBuilder {
 	args.vec = append(args.vec, "--"+tendermint.CfgP2PSeedMode)
 	return args
@@ -110,6 +137,24 @@ func (args *argBuilder) workerClientPort(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + workerCommon.CfgClientPort, strconv.Itoa(int(port)),
 	}...)
+	return args
+}
+
+func (args *argBuilder) workerCommonSentryAddresses(addrs []string) *argBuilder {
+	for _, addr := range addrs {
+		args.vec = append(args.vec, []string{
+			"--" + workerCommon.CfgSentryAddresses, addr,
+		}...)
+	}
+	return args
+}
+
+func (args *argBuilder) workerCommonSentryCertFiles(certFiles []string) *argBuilder {
+	for _, certFile := range certFiles {
+		args.vec = append(args.vec, []string{
+			"--" + workerCommon.CfgSentryCertFiles, certFile,
+		}...)
+	}
 	return args
 }
 
@@ -196,6 +241,20 @@ func (args *argBuilder) workerMergeEnabled() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) workerSentryEnabled() *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + workerSentry.CfgEnabled,
+	}...)
+	return args
+}
+
+func (args *argBuilder) workerSentryControlPort(port uint16) *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + workerSentry.CfgControlPort, strconv.Itoa(int(port)),
+	}...)
+	return args
+}
+
 func (args *argBuilder) workerStorageEnabled() *argBuilder {
 	args.vec = append(args.vec, "--"+workerStorage.CfgWorkerEnabled)
 	return args
@@ -230,13 +289,41 @@ func (args *argBuilder) iasSPID(spid []byte) *argBuilder {
 	return args
 }
 
+func (args *argBuilder) addSentries(sentries []*Sentry) *argBuilder {
+	var addrs, certFiles []string
+	for _, sentry := range sentries {
+		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", sentry.controlPort))
+		certFiles = append(certFiles, sentry.TLSCertPath())
+	}
+	args = args.workerCommonSentryAddresses(addrs)
+	args = args.workerCommonSentryCertFiles(certFiles)
+	return args
+}
+
+func (args *argBuilder) addSentriesAsPersistentPeers(sentries []*Sentry) *argBuilder {
+	var peers []string
+	for _, sentry := range sentries {
+		peers = append(peers, fmt.Sprintf("%s@127.0.0.1:%d", sentry.tmAddress, sentry.consensusPort))
+	}
+	args = args.tendermintPersistentPeer(peers)
+	return args
+}
+
+func (args *argBuilder) addValidatorsAsPrivatePeers(validators []*Validator) *argBuilder {
+	var peers []string
+	for _, val := range validators {
+		peers = append(peers, fmt.Sprintf("%s@127.0.0.1:%d", val.tmAddress, val.consensusPort))
+	}
+	args = args.tendermintPrivatePeer(peers)
+	return args
+}
+
 func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {
 	if seed := net.seedNode; seed != nil {
 		args.vec = append(args.vec, []string{
-			"--" + tendermint.CfgP2PSeeds, seed.tmAddress + "@127.0.0.1:" + strconv.Itoa(int(seed.consensusPort)),
+			"--" + tendermint.CfgP2PSeed, fmt.Sprintf("%s@127.0.0.1:%d", seed.tmAddress, seed.consensusPort),
 		}...)
 	}
-
 	return args
 }
 

@@ -2,6 +2,7 @@ package oasis
 
 import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	tendermint "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 )
@@ -58,4 +59,10 @@ func LogAssertMergeDiscrepancyDetected() log.WatcherHandler {
 // merge discrepancy was not detected based on JSON log output.
 func LogAssertNoMergeDiscrepancyDetected() log.WatcherHandler {
 	return LogAssertNotEvent(roothash.LogEventMergeDiscrepancyDetected, "merge discrepancy detected")
+}
+
+// LogAssertPeerExchangeDisabled returns a handler which checks whether a peer
+// exchange disabled event was detected based on JSON log output.
+func LogAssertPeerExchangeDisabled() log.WatcherHandler {
+	return LogAssertEvent(tendermint.LogEventPeerExchangeDisabled, "peer exchange not disabled")
 }

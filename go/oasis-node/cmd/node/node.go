@@ -47,16 +47,19 @@ import (
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	staking "github.com/oasislabs/oasis-core/go/staking"
+	"github.com/oasislabs/oasis-core/go/sentry"
+	sentryAPI "github.com/oasislabs/oasis-core/go/sentry/api"
+	"github.com/oasislabs/oasis-core/go/staking"
 	stakingAPI "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/storage"
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
-	keymanagerWorker "github.com/oasislabs/oasis-core/go/worker/keymanager"
+	workerKeymanager "github.com/oasislabs/oasis-core/go/worker/keymanager"
 	"github.com/oasislabs/oasis-core/go/worker/merge"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
+	workerSentry "github.com/oasislabs/oasis-core/go/worker/sentry"
 	workerStorage "github.com/oasislabs/oasis-core/go/worker/storage"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
 )
@@ -104,6 +107,7 @@ type Node struct {
 	Registry  registryAPI.Backend
 	RootHash  roothash.Backend
 	Scheduler scheduler.Backend
+	Sentry    sentryAPI.Backend
 	Staking   stakingAPI.Backend
 	Storage   storageAPI.Backend
 	IAS       *ias.IAS
@@ -117,8 +121,10 @@ type Node struct {
 	StorageWorker              *workerStorage.Worker
 	TransactionSchedulerWorker *txnscheduler.Worker
 	MergeWorker                *merge.Worker
+	SentryWorker               *workerSentry.Worker
 	P2P                        *p2p.P2P
 	RegistrationWorker         *registration.Worker
+	KeymanagerWorker           *workerKeymanager.Worker
 }
 
 // Cleanup cleans up after the node has terminated.
@@ -159,6 +165,10 @@ func (n *Node) initBackends() error {
 
 	var err error
 
+	if n.Sentry, err = sentry.New(n.Consensus); err != nil {
+		return err
+	}
+
 	if n.Storage, err = storage.New(n.svcMgr.Ctx, dataDir, n.Identity, n.Scheduler, n.Registry); err != nil {
 		return err
 	}
@@ -177,21 +187,23 @@ func (n *Node) initBackends() error {
 	return nil
 }
 
-func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
+func (n *Node) initWorkers(logger *logging.Logger) error {
 	dataDir := cmdCommon.DataDir()
 
 	var err error
 
-	genesisDoc, errr := n.Genesis.GetGenesisDocument()
-	if errr != nil {
-		return errr
+	genesisDoc, err := n.Genesis.GetGenesisDocument()
+	if err != nil {
+		return err
 	}
 
-	// Initialize the worker P2P if any workers are enabled. Since the P2P layer
-	// does not have a separate Start method and starts listening immediately
-	// when created, make sure that we don't start if if not needed.
+	// Initialize the P2P worker if any workers are enabled. Since the P2P
+	// layer does not have a separate Start method and starts listening
+	// immediately when created, make sure that we don't start it if it is not
+	// needed.
 	//
-	// Only compute, txn scheduler and merge workers need P2P transport.
+	// Currently, only compute, txn scheduler and merge workers need P2P
+	// transport.
 	if compute.Enabled() || txnscheduler.Enabled() || merge.Enabled() {
 		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
 		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
@@ -204,10 +216,10 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 		n.svcMgr.RegisterCleanupOnly(p2pSvc, "worker p2p")
 	}
 
-	// Start common worker.
+	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(
 		dataDir,
-		compute.Enabled() || workerStorage.Enabled() || txnscheduler.Enabled() || merge.Enabled() || keymanagerWorker.Enabled(),
+		compute.Enabled() || workerStorage.Enabled() || txnscheduler.Enabled() || merge.Enabled() || workerKeymanager.Enabled(),
 		n.Identity,
 		n.Storage,
 		n.RootHash,
@@ -229,8 +241,9 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	n.svcMgr.Register(n.CommonWorker.Grpc)
 	n.svcMgr.Register(n.CommonWorker)
 
-	// Initialize the worker registration.
 	workerCommonCfg := n.CommonWorker.GetConfig()
+
+	// Initialize the registration worker.
 	n.RegistrationWorker, err = registration.New(
 		dataDir,
 		n.Epochtime,
@@ -250,8 +263,8 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.Register(n.RegistrationWorker)
 
-	// Initialize the key manager worker service.
-	kmSvc, err := keymanagerWorker.New(
+	// Initialize the key manager worker.
+	n.KeymanagerWorker, err = workerKeymanager.New(
 		dataDir,
 		n.CommonWorker,
 		n.IAS,
@@ -261,7 +274,7 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	if err != nil {
 		return err
 	}
-	n.svcMgr.Register(kmSvc)
+	n.svcMgr.Register(n.KeymanagerWorker)
 
 	// Initialize the storage worker.
 	n.StorageWorker, err = workerStorage.New(
@@ -298,6 +311,17 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.Register(n.ComputeWorker)
 
+	// Initialize the sentry worker.
+	n.SentryWorker, err = workerSentry.New(
+		&workerCommonCfg,
+		n.Sentry,
+		n.Identity,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.SentryWorker)
+
 	// Initialize the transaction scheduler.
 	n.TransactionSchedulerWorker, err = txnscheduler.New(
 		n.CommonWorker,
@@ -309,44 +333,53 @@ func (n *Node) initAndStartWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.Register(n.TransactionSchedulerWorker)
 
+	return nil
+}
+
+func (n *Node) startWorkers(logger *logging.Logger) error {
 	// Start the storage worker.
-	if err = n.StorageWorker.Start(); err != nil {
+	if err := n.StorageWorker.Start(); err != nil {
 		return err
 	}
 
 	// Start the compute worker.
-	if err = n.ComputeWorker.Start(); err != nil {
+	if err := n.ComputeWorker.Start(); err != nil {
 		return err
 	}
 
 	// Start the transaction scheduler.
-	if err = n.TransactionSchedulerWorker.Start(); err != nil {
+	if err := n.TransactionSchedulerWorker.Start(); err != nil {
 		return err
 	}
 
 	// Start the merge worker.
-	if err = n.MergeWorker.Start(); err != nil {
+	if err := n.MergeWorker.Start(); err != nil {
 		return err
 	}
 
 	// Start the common worker.
-	if err = n.CommonWorker.Start(); err != nil {
+	if err := n.CommonWorker.Start(); err != nil {
 		return err
 	}
 
 	// Start the key manager worker.
-	if err = kmSvc.Start(); err != nil {
+	if err := n.KeymanagerWorker.Start(); err != nil {
+		return err
+	}
+
+	// Start the sentry worker.
+	if err := n.SentryWorker.Start(); err != nil {
 		return err
 	}
 
 	// Start the worker registration service.
-	if err = n.RegistrationWorker.Start(); err != nil {
+	if err := n.RegistrationWorker.Start(); err != nil {
 		return err
 	}
 
 	// Only start the external gRPC server if any workers are enabled.
-	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() || n.MergeWorker.Enabled() || kmSvc.Enabled() {
-		if err = n.CommonWorker.Grpc.Start(); err != nil {
+	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() || n.MergeWorker.Enabled() || n.KeymanagerWorker.Enabled() {
+		if err := n.CommonWorker.Grpc.Start(); err != nil {
 			logger.Error("failed to start external gRPC server",
 				"err", err,
 			)
@@ -491,7 +524,7 @@ func newNode(testNode bool) (*Node, error) {
 	// Depends on global tracer.
 	node.grpcInternal, err = cmdGrpc.NewServerLocal(false)
 	if err != nil {
-		logger.Error("failed to initialize gRPC server",
+		logger.Error("failed to initialize internal gRPC server",
 			"err", err,
 		)
 		return nil, err
@@ -534,8 +567,8 @@ func newNode(testNode bool) (*Node, error) {
 		return nil, err
 	}
 
-	// Initialize tendermint.
 	if tendermint.IsSeed() {
+		// Initialize Seed node.
 		node.svcTmntSeed, err = tendermint.NewSeed(dataDir, node.Identity, node.Genesis)
 		if err != nil {
 			logger.Error("failed to initialize seed node",
@@ -545,6 +578,7 @@ func newNode(testNode bool) (*Node, error) {
 		}
 		node.svcMgr.Register(node.svcTmntSeed)
 	} else {
+		// Initialize Tendermint service.
 		node.svcTmnt, err = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Genesis)
 		if err != nil {
 			logger.Error("failed to initialize tendermint service",
@@ -553,13 +587,14 @@ func newNode(testNode bool) (*Node, error) {
 			return nil, err
 		}
 		node.svcMgr.Register(node.svcTmnt)
-		node.Epochtime = node.svcTmnt.EpochTime()
-		node.Beacon = node.svcTmnt.Beacon()
-		node.KeyManager = node.svcTmnt.KeyManager()
-		node.Registry = node.svcTmnt.Registry()
-		node.Staking = node.svcTmnt.Staking()
-		node.Scheduler = node.svcTmnt.Scheduler()
-		node.RootHash = node.svcTmnt.RootHash()
+		node.Consensus = node.svcTmnt
+		node.Epochtime = node.Consensus.EpochTime()
+		node.Beacon = node.Consensus.Beacon()
+		node.KeyManager = node.Consensus.KeyManager()
+		node.Registry = node.Consensus.Registry()
+		node.Staking = node.Consensus.Staking()
+		node.Scheduler = node.Consensus.Scheduler()
+		node.RootHash = node.Consensus.RootHash()
 
 		// Initialize node backends.
 		if err = node.initBackends(); err != nil {
@@ -570,7 +605,7 @@ func newNode(testNode bool) (*Node, error) {
 		}
 
 		// Register dump genesis halt hook.
-		node.svcTmnt.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) {
+		node.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) {
 			logger.Info("Consensus halt hook: dumping genesis",
 				"epoch", epoch,
 				"block_height", blockHeight,
@@ -587,7 +622,6 @@ func newNode(testNode bool) (*Node, error) {
 			)
 		})
 	}
-	node.Consensus = node.svcTmnt
 
 	// Initialize the IAS proxy client.
 	// NOTE: See reason above why this needs to happen before seed node init.
@@ -657,9 +691,17 @@ func newNode(testNode bool) (*Node, error) {
 		return nil, err
 	}
 
-	// Initialize and start workers.
-	if err = node.initAndStartWorkers(logger); err != nil {
+	// Initialize workers.
+	if err = node.initWorkers(logger); err != nil {
 		logger.Error("failed to initialize workers",
+			"err", err,
+		)
+		return nil, err
+	}
+
+	// Start workers.
+	if err = node.startWorkers(logger); err != nil {
+		logger.Error("failed to start workers",
 			"err", err,
 		)
 		return nil, err
@@ -708,7 +750,7 @@ func init() {
 		tendermint.Flags,
 		ias.Flags,
 		keymanagerClient.Flags,
-		keymanagerWorker.Flags,
+		workerKeymanager.Flags,
 		client.Flags,
 		compute.Flags,
 		p2p.Flags,
@@ -717,6 +759,7 @@ func init() {
 		workerCommon.Flags,
 		workerStorage.Flags,
 		merge.Flags,
+		workerSentry.Flags,
 		crash.InitFlags(),
 	} {
 		Flags.AddFlagSet(v)
