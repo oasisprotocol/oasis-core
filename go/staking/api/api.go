@@ -39,7 +39,7 @@ var (
 	ReclaimEscrowSignatureContext = signature.NewContext("oasis-core/staking: reclaim escrow", signature.WithChainSeparation())
 
 	// AmendCommissionScheduleSignatureContext is the context used for escrow reclimation.
-	AmendCommissionScheduleSignatureContext = signature.NewContext("oasis-core/staking: amend commission schedule")
+	AmendCommissionScheduleSignatureContext = signature.NewContext("oasis-core/staking: amend commission schedule", signature.WithChainSeparation())
 
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New("staking: invalid argument")
