@@ -14,7 +14,7 @@ var (
 	// statusKeyFmt is the key manager status key format.
 	//
 	// Value is CBOR-serialized key manager status.
-	statusKeyFmt = keyformat.New(0x70, &signature.MapKey{})
+	statusKeyFmt = keyformat.New(0x70, &signature.PublicKey{})
 )
 
 type ImmutableState struct {

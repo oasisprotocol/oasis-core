@@ -69,55 +69,12 @@ var (
 	defaultOptions = &ed25519.Options{}
 )
 
-// MapKey is a PublicKey as a fixed sized byte array for use as a map key.
-type MapKey [PublicKeySize]byte
-
-// String returns a string representation of the MapKey.
-func (k MapKey) String() string {
-	return hex.EncodeToString(k[:])
-}
-
-// MarshalBinary encodes a public key into binary form.
-func (k MapKey) MarshalBinary() (data []byte, err error) {
-	data = append([]byte{}, k[:]...)
-	return
-}
-
-// UnmarshalBinary decodes a binary marshaled public key.
-func (k *MapKey) UnmarshalBinary(data []byte) error {
-	if len(data) != PublicKeySize {
-		return ErrMalformedPublicKey
-	}
-
-	copy((*k)[:], data)
-
-	return nil
-}
-
-// MarshalText encodes a public key into text form.
-func (k MapKey) MarshalText() (data []byte, err error) {
-	return []byte(base64.StdEncoding.EncodeToString(k[:])), nil
-}
-
-// UnmarshalText decodes a text marshaled public key.
-func (k *MapKey) UnmarshalText(text []byte) error {
-	b, err := base64.StdEncoding.DecodeString(string(text))
-	if err != nil {
-		return err
-	}
-
-	return k.UnmarshalBinary(b)
-}
-
 // PublicKey is a public key used for signing.
-type PublicKey ed25519.PublicKey
+type PublicKey [PublicKeySize]byte
 
 // Verify returns true iff the signature is valid for the public key
 // over the context and message.
 func (k PublicKey) Verify(context Context, message, sig []byte) bool {
-	if len(k) != PublicKeySize {
-		return false
-	}
 	if len(sig) != SignatureSize {
 		return false
 	}
@@ -130,21 +87,11 @@ func (k PublicKey) Verify(context Context, message, sig []byte) bool {
 		return false
 	}
 
-	return ed25519.Verify(ed25519.PublicKey(k), data, sig)
+	return ed25519.Verify(ed25519.PublicKey(k[:]), data, sig)
 }
 
 // MarshalBinary encodes a public key into binary form.
 func (k PublicKey) MarshalBinary() (data []byte, err error) {
-	// Since UnmarshalBinary will fail for incorrectly encoded keys,
-	// replace any malformed keys with an all-zero key. Note that
-	// such a key is blacklisted and will always be invalid for
-	// verification (but not malformed).
-	if len(k) != PublicKeySize {
-		var zeroKey [PublicKeySize]byte
-		data = zeroKey[:]
-		return
-	}
-
 	data = append([]byte{}, k[:]...)
 	return
 }
@@ -155,11 +102,7 @@ func (k *PublicKey) UnmarshalBinary(data []byte) error {
 		return ErrMalformedPublicKey
 	}
 
-	if len(*k) != PublicKeySize {
-		keybuf := make([]byte, PublicKeySize)
-		*k = keybuf
-	}
-	copy((*k)[:], data)
+	copy(k[:], data)
 
 	return nil
 }
@@ -189,6 +132,21 @@ func (k PublicKey) MarshalPEM() (data []byte, err error) {
 	return pem.Marshal(pubPEMType, k[:])
 }
 
+// MarshalText encodes a public key into text form.
+func (k PublicKey) MarshalText() (data []byte, err error) {
+	return []byte(base64.StdEncoding.EncodeToString(k[:])), nil
+}
+
+// UnmarshalText decodes a text marshaled public key.
+func (k *PublicKey) UnmarshalText(text []byte) error {
+	b, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return err
+	}
+
+	return k.UnmarshalBinary(b)
+}
+
 // UnmarshalHex deserializes a hexadecimal text string into the given type.
 func (k *PublicKey) UnmarshalHex(text string) error {
 	b, err := hex.DecodeString(text)
@@ -201,12 +159,12 @@ func (k *PublicKey) UnmarshalHex(text string) error {
 
 // Equal compares vs another public key for equality.
 func (k PublicKey) Equal(cmp PublicKey) bool {
-	return bytes.Equal(k, cmp)
+	return bytes.Equal(k[:], cmp[:])
 }
 
 // String returns a string representation of the public key.
 func (k PublicKey) String() string {
-	hexKey := hex.EncodeToString(k)
+	hexKey := hex.EncodeToString(k[:])
 
 	if len(k) != PublicKeySize {
 		return "[malformed]: " + hexKey
@@ -224,25 +182,6 @@ func (k PublicKey) IsValid() bool {
 		return false
 	}
 	return true
-}
-
-// ToMapKey returns a fixed-sized representation of the public key.
-func (k PublicKey) ToMapKey() MapKey {
-	var mk MapKey
-	// For malformed public keys, use an all-zero MapKey to avoid
-	// panics on conversions from malformed keys.
-	if len(k) == PublicKeySize {
-		copy(mk[:], k)
-	}
-
-	return mk
-}
-
-// FromMapKey converts a MapKey back to a public key.
-func (k *PublicKey) FromMapKey(mk MapKey) {
-	if err := k.UnmarshalBinary(mk[:]); err != nil {
-		panic("signature: failed to convert MapKey: " + err.Error())
-	}
 }
 
 // LoadPEM loads a public key from a PEM file on disk.  Iff the public key
@@ -284,7 +223,7 @@ func (k *PublicKey) LoadPEM(fn string, signer Signer) error {
 }
 
 func (k PublicKey) isBlacklisted() bool {
-	_, isBlacklisted := blacklistedPublicKeys.Load(k.ToMapKey())
+	_, isBlacklisted := blacklistedPublicKeys.Load(k)
 	return isBlacklisted
 }
 
@@ -546,7 +485,7 @@ func VerifyManyToOne(context Context, message []byte, sigs []Signature) bool {
 			return false
 		}
 
-		pks = append(pks, ed25519.PublicKey(v.PublicKey))
+		pks = append(pks, ed25519.PublicKey(v.PublicKey[:]))
 		rawSigs = append(rawSigs, v.Signature[:])
 		msgs = append(msgs, msg)
 	}
@@ -577,7 +516,7 @@ func VerifyBatch(context Context, messages [][]byte, sigs []Signature) bool {
 		if v.PublicKey.isBlacklisted() {
 			return false
 		}
-		pks = append(pks, ed25519.PublicKey(v.PublicKey))
+		pks = append(pks, ed25519.PublicKey(v.PublicKey[:]))
 		rawSigs = append(rawSigs, v.Signature[:])
 
 		// Sigh. :(
@@ -599,7 +538,7 @@ func VerifyBatch(context Context, messages [][]byte, sigs []Signature) bool {
 // RegisterTestPublicKey registers a hardcoded test public key with the
 // internal public key blacklist.
 func RegisterTestPublicKey(pk PublicKey) {
-	testPublicKeys.Store(pk.ToMapKey(), true)
+	testPublicKeys.Store(pk, true)
 }
 
 // BuildPublicKeyBlacklist builds the public key blacklist.
@@ -636,6 +575,6 @@ func BuildPublicKeyBlacklist(allowTestKeys bool) {
 			panic(err)
 		}
 
-		blacklistedPublicKeys.Store(pk.ToMapKey(), true)
+		blacklistedPublicKeys.Store(pk, true)
 	}
 }

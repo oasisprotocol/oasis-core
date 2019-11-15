@@ -219,15 +219,13 @@ func doUpdate(cmd *cobra.Command, args []string) {
 	}
 
 	// De-duplicate the entity's nodes.
-	nodeMap := make(map[signature.MapKey]bool)
+	nodeMap := make(map[signature.PublicKey]bool)
 	for _, v := range ent.Nodes {
-		nodeMap[v.ToMapKey()] = true
+		nodeMap[v] = true
 	}
 	ent.Nodes = make([]signature.PublicKey, 0, len(nodeMap))
 	for k := range nodeMap {
-		var nodeID signature.PublicKey
-		nodeID.FromMapKey(k)
-		ent.Nodes = append(ent.Nodes, nodeID)
+		ent.Nodes = append(ent.Nodes, k)
 	}
 
 	// Save the entity descriptor.

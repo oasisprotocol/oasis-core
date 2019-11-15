@@ -11,17 +11,20 @@ import (
 
 func TestSerialization(t *testing.T) {
 	key, _, _ := ed25519.GenerateKey(nil)
+	var publicKey signature.PublicKey
+	_ = publicKey.UnmarshalBinary(key)
+
 	n := Node{
-		ID:       signature.PublicKey(key),
-		EntityID: signature.PublicKey(key),
+		ID:       publicKey,
+		EntityID: publicKey,
 		Committee: CommitteeInfo{
 			Certificate: []byte("I moon o'er you, Inis Mona, As long as I breathe, I'll call you my home"),
 		},
 		P2P: P2PInfo{
-			ID: signature.PublicKey(key),
+			ID: publicKey,
 		},
 		Consensus: ConsensusInfo{
-			ID: signature.PublicKey(key),
+			ID: publicKey,
 		},
 		Expiration: 42,
 		Roles:      RoleComputeWorker,

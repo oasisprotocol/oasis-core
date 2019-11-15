@@ -47,7 +47,7 @@ var (
 
 type stakeAccumulator struct {
 	stakeCache     *stakingState.StakeCache
-	perEntityStake map[signature.MapKey][]staking.ThresholdKind
+	perEntityStake map[signature.PublicKey][]staking.ThresholdKind
 
 	unsafeBypass bool
 }
@@ -57,14 +57,12 @@ func (acc *stakeAccumulator) checkThreshold(id signature.PublicKey, kind staking
 		return nil
 	}
 
-	mk := id.ToMapKey()
-
 	// The staking balance is per-entity.  Each entity can have multiple nodes,
 	// that each can serve multiple roles.  Check the entity's balance to see
 	// that it has sufficient stake for the current roles and the additional
 	// role.
 	kinds := make([]staking.ThresholdKind, 0, 1)
-	if existing, ok := acc.perEntityStake[mk]; ok && len(existing) > 0 {
+	if existing, ok := acc.perEntityStake[id]; ok && len(existing) > 0 {
 		kinds = append(kinds, existing...)
 	}
 	kinds = append(kinds, kind)
@@ -76,7 +74,7 @@ func (acc *stakeAccumulator) checkThreshold(id signature.PublicKey, kind staking
 	if accumulate {
 		// The entity has sufficient stake to qualify for the additional role,
 		// update the accumulated roles.
-		acc.perEntityStake[mk] = kinds
+		acc.perEntityStake[id] = kinds
 	}
 
 	return nil
@@ -90,7 +88,7 @@ func newStakeAccumulator(ctx *abci.Context, unsafeBypass bool) (*stakeAccumulato
 
 	return &stakeAccumulator{
 		stakeCache:     stakeCache,
-		perEntityStake: make(map[signature.MapKey][]staking.ThresholdKind),
+		perEntityStake: make(map[signature.PublicKey][]staking.ThresholdKind),
 		unsafeBypass:   unsafeBypass,
 	}, nil
 }
@@ -197,10 +195,10 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get stake snapshot")
 		}
 
-		var entitiesEligibleForReward map[signature.MapKey]bool
+		var entitiesEligibleForReward map[signature.PublicKey]bool
 		if epochChanged {
 			// For elections on epoch changes, distribute rewards to entities with any eligible nodes.
-			entitiesEligibleForReward = make(map[signature.MapKey]bool)
+			entitiesEligibleForReward = make(map[signature.PublicKey]bool)
 		}
 
 		// Handle the validator election first, because no consensus is
@@ -286,21 +284,19 @@ func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEn
 	// from InitChain), and the new validator set, which is a huge pain
 	// in the ass.
 
-	currentMap := make(map[signature.MapKey]bool)
+	currentMap := make(map[signature.PublicKey]bool)
 	for _, v := range currentValidators {
-		currentMap[v.ToMapKey()] = true
+		currentMap[v] = true
 	}
 
-	pendingMap := make(map[signature.MapKey]bool)
+	pendingMap := make(map[signature.PublicKey]bool)
 	for _, v := range pendingValidators {
-		pendingMap[v.ToMapKey()] = true
+		pendingMap[v] = true
 	}
 
 	var updates []types.ValidatorUpdate
 	for _, v := range currentValidators {
-		mk := v.ToMapKey()
-
-		switch pendingMap[mk] {
+		switch pendingMap[v] {
 		case false:
 			// Existing validator is not part of the new set, reduce it's
 			// voting power to 0, to indicate removal.
@@ -311,14 +307,12 @@ func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEn
 		case true:
 			// Existing validator is part of the new set, remove it from
 			// the pending map, since there is nothing to be done.
-			pendingMap[mk] = false
+			pendingMap[v] = false
 		}
 	}
 
 	for _, v := range pendingValidators {
-		mk := v.ToMapKey()
-
-		if pendingMap[mk] {
+		if pendingMap[v] {
 			// This is a validator that is not part of the current set.
 			app.logger.Debug("adding new validator to validator set",
 				"id", v,
@@ -412,7 +406,7 @@ func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registr
 // Operates on consensus connection.
 // Return error if node should crash.
 // For non-fatal problems, save a problem condition to the state and return successfully.
-func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
+func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.PublicKey]bool, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
 	if !rt.IsCompute() && kind != scheduler.KindCompute {
 		return nil
@@ -466,7 +460,7 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 		if isSuitableFn(n, rt, request.Header.Time) {
 			nodeList = append(nodeList, n)
 			if entitiesEligibleForReward != nil {
-				entitiesEligibleForReward[n.EntityID.ToMapKey()] = true
+				entitiesEligibleForReward[n.EntityID] = true
 			}
 		}
 	}
@@ -548,7 +542,7 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 }
 
 // Operates on consensus connection.
-func (app *schedulerApplication) electAllCommittees(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
+func (app *schedulerApplication) electAllCommittees(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.PublicKey]bool, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	for _, runtime := range runtimes {
 		if err := app.electCommittee(ctx, request, epoch, beacon, entityStake, entitiesEligibleForReward, runtime, nodes, kind); err != nil {
 			return err
@@ -557,11 +551,11 @@ func (app *schedulerApplication) electAllCommittees(ctx *abci.Context, request t
 	return nil
 }
 
-func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.MapKey]bool, nodes []*node.Node, params *scheduler.ConsensusParameters) error {
+func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.PublicKey]bool, nodes []*node.Node, params *scheduler.ConsensusParameters) error {
 	// Filter the node list based on eligibility and minimum required
 	// entity stake.
 	var nodeList []*node.Node
-	entMap := make(map[signature.MapKey]bool)
+	entMap := make(map[signature.PublicKey]bool)
 	for _, n := range nodes {
 		if !n.HasRoles(node.RoleValidator) {
 			continue
@@ -570,7 +564,7 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 			continue
 		}
 		nodeList = append(nodeList, n)
-		entMap[n.EntityID.ToMapKey()] = true
+		entMap[n.EntityID] = true
 	}
 
 	// Sort all of the entities that are actually running eligible validator
@@ -592,14 +586,14 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 
 	// Gather all the entities nodes.  If the entity has more than one node,
 	// ordering will be determistically random due to the shuffle.
-	entityNodes := make(map[signature.MapKey][]*node.Node)
+	entityNodes := make(map[signature.PublicKey][]*node.Node)
 	for i := 0; i < len(idxs); i++ {
 		n := nodeList[idxs[i]]
-		mk := n.EntityID.ToMapKey()
+		id := n.EntityID
 
-		vec := entityNodes[mk]
+		vec := entityNodes[id]
 		vec = append(vec, n)
-		entityNodes[mk] = vec
+		entityNodes[id] = vec
 	}
 
 	// Go down the list of entities running nodes by stake, picking one node
@@ -607,7 +601,7 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 	var newValidators []signature.PublicKey
 electLoop:
 	for _, v := range sortedEntities {
-		vec := entityNodes[v.ToMapKey()]
+		vec := entityNodes[v]
 
 		// This is usually a maximum of 1, but if more are allowed,
 		// like in certain test scenarios, then pick as many nodes
@@ -627,7 +621,7 @@ electLoop:
 			// for rewards, but only once regardless of the number
 			// of validators owned by the entity in the set.
 			if entitiesEligibleForReward != nil {
-				entitiesEligibleForReward[n.EntityID.ToMapKey()] = true
+				entitiesEligibleForReward[n.EntityID] = true
 			}
 
 			newValidators = append(newValidators, n.Consensus.ID)
@@ -652,7 +646,7 @@ electLoop:
 	return nil
 }
 
-func publicKeyMapToSliceByStake(entMap map[signature.MapKey]bool, entityStake *stakeAccumulator, beacon []byte) ([]signature.PublicKey, error) {
+func publicKeyMapToSliceByStake(entMap map[signature.PublicKey]bool, entityStake *stakeAccumulator, beacon []byte) ([]signature.PublicKey, error) {
 	// Convert the map of entity public keys to a lexographically
 	// sorted slice (ie: make it deterministic).
 	entities := publicKeyMapToSortedSlice(entMap)
@@ -679,15 +673,13 @@ func publicKeyMapToSliceByStake(entMap map[signature.MapKey]bool, entityStake *s
 	return entities, nil
 }
 
-func publicKeyMapToSortedSlice(m map[signature.MapKey]bool) []signature.PublicKey {
+func publicKeyMapToSortedSlice(m map[signature.PublicKey]bool) []signature.PublicKey {
 	v := make([]signature.PublicKey, 0, len(m))
 	for mk := range m {
-		var id signature.PublicKey
-		id.FromMapKey(mk)
-		v = append(v, id)
+		v = append(v, mk)
 	}
 	sort.Slice(v, func(i, j int) bool {
-		return bytes.Compare(v[i], v[j]) < 0
+		return bytes.Compare(v[i][:], v[j][:]) < 0
 	})
 	return v
 }

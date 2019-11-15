@@ -19,20 +19,20 @@ var (
 	// signedEntityKeyFmt is the key format used for signed entities.
 	//
 	// Value is CBOR-serialized signed entity.
-	signedEntityKeyFmt = keyformat.New(0x10, &signature.MapKey{})
+	signedEntityKeyFmt = keyformat.New(0x10, &signature.PublicKey{})
 	// signedNodeKeyFmt is the key format used for signed nodes.
 	//
 	// Value is CBOR-serialized signed node.
-	signedNodeKeyFmt = keyformat.New(0x11, &signature.MapKey{})
+	signedNodeKeyFmt = keyformat.New(0x11, &signature.PublicKey{})
 	// signedNodeByEntityKeyFmt is the key format used for signed node by entity
 	// index.
 	//
 	// Value is empty.
-	signedNodeByEntityKeyFmt = keyformat.New(0x12, &signature.MapKey{}, &signature.MapKey{})
+	signedNodeByEntityKeyFmt = keyformat.New(0x12, &signature.PublicKey{}, &signature.PublicKey{})
 	// signedRuntimeKeyFmt is the key format used for signed runtimes.
 	//
 	// Value is CBOR-serialized signed runtime.
-	signedRuntimeKeyFmt = keyformat.New(0x13, &signature.MapKey{})
+	signedRuntimeKeyFmt = keyformat.New(0x13, &signature.PublicKey{})
 	// nodeByConsAddressKeyFmt is the key format used for the consensus address to
 	// node public key mapping.
 	//
@@ -45,7 +45,7 @@ var (
 	// nodeStatusKeyFmt is the key format used for node statuses.
 	//
 	// Value is CBOR-serialized node status.
-	nodeStatusKeyFmt = keyformat.New(0x15, &signature.MapKey{})
+	nodeStatusKeyFmt = keyformat.New(0x15, &signature.PublicKey{})
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized roothash.ConsensusParameters.
@@ -315,14 +315,14 @@ func (s *ImmutableState) NodeStatus(id signature.PublicKey) (*registry.NodeStatu
 	return &status, nil
 }
 
-func (s *ImmutableState) NodeStatuses() (map[signature.MapKey]*registry.NodeStatus, error) {
-	statuses := make(map[signature.MapKey]*registry.NodeStatus)
+func (s *ImmutableState) NodeStatuses() (map[signature.PublicKey]*registry.NodeStatus, error) {
+	statuses := make(map[signature.PublicKey]*registry.NodeStatus)
 	s.Snapshot.IterateRange(
 		nodeStatusKeyFmt.Encode(),
 		nil,
 		true,
 		func(key, value []byte) bool {
-			var nodeID signature.MapKey
+			var nodeID signature.PublicKey
 			if !nodeStatusKeyFmt.Decode(key, &nodeID) {
 				return true
 			}

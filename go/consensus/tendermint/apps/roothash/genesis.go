@@ -44,7 +44,7 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothash.Genesis, erro
 	runtimes := rq.state.Runtimes()
 
 	// Get per-runtime blocks.
-	blocks := make(map[signature.MapKey]*block.Block)
+	blocks := make(map[signature.PublicKey]*block.Block)
 	for _, rt := range runtimes {
 		blk := *rt.CurrentBlock
 		// Header should be a normal header for genesis.
@@ -55,7 +55,7 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothash.Genesis, erro
 		blk.Header.RoothashMessages = []*block.RoothashMessage{}
 		// No storage signatures.
 		blk.Header.StorageSignatures = []signature.Signature{}
-		blocks[rt.Runtime.ID.ToMapKey()] = &blk
+		blocks[rt.Runtime.ID] = &blk
 	}
 
 	params, err := rq.state.ConsensusParameters()

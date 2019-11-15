@@ -48,8 +48,7 @@ func (app *stakingApplication) initLedger(state *stakingState.MutableState, st *
 
 	var ups []ledgerUpdate
 	for k, v := range st.Ledger {
-		var id signature.PublicKey
-		id.FromMapKey(k)
+		id := k
 
 		if !v.General.Balance.IsValid() {
 			app.logger.Error("InitChain: invalid genesis general balance",
@@ -120,15 +119,9 @@ func (app *stakingApplication) initDelegations(state *stakingState.MutableState,
 		delegation  *staking.Delegation
 	}
 	var dups []delegationUpdate
-	for keyEscrowID, delegations := range st.Delegations {
-		var escrowID signature.PublicKey
-		escrowID.FromMapKey(keyEscrowID)
-
+	for escrowID, delegations := range st.Delegations {
 		delegationShares := quantity.NewQuantity()
-		for keyDelegatorID, delegation := range delegations {
-			var delegatorID signature.PublicKey
-			delegatorID.FromMapKey(keyDelegatorID)
-
+		for delegatorID, delegation := range delegations {
 			if err := delegationShares.Add(&delegation.Shares); err != nil {
 				app.logger.Error("InitChain: failed to add delegation shares",
 					"err", err,
@@ -169,15 +162,9 @@ func (app *stakingApplication) initDebondingDelegations(state *stakingState.Muta
 		delegation  *staking.DebondingDelegation
 	}
 	var deups []debondingDelegationUpdate
-	for keyEscrowID, delegators := range st.DebondingDelegations {
-		var escrowID signature.PublicKey
-		escrowID.FromMapKey(keyEscrowID)
-
+	for escrowID, delegators := range st.DebondingDelegations {
 		debondingShares := quantity.NewQuantity()
-		for keyDelegatorID, delegations := range delegators {
-			var delegatorID signature.PublicKey
-			delegatorID.FromMapKey(keyDelegatorID)
-
+		for delegatorID, delegations := range delegators {
 			for idx, delegation := range delegations {
 				if err := debondingShares.Add(&delegation.Shares); err != nil {
 					app.logger.Error("InitChain: failed to add debonding delegation shares",
@@ -271,10 +258,10 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 	if err != nil {
 		return nil, err
 	}
-	ledger := make(map[signature.MapKey]*staking.Account)
+	ledger := make(map[signature.PublicKey]*staking.Account)
 	for _, acctID := range accounts {
 		acct := sq.state.Account(acctID)
-		ledger[acctID.ToMapKey()] = acct
+		ledger[acctID] = acct
 	}
 
 	delegations, err := sq.state.Delegations()

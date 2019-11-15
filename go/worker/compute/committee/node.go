@@ -205,7 +205,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 		// actually signed by the current transaction scheduler.
 		epoch := n.commonNode.Group.GetEpochSnapshot()
 		txsc := epoch.GetTransactionSchedulerCommittee()
-		if !txsc.PublicKeys[sbd.Signature.PublicKey.ToMapKey()] {
+		if !txsc.PublicKeys[sbd.Signature.PublicKey] {
 			// Not signed by a current txn scheduler!
 			return false, errMsgFromNonTxnSched
 		}
@@ -235,7 +235,7 @@ func (n *Node) queueBatchBlocking(
 	txnSchedSig signature.Signature,
 ) error {
 	// Quick check to see if header is compatible.
-	if !bytes.Equal(hdr.Namespace[:], n.commonNode.RuntimeID) {
+	if !bytes.Equal(hdr.Namespace[:], n.commonNode.RuntimeID[:]) {
 		n.logger.Warn("received incompatible header in external batch",
 			"header", hdr,
 		)

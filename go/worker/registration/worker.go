@@ -385,6 +385,8 @@ func (w *Worker) RequestDeregistration() {
 
 // GetRegistrationSigner loads the signing credentials as configured by this package's flags.
 func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *identity.Identity) (signature.PublicKey, signature.Signer, error) {
+	var defaultPk signature.PublicKey
+
 	// If the test entity is enabled, use the entity signing key for signing
 	// registrations.
 	if flags.DebugTestEntity() {
@@ -399,13 +401,13 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 		// spin up workers, which require a registration worker, but don't
 		// need it, and do not have an owning entity.  The registration worker
 		// should not be initialized in this case.
-		return nil, nil, nil
+		return defaultPk, nil, nil
 	}
 
 	// Attempt to load the entity descriptor.
 	entity, err := entity.LoadDescriptor(f)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "worker/registration: failed to load entity descriptor")
+		return defaultPk, nil, errors.Wrap(err, "worker/registration: failed to load entity descriptor")
 	}
 	if !entity.AllowEntitySignedNodes {
 		// If the entity does not allow any entity-signed nodes, then
@@ -446,7 +448,7 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 	fileFactory := factory.(*fileSigner.Factory)
 	entitySigner, err := fileFactory.ForceLoad(f)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "worker/registration: failed to load entity signing key")
+		return defaultPk, nil, errors.Wrap(err, "worker/registration: failed to load entity signing key")
 	}
 
 	return entity.ID, entitySigner, nil
@@ -531,7 +533,7 @@ func (w *Worker) Start() error {
 	w.logger.Info("starting node registration service")
 
 	// HACK: This can be ok in certain configurations.
-	if w.entityID == nil || w.registrationSigner == nil {
+	if !w.entityID.IsValid() || w.registrationSigner == nil {
 		w.logger.Warn("no entity/signer for this node, registration will NEVER succeed")
 		// Make sure the node is stopped on quit.
 		go func() {

@@ -84,10 +84,7 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	}
 	var ns []*nodeStatus
 	for k, v := range st.NodeStatuses {
-		var id signature.PublicKey
-		id.FromMapKey(k)
-
-		ns = append(ns, &nodeStatus{id, v})
+		ns = append(ns, &nodeStatus{k, v})
 	}
 	// Make sure that we apply node status updates in a canonical order.
 	sort.SliceStable(ns, func(i, j int) bool { return bytes.Compare(ns[i].id[:], ns[j].id[:]) < 0 })

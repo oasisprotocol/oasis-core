@@ -257,13 +257,12 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 		Nodes:    make([]*node.SignedNode, 0, len(nodes)),
 	}
 
-	entMap := make(map[signature.MapKey]bool)
+	entMap := make(map[signature.PublicKey]bool)
 	appendToEntities := func(signedEntity *entity.SignedEntity, ent *entity.Entity) error {
-		idKey := ent.ID.ToMapKey()
-		if entMap[idKey] {
+		if entMap[ent.ID] {
 			return errors.New("genesis: duplicate entity registration")
 		}
-		entMap[idKey] = true
+		entMap[ent.ID] = true
 
 		regSt.Entities = append(regSt.Entities, signedEntity)
 
@@ -345,7 +344,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			return err
 		}
 
-		if !entMap[ent.ID.ToMapKey()] {
+		if !entMap[ent.ID] {
 			l.Error("key manager operator is not a genesis entity",
 				"id", ent.ID,
 			)
@@ -356,8 +355,8 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 	} else {
 		l.Warn("no key manager operator specified")
 
-		var zeroPk [signature.PublicKeySize]byte
-		regSt.Parameters.KeyManagerOperator = signature.PublicKey(zeroPk[:])
+		var zeroPk signature.PublicKey
+		regSt.Parameters.KeyManagerOperator = zeroPk
 	}
 
 	for _, v := range runtimes {
@@ -422,7 +421,7 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 				MaxBatchSizeBytes: uint64(viper.GetSizeInBytes(cfgSchedulerMaxBatchSizeBytes)),
 			},
 		},
-		Blocks: make(map[signature.MapKey]*block.Block),
+		Blocks: make(map[signature.PublicKey]*block.Block),
 	}
 
 	for _, v := range exports {
@@ -445,7 +444,7 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 		}
 
 		for _, blk := range blocks {
-			var key signature.MapKey
+			var key signature.PublicKey
 			copy(key[:], blk.Header.Namespace[:])
 			if _, ok := rootSt.Blocks[key]; ok {
 				l.Error("duplicate genesis roothash block",
@@ -498,7 +497,7 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 // AppendStakingState appends the staking genesis state given a state file name.
 func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) error {
 	stakingSt := staking.Genesis{
-		Ledger: make(map[signature.MapKey]*staking.Account),
+		Ledger: make(map[signature.PublicKey]*staking.Account),
 	}
 
 	if state != "" {
@@ -539,7 +538,7 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 			return err
 		}
 
-		stakingSt.Ledger[ent.ID.ToMapKey()] = &staking.Account{
+		stakingSt.Ledger[ent.ID] = &staking.Account{
 			General: staking.GeneralAccount{
 				Balance: q,
 				Nonce:   0,

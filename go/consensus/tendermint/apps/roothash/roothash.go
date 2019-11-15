@@ -107,10 +107,10 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 	// Query the updated runtime list.
 	regState := registryState.NewMutableState(ctx.State())
 	runtimes, _ := regState.Runtimes()
-	newDescriptors := make(map[signature.MapKey]*registry.Runtime)
+	newDescriptors := make(map[signature.PublicKey]*registry.Runtime)
 	for _, v := range runtimes {
 		if v.Kind == registry.KindCompute {
-			newDescriptors[v.ID.ToMapKey()] = v
+			newDescriptors[v.ID] = v
 		}
 	}
 
@@ -170,7 +170,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 			)
 		}
 		for _, computeCommittee := range computeCommittees {
-			computeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+			computeNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
 			for idx, n := range computeCommittee.Members {
 				var nodeRuntime *node.Runtime
 				node, err1 := regState.Node(n.PublicKey)
@@ -192,7 +192,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 					)
 					continue
 				}
-				computeNodeInfo[n.PublicKey.ToMapKey()] = commitment.NodeInfo{
+				computeNodeInfo[n.PublicKey] = commitment.NodeInfo{
 					CommitteeNode: idx,
 					Runtime:       nodeRuntime,
 				}
@@ -222,9 +222,9 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 				"runtime", rtID,
 			)
 		} else {
-			mergeNodeInfo := make(map[signature.MapKey]commitment.NodeInfo)
+			mergeNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
 			for idx, n := range mergeCommittee.Members {
-				mergeNodeInfo[n.PublicKey.ToMapKey()] = commitment.NodeInfo{
+				mergeNodeInfo[n.PublicKey] = commitment.NodeInfo{
 					CommitteeNode: idx,
 				}
 			}
@@ -251,9 +251,8 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 				"runtime", rtID,
 				"committee_id", committeeID,
 			)
-			mk := rtID.ToMapKey()
-			if _, ok := newDescriptors[mk]; ok {
-				delete(newDescriptors, rtID.ToMapKey())
+			if _, ok := newDescriptors[rtID]; ok {
+				delete(newDescriptors, rtID)
 			}
 			continue
 		}
@@ -275,11 +274,10 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 		// the clients can be sure what state is final when an epoch transition occurs.
 		app.emitEmptyBlock(ctx, rtState, block.EpochTransition)
 
-		mk := rtID.ToMapKey()
-		if rt, ok := newDescriptors[mk]; ok {
+		if rt, ok := newDescriptors[rtID]; ok {
 			// Update the runtime descriptor to the latest per-epoch value.
 			rtState.Runtime = rt
-			delete(newDescriptors, mk)
+			delete(newDescriptors, rtID)
 		}
 
 		state.SetRuntimeState(rtState)
@@ -390,7 +388,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 	}
 
 	// Create genesis block.
-	genesisBlock := genesis.Blocks[runtime.ID.ToMapKey()]
+	genesisBlock := genesis.Blocks[runtime.ID]
 	if genesisBlock == nil {
 		now := ctx.Now().Unix()
 		genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
@@ -413,9 +411,8 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 	)
 
 	// This transaction now also includes a new block for the given runtime.
-	id, _ := runtime.ID.MarshalBinary()
 	tagV := ValueFinalized{
-		ID:    id,
+		ID:    runtime.ID,
 		Round: genesisBlock.Header.Round,
 	}
 	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, tagV.MarshalCBOR()))
@@ -508,13 +505,13 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 	}
 
 	// TODO: Consider caching this set?
-	pks := make(map[signature.MapKey]bool)
+	pks := make(map[signature.PublicKey]bool)
 	for _, m := range committee.Members {
-		pks[m.PublicKey.ToMapKey()] = true
+		pks[m.PublicKey] = true
 	}
 
 	for _, sig := range sigs {
-		if !pks[sig.PublicKey.ToMapKey()] {
+		if !pks[sig.PublicKey] {
 			return errors.New("roothash: signature is not from a valid committee member")
 		}
 	}
@@ -650,7 +647,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 ) {
 	latestBlock := rtState.CurrentBlock
 	blockNr := latestBlock.Header.Round
-	id, _ := runtime.ID.MarshalBinary()
+	//id, _ := runtime.ID.MarshalBinary()
 	committeeID := pool.GetCommitteeID()
 
 	defer app.updateTimer(ctx, runtime, rtState, blockNr)
@@ -702,7 +699,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 		)
 
 		tagV := ValueComputeDiscrepancyDetected{
-			ID: id,
+			ID: runtime.ID,
 			Event: roothash.ComputeDiscrepancyDetectedEvent{
 				CommitteeID: pool.GetCommitteeID(),
 				Timeout:     forced,
@@ -734,7 +731,6 @@ func (app *rootHashApplication) tryFinalizeMerge(
 ) *block.Block {
 	latestBlock := rtState.CurrentBlock
 	blockNr := latestBlock.Header.Round
-	id, _ := runtime.ID.MarshalBinary()
 
 	defer app.updateTimer(ctx, runtime, rtState, blockNr)
 
@@ -786,7 +782,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		)
 
 		tagV := ValueMergeDiscrepancyDetected{
-			ID:    id,
+			ID:    runtime.ID,
 			Event: roothash.MergeDiscrepancyDetectedEvent{},
 		}
 		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyMergeDiscrepancyDetected, tagV.MarshalCBOR()))

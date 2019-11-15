@@ -57,13 +57,13 @@ type Pool struct {
 	// Committee is the committee this pool is collecting the commitments for.
 	Committee *scheduler.Committee `json:"committee"`
 	// NodeInfo contains node information about committee members.
-	NodeInfo map[signature.MapKey]NodeInfo `json:"node_info"`
+	NodeInfo map[signature.PublicKey]NodeInfo `json:"node_info"`
 	// ComputeCommitments are the commitments in the pool iff Committee.Kind
 	// is scheduler.KindCompute.
-	ComputeCommitments map[signature.MapKey]OpenComputeCommitment `json:"compute_commitments,omitempty"`
+	ComputeCommitments map[signature.PublicKey]OpenComputeCommitment `json:"compute_commitments,omitempty"`
 	// MergeCommitments are the commitments in the pool iff Committee.Kind
 	// is scheduler.KindMerge.
-	MergeCommitments map[signature.MapKey]OpenMergeCommitment `json:"merge_commitments,omitempty"`
+	MergeCommitments map[signature.PublicKey]OpenMergeCommitment `json:"merge_commitments,omitempty"`
 	// Discrepancy is a flag signalling that a discrepancy has been detected.
 	Discrepancy bool `json:"discrepancy"`
 	// NextTimeout is the time when the next call to TryFinalize(true) should
@@ -82,10 +82,10 @@ func (p *Pool) GetCommitteeID() hash.Hash {
 // flag.
 func (p *Pool) ResetCommitments() {
 	if p.ComputeCommitments == nil || len(p.ComputeCommitments) > 0 {
-		p.ComputeCommitments = make(map[signature.MapKey]OpenComputeCommitment)
+		p.ComputeCommitments = make(map[signature.PublicKey]OpenComputeCommitment)
 	}
 	if p.MergeCommitments == nil || len(p.MergeCommitments) > 0 {
-		p.MergeCommitments = make(map[signature.MapKey]OpenMergeCommitment)
+		p.MergeCommitments = make(map[signature.PublicKey]OpenMergeCommitment)
 	}
 	p.Discrepancy = false
 	p.NextTimeout = time.Time{}
@@ -101,12 +101,11 @@ func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
 		ok  bool
 	)
 
-	mk := id.ToMapKey()
 	switch p.Committee.Kind {
 	case scheduler.KindCompute:
-		com, ok = p.ComputeCommitments[mk]
+		com, ok = p.ComputeCommitments[id]
 	case scheduler.KindMerge:
-		com, ok = p.MergeCommitments[mk]
+		com, ok = p.MergeCommitments[id]
 	default:
 		panic("roothash/commitment: unknown committee kind: " + p.Committee.Kind.String())
 	}
@@ -121,7 +120,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 		return ErrInvalidCommitteeKind
 	}
 
-	id := openCom.Signature.PublicKey.ToMapKey()
+	id := openCom.Signature.PublicKey
 
 	// Ensure that the node is actually a committee member. We do not enforce specific
 	// roles based on current discrepancy state to allow commitments arriving in any
@@ -225,7 +224,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 	}
 
 	if p.ComputeCommitments == nil {
-		p.ComputeCommitments = make(map[signature.MapKey]OpenComputeCommitment)
+		p.ComputeCommitments = make(map[signature.PublicKey]OpenComputeCommitment)
 	}
 	p.ComputeCommitments[id] = *openCom
 
@@ -461,7 +460,7 @@ func (p *Pool) AddMergeCommitment(
 		return ErrInvalidCommitteeKind
 	}
 
-	id := commitment.Signature.PublicKey.ToMapKey()
+	id := commitment.Signature.PublicKey
 
 	// Ensure that the node is actually a committee member. We do not enforce specific
 	// roles based on current discrepancy state to allow commitments arriving in any
@@ -555,7 +554,7 @@ func (p *Pool) AddMergeCommitment(
 	}
 
 	if p.MergeCommitments == nil {
-		p.MergeCommitments = make(map[signature.MapKey]OpenMergeCommitment)
+		p.MergeCommitments = make(map[signature.PublicKey]OpenMergeCommitment)
 	}
 	p.MergeCommitments[id] = *openCom
 
@@ -564,7 +563,7 @@ func (p *Pool) AddMergeCommitment(
 
 // GetCommitteeNode returns a committee node given its public key.
 func (p *Pool) GetCommitteeNode(id signature.PublicKey) (*scheduler.CommitteeNode, error) {
-	ni, ok := p.NodeInfo[id.ToMapKey()]
+	ni, ok := p.NodeInfo[id]
 	if !ok {
 		return nil, ErrNotInCommittee
 	}

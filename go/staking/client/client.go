@@ -114,7 +114,7 @@ func (b *clientBackend) AccountInfo(ctx context.Context, owner signature.PublicK
 
 // DebondingDelegations returns the list of debonding delegations for
 // the given owner (delegator).
-func (b *clientBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.MapKey][]*api.DebondingDelegation, error) {
+func (b *clientBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.PublicKey][]*api.DebondingDelegation, error) {
 	id, _ := owner.MarshalBinary()
 
 	rsp, err := b.grpc.GetDebondingDelegations(ctx, &pb.GetDebondingDelegationsRequest{Owner: id, Height: height})
@@ -122,7 +122,7 @@ func (b *clientBackend) DebondingDelegations(ctx context.Context, owner signatur
 		return nil, err
 	}
 
-	var delegations map[signature.MapKey][]*api.DebondingDelegation
+	var delegations map[signature.PublicKey][]*api.DebondingDelegation
 	if err := cbor.Unmarshal(rsp.GetDelegations(), &delegations); err != nil {
 		return nil, fmt.Errorf("staking: malformed response: %w", err)
 	}

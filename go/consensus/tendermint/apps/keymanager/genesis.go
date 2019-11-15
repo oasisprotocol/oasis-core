@@ -29,7 +29,7 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 	// before the keymanager, and just query the registry for the runtime
 	// list.
 	regSt := doc.Registry
-	rtMap := make(map[signature.MapKey]*registry.Runtime)
+	rtMap := make(map[signature.PublicKey]*registry.Runtime)
 	for _, v := range regSt.Runtimes {
 		rt, err := registry.VerifyRegisterRuntimeArgs(app.logger, v, true)
 		if err != nil {
@@ -40,14 +40,14 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 		}
 
 		if rt.Kind == registry.KindKeyManager {
-			rtMap[rt.ID.ToMapKey()] = rt
+			rtMap[rt.ID] = rt
 		}
 	}
 
 	var toEmit []*keymanager.Status
 	state := keymanagerState.NewMutableState(ctx.State())
 	for _, v := range st.Statuses {
-		rt := rtMap[v.ID.ToMapKey()]
+		rt := rtMap[v.ID]
 		if rt == nil {
 			app.logger.Error("InitChain: State for unknown runtime",
 				"id", v.ID,

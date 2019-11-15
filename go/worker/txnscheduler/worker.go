@@ -52,7 +52,7 @@ type Worker struct {
 	registration *registration.Worker
 	compute      *compute.Worker
 
-	runtimes map[signature.MapKey]*Runtime
+	runtimes map[signature.PublicKey]*Runtime
 
 	quitCh chan struct{}
 	initCh chan struct{}
@@ -164,7 +164,7 @@ func (w *Worker) GetConfig() Config {
 // In case the runtime with the specified id was not registered it
 // returns nil.
 func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
-	rt, ok := w.runtimes[id.ToMapKey()]
+	rt, ok := w.runtimes[id]
 	if !ok {
 		return nil
 	}
@@ -200,7 +200,7 @@ func (w *Worker) registerRuntime(cfg *Config, rtCfg *RuntimeConfig) error {
 		cfg:  rtCfg,
 		node: node,
 	}
-	w.runtimes[rt.cfg.ID.ToMapKey()] = rt
+	w.runtimes[rt.cfg.ID] = rt
 
 	w.logger.Info("new runtime registered",
 		"runtime_id", rt.cfg.ID,
@@ -222,7 +222,7 @@ func newWorker(
 		commonWorker: commonWorker,
 		registration: registration,
 		compute:      compute,
-		runtimes:     make(map[signature.MapKey]*Runtime),
+		runtimes:     make(map[signature.PublicKey]*Runtime),
 		quitCh:       make(chan struct{}),
 		initCh:       make(chan struct{}),
 		logger:       logging.GetLogger("worker/txnscheduler"),

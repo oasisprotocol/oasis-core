@@ -68,7 +68,7 @@ type RuntimeHostRuntimeConfig struct {
 type RuntimeHostConfig struct {
 	Backend  string
 	Loader   string
-	Runtimes map[signature.MapKey]RuntimeHostRuntimeConfig
+	Runtimes map[signature.PublicKey]RuntimeHostRuntimeConfig
 }
 
 // GetNodeAddresses returns worker node addresses.
@@ -159,13 +159,13 @@ func newConfig() (*Config, error) {
 		cfg.RuntimeHost = &RuntimeHostConfig{
 			Backend:  viper.GetString(CfgRuntimeBackend),
 			Loader:   runtimeLoader,
-			Runtimes: make(map[signature.MapKey]RuntimeHostRuntimeConfig),
+			Runtimes: make(map[signature.PublicKey]RuntimeHostRuntimeConfig),
 		}
 
 		for idx, runtimeBinary := range runtimeBinaries {
 			runtimeID := runtimes[idx]
 
-			cfg.RuntimeHost.Runtimes[runtimeID.ToMapKey()] = RuntimeHostRuntimeConfig{
+			cfg.RuntimeHost.Runtimes[runtimeID] = RuntimeHostRuntimeConfig{
 				ID:     runtimeID,
 				Binary: runtimeBinary,
 			}

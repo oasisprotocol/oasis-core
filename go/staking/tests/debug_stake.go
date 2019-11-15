@@ -23,9 +23,9 @@ var (
 				api.KindCompute:   QtyFromInt(3),
 				api.KindStorage:   QtyFromInt(4),
 			},
-			AcceptableTransferPeers: map[signature.MapKey]bool{
+			AcceptableTransferPeers: map[signature.PublicKey]bool{
 				// test runtime 0 from roothash tester
-				publicKeyFromHex("612b31ddd66fc99e41cc9996f4029ea84752785d7af329d4595c4bcf8f5e4215").ToMapKey(): true,
+				publicKeyFromHex("612b31ddd66fc99e41cc9996f4029ea84752785d7af329d4595c4bcf8f5e4215"): true,
 			},
 			Slashing: map[api.SlashReason]api.Slash{
 				api.SlashDoubleSigning: api.Slash{
@@ -36,8 +36,8 @@ var (
 			MinDelegationAmount: QtyFromInt(10),
 		},
 		TotalSupply: DebugStateTestTotalSupply,
-		Ledger: map[signature.MapKey]*api.Account{
-			DebugStateSrcID.ToMapKey(): &api.Account{
+		Ledger: map[signature.PublicKey]*api.Account{
+			DebugStateSrcID: &api.Account{
 				General: api.GeneralAccount{
 					Balance: DebugStateTestTotalSupply,
 				},

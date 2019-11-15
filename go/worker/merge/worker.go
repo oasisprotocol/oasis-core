@@ -38,7 +38,7 @@ type Worker struct {
 	commonWorker       *workerCommon.Worker
 	registrationWorker *registration.Worker
 
-	runtimes map[signature.MapKey]*Runtime
+	runtimes map[signature.PublicKey]*Runtime
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -147,7 +147,7 @@ func (w *Worker) Initialized() <-chan struct{} {
 // In case the runtime with the specified id was not registered it
 // returns nil.
 func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
-	rt, ok := w.runtimes[id.ToMapKey()]
+	rt, ok := w.runtimes[id]
 	if !ok {
 		return nil
 	}
@@ -177,7 +177,7 @@ func (w *Worker) registerRuntime(id signature.PublicKey) error {
 		id:   id,
 		node: node,
 	}
-	w.runtimes[id.ToMapKey()] = rt
+	w.runtimes[id] = rt
 
 	w.logger.Info("new runtime registered",
 		"runtime_id", id,
@@ -199,7 +199,7 @@ func newWorker(
 		cfg:                cfg,
 		commonWorker:       commonWorker,
 		registrationWorker: registrationWorker,
-		runtimes:           make(map[signature.MapKey]*Runtime),
+		runtimes:           make(map[signature.PublicKey]*Runtime),
 		ctx:                ctx,
 		cancelCtx:          cancelCtx,
 		quitCh:             make(chan struct{}),

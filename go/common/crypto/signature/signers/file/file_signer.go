@@ -165,7 +165,9 @@ type Signer struct {
 
 // Public returns the PublicKey corresponding to the signer.
 func (s *Signer) Public() signature.PublicKey {
-	return signature.PublicKey(s.privateKey.Public().(ed25519.PublicKey))
+	var pk signature.PublicKey
+	_ = pk.UnmarshalBinary(s.privateKey.Public().(ed25519.PublicKey))
+	return pk
 }
 
 // ContextSign generates a signature with the private key over the context and

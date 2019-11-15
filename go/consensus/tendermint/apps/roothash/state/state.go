@@ -18,7 +18,7 @@ var (
 	// runtimeKeyFmt is the key format used for per-runtime roothash state.
 	//
 	// Value is CBOR-serialized runtime state.
-	runtimeKeyFmt = keyformat.New(0x20, &signature.MapKey{})
+	runtimeKeyFmt = keyformat.New(0x20, &signature.PublicKey{})
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized roothash.ConsensusParameters.

@@ -25,9 +25,8 @@ func (s *grpcServer) SubmitTx(ctx context.Context, req *pb.SubmitTxRequest) (*pb
 	if err := runtimeID.UnmarshalBinary(req.GetRuntimeId()); err != nil {
 		return nil, err
 	}
-	mapKey := runtimeID.ToMapKey()
 
-	runtime, ok := s.worker.runtimes[mapKey]
+	runtime, ok := s.worker.runtimes[runtimeID]
 	if !ok {
 		return nil, errors.New("unknown runtime")
 	}
@@ -48,14 +47,13 @@ func (s *grpcServer) IsTransactionQueued(ctx context.Context, req *pb.IsTransact
 	if err := runtimeID.UnmarshalBinary(req.GetRuntimeId()); err != nil {
 		return nil, err
 	}
-	mapKey := runtimeID.ToMapKey()
 
 	var id hash.Hash
 	if err := id.UnmarshalBinary(req.GetHash()); err != nil {
 		return nil, err
 	}
 
-	runtime, ok := s.worker.runtimes[mapKey]
+	runtime, ok := s.worker.runtimes[runtimeID]
 	if !ok {
 		return nil, errors.New("unknown runtime")
 	}

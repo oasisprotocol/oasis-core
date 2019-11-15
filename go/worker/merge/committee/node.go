@@ -212,7 +212,7 @@ func (n *Node) newStateWaitingForResultsLocked(epoch *committee.EpochSnapshot) S
 	}
 
 	for cID, ci := range epoch.GetComputeCommittees() {
-		nodeInfo := make(map[signature.MapKey]commitment.NodeInfo, len(ci.Nodes))
+		nodeInfo := make(map[signature.PublicKey]commitment.NodeInfo, len(ci.Nodes))
 		for idx, nd := range ci.Nodes {
 			var nodeRuntime *node.Runtime
 			for _, r := range nd.Runtimes {
@@ -231,7 +231,7 @@ func (n *Node) newStateWaitingForResultsLocked(epoch *committee.EpochSnapshot) S
 				continue
 			}
 
-			nodeInfo[nd.ID.ToMapKey()] = commitment.NodeInfo{
+			nodeInfo[nd.ID] = commitment.NodeInfo{
 				CommitteeNode: idx,
 				Runtime:       nodeRuntime,
 			}

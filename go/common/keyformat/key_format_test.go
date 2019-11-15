@@ -61,10 +61,7 @@ func TestKeyFormat(t *testing.T) {
 }
 
 func TestPublicKey(t *testing.T) {
-	// NOTE: When using a signature.PublicKey we must use MapKey in the format
-	//       specification to get the correct size. Then we can use PublicKey
-	//       during actual serialization/deserialization.
-	fmt := New('S', &signature.MapKey{})
+	fmt := New('S', &signature.PublicKey{})
 	require.Equal(t, 1+32, fmt.Size(), "format size")
 
 	var pk signature.PublicKey

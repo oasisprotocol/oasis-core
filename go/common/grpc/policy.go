@@ -57,7 +57,7 @@ type DynamicRuntimePolicyChecker struct {
 	sync.RWMutex
 
 	// Map from runtime IDs to corresponding access control policies.
-	accessPolicies map[signature.MapKey]accessctl.Policy
+	accessPolicies map[signature.PublicKey]accessctl.Policy
 }
 
 // SetAccessPolicy sets the PolicyChecker's access policy.
@@ -67,7 +67,7 @@ func (c *DynamicRuntimePolicyChecker) SetAccessPolicy(policy accessctl.Policy, r
 	c.Lock()
 	defer c.Unlock()
 
-	c.accessPolicies[runtimeID.ToMapKey()] = policy
+	c.accessPolicies[runtimeID] = policy
 }
 
 // CheckAccessAllowed checks if the connected peer is allowed access to a server method according
@@ -97,7 +97,7 @@ func (c *DynamicRuntimePolicyChecker) CheckAccessAllowed(
 	}
 	peerCert := tlsAuth.State.PeerCertificates[0]
 	subject := accessctl.SubjectFromX509Certificate(peerCert)
-	policy := c.accessPolicies[runtimeID.ToMapKey()]
+	policy := c.accessPolicies[runtimeID]
 	if policy == nil || !policy.IsAllowed(subject, method) {
 		return ErrForbiddenByPolicy{
 			method:    method,
@@ -111,6 +111,6 @@ func (c *DynamicRuntimePolicyChecker) CheckAccessAllowed(
 // NewDynamicRuntimePolicyChecker creates a new dynamic runtime policy checker instance.
 func NewDynamicRuntimePolicyChecker() *DynamicRuntimePolicyChecker {
 	return &DynamicRuntimePolicyChecker{
-		accessPolicies: make(map[signature.MapKey]accessctl.Policy),
+		accessPolicies: make(map[signature.PublicKey]accessctl.Policy),
 	}
 }

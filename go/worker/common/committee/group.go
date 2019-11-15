@@ -35,7 +35,7 @@ type CommitteeInfo struct { // nolint: golint
 	Role       scheduler.Role
 	Committee  *scheduler.Committee
 	Nodes      []*node.Node
-	PublicKeys map[signature.MapKey]bool
+	PublicKeys map[signature.PublicKey]bool
 }
 
 type epoch struct {
@@ -54,7 +54,7 @@ type epoch struct {
 	computeCommittees map[hash.Hash]*CommitteeInfo
 	// computeCommitteesByPeer is a set of P2P public keys of compute committee
 	// members.
-	computeCommitteesByPeer map[signature.MapKey]bool
+	computeCommitteesByPeer map[signature.PublicKey]bool
 
 	// txnSchedulerCommitee is the txn scheduler committee we are a member of.
 	txnSchedulerCommittee *CommitteeInfo
@@ -208,7 +208,7 @@ func (e *EpochSnapshot) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, 
 	}
 
 	for _, sig := range sigs {
-		if !committee.PublicKeys[sig.PublicKey.ToMapKey()] {
+		if !committee.PublicKeys[sig.PublicKey] {
 			return fmt.Errorf("epoch: signature is not from a valid committee member")
 		}
 	}
@@ -279,17 +279,17 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 	// Find the current committees.
 	computeCommittees := make(map[hash.Hash]*CommitteeInfo)
-	computeCommitteesByPeer := make(map[signature.MapKey]bool)
+	computeCommitteesByPeer := make(map[signature.PublicKey]bool)
 	var computeCommittee, txnSchedulerCommittee, mergeCommittee, storageCommittee *CommitteeInfo
 	var computeCommitteeID hash.Hash
 	var txnSchedulerLeaderPeerID signature.PublicKey
 	for _, cm := range committees {
 		var nodes []*node.Node
 		var role scheduler.Role
-		publicKeys := make(map[signature.MapKey]bool)
+		publicKeys := make(map[signature.PublicKey]bool)
 		leader := -1
 		for idx, member := range cm.Members {
-			publicKeys[member.PublicKey.ToMapKey()] = true
+			publicKeys[member.PublicKey] = true
 			if member.PublicKey.Equal(publicIdentity) {
 				role = member.Role
 			}
@@ -330,7 +330,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			}
 
 			for _, n := range nodes {
-				computeCommitteesByPeer[n.P2P.ID.ToMapKey()] = true
+				computeCommitteesByPeer[n.P2P.ID] = true
 			}
 		case scheduler.KindTransactionScheduler:
 			txnSchedulerCommittee = ci
@@ -450,13 +450,13 @@ func (g *Group) IsPeerAuthorized(peerID signature.PublicKey) bool {
 
 	// If we are in the compute committee, we accept messages from the transaction
 	// scheduler committee leader.
-	if g.activeEpoch.computeCommittee != nil && g.activeEpoch.txnSchedulerLeaderPeerID != nil {
+	if g.activeEpoch.computeCommittee != nil && g.activeEpoch.txnSchedulerLeaderPeerID.IsValid() {
 		authorized = authorized || peerID.Equal(g.activeEpoch.txnSchedulerLeaderPeerID)
 	}
 
 	// If we are in the merge committee, we accept messages from any compute committee member.
 	if g.activeEpoch.mergeCommittee.Role != scheduler.Invalid {
-		authorized = authorized || g.activeEpoch.computeCommitteesByPeer[peerID.ToMapKey()]
+		authorized = authorized || g.activeEpoch.computeCommitteesByPeer[peerID]
 	}
 
 	return authorized

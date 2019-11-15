@@ -58,7 +58,7 @@ type P2P struct {
 	registerAddresses []multiaddr.Multiaddr
 
 	host     core.Host
-	handlers map[signature.MapKey]Handler
+	handlers map[signature.PublicKey]Handler
 
 	logger *logging.Logger
 }
@@ -80,14 +80,9 @@ func publicKeyToPeerID(pk signature.PublicKey) (core.PeerID, error) {
 func peerIDToPublicKey(peerID core.PeerID) (signature.PublicKey, error) {
 	pk, err := peerID.ExtractPublicKey()
 	if err != nil {
-		return nil, err
+		return signature.PublicKey{}, err
 	}
-	id, err := pubKeyToPublicKey(pk)
-	if err != nil {
-		return nil, err
-	}
-
-	return id, nil
+	return pubKeyToPublicKey(pk)
 }
 
 // Info returns the information needed to establish connections to this
@@ -240,7 +235,7 @@ func (p *P2P) Flush() {
 // RegisterHandler registeres a message handler for the specified runtime.
 func (p *P2P) RegisterHandler(runtimeID signature.PublicKey, handler Handler) {
 	p.Lock()
-	p.handlers[runtimeID.ToMapKey()] = handler
+	p.handlers[runtimeID] = handler
 	p.Unlock()
 
 	p.logger.Debug("registered handler",
@@ -279,7 +274,7 @@ func (p *P2P) handleStreamMessages(stream *Stream) {
 
 	// Determine handler based on the runtime identifier.
 	p.RLock()
-	handler, ok := p.handlers[message.RuntimeID.ToMapKey()]
+	handler, ok := p.handlers[message.RuntimeID]
 	p.RUnlock()
 	if !ok {
 		p.logger.Error("received message for unknown runtime",
@@ -409,7 +404,7 @@ func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
 	p := &P2P{
 		registerAddresses: registerAddresses,
 		host:              host,
-		handlers:          make(map[signature.MapKey]Handler),
+		handlers:          make(map[signature.PublicKey]Handler),
 		logger:            logging.GetLogger("worker/common/p2p"),
 	}
 
