@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -46,15 +48,22 @@ const (
 
 	// CfgEscrowAccount configures the escrow address.
 	CfgEscrowAccount = "stake.escrow.account"
+
+	// CfgCommissionScheduleRates configures the commission schedule rate steps.
+	CfgCommissionScheduleRates = "stake.commission_schedule.rates"
+
+	// CfgCommissionScheduleBounds configures the commission schedule rate bound steps.
+	CfgCommissionScheduleBounds = "stake.commission_schedule.bounds"
 )
 
 var (
-	accountInfoFlags     = flag.NewFlagSet("", flag.ContinueOnError)
-	accountSubmitFlags   = flag.NewFlagSet("", flag.ContinueOnError)
-	txFlags              = flag.NewFlagSet("", flag.ContinueOnError)
-	txFileFlags          = flag.NewFlagSet("", flag.ContinueOnError)
-	escrowFlags          = flag.NewFlagSet("", flag.ContinueOnError)
-	accountTransferFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	accountInfoFlags        = flag.NewFlagSet("", flag.ContinueOnError)
+	accountSubmitFlags      = flag.NewFlagSet("", flag.ContinueOnError)
+	txFlags                 = flag.NewFlagSet("", flag.ContinueOnError)
+	txFileFlags             = flag.NewFlagSet("", flag.ContinueOnError)
+	escrowFlags             = flag.NewFlagSet("", flag.ContinueOnError)
+	commissionScheduleFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	accountTransferFlags    = flag.NewFlagSet("", flag.ContinueOnError)
 
 	accountCmd = &cobra.Command{
 		Use:   "account",
@@ -96,13 +105,20 @@ var (
 		Short: "Generate a reclaim_escrow (unstake) transaction",
 		Run:   doAccountReclaimEscrow,
 	}
+
+	accountAmendCommissionScheduleCmd = &cobra.Command{
+		Use:   "gen_amend_commission_schedule",
+		Short: "Generate an amend_commission_schedule transaction",
+		Run:   doAccountAmendCommissionSchedule,
+	}
 )
 
 type serializedTx struct {
-	Transfer      *api.SignedTransfer      `json:"tranfer"`
-	Burn          *api.SignedBurn          `json:"burn"`
-	Escrow        *api.SignedEscrow        `json:"escrow"`
-	ReclaimEscrow *api.SignedReclaimEscrow `json:"reclaim_escrow"`
+	Transfer                *api.SignedTransfer                `json:"tranfer"`
+	Burn                    *api.SignedBurn                    `json:"burn"`
+	Escrow                  *api.SignedEscrow                  `json:"escrow"`
+	ReclaimEscrow           *api.SignedReclaimEscrow           `json:"reclaim_escrow"`
+	AmendCommissionSchedule *api.SignedAmendCommissionSchedule `json:"amend_commission_schedule"`
 }
 
 func (tx *serializedTx) MustSave() {
@@ -218,6 +234,11 @@ func doAccountSubmit(cmd *cobra.Command, args []string) {
 		if signed := tx.ReclaimEscrow; signed != nil {
 			_, err = client.ReclaimEscrow(ctx, &grpcStaking.ReclaimEscrowRequest{
 				SignedReclaim: cbor.Marshal(signed),
+			})
+		}
+		if signed := tx.AmendCommissionSchedule; signed != nil {
+			_, err = client.AmendCommissionSchedule(ctx, &grpcStaking.AmendCommissionScheduleRequest{
+				SignedAmendCommissionSchedule: cbor.Marshal(signed),
 			})
 		}
 		return err
@@ -430,6 +451,109 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 	tx.MustSave()
 }
 
+func scanRateStep(dst *api.CommissionRateStep, raw string) error {
+	var rateBI big.Int
+	n, err := fmt.Sscanf(raw, "%d/%d", &dst.Start, &rateBI)
+	if err != nil {
+		return err
+	}
+	if n != 2 {
+		return fmt.Errorf("scanned %d tokens (need 2)", n)
+	}
+	if err = dst.Rate.FromBigInt(&rateBI); err != nil {
+		return errors.Wrap(err, "rate")
+	}
+	return nil
+}
+
+func scanBoundStep(dst *api.CommissionRateBoundStep, raw string) error {
+	var rateMinBI big.Int
+	var rateMaxBI big.Int
+	n, err := fmt.Sscanf(raw, "%d/%d/%d", &dst.Start, &rateMinBI, &rateMaxBI)
+	if err != nil {
+		return err
+	}
+	if n != 3 {
+		return fmt.Errorf("scanned %d tokens (need 3)", n)
+	}
+	if err = dst.RateMin.FromBigInt(&rateMinBI); err != nil {
+		return errors.Wrap(err, "rate min")
+	}
+	if err = dst.RateMax.FromBigInt(&rateMaxBI); err != nil {
+		return errors.Wrap(err, "rate max")
+	}
+	return nil
+}
+
+func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	initGenesis()
+	assertTxFileOK()
+
+	var amendCommissionSchedule api.AmendCommissionSchedule
+	rawRates := viper.GetStringSlice(CfgCommissionScheduleRates)
+	if rawRates != nil {
+		amendCommissionSchedule.Amendment.Rates = make([]api.CommissionRateStep, len(rawRates))
+		for i, rawRate := range rawRates {
+			if err := scanRateStep(&amendCommissionSchedule.Amendment.Rates[i], rawRate); err != nil {
+				logger.Error("failed to parse commission schedule rate step",
+					"err", err,
+					"index", i,
+					"raw_rate", rawRate,
+				)
+				os.Exit(1)
+			}
+		}
+	}
+	rawBounds := viper.GetStringSlice(CfgCommissionScheduleBounds)
+	if rawBounds != nil {
+		amendCommissionSchedule.Amendment.Bounds = make([]api.CommissionRateBoundStep, len(rawBounds))
+		for i, rawBound := range rawBounds {
+			if err := scanBoundStep(&amendCommissionSchedule.Amendment.Bounds[i], rawBound); err != nil {
+				logger.Error("failed to parse commission schedule bound step",
+					"err", err,
+					"index", i,
+					"raw_bound", rawBound,
+				)
+				os.Exit(1)
+			}
+		}
+	}
+	amendCommissionSchedule.Nonce = viper.GetUint64(CfgTxNonce)
+	if err := amendCommissionSchedule.Fee.Amount.UnmarshalText([]byte(viper.GetString(CfgTxFeeAmount))); err != nil {
+		logger.Error("failed to parse fee amount",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	amendCommissionSchedule.Fee.Gas = gas.Gas(viper.GetUint64(CfgTxFeeGas))
+
+	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Entity())
+	if err != nil {
+		logger.Error("failed to load account entity",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	defer signer.Reset()
+
+	signedAmendCommissionSchedule, err := api.SignAmendCommissionSchedule(signer, &amendCommissionSchedule)
+	if err != nil {
+		logger.Error("failed to sign amend_commission_schedule",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	tx := &serializedTx{
+		AmendCommissionSchedule: signedAmendCommissionSchedule,
+	}
+	tx.MustSave()
+}
+
 func registerAccountCmd() {
 	for _, v := range []*cobra.Command{
 		accountInfoCmd,
@@ -438,6 +562,7 @@ func registerAccountCmd() {
 		accountBurnCmd,
 		accountEscrowCmd,
 		accountReclaimEscrowCmd,
+		accountAmendCommissionScheduleCmd,
 	} {
 		accountCmd.AddCommand(v)
 	}
@@ -448,6 +573,7 @@ func registerAccountCmd() {
 	accountBurnCmd.Flags().AddFlagSet(txFlags)
 	accountEscrowCmd.Flags().AddFlagSet(escrowFlags)
 	accountReclaimEscrowCmd.Flags().AddFlagSet(escrowFlags)
+	accountAmendCommissionScheduleCmd.Flags().AddFlagSet(commissionScheduleFlags)
 }
 
 func init() {
@@ -481,4 +607,10 @@ func init() {
 	escrowFlags.String(CfgEscrowAccount, "", "ID of the escrow account")
 	_ = viper.BindPFlags(escrowFlags)
 	escrowFlags.AddFlagSet(txFlags)
+
+	commissionScheduleFlags.StringSlice(CfgCommissionScheduleRates, nil, fmt.Sprintf("commission rate step. Multiple of this flag is allowed. Each step is in the format start_epoch/rate_numerator. The rate is rate_numerator divided by %v", api.CommissionRateDenominator))
+	commissionScheduleFlags.StringSlice(CfgCommissionScheduleBounds, nil, fmt.Sprintf("commission rate bound step. Multiple of this flag is allowed. Each step is in the format start_epoch/rate_min_numerator/rate_max_numerator. The minimum rate is rate_min_numerator divided by %v, and the maximum rate is rate_max_numerator divided by %v", api.CommissionRateDenominator, api.CommissionRateDenominator))
+	_ = viper.BindPFlags(commissionScheduleFlags)
+	commissionScheduleFlags.AddFlagSet(txFlags)
+	// todo: remove amount flag
 }
