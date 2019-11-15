@@ -4,3 +4,4 @@ ignore:
   - "oasis-node/cmd/debug" # Debug and test utilities.
   - "oasis-test-runner" # E2E test runner.
   - "oasis-net-runner" # Test local network runner.
+  - "staking/gen_vectors" # Staking test vector generator.

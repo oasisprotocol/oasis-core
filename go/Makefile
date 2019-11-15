@@ -59,8 +59,11 @@ test: generate
 urkel-test-helpers: generate
 	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) -o ./storage/mkvs/urkel/interop/urkel_test_helpers ./storage/mkvs/urkel/interop
 
+test-vectors/staking: generate
+	@env -u GOPATH $(OASIS_GO) run ./staking/gen_vectors
+
 # Clean.
 clean:
 	@env -u GOPATH $(OASIS_GO) clean
 
-.PHONY: all generate build integrationrunner lint test clean
+.PHONY: all generate build integrationrunner lint test clean test-vectors/staking
