@@ -430,7 +430,7 @@ func testEscrowEx(
 	debs, err = backend.DebondingDelegations(context.Background(), srcID, 0)
 	require.NoError(err, "DebondingDelegations - after (in debonding)")
 	require.Len(debs, 1, "one debonding delegation after reclaiming escrow")
-	require.Len(debs[dstID.ToMapKey()], 1, "one debonding delegation after reclaiming escrow")
+	require.Len(debs[dstID], 1, "one debonding delegation after reclaiming escrow")
 
 	// Advance epoch to trigger debonding.
 	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)

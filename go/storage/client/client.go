@@ -58,13 +58,13 @@ type storageClientBackend struct {
 	initCh       chan struct{}
 	signaledInit bool
 
-	debugRuntimeID signature.PublicKey
+	debugRuntimeID *signature.PublicKey
 
 	scheduler scheduler.Backend
 	registry  registry.Backend
 
 	runtimeWatchersLock sync.RWMutex
-	runtimeWatchers     map[signature.MapKey]storageWatcher
+	runtimeWatchers     map[signature.PublicKey]storageWatcher
 
 	identity *identity.Identity
 
@@ -72,7 +72,7 @@ type storageClientBackend struct {
 	cancelFn context.CancelFunc
 }
 
-func (b *storageClientBackend) getStorageWatcher(runtimeID signature.MapKey) (storageWatcher, error) {
+func (b *storageClientBackend) getStorageWatcher(runtimeID signature.PublicKey) (storageWatcher, error) {
 	b.runtimeWatchersLock.RLock()
 	defer b.runtimeWatchersLock.RUnlock()
 
@@ -103,7 +103,7 @@ func (b *storageClientBackend) WatchRuntime(id signature.PublicKey) error {
 	b.runtimeWatchersLock.Lock()
 	defer b.runtimeWatchersLock.Unlock()
 
-	watcher := b.runtimeWatchers[id.ToMapKey()]
+	watcher := b.runtimeWatchers[id]
 	if watcher != nil {
 		// Already watching, nothing to do.
 		return nil
@@ -111,7 +111,7 @@ func (b *storageClientBackend) WatchRuntime(id signature.PublicKey) error {
 
 	// Watcher doesn't exist. Start new watcher.
 	watcher = newWatcher(b.ctx, id, b.identity, b.scheduler, b.registry)
-	b.runtimeWatchers[id.ToMapKey()] = watcher
+	b.runtimeWatchers[id] = watcher
 
 	// Signal init when the first registered runtime is initialized.
 	if !b.signaledInit {
@@ -139,7 +139,7 @@ type grpcResponse struct {
 func (b *storageClientBackend) getRequestRuntime(ns common.Namespace) (runtimeID signature.PublicKey, err error) {
 	// In debug mode always connect to the debug watcher.
 	if b.debugRuntimeID != nil {
-		runtimeID = b.debugRuntimeID
+		runtimeID = *b.debugRuntimeID
 	} else {
 		// Otherwise, determine runtime from request namsepace.
 		return ns.ToRuntimeID()
@@ -164,7 +164,7 @@ func (b *storageClientBackend) writeWithClient(
 	}
 
 	// Get watcher for runtime.
-	watcher, err := b.getStorageWatcher(runtimeID.ToMapKey())
+	watcher, err := b.getStorageWatcher(runtimeID)
 	if err != nil {
 		b.logger.Error("writeWithClient: cannot get watcher for runtime",
 			"runtime_id", runtimeID,
@@ -480,7 +480,7 @@ func (b *storageClientBackend) readWithClient(
 	}
 
 	// Get watcher for runtime.
-	watcher, err := b.getStorageWatcher(runtimeID.ToMapKey())
+	watcher, err := b.getStorageWatcher(runtimeID)
 	if err != nil {
 		b.logger.Error("readWithClient: cannot get watcher for runtime",
 			"runtime_id", runtimeID,

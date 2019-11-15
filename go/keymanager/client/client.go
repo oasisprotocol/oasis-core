@@ -58,8 +58,8 @@ type Client struct {
 	backend  api.Backend
 	registry registry.Backend
 
-	state map[signature.MapKey]*clientState
-	kmMap map[signature.MapKey]signature.PublicKey
+	state map[signature.PublicKey]*clientState
+	kmMap map[signature.PublicKey]signature.PublicKey
 
 	debugClient *enclaverpc.Client
 }
@@ -96,19 +96,18 @@ func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, 
 	c.RLock()
 	defer c.RUnlock()
 
-	id := runtimeID.ToMapKey()
-	kmID := c.kmMap[id]
-	if kmID == nil {
-		if c.state[id] == nil {
+	kmID, ok := c.kmMap[runtimeID]
+	if !ok {
+		return nil, ErrKeyManagerNotAvailable
+	} else if kmID == runtimeID {
+		// Key manager runtimes have an identity mapping.
+		if c.state[runtimeID] == nil {
 			return nil, ErrKeyManagerNotAvailable
 		}
-
-		// The target query is for a keymanager runtime ID, probably
-		// replication.
 		kmID = runtimeID
 	}
 
-	st := c.state[kmID.ToMapKey()]
+	st := c.state[kmID]
 	if st == nil || st.client == nil {
 		return nil, ErrKeyManagerNotAvailable
 	}
@@ -174,9 +173,9 @@ func (c *Client) updateRuntime(rt *registry.Runtime) {
 			"id", rt.ID,
 			"km_id", rt.KeyManager,
 		)
-		c.kmMap[rt.ID.ToMapKey()] = rt.KeyManager
+		c.kmMap[rt.ID] = rt.KeyManager
 	case registry.KindKeyManager:
-		c.kmMap[rt.ID.ToMapKey()] = rt.ID
+		c.kmMap[rt.ID] = rt.ID
 	default:
 	}
 }
@@ -186,23 +185,22 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 		"id", status.ID,
 	)
 
-	nodeMap := make(map[signature.MapKey]*node.Node)
+	nodeMap := make(map[signature.PublicKey]*node.Node)
 	for _, n := range nodeList {
-		nodeMap[n.ID.ToMapKey()] = n
+		nodeMap[n.ID] = n
 	}
 
 	c.Lock()
 	defer c.Unlock()
 
-	idKey := status.ID.ToMapKey()
-	st := c.state[idKey]
+	st := c.state[status.ID]
 
 	// It's not possible to service requests for this key manager.
 	if !status.IsInitialized || len(status.Nodes) == 0 {
 		// Kill the conn and return.
 		if st != nil {
 			st.kill()
-			delete(c.state, idKey)
+			delete(c.state, status.ID)
 		}
 
 		return
@@ -212,7 +210,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 	certPool := x509.NewCertPool()
 	var resolverState resolver.State
 	for _, v := range status.Nodes {
-		n := nodeMap[v.ToMapKey()]
+		n := nodeMap[v]
 		if n == nil {
 			c.logger.Warn("key manager node missing descriptor",
 				"id", v,
@@ -248,7 +246,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 	// Kill the old state if it exists.
 	if st != nil {
 		st.kill()
-		delete(c.state, idKey)
+		delete(c.state, status.ID)
 	}
 
 	// Note: While this may look screwed up, the resolver needs the client conn
@@ -269,7 +267,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 		"id", status.ID,
 	)
 
-	c.state[idKey] = &clientState{
+	c.state[status.ID] = &clientState{
 		status:            status,
 		conn:              conn,
 		client:            enclaverpc.NewFromConn(conn, kmEndpoint),
@@ -298,8 +296,8 @@ func New(backend api.Backend, registryBackend registry.Backend, nodeIdentity *id
 	c := &Client{
 		logger:       logging.GetLogger("keymanager/client"),
 		nodeIdentity: nodeIdentity,
-		state:        make(map[signature.MapKey]*clientState),
-		kmMap:        make(map[signature.MapKey]signature.PublicKey),
+		state:        make(map[signature.PublicKey]*clientState),
+		kmMap:        make(map[signature.PublicKey]signature.PublicKey),
 	}
 
 	if debugAddress := viper.GetString(cfgDebugClientAddress); debugAddress != "" {

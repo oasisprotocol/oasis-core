@@ -78,9 +78,9 @@ func (c *submitContext) cancel() {
 type Client struct {
 	sync.Mutex
 	common   *clientCommon
-	watchers map[signature.MapKey]*blockWatcher
+	watchers map[signature.PublicKey]*blockWatcher
 
-	indexers       map[signature.MapKey]*indexer.Service
+	indexers       map[signature.PublicKey]*indexer.Service
 	indexerBackend indexer.Backend
 
 	logger *logging.Logger
@@ -117,17 +117,15 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 	}
 
 	req := &txnscheduler.SubmitTxRequest{
-		RuntimeId: runtimeID,
+		RuntimeId: runtimeID[:],
 		Data:      txData,
 	}
-
-	mapKey := runtimeID.ToMapKey()
 
 	var watcher *blockWatcher
 	var ok bool
 	var err error
 	c.Lock()
-	if watcher, ok = c.watchers[mapKey]; !ok {
+	if watcher, ok = c.watchers[runtimeID]; !ok {
 		watcher, err = newWatcher(c.common, runtimeID)
 		if err != nil {
 			c.Unlock()
@@ -137,7 +135,7 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 			c.Unlock()
 			return nil, err
 		}
-		c.watchers[mapKey] = watcher
+		c.watchers[runtimeID] = watcher
 	}
 	c.Unlock()
 
@@ -546,8 +544,8 @@ func New(
 			keyManager: keyManager,
 			ctx:        ctx,
 		},
-		watchers: make(map[signature.MapKey]*blockWatcher),
-		indexers: make(map[signature.MapKey]*indexer.Service),
+		watchers: make(map[signature.PublicKey]*blockWatcher),
+		indexers: make(map[signature.PublicKey]*indexer.Service),
 		logger:   logging.GetLogger("client"),
 	}
 
@@ -581,7 +579,7 @@ func New(
 				return nil, err
 			}
 
-			c.indexers[id.ToMapKey()] = idx
+			c.indexers[id] = idx
 		}
 
 		// Start all indexers.

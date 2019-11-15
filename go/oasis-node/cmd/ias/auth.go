@@ -16,14 +16,14 @@ import (
 type enclaveStore struct {
 	sync.RWMutex
 
-	enclaves map[signature.MapKey][]sgx.EnclaveIdentity
+	enclaves map[signature.PublicKey][]sgx.EnclaveIdentity
 }
 
 func (st *enclaveStore) verifyEvidence(evidence *ias.Evidence) error {
 	st.RLock()
 	defer st.RUnlock()
 
-	enclaveIDs, ok := st.enclaves[evidence.ID.ToMapKey()]
+	enclaveIDs, ok := st.enclaves[evidence.ID]
 	if !ok {
 		return errors.New("ias: unknown runtime")
 	}
@@ -60,13 +60,13 @@ func (st *enclaveStore) addRuntime(runtime *registry.Runtime) (int, error) {
 		return len(st.enclaves), err
 	}
 
-	st.enclaves[runtime.ID.ToMapKey()] = vi.Enclaves
+	st.enclaves[runtime.ID] = vi.Enclaves
 
 	return len(st.enclaves), nil
 }
 
 func newEnclaveStore() *enclaveStore {
 	return &enclaveStore{
-		enclaves: make(map[signature.MapKey][]sgx.EnclaveIdentity),
+		enclaves: make(map[signature.PublicKey][]sgx.EnclaveIdentity),
 	}
 }

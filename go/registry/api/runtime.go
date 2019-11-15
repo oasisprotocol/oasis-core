@@ -125,10 +125,6 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 		return ErrNilProtobuf
 	}
 
-	if c.ID == nil {
-		c.ID = signature.PublicKey{}
-	}
-
 	if err := c.ID.UnmarshalBinary(pb.GetId()); err != nil {
 		return err
 	}

@@ -66,8 +66,8 @@ type tendermintBackend struct {
 
 	allBlockNotifier *pubsub.Broker
 	pruneNotifier    *pubsub.Broker
-	runtimeNotifiers map[signature.MapKey]*runtimeBrokers
-	genesisBlocks    map[signature.MapKey]*block.Block
+	runtimeNotifiers map[signature.PublicKey]*runtimeBrokers
+	genesisBlocks    map[signature.PublicKey]*block.Block
 	blockIndex       *blockIndexer
 
 	closeOnce sync.Once
@@ -79,7 +79,7 @@ func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.P
 	// First check if we have the genesis blocks cached. They are immutable so easy
 	// to cache to avoid repeated requests to the Tendermint app.
 	tb.RLock()
-	if blk := tb.genesisBlocks[id.ToMapKey()]; blk != nil {
+	if blk := tb.genesisBlocks[id]; blk != nil {
 		tb.RUnlock()
 		return blk, nil
 	}
@@ -97,7 +97,7 @@ func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.P
 
 	// Update the genesis block cache.
 	tb.Lock()
-	tb.genesisBlocks[id.ToMapKey()] = blk
+	tb.genesisBlocks[id] = blk
 	tb.Unlock()
 
 	return blk, nil
@@ -256,12 +256,10 @@ func (tb *tendermintBackend) Cleanup() {
 }
 
 func (tb *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtimeBrokers {
-	k := id.ToMapKey()
-
 	tb.Lock()
 	defer tb.Unlock()
 
-	notifiers := tb.runtimeNotifiers[k]
+	notifiers := tb.runtimeNotifiers[id]
 	if notifiers == nil {
 		// Fetch the latest block.
 		block, _ := tb.GetLatestBlock(tb.ctx, id, 0)
@@ -272,7 +270,7 @@ func (tb *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtim
 			lastBlock:     block,
 		}
 
-		tb.runtimeNotifiers[k] = notifiers
+		tb.runtimeNotifiers[id] = notifiers
 	}
 
 	return notifiers
@@ -545,8 +543,8 @@ func New(
 		querier:          a.QueryFactory().(*app.QueryFactory),
 		allBlockNotifier: pubsub.NewBroker(false),
 		pruneNotifier:    pubsub.NewBroker(false),
-		runtimeNotifiers: make(map[signature.MapKey]*runtimeBrokers),
-		genesisBlocks:    make(map[signature.MapKey]*block.Block),
+		runtimeNotifiers: make(map[signature.PublicKey]*runtimeBrokers),
+		genesisBlocks:    make(map[signature.PublicKey]*block.Block),
 		closedCh:         make(chan struct{}),
 		initCh:           make(chan struct{}),
 	}

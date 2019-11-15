@@ -147,7 +147,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	res, err := client.GetBlock(ctx, &clientGrpc.GetBlockRequest{RuntimeId: id, Round: math.MaxUint64})
+	res, err := client.GetBlock(ctx, &clientGrpc.GetBlockRequest{RuntimeId: id[:], Round: math.MaxUint64})
 	if err != nil {
 		logger.Error("failed to get latest block from roothash",
 			"err", err,
@@ -169,7 +169,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 	retryCount := 0
 	for {
 		lastSyncedReq := &storageGrpc.GetLastSyncedRoundRequest{
-			RuntimeId: id,
+			RuntimeId: id[:],
 		}
 		resp, err = storageWorkerClient.GetLastSyncedRound(ctx, lastSyncedReq)
 		if err != nil {
@@ -205,7 +205,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 	emptyRoot := node.Root{}
 	emptyRoot.Hash.Empty()
 	for i := uint64(0); i <= latestBlock.Header.Round; i++ {
-		res, err = client.GetBlock(ctx, &clientGrpc.GetBlockRequest{RuntimeId: id, Round: i})
+		res, err = client.GetBlock(ctx, &clientGrpc.GetBlockRequest{RuntimeId: id[:], Round: i})
 		if err != nil {
 			logger.Error("failed to get block from roothash",
 				"err", err,
@@ -267,7 +267,7 @@ func doForceFinalize(cmd *cobra.Command, args []string) {
 		}
 
 		_, err := storageWorkerClient.ForceFinalize(ctx, &storageGrpc.ForceFinalizeRequest{
-			RuntimeId: id,
+			RuntimeId: id[:],
 			Round:     finalizeRound,
 		})
 		if err != nil {

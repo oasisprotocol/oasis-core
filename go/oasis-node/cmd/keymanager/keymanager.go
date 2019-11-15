@@ -137,7 +137,7 @@ func policyFromFlags() (*kmApi.PolicySGX, error) {
 
 			enclaves[kmEnclaveID] = &kmApi.EnclavePolicySGX{
 				MayReplicate: []sgx.EnclaveIdentity{},
-				MayQuery:     make(map[signature.MapKey][]sgx.EnclaveIdentity),
+				MayQuery:     make(map[signature.PublicKey][]sgx.EnclaveIdentity),
 			}
 
 			for curArgIdx = curArgIdx + 2; curArgIdx < len(os.Args); curArgIdx++ {
@@ -188,7 +188,7 @@ func policyFromFlags() (*kmApi.PolicySGX, error) {
 						}
 						queryEnclaveIDs = append(queryEnclaveIDs, queryEnclaveID)
 					}
-					enclaves[kmEnclaveID].MayQuery[qRuntimeID.ToMapKey()] = queryEnclaveIDs
+					enclaves[kmEnclaveID].MayQuery[qRuntimeID] = queryEnclaveIDs
 				}
 			}
 		}

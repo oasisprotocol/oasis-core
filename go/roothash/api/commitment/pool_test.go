@@ -105,7 +105,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	require.NoError(t, err, "NewSigner")
 
 	// Generate a committee.
-	cID := sk.Public().ToMapKey()
+	cID := sk.Public()
 	committee := &scheduler.Committee{
 		Kind: scheduler.KindCompute,
 		Members: []*scheduler.CommitteeNode{
@@ -115,7 +115,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 			},
 		},
 	}
-	nodeInfo := map[signature.MapKey]NodeInfo{
+	nodeInfo := map[signature.PublicKey]NodeInfo{
 		cID: NodeInfo{
 			CommitteeNode: 0,
 			Runtime: &node.Runtime{
@@ -215,7 +215,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	require.NoError(t, err, "NewSigner")
 
 	// Generate a committee.
-	cID := sk.Public().ToMapKey()
+	cID := sk.Public()
 	committee := &scheduler.Committee{
 		Kind: scheduler.KindCompute,
 		Members: []*scheduler.CommitteeNode{
@@ -225,7 +225,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 			},
 		},
 	}
-	nodeInfo := map[signature.MapKey]NodeInfo{
+	nodeInfo := map[signature.PublicKey]NodeInfo{
 		cID: NodeInfo{
 			CommitteeNode: 0,
 			Runtime: &node.Runtime{
@@ -447,7 +447,7 @@ func TestPoolSerialization(t *testing.T) {
 	require.NoError(t, err, "NewSigner")
 
 	// Generate a committee.
-	cID := sk.Public().ToMapKey()
+	cID := sk.Public()
 	committee := &scheduler.Committee{
 		Kind: scheduler.KindCompute,
 		Members: []*scheduler.CommitteeNode{
@@ -457,7 +457,7 @@ func TestPoolSerialization(t *testing.T) {
 			},
 		},
 	}
-	nodeInfo := map[signature.MapKey]NodeInfo{
+	nodeInfo := map[signature.PublicKey]NodeInfo{
 		cID: NodeInfo{
 			CommitteeNode: 0,
 			Runtime: &node.Runtime{
@@ -1093,7 +1093,7 @@ func generateMockCommittee(t *testing.T) (
 	rt *registry.Runtime,
 	sks []signature.Signer,
 	committee *scheduler.Committee,
-	nodeInfo map[signature.MapKey]NodeInfo,
+	nodeInfo map[signature.PublicKey]NodeInfo,
 ) {
 	// Generate a non-TEE runtime.
 	var rtID signature.PublicKey
@@ -1114,9 +1114,9 @@ func generateMockCommittee(t *testing.T) (
 	sks = append(sks, sk1, sk2, sk3)
 
 	// Generate a committee.
-	c1ID := sk1.Public().ToMapKey()
-	c2ID := sk2.Public().ToMapKey()
-	c3ID := sk3.Public().ToMapKey()
+	c1ID := sk1.Public()
+	c2ID := sk2.Public()
+	c3ID := sk3.Public()
 	committee = &scheduler.Committee{
 		Kind: scheduler.KindCompute,
 		Members: []*scheduler.CommitteeNode{
@@ -1134,7 +1134,7 @@ func generateMockCommittee(t *testing.T) (
 			},
 		},
 	}
-	nodeInfo = map[signature.MapKey]NodeInfo{
+	nodeInfo = map[signature.PublicKey]NodeInfo{
 		c1ID: NodeInfo{
 			CommitteeNode: 0,
 			Runtime: &node.Runtime{

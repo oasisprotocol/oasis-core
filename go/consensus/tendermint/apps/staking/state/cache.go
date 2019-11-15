@@ -30,7 +30,7 @@ type StakeCache struct {
 	ctx *abci.Context
 
 	thresholds map[staking.ThresholdKind]quantity.Quantity
-	balances   map[signature.MapKey]*quantity.Quantity
+	balances   map[signature.PublicKey]*quantity.Quantity
 
 	lowestNonZeroThreshold quantity.Quantity
 }
@@ -82,11 +82,11 @@ func (sc *StakeCache) EnsureSufficientStake(id signature.PublicKey, thresholds [
 
 // GetEscrowBalance returns the escrow balance of the account owned by id.
 func (sc *StakeCache) GetEscrowBalance(id signature.PublicKey) quantity.Quantity {
-	escrowBalance := sc.balances[id.ToMapKey()]
+	escrowBalance := sc.balances[id]
 	if escrowBalance == nil {
 		state := NewMutableState(sc.ctx.State())
 		escrowBalance = state.EscrowBalance(id)
-		sc.balances[id.ToMapKey()] = escrowBalance
+		sc.balances[id] = escrowBalance
 	}
 
 	ret := escrowBalance.Clone()
@@ -114,7 +114,7 @@ func NewStakeCache(ctx *abci.Context) (*StakeCache, error) {
 	return &StakeCache{
 		ctx:                    ctx,
 		thresholds:             thresholds,
-		balances:               make(map[signature.MapKey]*quantity.Quantity),
+		balances:               make(map[signature.PublicKey]*quantity.Quantity),
 		lowestNonZeroThreshold: *lowestNonZeroThreshold,
 	}, nil
 }

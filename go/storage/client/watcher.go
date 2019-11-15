@@ -100,12 +100,12 @@ type watcherState struct {
 	scheduler scheduler.Backend
 	registry  registry.Backend
 
-	runtimeID signature.MapKey
+	runtimeID signature.PublicKey
 
 	identity *identity.Identity
 
 	registeredStorageNodes []*node.Node
-	scheduledNodes         map[signature.MapKey]bool
+	scheduledNodes         map[signature.PublicKey]bool
 	clientStates           []*clientState
 
 	initCh       chan struct{}
@@ -167,7 +167,7 @@ func (w *watcherState) updateStorageNodeConnections() {
 
 	nodeList := []*node.Node{}
 	for _, node := range w.registeredStorageNodes {
-		if w.scheduledNodes[node.ID.ToMapKey()] {
+		if w.scheduledNodes[node.ID] {
 			nodeList = append(nodeList, node)
 		}
 	}
@@ -268,10 +268,10 @@ func (w *watcherState) updateRegisteredStorageNodes(nodes []*node.Node) {
 }
 
 func (w *watcherState) updateScheduledNodes(nodes []*scheduler.CommitteeNode) {
-	scheduledStorageNodes := make(map[signature.MapKey]bool)
+	scheduledStorageNodes := make(map[signature.PublicKey]bool)
 	for _, n := range nodes {
 		if n.Role == scheduler.Worker {
-			scheduledStorageNodes[n.PublicKey.ToMapKey()] = true
+			scheduledStorageNodes[n.PublicKey] = true
 		}
 	}
 
@@ -306,7 +306,7 @@ func (w *watcherState) watch(ctx context.Context) {
 
 			w.logger.Debug("updated connections to all nodes")
 		case committee := <-committeeCh:
-			if committee.RuntimeID.ToMapKey() != w.runtimeID {
+			if committee.RuntimeID != w.runtimeID {
 				continue
 			}
 			if committee.Kind != scheduler.KindStorage {
@@ -347,12 +347,12 @@ func newWatcher(
 	watcher := &watcherState{
 		initCh:                 make(chan struct{}),
 		logger:                 logger,
-		runtimeID:              runtimeID.ToMapKey(),
+		runtimeID:              runtimeID,
 		identity:               identity,
 		scheduler:              schedulerBackend,
 		registry:               registryBackend,
 		registeredStorageNodes: []*node.Node{},
-		scheduledNodes:         make(map[signature.MapKey]bool),
+		scheduledNodes:         make(map[signature.PublicKey]bool),
 		clientStates:           []*clientState{},
 	}
 

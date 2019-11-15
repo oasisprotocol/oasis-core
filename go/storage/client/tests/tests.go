@@ -100,12 +100,12 @@ recvLoop:
 			if cm.Kind != scheduler.KindStorage {
 				continue
 			}
-			if cm.RuntimeID.ToMapKey() != rt.Runtime.ID.ToMapKey() {
+			if cm.RuntimeID != rt.Runtime.ID {
 				continue
 			}
 			for _, cn := range cm.Members {
 				for _, n := range nodes {
-					if n.ID.ToMapKey() == cn.PublicKey.ToMapKey() {
+					if n.ID == cn.PublicKey {
 						scheduledStorageNodes = append(scheduledStorageNodes, n)
 					}
 				}

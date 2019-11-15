@@ -150,7 +150,7 @@ func (f *runtimeWorkerHostSandboxedFactory) NewWorkerHost(cfg host.Config) (host
 // NewRuntimeWorkerHostFactory creates a new worker host factory for the given runtime.
 func (rw *RuntimeHostWorker) NewRuntimeWorkerHostFactory(role node.RolesMask, id signature.PublicKey) (h host.Factory, err error) {
 	cfg := rw.commonWorker.GetConfig().RuntimeHost
-	rtCfg, ok := cfg.Runtimes[id.ToMapKey()]
+	rtCfg, ok := cfg.Runtimes[id]
 	if !ok {
 		return nil, fmt.Errorf("runtime host: unknown runtime: %s", id)
 	}

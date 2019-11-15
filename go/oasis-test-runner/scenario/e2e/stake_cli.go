@@ -108,7 +108,7 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 	if err = src.UnmarshalHex(srcAddress); err != nil {
 		return err
 	}
-	if !bytes.Equal(accounts[0], src) {
+	if !bytes.Equal(accounts[0][:], src[:]) {
 		return fmt.Errorf("scenario/e2e/stake: wrong src account: %s expected: %s", accounts[0].String(), src.String())
 	}
 	// Define a new destination account.

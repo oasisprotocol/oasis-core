@@ -29,7 +29,7 @@ func (s *grpcServer) GetLastSyncedRound(ctx context.Context, req *pb.GetLastSync
 	}
 
 	var node *committee.Node
-	node, ok := s.w.runtimes[id.ToMapKey()]
+	node, ok := s.w.runtimes[id]
 	if !ok {
 		return nil, ErrRuntimeNotFound
 	}
@@ -53,7 +53,7 @@ func (s *grpcServer) ForceFinalize(ctx context.Context, req *pb.ForceFinalizeReq
 	round := req.GetRound()
 
 	var node *committee.Node
-	node, ok := s.w.runtimes[id.ToMapKey()]
+	node, ok := s.w.runtimes[id]
 	if !ok {
 		return nil, ErrRuntimeNotFound
 	}

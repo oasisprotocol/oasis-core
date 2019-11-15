@@ -17,7 +17,7 @@ var (
 	// committeeKeyFmt is the key format used for committees.
 	//
 	// Value is CBOR-serialized committee.
-	committeeKeyFmt = keyformat.New(0x60, uint8(0), &signature.MapKey{})
+	committeeKeyFmt = keyformat.New(0x60, uint8(0), &signature.PublicKey{})
 	// validatorsCurrentKeyFmt is the key format used for the current set of
 	// validators.
 	//

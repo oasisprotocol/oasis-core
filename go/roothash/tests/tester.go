@@ -196,9 +196,9 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler scheduler.Backend, epoch epochtime.EpochTime, ch <-chan *api.AnnotatedBlock) {
 	require := require.New(t)
 
-	nodes := make(map[signature.MapKey]*registryTests.TestNode)
+	nodes := make(map[signature.PublicKey]*registryTests.TestNode)
 	for _, node := range s.rt.TestNodes() {
-		nodes[node.Node.ID.ToMapKey()] = node
+		nodes[node.Node.ID] = node
 	}
 
 	s.computeCommittee, s.mergeCommittee, s.storageCommittee, s.txnSchedCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
@@ -671,7 +671,7 @@ func mustGetCommittee(
 	rt *registryTests.TestRuntime,
 	epoch epochtime.EpochTime,
 	sched scheduler.Backend,
-	nodes map[signature.MapKey]*registryTests.TestNode,
+	nodes map[signature.PublicKey]*registryTests.TestNode,
 ) (
 	computeCommittee *testCommittee,
 	mergeCommittee *testCommittee,
@@ -696,7 +696,7 @@ func mustGetCommittee(
 			var ret testCommittee
 			ret.committee = committee
 			for _, member := range committee.Members {
-				node := nodes[member.PublicKey.ToMapKey()]
+				node := nodes[member.PublicKey]
 				require.NotNil(node, "member is one of the nodes")
 				switch member.Role {
 				case scheduler.Worker:

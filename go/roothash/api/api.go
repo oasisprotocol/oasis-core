@@ -167,7 +167,7 @@ type Genesis struct {
 	Parameters ConsensusParameters `json:"params"`
 
 	// Blocks is the per-runtime map of genesis blocks.
-	Blocks map[signature.MapKey]*block.Block `json:"blocks,omitempty"`
+	Blocks map[signature.PublicKey]*block.Block `json:"blocks,omitempty"`
 }
 
 // ConsensusParameters are the roothash consensus parameters.

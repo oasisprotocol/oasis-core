@@ -34,7 +34,7 @@ func (c *Client) CallEnclave(ctx context.Context, request []byte, runtimeID sign
 	req := erpcGrpc.CallEnclaveRequest{
 		Endpoint: c.endpoint,
 		Payload:  request,
-		Runtime:  runtimeID,
+		Runtime:  runtimeID[:],
 	}
 	res, err := c.client.CallEnclave(ctx, &req)
 	if err != nil {

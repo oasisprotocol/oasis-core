@@ -82,10 +82,10 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 		return fmt.Errorf("tendermint/scheduler: couldn't get nodes: %w", err)
 	}
 
-	registeredValidators := make(map[signature.MapKey]*node.Node)
+	registeredValidators := make(map[signature.PublicKey]*node.Node)
 	for _, v := range nodes {
 		if v.HasRoles(node.RoleValidator) {
-			registeredValidators[v.Consensus.ID.ToMapKey()] = v
+			registeredValidators[v.Consensus.ID] = v
 		}
 	}
 
@@ -120,7 +120,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 			return fmt.Errorf("scheduler: invalid genesis validator voting power: %v", power)
 		}
 
-		n := registeredValidators[id.ToMapKey()]
+		n := registeredValidators[id]
 		if n == nil {
 			app.logger.Error("genesis validator not in registry",
 				"id", id,

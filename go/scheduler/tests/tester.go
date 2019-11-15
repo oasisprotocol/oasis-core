@@ -126,15 +126,15 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtime *registry.Runtime, nodes []*node.Node) {
 	require := require.New(t)
 
-	nodeMap := make(map[signature.MapKey]*node.Node)
+	nodeMap := make(map[signature.PublicKey]*node.Node)
 	for _, node := range nodes {
-		nodeMap[node.ID.ToMapKey()] = node
+		nodeMap[node.ID] = node
 	}
 
 	var leaders, workers, backups int
-	seenMap := make(map[signature.MapKey]bool)
+	seenMap := make(map[signature.PublicKey]bool)
 	for _, member := range committee.Members {
-		id := member.PublicKey.ToMapKey()
+		id := member.PublicKey
 		require.NotNil(nodeMap[id], "member is a node")
 		require.False(seenMap[id], "member is unique")
 		seenMap[id] = true

@@ -28,7 +28,7 @@ type EnclavePolicySGX struct {
 	//
 	// TODO: This could be made more sophisticated and seggregate based on
 	// contract ID as well, but for now punt on the added complexity.
-	MayQuery map[signature.MapKey][]sgx.EnclaveIdentity `json:"may_query"`
+	MayQuery map[signature.PublicKey][]sgx.EnclaveIdentity `json:"may_query"`
 
 	// MayReplicate is the vector of enclave IDs that may retrieve the master
 	// secret (Note: Each enclave ID may always implicitly replicate from other

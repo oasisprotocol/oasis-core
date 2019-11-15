@@ -103,7 +103,7 @@ func doExport(cmd *cobra.Command, args []string) {
 			"runtime_id", idHex,
 		)
 
-		res, berr := client.GetBlock(ctx, &clientGrpc.GetBlockRequest{RuntimeId: id, Round: math.MaxUint64})
+		res, berr := client.GetBlock(ctx, &clientGrpc.GetBlockRequest{RuntimeId: id[:], Round: math.MaxUint64})
 		if berr != nil {
 			logger.Error("failed to get latest block",
 				"err", berr,

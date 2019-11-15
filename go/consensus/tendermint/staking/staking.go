@@ -92,7 +92,7 @@ func (tb *tendermintBackend) AccountInfo(ctx context.Context, owner signature.Pu
 	return q.AccountInfo(ctx, owner)
 }
 
-func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.MapKey][]*api.DebondingDelegation, error) {
+func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.PublicKey][]*api.DebondingDelegation, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err

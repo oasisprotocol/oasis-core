@@ -31,7 +31,7 @@ var (
 	// accountKeyFmt is the key format used for accounts (account id).
 	//
 	// Value is a CBOR-serialized account.
-	accountKeyFmt = keyformat.New(0x50, &signature.MapKey{})
+	accountKeyFmt = keyformat.New(0x50, &signature.PublicKey{})
 	// totalSupplyKeyFmt is the key format used for the total supply.
 	//
 	// Value is a CBOR-serialized quantity.
@@ -43,17 +43,17 @@ var (
 	// delegationKeyFmt is the key format used for delegations (escrow id, delegator id).
 	//
 	// Value is CBOR-serialized delegation.
-	delegationKeyFmt = keyformat.New(0x53, &signature.MapKey{}, &signature.MapKey{})
+	delegationKeyFmt = keyformat.New(0x53, &signature.PublicKey{}, &signature.PublicKey{})
 	// debondingDelegationKeyFmt is the key format used for debonding delegations
 	// (delegator id, escrow id, seq no).
 	//
 	// Value is CBOR-serialized debonding delegation.
-	debondingDelegationKeyFmt = keyformat.New(0x54, &signature.MapKey{}, &signature.MapKey{}, uint64(0))
+	debondingDelegationKeyFmt = keyformat.New(0x54, &signature.PublicKey{}, &signature.PublicKey{}, uint64(0))
 	// debondingQueueKeyFmt is the debonding queue key format (epoch, delegator id,
 	// escrow id, seq no).
 	//
 	// Value is empty.
-	debondingQueueKeyFmt = keyformat.New(0x55, uint64(0), &signature.MapKey{}, &signature.MapKey{}, uint64(0))
+	debondingQueueKeyFmt = keyformat.New(0x55, uint64(0), &signature.PublicKey{}, &signature.PublicKey{}, uint64(0))
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized staking.ConsensusParameters.
@@ -128,7 +128,7 @@ func (s *ImmutableState) RewardSchedule() ([]staking.RewardStep, error) {
 	return params.RewardSchedule, nil
 }
 
-func (s *ImmutableState) AcceptableTransferPeers() (map[signature.MapKey]bool, error) {
+func (s *ImmutableState) AcceptableTransferPeers() (map[signature.PublicKey]bool, error) {
 	params, err := s.ConsensusParameters()
 	if err != nil {
 		return nil, err
@@ -142,7 +142,7 @@ func (s *ImmutableState) isAcceptableTransferPeer(runtimeID signature.PublicKey)
 	if err != nil {
 		return false, err
 	}
-	return peers[runtimeID.ToMapKey()], nil
+	return peers[runtimeID], nil
 }
 
 // Thresholds returns the currently configured thresholds if any.
@@ -196,15 +196,15 @@ func (s *ImmutableState) EscrowBalance(id signature.PublicKey) *quantity.Quantit
 	return account.Escrow.Active.Balance.Clone()
 }
 
-func (s *ImmutableState) Delegations() (map[signature.MapKey]map[signature.MapKey]*staking.Delegation, error) {
-	delegations := make(map[signature.MapKey]map[signature.MapKey]*staking.Delegation)
+func (s *ImmutableState) Delegations() (map[signature.PublicKey]map[signature.PublicKey]*staking.Delegation, error) {
+	delegations := make(map[signature.PublicKey]map[signature.PublicKey]*staking.Delegation)
 	s.Snapshot.IterateRange(
 		delegationKeyFmt.Encode(),
 		nil,
 		true,
 		func(key, value []byte) bool {
-			var escrowID signature.MapKey
-			var delegatorID signature.MapKey
+			var escrowID signature.PublicKey
+			var delegatorID signature.PublicKey
 			if !delegationKeyFmt.Decode(key, &escrowID, &delegatorID) {
 				return true
 			}
@@ -215,7 +215,7 @@ func (s *ImmutableState) Delegations() (map[signature.MapKey]map[signature.MapKe
 			}
 
 			if delegations[escrowID] == nil {
-				delegations[escrowID] = make(map[signature.MapKey]*staking.Delegation)
+				delegations[escrowID] = make(map[signature.PublicKey]*staking.Delegation)
 			}
 			delegations[escrowID][delegatorID] = &del
 
@@ -239,15 +239,15 @@ func (s *ImmutableState) Delegation(delegatorID, escrowID signature.PublicKey) *
 	return &del
 }
 
-func (s *ImmutableState) DebondingDelegations() (map[signature.MapKey]map[signature.MapKey][]*staking.DebondingDelegation, error) {
-	delegations := make(map[signature.MapKey]map[signature.MapKey][]*staking.DebondingDelegation)
+func (s *ImmutableState) DebondingDelegations() (map[signature.PublicKey]map[signature.PublicKey][]*staking.DebondingDelegation, error) {
+	delegations := make(map[signature.PublicKey]map[signature.PublicKey][]*staking.DebondingDelegation)
 	s.Snapshot.IterateRange(
 		debondingDelegationKeyFmt.Encode(),
 		nil,
 		true,
 		func(key, value []byte) bool {
-			var escrowID signature.MapKey
-			var delegatorID signature.MapKey
+			var escrowID signature.PublicKey
+			var delegatorID signature.PublicKey
 			if !debondingDelegationKeyFmt.Decode(key, &delegatorID, &escrowID) {
 				return true
 			}
@@ -258,7 +258,7 @@ func (s *ImmutableState) DebondingDelegations() (map[signature.MapKey]map[signat
 			}
 
 			if delegations[escrowID] == nil {
-				delegations[escrowID] = make(map[signature.MapKey][]*staking.DebondingDelegation)
+				delegations[escrowID] = make(map[signature.PublicKey][]*staking.DebondingDelegation)
 			}
 			delegations[escrowID][delegatorID] = append(delegations[escrowID][delegatorID], &deb)
 
@@ -269,14 +269,14 @@ func (s *ImmutableState) DebondingDelegations() (map[signature.MapKey]map[signat
 	return delegations, nil
 }
 
-func (s *ImmutableState) DebondingDelegationsFor(delegatorID signature.PublicKey) (map[signature.MapKey][]*staking.DebondingDelegation, error) {
-	delegations := make(map[signature.MapKey][]*staking.DebondingDelegation)
+func (s *ImmutableState) DebondingDelegationsFor(delegatorID signature.PublicKey) (map[signature.PublicKey][]*staking.DebondingDelegation, error) {
+	delegations := make(map[signature.PublicKey][]*staking.DebondingDelegation)
 	s.Snapshot.IterateRange(
 		debondingDelegationKeyFmt.Encode(&delegatorID),
 		nil,
 		true,
 		func(key, value []byte) bool {
-			var escrowID signature.MapKey
+			var escrowID signature.PublicKey
 			var decDelegatorID signature.PublicKey
 			if !debondingDelegationKeyFmt.Decode(key, &decDelegatorID, &escrowID) || !decDelegatorID.Equal(delegatorID) {
 				return true

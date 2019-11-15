@@ -56,7 +56,7 @@ type Worker struct {
 	initCh chan struct{}
 	quitCh chan struct{}
 
-	runtimes   map[signature.MapKey]*committee.Node
+	runtimes   map[signature.PublicKey]*committee.Node
 	watchState *persistent.ServiceStore
 	fetchPool  *workerpool.Pool
 
@@ -79,7 +79,7 @@ func New(
 		logger:             logging.GetLogger("worker/storage"),
 		initCh:             make(chan struct{}),
 		quitCh:             make(chan struct{}),
-		runtimes:           make(map[signature.MapKey]*committee.Node),
+		runtimes:           make(map[signature.PublicKey]*committee.Node),
 	}
 
 	if s.enabled {
@@ -143,7 +143,7 @@ func (s *Worker) registerRuntime(rt *workerCommon.Runtime) error {
 		return err
 	}
 	commonNode.AddHooks(node)
-	s.runtimes[commonNode.RuntimeID.ToMapKey()] = node
+	s.runtimes[commonNode.RuntimeID] = node
 	return nil
 }
 

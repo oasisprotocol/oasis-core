@@ -13,14 +13,18 @@ import (
 
 func TestSerialization(t *testing.T) {
 	key, _, _ := ed25519.GenerateKey(nil)
+
+	var publicKey signature.PublicKey
+	_ = publicKey.UnmarshalBinary(key)
+
 	c := Runtime{
-		ID:                       signature.PublicKey(key),
+		ID:                       publicKey,
 		TEEHardware:              node.TEEHardwareIntelSGX,
 		ReplicaGroupSize:         63,
 		ReplicaGroupBackupSize:   72,
 		ReplicaAllowedStragglers: 81,
 		StorageGroupSize:         90,
-		KeyManager:               signature.PublicKey(key),
+		KeyManager:               publicKey,
 		Kind:                     KindCompute,
 		Version: VersionInfo{
 			TEE:     []byte{},

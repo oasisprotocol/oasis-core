@@ -65,7 +65,7 @@ type Worker struct {
 	LocalStorage     *host.LocalStorage
 	GenesisDoc       *genesis.Document
 
-	runtimes map[signature.MapKey]*Runtime
+	runtimes map[signature.PublicKey]*Runtime
 
 	quitCh chan struct{}
 	initCh chan struct{}
@@ -180,7 +180,7 @@ func (w *Worker) GetConfig() Config {
 }
 
 // GetRuntimes returns a map of registered runtimes.
-func (w *Worker) GetRuntimes() map[signature.MapKey]*Runtime {
+func (w *Worker) GetRuntimes() map[signature.PublicKey]*Runtime {
 	return w.runtimes
 }
 
@@ -189,7 +189,7 @@ func (w *Worker) GetRuntimes() map[signature.MapKey]*Runtime {
 // In case the runtime with the specified id was not registered it
 // returns nil.
 func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
-	rt, ok := w.runtimes[id.ToMapKey()]
+	rt, ok := w.runtimes[id]
 	if !ok {
 		return nil
 	}
@@ -211,7 +211,7 @@ func (w *Worker) NewUnmanagedCommitteeNode(id signature.PublicKey, enableP2P boo
 		// Make sure that there is no other (managed) runtime already registered
 		// with the same identifier as registering another will overwrite the
 		// P2P handler.
-		if w.runtimes[id.ToMapKey()] != nil {
+		if w.runtimes[id] != nil {
 			return nil, fmt.Errorf("worker/common: managed runtime with id %s already exists", id)
 		}
 		p2p = w.P2P
@@ -247,7 +247,7 @@ func (w *Worker) registerRuntime(id signature.PublicKey) error {
 		version: version.Version{Major: 0, Minor: 0, Patch: 0}, // Version is populated once the runtime has been loaded. -Matevz
 		node:    node,
 	}
-	w.runtimes[rt.id.ToMapKey()] = rt
+	w.runtimes[rt.id] = rt
 
 	w.logger.Info("new runtime registered",
 		"runtime_id", rt.id,
@@ -302,7 +302,7 @@ func newWorker(
 		KeyManager:       keyManager,
 		KeyManagerClient: keyManagerClient,
 		GenesisDoc:       genesisDoc,
-		runtimes:         make(map[signature.MapKey]*Runtime),
+		runtimes:         make(map[signature.PublicKey]*Runtime),
 		quitCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
 		logger:           logging.GetLogger("worker/common"),

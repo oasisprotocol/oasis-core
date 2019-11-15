@@ -78,14 +78,15 @@ func New(
 		client := storage.NewStorageClient(conn)
 
 		testRuntimeSigner := memorySigner.NewTestSigner(debugModeFakeRuntimeSeed)
+		debugRuntimeID := testRuntimeSigner.Public()
 		b := &storageClientBackend{
 			ctx:             ctx,
 			initCh:          make(chan struct{}),
 			logger:          logger,
-			debugRuntimeID:  testRuntimeSigner.Public(),
+			debugRuntimeID:  &debugRuntimeID,
 			scheduler:       schedulerBackend,
 			registry:        registryBackend,
-			runtimeWatchers: make(map[signature.MapKey]storageWatcher),
+			runtimeWatchers: make(map[signature.PublicKey]storageWatcher),
 			identity:        ident,
 		}
 		state := &clientState{
@@ -93,7 +94,7 @@ func New(
 			conn:   conn,
 		}
 		close(b.initCh)
-		b.runtimeWatchers[b.debugRuntimeID.ToMapKey()] = newDebugWatcher(state)
+		b.runtimeWatchers[debugRuntimeID] = newDebugWatcher(state)
 		return b, nil
 	}
 
@@ -103,7 +104,7 @@ func New(
 		logger:          logger,
 		scheduler:       schedulerBackend,
 		registry:        registryBackend,
-		runtimeWatchers: make(map[signature.MapKey]storageWatcher),
+		runtimeWatchers: make(map[signature.PublicKey]storageWatcher),
 		identity:        ident,
 	}
 

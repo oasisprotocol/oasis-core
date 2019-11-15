@@ -26,9 +26,9 @@ const (
 
 var (
 	// txDocIDKeyFmt is the key format used for indexed transaction document IDs.
-	txDocIDKeyFmt = keyformat.New('T', &signature.MapKey{}, uint64(0), &hash.Hash{}, uint32(0))
+	txDocIDKeyFmt = keyformat.New('T', &signature.PublicKey{}, uint64(0), &hash.Hash{}, uint32(0))
 	// blockDocIDKeyFmt is the key format used for indexed block document IDs.
-	blockDocIDKeyFmt = keyformat.New('B', &signature.MapKey{}, uint64(0))
+	blockDocIDKeyFmt = keyformat.New('B', &signature.PublicKey{}, uint64(0))
 
 	// queryByKindBlock is a query matching documents of kind docTypeBlock.
 	queryByKindBlock bleveQuery.Query

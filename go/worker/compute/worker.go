@@ -45,7 +45,7 @@ type Worker struct {
 	merge        *merge.Worker
 	registration *registration.Worker
 
-	runtimes map[signature.MapKey]*Runtime
+	runtimes map[signature.PublicKey]*Runtime
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -160,7 +160,7 @@ func (w *Worker) GetConfig() Config {
 // In case the runtime with the specified id was not registered it
 // returns nil.
 func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
-	rt, ok := w.runtimes[id.ToMapKey()]
+	rt, ok := w.runtimes[id]
 	if !ok {
 		return nil
 	}
@@ -203,7 +203,7 @@ func (w *Worker) registerRuntime(cfg *Config, rt *workerCommon.Runtime) error {
 		id:   rt.GetID(),
 		node: node,
 	}
-	w.runtimes[crt.id.ToMapKey()] = crt
+	w.runtimes[crt.id] = crt
 
 	w.logger.Info("new runtime registered",
 		"runtime_id", rt.GetID(),
@@ -228,7 +228,7 @@ func newWorker(
 		commonWorker: commonWorker,
 		merge:        merge,
 		registration: registration,
-		runtimes:     make(map[signature.MapKey]*Runtime),
+		runtimes:     make(map[signature.PublicKey]*Runtime),
 		ctx:          ctx,
 		cancelCtx:    cancelCtx,
 		quitCh:       make(chan struct{}),
@@ -271,7 +271,7 @@ func newWorker(
 			for _, rt := range n.Runtimes {
 				var err error
 
-				workerRT := w.runtimes[rt.ID.ToMapKey()]
+				workerRT := w.runtimes[rt.ID]
 				if workerRT == nil {
 					continue
 				}

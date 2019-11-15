@@ -92,13 +92,13 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		require.NoError(err, "GetEntities")
 		require.Len(registeredEntities, len(entities), "entities after registration")
 
-		seen := make(map[signature.MapKey]bool)
+		seen := make(map[signature.PublicKey]bool)
 		for _, ent := range registeredEntities {
 			var isValid bool
 			for _, v := range entities {
 				if v.Entity.ID.Equal(ent.ID) {
 					require.EqualValues(v.Entity, ent, "bulk retrieved entity")
-					seen[ent.ID.ToMapKey()] = true
+					seen[ent.ID] = true
 					isValid = true
 					break
 				}
@@ -291,7 +291,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		// Advancing the epoch should result in the 0th entity's nodes
 		// being deregistered due to expiration.
 		expectedDeregEvents := len(nodes[0])
-		deregisteredNodes := make(map[signature.MapKey]*node.Node)
+		deregisteredNodes := make(map[signature.PublicKey]*node.Node)
 
 		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
@@ -299,7 +299,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 			select {
 			case ev := <-nodeCh:
 				require.False(ev.IsRegistration, "event is deregistration")
-				deregisteredNodes[ev.Node.ID.ToMapKey()] = ev.Node
+				deregisteredNodes[ev.Node.ID] = ev.Node
 			case <-time.After(recvTimeout):
 				t.Fatalf("failed to receive node deregistration event")
 			}
@@ -307,7 +307,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		require.Len(deregisteredNodes, expectedDeregEvents, "deregistration events")
 
 		for _, v := range nodes[0] {
-			n, ok := deregisteredNodes[v.Node.ID.ToMapKey()]
+			n, ok := deregisteredNodes[v.Node.ID]
 			require.True(ok, "got deregister event for node")
 			require.EqualValues(v.UpdatedNode, n, "deregistered node")
 		}
@@ -389,13 +389,13 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	t.Run("RemainingNodeExpiration", func(t *testing.T) {
 		require := require.New(t)
 
-		deregisteredNodes := make(map[signature.MapKey]*node.Node)
+		deregisteredNodes := make(map[signature.PublicKey]*node.Node)
 
 		for i := 0; i < numNodes; i++ {
 			select {
 			case ev := <-nodeCh:
 				require.False(ev.IsRegistration, "event is deregistration")
-				deregisteredNodes[ev.Node.ID.ToMapKey()] = ev.Node
+				deregisteredNodes[ev.Node.ID] = ev.Node
 			case <-time.After(recvTimeout):
 				t.Fatalf("failed to receive node deregistration event")
 			}
@@ -404,7 +404,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		for _, vec := range nodes {
 			for _, v := range vec {
-				n, ok := deregisteredNodes[v.Node.ID.ToMapKey()]
+				n, ok := deregisteredNodes[v.Node.ID]
 				require.True(ok, "got deregister event for node")
 				require.EqualValues(v.UpdatedNode, n, "deregistered node")
 			}
@@ -525,7 +525,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 	}
 	n := nCompute + nStorage
 
-	rng, err := drbg.New(crypto.SHA512, hashForDrbg(ent.Entity.ID), nil, []byte("TestNodes"))
+	rng, err := drbg.New(crypto.SHA512, hashForDrbg(ent.Entity.ID[:]), nil, []byte("TestNodes"))
 	if err != nil {
 		return nil, err
 	}
@@ -621,7 +621,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 
 		// Add a registration without a P2P ID.
 		invalid6 := *nod.Node
-		invalid6.P2P.ID = nil
+		invalid6.P2P.ID = signature.PublicKey{}
 
 		nod.SignedInvalidRegistration6, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid6)
 		if err != nil {

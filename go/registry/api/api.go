@@ -270,7 +270,7 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 	}
 
 	// Ensure the node list has no duplicates.
-	nodesMap := make(map[signature.MapKey]bool)
+	nodesMap := make(map[signature.PublicKey]bool)
 	for _, v := range ent.Nodes {
 		if !v.IsValid() {
 			logger.Error("RegisterEntity: malformed node id",
@@ -279,14 +279,13 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 			return nil, ErrInvalidArgument
 		}
 
-		mk := v.ToMapKey()
-		if nodesMap[mk] {
+		if nodesMap[v] {
 			logger.Error("RegisterEntity: duplicate entries in node list",
 				"entity", ent,
 			)
 			return nil, ErrInvalidArgument
 		}
-		nodesMap[mk] = true
+		nodesMap[v] = true
 	}
 
 	return &ent, nil
@@ -297,13 +296,13 @@ func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.
 	var id signature.PublicKey
 	var timestamp Timestamp
 	if sigTimestamp == nil {
-		return nil, 0, ErrInvalidArgument
+		return id, 0, ErrInvalidArgument
 	}
 	if err := sigTimestamp.Open(DeregisterEntitySignatureContext, &timestamp); err != nil {
 		logger.Error("DeregisterEntity: invalid signature",
 			"signed_timestamp", sigTimestamp,
 		)
-		return nil, 0, ErrInvalidSignature
+		return id, 0, ErrInvalidSignature
 	}
 	id = sigTimestamp.Signature.PublicKey
 
@@ -414,25 +413,24 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			return nil, ErrInvalidArgument
 		}
 	default:
-		rtMap := make(map[signature.MapKey]bool)
-		regRtMap := make(map[signature.MapKey]bool)
+		rtMap := make(map[signature.PublicKey]bool)
+		regRtMap := make(map[signature.PublicKey]bool)
 
 		for _, rt := range regRuntimes {
-			regRtMap[rt.ID.ToMapKey()] = true
+			regRtMap[rt.ID] = true
 		}
 
 		for _, rt := range n.Runtimes {
-			k := rt.ID.ToMapKey()
-			if rtMap[k] {
+			if rtMap[rt.ID] {
 				logger.Error("RegisterNode: duplicate runtime IDs",
 					"id", rt.ID,
 				)
 				return nil, ErrInvalidArgument
 			}
-			rtMap[k] = true
+			rtMap[rt.ID] = true
 
 			// Make sure that the claimed runtime actually exists.
-			if !regRtMap[k] {
+			if !regRtMap[rt.ID] {
 				logger.Error("RegisterNode: runtime does not exist",
 					"id", rt.ID,
 				)
@@ -664,7 +662,7 @@ func verifyAddresses(params *ConsensusParameters, addresses interface{}) error {
 // sortRuntimeList sorts the given runtime list to ensure a canonical order.
 func sortRuntimeList(runtimes []*node.Runtime) {
 	sort.Slice(runtimes, func(i, j int) bool {
-		return bytes.Compare(runtimes[i].ID, runtimes[j].ID) == -1
+		return bytes.Compare(runtimes[i].ID[:], runtimes[j].ID[:]) == -1
 	})
 }
 
@@ -862,7 +860,7 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 // SortNodeList sorts the given node list to ensure a canonical order.
 func SortNodeList(nodes []*node.Node) {
 	sort.Slice(nodes, func(i, j int) bool {
-		return bytes.Compare(nodes[i].ID, nodes[j].ID) == -1
+		return bytes.Compare(nodes[i].ID[:], nodes[j].ID[:]) == -1
 	})
 }
 
@@ -894,7 +892,7 @@ type Genesis struct {
 	Nodes []*node.SignedNode `json:"nodes,omitempty"`
 
 	// NodeStatuses is a set of node statuses.
-	NodeStatuses map[signature.MapKey]*NodeStatus `json:"node_statuses,omitempty"`
+	NodeStatuses map[signature.PublicKey]*NodeStatus `json:"node_statuses,omitempty"`
 }
 
 // ConsensusParameters are the registry consensus parameters.
@@ -922,7 +920,7 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 	// use a key manager, so the parameter is optional.
 
 	// Check entities.
-	seenEntities := make(map[signature.MapKey]bool)
+	seenEntities := make(map[signature.PublicKey]bool)
 	for _, sent := range g.Entities {
 		var ent entity.Entity
 		if err := sent.Open(RegisterGenesisEntitySignatureContext, &ent); err != nil {
@@ -943,11 +941,11 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 			return fmt.Errorf("registry: sanity check failed: entity ID %s registration time is more than 1h1m in the future", ent.ID.String())
 		}
 
-		seenEntities[ent.ID.ToMapKey()] = true
+		seenEntities[ent.ID] = true
 	}
 
 	// Check runtimes.
-	seenRuntimes := make(map[signature.MapKey]*Runtime)
+	seenRuntimes := make(map[signature.PublicKey]*Runtime)
 	for _, srt := range g.Runtimes {
 		var rt Runtime
 		if err := srt.Open(RegisterGenesisRuntimeSignatureContext, &rt); err != nil {
@@ -959,7 +957,7 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 		}
 
 		// Check that the given key manager runtime is a valid key manager runtime.
-		krt := seenRuntimes[rt.KeyManager.ToMapKey()]
+		krt := seenRuntimes[rt.KeyManager]
 		if krt == nil {
 			// Not seen yet, traverse the entire runtime list (the KM runtimes
 			// aren't guaranteed to be sorted before the other runtimes).
@@ -989,7 +987,7 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 			return fmt.Errorf("registry: sanity check failed: runtime ID %s is of invalid kind", rt.ID.String())
 		}
 
-		seenRuntimes[rt.ID.ToMapKey()] = &rt
+		seenRuntimes[rt.ID] = &rt
 	}
 
 	// Check nodes.
@@ -1007,7 +1005,7 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 			return fmt.Errorf("registry: sanity check failed: node ID %s has invalid entity ID", n.ID.String())
 		}
 
-		if !seenEntities[n.EntityID.ToMapKey()] {
+		if !seenEntities[n.EntityID] {
 			return fmt.Errorf("registry: sanity check failed: node ID %s has unknown controlling entity", n.ID.String())
 		}
 
@@ -1044,7 +1042,7 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 		}
 
 		for _, rt := range n.Runtimes {
-			if seenRuntimes[rt.ID.ToMapKey()] == nil {
+			if seenRuntimes[rt.ID] == nil {
 				return fmt.Errorf("registry: sanity check failed: node ID %s has an unknown runtime ID", n.ID.String())
 			}
 		}

@@ -90,7 +90,7 @@ type Backend interface {
 
 	// DebondingDelegations returns the list of debonding delegations for
 	// the given owner (delegator).
-	DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.MapKey][]*DebondingDelegation, error)
+	DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.PublicKey][]*DebondingDelegation, error)
 
 	// Transfer executes a SignedTransfer.
 	Transfer(ctx context.Context, signedXfer *SignedTransfer) error
@@ -489,10 +489,10 @@ type Genesis struct {
 	TotalSupply quantity.Quantity `json:"total_supply"`
 	CommonPool  quantity.Quantity `json:"common_pool"`
 
-	Ledger map[signature.MapKey]*Account `json:"ledger,omitempty"`
+	Ledger map[signature.PublicKey]*Account `json:"ledger,omitempty"`
 
-	Delegations          map[signature.MapKey]map[signature.MapKey]*Delegation            `json:"delegations,omitempty"`
-	DebondingDelegations map[signature.MapKey]map[signature.MapKey][]*DebondingDelegation `json:"debonding_delegations,omitempty"`
+	Delegations          map[signature.PublicKey]map[signature.PublicKey]*Delegation            `json:"delegations,omitempty"`
+	DebondingDelegations map[signature.PublicKey]map[signature.PublicKey][]*DebondingDelegation `json:"debonding_delegations,omitempty"`
 }
 
 // ConsensusParameters are the staking consensus parameters.
@@ -500,7 +500,7 @@ type ConsensusParameters struct {
 	Thresholds              map[ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
 	DebondingInterval       epochtime.EpochTime                 `json:"debonding_interval,omitempty"`
 	RewardSchedule          []RewardStep                        `json:"reward_schedule,omitempty"`
-	AcceptableTransferPeers map[signature.MapKey]bool           `json:"acceptable_transfer_peers,omitempty"`
+	AcceptableTransferPeers map[signature.PublicKey]bool        `json:"acceptable_transfer_peers,omitempty"`
 	Slashing                map[SlashReason]Slash               `json:"slashing,omitempty"`
 	GasCosts                gas.Costs                           `json:"gas_costs,omitempty"`
 	MinDelegationAmount     quantity.Quantity                   `json:"min_delegation,omitempty"`

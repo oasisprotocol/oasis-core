@@ -431,7 +431,7 @@ func (w *Worker) worker() {
 
 	// Subscribe to runtime registrations in order to know which runtimes
 	// are using us as a key manager.
-	clientRuntimes := make(map[signature.MapKey]*clientRuntimeWatcher)
+	clientRuntimes := make(map[signature.PublicKey]*clientRuntimeWatcher)
 	clientRuntimesQuitCh := make(chan *clientRuntimeWatcher)
 	defer close(clientRuntimesQuitCh)
 	rtCh, rtSub := w.commonWorker.Registry.WatchRuntimes()
@@ -494,7 +494,7 @@ func (w *Worker) worker() {
 			if rt.Kind != registry.KindCompute || !rt.KeyManager.Equal(w.runtimeID) {
 				continue
 			}
-			if clientRuntimes[rt.ID.ToMapKey()] != nil {
+			if clientRuntimes[rt.ID] != nil {
 				continue
 			}
 
@@ -536,7 +536,7 @@ func (w *Worker) worker() {
 				}
 			}()
 
-			clientRuntimes[rt.ID.ToMapKey()] = crw
+			clientRuntimes[rt.ID] = crw
 		case crw := <-clientRuntimesQuitCh:
 			w.logger.Error("client runtime watcher quit unexpectedly, terminating",
 				"runtme_id", crw.node.RuntimeID,
