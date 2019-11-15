@@ -374,7 +374,7 @@ func (s *stakeCLIImpl) genTransferTx(childEnv *env.Env, amount int, nonce int, d
 
 	args := []string{
 		"stake", "account", "gen_transfer",
-		"--" + stake.CfgTxAmount, strconv.Itoa(amount),
+		"--" + stake.CfgAmount, strconv.Itoa(amount),
 		"--" + stake.CfgTxNonce, strconv.Itoa(nonce),
 		"--" + stake.CfgTxFile, txPath,
 		"--" + stake.CfgTransferDestination, dst.String(),
@@ -395,7 +395,7 @@ func (s *stakeCLIImpl) genBurnTx(childEnv *env.Env, amount int, nonce int, txPat
 
 	args := []string{
 		"stake", "account", "gen_burn",
-		"--" + stake.CfgTxAmount, strconv.Itoa(amount),
+		"--" + stake.CfgAmount, strconv.Itoa(amount),
 		"--" + stake.CfgTxNonce, strconv.Itoa(nonce),
 		"--" + stake.CfgTxFile, txPath,
 		"--" + stake.CfgTxFeeAmount, strconv.Itoa(feeAmount),
@@ -415,7 +415,7 @@ func (s *stakeCLIImpl) genEscrowTx(childEnv *env.Env, amount int, nonce int, esc
 
 	args := []string{
 		"stake", "account", "gen_escrow",
-		"--" + stake.CfgTxAmount, strconv.Itoa(amount),
+		"--" + stake.CfgAmount, strconv.Itoa(amount),
 		"--" + stake.CfgTxNonce, strconv.Itoa(nonce),
 		"--" + stake.CfgTxFile, txPath,
 		"--" + stake.CfgEscrowAccount, escrow.String(),
@@ -436,7 +436,7 @@ func (s *stakeCLIImpl) genReclaimEscrowTx(childEnv *env.Env, amount int, nonce i
 
 	args := []string{
 		"stake", "account", "gen_reclaim_escrow",
-		"--" + stake.CfgTxAmount, strconv.Itoa(amount),
+		"--" + stake.CfgAmount, strconv.Itoa(amount),
 		"--" + stake.CfgTxNonce, strconv.Itoa(nonce),
 		"--" + stake.CfgTxFile, txPath,
 		"--" + stake.CfgEscrowAccount, escrow.String(),

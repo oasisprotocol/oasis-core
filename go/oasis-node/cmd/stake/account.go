@@ -31,9 +31,6 @@ const (
 	// CfgTxNonce configures the nonce.
 	CfgTxNonce = "stake.transaction.nonce"
 
-	// CfgTxAmount configures the amount of tokens.
-	CfgTxAmount = "stake.transaction.amount"
-
 	// CfgTxFeeAmount configures the fee amount in tokens.
 	CfgTxFeeAmount = "stake.transaction.fee.amount"
 
@@ -42,6 +39,9 @@ const (
 
 	// CfgTxFile configures the filename for the transaction.
 	CfgTxFile = "stake.transaction.file"
+
+	// CfgAmount configures the amount of tokens.
+	CfgAmount = "stake.transaction.amount"
 
 	// CfgTransferDestination configures the transfer destination address.
 	CfgTransferDestination = "stake.transfer.destination"
@@ -60,6 +60,7 @@ var (
 	accountInfoFlags        = flag.NewFlagSet("", flag.ContinueOnError)
 	accountSubmitFlags      = flag.NewFlagSet("", flag.ContinueOnError)
 	txFlags                 = flag.NewFlagSet("", flag.ContinueOnError)
+	amountFlags             = flag.NewFlagSet("", flag.ContinueOnError)
 	txFileFlags             = flag.NewFlagSet("", flag.ContinueOnError)
 	escrowFlags             = flag.NewFlagSet("", flag.ContinueOnError)
 	commissionScheduleFlags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -260,7 +261,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	if err := xfer.Tokens.UnmarshalText([]byte(viper.GetString(CfgTxAmount))); err != nil {
+	if err := xfer.Tokens.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
 		logger.Error("failed to parse transfer amount",
 			"err", err,
 		)
@@ -307,7 +308,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 	assertTxFileOK()
 
 	var burn api.Burn
-	if err := burn.Tokens.UnmarshalText([]byte(viper.GetString(CfgTxAmount))); err != nil {
+	if err := burn.Tokens.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
 		logger.Error("failed to parse burn amount",
 			"err", err,
 		)
@@ -360,7 +361,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	if err := escrow.Tokens.UnmarshalText([]byte(viper.GetString(CfgTxAmount))); err != nil {
+	if err := escrow.Tokens.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
 		logger.Error("failed to parse escrow amount",
 			"err", err,
 		)
@@ -413,7 +414,7 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	if err := reclaim.Shares.UnmarshalText([]byte(viper.GetString(CfgTxAmount))); err != nil {
+	if err := reclaim.Shares.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
 		logger.Error("failed to parse escrow reclaim amount",
 			"err", err,
 		)
@@ -571,6 +572,7 @@ func registerAccountCmd() {
 	accountSubmitCmd.Flags().AddFlagSet(accountSubmitFlags)
 	accountTransferCmd.Flags().AddFlagSet(accountTransferFlags)
 	accountBurnCmd.Flags().AddFlagSet(txFlags)
+	accountBurnCmd.Flags().AddFlagSet(amountFlags)
 	accountEscrowCmd.Flags().AddFlagSet(escrowFlags)
 	accountReclaimEscrowCmd.Flags().AddFlagSet(escrowFlags)
 	accountAmendCommissionScheduleCmd.Flags().AddFlagSet(commissionScheduleFlags)
@@ -591,7 +593,6 @@ func init() {
 	accountSubmitFlags.AddFlagSet(txFileFlags)
 
 	txFlags.Uint64(CfgTxNonce, 0, "nonce of the source account")
-	txFlags.String(CfgTxAmount, "0", "amount of tokens for the transaction")
 	txFlags.Uint64(CfgTxFeeAmount, 0, "transaction fee in tokens")
 	txFlags.String(CfgTxFeeGas, "0", "maximum gas limit")
 	_ = viper.BindPFlags(txFlags)
@@ -600,17 +601,21 @@ func init() {
 	txFlags.AddFlagSet(cmdFlags.EntityFlags)
 	txFlags.AddFlagSet(cmdFlags.GenesisFileFlags)
 
+	amountFlags.String(CfgAmount, "0", "amount of tokens for the transaction")
+	_ = viper.BindPFlags(amountFlags)
+
 	accountTransferFlags.String(CfgTransferDestination, "", "transfer destination account ID")
 	_ = viper.BindPFlags(accountTransferFlags)
 	accountTransferFlags.AddFlagSet(txFlags)
+	accountTransferFlags.AddFlagSet(amountFlags)
 
 	escrowFlags.String(CfgEscrowAccount, "", "ID of the escrow account")
 	_ = viper.BindPFlags(escrowFlags)
 	escrowFlags.AddFlagSet(txFlags)
+	escrowFlags.AddFlagSet(amountFlags)
 
 	commissionScheduleFlags.StringSlice(CfgCommissionScheduleRates, nil, fmt.Sprintf("commission rate step. Multiple of this flag is allowed. Each step is in the format start_epoch/rate_numerator. The rate is rate_numerator divided by %v", api.CommissionRateDenominator))
 	commissionScheduleFlags.StringSlice(CfgCommissionScheduleBounds, nil, fmt.Sprintf("commission rate bound step. Multiple of this flag is allowed. Each step is in the format start_epoch/rate_min_numerator/rate_max_numerator. The minimum rate is rate_min_numerator divided by %v, and the maximum rate is rate_max_numerator divided by %v", api.CommissionRateDenominator, api.CommissionRateDenominator))
 	_ = viper.BindPFlags(commissionScheduleFlags)
 	commissionScheduleFlags.AddFlagSet(txFlags)
-	// todo: remove amount flag
 }
