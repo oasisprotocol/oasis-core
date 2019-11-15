@@ -154,8 +154,21 @@ func (c *Committee) EncodedMembersHash() hash.Hash {
 	return hh
 }
 
+// Validator is a consensus validator.
+type Validator struct {
+	// ID is the validator consensus (NOT oasis) identifier.
+	ID signature.PublicKey `json:"id"`
+
+	// VotingPower is the validator's consensus voting power.
+	VotingPower int64 `json:"voting_power"`
+}
+
 // Backend is a scheduler implementation.
 type Backend interface {
+	// GetValidators returns the vector of consensus validators for
+	// a given epoch.
+	GetValidators(context.Context, int64) ([]*Validator, error)
+
 	// GetCommittees returns the vector of committees for a given
 	// runtime ID, at the specified block height, and optional callback
 	// for querying the beacon for a given epoch/block height.
