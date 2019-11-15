@@ -70,8 +70,8 @@ const (
 	cfgABCIPruneStrategy = "tendermint.abci.prune.strategy"
 	cfgABCIPruneNumKept  = "tendermint.abci.prune.num_kept"
 
-	// CfgP2PPrivatePeer configures tendermint's private peer(s).
-	CfgP2PPrivatePeer = "tendermint.private_peer"
+	// CfgP2PPrivatePeerID configures tendermint's private peer ID(s).
+	CfgP2PPrivatePeerID = "tendermint.private_peer_id"
 	// CfgP2PPersistentPeer configures tendermint's persistent peer(s).
 	CfgP2PPersistentPeer = "tendermint.persistent_peer"
 	// CfgP2PDisablePeerExchange disables tendermint's peer-exchange (Pex) reactor.
@@ -775,7 +775,10 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.P2P.ListenAddress = viper.GetString(CfgCoreListenAddress)
 	tenderConfig.P2P.ExternalAddress = viper.GetString(cfgCoreExternalAddress)
 	tenderConfig.P2P.AllowDuplicateIP = true // HACK: e2e tests need this.
-	tenderConfig.P2P.PrivatePeerIDs = strings.Join(viper.GetStringSlice(CfgP2PPrivatePeer), ",")
+	// Convert persistent peer IDs to lowercase (like other IDs) since
+	// Tendermint stores them in a map and uses a case sensitive string
+	// comparison to check ID equality.
+	tenderConfig.P2P.PrivatePeerIDs = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PPrivatePeerID), ","))
 	// Persistent peers need to be lowecase as p2p/transport.go:MultiplexTransport.upgrade()
 	// uses a case sensitive string comparision to validate public keys.
 	// Since persistent peers is expected to be in comma-delimited ID@host:port format,
@@ -1166,7 +1169,7 @@ func init() {
 	Flags.String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
 	Flags.String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 	Flags.Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
-	Flags.StringSlice(CfgP2PPrivatePeer, []string{}, "Tendermint private peer(s) (i.e. they will not be gossiped to other peers) of the form ID@ip:port")
+	Flags.StringSlice(CfgP2PPrivatePeerID, []string{}, "Tendermint private peer(s) (i.e. they will not be gossiped to other peers) of the form ID")
 	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form ID@ip:port")
 	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")
 	Flags.Bool(CfgP2PSeedMode, false, "run the tendermint node in seed mode")
