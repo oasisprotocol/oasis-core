@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
+	tendermintAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -212,6 +213,7 @@ func TestNode(t *testing.T) {
 		{"Storage", testStorage},
 		{"Registry", testRegistry},
 		{"Scheduler", testScheduler},
+		{"Scheduler/GetValidators", testSchedulerGetValidators},
 		{"RootHash", testRootHash},
 
 		// TestStorageClientWithoutNode runs client tests that use a mock storage
@@ -337,6 +339,17 @@ func testScheduler(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
 	schedulerTests.SchedulerImplementationTests(t, node.Scheduler, timeSource, node.Registry)
+}
+
+func testSchedulerGetValidators(t *testing.T, node *testNode) {
+	// Since the integration tests run with validator elections disabled,
+	// just ensure that the GetValidators query returns the node's identity.
+	validators, err := node.Scheduler.GetValidators(context.Background(), 0)
+	require.NoError(t, err, "GetValidators")
+
+	require.Len(t, validators, 1, "should be only one static validator")
+	require.Equal(t, node.Identity.ConsensusSigner.Public(), validators[0].ID)
+	require.EqualValues(t, tendermintAPI.VotingPower, validators[0].VotingPower)
 }
 
 func testStaking(t *testing.T, node *testNode) {

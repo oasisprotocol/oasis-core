@@ -46,8 +46,17 @@ func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.
 func (tb *tendermintBackend) Cleanup() {
 }
 
+func (tb *tendermintBackend) GetValidators(ctx context.Context, height int64) ([]*api.Validator, error) {
+	q, err := tb.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.Validators(ctx)
+}
+
 func (tb *tendermintBackend) GetCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) {
-	q, err := tb.querier.QueryAt(ctx, 0)
+	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}

@@ -29,6 +29,34 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 
 	if doc.Scheduler.Parameters.DebugStaticValidators {
 		app.logger.Warn("static validators are configured")
+
+		var staticValidators []signature.PublicKey
+		for _, v := range req.Validators {
+			tmPk := v.GetPubKey()
+
+			if t := tmPk.GetType(); t != types.PubKeyEd25519 {
+				app.logger.Error("invalid static validator public key type",
+					"public_key", hex.EncodeToString(tmPk.GetData()),
+					"type", t,
+				)
+				return fmt.Errorf("scheduler: invalid static validator public key type: '%v'", t)
+			}
+
+			var id signature.PublicKey
+			if err = id.UnmarshalBinary(tmPk.GetData()); err != nil {
+				app.logger.Error("invalid static validator public key",
+					"err", err,
+					"public_key", hex.EncodeToString(tmPk.GetData()),
+				)
+				return fmt.Errorf("scheduler: invalid static validator public key: %w", err)
+			}
+
+			staticValidators = append(staticValidators, id)
+		}
+
+		// Add the current validator set to ABCI, so that we can query it later.
+		state.PutCurrentValidators(staticValidators)
+
 		return nil
 	}
 
@@ -72,7 +100,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 				"public_key", hex.EncodeToString(tmPk.GetData()),
 				"type", t,
 			)
-			return fmt.Errorf("scheduler: invalid genesus validator public key type: '%v'", t)
+			return fmt.Errorf("scheduler: invalid genesis validator public key type: '%v'", t)
 		}
 
 		var id signature.PublicKey
