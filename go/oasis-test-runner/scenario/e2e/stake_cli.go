@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
+	"github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 const (
@@ -77,6 +78,9 @@ func (s *stakeCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// We will mock epochs for reclaiming the escrow.
 	f.Network.EpochtimeMock = true
+
+	// Enable some features in the staking system that we'll test.
+	f.Network.StakingGenesis = "tests/fixture-data/stake-cli/staking-genesis.json"
 
 	return f, nil
 }
@@ -141,6 +145,11 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 	// ReclaimEscrow
 	if err = s.testReclaimEscrow(childEnv, src, escrow); err != nil {
 		return fmt.Errorf("scenario/e2e/stake: error while running ReclaimEscrow test: %w", err)
+	}
+
+	// AmendCommissionSchedule
+	if err = s.testAmendCommissionSchedule(childEnv, src); err != nil {
+		return fmt.Errorf("scenario/e2e/stake: error while running AmendCommissionSchedule: %w", err)
 	}
 
 	// Stop the network.
@@ -266,6 +275,42 @@ func (s *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, src signature.Public
 	if len(accounts) < 3 {
 		return fmt.Errorf("scenario/e2e/stake: post-reclaim-escrow stake list wrong number of accounts: %d, expected: %d", len(accounts), 3)
 	}
+
+	return nil
+}
+
+func mustInitQuantity(i int64) (q quantity.Quantity) {
+	if err := q.FromInt64(i); err != nil {
+		panic(fmt.Sprintf("FromInt64: %+v", err))
+	}
+	return
+}
+
+func (s *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, src signature.PublicKey) error {
+	amendCommissionScheduleTxPath := filepath.Join(childEnv.Dir(), "amend_commission_schedule.json")
+	if err := s.genAmendCommissionScheduleTx(childEnv, 4, &api.CommissionSchedule{
+		Rates: []api.CommissionRateStep{
+			{
+				Start: 40,
+				Rate:  mustInitQuantity(50_000),
+			},
+		},
+		Bounds: []api.CommissionRateBoundStep{
+			{
+				Start:   40,
+				RateMin: mustInitQuantity(0),
+				RateMax: mustInitQuantity(100_000),
+			},
+		},
+	}, amendCommissionScheduleTxPath); err != nil {
+		return err
+	}
+
+	if err := s.submitTx(childEnv, src, amendCommissionScheduleTxPath); err != nil {
+		return err
+	}
+
+	// todo: check that it was applied
 
 	return nil
 }
@@ -448,6 +493,31 @@ func (s *stakeCLIImpl) genReclaimEscrowTx(childEnv *env.Env, amount int, nonce i
 	}
 	if err := runSubCommand(childEnv, "gen_reclaim_escrow", s.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genReclaimEscrowTx: failed to generate reclaim escrow tx: %w", err)
+	}
+	return nil
+}
+
+func (s *stakeCLIImpl) genAmendCommissionScheduleTx(childEnv *env.Env, nonce int, cs *api.CommissionSchedule, txPath string) error {
+	s.logger.Info("generating stake amend commission schedule tx", "commission_schedule", cs)
+
+	args := []string{
+		"stake", "account", "gen_amend_commission_schedule",
+		"--" + stake.CfgTxNonce, strconv.Itoa(nonce),
+		"--" + stake.CfgTxFile, txPath,
+		"--" + stake.CfgTxFeeAmount, strconv.Itoa(feeAmount),
+		"--" + stake.CfgTxFeeGas, strconv.Itoa(feeGas),
+		"--" + flags.CfgDebugTestEntity,
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
+	}
+	for _, step := range cs.Rates {
+		args = append(args, "--"+stake.CfgCommissionScheduleRates, fmt.Sprintf("%d/%d", step.Start, step.Rate.ToBigInt()))
+	}
+	for _, step := range cs.Bounds {
+		args = append(args, "--"+stake.CfgCommissionScheduleBounds, fmt.Sprintf("%d/%d/%d", step.Start, step.RateMin.ToBigInt(), step.RateMax.ToBigInt()))
+	}
+	if err := runSubCommand(childEnv, "gen_amend_commission_schedule", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("genAmendCommissionScheduleTx: failed to generate amend commission schedule tx: %w", err)
 	}
 	return nil
 }
