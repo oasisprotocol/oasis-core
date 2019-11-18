@@ -8,18 +8,13 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
-	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	genesisApi "github.com/oasislabs/oasis-core/go/genesis/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 )
 
-func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
+func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesisApi.Document) error {
 	st := doc.RootHash
-
-	// Store initial round timeout from the genesis document.
-	rhState := roothashState.NewMutableState(ctx.State())
-	rhState.SetConsensusParameters(&st.Parameters)
 
 	// The per-runtime roothash state is done primarily via DeliverTx, but
 	// also needs to be done here since the genesis state can have runtime
@@ -58,14 +53,8 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothash.Genesis, erro
 		blocks[rt.Runtime.ID] = &blk
 	}
 
-	params, err := rq.state.ConsensusParameters()
-	if err != nil {
-		return nil, err
-	}
-
 	genesis := &roothash.Genesis{
-		Parameters: *params,
-		Blocks:     blocks,
+		Blocks: blocks,
 	}
 	return genesis, nil
 }

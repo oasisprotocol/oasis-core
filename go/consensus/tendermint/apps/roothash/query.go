@@ -15,7 +15,6 @@ type Query interface {
 	LatestBlock(context.Context, signature.PublicKey) (*block.Block, error)
 	GenesisBlock(context.Context, signature.PublicKey) (*block.Block, error)
 	Genesis(context.Context) (*roothash.Genesis, error)
-	ConsensusParameters(context.Context) (*roothash.ConsensusParameters, error)
 }
 
 // QueryFactory is the roothash query factory.
@@ -64,10 +63,6 @@ func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id signature.Public
 	}
 
 	return runtime.GenesisBlock, nil
-}
-
-func (rq *rootHashQuerier) ConsensusParameters(ctx context.Context) (*roothash.ConsensusParameters, error) {
-	return rq.state.ConsensusParameters()
 }
 
 func (app *rootHashApplication) QueryFactory() interface{} {

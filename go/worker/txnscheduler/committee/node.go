@@ -23,7 +23,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	computeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/committee"
-	txnScheduler "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
+	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm"
+	txnSchedulerAlgorithmApi "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
 )
 
 var (
@@ -52,8 +53,8 @@ type Node struct {
 	commonNode  *committee.Node
 	computeNode *computeCommittee.Node
 
-	algorithm    txnScheduler.Algorithm
-	flushTimeout time.Duration
+	algorithmMutex sync.Mutex
+	algorithm      txnSchedulerAlgorithmApi.Algorithm
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -181,6 +182,14 @@ func (n *Node) transitionLocked(state NodeState) {
 // HandleEpochTransitionLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
+	n.algorithmMutex.Lock()
+	if n.algorithm == nil || !n.algorithm.IsInitialized() {
+		n.logger.Error("scheduling algorithm not available yet")
+		n.algorithmMutex.Unlock()
+		return
+	}
+	n.algorithmMutex.Unlock()
+
 	if epoch.IsTransactionSchedulerLeader() {
 		if err := n.algorithm.EpochTransition(epoch); err != nil {
 			n.logger.Error("scheduling algorithm failed to process epoch transition",
@@ -360,8 +369,32 @@ func (n *Node) worker() {
 
 	n.logger.Info("starting committee node")
 
+	// Initialize transaction scheduler's algorithm.
+	runtime := n.commonNode.Runtime
+	txnAlgorithm, err := txnSchedulerAlgorithm.New(
+		runtime.TxnScheduler.Algorithm,
+		runtime.TxnScheduler.MaxBatchSize,
+		runtime.TxnScheduler.MaxBatchSizeBytes,
+	)
+	if err != nil {
+		n.logger.Error("Failed to create new transaction scheduler algorithm",
+			"err", err,
+		)
+		return
+	}
+	if err := txnAlgorithm.Initialize(n); err != nil {
+		n.logger.Error("Failed initializing transaction scheduler algorithm",
+			"err", err,
+		)
+		return
+	}
+
+	n.algorithmMutex.Lock()
+	n.algorithm = txnAlgorithm
+	n.algorithmMutex.Unlock()
+
 	// Check incoming queue every FlushTimeout.
-	scheduleTicker := time.NewTicker(n.flushTimeout)
+	scheduleTicker := time.NewTicker(n.commonNode.Runtime.TxnScheduler.BatchFlushTimeout)
 	defer scheduleTicker.Stop()
 
 	// We are initialized.
@@ -382,8 +415,6 @@ func (n *Node) worker() {
 func NewNode(
 	commonNode *committee.Node,
 	computeNode *computeCommittee.Node,
-	algorithm txnScheduler.Algorithm,
-	flushTimeout time.Duration,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -394,8 +425,6 @@ func NewNode(
 	n := &Node{
 		commonNode:       commonNode,
 		computeNode:      computeNode,
-		algorithm:        algorithm,
-		flushTimeout:     flushTimeout,
 		ctx:              ctx,
 		cancelCtx:        cancel,
 		stopCh:           make(chan struct{}),
@@ -404,13 +433,6 @@ func NewNode(
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
 		logger:           logging.GetLogger("worker/txnscheduler/committee").With("runtime_id", commonNode.RuntimeID),
-	}
-
-	if err := algorithm.Initialize(n); err != nil {
-		n.logger.Error("Failed initializing txnscheduler algorithm",
-			"err", err,
-		)
-		return nil, err
 	}
 
 	return n, nil

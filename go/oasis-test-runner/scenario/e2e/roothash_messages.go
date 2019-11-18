@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -80,14 +81,29 @@ func (sc *roothashMessagesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 			// Compute runtime.
 			oasis.RuntimeFixture{
-				ID:                     runtimeID,
-				Kind:                   registry.KindCompute,
-				Entity:                 0,
-				Keymanager:             0,
-				Binary:                 runtimeBinary,
-				ReplicaGroupSize:       1,
-				ReplicaGroupBackupSize: 0,
-				StorageGroupSize:       1,
+				ID:         runtimeID,
+				Kind:       registry.KindCompute,
+				Entity:     0,
+				Keymanager: 0,
+				Binary:     runtimeBinary,
+				Compute: registry.ComputeParameters{
+					GroupSize:       1,
+					GroupBackupSize: 0,
+					RoundTimeout:    10 * time.Second,
+				},
+				Merge: registry.MergeParameters{
+					GroupSize:       1,
+					GroupBackupSize: 0,
+					RoundTimeout:    10 * time.Second,
+				},
+				TxnScheduler: registry.TxnSchedulerParameters{
+					Algorithm:         registry.TxnSchedulerAlgorithmBatching,
+					GroupSize:         1,
+					MaxBatchSize:      1,
+					MaxBatchSizeBytes: 1000,
+					BatchFlushTimeout: 10 * time.Second,
+				},
+				Storage: registry.StorageParameters{GroupSize: 1},
 			},
 		},
 		Validators: []oasis.ValidatorFixture{

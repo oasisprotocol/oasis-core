@@ -18,14 +18,21 @@ func TestSerialization(t *testing.T) {
 	_ = publicKey.UnmarshalBinary(key)
 
 	c := Runtime{
-		ID:                       publicKey,
-		TEEHardware:              node.TEEHardwareIntelSGX,
-		ReplicaGroupSize:         63,
-		ReplicaGroupBackupSize:   72,
-		ReplicaAllowedStragglers: 81,
-		StorageGroupSize:         90,
-		KeyManager:               publicKey,
-		Kind:                     KindCompute,
+		ID:          publicKey,
+		TEEHardware: node.TEEHardwareIntelSGX,
+		Compute: ComputeParameters{
+			GroupSize:         63,
+			GroupBackupSize:   72,
+			AllowedStragglers: 81,
+		},
+		Merge: MergeParameters{
+			GroupSize:         63,
+			GroupBackupSize:   72,
+			AllowedStragglers: 81,
+		},
+		Storage:    StorageParameters{GroupSize: 90},
+		KeyManager: publicKey,
+		Kind:       KindCompute,
 		Version: VersionInfo{
 			TEE:     []byte{},
 			Version: version.Version{Major: 1, Minor: 2, Patch: 3},

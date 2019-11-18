@@ -113,7 +113,7 @@ func (k CommitteeKind) String() string {
 	case KindStorage:
 		return "storage"
 	case KindTransactionScheduler:
-		return "transaction"
+		return "txn_scheduler"
 	case KindMerge:
 		return "merge"
 	default:

@@ -12,7 +12,7 @@ import (
 
 const (
 	// CfgWorkerEnabled enables the tx scheduler worker.
-	CfgWorkerEnabled = "worker.txnscheduler.enabled"
+	CfgWorkerEnabled = "worker.txn_scheduler.enabled"
 )
 
 // Flags has the configuration flags.
@@ -38,24 +38,8 @@ func New(
 		})
 	}
 
-	// Fetch config from scheduler backend.
-	// XXX: this should query roothash ConsensusParameters and also support
-	// updating per epoch once issue #2334 is done.
-	genesis := commonWorker.GenesisDoc.RootHash.Parameters.TransactionScheduler
-
-	txAlgorithm, err := txnSchedulerAlgorithm.New(
-		genesis.Algorithm,
-		genesis.MaxBatchSize,
-		genesis.MaxBatchSizeBytes,
-	)
-	if err != nil {
-		return nil, err
-	}
-
 	cfg := Config{
-		Algorithm:    txAlgorithm,
-		FlushTimeout: genesis.BatchFlushTimeout,
-		Runtimes:     runtimes,
+		Runtimes: runtimes,
 	}
 
 	return newWorker(Enabled(), commonWorker, compute, registration, cfg)

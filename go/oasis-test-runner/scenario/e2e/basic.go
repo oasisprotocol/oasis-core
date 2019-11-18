@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -94,14 +95,29 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 			// Compute runtime.
 			oasis.RuntimeFixture{
-				ID:                     runtimeID,
-				Kind:                   registry.KindCompute,
-				Entity:                 0,
-				Keymanager:             0,
-				Binary:                 runtimeBinary,
-				ReplicaGroupSize:       2,
-				ReplicaGroupBackupSize: 1,
-				StorageGroupSize:       2,
+				ID:         runtimeID,
+				Kind:       registry.KindCompute,
+				Entity:     0,
+				Keymanager: 0,
+				Binary:     runtimeBinary,
+				Compute: registry.ComputeParameters{
+					GroupSize:       2,
+					GroupBackupSize: 1,
+					RoundTimeout:    10 * time.Second,
+				},
+				Merge: registry.MergeParameters{
+					GroupSize:       2,
+					GroupBackupSize: 1,
+					RoundTimeout:    10 * time.Second,
+				},
+				TxnScheduler: registry.TxnSchedulerParameters{
+					Algorithm:         registry.TxnSchedulerAlgorithmBatching,
+					GroupSize:         1,
+					MaxBatchSize:      1,
+					MaxBatchSizeBytes: 1000,
+					BatchFlushTimeout: 10 * time.Second,
+				},
+				Storage: registry.StorageParameters{GroupSize: 2},
 			},
 		},
 		Validators: []oasis.ValidatorFixture{

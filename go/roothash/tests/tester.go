@@ -711,15 +711,15 @@ func mustGetCommittee(
 			var groupSize, groupBackupSize int
 			switch committee.Kind {
 			case scheduler.KindTransactionScheduler:
-				groupSize = int(rt.Runtime.ReplicaGroupSize)
+				groupSize = int(rt.Runtime.TxnScheduler.GroupSize)
 				groupBackupSize = 0
 			case scheduler.KindCompute:
 				fallthrough
 			case scheduler.KindMerge:
-				groupSize = int(rt.Runtime.ReplicaGroupSize)
-				groupBackupSize = int(rt.Runtime.ReplicaGroupBackupSize)
+				groupSize = int(rt.Runtime.Merge.GroupSize)
+				groupBackupSize = int(rt.Runtime.Merge.GroupBackupSize)
 			case scheduler.KindStorage:
-				groupSize = int(rt.Runtime.StorageGroupSize)
+				groupSize = int(rt.Runtime.Storage.GroupSize)
 			}
 
 			if committee.Kind.NeedsLeader() {

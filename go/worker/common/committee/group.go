@@ -68,9 +68,6 @@ type epoch struct {
 	storageCommittee *CommitteeInfo
 
 	runtime *registry.Runtime
-
-	// roothashParams are the roothash consensus parameters for the epoch.
-	roothashParams *roothash.ConsensusParameters
 }
 
 // EpochSnapshot is an immutable snapshot of epoch state.
@@ -84,8 +81,6 @@ type EpochSnapshot struct {
 	mergeRole        scheduler.Role
 
 	runtime *registry.Runtime
-
-	roothashParams *roothash.ConsensusParameters
 
 	computeCommittees     map[hash.Hash]*CommitteeInfo
 	txnSchedulerCommittee *CommitteeInfo
@@ -115,11 +110,6 @@ func (e *EpochSnapshot) GetGroupVersion() int64 {
 // GetRuntime returns the current runtime descriptor.
 func (e *EpochSnapshot) GetRuntime() *registry.Runtime {
 	return e.runtime
-}
-
-// GetRoothashParams returns the current roothash consensus parameters.
-func (e *EpochSnapshot) GetRoothashParams() *roothash.ConsensusParameters {
-	return e.roothashParams
 }
 
 // GetComputeCommittees returns the current compute committees.
@@ -362,11 +352,6 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		return err
 	}
 
-	roothashParams, err := g.roothash.ConsensusParameters(ctx, height)
-	if err != nil {
-		return fmt.Errorf("failed to get roothash consensus parameters for epoch: %w", err)
-	}
-
 	// Create round context.
 	roundCtx, cancel := context.WithCancel(ctx)
 
@@ -384,7 +369,6 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		mergeCommittee,
 		storageCommittee,
 		runtime,
-		roothashParams,
 	}
 
 	// Compute committee may be nil in case we are not a member of any committee.
@@ -396,7 +380,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	g.logger.Info("epoch transition complete",
 		"group_version", height,
 		"compute_role", computeRole,
-		"transaction_scheduler_role", txnSchedulerCommittee.Role,
+		"txn_scheduler_role", txnSchedulerCommittee.Role,
 		"merge_role", mergeCommittee.Role,
 	)
 
@@ -418,7 +402,6 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 		txnSchedulerRole:      g.activeEpoch.txnSchedulerCommittee.Role,
 		mergeRole:             g.activeEpoch.mergeCommittee.Role,
 		runtime:               g.activeEpoch.runtime,
-		roothashParams:        g.activeEpoch.roothashParams,
 		computeCommittees:     g.activeEpoch.computeCommittees,
 		txnSchedulerCommittee: g.activeEpoch.txnSchedulerCommittee,
 		mergeCommittee:        g.activeEpoch.mergeCommittee,
