@@ -18,8 +18,6 @@ import (
 const (
 	// CfgServerPort configures the server port.
 	CfgServerPort = "grpc.port"
-	// CfgDebugPort configures the internal debug port.
-	CfgDebugPort = "grpc.debug.port"
 	// CfgDebugPort configures the remote address.
 	CfgAddress = "address"
 
@@ -63,11 +61,8 @@ func NewServerLocal(installWrapper bool) (*cmnGrpc.Server, error) {
 	}
 	path := filepath.Join(dataDir, localSocketFilename)
 
-	debugPort := uint16(viper.GetInt(CfgDebugPort))
-
 	config := &cmnGrpc.ServerConfig{
 		Name:           "internal",
-		Port:           debugPort,
 		Path:           path,
 		InstallWrapper: installWrapper,
 	}
@@ -92,8 +87,6 @@ func init() {
 	_ = viper.BindPFlags(ServerTCPFlags)
 	ServerTCPFlags.AddFlagSet(cmnGrpc.Flags)
 
-	ServerLocalFlags.Uint16(CfgDebugPort, 0, "gRPC server debug port (INSECURE/UNSAFE)")
-	_ = viper.BindPFlags(ServerLocalFlags)
 	ServerLocalFlags.AddFlagSet(cmnGrpc.Flags)
 
 	ClientFlags.StringP(CfgAddress, "a", defaultAddress, "remote gRPC address")

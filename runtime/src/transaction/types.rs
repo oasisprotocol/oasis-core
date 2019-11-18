@@ -66,6 +66,12 @@ mod batch_serialize {
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TxnBatch(#[serde(with = "batch_serialize")] pub Vec<Vec<u8>>);
 
+impl TxnBatch {
+    pub fn new(txs: Vec<Vec<u8>>) -> TxnBatch {
+        TxnBatch(txs)
+    }
+}
+
 impl Deref for TxnBatch {
     type Target = Vec<Vec<u8>>;
 

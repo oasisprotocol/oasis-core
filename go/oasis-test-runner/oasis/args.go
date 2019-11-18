@@ -39,13 +39,6 @@ func (args *argBuilder) debugAllowTestKeys() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) grpcDebugPort(port uint16) *argBuilder {
-	args.vec = append(args.vec, []string{
-		"--" + grpc.CfgDebugPort, strconv.Itoa(int(port)),
-	}...)
-	return args
-}
-
 func (args *argBuilder) grpcServerPort(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + grpc.CfgServerPort, strconv.Itoa(int(port)),

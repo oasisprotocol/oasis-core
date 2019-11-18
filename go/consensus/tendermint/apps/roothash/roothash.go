@@ -251,9 +251,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 				"runtime", rtID,
 				"committee_id", committeeID,
 			)
-			if _, ok := newDescriptors[rtID]; ok {
-				delete(newDescriptors, rtID)
-			}
+			delete(newDescriptors, rtID)
 			continue
 		}
 
