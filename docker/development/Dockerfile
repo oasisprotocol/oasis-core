@@ -52,11 +52,7 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     rm go${GO_VERSION}.linux-amd64.tar.gz && \
     mkdir -p /go/bin && \
     # Install a specific version of protoc-gen-go.
-    go get -d github.com/golang/protobuf/protoc-gen-go && \
-    cd /go/src/github.com/golang/protobuf && \
-    git checkout v${GO_PROTOC_GEN_GO_VERSION} && \
-    cd protoc-gen-go && \
-    go install && \
+    GO111MODULE=on go get github.com/golang/protobuf/protoc-gen-go@v${GO_PROTOC_GEN_GO_VERSION} && \
     # Install golangci-lint.
     curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v${GOLANGCILINT_VERSION} && \
     mv /tmp/bin/golangci-lint /go/bin
