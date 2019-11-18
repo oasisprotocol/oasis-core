@@ -26,7 +26,6 @@ type Validator struct {
 
 	tmAddress     string
 	consensusPort uint16
-	grpcDebugPort uint16
 }
 
 // ValidatorCfg is the Oasis validator provisioning configuration.
@@ -75,7 +74,6 @@ func (val *Validator) startNode() error {
 		consensusValidator().
 		tendermintCoreListenAddress(val.consensusPort).
 		tendermintMinGasPrice(val.minGasPrice).
-		grpcDebugPort(val.grpcDebugPort).
 		storageBackend("client").
 		appendNetwork(val.net).
 		appendEntity(val.entity)
@@ -117,7 +115,6 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		minGasPrice:   cfg.MinGasPrice,
 		sentries:      cfg.Sentries,
 		consensusPort: net.nextNodePort,
-		grpcDebugPort: net.nextNodePort + 1,
 	}
 	val.doStartNode = val.startNode
 
@@ -181,7 +178,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	val.tmAddress = crypto.PublicKeyToTendermint(&valPublicKey).Address().String()
 
 	net.validators = append(net.validators, val)
-	net.nextNodePort += 2
+	net.nextNodePort++
 
 	// Use the first validator as a controller.
 	if len(net.validators) == 1 {
