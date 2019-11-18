@@ -232,7 +232,7 @@ impl Dispatcher {
         }
 
         // Process batch.
-        let outputs = TxnBatch(
+        let outputs = TxnBatch::new(
             batch
                 .iter()
                 .map(|call| {
