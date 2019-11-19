@@ -80,22 +80,26 @@ var (
 //
 // These are the artifacts that are stored CBOR-serialized in the Merkle tree.
 type inputArtifacts struct {
+	_ struct{} `cbor:",toarray"` //nolint
+
 	// Input is the transaction input.
-	Input []byte `json:"input,omitempty"`
+	Input []byte
 	// BatchOrder is the transaction order within the batch.
 	//
 	// This is only relevant within the committee that is processing the batch
 	// and should be ignored once transactions from multiple committees are
 	// merged together.
-	BatchOrder uint32 `json:"batch_order"`
+	BatchOrder uint32
 }
 
 // outputArtifacts are the output transaction artifacts.
 //
 // These are the artifacts that are stored CBOR-serialized in the Merkle tree.
 type outputArtifacts struct {
+	_ struct{} `cbor:",toarray"` //nolint
+
 	// Output is the transaction output (if available).
-	Output []byte `json:"output,omitempty"`
+	Output []byte
 }
 
 // Transaction is an executed (or executing) transaction.
