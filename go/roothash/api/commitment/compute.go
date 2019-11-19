@@ -53,16 +53,6 @@ func (h *ComputeResultsHeader) EncodedHash() hash.Hash {
 	return hh
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (h *ComputeResultsHeader) MarshalCBOR() []byte {
-	return cbor.Marshal(h)
-}
-
-// UnmarshalCBOR decodes a CBOR marshaled compute results header.
-func (h *ComputeResultsHeader) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, h)
-}
-
 // ComputeBody holds the data signed in a compute worker commitment.
 type ComputeBody struct {
 	CommitteeID       hash.Hash              `json:"cid"`
@@ -86,7 +76,7 @@ func (m *ComputeBody) VerifyTxnSchedSignature(header block.Header) bool {
 		Header:            header,
 	}
 
-	return m.TxnSchedSig.Verify(TxnSchedulerBatchDispatchSigCtx, dispatch.MarshalCBOR())
+	return m.TxnSchedSig.Verify(TxnSchedulerBatchDispatchSigCtx, cbor.Marshal(dispatch))
 }
 
 // RootsForStorageReceipt gets the merkle roots that must be part of
@@ -111,7 +101,7 @@ func (m *ComputeBody) VerifyStorageReceiptSignatures(ns common.Namespace, round 
 		Roots:     m.RootsForStorageReceipt(),
 	}
 
-	if !signature.VerifyManyToOne(storage.ReceiptSignatureContext, receiptBody.MarshalCBOR(), m.StorageSignatures) {
+	if !signature.VerifyManyToOne(storage.ReceiptSignatureContext, cbor.Marshal(receiptBody), m.StorageSignatures) {
 		return signature.ErrVerifyFailed
 	}
 
@@ -141,16 +131,6 @@ func (m *ComputeBody) VerifyStorageReceipt(ns common.Namespace, round uint64, re
 	}
 
 	return nil
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (m *ComputeBody) MarshalCBOR() []byte {
-	return cbor.Marshal(m)
-}
-
-// UnmarshalCBOR decodes a CBOR marshaled message.
-func (m *ComputeBody) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, m)
 }
 
 // ComputeCommitment is a roothash commitment from a compute worker.

@@ -298,7 +298,7 @@ func (app *registryApplication) registerNode(
 ) error {
 	// Peek into the to-be-verified node to pull out the owning entity ID.
 	var untrustedNode node.Node
-	if err := untrustedNode.UnmarshalCBOR(sigNode.Blob); err != nil {
+	if err := cbor.Unmarshal(sigNode.Blob, &untrustedNode); err != nil {
 		app.logger.Error("RegisterNode: failed to extract entity",
 			"err", err,
 			"signed_node", sigNode,

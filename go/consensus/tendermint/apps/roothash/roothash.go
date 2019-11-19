@@ -47,14 +47,6 @@ type timerContext struct {
 	Round uint64              `json:"round"`
 }
 
-func (ctx *timerContext) MarshalCBOR() []byte {
-	return cbor.Marshal(ctx)
-}
-
-func (ctx *timerContext) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, ctx)
-}
-
 type rootHashApplication struct {
 	logger *logging.Logger
 	state  *abci.ApplicationState
@@ -309,7 +301,7 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *rooth
 		ID:    runtime.Runtime.ID,
 		Round: blk.Header.Round,
 	}
-	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, tagV.MarshalCBOR()))
+	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, cbor.Marshal(tagV)))
 }
 
 func (app *rootHashApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error {
@@ -401,7 +393,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 		Runtime:      runtime,
 		CurrentBlock: genesisBlock,
 		GenesisBlock: genesisBlock,
-		Timer:        *abci.NewTimer(ctx, app, timerKindRound, runtime.ID[:], timerCtx.MarshalCBOR()),
+		Timer:        *abci.NewTimer(ctx, app, timerKindRound, runtime.ID[:], cbor.Marshal(timerCtx)),
 	})
 
 	app.logger.Debug("onNewRuntime: created genesis state for runtime",
@@ -413,7 +405,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 		ID:    runtime.ID,
 		Round: genesisBlock.Header.Round,
 	}
-	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, tagV.MarshalCBOR()))
+	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, cbor.Marshal(tagV)))
 }
 
 func (app *rootHashApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
@@ -426,7 +418,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	}
 
 	var tCtx timerContext
-	if err := tCtx.UnmarshalCBOR(timer.Data(ctx)); err != nil {
+	if err := cbor.Unmarshal(timer.Data(ctx), &tCtx); err != nil {
 		return err
 	}
 
@@ -632,7 +624,7 @@ func (app *rootHashApplication) updateTimer(
 			ID:    runtime.ID,
 			Round: blockNr,
 		}
-		rtState.Timer.Reset(ctx, nextTimeout.Sub(ctx.Now()), timerCtx.MarshalCBOR())
+		rtState.Timer.Reset(ctx, nextTimeout.Sub(ctx.Now()), cbor.Marshal(timerCtx))
 	}
 }
 
@@ -694,7 +686,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 				Timeout:     forced,
 			},
 		}
-		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyComputeDiscrepancyDetected, tagV.MarshalCBOR()))
+		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyComputeDiscrepancyDetected, cbor.Marshal(tagV)))
 		return
 	default:
 	}
@@ -766,7 +758,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 			ID:    runtime.ID,
 			Event: roothash.MergeDiscrepancyDetectedEvent{},
 		}
-		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyMergeDiscrepancyDetected, tagV.MarshalCBOR()))
+		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyMergeDiscrepancyDetected, cbor.Marshal(tagV)))
 		return nil
 	default:
 	}
@@ -818,7 +810,7 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, rtS
 		ID:    rtState.Runtime.ID,
 		Round: blk.Header.Round,
 	}
-	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, tagV.MarshalCBOR()))
+	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, cbor.Marshal(tagV)))
 
 	return nil
 }

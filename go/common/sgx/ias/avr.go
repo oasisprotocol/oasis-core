@@ -13,7 +13,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 )
 
@@ -72,9 +71,6 @@ var (
 	// test signing key that is used by default if no other signing key is
 	// specified.
 	FortanixTestMrSigner sgx.MrSigner
-
-	_ cbor.Marshaler   = (*AVRBundle)(nil)
-	_ cbor.Unmarshaler = (*AVRBundle)(nil)
 )
 
 // ISVEnclaveQuoteStatus is the status of an enclave quote.
@@ -189,16 +185,6 @@ type AVRBundle struct {
 	Body             []byte `json:"body"`
 	CertificateChain []byte `json:"certificate_chain"`
 	Signature        []byte `json:"signature"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (b *AVRBundle) MarshalCBOR() []byte {
-	return cbor.Marshal(b)
-}
-
-// UnmarshalCBOR deserializes a CBOR Byte vector into a given type.
-func (b *AVRBundle) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, b)
 }
 
 // Open decodes and validates the AVR contained in the bundle, and returns

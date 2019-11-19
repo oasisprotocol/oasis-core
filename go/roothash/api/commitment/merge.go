@@ -4,7 +4,6 @@ package commitment
 import (
 	"errors"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
@@ -17,16 +16,6 @@ var MergeSignatureContext = signature.NewContext("oasis-core/roothash: merge com
 type MergeBody struct {
 	ComputeCommits []ComputeCommitment `json:"commits"`
 	Header         block.Header        `json:"header"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (m *MergeBody) MarshalCBOR() []byte {
-	return cbor.Marshal(m)
-}
-
-// UnmarshalCBOR decodes a CBOR marshaled message.
-func (m *MergeBody) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, m)
 }
 
 // MergeCommitment is a roothash commitment from a merge worker.

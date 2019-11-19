@@ -173,7 +173,7 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 		InputStorageSigs:  cbc.bd.StorageSignatures,
 	}
 	if rak != nil {
-		rakSig, err := signature.Sign(rak, commitment.ComputeResultsHeaderSignatureContext, header.MarshalCBOR())
+		rakSig, err := signature.Sign(rak, commitment.ComputeResultsHeaderSignatureContext, cbor.Marshal(header))
 		if err != nil {
 			return errors.Wrapf(err, "signature Sign RAK")
 		}

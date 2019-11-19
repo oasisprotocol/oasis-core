@@ -9,7 +9,6 @@ import (
 	"time"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/genesis"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
@@ -17,11 +16,6 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
-)
-
-var (
-	_ cbor.Marshaler   = (*Document)(nil)
-	_ cbor.Unmarshaler = (*Document)(nil)
 )
 
 const filePerm = 0600
@@ -56,16 +50,6 @@ type Document struct {
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by the protocol.
 	ExtraData map[string][]byte `json:"extra_data"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (d *Document) MarshalCBOR() []byte {
-	return cbor.Marshal(d)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (d *Document) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, d)
 }
 
 // WriteFileJSON writes the genesis document into a JSON file.

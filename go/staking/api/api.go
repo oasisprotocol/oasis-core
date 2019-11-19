@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
@@ -55,13 +54,6 @@ var (
 	// ErrInsufficientStake is the error returned when an operation fails
 	// due to insufficient stake.
 	ErrInsufficientStake = errors.New("staking: insufficient stake")
-
-	_ cbor.Marshaler   = (*Transfer)(nil)
-	_ cbor.Unmarshaler = (*Transfer)(nil)
-	_ cbor.Marshaler   = (*Burn)(nil)
-	_ cbor.Unmarshaler = (*Burn)(nil)
-	_ cbor.Marshaler   = (*Escrow)(nil)
-	_ cbor.Unmarshaler = (*Escrow)(nil)
 )
 
 // Backend is a staking token implementation.
@@ -175,32 +167,12 @@ type Transfer struct {
 	Tokens quantity.Quantity   `json:"xfer_tokens"`
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (x *Transfer) MarshalCBOR() []byte {
-	return cbor.Marshal(x)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (x *Transfer) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, x)
-}
-
 // Burn is a token burn (destruction).
 type Burn struct {
 	Nonce uint64  `json:"nonce"`
 	Fee   gas.Fee `json:"fee"`
 
 	Tokens quantity.Quantity `json:"burn_tokens"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (b *Burn) MarshalCBOR() []byte {
-	return cbor.Marshal(b)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (b *Burn) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, b)
 }
 
 // Escrow is a token escrow.
@@ -212,16 +184,6 @@ type Escrow struct {
 	Tokens  quantity.Quantity   `json:"escrow_tokens"`
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (e *Escrow) MarshalCBOR() []byte {
-	return cbor.Marshal(e)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (e *Escrow) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, e)
-}
-
 // ReclaimEscrow is a token escrow reclimation.
 type ReclaimEscrow struct {
 	Nonce uint64  `json:"nonce"`
@@ -229,16 +191,6 @@ type ReclaimEscrow struct {
 
 	Account signature.PublicKey `json:"escrow_account"`
 	Shares  quantity.Quantity   `json:"reclaim_shares"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (r *ReclaimEscrow) MarshalCBOR() []byte {
-	return cbor.Marshal(r)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (r *ReclaimEscrow) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, r)
 }
 
 // SignedTransfer is a Transfer, signed by the owner (source) entity.

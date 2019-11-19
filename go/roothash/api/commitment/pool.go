@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -147,7 +148,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 	// Verify RAK-attestation.
 	if p.Runtime.TEEHardware != node.TEEHardwareInvalid {
 		rak := p.NodeInfo[id].Runtime.Capabilities.TEE.RAK
-		if !rak.Verify(ComputeResultsHeaderSignatureContext, header.MarshalCBOR(), body.RakSig[:]) {
+		if !rak.Verify(ComputeResultsHeaderSignatureContext, cbor.Marshal(header), body.RakSig[:]) {
 			return ErrRakSigInvalid
 		}
 	}
@@ -636,7 +637,7 @@ func (m *MultiPool) addComputeCommitments(blk *block.Block, sv SignatureVerifier
 	var hadError bool
 	for _, v := range commitments {
 		var body ComputeBody
-		if err := body.UnmarshalCBOR(v.Blob); err != nil {
+		if err := cbor.Unmarshal(v.Blob, &body); err != nil {
 			hadError = true
 			continue
 		}

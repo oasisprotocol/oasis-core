@@ -30,9 +30,6 @@ var (
 	ErrNilProtobuf = errors.New("node: Protobuf is nil")
 
 	teeHashContext = []byte("oasis-core/node: TEE RAK binding")
-
-	_ cbor.Marshaler   = (*Node)(nil)
-	_ cbor.Unmarshaler = (*Node)(nil)
 )
 
 // Node represents public connectivity information about an Oasis node.
@@ -456,7 +453,7 @@ func (c *CapabilityTEE) Verify(ts time.Time) error {
 	switch c.Hardware {
 	case TEEHardwareIntelSGX:
 		var avrBundle ias.AVRBundle
-		if err := avrBundle.UnmarshalCBOR(c.Attestation); err != nil {
+		if err := cbor.Unmarshal(c.Attestation, &avrBundle); err != nil {
 			return err
 		}
 
@@ -560,21 +557,6 @@ func (n *Node) ToProto() *pbCommon.Node {
 	pb.Roles = uint32(n.Roles)
 
 	return pb
-}
-
-// ToSignable serialized the Node into a signature compatible byte vector.
-func (n *Node) ToSignable() []byte {
-	return n.MarshalCBOR()
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (n *Node) MarshalCBOR() []byte {
-	return cbor.Marshal(n)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (n *Node) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, n)
 }
 
 // SignedNode is a signed blob containing a CBOR-serialized Node.

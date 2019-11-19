@@ -325,10 +325,10 @@ func (s *writeLogService) SendWriteLogIterator() error {
 
 func (s *GrpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffServer) error {
 	var startRoot, endRoot api.Root
-	if err := startRoot.UnmarshalCBOR(req.GetStartRoot()); err != nil {
+	if err := cbor.Unmarshal(req.GetStartRoot(), &startRoot); err != nil {
 		return errors.Wrap(err, "storage: failed to unmarshal start root")
 	}
-	if err := endRoot.UnmarshalCBOR(req.GetEndRoot()); err != nil {
+	if err := cbor.Unmarshal(req.GetEndRoot(), &endRoot); err != nil {
 		return errors.Wrap(err, "storage: failed to unmarshal end root")
 	}
 
@@ -356,7 +356,7 @@ func (s *GrpcServer) GetDiff(req *pb.GetDiffRequest, stream pb.Storage_GetDiffSe
 
 func (s *GrpcServer) GetCheckpoint(req *pb.GetCheckpointRequest, stream pb.Storage_GetCheckpointServer) error {
 	var root api.Root
-	if err := root.UnmarshalCBOR(req.GetRoot()); err != nil {
+	if err := cbor.Unmarshal(req.GetRoot(), &root); err != nil {
 		return errors.Wrap(err, "storage: failed to unmarshal root")
 	}
 

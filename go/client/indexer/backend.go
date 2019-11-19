@@ -4,16 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
-)
-
-var (
-	_ cbor.Marshaler   = (*Query)(nil)
-	_ cbor.Unmarshaler = (*Query)(nil)
 )
 
 const (
@@ -50,16 +44,6 @@ type Query struct {
 	//
 	// A zero value means that the `maxQueryLimit` limit is used.
 	Limit uint64 `json:"limit"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (q *Query) MarshalCBOR() []byte {
-	return cbor.Marshal(q)
-}
-
-// UnmarshalCBOR decodes a CBOR marshaled query.
-func (q *Query) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, q)
 }
 
 // Result is a query result.

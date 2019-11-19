@@ -16,18 +16,6 @@ func FixSliceForSerde(b []byte) []byte {
 	return []byte{}
 }
 
-// Marshaler allows a type to be serialized into CBOR.
-type Marshaler interface {
-	// MarshalCBOR serializes the type into a CBOR byte vector.
-	MarshalCBOR() []byte
-}
-
-// Unmarshaler allows a type to be deserialized from CBOR.
-type Unmarshaler interface {
-	// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-	UnmarshalCBOR([]byte) error
-}
-
 // Marshal serializes a given type into a CBOR byte vector.
 func Marshal(src interface{}) []byte {
 	b, err := cbor.Marshal(src, cbor.EncOptions{

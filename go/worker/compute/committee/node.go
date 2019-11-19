@@ -11,6 +11,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -258,7 +259,7 @@ func (n *Node) queueBatchBlocking(
 		Roots:     []hash.Hash{ioRootHash},
 	}
 	receipt := storage.Receipt{}
-	receipt.Signed.Blob = receiptBody.MarshalCBOR()
+	receipt.Signed.Blob = cbor.Marshal(receiptBody)
 	for _, sig := range storageSignatures {
 		receipt.Signed.Signature = sig
 		var tmp storage.ReceiptBody

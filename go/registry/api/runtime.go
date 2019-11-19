@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -25,9 +24,6 @@ var (
 
 	// ErrNilProtobuf is the error returned when a protobuf is nil.
 	ErrNilProtobuf = errors.New("node: Protobuf is nil")
-
-	_ cbor.Marshaler   = (*Runtime)(nil)
-	_ cbor.Unmarshaler = (*Runtime)(nil)
 )
 
 // RuntimeKind represents the runtime funtionality.
@@ -251,21 +247,6 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 	pb.Kind = uint32(c.Kind)
 
 	return pb
-}
-
-// ToSignable serializes the Runtime into a signature compatible byte vector.
-func (c *Runtime) ToSignable() []byte {
-	return c.MarshalCBOR()
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (c *Runtime) MarshalCBOR() []byte {
-	return cbor.Marshal(c)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (c *Runtime) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, c)
 }
 
 // SignedRuntime is a signed blob containing a CBOR-serialized Runtime.

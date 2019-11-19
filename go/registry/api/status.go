@@ -1,7 +1,6 @@
 package api
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
@@ -40,16 +39,6 @@ func (ns *NodeStatus) Unfreeze() {
 type UnfreezeNode struct {
 	NodeID    signature.PublicKey `json:"node_id"`
 	Timestamp uint64              `json:"timestamp"`
-}
-
-// MarshalCBOR serializes the UnfreezeNode type into a CBOR byte vector.
-func (u *UnfreezeNode) MarshalCBOR() []byte {
-	return cbor.Marshal(u)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into a UnfreezeNode.
-func (u *UnfreezeNode) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, u)
 }
 
 // SignedUnfreezeNode is a signed UnfreezeNode.

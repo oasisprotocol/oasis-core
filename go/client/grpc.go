@@ -72,7 +72,7 @@ func (s *grpcServer) WatchBlocks(req *pbClient.WatchBlocksRequest, stream pbClie
 
 			blockHash := blk.Block.Header.EncodedHash()
 			pbBlk := &pbClient.WatchBlocksResponse{
-				Block:     blk.Block.MarshalCBOR(),
+				Block:     cbor.Marshal(blk.Block),
 				BlockHash: blockHash[:],
 			}
 			if err := stream.Send(pbBlk); err != nil {
@@ -99,7 +99,7 @@ func (s *grpcServer) GetBlock(ctx context.Context, req *pbClient.GetBlockRequest
 	}
 	blockHash := blk.Header.EncodedHash()
 	return &pbClient.GetBlockResponse{
-		Block:     blk.MarshalCBOR(),
+		Block:     cbor.Marshal(blk),
 		BlockHash: blockHash[:],
 	}, nil
 }
@@ -119,7 +119,7 @@ func (s *grpcServer) GetTxn(ctx context.Context, req *pbClient.GetTxnRequest) (*
 	}
 
 	return &pbClient.GetTxnResponse{
-		Result: tx.MarshalCBOR(),
+		Result: cbor.Marshal(tx),
 	}, nil
 }
 
@@ -143,7 +143,7 @@ func (s *grpcServer) GetTxnByBlockHash(ctx context.Context, req *pbClient.GetTxn
 	}
 
 	return &pbClient.GetTxnByBlockHashResponse{
-		Result: tx.MarshalCBOR(),
+		Result: cbor.Marshal(tx),
 	}, nil
 }
 
@@ -186,7 +186,7 @@ func (s *grpcServer) QueryBlock(ctx context.Context, req *pbClient.QueryBlockReq
 		return nil, err
 	}
 	return &pbClient.QueryBlockResponse{
-		Block: blk.MarshalCBOR(),
+		Block: cbor.Marshal(blk),
 	}, nil
 }
 
@@ -205,7 +205,7 @@ func (s *grpcServer) QueryTxn(ctx context.Context, req *pbClient.QueryTxnRequest
 	}
 
 	return &pbClient.QueryTxnResponse{
-		Result: tx.MarshalCBOR(),
+		Result: cbor.Marshal(tx),
 	}, nil
 }
 
@@ -216,7 +216,7 @@ func (s *grpcServer) QueryTxns(ctx context.Context, req *pbClient.QueryTxnsReque
 	}
 
 	var query Query
-	if err := query.UnmarshalCBOR(req.GetQuery()); err != nil {
+	if err := cbor.Unmarshal(req.GetQuery(), &query); err != nil {
 		return nil, err
 	}
 

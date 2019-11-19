@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -61,11 +60,6 @@ var (
 
 	// ReceiptSignatureContext is the signature context used for verifying MKVS receipts.
 	ReceiptSignatureContext = signature.NewContext("oasis-core/storage: receipt", signature.WithChainSeparation())
-
-	_ cbor.Marshaler   = (*ReceiptBody)(nil)
-	_ cbor.Unmarshaler = (*ReceiptBody)(nil)
-	_ cbor.Marshaler   = (*Receipt)(nil)
-	_ cbor.Unmarshaler = (*Receipt)(nil)
 )
 
 // Config is the storage backend configuration.
@@ -122,29 +116,9 @@ type Receipt struct {
 	signature.Signed
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (rb *ReceiptBody) MarshalCBOR() []byte {
-	return cbor.Marshal(rb)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
-func (rb *ReceiptBody) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, rb)
-}
-
 // Open first verifies the blob signature then unmarshals the blob.
 func (s *Receipt) Open(receipt *ReceiptBody) error {
 	return s.Signed.Open(ReceiptSignatureContext, receipt)
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (s *Receipt) MarshalCBOR() []byte {
-	return s.Signed.MarshalCBOR()
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
-func (s *Receipt) UnmarshalCBOR(data []byte) error {
-	return s.Signed.UnmarshalCBOR(data)
 }
 
 // SignReceipt signs a storage receipt for the given roots.

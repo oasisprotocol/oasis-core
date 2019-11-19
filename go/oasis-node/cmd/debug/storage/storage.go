@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	clientGrpc "github.com/oasislabs/oasis-core/go/grpc/client"
@@ -156,7 +157,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 	}
 
 	var latestBlock block.Block
-	if err = latestBlock.UnmarshalCBOR(res.Block); err != nil {
+	if err = cbor.Unmarshal(res.Block, &latestBlock); err != nil {
 		logger.Error("failed to parse block",
 			"err", err,
 			"runtime_id", id,
@@ -215,7 +216,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 		}
 
 		var blk block.Block
-		if err = blk.UnmarshalCBOR(res.Block); err != nil {
+		if err = cbor.Unmarshal(res.Block, &blk); err != nil {
 			logger.Error("failed to parse block",
 				"err", err,
 				"runtime_id", id,

@@ -4,14 +4,8 @@ import (
 	"math"
 
 	"github.com/oasislabs/oasis-core/go/client/indexer"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
-)
-
-var (
-	_ cbor.Marshaler   = (*TxnResult)(nil)
-	_ cbor.Unmarshaler = (*TxnResult)(nil)
 )
 
 const (
@@ -35,14 +29,4 @@ type TxnResult struct {
 	Index     uint32       `json:"index"`
 	Input     []byte       `json:"input"`
 	Output    []byte       `json:"output"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (r *TxnResult) MarshalCBOR() []byte {
-	return cbor.Marshal(r)
-}
-
-// UnmarshalCBOR decodes a CBOR marshaled query result.
-func (r *TxnResult) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, r)
 }

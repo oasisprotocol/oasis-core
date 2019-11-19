@@ -1,7 +1,6 @@
 package roothash
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -62,16 +61,6 @@ type ValueFinalized struct {
 	Round uint64              `json:"round"`
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (v *ValueFinalized) MarshalCBOR() []byte {
-	return cbor.Marshal(v)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
-func (v *ValueFinalized) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, v)
-}
-
 // ValueMergeDiscrepancyDetected is the value component of a
 // TagMergeDiscrepancyDetected.
 type ValueMergeDiscrepancyDetected struct {
@@ -79,29 +68,9 @@ type ValueMergeDiscrepancyDetected struct {
 	ID    signature.PublicKey                    `json:"id"`
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (v *ValueMergeDiscrepancyDetected) MarshalCBOR() []byte {
-	return cbor.Marshal(v)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
-func (v *ValueMergeDiscrepancyDetected) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, v)
-}
-
 // ValueComputeDiscrepancyDetected is the value component of a
 // TagMergeDiscrepancyDetected.
 type ValueComputeDiscrepancyDetected struct {
 	ID    signature.PublicKey                      `json:"id"`
 	Event roothash.ComputeDiscrepancyDetectedEvent `json:"event"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (v *ValueComputeDiscrepancyDetected) MarshalCBOR() []byte {
-	return cbor.Marshal(v)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into the given type.
-func (v *ValueComputeDiscrepancyDetected) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, v)
 }
