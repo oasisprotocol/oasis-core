@@ -137,10 +137,12 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 
 	worker := &Compute{
 		Node: Node{
-			Name:        computeName,
-			net:         net,
-			dir:         computeDir,
-			restartable: cfg.Restartable,
+			Name:                                     computeName,
+			net:                                      net,
+			dir:                                      computeDir,
+			restartable:                              cfg.Restartable,
+			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
+			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
 		entity:         cfg.Entity,
 		runtimeBackend: cfg.RuntimeBackend,
@@ -152,6 +154,14 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 
 	net.computeWorkers = append(net.computeWorkers, worker)
 	net.nextNodePort += 3
+
+	if err := net.AddLogWatcher(&worker.Node); err != nil {
+		net.logger.Error("failed to add log watcher",
+			"err", err,
+			"compute_name", computeName,
+		)
+		return nil, fmt.Errorf("oasis/compute: failed to add log watcher for %s: %w", computeName, err)
+	}
 
 	return worker, nil
 }

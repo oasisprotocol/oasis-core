@@ -46,7 +46,7 @@ const (
 )
 
 // Node defines the common fields for all node types.
-type Node struct {
+type Node struct { // nolint: maligned
 	Name string
 
 	net *Network
@@ -57,6 +57,9 @@ type Node struct {
 
 	restartable bool
 	doStartNode func() error
+
+	disableDefaultLogWatcherHandlerFactories bool
+	logWatcherHandlerFactories               []log.WatcherHandlerFactory
 }
 
 // Exit returns a channel that will close once the node shuts down.
@@ -98,6 +101,9 @@ func (n *Node) Restart() error {
 // NodeCfg defines the common node configuration options.
 type NodeCfg struct {
 	Restartable bool
+
+	DisableDefaultLogWatcherHandlerFactories bool
+	LogWatcherHandlerFactories               []log.WatcherHandlerFactory
 }
 
 // CmdAttrs is the SysProcAttr that will ensure graceful cleanup.
@@ -171,7 +177,7 @@ type NetworkCfg struct { // nolint: maligned
 
 	// A set of log watcher handler factories used by default on all nodes
 	// created in this test network.
-	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
+	DefaultLogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 }
 
 // Config returns the network configuration.
@@ -241,6 +247,42 @@ func (net *Network) NumRegisterNodes() int {
 		len(net.storageWorkers) +
 		len(net.computeWorkers) +
 		len(net.byzantine)
+}
+
+// AddLogWatcher adds a log watcher for the given node and creates log watcher
+// handlers from the networks's default and node's specific log watcher handler
+// factories.
+func (net *Network) AddLogWatcher(node *Node) error {
+	var logWatcherHandlers []log.WatcherHandler
+	// Add network's default log watcher handlers.
+	if !node.disableDefaultLogWatcherHandlerFactories {
+		for _, logWatcherHandlerFactory := range net.cfg.DefaultLogWatcherHandlerFactories {
+			logWatcherHandler, err := logWatcherHandlerFactory.New()
+			if err != nil {
+				return err
+			}
+			logWatcherHandlers = append(logWatcherHandlers, logWatcherHandler)
+		}
+	}
+	// Add node's specific log watcher handlers.
+	for _, logWatcherHandlerFactory := range node.logWatcherHandlerFactories {
+		logWatcherHandler, err := logWatcherHandlerFactory.New()
+		if err != nil {
+			return err
+		}
+		logWatcherHandlers = append(logWatcherHandlers, logWatcherHandler)
+	}
+	logFileWatcher, err := log.NewWatcher(&log.WatcherConfig{
+		Name:     fmt.Sprintf("%s/log", node.Name),
+		File:     nodeLogPath(node.dir),
+		Handlers: logWatcherHandlers,
+	})
+	if err != nil {
+		return err
+	}
+	net.env.AddOnCleanup(logFileWatcher.Cleanup)
+	net.logWatchers = append(net.logWatchers, logFileWatcher)
+	return nil
 }
 
 // CloseLogWatchers closes all log watchers and checks if any errors were reported
@@ -489,27 +531,6 @@ func (net *Network) startOasisNode(
 
 	if err = cmd.Start(); err != nil {
 		return nil, nil, errors.Wrap(err, "oasis: failed to start node")
-	}
-
-	if len(net.cfg.LogWatcherHandlerFactories) > 0 {
-		var logWatcherHandlers []log.WatcherHandler
-		for _, logWatcherHandlerFactory := range net.cfg.LogWatcherHandlerFactories {
-			logWatcherHandler, err := logWatcherHandlerFactory.New()
-			if err != nil {
-				return nil, nil, err
-			}
-			logWatcherHandlers = append(logWatcherHandlers, logWatcherHandler)
-		}
-		logFileWatcher, err := log.NewWatcher(&log.WatcherConfig{
-			Name:     fmt.Sprintf("%s/log", descr),
-			File:     nodeLogPath(dir),
-			Handlers: logWatcherHandlers,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		net.env.AddOnCleanup(logFileWatcher.Cleanup)
-		net.logWatchers = append(net.logWatchers, logFileWatcher)
 	}
 
 	doneCh := net.env.AddTermOnCleanup(cmd)

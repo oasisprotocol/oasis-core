@@ -90,9 +90,9 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// The byzantine scenario requires mock epochtime as the byzantine node
 	// doesn't know how to handle epochs in which it is not scheduled.
 	f.Network.EpochtimeMock = true
-	// Change the default log watcher handlers if configured.
+	// Change the default network log watcher handler factories if configured.
 	if sc.logWatcherHandlerFactories != nil {
-		f.Network.LogWatcherHandlerFactories = sc.logWatcherHandlerFactories
+		f.Network.DefaultLogWatcherHandlerFactories = sc.logWatcherHandlerFactories
 	}
 	// Provision a Byzantine node.
 	f.ByzantineNodes = []oasis.ByzantineFixture{

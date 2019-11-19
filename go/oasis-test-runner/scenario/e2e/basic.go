@@ -30,8 +30,8 @@ var (
 		clientBinary: "simple-keyvalue-enc-client",
 	}
 
-	// DefaultBasicLogWatcherHandlerFactories is a list of default basic log
-	// watcher handler factories.
+	// DefaultBasicLogWatcherHandlerFactories is a list of default log watcher
+	// handler factories for the basic scenario.
 	DefaultBasicLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
@@ -77,9 +77,9 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 			MrSigner: mrSigner,
 		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:                 viper.GetString(cfgNodeBinary),
-			RuntimeLoaderBinary:        viper.GetString(cfgRuntimeLoader),
-			LogWatcherHandlerFactories: DefaultBasicLogWatcherHandlerFactories,
+			NodeBinary:                        viper.GetString(cfgNodeBinary),
+			RuntimeLoaderBinary:               viper.GetString(cfgRuntimeLoader),
+			DefaultLogWatcherHandlerFactories: DefaultBasicLogWatcherHandlerFactories,
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},

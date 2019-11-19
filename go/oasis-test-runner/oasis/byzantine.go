@@ -98,9 +98,11 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 
 	worker := &Byzantine{
 		Node: Node{
-			Name: byzantineName,
-			net:  net,
-			dir:  byzantineDir,
+			Name:                                     byzantineName,
+			net:                                      net,
+			dir:                                      byzantineDir,
+			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
+			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
 		script:        cfg.Script,
 		entity:        cfg.Entity,
@@ -111,6 +113,14 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 
 	net.byzantine = append(net.byzantine, worker)
 	net.nextNodePort += 2
+
+	if err := net.AddLogWatcher(&worker.Node); err != nil {
+		net.logger.Error("failed to add log watcher",
+			"err", err,
+			"byzantine_name", byzantineName,
+		)
+		return nil, fmt.Errorf("oasis/byzantine: failed to add log watcher for %s: %w", byzantineName, err)
+	}
 
 	return worker, nil
 }

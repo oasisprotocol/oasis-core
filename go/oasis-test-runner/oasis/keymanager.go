@@ -226,10 +226,12 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 
 	km := &Keymanager{
 		Node: Node{
-			Name:        kmName,
-			net:         net,
-			dir:         kmDir,
-			restartable: cfg.Restartable,
+			Name:                                     kmName,
+			net:                                      net,
+			dir:                                      kmDir,
+			restartable:                              cfg.Restartable,
+			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
+			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
 		runtime:          cfg.Runtime,
 		entity:           cfg.Entity,
@@ -240,6 +242,13 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 
 	net.keymanager = km
 	net.nextNodePort += 2
+
+	if err := net.AddLogWatcher(&km.Node); err != nil {
+		net.logger.Error("failed to add log watcher",
+			"err", err,
+		)
+		return nil, fmt.Errorf("oasis/keymanager: failed to add log watcher: %w", err)
+	}
 
 	return km, nil
 }

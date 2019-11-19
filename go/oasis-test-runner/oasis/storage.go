@@ -126,9 +126,11 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 
 	worker := &Storage{
 		Node: Node{
-			Name: storageName,
-			net:  net,
-			dir:  storageDir,
+			Name:                                     storageName,
+			net:                                      net,
+			dir:                                      storageDir,
+			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
+			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
 		backend:       cfg.Backend,
 		entity:        cfg.Entity,
@@ -141,6 +143,14 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 
 	net.storageWorkers = append(net.storageWorkers, worker)
 	net.nextNodePort += 3
+
+	if err := net.AddLogWatcher(&worker.Node); err != nil {
+		net.logger.Error("failed to add log watcher",
+			"err", err,
+			"storage_name", storageName,
+		)
+		return nil, fmt.Errorf("oasis/storage: failed to add log watcher for %s: %w", storageName, err)
+	}
 
 	return worker, nil
 }

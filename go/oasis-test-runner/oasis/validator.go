@@ -113,10 +113,12 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 
 	val := &Validator{
 		Node: Node{
-			Name:        valName,
-			net:         net,
-			dir:         valDir,
-			restartable: cfg.Restartable,
+			Name:                                     valName,
+			net:                                      net,
+			dir:                                      valDir,
+			restartable:                              cfg.Restartable,
+			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
+			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
 		entity:        cfg.Entity,
 		minGasPrice:   cfg.MinGasPrice,
@@ -188,6 +190,14 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		if net.controller, err = NewController(val.SocketPath()); err != nil {
 			return nil, errors.Wrap(err, "oasis/validator: failed to create controller")
 		}
+	}
+
+	if err := net.AddLogWatcher(&val.Node); err != nil {
+		net.logger.Error("failed to add log watcher",
+			"err", err,
+			"validator_name", valName,
+		)
+		return nil, fmt.Errorf("oasis/validator: failed to add log watcher for %s: %w", valName, err)
 	}
 
 	return val, nil
