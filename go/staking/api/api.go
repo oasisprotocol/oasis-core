@@ -411,7 +411,7 @@ func (p *ConsensusParameters) SanityCheck() error {
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck(now epochtime.EpochTime) error {
+func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocyclo
 	for thr, val := range g.Parameters.Thresholds {
 		if !val.IsValid() {
 			return fmt.Errorf("staking: sanity check failed: threshold '%s' has invalid value", thr.String())
@@ -497,6 +497,47 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error {
 		// Account's Escrow.Debonding.Balance must be 0 if account has no debonding delegations.
 		if numDebondingDelegations == 0 {
 			if !g.Ledger[acct].Escrow.Debonding.Balance.IsZero() {
+				return fmt.Errorf("staking: sanity check failed: account has no debonding delegations, but non-zero debonding escrow balance")
+			}
+		}
+	}
+
+	// Check the above two invariants for each account as well.
+	for id, acct := range g.Ledger {
+		// Count the delegations for this account and add up the total shares.
+		var shares quantity.Quantity
+		var numDelegations uint64
+		for _, d := range g.Delegations[id] {
+			_ = shares.Add(&d.Shares)
+			numDelegations++
+		}
+		// Account's total active shares in escrow should match delegations.
+		if shares.Cmp(&acct.Escrow.Active.TotalShares) != 0 {
+			return fmt.Errorf("staking: sanity check failed: delegations don't match account's total active shares in escrow")
+		}
+		// If there are no delegations, the active escrow balance should be 0.
+		if numDelegations == 0 {
+			if !acct.Escrow.Active.Balance.IsZero() {
+				return fmt.Errorf("staking: sanity check failed: account has no delegations, but non-zero active escrow balance")
+			}
+		}
+
+		// Count the debonding delegations for this account and add up the total shares.
+		var debondingShares quantity.Quantity
+		var numDebondingDelegations uint64
+		for _, dels := range g.DebondingDelegations[id] {
+			for _, d := range dels {
+				_ = debondingShares.Add(&d.Shares)
+				numDebondingDelegations++
+			}
+		}
+		// Account's total debonding shares in escrow should match debonding delegations.
+		if debondingShares.Cmp(&acct.Escrow.Debonding.TotalShares) != 0 {
+			return fmt.Errorf("staking: sanity check failed: debonding delegations don't match account's total debonding shares in escrow")
+		}
+		// If there are no debonding delegations, the debonding escrow balance should be 0.
+		if numDebondingDelegations == 0 {
+			if !acct.Escrow.Debonding.Balance.IsZero() {
 				return fmt.Errorf("staking: sanity check failed: account has no debonding delegations, but non-zero debonding escrow balance")
 			}
 		}

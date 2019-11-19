@@ -36,6 +36,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests/debug"
 )
 
 const (
@@ -529,7 +530,15 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 			},
 			Escrow: staking.EscrowAccount{
 				Active: staking.SharePool{
-					Balance: q,
+					Balance:     q,
+					TotalShares: stakingTests.QtyFromInt(1),
+				},
+			},
+		}
+		stakingSt.Delegations = map[signature.PublicKey]map[signature.PublicKey]*staking.Delegation{
+			ent.ID: map[signature.PublicKey]*staking.Delegation{
+				ent.ID: &staking.Delegation{
+					Shares: stakingTests.QtyFromInt(1),
 				},
 			},
 		}

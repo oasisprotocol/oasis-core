@@ -1,4 +1,4 @@
-package tests
+package debug
 
 import (
 	"crypto/rand"

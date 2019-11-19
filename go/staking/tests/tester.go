@@ -20,19 +20,20 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasislabs/oasis-core/go/staking/tests/debug"
 )
 
 const recvTimeout = 5 * time.Second
 
 var (
-	debugGenesisState = DebugGenesisState
+	debugGenesisState = debug.DebugGenesisState
 
-	testTotalSupply = DebugStateTestTotalSupply
-	qtyOne          = QtyFromInt(1)
+	testTotalSupply = debug.DebugStateTestTotalSupply
+	qtyOne          = debug.QtyFromInt(1)
 
-	srcSigner = DebugStateSrcSigner
-	SrcID     = DebugStateSrcID
-	DestID    = DebugStateDestID
+	srcSigner = debug.DebugStateSrcSigner
+	SrcID     = debug.DebugStateSrcID
+	DestID    = debug.DebugStateDestID
 )
 
 // StakingImplementationTests exercises the basic functionality of a
@@ -147,7 +148,7 @@ func testTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 
 	xfer := &api.Transfer{
 		To:     DestID,
-		Tokens: QtyFromInt(math.MaxUint8),
+		Tokens: debug.QtyFromInt(math.MaxUint8),
 	}
 	tx := api.NewTransferTx(srcAcc.General.Nonce, nil, xfer)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -195,7 +196,7 @@ func testSelfTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.
 
 	xfer := &api.Transfer{
 		To:     SrcID,
-		Tokens: QtyFromInt(math.MaxUint8),
+		Tokens: debug.QtyFromInt(math.MaxUint8),
 	}
 	tx := api.NewTransferTx(srcAcc.General.Nonce, nil, xfer)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -238,7 +239,7 @@ func testBurn(t *testing.T, backend api.Backend, consensus consensusAPI.Backend)
 	defer sub.Close()
 
 	burn := &api.Burn{
-		Tokens: QtyFromInt(math.MaxUint32),
+		Tokens: debug.QtyFromInt(math.MaxUint32),
 	}
 	tx := api.NewBurnTx(srcAcc.General.Nonce, nil, burn)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -304,7 +305,7 @@ func testEscrowEx(
 	// Escrow.
 	escrow := &api.Escrow{
 		Account: dstID,
-		Tokens:  QtyFromInt(math.MaxUint32),
+		Tokens:  debug.QtyFromInt(math.MaxUint32),
 	}
 	tx := api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -351,7 +352,7 @@ func testEscrowEx(
 	// Escrow some more.
 	escrow = &api.Escrow{
 		Account: dstID,
-		Tokens:  QtyFromInt(math.MaxUint32),
+		Tokens:  debug.QtyFromInt(math.MaxUint32),
 	}
 	tx = api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -470,7 +471,7 @@ func testEscrowEx(
 	// Escrow less than the minimum amount.
 	escrow = &api.Escrow{
 		Account: dstID,
-		Tokens:  QtyFromInt(1), // Minimum is 10.
+		Tokens:  debug.QtyFromInt(1), // Minimum is 10.
 	}
 	tx = api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -498,7 +499,7 @@ func testSlashDoubleSigning(
 
 	escrow := &api.Escrow{
 		Account: ent.ID,
-		Tokens:  QtyFromInt(math.MaxUint32),
+		Tokens:  debug.QtyFromInt(math.MaxUint32),
 	}
 	tx := api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)

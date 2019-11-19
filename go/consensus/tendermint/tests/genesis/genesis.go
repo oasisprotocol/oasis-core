@@ -17,7 +17,7 @@ import (
 	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
+	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests/debug"
 )
 
 var _ service.GenesisProvider = (*testNodeGenesisProvider)(nil)
