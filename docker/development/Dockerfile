@@ -5,6 +5,7 @@ ARG GO_VERSION=1.13.4
 ARG GO_PROTOC_VERSION=3.6.1
 ARG GO_PROTOC_GEN_GO_VERSION=1.2.0
 ARG GOLANGCILINT_VERSION=1.18.0
+ARG GOCOVMERGE_VERSION=b5bfa59ec0adc420475f97f89b58045c721d761c
 ARG RUST_NIGHTLY_VERSION=2019-08-26
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -57,7 +58,7 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v${GOLANGCILINT_VERSION} && \
     mv /tmp/bin/golangci-lint /go/bin && \
     # Install gocovmerge for e2e coverage.
-    GO111MODULE=on go get github.com/wadey/gocovmerge@b5bfa59ec0adc420475f97f89b58045c721d761c
+    GO111MODULE=on go get github.com/wadey/gocovmerge@${GOCOVMERGE_VERSION}
 
 # Install node / npm / truffle.
 RUN curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh | bash
