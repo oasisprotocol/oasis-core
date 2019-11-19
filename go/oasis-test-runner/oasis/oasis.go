@@ -47,6 +47,8 @@ const (
 
 // Node defines the common fields for all node types.
 type Node struct {
+	Name string
+
 	net *Network
 	dir *env.Dir
 	cmd *exec.Cmd

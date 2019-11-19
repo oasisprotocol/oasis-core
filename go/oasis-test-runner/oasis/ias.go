@@ -2,6 +2,7 @@ package oasis
 
 import (
 	"encoding/hex"
+	"fmt"
 
 	"github.com/pkg/errors"
 
@@ -33,8 +34,15 @@ func (ias *iasProxy) startNode() error {
 		iasSPID(mockSPID)
 
 	var err error
-	if ias.cmd, ias.exitCh, err = ias.net.startOasisNode(ias.dir, []string{"ias", "proxy"}, args, "ias-proxy", false, false); err != nil {
-		return errors.Wrap(err, "oasis/ias: failed to launch node")
+	if ias.cmd, ias.exitCh, err = ias.net.startOasisNode(
+		ias.dir,
+		[]string{"ias", "proxy"},
+		args,
+		ias.Name,
+		false,
+		false,
+	); err != nil {
+		return fmt.Errorf("oasis/ias: failed to launch node %s: %w", ias.Name, err)
 	}
 
 	return nil
@@ -45,7 +53,9 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 		return nil, errors.New("oasis/ias: already provisioned")
 	}
 
-	iasDir, err := net.baseDir.NewSubDir("ias")
+	iasName := "ias-proxy"
+
+	iasDir, err := net.baseDir.NewSubDir(iasName)
 	if err != nil {
 		net.logger.Error("failed to create ias proxy subdir",
 			"err", err,
@@ -65,8 +75,9 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 
 	net.iasProxy = &iasProxy{
 		Node: Node{
-			net: net,
-			dir: iasDir,
+			Name: iasName,
+			net:  net,
+			dir:  iasDir,
 		},
 		grpcPort: net.nextNodePort,
 	}

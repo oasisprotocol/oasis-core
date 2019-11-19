@@ -32,8 +32,15 @@ func (client *Client) startNode() error {
 	}
 
 	var err error
-	if client.cmd, client.exitCh, err = client.net.startOasisNode(client.dir, nil, args, "client", false, false); err != nil {
-		return errors.Wrap(err, "oasis/client: failed to launch node")
+	if client.cmd, client.exitCh, err = client.net.startOasisNode(
+		client.dir,
+		nil,
+		args,
+		client.Name,
+		false,
+		false,
+	); err != nil {
+		return fmt.Errorf("oasis/client: failed to launch node %s: %w", client.Name, err)
 	}
 
 	return nil
@@ -54,8 +61,9 @@ func (net *Network) NewClient() (*Client, error) {
 
 	client := &Client{
 		Node: Node{
-			net: net,
-			dir: clientDir,
+			Name: clientName,
+			net:  net,
+			dir:  clientDir,
 		},
 		consensusPort: net.nextNodePort,
 	}
