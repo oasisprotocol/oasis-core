@@ -55,7 +55,9 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     GO111MODULE=on go get github.com/golang/protobuf/protoc-gen-go@v${GO_PROTOC_GEN_GO_VERSION} && \
     # Install golangci-lint.
     curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v${GOLANGCILINT_VERSION} && \
-    mv /tmp/bin/golangci-lint /go/bin
+    mv /tmp/bin/golangci-lint /go/bin && \
+    # Install gocovmerge for e2e coverage.
+    GO111MODULE=on go get github.com/wadey/gocovmerge@b5bfa59ec0adc420475f97f89b58045c721d761c
 
 # Install node / npm / truffle.
 RUN curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh | bash

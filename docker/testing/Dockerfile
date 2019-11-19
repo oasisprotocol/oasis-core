@@ -37,6 +37,3 @@ RUN wget -O codecov https://codecov.io/bash && \
 # Install tarpaulin.
 RUN RUSTFLAGS="--cfg procmacro2_semver_exempt" \
     cargo install --version 0.9.1 cargo-tarpaulin
-
-# Install gocovmerge for e2e coverage.
-RUN GO111MODULE=on go get github.com/wadey/gocovmerge@b5bfa59ec0adc420475f97f89b58045c721d761c
