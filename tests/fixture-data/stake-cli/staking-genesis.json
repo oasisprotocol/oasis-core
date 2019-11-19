@@ -1,0 +1,10 @@
+{
+  "params": {
+    "commission_schedule_rules": {
+      "rate_change_interval": 10,
+      "rate_bound_lead": 30,
+      "max_rate_steps": 4,
+      "max_bound_steps": 12
+    }
+  }
+}

@@ -4,10 +4,17 @@ import (
 	"math/big"
 
 	"github.com/oasislabs/oasis-core/go/common/quantity"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
 // RewardAmountDenominator is the denominator for the reward rate.
 var RewardAmountDenominator *quantity.Quantity
+
+// RewardStep is one of the time periods in the reward schedule.
+type RewardStep struct {
+	Until epochtime.EpochTime `json:"until"`
+	Scale quantity.Quantity   `json:"scale"`
+}
 
 func init() {
 	// Denominated in 1000th of a percent.

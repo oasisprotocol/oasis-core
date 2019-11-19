@@ -100,6 +100,8 @@ func (app *stakingApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error 
 		return app.addEscrow(ctx, state, &tx.TxAddEscrow.SignedEscrow)
 	} else if tx.TxReclaimEscrow != nil {
 		return app.reclaimEscrow(ctx, state, &tx.TxReclaimEscrow.SignedReclaimEscrow)
+	} else if tx.TxAmendCommissionSchedule != nil {
+		return app.amendCommissionSchedule(ctx, state, &tx.TxAmendCommissionSchedule.SignedAmendCommissionSchedule)
 	}
 	return staking.ErrInvalidArgument
 }

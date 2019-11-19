@@ -38,6 +38,9 @@ var (
 	// ReclaimEscrowSignatureContext is the context used for escrow reclimation.
 	ReclaimEscrowSignatureContext = signature.NewContext("oasis-core/staking: reclaim escrow", signature.WithChainSeparation())
 
+	// AmendCommissionScheduleSignatureContext is the context used for escrow reclimation.
+	AmendCommissionScheduleSignatureContext = signature.NewContext("oasis-core/staking: amend commission schedule", signature.WithChainSeparation())
+
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New("staking: invalid argument")
 
@@ -96,6 +99,9 @@ type Backend interface {
 	// ReclaimEscrow releases the quantity of the owner's escrow balance
 	// back into the owner's general balance.
 	ReclaimEscrow(ctx context.Context, signedReclaim *SignedReclaimEscrow) error
+
+	// AmendCommissionSchedule amends the signer's commission schedule.
+	AmendCommissionSchedule(ctx context.Context, signedAmendCommissionSchedule *SignedAmendCommissionSchedule) error
 
 	// SubmitEvidence submits evidence of misbehavior.
 	SubmitEvidence(ctx context.Context, evidence Evidence) error
@@ -193,6 +199,14 @@ type ReclaimEscrow struct {
 	Shares  quantity.Quantity   `json:"reclaim_shares"`
 }
 
+// AmendCommissionSchedule is an amendment to a commission schedule.
+type AmendCommissionSchedule struct {
+	Nonce uint64  `json:"nonce"`
+	Fee   gas.Fee `json:"fee"`
+
+	Amendment CommissionSchedule `json:"amendment"`
+}
+
 // SignedTransfer is a Transfer, signed by the owner (source) entity.
 type SignedTransfer struct {
 	signature.Signed
@@ -257,6 +271,23 @@ func SignReclaimEscrow(signer signature.Signer, reclaim *ReclaimEscrow) (*Signed
 	}
 
 	return &SignedReclaimEscrow{
+		Signed: *signed,
+	}, nil
+}
+
+// SignedAmendCommissionSchedule is a ReclaimEscrow, signed by the owner entity.
+type SignedAmendCommissionSchedule struct {
+	signature.Signed
+}
+
+// SignReclaimEscrow serializes the Reclaim and signs the result.
+func SignAmendCommissionSchedule(signer signature.Signer, amendCommissionSchedule *AmendCommissionSchedule) (*SignedAmendCommissionSchedule, error) {
+	signed, err := signature.SignSigned(signer, AmendCommissionScheduleSignatureContext, amendCommissionSchedule)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SignedAmendCommissionSchedule{
 		Signed: *signed,
 	}, nil
 }
@@ -403,8 +434,9 @@ type GeneralAccount struct {
 // EscrowAccount is an escrow account the balance of which is subject to
 // special delegation provisions and a debonding period.
 type EscrowAccount struct {
-	Active    SharePool `json:"active"`
-	Debonding SharePool `json:"debonding"`
+	Active             SharePool          `json:"active"`
+	Debonding          SharePool          `json:"debonding"`
+	CommissionSchedule CommissionSchedule `json:"commission_schedule"`
 }
 
 // Account is an entry in the staking ledger.
@@ -427,12 +459,6 @@ type DebondingDelegation struct {
 	DebondEndTime epochtime.EpochTime `json:"debond_end"`
 }
 
-// RewardStep is one of the time periods in the reward schedule.
-type RewardStep struct {
-	Until epochtime.EpochTime `json:"until"`
-	Scale quantity.Quantity   `json:"scale"`
-}
-
 // Genesis is the initial ledger balances at genesis for use in the genesis
 // block and test cases.
 type Genesis struct {
@@ -452,6 +478,7 @@ type ConsensusParameters struct {
 	Thresholds              map[ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
 	DebondingInterval       epochtime.EpochTime                 `json:"debonding_interval,omitempty"`
 	RewardSchedule          []RewardStep                        `json:"reward_schedule,omitempty"`
+	CommissionScheduleRules CommissionScheduleRules             `json:"commission_schedule_rules,omitempty"`
 	AcceptableTransferPeers map[signature.PublicKey]bool        `json:"acceptable_transfer_peers,omitempty"`
 	Slashing                map[SlashReason]Slash               `json:"slashing,omitempty"`
 	GasCosts                gas.Costs                           `json:"gas_costs,omitempty"`
@@ -473,7 +500,7 @@ func (p *ConsensusParameters) SanityCheck() error {
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck() error {
+func (g *Genesis) SanityCheck(now epochtime.EpochTime) error {
 	for thr, val := range g.Parameters.Thresholds {
 		if !val.IsValid() {
 			return fmt.Errorf("staking: sanity check failed: threshold '%s' has invalid value", thr.String())
@@ -489,8 +516,9 @@ func (g *Genesis) SanityCheck() error {
 	}
 
 	// Check if the total supply adds up (common pool + all balances in the ledger).
+	// Check all commission schedules.
 	var total quantity.Quantity
-	for _, acct := range g.Ledger {
+	for id, acct := range g.Ledger {
 		if !acct.General.Balance.IsValid() {
 			return fmt.Errorf("staking: sanity check failed: account balance is invalid")
 		}
@@ -504,6 +532,11 @@ func (g *Genesis) SanityCheck() error {
 		_ = total.Add(&acct.General.Balance)
 		_ = total.Add(&acct.Escrow.Active.Balance)
 		_ = total.Add(&acct.Escrow.Debonding.Balance)
+
+		commissionStateShallowCopy := acct.Escrow.CommissionSchedule
+		if err := commissionStateShallowCopy.PruneAndValidateForGenesis(&g.Parameters.CommissionScheduleRules, now); err != nil {
+			return fmt.Errorf("staking: sanity check failed: commission schedule for %s is invalid: %+v", id, err)
+		}
 	}
 	_ = total.Add(&g.CommonPool)
 	if total.Cmp(&g.TotalSupply) != 0 {
@@ -570,4 +603,6 @@ const (
 	GasOpAddEscrow gas.Op = "add_escrow"
 	// GasOpReclaimEscrow is the gas operation identifier for reclaim escrow.
 	GasOpReclaimEscrow gas.Op = "reclaim_escrow"
+	// GasOpAmendCommissionSchedule is the gas operation identifier for amend commission schedule.
+	GasOpAmendCommissionSchedule gas.Op = "amend_commission_schedule"
 )

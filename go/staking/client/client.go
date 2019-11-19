@@ -166,6 +166,15 @@ func (b *clientBackend) ReclaimEscrow(ctx context.Context, signedReclaim *api.Si
 	return nil
 }
 
+// AmendCommissionSchedule amends the signer's commission schedule.
+func (b *clientBackend) AmendCommissionSchedule(ctx context.Context, signedAmendCommissionSchedule *api.SignedAmendCommissionSchedule) error {
+	_, err := b.grpc.AmendCommissionSchedule(ctx, &pb.AmendCommissionScheduleRequest{SignedAmendCommissionSchedule: cbor.Marshal(signedAmendCommissionSchedule)})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // SubmitEvidence submits evidence of misbehavior.
 func (b *clientBackend) SubmitEvidence(ctx context.Context, evidence api.Evidence) error {
 	// TODO: Add gRPC method.
