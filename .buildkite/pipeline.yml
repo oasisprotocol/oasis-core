@@ -271,5 +271,6 @@ steps:
       - .buildkite/scripts/upload_coverage.sh
     artifact_paths:
       - merged-coverage.txt
+    soft_fail: true
     plugins:
       <<: *docker_plugin
