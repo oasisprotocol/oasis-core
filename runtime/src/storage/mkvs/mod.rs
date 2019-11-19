@@ -4,11 +4,7 @@ use std::ops::{Deref, DerefMut};
 use base64;
 use failure::Fallible;
 use io_context::Context;
-use serde::{
-    self,
-    ser::{SerializeSeq, SerializeStruct},
-    Serializer,
-};
+use serde::{self, ser::SerializeSeq, Serializer};
 use serde_bytes::Bytes;
 use serde_derive::{Deserialize, Serialize};
 
@@ -57,17 +53,15 @@ impl serde::Serialize for LogEntry {
         S: Serializer,
     {
         let is_human_readable = serializer.is_human_readable();
+        let mut seq = serializer.serialize_seq(Some(2))?;
         if is_human_readable {
-            let mut seq = serializer.serialize_seq(Some(2))?;
             seq.serialize_element(&base64::encode(&self.key))?;
             seq.serialize_element(&base64::encode(&self.value))?;
-            seq.end()
         } else {
-            let mut blob = serializer.serialize_struct("LogEntry", 2)?;
-            blob.serialize_field("key", &Bytes::new(&self.key))?;
-            blob.serialize_field("value", &Bytes::new(&self.value))?;
-            blob.end()
+            seq.serialize_element(&Bytes::new(&self.key))?;
+            seq.serialize_element(&Bytes::new(&self.value))?;
         }
+        seq.end()
     }
 }
 

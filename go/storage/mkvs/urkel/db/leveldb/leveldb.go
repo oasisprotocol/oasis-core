@@ -72,6 +72,8 @@ const maxBatchSize = 100
 
 // rootGcIndexUpdate is an element of the rootGcUpdates list.
 type rootGcUpdate struct {
+	_ struct{} `cbor:",toarray"` //nolint
+
 	EndRound   uint64
 	StartRound uint64
 	Node       hash.Hash
