@@ -266,7 +266,6 @@ steps:
     command:
       - mkdir -p /tmp/coverage-to-merge
       - buildkite-agent artifact download "coverage-*.txt" /tmp/coverage-to-merge
-      - type gocovmerge || go get github.com/wadey/gocovmerge
       - gocovmerge /tmp/coverage-to-merge/coverage-*.txt >merged-coverage.txt
       - .buildkite/scripts/upload_coverage.sh
     artifact_paths:
