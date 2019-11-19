@@ -2,16 +2,14 @@
 package registry
 
 import (
-	"encoding/hex"
-
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -33,8 +31,12 @@ func (app *registryApplication) Name() string {
 	return AppName
 }
 
-func (app *registryApplication) TransactionTag() byte {
-	return TransactionTag
+func (app *registryApplication) ID() uint8 {
+	return AppID
+}
+
+func (app *registryApplication) Methods() []transaction.MethodName {
+	return registry.Methods
 }
 
 func (app *registryApplication) Blessed() bool {
@@ -64,26 +66,39 @@ func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.Requ
 	return nil
 }
 
-func (app *registryApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error {
-	var tx Tx
-	if err := cbor.Unmarshal(rawTx, &tx); err != nil {
-		app.logger.Error("failed to unmarshal",
-			"tx", hex.EncodeToString(rawTx),
-		)
-		return errors.Wrap(err, "registry: failed to unmarshal")
-	}
-
+func (app *registryApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
 	state := registryState.NewMutableState(ctx.State())
 
-	if tx.TxRegisterEntity != nil {
-		return app.registerEntity(ctx, state, &tx.TxRegisterEntity.Entity)
-	} else if tx.TxDeregisterEntity != nil {
-		return app.deregisterEntity(ctx, state, &tx.TxDeregisterEntity.Timestamp)
-	} else if tx.TxRegisterNode != nil {
-		return app.registerNode(ctx, state, &tx.TxRegisterNode.Node)
-	} else if tx.TxUnfreezeNode != nil {
-		return app.unfreezeNode(ctx, state, &tx.TxUnfreezeNode.UnfreezeNode)
-	} else if tx.TxRegisterRuntime != nil {
+	switch tx.Method {
+	case registry.MethodRegisterEntity:
+		var sigEnt entity.SignedEntity
+		if err := cbor.Unmarshal(tx.Body, &sigEnt); err != nil {
+			return err
+		}
+
+		return app.registerEntity(ctx, state, &sigEnt)
+	case registry.MethodDeregisterEntity:
+		return app.deregisterEntity(ctx, state)
+	case registry.MethodRegisterNode:
+		var sigNode node.SignedNode
+		if err := cbor.Unmarshal(tx.Body, &sigNode); err != nil {
+			return err
+		}
+
+		return app.registerNode(ctx, state, &sigNode)
+	case registry.MethodUnfreezeNode:
+		var unfreeze registry.UnfreezeNode
+		if err := cbor.Unmarshal(tx.Body, &unfreeze); err != nil {
+			return err
+		}
+
+		return app.unfreezeNode(ctx, state, &unfreeze)
+	case registry.MethodRegisterRuntime:
+		var sigRt registry.SignedRuntime
+		if err := cbor.Unmarshal(tx.Body, &sigRt); err != nil {
+			return err
+		}
+
 		params, err := state.ConsensusParameters()
 		if err != nil {
 			app.logger.Error("RegisterRuntime: failed to fetch consensus parameters",
@@ -95,12 +110,13 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error
 		if !params.DebugAllowRuntimeRegistration {
 			return registry.ErrForbidden
 		}
-		return app.registerRuntime(ctx, state, &tx.TxRegisterRuntime.Runtime)
+		return app.registerRuntime(ctx, state, &sigRt)
+	default:
+		return registry.ErrInvalidArgument
 	}
-	return registry.ErrInvalidArgument
 }
 
-func (app *registryApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *registryApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
@@ -237,24 +253,8 @@ func (app *registryApplication) registerEntity(
 }
 
 // Perform actual entity deregistration.
-func (app *registryApplication) deregisterEntity(
-	ctx *abci.Context,
-	state *registryState.MutableState,
-	sigTimestamp *signature.Signed,
-) error {
-	id, timestamp, err := registry.VerifyDeregisterEntityArgs(app.logger, sigTimestamp)
-	if err != nil {
-		return err
-	}
-
-	err = registry.VerifyTimestamp(timestamp, uint64(ctx.Now().Unix()))
-	if err != nil {
-		app.logger.Error("DeregisterEntity: invalid timestamp",
-			"timestamp", timestamp,
-			"now", uint64(ctx.Now().Unix()),
-		)
-		return err
-	}
+func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *registryState.MutableState) error {
+	id := ctx.TxSigner()
 
 	// Prevent entity deregistration if there are any registered nodes.
 	hasNodes, err := state.HasEntityNodes(id)
@@ -490,34 +490,19 @@ func (app *registryApplication) registerNode(
 func (app *registryApplication) unfreezeNode(
 	ctx *abci.Context,
 	state *registryState.MutableState,
-	sigUnfreeze *registry.SignedUnfreezeNode,
+	unfreeze *registry.UnfreezeNode,
 ) error {
-	var unfreeze registry.UnfreezeNode
-	if err := sigUnfreeze.Open(registry.RegisterUnfreezeNodeSignatureContext, &unfreeze); err != nil {
-		return err
-	}
-
-	// Verify timestamp.
-	if err := registry.VerifyTimestamp(unfreeze.Timestamp, uint64(ctx.Now().Unix())); err != nil {
-		app.logger.Error("UnfreezeNode: invalid timestamp",
-			"unfreeze_timestamp", unfreeze.Timestamp,
-			"now", uint64(ctx.Now().Unix()),
-		)
-		return err
-	}
-
 	// Fetch node descriptor.
 	node, err := state.Node(unfreeze.NodeID)
 	if err != nil {
 		app.logger.Error("UnfreezeNode: failed to fetch node",
 			"err", err,
 			"node_id", unfreeze.NodeID,
-			"entity_id", sigUnfreeze.Signature.PublicKey,
 		)
 		return err
 	}
 	// Make sure that the unfreeze request was signed by the owning entity.
-	if !sigUnfreeze.Signature.PublicKey.Equal(node.EntityID) {
+	if !ctx.TxSigner().Equal(node.EntityID) {
 		return registry.ErrBadEntityForNode
 	}
 

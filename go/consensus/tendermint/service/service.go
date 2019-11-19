@@ -2,15 +2,13 @@
 package service
 
 import (
-	"context"
-
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/service"
-	"github.com/oasislabs/oasis-core/go/consensus"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 )
@@ -29,6 +27,10 @@ type TendermintService interface {
 	// registered.
 	RegisterApplication(abci.Application) error
 
+	// SetTransactionAuthHandler configures the transaction fee handler for the
+	// ABCI multiplexer.
+	SetTransactionAuthHandler(abci.TransactionAuthHandler) error
+
 	// GetGenesis will return the oasis genesis document.
 	GetGenesis() *genesis.Document
 
@@ -45,25 +47,6 @@ type TendermintService interface {
 	// WatchBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
 	WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
-
-	// MarshalTx returns the Tendermint transaction from the inputs
-	// that you would pass to BroadcastTx.
-	MarshalTx(tag byte, tx interface{}) tmtypes.Tx
-
-	// BroadcastTx broadcasts a transaction for Oasis ABCI application.
-	//
-	// The CBOR-encodable transaction together with the given application
-	// tag is first marshalled and then transmitted using BroadcastTxSync.
-	//
-	// In case wait is true, the method will wait until the transaction
-	// is finalized.
-	//
-	// Note that there is no implicit timeout -- if you need one, make
-	// sure to cancel the context.
-	BroadcastTx(ctx context.Context, tag byte, tx interface{}, wait bool) error
-
-	// BroadcastEvidence broadcasts evidence of Tendermint node misbehavior.
-	BroadcastEvidence(ctx context.Context, evidence tmtypes.Evidence) error
 
 	// Subscribe subscribes to tendermint events.
 	Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error)

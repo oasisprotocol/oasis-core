@@ -14,13 +14,6 @@ service Staking {
 	rpc GetAccountInfo(GetAccountInfoRequest) returns (GetAccountInfoResponse) {}
 	rpc GetDebondingDelegations(GetDebondingDelegationsRequest) returns (GetDebondingDelegationsResponse) {}
 
-	// Calls that mutate state.
-	rpc Transfer(TransferRequest) returns (TransferResponse) {}
-	rpc Burn(BurnRequest) returns (BurnResponse) {}
-	rpc AddEscrow(AddEscrowRequest) returns (AddEscrowResponse) {}
-	rpc ReclaimEscrow(ReclaimEscrowRequest) returns (ReclaimEscrowResponse) {}
-	rpc AmendCommissionSchedule(AmendCommissionScheduleRequest) returns (AmendCommissionScheduleResponse) {}
-
 	// Calls that watch events.
 	rpc WatchTransfers (WatchTransfersRequest) returns (stream WatchTransfersResponse) {}
 	rpc WatchBurns (WatchBurnsRequest) returns (stream WatchBurnsResponse) {}
@@ -95,36 +88,6 @@ message GetDebondingDelegationsRequest {
 message GetDebondingDelegationsResponse {
 	bytes delegations = 1;
 }
-
-message TransferRequest {
-	bytes signed_transfer = 1;
-}
-
-message TransferResponse {}
-
-message BurnRequest {
-	bytes signed_burn = 1;
-}
-
-message BurnResponse {}
-
-message AddEscrowRequest {
-	bytes signed_escrow = 1;
-}
-
-message AddEscrowResponse {}
-
-message ReclaimEscrowRequest {
-	bytes signed_reclaim = 1;
-}
-
-message ReclaimEscrowResponse {}
-
-message AmendCommissionScheduleRequest {
-	bytes signed_amend_commission_schedule = 1;
-}
-
-message AmendCommissionScheduleResponse {}
 
 message WatchTransfersRequest {}
 

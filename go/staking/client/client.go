@@ -129,58 +129,6 @@ func (b *clientBackend) DebondingDelegations(ctx context.Context, owner signatur
 	return delegations, nil
 }
 
-// Transfer executes a SignedTransfer.
-func (b *clientBackend) Transfer(ctx context.Context, signedXfer *api.SignedTransfer) error {
-	_, err := b.grpc.Transfer(ctx, &pb.TransferRequest{SignedTransfer: cbor.Marshal(signedXfer)})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// Burn destroys tokens in the signing entity's balance.
-func (b *clientBackend) Burn(ctx context.Context, signedBurn *api.SignedBurn) error {
-	_, err := b.grpc.Burn(ctx, &pb.BurnRequest{SignedBurn: cbor.Marshal(signedBurn)})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// AddEscrow escrows the amount of tokens from the signer's balance.
-func (b *clientBackend) AddEscrow(ctx context.Context, signedEscrow *api.SignedEscrow) error {
-	_, err := b.grpc.AddEscrow(ctx, &pb.AddEscrowRequest{SignedEscrow: cbor.Marshal(signedEscrow)})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// ReclaimEscrow releases the quantity of the owner's escrow balance
-// back into the owner's general balance.
-func (b *clientBackend) ReclaimEscrow(ctx context.Context, signedReclaim *api.SignedReclaimEscrow) error {
-	_, err := b.grpc.ReclaimEscrow(ctx, &pb.ReclaimEscrowRequest{SignedReclaim: cbor.Marshal(signedReclaim)})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// AmendCommissionSchedule amends the signer's commission schedule.
-func (b *clientBackend) AmendCommissionSchedule(ctx context.Context, signedAmendCommissionSchedule *api.SignedAmendCommissionSchedule) error {
-	_, err := b.grpc.AmendCommissionSchedule(ctx, &pb.AmendCommissionScheduleRequest{SignedAmendCommissionSchedule: cbor.Marshal(signedAmendCommissionSchedule)})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// SubmitEvidence submits evidence of misbehavior.
-func (b *clientBackend) SubmitEvidence(ctx context.Context, evidence api.Evidence) error {
-	// TODO: Add gRPC method.
-	return fmt.Errorf("staking: not yet implemented for client backend")
-}
-
 // WatchTransfers returns a channel that produces a stream of TranserEvent
 // on all balance transfers.
 func (b *clientBackend) WatchTransfers(ctx context.Context) (<-chan *api.TransferEvent, pubsub.ClosableSubscription, error) {

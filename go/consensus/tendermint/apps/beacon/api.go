@@ -3,9 +3,8 @@ package beacon
 import "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 
 const (
-	// TransactionTag is a unique byte used to identify transactions
-	// for the beacon application.
-	TransactionTag byte = 0x04
+	// AppID is the unique application identifier.
+	AppID uint8 = 0x04
 
 	// AppName is the ABCI application name.
 	// Run before the scheduler application.

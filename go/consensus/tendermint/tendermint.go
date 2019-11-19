@@ -34,6 +34,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	cmservice "github.com/oasislabs/oasis-core/go/common/service"
+	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	tmbeacon "github.com/oasislabs/oasis-core/go/consensus/tendermint/beacon"
@@ -153,13 +155,14 @@ type tendermintService struct {
 	blockNotifier *pubsub.Broker
 	failMonitor   *failMonitor
 
-	beacon     beaconAPI.Backend
-	epochtime  epochtimeAPI.Backend
-	keymanager keymanagerAPI.Backend
-	registry   registryAPI.Backend
-	roothash   roothashAPI.Backend
-	staking    stakingAPI.Backend
-	scheduler  schedulerAPI.Backend
+	beacon          beaconAPI.Backend
+	epochtime       epochtimeAPI.Backend
+	keymanager      keymanagerAPI.Backend
+	registry        registryAPI.Backend
+	registryMetrics *registry.MetricsUpdater
+	roothash        roothashAPI.Backend
+	staking         stakingAPI.Backend
+	scheduler       schedulerAPI.Backend
 
 	genesis                  *genesisAPI.Document
 	genesisProvider          genesisAPI.Provider
@@ -426,35 +429,9 @@ func (t *tendermintService) RegisterHaltHook(hook func(context.Context, int64, e
 	t.mux.RegisterHaltHook(hook)
 }
 
-func (t *tendermintService) MarshalTx(tag byte, tx interface{}) tmtypes.Tx {
-	message := cbor.Marshal(tx)
-	return append([]byte{tag}, message...)
-}
-
-func (t *tendermintService) BroadcastTx(ctx context.Context, tag byte, tx interface{}, wait bool) error {
-	return t.broadcastTx(ctx, tag, tx, wait)
-}
-
-func (t *tendermintService) broadcastTxRaw(data []byte) error {
-	response, err := t.client.BroadcastTxSync(data)
-	if err != nil {
-		return errors.Wrap(err, "broadcast tx: commit failed")
-	}
-
-	if response.Code != api.CodeOK.ToInt() {
-		return fmt.Errorf("broadcast tx: check tx failed: %d: %s", response.Code, response.Log)
-	}
-
-	return nil
-}
-
-func (t *tendermintService) newSubscriberID() string {
-	return fmt.Sprintf("subscriber-%d", atomic.AddUint64(&t.nextSubscriberID, 1))
-}
-
-func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interface{}, wait bool) error {
+func (t *tendermintService) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
 	// Subscribe to the transaction being included in a block.
-	data := t.MarshalTx(tag, tx)
+	data := cbor.Marshal(tx)
 	query := tmtypes.EventQueryTxFor(data)
 	subID := t.newSubscriberID()
 	txSub, err := t.Subscribe(subID, query)
@@ -474,10 +451,6 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 		return err
 	}
 
-	if !wait {
-		return nil
-	}
-
 	// Wait for the transaction to be included in a block.
 	select {
 	case v := <-txSub.Out():
@@ -492,9 +465,38 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 	}
 }
 
-func (t *tendermintService) BroadcastEvidence(ctx context.Context, evidence tmtypes.Evidence) error {
-	_, err := t.client.BroadcastEvidence(evidence)
-	return err
+func (t *tendermintService) broadcastTxRaw(data []byte) error {
+	response, err := t.client.BroadcastTxSync(data)
+	if err != nil {
+		return errors.Wrap(err, "broadcast tx: commit failed")
+	}
+
+	if response.Code != api.CodeOK.ToInt() {
+		return fmt.Errorf("broadcast tx: check tx failed: %d: %s", response.Code, response.Log)
+	}
+
+	return nil
+}
+
+func (t *tendermintService) newSubscriberID() string {
+	return fmt.Sprintf("subscriber-%d", atomic.AddUint64(&t.nextSubscriberID, 1))
+}
+
+func (t *tendermintService) SubmitEvidence(ctx context.Context, evidence consensusAPI.Evidence) error {
+	if evidence.Kind() != consensusAPI.EvidenceKindConsensus {
+		return errors.New("tendermint: unsupported evidence kind")
+	}
+
+	tmEvidence, ok := evidence.Unwrap().(tmtypes.Evidence)
+	if !ok {
+		return errors.New("tendermint: expected tendermint evidence, got something else")
+	}
+
+	if _, err := t.client.BroadcastEvidence(tmEvidence); err != nil {
+		return errors.Wrap(err, "tendermint: broadcast evidence failed")
+	}
+
+	return nil
 }
 
 func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
@@ -544,16 +546,20 @@ func (t *tendermintService) Pruner() abci.StatePruner {
 	return t.mux.Pruner()
 }
 
-func (t *tendermintService) RegisterEpochtime(app abci.Application) error {
-	return t.mux.Register(app)
-}
-
 func (t *tendermintService) RegisterApplication(app abci.Application) error {
 	return t.mux.Register(app)
 }
 
+func (t *tendermintService) SetTransactionAuthHandler(handler abci.TransactionAuthHandler) error {
+	return t.mux.SetTransactionAuthHandler(handler)
+}
+
 func (t *tendermintService) GetGenesis() *genesisAPI.Document {
 	return t.genesis
+}
+
+func (t *tendermintService) TransactionAuthHandler() consensusAPI.TransactionAuthHandler {
+	return t.mux.TransactionAuthHandler()
 }
 
 func (t *tendermintService) EpochTime() epochtimeAPI.Backend {
@@ -587,68 +593,72 @@ func (t *tendermintService) Scheduler() schedulerAPI.Backend {
 func (t *tendermintService) initialize() error {
 	t.Lock()
 	defer t.Unlock()
-	if !t.isInitialized {
-		t.Logger.Debug("Initializing tendermint local node.")
-		if err := t.lazyInit(); err != nil {
-			return err
-		}
 
-		if err := t.initEpochtime(); err != nil {
-			return err
-		}
-		t.mux.SetEpochtime(t.epochtime)
-
-		// Initialize the rest of backends.
-		var err error
-		if t.beacon, err = tmbeacon.New(t.ctx, t); err != nil {
-			t.Logger.Error("initialize: failed to initialize beacon backend",
-				"err", err,
-			)
-			return err
-		}
-
-		if t.keymanager, err = tmkeymanager.New(t.ctx, t); err != nil {
-			t.Logger.Error("initialize: failed to initialize keymanager backend",
-				"err", err,
-			)
-			return err
-		}
-
-		if t.registry, err = tmregistry.New(t.ctx, t); err != nil {
-			t.Logger.Error("initialize: failed to initialize registry backend",
-				"err", err,
-			)
-			return err
-		}
-		t.registry = registry.NewMetricsWrapper(t.ctx, t.registry)
-		t.svcMgr.RegisterCleanupOnly(t.registry, "registry backend")
-
-		if t.staking, err = tmstaking.New(t.ctx, t); err != nil {
-			t.Logger.Error("staking: failed to initialize staking backend",
-				"err", err,
-			)
-			return err
-		}
-		t.svcMgr.RegisterCleanupOnly(t.staking, "staking backend")
-
-		if t.scheduler, err = tmscheduler.New(t.ctx, t); err != nil {
-			t.Logger.Error("scheduler: failed to initialize scheduler backend",
-				"err", err,
-			)
-			return err
-		}
-		t.svcMgr.RegisterCleanupOnly(t.scheduler, "scheduler backend")
-
-		if t.roothash, err = tmroothash.New(t.ctx, t.dataDir, t.beacon, t); err != nil {
-			t.Logger.Error("roothash: failed to initialize roothash backend",
-				"err", err,
-			)
-			return err
-		}
-		t.roothash = roothash.NewMetricsWrapper(t.roothash)
-		t.svcMgr.RegisterCleanupOnly(t.roothash, "roothash backend")
-
+	if t.isInitialized {
+		return nil
 	}
+
+	if err := t.lazyInit(); err != nil {
+		return err
+	}
+
+	if err := t.initEpochtime(); err != nil {
+		return err
+	}
+	if err := t.mux.SetEpochtime(t.epochtime); err != nil {
+		return err
+	}
+
+	// Initialize the rest of backends.
+	var err error
+	if t.beacon, err = tmbeacon.New(t.ctx, t); err != nil {
+		t.Logger.Error("initialize: failed to initialize beacon backend",
+			"err", err,
+		)
+		return err
+	}
+
+	if t.keymanager, err = tmkeymanager.New(t.ctx, t); err != nil {
+		t.Logger.Error("initialize: failed to initialize keymanager backend",
+			"err", err,
+		)
+		return err
+	}
+
+	if t.registry, err = tmregistry.New(t.ctx, t); err != nil {
+		t.Logger.Error("initialize: failed to initialize registry backend",
+			"err", err,
+		)
+		return err
+	}
+	t.registryMetrics = registry.NewMetricsUpdater(t.ctx, t.registry)
+	t.svcMgr.RegisterCleanupOnly(t.registry, "registry backend")
+	t.svcMgr.RegisterCleanupOnly(t.registryMetrics, "registry metrics updater")
+
+	if t.staking, err = tmstaking.New(t.ctx, t); err != nil {
+		t.Logger.Error("staking: failed to initialize staking backend",
+			"err", err,
+		)
+		return err
+	}
+	t.svcMgr.RegisterCleanupOnly(t.staking, "staking backend")
+
+	if t.scheduler, err = tmscheduler.New(t.ctx, t); err != nil {
+		t.Logger.Error("scheduler: failed to initialize scheduler backend",
+			"err", err,
+		)
+		return err
+	}
+	t.svcMgr.RegisterCleanupOnly(t.scheduler, "scheduler backend")
+
+	if t.roothash, err = tmroothash.New(t.ctx, t.dataDir, t.beacon, t); err != nil {
+		t.Logger.Error("roothash: failed to initialize roothash backend",
+			"err", err,
+		)
+		return err
+	}
+	t.roothash = roothash.NewMetricsWrapper(t.roothash)
+	t.svcMgr.RegisterCleanupOnly(t.roothash, "roothash backend")
 
 	return nil
 }

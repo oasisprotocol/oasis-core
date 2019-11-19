@@ -9,15 +9,14 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	registryTests "github.com/oasislabs/oasis-core/go/registry/tests"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/storage/api"
@@ -36,10 +35,7 @@ func runtimeIDToNamespace(t *testing.T, runtimeID signature.PublicKey) (ns commo
 func ClientWorkerTests(
 	t *testing.T,
 	identity *identity.Identity,
-	beacon beacon.Backend,
-	timeSource epochtime.SetableBackend,
-	registry registry.Backend,
-	schedulerBackend scheduler.Backend,
+	consensus consensusAPI.Backend,
 ) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -51,10 +47,10 @@ func ClientWorkerTests(
 	rt, err := registryTests.NewTestRuntime(seed, nil)
 	require.NoError(err, "NewTestRuntime")
 	// Populate the registry with an entity and nodes.
-	nodes := rt.Populate(t, registry, timeSource, seed)
+	nodes := rt.Populate(t, consensus.Registry(), consensus, seed)
 
 	// Initialize storage client
-	client, err := storageClient.New(ctx, identity, schedulerBackend, registry)
+	client, err := storageClient.New(ctx, identity, consensus.Scheduler(), consensus.Registry())
 	require.NoError(err, "NewStorageClient")
 	err = client.(api.ClientBackend).WatchRuntime(rt.Runtime.ID)
 	require.NoError(err, "NewStorageClient")
@@ -80,6 +76,7 @@ func ClientWorkerTests(
 	require.Nil(r, "result should be nil")
 
 	// Advance the epoch.
+	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
 	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Wait for initialization.
@@ -91,7 +88,7 @@ func ClientWorkerTests(
 
 	// Get scheduled storage nodes.
 	scheduledStorageNodes := []*node.Node{}
-	ch, sub := schedulerBackend.WatchCommittees()
+	ch, sub := consensus.Scheduler().WatchCommittees()
 	defer sub.Close()
 recvLoop:
 	for {
@@ -134,5 +131,5 @@ recvLoop:
 	require.Equal(codes.Unavailable, status.Code(err), "storage client should timeout")
 	require.Nil(r, "result should be nil")
 
-	rt.Cleanup(t, registry, timeSource)
+	rt.Cleanup(t, consensus.Registry(), consensus)
 }

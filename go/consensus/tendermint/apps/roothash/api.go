@@ -4,13 +4,11 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 )
 
 const (
-	// TransactionTag is a unique byte used to identify transactions
-	// for the root hash application.
-	TransactionTag byte = 0x02
+	// AppID is the unique application identifier.
+	AppID uint8 = 0x02
 
 	// AppName is the ABCI application name.
 	AppName string = "999_roothash"
@@ -36,24 +34,6 @@ var (
 	// (value is a CBOR serialized ValueFinalized).
 	KeyFinalized = []byte("finalized")
 )
-
-// Tx is a transaction to be accepted by the roothash app.
-type Tx struct {
-	*TxComputeCommit `json:"ComputeCommit,omitempty"`
-	*TxMergeCommit   `json:"MergeCommit,omitempty"`
-}
-
-// TxComputeCommit is a transaction for submitting compute commitments.
-type TxComputeCommit struct {
-	ID      signature.PublicKey            `json:"id"`
-	Commits []commitment.ComputeCommitment `json:"commits"`
-}
-
-// TxMergeCommit is a transaction for submitting merge commitments.
-type TxMergeCommit struct {
-	ID      signature.PublicKey          `json:"id"`
-	Commits []commitment.MergeCommitment `json:"commits"`
-}
 
 // ValueFinalized is the value component of a TagFinalized.
 type ValueFinalized struct {

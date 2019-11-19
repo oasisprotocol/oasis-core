@@ -9,11 +9,14 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/consensus/gas"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
 const (
+	// BackendName is a unique backend name for the staking backend.
+	BackendName = "staking"
+
 	// TokenName is the name of the staking token.
 	TokenName = "Buffycoin"
 
@@ -26,21 +29,6 @@ const (
 )
 
 var (
-	// TransferSignatureContext is the context used for transfers.
-	TransferSignatureContext = signature.NewContext("oasis-core/staking: transfer", signature.WithChainSeparation())
-
-	// BurnSignatureContext is the context used for burns.
-	BurnSignatureContext = signature.NewContext("oasis-core/staking: burn", signature.WithChainSeparation())
-
-	// EscrowSignatureContext is the context used for escrows.
-	EscrowSignatureContext = signature.NewContext("oasis-core/staking: escrow", signature.WithChainSeparation())
-
-	// ReclaimEscrowSignatureContext is the context used for escrow reclimation.
-	ReclaimEscrowSignatureContext = signature.NewContext("oasis-core/staking: reclaim escrow", signature.WithChainSeparation())
-
-	// AmendCommissionScheduleSignatureContext is the context used for escrow reclimation.
-	AmendCommissionScheduleSignatureContext = signature.NewContext("oasis-core/staking: amend commission schedule", signature.WithChainSeparation())
-
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New("staking: invalid argument")
 
@@ -57,6 +45,26 @@ var (
 	// ErrInsufficientStake is the error returned when an operation fails
 	// due to insufficient stake.
 	ErrInsufficientStake = errors.New("staking: insufficient stake")
+
+	// MethodTransfer is the method name for transfers.
+	MethodTransfer = transaction.NewMethodName(BackendName, "Transfer")
+	// MethodBurn is the method name for burns.
+	MethodBurn = transaction.NewMethodName(BackendName, "Burn")
+	// MethodAddEscrow is the method name for escrows.
+	MethodAddEscrow = transaction.NewMethodName(BackendName, "AddEscrow")
+	// MethodReclaimEscrow is the method name for escrow reclamations.
+	MethodReclaimEscrow = transaction.NewMethodName(BackendName, "ReclaimEscrow")
+	// MethodAmendCommissionSchedule is the method name for amending commission schedules.
+	MethodAmendCommissionSchedule = transaction.NewMethodName(BackendName, "AmendCommissionSchedule")
+
+	// Methods is the list of all methods supported by the staking backend.
+	Methods = []transaction.MethodName{
+		MethodTransfer,
+		MethodBurn,
+		MethodAddEscrow,
+		MethodReclaimEscrow,
+		MethodAmendCommissionSchedule,
+	}
 )
 
 // Backend is a staking token implementation.
@@ -86,25 +94,6 @@ type Backend interface {
 	// DebondingDelegations returns the list of debonding delegations for
 	// the given owner (delegator).
 	DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.PublicKey][]*DebondingDelegation, error)
-
-	// Transfer executes a SignedTransfer.
-	Transfer(ctx context.Context, signedXfer *SignedTransfer) error
-
-	// Burn destroys tokens in the signing entity's balance.
-	Burn(ctx context.Context, signedBurn *SignedBurn) error
-
-	// AddEscrow escrows the amount of tokens from the signer's balance.
-	AddEscrow(ctx context.Context, signedEscrow *SignedEscrow) error
-
-	// ReclaimEscrow releases the quantity of the owner's escrow balance
-	// back into the owner's general balance.
-	ReclaimEscrow(ctx context.Context, signedReclaim *SignedReclaimEscrow) error
-
-	// AmendCommissionSchedule amends the signer's commission schedule.
-	AmendCommissionSchedule(ctx context.Context, signedAmendCommissionSchedule *SignedAmendCommissionSchedule) error
-
-	// SubmitEvidence submits evidence of misbehavior.
-	SubmitEvidence(ctx context.Context, evidence Evidence) error
 
 	// WatchTransfers returns a channel that produces a stream of TranserEvent
 	// on all balance transfers.
@@ -166,130 +155,55 @@ type ReclaimEscrowEvent struct {
 
 // Transfer is a token transfer.
 type Transfer struct {
-	Nonce uint64  `json:"nonce"`
-	Fee   gas.Fee `json:"fee"`
-
 	To     signature.PublicKey `json:"xfer_to"`
 	Tokens quantity.Quantity   `json:"xfer_tokens"`
 }
 
+// NewTransferTx creates a new transfer transaction.
+func NewTransferTx(nonce uint64, fee *transaction.Fee, xfer *Transfer) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodTransfer, xfer)
+}
+
 // Burn is a token burn (destruction).
 type Burn struct {
-	Nonce uint64  `json:"nonce"`
-	Fee   gas.Fee `json:"fee"`
-
 	Tokens quantity.Quantity `json:"burn_tokens"`
+}
+
+// NewBurnTx creates a new burn transaction.
+func NewBurnTx(nonce uint64, fee *transaction.Fee, burn *Burn) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodBurn, burn)
 }
 
 // Escrow is a token escrow.
 type Escrow struct {
-	Nonce uint64  `json:"nonce"`
-	Fee   gas.Fee `json:"fee"`
-
 	Account signature.PublicKey `json:"escrow_account"`
 	Tokens  quantity.Quantity   `json:"escrow_tokens"`
 }
 
+// NewAddEscrowTx creates a new add escrow transaction.
+func NewAddEscrowTx(nonce uint64, fee *transaction.Fee, escrow *Escrow) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodAddEscrow, escrow)
+}
+
 // ReclaimEscrow is a token escrow reclimation.
 type ReclaimEscrow struct {
-	Nonce uint64  `json:"nonce"`
-	Fee   gas.Fee `json:"fee"`
-
 	Account signature.PublicKey `json:"escrow_account"`
 	Shares  quantity.Quantity   `json:"reclaim_shares"`
 }
 
+// NewReclaimEscrowTx creates a new reclaim escrow transaction.
+func NewReclaimEscrowTx(nonce uint64, fee *transaction.Fee, reclaim *ReclaimEscrow) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodReclaimEscrow, reclaim)
+}
+
 // AmendCommissionSchedule is an amendment to a commission schedule.
 type AmendCommissionSchedule struct {
-	Nonce uint64  `json:"nonce"`
-	Fee   gas.Fee `json:"fee"`
-
 	Amendment CommissionSchedule `json:"amendment"`
 }
 
-// SignedTransfer is a Transfer, signed by the owner (source) entity.
-type SignedTransfer struct {
-	signature.Signed
-}
-
-// SignTransfer serializes the Transfer and signs the result.
-func SignTransfer(signer signature.Signer, xfer *Transfer) (*SignedTransfer, error) {
-	signed, err := signature.SignSigned(signer, TransferSignatureContext, xfer)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SignedTransfer{
-		Signed: *signed,
-	}, nil
-}
-
-// SignedBurn is a Burn, signed by the owner entity.
-type SignedBurn struct {
-	signature.Signed
-}
-
-// SignBurn serializes the Burn and signs the result.
-func SignBurn(signer signature.Signer, burn *Burn) (*SignedBurn, error) {
-	signed, err := signature.SignSigned(signer, BurnSignatureContext, burn)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SignedBurn{
-		Signed: *signed,
-	}, nil
-}
-
-// SignedEscrow is a Escrow, signed by the owner entity.
-type SignedEscrow struct {
-	signature.Signed
-}
-
-// SignEscrow serializes the Escrow and signs the result.
-func SignEscrow(signer signature.Signer, escrow *Escrow) (*SignedEscrow, error) {
-	signed, err := signature.SignSigned(signer, EscrowSignatureContext, escrow)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SignedEscrow{
-		Signed: *signed,
-	}, nil
-}
-
-// SignedReclaimEscrow is a ReclaimEscrow, signed by the owner entity.
-type SignedReclaimEscrow struct {
-	signature.Signed
-}
-
-// SignReclaimEscrow serializes the Reclaim and signs the result.
-func SignReclaimEscrow(signer signature.Signer, reclaim *ReclaimEscrow) (*SignedReclaimEscrow, error) {
-	signed, err := signature.SignSigned(signer, ReclaimEscrowSignatureContext, reclaim)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SignedReclaimEscrow{
-		Signed: *signed,
-	}, nil
-}
-
-// SignedAmendCommissionSchedule is a ReclaimEscrow, signed by the owner entity.
-type SignedAmendCommissionSchedule struct {
-	signature.Signed
-}
-
-// SignReclaimEscrow serializes the Reclaim and signs the result.
-func SignAmendCommissionSchedule(signer signature.Signer, amendCommissionSchedule *AmendCommissionSchedule) (*SignedAmendCommissionSchedule, error) {
-	signed, err := signature.SignSigned(signer, AmendCommissionScheduleSignatureContext, amendCommissionSchedule)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SignedAmendCommissionSchedule{
-		Signed: *signed,
-	}, nil
+// NewAmendCommissionScheduleTx creates a new amend commission schedule transaction.
+func NewAmendCommissionScheduleTx(nonce uint64, fee *transaction.Fee, amend *AmendCommissionSchedule) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodAmendCommissionSchedule, amend)
 }
 
 // SharePool is a combined balance of several entries, the relative sizes
@@ -481,7 +395,7 @@ type ConsensusParameters struct {
 	CommissionScheduleRules CommissionScheduleRules             `json:"commission_schedule_rules,omitempty"`
 	AcceptableTransferPeers map[signature.PublicKey]bool        `json:"acceptable_transfer_peers,omitempty"`
 	Slashing                map[SlashReason]Slash               `json:"slashing,omitempty"`
-	GasCosts                gas.Costs                           `json:"gas_costs,omitempty"`
+	GasCosts                transaction.Costs                   `json:"gas_costs,omitempty"`
 	MinDelegationAmount     quantity.Quantity                   `json:"min_delegation,omitempty"`
 }
 
@@ -596,13 +510,13 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error {
 
 const (
 	// GasOpTransfer is the gas operation identifier for transfer.
-	GasOpTransfer gas.Op = "transfer"
+	GasOpTransfer transaction.Op = "transfer"
 	// GasOpBurn is the gas operation identifier for burn.
-	GasOpBurn gas.Op = "burn"
+	GasOpBurn transaction.Op = "burn"
 	// GasOpAddEscrow is the gas operation identifier for add escrow.
-	GasOpAddEscrow gas.Op = "add_escrow"
+	GasOpAddEscrow transaction.Op = "add_escrow"
 	// GasOpReclaimEscrow is the gas operation identifier for reclaim escrow.
-	GasOpReclaimEscrow gas.Op = "reclaim_escrow"
+	GasOpReclaimEscrow transaction.Op = "reclaim_escrow"
 	// GasOpAmendCommissionSchedule is the gas operation identifier for amend commission schedule.
-	GasOpAmendCommissionSchedule gas.Op = "amend_commission_schedule"
+	GasOpAmendCommissionSchedule transaction.Op = "amend_commission_schedule"
 )

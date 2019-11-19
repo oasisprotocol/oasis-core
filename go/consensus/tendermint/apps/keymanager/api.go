@@ -4,9 +4,8 @@ package keymanager
 import api "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 
 const (
-	// TransactionTag is a unique byte to identify transactions for
-	// the key manager application.
-	TransactionTag byte = 0x07
+	// AppID is the unique application identifier.
+	AppID uint8 = 0x07
 
 	// AppName is the ABCI application name.
 	AppName string = "999_keymanager"

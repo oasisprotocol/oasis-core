@@ -16,18 +16,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/registry/api"
 )
 
-// BackendName is the name of this implementation.
-const BackendName = tmapi.BackendName
-
-var (
-	_ api.Backend = (*tendermintBackend)(nil)
-)
+var _ api.Backend = (*tendermintBackend)(nil)
 
 type tendermintBackend struct {
 	logger *logging.Logger
@@ -43,34 +37,6 @@ type tendermintBackend struct {
 
 func (tb *tendermintBackend) Querier() *app.QueryFactory {
 	return tb.querier
-}
-
-func (tb *tendermintBackend) RegisterEntity(ctx context.Context, sigEnt *entity.SignedEntity) error {
-	tx := app.Tx{
-		TxRegisterEntity: &app.TxRegisterEntity{
-			Entity: *sigEnt,
-		},
-	}
-
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
-		return errors.Wrap(err, "registry: register entity failed")
-	}
-
-	return nil
-}
-
-func (tb *tendermintBackend) DeregisterEntity(ctx context.Context, sigTimestamp *signature.Signed) error {
-	tx := app.Tx{
-		TxDeregisterEntity: &app.TxDeregisterEntity{
-			Timestamp: *sigTimestamp,
-		},
-	}
-
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
-		return errors.Wrap(err, "registry: deregister entity failed")
-	}
-
-	return nil
 }
 
 func (tb *tendermintBackend) GetEntity(ctx context.Context, id signature.PublicKey, height int64) (*entity.Entity, error) {
@@ -97,34 +63,6 @@ func (tb *tendermintBackend) WatchEntities() (<-chan *api.EntityEvent, *pubsub.S
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
-}
-
-func (tb *tendermintBackend) RegisterNode(ctx context.Context, sigNode *node.SignedNode) error {
-	tx := app.Tx{
-		TxRegisterNode: &app.TxRegisterNode{
-			Node: *sigNode,
-		},
-	}
-
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
-		return errors.Wrap(err, "registry: register node failed")
-	}
-
-	return nil
-}
-
-func (tb *tendermintBackend) UnfreezeNode(ctx context.Context, sigUnfreeze *api.SignedUnfreezeNode) error {
-	tx := app.Tx{
-		TxUnfreezeNode: &app.TxUnfreezeNode{
-			UnfreezeNode: *sigUnfreeze,
-		},
-	}
-
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
-		return errors.Wrap(err, "registry: unfreeze node failed")
-	}
-
-	return nil
 }
 
 func (tb *tendermintBackend) GetNode(ctx context.Context, id signature.PublicKey, height int64) (*node.Node, error) {
@@ -168,20 +106,6 @@ func (tb *tendermintBackend) WatchNodeList() (<-chan *api.NodeList, *pubsub.Subs
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
-}
-
-func (tb *tendermintBackend) RegisterRuntime(ctx context.Context, sigCon *api.SignedRuntime) error {
-	tx := app.Tx{
-		TxRegisterRuntime: &app.TxRegisterRuntime{
-			Runtime: *sigCon,
-		},
-	}
-
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
-		return errors.Wrap(err, "registry: register runtime failed")
-	}
-
-	return nil
 }
 
 func (tb *tendermintBackend) GetRuntime(ctx context.Context, id signature.PublicKey, height int64) (*api.Runtime, error) {

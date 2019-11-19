@@ -11,6 +11,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -22,7 +23,7 @@ const recvTimeout = 5 * time.Second
 
 // SchedulerImplementationTests exercises the basic functionality of a
 // scheduler backend.
-func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, registry registry.Backend) {
+func SchedulerImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	seed := []byte("SchedulerImplementationTests")
 
 	require := require.New(t)
@@ -31,12 +32,13 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 	require.NoError(err, "NewTestRuntime")
 
 	// Populate the registry with an entity and nodes.
-	nodes := rt.Populate(t, registry, epochtime, seed)
+	nodes := rt.Populate(t, consensus.Registry(), consensus, seed)
 
 	ch, sub := backend.WatchCommittees()
 	defer sub.Close()
 
 	// Advance the epoch.
+	epochtime := consensus.EpochTime().(epochtime.SetableBackend)
 	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
 	ensureValidCommittees := func(expectedCompute, expectedStorage, expectedTransactionScheduler int) {
@@ -113,14 +115,14 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, epochtime e
 	rt.Runtime.Compute.GroupSize = 2
 	rt.Runtime.Compute.GroupBackupSize = 1
 	rt.Runtime.Storage.GroupSize = 1
-	rt.MustRegister(t, registry)
+	rt.MustRegister(t, consensus.Registry(), consensus)
 
 	epoch = epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
 	ensureValidCommittees(3, 1, int(rt.Runtime.TxnScheduler.GroupSize))
 
 	// Cleanup the registry.
-	rt.Cleanup(t, registry, epochtime)
+	rt.Cleanup(t, consensus.Registry(), consensus)
 }
 
 func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtime *registry.Runtime, nodes []*node.Node) {

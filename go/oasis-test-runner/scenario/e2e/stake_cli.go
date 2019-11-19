@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/stake"
@@ -345,11 +346,10 @@ func (s *stakeCLIImpl) listAccounts(childEnv *env.Env) ([]signature.PublicKey, e
 }
 
 func (s *stakeCLIImpl) submitTx(childEnv *env.Env, src signature.PublicKey, txPath string) error {
-	s.logger.Info("submitting tx", stake.CfgTxFile, txPath)
+	s.logger.Info("submitting tx", consensus.CfgTxFile, txPath)
 	args := []string{
-		"stake", "account", "submit",
-		"--" + stake.CfgAccountID, src.String(),
-		"--" + stake.CfgTxFile, txPath,
+		"consensus", "submit_tx",
+		"--" + consensus.CfgTxFile, txPath,
 		"--" + grpc.CfgAddress, "unix:" + s.basicImpl.net.Validators()[0].SocketPath(),
 		"--" + common.CfgDebugAllowTestKeys,
 	}
@@ -420,11 +420,11 @@ func (s *stakeCLIImpl) genTransferTx(childEnv *env.Env, amount int, nonce int, d
 	args := []string{
 		"stake", "account", "gen_transfer",
 		"--" + stake.CfgAmount, strconv.Itoa(amount),
-		"--" + stake.CfgTxNonce, strconv.Itoa(nonce),
-		"--" + stake.CfgTxFile, txPath,
+		"--" + consensus.CfgTxNonce, strconv.Itoa(nonce),
+		"--" + consensus.CfgTxFile, txPath,
 		"--" + stake.CfgTransferDestination, dst.String(),
-		"--" + stake.CfgTxFeeAmount, strconv.Itoa(feeAmount),
-		"--" + stake.CfgTxFeeGas, strconv.Itoa(feeGas),
+		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(feeAmount),
+		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugTestEntity,
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
@@ -441,10 +441,10 @@ func (s *stakeCLIImpl) genBurnTx(childEnv *env.Env, amount int, nonce int, txPat
 	args := []string{
 		"stake", "account", "gen_burn",
 		"--" + stake.CfgAmount, strconv.Itoa(amount),
-		"--" + stake.CfgTxNonce, strconv.Itoa(nonce),
-		"--" + stake.CfgTxFile, txPath,
-		"--" + stake.CfgTxFeeAmount, strconv.Itoa(feeAmount),
-		"--" + stake.CfgTxFeeGas, strconv.Itoa(feeGas),
+		"--" + consensus.CfgTxNonce, strconv.Itoa(nonce),
+		"--" + consensus.CfgTxFile, txPath,
+		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(feeAmount),
+		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugTestEntity,
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
@@ -461,11 +461,11 @@ func (s *stakeCLIImpl) genEscrowTx(childEnv *env.Env, amount int, nonce int, esc
 	args := []string{
 		"stake", "account", "gen_escrow",
 		"--" + stake.CfgAmount, strconv.Itoa(amount),
-		"--" + stake.CfgTxNonce, strconv.Itoa(nonce),
-		"--" + stake.CfgTxFile, txPath,
+		"--" + consensus.CfgTxNonce, strconv.Itoa(nonce),
+		"--" + consensus.CfgTxFile, txPath,
 		"--" + stake.CfgEscrowAccount, escrow.String(),
-		"--" + stake.CfgTxFeeAmount, strconv.Itoa(feeAmount),
-		"--" + stake.CfgTxFeeGas, strconv.Itoa(feeGas),
+		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(feeAmount),
+		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugTestEntity,
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
@@ -482,11 +482,11 @@ func (s *stakeCLIImpl) genReclaimEscrowTx(childEnv *env.Env, amount int, nonce i
 	args := []string{
 		"stake", "account", "gen_reclaim_escrow",
 		"--" + stake.CfgAmount, strconv.Itoa(amount),
-		"--" + stake.CfgTxNonce, strconv.Itoa(nonce),
-		"--" + stake.CfgTxFile, txPath,
+		"--" + consensus.CfgTxNonce, strconv.Itoa(nonce),
+		"--" + consensus.CfgTxFile, txPath,
 		"--" + stake.CfgEscrowAccount, escrow.String(),
-		"--" + stake.CfgTxFeeAmount, strconv.Itoa(feeAmount),
-		"--" + stake.CfgTxFeeGas, strconv.Itoa(feeGas),
+		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(feeAmount),
+		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugTestEntity,
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
@@ -502,10 +502,10 @@ func (s *stakeCLIImpl) genAmendCommissionScheduleTx(childEnv *env.Env, nonce int
 
 	args := []string{
 		"stake", "account", "gen_amend_commission_schedule",
-		"--" + stake.CfgTxNonce, strconv.Itoa(nonce),
-		"--" + stake.CfgTxFile, txPath,
-		"--" + stake.CfgTxFeeAmount, strconv.Itoa(feeAmount),
-		"--" + stake.CfgTxFeeGas, strconv.Itoa(feeGas),
+		"--" + consensus.CfgTxNonce, strconv.Itoa(nonce),
+		"--" + consensus.CfgTxFile, txPath,
+		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(feeAmount),
+		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugTestEntity,
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),

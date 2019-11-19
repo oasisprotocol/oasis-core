@@ -57,11 +57,14 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 func MustAdvanceEpoch(t *testing.T, backend api.SetableBackend, increment uint64) api.EpochTime {
 	require := require.New(t)
 
-	epoch, err := backend.GetEpoch(context.Background(), 0)
+	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+	defer cancel()
+
+	epoch, err := backend.GetEpoch(ctx, 0)
 	require.NoError(err, "GetEpoch")
 
 	epoch = epoch + api.EpochTime(increment)
-	err = backend.SetEpoch(context.Background(), epoch)
+	err = backend.SetEpoch(ctx, epoch)
 	require.NoError(err, "SetEpoch")
 
 	return epoch

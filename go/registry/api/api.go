@@ -17,9 +17,13 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 )
 
 const (
+	// BackendName is a unique backend name for the registry backend.
+	BackendName = "registry"
+
 	// TimestampValidFor is the number of seconds that a timestamp in a
 	// register or deregister call is considered valid.
 	// Default is 15 minutes.
@@ -37,10 +41,6 @@ var (
 	// Note: This is identical to non-gensis registrations to support
 	// migrating existing registrations into a new genesis document.
 	RegisterGenesisEntitySignatureContext = RegisterEntitySignatureContext
-
-	// DeregisterEntitySignatureContext is the context used for entity
-	// deregistration.
-	DeregisterEntitySignatureContext = signature.NewContext("oasis-core/registry: deregister entity")
 
 	// RegisterNodeSignatureContext is the context used for node
 	// registration.
@@ -63,10 +63,6 @@ var (
 	// Note: This is identical to non-gensis registrations to support
 	// migrating existing registrations into a new genesis document.
 	RegisterGenesisRuntimeSignatureContext = RegisterRuntimeSignatureContext
-
-	// RegisterUnfreezeNodeSignatureContext is the context used for
-	// unfreezing nodes.
-	RegisterUnfreezeNodeSignatureContext = signature.NewContext("oasis-core/registry: unfreeze node")
 
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New("registry: invalid argument")
@@ -128,20 +124,30 @@ var (
 
 	// ErrNodeUpdateNotAllowed is the error returned when trying to update an existing node with unallowed changes.
 	ErrNodeUpdateNotAllowed = errors.New("registry: node update not allowed")
+
+	// MethodRegisterEntity is the method name for entity registrations.
+	MethodRegisterEntity = transaction.NewMethodName(BackendName, "RegisterEntity")
+	// MethodDeregisterEntity is the method name for entity deregistrations.
+	MethodDeregisterEntity = transaction.NewMethodName(BackendName, "DeregisterEntity")
+	// MethodRegisterNode is the method name for node registrations.
+	MethodRegisterNode = transaction.NewMethodName(BackendName, "RegisterNode")
+	// MethodUnfreezeNode is the method name for unfreezing nodes.
+	MethodUnfreezeNode = transaction.NewMethodName(BackendName, "UnfreezeNode")
+	// MethodRegisterRuntime is the method name for registering runtimes.
+	MethodRegisterRuntime = transaction.NewMethodName(BackendName, "RegisterRuntime")
+
+	// Methods is the list of all methods supported by the registry backend.
+	Methods = []transaction.MethodName{
+		MethodRegisterEntity,
+		MethodDeregisterEntity,
+		MethodRegisterNode,
+		MethodUnfreezeNode,
+		MethodRegisterRuntime,
+	}
 )
 
 // Backend is a registry implementation.
 type Backend interface {
-	// RegisterEntity registers and or updates an entity with the registry.
-	//
-	// The signature should be made using RegisterEntitySignatureContext.
-	RegisterEntity(context.Context, *entity.SignedEntity) error
-
-	// DeregisterEntity deregisters an entity.
-	//
-	// The signature should be made using DeregisterEntitySignatureContext.
-	DeregisterEntity(context.Context, *signature.Signed) error
-
 	// GetEntity gets an entity by ID.
 	GetEntity(context.Context, signature.PublicKey, int64) (*entity.Entity, error)
 
@@ -151,17 +157,6 @@ type Backend interface {
 	// WatchEntities returns a channel that produces a stream of
 	// EntityEvent on entity registration changes.
 	WatchEntities() (<-chan *EntityEvent, *pubsub.Subscription)
-
-	// RegisterNode registers and or updates a node with the registry.
-	//
-	// The signature should be made using RegisterNodeSignatureContext.
-	RegisterNode(context.Context, *node.SignedNode) error
-
-	// UnfreezeNode unfreezes a previously frozen node.
-	//
-	// The signature should be made using RegisterUnfreezeNodeSignatureContext
-	// and must be made by the owning entity key.
-	UnfreezeNode(context.Context, *SignedUnfreezeNode) error
 
 	// GetNode gets a node by ID.
 	GetNode(context.Context, signature.PublicKey, int64) (*node.Node, error)
@@ -184,9 +179,6 @@ type Backend interface {
 	// order.
 	WatchNodeList() (<-chan *NodeList, *pubsub.Subscription)
 
-	// RegisterRuntime registers a runtime.
-	RegisterRuntime(context.Context, *SignedRuntime) error
-
 	// GetRuntime gets a runtime by ID.
 	GetRuntime(context.Context, signature.PublicKey, int64) (*Runtime, error)
 
@@ -206,6 +198,31 @@ type Backend interface {
 
 	// Cleanup cleans up the registry backend.
 	Cleanup()
+}
+
+// NewRegisterEntityTx creates a new register entity transaction.
+func NewRegisterEntityTx(nonce uint64, fee *transaction.Fee, sigEnt *entity.SignedEntity) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodRegisterEntity, sigEnt)
+}
+
+// NewDeregisterEntityTx creates a new deregister entity transaction.
+func NewDeregisterEntityTx(nonce uint64, fee *transaction.Fee) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodDeregisterEntity, nil)
+}
+
+// NewRegisterNodeTx creates a new register node transaction.
+func NewRegisterNodeTx(nonce uint64, fee *transaction.Fee, sigNode *node.SignedNode) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodRegisterNode, sigNode)
+}
+
+// NewUnfreezeNodeTx creates a new unfreeze node transaction.
+func NewUnfreezeNodeTx(nonce uint64, fee *transaction.Fee, unfreeze *UnfreezeNode) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodUnfreezeNode, unfreeze)
+}
+
+// NewRegisterRuntimeTx creates a new register runtime transaction.
+func NewRegisterRuntimeTx(nonce uint64, fee *transaction.Fee, sigRt *SignedRuntime) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodRegisterRuntime, sigRt)
 }
 
 // EntityEvent is the event that is returned via WatchEntities to signify
@@ -279,24 +296,6 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 	}
 
 	return &ent, nil
-}
-
-// VerifyDeregisterEntityArgs verifies arguments for DeregisterEntity.
-func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.Signed) (signature.PublicKey, uint64, error) {
-	var id signature.PublicKey
-	var timestamp Timestamp
-	if sigTimestamp == nil {
-		return id, 0, ErrInvalidArgument
-	}
-	if err := sigTimestamp.Open(DeregisterEntitySignatureContext, &timestamp); err != nil {
-		logger.Error("DeregisterEntity: invalid signature",
-			"signed_timestamp", sigTimestamp,
-		)
-		return id, 0, ErrInvalidSignature
-	}
-	id = sigTimestamp.Signature.PublicKey
-
-	return id, uint64(timestamp), nil
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.

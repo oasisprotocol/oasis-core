@@ -14,7 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
-	"github.com/oasislabs/oasis-core/go/consensus/gas"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
@@ -98,7 +98,6 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 	if err := sc.net.Controller().WaitNodesRegistered(ctx, 3); err != nil {
 		return err
 	}
-	st := sc.net.Controller().Staking
 
 	// Determine initial entity balances.
 	totalEntityBalance, err := sc.getTotalEntityBalance(ctx)
@@ -110,7 +109,7 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 	var totalFees quantity.Quantity
 	for _, t := range []struct {
 		name string
-		fn   func(context.Context, signature.Signer, staking.Backend) (*quantity.Quantity, error)
+		fn   func(context.Context, signature.Signer) (*quantity.Quantity, error)
 	}{
 		{"Transfer", sc.testTransfer},
 		{"Burn", sc.testBurn},
@@ -120,7 +119,7 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 		sc.logger.Info("testing operation", "op", t.name)
 
 		var fees *quantity.Quantity
-		if fees, err = t.fn(ctx, srcSigner, st); err != nil {
+		if fees, err = t.fn(ctx, srcSigner); err != nil {
 			return fmt.Errorf("%s: %w", t.name, err)
 		}
 		_ = totalFees.Add(fees)
@@ -137,6 +136,7 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 	// up in the common pool. Since in this scenario an operation costs 10 units,
 	// there is only one operation per block and there are 3 validators, each
 	// operation should put 1 unit to the common pool.
+	st := sc.net.Controller().Staking
 	commonPool, err := st.CommonPool(ctx, 0)
 	if err != nil {
 		return err
@@ -196,8 +196,8 @@ func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Qua
 	return &total, nil
 }
 
-func (sc *gasFeesImpl) testTransfer(ctx context.Context, signer signature.Signer, st staking.Backend) (*quantity.Quantity, error) {
-	return testStakingGas(ctx, signer, st, true, func(acct *staking.Account, fee gas.Fee, amount int64) error {
+func (sc *gasFeesImpl) testTransfer(ctx context.Context, signer signature.Signer) (*quantity.Quantity, error) {
+	return sc.testStakingGas(ctx, signer, true, func(acct *staking.Account, fee transaction.Fee, amount int64) error {
 		// Generate random destination account.
 		dstSigner, err := memorySigner.NewSigner(rand.Reader)
 		if err != nil {
@@ -205,67 +205,66 @@ func (sc *gasFeesImpl) testTransfer(ctx context.Context, signer signature.Signer
 		}
 
 		transfer := staking.Transfer{
-			Nonce: acct.General.Nonce,
-			Fee:   fee,
-			To:    dstSigner.Public(),
+			To: dstSigner.Public(),
 		}
 		_ = transfer.Tokens.FromInt64(amount)
-		signedXfer, err := staking.SignTransfer(signer, &transfer)
+
+		tx := staking.NewTransferTx(acct.General.Nonce, &fee, &transfer)
+		sigTx, err := transaction.Sign(signer, tx)
 		if err != nil {
 			return fmt.Errorf("failed to sign transfer: %w", err)
 		}
-		return st.Transfer(ctx, signedXfer)
+		return sc.net.Controller().Consensus.SubmitTx(ctx, sigTx)
 	})
 }
 
-func (sc *gasFeesImpl) testBurn(ctx context.Context, signer signature.Signer, st staking.Backend) (*quantity.Quantity, error) {
-	return testStakingGas(ctx, signer, st, true, func(acct *staking.Account, fee gas.Fee, amount int64) error {
-		burn := staking.Burn{
-			Nonce: acct.General.Nonce,
-			Fee:   fee,
-		}
+func (sc *gasFeesImpl) testBurn(ctx context.Context, signer signature.Signer) (*quantity.Quantity, error) {
+	return sc.testStakingGas(ctx, signer, true, func(acct *staking.Account, fee transaction.Fee, amount int64) error {
+		var burn staking.Burn
 		_ = burn.Tokens.FromInt64(amount)
-		signedBurn, err := staking.SignBurn(signer, &burn)
+
+		tx := staking.NewBurnTx(acct.General.Nonce, &fee, &burn)
+		sigTx, err := transaction.Sign(signer, tx)
 		if err != nil {
 			return fmt.Errorf("failed to sign burn: %w", err)
 		}
-		return st.Burn(ctx, signedBurn)
+		return sc.net.Controller().Consensus.SubmitTx(ctx, sigTx)
 	})
 }
 
-func (sc *gasFeesImpl) testAddEscrow(ctx context.Context, signer signature.Signer, st staking.Backend) (*quantity.Quantity, error) {
-	return testStakingGas(ctx, signer, st, true, func(acct *staking.Account, fee gas.Fee, amount int64) error {
+func (sc *gasFeesImpl) testAddEscrow(ctx context.Context, signer signature.Signer) (*quantity.Quantity, error) {
+	return sc.testStakingGas(ctx, signer, true, func(acct *staking.Account, fee transaction.Fee, amount int64) error {
 		escrow := staking.Escrow{
-			Nonce:   acct.General.Nonce,
-			Fee:     fee,
 			Account: escrowSigner.Public(),
 		}
 		_ = escrow.Tokens.FromInt64(amount)
-		signedEscrow, err := staking.SignEscrow(signer, &escrow)
+
+		tx := staking.NewAddEscrowTx(acct.General.Nonce, &fee, &escrow)
+		sigTx, err := transaction.Sign(signer, tx)
 		if err != nil {
 			return fmt.Errorf("failed to sign escrow: %w", err)
 		}
-		return st.AddEscrow(ctx, signedEscrow)
+		return sc.net.Controller().Consensus.SubmitTx(ctx, sigTx)
 	})
 }
 
-func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.Signer, st staking.Backend) (*quantity.Quantity, error) {
-	return testStakingGas(ctx, signer, st, false, func(acct *staking.Account, fee gas.Fee, amount int64) error {
+func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.Signer) (*quantity.Quantity, error) {
+	return sc.testStakingGas(ctx, signer, false, func(acct *staking.Account, fee transaction.Fee, amount int64) error {
 		escrow := staking.ReclaimEscrow{
-			Nonce:   acct.General.Nonce,
-			Fee:     fee,
 			Account: escrowSigner.Public(),
 		}
 		_ = escrow.Shares.FromInt64(amount)
-		signedEscrow, err := staking.SignReclaimEscrow(signer, &escrow)
+
+		tx := staking.NewReclaimEscrowTx(acct.General.Nonce, &fee, &escrow)
+		sigTx, err := transaction.Sign(signer, tx)
 		if err != nil {
-			return fmt.Errorf("failed to sign escrow: %w", err)
+			return fmt.Errorf("failed to sign reclaim escrow: %w", err)
 		}
-		if err = st.ReclaimEscrow(ctx, signedEscrow); err != nil {
+		if err = sc.net.Controller().Consensus.SubmitTx(ctx, sigTx); err != nil {
 			return fmt.Errorf("failed to reclaim escrow: %w", err)
 		}
 
-		ch, sub, err := st.WatchEscrows(ctx)
+		ch, sub, err := sc.net.Controller().Staking.WatchEscrows(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to watch escrows: %w", err)
 		}
@@ -289,12 +288,11 @@ func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.S
 	})
 }
 
-func testStakingGas(
+func (sc *gasFeesImpl) testStakingGas(
 	ctx context.Context,
 	signer signature.Signer,
-	st staking.Backend,
 	subtract bool,
-	op func(*staking.Account, gas.Fee, int64) error,
+	op func(*staking.Account, transaction.Fee, int64) error,
 ) (*quantity.Quantity, error) {
 	var amountOverBalance quantity.Quantity
 	// This should be more than it is in the account.
@@ -311,28 +309,28 @@ func testStakingGas(
 	var totalFees quantity.Quantity
 	for _, t := range []struct {
 		name      string
-		fee       gas.Fee
+		fee       transaction.Fee
 		amount    int64
 		checkOk   bool
 		deliverOk bool
 	}{
 		// No fees.
-		{"NoFees", gas.Fee{}, 50, false, false},
-		// Free gas.
-		{"FreeGas", gas.Fee{Gas: 10}, 50, false, false},
+		{"NoFees", transaction.Fee{}, 50, true, false},
+		// Free transaction.
+		{"FreeGas", transaction.Fee{Gas: 10}, 50, false, false},
 		// Gas price too low.
-		{"LowGasPrice", gas.Fee{Amount: amountLow, Gas: 10}, 50, false, false},
-		// Not enough gas.
-		{"OutOfGas", gas.Fee{Amount: amountOk, Gas: 9}, 50, true, false},
-		// No balance to pay for gas.
-		{"NoBalanceForGas", gas.Fee{Amount: amountOverBalance, Gas: 10}, 50, false, false},
+		{"LowGasPrice", transaction.Fee{Amount: amountLow, Gas: 10}, 50, false, false},
+		// Not enough transaction.
+		{"OutOfGas", transaction.Fee{Amount: amountOk, Gas: 9}, 50, true, false},
+		// No balance to pay for transaction.
+		{"NoBalanceForGas", transaction.Fee{Amount: amountOverBalance, Gas: 10}, 50, false, false},
 		// Enough balance to pay for gas, but not enough balance for operation
 		// after you subtract the gas payment.
-		{"NoBalanceForOp", gas.Fee{Amount: amountOk, Gas: 10}, 1000, true, false},
+		{"NoBalanceForOp", transaction.Fee{Amount: amountOk, Gas: 10}, 1000, true, false},
 		// Successful operation.
-		{"Success", gas.Fee{Amount: amountOk, Gas: 10}, 100, true, true},
+		{"Success", transaction.Fee{Amount: amountOk, Gas: 10}, 100, true, true},
 	} {
-		if err := testStakingGasOp(ctx, signer, st, t.fee, t.amount, t.checkOk, t.deliverOk, subtract, op); err != nil {
+		if err := sc.testStakingGasOp(ctx, signer, t.fee, t.amount, t.checkOk, t.deliverOk, subtract, op); err != nil {
 			return nil, fmt.Errorf("%s: %w", t.name, err)
 		}
 
@@ -344,16 +342,17 @@ func testStakingGas(
 	return &totalFees, nil
 }
 
-func testStakingGasOp(
+func (sc *gasFeesImpl) testStakingGasOp(
 	ctx context.Context,
 	signer signature.Signer,
-	st staking.Backend,
-	fee gas.Fee,
+	fee transaction.Fee,
 	amount int64,
 	checkOk, deliverOk bool,
 	subtract bool,
-	op func(*staking.Account, gas.Fee, int64) error,
+	op func(*staking.Account, transaction.Fee, int64) error,
 ) error {
+	st := sc.net.Controller().Staking
+
 	// Fetch initial account info.
 	acct, err := st.AccountInfo(ctx, signer.Public(), 0)
 	if err != nil {

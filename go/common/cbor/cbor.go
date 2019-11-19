@@ -7,6 +7,11 @@ package cbor
 
 import "github.com/fxamacker/cbor"
 
+// RawMessage is a raw encoded CBOR value. It implements Marshaler and
+// Unmarshaler interfaces and can be used to delay CBOR decoding or
+// precompute a CBOR encoding.
+type RawMessage = cbor.RawMessage
+
 // FixSliceForSerde will convert `nil` to `[]byte` to work around serde
 // brain damage.
 func FixSliceForSerde(b []byte) []byte {

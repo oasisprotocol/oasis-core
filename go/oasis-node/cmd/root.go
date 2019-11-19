@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/version"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/consensus"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/control"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/genesis"
@@ -76,6 +77,7 @@ func init() {
 		registry.Register,
 		stake.Register,
 		storage.Register,
+		consensus.Register,
 	} {
 		v(rootCmd)
 	}

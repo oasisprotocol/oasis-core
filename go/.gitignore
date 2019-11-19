@@ -20,4 +20,5 @@ grpc/txnscheduler/*.pb.go
 grpc/sentry/*.pb.go
 grpc/staking/*.pb.go
 grpc/genesis/*.pb.go
+grpc/consensus/*.pb.go
 common/sgx/aesm/*.pb.go

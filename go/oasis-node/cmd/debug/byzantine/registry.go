@@ -10,7 +10,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	registryapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
@@ -53,14 +53,10 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 		return errors.Wrap(err, "node SignNode")
 	}
 
-	if err := tendermintBroadcastTxCommit(svc, registryapp.TransactionTag, registryapp.Tx{
-		TxRegisterNode: &registryapp.TxRegisterNode{
-			Node: *signedNode,
-		},
-	}); err != nil {
-		return errors.Wrap(err, "Tendermint BroadcastTx commit")
+	tx := registry.NewRegisterNodeTx(0, nil, signedNode)
+	if err := consensus.SignAndSubmitTx(context.Background(), svc, id.NodeSigner, tx); err != nil {
+		return errors.Wrap(err, "consensus RegisterNode tx")
 	}
-
 	return nil
 }
 

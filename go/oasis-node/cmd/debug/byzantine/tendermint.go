@@ -4,8 +4,6 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
@@ -83,34 +81,6 @@ func (ht honestTendermint) stop() error {
 	<-ht.service.Quit()
 	logger.Debug("honest Tendermint service quit done")
 	ht.service = nil
-
-	return nil
-}
-
-// tendermintUnsubscribeDrain drains an unbuffered subscription while unsubscribing.
-func tendermintUnsubscribeDrain(svc service.TendermintService, subscriber string, query tmpubsub.Query, sub tmtypes.Subscription) error {
-	go func() {
-		for {
-			select {
-			case <-sub.Out():
-			case <-sub.Cancelled():
-				break
-			}
-		}
-	}()
-	if err := svc.Unsubscribe("script", query); err != nil {
-		return errors.Wrap(err, "Tendermint Unsubscribe")
-	}
-
-	return nil
-}
-
-// tendermintBroadcastTxCommit is like Tendermint's own BroadcastTxCommit, but without
-// the timeout system.
-func tendermintBroadcastTxCommit(svc service.TendermintService, tag byte, tx interface{}) error {
-	if err := svc.BroadcastTx(context.Background(), tag, tx, true); err != nil {
-		return errors.Wrap(err, "Tendermint BroadcastTx")
-	}
 
 	return nil
 }

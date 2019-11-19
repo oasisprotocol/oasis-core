@@ -9,22 +9,7 @@ import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.MutableState, signedXfer *staking.SignedTransfer) error {
-	var xfer staking.Transfer
-	if err := signedXfer.Open(staking.TransferSignatureContext, &xfer); err != nil {
-		app.logger.Error("Transfer: invalid signature",
-			"signed_xfer", signedXfer,
-		)
-		return staking.ErrInvalidSignature
-	}
-
-	// Authenticate sender and make sure fees are paid.
-	fromID := signedXfer.Signature.PublicKey
-	from, err := stakingState.AuthenticateAndPayFees(ctx, state, fromID, xfer.Nonce, &xfer.Fee)
-	if err != nil {
-		return err
-	}
-
+func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.MutableState, xfer *staking.Transfer) error {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
@@ -37,6 +22,9 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 	if err := ctx.Gas().UseGas(staking.GasOpTransfer, params.GasCosts); err != nil {
 		return err
 	}
+
+	fromID := ctx.TxSigner()
+	from := state.Account(fromID)
 
 	if fromID.Equal(xfer.To) {
 		// Handle transfer to self as just a balance check.
@@ -85,22 +73,7 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 	return nil
 }
 
-func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.MutableState, signedBurn *staking.SignedBurn) error {
-	var burn staking.Burn
-	if err := signedBurn.Open(staking.BurnSignatureContext, &burn); err != nil {
-		app.logger.Error("Burn: invalid signature",
-			"signed_burn", signedBurn,
-		)
-		return staking.ErrInvalidSignature
-	}
-
-	// Authenticate sender and make sure fees are paid.
-	id := signedBurn.Signature.PublicKey
-	from, err := stakingState.AuthenticateAndPayFees(ctx, state, id, burn.Nonce, &burn.Fee)
-	if err != nil {
-		return err
-	}
-
+func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.MutableState, burn *staking.Burn) error {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
@@ -113,6 +86,9 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.Mutab
 	if err := ctx.Gas().UseGas(staking.GasOpBurn, params.GasCosts); err != nil {
 		return err
 	}
+
+	id := ctx.TxSigner()
+	from := state.Account(id)
 
 	if err := from.General.Balance.Sub(&burn.Tokens); err != nil {
 		app.logger.Error("Burn: failed to burn tokens",
@@ -143,22 +119,7 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.Mutab
 	return nil
 }
 
-func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.MutableState, signedEscrow *staking.SignedEscrow) error {
-	var escrow staking.Escrow
-	if err := signedEscrow.Open(staking.EscrowSignatureContext, &escrow); err != nil {
-		app.logger.Error("AddEscrow: invalid signature",
-			"signed_escrow", signedEscrow,
-		)
-		return staking.ErrInvalidSignature
-	}
-
-	// Authenticate sender and make sure fees are paid.
-	id := signedEscrow.Signature.PublicKey
-	from, err := stakingState.AuthenticateAndPayFees(ctx, state, id, escrow.Nonce, &escrow.Fee)
-	if err != nil {
-		return err
-	}
-
+func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.MutableState, escrow *staking.Escrow) error {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
@@ -176,6 +137,9 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 	if escrow.Tokens.Cmp(&params.MinDelegationAmount) < 0 {
 		return staking.ErrInvalidArgument
 	}
+
+	id := ctx.TxSigner()
+	from := state.Account(id)
 
 	// Fetch escrow account.
 	//
@@ -225,25 +189,10 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 	return nil
 }
 
-func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingState.MutableState, signedReclaim *staking.SignedReclaimEscrow) error {
-	var reclaim staking.ReclaimEscrow
-	if err := signedReclaim.Open(staking.ReclaimEscrowSignatureContext, &reclaim); err != nil {
-		app.logger.Error("ReclaimEscrow: invalid signature",
-			"signed_reclaim", signedReclaim,
-		)
-		return staking.ErrInvalidSignature
-	}
-
+func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingState.MutableState, reclaim *staking.ReclaimEscrow) error {
 	// No sense if there is nothing to reclaim.
 	if reclaim.Shares.IsZero() {
 		return staking.ErrInvalidArgument
-	}
-
-	// Authenticate sender and make sure fees are paid.
-	id := signedReclaim.Signature.PublicKey
-	to, err := stakingState.AuthenticateAndPayFees(ctx, state, id, reclaim.Nonce, &reclaim.Fee)
-	if err != nil {
-		return err
 	}
 
 	if ctx.IsCheckOnly() {
@@ -258,6 +207,9 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	if err = ctx.Gas().UseGas(staking.GasOpReclaimEscrow, params.GasCosts); err != nil {
 		return err
 	}
+
+	id := ctx.TxSigner()
+	to := state.Account(id)
 
 	// Fetch escrow account.
 	//
@@ -333,22 +285,11 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	return nil
 }
 
-func (app *stakingApplication) amendCommissionSchedule(ctx *abci.Context, state *stakingState.MutableState, signedAmendCommissionSchedule *staking.SignedAmendCommissionSchedule) error {
-	var amendCommissionSchedule staking.AmendCommissionSchedule
-	if err := signedAmendCommissionSchedule.Open(staking.AmendCommissionScheduleSignatureContext, &amendCommissionSchedule); err != nil {
-		app.logger.Error("ReclaimEscrow: invalid signature",
-			"signed_amend_commission_schedule", signedAmendCommissionSchedule,
-		)
-		return staking.ErrInvalidSignature
-	}
-
-	// Authenticate sender and make sure fees are paid.
-	id := signedAmendCommissionSchedule.Signature.PublicKey
-	from, err := stakingState.AuthenticateAndPayFees(ctx, state, id, amendCommissionSchedule.Nonce, &amendCommissionSchedule.Fee)
-	if err != nil {
-		return err
-	}
-
+func (app *stakingApplication) amendCommissionSchedule(
+	ctx *abci.Context,
+	state *stakingState.MutableState,
+	amendCommissionSchedule *staking.AmendCommissionSchedule,
+) error {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
@@ -366,6 +307,9 @@ func (app *stakingApplication) amendCommissionSchedule(ctx *abci.Context, state 
 	if err != nil {
 		return err
 	}
+
+	id := ctx.TxSigner()
+	from := state.Account(id)
 
 	if err = from.Escrow.CommissionSchedule.AmendAndPruneAndValidate(&amendCommissionSchedule.Amendment, &params.CommissionScheduleRules, epoch); err != nil {
 		app.logger.Error("AmendCommissionSchedule: amendment not acceptable",

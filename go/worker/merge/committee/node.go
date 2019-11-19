@@ -16,6 +16,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
@@ -400,7 +401,8 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		// Submit compute commit to BFT.
 		ccs := pool.GetComputeCommitments()
 		go func() {
-			ccErr := n.commonNode.Roothash.ComputeCommit(n.roundCtx, n.commonNode.RuntimeID, ccs)
+			tx := roothash.NewComputeCommitTx(0, nil, n.commonNode.RuntimeID, ccs)
+			ccErr := consensus.SignAndSubmitTx(n.roundCtx, n.commonNode.Consensus, n.commonNode.Identity.NodeSigner, tx)
 
 			switch ccErr {
 			case nil:
@@ -585,7 +587,8 @@ func (n *Node) proposeHeaderLocked(result *commitment.MergeBody) {
 	mcs := []commitment.MergeCommitment{*mc}
 	mergeCommitStart := time.Now()
 	go func() {
-		mcErr := n.commonNode.Roothash.MergeCommit(n.roundCtx, n.commonNode.RuntimeID, mcs)
+		tx := roothash.NewMergeCommitTx(0, nil, n.commonNode.RuntimeID, mcs)
+		mcErr := consensus.SignAndSubmitTx(n.roundCtx, n.commonNode.Consensus, n.commonNode.Identity.NodeSigner, tx)
 		// Record merge commit latency.
 		roothashCommitLatency.With(n.getMetricLabels()).Observe(time.Since(mergeCommitStart).Seconds())
 

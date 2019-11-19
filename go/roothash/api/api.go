@@ -10,13 +10,14 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 )
 
 const (
-	// HashSize is the size of the various hashes in bytes.
-	HashSize = 32
+	// BackendName is a unique backend name for the roothash backend.
+	BackendName = "roothash"
 
 	// LogEventComputeDiscrepancyDetected is a log event value that signals
 	// a compute discrepancy has been detected.
@@ -33,14 +34,22 @@ const (
 )
 
 var (
-	// ErrMalformedHash is the error returned when a hash is malformed.
-	ErrMalformedHash = errors.New("roothash: malformed hash")
-
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New("roothash: invalid argument")
 
 	// ErrNotFound is the error returned when a block is not found.
 	ErrNotFound = errors.New("roothash: block not found")
+
+	// MethodComputeCommit is the method name for compute commit submission.
+	MethodComputeCommit = transaction.NewMethodName(BackendName, "ComputeCommit")
+	// MethodMergeCommit is the method name for merge commit submission.
+	MethodMergeCommit = transaction.NewMethodName(BackendName, "MergeCommit")
+
+	// Methods is a list of all methods supported by the roothash backend.
+	Methods = []transaction.MethodName{
+		MethodComputeCommit,
+		MethodMergeCommit,
+	}
 )
 
 // Backend is a root hash implementation.
@@ -72,17 +81,39 @@ type Backend interface {
 	// blocks.
 	WatchPrunedBlocks() (<-chan *PrunedBlock, *pubsub.Subscription, error)
 
-	// MergeCommit submits a batch of merge commitments.
-	MergeCommit(context.Context, signature.PublicKey, []commitment.MergeCommitment) error
-
-	// ComputeCommit submits a batch of compute commitments for slashing.
-	ComputeCommit(context.Context, signature.PublicKey, []commitment.ComputeCommitment) error
-
 	// ToGenesis returns the genesis state at specified block height.
 	ToGenesis(context.Context, int64) (*Genesis, error)
 
 	// Cleanup cleans up the roothash backend.
 	Cleanup()
+}
+
+// ComputeCommit is the argument set for the ComputeCommit method.
+type ComputeCommit struct {
+	ID      signature.PublicKey            `json:"id"`
+	Commits []commitment.ComputeCommitment `json:"commits"`
+}
+
+// NewComputeCommitTx creates a new compute commit transaction.
+func NewComputeCommitTx(nonce uint64, fee *transaction.Fee, runtimeID signature.PublicKey, commits []commitment.ComputeCommitment) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodComputeCommit, &ComputeCommit{
+		ID:      runtimeID,
+		Commits: commits,
+	})
+}
+
+// MergeCommit is the argument set for the MergeCommit method.
+type MergeCommit struct {
+	ID      signature.PublicKey          `json:"id"`
+	Commits []commitment.MergeCommitment `json:"commits"`
+}
+
+// NewMergeCommitTx creates a new compute commit transaction.
+func NewMergeCommitTx(nonce uint64, fee *transaction.Fee, runtimeID signature.PublicKey, commits []commitment.MergeCommitment) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodMergeCommit, &MergeCommit{
+		ID:      runtimeID,
+		Commits: commits,
+	})
 }
 
 // AnnotatedBlock is an annotated roothash block.

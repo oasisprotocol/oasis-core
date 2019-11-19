@@ -1,7 +1,5 @@
 package tests
 
-// NOTE: This file contains Tendermint-specific functions.
-
 import (
 	"io/ioutil"
 	"os"
@@ -12,12 +10,13 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/identity"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	tmcrypto "github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
-	"github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-func tendermintMakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) api.Evidence {
+// MakeDoubleSignEvidence creates consensus evidence of double signing.
+func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) consensus.Evidence {
 	require := require.New(t)
 
 	// Create empty directory for private validator metadata.
@@ -63,7 +62,7 @@ func tendermintMakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) ap
 		VoteA: makeVote(pv1, genesisTests.TestChainID, 0, 1, 2, 1, blockID1),
 		VoteB: makeVote(pv2, genesisTests.TestChainID, 0, 1, 2, 1, blockID2),
 	}
-	return api.NewConsensusEvidence(ev)
+	return consensus.NewConsensusEvidence(ev)
 }
 
 // makeVote copied from Tendermint test suite.

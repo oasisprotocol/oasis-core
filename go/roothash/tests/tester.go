@@ -14,16 +14,15 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
+	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	registryTests "github.com/oasislabs/oasis-core/go/registry/tests"
 	"github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
@@ -46,7 +45,7 @@ type runtimeState struct {
 
 // RootHashImplementationTests exercises the basic functionality of a
 // roothash backend.
-func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, storage storage.Backend, registry registry.Backend, stakingBackend staking.Backend) {
+func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, storage storage.Backend) {
 	seedBase := []byte("RootHashImplementationTests")
 
 	require := require.New(t)
@@ -57,10 +56,10 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 		if len(rtStates) > 0 {
 			// This is entity deregistration based, and all of the
 			// runtimes used in this test share the entity.
-			rtStates[0].rt.Cleanup(t, registry, epochtime)
+			rtStates[0].rt.Cleanup(t, consensus.Registry(), consensus)
 		}
 
-		registryTests.EnsureRegistryEmpty(t, registry)
+		registryTests.EnsureRegistryEmpty(t, consensus.Registry())
 	}()
 
 	// Populate the registry.
@@ -79,7 +78,7 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 		})
 		runtimes = append(runtimes, rt)
 	}
-	registryTests.BulkPopulate(t, registry, epochtime, runtimes, seedBase)
+	registryTests.BulkPopulate(t, consensus.Registry(), consensus, runtimes, seedBase)
 
 	// Run the various tests. (Ordering matters)
 	for _, v := range rtStates {
@@ -88,18 +87,18 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, epochtime ep
 		})
 	}
 	success := t.Run("EpochTransitionBlock", func(t *testing.T) {
-		testEpochTransitionBlock(t, backend, epochtime, scheduler, rtStates)
+		testEpochTransitionBlock(t, backend, consensus, rtStates)
 	})
 	if success {
 		// It only makes sense to run the SuccessfulRound test in case the
 		// EpochTransitionBlock was successful. Otherwise this may leave the
 		// committees set to nil and cause a crash.
 		t.Run("SucessfulRound", func(t *testing.T) {
-			testSucessfulRound(t, backend, storage, rtStates)
+			testSucessfulRound(t, backend, consensus, storage, rtStates)
 		})
 
 		t.Run("RoothashMessages", func(t *testing.T) {
-			testRoothashMessages(t, backend, rtStates, stakingBackend)
+			testRoothashMessages(t, backend, consensus, rtStates)
 		})
 	}
 
@@ -146,7 +145,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	require.EqualValues(genesisBlock, blk, "retrieved block is genesis block")
 }
 
-func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend, scheduler scheduler.Backend, states []*runtimeState) {
+func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
 	require := require.New(t)
 
 	// Before an epoch transition there should just be a genesis block.
@@ -159,7 +158,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	}
 
 	// Advance the epoch, get the committee.
-	epoch, err := epochtime.GetEpoch(context.Background(), 0)
+	epoch, err := consensus.EpochTime().GetEpoch(context.Background(), 0)
 	require.NoError(err, "GetEpoch")
 
 	// Subscribe to blocks for all of the runtimes.
@@ -176,12 +175,13 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, epochtime epoch
 	}
 
 	// Advance the epoch.
-	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
+	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Check for the expected post-epoch transition events.
 	for i, state := range states {
 		blkCh := blkChannels[i]
-		state.testEpochTransitionBlock(t, scheduler, epoch, blkCh)
+		state.testEpochTransitionBlock(t, consensus.Scheduler(), epoch, blkCh)
 	}
 
 	// Check if GetGenesisBlock still returns the correct genesis block.
@@ -225,13 +225,13 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 	}
 }
 
-func testSucessfulRound(t *testing.T, backend api.Backend, storage storage.Backend, states []*runtimeState) {
+func testSucessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, storage storage.Backend, states []*runtimeState) {
 	for _, state := range states {
-		state.testSuccessfulRound(t, backend, storage)
+		state.testSuccessfulRound(t, backend, consensus, storage)
 	}
 }
 
-func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, storageBackend storage.Backend) {
+func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, storageBackend storage.Backend) {
 	require := require.New(t)
 
 	rt, computeCommittee, mergeCommittee := s.rt, s.computeCommittee, s.mergeCommittee
@@ -343,7 +343,9 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, st
 
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
-	err = backend.MergeCommit(ctx, rt.Runtime.ID, mergeCommits)
+
+	tx := api.NewMergeCommitTx(0, nil, rt.Runtime.ID, mergeCommits)
+	err = consensusAPI.SignAndSubmitTx(ctx, consensus, toCommit[0].Signer, tx)
 	require.NoError(err, "MergeCommit")
 
 	// Ensure that the round was finalized.
@@ -393,8 +395,10 @@ func hashFromHex(t *testing.T, text string) hash.Hash {
 	return h
 }
 
-func testRoothashMessages(t *testing.T, backend api.Backend, states []*runtimeState, stakingBackend staking.Backend) {
+func testRoothashMessages(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
 	require := require.New(t)
+
+	stakingBackend := consensus.Staking()
 
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
@@ -618,7 +622,8 @@ func testRoothashMessages(t *testing.T, backend api.Backend, states []*runtimeSt
 
 			ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 			defer cancel()
-			err = backend.MergeCommit(ctx, rt.Runtime.ID, mergeCommits)
+			tx := api.NewMergeCommitTx(0, nil, rt.Runtime.ID, mergeCommits)
+			err = consensusAPI.SignAndSubmitTx(ctx, consensus, toCommit[0].Signer, tx)
 			require.NoError(err, "MergeCommit")
 
 			// Ensure that the round was finalized.

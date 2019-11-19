@@ -45,7 +45,7 @@ lint:
 
 # Test.
 test: generate
-	@env -u GOPATH $(OASIS_GO) test -race -v ./...
+	@env -u GOPATH $(OASIS_GO) test -timeout 5m -race -v ./...
 
 # Urkel interoperability test helpers.
 urkel-test-helpers: generate

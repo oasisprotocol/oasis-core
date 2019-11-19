@@ -17,7 +17,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 )
 
-// Conesnus Backend Name
+// BackendName is the consensus backend name.
 const BackendName = "tendermint"
 
 // Code is a status code for ABCI requests.

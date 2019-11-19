@@ -69,7 +69,7 @@ func NewTimer(ctx *Context, app Application, kind uint8, id []byte, data []byte)
 	}
 
 	state := &timerState{
-		app:      app.TransactionTag(),
+		app:      app.ID(),
 		kind:     kind,
 		id:       id,
 		data:     data,
@@ -185,7 +185,7 @@ func fireTimers(ctx *Context, app Application) (err error) {
 			ts.fromKeyValue(key, value)
 
 			// Skip timers that are not for this application.
-			if app.TransactionTag() != ts.app {
+			if app.ID() != ts.app {
 				return false
 			}
 

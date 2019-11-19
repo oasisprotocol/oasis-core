@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/pkg/errors"
 	abcitypes "github.com/tendermint/tendermint/abci/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -14,14 +13,11 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 )
-
-// BackendName is the name of this implementation.
-const BackendName = tmapi.BackendName
 
 var _ api.Backend = (*tendermintBackend)(nil)
 
@@ -99,88 +95,6 @@ func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, owner sig
 	}
 
 	return q.DebondingDelegations(ctx, owner)
-}
-
-func (tb *tendermintBackend) Transfer(ctx context.Context, signedXfer *api.SignedTransfer) error {
-	tx := app.Tx{
-		TxTransfer: &app.TxTransfer{
-			SignedTransfer: *signedXfer,
-		},
-	}
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
-		return errors.Wrap(err, "staking: transfer transaction failed")
-	}
-
-	return nil
-}
-
-func (tb *tendermintBackend) Burn(ctx context.Context, signedBurn *api.SignedBurn) error {
-	tx := app.Tx{
-		TxBurn: &app.TxBurn{
-			SignedBurn: *signedBurn,
-		},
-	}
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
-		return errors.Wrap(err, "staking: burn transaction failed")
-	}
-
-	return nil
-}
-
-func (tb *tendermintBackend) AddEscrow(ctx context.Context, signedEscrow *api.SignedEscrow) error {
-	tx := app.Tx{
-		TxAddEscrow: &app.TxAddEscrow{
-			SignedEscrow: *signedEscrow,
-		},
-	}
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
-		return errors.Wrap(err, "staking: add escrow transaction failed")
-	}
-
-	return nil
-}
-
-func (tb *tendermintBackend) ReclaimEscrow(ctx context.Context, signedReclaim *api.SignedReclaimEscrow) error {
-	tx := app.Tx{
-		TxReclaimEscrow: &app.TxReclaimEscrow{
-			SignedReclaimEscrow: *signedReclaim,
-		},
-	}
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
-		return errors.Wrap(err, "staking: reclaim escrow transaction failed")
-	}
-
-	return nil
-}
-
-func (tb *tendermintBackend) AmendCommissionSchedule(ctx context.Context, signedAmendCommissionSchedule *api.SignedAmendCommissionSchedule) error {
-	tx := app.Tx{
-		TxAmendCommissionSchedule: &app.TxAmendCommissionSchedule{
-			SignedAmendCommissionSchedule: *signedAmendCommissionSchedule,
-		},
-	}
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
-		return errors.Wrap(err, "staking: amend commission schedule transaction failed")
-	}
-
-	return nil
-}
-
-func (tb *tendermintBackend) SubmitEvidence(ctx context.Context, evidence api.Evidence) error {
-	if evidence.Kind() != api.EvidenceKindConsensus {
-		return errors.New("staking: unsupported evidence kind")
-	}
-
-	tmEvidence, ok := evidence.Unwrap().(tmtypes.Evidence)
-	if !ok {
-		return errors.New("staking: expected tendermint evidence, got something else")
-	}
-
-	if err := tb.service.BroadcastEvidence(ctx, tmEvidence); err != nil {
-		return errors.Wrap(err, "staking: broadcast evidence failed")
-	}
-
-	return nil
 }
 
 func (tb *tendermintBackend) WatchTransfers(ctx context.Context) (<-chan *api.TransferEvent, pubsub.ClosableSubscription, error) {
@@ -326,13 +240,15 @@ func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.Event
 }
 
 // New constructs a new tendermint backed staking Backend instance.
-func New(
-	ctx context.Context,
-	service service.TendermintService,
-) (api.Backend, error) {
+func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
 	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
+		return nil, err
+	}
+
+	// Configure the staking application as a fee handler.
+	if err := service.SetTransactionAuthHandler(a.(abci.TransactionAuthHandler)); err != nil {
 		return nil, err
 	}
 

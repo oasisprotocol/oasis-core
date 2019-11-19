@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
+	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	tendermintAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/roothash"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -256,15 +257,17 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	node.entity.RegistrationTime = uint64(time.Now().Unix())
 	signedEnt, err := entity.SignEntity(node.entitySigner, registry.RegisterEntitySignatureContext, node.entity)
 	require.NoError(err, "sign node entity")
-	err = node.Node.Registry.RegisterEntity(context.Background(), signedEnt)
+	tx := registry.NewRegisterEntityTx(0, nil, signedEnt)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, node.entitySigner, tx)
 	require.NoError(err, "register test entity")
 
 	// Register the test runtime.
 	testRuntime.RegistrationTime = uint64(time.Now().Unix())
 	signedRt, err := registry.SignRuntime(node.entitySigner, registry.RegisterRuntimeSignatureContext, testRuntime)
 	require.NoError(err, "sign runtime descriptor")
-	err = node.Node.Registry.RegisterRuntime(context.Background(), signedRt)
-	require.NoError(err, "register test runtime")
+	tx = registry.NewRegisterRuntimeTx(0, nil, signedRt)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, node.entitySigner, tx)
+	require.NoError(err, "register test entity")
 
 	// Get the runtime and the corresponding compute committee node instance.
 	computeRT := node.ComputeWorker.GetRuntime(testRuntime.ID)
@@ -311,17 +314,13 @@ WaitLoop:
 		}
 	}
 
-	// Deregister the entity.
-	ts := registry.Timestamp(uint64(time.Now().Unix()))
-	signed, err := signature.SignSigned(node.entitySigner, registry.DeregisterEntitySignatureContext, &ts)
-	require.NoError(t, err, "SignSigned")
-
 	// Subscribe to entity deregistration event.
 	entityCh, sub := node.Node.Registry.WatchEntities()
 	defer sub.Close()
 
-	err = node.Node.Registry.DeregisterEntity(context.Background(), signed)
-	require.NoError(t, err, "DeregisterEntity")
+	tx := registry.NewDeregisterEntityTx(0, nil)
+	err := consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, node.entitySigner, tx)
+	require.NoError(t, err, "deregister test entity")
 
 	select {
 	case ev := <-entityCh:
@@ -353,15 +352,11 @@ func testStorage(t *testing.T, node *testNode) {
 }
 
 func testRegistry(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
-
-	registryTests.RegistryImplementationTests(t, node.Registry, timeSource)
+	registryTests.RegistryImplementationTests(t, node.Registry, node.Consensus)
 }
 
 func testScheduler(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
-
-	schedulerTests.SchedulerImplementationTests(t, node.Scheduler, timeSource, node.Registry)
+	schedulerTests.SchedulerImplementationTests(t, node.Scheduler, node.Consensus)
 }
 
 func testSchedulerGetValidators(t *testing.T, node *testNode) {
@@ -376,27 +371,21 @@ func testSchedulerGetValidators(t *testing.T, node *testNode) {
 }
 
 func testStaking(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
-
-	stakingTests.StakingImplementationTests(t, node.Staking, timeSource, node.Registry, node.RootHash, node.Identity, node.entity, node.entitySigner, testRuntimeID)
+	stakingTests.StakingImplementationTests(t, node.Staking, node.Consensus, node.Identity, node.entity, node.entitySigner, testRuntimeID)
 }
 
 func testStakingClient(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
-
 	// Create a client backend connected to the local node's internal socket.
 	conn, err := grpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"), grpc.WithInsecure())
 	require.NoError(t, err, "Dial")
 
 	client, err := stakingClient.New(conn)
 	require.NoError(t, err, "stakingClient.New")
-	stakingTests.StakingClientImplementationTests(t, client, timeSource)
+	stakingTests.StakingClientImplementationTests(t, client, node.Consensus)
 }
 
 func testRootHash(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
-
-	roothashTests.RootHashImplementationTests(t, node.RootHash, timeSource, node.Scheduler, node.Storage, node.Registry, node.Staking)
+	roothashTests.RootHashImplementationTests(t, node.RootHash, node.Consensus, node.Storage)
 }
 
 func testComputeWorker(t *testing.T, node *testNode) {
@@ -452,10 +441,8 @@ func testStorageClientWithNode(t *testing.T, node *testNode) {
 }
 
 func testStorageClientWithoutNode(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
-
 	// Storage client tests without node.
-	storageClientTests.ClientWorkerTests(t, node.Identity, node.Beacon, timeSource, node.Registry, node.Scheduler)
+	storageClientTests.ClientWorkerTests(t, node.Identity, node.Consensus)
 }
 
 func init() {

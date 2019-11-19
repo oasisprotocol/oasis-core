@@ -21,7 +21,7 @@ const (
 	// CfgDebugPort configures the remote address.
 	CfgAddress = "address"
 
-	defaultAddress      = "127.0.0.1:42261"
+	defaultAddress      = "unix:" + localSocketFilename
 	localSocketFilename = "internal.sock"
 )
 
@@ -74,7 +74,11 @@ func NewServerLocal(installWrapper bool) (*cmnGrpc.Server, error) {
 func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
 	addr, _ := cmd.Flags().GetString(CfgAddress)
 
-	conn, err := grpc.Dial(addr, grpc.WithInsecure()) // TODO: TLS?
+	conn, err := grpc.Dial(
+		addr,
+		grpc.WithInsecure(),
+		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
+	)
 	if err != nil {
 		return nil, err
 	}

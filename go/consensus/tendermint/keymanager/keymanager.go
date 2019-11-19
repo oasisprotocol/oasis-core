@@ -14,14 +14,10 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
 )
-
-// BackendName is the name of the backend.
-const BackendName = tmapi.BackendName
 
 type tendermintBackend struct {
 	logger *logging.Logger

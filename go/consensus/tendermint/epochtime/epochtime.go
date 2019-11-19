@@ -11,14 +11,8 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/epochtime/api"
-)
-
-const (
-	// BackendName is the name of this implementation.
-	BackendName = tmapi.BackendName
 )
 
 var _ api.Backend = (*tendermintBackend)(nil)

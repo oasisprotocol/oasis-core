@@ -24,9 +24,10 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/persistent"
 	"github.com/oasislabs/oasis-core/go/common/service"
 	"github.com/oasislabs/oasis-core/go/consensus"
+	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
 	tmService "github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
-	tendermintTests "github.com/oasislabs/oasis-core/go/consensus/tendermint/tests"
+	tendermintTestsGenesis "github.com/oasislabs/oasis-core/go/consensus/tendermint/tests/genesis"
 	"github.com/oasislabs/oasis-core/go/control"
 	"github.com/oasislabs/oasis-core/go/dummydebug"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -98,7 +99,7 @@ type Node struct {
 
 	commonStore *persistent.CommonStore
 
-	Consensus consensus.Backend
+	Consensus consensusAPI.Backend
 
 	Genesis   genesisAPI.Provider
 	Identity  *identity.Identity
@@ -182,7 +183,8 @@ func (n *Node) initBackends() error {
 	staking.NewGRPCServer(grpcSrv, n.Staking)
 	storage.NewGRPCServer(grpcSrv, n.Storage, &grpc.AllowAllRuntimePolicyChecker{}, false)
 	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
-	genesis.NewGRPCServer(grpcSrv, n.svcTmnt, n.KeyManager, n.Registry, n.RootHash, n.Staking, n.Scheduler)
+	genesis.NewGRPCServer(grpcSrv, n.Consensus)
+	consensus.NewGRPCServer(grpcSrv, n.Consensus)
 
 	cmdCommon.Logger().Debug("backends initialized")
 
@@ -399,7 +401,7 @@ func (n *Node) initGenesis(testNode bool) error {
 		if os.IsNotExist(err) && testNode {
 			// Well, there wasn't a genesis document and we're running unit tests,
 			// so use a test node one.
-			if n.Genesis, err = tendermintTests.NewTestNodeGenesisProvider(n.Identity); err != nil {
+			if n.Genesis, err = tendermintTestsGenesis.NewTestNodeGenesisProvider(n.Identity); err != nil {
 				return err
 			}
 		} else {
