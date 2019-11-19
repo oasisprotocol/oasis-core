@@ -54,10 +54,6 @@ var (
 
 	errKeyMismatch = errors.New("signature: public key PEM is not for private key")
 
-	_ cbor.Marshaler             = PublicKey{}
-	_ cbor.Unmarshaler           = (*PublicKey)(nil)
-	_ cbor.Marshaler             = (*Signed)(nil)
-	_ cbor.Unmarshaler           = (*Signed)(nil)
 	_ encoding.BinaryMarshaler   = PublicKey{}
 	_ encoding.BinaryUnmarshaler = (*PublicKey)(nil)
 	_ encoding.BinaryMarshaler   = RawSignature{}
@@ -105,16 +101,6 @@ func (k *PublicKey) UnmarshalBinary(data []byte) error {
 	copy(k[:], data)
 
 	return nil
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (k PublicKey) MarshalCBOR() []byte {
-	return cbor.Marshal(k)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (k *PublicKey) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, k)
 }
 
 // UnmarshalPEM decodes a PEM marshaled PublicKey.
@@ -406,8 +392,8 @@ type Signed struct {
 
 // SignSigned generates a Signed with the Signer over the context and
 // CBOR-serialized message.
-func SignSigned(signer Signer, context Context, src cbor.Marshaler) (*Signed, error) {
-	data := src.MarshalCBOR()
+func SignSigned(signer Signer, context Context, src interface{}) (*Signed, error) {
+	data := cbor.Marshal(src)
 	signature, err := Sign(signer, context, data)
 	if err != nil {
 		return nil, err
@@ -417,23 +403,13 @@ func SignSigned(signer Signer, context Context, src cbor.Marshaler) (*Signed, er
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *Signed) Open(context Context, dst cbor.Unmarshaler) error {
+func (s *Signed) Open(context Context, dst interface{}) error {
 	// Verify signature first.
 	if !s.Signature.Verify(context, s.Blob) {
 		return ErrVerifyFailed
 	}
 
-	return dst.UnmarshalCBOR(s.Blob)
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (s *Signed) MarshalCBOR() []byte {
-	return cbor.Marshal(s)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (s *Signed) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, s)
+	return cbor.Unmarshal(s.Blob, dst)
 }
 
 // FromProto deserializes a protobuf into a Signed.

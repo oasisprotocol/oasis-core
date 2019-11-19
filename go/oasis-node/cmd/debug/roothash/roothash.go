@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	clientGrpc "github.com/oasislabs/oasis-core/go/grpc/client"
@@ -115,7 +116,7 @@ func doExport(cmd *cobra.Command, args []string) {
 
 		// Update block header so the block will be suitable as the genesis block.
 		var latestBlock block.Block
-		err = latestBlock.UnmarshalCBOR(res.Block)
+		err = cbor.Unmarshal(res.Block, &latestBlock)
 		if err != nil {
 			logger.Error("failed to parse block",
 				"err", err,

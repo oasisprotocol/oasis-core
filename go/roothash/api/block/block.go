@@ -1,15 +1,7 @@
 // Package block implements the roothash block and header.
 package block
 
-import (
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-)
-
-var (
-	_ cbor.Marshaler   = (*Block)(nil)
-	_ cbor.Unmarshaler = (*Block)(nil)
-)
+import "github.com/oasislabs/oasis-core/go/common/crypto/signature"
 
 // Block is an Oasis block.
 //
@@ -17,16 +9,6 @@ var (
 type Block struct {
 	// Header is the block header.
 	Header Header `json:"header"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (b *Block) MarshalCBOR() []byte {
-	return cbor.Marshal(b)
-}
-
-// UnmarshalCBOR decodes a CBOR marshaled block.
-func (b *Block) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, b)
 }
 
 // NewGenesisBlock creates a new empty genesis block given a runtime

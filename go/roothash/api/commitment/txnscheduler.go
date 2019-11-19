@@ -1,7 +1,6 @@
 package commitment
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
@@ -29,16 +28,6 @@ type TxnSchedulerBatchDispatch struct {
 
 	// Header is the block header on which the batch should be based.
 	Header block.Header `json:"header"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (t *TxnSchedulerBatchDispatch) MarshalCBOR() []byte {
-	return cbor.Marshal(t)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (t *TxnSchedulerBatchDispatch) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, t)
 }
 
 // SignedTxnSchedulerBatchDispatch is a TxnSchedulerBatchDispatch, signed by

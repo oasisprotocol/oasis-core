@@ -16,9 +16,6 @@ var (
 	//
 	// Value is CBOR-serialized runtime state.
 	runtimeKeyFmt = keyformat.New(0x20, &signature.PublicKey{})
-
-	_ cbor.Marshaler   = (*RuntimeState)(nil)
-	_ cbor.Unmarshaler = (*RuntimeState)(nil)
 )
 
 type RuntimeState struct {
@@ -27,14 +24,6 @@ type RuntimeState struct {
 	GenesisBlock *block.Block      `json:"genesis_block"`
 	Round        *Round            `json:"round"`
 	Timer        abci.Timer        `json:"timer"`
-}
-
-func (s *RuntimeState) MarshalCBOR() []byte {
-	return cbor.Marshal(s)
-}
-
-func (s *RuntimeState) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, s)
 }
 
 type ImmutableState struct {
@@ -57,7 +46,7 @@ func (s *ImmutableState) RuntimeState(id signature.PublicKey) (*RuntimeState, er
 	}
 
 	var state RuntimeState
-	err := state.UnmarshalCBOR(raw)
+	err := cbor.Unmarshal(raw, &state)
 	return &state, err
 }
 
@@ -99,5 +88,5 @@ func NewMutableState(tree *iavl.MutableTree) *MutableState {
 }
 
 func (s *MutableState) SetRuntimeState(state *RuntimeState) {
-	s.tree.Set(runtimeKeyFmt.Encode(&state.Runtime.ID), state.MarshalCBOR())
+	s.tree.Set(runtimeKeyFmt.Encode(&state.Runtime.ID), cbor.Marshal(state))
 }

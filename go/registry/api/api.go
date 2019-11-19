@@ -230,16 +230,6 @@ type NodeList struct {
 // Timestamp is a UNIX timestamp.
 type Timestamp uint64
 
-// MarshalCBOR serializes the Timestamp type into a CBOR byte vector.
-func (t *Timestamp) MarshalCBOR() []byte {
-	return cbor.Marshal(t)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into a Timestamp.
-func (t *Timestamp) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, t)
-}
-
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
 func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis bool) (*entity.Entity, error) {
 	var ent entity.Entity
@@ -531,7 +521,7 @@ func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRu
 		// Check MRENCLAVE/MRSIGNER.
 		var eidValid bool
 		var avrBundle ias.AVRBundle
-		if err := avrBundle.UnmarshalCBOR(rt.Capabilities.TEE.Attestation); err != nil {
+		if err := cbor.Unmarshal(rt.Capabilities.TEE.Attestation, &avrBundle); err != nil {
 			return err
 		}
 

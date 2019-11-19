@@ -15,6 +15,7 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -160,7 +161,7 @@ func (tb *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.An
 
 func (tb *tendermintBackend) getBlockFromFinalizedTag(ctx context.Context, rawValue []byte, height int64) (*block.Block, *app.ValueFinalized, error) {
 	var value app.ValueFinalized
-	if err := value.UnmarshalCBOR(rawValue); err != nil {
+	if err := cbor.Unmarshal(rawValue, &value); err != nil {
 		return nil, nil, errors.Wrap(err, "roothash: corrupt finalized tag")
 	}
 
@@ -488,7 +489,7 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 					})
 				} else if bytes.Equal(pair.GetKey(), app.KeyMergeDiscrepancyDetected) {
 					var value app.ValueMergeDiscrepancyDetected
-					if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
+					if err := cbor.Unmarshal(pair.GetValue(), &value); err != nil {
 						tb.logger.Error("worker: failed to get discrepancy from tag",
 							"err", err,
 						)
@@ -499,7 +500,7 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 					notifiers.eventNotifier.Broadcast(&api.Event{MergeDiscrepancyDetected: &value.Event})
 				} else if bytes.Equal(pair.GetKey(), app.KeyComputeDiscrepancyDetected) {
 					var value app.ValueComputeDiscrepancyDetected
-					if err := value.UnmarshalCBOR(pair.GetValue()); err != nil {
+					if err := cbor.Unmarshal(pair.GetValue(), &value); err != nil {
 						tb.logger.Error("worker: failed to get discrepancy from tag",
 							"err", err,
 						)

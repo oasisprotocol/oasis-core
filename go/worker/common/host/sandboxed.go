@@ -415,7 +415,7 @@ func (st *teeStateIntelSGX) UpdateCapabilityTEE(worker *process) (*node.Capabili
 		return nil, errors.Wrap(err, "worker: error while configuring AVR")
 	}
 
-	attestation := avrBundle.MarshalCBOR()
+	attestation := cbor.Marshal(avrBundle)
 	capabilityTEE := &node.CapabilityTEE{
 		Hardware:    node.TEEHardwareIntelSGX,
 		RAK:         rakPub,

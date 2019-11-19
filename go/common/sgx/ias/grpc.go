@@ -5,7 +5,6 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	pb "github.com/oasislabs/oasis-core/go/grpc/ias"
@@ -13,11 +12,6 @@ import (
 
 var (
 	_ pb.IASServer = (*grpcServer)(nil)
-
-	_ cbor.Marshaler   = (*Evidence)(nil)
-	_ cbor.Unmarshaler = (*Evidence)(nil)
-	_ cbor.Marshaler   = (*SignedEvidence)(nil)
-	_ cbor.Unmarshaler = (*SignedEvidence)(nil)
 
 	// EvidenceSignatureContext is the signature context used for verifying evidence.
 	EvidenceSignatureContext = signature.NewContext("oasis-core/sgx: ias evidence")
@@ -49,16 +43,6 @@ func (s *SignedEvidence) Open(context signature.Context, evidence *Evidence) err
 	return s.Signed.Open(context, evidence)
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (s *SignedEvidence) MarshalCBOR() []byte {
-	return s.Signed.MarshalCBOR()
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (s *SignedEvidence) UnmarshalCBOR(data []byte) error {
-	return s.Signed.UnmarshalCBOR(data)
-}
-
 // Evidence is attestation evidence.
 type Evidence struct {
 	// ID is obviously the runtime ID of the enclave that's being attested.
@@ -66,16 +50,6 @@ type Evidence struct {
 	Quote       []byte              `json:"quote"`
 	PSEManifest []byte              `json:"pse_manifest"`
 	Nonce       string              `json:"nonce"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (e Evidence) MarshalCBOR() []byte {
-	return cbor.Marshal(e)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (e *Evidence) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, e)
 }
 
 type grpcServer struct {

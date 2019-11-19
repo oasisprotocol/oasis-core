@@ -6,11 +6,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 )
 
-var (
-	_ cbor.Marshaler   = (*ReadWriteSet)(nil)
-	_ cbor.Unmarshaler = (*ReadWriteSet)(nil)
-)
-
 // CoarsenedKey is a coarsened key prefix that represents any key that
 // starts with this prefix.
 type CoarsenedKey []byte
@@ -42,16 +37,6 @@ type ReadWriteSet struct {
 	WriteSet CoarsenedSet `json:"write_set"`
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (rw *ReadWriteSet) MarshalCBOR() []byte {
-	return cbor.Marshal(rw)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (rw *ReadWriteSet) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, rw)
-}
-
 // Equal checks whether the read/write set is equal to another.
 func (rw ReadWriteSet) Equal(other *ReadWriteSet) bool {
 	return rw.Granularity == other.Granularity && rw.ReadSet.Equal(other.ReadSet) && rw.WriteSet.Equal(other.WriteSet)
@@ -59,5 +44,5 @@ func (rw ReadWriteSet) Equal(other *ReadWriteSet) bool {
 
 // Size returns the size (in bytes) of the read/write set.
 func (rw ReadWriteSet) Size() uint64 {
-	return uint64(len(rw.MarshalCBOR()))
+	return uint64(len(cbor.Marshal(rw)))
 }

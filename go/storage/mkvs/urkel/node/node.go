@@ -12,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 )
 
@@ -51,8 +50,6 @@ var (
 	_ encoding.BinaryUnmarshaler = (*InternalNode)(nil)
 	_ encoding.BinaryMarshaler   = (*LeafNode)(nil)
 	_ encoding.BinaryUnmarshaler = (*LeafNode)(nil)
-	_ cbor.Marshaler             = (*Root)(nil)
-	_ cbor.Unmarshaler           = (*Root)(nil)
 )
 
 // Root is a storage root.
@@ -68,16 +65,6 @@ type Root struct {
 // String returns the string representation of a storage root.
 func (r Root) String() string {
 	return fmt.Sprintf("<Root ns=%s round=%d hash=%s>", r.Namespace, r.Round, r.Hash)
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (r *Root) MarshalCBOR() []byte {
-	return cbor.Marshal(r)
-}
-
-// UnmarshalCBOR decodes a CBOR marshaled root.
-func (r *Root) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, r)
 }
 
 // Empty sets the storage root to an empty root.

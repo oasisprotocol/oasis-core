@@ -19,22 +19,11 @@ var (
 	//
 	// Value is CBOR-serialized mock epoch time state.
 	epochFutureKeyFmt = keyformat.New(0x31)
-
-	_ cbor.Marshaler   = (*mockEpochTimeState)(nil)
-	_ cbor.Unmarshaler = (*mockEpochTimeState)(nil)
 )
 
 type mockEpochTimeState struct {
 	Epoch  api.EpochTime `json:"epoch"`
 	Height int64         `json:"height"`
-}
-
-func (s *mockEpochTimeState) MarshalCBOR() []byte {
-	return cbor.Marshal(s)
-}
-
-func (s *mockEpochTimeState) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, s)
 }
 
 type immutableState struct {
@@ -48,7 +37,7 @@ func (s *immutableState) getEpoch() (api.EpochTime, int64, error) {
 	}
 
 	var state mockEpochTimeState
-	err := state.UnmarshalCBOR(raw)
+	err := cbor.Unmarshal(raw, &state)
 	return state.Epoch, state.Height, err
 }
 
@@ -59,7 +48,7 @@ func (s *immutableState) getFutureEpoch() (*mockEpochTimeState, error) {
 	}
 
 	var state mockEpochTimeState
-	if err := state.UnmarshalCBOR(raw); err != nil {
+	if err := cbor.Unmarshal(raw, &state); err != nil {
 		return nil, errors.Wrap(err, "epochtime_mock: failed to unmarshal future epoch")
 	}
 	return &state, nil
@@ -82,7 +71,7 @@ type mutableState struct {
 
 func (s *mutableState) setEpoch(epoch api.EpochTime, height int64) {
 	state := mockEpochTimeState{Epoch: epoch, Height: height}
-	s.tree.Set(epochCurrentKeyFmt.Encode(), state.MarshalCBOR())
+	s.tree.Set(epochCurrentKeyFmt.Encode(), cbor.Marshal(state))
 }
 
 func (s *mutableState) setFutureEpoch(epoch api.EpochTime, height int64) error {
@@ -95,7 +84,7 @@ func (s *mutableState) setFutureEpoch(epoch api.EpochTime, height int64) error {
 	}
 
 	state := mockEpochTimeState{Epoch: epoch, Height: height}
-	s.tree.Set(epochFutureKeyFmt.Encode(), state.MarshalCBOR())
+	s.tree.Set(epochFutureKeyFmt.Encode(), cbor.Marshal(state))
 
 	return nil
 }

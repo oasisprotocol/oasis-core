@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 )
 
 func TestReadWriteSetSerialization(t *testing.T) {
@@ -13,10 +15,10 @@ func TestReadWriteSetSerialization(t *testing.T) {
 		WriteSet:    CoarsenedSet{[]byte("moo")},
 	}
 
-	enc := rwSet.MarshalCBOR()
+	enc := cbor.Marshal(rwSet)
 
 	var decRwSet ReadWriteSet
-	err := decRwSet.UnmarshalCBOR(enc)
+	err := cbor.Unmarshal(enc, &decRwSet)
 	require.NoError(t, err, "serialization should round-trip")
 	require.EqualValues(t, rwSet, decRwSet, "serialization should round-trip")
 	require.True(t, decRwSet.Equal(&rwSet), "Equal should return true")

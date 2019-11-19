@@ -5,6 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	pb "github.com/oasislabs/oasis-core/go/grpc/storage"
@@ -38,8 +39,8 @@ func (s *grpcServer) GetLastSyncedRound(ctx context.Context, req *pb.GetLastSync
 
 	resp := &pb.GetLastSyncedRoundResponse{
 		Round:     round,
-		IoRoot:    ioRoot.MarshalCBOR(),
-		StateRoot: stateRoot.MarshalCBOR(),
+		IoRoot:    cbor.Marshal(ioRoot),
+		StateRoot: cbor.Marshal(stateRoot),
 	}
 	return resp, nil
 }

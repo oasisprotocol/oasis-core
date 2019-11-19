@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -42,11 +41,6 @@ var (
 
 	// ErrNotFound is the error returned when a block is not found.
 	ErrNotFound = errors.New("roothash: block not found")
-
-	_ cbor.Marshaler   = (*ComputeDiscrepancyDetectedEvent)(nil)
-	_ cbor.Unmarshaler = (*ComputeDiscrepancyDetectedEvent)(nil)
-	_ cbor.Marshaler   = (*MergeDiscrepancyDetectedEvent)(nil)
-	_ cbor.Unmarshaler = (*MergeDiscrepancyDetectedEvent)(nil)
 )
 
 // Backend is a root hash implementation.
@@ -110,28 +104,8 @@ type ComputeDiscrepancyDetectedEvent struct {
 	Timeout bool `json:"timeout"`
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (e *ComputeDiscrepancyDetectedEvent) MarshalCBOR() []byte {
-	return cbor.Marshal(e)
-}
-
-// UnmarshalCBOR decodes a CBOR marshaled event.
-func (e *ComputeDiscrepancyDetectedEvent) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, e)
-}
-
 // MergeDiscrepancyDetectedEvent is a merge discrepancy detected event.
 type MergeDiscrepancyDetectedEvent struct {
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (e *MergeDiscrepancyDetectedEvent) MarshalCBOR() []byte {
-	return cbor.Marshal(e)
-}
-
-// UnmarshalCBOR decodes a CBOR marshaled event.
-func (e *MergeDiscrepancyDetectedEvent) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, e)
 }
 
 // Event is a protocol event.

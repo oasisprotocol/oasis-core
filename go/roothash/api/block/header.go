@@ -11,13 +11,8 @@ import (
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
-var (
-	// ErrInvalidVersion is the error returned when a version is invalid.
-	ErrInvalidVersion = errors.New("roothash: invalid version")
-
-	_ cbor.Marshaler   = (*Header)(nil)
-	_ cbor.Unmarshaler = (*Header)(nil)
-)
+// ErrInvalidVersion is the error returned when a version is invalid.
+var ErrInvalidVersion = errors.New("roothash: invalid version")
 
 // HeaderType is the type of header.
 type HeaderType uint8
@@ -91,16 +86,6 @@ func (h *Header) MostlyEqual(cmp *Header) bool {
 	return aHash.Equal(&bHash)
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (h *Header) MarshalCBOR() []byte {
-	return cbor.Marshal(h)
-}
-
-// UnmarshalCBOR decodes a CBOR marshaled header.
-func (h *Header) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, h)
-}
-
 // EncodedHash returns the encoded cryptographic hash of the header.
 func (h *Header) EncodedHash() hash.Hash {
 	var hh hash.Hash
@@ -132,7 +117,7 @@ func (h *Header) VerifyStorageReceiptSignatures() error {
 		Roots:     h.RootsForStorageReceipt(),
 	}
 
-	if !signature.VerifyManyToOne(storage.ReceiptSignatureContext, receiptBody.MarshalCBOR(), h.StorageSignatures) {
+	if !signature.VerifyManyToOne(storage.ReceiptSignatureContext, cbor.Marshal(receiptBody), h.StorageSignatures) {
 		return signature.ErrVerifyFailed
 	}
 

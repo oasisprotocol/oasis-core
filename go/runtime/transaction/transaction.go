@@ -90,32 +90,12 @@ type inputArtifacts struct {
 	BatchOrder uint32 `json:"batch_order"`
 }
 
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (ia inputArtifacts) MarshalCBOR() []byte {
-	return cbor.Marshal(ia)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (ia *inputArtifacts) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, ia)
-}
-
 // outputArtifacts are the output transaction artifacts.
 //
 // These are the artifacts that are stored CBOR-serialized in the Merkle tree.
 type outputArtifacts struct {
 	// Output is the transaction output (if available).
 	Output []byte `json:"output,omitempty"`
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (oa outputArtifacts) MarshalCBOR() []byte {
-	return cbor.Marshal(oa)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (oa *outputArtifacts) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, oa)
 }
 
 // Transaction is an executed (or executing) transaction.
@@ -191,11 +171,11 @@ func (t *Tree) AddTransaction(ctx context.Context, tx Transaction, tags Tags) er
 	txHash := tx.Hash()
 
 	// Add transaction artifacts.
-	if err := t.tree.Insert(ctx, txnKeyFmt.Encode(&txHash, kindInput), tx.asInputArtifacts().MarshalCBOR()); err != nil {
+	if err := t.tree.Insert(ctx, txnKeyFmt.Encode(&txHash, kindInput), cbor.Marshal(tx.asInputArtifacts())); err != nil {
 		return errors.Wrap(err, "transaction: input artifacts insert failed")
 	}
 	if tx.Output != nil {
-		if err := t.tree.Insert(ctx, txnKeyFmt.Encode(&txHash, kindOutput), tx.asOutputArtifacts().MarshalCBOR()); err != nil {
+		if err := t.tree.Insert(ctx, txnKeyFmt.Encode(&txHash, kindOutput), cbor.Marshal(tx.asOutputArtifacts())); err != nil {
 			return errors.Wrap(err, "transaction: output artifacts insert failed")
 		}
 	}
@@ -242,7 +222,7 @@ func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
 		}
 
 		var ia inputArtifacts
-		if err := ia.UnmarshalCBOR(it.Value()); err != nil {
+		if err := cbor.Unmarshal(it.Value(), &ia); err != nil {
 			return nil, errors.Wrap(err, "transaction: malformed input artifacts")
 		}
 
@@ -280,7 +260,7 @@ func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
 		switch decKind {
 		case kindInput:
 			var ia inputArtifacts
-			if err := ia.UnmarshalCBOR(it.Value()); err != nil {
+			if err := cbor.Unmarshal(it.Value(), &ia); err != nil {
 				return nil, errors.Wrap(err, "transaction: malformed input artifacts")
 			}
 
@@ -296,7 +276,7 @@ func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
 			}
 
 			var oa outputArtifacts
-			if err := oa.UnmarshalCBOR(it.Value()); err != nil {
+			if err := cbor.Unmarshal(it.Value(), &oa); err != nil {
 				return nil, errors.Wrap(err, "transaction: malformed output artifacts")
 			}
 
@@ -329,7 +309,7 @@ func (t *Tree) GetTransaction(ctx context.Context, txHash hash.Hash) (*Transacti
 		switch decKind {
 		case kindInput:
 			var ia inputArtifacts
-			if err := ia.UnmarshalCBOR(it.Value()); err != nil {
+			if err := cbor.Unmarshal(it.Value(), &ia); err != nil {
 				return nil, errors.Wrap(err, "transaction: malformed input artifacts")
 			}
 
@@ -337,7 +317,7 @@ func (t *Tree) GetTransaction(ctx context.Context, txHash hash.Hash) (*Transacti
 			tx.BatchOrder = ia.BatchOrder
 		case kindOutput:
 			var oa outputArtifacts
-			if err := oa.UnmarshalCBOR(it.Value()); err != nil {
+			if err := cbor.Unmarshal(it.Value(), &oa); err != nil {
 				return nil, errors.Wrap(err, "transaction: malformed output artifacts")
 			}
 

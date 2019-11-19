@@ -595,8 +595,8 @@ func (b *storageClientBackend) SyncIterate(ctx context.Context, request *api.Ite
 
 func (b *storageClientBackend) GetDiff(ctx context.Context, startRoot api.Root, endRoot api.Root) (api.WriteLogIterator, error) {
 	var req storage.GetDiffRequest
-	req.StartRoot = startRoot.MarshalCBOR()
-	req.EndRoot = endRoot.MarshalCBOR()
+	req.StartRoot = cbor.Marshal(startRoot)
+	req.EndRoot = cbor.Marshal(endRoot)
 
 	respRaw, err := b.readWithClient(ctx, startRoot.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
 		return c.GetDiff(ctx, &req)
@@ -640,7 +640,7 @@ func (b *storageClientBackend) GetDiff(ctx context.Context, startRoot api.Root, 
 
 func (b *storageClientBackend) GetCheckpoint(ctx context.Context, root api.Root) (api.WriteLogIterator, error) {
 	var req storage.GetCheckpointRequest
-	req.Root = root.MarshalCBOR()
+	req.Root = cbor.Marshal(root)
 
 	respRaw, err := b.readWithClient(ctx, root.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
 		return c.GetCheckpoint(ctx, &req)

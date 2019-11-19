@@ -250,7 +250,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 
 	// Generate a commitment.
 	childBlk, parentBlk, body := generateComputeBody(t, committee)
-	rakSig, err := signature.Sign(skRAK, ComputeResultsHeaderSignatureContext, body.Header.MarshalCBOR())
+	rakSig, err := signature.Sign(skRAK, ComputeResultsHeaderSignatureContext, cbor.Marshal(body.Header))
 	require.NoError(t, err, "Sign")
 	body.RakSig = rakSig.Signature
 

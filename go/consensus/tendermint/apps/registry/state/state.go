@@ -407,7 +407,7 @@ type MutableState struct {
 }
 
 func (s *MutableState) CreateEntity(ent *entity.Entity, sigEnt *entity.SignedEntity) {
-	s.tree.Set(signedEntityKeyFmt.Encode(&ent.ID), sigEnt.MarshalCBOR())
+	s.tree.Set(signedEntityKeyFmt.Encode(&ent.ID), cbor.Marshal(sigEnt))
 }
 
 func (s *MutableState) RemoveEntity(id signature.PublicKey) (*entity.Entity, error) {
@@ -431,7 +431,7 @@ func (s *MutableState) CreateNode(node *node.Node, signedNode *node.SignedNode) 
 		return registry.ErrNoSuchEntity
 	}
 
-	s.tree.Set(signedNodeKeyFmt.Encode(&node.ID), signedNode.MarshalCBOR())
+	s.tree.Set(signedNodeKeyFmt.Encode(&node.ID), cbor.Marshal(signedNode))
 	s.tree.Set(signedNodeByEntityKeyFmt.Encode(&node.EntityID, &node.ID), []byte(""))
 
 	address := []byte(tmcrypto.PublicKeyToTendermint(&node.Consensus.ID).Address())
@@ -459,7 +459,7 @@ func (s *MutableState) CreateRuntime(rt *registry.Runtime, sigRt *registry.Signe
 		return registry.ErrNoSuchEntity
 	}
 
-	s.tree.Set(signedRuntimeKeyFmt.Encode(&rt.ID), sigRt.MarshalCBOR())
+	s.tree.Set(signedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(sigRt))
 
 	return nil
 }

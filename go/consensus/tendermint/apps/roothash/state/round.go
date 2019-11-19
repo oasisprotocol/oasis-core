@@ -4,15 +4,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
-)
-
-var (
-	_ cbor.Marshaler   = (*Round)(nil)
-	_ cbor.Unmarshaler = (*Round)(nil)
 )
 
 // Round is a roothash round.
@@ -56,16 +50,6 @@ func (r *Round) AddMergeCommitment(commitment *commitment.MergeCommitment, sv co
 func (r *Round) Transition(blk *block.Block) {
 	r.CurrentBlock = blk
 	r.Reset()
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (r *Round) MarshalCBOR() []byte {
-	return cbor.Marshal(r)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (r *Round) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, r)
 }
 
 func NewRound(

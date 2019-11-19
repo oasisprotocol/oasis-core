@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	pbCommon "github.com/oasislabs/oasis-core/go/grpc/common"
@@ -24,9 +23,6 @@ const (
 var (
 	// ErrNilProtobuf is the error returned when a protobuf is nil.
 	ErrNilProtobuf = errors.New("entity: Protobuf is nil")
-
-	_ cbor.Marshaler   = (*Entity)(nil)
-	_ cbor.Unmarshaler = (*Entity)(nil)
 
 	testEntity       Entity
 	testEntitySigner signature.Signer
@@ -97,21 +93,6 @@ func (e *Entity) ToProto() *pbCommon.Entity {
 	pb.Nodes = pbNodes
 
 	return pb
-}
-
-// ToSignable serializes the Entity into a signature compatible byte vector.
-func (e *Entity) ToSignable() []byte {
-	return e.MarshalCBOR()
-}
-
-// MarshalCBOR serializes the type into a CBOR byte vector.
-func (e *Entity) MarshalCBOR() []byte {
-	return cbor.Marshal(e)
-}
-
-// UnmarshalCBOR deserializes a CBOR byte vector into given type.
-func (e *Entity) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, e)
 }
 
 // Save saves the JSON serialized entity descriptor.
