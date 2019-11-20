@@ -22,6 +22,7 @@ import (
 	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/version"
@@ -125,12 +126,6 @@ type Application interface {
 	// OnCleanup is the function that is called when the ApplicationServer
 	// has been halted.
 	OnCleanup()
-
-	// SetOption sets set an application option.
-	//
-	// It is expected that the key is prefixed by the application name
-	// followed by a '/' (eg: `foo/<some key here>`).
-	SetOption(types.RequestSetOption) types.ResponseSetOption
 
 	// ExecuteTx executes a transaction.
 	ExecuteTx(*Context, *transaction.Transaction) error
@@ -341,12 +336,12 @@ func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
 			"req", req,
 		)
 		return types.ResponseQuery{
-			Code: api.CodeOK.ToInt(),
+			Code: types.CodeTypeOK,
 		}
 	}
 
 	return types.ResponseQuery{
-		Code: api.CodeInvalidQuery.ToInt(),
+		Code: types.CodeTypeOK,
 	}
 }
 
@@ -663,8 +658,11 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	ctx := NewContext(ContextCheckTx, mux.currentTime, mux.state)
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
+		module, code := errors.Code(err)
+
 		return types.ResponseCheckTx{
-			Code:      api.CodeTransactionFailed.ToInt(),
+			Codespace: module,
+			Code:      code,
 			Log:       err.Error(),
 			GasWanted: int64(ctx.Gas().GasWanted()),
 			GasUsed:   int64(ctx.Gas().GasUsed()),
@@ -672,7 +670,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	}
 
 	return types.ResponseCheckTx{
-		Code:      api.CodeOK.ToInt(),
+		Code:      types.CodeTypeOK,
 		GasWanted: int64(ctx.Gas().GasWanted()),
 		GasUsed:   int64(ctx.Gas().GasUsed()),
 	}
@@ -682,8 +680,11 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 	ctx := NewContext(ContextDeliverTx, mux.currentTime, mux.state)
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
+		module, code := errors.Code(err)
+
 		return types.ResponseDeliverTx{
-			Code:      api.CodeTransactionFailed.ToInt(),
+			Codespace: module,
+			Code:      code,
 			Log:       err.Error(),
 			GasWanted: int64(ctx.Gas().GasWanted()),
 			GasUsed:   int64(ctx.Gas().GasUsed()),
@@ -691,7 +692,7 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 	}
 
 	return types.ResponseDeliverTx{
-		Code:      api.CodeOK.ToInt(),
+		Code:      types.CodeTypeOK,
 		Data:      cbor.Marshal(ctx.Data()),
 		Events:    ctx.GetEvents(),
 		GasWanted: int64(ctx.Gas().GasWanted()),
@@ -832,21 +833,6 @@ func (mux *abciMux) checkDependencies() error {
 		return fmt.Errorf("mux: missing dependencies %v", missingDeps)
 	}
 	return nil
-}
-
-func (mux *abciMux) extractAppFromKeyPath(s string) (Application, error) {
-	appName := s
-	if strings.Contains(appName, "/") {
-		sVec := strings.SplitN(appName, "/", 2)
-		appName = sVec[0]
-	}
-
-	app, ok := mux.appsByName[appName]
-	if !ok {
-		return nil, fmt.Errorf("mux: unknown app: '%s'", appName)
-	}
-
-	return app, nil
 }
 
 func newABCIMux(ctx context.Context, cfg *ApplicationConfig) (*abciMux, error) {

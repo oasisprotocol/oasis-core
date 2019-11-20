@@ -49,10 +49,6 @@ func (app *epochTimeMockApplication) OnRegister(state *abci.ApplicationState) {
 func (app *epochTimeMockApplication) OnCleanup() {
 }
 
-func (app *epochTimeMockApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
-}
-
 func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	return nil
 }

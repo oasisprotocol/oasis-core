@@ -6,9 +6,16 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 )
 
+// moduleName is the module name used for error definitions.
+const moduleName = "consensus/transaction"
+
 var (
+	// ErrInvalidNonce is the error returned when a nonce is invalid.
+	ErrInvalidNonce = errors.New(moduleName, 1, "transaction: invalid nonce")
+
 	// SignatureContext is the context used for signing transactions.
 	SignatureContext = signature.NewContext("oasis-core/consensus: tx", signature.WithChainSeparation())
 

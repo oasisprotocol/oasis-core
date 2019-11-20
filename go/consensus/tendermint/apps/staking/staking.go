@@ -54,10 +54,6 @@ func (app *stakingApplication) OnRegister(state *abci.ApplicationState) {
 func (app *stakingApplication) OnCleanup() {
 }
 
-func (app *stakingApplication) SetOption(types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
-}
-
 func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// Disburse fees from previous block.
 	if err := app.disburseFees(ctx, request.GetLastCommitInfo()); err != nil {

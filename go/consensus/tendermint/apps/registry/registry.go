@@ -54,10 +54,6 @@ func (app *registryApplication) OnRegister(state *abci.ApplicationState) {
 func (app *registryApplication) OnCleanup() {
 }
 
-func (app *registryApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
-}
-
 func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// XXX: With PR#1889 this can be a differnet interval.
 	if changed, registryEpoch := app.state.EpochChanged(ctx); changed {

@@ -3,10 +3,10 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
@@ -30,21 +30,18 @@ const (
 
 var (
 	// ErrInvalidArgument is the error returned on malformed arguments.
-	ErrInvalidArgument = errors.New("staking: invalid argument")
+	ErrInvalidArgument = errors.New(BackendName, 1, "staking: invalid argument")
 
 	// ErrInvalidSignature is the error returned on invalid signature.
-	ErrInvalidSignature = errors.New("staking: invalid signature")
+	ErrInvalidSignature = errors.New(BackendName, 2, "staking: invalid signature")
 
 	// ErrInsufficientBalance is the error returned when an operation
 	// fails due to insufficient balance.
-	ErrInsufficientBalance = errors.New("staking: insufficient balance")
-
-	// ErrInvalidNonce is the error returned when a nonce is invalid.
-	ErrInvalidNonce = errors.New("staking: invalid nonce")
+	ErrInsufficientBalance = errors.New(BackendName, 3, "staking: insufficient balance")
 
 	// ErrInsufficientStake is the error returned when an operation fails
 	// due to insufficient stake.
-	ErrInsufficientStake = errors.New("staking: insufficient stake")
+	ErrInsufficientStake = errors.New(BackendName, 4, "staking: insufficient stake")
 
 	// MethodTransfer is the method name for transfers.
 	MethodTransfer = transaction.NewMethodName(BackendName, "Transfer")

@@ -12,9 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	tmabcitypes "github.com/tendermint/tendermint/abci/types"
 	tmconfig "github.com/tendermint/tendermint/config"
 	tmlog "github.com/tendermint/tendermint/libs/log"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
@@ -29,6 +29,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -194,7 +195,7 @@ func (t *tendermintService) started() bool {
 
 func (t *tendermintService) Start() error {
 	if t.started() {
-		return errors.New("tendermint: service already started")
+		return fmt.Errorf("tendermint: service already started")
 	}
 
 	switch t.initialized() {
@@ -206,7 +207,7 @@ func (t *tendermintService) Start() error {
 			return err
 		}
 		if err := t.node.Start(); err != nil {
-			return errors.Wrap(err, "tendermint: failed to start service")
+			return fmt.Errorf("tendermint: failed to start service: %w", err)
 		}
 		go t.syncWorker()
 		go t.worker()
@@ -269,7 +270,7 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 
 	u, err := url.Parse(addrURI)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to parse external address URL")
+		return nil, fmt.Errorf("tendermint: failed to parse external address URL: %w", err)
 	}
 
 	if u.Scheme != "tcp" {
@@ -281,7 +282,7 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 	if u.Hostname() == "0.0.0.0" {
 		var port string
 		if _, port, err = net.SplitHostPort(u.Host); err != nil {
-			return nil, errors.Wrap(err, "tendermint: malformed external address host/port")
+			return nil, fmt.Errorf("tendermint: malformed external address host/port: %w", err)
 		}
 
 		ip := common.GuessExternalAddress()
@@ -294,7 +295,7 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 
 	var addr node.ConsensusAddress
 	if err = addr.Address.UnmarshalText([]byte(u.Host)); err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to parse external address host")
+		return nil, fmt.Errorf("tendermint: failed to parse external address host: %w", err)
 	}
 	addr.ID = t.nodeSigner.Public()
 
@@ -455,7 +456,12 @@ func (t *tendermintService) SubmitTx(ctx context.Context, tx *transaction.Signed
 	select {
 	case v := <-txSub.Out():
 		if result := v.Data().(tmtypes.EventDataTx).Result; !result.IsOK() {
-			return errors.New(result.GetLog())
+			err := errors.FromCode(result.GetCodespace(), result.GetCode())
+			if err == nil {
+				// Fallback to an ordinary error.
+				err = fmt.Errorf(result.GetLog())
+			}
+			return err
 		}
 		return nil
 	case <-txSub.Cancelled():
@@ -466,13 +472,28 @@ func (t *tendermintService) SubmitTx(ctx context.Context, tx *transaction.Signed
 }
 
 func (t *tendermintService) broadcastTxRaw(data []byte) error {
-	response, err := t.client.BroadcastTxSync(data)
+	// We could use t.client.BroadcastTxSync but that is annoying as it
+	// doesn't give you the right fields when CheckTx fails.
+	mp := t.node.Mempool()
+
+	// Submit the transaction to mempool and wait for response.
+	ch := make(chan *tmabcitypes.Response, 1)
+	err := mp.CheckTx(tmtypes.Tx(data), func(rsp *tmabcitypes.Response) {
+		ch <- rsp
+		close(ch)
+	})
 	if err != nil {
-		return errors.Wrap(err, "broadcast tx: commit failed")
+		return fmt.Errorf("tendermint: failed to submit to local mempool: %w", err)
 	}
 
-	if response.Code != api.CodeOK.ToInt() {
-		return fmt.Errorf("broadcast tx: check tx failed: %d: %s", response.Code, response.Log)
+	rsp := <-ch
+	if result := rsp.GetCheckTx(); !result.IsOK() {
+		err := errors.FromCode(result.GetCodespace(), result.GetCode())
+		if err == nil {
+			// Fallback to an ordinary error.
+			err = fmt.Errorf(result.GetLog())
+		}
+		return err
 	}
 
 	return nil
@@ -484,16 +505,16 @@ func (t *tendermintService) newSubscriberID() string {
 
 func (t *tendermintService) SubmitEvidence(ctx context.Context, evidence consensusAPI.Evidence) error {
 	if evidence.Kind() != consensusAPI.EvidenceKindConsensus {
-		return errors.New("tendermint: unsupported evidence kind")
+		return fmt.Errorf("tendermint: unsupported evidence kind")
 	}
 
 	tmEvidence, ok := evidence.Unwrap().(tmtypes.Evidence)
 	if !ok {
-		return errors.New("tendermint: expected tendermint evidence, got something else")
+		return fmt.Errorf("tendermint: expected tendermint evidence, got something else")
 	}
 
 	if _, err := t.client.BroadcastEvidence(tmEvidence); err != nil {
-		return errors.Wrap(err, "tendermint: broadcast evidence failed")
+		return fmt.Errorf("tendermint: broadcast evidence failed: %w", err)
 	}
 
 	return nil
@@ -539,7 +560,7 @@ func (t *tendermintService) Unsubscribe(subscriber string, query tmpubsub.Query)
 		return t.node.EventBus().Unsubscribe(t.ctx, subscriber, query)
 	}
 
-	return errors.New("tendermint: unsubscribe called with no backing service")
+	return fmt.Errorf("tendermint: unsubscribe called with no backing service")
 }
 
 func (t *tendermintService) Pruner() abci.StatePruner {
@@ -670,7 +691,7 @@ func (t *tendermintService) GetBlock(height *int64) (*tmtypes.Block, error) {
 
 	result, err := t.client.Block(height)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: block query failed")
+		return nil, fmt.Errorf("tendermint: block query failed: %w", err)
 	}
 
 	return result.Block, nil
@@ -692,7 +713,7 @@ func (t *tendermintService) GetBlockResults(height *int64) (*tmrpctypes.ResultBl
 
 	result, err := t.client.BlockResults(height)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: block results query failed")
+		return nil, fmt.Errorf("tendermint: block results query failed: %w", err)
 	}
 
 	return result, nil
@@ -837,7 +858,7 @@ func (t *tendermintService) lazyInit() error {
 	unsafeNodeSigner, ok := t.nodeSigner.(signature.UnsafeSigner)
 	if !ok {
 		t.Logger.Error("node signer does not allow private key access")
-		return errors.New("tendermint: node signer does not allow private key access")
+		return fmt.Errorf("tendermint: node signer does not allow private key access")
 	}
 
 	// HACK: tmnode.NewNode() triggers block replay and or ABCI chain
@@ -859,7 +880,7 @@ func (t *tendermintService) lazyInit() error {
 			newLogAdapter(!viper.GetBool(cfgLogDebug)),
 		)
 		if err != nil {
-			return errors.Wrap(err, "tendermint: failed to create node")
+			return fmt.Errorf("tendermint: failed to create node: %w", err)
 		}
 		t.client = tmcli.NewLocal(t.node)
 		t.failMonitor = newFailMonitor(t.Logger, t.node.ConsensusState().Wait)
@@ -882,7 +903,7 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 	// should be deterministic.
 	b, err := json.Marshal(d)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to serialize genesis doc")
+		return nil, fmt.Errorf("tendermint: failed to serialize genesis doc: %w", err)
 	}
 
 	// Translate special "disable block gas limit" value as Tendermint uses
@@ -915,7 +936,7 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 	for _, v := range d.Registry.Nodes {
 		var openedNode node.Node
 		if err := v.Open(registryAPI.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
-			return nil, errors.Wrap(err, "tendermint: failed to verify validator")
+			return nil, fmt.Errorf("tendermint: failed to verify validator: %w", err)
 		}
 		// TODO: This should cross check that the entity is valid.
 		if !openedNode.HasRoles(node.RoleValidator) {
@@ -950,7 +971,7 @@ func (t *tendermintService) getTendermintGenesis() (*tmtypes.GenesisDoc, error) 
 		tmGenDoc, err = genesisToTendermint(t.genesis)
 	}
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to create genesis doc")
+		return nil, fmt.Errorf("tendermint: failed to create genesis doc: %w", err)
 	}
 
 	// HACK: Certain test cases use TimeoutCommit < 1 sec, and care about the
@@ -965,7 +986,7 @@ func (t *tendermintService) syncWorker() {
 	checkSyncFn := func() (isSyncing bool, err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				err = errors.New("tendermint: node disappeared, terminated?")
+				err = fmt.Errorf("tendermint: node disappeared, terminated?")
 			}
 		}()
 
@@ -1024,7 +1045,7 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 	// use it while initializing other things.
 	genesisDoc, err := genesisProvider.GetGenesisDocument()
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to get genesis doc")
+		return nil, fmt.Errorf("tendermint: failed to get genesis doc: %w", err)
 	}
 
 	// Sanity check genesis document.

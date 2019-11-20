@@ -7,7 +7,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 // feeAccumulatorKey is the block context key.
@@ -44,7 +43,7 @@ func AuthenticateAndPayFees(
 			"account_nonce", account.General.Nonce,
 			"nonce", nonce,
 		)
-		return staking.ErrInvalidNonce
+		return transaction.ErrInvalidNonce
 	}
 
 	if fee == nil {

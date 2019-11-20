@@ -127,10 +127,6 @@ func (app *schedulerApplication) OnRegister(state *abci.ApplicationState) {
 
 func (app *schedulerApplication) OnCleanup() {}
 
-func (app *schedulerApplication) SetOption(req types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
-}
-
 func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// Check if any stake slashing has occurred in the staking layer.
 	// NOTE: This will NOT trigger for any slashing that happens as part of

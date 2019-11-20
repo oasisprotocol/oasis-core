@@ -1,12 +1,12 @@
 package commitment
 
 import (
-	"errors"
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -14,20 +14,23 @@ import (
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 )
 
+// moduleName is the module name used for namespacing errors.
+const moduleName = "roothash/commitment"
+
 var (
-	ErrNoRuntime              = errors.New("roothash/commitment: no runtime configured")
-	ErrNoCommittee            = errors.New("roothash/commitment: no committee configured")
-	ErrInvalidCommitteeKind   = errors.New("roothash/commitment: invalid committee kind")
-	ErrRakSigInvalid          = errors.New("roothash/commitment: batch RAK signature invalid")
-	ErrNotInCommittee         = errors.New("roothash/commitment: node not part of committee")
-	ErrAlreadyCommitted       = errors.New("roothash/commitment: node already sent commitment")
-	ErrNotBasedOnCorrectBlock = errors.New("roothash/commitment: submitted commitment is not based on correct block")
-	ErrDiscrepancyDetected    = errors.New("roothash/commitment: discrepancy detected")
-	ErrStillWaiting           = errors.New("roothash/commitment: still waiting for commits")
-	ErrInsufficientVotes      = errors.New("roothash/commitment: insufficient votes to finalize discrepancy resolution round")
-	ErrBadComputeCommits      = errors.New("roothash/commitment: bad compute commitments")
-	ErrInvalidCommitteeID     = errors.New("roothash/commitment: invalid committee ID")
-	ErrTxnSchedSigInvalid     = errors.New("roothash/commitment: txn scheduler signature invalid")
+	ErrNoRuntime              = errors.New(moduleName, 1, "roothash/commitment: no runtime configured")
+	ErrNoCommittee            = errors.New(moduleName, 2, "roothash/commitment: no committee configured")
+	ErrInvalidCommitteeKind   = errors.New(moduleName, 3, "roothash/commitment: invalid committee kind")
+	ErrRakSigInvalid          = errors.New(moduleName, 4, "roothash/commitment: batch RAK signature invalid")
+	ErrNotInCommittee         = errors.New(moduleName, 5, "roothash/commitment: node not part of committee")
+	ErrAlreadyCommitted       = errors.New(moduleName, 6, "roothash/commitment: node already sent commitment")
+	ErrNotBasedOnCorrectBlock = errors.New(moduleName, 7, "roothash/commitment: submitted commitment is not based on correct block")
+	ErrDiscrepancyDetected    = errors.New(moduleName, 8, "roothash/commitment: discrepancy detected")
+	ErrStillWaiting           = errors.New(moduleName, 9, "roothash/commitment: still waiting for commits")
+	ErrInsufficientVotes      = errors.New(moduleName, 10, "roothash/commitment: insufficient votes to finalize discrepancy resolution round")
+	ErrBadComputeCommits      = errors.New(moduleName, 11, "roothash/commitment: bad compute commitments")
+	ErrInvalidCommitteeID     = errors.New(moduleName, 12, "roothash/commitment: invalid committee ID")
+	ErrTxnSchedSigInvalid     = errors.New(moduleName, 13, "roothash/commitment: txn scheduler signature invalid")
 )
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")

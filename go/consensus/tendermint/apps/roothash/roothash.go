@@ -82,10 +82,6 @@ func (app *rootHashApplication) OnRegister(state *abci.ApplicationState) {
 func (app *rootHashApplication) OnCleanup() {
 }
 
-func (app *rootHashApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
-}
-
 func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// Check if rescheduling has taken place.
 	rescheduled := ctx.HasEvent(schedulerapp.AppName, schedulerapp.KeyElected)

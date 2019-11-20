@@ -3,12 +3,12 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
@@ -35,10 +35,10 @@ const (
 
 var (
 	// ErrInvalidArgument is the error returned on malformed argument(s).
-	ErrInvalidArgument = errors.New("roothash: invalid argument")
+	ErrInvalidArgument = errors.New(BackendName, 1, "roothash: invalid argument")
 
 	// ErrNotFound is the error returned when a block is not found.
-	ErrNotFound = errors.New("roothash: block not found")
+	ErrNotFound = errors.New(BackendName, 2, "roothash: block not found")
 
 	// MethodComputeCommit is the method name for compute commit submission.
 	MethodComputeCommit = transaction.NewMethodName(BackendName, "ComputeCommit")

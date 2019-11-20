@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -65,65 +65,65 @@ var (
 	RegisterGenesisRuntimeSignatureContext = RegisterRuntimeSignatureContext
 
 	// ErrInvalidArgument is the error returned on malformed argument(s).
-	ErrInvalidArgument = errors.New("registry: invalid argument")
+	ErrInvalidArgument = errors.New(BackendName, 1, "registry: invalid argument")
 
 	// ErrInvalidSignature is the error returned on an invalid signature.
-	ErrInvalidSignature = errors.New("registry: invalid signature")
+	ErrInvalidSignature = errors.New(BackendName, 2, "registry: invalid signature")
 
 	// ErrBadEntityForNode is the error returned when a node registration
 	// with an unknown entity is attempted.
-	ErrBadEntityForNode = errors.New("registry: unknown entity in node registration")
+	ErrBadEntityForNode = errors.New(BackendName, 3, "registry: unknown entity in node registration")
 
 	// ErrBadEntityForRuntime is the error returned when a runtime
 	// attempts to register with an unknown entity.
-	ErrBadEntityForRuntime = errors.New("registry: unknown entity in runtime registration")
+	ErrBadEntityForRuntime = errors.New(BackendName, 4, "registry: unknown entity in runtime registration")
 
 	// ErrNoEnclaveForRuntime is the error returned when a TEE runtime
 	// registers with no enclave IDs.
-	ErrNoEnclaveForRuntime = errors.New("registry: no enclaves for TEE runtime registration")
+	ErrNoEnclaveForRuntime = errors.New(BackendName, 5, "registry: no enclaves for TEE runtime registration")
 
 	// ErrBadEnclaveIdentity is the error returned when a node tries to
 	// register runtimes with wrong Enclave IDs.
-	ErrBadEnclaveIdentity = errors.New("registry: bad enclave id")
+	ErrBadEnclaveIdentity = errors.New(BackendName, 6, "registry: bad enclave id")
 
 	// ErrBadCapabilitiesTEEHardware is the error returned when a node tries to
 	// register a runtime with bad Capabilities.TEE.Hardware.
-	ErrBadCapabilitiesTEEHardware = errors.New("registry: bad capabilities.TEE.Hardware")
+	ErrBadCapabilitiesTEEHardware = errors.New(BackendName, 7, "registry: bad capabilities.TEE.Hardware")
 
 	// ErrTEEHardwareMismatch is the error returned when a node tries to
 	// register a runtime and Capabilities.TEE.Hardware mismatches the one in
 	// the registry.
-	ErrTEEHardwareMismatch = errors.New("registry: runtime TEE.Hardware mismatches the one in registry")
+	ErrTEEHardwareMismatch = errors.New(BackendName, 8, "registry: runtime TEE.Hardware mismatches the one in registry")
 
 	// ErrNoSuchEntity is the error returned when an entity does not exist.
-	ErrNoSuchEntity = errors.New("registry: no such entity")
+	ErrNoSuchEntity = errors.New(BackendName, 9, "registry: no such entity")
 
 	// ErrNoSuchNode is the error returned when an node does not exist.
-	ErrNoSuchNode = errors.New("registry: no such node")
+	ErrNoSuchNode = errors.New(BackendName, 10, "registry: no such node")
 
 	// ErrNoSuchRuntime is the error returned when an runtime does not exist.
-	ErrNoSuchRuntime = errors.New("registry: no such runtime")
+	ErrNoSuchRuntime = errors.New(BackendName, 11, "registry: no such runtime")
 
 	// ErrInvalidTimestamp is the error returned when a timestamp is invalid.
-	ErrInvalidTimestamp = errors.New("registry: invalid timestamp")
+	ErrInvalidTimestamp = errors.New(BackendName, 12, "registry: invalid timestamp")
 
 	// ErrNodeExpired is the error returned when a node is expired.
-	ErrNodeExpired = errors.New("registry: node expired")
+	ErrNodeExpired = errors.New(BackendName, 13, "registry: node expired")
 
 	// ErrNodeCannotBeUnfrozen is the error returned when a node cannot yet be
 	// unfrozen due to the freeze period not being over yet.
-	ErrNodeCannotBeUnfrozen = errors.New("registry: node cannot be unfrozen yet")
+	ErrNodeCannotBeUnfrozen = errors.New(BackendName, 14, "registry: node cannot be unfrozen yet")
 
 	// ErrEntityHasNodes is the error returned when an entity cannot be deregistered
 	// as it still has nodes.
-	ErrEntityHasNodes = errors.New("registry: entity still has nodes")
+	ErrEntityHasNodes = errors.New(BackendName, 15, "registry: entity still has nodes")
 
 	// ErrForbidden is the error returned when an operation is forbiden by
 	// policy.
-	ErrForbidden = errors.New("registry: forbidden by policy")
+	ErrForbidden = errors.New(BackendName, 16, "registry: forbidden by policy")
 
 	// ErrNodeUpdateNotAllowed is the error returned when trying to update an existing node with unallowed changes.
-	ErrNodeUpdateNotAllowed = errors.New("registry: node update not allowed")
+	ErrNodeUpdateNotAllowed = errors.New(BackendName, 17, "registry: node update not allowed")
 
 	// MethodRegisterEntity is the method name for entity registrations.
 	MethodRegisterEntity = transaction.NewMethodName(BackendName, "RegisterEntity")

@@ -59,10 +59,6 @@ func (app *beaconApplication) OnRegister(state *abci.ApplicationState) {
 func (app *beaconApplication) OnCleanup() {
 }
 
-func (app *beaconApplication) SetOption(req types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
-}
-
 func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeginBlock) error {
 	if changed, beaconEpoch := app.state.EpochChanged(ctx); changed {
 		return app.onBeaconEpochChange(ctx, beaconEpoch, req)

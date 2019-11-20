@@ -56,10 +56,6 @@ func (app *keymanagerApplication) OnRegister(state *abci.ApplicationState) {
 
 func (app *keymanagerApplication) OnCleanup() {}
 
-func (app *keymanagerApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
-}
-
 func (app *keymanagerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	if changed, epoch := app.state.EpochChanged(ctx); changed {
 		return app.onEpochChange(ctx, epoch)

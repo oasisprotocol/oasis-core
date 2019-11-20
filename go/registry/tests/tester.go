@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	"github.com/oasislabs/oasis-core/go/registry/api"
@@ -139,30 +140,38 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				if v.Node.Roles&node.RoleComputeWorker != 0 {
 					err = v.Register(consensus, v.SignedInvalidRegistration1)
 					require.Error(err, "register committee node without P2P addresses")
+					require.Equal(err, api.ErrInvalidArgument)
 				}
 
 				err = v.Register(consensus, v.SignedInvalidRegistration2)
 				require.Error(err, "register committee node without committee addresses")
+				require.Equal(err, api.ErrInvalidArgument)
 
 				err = v.Register(consensus, v.SignedInvalidRegistration3)
 				require.Error(err, "register committee node without committee certificate")
+				require.Equal(err, api.ErrInvalidArgument)
 
 				err = v.Register(consensus, v.SignedInvalidRegistration4)
 				require.Error(err, "register node without roles")
+				require.Equal(err, api.ErrInvalidArgument)
 
 				err = v.Register(consensus, v.SignedInvalidRegistration5)
 				require.Error(err, "register node with reserved roles")
+				require.Equal(err, api.ErrInvalidArgument)
 
 				if v.Node.Roles&node.RoleComputeWorker != 0 {
 					err = v.Register(consensus, v.SignedInvalidRegistration6)
 					require.Error(err, "register node without a valid p2p id")
+					require.Equal(err, api.ErrInvalidArgument)
 				}
 
 				err = v.Register(consensus, v.SignedInvalidRegistration7)
 				require.Error(err, "register node without runtimes")
+				require.Equal(err, api.ErrInvalidArgument)
 
 				err = v.Register(consensus, v.SignedInvalidRegistration8)
 				require.Error(err, "register node with invalid runtimes")
+				require.Equal(err, api.ErrInvalidArgument)
 
 				err = v.Register(consensus, v.SignedRegistration)
 				require.NoError(err, "RegisterNode")
@@ -185,6 +194,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 				err = v.Register(consensus, v.SignedInvalidReRegistration)
 				require.Error(err, "Re-registering a node with different runtimes should fail")
+				require.Equal(err, api.ErrInvalidArgument)
 
 				select {
 				case ev := <-nodeCh:
@@ -252,13 +262,15 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		tx = api.NewUnfreezeNodeTx(0, nil, &unfreeze)
 		err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, entity.Signer, tx)
 		require.Error(err, "UnfreezeNode (with invalid node)")
+		require.Equal(err, api.ErrNoSuchNode)
 
 		// Try to unfreeze with an invalid nonce (should fail).
 		tx = api.NewUnfreezeNodeTx(123, nil, &api.UnfreezeNode{
 			NodeID: node.Node.ID,
 		})
 		err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, entity.Signer, tx)
-		require.Error(err, "UnfreezeNode (with invalid node)")
+		require.Error(err, "UnfreezeNode (with invalid nonce)")
+		require.Equal(err, transaction.ErrInvalidNonce)
 
 		// Try to unfreeze a node using the node signing key (should fail
 		// as unfreeze must be signed by entity signing key).
@@ -267,6 +279,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		})
 		err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, node.Signer, tx)
 		require.Error(err, "UnfreezeNode (with invalid signer)")
+		require.Equal(err, api.ErrBadEntityForNode)
 	})
 
 	t.Run("NodeExpiration", func(t *testing.T) {
@@ -311,6 +324,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		// Ensure that registering an expired node will fail.
 		err = expiredNode.Register(consensus, expiredNode.SignedRegistration)
 		require.Error(err, "RegisterNode with expired node")
+		require.Equal(err, api.ErrNodeExpired)
 	})
 
 	t.Run("EntityDeregistration", func(t *testing.T) {
@@ -323,6 +337,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		for _, v := range entities {
 			err := v.Deregister(consensus)
 			require.Error(err, "DeregisterEntity")
+			require.Equal(err, api.ErrEntityHasNodes)
 		}
 
 		// Advance the epoch to trigger 0th entity nodes to be removed.
@@ -344,6 +359,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		for _, v := range entities[1:] {
 			err := v.Deregister(consensus)
 			require.Error(err, "DeregisterEntity")
+			require.Equal(err, api.ErrEntityHasNodes)
 		}
 
 		// Advance the epoch to trigger all nodes to expire and be removed.
