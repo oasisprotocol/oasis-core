@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -160,7 +159,6 @@ func doUpdate(cmd *cobra.Command, args []string) {
 	}
 
 	// Update the entity.
-	ent.RegistrationTime = uint64(time.Now().Unix())
 	ent.AllowEntitySignedNodes = viper.GetBool(cfgAllowEntitySignedNodes)
 
 	ent.Nodes = nil
@@ -283,8 +281,6 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	defer signer.Reset()
-
-	ent.RegistrationTime = uint64(time.Now().Unix())
 
 	signed, err := entity.SignEntity(signer, registry.RegisterEntitySignatureContext, ent)
 	if err != nil {

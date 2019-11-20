@@ -2,7 +2,6 @@ package byzantine
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -37,7 +36,6 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 		Consensus: node.ConsensusInfo{
 			ID: id.ConsensusSigner.Public(),
 		},
-		RegistrationTime: uint64(time.Now().Unix()),
 		Runtimes: []*node.Runtime{
 			&node.Runtime{
 				ID: runtimeID,

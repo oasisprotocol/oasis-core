@@ -20,15 +20,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 )
 
-const (
-	// BackendName is a unique backend name for the registry backend.
-	BackendName = "registry"
-
-	// TimestampValidFor is the number of seconds that a timestamp in a
-	// register or deregister call is considered valid.
-	// Default is 15 minutes.
-	TimestampValidFor = uint64(15 * 60)
-)
+// BackendName is a unique backend name for the registry backend.
+const BackendName = "registry"
 
 var (
 	// RegisterEntitySignatureContext is the context used for entity
@@ -243,9 +236,6 @@ type NodeEvent struct {
 type NodeList struct {
 	Nodes []*node.Node
 }
-
-// Timestamp is a UNIX timestamp.
-type Timestamp uint64
 
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
 func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis bool) (*entity.Entity, error) {
@@ -750,13 +740,6 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) e
 		)
 		return ErrNodeUpdateNotAllowed
 	}
-	if currentNode.RegistrationTime > newNode.RegistrationTime {
-		logger.Error("RegisterNode: current node registration time greater than new",
-			"current_registration_time", currentNode.RegistrationTime,
-			"new_registration_time", newNode.RegistrationTime,
-		)
-		return ErrNodeUpdateNotAllowed
-	}
 
 	// As of right now, every node has a consensus ID.
 	if !currentNode.Consensus.ID.Equal(newNode.Consensus.ID) {
@@ -861,19 +844,6 @@ func SortNodeList(nodes []*node.Node) {
 	})
 }
 
-// VerifyTimestamp verifies that the given timestamp is valid.
-func VerifyTimestamp(timestamp uint64, now uint64) error {
-	// For now, we check that it's new enough and not too far in the future.
-	// We allow the timestamp to be up to 1 minute in the future to account
-	// for network latency, leap seconds, and real-time clock inaccuracies
-	// and drift.
-	if timestamp < now-TimestampValidFor || timestamp > now+60 {
-		return ErrInvalidTimestamp
-	}
-
-	return nil
-}
-
 // Genesis is the registry genesis state.
 type Genesis struct {
 	// Parameters are the registry consensus parameters.
@@ -934,10 +904,6 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 			}
 		}
 
-		if ent.RegistrationTime > uint64(time.Now().Unix()+61*60) {
-			return fmt.Errorf("registry: sanity check failed: entity ID %s registration time is more than 1h1m in the future", ent.ID.String())
-		}
-
 		seenEntities[ent.ID] = true
 	}
 
@@ -947,10 +913,6 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 		var rt Runtime
 		if err := srt.Open(RegisterGenesisRuntimeSignatureContext, &rt); err != nil {
 			return fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
-		}
-
-		if rt.RegistrationTime > uint64(time.Now().Unix()+61*60) {
-			return fmt.Errorf("registry: sanity check failed: runtime ID %s registration time is more than 1h1m in the future", rt.ID.String())
 		}
 
 		// Check runtime's Compute committee parameters.
@@ -1051,10 +1013,6 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 
 		if !seenEntities[n.EntityID] {
 			return fmt.Errorf("registry: sanity check failed: node ID %s has unknown controlling entity", n.ID.String())
-		}
-
-		if n.RegistrationTime > uint64(time.Now().Unix()+61*60) {
-			return fmt.Errorf("registry: sanity check failed: node ID %s registration time is more than 1h1m in the future", n.ID.String())
 		}
 
 		if n.HasRoles(node.RoleReserved) {

@@ -55,9 +55,6 @@ type Node struct {
 	// consensus member.
 	Consensus ConsensusInfo `json:"consensus"`
 
-	// Time of registration.
-	RegistrationTime uint64 `json:"registration_time"`
-
 	// Runtimes are the node's runtimes.
 	Runtimes []*Runtime `json:"runtimes"`
 
@@ -518,8 +515,6 @@ func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
 		return err
 	}
 
-	n.RegistrationTime = pb.GetRegistrationTime()
-
 	if pbRuntimes := pb.GetRuntimes(); pbRuntimes != nil {
 		n.Runtimes = make([]*Runtime, 0, len(pbRuntimes))
 		for _, v := range pbRuntimes {
@@ -546,7 +541,6 @@ func (n *Node) ToProto() *pbCommon.Node {
 	pb.Committee = n.Committee.toProto()
 	pb.P2P = n.P2P.toProto()
 	pb.Consensus = n.Consensus.toProto()
-	pb.RegistrationTime = n.RegistrationTime
 	if n.Runtimes != nil {
 		pb.Runtimes = make([]*pbCommon.NodeRuntime, 0, len(n.Runtimes))
 		for _, v := range n.Runtimes {

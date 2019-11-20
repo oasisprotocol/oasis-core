@@ -10,8 +10,6 @@ message Runtime {
 
     common.CapabilitiesTEE.Hardware tee_hardware = 2;
 
-    uint64 registration_time = 3;
-
     uint32 kind = 4;
 
     VersionInfo version = 5;

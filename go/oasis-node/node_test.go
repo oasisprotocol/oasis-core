@@ -254,7 +254,6 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	require := require.New(t)
 
 	// Register node entity.
-	node.entity.RegistrationTime = uint64(time.Now().Unix())
 	signedEnt, err := entity.SignEntity(node.entitySigner, registry.RegisterEntitySignatureContext, node.entity)
 	require.NoError(err, "sign node entity")
 	tx := registry.NewRegisterEntityTx(0, nil, signedEnt)
@@ -262,7 +261,6 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	require.NoError(err, "register test entity")
 
 	// Register the test runtime.
-	testRuntime.RegistrationTime = uint64(time.Now().Unix())
 	signedRt, err := registry.SignRuntime(node.entitySigner, registry.RegisterRuntimeSignatureContext, testRuntime)
 	require.NoError(err, "sign runtime descriptor")
 	tx = registry.NewRegisterRuntimeTx(0, nil, signedRt)

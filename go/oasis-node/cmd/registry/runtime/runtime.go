@@ -238,7 +238,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	ent, signer, err := loadEntity(cmdFlags.Entity())
+	_, signer, err := loadEntity(cmdFlags.Entity())
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
@@ -325,11 +325,10 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 	}
 
 	rt := &registry.Runtime{
-		ID:               id,
-		Genesis:          gen,
-		RegistrationTime: ent.RegistrationTime,
-		Kind:             kind,
-		TEEHardware:      teeHardware,
+		ID:          id,
+		Genesis:     gen,
+		Kind:        kind,
+		TEEHardware: teeHardware,
 		Version: registry.VersionInfo{
 			Version: version.FromU64(viper.GetUint64(cfgVersion)),
 		},
@@ -378,7 +377,6 @@ func signForRegistration(rt *registry.Runtime, signer signature.Signer, isGenesi
 	switch isGenesis {
 	case false:
 		ctx = registry.RegisterRuntimeSignatureContext
-		rt.RegistrationTime = uint64(time.Now().Unix())
 	case true:
 		ctx = registry.RegisterGenesisRuntimeSignatureContext
 	}

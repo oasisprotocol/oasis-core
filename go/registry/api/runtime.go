@@ -134,9 +134,6 @@ type Runtime struct {
 	// Genesis is the runtime genesis information.
 	Genesis RuntimeGenesis `json:"genesis"`
 
-	// RegistrationTime is the time of registration of the runtime.
-	RegistrationTime uint64 `json:"registration_time"`
-
 	// Kind is the type of runtime.
 	Kind RuntimeKind `json:"kind"`
 
@@ -208,7 +205,6 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 	c.TxnScheduler.MaxBatchSizeBytes = pb.GetTxnSchedulerMaxBatchSizeBytes()
 	c.TxnScheduler.BatchFlushTimeout = time.Duration(pb.GetTxnSchedulerBatchFlushTimeout())
 	c.Storage.GroupSize = pb.GetStorageGroupSize()
-	c.RegistrationTime = pb.GetRegistrationTime()
 	c.Kind = RuntimeKind(pb.GetKind())
 
 	return nil
@@ -243,7 +239,6 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 	pb.TxnSchedulerMaxBatchSizeBytes = c.TxnScheduler.MaxBatchSizeBytes
 	pb.TxnSchedulerBatchFlushTimeout = int64(c.TxnScheduler.BatchFlushTimeout)
 	pb.StorageGroupSize = c.Storage.GroupSize
-	pb.RegistrationTime = c.RegistrationTime
 	pb.Kind = uint32(c.Kind)
 
 	return pb

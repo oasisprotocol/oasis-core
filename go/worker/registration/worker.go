@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
@@ -267,7 +266,6 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 		Consensus: node.ConsensusInfo{
 			ID: w.consensus.ConsensusKey(),
 		},
-		RegistrationTime: uint64(time.Now().Unix()),
 	}
 	for _, runtime := range w.workerCommonCfg.Runtimes {
 		nodeDesc.Runtimes = append(nodeDesc.Runtimes, &node.Runtime{

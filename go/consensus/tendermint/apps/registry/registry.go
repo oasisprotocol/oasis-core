@@ -207,15 +207,8 @@ func (app *registryApplication) registerEntity(
 		return err
 	}
 
-	if !ctx.IsInitChain() {
-		err = registry.VerifyTimestamp(ent.RegistrationTime, uint64(ctx.Now().Unix()))
-		if err != nil {
-			app.logger.Error("RegisterEntity: invalid timestamp",
-				"entity_timestamp", ent.RegistrationTime,
-				"now", uint64(ctx.Now().Unix()),
-			)
-			return err
-		}
+	if ctx.IsCheckOnly() {
+		return nil
 	}
 
 	params, err := state.ConsensusParameters()
@@ -237,19 +230,21 @@ func (app *registryApplication) registerEntity(
 
 	state.CreateEntity(ent, sigEnt)
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("RegisterEntity: registered",
-			"entity", ent,
-		)
+	app.logger.Debug("RegisterEntity: registered",
+		"entity", ent,
+	)
 
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEntityRegistered, cbor.Marshal(ent)))
-	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEntityRegistered, cbor.Marshal(ent)))
 
 	return nil
 }
 
 // Perform actual entity deregistration.
 func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *registryState.MutableState) error {
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
 	id := ctx.TxSigner()
 
 	// Prevent entity deregistration if there are any registered nodes.
@@ -292,6 +287,10 @@ func (app *registryApplication) registerNode(
 	state *registryState.MutableState,
 	sigNode *node.SignedNode,
 ) error {
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
 	// Peek into the to-be-verified node to pull out the owning entity ID.
 	var untrustedNode node.Node
 	if err := cbor.Unmarshal(sigNode.Blob, &untrustedNode); err != nil {
@@ -328,17 +327,6 @@ func (app *registryApplication) registerNode(
 	newNode, err := registry.VerifyRegisterNodeArgs(params, app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), regRuntimes)
 	if err != nil {
 		return err
-	}
-
-	if !ctx.IsInitChain() {
-		err = registry.VerifyTimestamp(newNode.RegistrationTime, uint64(ctx.Now().Unix()))
-		if err != nil {
-			app.logger.Error("RegisterNode: invalid timestamp",
-				"node_timestamp", newNode.RegistrationTime,
-				"now", uint64(ctx.Now().Unix()),
-			)
-			return err
-		}
 	}
 
 	// Re-check that the entity has at sufficient stake to still be an entity.
@@ -471,14 +459,12 @@ func (app *registryApplication) registerNode(
 		}
 	}
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("RegisterNode: registered",
-			"node", newNode,
-			"roles", newNode.Roles,
-		)
+	app.logger.Debug("RegisterNode: registered",
+		"node", newNode,
+		"roles", newNode.Roles,
+	)
 
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeRegistered, cbor.Marshal(newNode)))
-	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeRegistered, cbor.Marshal(newNode)))
 
 	return nil
 }
@@ -488,6 +474,10 @@ func (app *registryApplication) unfreezeNode(
 	state *registryState.MutableState,
 	unfreeze *registry.UnfreezeNode,
 ) error {
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
 	// Fetch node descriptor.
 	node, err := state.Node(unfreeze.NodeID)
 	if err != nil {
@@ -528,13 +518,11 @@ func (app *registryApplication) unfreezeNode(
 		return err
 	}
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("UnfreezeNode: unfrozen",
-			"node_id", node.ID,
-		)
+	app.logger.Debug("UnfreezeNode: unfrozen",
+		"node_id", node.ID,
+	)
 
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeUnfrozen, cbor.Marshal(node.ID)))
-	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeUnfrozen, cbor.Marshal(node.ID)))
 
 	return nil
 }
@@ -550,15 +538,8 @@ func (app *registryApplication) registerRuntime(
 		return err
 	}
 
-	if !ctx.IsInitChain() {
-		err = registry.VerifyTimestamp(rt.RegistrationTime, uint64(ctx.Now().Unix()))
-		if err != nil {
-			app.logger.Error("RegisterRuntime: invalid timestamp",
-				"runtime_timestamp", rt.RegistrationTime,
-				"now", uint64(ctx.Now().Unix()),
-			)
-			return err
-		}
+	if ctx.IsCheckOnly() {
+		return nil
 	}
 
 	// If TEE is required, check if runtime provided at least one enclave ID.
@@ -584,13 +565,11 @@ func (app *registryApplication) registerRuntime(
 		return registry.ErrBadEntityForRuntime
 	}
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("RegisterRuntime: registered",
-			"runtime", rt,
-		)
+	app.logger.Debug("RegisterRuntime: registered",
+		"runtime", rt,
+	)
 
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
-	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
 
 	return nil
 }

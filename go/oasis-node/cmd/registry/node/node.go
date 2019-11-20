@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -172,7 +171,6 @@ func doInit(cmd *cobra.Command, args []string) {
 		Consensus: node.ConsensusInfo{
 			ID: nodeIdentity.ConsensusSigner.Public(),
 		},
-		RegistrationTime: uint64(time.Now().Unix()),
 	}
 	if n.Roles, err = argsToRolesMask(); err != nil {
 		logger.Error("failed to parse node roles mask",

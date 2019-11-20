@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io/ioutil"
 	"path/filepath"
-	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
@@ -39,9 +38,6 @@ type Entity struct {
 	// entity signing key.
 	Nodes []signature.PublicKey `json:"nodes"`
 
-	// Time of registration.
-	RegistrationTime uint64 `json:"registration_time"`
-
 	// AllowEntitySignedNodes is true iff nodes belonging to this entity
 	// may be signed with the entity signing key.
 	AllowEntitySignedNodes bool `json:"allow_entity_signed_nodes"`
@@ -71,7 +67,6 @@ func (e *Entity) FromProto(pb *pbCommon.Entity) error {
 		e.Nodes = append(e.Nodes, nodeID)
 	}
 
-	e.RegistrationTime = pb.GetRegistrationTime()
 	e.AllowEntitySignedNodes = pb.GetAllowEntitySignedNodes()
 
 	return nil
@@ -82,7 +77,6 @@ func (e *Entity) ToProto() *pbCommon.Entity {
 	pb := new(pbCommon.Entity)
 
 	pb.Id, _ = e.ID.MarshalBinary()
-	pb.RegistrationTime = e.RegistrationTime
 	pb.AllowEntitySignedNodes = e.AllowEntitySignedNodes
 
 	var pbNodes [][]byte
@@ -150,8 +144,7 @@ func Generate(baseDir string, signerFactory signature.SignerFactory, template *E
 		return nil, nil, err
 	}
 	ent := &Entity{
-		ID:               signer.Public(),
-		RegistrationTime: uint64(time.Now().Unix()),
+		ID: signer.Public(),
 	}
 	if template != nil {
 		ent.Nodes = template.Nodes
@@ -196,6 +189,5 @@ func init() {
 	testEntitySigner = memorySigner.NewTestSigner("ekiden test entity key seed")
 
 	testEntity.ID = testEntitySigner.Public()
-	testEntity.RegistrationTime = uint64(time.Date(2019, 6, 1, 0, 0, 0, 0, time.UTC).Unix())
 	testEntity.AllowEntitySignedNodes = true
 }

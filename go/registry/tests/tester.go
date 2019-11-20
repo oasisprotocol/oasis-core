@@ -559,12 +559,11 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		}
 
 		nod.Node = &node.Node{
-			ID:               nod.Signer.Public(),
-			EntityID:         ent.Entity.ID,
-			Expiration:       uint64(expiration),
-			RegistrationTime: uint64(time.Now().Unix()),
-			Runtimes:         runtimes,
-			Roles:            role,
+			ID:         nod.Signer.Public(),
+			EntityID:   ent.Entity.ID,
+			Expiration: uint64(expiration),
+			Runtimes:   runtimes,
+			Roles:      role,
 		}
 		addr := node.Address{
 			TCPAddr: net.TCPAddr{
@@ -662,12 +661,11 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 
 		// Add another Re-Registration with different address field.
 		nod.UpdatedNode = &node.Node{
-			ID:               nod.Signer.Public(),
-			EntityID:         ent.Entity.ID,
-			Expiration:       uint64(expiration),
-			RegistrationTime: uint64(time.Now().Unix()) + 10, // Ensure greater than initial registration.
-			Runtimes:         runtimes,
-			Roles:            role,
+			ID:         nod.Signer.Public(),
+			EntityID:   ent.Entity.ID,
+			Expiration: uint64(expiration),
+			Runtimes:   runtimes,
+			Roles:      role,
 		}
 		addr = node.Address{
 			TCPAddr: net.TCPAddr{
@@ -688,14 +686,13 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		// Add invalid Re-Registration with changed Roles field.
 		testRuntimeSigner := memorySigner.NewTestSigner("invalod-registration-runtime-seed")
 		newNode := &node.Node{
-			ID:               nod.Signer.Public(),
-			EntityID:         ent.Entity.ID,
-			Expiration:       uint64(expiration),
-			RegistrationTime: uint64(time.Now().Unix()),
-			Runtimes:         append(runtimes, &node.Runtime{ID: testRuntimeSigner.Public()}),
-			Roles:            role,
-			P2P:              nod.Node.P2P,
-			Committee:        nod.Node.Committee,
+			ID:         nod.Signer.Public(),
+			EntityID:   ent.Entity.ID,
+			Expiration: uint64(expiration),
+			Runtimes:   append(runtimes, &node.Runtime{ID: testRuntimeSigner.Public()}),
+			Roles:      role,
+			P2P:        nod.Node.P2P,
+			Committee:  nod.Node.Committee,
 		}
 		nod.SignedInvalidReRegistration, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, newNode)
 		if err != nil {
@@ -724,7 +721,6 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 		}
 		ent.Entity = &entity.Entity{
 			ID:                     ent.Signer.Public(),
-			RegistrationTime:       uint64(time.Now().Unix()),
 			AllowEntitySignedNodes: true,
 		}
 
@@ -759,7 +755,6 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 	ch, sub := backend.WatchRuntimes()
 	defer sub.Close()
 
-	rt.Runtime.RegistrationTime = uint64(time.Now().Unix())
 	signed, err := signature.SignSigned(rt.Signer, api.RegisterRuntimeSignatureContext, rt.Runtime)
 	require.NoError(err, "signed runtime descriptor")
 
