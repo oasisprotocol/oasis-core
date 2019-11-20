@@ -7,6 +7,7 @@ import (
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -17,6 +18,13 @@ import (
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
+
+// moduleName is the module name used for error definitions.
+const moduleName = "consensus"
+
+// ErrNoCommittedBlocks is the error returned when there are no committed
+// blocks and as such no state can be queried.
+var ErrNoCommittedBlocks = errors.New(moduleName, 1, "consensus: no committed blocks")
 
 // ClientBackend is a limited consensus interface used by clients that
 // connect to the local node.
@@ -59,6 +67,9 @@ type Backend interface {
 	// TransactionAuthHandler returns the transaction authentication handler.
 	TransactionAuthHandler() TransactionAuthHandler
 
+	// SubmissionManager returns the transaction submission manager.
+	SubmissionManager() SubmissionManager
+
 	// EpochTime returns the epochtime backend.
 	EpochTime() epochtime.Backend
 
@@ -90,31 +101,6 @@ type TransactionAuthHandler interface {
 	// GetSignerNonce returns the nonce that should be used by the given
 	// signer for transmitting the next transaction.
 	GetSignerNonce(ctx context.Context, id signature.PublicKey, height int64) (uint64, error)
-}
-
-// SignAndSubmitTx is a helper method that signs and submits a transaction to
-// the consensus backend.
-//
-// If the transaction includes a zero nonce, the current nonce for the signer's
-// account will automatically be fetched and used before signing the transaction.
-//
-// Transaction will be submitted by calling SubmitTx.
-func SignAndSubmitTx(ctx context.Context, backend Backend, signer signature.Signer, tx *transaction.Transaction) error {
-	if tx.Nonce == 0 {
-		// Fetch current nonce value.
-		var err error
-		tx.Nonce, err = backend.TransactionAuthHandler().GetSignerNonce(ctx, signer.Public(), 0)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Sign the transaction.
-	sigTx, err := transaction.Sign(signer, tx)
-	if err != nil {
-		return err
-	}
-	return backend.SubmitTx(ctx, sigTx)
 }
 
 // EvidenceKind is kind of evindence of a node misbehaving.

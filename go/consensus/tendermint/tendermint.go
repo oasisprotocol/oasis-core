@@ -164,6 +164,7 @@ type tendermintService struct {
 	roothash        roothashAPI.Backend
 	staking         stakingAPI.Backend
 	scheduler       schedulerAPI.Backend
+	submissionMgr   consensusAPI.SubmissionManager
 
 	genesis                  *genesisAPI.Document
 	genesisProvider          genesisAPI.Provider
@@ -581,6 +582,10 @@ func (t *tendermintService) GetGenesis() *genesisAPI.Document {
 
 func (t *tendermintService) TransactionAuthHandler() consensusAPI.TransactionAuthHandler {
 	return t.mux.TransactionAuthHandler()
+}
+
+func (t *tendermintService) SubmissionManager() consensusAPI.SubmissionManager {
+	return t.submissionMgr
 }
 
 func (t *tendermintService) EpochTime() epochtimeAPI.Backend {
@@ -1066,6 +1071,9 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 		startedCh:             make(chan struct{}),
 		syncedCh:              make(chan struct{}),
 	}
+
+	// Create the submission manager.
+	t.submissionMgr = consensusAPI.NewSubmissionManager(t)
 
 	return t, t.initialize()
 }

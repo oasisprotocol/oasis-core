@@ -4,14 +4,13 @@ import (
 	"errors"
 
 	"github.com/tendermint/iavl"
+
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 )
 
 var (
 	// ErrNoState is the error returned when state is nil.
 	ErrNoState = errors.New("tendermint: no state available (app not registered?)")
-	// ErrNoCommittedBlocks is the error returned when there are no committed
-	// blocks and as such no state can be queried.
-	ErrNoCommittedBlocks = errors.New("tendermint: no committed blocks")
 )
 
 // ImmutableState is an immutable state wrapper.
@@ -26,7 +25,7 @@ func NewImmutableState(state *ApplicationState, version int64) (*ImmutableState,
 		return nil, ErrNoState
 	}
 	if state.BlockHeight() == 0 {
-		return nil, ErrNoCommittedBlocks
+		return nil, consensus.ErrNoCommittedBlocks
 	}
 	if version <= 0 || version > state.BlockHeight() {
 		version = state.BlockHeight()
