@@ -28,6 +28,7 @@ import (
 	beaconAPI "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/identity"
@@ -448,6 +449,16 @@ func (t *tendermintService) SubmitTx(ctx context.Context, tx *transaction.Signed
 
 	defer t.Unsubscribe(subID, query) // nolint: errcheck
 
+	// Subscribe to the transaction becoming invalid.
+	var txHash hash.Hash
+	txHash.FromBytes(data)
+
+	recheckCh, recheckSub, err := t.mux.WatchInvalidatedTx(txHash)
+	if err != nil {
+		return err
+	}
+	defer recheckSub.Close()
+
 	// First try to broadcast.
 	if err := t.broadcastTxRaw(data); err != nil {
 		return err
@@ -455,6 +466,8 @@ func (t *tendermintService) SubmitTx(ctx context.Context, tx *transaction.Signed
 
 	// Wait for the transaction to be included in a block.
 	select {
+	case v := <-recheckCh:
+		return v
 	case v := <-txSub.Out():
 		if result := v.Data().(tmtypes.EventDataTx).Result; !result.IsOK() {
 			err := errors.FromCode(result.GetCodespace(), result.GetCode())

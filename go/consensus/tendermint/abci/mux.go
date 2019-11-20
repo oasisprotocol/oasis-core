@@ -22,8 +22,10 @@ import (
 	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/version"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
@@ -262,6 +264,12 @@ func (a *ApplicationServer) TransactionAuthHandler() TransactionAuthHandler {
 	return a.mux.state.txAuthHandler
 }
 
+// WatchInvalidatedTx adds a watcher for when/if the transaction with given
+// hash becomes invalid due to a failed re-check.
+func (a *ApplicationServer) WatchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.ClosableSubscription, error) {
+	return a.mux.watchInvalidatedTx(txHash)
+}
+
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
 func NewApplicationServer(ctx context.Context, cfg *ApplicationConfig) (*ApplicationServer, error) {
@@ -299,6 +307,39 @@ type abciMux struct {
 
 	genesisHooks []func()
 	haltHooks    []func(context.Context, int64, epochtime.EpochTime)
+
+	// invalidatedTxs maps transaction hashes (hash.Hash) to a subscriber
+	// waiting for that transaction to become invalid.
+	invalidatedTxs sync.Map
+}
+
+type invalidatedTxSubscription struct {
+	mux      *abciMux
+	txHash   hash.Hash
+	resultCh chan<- error
+}
+
+func (s *invalidatedTxSubscription) Close() {
+	if s.mux == nil {
+		return
+	}
+	s.mux.invalidatedTxs.Delete(s.txHash)
+	s.mux = nil
+}
+
+func (mux *abciMux) watchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.ClosableSubscription, error) {
+	resultCh := make(chan error)
+	sub := &invalidatedTxSubscription{
+		mux:      mux,
+		txHash:   txHash,
+		resultCh: resultCh,
+	}
+
+	if _, exists := mux.invalidatedTxs.LoadOrStore(txHash, sub); exists {
+		return nil, nil, fmt.Errorf("mux: transaction already exists")
+	}
+
+	return resultCh, sub, nil
 }
 
 func (mux *abciMux) registerGenesisHook(hook func()) {
@@ -659,6 +700,29 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
 		module, code := errors.Code(err)
+
+		if req.Type == types.CheckTxType_Recheck {
+			// This is a re-check and the transaction just failed validation. Since
+			// the mempool provides no way of getting notified when a previously
+			// valid transaction becomes invalid, handle this here.
+
+			// XXX: The Tendermint mempool should have provisions for this instead
+			//      of us hacking our way through this here.
+			var txHash hash.Hash
+			txHash.FromBytes(req.Tx)
+
+			if item, exists := mux.invalidatedTxs.Load(txHash); exists {
+				// Notify subscriber.
+				sub := item.(*invalidatedTxSubscription)
+				select {
+				case sub.resultCh <- err:
+				default:
+				}
+				close(sub.resultCh)
+
+				mux.invalidatedTxs.Delete(txHash)
+			}
+		}
 
 		return types.ResponseCheckTx{
 			Codespace: module,
