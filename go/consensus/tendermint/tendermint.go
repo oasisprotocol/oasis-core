@@ -141,7 +141,7 @@ func newFailMonitor(logger *logging.Logger, fn func()) *failMonitor {
 	return &m
 }
 
-// IsSeed retuns true iff the node is configured as a seed node.
+// IsSeed returns true iff the node is configured as a seed node.
 func IsSeed() bool {
 	return viper.GetBool(CfgP2PSeedMode)
 }
