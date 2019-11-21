@@ -5,11 +5,15 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"path/filepath"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 	pbCommon "github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
@@ -25,6 +29,8 @@ var (
 
 	testEntity       Entity
 	testEntitySigner signature.Signer
+
+	_ prettyprint.PrettyPrinter = (*SignedEntity)(nil)
 )
 
 // Entity represents an entity that controls one or more Nodes and or
@@ -171,6 +177,19 @@ type SignedEntity struct {
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedEntity) Open(context signature.Context, entity *Entity) error { // nolint: interfacer
 	return s.Signed.Open(context, entity)
+}
+
+// PrettyPrint writes a pretty-printed representation of the type
+// to the given writer.
+func (s SignedEntity) PrettyPrint(prefix string, w io.Writer) {
+	var e Entity
+	if err := cbor.Unmarshal(s.Signed.Blob, &e); err != nil {
+		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, err)
+		return
+	}
+
+	pp := signature.NewPrettySigned(s.Signed, e)
+	pp.PrettyPrint(prefix, w)
 }
 
 // SignEntity serializes the Entity and signs the result.

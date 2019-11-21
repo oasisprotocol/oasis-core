@@ -41,9 +41,9 @@ var (
 	ErrNotFound = errors.New(BackendName, 2, "roothash: block not found")
 
 	// MethodComputeCommit is the method name for compute commit submission.
-	MethodComputeCommit = transaction.NewMethodName(BackendName, "ComputeCommit")
+	MethodComputeCommit = transaction.NewMethodName(BackendName, "ComputeCommit", ComputeCommit{})
 	// MethodMergeCommit is the method name for merge commit submission.
-	MethodMergeCommit = transaction.NewMethodName(BackendName, "MergeCommit")
+	MethodMergeCommit = transaction.NewMethodName(BackendName, "MergeCommit", MergeCommit{})
 
 	// Methods is a list of all methods supported by the roothash backend.
 	Methods = []transaction.MethodName{

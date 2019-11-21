@@ -17,6 +17,7 @@ import (
 	consensusClient "github.com/oasislabs/oasis-core/go/consensus/client"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
+	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 )
 
@@ -30,6 +31,12 @@ var (
 		Use:   "submit_tx",
 		Short: "Submit a pre-signed transaction",
 		Run:   doSubmitTx,
+	}
+
+	showTxCmd = &cobra.Command{
+		Use:   "show_tx",
+		Short: "Show the content a pre-signed transaction",
+		Run:   doShowTx,
 	}
 
 	logger = logging.GetLogger("cmd/consensus")
@@ -54,14 +61,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, consensusAPI.ClientBackend
 	return conn, client
 }
 
-func doSubmitTx(cmd *cobra.Command, args []string) {
-	if err := cmdCommon.Init(); err != nil {
-		cmdCommon.EarlyLogAndExit(err)
-	}
-
-	conn, client := doConnect(cmd)
-	defer conn.Close()
-
+func loadTx() *transaction.SignedTransaction {
 	rawTx, err := ioutil.ReadFile(viper.GetString(cmdConsensus.CfgTxFile))
 	if err != nil {
 		logger.Error("failed to read raw serialized transaction",
@@ -78,7 +78,20 @@ func doSubmitTx(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	if err = client.SubmitTx(context.Background(), &tx); err != nil {
+	return &tx
+}
+
+func doSubmitTx(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	conn, client := doConnect(cmd)
+	defer conn.Close()
+
+	tx := loadTx()
+
+	if err := client.SubmitTx(context.Background(), tx); err != nil {
 		logger.Error("failed to submit transaction",
 			"err", err,
 		)
@@ -86,16 +99,31 @@ func doSubmitTx(cmd *cobra.Command, args []string) {
 	}
 }
 
+func doShowTx(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	cmdConsensus.InitGenesis()
+
+	sigTx := loadTx()
+	sigTx.PrettyPrint("", os.Stdout)
+}
+
 // Register registers the consensus sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	for _, v := range []*cobra.Command{
 		submitTxCmd,
+		showTxCmd,
 	} {
 		consensusCmd.AddCommand(v)
 	}
 
 	submitTxCmd.Flags().AddFlagSet(cmdConsensus.TxFileFlags)
 	submitTxCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
+
+	showTxCmd.Flags().AddFlagSet(cmdConsensus.TxFileFlags)
+	showTxCmd.Flags().AddFlagSet(cmdFlags.GenesisFileFlags)
 
 	parentCmd.AddCommand(consensusCmd)
 }

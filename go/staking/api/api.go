@@ -44,15 +44,15 @@ var (
 	ErrInsufficientStake = errors.New(BackendName, 4, "staking: insufficient stake")
 
 	// MethodTransfer is the method name for transfers.
-	MethodTransfer = transaction.NewMethodName(BackendName, "Transfer")
+	MethodTransfer = transaction.NewMethodName(BackendName, "Transfer", Transfer{})
 	// MethodBurn is the method name for burns.
-	MethodBurn = transaction.NewMethodName(BackendName, "Burn")
+	MethodBurn = transaction.NewMethodName(BackendName, "Burn", Burn{})
 	// MethodAddEscrow is the method name for escrows.
-	MethodAddEscrow = transaction.NewMethodName(BackendName, "AddEscrow")
+	MethodAddEscrow = transaction.NewMethodName(BackendName, "AddEscrow", Escrow{})
 	// MethodReclaimEscrow is the method name for escrow reclamations.
-	MethodReclaimEscrow = transaction.NewMethodName(BackendName, "ReclaimEscrow")
+	MethodReclaimEscrow = transaction.NewMethodName(BackendName, "ReclaimEscrow", ReclaimEscrow{})
 	// MethodAmendCommissionSchedule is the method name for amending commission schedules.
-	MethodAmendCommissionSchedule = transaction.NewMethodName(BackendName, "AmendCommissionSchedule")
+	MethodAmendCommissionSchedule = transaction.NewMethodName(BackendName, "AmendCommissionSchedule", AmendCommissionSchedule{})
 
 	// Methods is the list of all methods supported by the staking backend.
 	Methods = []transaction.MethodName{

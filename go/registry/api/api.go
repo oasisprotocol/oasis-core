@@ -119,15 +119,15 @@ var (
 	ErrNodeUpdateNotAllowed = errors.New(BackendName, 17, "registry: node update not allowed")
 
 	// MethodRegisterEntity is the method name for entity registrations.
-	MethodRegisterEntity = transaction.NewMethodName(BackendName, "RegisterEntity")
+	MethodRegisterEntity = transaction.NewMethodName(BackendName, "RegisterEntity", entity.SignedEntity{})
 	// MethodDeregisterEntity is the method name for entity deregistrations.
-	MethodDeregisterEntity = transaction.NewMethodName(BackendName, "DeregisterEntity")
+	MethodDeregisterEntity = transaction.NewMethodName(BackendName, "DeregisterEntity", nil)
 	// MethodRegisterNode is the method name for node registrations.
-	MethodRegisterNode = transaction.NewMethodName(BackendName, "RegisterNode")
+	MethodRegisterNode = transaction.NewMethodName(BackendName, "RegisterNode", node.SignedNode{})
 	// MethodUnfreezeNode is the method name for unfreezing nodes.
-	MethodUnfreezeNode = transaction.NewMethodName(BackendName, "UnfreezeNode")
+	MethodUnfreezeNode = transaction.NewMethodName(BackendName, "UnfreezeNode", UnfreezeNode{})
 	// MethodRegisterRuntime is the method name for registering runtimes.
-	MethodRegisterRuntime = transaction.NewMethodName(BackendName, "RegisterRuntime")
+	MethodRegisterRuntime = transaction.NewMethodName(BackendName, "RegisterRuntime", SignedRuntime{})
 
 	// Methods is the list of all methods supported by the registry backend.
 	Methods = []transaction.MethodName{

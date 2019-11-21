@@ -108,13 +108,20 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("scenario/e2e/stake: initial stake list wrong number of accounts: %d, expected at least: %d. Accounts: %s", len(accounts), 1, accounts)
 	}
 
-	// Let the first and the only account in the list be the source account.
+	// Ensure the source account is in the list.
 	var src signature.PublicKey
 	if err = src.UnmarshalHex(srcAddress); err != nil {
 		return err
 	}
-	if !bytes.Equal(accounts[0][:], src[:]) {
-		return fmt.Errorf("scenario/e2e/stake: wrong src account: %s expected: %s", accounts[0].String(), src.String())
+	var found bool
+	for _, a := range accounts {
+		if bytes.Equal(a[:], src[:]) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("scenario/e2e/stake: src account not found: %s", src.String())
 	}
 	// Define a new destination account.
 	var dst signature.PublicKey
@@ -166,6 +173,9 @@ func (s *stakeCLIImpl) testTransfer(childEnv *env.Env, src signature.PublicKey, 
 	if err := s.genTransferTx(childEnv, transferAmount, 0, dst, transferTxPath); err != nil {
 		return err
 	}
+	if err := s.showTx(childEnv, transferTxPath); err != nil {
+		return err
+	}
 	if err := s.checkBalance(childEnv, src, initBalance); err != nil {
 		return err
 	}
@@ -200,6 +210,9 @@ func (s *stakeCLIImpl) testBurn(childEnv *env.Env, src signature.PublicKey) erro
 	if err := s.genBurnTx(childEnv, burnAmount, 1, burnTxPath); err != nil {
 		return err
 	}
+	if err := s.showTx(childEnv, burnTxPath); err != nil {
+		return err
+	}
 
 	if err := s.submitTx(childEnv, src, burnTxPath); err != nil {
 		return err
@@ -223,6 +236,9 @@ func (s *stakeCLIImpl) testBurn(childEnv *env.Env, src signature.PublicKey) erro
 func (s *stakeCLIImpl) testEscrow(childEnv *env.Env, src signature.PublicKey, escrow signature.PublicKey) error {
 	escrowTxPath := filepath.Join(childEnv.Dir(), "stake_escrow.json")
 	if err := s.genEscrowTx(childEnv, escrowAmount, 2, escrow, escrowTxPath); err != nil {
+		return err
+	}
+	if err := s.showTx(childEnv, escrowTxPath); err != nil {
 		return err
 	}
 
@@ -251,6 +267,9 @@ func (s *stakeCLIImpl) testEscrow(childEnv *env.Env, src signature.PublicKey, es
 func (s *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, src signature.PublicKey, escrow signature.PublicKey) error {
 	reclaimEscrowTxPath := filepath.Join(childEnv.Dir(), "stake_reclaim_escrow.json")
 	if err := s.genReclaimEscrowTx(childEnv, escrowAmount, 3, escrow, reclaimEscrowTxPath); err != nil {
+		return err
+	}
+	if err := s.showTx(childEnv, reclaimEscrowTxPath); err != nil {
 		return err
 	}
 
@@ -304,6 +323,9 @@ func (s *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, src signat
 			},
 		},
 	}, amendCommissionScheduleTxPath); err != nil {
+		return err
+	}
+	if err := s.showTx(childEnv, amendCommissionScheduleTxPath); err != nil {
 		return err
 	}
 
@@ -411,6 +433,21 @@ func (s *stakeCLIImpl) checkEscrowBalance(childEnv *env.Env, src signature.Publi
 		return fmt.Errorf("checkEscrowBalance: wrong escrow balance of account. Expected %s got %s", q.String(), ai.EscrowBalance.String())
 	}
 
+	return nil
+}
+
+func (s *stakeCLIImpl) showTx(childEnv *env.Env, txPath string) error {
+	s.logger.Info("pretty printing generated transaction")
+
+	args := []string{
+		"consensus", "show_tx",
+		"--" + consensus.CfgTxFile, txPath,
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
+	}
+	if err := runSubCommand(childEnv, "show_tx", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("showTx: failed to show tx: %w", err)
+	}
 	return nil
 }
 

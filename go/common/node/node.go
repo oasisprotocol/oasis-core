@@ -6,12 +6,15 @@ package node
 import (
 	"crypto/x509"
 	"errors"
+	"fmt"
+	"io"
 	"strings"
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/common/version"
 	pbCommon "github.com/oasislabs/oasis-core/go/grpc/common"
@@ -30,6 +33,8 @@ var (
 	ErrNilProtobuf = errors.New("node: Protobuf is nil")
 
 	teeHashContext = []byte("oasis-core/node: TEE RAK binding")
+
+	_ prettyprint.PrettyPrinter = (*SignedNode)(nil)
 )
 
 // Node represents public connectivity information about an Oasis node.
@@ -561,6 +566,19 @@ type SignedNode struct {
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedNode) Open(context signature.Context, node *Node) error { // nolint: interfacer
 	return s.Signed.Open(context, node)
+}
+
+// PrettyPrint writes a pretty-printed representation of the type
+// to the given writer.
+func (s SignedNode) PrettyPrint(prefix string, w io.Writer) {
+	var n Node
+	if err := cbor.Unmarshal(s.Signed.Blob, &n); err != nil {
+		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, err)
+		return
+	}
+
+	pp := signature.NewPrettySigned(s.Signed, n)
+	pp.PrettyPrint(prefix, w)
 }
 
 // SignNode serializes the Node and signs the result.

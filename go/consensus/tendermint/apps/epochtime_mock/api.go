@@ -3,6 +3,7 @@ package epochtimemock
 import (
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
 const (
@@ -28,7 +29,7 @@ var (
 	KeyEpoch = []byte("epoch")
 
 	// MethodSetEpoch is the method name for setting epochs.
-	MethodSetEpoch = transaction.NewMethodName(AppName, "SetEpoch")
+	MethodSetEpoch = transaction.NewMethodName(AppName, "SetEpoch", epochtime.EpochTime(0))
 
 	// Methods is a list of all methods supported by the epochtime mock application.
 	Methods = []transaction.MethodName{
