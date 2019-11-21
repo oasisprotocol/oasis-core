@@ -34,17 +34,18 @@ Prerequisites:
     0.3.3).
   * [GCC](http://gcc.gnu.org/) (including C++ subpackage).
   * [Protobuf](https://github.com/protocolbuffers/protobuf) compiler.
+  * [GNU Make](https://www.gnu.org/software/make/).
   * [CMake](https://cmake.org/).
   * [OpenSSL](https://www.openssl.org/) development package.
   * [libseccomp](https://github.com/seccomp/libseccomp) development package.
 
   On Fedora 29+, you can install all the above with:
   ```
-  sudo dnf install bubblewrap gcc gcc-c++ protobuf-compiler cmake openssl-devel libseccomp-devel
+  sudo dnf install bubblewrap gcc gcc-c++ protobuf-compiler make cmake openssl-devel libseccomp-devel
   ```
   On Ubuntu 18.10+, you can install all the above with:
   ```
-  sudo apt install bubblewrap gcc g++ protobuf-compiler cmake libssl-dev libseccomp-dev
+  sudo apt install bubblewrap gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev
   ```
 
 * [Go](https://golang.org) (at least version 1.13).
@@ -69,15 +70,15 @@ Prerequisites:
 
 * [protoc-gen-go](https://github.com/golang/protobuf).
 
-  Install it with:
+  Download and install it with:
   ```
-  go get github.com/golang/protobuf/protoc-gen-go
+  ${OASIS_GO:-go} get github.com/golang/protobuf/protoc-gen-go
   ```
 
-  _NOTE: If you use a particular version of Go, i.e. the one set in
-  `OASIS_GO`, then install it with:_
+  _NOTE: If you didn't/can't add `$GOPATH/bin` to your `PATH`, you can install
+  `protoc-gen-go` to `/usr/local/bin` (which is in `$PATH`) with:_
   ```
-  $OASIS_GO get github.com/golang/protobuf/protoc-gen-go
+  sudo GOBIN=/usr/local/bin ${OASIS_GO:-go} install github.com/golang/protobuf/protoc-gen-go
   ```
 
 * [Rust](https://www.rust-lang.org) and the nightly toolchain.
