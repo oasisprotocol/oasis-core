@@ -396,6 +396,19 @@ type ConsensusParameters struct {
 	MinDelegationAmount     quantity.Quantity                   `json:"min_delegation,omitempty"`
 }
 
+const (
+	// GasOpTransfer is the gas operation identifier for transfer.
+	GasOpTransfer transaction.Op = "transfer"
+	// GasOpBurn is the gas operation identifier for burn.
+	GasOpBurn transaction.Op = "burn"
+	// GasOpAddEscrow is the gas operation identifier for add escrow.
+	GasOpAddEscrow transaction.Op = "add_escrow"
+	// GasOpReclaimEscrow is the gas operation identifier for reclaim escrow.
+	GasOpReclaimEscrow transaction.Op = "reclaim_escrow"
+	// GasOpAmendCommissionSchedule is the gas operation identifier for amend commission schedule.
+	GasOpAmendCommissionSchedule transaction.Op = "amend_commission_schedule"
+)
+
 // SanityCheck performs a sanity check on the consensus parameters.
 func (p *ConsensusParameters) SanityCheck() error {
 	// Thresholds.
@@ -545,16 +558,3 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocycl
 
 	return nil
 }
-
-const (
-	// GasOpTransfer is the gas operation identifier for transfer.
-	GasOpTransfer transaction.Op = "transfer"
-	// GasOpBurn is the gas operation identifier for burn.
-	GasOpBurn transaction.Op = "burn"
-	// GasOpAddEscrow is the gas operation identifier for add escrow.
-	GasOpAddEscrow transaction.Op = "add_escrow"
-	// GasOpReclaimEscrow is the gas operation identifier for reclaim escrow.
-	GasOpReclaimEscrow transaction.Op = "reclaim_escrow"
-	// GasOpAmendCommissionSchedule is the gas operation identifier for amend commission schedule.
-	GasOpAmendCommissionSchedule transaction.Op = "amend_commission_schedule"
-)

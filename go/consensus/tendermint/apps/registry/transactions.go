@@ -26,6 +26,7 @@ func (app *registryApplication) registerEntity(
 		return nil
 	}
 
+	// Charge gas for this transaction.
 	params, err := state.ConsensusParameters()
 	if err != nil {
 		app.logger.Error("RegisterEntity: failed to fetch consensus parameters",
@@ -33,6 +34,13 @@ func (app *registryApplication) registerEntity(
 		)
 		return err
 	}
+	if err = ctx.Gas().UseGas(1, registry.GasOpRegisterEntity, params.GasCosts); err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(len(ent.Nodes), registry.GasOpRegisterNode, params.GasCosts); err != nil {
+		return err
+	}
+
 	if !params.DebugBypassStake {
 		if err = stakingState.EnsureSufficientStake(ctx, ent.ID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
 			app.logger.Error("RegisterEntity: Insufficent stake",
@@ -41,6 +49,13 @@ func (app *registryApplication) registerEntity(
 			)
 			return err
 		}
+	}
+
+	// Make sure the signer of the transaction matches the signer of the entity.
+	// NOTE: If this is invoked during InitChain then there is no actual transaction
+	//       and thus no transaction signer so we must skip this check.
+	if !ctx.IsInitChain() && !sigEnt.Signature.PublicKey.Equal(ctx.TxSigner()) {
+		return registry.ErrIncorrectTxSigner
 	}
 
 	state.CreateEntity(ent, sigEnt)
@@ -57,6 +72,18 @@ func (app *registryApplication) registerEntity(
 func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *registryState.MutableState) error {
 	if ctx.IsCheckOnly() {
 		return nil
+	}
+
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		app.logger.Error("DeregisterEntity: failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, registry.GasOpDeregisterEntity, params.GasCosts); err != nil {
+		return err
 	}
 
 	id := ctx.TxSigner()
@@ -81,21 +108,19 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 		return err
 	}
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("DeregisterEntity: complete",
-			"entity_id", id,
-		)
+	app.logger.Debug("DeregisterEntity: complete",
+		"entity_id", id,
+	)
 
-		tagV := &EntityDeregistration{
-			Entity: *removedEntity,
-		}
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEntityDeregistered, cbor.Marshal(tagV)))
+	tagV := &EntityDeregistration{
+		Entity: *removedEntity,
 	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEntityDeregistered, cbor.Marshal(tagV)))
 
 	return nil
 }
 
-func (app *registryApplication) registerNode(
+func (app *registryApplication) registerNode( // nolint: gocyclo
 	ctx *abci.Context,
 	state *registryState.MutableState,
 	sigNode *node.SignedNode,
@@ -140,6 +165,21 @@ func (app *registryApplication) registerNode(
 	newNode, err := registry.VerifyRegisterNodeArgs(params, app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), regRuntimes)
 	if err != nil {
 		return err
+	}
+
+	// Charge gas for node registration if signed by entity. For node-signed
+	// registrations, the gas charges are pre-paid by the entity.
+	if sigNode.Signature.PublicKey.Equal(untrustedNode.EntityID) {
+		if err = ctx.Gas().UseGas(1, registry.GasOpRegisterNode, params.GasCosts); err != nil {
+			return err
+		}
+	}
+
+	// Make sure the signer of the transaction matches the signer of the node.
+	// NOTE: If this is invoked during InitChain then there is no actual transaction
+	//       and thus no transaction signer so we must skip this check.
+	if !ctx.IsInitChain() && !sigNode.Signature.PublicKey.Equal(ctx.TxSigner()) {
+		return registry.ErrIncorrectTxSigner
 	}
 
 	// Re-check that the entity has at sufficient stake to still be an entity.
@@ -291,6 +331,18 @@ func (app *registryApplication) unfreezeNode(
 		return nil
 	}
 
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		app.logger.Error("UnfreezeNode: failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, registry.GasOpUnfreezeNode, params.GasCosts); err != nil {
+		return err
+	}
+
 	// Fetch node descriptor.
 	node, err := state.Node(unfreeze.NodeID)
 	if err != nil {
@@ -352,6 +404,25 @@ func (app *registryApplication) registerRuntime(
 
 	if ctx.IsCheckOnly() {
 		return nil
+	}
+
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		app.logger.Error("RegisterRuntime: failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, registry.GasOpRegisterRuntime, params.GasCosts); err != nil {
+		return err
+	}
+
+	// Make sure the signer of the transaction matches the signer of the runtime.
+	// NOTE: If this is invoked during InitChain then there is no actual transaction
+	//       and thus no transaction signer so we must skip this check.
+	if !ctx.IsInitChain() && !sigRt.Signature.PublicKey.Equal(ctx.TxSigner()) {
+		return registry.ErrIncorrectTxSigner
 	}
 
 	// If TEE is required, check if runtime provided at least one enclave ID.

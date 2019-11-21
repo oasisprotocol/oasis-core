@@ -513,6 +513,8 @@ func (ent *TestEntity) Deregister(consensus consensusAPI.Backend) error {
 // TestNode is a testing Node and some common pre-generated/signed blobs
 // useful for testing.
 type TestNode struct {
+	Entity *TestEntity
+
 	Node        *node.Node
 	UpdatedNode *node.Node
 	Signer      signature.Signer
@@ -533,7 +535,8 @@ type TestNode struct {
 
 // Register attempts to register a node.
 func (n *TestNode) Register(consensus consensusAPI.Backend, sigNode *node.SignedNode) error {
-	return consensusAPI.SignAndSubmitTx(context.Background(), consensus, n.Signer, api.NewRegisterNodeTx(0, nil, sigNode))
+	// NOTE: Node registrations in tests are entity-signed.
+	return consensusAPI.SignAndSubmitTx(context.Background(), consensus, n.Entity.Signer, api.NewRegisterNodeTx(0, nil, sigNode))
 }
 
 // NewTestNodes returns the specified number of TestNodes, generated
@@ -555,6 +558,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		if nod.Signer, err = memorySigner.NewSigner(rng); err != nil {
 			return nil, err
 		}
+		nod.Entity = ent
 
 		var role node.RolesMask
 		if i < nCompute {
