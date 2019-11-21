@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -37,14 +36,6 @@ import (
 )
 
 const (
-	// QueryKeyP2PFilterAddr is the standard ABCI query by IP address
-	// used to determine if a peer is authorized to connect.
-	QueryKeyP2PFilterAddr = "p2p/filter/addr/"
-
-	// QueryKeyP2PFilterPubkey is the standard ABCI query by public key
-	// used to determine if a peer is authorized to connect.
-	QueryKeyP2PFilterPubkey = "p2p/filter/pubkey/"
-
 	stateKeyGenesisDigest  = "OasisGenesisDigest"
 	stateKeyGenesisRequest = "OasisGenesisRequest"
 
@@ -95,8 +86,6 @@ type TransactionAuthHandler interface {
 // ABCI applications.
 type Application interface {
 	// Name returns the name of the Application.
-	//
-	// Note: The name is also used as a prefix for de-multiplexing Query calls.
 	Name() string
 
 	// ID returns the unique identifier of the application.
@@ -361,28 +350,6 @@ func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
 		AppVersion:       version.BackendProtocol.ToU64(),
 		LastBlockHeight:  mux.state.BlockHeight(),
 		LastBlockAppHash: mux.state.BlockHash(),
-	}
-}
-
-func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
-	queryPath := req.GetPath()
-
-	// Tendermint uses these queries to filter incoming connections
-	// by source address and or link(?) public key.  Offload the
-	// responsiblity onto the blessed app.
-	if isP2PFilterQuery(queryPath) {
-		// TODO: Handle P2P filter queries.
-
-		mux.logger.Debug("Query: allowing p2p/filter query",
-			"req", req,
-		)
-		return types.ResponseQuery{
-			Code: types.CodeTypeOK,
-		}
-	}
-
-	return types.ResponseQuery{
-		Code: types.CodeTypeOK,
 	}
 }
 
@@ -1231,10 +1198,6 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*Applicat
 	go s.metricsWorker()
 
 	return s, nil
-}
-
-func isP2PFilterQuery(s string) bool {
-	return strings.HasPrefix(s, QueryKeyP2PFilterAddr) || strings.HasPrefix(s, QueryKeyP2PFilterPubkey)
 }
 
 func parseGenesisAppState(req types.RequestInitChain) (*genesis.Document, error) {
