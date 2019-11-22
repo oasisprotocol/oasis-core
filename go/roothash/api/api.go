@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	// BackendName is a unique backend name for the roothash backend.
-	BackendName = "roothash"
+	// ModuleName is a unique module name for the roothash module.
+	ModuleName = "roothash"
 
 	// LogEventComputeDiscrepancyDetected is a log event value that signals
 	// a compute discrepancy has been detected.
@@ -35,15 +35,15 @@ const (
 
 var (
 	// ErrInvalidArgument is the error returned on malformed argument(s).
-	ErrInvalidArgument = errors.New(BackendName, 1, "roothash: invalid argument")
+	ErrInvalidArgument = errors.New(ModuleName, 1, "roothash: invalid argument")
 
 	// ErrNotFound is the error returned when a block is not found.
-	ErrNotFound = errors.New(BackendName, 2, "roothash: block not found")
+	ErrNotFound = errors.New(ModuleName, 2, "roothash: block not found")
 
 	// MethodComputeCommit is the method name for compute commit submission.
-	MethodComputeCommit = transaction.NewMethodName(BackendName, "ComputeCommit", ComputeCommit{})
+	MethodComputeCommit = transaction.NewMethodName(ModuleName, "ComputeCommit", ComputeCommit{})
 	// MethodMergeCommit is the method name for merge commit submission.
-	MethodMergeCommit = transaction.NewMethodName(BackendName, "MergeCommit", MergeCommit{})
+	MethodMergeCommit = transaction.NewMethodName(ModuleName, "MergeCommit", MergeCommit{})
 
 	// Methods is a list of all methods supported by the roothash backend.
 	Methods = []transaction.MethodName{

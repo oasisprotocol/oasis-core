@@ -20,8 +20,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 )
 
-// BackendName is a unique backend name for the registry backend.
-const BackendName = "registry"
+// ModuleName is a unique module name for the registry module.
+const ModuleName = "registry"
 
 var (
 	// RegisterEntitySignatureContext is the context used for entity
@@ -58,76 +58,76 @@ var (
 	RegisterGenesisRuntimeSignatureContext = RegisterRuntimeSignatureContext
 
 	// ErrInvalidArgument is the error returned on malformed argument(s).
-	ErrInvalidArgument = errors.New(BackendName, 1, "registry: invalid argument")
+	ErrInvalidArgument = errors.New(ModuleName, 1, "registry: invalid argument")
 
 	// ErrInvalidSignature is the error returned on an invalid signature.
-	ErrInvalidSignature = errors.New(BackendName, 2, "registry: invalid signature")
+	ErrInvalidSignature = errors.New(ModuleName, 2, "registry: invalid signature")
 
 	// ErrBadEntityForNode is the error returned when a node registration
 	// with an unknown entity is attempted.
-	ErrBadEntityForNode = errors.New(BackendName, 3, "registry: unknown entity in node registration")
+	ErrBadEntityForNode = errors.New(ModuleName, 3, "registry: unknown entity in node registration")
 
 	// ErrBadEntityForRuntime is the error returned when a runtime
 	// attempts to register with an unknown entity.
-	ErrBadEntityForRuntime = errors.New(BackendName, 4, "registry: unknown entity in runtime registration")
+	ErrBadEntityForRuntime = errors.New(ModuleName, 4, "registry: unknown entity in runtime registration")
 
 	// ErrNoEnclaveForRuntime is the error returned when a TEE runtime
 	// registers with no enclave IDs.
-	ErrNoEnclaveForRuntime = errors.New(BackendName, 5, "registry: no enclaves for TEE runtime registration")
+	ErrNoEnclaveForRuntime = errors.New(ModuleName, 5, "registry: no enclaves for TEE runtime registration")
 
 	// ErrBadEnclaveIdentity is the error returned when a node tries to
 	// register runtimes with wrong Enclave IDs.
-	ErrBadEnclaveIdentity = errors.New(BackendName, 6, "registry: bad enclave id")
+	ErrBadEnclaveIdentity = errors.New(ModuleName, 6, "registry: bad enclave id")
 
 	// ErrBadCapabilitiesTEEHardware is the error returned when a node tries to
 	// register a runtime with bad Capabilities.TEE.Hardware.
-	ErrBadCapabilitiesTEEHardware = errors.New(BackendName, 7, "registry: bad capabilities.TEE.Hardware")
+	ErrBadCapabilitiesTEEHardware = errors.New(ModuleName, 7, "registry: bad capabilities.TEE.Hardware")
 
 	// ErrTEEHardwareMismatch is the error returned when a node tries to
 	// register a runtime and Capabilities.TEE.Hardware mismatches the one in
 	// the registry.
-	ErrTEEHardwareMismatch = errors.New(BackendName, 8, "registry: runtime TEE.Hardware mismatches the one in registry")
+	ErrTEEHardwareMismatch = errors.New(ModuleName, 8, "registry: runtime TEE.Hardware mismatches the one in registry")
 
 	// ErrNoSuchEntity is the error returned when an entity does not exist.
-	ErrNoSuchEntity = errors.New(BackendName, 9, "registry: no such entity")
+	ErrNoSuchEntity = errors.New(ModuleName, 9, "registry: no such entity")
 
 	// ErrNoSuchNode is the error returned when an node does not exist.
-	ErrNoSuchNode = errors.New(BackendName, 10, "registry: no such node")
+	ErrNoSuchNode = errors.New(ModuleName, 10, "registry: no such node")
 
 	// ErrNoSuchRuntime is the error returned when an runtime does not exist.
-	ErrNoSuchRuntime = errors.New(BackendName, 11, "registry: no such runtime")
+	ErrNoSuchRuntime = errors.New(ModuleName, 11, "registry: no such runtime")
 
 	// ErrInvalidTimestamp is the error returned when a timestamp is invalid.
-	ErrInvalidTimestamp = errors.New(BackendName, 12, "registry: invalid timestamp")
+	ErrInvalidTimestamp = errors.New(ModuleName, 12, "registry: invalid timestamp")
 
 	// ErrNodeExpired is the error returned when a node is expired.
-	ErrNodeExpired = errors.New(BackendName, 13, "registry: node expired")
+	ErrNodeExpired = errors.New(ModuleName, 13, "registry: node expired")
 
 	// ErrNodeCannotBeUnfrozen is the error returned when a node cannot yet be
 	// unfrozen due to the freeze period not being over yet.
-	ErrNodeCannotBeUnfrozen = errors.New(BackendName, 14, "registry: node cannot be unfrozen yet")
+	ErrNodeCannotBeUnfrozen = errors.New(ModuleName, 14, "registry: node cannot be unfrozen yet")
 
 	// ErrEntityHasNodes is the error returned when an entity cannot be deregistered
 	// as it still has nodes.
-	ErrEntityHasNodes = errors.New(BackendName, 15, "registry: entity still has nodes")
+	ErrEntityHasNodes = errors.New(ModuleName, 15, "registry: entity still has nodes")
 
 	// ErrForbidden is the error returned when an operation is forbiden by
 	// policy.
-	ErrForbidden = errors.New(BackendName, 16, "registry: forbidden by policy")
+	ErrForbidden = errors.New(ModuleName, 16, "registry: forbidden by policy")
 
 	// ErrNodeUpdateNotAllowed is the error returned when trying to update an existing node with unallowed changes.
-	ErrNodeUpdateNotAllowed = errors.New(BackendName, 17, "registry: node update not allowed")
+	ErrNodeUpdateNotAllowed = errors.New(ModuleName, 17, "registry: node update not allowed")
 
 	// MethodRegisterEntity is the method name for entity registrations.
-	MethodRegisterEntity = transaction.NewMethodName(BackendName, "RegisterEntity", entity.SignedEntity{})
+	MethodRegisterEntity = transaction.NewMethodName(ModuleName, "RegisterEntity", entity.SignedEntity{})
 	// MethodDeregisterEntity is the method name for entity deregistrations.
-	MethodDeregisterEntity = transaction.NewMethodName(BackendName, "DeregisterEntity", nil)
+	MethodDeregisterEntity = transaction.NewMethodName(ModuleName, "DeregisterEntity", nil)
 	// MethodRegisterNode is the method name for node registrations.
-	MethodRegisterNode = transaction.NewMethodName(BackendName, "RegisterNode", node.SignedNode{})
+	MethodRegisterNode = transaction.NewMethodName(ModuleName, "RegisterNode", node.SignedNode{})
 	// MethodUnfreezeNode is the method name for unfreezing nodes.
-	MethodUnfreezeNode = transaction.NewMethodName(BackendName, "UnfreezeNode", UnfreezeNode{})
+	MethodUnfreezeNode = transaction.NewMethodName(ModuleName, "UnfreezeNode", UnfreezeNode{})
 	// MethodRegisterRuntime is the method name for registering runtimes.
-	MethodRegisterRuntime = transaction.NewMethodName(BackendName, "RegisterRuntime", SignedRuntime{})
+	MethodRegisterRuntime = transaction.NewMethodName(ModuleName, "RegisterRuntime", SignedRuntime{})
 
 	// Methods is the list of all methods supported by the registry backend.
 	Methods = []transaction.MethodName{

@@ -172,11 +172,11 @@ func (m MethodName) BodyType() interface{} {
 
 // NewMethodName creates a new method name.
 //
-// Backend name and method pair must be unique. If they are not, this method
+// Module and method pair must be unique. If they are not, this method
 // will panic.
-func NewMethodName(backendName, method string, bodyType interface{}) MethodName {
+func NewMethodName(module, method string, bodyType interface{}) MethodName {
 	// Check for duplicate method names.
-	name := backendName + MethodSeparator + method
+	name := module + MethodSeparator + method
 	if _, isRegistered := registeredMethods.Load(name); isRegistered {
 		panic(fmt.Errorf("transaction: method already registered: %s", name))
 	}

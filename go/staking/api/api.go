@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	// BackendName is a unique backend name for the staking backend.
-	BackendName = "staking"
+	// ModuleName is a unique module name for the staking module.
+	ModuleName = "staking"
 
 	// TokenName is the name of the staking token.
 	TokenName = "Buffycoin"
@@ -30,29 +30,29 @@ const (
 
 var (
 	// ErrInvalidArgument is the error returned on malformed arguments.
-	ErrInvalidArgument = errors.New(BackendName, 1, "staking: invalid argument")
+	ErrInvalidArgument = errors.New(ModuleName, 1, "staking: invalid argument")
 
 	// ErrInvalidSignature is the error returned on invalid signature.
-	ErrInvalidSignature = errors.New(BackendName, 2, "staking: invalid signature")
+	ErrInvalidSignature = errors.New(ModuleName, 2, "staking: invalid signature")
 
 	// ErrInsufficientBalance is the error returned when an operation
 	// fails due to insufficient balance.
-	ErrInsufficientBalance = errors.New(BackendName, 3, "staking: insufficient balance")
+	ErrInsufficientBalance = errors.New(ModuleName, 3, "staking: insufficient balance")
 
 	// ErrInsufficientStake is the error returned when an operation fails
 	// due to insufficient stake.
-	ErrInsufficientStake = errors.New(BackendName, 4, "staking: insufficient stake")
+	ErrInsufficientStake = errors.New(ModuleName, 4, "staking: insufficient stake")
 
 	// MethodTransfer is the method name for transfers.
-	MethodTransfer = transaction.NewMethodName(BackendName, "Transfer", Transfer{})
+	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", Transfer{})
 	// MethodBurn is the method name for burns.
-	MethodBurn = transaction.NewMethodName(BackendName, "Burn", Burn{})
+	MethodBurn = transaction.NewMethodName(ModuleName, "Burn", Burn{})
 	// MethodAddEscrow is the method name for escrows.
-	MethodAddEscrow = transaction.NewMethodName(BackendName, "AddEscrow", Escrow{})
+	MethodAddEscrow = transaction.NewMethodName(ModuleName, "AddEscrow", Escrow{})
 	// MethodReclaimEscrow is the method name for escrow reclamations.
-	MethodReclaimEscrow = transaction.NewMethodName(BackendName, "ReclaimEscrow", ReclaimEscrow{})
+	MethodReclaimEscrow = transaction.NewMethodName(ModuleName, "ReclaimEscrow", ReclaimEscrow{})
 	// MethodAmendCommissionSchedule is the method name for amending commission schedules.
-	MethodAmendCommissionSchedule = transaction.NewMethodName(BackendName, "AmendCommissionSchedule", AmendCommissionSchedule{})
+	MethodAmendCommissionSchedule = transaction.NewMethodName(ModuleName, "AmendCommissionSchedule", AmendCommissionSchedule{})
 
 	// Methods is the list of all methods supported by the staking backend.
 	Methods = []transaction.MethodName{

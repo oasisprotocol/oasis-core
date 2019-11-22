@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	// BackendName is a unique backend name for the keymanager backend.
-	BackendName = "keymanager"
+	// ModuleName is a unique module name for the keymanager module.
+	ModuleName = "keymanager"
 
 	// ChecksumSize is the length of checksum in bytes.
 	ChecksumSize = 32
@@ -26,7 +26,7 @@ const (
 var (
 	// ErrNoSuchKeyManager is the error returned when a key manager does not
 	// exist.
-	ErrNoSuchKeyManager = errors.New(BackendName, 1, "keymanager: no such key manager")
+	ErrNoSuchKeyManager = errors.New(ModuleName, 1, "keymanager: no such key manager")
 
 	// TestPublicKey is the insecure hardcoded key manager public key, used
 	// in insecure builds when a RAK is unavailable.

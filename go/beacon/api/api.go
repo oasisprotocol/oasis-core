@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	// BackendName is a unique backend name for the beacon backend.
-	BackendName = "beacon"
+	// ModuleName is a unique module name for the beacon module.
+	ModuleName = "beacon"
 
 	// BeaconSize is the size of the beacon in bytes.
 	BeaconSize = 32
@@ -17,7 +17,7 @@ const (
 
 // ErrBeaconNotAvailable is the error returned when a beacon is not
 // available for the requested height for any reason.
-var ErrBeaconNotAvailable = errors.New(BackendName, 1, "beacon: random beacon not available")
+var ErrBeaconNotAvailable = errors.New(ModuleName, 1, "beacon: random beacon not available")
 
 // Backend is a random beacon implementation.
 type Backend interface {
