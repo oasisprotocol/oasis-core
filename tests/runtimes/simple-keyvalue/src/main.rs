@@ -134,21 +134,6 @@ fn enc_remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
 
-/// Insert a key/value pair (untrusted local).
-fn local_insert(args: &KeyValue, _ctx: &mut TxnContext) -> Fallible<()> {
-    StorageContext::with_current(|_mkvs, untrusted_local| {
-        untrusted_local.insert(args.key.as_bytes().to_vec(), args.value.as_bytes().to_vec())
-    })
-}
-
-/// Retrive a key (untrusted local).
-fn local_get(args: &String, _ctx: &mut TxnContext) -> Fallible<String> {
-    let existing = StorageContext::with_current(|_mkvs, untrusted_local| {
-        untrusted_local.get(args.as_bytes().to_vec())
-    })?;
-    Ok(String::from_utf8(existing)?)
-}
-
 /// A keyed storage encryption context, for use with a MKVS instance.
 struct EncryptionContext {
     d2: DeoxysII,
