@@ -10,6 +10,19 @@ import (
 
 var run = flag.Bool("integration.run", false, "Run the node")
 
+func TestMain(m *testing.M) {
+	rv := m.Run()
+
+	coverProfile := flag.Lookup("test.coverprofile").Value.String()
+	if coverProfile != "" {
+		// outputDir not supported
+		f, _ := os.Create(coverProfile + ".commit")
+		_ = f.Close()
+	}
+
+	os.Exit(rv)
+}
+
 func TestIntegration(t *testing.T) {
 	if !*run {
 		// This test requires a bunch of extra arguments and isn't automated on its own. Because of that, it's disabled
