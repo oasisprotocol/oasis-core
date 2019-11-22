@@ -4,7 +4,7 @@ package roothash
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry"
@@ -58,8 +59,12 @@ func (app *rootHashApplication) Name() string {
 	return AppName
 }
 
-func (app *rootHashApplication) TransactionTag() byte {
-	return TransactionTag
+func (app *rootHashApplication) ID() uint8 {
+	return AppID
+}
+
+func (app *rootHashApplication) Methods() []transaction.MethodName {
+	return roothash.Methods
 }
 
 func (app *rootHashApplication) Blessed() bool {
@@ -75,10 +80,6 @@ func (app *rootHashApplication) OnRegister(state *abci.ApplicationState) {
 }
 
 func (app *rootHashApplication) OnCleanup() {
-}
-
-func (app *rootHashApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
 }
 
 func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
@@ -304,26 +305,30 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *rooth
 	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, cbor.Marshal(tagV)))
 }
 
-func (app *rootHashApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error {
-	var tx Tx
-	if err := cbor.Unmarshal(rawTx, &tx); err != nil {
-		app.logger.Error("DeliverTx: failed to unmarshal",
-			"tx", hex.EncodeToString(rawTx),
-		)
-		return errors.Wrap(err, "roothash: failed to unmarshal")
-	}
-
+func (app *rootHashApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
 	state := roothashState.NewMutableState(ctx.State())
 
-	if tx.TxMergeCommit != nil {
-		return app.commit(ctx, state, tx.TxMergeCommit.ID, &tx)
-	} else if tx.TxComputeCommit != nil {
-		return app.commit(ctx, state, tx.TxComputeCommit.ID, &tx)
+	switch tx.Method {
+	case roothash.MethodComputeCommit:
+		var cc roothash.ComputeCommit
+		if err := cbor.Unmarshal(tx.Body, &cc); err != nil {
+			return err
+		}
+
+		return app.commit(ctx, state, cc.ID, &cc)
+	case roothash.MethodMergeCommit:
+		var mc roothash.MergeCommit
+		if err := cbor.Unmarshal(tx.Body, &mc); err != nil {
+			return err
+		}
+
+		return app.commit(ctx, state, mc.ID, &mc)
+	default:
+		return roothash.ErrInvalidArgument
 	}
-	return roothash.ErrInvalidArgument
 }
 
-func (app *rootHashApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *rootHashApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
 	var st *roothash.Genesis
 	ensureGenesis := func() {
 		st = &app.state.Genesis().RootHash
@@ -512,7 +517,7 @@ func (app *rootHashApplication) commit(
 	ctx *abci.Context,
 	state *roothashState.MutableState,
 	id signature.PublicKey,
-	tx *Tx,
+	msg interface{},
 ) error {
 	logger := app.logger.With("is_check_only", ctx.IsCheckOnly())
 
@@ -551,9 +556,9 @@ func (app *rootHashApplication) commit(
 	}
 
 	// Add the commitments.
-	switch {
-	case tx.TxMergeCommit != nil:
-		for _, commit := range tx.TxMergeCommit.Commits {
+	switch c := msg.(type) {
+	case *roothash.MergeCommit:
+		for _, commit := range c.Commits {
 			if err = rtState.Round.AddMergeCommitment(&commit, sv); err != nil {
 				logger.Error("failed to add merge commitment to round",
 					"err", err,
@@ -572,9 +577,9 @@ func (app *rootHashApplication) commit(
 				return err
 			}
 		}
-	case tx.TxComputeCommit != nil:
+	case *roothash.ComputeCommit:
 		pools := make(map[*commitment.Pool]bool)
-		for _, commit := range tx.TxComputeCommit.Commits {
+		for _, commit := range c.Commits {
 			var pool *commitment.Pool
 			if pool, err = rtState.Round.AddComputeCommitment(&commit, sv); err != nil {
 				logger.Error("failed to add compute commitment to round",
@@ -594,7 +599,7 @@ func (app *rootHashApplication) commit(
 			}
 		}
 	default:
-		return roothash.ErrInvalidArgument
+		panic(fmt.Errorf("roothash: invalid type passed to commit(): %T", c))
 	}
 
 	return nil

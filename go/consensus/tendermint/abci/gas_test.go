@@ -6,16 +6,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/consensus/gas"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 )
 
 func TestBasicGasAccountant(t *testing.T) {
 	require := require.New(t)
 
-	cheapOp := gas.Op("cheap op")
-	expensiveOp := gas.Op("expensive op")
-	overflowOp := gas.Op("overflow op")
-	costs := gas.Costs{
+	cheapOp := transaction.Op("cheap op")
+	expensiveOp := transaction.Op("expensive op")
+	overflowOp := transaction.Op("overflow op")
+	costs := transaction.Costs{
 		cheapOp:     10,
 		expensiveOp: 91,
 		overflowOp:  math.MaxUint64,
@@ -47,10 +47,10 @@ func TestBasicGasAccountant(t *testing.T) {
 func TestNopGasAccountant(t *testing.T) {
 	require := require.New(t)
 
-	cheapOp := gas.Op("cheap op")
-	expensiveOp := gas.Op("expensive op")
-	overflowOp := gas.Op("overflow op")
-	costs := gas.Costs{
+	cheapOp := transaction.Op("cheap op")
+	expensiveOp := transaction.Op("expensive op")
+	overflowOp := transaction.Op("overflow op")
+	costs := transaction.Costs{
 		cheapOp:     10,
 		expensiveOp: 91,
 		overflowOp:  math.MaxUint64,
@@ -80,10 +80,10 @@ func TestNopGasAccountant(t *testing.T) {
 func TestCompositeGasAccountant(t *testing.T) {
 	require := require.New(t)
 
-	cheapOp := gas.Op("cheap op")
-	expensiveOp := gas.Op("expensive op")
-	overflowOp := gas.Op("overflow op")
-	costs := gas.Costs{
+	cheapOp := transaction.Op("cheap op")
+	expensiveOp := transaction.Op("expensive op")
+	overflowOp := transaction.Op("overflow op")
+	costs := transaction.Costs{
 		cheapOp:     10,
 		expensiveOp: 91,
 		overflowOp:  math.MaxUint64,

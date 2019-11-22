@@ -3,7 +3,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -13,14 +12,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-)
-
-var (
-	// ErrNilProtobuf is the error returned when a protobuf is nil.
-	ErrNilProtobuf = errors.New("scheduler: protobuf is nil")
-
-	// ErrInvalidRole is the error returned when a role is invalid.
-	ErrInvalidRole = errors.New("scheduler: invalid role")
 )
 
 // Role is the role a given node plays in a committee.
@@ -58,7 +49,7 @@ func (r Role) String() string {
 	case Leader:
 		return "leader"
 	default:
-		return fmt.Sprintf("unknown role: %d", r)
+		return fmt.Sprintf("[unknown role: %d]", r)
 	}
 }
 
@@ -117,7 +108,7 @@ func (k CommitteeKind) String() string {
 	case KindMerge:
 		return "merge"
 	default:
-		return fmt.Sprintf("unknown kind: %d", k)
+		return fmt.Sprintf("[unknown kind: %d]", k)
 	}
 }
 

@@ -7,7 +7,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/consensus"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/sentry/api"
 )
 

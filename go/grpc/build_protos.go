@@ -37,6 +37,7 @@ var protoFiles = [][]string{
 	{"sentry/sentry.proto"},
 	{"staking/staking.proto"},
 	{"genesis/genesis.proto"},
+	{"consensus/consensus.proto"},
 }
 
 //

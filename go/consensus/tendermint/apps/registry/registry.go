@@ -2,16 +2,14 @@
 package registry
 
 import (
-	"encoding/hex"
-
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -33,8 +31,12 @@ func (app *registryApplication) Name() string {
 	return AppName
 }
 
-func (app *registryApplication) TransactionTag() byte {
-	return TransactionTag
+func (app *registryApplication) ID() uint8 {
+	return AppID
+}
+
+func (app *registryApplication) Methods() []transaction.MethodName {
+	return registry.Methods
 }
 
 func (app *registryApplication) Blessed() bool {
@@ -52,10 +54,6 @@ func (app *registryApplication) OnRegister(state *abci.ApplicationState) {
 func (app *registryApplication) OnCleanup() {
 }
 
-func (app *registryApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
-}
-
 func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	// XXX: With PR#1889 this can be a differnet interval.
 	if changed, registryEpoch := app.state.EpochChanged(ctx); changed {
@@ -64,26 +62,39 @@ func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.Requ
 	return nil
 }
 
-func (app *registryApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error {
-	var tx Tx
-	if err := cbor.Unmarshal(rawTx, &tx); err != nil {
-		app.logger.Error("failed to unmarshal",
-			"tx", hex.EncodeToString(rawTx),
-		)
-		return errors.Wrap(err, "registry: failed to unmarshal")
-	}
-
+func (app *registryApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
 	state := registryState.NewMutableState(ctx.State())
 
-	if tx.TxRegisterEntity != nil {
-		return app.registerEntity(ctx, state, &tx.TxRegisterEntity.Entity)
-	} else if tx.TxDeregisterEntity != nil {
-		return app.deregisterEntity(ctx, state, &tx.TxDeregisterEntity.Timestamp)
-	} else if tx.TxRegisterNode != nil {
-		return app.registerNode(ctx, state, &tx.TxRegisterNode.Node)
-	} else if tx.TxUnfreezeNode != nil {
-		return app.unfreezeNode(ctx, state, &tx.TxUnfreezeNode.UnfreezeNode)
-	} else if tx.TxRegisterRuntime != nil {
+	switch tx.Method {
+	case registry.MethodRegisterEntity:
+		var sigEnt entity.SignedEntity
+		if err := cbor.Unmarshal(tx.Body, &sigEnt); err != nil {
+			return err
+		}
+
+		return app.registerEntity(ctx, state, &sigEnt)
+	case registry.MethodDeregisterEntity:
+		return app.deregisterEntity(ctx, state)
+	case registry.MethodRegisterNode:
+		var sigNode node.SignedNode
+		if err := cbor.Unmarshal(tx.Body, &sigNode); err != nil {
+			return err
+		}
+
+		return app.registerNode(ctx, state, &sigNode)
+	case registry.MethodUnfreezeNode:
+		var unfreeze registry.UnfreezeNode
+		if err := cbor.Unmarshal(tx.Body, &unfreeze); err != nil {
+			return err
+		}
+
+		return app.unfreezeNode(ctx, state, &unfreeze)
+	case registry.MethodRegisterRuntime:
+		var sigRt registry.SignedRuntime
+		if err := cbor.Unmarshal(tx.Body, &sigRt); err != nil {
+			return err
+		}
+
 		params, err := state.ConsensusParameters()
 		if err != nil {
 			app.logger.Error("RegisterRuntime: failed to fetch consensus parameters",
@@ -95,12 +106,13 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error
 		if !params.DebugAllowRuntimeRegistration {
 			return registry.ErrForbidden
 		}
-		return app.registerRuntime(ctx, state, &tx.TxRegisterRuntime.Runtime)
+		return app.registerRuntime(ctx, state, &sigRt)
+	default:
+		return registry.ErrInvalidArgument
 	}
-	return registry.ErrInvalidArgument
 }
 
-func (app *registryApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *registryApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
@@ -195,15 +207,8 @@ func (app *registryApplication) registerEntity(
 		return err
 	}
 
-	if !ctx.IsInitChain() {
-		err = registry.VerifyTimestamp(ent.RegistrationTime, uint64(ctx.Now().Unix()))
-		if err != nil {
-			app.logger.Error("RegisterEntity: invalid timestamp",
-				"entity_timestamp", ent.RegistrationTime,
-				"now", uint64(ctx.Now().Unix()),
-			)
-			return err
-		}
+	if ctx.IsCheckOnly() {
+		return nil
 	}
 
 	params, err := state.ConsensusParameters()
@@ -225,36 +230,22 @@ func (app *registryApplication) registerEntity(
 
 	state.CreateEntity(ent, sigEnt)
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("RegisterEntity: registered",
-			"entity", ent,
-		)
+	app.logger.Debug("RegisterEntity: registered",
+		"entity", ent,
+	)
 
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEntityRegistered, cbor.Marshal(ent)))
-	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEntityRegistered, cbor.Marshal(ent)))
 
 	return nil
 }
 
 // Perform actual entity deregistration.
-func (app *registryApplication) deregisterEntity(
-	ctx *abci.Context,
-	state *registryState.MutableState,
-	sigTimestamp *signature.Signed,
-) error {
-	id, timestamp, err := registry.VerifyDeregisterEntityArgs(app.logger, sigTimestamp)
-	if err != nil {
-		return err
+func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *registryState.MutableState) error {
+	if ctx.IsCheckOnly() {
+		return nil
 	}
 
-	err = registry.VerifyTimestamp(timestamp, uint64(ctx.Now().Unix()))
-	if err != nil {
-		app.logger.Error("DeregisterEntity: invalid timestamp",
-			"timestamp", timestamp,
-			"now", uint64(ctx.Now().Unix()),
-		)
-		return err
-	}
+	id := ctx.TxSigner()
 
 	// Prevent entity deregistration if there are any registered nodes.
 	hasNodes, err := state.HasEntityNodes(id)
@@ -296,6 +287,10 @@ func (app *registryApplication) registerNode(
 	state *registryState.MutableState,
 	sigNode *node.SignedNode,
 ) error {
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
 	// Peek into the to-be-verified node to pull out the owning entity ID.
 	var untrustedNode node.Node
 	if err := cbor.Unmarshal(sigNode.Blob, &untrustedNode); err != nil {
@@ -332,17 +327,6 @@ func (app *registryApplication) registerNode(
 	newNode, err := registry.VerifyRegisterNodeArgs(params, app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), regRuntimes)
 	if err != nil {
 		return err
-	}
-
-	if !ctx.IsInitChain() {
-		err = registry.VerifyTimestamp(newNode.RegistrationTime, uint64(ctx.Now().Unix()))
-		if err != nil {
-			app.logger.Error("RegisterNode: invalid timestamp",
-				"node_timestamp", newNode.RegistrationTime,
-				"now", uint64(ctx.Now().Unix()),
-			)
-			return err
-		}
 	}
 
 	// Re-check that the entity has at sufficient stake to still be an entity.
@@ -475,14 +459,12 @@ func (app *registryApplication) registerNode(
 		}
 	}
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("RegisterNode: registered",
-			"node", newNode,
-			"roles", newNode.Roles,
-		)
+	app.logger.Debug("RegisterNode: registered",
+		"node", newNode,
+		"roles", newNode.Roles,
+	)
 
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeRegistered, cbor.Marshal(newNode)))
-	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeRegistered, cbor.Marshal(newNode)))
 
 	return nil
 }
@@ -490,20 +472,10 @@ func (app *registryApplication) registerNode(
 func (app *registryApplication) unfreezeNode(
 	ctx *abci.Context,
 	state *registryState.MutableState,
-	sigUnfreeze *registry.SignedUnfreezeNode,
+	unfreeze *registry.UnfreezeNode,
 ) error {
-	var unfreeze registry.UnfreezeNode
-	if err := sigUnfreeze.Open(registry.RegisterUnfreezeNodeSignatureContext, &unfreeze); err != nil {
-		return err
-	}
-
-	// Verify timestamp.
-	if err := registry.VerifyTimestamp(unfreeze.Timestamp, uint64(ctx.Now().Unix())); err != nil {
-		app.logger.Error("UnfreezeNode: invalid timestamp",
-			"unfreeze_timestamp", unfreeze.Timestamp,
-			"now", uint64(ctx.Now().Unix()),
-		)
-		return err
+	if ctx.IsCheckOnly() {
+		return nil
 	}
 
 	// Fetch node descriptor.
@@ -512,12 +484,11 @@ func (app *registryApplication) unfreezeNode(
 		app.logger.Error("UnfreezeNode: failed to fetch node",
 			"err", err,
 			"node_id", unfreeze.NodeID,
-			"entity_id", sigUnfreeze.Signature.PublicKey,
 		)
 		return err
 	}
 	// Make sure that the unfreeze request was signed by the owning entity.
-	if !sigUnfreeze.Signature.PublicKey.Equal(node.EntityID) {
+	if !ctx.TxSigner().Equal(node.EntityID) {
 		return registry.ErrBadEntityForNode
 	}
 
@@ -547,13 +518,11 @@ func (app *registryApplication) unfreezeNode(
 		return err
 	}
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("UnfreezeNode: unfrozen",
-			"node_id", node.ID,
-		)
+	app.logger.Debug("UnfreezeNode: unfrozen",
+		"node_id", node.ID,
+	)
 
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeUnfrozen, cbor.Marshal(node.ID)))
-	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeUnfrozen, cbor.Marshal(node.ID)))
 
 	return nil
 }
@@ -569,15 +538,8 @@ func (app *registryApplication) registerRuntime(
 		return err
 	}
 
-	if !ctx.IsInitChain() {
-		err = registry.VerifyTimestamp(rt.RegistrationTime, uint64(ctx.Now().Unix()))
-		if err != nil {
-			app.logger.Error("RegisterRuntime: invalid timestamp",
-				"runtime_timestamp", rt.RegistrationTime,
-				"now", uint64(ctx.Now().Unix()),
-			)
-			return err
-		}
+	if ctx.IsCheckOnly() {
+		return nil
 	}
 
 	// If TEE is required, check if runtime provided at least one enclave ID.
@@ -603,13 +565,11 @@ func (app *registryApplication) registerRuntime(
 		return registry.ErrBadEntityForRuntime
 	}
 
-	if !ctx.IsCheckOnly() {
-		app.logger.Debug("RegisterRuntime: registered",
-			"runtime", rt,
-		)
+	app.logger.Debug("RegisterRuntime: registered",
+		"runtime", rt,
+	)
 
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
-	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
 
 	return nil
 }

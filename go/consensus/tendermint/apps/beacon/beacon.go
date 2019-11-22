@@ -10,6 +10,7 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	beaconState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/beacon/state"
@@ -35,8 +36,12 @@ func (app *beaconApplication) Name() string {
 	return AppName
 }
 
-func (app *beaconApplication) TransactionTag() byte {
-	return TransactionTag
+func (app *beaconApplication) ID() uint8 {
+	return AppID
+}
+
+func (app *beaconApplication) Methods() []transaction.MethodName {
+	return nil
 }
 
 func (app *beaconApplication) Blessed() bool {
@@ -54,10 +59,6 @@ func (app *beaconApplication) OnRegister(state *abci.ApplicationState) {
 func (app *beaconApplication) OnCleanup() {
 }
 
-func (app *beaconApplication) SetOption(req types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
-}
-
 func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeginBlock) error {
 	if changed, beaconEpoch := app.state.EpochChanged(ctx); changed {
 		return app.onBeaconEpochChange(ctx, beaconEpoch, req)
@@ -65,11 +66,11 @@ func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeg
 	return nil
 }
 
-func (app *beaconApplication) ExecuteTx(ctx *abci.Context, tx []byte) error {
+func (app *beaconApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
 	return errUnexpectedTransaction
 }
 
-func (app *beaconApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *beaconApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
 	return nil
 }
 

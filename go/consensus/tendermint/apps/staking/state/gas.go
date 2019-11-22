@@ -5,9 +5,8 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/consensus/gas"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 // feeAccumulatorKey is the block context key.
@@ -28,16 +27,14 @@ type feeAccumulator struct {
 //
 // This method transfers the fees to the per-block fee accumulator which is
 // persisted at the end of the block.
-//
-// When executed in a CheckTx context, this method returns a nil account as
-// the caller should not do any further processing.
 func AuthenticateAndPayFees(
 	ctx *abci.Context,
-	state *MutableState,
 	id signature.PublicKey,
 	nonce uint64,
-	fee *gas.Fee,
-) (*staking.Account, error) {
+	fee *transaction.Fee,
+) error {
+	state := NewMutableState(ctx.State())
+
 	// Fetch account and make sure the nonce is correct.
 	account := state.Account(id)
 	if account.General.Nonce != nonce {
@@ -46,7 +43,11 @@ func AuthenticateAndPayFees(
 			"account_nonce", account.General.Nonce,
 			"nonce", nonce,
 		)
-		return nil, staking.ErrInvalidNonce
+		return transaction.ErrInvalidNonce
+	}
+
+	if fee == nil {
+		fee = &transaction.Fee{}
 	}
 
 	if ctx.IsCheckOnly() {
@@ -56,24 +57,24 @@ func AuthenticateAndPayFees(
 		// Check that there is enough balance to pay fees. For the non-CheckTx case
 		// this happens during Move below.
 		if account.General.Balance.Cmp(&fee.Amount) < 0 {
-			return nil, gas.ErrInsufficientFeeBalance
+			return transaction.ErrInsufficientFeeBalance
 		}
 
 		// Check fee against minimum gas price if in CheckTx.
 		// NOTE: This is non-deterministic as it is derived from the local validator
 		//       configuration, but as long as it is only done in CheckTx, this is ok.
 		callerGasPrice := fee.GasPrice()
-		if callerGasPrice.Cmp(ctx.AppState().MinGasPrice()) < 0 {
-			return nil, gas.ErrGasPriceTooLow
+		if fee.Gas > 0 && callerGasPrice.Cmp(ctx.AppState().MinGasPrice()) < 0 {
+			return transaction.ErrGasPriceTooLow
 		}
 
-		return nil, nil
+		return nil
 	}
 
 	// Transfer fee to per-block fee accumulator.
 	feeAcc := ctx.BlockContext().Get(feeAccumulatorKey{}).(*feeAccumulator)
 	if err := quantity.Move(&feeAcc.balance, &account.General.Balance, &fee.Amount); err != nil {
-		return nil, fmt.Errorf("staking: failed to pay fees: %w", err)
+		return fmt.Errorf("staking: failed to pay fees: %w", err)
 	}
 
 	account.General.Nonce++
@@ -85,7 +86,7 @@ func AuthenticateAndPayFees(
 		ctx.BlockContext().Get(abci.GasAccountantKey{}).(abci.GasAccountant),
 	))
 
-	return account, nil
+	return nil
 }
 
 // PersistBlockFees persists the accumulated fee balance for the current block.

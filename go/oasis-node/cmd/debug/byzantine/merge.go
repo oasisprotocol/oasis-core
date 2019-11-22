@@ -134,8 +134,8 @@ func (mbc *mergeBatchContext) createCommitment(id *identity.Identity) error {
 	return nil
 }
 
-func (mbc *mergeBatchContext) publishToChain(svc service.TendermintService, runtimeID signature.PublicKey) error {
-	if err := roothashMergeCommit(svc, runtimeID, []commitment.MergeCommitment{*mbc.commit}); err != nil {
+func (mbc *mergeBatchContext) publishToChain(svc service.TendermintService, id *identity.Identity, runtimeID signature.PublicKey) error {
+	if err := roothashMergeCommit(svc, id, runtimeID, []commitment.MergeCommitment{*mbc.commit}); err != nil {
 		return errors.Wrap(err, "roothash merge commentment")
 	}
 

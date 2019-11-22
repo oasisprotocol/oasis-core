@@ -10,8 +10,6 @@ message Runtime {
 
     common.CapabilitiesTEE.Hardware tee_hardware = 2;
 
-    uint64 registration_time = 3;
-
     uint32 kind = 4;
 
     VersionInfo version = 5;
@@ -53,18 +51,9 @@ message VersionInfo {
 }
 
 service RuntimeRegistry {
-    rpc RegisterRuntime (RegisterRuntimeRequest) returns (RegisterRuntimeResponse) {}
     rpc GetRuntime (RuntimeRequest) returns (RuntimeResponse) {}
     rpc GetRuntimes (RuntimesRequest) returns (RuntimesResponse) {}
     rpc WatchRuntimes (WatchRuntimesRequest) returns (stream WatchRuntimesResponse) {}
-}
-
-message RegisterRuntimeRequest {
-    // Signed blob should be a CBOR-serialized runtime.
-    common.Signed runtime = 1;
-}
-
-message RegisterRuntimeResponse {
 }
 
 message RuntimeRequest {

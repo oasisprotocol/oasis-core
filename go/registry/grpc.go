@@ -6,8 +6,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/registry/api"
 
 	commonPB "github.com/oasislabs/oasis-core/go/grpc/common"
@@ -21,32 +19,6 @@ var (
 
 type grpcServer struct {
 	backend api.Backend
-}
-
-func (s *grpcServer) RegisterEntity(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
-	var ent entity.SignedEntity
-	if err := ent.FromProto(req.GetEntity()); err != nil {
-		return nil, err
-	}
-
-	if err := s.backend.RegisterEntity(ctx, &ent); err != nil {
-		return nil, err
-	}
-
-	return &pb.RegisterResponse{}, nil
-}
-
-func (s *grpcServer) DeregisterEntity(ctx context.Context, req *pb.DeregisterRequest) (*pb.DeregisterResponse, error) {
-	var timestamp signature.Signed
-	if err := timestamp.FromProto(req.GetTimestamp()); err != nil {
-		return nil, err
-	}
-
-	if err := s.backend.DeregisterEntity(ctx, &timestamp); err != nil {
-		return nil, err
-	}
-
-	return &pb.DeregisterResponse{}, nil
 }
 
 func (s *grpcServer) GetEntity(ctx context.Context, req *pb.EntityRequest) (*pb.EntityResponse, error) {
@@ -111,19 +83,6 @@ func (s *grpcServer) WatchEntities(req *pb.WatchEntityRequest, stream pb.EntityR
 	}
 
 	return nil
-}
-
-func (s *grpcServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeRequest) (*pb.RegisterNodeResponse, error) {
-	var node node.SignedNode
-	if err := node.FromProto(req.GetNode()); err != nil {
-		return nil, err
-	}
-
-	if err := s.backend.RegisterNode(ctx, &node); err != nil {
-		return nil, err
-	}
-
-	return &pb.RegisterNodeResponse{}, nil
 }
 
 func (s *grpcServer) GetNode(ctx context.Context, req *pb.NodeRequest) (*pb.NodeResponse, error) {
@@ -219,19 +178,6 @@ func (s *grpcServer) WatchNodeList(req *pb.WatchNodeListRequest, stream pb.Entit
 	}
 
 	return nil
-}
-
-func (s *grpcServer) RegisterRuntime(ctx context.Context, req *pb.RegisterRuntimeRequest) (*pb.RegisterRuntimeResponse, error) {
-	var con api.SignedRuntime
-	if err := con.FromProto(req.GetRuntime()); err != nil {
-		return nil, err
-	}
-
-	if err := s.backend.RegisterRuntime(ctx, &con); err != nil {
-		return nil, err
-	}
-
-	return &pb.RegisterRuntimeResponse{}, nil
 }
 
 func (s *grpcServer) GetRuntime(ctx context.Context, req *pb.RuntimeRequest) (*pb.RuntimeResponse, error) {

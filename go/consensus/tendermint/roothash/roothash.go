@@ -20,18 +20,13 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
-	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 )
 
 const (
-	// BackendName is the name of this implementation.
-	BackendName = tmapi.BackendName
-
 	crashPointBlockBeforeIndex = "roothash.before_index"
 
 	// CfgIndexBlocks enables the block indexer.
@@ -200,36 +195,6 @@ func (tb *tendermintBackend) WatchPrunedBlocks() (<-chan *api.PrunedBlock, *pubs
 	sub.Unwrap(ch)
 
 	return ch, sub, nil
-}
-
-func (tb *tendermintBackend) MergeCommit(ctx context.Context, id signature.PublicKey, commits []commitment.MergeCommitment) error {
-	tx := app.Tx{
-		TxMergeCommit: &app.TxMergeCommit{
-			ID:      id,
-			Commits: commits,
-		},
-	}
-
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
-		return errors.Wrap(err, "roothash: merge commit failed")
-	}
-
-	return nil
-}
-
-func (tb *tendermintBackend) ComputeCommit(ctx context.Context, id signature.PublicKey, commits []commitment.ComputeCommitment) error {
-	tx := app.Tx{
-		TxComputeCommit: &app.TxComputeCommit{
-			ID:      id,
-			Commits: commits,
-		},
-	}
-
-	if err := tb.service.BroadcastTx(ctx, app.TransactionTag, tx, true); err != nil {
-		return errors.Wrap(err, "roothash: compute commit failed")
-	}
-
-	return nil
 }
 
 func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {

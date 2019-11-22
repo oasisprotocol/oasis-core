@@ -4,26 +4,29 @@ package epochtimemock
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/eapache/channels"
-	"github.com/pkg/errors"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
-const (
-	// BackendName is the name of this implementation.
-	BackendName = "tendermint_mock"
-)
+var (
+	testSigner signature.Signer
 
-var _ api.Backend = (*tendermintMockBackend)(nil)
+	_ api.Backend = (*tendermintMockBackend)(nil)
+)
 
 type tendermintMockBackend struct {
 	sync.RWMutex
@@ -66,7 +69,7 @@ func (t *tendermintMockBackend) GetEpochBlock(ctx context.Context, epoch api.Epo
 		"current_epoch", t.epoch,
 	)
 
-	return 0, errors.New("epochtime: not implemented for historic epochs")
+	return 0, fmt.Errorf("epochtime: not implemented for historic epochs")
 }
 
 func (t *tendermintMockBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscription) {
@@ -92,17 +95,12 @@ func (t *tendermintMockBackend) ToGenesis(ctx context.Context, height int64) (*a
 }
 
 func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTime) error {
-	tx := app.Tx{
-		TxSetEpoch: &app.TxSetEpoch{
-			Epoch: epoch,
-		},
-	}
-
 	ch, sub := t.WatchEpochs()
 	defer sub.Close()
 
-	if err := t.service.BroadcastTx(ctx, app.TransactionTag, tx, false); err != nil {
-		return errors.Wrap(err, "epochtime: set epoch failed")
+	tx := transaction.NewTransaction(0, nil, app.MethodSetEpoch, epoch)
+	if err := consensus.SignAndSubmitTx(ctx, t.service, testSigner, tx); err != nil {
+		return fmt.Errorf("epochtime: set epoch failed: %w", err)
 	}
 
 	for {
@@ -248,4 +246,8 @@ func New(ctx context.Context, service service.TendermintService) (api.SetableBac
 	go r.worker(ctx)
 
 	return r, nil
+}
+
+func init() {
+	testSigner = memorySigner.NewTestSigner("oasis-core epochtime mock key seed")
 }

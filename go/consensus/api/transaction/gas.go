@@ -1,18 +1,19 @@
-package gas
+package transaction
 
 import (
-	"errors"
 	"math/big"
 
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 )
 
 var (
 	// ErrInsufficientFeeBalance is the error returned when there is insufficient
 	// balance to pay consensus fees.
-	ErrInsufficientFeeBalance = errors.New("insufficient balance to pay fees")
+	ErrInsufficientFeeBalance = errors.New(moduleName, 2, "transaction: insufficient balance to pay fees")
+
 	// ErrGasPriceTooLow is the error returned when the gas price is too low.
-	ErrGasPriceTooLow = errors.New("gas price too low")
+	ErrGasPriceTooLow = errors.New(moduleName, 3, "transaction: gas price too low")
 )
 
 // Gas is the consensus gas representation.

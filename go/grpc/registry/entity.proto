@@ -6,32 +6,13 @@ package registry;
 option go_package = "github.com/oasislabs/oasis-core/go/grpc/registry";
 
 service EntityRegistry {
-    rpc RegisterEntity (RegisterRequest) returns (RegisterResponse) {}
-    rpc DeregisterEntity (DeregisterRequest) returns (DeregisterResponse) {}
     rpc GetEntity (EntityRequest) returns (EntityResponse) {}
     rpc GetEntities (EntitiesRequest) returns (EntitiesResponse) {}
     rpc WatchEntities (WatchEntityRequest) returns (stream WatchEntityResponse) {}
-    rpc RegisterNode (RegisterNodeRequest) returns (RegisterNodeResponse) {}
     rpc GetNode (NodeRequest) returns (NodeResponse) {}
     rpc GetNodes (NodesRequest) returns (NodesResponse) {}
     rpc WatchNodes (WatchNodeRequest) returns (stream WatchNodeResponse) {}
     rpc WatchNodeList (WatchNodeListRequest) returns (stream WatchNodeListResponse) {}
-}
-
-message RegisterRequest {
-    // Signed blob should be a CBOR-serialized entity.
-    common.Signed entity = 1;
-}
-
-message RegisterResponse {
-}
-
-message DeregisterRequest {
-    // Signed blob should be the time when the deregister request was made.
-    common.Signed timestamp = 1;
-}
-
-message DeregisterResponse {
 }
 
 message EntityRequest {
@@ -61,14 +42,6 @@ message WatchEntityResponse {
     }
     ChangeType event_type = 1;
     common.Entity entity = 2;
-}
-
-message RegisterNodeRequest {
-    // Signed blob should be a CBOR-serialized node.
-    common.Signed node = 1;
-}
-
-message RegisterNodeResponse {
 }
 
 message NodeRequest {

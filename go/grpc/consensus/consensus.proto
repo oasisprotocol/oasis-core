@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package consensus;
+option go_package = "github.com/oasislabs/oasis-core/go/grpc/consensus";
+
+service Consensus {
+	rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {}
+}
+
+message SubmitTxRequest {
+	// CBOR-serialized signed transaction.
+	bytes tx = 1;
+}
+
+message SubmitTxResponse {}

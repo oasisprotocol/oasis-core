@@ -1,14 +1,14 @@
 package epochtimemock
 
 import (
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
 const (
-	// TransactionTag is a unique byte used to identify transactions
-	// for the mock epochtime application.
-	TransactionTag byte = 0x03
+	// AppID is the unique application identifier.
+	AppID uint8 = 0x03
 
 	// AppName is the ABCI application name.
 	//
@@ -27,14 +27,12 @@ var (
 
 	// KeyEpoch is an ABCI event attribute for specifying the set epoch.
 	KeyEpoch = []byte("epoch")
+
+	// MethodSetEpoch is the method name for setting epochs.
+	MethodSetEpoch = transaction.NewMethodName(AppName, "SetEpoch", epochtime.EpochTime(0))
+
+	// Methods is a list of all methods supported by the epochtime mock application.
+	Methods = []transaction.MethodName{
+		MethodSetEpoch,
+	}
 )
-
-// Tx is a transaction to be accepted by the mock epochtime app.
-type Tx struct {
-	*TxSetEpoch `json:"SetEpoch,omitempty"`
-}
-
-// TxSetEpoch is a transaction for submitting an epoch to be set.
-type TxSetEpoch struct {
-	Epoch epochtime.EpochTime
-}

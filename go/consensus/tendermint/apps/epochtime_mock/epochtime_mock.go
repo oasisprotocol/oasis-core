@@ -2,13 +2,13 @@
 package epochtimemock
 
 import (
-	"encoding/hex"
+	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -26,8 +26,12 @@ func (app *epochTimeMockApplication) Name() string {
 	return AppName
 }
 
-func (app *epochTimeMockApplication) TransactionTag() byte {
-	return TransactionTag
+func (app *epochTimeMockApplication) ID() uint8 {
+	return AppID
+}
+
+func (app *epochTimeMockApplication) Methods() []transaction.MethodName {
+	return Methods
 }
 
 func (app *epochTimeMockApplication) Blessed() bool {
@@ -45,10 +49,6 @@ func (app *epochTimeMockApplication) OnRegister(state *abci.ApplicationState) {
 func (app *epochTimeMockApplication) OnCleanup() {
 }
 
-func (app *epochTimeMockApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
-}
-
 func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	return nil
 }
@@ -58,7 +58,7 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types
 
 	future, err := state.getFutureEpoch()
 	if err != nil {
-		return errors.Wrap(err, "BeginBlock: failed to get future epoch")
+		return fmt.Errorf("BeginBlock: failed to get future epoch: %w", err)
 	}
 	if future == nil {
 		return nil
@@ -71,7 +71,7 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types
 			"height", height,
 			"expected_height", future.Height,
 		)
-		return errors.New("epochtime_mock: height mismatch in defered set")
+		return fmt.Errorf("epochtime_mock: height mismatch in defered set")
 	}
 
 	app.logger.Info("setting epoch",
@@ -85,24 +85,23 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types
 	return nil
 }
 
-func (app *epochTimeMockApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error {
-	var tx Tx
-	if err := cbor.Unmarshal(rawTx, &tx); err != nil {
-		app.logger.Error("failed to unmarshal",
-			"tx", hex.EncodeToString(rawTx),
-		)
-		return errors.Wrap(err, "epochtime_mock: failed to unmarshal")
-	}
-
+func (app *epochTimeMockApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
 	state := newMutableState(ctx.State())
 
-	if tx.TxSetEpoch != nil {
-		return app.setEpoch(ctx, state, tx.TxSetEpoch.Epoch)
+	switch tx.Method {
+	case MethodSetEpoch:
+		var epoch epochtime.EpochTime
+		if err := cbor.Unmarshal(tx.Body, &epoch); err != nil {
+			return err
+		}
+
+		return app.setEpoch(ctx, state, epoch)
+	default:
+		return fmt.Errorf("epochtime_mock: invalid method: %s", tx.Method)
 	}
-	return errors.New("epochtime_mock: invalid argument")
 }
 
-func (app *epochTimeMockApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *epochTimeMockApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
@@ -111,7 +110,7 @@ func (app *epochTimeMockApplication) EndBlock(ctx *abci.Context, request types.R
 }
 
 func (app *epochTimeMockApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) error {
-	return errors.New("tendermint/epochtime_mock: unexpected timer")
+	return fmt.Errorf("tendermint/epochtime_mock: unexpected timer")
 }
 
 func (app *epochTimeMockApplication) setEpoch(

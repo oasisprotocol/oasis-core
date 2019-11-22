@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -13,18 +12,16 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 )
 
-const (
-	// TimestampValidFor is the number of seconds that a timestamp in a
-	// register or deregister call is considered valid.
-	// Default is 15 minutes.
-	TimestampValidFor = uint64(15 * 60)
-)
+// ModuleName is a unique module name for the registry module.
+const ModuleName = "registry"
 
 var (
 	// RegisterEntitySignatureContext is the context used for entity
@@ -37,10 +34,6 @@ var (
 	// Note: This is identical to non-gensis registrations to support
 	// migrating existing registrations into a new genesis document.
 	RegisterGenesisEntitySignatureContext = RegisterEntitySignatureContext
-
-	// DeregisterEntitySignatureContext is the context used for entity
-	// deregistration.
-	DeregisterEntitySignatureContext = signature.NewContext("oasis-core/registry: deregister entity")
 
 	// RegisterNodeSignatureContext is the context used for node
 	// registration.
@@ -64,84 +57,90 @@ var (
 	// migrating existing registrations into a new genesis document.
 	RegisterGenesisRuntimeSignatureContext = RegisterRuntimeSignatureContext
 
-	// RegisterUnfreezeNodeSignatureContext is the context used for
-	// unfreezing nodes.
-	RegisterUnfreezeNodeSignatureContext = signature.NewContext("oasis-core/registry: unfreeze node")
-
 	// ErrInvalidArgument is the error returned on malformed argument(s).
-	ErrInvalidArgument = errors.New("registry: invalid argument")
+	ErrInvalidArgument = errors.New(ModuleName, 1, "registry: invalid argument")
 
 	// ErrInvalidSignature is the error returned on an invalid signature.
-	ErrInvalidSignature = errors.New("registry: invalid signature")
+	ErrInvalidSignature = errors.New(ModuleName, 2, "registry: invalid signature")
 
 	// ErrBadEntityForNode is the error returned when a node registration
 	// with an unknown entity is attempted.
-	ErrBadEntityForNode = errors.New("registry: unknown entity in node registration")
+	ErrBadEntityForNode = errors.New(ModuleName, 3, "registry: unknown entity in node registration")
 
 	// ErrBadEntityForRuntime is the error returned when a runtime
 	// attempts to register with an unknown entity.
-	ErrBadEntityForRuntime = errors.New("registry: unknown entity in runtime registration")
+	ErrBadEntityForRuntime = errors.New(ModuleName, 4, "registry: unknown entity in runtime registration")
 
 	// ErrNoEnclaveForRuntime is the error returned when a TEE runtime
 	// registers with no enclave IDs.
-	ErrNoEnclaveForRuntime = errors.New("registry: no enclaves for TEE runtime registration")
+	ErrNoEnclaveForRuntime = errors.New(ModuleName, 5, "registry: no enclaves for TEE runtime registration")
 
 	// ErrBadEnclaveIdentity is the error returned when a node tries to
 	// register runtimes with wrong Enclave IDs.
-	ErrBadEnclaveIdentity = errors.New("registry: bad enclave id")
+	ErrBadEnclaveIdentity = errors.New(ModuleName, 6, "registry: bad enclave id")
 
 	// ErrBadCapabilitiesTEEHardware is the error returned when a node tries to
 	// register a runtime with bad Capabilities.TEE.Hardware.
-	ErrBadCapabilitiesTEEHardware = errors.New("registry: bad capabilities.TEE.Hardware")
+	ErrBadCapabilitiesTEEHardware = errors.New(ModuleName, 7, "registry: bad capabilities.TEE.Hardware")
 
 	// ErrTEEHardwareMismatch is the error returned when a node tries to
 	// register a runtime and Capabilities.TEE.Hardware mismatches the one in
 	// the registry.
-	ErrTEEHardwareMismatch = errors.New("registry: runtime TEE.Hardware mismatches the one in registry")
+	ErrTEEHardwareMismatch = errors.New(ModuleName, 8, "registry: runtime TEE.Hardware mismatches the one in registry")
 
 	// ErrNoSuchEntity is the error returned when an entity does not exist.
-	ErrNoSuchEntity = errors.New("registry: no such entity")
+	ErrNoSuchEntity = errors.New(ModuleName, 9, "registry: no such entity")
 
 	// ErrNoSuchNode is the error returned when an node does not exist.
-	ErrNoSuchNode = errors.New("registry: no such node")
+	ErrNoSuchNode = errors.New(ModuleName, 10, "registry: no such node")
 
 	// ErrNoSuchRuntime is the error returned when an runtime does not exist.
-	ErrNoSuchRuntime = errors.New("registry: no such runtime")
+	ErrNoSuchRuntime = errors.New(ModuleName, 11, "registry: no such runtime")
 
 	// ErrInvalidTimestamp is the error returned when a timestamp is invalid.
-	ErrInvalidTimestamp = errors.New("registry: invalid timestamp")
+	ErrInvalidTimestamp = errors.New(ModuleName, 12, "registry: invalid timestamp")
 
 	// ErrNodeExpired is the error returned when a node is expired.
-	ErrNodeExpired = errors.New("registry: node expired")
+	ErrNodeExpired = errors.New(ModuleName, 13, "registry: node expired")
 
 	// ErrNodeCannotBeUnfrozen is the error returned when a node cannot yet be
 	// unfrozen due to the freeze period not being over yet.
-	ErrNodeCannotBeUnfrozen = errors.New("registry: node cannot be unfrozen yet")
+	ErrNodeCannotBeUnfrozen = errors.New(ModuleName, 14, "registry: node cannot be unfrozen yet")
 
 	// ErrEntityHasNodes is the error returned when an entity cannot be deregistered
 	// as it still has nodes.
-	ErrEntityHasNodes = errors.New("registry: entity still has nodes")
+	ErrEntityHasNodes = errors.New(ModuleName, 15, "registry: entity still has nodes")
 
 	// ErrForbidden is the error returned when an operation is forbiden by
 	// policy.
-	ErrForbidden = errors.New("registry: forbidden by policy")
+	ErrForbidden = errors.New(ModuleName, 16, "registry: forbidden by policy")
 
 	// ErrNodeUpdateNotAllowed is the error returned when trying to update an existing node with unallowed changes.
-	ErrNodeUpdateNotAllowed = errors.New("registry: node update not allowed")
+	ErrNodeUpdateNotAllowed = errors.New(ModuleName, 17, "registry: node update not allowed")
+
+	// MethodRegisterEntity is the method name for entity registrations.
+	MethodRegisterEntity = transaction.NewMethodName(ModuleName, "RegisterEntity", entity.SignedEntity{})
+	// MethodDeregisterEntity is the method name for entity deregistrations.
+	MethodDeregisterEntity = transaction.NewMethodName(ModuleName, "DeregisterEntity", nil)
+	// MethodRegisterNode is the method name for node registrations.
+	MethodRegisterNode = transaction.NewMethodName(ModuleName, "RegisterNode", node.SignedNode{})
+	// MethodUnfreezeNode is the method name for unfreezing nodes.
+	MethodUnfreezeNode = transaction.NewMethodName(ModuleName, "UnfreezeNode", UnfreezeNode{})
+	// MethodRegisterRuntime is the method name for registering runtimes.
+	MethodRegisterRuntime = transaction.NewMethodName(ModuleName, "RegisterRuntime", SignedRuntime{})
+
+	// Methods is the list of all methods supported by the registry backend.
+	Methods = []transaction.MethodName{
+		MethodRegisterEntity,
+		MethodDeregisterEntity,
+		MethodRegisterNode,
+		MethodUnfreezeNode,
+		MethodRegisterRuntime,
+	}
 )
 
 // Backend is a registry implementation.
 type Backend interface {
-	// RegisterEntity registers and or updates an entity with the registry.
-	//
-	// The signature should be made using RegisterEntitySignatureContext.
-	RegisterEntity(context.Context, *entity.SignedEntity) error
-
-	// DeregisterEntity deregisters an entity.
-	//
-	// The signature should be made using DeregisterEntitySignatureContext.
-	DeregisterEntity(context.Context, *signature.Signed) error
-
 	// GetEntity gets an entity by ID.
 	GetEntity(context.Context, signature.PublicKey, int64) (*entity.Entity, error)
 
@@ -151,17 +150,6 @@ type Backend interface {
 	// WatchEntities returns a channel that produces a stream of
 	// EntityEvent on entity registration changes.
 	WatchEntities() (<-chan *EntityEvent, *pubsub.Subscription)
-
-	// RegisterNode registers and or updates a node with the registry.
-	//
-	// The signature should be made using RegisterNodeSignatureContext.
-	RegisterNode(context.Context, *node.SignedNode) error
-
-	// UnfreezeNode unfreezes a previously frozen node.
-	//
-	// The signature should be made using RegisterUnfreezeNodeSignatureContext
-	// and must be made by the owning entity key.
-	UnfreezeNode(context.Context, *SignedUnfreezeNode) error
 
 	// GetNode gets a node by ID.
 	GetNode(context.Context, signature.PublicKey, int64) (*node.Node, error)
@@ -184,9 +172,6 @@ type Backend interface {
 	// order.
 	WatchNodeList() (<-chan *NodeList, *pubsub.Subscription)
 
-	// RegisterRuntime registers a runtime.
-	RegisterRuntime(context.Context, *SignedRuntime) error
-
 	// GetRuntime gets a runtime by ID.
 	GetRuntime(context.Context, signature.PublicKey, int64) (*Runtime, error)
 
@@ -208,6 +193,31 @@ type Backend interface {
 	Cleanup()
 }
 
+// NewRegisterEntityTx creates a new register entity transaction.
+func NewRegisterEntityTx(nonce uint64, fee *transaction.Fee, sigEnt *entity.SignedEntity) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodRegisterEntity, sigEnt)
+}
+
+// NewDeregisterEntityTx creates a new deregister entity transaction.
+func NewDeregisterEntityTx(nonce uint64, fee *transaction.Fee) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodDeregisterEntity, nil)
+}
+
+// NewRegisterNodeTx creates a new register node transaction.
+func NewRegisterNodeTx(nonce uint64, fee *transaction.Fee, sigNode *node.SignedNode) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodRegisterNode, sigNode)
+}
+
+// NewUnfreezeNodeTx creates a new unfreeze node transaction.
+func NewUnfreezeNodeTx(nonce uint64, fee *transaction.Fee, unfreeze *UnfreezeNode) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodUnfreezeNode, unfreeze)
+}
+
+// NewRegisterRuntimeTx creates a new register runtime transaction.
+func NewRegisterRuntimeTx(nonce uint64, fee *transaction.Fee, sigRt *SignedRuntime) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodRegisterRuntime, sigRt)
+}
+
 // EntityEvent is the event that is returned via WatchEntities to signify
 // entity registration changes and updates.
 type EntityEvent struct {
@@ -226,9 +236,6 @@ type NodeEvent struct {
 type NodeList struct {
 	Nodes []*node.Node
 }
-
-// Timestamp is a UNIX timestamp.
-type Timestamp uint64
 
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
 func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis bool) (*entity.Entity, error) {
@@ -279,24 +286,6 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 	}
 
 	return &ent, nil
-}
-
-// VerifyDeregisterEntityArgs verifies arguments for DeregisterEntity.
-func VerifyDeregisterEntityArgs(logger *logging.Logger, sigTimestamp *signature.Signed) (signature.PublicKey, uint64, error) {
-	var id signature.PublicKey
-	var timestamp Timestamp
-	if sigTimestamp == nil {
-		return id, 0, ErrInvalidArgument
-	}
-	if err := sigTimestamp.Open(DeregisterEntitySignatureContext, &timestamp); err != nil {
-		logger.Error("DeregisterEntity: invalid signature",
-			"signed_timestamp", sigTimestamp,
-		)
-		return id, 0, ErrInvalidSignature
-	}
-	id = sigTimestamp.Signature.PublicKey
-
-	return id, uint64(timestamp), nil
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
@@ -751,13 +740,6 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) e
 		)
 		return ErrNodeUpdateNotAllowed
 	}
-	if currentNode.RegistrationTime > newNode.RegistrationTime {
-		logger.Error("RegisterNode: current node registration time greater than new",
-			"current_registration_time", currentNode.RegistrationTime,
-			"new_registration_time", newNode.RegistrationTime,
-		)
-		return ErrNodeUpdateNotAllowed
-	}
 
 	// As of right now, every node has a consensus ID.
 	if !currentNode.Consensus.ID.Equal(newNode.Consensus.ID) {
@@ -862,19 +844,6 @@ func SortNodeList(nodes []*node.Node) {
 	})
 }
 
-// VerifyTimestamp verifies that the given timestamp is valid.
-func VerifyTimestamp(timestamp uint64, now uint64) error {
-	// For now, we check that it's new enough and not too far in the future.
-	// We allow the timestamp to be up to 1 minute in the future to account
-	// for network latency, leap seconds, and real-time clock inaccuracies
-	// and drift.
-	if timestamp < now-TimestampValidFor || timestamp > now+60 {
-		return ErrInvalidTimestamp
-	}
-
-	return nil
-}
-
 // Genesis is the registry genesis state.
 type Genesis struct {
 	// Parameters are the registry consensus parameters.
@@ -935,10 +904,6 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 			}
 		}
 
-		if ent.RegistrationTime > uint64(time.Now().Unix()+61*60) {
-			return fmt.Errorf("registry: sanity check failed: entity ID %s registration time is more than 1h1m in the future", ent.ID.String())
-		}
-
 		seenEntities[ent.ID] = true
 	}
 
@@ -948,10 +913,6 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 		var rt Runtime
 		if err := srt.Open(RegisterGenesisRuntimeSignatureContext, &rt); err != nil {
 			return fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
-		}
-
-		if rt.RegistrationTime > uint64(time.Now().Unix()+61*60) {
-			return fmt.Errorf("registry: sanity check failed: runtime ID %s registration time is more than 1h1m in the future", rt.ID.String())
 		}
 
 		// Check runtime's Compute committee parameters.
@@ -1052,10 +1013,6 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 
 		if !seenEntities[n.EntityID] {
 			return fmt.Errorf("registry: sanity check failed: node ID %s has unknown controlling entity", n.ID.String())
-		}
-
-		if n.RegistrationTime > uint64(time.Now().Unix()+61*60) {
-			return fmt.Errorf("registry: sanity check failed: node ID %s registration time is more than 1h1m in the future", n.ID.String())
 		}
 
 		if n.HasRoles(node.RoleReserved) {

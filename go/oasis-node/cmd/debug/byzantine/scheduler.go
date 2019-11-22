@@ -21,11 +21,7 @@ func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.C
 	if err != nil {
 		return 0, fmt.Errorf("Tendermint Subscribe error: %w", err)
 	}
-	defer func() {
-		if err := tendermintUnsubscribeDrain(svc, "script", schedulerapp.QueryApp, sub); err != nil {
-			panic(fmt.Sprintf("Tendermint unsubscribe drain: %+v", err))
-		}
-	}()
+	defer svc.Unsubscribe("script", schedulerapp.QueryApp) // nolint: errcheck
 
 	for {
 		ev := (<-sub.Out()).Data().(tmtypes.EventDataNewBlock)

@@ -1,4 +1,4 @@
-package tendermint
+package genesis
 
 import (
 	"encoding/json"

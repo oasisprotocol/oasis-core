@@ -18,8 +18,7 @@ message Address {
 message Entity {
     bytes id = 1;
     repeated bytes nodes = 2;
-    uint64 registration_time = 3;
-    bool allow_entity_signed_nodes = 4;
+    bool allow_entity_signed_nodes = 3;
 }
 
 message Node {
@@ -29,9 +28,8 @@ message Node {
     CommitteeInfo committee = 4;
     P2PInfo p2p = 5;
     ConsensusInfo consensus = 6;
-    uint64 registration_time = 7;
-    repeated NodeRuntime runtimes = 8;
-    uint32 roles = 9;
+    repeated NodeRuntime runtimes = 7;
+    uint32 roles = 8;
 }
 
 message CommitteeInfo {

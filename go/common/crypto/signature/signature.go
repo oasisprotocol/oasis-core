@@ -7,9 +7,11 @@ import (
 	"encoding"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	encPem "encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -17,6 +19,7 @@ import (
 	"github.com/oasislabs/ed25519"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/pem"
+	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 	"github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
@@ -58,6 +61,7 @@ var (
 	_ encoding.BinaryUnmarshaler = (*PublicKey)(nil)
 	_ encoding.BinaryMarshaler   = RawSignature{}
 	_ encoding.BinaryUnmarshaler = (*RawSignature)(nil)
+	_ prettyprint.PrettyPrinter  = (*PrettySigned)(nil)
 
 	testPublicKeys        sync.Map
 	blacklistedPublicKeys sync.Map
@@ -215,6 +219,12 @@ func (k PublicKey) isBlacklisted() bool {
 
 // RawSignature is a raw signature.
 type RawSignature [SignatureSize]byte
+
+// String returns a string representation of the raw signature.
+func (r RawSignature) String() string {
+	data, _ := r.MarshalText()
+	return string(data)
+}
 
 // MarshalBinary encodes a signature into binary form.
 func (r RawSignature) MarshalBinary() (data []byte, err error) {
@@ -427,6 +437,34 @@ func (s *Signed) ToProto() *common.Signed {
 	return &common.Signed{
 		Blob:      s.Blob,
 		Signature: s.Signature.ToProto(),
+	}
+}
+
+// PrettySigned is used for pretty-printing signed messages so that
+// the actual content is displayed instead of the binary blob.
+//
+// It should only be used for pretty printing.
+type PrettySigned struct {
+	Body      interface{} `json:"untrusted_raw_value"`
+	Signature Signature   `json:"signature"`
+}
+
+// PrettyPrint writes a pretty-printed representation of the type
+// to the given writer.
+func (p PrettySigned) PrettyPrint(prefix string, w io.Writer) {
+	data, err := json.MarshalIndent(p, prefix, "  ")
+	if err != nil {
+		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)
+	}
+	fmt.Fprintf(w, "%s%s\n", prefix, data)
+}
+
+// NewPrettySigned creates a new PrettySigned instance that can be
+// used for pretty printing signed values.
+func NewPrettySigned(s Signed, b interface{}) *PrettySigned {
+	return &PrettySigned{
+		Body:      b,
+		Signature: s.Signature,
 	}
 }
 

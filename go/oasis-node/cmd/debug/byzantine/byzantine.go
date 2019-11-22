@@ -459,7 +459,7 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("merge create commitment failed: %+v", err))
 	}
 
-	if err = mbc.publishToChain(ht.service, defaultRuntimeID); err != nil {
+	if err = mbc.publishToChain(ht.service, defaultIdentity, defaultRuntimeID); err != nil {
 		panic(fmt.Sprintf("merge publish to chain failed: %+v", err))
 	}
 	logger.Debug("merge honest: commitment sent")
@@ -573,7 +573,7 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("merge create commitment failed: %+v", err))
 	}
 
-	if err = mbc.publishToChain(ht.service, defaultRuntimeID); err != nil {
+	if err = mbc.publishToChain(ht.service, defaultIdentity, defaultRuntimeID); err != nil {
 		panic(fmt.Sprintf("merge publish to chain failed: %+v", err))
 	}
 	logger.Debug("merge wrong: commitment sent")

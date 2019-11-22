@@ -4,7 +4,7 @@ import (
 	"errors"
 	"math"
 
-	"github.com/oasislabs/oasis-core/go/consensus/gas"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 )
 
 var (
@@ -19,21 +19,21 @@ var (
 type GasAccountant interface {
 	// UseGas attempts the use the given amount of gas. If the limit is
 	// reached this method will return ErrOutOfGas.
-	UseGas(gas.Op, gas.Costs) error
+	UseGas(transaction.Op, transaction.Costs) error
 
 	// GasWanted returns the amount of gas wanted.
-	GasWanted() gas.Gas
+	GasWanted() transaction.Gas
 
 	// GasUsed returns the amount of gas used so far.
-	GasUsed() gas.Gas
+	GasUsed() transaction.Gas
 }
 
 type basicGasAccountant struct {
-	maxUsedGas gas.Gas
-	usedGas    gas.Gas
+	maxUsedGas transaction.Gas
+	usedGas    transaction.Gas
 }
 
-func (ga *basicGasAccountant) UseGas(op gas.Op, costs gas.Costs) error {
+func (ga *basicGasAccountant) UseGas(op transaction.Op, costs transaction.Costs) error {
 	amount, ok := costs[op]
 	if !ok {
 		return nil
@@ -52,32 +52,32 @@ func (ga *basicGasAccountant) UseGas(op gas.Op, costs gas.Costs) error {
 	return nil
 }
 
-func (ga *basicGasAccountant) GasWanted() gas.Gas {
+func (ga *basicGasAccountant) GasWanted() transaction.Gas {
 	return ga.maxUsedGas
 }
 
-func (ga *basicGasAccountant) GasUsed() gas.Gas {
+func (ga *basicGasAccountant) GasUsed() transaction.Gas {
 	return ga.usedGas
 }
 
 // NewGasAccountant creates a basic gas accountant.
 //
 // The gas accountant is not safe for concurrent use.
-func NewGasAccountant(maxUsedGas gas.Gas) GasAccountant {
+func NewGasAccountant(maxUsedGas transaction.Gas) GasAccountant {
 	return &basicGasAccountant{maxUsedGas: maxUsedGas}
 }
 
 type nopGasAccountant struct{}
 
-func (ga *nopGasAccountant) UseGas(op gas.Op, costs gas.Costs) error {
+func (ga *nopGasAccountant) UseGas(op transaction.Op, costs transaction.Costs) error {
 	return nil
 }
 
-func (ga *nopGasAccountant) GasWanted() gas.Gas {
+func (ga *nopGasAccountant) GasWanted() transaction.Gas {
 	return 0
 }
 
-func (ga *nopGasAccountant) GasUsed() gas.Gas {
+func (ga *nopGasAccountant) GasUsed() transaction.Gas {
 	return 0
 }
 
@@ -101,7 +101,7 @@ type compositeGasAccountant struct {
 	accts []GasAccountant
 }
 
-func (ga *compositeGasAccountant) UseGas(op gas.Op, costs gas.Costs) error {
+func (ga *compositeGasAccountant) UseGas(op transaction.Op, costs transaction.Costs) error {
 	for _, a := range ga.accts {
 		if err := a.UseGas(op, costs); err != nil {
 			return err
@@ -110,15 +110,15 @@ func (ga *compositeGasAccountant) UseGas(op gas.Op, costs gas.Costs) error {
 	return nil
 }
 
-func (ga *compositeGasAccountant) GasWanted() gas.Gas {
+func (ga *compositeGasAccountant) GasWanted() transaction.Gas {
 	if len(ga.accts) == 0 {
 		return 0
 	}
 	return ga.accts[0].GasWanted()
 }
 
-func (ga *compositeGasAccountant) GasUsed() gas.Gas {
-	var max gas.Gas
+func (ga *compositeGasAccountant) GasUsed() transaction.Gas {
+	var max transaction.Gas
 	for _, a := range ga.accts {
 		if g := a.GasUsed(); g > max {
 			max = g

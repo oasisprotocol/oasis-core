@@ -13,10 +13,11 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
+	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
+	tendermintTests "github.com/oasislabs/oasis-core/go/consensus/tendermint/tests"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 )
@@ -39,9 +40,7 @@ var (
 func StakingImplementationTests(
 	t *testing.T,
 	backend api.Backend,
-	timeSource epochtime.SetableBackend,
-	registry registry.Backend,
-	roothash roothash.Backend,
+	consensus consensusAPI.Backend,
 	identity *identity.Identity,
 	entity *entity.Entity,
 	entitySigner signature.Signer,
@@ -49,7 +48,7 @@ func StakingImplementationTests(
 ) {
 	for _, tc := range []struct {
 		n  string
-		fn func(*testing.T, api.Backend, epochtime.SetableBackend)
+		fn func(*testing.T, api.Backend, consensusAPI.Backend)
 	}{
 		{"InitialEnv", testInitialEnv},
 		{"Transfer", testTransfer},
@@ -58,21 +57,21 @@ func StakingImplementationTests(
 		{"Escrow", testEscrow},
 		{"EscrowSelf", testSelfEscrow},
 	} {
-		t.Run(tc.n, func(t *testing.T) { tc.fn(t, backend, timeSource) })
+		t.Run(tc.n, func(t *testing.T) { tc.fn(t, backend, consensus) })
 	}
 
 	// Separate test as it requires some arguments that others don't.
 	t.Run("SlashDoubleSigning", func(t *testing.T) {
-		testSlashDoubleSigning(t, backend, timeSource, registry, roothash, identity, entity, entitySigner, runtimeID)
+		testSlashDoubleSigning(t, backend, consensus, identity, entity, entitySigner, runtimeID)
 	})
 }
 
 // StakingClientImplementationTests exercises the basic functionality of a
 // staking token client backend.
-func StakingClientImplementationTests(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
+func StakingClientImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	for _, tc := range []struct {
 		n  string
-		fn func(*testing.T, api.Backend, epochtime.SetableBackend)
+		fn func(*testing.T, api.Backend, consensusAPI.Backend)
 	}{
 		{"Transfer", testTransfer},
 		{"TransferSelf", testSelfTransfer},
@@ -80,11 +79,11 @@ func StakingClientImplementationTests(t *testing.T, backend api.Backend, timeSou
 		{"Escrow", testEscrow},
 		{"EscrowSelf", testSelfEscrow},
 	} {
-		t.Run(tc.n, func(t *testing.T) { tc.fn(t, backend, timeSource) })
+		t.Run(tc.n, func(t *testing.T) { tc.fn(t, backend, consensus) })
 	}
 }
 
-func testInitialEnv(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
+func testInitialEnv(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
 	totalSupply, err := backend.TotalSupply(context.Background(), 0)
@@ -93,8 +92,15 @@ func testInitialEnv(t *testing.T, backend api.Backend, timeSource epochtime.Seta
 
 	accounts, err := backend.Accounts(context.Background(), 0)
 	require.NoError(err, "Accounts")
-	require.Len(accounts, 1, "Accounts - nr entries")
-	require.Equal(SrcID, accounts[0], "Accounts[0] == testID")
+	// Since all operations now cause nonce updates, we have some more accounts here:
+	//
+	//   1 is from the genesis file
+	//   1 is the mock epochtime test signer
+	//   1 is the test node worker identity
+	//   1 is the test node entity signer
+	//
+	require.Len(accounts, 4, "Accounts - nr entries")
+	require.Contains(accounts, SrcID, "Accounts[0] == testID")
 
 	acc, err := backend.AccountInfo(context.Background(), SrcID, 0)
 	require.NoError(err, "src: AccountInfo")
@@ -126,7 +132,7 @@ func testInitialEnv(t *testing.T, backend api.Backend, timeSource epochtime.Seta
 	}
 }
 
-func testTransfer(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
+func testTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
 	dstAcc, err := backend.AccountInfo(context.Background(), DestID, 0)
@@ -140,14 +146,11 @@ func testTransfer(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	defer sub.Close()
 
 	xfer := &api.Transfer{
-		Nonce:  srcAcc.General.Nonce,
 		To:     DestID,
 		Tokens: QtyFromInt(math.MaxUint8),
 	}
-	signed, err := api.SignTransfer(srcSigner, xfer)
-	require.NoError(err, "Sign xfer")
-
-	err = backend.Transfer(context.Background(), signed)
+	tx := api.NewTransferTx(srcAcc.General.Nonce, nil, xfer)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "Transfer")
 
 	select {
@@ -163,7 +166,7 @@ func testTransfer(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	newSrcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
 	require.NoError(err, "src: AccountInfo - after")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
-	require.Equal(xfer.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
+	require.Equal(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 
 	_ = dstAcc.General.Balance.Add(&xfer.Tokens)
 	newDstAcc, err := backend.AccountInfo(context.Background(), DestID, 0)
@@ -172,18 +175,15 @@ func testTransfer(t *testing.T, backend api.Backend, timeSource epochtime.Setabl
 	require.EqualValues(dstAcc.General.Nonce, newDstAcc.General.Nonce, "dest: nonce - after")
 
 	// Transfers that exceed available balance should fail.
-	xfer.Nonce = newSrcAcc.General.Nonce
 	_ = newSrcAcc.General.Balance.Add(&qtyOne)
 	xfer.Tokens = newSrcAcc.General.Balance
 
-	signed, err = api.SignTransfer(srcSigner, xfer)
-	require.NoError(err, "Sign xfer - fail test")
-
-	err = backend.Transfer(context.Background(), signed)
+	tx = api.NewTransferTx(newSrcAcc.General.Nonce, nil, xfer)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.Error(err, "Transfer - more than available balance")
 }
 
-func testSelfTransfer(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
+func testSelfTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
 	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
@@ -194,14 +194,11 @@ func testSelfTransfer(t *testing.T, backend api.Backend, timeSource epochtime.Se
 	defer sub.Close()
 
 	xfer := &api.Transfer{
-		Nonce:  srcAcc.General.Nonce,
 		To:     SrcID,
 		Tokens: QtyFromInt(math.MaxUint8),
 	}
-	signed, err := api.SignTransfer(srcSigner, xfer)
-	require.NoError(err, "Sign xfer")
-
-	err = backend.Transfer(context.Background(), signed)
+	tx := api.NewTransferTx(srcAcc.General.Nonce, nil, xfer)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "Transfer")
 
 	select {
@@ -216,21 +213,18 @@ func testSelfTransfer(t *testing.T, backend api.Backend, timeSource epochtime.Se
 	newSrcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
 	require.NoError(err, "src: AccountInfo - after")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
-	require.Equal(xfer.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
+	require.Equal(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 
 	// Self transfers that are more than the balance should fail.
-	xfer.Nonce = newSrcAcc.General.Nonce
 	_ = newSrcAcc.General.Balance.Add(&qtyOne)
 	xfer.Tokens = newSrcAcc.General.Balance
 
-	signed, err = api.SignTransfer(srcSigner, xfer)
-	require.NoError(err, "Sign xfer - fail test")
-
-	err = backend.Transfer(context.Background(), signed)
+	tx = api.NewTransferTx(newSrcAcc.General.Nonce, nil, xfer)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.Error(err, "Transfer - more than available balance")
 }
 
-func testBurn(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
+func testBurn(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
 	totalSupply, err := backend.TotalSupply(context.Background(), 0)
@@ -244,13 +238,10 @@ func testBurn(t *testing.T, backend api.Backend, timeSource epochtime.SetableBac
 	defer sub.Close()
 
 	burn := &api.Burn{
-		Nonce:  srcAcc.General.Nonce,
 		Tokens: QtyFromInt(math.MaxUint32),
 	}
-	signed, err := api.SignBurn(srcSigner, burn)
-	require.NoError(err, "Sign burn")
-
-	err = backend.Burn(context.Background(), signed)
+	tx := api.NewBurnTx(srcAcc.General.Nonce, nil, burn)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "Burn")
 
 	select {
@@ -270,21 +261,21 @@ func testBurn(t *testing.T, backend api.Backend, timeSource epochtime.SetableBac
 	newSrcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
 	require.NoError(err, "src: AccountInfo")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
-	require.EqualValues(burn.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
+	require.EqualValues(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 }
 
-func testEscrow(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
-	testEscrowEx(t, backend, timeSource, SrcID, srcSigner, DestID)
+func testEscrow(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+	testEscrowEx(t, backend, consensus, SrcID, srcSigner, DestID)
 }
 
-func testSelfEscrow(t *testing.T, backend api.Backend, timeSource epochtime.SetableBackend) {
-	testEscrowEx(t, backend, timeSource, SrcID, srcSigner, SrcID)
+func testSelfEscrow(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+	testEscrowEx(t, backend, consensus, SrcID, srcSigner, SrcID)
 }
 
 func testEscrowEx(
 	t *testing.T,
 	backend api.Backend,
-	timeSource epochtime.SetableBackend,
+	consensus consensusAPI.Backend,
 	srcID signature.PublicKey,
 	srcSigner signature.Signer,
 	dstID signature.PublicKey,
@@ -312,14 +303,11 @@ func testEscrowEx(
 
 	// Escrow.
 	escrow := &api.Escrow{
-		Nonce:   srcAcc.General.Nonce,
 		Account: dstID,
 		Tokens:  QtyFromInt(math.MaxUint32),
 	}
-	signed, err := api.SignEscrow(srcSigner, escrow)
-	require.NoError(err, "Sign escrow")
-
-	err = backend.AddEscrow(context.Background(), signed)
+	tx := api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "AddEscrow")
 	require.NoError(totalEscrowed.Add(&escrow.Tokens))
 
@@ -341,7 +329,7 @@ func testEscrowEx(
 		require.True(newSrcAcc.Escrow.Active.Balance.IsZero(), "src: active escrow balance == 0 - after")
 		require.True(newSrcAcc.Escrow.Debonding.Balance.IsZero(), "src: debonding escrow balance == 0 - after")
 	}
-	require.Equal(escrow.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
+	require.Equal(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 
 	_ = dstAcc.Escrow.Active.Balance.Add(&escrow.Tokens)
 	newDstAcc, err := backend.AccountInfo(context.Background(), dstID, 0)
@@ -362,14 +350,11 @@ func testEscrowEx(
 
 	// Escrow some more.
 	escrow = &api.Escrow{
-		Nonce:   srcAcc.General.Nonce,
 		Account: dstID,
 		Tokens:  QtyFromInt(math.MaxUint32),
 	}
-	signed, err = api.SignEscrow(srcSigner, escrow)
-	require.NoError(err, "Sign escrow")
-
-	err = backend.AddEscrow(context.Background(), signed)
+	tx = api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "AddEscrow")
 	require.NoError(totalEscrowed.Add(&escrow.Tokens))
 
@@ -391,7 +376,7 @@ func testEscrowEx(
 		require.True(newSrcAcc.Escrow.Active.Balance.IsZero(), "src: active escrow balance == 0 - after 2nd")
 		require.True(newSrcAcc.Escrow.Debonding.Balance.IsZero(), "src: debonding escrow balance == 0 - after 2nd")
 	}
-	require.Equal(escrow.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after 2nd")
+	require.Equal(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after 2nd")
 
 	_ = dstAcc.Escrow.Active.Balance.Add(&escrow.Tokens)
 	newDstAcc, err = backend.AccountInfo(context.Background(), dstID, 0)
@@ -416,14 +401,11 @@ func testEscrowEx(
 	require.Len(debs, 0, "no debonding delegations before reclaiming escrow")
 
 	reclaim := &api.ReclaimEscrow{
-		Nonce:   srcAcc.General.Nonce,
 		Account: dstID,
 		Shares:  dstAcc.Escrow.Active.TotalShares,
 	}
-	signedReclaim, err := api.SignReclaimEscrow(srcSigner, reclaim)
-	require.NoError(err, "Sign ReclaimEscrow")
-
-	err = backend.ReclaimEscrow(context.Background(), signedReclaim)
+	tx = api.NewReclaimEscrowTx(srcAcc.General.Nonce, nil, reclaim)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "ReclaimEscrow")
 
 	// Query debonding delegations.
@@ -433,6 +415,7 @@ func testEscrowEx(
 	require.Len(debs[dstID], 1, "one debonding delegation after reclaiming escrow")
 
 	// Advance epoch to trigger debonding.
+	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
 	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Wait for debonding period to pass.
@@ -454,7 +437,7 @@ func testEscrowEx(
 		require.True(srcAcc.Escrow.Active.Balance.IsZero(), "src: active escrow balance == 0 - after debond")
 		require.True(srcAcc.Escrow.Debonding.Balance.IsZero(), "src: debonding escrow balance == 0 - after debond")
 	}
-	require.Equal(reclaim.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after debond")
+	require.Equal(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after debond")
 
 	newDstAcc, err = backend.AccountInfo(context.Background(), dstID, 0)
 	require.NoError(err, "dst: AccountInfo - after debond")
@@ -473,14 +456,11 @@ func testEscrowEx(
 
 	// Reclaim escrow (without enough shares).
 	reclaim = &api.ReclaimEscrow{
-		Nonce:   newSrcAcc.General.Nonce,
 		Account: dstID,
 		Shares:  reclaim.Shares,
 	}
-	signedReclaim, err = api.SignReclaimEscrow(srcSigner, reclaim)
-	require.NoError(err, "Sign ReclaimEscrow")
-
-	err = backend.ReclaimEscrow(context.Background(), signedReclaim)
+	tx = api.NewReclaimEscrowTx(newSrcAcc.General.Nonce, nil, reclaim)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.Error(err, "ReclaimEscrow")
 
 	debs, err = backend.DebondingDelegations(context.Background(), srcID, 0)
@@ -489,23 +469,18 @@ func testEscrowEx(
 
 	// Escrow less than the minimum amount.
 	escrow = &api.Escrow{
-		Nonce:   srcAcc.General.Nonce,
 		Account: dstID,
 		Tokens:  QtyFromInt(1), // Minimum is 10.
 	}
-	signed, err = api.SignEscrow(srcSigner, escrow)
-	require.NoError(err, "Sign escrow")
-
-	err = backend.AddEscrow(context.Background(), signed)
+	tx = api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.Error(err, "AddEscrow")
 }
 
 func testSlashDoubleSigning(
 	t *testing.T,
 	backend api.Backend,
-	timeSource epochtime.SetableBackend,
-	reg registry.Backend,
-	roothash roothash.Backend,
+	consensus consensusAPI.Backend,
 	ident *identity.Identity,
 	ent *entity.Entity,
 	entSigner signature.Signer,
@@ -522,14 +497,11 @@ func testSlashDoubleSigning(
 	defer escrowSub.Close()
 
 	escrow := &api.Escrow{
-		Nonce:   srcAcc.General.Nonce,
 		Account: ent.ID,
 		Tokens:  QtyFromInt(math.MaxUint32),
 	}
-	signed, err := api.SignEscrow(srcSigner, escrow)
-	require.NoError(err, "Sign escrow")
-
-	err = backend.AddEscrow(context.Background(), signed)
+	tx := api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "AddEscrow")
 
 	select {
@@ -543,7 +515,7 @@ func testSlashDoubleSigning(
 	}
 
 	// Subscribe to roothash blocks.
-	blocksCh, blocksSub, err := roothash.WatchBlocks(runtimeID)
+	blocksCh, blocksSub, err := consensus.RootHash().WatchBlocks(runtimeID)
 	require.NoError(err, "WatchBlocks")
 	defer blocksSub.Close()
 
@@ -554,7 +526,7 @@ func testSlashDoubleSigning(
 
 	// Broadcast evidence. This is Tendermint-specific, if we ever have more than one
 	// consensus backend, we need to change this part.
-	err = backend.SubmitEvidence(context.Background(), tendermintMakeDoubleSignEvidence(t, ident))
+	err = consensus.SubmitEvidence(context.Background(), tendermintTests.MakeDoubleSignEvidence(t, ident))
 	require.NoError(err, "SubmitEvidence")
 
 	// Wait for the node to get slashed.
@@ -574,20 +546,17 @@ WaitLoop:
 	}
 
 	// Make sure the node is frozen.
-	nodeStatus, err := reg.GetNodeStatus(context.Background(), ident.NodeSigner.Public(), 0)
+	nodeStatus, err := consensus.Registry().GetNodeStatus(context.Background(), ident.NodeSigner.Public(), 0)
 	require.NoError(err, "GetNodeStatus")
 	require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
 	require.True(nodeStatus.IsFrozen(), "IsFrozen() should return true")
 
 	// Make sure node cannot be unfrozen.
-	unfreeze := registry.UnfreezeNode{
-		NodeID:    ident.NodeSigner.Public(),
-		Timestamp: uint64(time.Now().Unix()),
-	}
-	signedUnfreeze, err := registry.SignUnfreezeNode(entSigner, registry.RegisterUnfreezeNodeSignatureContext, &unfreeze)
-	require.NoError(err, "SignUnfreezeNode")
-	err = reg.UnfreezeNode(context.Background(), signedUnfreeze)
-	require.Error(err, "UnfreezeNode")
+	tx = registry.NewUnfreezeNodeTx(0, nil, &registry.UnfreezeNode{
+		NodeID: ident.NodeSigner.Public(),
+	})
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, entSigner, tx)
+	require.Error(err, "UnfreezeNode should fail")
 
 	// Wait for roothash block as re-scheduling must have taken place due to slashing.
 	select {
@@ -598,17 +567,21 @@ WaitLoop:
 	}
 
 	// Advance epoch to make the freeze period expire.
+	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
 	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Unfreeze node (now it should work).
-	err = reg.UnfreezeNode(context.Background(), signedUnfreeze)
+	tx = registry.NewUnfreezeNodeTx(0, nil, &registry.UnfreezeNode{
+		NodeID: ident.NodeSigner.Public(),
+	})
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, entSigner, tx)
 	require.NoError(err, "UnfreezeNode")
 
 	// Advance epoch to restore committees.
 	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Make sure the node is no longer frozen.
-	nodeStatus, err = reg.GetNodeStatus(context.Background(), ident.NodeSigner.Public(), 0)
+	nodeStatus, err = consensus.Registry().GetNodeStatus(context.Background(), ident.NodeSigner.Public(), 0)
 	require.NoError(err, "GetNodeStatus")
 	require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
 	require.False(nodeStatus.IsFrozen(), "IsFrozen() should return false")

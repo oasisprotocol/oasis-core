@@ -3,25 +3,30 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
-// ChecksumSize is the length of checksum in bytes.
-const ChecksumSize = 32
+const (
+	// ModuleName is a unique module name for the keymanager module.
+	ModuleName = "keymanager"
+
+	// ChecksumSize is the length of checksum in bytes.
+	ChecksumSize = 32
+)
 
 var (
 	// ErrNoSuchKeyManager is the error returned when a key manager does not
 	// exist.
-	ErrNoSuchKeyManager = errors.New("keymanager: no such key manager")
+	ErrNoSuchKeyManager = errors.New(ModuleName, 1, "keymanager: no such key manager")
 
 	// TestPublicKey is the insecure hardcoded key manager public key, used
 	// in insecure builds when a RAK is unavailable.
@@ -91,7 +96,7 @@ type SignedInitResponse struct {
 func (r *SignedInitResponse) Verify(pk signature.PublicKey) error {
 	raw := cbor.Marshal(r.InitResponse)
 	if !pk.Verify(initResponseContext, raw, r.Signature) {
-		return errors.New("keymanager: invalid initialization response signature")
+		return fmt.Errorf("keymanager: invalid initialization response signature")
 	}
 	return nil
 }
@@ -111,7 +116,7 @@ func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime, ts time.Time) (
 		rak = nodeRt.Capabilities.TEE.RAK
 	}
 	if hw != rt.TEEHardware {
-		return nil, errors.New("keymanger: TEEHardware mismatch")
+		return nil, fmt.Errorf("keymanger: TEEHardware mismatch")
 	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(nil, nodeRt, []*registry.Runtime{rt}, ts); err != nil {
 		return nil, err
 	}

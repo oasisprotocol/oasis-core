@@ -7,13 +7,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/consensus"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	pb "github.com/oasislabs/oasis-core/go/grpc/genesis"
-	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 var (
@@ -24,12 +19,6 @@ type grpcServer struct {
 	logger *logging.Logger
 
 	consensusBackend consensus.Backend
-
-	keymanagerBackend keymanager.Backend
-	registryBackend   registry.Backend
-	roothashBackend   roothash.Backend
-	stakingBackend    staking.Backend
-	schedulerBackend  scheduler.Backend
 }
 
 // ToGenesis generates a genesis document based on current state at given height.
@@ -57,15 +46,10 @@ func (s *grpcServer) ToGenesis(ctx context.Context, req *pb.GenesisRequest) (*pb
 	return &resp, nil
 }
 
-func NewGRPCServer(grpc *grpc.Server, cb consensus.Backend, km keymanager.Backend, reg registry.Backend, rh roothash.Backend, s staking.Backend, sch scheduler.Backend) {
+func NewGRPCServer(grpc *grpc.Server, cb consensus.Backend) {
 	srv := &grpcServer{
-		logger:            logging.GetLogger("genesis/grpc"),
-		consensusBackend:  cb,
-		keymanagerBackend: km,
-		registryBackend:   reg,
-		roothashBackend:   rh,
-		stakingBackend:    s,
-		schedulerBackend:  sch,
+		logger:           logging.GetLogger("genesis/grpc"),
+		consensusBackend: cb,
 	}
 	pb.RegisterGenesisServer(grpc, srv)
 }

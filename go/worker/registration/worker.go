@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
@@ -19,7 +18,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/persistent"
-	"github.com/oasislabs/oasis-core/go/consensus"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -267,7 +266,6 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 		Consensus: node.ConsensusInfo{
 			ID: w.consensus.ConsensusKey(),
 		},
-		RegistrationTime: uint64(time.Now().Unix()),
 	}
 	for _, runtime := range w.workerCommonCfg.Runtimes {
 		nodeDesc.Runtimes = append(nodeDesc.Runtimes, &node.Runtime{
@@ -295,7 +293,9 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 			)
 			return err
 		}
-		if err := w.registry.RegisterNode(w.ctx, signedNode); err != nil {
+
+		tx := registry.NewRegisterNodeTx(0, nil, signedNode)
+		if err := consensus.SignAndSubmitTx(w.ctx, w.consensus, w.identity.NodeSigner, tx); err != nil {
 			w.logger.Error("failed to register node",
 				"err", err,
 			)

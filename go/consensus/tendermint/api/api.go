@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 	tmcmn "github.com/tendermint/tendermint/libs/common"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
@@ -17,55 +16,14 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 )
 
-// Conesnus Backend Name
+// BackendName is the consensus backend name.
 const BackendName = "tendermint"
-
-// Code is a status code for ABCI requests.
-type Code uint32
-
-// Status codes for the various ABCI requests.
-const (
-	CodeOK                 Code = Code(types.CodeTypeOK) // uint32(0)
-	CodeInvalidApplication Code = Code(1)
-	CodeNoCommittedBlocks  Code = Code(2)
-	CodeInvalidFormat      Code = Code(3)
-	CodeTransactionFailed  Code = Code(4)
-	CodeInvalidQuery       Code = Code(5)
-	CodeNotFound           Code = Code(6)
-)
 
 const (
 	// LogEventPeerExchangeDisable is a log event that indicates that
 	// Tendermint's peer exchange has been disabled.
 	LogEventPeerExchangeDisabled = "tendermint/peer_exchange_disabled"
 )
-
-// ToInt returns an integer representation of the status code.
-func (c Code) ToInt() uint32 {
-	return uint32(c)
-}
-
-// String returns a string representation of the status code.
-func (c Code) String() string {
-	switch c {
-	case CodeOK:
-		return "ok"
-	case CodeInvalidApplication:
-		return "invalid application"
-	case CodeNoCommittedBlocks:
-		return "no committed blocks"
-	case CodeInvalidFormat:
-		return "invalid format"
-	case CodeTransactionFailed:
-		return "transaction failed"
-	case CodeInvalidQuery:
-		return "invalid query"
-	case CodeNotFound:
-		return "not found"
-	default:
-		return "unknown"
-	}
-}
 
 var tagAppNameValue = []byte("1")
 
@@ -114,7 +72,7 @@ func NodeToP2PAddr(n *node.Node) (*tmp2p.NetAddress, error) {
 
 	tmAddr, err := tmp2p.NewNetAddressString(addr)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint/api: failed to reformat validator")
+		return nil, fmt.Errorf("tendermint/api: failed to reformat validator: %w", err)
 	}
 
 	return tmAddr, nil

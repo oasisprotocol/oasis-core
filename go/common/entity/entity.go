@@ -5,12 +5,15 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"path/filepath"
-	"time"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 	pbCommon "github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
@@ -26,6 +29,8 @@ var (
 
 	testEntity       Entity
 	testEntitySigner signature.Signer
+
+	_ prettyprint.PrettyPrinter = (*SignedEntity)(nil)
 )
 
 // Entity represents an entity that controls one or more Nodes and or
@@ -38,9 +43,6 @@ type Entity struct {
 	// will sign the descriptor with the node signing key rather than the
 	// entity signing key.
 	Nodes []signature.PublicKey `json:"nodes"`
-
-	// Time of registration.
-	RegistrationTime uint64 `json:"registration_time"`
 
 	// AllowEntitySignedNodes is true iff nodes belonging to this entity
 	// may be signed with the entity signing key.
@@ -71,7 +73,6 @@ func (e *Entity) FromProto(pb *pbCommon.Entity) error {
 		e.Nodes = append(e.Nodes, nodeID)
 	}
 
-	e.RegistrationTime = pb.GetRegistrationTime()
 	e.AllowEntitySignedNodes = pb.GetAllowEntitySignedNodes()
 
 	return nil
@@ -82,7 +83,6 @@ func (e *Entity) ToProto() *pbCommon.Entity {
 	pb := new(pbCommon.Entity)
 
 	pb.Id, _ = e.ID.MarshalBinary()
-	pb.RegistrationTime = e.RegistrationTime
 	pb.AllowEntitySignedNodes = e.AllowEntitySignedNodes
 
 	var pbNodes [][]byte
@@ -150,8 +150,7 @@ func Generate(baseDir string, signerFactory signature.SignerFactory, template *E
 		return nil, nil, err
 	}
 	ent := &Entity{
-		ID:               signer.Public(),
-		RegistrationTime: uint64(time.Now().Unix()),
+		ID: signer.Public(),
 	}
 	if template != nil {
 		ent.Nodes = template.Nodes
@@ -180,6 +179,19 @@ func (s *SignedEntity) Open(context signature.Context, entity *Entity) error { /
 	return s.Signed.Open(context, entity)
 }
 
+// PrettyPrint writes a pretty-printed representation of the type
+// to the given writer.
+func (s SignedEntity) PrettyPrint(prefix string, w io.Writer) {
+	var e Entity
+	if err := cbor.Unmarshal(s.Signed.Blob, &e); err != nil {
+		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, err)
+		return
+	}
+
+	pp := signature.NewPrettySigned(s.Signed, e)
+	pp.PrettyPrint(prefix, w)
+}
+
 // SignEntity serializes the Entity and signs the result.
 func SignEntity(signer signature.Signer, context signature.Context, entity *Entity) (*SignedEntity, error) {
 	signed, err := signature.SignSigned(signer, context, entity)
@@ -196,6 +208,5 @@ func init() {
 	testEntitySigner = memorySigner.NewTestSigner("ekiden test entity key seed")
 
 	testEntity.ID = testEntitySigner.Public()
-	testEntity.RegistrationTime = uint64(time.Date(2019, 6, 1, 0, 0, 0, 0, time.UTC).Unix())
 	testEntity.AllowEntitySignedNodes = true
 }

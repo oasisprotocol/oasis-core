@@ -8,7 +8,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/version"
-	"github.com/oasislabs/oasis-core/go/consensus"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	"github.com/oasislabs/oasis-core/go/ias"
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"

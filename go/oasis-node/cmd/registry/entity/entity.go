@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -22,6 +21,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	grpcRegistry "github.com/oasislabs/oasis-core/go/grpc/registry"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdConsensus "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -31,7 +31,6 @@ const (
 	cfgAllowEntitySignedNodes = "entity.debug.allow_entity_signed_nodes"
 	cfgNodeID                 = "entity.node.id"
 	cfgNodeDescriptor         = "entity.node.descriptor"
-	cfgTxFile                 = "entity.transaction.file"
 
 	entityGenesisFilename = "entity_genesis.json"
 )
@@ -41,8 +40,6 @@ var (
 	initFlags                 = flag.NewFlagSet("", flag.ContinueOnError)
 	updateFlags               = flag.NewFlagSet("", flag.ContinueOnError)
 	registerOrDeregisterFlags = flag.NewFlagSet("", flag.ContinueOnError)
-	submitFlags               = flag.NewFlagSet("", flag.ContinueOnError)
-	txFileFlags               = flag.NewFlagSet("", flag.ContinueOnError)
 
 	entityCmd = &cobra.Command{
 		Use:   "entity",
@@ -79,21 +76,8 @@ var (
 		Run:   doList,
 	}
 
-	submitCmd = &cobra.Command{
-		Use:   "submit",
-		Short: "submit a pre-generated transaction",
-		Run:   doSubmit,
-	}
-
 	logger = logging.GetLogger("cmd/registry/entity")
 )
-
-type serializedTx struct {
-	Register   *entity.SignedEntity `json:"register,omitempty"`
-	Deregister *signature.Signed    `json:"deregister,omitempty"`
-}
-
-type generateEntitySignedTxFunc func(txFilePath string, ent *entity.Entity, signer signature.Signer) (*serializedTx, error)
 
 func doConnect(cmd *cobra.Command) (*grpc.ClientConn, grpcRegistry.EntityRegistryClient) {
 	conn, err := cmdGrpc.NewClient(cmd)
@@ -175,7 +159,6 @@ func doUpdate(cmd *cobra.Command, args []string) {
 	}
 
 	// Update the entity.
-	ent.RegistrationTime = uint64(time.Now().Unix())
 	ent.AllowEntitySignedNodes = viper.GetBool(cfgAllowEntitySignedNodes)
 
 	ent.Nodes = nil
@@ -282,177 +265,49 @@ func signAndWriteEntityGenesis(dataDir string, signer signature.Signer, ent *ent
 	return nil
 }
 
-func saveSignedTx(tx *serializedTx, txFilePath string) error {
-	b, _ := json.Marshal(tx)
-	if err := ioutil.WriteFile(txFilePath, b, 0600); err != nil {
-		return err
-	}
-	return nil
-}
-
-func loadSignedTx(txFilePath string) (*serializedTx, error) {
-	var tx serializedTx
-	b, err := ioutil.ReadFile(txFilePath)
-	if err != nil {
-		return nil, err
-	}
-	if err = json.Unmarshal(b, &tx); err != nil {
-		return nil, err
-	}
-	return &tx, nil
-}
-
-func doGenerateEntitySignedTx(signedTxFunc generateEntitySignedTxFunc, cmd *cobra.Command, args []string) {
+func doGenRegister(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	txFilePath := viper.GetString(cfgTxFile)
-	if txFilePath == "" {
-		logger.Error("must specify an --" + cfgTxFile)
-		os.Exit(1)
-	}
+	cmdConsensus.InitGenesis()
+	cmdConsensus.AssertTxFileOK()
 
-	dataDir, err := cmdCommon.DataDirOrPwd()
-	if err != nil {
-		logger.Error("failed to query data directory",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-
-	ent, signer, err := loadOrGenerateEntity(dataDir, false)
+	ent, signer, err := cmdCommon.LoadEntity(cmdFlags.Entity())
 	if err != nil {
 		logger.Error("failed to load entity",
 			"err", err,
 		)
 		os.Exit(1)
 	}
+	defer signer.Reset()
 
-	tx, err := signedTxFunc(txFilePath, ent, signer)
-	if err != nil {
-		logger.Error("failed to sign transaction",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-
-	if err = saveSignedTx(tx, txFilePath); err != nil {
-		logger.Error("failed to save signed transaction",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-}
-
-func doGenRegister(cmd *cobra.Command, args []string) {
-	doGenerateEntitySignedTx(doSignRegister, cmd, args)
-}
-
-func doSignRegister(txFilePath string, ent *entity.Entity, signer signature.Signer) (*serializedTx, error) {
-	ent.RegistrationTime = uint64(time.Now().Unix())
 	signed, err := entity.SignEntity(signer, registry.RegisterEntitySignatureContext, ent)
 	if err != nil {
-		return nil, err
+		logger.Error("failed to sign entity descriptor",
+			"err", err,
+		)
+		os.Exit(1)
 	}
 
-	tx := &serializedTx{
-		Register: signed,
-	}
-	return tx, nil
+	nonce, fee := cmdConsensus.GetTxNonceAndFee()
+	tx := registry.NewRegisterEntityTx(nonce, fee, signed)
+
+	cmdConsensus.SignAndSaveTx(tx)
 }
 
 func doGenDeregister(cmd *cobra.Command, args []string) {
-	doGenerateEntitySignedTx(doSignDeregister, cmd, args)
-}
-
-func doSignDeregister(txFilePath string, ent *entity.Entity, signer signature.Signer) (*serializedTx, error) {
-	ts := registry.Timestamp(time.Now().Unix())
-	signed, err := signature.SignSigned(signer, registry.DeregisterEntitySignatureContext, &ts)
-	if err != nil {
-		return nil, err
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	tx := &serializedTx{
-		Deregister: signed,
-	}
-	return tx, nil
-}
+	cmdConsensus.InitGenesis()
+	cmdConsensus.AssertTxFileOK()
 
-func doSubmit(cmd *cobra.Command, args []string) {
-	txFilePath := viper.GetString(cfgTxFile)
-	if txFilePath == "" {
-		logger.Error("must specify an --" + cfgTxFile)
-		os.Exit(1)
-	}
-	tx, err := loadSignedTx(txFilePath)
-	if err != nil {
-		logger.Error("failed to load signed transaction",
-			"err", err,
-		)
-		os.Exit(1)
-	}
+	nonce, fee := cmdConsensus.GetTxNonceAndFee()
+	tx := registry.NewDeregisterEntityTx(nonce, fee)
 
-	nrRetries := cmdFlags.Retries()
-	for i := 0; i <= nrRetries; {
-		if err = func() error {
-			conn, client := doConnect(cmd)
-			defer conn.Close()
-
-			var actErr error
-			if tx.Register != nil {
-				actErr = doSubmitRegister(client, tx.Register)
-			} else if tx.Deregister != nil {
-				actErr = doSubmitDeregister(client, tx.Deregister)
-			}
-			return actErr
-		}(); err == nil {
-			return
-		}
-
-		if nrRetries > 0 {
-			i++
-		}
-		if i <= nrRetries {
-			time.Sleep(1 * time.Second)
-		}
-	}
-	os.Exit(1)
-}
-
-func doSubmitRegister(client grpcRegistry.EntityRegistryClient, signed *entity.SignedEntity) error {
-	req := &grpcRegistry.RegisterRequest{
-		Entity: signed.ToProto(),
-	}
-	if _, err := client.RegisterEntity(context.Background(), req); err != nil {
-		logger.Error("failed to register entity",
-			"err", err,
-		)
-		return err
-	}
-
-	logger.Info("registered entity",
-		"entity", signed.Signature.PublicKey,
-	)
-
-	return nil
-}
-
-func doSubmitDeregister(client grpcRegistry.EntityRegistryClient, signed *signature.Signed) error {
-	req := &grpcRegistry.DeregisterRequest{
-		Timestamp: signed.ToProto(),
-	}
-	if _, err := client.DeregisterEntity(context.Background(), req); err != nil {
-		logger.Error("failed to deregister entity",
-			"err", err,
-		)
-		return err
-	}
-
-	logger.Info("deregistered entity",
-		"entity", signed.Signature.PublicKey,
-	)
-	return nil
+	cmdConsensus.SignAndSaveTx(tx)
 }
 
 func doList(cmd *cobra.Command, args []string) {
@@ -520,7 +375,6 @@ func Register(parentCmd *cobra.Command) {
 		registerCmd,
 		deregisterCmd,
 		listCmd,
-		submitCmd,
 	} {
 		entityCmd.AddCommand(v)
 	}
@@ -529,7 +383,6 @@ func Register(parentCmd *cobra.Command) {
 	updateCmd.Flags().AddFlagSet(updateFlags)
 	registerCmd.Flags().AddFlagSet(registerOrDeregisterFlags)
 	deregisterCmd.Flags().AddFlagSet(registerOrDeregisterFlags)
-	submitCmd.Flags().AddFlagSet(submitFlags)
 
 	listCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
 	listCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
@@ -551,15 +404,6 @@ func init() {
 	updateFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	updateFlags.AddFlagSet(entityFlags)
 
-	txFileFlags.String(cfgTxFile, "", "Signed transaction file path")
-	_ = viper.BindPFlags(txFileFlags)
-
-	registerOrDeregisterFlags.AddFlagSet(cmdFlags.RetriesFlags)
 	registerOrDeregisterFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
-	registerOrDeregisterFlags.AddFlagSet(cmdGrpc.ClientFlags)
-	registerOrDeregisterFlags.AddFlagSet(txFileFlags)
-
-	submitFlags.AddFlagSet(cmdFlags.RetriesFlags)
-	submitFlags.AddFlagSet(cmdGrpc.ClientFlags)
-	submitFlags.AddFlagSet(txFileFlags)
+	registerOrDeregisterFlags.AddFlagSet(cmdConsensus.TxFlags)
 }

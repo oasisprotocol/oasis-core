@@ -26,6 +26,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/version"
 	grpcRegistry "github.com/oasislabs/oasis-core/go/grpc/registry"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdConsensus "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -69,8 +70,9 @@ const (
 )
 
 var (
-	outputFlags  = flag.NewFlagSet("", flag.ContinueOnError)
-	runtimeFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	outputFlags   = flag.NewFlagSet("", flag.ContinueOnError)
+	runtimeFlags  = flag.NewFlagSet("", flag.ContinueOnError)
+	registerFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	runtimeCmd = &cobra.Command{
 		Use:   "runtime",
@@ -84,9 +86,9 @@ var (
 	}
 
 	registerCmd = &cobra.Command{
-		Use:   "register",
-		Short: "register a runtime",
-		Run:   doRegister,
+		Use:   "gen_register",
+		Short: "generate a register runtime transaction",
+		Run:   doGenRegister,
 	}
 
 	listCmd = &cobra.Command{
@@ -149,55 +151,34 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	)
 }
 
-func doRegister(cmd *cobra.Command, args []string) {
+func doGenRegister(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
+	cmdConsensus.InitGenesis()
+	cmdConsensus.AssertTxFileOK()
+
 	rt, signer, err := runtimeFromFlags()
 	if err != nil {
+		logger.Info("failed to get runtime",
+			"err", err,
+		)
 		os.Exit(1)
 	}
 
-	nrRetries := cmdFlags.Retries()
-	for i := 0; i <= nrRetries; {
-		if err := actuallyRegister(cmd, rt, signer); err == nil {
-			return
-		}
-
-		if nrRetries > 0 {
-			i++
-		}
-		if i <= nrRetries {
-			time.Sleep(1 * time.Second)
-		}
-	}
-}
-
-func actuallyRegister(cmd *cobra.Command, rt *registry.Runtime, signer signature.Signer) error {
-	conn, client := doConnect(cmd)
-	defer conn.Close()
-
 	signed, err := signForRegistration(rt, signer, false)
 	if err != nil {
-		return err
-	}
-
-	req := &grpcRegistry.RegisterRuntimeRequest{
-		Runtime: signed.ToProto(),
-	}
-	if _, err = client.RegisterRuntime(context.Background(), req); err != nil {
-		logger.Error("failed to register runtime",
+		logger.Info("failed to sign runtime descriptor",
 			"err", err,
 		)
-		return err
+		os.Exit(1)
 	}
 
-	logger.Info("registered runtime",
-		"runtime", rt.ID,
-	)
+	nonce, fee := cmdConsensus.GetTxNonceAndFee()
+	tx := registry.NewRegisterRuntimeTx(nonce, fee, signed)
 
-	return nil
+	cmdConsensus.SignAndSaveTx(tx)
 }
 
 func doList(cmd *cobra.Command, args []string) {
@@ -257,7 +238,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	ent, signer, err := loadEntity(cmdFlags.Entity())
+	_, signer, err := loadEntity(cmdFlags.Entity())
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
@@ -344,11 +325,10 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 	}
 
 	rt := &registry.Runtime{
-		ID:               id,
-		Genesis:          gen,
-		RegistrationTime: ent.RegistrationTime,
-		Kind:             kind,
-		TEEHardware:      teeHardware,
+		ID:          id,
+		Genesis:     gen,
+		Kind:        kind,
+		TEEHardware: teeHardware,
 		Version: registry.VersionInfo{
 			Version: version.FromU64(viper.GetUint64(cfgVersion)),
 		},
@@ -397,7 +377,6 @@ func signForRegistration(rt *registry.Runtime, signer signature.Signer, isGenesi
 	switch isGenesis {
 	case false:
 		ctx = registry.RegisterRuntimeSignatureContext
-		rt.RegistrationTime = uint64(time.Now().Unix())
 	case true:
 		ctx = registry.RegisterGenesisRuntimeSignatureContext
 	}
@@ -446,8 +425,7 @@ func Register(parentCmd *cobra.Command) {
 	listCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
 	listCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
 
-	registerCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
-	registerCmd.Flags().AddFlagSet(cmdFlags.RetriesFlags)
+	registerCmd.Flags().AddFlagSet(registerFlags)
 
 	registerCmd.Flags().AddFlagSet(runtimeFlags)
 
@@ -490,4 +468,7 @@ func init() {
 
 	_ = viper.BindPFlags(runtimeFlags)
 	runtimeFlags.AddFlagSet(cmdFlags.EntityFlags)
+
+	registerFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
+	registerFlags.AddFlagSet(cmdConsensus.TxFlags)
 }

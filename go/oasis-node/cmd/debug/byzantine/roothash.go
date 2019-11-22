@@ -3,11 +3,11 @@ package byzantine
 import (
 	"context"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	roothashapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash"
+	"github.com/oasislabs/oasis-core/go/common/identity"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 )
@@ -16,15 +16,7 @@ func roothashGetLatestBlock(ht *honestTendermint, height int64, runtimeID signat
 	return ht.service.RootHash().GetLatestBlock(context.Background(), runtimeID, height)
 }
 
-func roothashMergeCommit(svc service.TendermintService, runtimeID signature.PublicKey, commits []commitment.MergeCommitment) error {
-	if err := tendermintBroadcastTxCommit(svc, roothashapp.TransactionTag, roothashapp.Tx{
-		TxMergeCommit: &roothashapp.TxMergeCommit{
-			ID:      runtimeID,
-			Commits: commits,
-		},
-	}); err != nil {
-		return errors.Wrap(err, "Tendermint BroadcastTx commit")
-	}
-
-	return nil
+func roothashMergeCommit(svc service.TendermintService, id *identity.Identity, runtimeID signature.PublicKey, commits []commitment.MergeCommitment) error {
+	tx := roothash.NewMergeCommitTx(0, nil, runtimeID, commits)
+	return consensus.SignAndSubmitTx(context.Background(), svc, id.NodeSigner, tx)
 }

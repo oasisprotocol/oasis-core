@@ -7,22 +7,12 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/registry/api"
 )
 
 const metricsUpdateInterval = 10 * time.Second
 
 var (
-	registryFailures = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "oasis_registry_failures",
-			Help: "Number of registry failures.",
-		},
-		[]string{"call"},
-	)
 	registryNodes = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "oasis_registry_nodes",
@@ -42,90 +32,43 @@ var (
 		},
 	)
 	registeryCollectors = []prometheus.Collector{
-		registryFailures,
 		registryNodes,
 		registryEntities,
 		registryRuntimes,
 	}
 
-	_ api.Backend = (*metricsWrapper)(nil)
-
 	metricsOnce sync.Once
 )
 
-type metricsWrapper struct {
-	api.Backend
+// MetricsUpdater is a registry metric updater.
+type MetricsUpdater struct {
+	backend api.Backend
 
 	closeOnce sync.Once
 	closeCh   chan struct{}
 	closedCh  chan struct{}
 }
 
-func (w *metricsWrapper) RegisterEntity(ctx context.Context, sigEnt *entity.SignedEntity) error {
-	if err := w.Backend.RegisterEntity(ctx, sigEnt); err != nil {
-		registryFailures.With(prometheus.Labels{"call": "registerEntity"}).Inc()
-		return err
-	}
-
-	return nil
-}
-
-func (w *metricsWrapper) DeregisterEntity(ctx context.Context, sigTimestamp *signature.Signed) error {
-	if err := w.Backend.DeregisterEntity(ctx, sigTimestamp); err != nil {
-		registryFailures.With(prometheus.Labels{"call": "deregisterEntity"}).Inc()
-		return err
-	}
-
-	return nil
-}
-
-func (w *metricsWrapper) RegisterNode(ctx context.Context, sigNode *node.SignedNode) error {
-	if err := w.Backend.RegisterNode(ctx, sigNode); err != nil {
-		registryFailures.With(prometheus.Labels{"call": "registerNode"}).Inc()
-		return err
-	}
-
-	return nil
-}
-
-func (w *metricsWrapper) RegisterRuntime(ctx context.Context, sigCon *api.SignedRuntime) error {
-	if err := w.Backend.RegisterRuntime(ctx, sigCon); err != nil {
-		registryFailures.With(prometheus.Labels{"call": "registerRuntime"}).Inc()
-		return err
-	}
-
-	return nil
-}
-
-func (w *metricsWrapper) GetNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
-	return w.Backend.GetNodeList(ctx, height)
-}
-
-func (w *metricsWrapper) GetRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
-	return w.Backend.GetRuntimes(ctx, height)
-}
-
-func (w *metricsWrapper) Cleanup() {
-	w.closeOnce.Do(func() {
-		close(w.closeCh)
-		<-w.closedCh
+// Cleanup performs cleanup.
+func (m *MetricsUpdater) Cleanup() {
+	m.closeOnce.Do(func() {
+		close(m.closeCh)
+		<-m.closedCh
 	})
-
-	w.Backend.Cleanup()
 }
 
-func (w *metricsWrapper) worker(ctx context.Context) {
-	defer close(w.closedCh)
+func (m *MetricsUpdater) worker(ctx context.Context) {
+	defer close(m.closedCh)
 
 	t := time.NewTicker(metricsUpdateInterval)
 	defer t.Stop()
 
-	runtimeCh, sub := w.Backend.WatchRuntimes()
+	runtimeCh, sub := m.backend.WatchRuntimes()
 	defer sub.Close()
 
 	for {
 		select {
-		case <-w.closeCh:
+		case <-m.closeCh:
 			return
 		case <-runtimeCh:
 			registryRuntimes.Inc()
@@ -133,39 +76,36 @@ func (w *metricsWrapper) worker(ctx context.Context) {
 		case <-t.C:
 		}
 
-		w.updatePeriodicMetrics(ctx)
+		m.updatePeriodicMetrics(ctx)
 	}
 }
 
-func (w *metricsWrapper) updatePeriodicMetrics(ctx context.Context) {
-	nodes, err := w.Backend.GetNodes(ctx, 0)
+func (m *MetricsUpdater) updatePeriodicMetrics(ctx context.Context) {
+	nodes, err := m.backend.GetNodes(ctx, 0)
 	if err == nil {
 		registryNodes.Set(float64(len(nodes)))
 	}
 
-	entities, err := w.Backend.GetEntities(ctx, 0)
+	entities, err := m.backend.GetEntities(ctx, 0)
 	if err == nil {
 		registryEntities.Set(float64(len(entities)))
 	}
 }
 
-// NewMetricsWrapper wraps a registry backend implementation with instrumentation.
-func NewMetricsWrapper(ctx context.Context, base api.Backend) api.Backend {
+// NewMetricsUpdater creates a new registry metrics updater.
+func NewMetricsUpdater(ctx context.Context, backend api.Backend) *MetricsUpdater {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(registeryCollectors...)
 	})
 
-	// XXX: When the registry backends support node deregistration,
-	// handle this on the metrics side.
-
-	wrapper := &metricsWrapper{
-		Backend:  base,
+	m := &MetricsUpdater{
+		backend:  backend,
 		closeCh:  make(chan struct{}),
 		closedCh: make(chan struct{}),
 	}
 
-	wrapper.updatePeriodicMetrics(ctx)
-	go wrapper.worker(ctx)
+	m.updatePeriodicMetrics(ctx)
+	go m.worker(ctx)
 
-	return wrapper
+	return m
 }

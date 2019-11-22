@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,10 +21,14 @@ import (
 	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/version"
-	"github.com/oasislabs/oasis-core/go/consensus/gas"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/db"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -33,14 +36,6 @@ import (
 )
 
 const (
-	// QueryKeyP2PFilterAddr is the standard ABCI query by IP address
-	// used to determine if a peer is authorized to connect.
-	QueryKeyP2PFilterAddr = "p2p/filter/addr/"
-
-	// QueryKeyP2PFilterPubkey is the standard ABCI query by public key
-	// used to determine if a peer is authorized to connect.
-	QueryKeyP2PFilterPubkey = "p2p/filter/pubkey/"
-
 	stateKeyGenesisDigest  = "OasisGenesisDigest"
 	stateKeyGenesisRequest = "OasisGenesisRequest"
 
@@ -71,18 +66,33 @@ type ApplicationConfig struct {
 	MinGasPrice     uint64
 }
 
+// TransactionAuthHandler is the interface for ABCI applications that handle
+// authenticating transactions (checking nonces and fees).
+type TransactionAuthHandler interface {
+	consensus.TransactionAuthHandler
+
+	// AuthenticateTx authenticates the given transaction by making sure
+	// that the nonce is correct and deducts any fees as specified.
+	//
+	// It may reject the transaction in case of incorrect nonces, insufficient
+	// balance to pay fees or (only during CheckTx) if the gas price is too
+	// low.
+	//
+	// The context may be modified to configure a gas accountant.
+	AuthenticateTx(ctx *Context, tx *transaction.Transaction) error
+}
+
 // Application is the interface implemented by multiplexed Oasis-specific
 // ABCI applications.
 type Application interface {
 	// Name returns the name of the Application.
-	//
-	// Note: The name is also used as a prefix for de-multiplexing SetOption
-	// and Query calls and accessing genesis state.
 	Name() string
 
-	// TransactionTag returns the transaction tag used to disambiguate
-	// CheckTx and DeliverTx calls.
-	TransactionTag() byte
+	// ID returns the unique identifier of the application.
+	ID() uint8
+
+	// Methods returns the list of supported methods.
+	Methods() []transaction.MethodName
 
 	// Blessed returns true iff the Application should be considered
 	// "blessed", and able to alter the validation set and handle the
@@ -108,21 +118,15 @@ type Application interface {
 	// has been halted.
 	OnCleanup()
 
-	// SetOption sets set an application option.
-	//
-	// It is expected that the key is prefixed by the application name
-	// followed by a '/' (eg: `foo/<some key here>`).
-	SetOption(types.RequestSetOption) types.ResponseSetOption
-
 	// ExecuteTx executes a transaction.
-	ExecuteTx(*Context, []byte) error
+	ExecuteTx(*Context, *transaction.Transaction) error
 
 	// ForeignExecuteTx delivers a transaction of another application for
 	// processing.
 	//
 	// This can be used to run post-tx hooks when dependencies exist
 	// between applications.
-	ForeignExecuteTx(*Context, Application, []byte) error
+	ForeignExecuteTx(*Context, Application, *transaction.Transaction) error
 
 	// InitChain initializes the blockchain with validators and other
 	// info from TendermintCore.
@@ -221,9 +225,38 @@ func (a *ApplicationServer) Pruner() StatePruner {
 }
 
 // SetEpochtime sets the mux epochtime.
-// XXX: epochtime needs to be set before mux can be used.
-func (a *ApplicationServer) SetEpochtime(epochTime epochtime.Backend) {
+//
+// Epochtime must be set before the multiplexer can be used.
+func (a *ApplicationServer) SetEpochtime(epochTime epochtime.Backend) error {
+	if a.mux.state.timeSource != nil {
+		return fmt.Errorf("mux: epochtime already configured")
+	}
+
 	a.mux.state.timeSource = epochTime
+	return nil
+}
+
+// SetTransactionAuthHandler configures the transaction auth handler for the
+// ABCI multiplexer.
+func (a *ApplicationServer) SetTransactionAuthHandler(handler TransactionAuthHandler) error {
+	if a.mux.state.txAuthHandler != nil {
+		return fmt.Errorf("mux: transaction fee handler already configured")
+	}
+
+	a.mux.state.txAuthHandler = handler
+	return nil
+}
+
+// TransactionAuthHandler returns the configured handler for authenticating
+// transactions.
+func (a *ApplicationServer) TransactionAuthHandler() TransactionAuthHandler {
+	return a.mux.state.txAuthHandler
+}
+
+// WatchInvalidatedTx adds a watcher for when/if the transaction with given
+// hash becomes invalid due to a failed re-check.
+func (a *ApplicationServer) WatchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.ClosableSubscription, error) {
+	return a.mux.watchInvalidatedTx(txHash)
 }
 
 // NewApplicationServer returns a new ApplicationServer, using the provided
@@ -252,17 +285,50 @@ type abciMux struct {
 	state  *ApplicationState
 
 	appsByName     map[string]Application
-	appsByTxTag    map[byte]Application
+	appsByMethod   map[transaction.MethodName]Application
 	appsByLexOrder []Application
 	appBlessed     Application
 
 	lastBeginBlock int64
 	currentTime    time.Time
 	maxTxSize      uint64
-	maxBlockGas    gas.Gas
+	maxBlockGas    transaction.Gas
 
 	genesisHooks []func()
 	haltHooks    []func(context.Context, int64, epochtime.EpochTime)
+
+	// invalidatedTxs maps transaction hashes (hash.Hash) to a subscriber
+	// waiting for that transaction to become invalid.
+	invalidatedTxs sync.Map
+}
+
+type invalidatedTxSubscription struct {
+	mux      *abciMux
+	txHash   hash.Hash
+	resultCh chan<- error
+}
+
+func (s *invalidatedTxSubscription) Close() {
+	if s.mux == nil {
+		return
+	}
+	s.mux.invalidatedTxs.Delete(s.txHash)
+	s.mux = nil
+}
+
+func (mux *abciMux) watchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.ClosableSubscription, error) {
+	resultCh := make(chan error)
+	sub := &invalidatedTxSubscription{
+		mux:      mux,
+		txHash:   txHash,
+		resultCh: resultCh,
+	}
+
+	if _, exists := mux.invalidatedTxs.LoadOrStore(txHash, sub); exists {
+		return nil, nil, fmt.Errorf("mux: transaction already exists")
+	}
+
+	return resultCh, sub, nil
 }
 
 func (mux *abciMux) registerGenesisHook(hook func()) {
@@ -281,51 +347,9 @@ func (mux *abciMux) registerHaltHook(hook func(context.Context, int64, epochtime
 
 func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
 	return types.ResponseInfo{
-		AppVersion:       version.BackendProtocol.ToU64(),
+		AppVersion:       version.ConsensusProtocol.ToU64(),
 		LastBlockHeight:  mux.state.BlockHeight(),
 		LastBlockAppHash: mux.state.BlockHash(),
-	}
-}
-
-func (mux *abciMux) SetOption(req types.RequestSetOption) types.ResponseSetOption {
-	app, err := mux.extractAppFromKeyPath(req.GetKey())
-	if err != nil {
-		mux.logger.Error("SetOption: failed to de-multiplex",
-			"req", req,
-			"err", err,
-		)
-		return types.ResponseSetOption{
-			Code: api.CodeInvalidApplication.ToInt(),
-		}
-	}
-
-	mux.logger.Debug("SetOption: dispatching",
-		"app", app.Name(),
-		"req", req,
-	)
-
-	return app.SetOption(req)
-}
-
-func (mux *abciMux) Query(req types.RequestQuery) types.ResponseQuery {
-	queryPath := req.GetPath()
-
-	// Tendermint uses these queries to filter incoming connections
-	// by source address and or link(?) public key.  Offload the
-	// responsiblity onto the blessed app.
-	if isP2PFilterQuery(queryPath) {
-		// TODO: Handle P2P filter queries.
-
-		mux.logger.Debug("Query: allowing p2p/filter query",
-			"req", req,
-		)
-		return types.ResponseQuery{
-			Code: api.CodeOK.ToInt(),
-		}
-	}
-
-	return types.ResponseQuery{
-		Code: api.CodeInvalidQuery.ToInt(),
 	}
 }
 
@@ -346,7 +370,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	if mux.maxTxSize = st.Consensus.Parameters.MaxTxSize; mux.maxTxSize == 0 {
 		mux.logger.Warn("maximum transaction size enforcement is disabled")
 	}
-	if mux.maxBlockGas = gas.Gas(st.Consensus.Parameters.MaxBlockGas); mux.maxBlockGas == 0 {
+	if mux.maxBlockGas = transaction.Gas(st.Consensus.Parameters.MaxBlockGas); mux.maxBlockGas == 0 {
 		mux.logger.Warn("maximum block gas enforcement is disabled")
 	}
 
@@ -549,7 +573,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	return response
 }
 
-func (mux *abciMux) executeTx(ctx *Context, tx []byte) error {
+func (mux *abciMux) executeTx(ctx *Context, rawTx []byte) error {
 	logger := mux.logger.With("is_check_only", ctx.IsCheckOnly())
 
 	if mux.state.haltMode {
@@ -557,29 +581,69 @@ func (mux *abciMux) executeTx(ctx *Context, tx []byte) error {
 		return fmt.Errorf("halt mode, rejecting all transactions")
 	}
 
-	if mux.maxTxSize > 0 && uint64(len(tx)) > mux.maxTxSize {
-		// This deliberately avoids logging the tx since spamming the
+	if mux.maxTxSize > 0 && uint64(len(rawTx)) > mux.maxTxSize {
+		// This deliberately avoids logging the rawTx since spamming the
 		// logs is also bad.
 		logger.Error("received oversized transaction",
-			"tx_size", len(tx),
+			"tx_size", len(rawTx),
 		)
 		return errOversizedTx
 	}
 
-	app, err := mux.extractAppFromTx(tx)
-	if err != nil {
-		logger.Error("failed to de-multiplex",
-			"tx", base64.StdEncoding.EncodeToString(tx),
+	// Unmarshal envelope and verify transaction.
+	var sigTx transaction.SignedTransaction
+	if err := cbor.Unmarshal(rawTx, &sigTx); err != nil {
+		logger.Error("failed to unmarshal signed transaction",
+			"tx", base64.StdEncoding.EncodeToString(rawTx),
+		)
+		return err
+	}
+	var tx transaction.Transaction
+	if err := sigTx.Open(&tx); err != nil {
+		logger.Error("failed to verify transaction signature",
+			"tx", base64.StdEncoding.EncodeToString(rawTx),
+		)
+		return err
+	}
+	if err := tx.SanityCheck(); err != nil {
+		logger.Error("bad transaction",
+			"tx", base64.StdEncoding.EncodeToString(rawTx),
 		)
 		return err
 	}
 
+	// Set authenticated transaction signer.
+	ctx.SetTxSigner(sigTx.Signature.PublicKey)
+
+	// Pass the transaction through the fee handler if configured.
+	if txAuthHandler := mux.state.txAuthHandler; txAuthHandler != nil {
+		if err := txAuthHandler.AuthenticateTx(ctx, &tx); err != nil {
+			logger.Debug("failed to authenticate transaction",
+				"tx", base64.StdEncoding.EncodeToString(rawTx),
+				"tx_signer", ctx.TxSigner(),
+				"method", tx.Method,
+				"err", err,
+			)
+			return err
+		}
+	}
+
+	// Route to correct handler.
+	app := mux.appsByMethod[tx.Method]
+	if app == nil {
+		logger.Error("unknown method",
+			"tx", base64.StdEncoding.EncodeToString(rawTx),
+			"method", tx.Method,
+		)
+		return fmt.Errorf("mux: unknown method: %s", tx.Method)
+	}
+
 	logger.Debug("dispatching",
 		"app", app.Name(),
-		"tx", base64.StdEncoding.EncodeToString(tx),
+		"tx", base64.StdEncoding.EncodeToString(rawTx),
 	)
 
-	if err = app.ExecuteTx(ctx, tx[1:]); err != nil {
+	if err := app.ExecuteTx(ctx, &tx); err != nil {
 		return err
 	}
 
@@ -590,7 +654,7 @@ func (mux *abciMux) executeTx(ctx *Context, tx []byte) error {
 			continue
 		}
 
-		if err = foreignApp.ForeignExecuteTx(ctx, app, tx[1:]); err != nil {
+		if err := foreignApp.ForeignExecuteTx(ctx, app, &tx); err != nil {
 			return err
 		}
 	}
@@ -602,8 +666,34 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	ctx := NewContext(ContextCheckTx, mux.currentTime, mux.state)
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
+		module, code := errors.Code(err)
+
+		if req.Type == types.CheckTxType_Recheck {
+			// This is a re-check and the transaction just failed validation. Since
+			// the mempool provides no way of getting notified when a previously
+			// valid transaction becomes invalid, handle this here.
+
+			// XXX: The Tendermint mempool should have provisions for this instead
+			//      of us hacking our way through this here.
+			var txHash hash.Hash
+			txHash.FromBytes(req.Tx)
+
+			if item, exists := mux.invalidatedTxs.Load(txHash); exists {
+				// Notify subscriber.
+				sub := item.(*invalidatedTxSubscription)
+				select {
+				case sub.resultCh <- err:
+				default:
+				}
+				close(sub.resultCh)
+
+				mux.invalidatedTxs.Delete(txHash)
+			}
+		}
+
 		return types.ResponseCheckTx{
-			Code:      api.CodeTransactionFailed.ToInt(),
+			Codespace: module,
+			Code:      code,
 			Log:       err.Error(),
 			GasWanted: int64(ctx.Gas().GasWanted()),
 			GasUsed:   int64(ctx.Gas().GasUsed()),
@@ -611,7 +701,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	}
 
 	return types.ResponseCheckTx{
-		Code:      api.CodeOK.ToInt(),
+		Code:      types.CodeTypeOK,
 		GasWanted: int64(ctx.Gas().GasWanted()),
 		GasUsed:   int64(ctx.Gas().GasUsed()),
 	}
@@ -621,8 +711,11 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 	ctx := NewContext(ContextDeliverTx, mux.currentTime, mux.state)
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
+		module, code := errors.Code(err)
+
 		return types.ResponseDeliverTx{
-			Code:      api.CodeTransactionFailed.ToInt(),
+			Codespace: module,
+			Code:      code,
 			Log:       err.Error(),
 			GasWanted: int64(ctx.Gas().GasWanted()),
 			GasUsed:   int64(ctx.Gas().GasUsed()),
@@ -630,7 +723,7 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 	}
 
 	return types.ResponseDeliverTx{
-		Code:      api.CodeOK.ToInt(),
+		Code:      types.CodeTypeOK,
 		Data:      cbor.Marshal(ctx.Data()),
 		Events:    ctx.GetEvents(),
 		GasWanted: int64(ctx.Gas().GasWanted()),
@@ -728,7 +821,12 @@ func (mux *abciMux) doRegister(app Application) error {
 	}
 
 	mux.appsByName[name] = app
-	mux.appsByTxTag[app.TransactionTag()] = app
+	for _, m := range app.Methods() {
+		if _, exists := mux.appsByMethod[m]; exists {
+			return fmt.Errorf("mux: method already registered: %s", m)
+		}
+		mux.appsByMethod[m] = app
+	}
 	mux.rebuildAppLexOrdering() // Inefficient but not a lot of apps.
 
 	app.OnRegister(mux.state)
@@ -768,34 +866,6 @@ func (mux *abciMux) checkDependencies() error {
 	return nil
 }
 
-func (mux *abciMux) extractAppFromKeyPath(s string) (Application, error) {
-	appName := s
-	if strings.Contains(appName, "/") {
-		sVec := strings.SplitN(appName, "/", 2)
-		appName = sVec[0]
-	}
-
-	app, ok := mux.appsByName[appName]
-	if !ok {
-		return nil, fmt.Errorf("mux: unknown app: '%s'", appName)
-	}
-
-	return app, nil
-}
-
-func (mux *abciMux) extractAppFromTx(tx []byte) (Application, error) {
-	if len(tx) == 0 {
-		return nil, fmt.Errorf("mux: invalid transaction")
-	}
-
-	app, ok := mux.appsByTxTag[tx[0]]
-	if !ok {
-		return nil, fmt.Errorf("mux: unknown transaction tag: 0x%x", tx[0])
-	}
-
-	return app, nil
-}
-
 func newABCIMux(ctx context.Context, cfg *ApplicationConfig) (*abciMux, error) {
 	state, err := newApplicationState(ctx, cfg)
 	if err != nil {
@@ -806,7 +876,7 @@ func newABCIMux(ctx context.Context, cfg *ApplicationConfig) (*abciMux, error) {
 		logger:         logging.GetLogger("abci-mux"),
 		state:          state,
 		appsByName:     make(map[string]Application),
-		appsByTxTag:    make(map[byte]Application),
+		appsByMethod:   make(map[transaction.MethodName]Application),
 		lastBeginBlock: -1,
 	}
 
@@ -833,6 +903,8 @@ type ApplicationState struct {
 	blockHash   []byte
 	blockHeight int64
 	blockCtx    *BlockContext
+
+	txAuthHandler TransactionAuthHandler
 
 	timeSource epochtime.Backend
 
@@ -1126,10 +1198,6 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*Applicat
 	go s.metricsWorker()
 
 	return s, nil
-}
-
-func isP2PFilterQuery(s string) bool {
-	return strings.HasPrefix(s, QueryKeyP2PFilterAddr) || strings.HasPrefix(s, QueryKeyP2PFilterPubkey)
 }
 
 func parseGenesisAppState(req types.RequestInitChain) (*genesis.Document, error) {

@@ -8,6 +8,7 @@ import (
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 )
 
@@ -37,6 +38,8 @@ type Context struct {
 	data          interface{}
 	events        []types.Event
 	gasAccountant GasAccountant
+
+	txSigner signature.PublicKey
 
 	state *ApplicationState
 }
@@ -71,6 +74,30 @@ func (c *Context) Type() ContextType {
 // Data returns the data to be serialized with this output.
 func (c *Context) Data() interface{} {
 	return c.data
+}
+
+// TxSigner returns the authenticated transaction signer.
+//
+// In case the method is called on a non-transaction context, this method
+// will panic.
+func (c *Context) TxSigner() signature.PublicKey {
+	if c.outputType != ContextCheckTx && c.outputType != ContextDeliverTx {
+		panic("context: only available in transaction context")
+	}
+	return c.txSigner
+}
+
+// SetTxSigner sets the authenticated transaction signer.
+//
+// This must only be done after verifying the transaction signature.
+//
+// In case the method is called on a non-transaction context, this method
+// will panic.
+func (c *Context) SetTxSigner(txSigner signature.PublicKey) {
+	if c.outputType != ContextCheckTx && c.outputType != ContextDeliverTx {
+		panic("context: only available in transaction context")
+	}
+	c.txSigner = txSigner
 }
 
 // IsInitChain returns true if this output is part of a InitChain.

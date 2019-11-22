@@ -2,7 +2,6 @@
 package staking
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/pkg/errors"
@@ -12,6 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -19,9 +19,7 @@ import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-var (
-	_ abci.Application = (*stakingApplication)(nil)
-)
+var _ abci.Application = (*stakingApplication)(nil)
 
 type stakingApplication struct {
 	logger *logging.Logger
@@ -33,8 +31,12 @@ func (app *stakingApplication) Name() string {
 	return AppName
 }
 
-func (app *stakingApplication) TransactionTag() byte {
-	return TransactionTag
+func (app *stakingApplication) ID() uint8 {
+	return AppID
+}
+
+func (app *stakingApplication) Methods() []transaction.MethodName {
+	return staking.Methods
 }
 
 func (app *stakingApplication) Blessed() bool {
@@ -50,10 +52,6 @@ func (app *stakingApplication) OnRegister(state *abci.ApplicationState) {
 }
 
 func (app *stakingApplication) OnCleanup() {
-}
-
-func (app *stakingApplication) SetOption(types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
 }
 
 func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
@@ -80,33 +78,51 @@ func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.Reque
 	return nil
 }
 
-func (app *stakingApplication) ExecuteTx(ctx *abci.Context, rawTx []byte) error {
-	var tx Tx
-	if err := cbor.Unmarshal(rawTx, &tx); err != nil {
-		app.logger.Error("failed to unmarshal",
-			"err", err,
-			"tx", hex.EncodeToString(rawTx),
-		)
-		return errors.Wrap(err, "staking/tendermint: failed to unmarshal tx")
-	}
-
+func (app *stakingApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
 	state := stakingState.NewMutableState(ctx.State())
 
-	if tx.TxTransfer != nil {
-		return app.transfer(ctx, state, &tx.TxTransfer.SignedTransfer)
-	} else if tx.TxBurn != nil {
-		return app.burn(ctx, state, &tx.TxBurn.SignedBurn)
-	} else if tx.TxAddEscrow != nil {
-		return app.addEscrow(ctx, state, &tx.TxAddEscrow.SignedEscrow)
-	} else if tx.TxReclaimEscrow != nil {
-		return app.reclaimEscrow(ctx, state, &tx.TxReclaimEscrow.SignedReclaimEscrow)
-	} else if tx.TxAmendCommissionSchedule != nil {
-		return app.amendCommissionSchedule(ctx, state, &tx.TxAmendCommissionSchedule.SignedAmendCommissionSchedule)
+	switch tx.Method {
+	case staking.MethodTransfer:
+		var xfer staking.Transfer
+		if err := cbor.Unmarshal(tx.Body, &xfer); err != nil {
+			return err
+		}
+
+		return app.transfer(ctx, state, &xfer)
+	case staking.MethodBurn:
+		var burn staking.Burn
+		if err := cbor.Unmarshal(tx.Body, &burn); err != nil {
+			return err
+		}
+
+		return app.burn(ctx, state, &burn)
+	case staking.MethodAddEscrow:
+		var escrow staking.Escrow
+		if err := cbor.Unmarshal(tx.Body, &escrow); err != nil {
+			return err
+		}
+
+		return app.addEscrow(ctx, state, &escrow)
+	case staking.MethodReclaimEscrow:
+		var reclaim staking.ReclaimEscrow
+		if err := cbor.Unmarshal(tx.Body, &reclaim); err != nil {
+			return err
+		}
+
+		return app.reclaimEscrow(ctx, state, &reclaim)
+	case staking.MethodAmendCommissionSchedule:
+		var amend staking.AmendCommissionSchedule
+		if err := cbor.Unmarshal(tx.Body, &amend); err != nil {
+			return err
+		}
+
+		return app.amendCommissionSchedule(ctx, state, &amend)
+	default:
+		return staking.ErrInvalidArgument
 	}
-	return staking.ErrInvalidArgument
 }
 
-func (app *stakingApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *stakingApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
 	return nil
 }
 

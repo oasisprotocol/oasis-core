@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
@@ -33,8 +34,12 @@ func (app *keymanagerApplication) Name() string {
 	return AppName
 }
 
-func (app *keymanagerApplication) TransactionTag() byte {
-	return TransactionTag
+func (app *keymanagerApplication) ID() uint8 {
+	return AppID
+}
+
+func (app *keymanagerApplication) Methods() []transaction.MethodName {
+	return nil
 }
 
 func (app *keymanagerApplication) Blessed() bool {
@@ -51,10 +56,6 @@ func (app *keymanagerApplication) OnRegister(state *abci.ApplicationState) {
 
 func (app *keymanagerApplication) OnCleanup() {}
 
-func (app *keymanagerApplication) SetOption(request types.RequestSetOption) types.ResponseSetOption {
-	return types.ResponseSetOption{}
-}
-
 func (app *keymanagerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	if changed, epoch := app.state.EpochChanged(ctx); changed {
 		return app.onEpochChange(ctx, epoch)
@@ -62,12 +63,12 @@ func (app *keymanagerApplication) BeginBlock(ctx *abci.Context, request types.Re
 	return nil
 }
 
-func (app *keymanagerApplication) ExecuteTx(ctx *abci.Context, tx []byte) error {
+func (app *keymanagerApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
 	// TODO: Add policy support.
 	return errors.New("tendermint/keymanager: transactions not supported yet")
 }
 
-func (app *keymanagerApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx []byte) error {
+func (app *keymanagerApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
 	return nil
 }
 

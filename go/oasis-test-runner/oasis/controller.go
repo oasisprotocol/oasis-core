@@ -5,6 +5,8 @@ import (
 
 	"google.golang.org/grpc"
 
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
+	consensusClient "github.com/oasislabs/oasis-core/go/consensus/client"
 	"github.com/oasislabs/oasis-core/go/grpc/client"
 	"github.com/oasislabs/oasis-core/go/grpc/control"
 	"github.com/oasislabs/oasis-core/go/grpc/dummydebug"
@@ -60,7 +62,8 @@ type Controller struct {
 	RuntimeClientController
 	NodeController
 
-	Staking staking.Backend
+	Staking   staking.Backend
+	Consensus consensus.ClientBackend
 }
 
 // NewController creates a new node controller given the path to
@@ -80,6 +83,11 @@ func NewController(socketPath string) (*Controller, error) {
 		return nil, err
 	}
 
+	cc, err := consensusClient.New(conn)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Controller{
 		DebugController: DebugController{
 			debugClient: dummydebug.NewDummyDebugClient(conn),
@@ -90,6 +98,7 @@ func NewController(socketPath string) (*Controller, error) {
 		NodeController: NodeController{
 			ctrlClient: control.NewControlClient(conn),
 		},
-		Staking: sc,
+		Staking:   sc,
+		Consensus: cc,
 	}, nil
 }

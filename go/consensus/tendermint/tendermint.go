@@ -12,9 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	tmabcitypes "github.com/tendermint/tendermint/abci/types"
 	tmconfig "github.com/tendermint/tendermint/config"
 	tmlog "github.com/tendermint/tendermint/libs/log"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
@@ -28,12 +28,16 @@ import (
 	beaconAPI "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	cmservice "github.com/oasislabs/oasis-core/go/common/service"
+	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	tmbeacon "github.com/oasislabs/oasis-core/go/consensus/tendermint/beacon"
@@ -153,13 +157,15 @@ type tendermintService struct {
 	blockNotifier *pubsub.Broker
 	failMonitor   *failMonitor
 
-	beacon     beaconAPI.Backend
-	epochtime  epochtimeAPI.Backend
-	keymanager keymanagerAPI.Backend
-	registry   registryAPI.Backend
-	roothash   roothashAPI.Backend
-	staking    stakingAPI.Backend
-	scheduler  schedulerAPI.Backend
+	beacon          beaconAPI.Backend
+	epochtime       epochtimeAPI.Backend
+	keymanager      keymanagerAPI.Backend
+	registry        registryAPI.Backend
+	registryMetrics *registry.MetricsUpdater
+	roothash        roothashAPI.Backend
+	staking         stakingAPI.Backend
+	scheduler       schedulerAPI.Backend
+	submissionMgr   consensusAPI.SubmissionManager
 
 	genesis                  *genesisAPI.Document
 	genesisProvider          genesisAPI.Provider
@@ -191,7 +197,7 @@ func (t *tendermintService) started() bool {
 
 func (t *tendermintService) Start() error {
 	if t.started() {
-		return errors.New("tendermint: service already started")
+		return fmt.Errorf("tendermint: service already started")
 	}
 
 	switch t.initialized() {
@@ -203,7 +209,7 @@ func (t *tendermintService) Start() error {
 			return err
 		}
 		if err := t.node.Start(); err != nil {
-			return errors.Wrap(err, "tendermint: failed to start service")
+			return fmt.Errorf("tendermint: failed to start service: %w", err)
 		}
 		go t.syncWorker()
 		go t.worker()
@@ -266,7 +272,7 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 
 	u, err := url.Parse(addrURI)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to parse external address URL")
+		return nil, fmt.Errorf("tendermint: failed to parse external address URL: %w", err)
 	}
 
 	if u.Scheme != "tcp" {
@@ -278,7 +284,7 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 	if u.Hostname() == "0.0.0.0" {
 		var port string
 		if _, port, err = net.SplitHostPort(u.Host); err != nil {
-			return nil, errors.Wrap(err, "tendermint: malformed external address host/port")
+			return nil, fmt.Errorf("tendermint: malformed external address host/port: %w", err)
 		}
 
 		ip := common.GuessExternalAddress()
@@ -291,7 +297,7 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 
 	var addr node.ConsensusAddress
 	if err = addr.Address.UnmarshalText([]byte(u.Host)); err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to parse external address host")
+		return nil, fmt.Errorf("tendermint: failed to parse external address host: %w", err)
 	}
 	addr.ID = t.nodeSigner.Public()
 
@@ -426,35 +432,9 @@ func (t *tendermintService) RegisterHaltHook(hook func(context.Context, int64, e
 	t.mux.RegisterHaltHook(hook)
 }
 
-func (t *tendermintService) MarshalTx(tag byte, tx interface{}) tmtypes.Tx {
-	message := cbor.Marshal(tx)
-	return append([]byte{tag}, message...)
-}
-
-func (t *tendermintService) BroadcastTx(ctx context.Context, tag byte, tx interface{}, wait bool) error {
-	return t.broadcastTx(ctx, tag, tx, wait)
-}
-
-func (t *tendermintService) broadcastTxRaw(data []byte) error {
-	response, err := t.client.BroadcastTxSync(data)
-	if err != nil {
-		return errors.Wrap(err, "broadcast tx: commit failed")
-	}
-
-	if response.Code != api.CodeOK.ToInt() {
-		return fmt.Errorf("broadcast tx: check tx failed: %d: %s", response.Code, response.Log)
-	}
-
-	return nil
-}
-
-func (t *tendermintService) newSubscriberID() string {
-	return fmt.Sprintf("subscriber-%d", atomic.AddUint64(&t.nextSubscriberID, 1))
-}
-
-func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interface{}, wait bool) error {
+func (t *tendermintService) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
 	// Subscribe to the transaction being included in a block.
-	data := t.MarshalTx(tag, tx)
+	data := cbor.Marshal(tx)
 	query := tmtypes.EventQueryTxFor(data)
 	subID := t.newSubscriberID()
 	txSub, err := t.Subscribe(subID, query)
@@ -469,20 +449,33 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 
 	defer t.Unsubscribe(subID, query) // nolint: errcheck
 
+	// Subscribe to the transaction becoming invalid.
+	var txHash hash.Hash
+	txHash.FromBytes(data)
+
+	recheckCh, recheckSub, err := t.mux.WatchInvalidatedTx(txHash)
+	if err != nil {
+		return err
+	}
+	defer recheckSub.Close()
+
 	// First try to broadcast.
 	if err := t.broadcastTxRaw(data); err != nil {
 		return err
 	}
 
-	if !wait {
-		return nil
-	}
-
 	// Wait for the transaction to be included in a block.
 	select {
+	case v := <-recheckCh:
+		return v
 	case v := <-txSub.Out():
 		if result := v.Data().(tmtypes.EventDataTx).Result; !result.IsOK() {
-			return errors.New(result.GetLog())
+			err := errors.FromCode(result.GetCodespace(), result.GetCode())
+			if err == nil {
+				// Fallback to an ordinary error.
+				err = fmt.Errorf(result.GetLog())
+			}
+			return err
 		}
 		return nil
 	case <-txSub.Cancelled():
@@ -492,9 +485,53 @@ func (t *tendermintService) broadcastTx(ctx context.Context, tag byte, tx interf
 	}
 }
 
-func (t *tendermintService) BroadcastEvidence(ctx context.Context, evidence tmtypes.Evidence) error {
-	_, err := t.client.BroadcastEvidence(evidence)
-	return err
+func (t *tendermintService) broadcastTxRaw(data []byte) error {
+	// We could use t.client.BroadcastTxSync but that is annoying as it
+	// doesn't give you the right fields when CheckTx fails.
+	mp := t.node.Mempool()
+
+	// Submit the transaction to mempool and wait for response.
+	ch := make(chan *tmabcitypes.Response, 1)
+	err := mp.CheckTx(tmtypes.Tx(data), func(rsp *tmabcitypes.Response) {
+		ch <- rsp
+		close(ch)
+	})
+	if err != nil {
+		return fmt.Errorf("tendermint: failed to submit to local mempool: %w", err)
+	}
+
+	rsp := <-ch
+	if result := rsp.GetCheckTx(); !result.IsOK() {
+		err := errors.FromCode(result.GetCodespace(), result.GetCode())
+		if err == nil {
+			// Fallback to an ordinary error.
+			err = fmt.Errorf(result.GetLog())
+		}
+		return err
+	}
+
+	return nil
+}
+
+func (t *tendermintService) newSubscriberID() string {
+	return fmt.Sprintf("subscriber-%d", atomic.AddUint64(&t.nextSubscriberID, 1))
+}
+
+func (t *tendermintService) SubmitEvidence(ctx context.Context, evidence consensusAPI.Evidence) error {
+	if evidence.Kind() != consensusAPI.EvidenceKindConsensus {
+		return fmt.Errorf("tendermint: unsupported evidence kind")
+	}
+
+	tmEvidence, ok := evidence.Unwrap().(tmtypes.Evidence)
+	if !ok {
+		return fmt.Errorf("tendermint: expected tendermint evidence, got something else")
+	}
+
+	if _, err := t.client.BroadcastEvidence(tmEvidence); err != nil {
+		return fmt.Errorf("tendermint: broadcast evidence failed: %w", err)
+	}
+
+	return nil
 }
 
 func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
@@ -537,23 +574,31 @@ func (t *tendermintService) Unsubscribe(subscriber string, query tmpubsub.Query)
 		return t.node.EventBus().Unsubscribe(t.ctx, subscriber, query)
 	}
 
-	return errors.New("tendermint: unsubscribe called with no backing service")
+	return fmt.Errorf("tendermint: unsubscribe called with no backing service")
 }
 
 func (t *tendermintService) Pruner() abci.StatePruner {
 	return t.mux.Pruner()
 }
 
-func (t *tendermintService) RegisterEpochtime(app abci.Application) error {
-	return t.mux.Register(app)
-}
-
 func (t *tendermintService) RegisterApplication(app abci.Application) error {
 	return t.mux.Register(app)
 }
 
+func (t *tendermintService) SetTransactionAuthHandler(handler abci.TransactionAuthHandler) error {
+	return t.mux.SetTransactionAuthHandler(handler)
+}
+
 func (t *tendermintService) GetGenesis() *genesisAPI.Document {
 	return t.genesis
+}
+
+func (t *tendermintService) TransactionAuthHandler() consensusAPI.TransactionAuthHandler {
+	return t.mux.TransactionAuthHandler()
+}
+
+func (t *tendermintService) SubmissionManager() consensusAPI.SubmissionManager {
+	return t.submissionMgr
 }
 
 func (t *tendermintService) EpochTime() epochtimeAPI.Backend {
@@ -587,68 +632,72 @@ func (t *tendermintService) Scheduler() schedulerAPI.Backend {
 func (t *tendermintService) initialize() error {
 	t.Lock()
 	defer t.Unlock()
-	if !t.isInitialized {
-		t.Logger.Debug("Initializing tendermint local node.")
-		if err := t.lazyInit(); err != nil {
-			return err
-		}
 
-		if err := t.initEpochtime(); err != nil {
-			return err
-		}
-		t.mux.SetEpochtime(t.epochtime)
-
-		// Initialize the rest of backends.
-		var err error
-		if t.beacon, err = tmbeacon.New(t.ctx, t); err != nil {
-			t.Logger.Error("initialize: failed to initialize beacon backend",
-				"err", err,
-			)
-			return err
-		}
-
-		if t.keymanager, err = tmkeymanager.New(t.ctx, t); err != nil {
-			t.Logger.Error("initialize: failed to initialize keymanager backend",
-				"err", err,
-			)
-			return err
-		}
-
-		if t.registry, err = tmregistry.New(t.ctx, t); err != nil {
-			t.Logger.Error("initialize: failed to initialize registry backend",
-				"err", err,
-			)
-			return err
-		}
-		t.registry = registry.NewMetricsWrapper(t.ctx, t.registry)
-		t.svcMgr.RegisterCleanupOnly(t.registry, "registry backend")
-
-		if t.staking, err = tmstaking.New(t.ctx, t); err != nil {
-			t.Logger.Error("staking: failed to initialize staking backend",
-				"err", err,
-			)
-			return err
-		}
-		t.svcMgr.RegisterCleanupOnly(t.staking, "staking backend")
-
-		if t.scheduler, err = tmscheduler.New(t.ctx, t); err != nil {
-			t.Logger.Error("scheduler: failed to initialize scheduler backend",
-				"err", err,
-			)
-			return err
-		}
-		t.svcMgr.RegisterCleanupOnly(t.scheduler, "scheduler backend")
-
-		if t.roothash, err = tmroothash.New(t.ctx, t.dataDir, t.beacon, t); err != nil {
-			t.Logger.Error("roothash: failed to initialize roothash backend",
-				"err", err,
-			)
-			return err
-		}
-		t.roothash = roothash.NewMetricsWrapper(t.roothash)
-		t.svcMgr.RegisterCleanupOnly(t.roothash, "roothash backend")
-
+	if t.isInitialized {
+		return nil
 	}
+
+	if err := t.lazyInit(); err != nil {
+		return err
+	}
+
+	if err := t.initEpochtime(); err != nil {
+		return err
+	}
+	if err := t.mux.SetEpochtime(t.epochtime); err != nil {
+		return err
+	}
+
+	// Initialize the rest of backends.
+	var err error
+	if t.beacon, err = tmbeacon.New(t.ctx, t); err != nil {
+		t.Logger.Error("initialize: failed to initialize beacon backend",
+			"err", err,
+		)
+		return err
+	}
+
+	if t.keymanager, err = tmkeymanager.New(t.ctx, t); err != nil {
+		t.Logger.Error("initialize: failed to initialize keymanager backend",
+			"err", err,
+		)
+		return err
+	}
+
+	if t.registry, err = tmregistry.New(t.ctx, t); err != nil {
+		t.Logger.Error("initialize: failed to initialize registry backend",
+			"err", err,
+		)
+		return err
+	}
+	t.registryMetrics = registry.NewMetricsUpdater(t.ctx, t.registry)
+	t.svcMgr.RegisterCleanupOnly(t.registry, "registry backend")
+	t.svcMgr.RegisterCleanupOnly(t.registryMetrics, "registry metrics updater")
+
+	if t.staking, err = tmstaking.New(t.ctx, t); err != nil {
+		t.Logger.Error("staking: failed to initialize staking backend",
+			"err", err,
+		)
+		return err
+	}
+	t.svcMgr.RegisterCleanupOnly(t.staking, "staking backend")
+
+	if t.scheduler, err = tmscheduler.New(t.ctx, t); err != nil {
+		t.Logger.Error("scheduler: failed to initialize scheduler backend",
+			"err", err,
+		)
+		return err
+	}
+	t.svcMgr.RegisterCleanupOnly(t.scheduler, "scheduler backend")
+
+	if t.roothash, err = tmroothash.New(t.ctx, t.dataDir, t.beacon, t); err != nil {
+		t.Logger.Error("roothash: failed to initialize roothash backend",
+			"err", err,
+		)
+		return err
+	}
+	t.roothash = roothash.NewMetricsWrapper(t.roothash)
+	t.svcMgr.RegisterCleanupOnly(t.roothash, "roothash backend")
 
 	return nil
 }
@@ -660,7 +709,7 @@ func (t *tendermintService) GetBlock(height *int64) (*tmtypes.Block, error) {
 
 	result, err := t.client.Block(height)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: block query failed")
+		return nil, fmt.Errorf("tendermint: block query failed: %w", err)
 	}
 
 	return result.Block, nil
@@ -682,7 +731,7 @@ func (t *tendermintService) GetBlockResults(height *int64) (*tmrpctypes.ResultBl
 
 	result, err := t.client.BlockResults(height)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: block results query failed")
+		return nil, fmt.Errorf("tendermint: block results query failed: %w", err)
 	}
 
 	return result, nil
@@ -827,7 +876,7 @@ func (t *tendermintService) lazyInit() error {
 	unsafeNodeSigner, ok := t.nodeSigner.(signature.UnsafeSigner)
 	if !ok {
 		t.Logger.Error("node signer does not allow private key access")
-		return errors.New("tendermint: node signer does not allow private key access")
+		return fmt.Errorf("tendermint: node signer does not allow private key access")
 	}
 
 	// HACK: tmnode.NewNode() triggers block replay and or ABCI chain
@@ -849,7 +898,7 @@ func (t *tendermintService) lazyInit() error {
 			newLogAdapter(!viper.GetBool(cfgLogDebug)),
 		)
 		if err != nil {
-			return errors.Wrap(err, "tendermint: failed to create node")
+			return fmt.Errorf("tendermint: failed to create node: %w", err)
 		}
 		t.client = tmcli.NewLocal(t.node)
 		t.failMonitor = newFailMonitor(t.Logger, t.node.ConsensusState().Wait)
@@ -872,7 +921,7 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 	// should be deterministic.
 	b, err := json.Marshal(d)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to serialize genesis doc")
+		return nil, fmt.Errorf("tendermint: failed to serialize genesis doc: %w", err)
 	}
 
 	// Translate special "disable block gas limit" value as Tendermint uses
@@ -905,7 +954,7 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 	for _, v := range d.Registry.Nodes {
 		var openedNode node.Node
 		if err := v.Open(registryAPI.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
-			return nil, errors.Wrap(err, "tendermint: failed to verify validator")
+			return nil, fmt.Errorf("tendermint: failed to verify validator: %w", err)
 		}
 		// TODO: This should cross check that the entity is valid.
 		if !openedNode.HasRoles(node.RoleValidator) {
@@ -940,7 +989,7 @@ func (t *tendermintService) getTendermintGenesis() (*tmtypes.GenesisDoc, error) 
 		tmGenDoc, err = genesisToTendermint(t.genesis)
 	}
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to create genesis doc")
+		return nil, fmt.Errorf("tendermint: failed to create genesis doc: %w", err)
 	}
 
 	// HACK: Certain test cases use TimeoutCommit < 1 sec, and care about the
@@ -955,7 +1004,7 @@ func (t *tendermintService) syncWorker() {
 	checkSyncFn := func() (isSyncing bool, err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				err = errors.New("tendermint: node disappeared, terminated?")
+				err = fmt.Errorf("tendermint: node disappeared, terminated?")
 			}
 		}()
 
@@ -1014,7 +1063,7 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 	// use it while initializing other things.
 	genesisDoc, err := genesisProvider.GetGenesisDocument()
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint: failed to get genesis doc")
+		return nil, fmt.Errorf("tendermint: failed to get genesis doc: %w", err)
 	}
 
 	// Sanity check genesis document.
@@ -1035,6 +1084,9 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 		startedCh:             make(chan struct{}),
 		syncedCh:              make(chan struct{}),
 	}
+
+	// Create the submission manager.
+	t.submissionMgr = consensusAPI.NewSubmissionManager(t)
 
 	return t, t.initialize()
 }

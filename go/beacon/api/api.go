@@ -3,15 +3,21 @@ package api
 
 import (
 	"context"
-	"errors"
+
+	"github.com/oasislabs/oasis-core/go/common/errors"
+)
+
+const (
+	// ModuleName is a unique module name for the beacon module.
+	ModuleName = "beacon"
+
+	// BeaconSize is the size of the beacon in bytes.
+	BeaconSize = 32
 )
 
 // ErrBeaconNotAvailable is the error returned when a beacon is not
 // available for the requested height for any reason.
-var ErrBeaconNotAvailable = errors.New("beacon: random beacon not available")
-
-// BeaconSize is the size of the beacon in bytes.
-const BeaconSize = 32
+var ErrBeaconNotAvailable = errors.New(ModuleName, 1, "beacon: random beacon not available")
 
 // Backend is a random beacon implementation.
 type Backend interface {

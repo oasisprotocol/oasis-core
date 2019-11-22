@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/version"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/consensus"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/control"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/genesis"
@@ -51,7 +52,7 @@ func initVersions() {
 	rootCmd.SetVersionTemplate(`Software version: {{.Version}}
 {{- with nodeVersion }}
 Runtime protocol version: {{ .RuntimeProtocol }}
-Backend protocol version: {{ .BackendProtocol }}
+Consensus protocol version: {{ .ConsensusProtocol }}
 Committee protocol version: {{ .CommitteeProtocol }}
 Tendermint core version: {{ .Tendermint }}
 ABCI library version: {{ .ABCI }}
@@ -76,6 +77,7 @@ func init() {
 		registry.Register,
 		stake.Register,
 		storage.Register,
+		consensus.Register,
 	} {
 		v(rootCmd)
 	}

@@ -1,17 +1,13 @@
 package registry
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
 const (
-	// TransactionTag is a unique byte used to identify transactions
-	// for the entity registry application.
-	TransactionTag byte = 0x01
+	// AppID is the unique application identifier.
+	AppID uint8 = 0x01
 
 	// AppName is the ABCI application name.
 	AppName string = "200_registry"
@@ -55,41 +51,6 @@ var (
 	// registry epochs.
 	KeyRegistryNodeListEpoch = []byte("nodes.epoch")
 )
-
-// Tx is a transaction to be accepted by the registry app.
-type Tx struct {
-	*TxRegisterEntity   `json:"RegisterEntity,omitempty"`
-	*TxDeregisterEntity `json:"DeregisterEntity,omitempty"`
-	*TxRegisterNode     `json:"RegisterNode,omitempty"`
-	*TxUnfreezeNode     `json:"UnfreezeNode,omitempty"`
-
-	*TxRegisterRuntime `json:"RegisterRuntime,omitempty"`
-}
-
-// TxRegisterEntity is a transaction for registering a new entity.
-type TxRegisterEntity struct {
-	Entity entity.SignedEntity `json:"entity"`
-}
-
-// TxDeregisterEntity is a transaction for deregistering an entity.
-type TxDeregisterEntity struct {
-	Timestamp signature.Signed `json:"timestamp"`
-}
-
-// TxRegisterNode is a transaction for registering a new node.
-type TxRegisterNode struct {
-	Node node.SignedNode `json:"node"`
-}
-
-// TxUnfreezeNode is a transaction for unfreezing a node.
-type TxUnfreezeNode struct {
-	UnfreezeNode registry.SignedUnfreezeNode `json:"unfreeze_node"`
-}
-
-// TxRegisterRuntime is a transaction for registering a new runtime.
-type TxRegisterRuntime struct {
-	Runtime registry.SignedRuntime `json:"runtime"`
-}
 
 // EntityDeregistration is an entity deregistration.
 type EntityDeregistration struct {

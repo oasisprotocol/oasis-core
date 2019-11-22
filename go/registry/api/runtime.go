@@ -2,12 +2,16 @@ package api
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"strings"
 	"time"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/version"
 	pbRegistry "github.com/oasislabs/oasis-core/go/grpc/registry"
@@ -24,6 +28,8 @@ var (
 
 	// ErrNilProtobuf is the error returned when a protobuf is nil.
 	ErrNilProtobuf = errors.New("node: Protobuf is nil")
+
+	_ prettyprint.PrettyPrinter = (*SignedRuntime)(nil)
 )
 
 // RuntimeKind represents the runtime funtionality.
@@ -134,9 +140,6 @@ type Runtime struct {
 	// Genesis is the runtime genesis information.
 	Genesis RuntimeGenesis `json:"genesis"`
 
-	// RegistrationTime is the time of registration of the runtime.
-	RegistrationTime uint64 `json:"registration_time"`
-
 	// Kind is the type of runtime.
 	Kind RuntimeKind `json:"kind"`
 
@@ -208,7 +211,6 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 	c.TxnScheduler.MaxBatchSizeBytes = pb.GetTxnSchedulerMaxBatchSizeBytes()
 	c.TxnScheduler.BatchFlushTimeout = time.Duration(pb.GetTxnSchedulerBatchFlushTimeout())
 	c.Storage.GroupSize = pb.GetStorageGroupSize()
-	c.RegistrationTime = pb.GetRegistrationTime()
 	c.Kind = RuntimeKind(pb.GetKind())
 
 	return nil
@@ -243,7 +245,6 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 	pb.TxnSchedulerMaxBatchSizeBytes = c.TxnScheduler.MaxBatchSizeBytes
 	pb.TxnSchedulerBatchFlushTimeout = int64(c.TxnScheduler.BatchFlushTimeout)
 	pb.StorageGroupSize = c.Storage.GroupSize
-	pb.RegistrationTime = c.RegistrationTime
 	pb.Kind = uint32(c.Kind)
 
 	return pb
@@ -257,6 +258,19 @@ type SignedRuntime struct {
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedRuntime) Open(context signature.Context, runtime *Runtime) error { // nolint: interfacer
 	return s.Signed.Open(context, runtime)
+}
+
+// PrettyPrint writes a pretty-printed representation of the type
+// to the given writer.
+func (s SignedRuntime) PrettyPrint(prefix string, w io.Writer) {
+	var rt Runtime
+	if err := cbor.Unmarshal(s.Signed.Blob, &rt); err != nil {
+		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, err)
+		return
+	}
+
+	pp := signature.NewPrettySigned(s.Signed, rt)
+	pp.PrettyPrint(prefix, w)
 }
 
 // SignRuntime serializes the Runtime and signs the result.
