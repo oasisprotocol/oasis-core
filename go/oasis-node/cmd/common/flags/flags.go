@@ -87,9 +87,9 @@ func init() {
 
 	DebugTestEntityFlags.Bool(CfgDebugTestEntity, false, "use the test entity (UNSAFE)")
 
-	EntityFlags.String(cfgEntity, "", "Path to directory containing entity private key and descriptor")
+	EntityFlags.StringP(cfgEntity, "e", "", "Path to directory containing entity private key and descriptor")
 
-	GenesisFileFlags.String(CfgGenesisFile, "genesis.json", "path to genesis file")
+	GenesisFileFlags.StringP(CfgGenesisFile, "g", "genesis.json", "path to genesis file")
 
 	for _, v := range []*flag.FlagSet{
 		VerboseFlags,
