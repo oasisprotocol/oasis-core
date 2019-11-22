@@ -11,8 +11,6 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
@@ -31,21 +29,13 @@ import (
 )
 
 const (
-	cfgDebugClientAddress = "keymanager.debug.client.address"
-	cfgDebugClientCert    = "keymanager.debug.client.certificate"
-
 	kmEndpoint = "key-manager"
 
 	retryInterval = 1 * time.Second
 	maxRetries    = 15
 )
 
-var (
-	ErrKeyManagerNotAvailable = errors.New("keymanager/client: key manager not available")
-
-	// Flags has the configuration flags.
-	Flags = flag.NewFlagSet("", flag.ContinueOnError)
-)
+var ErrKeyManagerNotAvailable = errors.New("keymanager/client: key manager not available")
 
 // Client is a key manager client instance.
 type Client struct {
@@ -300,19 +290,6 @@ func New(backend api.Backend, registryBackend registry.Backend, nodeIdentity *id
 		kmMap:        make(map[signature.PublicKey]signature.PublicKey),
 	}
 
-	if debugAddress := viper.GetString(cfgDebugClientAddress); debugAddress != "" {
-		debugCert := viper.GetString(cfgDebugClientCert)
-
-		client, err := enclaverpc.NewClient(debugAddress, debugCert, kmEndpoint)
-		if err != nil {
-			return nil, errors.Wrap(err, "keymanager/client: failed to create debug client")
-		}
-
-		c.debugClient = client
-
-		return c, nil
-	}
-
 	// Standard configuration watches the various backends.
 	c.backend = backend
 	c.registry = registryBackend
@@ -320,11 +297,4 @@ func New(backend api.Backend, registryBackend registry.Backend, nodeIdentity *id
 	go c.worker()
 
 	return c, nil
-}
-
-func init() {
-	Flags.String(cfgDebugClientAddress, "", "Key manager address")
-	Flags.String(cfgDebugClientCert, "", "Key manager TLS certificate")
-
-	_ = viper.BindPFlags(Flags)
 }

@@ -3,8 +3,10 @@ package api
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/errors"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 const (
@@ -44,5 +46,10 @@ type ConsensusParameters struct {
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {
+	unsafeFlags := g.Parameters.DebugDeterministic
+	if unsafeFlags && !flags.DebugDontBlameOasis() {
+		return fmt.Errorf("beacon: sanity check failed: one or more unsafe debug flags set")
+	}
+
 	return nil
 }

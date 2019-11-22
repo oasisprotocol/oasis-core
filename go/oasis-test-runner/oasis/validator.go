@@ -70,6 +70,7 @@ func (val *Validator) ExportsPath() string {
 
 func (val *Validator) startNode() error {
 	args := newArgBuilder().
+		debugDontBlameOasis().
 		debugAllowTestKeys().
 		consensusValidator().
 		tendermintCoreListenAddress(val.consensusPort).

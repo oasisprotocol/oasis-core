@@ -68,6 +68,7 @@ func (worker *Storage) DatabasePath() string {
 
 func (worker *Storage) startNode() error {
 	args := newArgBuilder().
+		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
 		roothashTendermintIndexBlocks().

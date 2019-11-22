@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 // EpochTime is the number of intervals (epochs) since a fixed instant
@@ -67,6 +68,11 @@ type ConsensusParameters struct {
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {
+	unsafeFlags := g.Parameters.DebugMockBackend
+	if unsafeFlags && !flags.DebugDontBlameOasis() {
+		return fmt.Errorf("epochtime: sanity check failed: one or more unsafe debug flags set")
+	}
+
 	if g.Parameters.Interval <= 0 && !g.Parameters.DebugMockBackend {
 		return fmt.Errorf("epochtime: sanity check failed: epoch interval must be > 0")
 	}

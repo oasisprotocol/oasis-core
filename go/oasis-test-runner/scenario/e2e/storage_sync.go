@@ -67,6 +67,7 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 	args := []string{
 		"debug", "storage", "check-roots",
 		"--log.level", "debug",
+		"--debug.dont_blame_oasis",
 		"--storage.debug.client.address", "unix:" + storageNode.SocketPath(),
 		"--address", "unix:" + storageNode.SocketPath(),
 		sc.basicImpl.net.Runtimes()[1].ID().String(),

@@ -241,6 +241,9 @@ func signPolicyFromFlags() (*signature.Signature, error) {
 			return nil, err
 		}
 	} else if viper.GetUint(cfgPolicyTestKey) != 0 {
+		if !cmdFlags.DebugDontBlameOasis() {
+			return nil, errors.New("refusing to use test keys for signing")
+		}
 		if viper.GetUint(cfgPolicyTestKey) > uint(len(kmApi.TestSigners)) {
 			return nil, errors.New("test key index invalid")
 		}
@@ -473,10 +476,12 @@ func registerKMSignPolicyFlags(cmd *cobra.Command) {
 	if !cmd.Flags().Parsed() {
 		cmd.Flags().String(cfgPolicyKeyFile, "", "input file name containing client key")
 		cmd.Flags().Uint(cfgPolicyTestKey, 0, "index of test key to use (for debugging only) counting from 1")
+		_ = cmd.Flags().MarkHidden(cfgPolicyTestKey)
 	}
 
 	cmd.Flags().AddFlagSet(policyFileFlag)
 	cmd.Flags().AddFlagSet(policySigFileFlag)
+	cmd.Flags().AddFlagSet(cmdFlags.DebugDontBlameOasisFlag)
 
 	for _, v := range []string{
 		cfgPolicyKeyFile,

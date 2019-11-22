@@ -18,6 +18,7 @@ type seedNode struct {
 
 func (seed *seedNode) startNode() error {
 	args := newArgBuilder().
+		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(seed.consensusPort).
 		tendermintSeedMode()

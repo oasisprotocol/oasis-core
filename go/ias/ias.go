@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	iasGrpc "github.com/oasislabs/oasis-core/go/grpc/ias"
+	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 const (
@@ -210,14 +211,16 @@ func New(identity *identity.Identity) (*IAS, error) {
 		s.client = iasGrpc.NewIASClient(conn)
 	}
 
-	if viper.GetBool(CfgDebugSkipVerify) {
-		s.logger.Warn("`ias.debug.skip_verify` set, AVR signature validation bypassed")
-		ias.SetSkipVerify()
-	}
+	if cmdFlags.DebugDontBlameOasis() {
+		if viper.GetBool(CfgDebugSkipVerify) {
+			s.logger.Warn("`ias.debug.skip_verify` set, AVR signature validation bypassed")
+			ias.SetSkipVerify()
+		}
 
-	if viper.GetBool(CfgAllowDebugEnclaves) {
-		s.logger.Warn("`ias.debug.allow_debug_enclaves` set, enclaves in debug mode will be allowed")
-		ias.SetAllowDebugEnclaves()
+		if viper.GetBool(CfgAllowDebugEnclaves) {
+			s.logger.Warn("`ias.debug.allow_debug_enclaves` set, enclaves in debug mode will be allowed")
+			ias.SetAllowDebugEnclaves()
+		}
 	}
 
 	return s, nil
@@ -229,6 +232,7 @@ func init() {
 	Flags.Bool(CfgDebugSkipVerify, false, "skip IAS AVR signature verification (UNSAFE)")
 	Flags.Bool(CfgAllowDebugEnclaves, false, "allow enclaves compiled in debug mode (UNSAFE)")
 
+	_ = Flags.MarkHidden(CfgDebugSkipVerify)
 	_ = Flags.MarkHidden(CfgAllowDebugEnclaves)
 
 	_ = viper.BindPFlags(Flags)

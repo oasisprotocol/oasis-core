@@ -18,6 +18,7 @@ type Client struct {
 
 func (client *Client) startNode() error {
 	args := newArgBuilder().
+		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(client.consensusPort).
 		roothashTendermintIndexBlocks().

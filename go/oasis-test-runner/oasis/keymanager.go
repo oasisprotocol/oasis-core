@@ -74,6 +74,7 @@ func (km *Keymanager) provisionGenesis() error {
 	// a list of runtimes allowed to query the key manager.
 	statusArgs := []string{
 		"keymanager", "init_status",
+		"--debug.dont_blame_oasis",
 		"--debug.allow_test_keys",
 		"--keymanager.status.id", km.runtime.id.String(),
 		"--keymanager.status.file", filepath.Join(km.dir.String(), kmStatusFile),
@@ -86,6 +87,7 @@ func (km *Keymanager) provisionGenesis() error {
 		kmPolicyPath := filepath.Join(km.dir.String(), kmPolicyFile)
 		policyArgs := []string{
 			"keymanager", "init_policy",
+			"--debug.dont_blame_oasis",
 			"--keymanager.policy.file", kmPolicyPath,
 			"--keymanager.policy.id", km.runtime.id.String(),
 			"--keymanager.policy.serial", "1",
@@ -118,6 +120,7 @@ func (km *Keymanager) provisionGenesis() error {
 		signArgsTpl := []string{
 			"keymanager", "sign_policy",
 			"--debug.allow_test_keys",
+			"--debug.dont_blame_oasis",
 			"--keymanager.policy.file", kmPolicyPath,
 		}
 		for i := 1; i <= 3; i++ {
@@ -171,6 +174,7 @@ func (km *Keymanager) toGenesisArgs() []string {
 
 func (km *Keymanager) startNode() error {
 	args := newArgBuilder().
+		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(km.consensusPort).
 		workerClientPort(km.workerClientPort).

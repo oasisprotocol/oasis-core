@@ -38,6 +38,7 @@ func (sentry *Sentry) startNode() error {
 	}
 
 	args := newArgBuilder().
+		debugDontBlameOasis().
 		debugAllowTestKeys().
 		workerSentryEnabled().
 		workerSentryControlPort(sentry.controlPort).

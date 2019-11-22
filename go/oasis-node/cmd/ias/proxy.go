@@ -230,6 +230,9 @@ func iasEndpointFromFlags() (ias.Endpoint, error) {
 
 		cfg.IsProduction = viper.GetBool(cfgIsProduction)
 	} else {
+		if !flags.DebugDontBlameOasis() {
+			return nil, fmt.Errorf("ias: refusing to mock IAS responses")
+		}
 		cfg.DebugIsMock = true
 	}
 
@@ -238,6 +241,9 @@ func iasEndpointFromFlags() (ias.Endpoint, error) {
 
 func grpcAuthenticatorFromFlags(ctx context.Context, cmd *cobra.Command) (ias.GRPCAuthenticator, error) {
 	if viper.GetBool(cfgDebugSkipAuth) {
+		if !flags.DebugDontBlameOasis() {
+			return nil, fmt.Errorf("ias: refusing to disable gRPC authentication")
+		}
 		logger.Warn("IAS gRPC authentication disabled, proxy is open")
 		return nil, nil
 	}
@@ -267,10 +273,15 @@ func init() {
 	proxyFlags.Bool(cfgDebugSkipAuth, false, "disable proxy authentication (UNSAFE)")
 	proxyFlags.Bool(cfgUseGenesis, false, "use a genesis document instead of the registry")
 	proxyFlags.Int(cfgWaitRuntimes, 0, "wait for N runtimes to be registered before servicing requests")
+
+	_ = proxyFlags.MarkHidden(cfgDebugMock)
+	_ = proxyFlags.MarkHidden(cfgDebugSkipAuth)
+
 	_ = viper.BindPFlags(proxyFlags)
 	proxyFlags.AddFlagSet(metrics.Flags)
 	proxyFlags.AddFlagSet(cmdGrpc.ServerTCPFlags)
 	proxyFlags.AddFlagSet(cmdGrpc.ClientFlags)
 	proxyFlags.AddFlagSet(flags.GenesisFileFlags)
+	proxyFlags.AddFlagSet(flags.DebugDontBlameOasisFlag)
 	proxyFlags.AddFlagSet(pprof.Flags)
 }

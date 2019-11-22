@@ -39,6 +39,11 @@ func newTestCrasher(crashPointConfig map[string]float64, options CrasherOptions)
 }
 
 func TestCrashHere(t *testing.T) {
+	testForceEnable = true
+	defer func() {
+		testForceEnable = false
+	}()
+
 	deterministicRandomProvider := newDeterministicRandomProvider(0.4)
 	crasher := newTestCrasher(map[string]float64{
 		"succeed": 0.0,
@@ -73,6 +78,11 @@ func TestCrashHere(t *testing.T) {
 }
 
 func TestCrashPointRegistrationAndConfig(t *testing.T) {
+	testForceEnable = true
+	defer func() {
+		testForceEnable = false
+	}()
+
 	crasher := newTestCrasher(map[string]float64{}, CrasherOptions{})
 	crasher.RegisterCrashPoints("point1", "point2")
 	crasher.RegisterCrashPoints("point3")

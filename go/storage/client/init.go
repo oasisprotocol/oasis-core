@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/grpc/storage"
+	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/storage/api"
@@ -24,11 +25,12 @@ const (
 	// BackendName is the name of this implementation.
 	BackendName = "client"
 
-	// Address to connect to with the storage client.
-	cfgDebugClientAddress = "storage.debug.client.address"
+	// CfgDebugClientAddress is the address to connect to with the
+	// storage client.
+	CfgDebugClientAddress = "storage.debug.client.address"
 
-	// Path to certificate file for grpc.
-	cfgDebugClientTLSCertFile = "storage.debug.client.tls"
+	// CfgDebugClientCert is the path to the certificate file for grpc.
+	CfgDebugClientCert = "storage.debug.client.certificate"
 )
 
 // In debug mode, we connect to the provided node and save it to the fake runtime.
@@ -46,17 +48,17 @@ func New(
 ) (api.Backend, error) {
 	logger := logging.GetLogger("storage/client")
 
-	if viper.GetString(cfgDebugClientAddress) != "" {
+	if addr := viper.GetString(CfgDebugClientAddress); addr != "" && cmdFlags.DebugDontBlameOasis() {
 		logger.Warn("Storage client in debug mode, connecting to provided client",
-			"address", cfgDebugClientAddress,
+			"address", CfgDebugClientAddress,
 		)
 
 		var opts grpc.DialOption
-		if viper.GetString(cfgDebugClientTLSCertFile) != "" {
-			tlsConfig, err := commonGrpc.NewClientTLSConfigFromFile(viper.GetString(cfgDebugClientTLSCertFile), identity.CommonName)
+		if certFile := viper.GetString(CfgDebugClientCert); certFile != "" {
+			tlsConfig, err := commonGrpc.NewClientTLSConfigFromFile(certFile, identity.CommonName)
 			if err != nil {
 				logger.Error("failed creating client tls config from file",
-					"file", viper.GetString(cfgDebugClientTLSCertFile),
+					"file", viper.GetString(certFile),
 					"error", err,
 				)
 				return nil, err
@@ -68,7 +70,7 @@ func New(
 			opts = grpc.WithInsecure()
 		}
 
-		conn, err := grpc.Dial(viper.GetString(cfgDebugClientAddress), opts)
+		conn, err := grpc.Dial(addr, opts)
 		if err != nil {
 			logger.Error("unable to dial debug client",
 				"error", err,
@@ -114,8 +116,11 @@ func New(
 }
 
 func init() {
-	Flags.String(cfgDebugClientAddress, "", "Address of node to connect to with the storage client")
-	Flags.String(cfgDebugClientTLSCertFile, "", "Path to tls certificate for grpc")
+	Flags.String(CfgDebugClientAddress, "", "Address of node to connect to with the storage client")
+	Flags.String(CfgDebugClientCert, "", "Path to tls certificate for grpc")
+
+	_ = Flags.MarkHidden(CfgDebugClientAddress)
+	_ = Flags.MarkHidden(CfgDebugClientCert)
 
 	_ = viper.BindPFlags(Flags)
 }
