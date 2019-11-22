@@ -52,7 +52,7 @@ func initVersions() {
 	rootCmd.SetVersionTemplate(`Software version: {{.Version}}
 {{- with nodeVersion }}
 Runtime protocol version: {{ .RuntimeProtocol }}
-Backend protocol version: {{ .BackendProtocol }}
+Consensus protocol version: {{ .ConsensusProtocol }}
 Committee protocol version: {{ .CommitteeProtocol }}
 Tendermint core version: {{ .Tendermint }}
 ABCI library version: {{ .ABCI }}

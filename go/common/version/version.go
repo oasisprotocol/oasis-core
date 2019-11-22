@@ -60,12 +60,13 @@ var (
 	// committee members.
 	CommitteeProtocol = Version{Major: 0, Minor: 6, Patch: 0}
 
-	// BackendProtocol versions all data structures and processing used by
-	// the epochtime, beacon, registry, roothash, etc.
+	// ConsensusProtocol versions all data structures and processing used by
+	// the epochtime, beacon, registry, roothash, etc. modules that are
+	// backend by consensus.
 	//
 	// NOTE: Any change in the major or minor versions are considered
 	//       breaking changes for the protocol.
-	BackendProtocol = Version{Major: 0, Minor: 17, Patch: 0}
+	ConsensusProtocol = Version{Major: 0, Minor: 18, Patch: 0}
 
 	// Tendermint exposes the tendermint core version.
 	Tendermint = parseSemVerStr(version.TMCoreSemVer)
@@ -78,13 +79,13 @@ var (
 var Versions = struct {
 	RuntimeProtocol   Version
 	CommitteeProtocol Version
-	BackendProtocol   Version
+	ConsensusProtocol Version
 	Tendermint        Version
 	ABCI              Version
 }{
 	RuntimeProtocol,
 	CommitteeProtocol,
-	BackendProtocol,
+	ConsensusProtocol,
 	Tendermint,
 	ABCI,
 }

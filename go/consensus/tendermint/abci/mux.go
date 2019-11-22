@@ -347,7 +347,7 @@ func (mux *abciMux) registerHaltHook(hook func(context.Context, int64, epochtime
 
 func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
 	return types.ResponseInfo{
-		AppVersion:       version.BackendProtocol.ToU64(),
+		AppVersion:       version.ConsensusProtocol.ToU64(),
 		LastBlockHeight:  mux.state.BlockHeight(),
 		LastBlockAppHash: mux.state.BlockHash(),
 	}
