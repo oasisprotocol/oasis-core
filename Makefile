@@ -89,3 +89,12 @@ clean: clean-go clean-runtimes
 	@$(ECHO) "$(CYAN)*** Cleaning up...$(OFF)"
 	@cargo clean
 
+docker-shell:
+	@docker run -t -i \
+	  --name oasis-core \
+	  --security-opt apparmor:unconfined \
+	  --security-opt seccomp=unconfined \
+	  -v $(pwd):/code \
+	  -w /code \
+	  oasislabs/development:0.3.0 \
+	  bash
