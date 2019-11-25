@@ -29,12 +29,12 @@ func Mkdir(d string) error {
 		return fmt.Errorf("common/Mkdir: path '%s' is not a directory", d)
 	}
 	if fm.Perm() != permDir {
-		return fmt.Errorf("common/Mkdir: path '%s' has invalid permissions: %v", d, fm.Perm())
+		return fmt.Errorf("common/Mkdir: path '%s' has invalid permissions: %v. Expected permissions: %v", d, fm.Perm(), permDir)
 	}
 	if fs, ok := fi.Sys().(*syscall.Stat_t); ok {
 		euid := os.Geteuid()
 		if euid != int(fs.Uid) {
-			return fmt.Errorf("common/Mkdir: path '%s' has invalid owner: %d", d, fs.Uid)
+			return fmt.Errorf("common/Mkdir: path '%s' has invalid owner: %d. Expected owner: %d", d, fs.Uid, euid)
 		}
 	}
 
