@@ -116,6 +116,11 @@ host system, you can use our development Docker image. This requires that you ha
 Oasis development environment with all the dependencies preinstalled is available
 in the `oasislabs/development:0.3.0` image. To run a container do something like the
 following in the top-level directory:
+```bash
+make docker-shell
+```
+
+if you are curious, this target will internally run the following command:
 ```
 docker run -t -i \
   --name oasis-core \
