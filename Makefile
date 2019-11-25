@@ -90,11 +90,11 @@ clean: clean-go clean-runtimes
 	@cargo clean
 
 docker-shell:
-	@docker run -t -i \
+	@docker run -t -i --rm \
 	  --name oasis-core \
 	  --security-opt apparmor:unconfined \
 	  --security-opt seccomp=unconfined \
-	  -v $(pwd):/code \
+	  -v $(shell pwd):/code \
 	  -w /code \
 	  oasislabs/development:0.3.0 \
 	  bash
