@@ -90,7 +90,7 @@ clean: clean-go clean-runtimes
 	@cargo clean
 
 docker-shell:
-	@docker run -t -i \
+	@docker run -t -i --rm \
 	  --name oasis-core \
 	  --security-opt apparmor:unconfined \
 	  --security-opt seccomp=unconfined \
