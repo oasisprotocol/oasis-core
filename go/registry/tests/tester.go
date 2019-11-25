@@ -173,6 +173,10 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				require.Error(err, "register node with invalid runtimes")
 				require.Equal(err, api.ErrInvalidArgument)
 
+				err = v.Register(consensus, v.SignedInvalidRegistration9)
+				require.Error(err, "register node with invalid consensus address")
+				require.Equal(err, api.ErrInvalidArgument)
+
 				err = v.Register(consensus, v.SignedRegistration)
 				require.NoError(err, "RegisterNode")
 
@@ -522,6 +526,7 @@ type TestNode struct {
 	SignedInvalidRegistration6  *node.SignedNode
 	SignedInvalidRegistration7  *node.SignedNode
 	SignedInvalidRegistration8  *node.SignedNode
+	SignedInvalidRegistration9  *node.SignedNode
 	SignedValidReRegistration   *node.SignedNode
 	SignedInvalidReRegistration *node.SignedNode
 }
@@ -655,6 +660,20 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		invalid8.Runtimes = []*node.Runtime{&node.Runtime{ID: ent.Signer.Public()}}
 
 		nod.SignedInvalidRegistration8, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid8)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add a registration with invalid consensus address.
+		invalid9 := *nod.Node
+		invalid9.Consensus.Addresses = []node.ConsensusAddress{
+			node.ConsensusAddress{
+				// ID: invalid
+				Address: addr,
+			},
+		}
+
+		nod.SignedInvalidRegistration9, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid9)
 		if err != nil {
 			return nil, err
 		}

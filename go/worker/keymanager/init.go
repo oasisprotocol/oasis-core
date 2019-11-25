@@ -93,7 +93,9 @@ func New(
 			return nil, fmt.Errorf("worker/keymanager: runtime binary not configured")
 		}
 
-		w.registration.RegisterRole(w.onNodeRegistration)
+		if err := w.registration.RegisterRole(node.RoleKeyManager, w.onNodeRegistration); err != nil {
+			return nil, fmt.Errorf("worker/keymanager: failed to register role: %w", err)
+		}
 
 		w.workerHostCfg = host.Config{
 			Role:           node.RoleKeyManager,

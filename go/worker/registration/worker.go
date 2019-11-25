@@ -43,6 +43,8 @@ var (
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
+
+	allowUnroutableAddresses bool
 )
 
 // Delegate is the interface for objects that wish to know about the worker's events.
@@ -78,8 +80,13 @@ type Worker struct { // nolint: maligned
 	stopReqCh    chan struct{} // closed internally to trigger clean registration lapse
 
 	logger    *logging.Logger
-	roleHooks []func(*node.Node) error
+	roleHooks map[node.RolesMask](func(*node.Node) error)
 	consensus consensus.Backend
+}
+
+// DebugForceallowUnroutableAddresses allows unroutable addresses.
+func DebugForceAllowUnroutableAddresses() {
+	allowUnroutableAddresses = true
 }
 
 func (w *Worker) registrationLoop() {
@@ -230,15 +237,25 @@ func (w *Worker) InitialRegistrationCh() chan struct{} {
 	return w.initialRegCh
 }
 
-// RegisterRole enables registering Node roles.
-// hook is a callback that does the following:
-// - Use AddRole to add a role to the node descriptor
-// - Make other changes specific to the role, e.g. setting compute capabilities
-func (w *Worker) RegisterRole(hook func(*node.Node) error) {
+// RegisterRole enables registering Node roles. Only one hook per role is
+// allowed.
+//
+// hook is a callback that can be used to update node descriptor with role
+// specific settings, e.g. setting compute capabilities for compute worker.
+func (w *Worker) RegisterRole(role node.RolesMask, hook func(*node.Node) error) error {
 	w.Lock()
 	defer w.Unlock()
 
-	w.roleHooks = append(w.roleHooks, hook)
+	if !role.IsSingleRole() {
+		return fmt.Errorf("RegisterRole: registration role mask does not encode a single role. RoleMask: '%s'", role)
+	}
+
+	if _, exists := w.roleHooks[role]; exists {
+		return fmt.Errorf("RegisterRole: role already registered. Role: '%s'", role)
+	}
+	w.roleHooks[role] = hook
+
+	return nil
 }
 
 func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
@@ -246,13 +263,6 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 		"epoch", epoch,
 	)
 
-	addresses, err := w.workerCommonCfg.GetNodeAddresses()
-	if err != nil {
-		w.logger.Error("failed to register node: unable to get addresses",
-			"err", err,
-		)
-		return err
-	}
 	identityPublic := w.identity.NodeSigner.Public()
 	nodeDesc := node.Node{
 		ID:         identityPublic,
@@ -260,9 +270,10 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 		Expiration: uint64(epoch) + 2,
 		Committee: node.CommitteeInfo{
 			Certificate: w.identity.TLSCertificate.Certificate[0],
-			Addresses:   addresses,
 		},
-		P2P: w.p2p.Info(),
+		P2P: node.P2PInfo{
+			ID: w.identity.P2PSigner.Public(),
+		},
 		Consensus: node.ConsensusInfo{
 			ID: w.consensus.ConsensusKey(),
 		},
@@ -277,11 +288,33 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 	defer w.Unlock()
 
 	// Apply worker role hooks:
-	for _, h := range w.roleHooks {
+	for role, h := range w.roleHooks {
+		nodeDesc.AddRoles(role)
+
 		if err := h(&nodeDesc); err != nil {
 			w.logger.Error("failed to apply role hook",
-				"err", err)
+				"role", role,
+				"err", err,
+			)
 		}
+	}
+
+	// Add Committee Addresses if required.
+	if nodeDesc.HasRoles(registry.CommitteeAddressRequiredRoles) {
+		addresses, err := w.workerCommonCfg.GetNodeAddresses()
+		if err != nil {
+			w.logger.Error("failed to register node: unable to get committee addresses",
+				"err", err,
+			)
+			return err
+		}
+
+		nodeDesc.Committee.Addresses = addresses
+	}
+
+	// Add P2P Addresses if required.
+	if nodeDesc.HasRoles(registry.P2PAddressRequiredRoles) {
+		nodeDesc.P2P.Addresses = w.p2p.Addresses()
 	}
 
 	// Only register node if hooks exist.
@@ -354,19 +387,30 @@ func (w *Worker) consensusValidatorHook(n *node.Node) error {
 		}
 	}
 
-	if len(addrs) == 0 {
-		w.logger.Error("node has no consensus addresses, not registering as validator")
-		return nil
+	var validatedAddrs []node.ConsensusAddress
+	for _, addr := range addrs {
+		if !addr.ID.IsValid() {
+			w.logger.Error("worker/registration: skipping validator address due to invalid ID",
+				"addr", addr,
+			)
+			continue
+		}
+		if err := registry.VerifyAddress(addr.Address, allowUnroutableAddresses); err != nil {
+			w.logger.Error("worker/registration: skipping validator address due to invalid address",
+				"addr", addr,
+				"err", err,
+			)
+			continue
+		}
+		validatedAddrs = append(validatedAddrs, addr)
 	}
 
-	// TODO: Someone, somewhere needs to check to see if the address is
-	// actually routable (or applicable for a given configuration).  My
-	// inclination is to do it in the registry, but this would be the other
-	// location for such a thing.
+	if len(validatedAddrs) == 0 {
+		return fmt.Errorf("worker/registration: node has no consensus addresses")
+	}
 
 	// n.Consensus.ID is set for all nodes, no need to set it here.
-	n.Consensus.Addresses = addrs
-	n.AddRoles(node.RoleValidator)
+	n.Consensus.Addresses = validatedAddrs
 
 	return nil
 }
@@ -513,11 +557,13 @@ func New(
 		logger:             logger,
 		consensus:          consensus,
 		p2p:                p2p,
-		roleHooks:          []func(*node.Node) error{},
+		roleHooks:          make(map[node.RolesMask](func(*node.Node) error)),
 	}
 
 	if flags.ConsensusValidator() {
-		w.RegisterRole(w.consensusValidatorHook)
+		if err := w.RegisterRole(node.RoleValidator, w.consensusValidatorHook); err != nil {
+			return nil, err
+		}
 	}
 
 	return w, nil

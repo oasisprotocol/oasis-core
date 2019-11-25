@@ -409,8 +409,6 @@ func (w *Worker) onNodeRegistration(n *node.Node) error {
 	rtDesc.Capabilities.TEE = tee
 	n.Runtimes = append(n.Runtimes, rtDesc)
 
-	n.AddRoles(node.RoleKeyManager)
-
 	return nil
 }
 

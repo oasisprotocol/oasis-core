@@ -138,6 +138,21 @@ var (
 		MethodUnfreezeNode,
 		MethodRegisterRuntime,
 	}
+
+	// ConsensusAddressRequiredRoles are the Node roles that require Consensus Address.
+	ConsensusAddressRequiredRoles = node.RoleValidator
+
+	// CommitteeAddressRequiredRoles are the Node roles that require Committee Address.
+	CommitteeAddressRequiredRoles = (node.RoleComputeWorker |
+		node.RoleStorageWorker |
+		node.RoleTransactionScheduler |
+		node.RoleKeyManager |
+		node.RoleMergeWorker)
+
+	// P2PAddressRequiredRoles are the Node roles that require P2P Address.
+	P2PAddressRequiredRoles = (node.RoleComputeWorker |
+		node.RoleTransactionScheduler |
+		node.RoleMergeWorker)
 )
 
 // Backend is a registry implementation.
@@ -425,23 +440,21 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		}
 	}
 
-	// If node is a validator, ensure it has ConsensusInfo.
-	if n.HasRoles(node.RoleValidator) {
-		if !n.Consensus.ID.IsValid() {
-			logger.Error("RegisterNode: invalid consensus id",
-				"node", n,
-			)
-			return nil, ErrInvalidArgument
-		}
-
-		if err := verifyAddresses(params, n.Consensus.Addresses); err != nil {
-			addrs, _ := json.Marshal(n.Consensus.Addresses)
-			logger.Error("RegisterNode: missing/invalid consensus addresses",
-				"node", n,
-				"consensus_addrs", addrs,
-			)
-			return nil, err
-		}
+	// Validate ConsensusInfo.
+	if !n.Consensus.ID.IsValid() {
+		logger.Error("RegisterNode: invalid consensus id",
+			"node", n,
+		)
+		return nil, ErrInvalidArgument
+	}
+	consensusAddressRequired := n.HasRoles(ConsensusAddressRequiredRoles)
+	if err := verifyAddresses(params, consensusAddressRequired, n.Consensus.Addresses); err != nil {
+		addrs, _ := json.Marshal(n.Consensus.Addresses)
+		logger.Error("RegisterNode: missing/invalid consensus addresses",
+			"node", n,
+			"consensus_addrs", addrs,
+		)
+		return nil, err
 	}
 
 	// If node is a key manager, ensure that it is owned by the key manager
@@ -455,44 +468,40 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		}
 	}
 
-	// If node is a worker, ensure it has CommitteeInfo.
-	if n.HasRoles(node.RoleComputeWorker | node.RoleStorageWorker | node.RoleTransactionScheduler | node.RoleKeyManager | node.RoleMergeWorker) {
-		if err := verifyAddresses(params, n.Committee.Addresses); err != nil {
-			addrs, _ := json.Marshal(n.Committee.Addresses)
-			logger.Error("RegisterNode: missing/invalid committee addresses",
-				"node", n,
-				"committee_addrs", addrs,
-			)
-			return nil, err
-		}
-
-		// Verify that certificate is well-formed.
-		if _, err := n.Committee.ParseCertificate(); err != nil {
-			logger.Error("RegisterNode: invalid committee TLS certificate",
-				"node", n,
-				"err", err,
-			)
-			return nil, ErrInvalidArgument
-		}
+	// Validate CommitteeInfo.
+	// Verify that certificate is well-formed.
+	if _, err := n.Committee.ParseCertificate(); err != nil {
+		logger.Error("RegisterNode: invalid committee TLS certificate",
+			"node", n,
+			"err", err,
+		)
+		return nil, ErrInvalidArgument
+	}
+	committeeAddressRequired := n.HasRoles(CommitteeAddressRequiredRoles)
+	if err := verifyAddresses(params, committeeAddressRequired, n.Committee.Addresses); err != nil {
+		addrs, _ := json.Marshal(n.Committee.Addresses)
+		logger.Error("RegisterNode: missing/invalid committee addresses",
+			"node", n,
+			"committee_addrs", addrs,
+		)
+		return nil, err
 	}
 
-	// If node is a compute/txnscheduler/merge worker, ensure it has P2PInfo.
-	if n.HasRoles(node.RoleComputeWorker | node.RoleTransactionScheduler | node.RoleMergeWorker) {
-		if !n.P2P.ID.IsValid() {
-			logger.Error("RegisterNode: invalid P2P id",
-				"node", n,
-			)
-			return nil, ErrInvalidArgument
-		}
-
-		if err := verifyAddresses(params, n.P2P.Addresses); err != nil {
-			addrs, _ := json.Marshal(n.P2P.Addresses)
-			logger.Error("RegisterNode: missing/invald P2P addresses",
-				"node", n,
-				"p2p_addrs", addrs,
-			)
-			return nil, err
-		}
+	// Validate P2PInfo.
+	if !n.P2P.ID.IsValid() {
+		logger.Error("RegisterNode: invalid P2P id",
+			"node", n,
+		)
+		return nil, ErrInvalidArgument
+	}
+	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
+	if err := verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
+		addrs, _ := json.Marshal(n.P2P.Addresses)
+		logger.Error("RegisterNode: missing/invald P2P addresses",
+			"node", n,
+			"p2p_addrs", addrs,
+		)
+		return nil, err
 	}
 
 	return &n, nil
@@ -608,11 +617,10 @@ func VerifyAddress(addr node.Address, allowUnroutable bool) error {
 	return nil
 }
 
-func verifyAddresses(params *ConsensusParameters, addresses interface{}) error {
+func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresses interface{}) error {
 	switch addrs := addresses.(type) {
 	case []node.ConsensusAddress:
-		// Treat having no addresses as invalid, regardless.
-		if len(addrs) == 0 {
+		if len(addrs) == 0 && addressRequired {
 			return ErrInvalidArgument
 		}
 		for _, v := range addrs {
@@ -624,8 +632,7 @@ func verifyAddresses(params *ConsensusParameters, addresses interface{}) error {
 			}
 		}
 	case []node.Address:
-		// Treat having no addresses as invalid, regardless.
-		if len(addrs) == 0 {
+		if len(addrs) == 0 && addressRequired {
 			return ErrInvalidArgument
 		}
 		for _, v := range addrs {
@@ -742,7 +749,7 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) e
 		return ErrNodeUpdateNotAllowed
 	}
 
-	// As of right now, every node has a consensus ID.
+	// Every node requires a Consensus.ID and it shouldn't be updated.
 	if !currentNode.Consensus.ID.Equal(newNode.Consensus.ID) {
 		logger.Error("RegisterNode: trying to update consensus ID",
 			"current_id", currentNode.Consensus.ID,
@@ -1063,6 +1070,9 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 		if !n.Consensus.ID.IsValid() {
 			return fmt.Errorf("registry: sanity check failed: node ID %s has an invalid consensus ID", n.ID.String())
 		}
+		// XXX: Validate P2P.ID and Consensus/Committee/P2P addresses after
+		// existing deployments have cleared up registry.
+		// https://github.com/oasislabs/oasis-core/issues/2428
 
 		for _, rt := range n.Runtimes {
 			seenRT := seenRuntimes[rt.ID]

@@ -259,6 +259,10 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		n.commonStore,
 		n, // the delegate to be called on registration shutdown
 	)
+	if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
+		registration.DebugForceAllowUnroutableAddresses()
+	}
+
 	if err != nil {
 		logger.Error("failed to initialize worker registration",
 			"err", err,
