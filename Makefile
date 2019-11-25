@@ -94,7 +94,7 @@ docker-shell:
 	  --name oasis-core \
 	  --security-opt apparmor:unconfined \
 	  --security-opt seccomp=unconfined \
-	  -v $(pwd):/code \
+	  -v $(shell pwd):/code \
 	  -w /code \
 	  oasislabs/development:0.3.0 \
 	  bash
