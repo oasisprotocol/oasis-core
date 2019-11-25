@@ -753,7 +753,6 @@ func init() {
 		storage.Flags,
 		tendermint.Flags,
 		ias.Flags,
-		keymanagerClient.Flags,
 		workerKeymanager.Flags,
 		client.Flags,
 		compute.Flags,

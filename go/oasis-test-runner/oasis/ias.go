@@ -25,6 +25,7 @@ func (ias *iasProxy) tlsCertPath() string {
 
 func (ias *iasProxy) startNode() error {
 	args := newArgBuilder().
+		debugDontBlameOasis().
 		debugAllowTestKeys().
 		grpcServerPort(ias.grpcPort).
 		iasUseGenesis().

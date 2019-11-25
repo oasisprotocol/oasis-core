@@ -16,6 +16,7 @@ import (
 )
 
 var entityArgsDebugTest = []string{
+	"--" + flags.CfgDebugDontBlameOasis,
 	"--" + flags.CfgDebugTestEntity,
 	"--" + common.CfgDebugAllowTestKeys,
 }

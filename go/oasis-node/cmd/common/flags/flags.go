@@ -8,6 +8,9 @@ import (
 )
 
 const (
+	// CfgDebugDontBlameOasis is the flag used to opt-in to unsafe/debug/test
+	// behavior.
+	CfgDebugDontBlameOasis = "debug.dont_blame_oasis"
 	// CfgDebugTestEntity is the command line flag to enable the debug test
 	// entity.
 	CfgDebugTestEntity = "debug.test_entity"
@@ -38,6 +41,8 @@ var (
 
 	// ConsensusValidatorFlag has the consensus validator flag.
 	ConsensusValidatorFlag = flag.NewFlagSet("", flag.ContinueOnError)
+	// DebugDontBlameOasisFlag has the "don't blame oasis" flag.
+	DebugDontBlameOasisFlag = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // Verbose returns true iff the verbose flag is set.
@@ -63,7 +68,7 @@ func ConsensusValidator() bool {
 
 // DebugTestEntity returns true iff the test entity enable flag is set.
 func DebugTestEntity() bool {
-	return viper.GetBool(CfgDebugTestEntity)
+	return DebugDontBlameOasis() && viper.GetBool(CfgDebugTestEntity)
 }
 
 // Entity returns the set entity directory.
@@ -76,6 +81,11 @@ func GenesisFile() string {
 	return viper.GetString(CfgGenesisFile)
 }
 
+// DebugDontBlameOasis returns true iff the "don't blame oasis" flag is set.
+func DebugDontBlameOasis() bool {
+	return viper.GetBool(CfgDebugDontBlameOasis)
+}
+
 func init() {
 	VerboseFlags.BoolP(cfgVerbose, "v", false, "verbose output")
 
@@ -86,10 +96,14 @@ func init() {
 	ConsensusValidatorFlag.Bool(CfgConsensusValidator, false, "node is a consensus validator")
 
 	DebugTestEntityFlags.Bool(CfgDebugTestEntity, false, "use the test entity (UNSAFE)")
+	_ = DebugTestEntityFlags.MarkHidden(CfgDebugTestEntity)
 
 	EntityFlags.StringP(cfgEntity, "e", "", "Path to directory containing entity private key and descriptor")
 
 	GenesisFileFlags.StringP(CfgGenesisFile, "g", "genesis.json", "path to genesis file")
+
+	DebugDontBlameOasisFlag.Bool(CfgDebugDontBlameOasis, false, "Enable debug/unsafe/insecure options")
+	_ = DebugDontBlameOasisFlag.MarkHidden(CfgDebugDontBlameOasis)
 
 	for _, v := range []*flag.FlagSet{
 		VerboseFlags,
@@ -99,6 +113,7 @@ func init() {
 		EntityFlags,
 		GenesisFileFlags,
 		ConsensusValidatorFlag,
+		DebugDontBlameOasisFlag,
 	} {
 		_ = viper.BindPFlags(v)
 	}

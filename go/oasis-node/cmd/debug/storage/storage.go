@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	clientGrpc "github.com/oasislabs/oasis-core/go/grpc/client"
 	storageGrpc "github.com/oasislabs/oasis-core/go/grpc/storage"
+	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	cmdControl "github.com/oasislabs/oasis-core/go/oasis-node/cmd/control"
 	cmdRoothashDebug "github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/roothash"
@@ -289,10 +290,12 @@ func doForceFinalize(cmd *cobra.Command, args []string) {
 func Register(parentCmd *cobra.Command) {
 	storageCheckRootsCmd.Flags().AddFlagSet(storageClient.Flags)
 	storageCheckRootsCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
+	storageCheckRootsCmd.PersistentFlags().AddFlagSet(cmdFlags.DebugDontBlameOasisFlag)
 
 	storageForceFinalizeCmd.Flags().AddFlagSet(storageClient.Flags)
 	storageForceFinalizeCmd.Flags().Uint64Var(&finalizeRound, "round", committee.RoundLatest, "the round to force finalize; default latest")
 	storageForceFinalizeCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
+	storageForceFinalizeCmd.PersistentFlags().AddFlagSet(cmdFlags.DebugDontBlameOasisFlag)
 
 	storageCmd.AddCommand(storageCheckRootsCmd)
 	storageCmd.AddCommand(storageForceFinalizeCmd)

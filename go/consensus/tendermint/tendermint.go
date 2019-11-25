@@ -56,6 +56,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/genesis/file"
 	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
 	cmbackground "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/background"
+	cmflags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/registry"
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/roothash"
@@ -840,7 +841,7 @@ func (t *tendermintService) lazyInit() error {
 	// Since Seeds is expected to be in comma-delimited ID@host:port format,
 	// lowercasing the whole string is ok.
 	tenderConfig.P2P.Seeds = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PSeed), ","))
-	tenderConfig.P2P.AddrBookStrict = !viper.GetBool(CfgDebugP2PAddrBookLenient)
+	tenderConfig.P2P.AddrBookStrict = !(viper.GetBool(CfgDebugP2PAddrBookLenient) && cmflags.DebugDontBlameOasis())
 	tenderConfig.RPC.ListenAddress = ""
 
 	if !tenderConfig.P2P.PexReactor {
@@ -1229,6 +1230,9 @@ func init() {
 	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 	Flags.Bool(CfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
 	Flags.Uint64(CfgConsensusMinGasPrice, 0, "minimum gas price")
+
+	_ = Flags.MarkHidden(cfgLogDebug)
+	_ = Flags.MarkHidden(CfgDebugP2PAddrBookLenient)
 
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(db.Flags)

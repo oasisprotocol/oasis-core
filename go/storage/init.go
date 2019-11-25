@@ -3,7 +3,6 @@ package storage
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -11,8 +10,8 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/oasis-core/go/common/identity"
+	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/storage/api"
@@ -22,11 +21,10 @@ import (
 
 const (
 	// CfgBackend configures the storage backend flag.
-	CfgBackend             = "storage.backend"
-	cfgDebugMockSigningKey = "storage.debug.mock_signing_key"
-	cfgCrashEnabled        = "storage.crash.enabled"
-	cfgLRUSlots            = "storage.root_cache.apply_lock_lru_slots"
-	cfgInsecureSkipChecks  = "storage.debug.insecure_skip_checks"
+	CfgBackend            = "storage.backend"
+	cfgCrashEnabled       = "storage.crash.enabled"
+	cfgLRUSlots           = "storage.root_cache.apply_lock_lru_slots"
+	cfgInsecureSkipChecks = "storage.debug.insecure_skip_checks"
 )
 
 // Flags has the configuration flags.
@@ -45,18 +43,13 @@ func New(
 		DB:                 dataDir,
 		Signer:             identity.NodeSigner,
 		ApplyLockLRUSlots:  uint64(viper.GetInt(cfgLRUSlots)),
-		InsecureSkipChecks: viper.GetBool(cfgInsecureSkipChecks),
+		InsecureSkipChecks: viper.GetBool(cfgInsecureSkipChecks) && cmdFlags.DebugDontBlameOasis(),
 	}
 
-	var err error
-	if viper.GetBool(cfgDebugMockSigningKey) {
-		cfg.Signer, err = memorySigner.NewSigner(rand.Reader)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	var impl api.Backend
+	var (
+		err  error
+		impl api.Backend
+	)
 	switch cfg.Backend {
 	case database.BackendNameLevelDB, database.BackendNameBadgerDB:
 		cfg.DB = filepath.Join(cfg.DB, database.DefaultFileName(cfg.Backend))
@@ -67,7 +60,7 @@ func New(
 		err = fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
 	}
 
-	crashEnabled := viper.GetBool(cfgCrashEnabled)
+	crashEnabled := viper.GetBool(cfgCrashEnabled) && cmdFlags.DebugDontBlameOasis()
 	if crashEnabled {
 		impl = newCrashingWrapper(impl)
 	}
@@ -81,12 +74,13 @@ func New(
 
 func init() {
 	Flags.String(CfgBackend, database.BackendNameLevelDB, "Storage backend")
-	Flags.Bool(cfgDebugMockSigningKey, false, "Generate volatile mock signing key")
 	Flags.Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
 	Flags.Int(cfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
 
 	Flags.Bool(cfgInsecureSkipChecks, false, "INSECURE: Skip known root checks")
+
 	_ = Flags.MarkHidden(cfgInsecureSkipChecks)
+	_ = Flags.MarkHidden(cfgCrashEnabled)
 
 	_ = viper.BindPFlags(Flags)
 

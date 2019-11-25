@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 // Role is the role a given node plays in a committee.
@@ -212,6 +213,11 @@ type ConsensusParameters struct {
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {
+	unsafeFlags := g.Parameters.DebugBypassStake || g.Parameters.DebugStaticValidators
+	if unsafeFlags && !flags.DebugDontBlameOasis() {
+		return fmt.Errorf("scheduler: sanity check failed: one or more unsafe debug flags set")
+	}
+
 	return nil
 }
 

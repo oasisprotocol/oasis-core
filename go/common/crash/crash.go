@@ -14,7 +14,10 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/debug"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/random"
+	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
+
+var testForceEnable bool
 
 // defaultCLIPrefix is the default CLI prefix used to configure crash points in
 // viper and cobra.
@@ -131,6 +134,10 @@ func Here(crashPointID string) {
 
 // Here crashes at this point based on the passed in crashPointID's probability.
 func (c *Crasher) Here(crashPointID string) {
+	if !cmdFlags.DebugDontBlameOasis() && !testForceEnable {
+		return
+	}
+
 	_, callerFilename, callerLine, callerInformationIsCorrect := runtime.Caller(c.callerSkip)
 	crashPointProbability, ok := c.CrashPointConfig[crashPointID]
 	if !ok {
@@ -185,6 +192,8 @@ func (c *Crasher) InitFlags() *flag.FlagSet {
 		argFlag := fmt.Sprintf("%s.%s", c.CLIPrefix, crashPointID)
 		helpMessage := fmt.Sprintf(`Crash probability of "%s" crash point`, crashPointID)
 		flags.Float64(argFlag, 0.0, helpMessage)
+
+		_ = flags.MarkHidden(argFlag)
 	}
 
 	_ = viper.BindPFlags(flags)

@@ -656,6 +656,7 @@ func init() {
 	byzantineCmd.PersistentFlags().AddFlagSet(fs)
 
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.GenesisFileFlags)
+	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugDontBlameOasisFlag)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugTestEntityFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(p2p.Flags)
 	byzantineCmd.PersistentFlags().AddFlagSet(tendermint.Flags)

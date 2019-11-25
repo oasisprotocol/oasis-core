@@ -18,6 +18,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 // ModuleName is a unique module name for the registry module.
@@ -883,6 +884,11 @@ type ConsensusParameters struct {
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error { // nolint: gocyclo
+	unsafeFlags := g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugAllowRuntimeRegistration || g.Parameters.DebugBypassStake
+	if unsafeFlags && !flags.DebugDontBlameOasis() {
+		return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
+	}
+
 	// This could check KeyManagerOperator, but some configurations don't
 	// use a key manager, so the parameter is optional.
 

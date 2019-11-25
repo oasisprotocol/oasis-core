@@ -671,6 +671,9 @@ func init() {
 	initGenesisFlags.Bool(cfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
 	initGenesisFlags.Bool(cfgRegistryDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
 	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
+	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowUnroutableAddresses)
+	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowRuntimeRegistration)
+	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugBypassStake)
 
 	// Scheduler config flags.
 	initGenesisFlags.Int(cfgSchedulerMinValidators, 1, "minumum number of validators")
@@ -678,13 +681,17 @@ func init() {
 	initGenesisFlags.Int(cfgSchedulerMaxValidatorsPerEntity, 1, "maximum number of validators per entity")
 	initGenesisFlags.Bool(cfgSchedulerDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	initGenesisFlags.Bool(cfgSchedulerDebugStaticValidators, false, "bypass all validator elections (UNSAFE)")
+	_ = initGenesisFlags.MarkHidden(cfgSchedulerDebugBypassStake)
+	_ = initGenesisFlags.MarkHidden(cfgSchedulerDebugStaticValidators)
 
 	// Beacon config flags.
 	initGenesisFlags.Bool(cfgBeaconDebugDeterministic, false, "enable deterministic beacon output (UNSAFE)")
+	_ = initGenesisFlags.MarkHidden(cfgBeaconDebugDeterministic)
 
 	// EpochTime config flags.
 	initGenesisFlags.Bool(cfgEpochTimeDebugMockBackend, false, "use debug mock Epoch time backend")
 	initGenesisFlags.Int64(cfgEpochTimeTendermintInterval, 86400, "Epoch interval (in blocks)")
+	_ = initGenesisFlags.MarkHidden(cfgEpochTimeDebugMockBackend)
 
 	// Tendermint config flags.
 	initGenesisFlags.Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
@@ -703,4 +710,5 @@ func init() {
 	_ = viper.BindPFlag(viperEntity, initGenesisFlags.Lookup(cfgEntity))
 	initGenesisFlags.AddFlagSet(flags.DebugTestEntityFlags)
 	initGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
+	initGenesisFlags.AddFlagSet(flags.DebugDontBlameOasisFlag)
 }

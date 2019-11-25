@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	// CfgGRPCVerboseDebug enables verbose gRPC debug output.
-	CfgGRPCVerboseDebug = "grpc.log.verbose_debug"
+	// CfgLogDebug enables verbose gRPC debug output.
+	CfgLogDebug = "grpc.log.debug"
 
 	maxRecvMsgSize = 104857600 // 100 MiB
 	maxSendMsgSize = 104857600 // 100 MiB
@@ -221,7 +221,7 @@ func (l *grpcLogAdapter) streamLogger(srv interface{}, ss grpc.ServerStream, inf
 }
 
 func newGrpcLogAdapter(baseLogger *logging.Logger) *grpcLogAdapter {
-	grpcVerboseDebug := viper.GetBool(CfgGRPCVerboseDebug)
+	logDebug := viper.GetBool(CfgLogDebug)
 
 	// A extra 2 level 2 of unwinding since there's an adapter here,
 	// and there's wrappers in the grpc library.
@@ -233,7 +233,7 @@ func newGrpcLogAdapter(baseLogger *logging.Logger) *grpcLogAdapter {
 		logger:    logging.GetLoggerEx("grpc", 2),
 		reqLogger: baseLogger,
 		verbosity: 2,
-		isDebug:   logging.GetLevel() == logging.LevelDebug && grpcVerboseDebug,
+		isDebug:   logging.GetLevel() == logging.LevelDebug && logDebug,
 	}
 }
 
@@ -466,7 +466,8 @@ func NewServer(config *ServerConfig) (*Server, error) {
 }
 
 func init() {
-	Flags.Bool(CfgGRPCVerboseDebug, false, "gRPC request/responses in debug logs")
+	Flags.Bool(CfgLogDebug, false, "gRPC request/responses in debug logs (very verbose)")
+	_ = Flags.MarkHidden(CfgLogDebug)
 
 	_ = viper.BindPFlags(Flags)
 }

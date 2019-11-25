@@ -66,6 +66,7 @@ func (worker *Compute) ExportsPath() string {
 
 func (worker *Compute) startNode() error {
 	args := newArgBuilder().
+		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
 		roothashTendermintIndexBlocks().

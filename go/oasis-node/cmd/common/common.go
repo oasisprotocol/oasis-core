@@ -34,6 +34,8 @@ var (
 
 	rootLog = logging.GetLogger("oasis-node")
 
+	debugAllowTestKeysFlag = flag.NewFlagSet("", flag.ContinueOnError)
+
 	// RootFlags has the flags that are common across all commands.
 	RootFlags = flag.NewFlagSet("", flag.ContinueOnError)
 )
@@ -90,11 +92,18 @@ func Logger() *logging.Logger {
 
 func init() {
 	initLoggingFlags()
+
+	debugAllowTestKeysFlag.Bool(CfgDebugAllowTestKeys, false, "Allow test keys (UNSAFE)")
+	_ = debugAllowTestKeysFlag.MarkHidden(CfgDebugAllowTestKeys)
+	_ = viper.BindPFlags(debugAllowTestKeysFlag)
+
 	RootFlags.StringVar(&cfgFile, cfgConfigFile, "", "config file")
 	RootFlags.String(cfgDataDir, "", "data directory")
-	RootFlags.Bool(CfgDebugAllowTestKeys, false, "Allow test keys (UNSAFE)")
 	_ = viper.BindPFlags(RootFlags)
+
 	RootFlags.AddFlagSet(loggingFlags)
+	RootFlags.AddFlagSet(debugAllowTestKeysFlag)
+	RootFlags.AddFlagSet(flags.DebugDontBlameOasisFlag)
 }
 
 // InitConfig initializes the command configuration.
@@ -151,7 +160,7 @@ func normalizePath(f string) string {
 }
 
 func initPublicKeyBlacklist() error {
-	allowTestKeys := viper.GetBool(CfgDebugAllowTestKeys)
+	allowTestKeys := flags.DebugDontBlameOasis() && viper.GetBool(CfgDebugAllowTestKeys)
 	signature.BuildPublicKeyBlacklist(allowTestKeys)
 	ias.BuildMrSignerBlacklist(allowTestKeys)
 	return nil

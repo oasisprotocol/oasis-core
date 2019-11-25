@@ -30,6 +30,7 @@ type ByzantineCfg struct {
 
 func (worker *Byzantine) startNode() error {
 	args := newArgBuilder().
+		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
 		tendermintDebugAddrBookLenient().

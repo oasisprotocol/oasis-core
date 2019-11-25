@@ -63,6 +63,7 @@ var (
 	}{
 		{"log.level.default", "DEBUG"},
 		{cmdCommonFlags.CfgConsensusValidator, true},
+		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
 		{roothash.CfgIndexBlocks, true},
 		{storage.CfgBackend, "leveldb"},
 		{computeWorker.CfgWorkerEnabled, true},
@@ -416,8 +417,8 @@ func testStorageClientWithNode(t *testing.T, node *testNode) {
 		key   string
 		value interface{}
 	}{
-		{"storage.debug.client.address", "localhost:" + workerClientPort},
-		{"storage.debug.client.tls", node.dataDir + "/tls_identity_cert.pem"},
+		{storageClient.CfgDebugClientAddress, "localhost:" + workerClientPort},
+		{storageClient.CfgDebugClientCert, node.dataDir + "/tls_identity_cert.pem"},
 	}
 	for _, kv := range config {
 		viper.Set(kv.key, kv.value)

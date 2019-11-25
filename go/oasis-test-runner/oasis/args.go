@@ -34,6 +34,11 @@ type argBuilder struct {
 	vec []string
 }
 
+func (args *argBuilder) debugDontBlameOasis() *argBuilder {
+	args.vec = append(args.vec, "--"+flags.CfgDebugDontBlameOasis)
+	return args
+}
+
 func (args *argBuilder) debugAllowTestKeys() *argBuilder {
 	args.vec = append(args.vec, "--"+cmdCommon.CfgDebugAllowTestKeys)
 	return args
@@ -46,8 +51,8 @@ func (args *argBuilder) grpcServerPort(port uint16) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) grpcVerboseDebug() *argBuilder {
-	args.vec = append(args.vec, "--"+commonGrpc.CfgGRPCVerboseDebug)
+func (args *argBuilder) grpcLogDebug() *argBuilder {
+	args.vec = append(args.vec, "--"+commonGrpc.CfgLogDebug)
 	return args
 }
 
@@ -321,7 +326,7 @@ func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {
 }
 
 func (args *argBuilder) appendNetwork(net *Network) *argBuilder {
-	args = args.grpcVerboseDebug().
+	args = args.grpcLogDebug().
 		appendSeedNodes(net)
 	return args
 }
