@@ -98,8 +98,9 @@ var (
 	// ErrNoSuchRuntime is the error returned when an runtime does not exist.
 	ErrNoSuchRuntime = errors.New(ModuleName, 11, "registry: no such runtime")
 
-	// ErrInvalidTimestamp is the error returned when a timestamp is invalid.
-	ErrInvalidTimestamp = errors.New(ModuleName, 12, "registry: invalid timestamp")
+	// ErrIncorrectTxSigner is the error returned when the signer of the transaction
+	// is not the correct one.
+	ErrIncorrectTxSigner = errors.New(ModuleName, 12, "registry: incorrect tx signer")
 
 	// ErrNodeExpired is the error returned when a node is expired.
 	ErrNodeExpired = errors.New(ModuleName, 13, "registry: node expired")
@@ -887,7 +888,23 @@ type ConsensusParameters struct {
 	// DebugBypassStake is true iff the registry should bypass all of the staking
 	// related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake"`
+
+	// GasCosts are the registry transaction gas costs.
+	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
 }
+
+const (
+	// GasOpRegisterEntity is the gas operation identifier for entity registration.
+	GasOpRegisterEntity transaction.Op = "register_entity"
+	// GasOpDeregisterEntity is the gas operation identifier for entity deregistration.
+	GasOpDeregisterEntity transaction.Op = "deregister_entity"
+	// GasOpRegisterNode is the gas operation identifier for entity registration.
+	GasOpRegisterNode transaction.Op = "register_node"
+	// GasOpUnfreezeNode is the gas operation identifier for unfreezing nodes.
+	GasOpUnfreezeNode transaction.Op = "unfreeze_node"
+	// GasOpRegisterRuntime is the gas operation identifier for runtime registration.
+	GasOpRegisterRuntime transaction.Op = "register_runtime"
+)
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error { // nolint: gocyclo

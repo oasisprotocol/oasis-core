@@ -328,7 +328,7 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 		}
 
 		tx := registry.NewRegisterNodeTx(0, nil, signedNode)
-		if err := consensus.SignAndSubmitTx(w.ctx, w.consensus, w.identity.NodeSigner, tx); err != nil {
+		if err := consensus.SignAndSubmitTx(w.ctx, w.consensus, w.registrationSigner, tx); err != nil {
 			w.logger.Error("failed to register node",
 				"err", err,
 			)

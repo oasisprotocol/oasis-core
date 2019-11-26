@@ -19,7 +19,7 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 	if err != nil {
 		return err
 	}
-	if err := ctx.Gas().UseGas(staking.GasOpTransfer, params.GasCosts); err != nil {
+	if err := ctx.Gas().UseGas(1, staking.GasOpTransfer, params.GasCosts); err != nil {
 		return err
 	}
 
@@ -83,7 +83,7 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.Mutab
 	if err != nil {
 		return err
 	}
-	if err := ctx.Gas().UseGas(staking.GasOpBurn, params.GasCosts); err != nil {
+	if err := ctx.Gas().UseGas(1, staking.GasOpBurn, params.GasCosts); err != nil {
 		return err
 	}
 
@@ -129,7 +129,7 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 	if err != nil {
 		return err
 	}
-	if err := ctx.Gas().UseGas(staking.GasOpAddEscrow, params.GasCosts); err != nil {
+	if err := ctx.Gas().UseGas(1, staking.GasOpAddEscrow, params.GasCosts); err != nil {
 		return err
 	}
 
@@ -204,7 +204,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	if err != nil {
 		return err
 	}
-	if err = ctx.Gas().UseGas(staking.GasOpReclaimEscrow, params.GasCosts); err != nil {
+	if err = ctx.Gas().UseGas(1, staking.GasOpReclaimEscrow, params.GasCosts); err != nil {
 		return err
 	}
 
@@ -299,7 +299,7 @@ func (app *stakingApplication) amendCommissionSchedule(
 	if err != nil {
 		return err
 	}
-	if err = ctx.Gas().UseGas(staking.GasOpAmendCommissionSchedule, params.GasCosts); err != nil {
+	if err = ctx.Gas().UseGas(1, staking.GasOpAmendCommissionSchedule, params.GasCosts); err != nil {
 		return err
 	}
 

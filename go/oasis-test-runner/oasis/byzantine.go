@@ -23,6 +23,7 @@ type Byzantine struct {
 // ByzantineCfg is the Oasis byzantine node configuration.
 type ByzantineCfg struct {
 	NodeCfg
+
 	Script       string
 	IdentitySeed string
 	Entity       *Entity
@@ -75,8 +76,17 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 	if cfg.IdentitySeed == "" {
 		return nil, errors.New("oasis/byzantine: empty identity seed")
 	}
-	if err := net.generateDeterministicNodeIdentity(byzantineDir, cfg.IdentitySeed); err != nil {
+	if err = net.generateDeterministicNodeIdentity(byzantineDir, cfg.IdentitySeed); err != nil {
 		return nil, errors.Wrap(err, "oasis/byzantine: failed to generate deterministic identity")
+	}
+
+	// Pre-provision the node identity so that we can update the entity.
+	publicKey, err := provisionNodeIdentity(byzantineDir)
+	if err != nil {
+		return nil, errors.Wrap(err, "oasis/byzantine: failed to provision node identity")
+	}
+	if err := cfg.Entity.addNode(publicKey); err != nil {
+		return nil, err
 	}
 
 	worker := &Byzantine{

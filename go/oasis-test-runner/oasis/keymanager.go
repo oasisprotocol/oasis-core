@@ -30,6 +30,7 @@ type Keymanager struct { // nolint: maligned
 // KeymanagerCfg is the Oasis key manager provisioning configuration.
 type KeymanagerCfg struct {
 	NodeCfg
+
 	Runtime *Runtime
 	Entity  *Entity
 }
@@ -210,6 +211,15 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 			"err", err,
 		)
 		return nil, errors.Wrap(err, "oasis/keymanager: failed to create keymanager subdir")
+	}
+
+	// Pre-provision the node identity so that we can update the entity.
+	publicKey, err := provisionNodeIdentity(kmDir)
+	if err != nil {
+		return nil, errors.Wrap(err, "oasis/keymanager: failed to provision node identity")
+	}
+	if err := cfg.Entity.addNode(publicKey); err != nil {
+		return nil, err
 	}
 
 	km := &Keymanager{

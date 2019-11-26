@@ -55,7 +55,7 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 	}
 
 	tx := registry.NewRegisterNodeTx(0, nil, signedNode)
-	if err := consensus.SignAndSubmitTx(context.Background(), svc, id.NodeSigner, tx); err != nil {
+	if err := consensus.SignAndSubmitTx(context.Background(), svc, registrationSigner, tx); err != nil {
 		return errors.Wrap(err, "consensus RegisterNode tx")
 	}
 	return nil

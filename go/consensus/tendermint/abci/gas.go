@@ -19,7 +19,10 @@ var (
 type GasAccountant interface {
 	// UseGas attempts the use the given amount of gas. If the limit is
 	// reached this method will return ErrOutOfGas.
-	UseGas(transaction.Op, transaction.Costs) error
+	//
+	// The actual amount defined by the costs map will be multiplied by
+	// the given multiplier which must be a positive value.
+	UseGas(multiplier int, op transaction.Op, costs transaction.Costs) error
 
 	// GasWanted returns the amount of gas wanted.
 	GasWanted() transaction.Gas
@@ -33,11 +36,16 @@ type basicGasAccountant struct {
 	usedGas    transaction.Gas
 }
 
-func (ga *basicGasAccountant) UseGas(op transaction.Op, costs transaction.Costs) error {
+func (ga *basicGasAccountant) UseGas(multiplier int, op transaction.Op, costs transaction.Costs) error {
+	if multiplier < 0 {
+		panic("gas: multiplier must be >= 0")
+	}
+
 	amount, ok := costs[op]
 	if !ok {
 		return nil
 	}
+	amount = amount * transaction.Gas(multiplier)
 
 	// Check for overflow.
 	if math.MaxUint64-ga.usedGas < amount {
@@ -69,7 +77,11 @@ func NewGasAccountant(maxUsedGas transaction.Gas) GasAccountant {
 
 type nopGasAccountant struct{}
 
-func (ga *nopGasAccountant) UseGas(op transaction.Op, costs transaction.Costs) error {
+func (ga *nopGasAccountant) UseGas(multiplier int, op transaction.Op, costs transaction.Costs) error {
+	if multiplier < 0 {
+		panic("gas: multiplier must be >= 0")
+	}
+
 	return nil
 }
 
@@ -101,9 +113,13 @@ type compositeGasAccountant struct {
 	accts []GasAccountant
 }
 
-func (ga *compositeGasAccountant) UseGas(op transaction.Op, costs transaction.Costs) error {
+func (ga *compositeGasAccountant) UseGas(multiplier int, op transaction.Op, costs transaction.Costs) error {
+	if multiplier < 0 {
+		panic("gas: multiplier must be >= 0")
+	}
+
 	for _, a := range ga.accts {
-		if err := a.UseGas(op, costs); err != nil {
+		if err := a.UseGas(multiplier, op, costs); err != nil {
 			return err
 		}
 	}

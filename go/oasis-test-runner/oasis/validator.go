@@ -7,9 +7,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
-	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 )
@@ -31,6 +28,7 @@ type Validator struct {
 // ValidatorCfg is the Oasis validator provisioning configuration.
 type ValidatorCfg struct {
 	NodeCfg
+
 	Entity *Entity
 
 	MinGasPrice uint64
@@ -165,18 +163,14 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 
 	// Load node's identity, so that we can pass the validator's Tendermint
 	// address to sentry node(s) to configure it as a private peer.
-	signerFactory := fileSigner.NewFactory(valDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
-	valIdentity, err := identity.LoadOrGenerate(valDir.String(), signerFactory)
+	valPublicKey, err := provisionNodeIdentity(valDir)
 	if err != nil {
-		net.logger.Error("failed to load validator identity",
-			"err", err,
-			"validator_name", valName,
-		)
-		return nil, fmt.Errorf("oasis/validator: failed to load validator identity: %w", err)
+		return nil, errors.Wrap(err, "oasis/validator: failed to provision node identity")
 	}
-
-	valPublicKey := valIdentity.NodeSigner.Public()
 	val.tmAddress = crypto.PublicKeyToTendermint(&valPublicKey).Address().String()
+	if err = cfg.Entity.addNode(valPublicKey); err != nil {
+		return nil, err
+	}
 
 	net.validators = append(net.validators, val)
 	net.nextNodePort++

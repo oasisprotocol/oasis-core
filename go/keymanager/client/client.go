@@ -88,17 +88,18 @@ func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, 
 
 	kmID, ok := c.kmMap[runtimeID]
 	if !ok {
+		c.logger.Error("no known key manager for runtime",
+			"id", runtimeID,
+		)
 		return nil, ErrKeyManagerNotAvailable
-	} else if kmID == runtimeID {
-		// Key manager runtimes have an identity mapping.
-		if c.state[runtimeID] == nil {
-			return nil, ErrKeyManagerNotAvailable
-		}
-		kmID = runtimeID
 	}
 
 	st := c.state[kmID]
 	if st == nil || st.client == nil {
+		c.logger.Error("no key manager connection for runtime",
+			"id", runtimeID,
+			"km_id", kmID,
+		)
 		return nil, ErrKeyManagerNotAvailable
 	}
 
@@ -187,6 +188,11 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 
 	// It's not possible to service requests for this key manager.
 	if !status.IsInitialized || len(status.Nodes) == 0 {
+		c.logger.Warn("key manager not initialized or has no nodes",
+			"id", status.ID,
+			"status", status,
+		)
+
 		// Kill the conn and return.
 		if st != nil {
 			st.kill()

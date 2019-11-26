@@ -110,9 +110,18 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 
 	if net.cfg.DeterministicIdentities {
 		seed := fmt.Sprintf(computeIdentitySeedTemplate, len(net.computeWorkers))
-		if err := net.generateDeterministicNodeIdentity(computeDir, seed); err != nil {
-			return nil, errors.Wrap(err, "oasis/byzantine: failed to generate deterministic identity")
+		if err = net.generateDeterministicNodeIdentity(computeDir, seed); err != nil {
+			return nil, errors.Wrap(err, "oasis/compute: failed to generate deterministic identity")
 		}
+	}
+
+	// Pre-provision the node identity so that we can update the entity.
+	publicKey, err := provisionNodeIdentity(computeDir)
+	if err != nil {
+		return nil, errors.Wrap(err, "oasis/compute: failed to provision node identity")
+	}
+	if err := cfg.Entity.addNode(publicKey); err != nil {
+		return nil, err
 	}
 
 	if cfg.RuntimeBackend == "" {
