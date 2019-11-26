@@ -3,6 +3,7 @@ package storage
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"os"
@@ -18,7 +19,6 @@ import (
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	cmdControl "github.com/oasislabs/oasis-core/go/oasis-node/cmd/control"
-	cmdRoothashDebug "github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/roothash"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
@@ -48,7 +48,7 @@ var (
 				return err
 			}
 			for _, arg := range args {
-				if err := cmdRoothashDebug.ValidateRuntimeIDStr(arg); err != nil {
+				if err := ValidateRuntimeIDStr(arg); err != nil {
 					return fmt.Errorf("malformed runtime id '%v': %v", arg, err)
 				}
 			}
@@ -67,7 +67,7 @@ var (
 				return err
 			}
 			for _, arg := range args {
-				if err := cmdRoothashDebug.ValidateRuntimeIDStr(arg); err != nil {
+				if err := ValidateRuntimeIDStr(arg); err != nil {
 					return fmt.Errorf("malformed runtime id '%v': %v", arg, err)
 				}
 			}
@@ -79,6 +79,21 @@ var (
 
 	logger = logging.GetLogger("cmd/storage")
 )
+
+// ValidateRuntimeIDStr validates that the given string is a valid runtime id.
+func ValidateRuntimeIDStr(idStr string) error {
+	b, err := hex.DecodeString(idStr)
+	if err != nil {
+		return err
+	}
+
+	var id signature.PublicKey
+	if err = id.UnmarshalBinary(b); err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func checkDiff(ctx context.Context, storageClient storageApi.Backend, root string, oldRoot node.Root, newRoot node.Root) {
 	it, err := storageClient.GetDiff(ctx, oldRoot, newRoot)
