@@ -24,7 +24,7 @@ var (
 	rootCmd = &cobra.Command{
 		Use:     "oasis-node",
 		Short:   "Oasis Node",
-		Version: "0.2.0-alpha",
+		Version: "0.2.0-alpha" + version.Build,
 		Run:     node.Run,
 	}
 )

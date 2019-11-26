@@ -11,6 +11,14 @@ OASIS_GO ?= go
 #   migrate to a version of Go that has the fix, it can be removed.
 GOFLAGS ?= -trimpath -ldflags=-buildid= -v
 
+# Append git HEAD commit to the oasis node version, if git command exists and
+# this folder is in some git repository. Use a truncated commit hash and append
+# +, if the branch is dirty.
+VERSION_BUILD = $(shell git describe --always --match "" --dirty=+ 2>/dev/null)
+ifneq ($(VERSION_BUILD),)
+	GOFLAGS_VERSION_EXTRA = -ldflags "-X github.com/oasislabs/oasis-core/go/common/version.Build=+$(VERSION_BUILD)"
+endif
+
 all: generate build
 
 # Generate required files.
@@ -24,7 +32,7 @@ generate:
 # Build all the things.
 build: generate
 	@echo "Building Oasis node"
-	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) -o ./oasis-node/oasis-node ./oasis-node
+	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) $(GOFLAGS_VERSION_EXTRA) -o ./oasis-node/oasis-node ./oasis-node
 	@echo "Building Oasis test harness"
 	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) -o ./oasis-test-runner/oasis-test-runner ./oasis-test-runner
 	@echo "Building Oasis local network runner"

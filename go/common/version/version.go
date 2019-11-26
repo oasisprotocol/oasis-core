@@ -50,6 +50,9 @@ func (v Version) MajorMinor() Version {
 }
 
 var (
+	// Build stores current git HEAD and is set by the linker.
+	Build = ""
+
 	// RuntimeProtocol versions the protocol between the Oasis node(s) and
 	// the runtime.
 	//
