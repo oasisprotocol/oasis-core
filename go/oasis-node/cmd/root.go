@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/genesis"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/ias"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/identity"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/keymanager"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/node"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry"
@@ -73,6 +74,7 @@ func init() {
 		debug.Register,
 		genesis.Register,
 		ias.Register,
+		identity.Register,
 		keymanager.Register,
 		registry.Register,
 		stake.Register,
