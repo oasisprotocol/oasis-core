@@ -172,8 +172,8 @@ type UnsafeSigner interface {
 	UnsafeBytes() []byte
 }
 
-// PrepareSignerMessage prepares a context and message for signing by a Signer.
-func PrepareSignerMessage(context Context, message []byte) ([]byte, error) {
+// PrepareSignerContext prepares a context for use during signing by a Signer.
+func PrepareSignerContext(context Context) ([]byte, error) {
 	// Ensure that the context is registered for use.
 	rawOpts, isRegistered := registeredContexts.Load(context)
 	if !isRegistered {
@@ -192,13 +192,23 @@ func PrepareSignerMessage(context Context, message []byte) ([]byte, error) {
 		context = context + chainContextSeparator + chainContext
 	}
 
+	return []byte(context), nil
+}
+
+// PrepareSignerMessage prepares a context and message for signing by a Signer.
+func PrepareSignerMessage(context Context, message []byte) ([]byte, error) {
+	rawContext, err := PrepareSignerContext(context)
+	if err != nil {
+		return nil, err
+	}
+
 	// This is stupid, and we should be using RFC 8032's Ed25519ph instead
 	// but when an attempt was made to switch to it (See: #2103), people
 	// complained that certain HSM offerings doesn't support it.
 	//
 	// Blame YubiHSM and Ledger, not me.
 	h := sha512.New512_256()
-	_, _ = h.Write([]byte(context))
+	_, _ = h.Write(rawContext)
 	_, _ = h.Write(message)
 	sum := h.Sum(nil)
 
