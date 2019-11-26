@@ -24,6 +24,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
+	stakingTestsDebug "github.com/oasislabs/oasis-core/go/staking/tests/debug"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
@@ -403,7 +404,7 @@ func testRoothashMessages(t *testing.T, backend api.Backend, consensus consensus
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 
-	adjustmentAmount := stakingTests.QtyFromInt(1004)
+	adjustmentAmount := stakingTestsDebug.QtyFromInt(1004)
 	srcAcc, err := stakingBackend.AccountInfo(context.Background(), stakingTests.SrcID, 0)
 	require.NoError(err, "AccountInfo %s", stakingTests.SrcID)
 	srcStartBalance := &srcAcc.General.Balance

@@ -153,16 +153,16 @@ type Runtime struct {
 	KeyManager signature.PublicKey `json:"key_manager"`
 
 	// Compute stores parameters of the compute committee.
-	Compute ComputeParameters `json:"compute"`
+	Compute ComputeParameters `json:"compute,omitempty"`
 
 	// Merge stores parameters of the merge committee.
-	Merge MergeParameters `json:"merge"`
+	Merge MergeParameters `json:"merge,omitempty"`
 
 	// TxnScheduler stores parameters of the transactions scheduler committee.
-	TxnScheduler TxnSchedulerParameters `json:"txn_scheduler"`
+	TxnScheduler TxnSchedulerParameters `json:"txn_scheduler,omitempty"`
 
 	// Storage stores parameters of the storage committee.
-	Storage StorageParameters `json:"storage"`
+	Storage StorageParameters `json:"storage,omitempty"`
 }
 
 // String returns a string representation of itself.
