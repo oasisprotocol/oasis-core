@@ -23,12 +23,16 @@ var entityArgsDebugTest = []string{
 
 // Entity is an Oasis entity.
 type Entity struct {
+	net *Network
 	dir *env.Dir
 
 	entity       *entity.Entity
 	entitySigner signature.Signer
 
-	isDebugTestEntity bool
+	isDebugTestEntity      bool
+	allowEntitySignedNodes bool
+
+	nodes []signature.PublicKey
 }
 
 // EntityCfg is the Oasis entity provisioning configuration.
@@ -79,6 +83,43 @@ func (ent *Entity) toGenesisDescriptorArgs() []string {
 	return nil
 }
 
+func (ent *Entity) update() error {
+	if ent.isDebugTestEntity {
+		return nil
+	}
+
+	args := []string{
+		"registry", "entity", "update",
+		"--datadir", ent.dir.String(),
+	}
+	for _, n := range ent.nodes {
+		args = append(args, "--entity.node.id", n.String())
+	}
+
+	w, err := ent.dir.NewLogWriter("update.log")
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	if err = ent.net.runNodeBinary(w, args...); err != nil {
+		ent.net.logger.Error("failed to update entity",
+			"err", err,
+		)
+		return errors.Wrap(err, "oasis/entity: failed to update entity")
+	}
+
+	return nil
+}
+
+func (ent *Entity) addNode(id signature.PublicKey) error {
+	if ent.allowEntitySignedNodes {
+		return nil
+	}
+	ent.nodes = append(ent.nodes, id)
+	return ent.update()
+}
+
 // NewEntity provisions a new entity and adds it to the network.
 func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 	var ent *Entity
@@ -124,7 +165,9 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 		}
 
 		ent = &Entity{
-			dir: entityDir,
+			net:                    net,
+			dir:                    entityDir,
+			allowEntitySignedNodes: cfg.AllowEntitySignedNodes,
 		}
 		signerFactory := fileSigner.NewFactory(entityDir.String(), signature.SignerEntity)
 		ent.entity, ent.entitySigner, err = entity.Load(entityDir.String(), signerFactory)

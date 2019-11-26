@@ -26,6 +26,7 @@ type Storage struct { // nolint: maligned
 // StorageCfg is the Oasis storage node configuration.
 type StorageCfg struct { // nolint: maligned
 	NodeCfg
+
 	Backend       string
 	Entity        *Entity
 	IgnoreApplies bool
@@ -105,6 +106,15 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 			"storage_name", storageName,
 		)
 		return nil, errors.Wrap(err, "oasis/storage: failed to create storage subdir")
+	}
+
+	// Pre-provision the node identity so that we can update the entity.
+	publicKey, err := provisionNodeIdentity(storageDir)
+	if err != nil {
+		return nil, errors.Wrap(err, "oasis/storage: failed to provision node identity")
+	}
+	if err := cfg.Entity.addNode(publicKey); err != nil {
+		return nil, err
 	}
 
 	worker := &Storage{

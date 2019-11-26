@@ -82,7 +82,7 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},
-			oasis.EntityCfg{AllowEntitySignedNodes: true},
+			oasis.EntityCfg{},
 		},
 		Runtimes: []oasis.RuntimeFixture{
 			// Key manager runtime.

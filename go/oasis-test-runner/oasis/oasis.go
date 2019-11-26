@@ -654,3 +654,12 @@ func nodeTLSCertPath(dir *env.Dir) string {
 func nodeExportsPath(dir *env.Dir) string {
 	return filepath.Join(dir.String(), exportsDir)
 }
+
+func provisionNodeIdentity(dataDir *env.Dir) (signature.PublicKey, error) {
+	signerFactory := fileSigner.NewFactory(dataDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	nodeIdentity, err := identity.LoadOrGenerate(dataDir.String(), signerFactory)
+	if err != nil {
+		return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to provision node identity")
+	}
+	return nodeIdentity.NodeSigner.Public(), nil
+}

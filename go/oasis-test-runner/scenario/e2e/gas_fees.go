@@ -68,9 +68,9 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},
-			oasis.EntityCfg{AllowEntitySignedNodes: true},
-			oasis.EntityCfg{AllowEntitySignedNodes: true},
-			oasis.EntityCfg{AllowEntitySignedNodes: true},
+			oasis.EntityCfg{},
+			oasis.EntityCfg{},
+			oasis.EntityCfg{},
 		},
 		Validators: []oasis.ValidatorFixture{
 			// Create three validators, each with its own entity so we can test
