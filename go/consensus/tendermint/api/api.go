@@ -25,8 +25,6 @@ const (
 	LogEventPeerExchangeDisabled = "tendermint/peer_exchange_disabled"
 )
 
-var tagAppNameValue = []byte("1")
-
 // VotingPower is the default voting power for all validator nodes.
 const VotingPower = 1
 
@@ -78,8 +76,6 @@ func NodeToP2PAddr(n *node.Node) (*tmp2p.NetAddress, error) {
 	return tmAddr, nil
 }
 
-const eventTypeOasis = "oasis"
-
 // EventBuilder is a helper for constructing ABCI events.
 type EventBuilder struct {
 	app []byte
@@ -106,12 +102,6 @@ func (bld *EventBuilder) Event() types.Event {
 	// Return a copy to support emitting incrementally.
 	ev := types.Event{
 		Type: bld.ev.Type,
-		Attributes: []tmcmn.KVPair{
-			tmcmn.KVPair{
-				Key:   []byte("updated"),
-				Value: tagAppNameValue,
-			},
-		},
 	}
 	ev.Attributes = append(ev.Attributes, bld.ev.Attributes...)
 
@@ -131,11 +121,11 @@ func NewEventBuilder(app string) *EventBuilder {
 // EventTypeForApp generates the ABCI event type for events belonging
 // to the specified App.
 func EventTypeForApp(eventApp string) string {
-	return eventTypeOasis + "." + eventApp
+	return "oasis-event-" + eventApp
 }
 
 // QueryForApp generates a tmquery.Query for events belonging to the
 // specified App.
 func QueryForApp(eventApp string) tmpubsub.Query {
-	return tmquery.MustParse(fmt.Sprintf("%s.updated='%s'", EventTypeForApp(eventApp), tagAppNameValue))
+	return tmquery.MustParse(fmt.Sprintf("%s EXISTS", EventTypeForApp(eventApp)))
 }
