@@ -447,6 +447,7 @@ func (s *MutableState) CreateNode(node *node.Node, signedNode *node.SignedNode) 
 func (s *MutableState) RemoveNode(node *node.Node) {
 	s.tree.Remove(signedNodeKeyFmt.Encode(&node.ID))
 	s.tree.Remove(signedNodeByEntityKeyFmt.Encode(&node.EntityID, &node.ID))
+	s.tree.Remove(nodeStatusKeyFmt.Encode(&node.ID))
 
 	address := []byte(tmcrypto.PublicKeyToTendermint(&node.Consensus.ID).Address())
 	s.tree.Remove(nodeByConsAddressKeyFmt.Encode(address))
