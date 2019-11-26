@@ -18,6 +18,7 @@ import (
 	tmconfig "github.com/tendermint/tendermint/config"
 	tmlog "github.com/tendermint/tendermint/libs/log"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
+	tmmempool "github.com/tendermint/tendermint/mempool"
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
 	tmproxy "github.com/tendermint/tendermint/proxy"
@@ -496,7 +497,7 @@ func (t *tendermintService) broadcastTxRaw(data []byte) error {
 	err := mp.CheckTx(tmtypes.Tx(data), func(rsp *tmabcitypes.Response) {
 		ch <- rsp
 		close(ch)
-	})
+	}, tmmempool.TxInfo{})
 	if err != nil {
 		return fmt.Errorf("tendermint: failed to submit to local mempool: %w", err)
 	}

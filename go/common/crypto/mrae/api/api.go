@@ -76,7 +76,7 @@ func GenerateKeyPair(rng io.Reader) (publicKey, privateKey *[32]byte, err error)
 // private keys, and applies a HMAC based tweak to the resulting output.
 func ECDHAndTweak(key []byte, publicKey, privateKey *[32]byte, h func() hash.Hash, tweak []byte) {
 	var pmk [32]byte
-	curve25519.ScalarMult(&pmk, privateKey, publicKey)
+	curve25519.ScalarMult(&pmk, privateKey, publicKey) //nolint: staticcheck
 
 	kdf := hmac.New(h, tweak)
 	_, _ = kdf.Write(pmk[:])
