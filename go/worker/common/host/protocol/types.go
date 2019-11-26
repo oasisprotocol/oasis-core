@@ -203,11 +203,6 @@ type WorkerExecuteTxBatchResponse struct {
 	Batch ComputedBatch `json:"batch"`
 }
 
-const (
-	// EndpointKeyManager is a key manager client endpoint.
-	EndpointKeyManager string = "key-manager"
-)
-
 // HostKeyManagerPolicyRequest is a host key manager policy request message body.
 type HostKeyManagerPolicyRequest struct {
 }

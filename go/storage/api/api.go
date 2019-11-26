@@ -3,11 +3,11 @@ package api
 
 import (
 	"context"
-	"errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
 	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
@@ -15,22 +15,31 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
+const (
+	// ModuleName is the storage module name.
+	ModuleName = "storage"
+
+	// WriteLogIteratorChunkSize defines the chunk size of write log entries
+	// for GetCheckpoint and GetDiff methods.
+	WriteLogIteratorChunkSize = 10
+)
+
 var (
 	// ErrCantProve is the error returned when the backend is incapable
 	// of generating proofs (unsupported, no key, etc).
-	ErrCantProve = errors.New("storage: unable to provide proofs")
+	ErrCantProve = errors.New(ModuleName, 1, "storage: unable to provide proofs")
 	// ErrNoRoots is the error returned when the generated receipt would
 	// not contain any roots.
-	ErrNoRoots = errors.New("storage: no roots to generate receipt for")
+	ErrNoRoots = errors.New(ModuleName, 2, "storage: no roots to generate receipt for")
 	// ErrExpectedRootMismatch is the error returned when the expected root
 	// does not match the computed root.
-	ErrExpectedRootMismatch = errors.New("storage: expected root mismatch")
+	ErrExpectedRootMismatch = errors.New(ModuleName, 3, "storage: expected root mismatch")
 	// ErrUnsupported is the error returned when the called method is not
 	// supported by the given backend.
-	ErrUnsupported = errors.New("storage: method not supported by backend")
+	ErrUnsupported = errors.New(ModuleName, 4, "storage: method not supported by backend")
 	// ErrNoMergeRoots is the error returned when no other roots are passed
 	// to the Merge operation.
-	ErrNoMergeRoots = errors.New("storage: no roots to merge")
+	ErrNoMergeRoots = errors.New(ModuleName, 5, "storage: no roots to merge")
 
 	// The following errors are reimports from NodeDB.
 
@@ -207,6 +216,64 @@ type MergeOp struct {
 	Others []hash.Hash
 }
 
+// ApplyRequest is an Apply request.
+type ApplyRequest struct {
+	Namespace common.Namespace `json:"namespace"`
+	SrcRound  uint64           `json:"src_round"`
+	SrcRoot   hash.Hash        `json:"src_root"`
+	DstRound  uint64           `json:"dst_round"`
+	DstRoot   hash.Hash        `json:"dst_root"`
+	WriteLog  WriteLog         `json:"writelog"`
+}
+
+// ApplyBatchRequest is an ApplyBatch request.
+type ApplyBatchRequest struct {
+	Namespace common.Namespace `json:"namespace"`
+	DstRound  uint64           `json:"dst_round"`
+	Ops       []ApplyOp        `json:"ops"`
+}
+
+// MergeRequest is a Merge request.
+type MergeRequest struct {
+	Namespace common.Namespace `json:"namespace"`
+	Round     uint64           `json:"round"`
+	Base      hash.Hash        `json:"base"`
+	Others    []hash.Hash      `json:"others"`
+}
+
+// MergeBatchRequest is a MergeBatch request.
+type MergeBatchRequest struct {
+	Namespace common.Namespace `json:"namespace"`
+	Round     uint64           `json:"round"`
+	Ops       []MergeOp        `json:"ops"`
+}
+
+// SyncOptions are the sync options.
+type SyncOptions struct {
+	OffsetKey []byte `json:"offset_key"`
+	Limit     uint64 `json:"limit"`
+}
+
+// SyncChunk is a chunk of write log entries sent during GetDiff and
+// GetCheckpoint operations.
+type SyncChunk struct {
+	Final    bool     `json:"final"`
+	WriteLog WriteLog `json:"writelog"`
+}
+
+// GetDiffRequest is a GetDiff request.
+type GetDiffRequest struct {
+	StartRoot Root        `json:"start_root"`
+	EndRoot   Root        `json:"end_root"`
+	Options   SyncOptions `json:"options"`
+}
+
+// GetCheckpointRequest is a GetCheckpoint request.
+type GetCheckpointRequest struct {
+	Root    Root        `json:"root"`
+	Options SyncOptions `json:"options"`
+}
+
 // Backend is a storage backend implementation.
 type Backend interface {
 	syncer.ReadSyncer
@@ -216,26 +283,13 @@ type Backend interface {
 	// The expected new root is used to check if the new root after all the
 	// operations are applied already exists in the local DB.  If it does, the
 	// Apply is ignored.
-	Apply(
-		ctx context.Context,
-		ns common.Namespace,
-		srcRound uint64,
-		srcRoot hash.Hash,
-		dstRound uint64,
-		dstRoot hash.Hash,
-		writeLog WriteLog,
-	) ([]*Receipt, error)
+	Apply(ctx context.Context, request *ApplyRequest) ([]*Receipt, error)
 
 	// ApplyBatch applies multiple sets of operations against the MKVS and
 	// returns a single receipt covering all applied roots.
 	//
 	// See Apply for more details.
-	ApplyBatch(
-		ctx context.Context,
-		ns common.Namespace,
-		dstRound uint64,
-		ops []ApplyOp,
-	) ([]*Receipt, error)
+	ApplyBatch(ctx context.Context, request *ApplyBatchRequest) ([]*Receipt, error)
 
 	// TODO: Add proof.
 	// Merge performs a 3-way merge operation between the specified
@@ -243,33 +297,22 @@ type Backend interface {
 	//
 	// Round is the round of the base root while all other roots are
 	// expected to be in the next round.
-	Merge(
-		ctx context.Context,
-		ns common.Namespace,
-		round uint64,
-		base hash.Hash,
-		others []hash.Hash,
-	) ([]*Receipt, error)
+	Merge(ctx context.Context, request *MergeRequest) ([]*Receipt, error)
 
 	// TODO: Add proof.
 	// MergeBatch performs multiple sets of merge operations and returns
 	// a single receipt covering all merged roots.
 	//
 	// See Merge for more details.
-	MergeBatch(
-		ctx context.Context,
-		ns common.Namespace,
-		round uint64,
-		ops []MergeOp,
-	) ([]*Receipt, error)
+	MergeBatch(ctx context.Context, request *MergeBatchRequest) ([]*Receipt, error)
 
 	// GetDiff returns an iterator of write log entries that must be applied
 	// to get from the first given root to the second one.
-	GetDiff(context.Context, Root, Root) (WriteLogIterator, error)
+	GetDiff(ctx context.Context, request *GetDiffRequest) (WriteLogIterator, error)
 
 	// GetCheckpoint returns an iterator of write log entries in the provided
 	// root.
-	GetCheckpoint(context.Context, Root) (WriteLogIterator, error)
+	GetCheckpoint(ctx context.Context, request *GetCheckpointRequest) (WriteLogIterator, error)
 
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()

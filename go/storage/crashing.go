@@ -3,9 +3,7 @@ package storage
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 )
 
@@ -50,29 +48,16 @@ func (w *crashingWrapper) SyncIterate(ctx context.Context, request *api.IterateR
 	return res, err
 }
 
-func (w *crashingWrapper) Apply(
-	ctx context.Context,
-	ns common.Namespace,
-	srcRound uint64,
-	srcRoot hash.Hash,
-	dstRound uint64,
-	dstRoot hash.Hash,
-	writeLog api.WriteLog,
-) ([]*api.Receipt, error) {
+func (w *crashingWrapper) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {
 	crash.Here(crashPointWriteBefore)
-	res, err := w.Backend.Apply(ctx, ns, srcRound, srcRoot, dstRound, dstRoot, writeLog)
+	res, err := w.Backend.Apply(ctx, request)
 	crash.Here(crashPointWriteAfter)
 	return res, err
 }
 
-func (w *crashingWrapper) ApplyBatch(
-	ctx context.Context,
-	ns common.Namespace,
-	dstRound uint64,
-	ops []api.ApplyOp,
-) ([]*api.Receipt, error) {
+func (w *crashingWrapper) ApplyBatch(ctx context.Context, request *api.ApplyBatchRequest) ([]*api.Receipt, error) {
 	crash.Here(crashPointWriteBefore)
-	res, err := w.Backend.ApplyBatch(ctx, ns, dstRound, ops)
+	res, err := w.Backend.ApplyBatch(ctx, request)
 	crash.Here(crashPointWriteAfter)
 	return res, err
 }

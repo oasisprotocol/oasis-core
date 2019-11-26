@@ -60,7 +60,7 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
-	if err = nodeCtrl.WaitReady(context.Background()); err != nil {
+	if err = nodeCtrl.WaitSync(context.Background()); err != nil {
 		return err
 	}
 

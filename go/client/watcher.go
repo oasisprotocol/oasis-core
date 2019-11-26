@@ -12,15 +12,17 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/service"
-	"github.com/oasislabs/oasis-core/go/grpc/txnscheduler"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	txnscheduler "github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
 )
 
 type watchRequest struct {
@@ -41,11 +43,11 @@ func (w *watchRequest) send(res *watchResult) error {
 type watchResult struct {
 	result                []byte
 	err                   error
-	newTxnschedulerClient txnscheduler.TransactionSchedulerClient
+	newTxnschedulerClient txnscheduler.TransactionScheduler
 }
 
 type txnschedulerClientState struct {
-	client            txnscheduler.TransactionSchedulerClient
+	client            txnscheduler.TransactionScheduler
 	conn              *grpc.ClientConn
 	resolverCleanupCb func()
 }
@@ -73,7 +75,7 @@ func (t *txnschedulerClientState) updateConnection(node *node.Node) error {
 	t.resolverCleanupCb = cleanup
 
 	// Dial.
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(creds), grpc.WithBalancerName(roundrobin.Name)) //nolint: staticcheck
+	conn, err := cmnGrpc.Dial(address, grpc.WithTransportCredentials(creds), grpc.WithBalancerName(roundrobin.Name)) //nolint: staticcheck
 	if err != nil {
 		return errors.Wrap(err, "client/watcher: failed to dial txnscheduler leader")
 	}
@@ -128,7 +130,7 @@ func (w *blockWatcher) refreshCommittee(height int64) error {
 		if node.Role != scheduler.Leader {
 			continue
 		}
-		leaderNode, err = w.common.registry.GetNode(w.common.ctx, node.PublicKey, height)
+		leaderNode, err = w.common.registry.GetNode(w.common.ctx, &registry.IDQuery{ID: node.PublicKey, Height: height})
 		if err != nil {
 			return err
 		}

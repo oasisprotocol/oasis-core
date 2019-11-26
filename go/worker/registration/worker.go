@@ -192,11 +192,17 @@ func (w *Worker) doNodeRegistration() {
 	// Loop broken; shutdown requested.
 	publicKey := w.identity.NodeSigner.Public()
 
-	initialRegCh, sub := w.registry.WatchNodes()
+	initialRegCh, sub, err := w.registry.WatchNodes(w.ctx)
+	if err != nil {
+		w.logger.Error("failed to watch nodes",
+			"err", err,
+		)
+		return
+	}
 	defer sub.Close()
 
 	// Check if the node is already deregistered.
-	_, err := w.registry.GetNode(w.ctx, publicKey, 0)
+	_, err = w.registry.GetNode(w.ctx, &registry.IDQuery{ID: publicKey, Height: consensus.HeightLatest})
 	if err == registry.ErrNoSuchNode {
 		w.registrationStopped()
 		return

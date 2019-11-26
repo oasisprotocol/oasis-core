@@ -14,7 +14,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/version"
-	pbRegistry "github.com/oasislabs/oasis-core/go/grpc/registry"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
@@ -25,9 +24,6 @@ var (
 	// ErrMalformedStoreID is the error returned when a storage service
 	// ID is malformed.
 	ErrMalformedStoreID = errors.New("runtime: Malformed store ID")
-
-	// ErrNilProtobuf is the error returned when a protobuf is nil.
-	ErrNilProtobuf = errors.New("node: Protobuf is nil")
 
 	_ prettyprint.PrettyPrinter = (*SignedRuntime)(nil)
 )
@@ -175,81 +171,6 @@ func (c *Runtime) IsCompute() bool {
 	return c.Kind == KindCompute
 }
 
-// FromProto deserializes a protobuf into a Runtime.
-func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
-	if pb == nil {
-		return ErrNilProtobuf
-	}
-
-	if err := c.ID.UnmarshalBinary(pb.GetId()); err != nil {
-		return err
-	}
-
-	if err := c.TEEHardware.FromProto(pb.GetTeeHardware()); err != nil {
-		return err
-	}
-
-	if err := c.KeyManager.UnmarshalBinary(pb.GetKeyManager()); err != nil {
-		return err
-	}
-
-	if err := c.Version.fromProto(pb.GetVersion()); err != nil {
-		return err
-	}
-
-	c.Compute.GroupSize = pb.GetComputeGroupSize()
-	c.Compute.GroupBackupSize = pb.GetComputeGroupBackupSize()
-	c.Compute.AllowedStragglers = pb.GetComputeAllowedStragglers()
-	c.Compute.RoundTimeout = time.Duration(pb.GetComputeRoundTimeout())
-	c.Merge.GroupSize = pb.GetMergeGroupSize()
-	c.Merge.GroupBackupSize = pb.GetMergeGroupBackupSize()
-	c.Merge.AllowedStragglers = pb.GetMergeAllowedStragglers()
-	c.Merge.RoundTimeout = time.Duration(pb.GetMergeRoundTimeout())
-	c.TxnScheduler.GroupSize = pb.GetTxnSchedulerGroupSize()
-	c.TxnScheduler.Algorithm = pb.GetTxnSchedulerAlgorithm()
-	c.TxnScheduler.MaxBatchSize = pb.GetTxnSchedulerMaxBatchSize()
-	c.TxnScheduler.MaxBatchSizeBytes = pb.GetTxnSchedulerMaxBatchSizeBytes()
-	c.TxnScheduler.BatchFlushTimeout = time.Duration(pb.GetTxnSchedulerBatchFlushTimeout())
-	c.Storage.GroupSize = pb.GetStorageGroupSize()
-	c.Kind = RuntimeKind(pb.GetKind())
-
-	return nil
-}
-
-// ToProto serializes a Runtime into a protobuf.
-func (c *Runtime) ToProto() *pbRegistry.Runtime {
-	pb := new(pbRegistry.Runtime)
-	var err error
-
-	if pb.Id, err = c.ID.MarshalBinary(); err != nil {
-		panic(err)
-	}
-	if pb.TeeHardware, err = c.TEEHardware.ToProto(); err != nil {
-		panic(err)
-	}
-	if pb.KeyManager, err = c.KeyManager.MarshalBinary(); err != nil {
-		panic(err)
-	}
-	pb.Version = c.Version.toProto()
-	pb.ComputeGroupSize = c.Compute.GroupSize
-	pb.ComputeGroupBackupSize = c.Compute.GroupBackupSize
-	pb.ComputeAllowedStragglers = c.Compute.AllowedStragglers
-	pb.ComputeRoundTimeout = int64(c.Compute.RoundTimeout)
-	pb.MergeGroupSize = c.Merge.GroupSize
-	pb.MergeGroupBackupSize = c.Merge.GroupBackupSize
-	pb.MergeAllowedStragglers = c.Merge.AllowedStragglers
-	pb.MergeRoundTimeout = int64(c.Merge.RoundTimeout)
-	pb.TxnSchedulerAlgorithm = c.TxnScheduler.Algorithm
-	pb.TxnSchedulerGroupSize = c.TxnScheduler.GroupSize
-	pb.TxnSchedulerMaxBatchSize = c.TxnScheduler.MaxBatchSize
-	pb.TxnSchedulerMaxBatchSizeBytes = c.TxnScheduler.MaxBatchSizeBytes
-	pb.TxnSchedulerBatchFlushTimeout = int64(c.TxnScheduler.BatchFlushTimeout)
-	pb.StorageGroupSize = c.Storage.GroupSize
-	pb.Kind = uint32(c.Kind)
-
-	return pb
-}
-
 // SignedRuntime is a signed blob containing a CBOR-serialized Runtime.
 type SignedRuntime struct {
 	signature.Signed
@@ -293,19 +214,6 @@ type VersionInfo struct {
 	// TEE is the enclave version information, in an enclave provider specific
 	// format if any.
 	TEE []byte `json:"tee,omitempty"`
-}
-
-func (v *VersionInfo) fromProto(pb *pbRegistry.VersionInfo) error {
-	v.Version = version.FromU64(pb.GetVersion())
-	v.TEE = append([]byte{}, pb.GetTee()...)
-	return nil
-}
-
-func (v *VersionInfo) toProto() *pbRegistry.VersionInfo {
-	pb := new(pbRegistry.VersionInfo)
-	pb.Version = v.Version.ToU64()
-	pb.Tee = append([]byte{}, v.TEE...)
-	return pb
 }
 
 // VersionInfoIntelSGX is the SGX TEE version information.

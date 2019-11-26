@@ -499,7 +499,11 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 			},
 		}
 
-		receipts, err := n.commonNode.Storage.MergeBatch(ctx, prevBlk.Header.Namespace, prevBlk.Header.Round, mergeOps)
+		receipts, err := n.commonNode.Storage.MergeBatch(ctx, &storage.MergeBatchRequest{
+			Namespace: prevBlk.Header.Namespace,
+			Round:     prevBlk.Header.Round,
+			Ops:       mergeOps,
+		})
 		if err != nil {
 			n.logger.Error("failed to merge",
 				"err", err,

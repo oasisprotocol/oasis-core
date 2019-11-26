@@ -16,7 +16,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 )
 
-const nonceMaxLen = 32
+// NonceMaxLen is the maximum length of the AVR nonce.
+const NonceMaxLen = 32
 
 var (
 	unsafeSkipVerify         bool
@@ -304,7 +305,7 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 		// described as "opaque".
 	}
 
-	if len(a.Nonce) > nonceMaxLen {
+	if len(a.Nonce) > NonceMaxLen {
 		return fmt.Errorf("ias/avr: invalid nonce length")
 	}
 

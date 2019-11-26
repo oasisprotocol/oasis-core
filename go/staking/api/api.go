@@ -17,12 +17,6 @@ const (
 	// ModuleName is a unique module name for the staking module.
 	ModuleName = "staking"
 
-	// TokenName is the name of the staking token.
-	TokenName = "Buffycoin"
-
-	// TokenSymbol is the symbol of the staking token.
-	TokenSymbol = "BUF"
-
 	// LogEventGeneralAdjustment is a log event value that signals adjustment
 	// of an account's general balance due to a roothash message.
 	LogEventGeneralAdjustment = "staking/general_adjustment"
@@ -70,12 +64,6 @@ var (
 
 // Backend is a staking token implementation.
 type Backend interface {
-	// Name is the name of the token.
-	Name() string
-
-	// Symbol is the symbol of the token.
-	Symbol() string
-
 	// TotalSupply returns the total number of tokens.
 	TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error)
 
@@ -83,18 +71,21 @@ type Backend interface {
 	CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error)
 
 	// Threshold returns the specific staking threshold by kind.
-	Threshold(ctx context.Context, kind ThresholdKind, height int64) (*quantity.Quantity, error)
+	Threshold(ctx context.Context, query *ThresholdQuery) (*quantity.Quantity, error)
 
 	// Accounts returns the IDs of all accounts with a non-zero general
 	// or escrow balance.
 	Accounts(ctx context.Context, height int64) ([]signature.PublicKey, error)
 
 	// AccountInfo returns the account descriptor for the given account.
-	AccountInfo(ctx context.Context, owner signature.PublicKey, height int64) (*Account, error)
+	AccountInfo(ctx context.Context, query *OwnerQuery) (*Account, error)
 
 	// DebondingDelegations returns the list of debonding delegations for
 	// the given owner (delegator).
-	DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.PublicKey][]*DebondingDelegation, error)
+	DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[signature.PublicKey][]*DebondingDelegation, error)
+
+	// StateToGenesis returns the genesis state at specified block height.
+	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
 
 	// WatchTransfers returns a channel that produces a stream of TranserEvent
 	// on all balance transfers.
@@ -103,18 +94,26 @@ type Backend interface {
 	// WatchBurns returns a channel of BurnEvent on token destruction.
 	WatchBurns(ctx context.Context) (<-chan *BurnEvent, pubsub.ClosableSubscription, error)
 
-	// WatchEscrows returns a channel that produces a stream of `*EscrowEvent`,
-	// `*TakeEscrowEvent`, and `*ReleaseEscrowEvent` when entities add to their
-	// escrow balance, get tokens deducted from their escrow balance, and
-	// have their escrow balance released into their general balance
-	// respectively.
-	WatchEscrows(ctx context.Context) (<-chan interface{}, pubsub.ClosableSubscription, error)
-
-	// ToGenesis returns the genesis state at specified block height.
-	ToGenesis(ctx context.Context, height int64) (*Genesis, error)
+	// WatchEscrows returns a channel that produces a stream of EscrowEvent
+	// when entities add to their escrow balance, get tokens deducted from
+	// their escrow balance, and have their escrow balance released into their
+	// general balance.
+	WatchEscrows(ctx context.Context) (<-chan *EscrowEvent, pubsub.ClosableSubscription, error)
 
 	// Cleanup cleans up the backend.
 	Cleanup()
+}
+
+// ThresholdQuery is a treshold query.
+type ThresholdQuery struct {
+	Height int64         `json:"height"`
+	Kind   ThresholdKind `json:"kind"`
+}
+
+// OwnerQuery is an owner query.
+type OwnerQuery struct {
+	Height int64               `json:"height"`
+	Owner  signature.PublicKey `json:"owner"`
 }
 
 // TransferEvent is the event emitted when a balance is transfered, either by
@@ -131,9 +130,16 @@ type BurnEvent struct {
 	Tokens quantity.Quantity   `json:"tokens"`
 }
 
-// EscrowEvent is the event emitted when a balance is transfered into a escrow
-// balance.
+// EscrowEvent is an escrow event.
 type EscrowEvent struct {
+	Add     *AddEscrowEvent     `json:"add,omitempty"`
+	Take    *TakeEscrowEvent    `json:"take,omitempty"`
+	Reclaim *ReclaimEscrowEvent `json:"reclaim,omitempty"`
+}
+
+// AddEscrowEvent is the event emitted when a balance is transfered into a escrow
+// balance.
+type AddEscrowEvent struct {
 	Owner  signature.PublicKey `json:"owner"`
 	Escrow signature.PublicKey `json:"escrow"`
 	Tokens quantity.Quantity   `json:"tokens"`

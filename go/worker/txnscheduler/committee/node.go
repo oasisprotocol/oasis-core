@@ -25,10 +25,10 @@ import (
 	computeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/committee"
 	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm"
 	txnSchedulerAlgorithmApi "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
+	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
 )
 
 var (
-	ErrNotLeader      = errors.New("not leader")
 	errIncorrectState = errors.New("incorrect state")
 	errNoBlocks       = errors.New("no blocks")
 )
@@ -128,7 +128,7 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 	// Check if we are a leader. Note that we may be in the middle of a
 	// transition, but this shouldn't matter as the client will retry.
 	if !n.commonNode.Group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
-		return ErrNotLeader
+		return api.ErrNotLeader
 	}
 
 	if err := n.algorithm.ScheduleTx(call); err != nil {
@@ -147,7 +147,7 @@ func (n *Node) IsTransactionQueued(ctx context.Context, id hash.Hash) (bool, err
 	// Check if we are a leader. Note that we may be in the middle of a
 	// transition, but this shouldn't matter as the client will retry.
 	if !n.commonNode.Group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
-		return false, ErrNotLeader
+		return false, api.ErrNotLeader
 	}
 
 	return n.algorithm.IsQueued(id), nil
@@ -244,7 +244,7 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 	// If we are not a leader or we don't have any blocks, don't do anything.
 	if !epoch.IsTransactionSchedulerLeader() {
-		return ErrNotLeader
+		return api.ErrNotLeader
 	}
 	if n.commonNode.CurrentBlock == nil {
 		return errNoBlocks
@@ -290,15 +290,14 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error
 		opentracing.ChildOf(batchSpanCtx),
 	)
 
-	ioReceipts, err := n.commonNode.Storage.Apply(
-		ctx,
-		lastHeader.Namespace,
-		lastHeader.Round+1,
-		emptyRoot.Hash,
-		lastHeader.Round+1,
-		ioRoot,
-		ioWriteLog,
-	)
+	ioReceipts, err := n.commonNode.Storage.Apply(ctx, &storage.ApplyRequest{
+		Namespace: lastHeader.Namespace,
+		SrcRound:  lastHeader.Round + 1,
+		SrcRoot:   emptyRoot.Hash,
+		DstRound:  lastHeader.Round + 1,
+		DstRoot:   ioRoot,
+		WriteLog:  ioWriteLog,
+	})
 	if err != nil {
 		spanInsert.Finish()
 		n.logger.Error("failed to commit I/O tree to storage",

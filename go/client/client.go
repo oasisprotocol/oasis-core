@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -15,21 +14,23 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/oasislabs/oasis-core/go/client/api"
 	"github.com/oasislabs/oasis-core/go/client/indexer"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	"github.com/oasislabs/oasis-core/go/grpc/txnscheduler"
+	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/client"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	txnscheduler "github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
 )
 
 const (
@@ -40,11 +41,11 @@ const (
 )
 
 var (
-	// ErrIndexerDisabled is an error when the indexer is disabled.
-	ErrIndexerDisabled = errors.New("client: indexer not enabled")
-
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
+
+	_ api.RuntimeClient    = (*runtimeClient)(nil)
+	_ enclaverpc.Transport = (*runtimeClient)(nil)
 )
 
 const (
@@ -74,8 +75,7 @@ func (c *submitContext) cancel() {
 	<-c.closeCh
 }
 
-// Client is implements submitting transactions to the transaction scheduler committee leader.
-type Client struct {
+type runtimeClient struct {
 	sync.Mutex
 	common   *clientCommon
 	watchers map[signature.PublicKey]*blockWatcher
@@ -86,15 +86,20 @@ type Client struct {
 	logger *logging.Logger
 }
 
-func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.SubmitTxRequest, txnschedulerClient txnscheduler.TransactionSchedulerClient, resultCh chan error) {
+func (c *runtimeClient) doSubmitTxToLeader(
+	submitCtx *submitContext,
+	req *txnscheduler.SubmitTxRequest,
+	client txnscheduler.TransactionScheduler,
+	resultCh chan error,
+) {
 	defer close(submitCtx.closeCh)
 
 	op := func() error {
-		_, err := txnschedulerClient.SubmitTx(submitCtx.ctx, req)
+		_, err := client.SubmitTx(submitCtx.ctx, req)
 		if submitCtx.ctx.Err() != nil {
 			return backoff.Permanent(submitCtx.ctx.Err())
 		}
-		if status.Code(err) == codes.Unavailable {
+		if err == txnscheduler.ErrNotLeader || status.Code(err) == codes.Unavailable {
 			return err
 		}
 		if err != nil {
@@ -110,23 +115,19 @@ func (c *Client) doSubmitTxToLeader(submitCtx *submitContext, req *txnscheduler.
 	resultCh <- backoff.Retry(op, bctx)
 }
 
-// SubmitTx submits a new transaction to the committee leader and returns its results.
-func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signature.PublicKey) ([]byte, error) {
-	if werr := c.WaitSync(ctx); werr != nil {
-		return nil, werr
-	}
-
+// Implements api.RuntimeClient.
+func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxRequest) ([]byte, error) {
 	req := &txnscheduler.SubmitTxRequest{
-		RuntimeId: runtimeID[:],
-		Data:      txData,
+		RuntimeID: request.RuntimeID,
+		Data:      request.Data,
 	}
 
 	var watcher *blockWatcher
 	var ok bool
 	var err error
 	c.Lock()
-	if watcher, ok = c.watchers[runtimeID]; !ok {
-		watcher, err = newWatcher(c.common, runtimeID)
+	if watcher, ok = c.watchers[request.RuntimeID]; !ok {
+		watcher, err = newWatcher(c.common, request.RuntimeID)
 		if err != nil {
 			c.Unlock()
 			return nil, err
@@ -135,13 +136,13 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 			c.Unlock()
 			return nil, err
 		}
-		c.watchers[runtimeID] = watcher
+		c.watchers[request.RuntimeID] = watcher
 	}
 	c.Unlock()
 
 	respCh := make(chan *watchResult)
 	var requestID hash.Hash
-	requestID.FromBytes(txData)
+	requestID.FromBytes(request.Data)
 	watcher.newCh <- &watchRequest{
 		id:     &requestID,
 		ctx:    ctx,
@@ -211,64 +212,20 @@ func (c *Client) SubmitTx(ctx context.Context, txData []byte, runtimeID signatur
 	}
 }
 
-// WaitEpoch waits on the consensus epochtime to reach provided epoch.
-func (c *Client) WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error {
-	et := c.common.consensus.EpochTime()
-	ch, sub := et.WatchEpochs()
-	defer sub.Close()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case e, ok := <-ch:
-			if !ok {
-				return context.Canceled
-			}
-			if e >= epoch {
-				return nil
-			}
-		}
-	}
-}
-
-// WaitSync waits on the consensus backend given at construction to finish syncing.
-func (c *Client) WaitSync(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-c.common.consensus.Synced():
-		return nil
-	}
-}
-
-// IsSynced checks if the consensus backend given at construction has finished syncing.
-func (c *Client) IsSynced(ctx context.Context) (bool, error) {
-	select {
-	case <-ctx.Done():
-		return false, ctx.Err()
-	case <-c.common.consensus.Synced():
-		return true, nil
-	default:
-		return false, nil
-	}
-}
-
-// WatchBlocks subscribes to blocks for the given runtime.
-func (c *Client) WatchBlocks(ctx context.Context, runtimeID signature.PublicKey) (<-chan *roothash.AnnotatedBlock, *pubsub.Subscription, error) {
+// Implements api.RuntimeClient.
+func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID signature.PublicKey) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	return c.common.roothash.WatchBlocks(runtimeID)
 }
 
-// GetBlock returns the block at a specific round.
-//
-// Pass RoundLatest to get the latest block.
-func (c *Client) GetBlock(ctx context.Context, runtimeID signature.PublicKey, round uint64) (*block.Block, error) {
-	if round == RoundLatest {
-		return c.common.roothash.GetLatestBlock(ctx, runtimeID, 0)
+// Implements api.RuntimeClient.
+func (c *runtimeClient) GetBlock(ctx context.Context, request *api.GetBlockRequest) (*block.Block, error) {
+	if request.Round == api.RoundLatest {
+		return c.common.roothash.GetLatestBlock(ctx, request.RuntimeID, consensus.HeightLatest)
 	}
-	return c.common.roothash.GetBlock(ctx, runtimeID, round)
+	return c.common.roothash.GetBlock(ctx, request.RuntimeID, request.Round)
 }
 
-func (c *Client) getTxnTree(blk *block.Block) *transaction.Tree {
+func (c *runtimeClient) getTxnTree(blk *block.Block) *transaction.Tree {
 	ioRoot := storage.Root{
 		Namespace: blk.Header.Namespace,
 		Round:     blk.Header.Round,
@@ -278,27 +235,25 @@ func (c *Client) getTxnTree(blk *block.Block) *transaction.Tree {
 	return transaction.NewTree(c.common.storage, ioRoot)
 }
 
-func (c *Client) getTxnByHash(ctx context.Context, blk *block.Block, txHash hash.Hash) (*transaction.Transaction, error) {
+func (c *runtimeClient) getTxnByHash(ctx context.Context, blk *block.Block, txHash hash.Hash) (*transaction.Transaction, error) {
 	tree := c.getTxnTree(blk)
 	defer tree.Close()
 
 	return tree.GetTransaction(ctx, txHash)
 }
 
-// GetTxn returns the transaction at a specific block round and index.
-//
-// Pass RoundLatest for the round to get the latest block.
-func (c *Client) GetTxn(ctx context.Context, runtimeID signature.PublicKey, round uint64, index uint32) (*TxnResult, error) {
+// Implements api.RuntimeClient.
+func (c *runtimeClient) GetTx(ctx context.Context, request *api.GetTxRequest) (*api.TxResult, error) {
 	if c.indexerBackend == nil {
-		return nil, ErrIndexerDisabled
+		return nil, api.ErrIndexerDisabled
 	}
 
-	blk, err := c.GetBlock(ctx, runtimeID, round)
+	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: request.Round})
 	if err != nil {
 		return nil, err
 	}
 
-	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, runtimeID, blk.Header.Round, index)
+	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, request.RuntimeID, blk.Header.Round, request.Index)
 	if err != nil {
 		return nil, err
 	}
@@ -308,27 +263,26 @@ func (c *Client) GetTxn(ctx context.Context, runtimeID signature.PublicKey, roun
 		return nil, err
 	}
 
-	return &TxnResult{
-		Block:     blk,
-		BlockHash: blk.Header.EncodedHash(),
-		Index:     index,
-		Input:     tx.Input,
-		Output:    tx.Output,
+	return &api.TxResult{
+		Block:  blk,
+		Index:  request.Index,
+		Input:  tx.Input,
+		Output: tx.Output,
 	}, nil
 }
 
-// GetTxnByBlockHash returns the transaction at a specific block hash and index.
-func (c *Client) GetTxnByBlockHash(ctx context.Context, runtimeID signature.PublicKey, blockHash hash.Hash, index uint32) (*TxnResult, error) {
+// Implements api.RuntimeClient.
+func (c *runtimeClient) GetTxByBlockHash(ctx context.Context, request *api.GetTxByBlockHashRequest) (*api.TxResult, error) {
 	if c.indexerBackend == nil {
-		return nil, ErrIndexerDisabled
+		return nil, api.ErrIndexerDisabled
 	}
 
-	blk, err := c.QueryBlock(ctx, runtimeID, blockHash)
+	blk, err := c.GetBlockByHash(ctx, &api.GetBlockByHashRequest{RuntimeID: request.RuntimeID, BlockHash: request.BlockHash})
 	if err != nil {
 		return nil, err
 	}
 
-	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, runtimeID, blk.Header.Round, index)
+	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, request.RuntimeID, blk.Header.Round, request.Index)
 	if err != nil {
 		return nil, err
 	}
@@ -338,26 +292,25 @@ func (c *Client) GetTxnByBlockHash(ctx context.Context, runtimeID signature.Publ
 		return nil, err
 	}
 
-	return &TxnResult{
-		Block:     blk,
-		BlockHash: blk.Header.EncodedHash(),
-		Index:     index,
-		Input:     tx.Input,
-		Output:    tx.Output,
+	return &api.TxResult{
+		Block:  blk,
+		Index:  request.Index,
+		Input:  tx.Input,
+		Output: tx.Output,
 	}, nil
 }
 
-// GetTransactions returns a list of transactions under the given transaction root.
-func (c *Client) GetTransactions(ctx context.Context, runtimeID signature.PublicKey, round uint64, rootHash hash.Hash) ([][]byte, error) {
-	if rootHash.IsEmpty() {
+// Implements api.RuntimeClient.
+func (c *runtimeClient) GetTxs(ctx context.Context, request *api.GetTxsRequest) ([][]byte, error) {
+	if request.IORoot.IsEmpty() {
 		return [][]byte{}, nil
 	}
 
 	ioRoot := storage.Root{
-		Round: round,
-		Hash:  rootHash,
+		Round: request.Round,
+		Hash:  request.IORoot,
 	}
-	copy(ioRoot.Namespace[:], runtimeID[:])
+	copy(ioRoot.Namespace[:], request.RuntimeID[:])
 
 	tree := transaction.NewTree(c.common.storage, ioRoot)
 	defer tree.Close()
@@ -375,32 +328,32 @@ func (c *Client) GetTransactions(ctx context.Context, runtimeID signature.Public
 	return inputs, nil
 }
 
-// QueryBlock queries the block index of a given runtime.
-func (c *Client) QueryBlock(ctx context.Context, runtimeID signature.PublicKey, blockHash hash.Hash) (*block.Block, error) {
+// Implements api.RuntimeClient.
+func (c *runtimeClient) GetBlockByHash(ctx context.Context, request *api.GetBlockByHashRequest) (*block.Block, error) {
 	if c.indexerBackend == nil {
-		return nil, ErrIndexerDisabled
+		return nil, api.ErrIndexerDisabled
 	}
 
-	round, err := c.indexerBackend.QueryBlock(ctx, runtimeID, blockHash)
+	round, err := c.indexerBackend.QueryBlock(ctx, request.RuntimeID, request.BlockHash)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.GetBlock(ctx, runtimeID, round)
+	return c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: round})
 }
 
-// QueryTxn queries the transaction index of a given runtime.
-func (c *Client) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, key, value []byte) (*TxnResult, error) {
+// Implements api.RuntimeClient.
+func (c *runtimeClient) QueryTx(ctx context.Context, request *api.QueryTxRequest) (*api.TxResult, error) {
 	if c.indexerBackend == nil {
-		return nil, ErrIndexerDisabled
+		return nil, api.ErrIndexerDisabled
 	}
 
-	round, txHash, txIndex, err := c.indexerBackend.QueryTxn(ctx, runtimeID, key, value)
+	round, txHash, txIndex, err := c.indexerBackend.QueryTxn(ctx, request.RuntimeID, request.Key, request.Value)
 	if err != nil {
 		return nil, err
 	}
 
-	blk, err := c.GetBlock(ctx, runtimeID, round)
+	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: round})
 	if err != nil {
 		return nil, err
 	}
@@ -410,32 +363,30 @@ func (c *Client) QueryTxn(ctx context.Context, runtimeID signature.PublicKey, ke
 		return nil, err
 	}
 
-	return &TxnResult{
-		Block:     blk,
-		BlockHash: blk.Header.EncodedHash(),
-		Index:     txIndex,
-		Input:     tx.Input,
-		Output:    tx.Output,
+	return &api.TxResult{
+		Block:  blk,
+		Index:  txIndex,
+		Input:  tx.Input,
+		Output: tx.Output,
 	}, nil
 }
 
-// QueryTxns queries the transaction index of a given runtime with a complex
-// query and returns multiple results.
-func (c *Client) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, query indexer.Query) ([]*TxnResult, error) {
+// Implements api.RuntimeClient.
+func (c *runtimeClient) QueryTxs(ctx context.Context, request *api.QueryTxsRequest) ([]*api.TxResult, error) {
 	if c.indexerBackend == nil {
-		return nil, ErrIndexerDisabled
+		return nil, api.ErrIndexerDisabled
 	}
 
-	results, err := c.indexerBackend.QueryTxns(ctx, runtimeID, query)
+	results, err := c.indexerBackend.QueryTxns(ctx, request.RuntimeID, request.Query)
 	if err != nil {
 		return nil, err
 	}
 
-	var output []*TxnResult
+	var output []*api.TxResult
 	for round, txResults := range results {
 		// Fetch block for the given round.
 		var blk *block.Block
-		blk, err = c.GetBlock(ctx, runtimeID, round)
+		blk, err = c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: round})
 		if err != nil {
 			return nil, err
 		}
@@ -444,19 +395,17 @@ func (c *Client) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, q
 		defer tree.Close()
 
 		// Extract transaction data for the specified indices.
-		blockHash := blk.Header.EncodedHash()
 		for _, txResult := range txResults {
 			tx, err := tree.GetTransaction(ctx, txResult.TxHash)
 			if err != nil {
 				return nil, err
 			}
 
-			output = append(output, &TxnResult{
-				Block:     blk,
-				BlockHash: blockHash,
-				Index:     txResult.TxIndex,
-				Input:     tx.Input,
-				Output:    tx.Output,
+			output = append(output, &api.TxResult{
+				Block:  blk,
+				Index:  txResult.TxIndex,
+				Input:  tx.Input,
+				Output: tx.Output,
 			})
 		}
 	}
@@ -464,45 +413,32 @@ func (c *Client) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, q
 	return output, nil
 }
 
-// WaitBlockIndexed waits for a block to be indexed by the indexer.
-func (c *Client) WaitBlockIndexed(ctx context.Context, runtimeID signature.PublicKey, round uint64) error {
+// Implements api.RuntimeClient.
+func (c *runtimeClient) WaitBlockIndexed(ctx context.Context, request *api.WaitBlockIndexedRequest) error {
 	if c.indexerBackend == nil {
-		return ErrIndexerDisabled
+		return api.ErrIndexerDisabled
 	}
 
-	return c.indexerBackend.WaitBlockIndexed(ctx, runtimeID, round)
+	return c.indexerBackend.WaitBlockIndexed(ctx, request.RuntimeID, request.Round)
 }
 
-// CallEnclave proxies an EnclaveRPC call to the given endpoint.
-//
-// The endpoint should be an URI in the form <endpoint-type>://<id> where the
-// <endpoint-type> is one of the known endpoint types and the <id> is an
-// endpoint-specific identifier.
-func (c *Client) CallEnclave(ctx context.Context, endpoint string, data []byte) ([]byte, error) {
-	endpointURL, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, err
-	}
-
-	switch endpointURL.Scheme {
-	case EndpointKeyManager:
-		var runtimeID signature.PublicKey
-		if err = runtimeID.UnmarshalHex(endpointURL.Host); err != nil {
-			return nil, errors.Wrap(err, "malformed key manager EnclaveRPC endpoint")
-		}
-
-		return c.common.keyManager.CallRemote(ctx, runtimeID, data)
+// Implements enclaverpc.Transport.
+func (c *runtimeClient) CallEnclave(ctx context.Context, request *enclaverpc.CallEnclaveRequest) ([]byte, error) {
+	switch request.Endpoint {
+	case keymanagerAPI.EnclaveRPCEndpoint:
+		// Key manager.
+		return c.common.keyManager.CallRemote(ctx, request.RuntimeID, request.Payload)
 	default:
 		c.logger.Warn("failed to route EnclaveRPC call",
-			"endpoint", endpoint,
+			"endpoint", request.Endpoint,
 		)
-		return nil, fmt.Errorf("unknown EnclaveRPC endpoint: %s", endpoint)
+		return nil, fmt.Errorf("unknown EnclaveRPC endpoint: %s", request.Endpoint)
 	}
 }
 
 // Cleanup stops all running block watchers and indexers and waits for them
 // to finish.
-func (c *Client) Cleanup() {
+func (c *runtimeClient) Cleanup() {
 	// Watchers.
 	for _, watcher := range c.watchers {
 		watcher.Stop()
@@ -523,7 +459,7 @@ func (c *Client) Cleanup() {
 	}
 }
 
-// New returns a new instance of the Client service.
+// New returns a new runtime client instance.
 func New(
 	ctx context.Context,
 	dataDir string,
@@ -533,8 +469,8 @@ func New(
 	registry registry.Backend,
 	consensus consensus.Backend,
 	keyManager *keymanager.Client,
-) (*Client, error) {
-	c := &Client{
+) (api.RuntimeClient, error) {
+	c := &runtimeClient{
 		common: &clientCommon{
 			roothash:   roothash,
 			storage:    storage,
@@ -546,7 +482,7 @@ func New(
 		},
 		watchers: make(map[signature.PublicKey]*blockWatcher),
 		indexers: make(map[signature.PublicKey]*indexer.Service),
-		logger:   logging.GetLogger("client"),
+		logger:   logging.GetLogger("runtime/client"),
 	}
 
 	// Initialize the tag indexer(s) when configured.

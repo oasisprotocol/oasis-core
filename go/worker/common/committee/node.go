@@ -267,7 +267,13 @@ func (n *Node) waitForRuntime() error {
 
 	// Wait for the runtime to be registered.
 	n.logger.Info("delaying committee node start until the runtime is registered")
-	ch, sub := n.Registry.WatchRuntimes()
+	ch, sub, err := n.Registry.WatchRuntimes(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to watch runtimes",
+			"err", err,
+		)
+		return err
+	}
 	defer sub.Close()
 	for {
 		select {

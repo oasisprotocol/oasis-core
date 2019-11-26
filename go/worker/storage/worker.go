@@ -16,10 +16,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/persistent"
 	"github.com/oasislabs/oasis-core/go/common/workerpool"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	"github.com/oasislabs/oasis-core/go/storage"
+	"github.com/oasislabs/oasis-core/go/storage/api"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
+	storageWorkerAPI "github.com/oasislabs/oasis-core/go/worker/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/storage/committee"
 )
 
@@ -113,7 +115,10 @@ func New(
 
 		// Attach storage interface to gRPC server.
 		s.grpcPolicy = grpc.NewDynamicRuntimePolicyChecker()
-		storage.NewGRPCServer(s.commonWorker.Grpc.Server(), s.commonWorker.Storage, s.grpcPolicy, viper.GetBool(CfgWorkerDebugIgnoreApply))
+		api.RegisterService(s.commonWorker.Grpc.Server(), &storageService{
+			w:                  s,
+			debugRejectUpdates: viper.GetBool(CfgWorkerDebugIgnoreApply) && flags.DebugDontBlameOasis(),
+		})
 
 		// Register storage worker role.
 		if err := s.registrationWorker.RegisterRole(node.RoleStorageWorker,
@@ -129,7 +134,7 @@ func New(
 		}
 
 		// Attach the storage worker's internal GRPC interface.
-		newGRPCServer(grpcInternal, s)
+		storageWorkerAPI.RegisterService(grpcInternal.Server(), s)
 	}
 
 	return s, nil
@@ -255,7 +260,14 @@ func (s *Worker) initGenesis(gen *genesis.Document) error {
 				var ns common.Namespace
 				copy(ns[:], rt.ID[:])
 
-				_, err = s.commonWorker.Storage.Apply(ctx, ns, 0, emptyRoot, 0, rt.Genesis.StateRoot, rt.Genesis.State)
+				_, err = s.commonWorker.Storage.Apply(ctx, &api.ApplyRequest{
+					Namespace: ns,
+					SrcRound:  0,
+					SrcRoot:   emptyRoot,
+					DstRound:  0,
+					DstRoot:   rt.Genesis.StateRoot,
+					WriteLog:  rt.Genesis.State,
+				})
 				if err != nil {
 					return err
 				}

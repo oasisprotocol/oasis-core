@@ -102,21 +102,13 @@ func (w *metricsWrapper) WatchRuntime(id signature.PublicKey) error {
 	return errors.New("storage/metricswrapper: backend not ClientBackend")
 }
 
-func (w *metricsWrapper) Apply(
-	ctx context.Context,
-	ns common.Namespace,
-	srcRound uint64,
-	srcRoot hash.Hash,
-	dstRound uint64,
-	dstRoot hash.Hash,
-	writeLog api.WriteLog,
-) ([]*api.Receipt, error) {
+func (w *metricsWrapper) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {
 	start := time.Now()
-	receipts, err := w.Backend.Apply(ctx, ns, srcRound, srcRoot, dstRound, dstRoot, writeLog)
+	receipts, err := w.Backend.Apply(ctx, request)
 	storageLatency.With(labelApply).Observe(time.Since(start).Seconds())
 
 	var size int
-	for _, entry := range writeLog {
+	for _, entry := range request.WriteLog {
 		size += len(entry.Key) + len(entry.Value)
 	}
 	storageValueSize.With(labelApply).Observe(float64(size))
@@ -129,18 +121,13 @@ func (w *metricsWrapper) Apply(
 	return receipts, err
 }
 
-func (w *metricsWrapper) ApplyBatch(
-	ctx context.Context,
-	ns common.Namespace,
-	dstRound uint64,
-	ops []api.ApplyOp,
-) ([]*api.Receipt, error) {
+func (w *metricsWrapper) ApplyBatch(ctx context.Context, request *api.ApplyBatchRequest) ([]*api.Receipt, error) {
 	start := time.Now()
-	receipts, err := w.Backend.ApplyBatch(ctx, ns, dstRound, ops)
+	receipts, err := w.Backend.ApplyBatch(ctx, request)
 	storageLatency.With(labelApplyBatch).Observe(time.Since(start).Seconds())
 
 	var size int
-	for _, op := range ops {
+	for _, op := range request.Ops {
 		for _, entry := range op.WriteLog {
 			size += len(entry.Key) + len(entry.Value)
 		}
@@ -155,15 +142,9 @@ func (w *metricsWrapper) ApplyBatch(
 	return receipts, err
 }
 
-func (w *metricsWrapper) Merge(
-	ctx context.Context,
-	ns common.Namespace,
-	round uint64,
-	base hash.Hash,
-	others []hash.Hash,
-) ([]*api.Receipt, error) {
+func (w *metricsWrapper) Merge(ctx context.Context, request *api.MergeRequest) ([]*api.Receipt, error) {
 	start := time.Now()
-	receipts, err := w.Backend.Merge(ctx, ns, round, base, others)
+	receipts, err := w.Backend.Merge(ctx, request)
 	storageLatency.With(labelMerge).Observe(time.Since(start).Seconds())
 	if err != nil {
 		storageFailures.With(labelMerge).Inc()
@@ -174,14 +155,9 @@ func (w *metricsWrapper) Merge(
 	return receipts, err
 }
 
-func (w *metricsWrapper) MergeBatch(
-	ctx context.Context,
-	ns common.Namespace,
-	round uint64,
-	ops []api.MergeOp,
-) ([]*api.Receipt, error) {
+func (w *metricsWrapper) MergeBatch(ctx context.Context, request *api.MergeBatchRequest) ([]*api.Receipt, error) {
 	start := time.Now()
-	receipts, err := w.Backend.MergeBatch(ctx, ns, round, ops)
+	receipts, err := w.Backend.MergeBatch(ctx, request)
 	storageLatency.With(labelMergeBatch).Observe(time.Since(start).Seconds())
 	if err != nil {
 		storageFailures.With(labelMergeBatch).Inc()

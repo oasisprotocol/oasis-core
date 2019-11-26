@@ -5,24 +5,22 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	runtimeClient "github.com/oasislabs/oasis-core/go/client/api"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	clientGrpc "github.com/oasislabs/oasis-core/go/grpc/client"
-	storageGrpc "github.com/oasislabs/oasis-core/go/grpc/storage"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	cmdControl "github.com/oasislabs/oasis-core/go/oasis-node/cmd/control"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
-	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
+	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	storageWorkerAPI "github.com/oasislabs/oasis-core/go/worker/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/storage/committee"
 )
 
@@ -95,8 +93,8 @@ func ValidateRuntimeIDStr(idStr string) error {
 	return nil
 }
 
-func checkDiff(ctx context.Context, storageClient storageApi.Backend, root string, oldRoot node.Root, newRoot node.Root) {
-	it, err := storageClient.GetDiff(ctx, oldRoot, newRoot)
+func checkDiff(ctx context.Context, storageClient storageAPI.Backend, root string, oldRoot node.Root, newRoot node.Root) {
+	it, err := storageClient.GetDiff(ctx, &storageAPI.GetDiffRequest{StartRoot: oldRoot, EndRoot: newRoot})
 	if err != nil {
 		logger.Error("error getting write log from the syncing node",
 			"err", err,
@@ -144,8 +142,8 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 
 	conn, _ := cmdControl.DoConnect(cmd)
-	client := clientGrpc.NewRuntimeClient(conn)
-	storageWorkerClient := storageGrpc.NewStorageWorkerClient(conn)
+	client := runtimeClient.NewRuntimeClient(conn)
+	storageWorkerClient := storageWorkerAPI.NewStorageWorkerClient(conn)
 	defer conn.Close()
 
 	storageClient, err := storageClient.New(ctx, nil, nil, nil)
@@ -164,7 +162,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	res, err := client.GetBlock(ctx, &clientGrpc.GetBlockRequest{RuntimeId: id[:], Round: math.MaxUint64})
+	latestBlock, err := client.GetBlock(ctx, &runtimeClient.GetBlockRequest{RuntimeID: id, Round: runtimeClient.RoundLatest})
 	if err != nil {
 		logger.Error("failed to get latest block from roothash",
 			"err", err,
@@ -172,21 +170,12 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	var latestBlock block.Block
-	if err = cbor.Unmarshal(res.Block, &latestBlock); err != nil {
-		logger.Error("failed to parse block",
-			"err", err,
-			"runtime_id", id,
-		)
-		os.Exit(1)
-	}
-
 	// Wait for the worker to sync until this last round.
-	var resp *storageGrpc.GetLastSyncedRoundResponse
+	var resp *storageWorkerAPI.GetLastSyncedRoundResponse
 	retryCount := 0
 	for {
-		lastSyncedReq := &storageGrpc.GetLastSyncedRoundRequest{
-			RuntimeId: id[:],
+		lastSyncedReq := &storageWorkerAPI.GetLastSyncedRoundRequest{
+			RuntimeID: id,
 		}
 		resp, err = storageWorkerClient.GetLastSyncedRound(ctx, lastSyncedReq)
 		if err != nil {
@@ -196,11 +185,11 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 
-		if resp.GetRound() >= latestBlock.Header.Round {
+		if resp.Round >= latestBlock.Header.Round {
 			break
 		}
 		logger.Debug("storage worker not synced yet, waiting",
-			"last_synced", resp.GetRound(),
+			"last_synced", resp.Round,
 			"expected", latestBlock.Header.Round,
 		)
 		time.Sleep(5 * time.Second)
@@ -212,7 +201,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 		}
 	}
 	logger.Debug("storage worker is synced at least to the round we want",
-		"last_synced", resp.GetRound(),
+		"last_synced", resp.Round,
 		"expected", latestBlock.Header.Round,
 	)
 
@@ -222,20 +211,11 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 	emptyRoot := node.Root{}
 	emptyRoot.Hash.Empty()
 	for i := uint64(0); i <= latestBlock.Header.Round; i++ {
-		res, err = client.GetBlock(ctx, &clientGrpc.GetBlockRequest{RuntimeId: id[:], Round: i})
+		var blk *block.Block
+		blk, err = client.GetBlock(ctx, &runtimeClient.GetBlockRequest{RuntimeID: id, Round: i})
 		if err != nil {
 			logger.Error("failed to get block from roothash",
 				"err", err,
-				"round", i,
-			)
-			os.Exit(1)
-		}
-
-		var blk block.Block
-		if err = cbor.Unmarshal(res.Block, &blk); err != nil {
-			logger.Error("failed to parse block",
-				"err", err,
-				"runtime_id", id,
 				"round", i,
 			)
 			os.Exit(1)
@@ -269,7 +249,7 @@ func doForceFinalize(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 
 	conn, _ := cmdControl.DoConnect(cmd)
-	storageWorkerClient := storageGrpc.NewStorageWorkerClient(conn)
+	storageWorkerClient := storageWorkerAPI.NewStorageWorkerClient(conn)
 	defer conn.Close()
 
 	failed := false
@@ -283,8 +263,8 @@ func doForceFinalize(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		_, err := storageWorkerClient.ForceFinalize(ctx, &storageGrpc.ForceFinalizeRequest{
-			RuntimeId: id[:],
+		err := storageWorkerClient.ForceFinalize(ctx, &storageWorkerAPI.ForceFinalizeRequest{
+			RuntimeID: id,
 			Round:     finalizeRound,
 		})
 		if err != nil {

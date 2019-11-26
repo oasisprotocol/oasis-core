@@ -80,7 +80,7 @@ func (t *tendermintMockBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Sub
 	return typedCh, sub
 }
 
-func (t *tendermintMockBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (t *tendermintMockBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	now, err := t.GetEpoch(ctx, height)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func (t *tendermintMockBackend) worker(ctx context.Context) {
 	defer t.service.Unsubscribe("epochtime-worker", app.QueryApp) // nolint: errcheck
 
 	// Populate current epoch (if available).
-	q, err := t.querier.QueryAt(ctx, 0)
+	q, err := t.querier.QueryAt(ctx, consensus.HeightLatest)
 	if err == nil {
 		var epoch api.EpochTime
 		var height int64

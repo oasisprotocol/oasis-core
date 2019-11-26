@@ -9,7 +9,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	cmnIAS "github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	ias "github.com/oasislabs/oasis-core/go/ias/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
@@ -23,12 +24,12 @@ func (st *enclaveStore) verifyEvidence(evidence *ias.Evidence) error {
 	st.RLock()
 	defer st.RUnlock()
 
-	enclaveIDs, ok := st.enclaves[evidence.ID]
+	enclaveIDs, ok := st.enclaves[evidence.RuntimeID]
 	if !ok {
 		return errors.New("ias: unknown runtime")
 	}
 
-	var quote ias.Quote
+	var quote cmnIAS.Quote
 	if err := quote.UnmarshalBinary(evidence.Quote); err != nil {
 		return errors.Wrap(err, "ias: evidence contains an invalid quote")
 	}

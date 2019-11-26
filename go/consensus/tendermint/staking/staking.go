@@ -35,14 +35,6 @@ type tendermintBackend struct {
 	closedCh chan struct{}
 }
 
-func (tb *tendermintBackend) Name() string {
-	return api.TokenName
-}
-
-func (tb *tendermintBackend) Symbol() string {
-	return api.TokenSymbol
-}
-
 func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
@@ -61,13 +53,13 @@ func (tb *tendermintBackend) CommonPool(ctx context.Context, height int64) (*qua
 	return q.CommonPool(ctx)
 }
 
-func (tb *tendermintBackend) Threshold(ctx context.Context, kind api.ThresholdKind, height int64) (*quantity.Quantity, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (tb *tendermintBackend) Threshold(ctx context.Context, query *api.ThresholdQuery) (*quantity.Quantity, error) {
+	q, err := tb.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.Threshold(ctx, kind)
+	return q.Threshold(ctx, query.Kind)
 }
 
 func (tb *tendermintBackend) Accounts(ctx context.Context, height int64) ([]signature.PublicKey, error) {
@@ -79,22 +71,22 @@ func (tb *tendermintBackend) Accounts(ctx context.Context, height int64) ([]sign
 	return q.Accounts(ctx)
 }
 
-func (tb *tendermintBackend) AccountInfo(ctx context.Context, owner signature.PublicKey, height int64) (*api.Account, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (tb *tendermintBackend) AccountInfo(ctx context.Context, query *api.OwnerQuery) (*api.Account, error) {
+	q, err := tb.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.AccountInfo(ctx, owner)
+	return q.AccountInfo(ctx, query.Owner)
 }
 
-func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, owner signature.PublicKey, height int64) (map[signature.PublicKey][]*api.DebondingDelegation, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, query *api.OwnerQuery) (map[signature.PublicKey][]*api.DebondingDelegation, error) {
+	q, err := tb.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.DebondingDelegations(ctx, owner)
+	return q.DebondingDelegations(ctx, query.Owner)
 }
 
 func (tb *tendermintBackend) WatchTransfers(ctx context.Context) (<-chan *api.TransferEvent, pubsub.ClosableSubscription, error) {
@@ -113,12 +105,15 @@ func (tb *tendermintBackend) WatchBurns(ctx context.Context) (<-chan *api.BurnEv
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) WatchEscrows(ctx context.Context) (<-chan interface{}, pubsub.ClosableSubscription, error) {
+func (tb *tendermintBackend) WatchEscrows(ctx context.Context) (<-chan *api.EscrowEvent, pubsub.ClosableSubscription, error) {
+	typedCh := make(chan *api.EscrowEvent)
 	sub := tb.escrowNotifier.Subscribe()
-	return sub.Untyped(), sub, nil
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -189,7 +184,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, events []abci
 					continue
 				}
 
-				tb.escrowNotifier.Broadcast(&e)
+				tb.escrowNotifier.Broadcast(&api.EscrowEvent{Take: &e})
 			} else if bytes.Equal(pair.GetKey(), app.KeyTransfer) {
 				var e api.TransferEvent
 				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
@@ -209,9 +204,9 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, events []abci
 					continue
 				}
 
-				tb.escrowNotifier.Broadcast(&e)
+				tb.escrowNotifier.Broadcast(&api.EscrowEvent{Reclaim: &e})
 			} else if bytes.Equal(pair.GetKey(), app.KeyAddEscrow) {
-				var e api.EscrowEvent
+				var e api.AddEscrowEvent
 				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
 					tb.logger.Error("worker: failed to get escrow event from tag",
 						"err", err,
@@ -219,7 +214,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, events []abci
 					continue
 				}
 
-				tb.escrowNotifier.Broadcast(&e)
+				tb.escrowNotifier.Broadcast(&api.EscrowEvent{Add: &e})
 			} else if bytes.Equal(pair.GetKey(), app.KeyBurn) {
 				var e api.BurnEvent
 				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {

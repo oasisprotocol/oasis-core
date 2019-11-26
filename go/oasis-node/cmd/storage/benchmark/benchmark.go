@@ -141,7 +141,14 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 				b.StartTimer()
 
 				var receipts []*storageAPI.Receipt
-				receipts, err = storage.Apply(context.Background(), ns, 0, root, 1, unknown, wl)
+				receipts, err = storage.Apply(context.Background(), &storageAPI.ApplyRequest{
+					Namespace: ns,
+					SrcRound:  0,
+					SrcRoot:   root,
+					DstRound:  1,
+					DstRoot:   unknown,
+					WriteLog:  wl,
+				})
 				if err != nil {
 					b.Fatalf("failed to Apply(): %v", err)
 				}
@@ -217,7 +224,14 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 					}
 					b.StartTimer()
 
-					_, err = storage.Apply(context.Background(), ns, 0, root, 1, unknown, wl)
+					_, err = storage.Apply(context.Background(), &storageAPI.ApplyRequest{
+						Namespace: ns,
+						SrcRound:  0,
+						SrcRoot:   root,
+						DstRound:  1,
+						DstRoot:   unknown,
+						WriteLog:  wl,
+					})
 					if err != nil {
 						b.Fatalf("failed to Apply(): %v", err)
 					}
@@ -259,7 +273,14 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		b.SetParallelism(100)
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				_, cerr = storage.Apply(context.Background(), ns, 0, emptyRoot, 1, expectedNewRoot, wl)
+				_, cerr = storage.Apply(context.Background(), &storageAPI.ApplyRequest{
+					Namespace: ns,
+					SrcRound:  0,
+					SrcRoot:   emptyRoot,
+					DstRound:  1,
+					DstRoot:   expectedNewRoot,
+					WriteLog:  wl,
+				})
 				if cerr != nil {
 					b.Fatalf("failed to Apply(): %v", cerr)
 				}

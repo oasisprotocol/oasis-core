@@ -9,6 +9,6 @@ import (
 
 // Backend is a sentry backend implementation.
 type Backend interface {
-	// GetConsensusAddresses() returns the list of consensus addresses of the sentry node.
+	// GetConsensusAddresses returns the list of consensus addresses of the sentry node.
 	GetConsensusAddresses(context.Context) ([]node.ConsensusAddress, error)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/compute"
 	computeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/committee"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
+	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/committee"
 )
 
@@ -232,7 +233,7 @@ func newWorker(
 		}
 
 		// Use existing gRPC server passed from the node.
-		newClientGRPCServer(commonWorker.Grpc.Server(), w)
+		api.RegisterService(commonWorker.Grpc.Server(), w)
 
 		// Register all configured runtimes.
 		for _, rtCfg := range cfg.Runtimes {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/oasislabs/oasis-core/go/client/api"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -14,37 +15,6 @@ const (
 	// maxQueryLimit is the maximum number of results to return.
 	maxQueryLimit = 1000
 )
-
-// Condition is a query condition.
-type Condition struct {
-	// Key is the tag key that should be matched.
-	Key []byte `json:"key"`
-	// Values are a list of tag values that the given tag key should
-	// have. They are combined using an OR query which means that any
-	// of the values will match.
-	Values [][]byte `json:"values"`
-}
-
-// Query is a complex query against the index.
-type Query struct {
-	// RoundMin is an optional minimum round (inclusive).
-	RoundMin uint64 `json:"round_min"`
-	// RoundMax is an optional maximum round (inclusive).
-	//
-	// A zero value means that there is no upper limit.
-	RoundMax uint64 `json:"round_max"`
-
-	// Conditions are the query conditions.
-	//
-	// They are combined using an AND query which means that all of
-	// the conditions must be satisfied for an item to match.
-	Conditions []Condition `json:"conditions"`
-
-	// Limit is the maximum number of results to return.
-	//
-	// A zero value means that the `maxQueryLimit` limit is used.
-	Limit uint64 `json:"limit"`
-}
 
 // Result is a query result.
 type Result struct {
@@ -91,7 +61,7 @@ type Backend interface {
 	// query and returns multiple results.
 	//
 	// If a backend does not support this method it may return ErrUnsupported.
-	QueryTxns(ctx context.Context, runtimeID signature.PublicKey, query Query) (Results, error)
+	QueryTxns(ctx context.Context, runtimeID signature.PublicKey, query api.Query) (Results, error)
 
 	// WaitBlockIndexed waits for a block to be indexed by the indexer.
 	WaitBlockIndexed(ctx context.Context, runtimeID signature.PublicKey, round uint64) error

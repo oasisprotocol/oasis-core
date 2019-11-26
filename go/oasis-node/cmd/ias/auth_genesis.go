@@ -1,10 +1,12 @@
 package ias
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"context"
+
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/file"
+	ias "github.com/oasislabs/oasis-core/go/ias/api"
+	iasProxy "github.com/oasislabs/oasis-core/go/ias/proxy"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
@@ -14,7 +16,7 @@ type genesisAuthenticator struct {
 	enclaves *enclaveStore
 }
 
-func (auth *genesisAuthenticator) VerifyEvidence(signer signature.PublicKey, evidence *ias.Evidence) error {
+func (auth *genesisAuthenticator) VerifyEvidence(ctx context.Context, evidence *ias.Evidence) error {
 	// Since this only uses the genesis document, it is not able to
 	// validate that the signer is a node scheduled for the appropriate
 	// runtime.
@@ -23,18 +25,18 @@ func (auth *genesisAuthenticator) VerifyEvidence(signer signature.PublicKey, evi
 	if err != nil {
 		auth.logger.Error("rejecting proxy request, invalid runtime",
 			"err", err,
-			"id", evidence.ID,
+			"runtime_id", evidence.RuntimeID,
 		)
 		return err
 	}
 
 	auth.logger.Debug("allowing proxy request, found enclave identity",
-		"id", evidence.ID,
+		"runtime_id", evidence.RuntimeID,
 	)
 	return nil
 }
 
-func newGenesisAuthenticator() (ias.GRPCAuthenticator, error) {
+func newGenesisAuthenticator() (iasProxy.Authenticator, error) {
 	genesisProvider, err := genesis.DefaultFileProvider()
 	if err != nil {
 		return nil, err

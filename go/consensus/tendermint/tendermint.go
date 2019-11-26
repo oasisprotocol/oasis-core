@@ -306,13 +306,11 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 	return []node.ConsensusAddress{addr}, nil
 }
 
-func (t *tendermintService) ToGenesis(ctx context.Context, blockHeight int64) (*genesisAPI.Document, error) {
-	logger := logging.GetLogger("tendermint/genesis")
-
+func (t *tendermintService) StateToGenesis(ctx context.Context, blockHeight int64) (*genesisAPI.Document, error) {
 	if blockHeight <= 0 {
 		var err error
 		if blockHeight, err = t.GetHeight(); err != nil {
-			logger.Error("failed querying height",
+			t.Logger.Error("failed querying height",
 				"err", err,
 				"height", blockHeight,
 			)
@@ -322,7 +320,7 @@ func (t *tendermintService) ToGenesis(ctx context.Context, blockHeight int64) (*
 
 	blk, err := t.GetBlock(&blockHeight)
 	if err != nil {
-		logger.Error("failed to get tendermint block",
+		t.Logger.Error("failed to get tendermint block",
 			"err", err,
 			"block_height", blockHeight,
 		)
@@ -332,68 +330,68 @@ func (t *tendermintService) ToGenesis(ctx context.Context, blockHeight int64) (*
 	// Get initial genesis doc.
 	genesisFileProvider, err := file.DefaultFileProvider()
 	if err != nil {
-		logger.Error("failed getting genesis file provider",
+		t.Logger.Error("failed getting genesis file provider",
 			"err", err,
 		)
 		return nil, err
 	}
 	genesisDoc, err := genesisFileProvider.GetGenesisDocument()
 	if err != nil {
-		logger.Error("failed getting genesis document from file provider",
+		t.Logger.Error("failed getting genesis document from file provider",
 			"err", err,
 		)
 		return nil, err
 	}
 
-	// Call ToGenesis on all backends and merge the results together.
-	epochtimeGenesis, err := t.epochtime.ToGenesis(ctx, blockHeight)
+	// Call StateToGenesis on all backends and merge the results together.
+	epochtimeGenesis, err := t.epochtime.StateToGenesis(ctx, blockHeight)
 	if err != nil {
-		logger.Error("epochtime ToGenesis failure",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return nil, err
-	}
-
-	registryGenesis, err := t.registry.ToGenesis(ctx, blockHeight)
-	if err != nil {
-		logger.Error("registry ToGenesis failure",
+		t.Logger.Error("epochtime StateToGenesis failure",
 			"err", err,
 			"block_height", blockHeight,
 		)
 		return nil, err
 	}
 
-	roothashGenesis, err := t.roothash.ToGenesis(ctx, blockHeight)
+	registryGenesis, err := t.registry.StateToGenesis(ctx, blockHeight)
 	if err != nil {
-		logger.Error("roothash ToGenesis failure",
+		t.Logger.Error("registry StateToGenesis failure",
 			"err", err,
 			"block_height", blockHeight,
 		)
 		return nil, err
 	}
 
-	stakingGenesis, err := t.staking.ToGenesis(ctx, blockHeight)
+	roothashGenesis, err := t.roothash.StateToGenesis(ctx, blockHeight)
 	if err != nil {
-		logger.Error("staking ToGenesis failure",
+		t.Logger.Error("roothash StateToGenesis failure",
 			"err", err,
 			"block_height", blockHeight,
 		)
 		return nil, err
 	}
 
-	keymanagerGenesis, err := t.keymanager.ToGenesis(ctx, blockHeight)
+	stakingGenesis, err := t.staking.StateToGenesis(ctx, blockHeight)
 	if err != nil {
-		logger.Error("keymanager ToGenesis failure",
+		t.Logger.Error("staking StateToGenesis failure",
 			"err", err,
 			"block_height", blockHeight,
 		)
 		return nil, err
 	}
 
-	schedulerGenesis, err := t.scheduler.ToGenesis(ctx, blockHeight)
+	keymanagerGenesis, err := t.keymanager.StateToGenesis(ctx, blockHeight)
 	if err != nil {
-		logger.Error("scheduler ToGenesis failure",
+		t.Logger.Error("keymanager StateToGenesis failure",
+			"err", err,
+			"block_height", blockHeight,
+		)
+		return nil, err
+	}
+
+	schedulerGenesis, err := t.scheduler.StateToGenesis(ctx, blockHeight)
+	if err != nil {
+		t.Logger.Error("scheduler StateToGenesis failure",
 			"err", err,
 			"block_height", blockHeight,
 		)
@@ -629,6 +627,25 @@ func (t *tendermintService) Staking() stakingAPI.Backend {
 
 func (t *tendermintService) Scheduler() schedulerAPI.Backend {
 	return t.scheduler
+}
+
+func (t *tendermintService) WaitEpoch(ctx context.Context, epoch epochtimeAPI.EpochTime) error {
+	ch, sub := t.epochtime.WatchEpochs()
+	defer sub.Close()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case e, ok := <-ch:
+			if !ok {
+				return context.Canceled
+			}
+			if e >= epoch {
+				return nil
+			}
+		}
+	}
 }
 
 func (t *tendermintService) initialize() error {

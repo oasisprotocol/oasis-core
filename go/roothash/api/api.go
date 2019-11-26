@@ -81,8 +81,8 @@ type Backend interface {
 	// blocks.
 	WatchPrunedBlocks() (<-chan *PrunedBlock, *pubsub.Subscription, error)
 
-	// ToGenesis returns the genesis state at specified block height.
-	ToGenesis(context.Context, int64) (*Genesis, error)
+	// StateToGenesis returns the genesis state at specified block height.
+	StateToGenesis(context.Context, int64) (*Genesis, error)
 
 	// Cleanup cleans up the roothash backend.
 	Cleanup()
@@ -120,10 +120,10 @@ func NewMergeCommitTx(nonce uint64, fee *transaction.Fee, runtimeID signature.Pu
 type AnnotatedBlock struct {
 	// Height is the underlying roothash backend's block height that
 	// generated this block.
-	Height int64
+	Height int64 `json:"consensus_height"`
 
 	// Block is the roothash block.
-	Block *block.Block
+	Block *block.Block `json:"block"`
 }
 
 // ComputeDiscrepancyDetectedEvent is a compute discrepancy detected event.

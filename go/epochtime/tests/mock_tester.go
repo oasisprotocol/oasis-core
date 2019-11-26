@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
@@ -22,7 +23,7 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 	require.Implements((*api.SetableBackend)(nil), backend, "epoch time backend is mock")
 	timeSource := (backend).(api.SetableBackend)
 
-	epoch, err := timeSource.GetEpoch(context.Background(), 0)
+	epoch, err := timeSource.GetEpoch(context.Background(), consensus.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
 	var e api.EpochTime
@@ -47,7 +48,7 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 		t.Fatalf("failed to receive epoch notification after transition")
 	}
 
-	e, err = timeSource.GetEpoch(context.Background(), 0)
+	e, err = timeSource.GetEpoch(context.Background(), consensus.HeightLatest)
 	require.NoError(err, "GetEpoch after set")
 	require.Equal(epoch, e, "GetEpoch after set, epoch")
 }
@@ -60,7 +61,7 @@ func MustAdvanceEpoch(t *testing.T, backend api.SetableBackend, increment uint64
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
 
-	epoch, err := backend.GetEpoch(ctx, 0)
+	epoch, err := backend.GetEpoch(ctx, consensus.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
 	epoch = epoch + api.EpochTime(increment)

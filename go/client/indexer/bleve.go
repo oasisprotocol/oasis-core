@@ -10,6 +10,7 @@ import (
 	"github.com/blevesearch/bleve/index/scorch"
 	bleveQuery "github.com/blevesearch/bleve/search/query"
 
+	"github.com/oasislabs/oasis-core/go/client/api"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
@@ -207,7 +208,7 @@ func (b *bleveBackend) QueryBlock(ctx context.Context, runtimeID signature.Publi
 		return 0, err
 	}
 	if len(result.Hits) == 0 {
-		return 0, ErrNotFound
+		return 0, api.ErrNotFound
 	}
 
 	var decRuntimeID signature.PublicKey
@@ -229,7 +230,7 @@ func (b *bleveBackend) QueryTxn(ctx context.Context, runtimeID signature.PublicK
 		return 0, hash.Hash{}, 0, err
 	}
 	if len(result.Hits) == 0 {
-		return 0, hash.Hash{}, 0, ErrNotFound
+		return 0, hash.Hash{}, 0, api.ErrNotFound
 	}
 
 	var decRuntimeID signature.PublicKey
@@ -259,7 +260,7 @@ func (b *bleveBackend) QueryTxnByIndex(ctx context.Context, runtimeID signature.
 		return hash.Hash{}, err
 	}
 	if len(result.Hits) == 0 {
-		return hash.Hash{}, ErrNotFound
+		return hash.Hash{}, api.ErrNotFound
 	}
 
 	var decRuntimeID signature.PublicKey
@@ -272,7 +273,7 @@ func (b *bleveBackend) QueryTxnByIndex(ctx context.Context, runtimeID signature.
 	return decTxHash, nil
 }
 
-func (b *bleveBackend) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, query Query) (Results, error) {
+func (b *bleveBackend) QueryTxns(ctx context.Context, runtimeID signature.PublicKey, query api.Query) (Results, error) {
 	qs := []bleveQuery.Query{
 		queryByKindTx,
 		queryByRuntime(runtimeID),

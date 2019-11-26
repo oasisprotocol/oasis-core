@@ -581,6 +581,8 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env) error {
 	// Runtime ID 0x0 is for simple-keyvalue, 0xf... is for the keymanager. Let's use 0x1.
 	_ = testRuntime.ID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000001")
 	_ = testRuntime.KeyManager.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
+	// Empty genesis state root.
+	testRuntime.Genesis.StateRoot.Empty()
 
 	// Generate register runtime transaction.
 	registerTxPath := filepath.Join(childEnv.Dir(), "registry_runtime_register.json")

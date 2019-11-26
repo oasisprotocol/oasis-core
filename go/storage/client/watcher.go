@@ -13,13 +13,14 @@ import (
 	"google.golang.org/grpc/resolver"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/grpc/storage"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
 // DialOptionForNode creates a grpc.DialOption for communicating under the node's certificate.
@@ -42,7 +43,7 @@ func DialOptionForNode(ourCerts []tls.Certificate, node *node.Node) (grpc.DialOp
 func DialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, func(), error) {
 	manualResolver, address, cleanupCb := manual.NewManualResolver()
 
-	conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name)) //nolint: staticcheck
+	conn, err := cmnGrpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name)) //nolint: staticcheck
 	if err != nil {
 		cleanupCb()
 		return nil, nil, errors.Wrap(err, "failed dialing node")
@@ -115,7 +116,7 @@ type watcherState struct {
 // clientState contains information about a connected storage node.
 type clientState struct {
 	node              *node.Node
-	client            storage.StorageClient
+	client            storage.Backend
 	conn              *grpc.ClientConn
 	resolverCleanupCb func()
 }
@@ -284,8 +285,14 @@ func (w *watcherState) watch(ctx context.Context) {
 	committeeCh, sub := w.scheduler.WatchCommittees()
 	defer sub.Close()
 
-	nodeListCh, sub := w.registry.WatchNodeList()
-	defer sub.Close()
+	nodeListCh, nodeListSub, err := w.registry.WatchNodeList(ctx)
+	if err != nil {
+		w.logger.Error("failed to watch node lists",
+			"err", err,
+		)
+		return
+	}
+	defer nodeListSub.Close()
 
 	for {
 		select {

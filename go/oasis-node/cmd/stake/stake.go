@@ -11,11 +11,10 @@ import (
 	flag "github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	grpcStaking "github.com/oasislabs/oasis-core/go/grpc/staking"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
@@ -46,7 +45,7 @@ var (
 	listFlags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
-func doConnect(cmd *cobra.Command) (*grpc.ClientConn, grpcStaking.StakingClient) {
+func doConnect(cmd *cobra.Command) (*grpc.ClientConn, api.Backend) {
 	conn, err := cmdGrpc.NewClient(cmd)
 	if err != nil {
 		logger.Error("failed to establish connection with node",
@@ -55,7 +54,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, grpcStaking.StakingClient)
 		os.Exit(1)
 	}
 
-	client := grpcStaking.NewStakingClient(conn)
+	client := api.NewStakingClient(conn)
 	return conn, client
 }
 
@@ -88,48 +87,22 @@ func doInfo(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
-	doWithRetries(cmd, "query token name", func() error {
-		resp, err := client.GetName(ctx, &grpcStaking.GetNameRequest{})
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Name: \"%v\"\n", resp.GetName())
-		return nil
-	})
-
-	doWithRetries(cmd, "query token symbol", func() error {
-		resp, err := client.GetSymbol(ctx, &grpcStaking.GetSymbolRequest{})
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Symbol: \"%v\"\n", resp.GetSymbol())
-		return nil
-	})
-
 	doWithRetries(cmd, "query token total supply", func() error {
-		resp, err := client.GetTotalSupply(ctx, &grpcStaking.GetTotalSupplyRequest{})
+		q, err := client.TotalSupply(ctx, consensus.HeightLatest)
 		if err != nil {
 			return err
 		}
 
-		var q quantity.Quantity
-		if err = q.UnmarshalBinary(resp.GetTotalSupply()); err != nil {
-			return err
-		}
 		fmt.Printf("Total supply: %v\n", q)
 		return nil
 	})
 
 	doWithRetries(cmd, "query token common pool", func() error {
-		resp, err := client.GetCommonPool(ctx, &grpcStaking.GetCommonPoolRequest{})
+		q, err := client.CommonPool(ctx, consensus.HeightLatest)
 		if err != nil {
 			return err
 		}
 
-		var q quantity.Quantity
-		if err = q.UnmarshalBinary(resp.GetCommonPool()); err != nil {
-			return err
-		}
 		fmt.Printf("Common pool: %v\n", q)
 		return nil
 	})
@@ -147,18 +120,11 @@ func doInfo(cmd *cobra.Command, args []string) {
 				continue
 			}
 
-			resp, err := client.GetThreshold(ctx, &grpcStaking.GetThresholdRequest{
-				ThresholdKind: grpcStaking.GetThresholdRequest_ThresholdKind(k),
-			})
+			q, err := client.Threshold(ctx, &api.ThresholdQuery{Kind: k, Height: consensus.HeightLatest})
 			if err != nil {
 				return err
 			}
-
-			var q quantity.Quantity
-			if err = q.UnmarshalBinary(resp.GetThreshold()); err != nil {
-				return err
-			}
-			thresholds[k] = &q
+			thresholds[k] = q
 		}
 		return nil
 	})
@@ -179,19 +145,9 @@ func doList(cmd *cobra.Command, args []string) {
 
 	var ids []signature.PublicKey
 	doWithRetries(cmd, "query accounts", func() error {
-		resp, err := client.GetAccounts(ctx, &grpcStaking.GetAccountsRequest{})
-		if err != nil {
-			return err
-		}
-
-		for _, rawID := range resp.GetIds() {
-			var id signature.PublicKey
-			if err = id.UnmarshalBinary(rawID); err != nil {
-				return err
-			}
-			ids = append(ids, id)
-		}
-		return nil
+		var err error
+		ids, err = client.Accounts(ctx, consensus.HeightLatest)
+		return err
 	})
 
 	for _, v := range ids {
@@ -206,46 +162,15 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-// AccountInfo contains aggregated information of a single account.
-type AccountInfo struct {
-	// ID is the address of account.
-	ID signature.PublicKey `json:"id"`
-
-	// GeneralBalance is the spendable balance by the account.
-	GeneralBalance quantity.Quantity `json:"general_balance"`
-
-	// EscrowBalance is the current escrow balance on this account.
-	EscrowBalance quantity.Quantity `json:"escrow_balance"`
-
-	// Nonce is a number increased each time there is an outgoing txn from this account.
-	Nonce uint64 `json:"nonce"`
-}
-
-func getAccountInfo(ctx context.Context, cmd *cobra.Command, id signature.PublicKey, client grpcStaking.StakingClient) *AccountInfo {
-	var ai AccountInfo
+func getAccountInfo(ctx context.Context, cmd *cobra.Command, id signature.PublicKey, client api.Backend) *api.Account {
+	var acct *api.Account
 	doWithRetries(cmd, "query account "+id.String(), func() error {
-		rawID, _ := id.MarshalBinary()
-		resp, err := client.GetAccountInfo(ctx, &grpcStaking.GetAccountInfoRequest{
-			Id: rawID,
-		})
-		if err != nil {
-			return err
-		}
-
-		var account api.Account
-		if err = cbor.Unmarshal(resp.GetAccount(), &account); err != nil {
-			return err
-		}
-
-		ai.ID = id
-		ai.GeneralBalance = account.General.Balance
-		ai.EscrowBalance = account.Escrow.Active.Balance
-		ai.Nonce = account.General.Nonce
-
-		return nil
+		var err error
+		acct, err = client.AccountInfo(ctx, &api.OwnerQuery{Owner: id, Height: consensus.HeightLatest})
+		return err
 	})
 
-	return &ai
+	return acct
 }
 
 // Register registers the stake sub-command and all of it's children.

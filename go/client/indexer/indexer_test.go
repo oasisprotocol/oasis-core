@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/oasis-core/go/client/api"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
@@ -58,17 +59,17 @@ func testOperations(t *testing.T, backend Backend) {
 
 	var invalidBlockHash hash.Hash
 	_, err = backend.QueryBlock(ctx, id, invalidBlockHash)
-	require.Equal(t, ErrNotFound, err, "QueryBlock must return a not found error")
+	require.Equal(t, api.ErrNotFound, err, "QueryBlock must return a not found error")
 
 	round, err := backend.QueryBlock(ctx, id, blockHash1)
 	require.NoError(t, err, "QueryBlock")
 	require.EqualValues(t, 42, round)
 
 	_, _, _, err = backend.QueryTxn(ctx, id, []byte("key"), []byte("value"))
-	require.Equal(t, ErrNotFound, err, "QueryTxn must return a not found error")
+	require.Equal(t, api.ErrNotFound, err, "QueryTxn must return a not found error")
 
 	_, _, _, err = backend.QueryTxn(ctx, id, []byte("key2"), []byte("value2"))
-	require.Equal(t, ErrNotFound, err, "QueryTxn must return a not found error")
+	require.Equal(t, api.ErrNotFound, err, "QueryTxn must return a not found error")
 
 	round, txnHash, txnIndex, err := backend.QueryTxn(ctx, id, []byte("hello2"), []byte("world"))
 	require.NoError(t, err, "QueryTxn")
@@ -124,11 +125,11 @@ func testOperations(t *testing.T, backend Backend) {
 	require.EqualValues(t, 42, round)
 
 	// Test advanced transaction queries.
-	query := Query{
+	query := api.Query{
 		RoundMin: 40,
 		RoundMax: 50,
-		Conditions: []Condition{
-			Condition{Key: []byte("hello"), Values: [][]byte{[]byte("world")}},
+		Conditions: []api.QueryCondition{
+			api.QueryCondition{Key: []byte("hello"), Values: [][]byte{[]byte("world")}},
 		},
 	}
 	results, err := backend.QueryTxns(ctx, id, query)
@@ -142,9 +143,9 @@ func testOperations(t *testing.T, backend Backend) {
 		require.Contains(t, results[42], Result{TxHash: tx2Hash, TxIndex: 1})
 	}
 
-	query = Query{
-		Conditions: []Condition{
-			Condition{Key: []byte("hello"), Values: [][]byte{[]byte("worlx"), []byte("world")}},
+	query = api.Query{
+		Conditions: []api.QueryCondition{
+			api.QueryCondition{Key: []byte("hello"), Values: [][]byte{[]byte("worlx"), []byte("world")}},
 		},
 	}
 	results, err = backend.QueryTxns(ctx, id, query)

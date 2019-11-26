@@ -5,21 +5,19 @@ import (
 	"context"
 	"os"
 
-	"github.com/cenkalti/backoff"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/grpc/dummydebug"
+	control "github.com/oasislabs/oasis-core/go/control/api"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 )
 
 var (
 	epoch uint64
-	nodes uint64
+	nodes int
 
 	dummyCmd = &cobra.Command{
 		Use:   "dummy",
@@ -41,7 +39,7 @@ var (
 	logger = logging.GetLogger("cmd/dummy")
 )
 
-func doConnect(cmd *cobra.Command) (*grpc.ClientConn, dummydebug.DummyDebugClient) {
+func doConnect(cmd *cobra.Command) (*grpc.ClientConn, control.DebugController) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -54,7 +52,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, dummydebug.DummyDebugClien
 		os.Exit(1)
 	}
 
-	client := dummydebug.NewDummyDebugClient(conn)
+	client := control.NewDebugControllerClient(conn)
 
 	return conn, client
 }
@@ -67,9 +65,7 @@ func doSetEpoch(cmd *cobra.Command, args []string) {
 		"epoch", epoch,
 	)
 
-	// Use background context to block until mock epoch transition is done.
-	_, err := client.SetEpoch(context.Background(), &dummydebug.SetEpochRequest{Epoch: epoch})
-	if err != nil {
+	if err := client.SetEpoch(context.Background(), epochtime.EpochTime(epoch)); err != nil {
 		logger.Error("failed to set epoch",
 			"err", err,
 		)
@@ -84,21 +80,7 @@ func doWaitNodes(cmd *cobra.Command, args []string) {
 		"nodes", nodes,
 	)
 
-	// Use background context to block until all nodes register.
-	ctx := context.Background()
-
-	err := backoff.Retry(func() error {
-		_, err := client.WaitNodes(ctx, &dummydebug.WaitNodesRequest{Nodes: nodes})
-		// Treat Unavailable errors as transient (and retry), all other errors are permanent.
-		if s, _ := status.FromError(err); s.Code() == codes.Unavailable {
-			return err
-		} else if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		return nil
-	}, backoff.NewExponentialBackOff())
-	if err != nil {
+	if err := client.WaitNodesRegistered(context.Background(), nodes); err != nil {
 		logger.Error("failed to wait for nodes",
 			"err", err,
 		)
@@ -112,7 +94,7 @@ func doWaitNodes(cmd *cobra.Command, args []string) {
 func Register(parentCmd *cobra.Command) {
 	dummyCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 	dummySetEpochCmd.Flags().Uint64VarP(&epoch, "epoch", "e", 0, "set epoch to given value")
-	dummyWaitNodesCmd.Flags().Uint64VarP(&nodes, "nodes", "n", 1, "number of nodes to wait for")
+	dummyWaitNodesCmd.Flags().IntVarP(&nodes, "nodes", "n", 1, "number of nodes to wait for")
 
 	dummyCmd.AddCommand(dummySetEpochCmd)
 	dummyCmd.AddCommand(dummyWaitNodesCmd)

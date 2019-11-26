@@ -286,7 +286,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 			// Fetch peer node information from the registry.
 			var n *node.Node
-			n, err = g.registry.GetNode(ctx, member.PublicKey, height)
+			n, err = g.registry.GetNode(ctx, &registry.IDQuery{ID: member.PublicKey, Height: height})
 			if err != nil {
 				return fmt.Errorf("group: failed to fetch node info: %w", err)
 			}
@@ -347,7 +347,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	}
 
 	// Fetch current runtime descriptor.
-	runtime, err := g.registry.GetRuntime(ctx, g.runtimeID, height)
+	runtime, err := g.registry.GetRuntime(ctx, &registry.IDQuery{ID: g.runtimeID, Height: height})
 	if err != nil {
 		return err
 	}

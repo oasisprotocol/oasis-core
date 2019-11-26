@@ -23,8 +23,6 @@ const (
 var (
 	// ErrTagTooLong is the error when either key or value is too long.
 	ErrTagTooLong = errors.New("indexer: tag too long to process")
-	// ErrNotFound is the error when no entries are found.
-	ErrNotFound = errors.New("indexer: no entries found")
 	// ErrCorrupted is the error when index corruption is detected.
 	ErrCorrupted = errors.New("indexer: index corrupted")
 	// ErrUnsupported is the error when the given method is not supported.
