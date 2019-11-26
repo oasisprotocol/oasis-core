@@ -113,7 +113,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 			panic(fmt.Sprintf("initFakeCapabilitiesSGX: %+v", err))
 		}
 	}
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -231,7 +231,7 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 			panic(fmt.Sprintf("initFakeCapabilitiesSGX: %+v", err))
 		}
 	}
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -348,7 +348,7 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 			panic(fmt.Sprintf("initFakeCapabilitiesSGX: %+v", err))
 		}
 	}
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, capabilities, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -405,7 +405,7 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -495,7 +495,7 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -609,7 +609,7 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Info(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 

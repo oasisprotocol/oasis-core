@@ -250,15 +250,13 @@ func newWorker(
 
 		// Register all configured runtimes.
 		for _, rt := range commonWorker.GetRuntimes() {
-			if err := w.registerRuntime(&cfg, rt); err != nil {
+			if err = w.registerRuntime(&cfg, rt); err != nil {
 				return nil, err
 			}
 		}
 
 		// Register compute worker role.
-		w.registration.RegisterRole(func(n *node.Node) error {
-			n.AddRoles(node.RoleComputeWorker)
-
+		if err := w.registration.RegisterRole(node.RoleComputeWorker, func(n *node.Node) error {
 			// Wait until all the runtimes are initialized.
 			for _, rt := range w.runtimes {
 				select {
@@ -305,7 +303,9 @@ func newWorker(
 			}
 
 			return nil
-		})
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	return w, nil

@@ -35,7 +35,7 @@ var (
 	allowUnroutableAddresses bool
 )
 
-// DebugForceAllowUnroutableAddresses allows unroutable addresses.
+// DebugForceallowUnroutableAddresses allows unroutable addresses.
 func DebugForceAllowUnroutableAddresses() {
 	allowUnroutableAddresses = true
 }
@@ -85,11 +85,10 @@ func peerIDToPublicKey(peerID core.PeerID) (signature.PublicKey, error) {
 	return pubKeyToPublicKey(pk)
 }
 
-// Info returns the information needed to establish connections to this
-// node via the P2P transport.
-func (p *P2P) Info() node.P2PInfo {
+// Addresses returns the P2P addresses of the node.
+func (p *P2P) Addresses() []node.Address {
 	if p == nil {
-		return node.P2PInfo{}
+		return nil
 	}
 
 	var addrs []multiaddr.Multiaddr
@@ -116,15 +115,7 @@ func (p *P2P) Info() node.P2PInfo {
 		addresses = append(addresses, nodeAddr)
 	}
 
-	id, err := peerIDToPublicKey(p.host.ID())
-	if err != nil {
-		panic(err)
-	}
-
-	return node.P2PInfo{
-		ID:        id,
-		Addresses: addresses,
-	}
+	return addresses
 }
 
 func (p *P2P) addPeerInfo(peerID core.PeerID, addresses []node.Address) error {

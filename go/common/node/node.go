@@ -89,6 +89,12 @@ const (
 	RoleReserved RolesMask = ((1 << 32) - 1) & ^((RoleValidator << 1) - 1)
 )
 
+// IsSingleRole returns true if RolesMask encodes a single valid role.
+func (m RolesMask) IsSingleRole() bool {
+	// Ensures exactly one bit is set, and the set bit is a valid role.
+	return m != 0 && m&(m-1) == 0 && m&RoleReserved == 0
+}
+
 func (m RolesMask) String() string {
 	if m&RoleReserved != 0 {
 		return "[invalid roles]"

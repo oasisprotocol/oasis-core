@@ -116,11 +116,10 @@ func New(
 		storage.NewGRPCServer(s.commonWorker.Grpc.Server(), s.commonWorker.Storage, s.grpcPolicy, viper.GetBool(CfgWorkerDebugIgnoreApply))
 
 		// Register storage worker role.
-		s.registrationWorker.RegisterRole(func(n *node.Node) error {
-			n.AddRoles(node.RoleStorageWorker)
-
-			return nil
-		})
+		if err := s.registrationWorker.RegisterRole(node.RoleStorageWorker,
+			func(n *node.Node) error { return nil }); err != nil {
+			return nil, err
+		}
 
 		// Start storage node for every runtime.
 		for _, runtimeID := range s.commonWorker.GetConfig().Runtimes {

@@ -220,10 +220,10 @@ func newWorker(
 		}
 
 		// Register merge worker role.
-		w.registrationWorker.RegisterRole(func(n *node.Node) error {
-			n.AddRoles(node.RoleMergeWorker)
-			return nil
-		})
+		if err := w.registrationWorker.RegisterRole(node.RoleMergeWorker,
+			func(n *node.Node) error { return nil }); err != nil {
+			return nil, err
+		}
 	}
 
 	return w, nil
