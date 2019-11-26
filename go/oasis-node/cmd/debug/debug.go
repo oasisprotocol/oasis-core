@@ -6,7 +6,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/dummy"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/roothash"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/storage"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/tendermint"
 )
@@ -19,7 +18,6 @@ var debugCmd = &cobra.Command{
 // Register registers the debug sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	dummy.Register(debugCmd)
-	roothash.Register(debugCmd)
 	storage.Register(debugCmd)
 	tendermint.Register(debugCmd)
 	byzantine.Register(debugCmd)
