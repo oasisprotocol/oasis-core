@@ -47,6 +47,8 @@ func main() {
 	_ = cmd.Register(e2e.NodeShutdown)
 	// Gas fees test.
 	_ = cmd.Register(e2e.GasFees)
+	// Identity CLI test.
+	_ = cmd.Register(e2e.IdentityCLI)
 
 	// Execute the command, now that everything has been initialized.
 	cmd.Execute()
