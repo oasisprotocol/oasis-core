@@ -7,7 +7,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/version"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	"github.com/oasislabs/oasis-core/go/ias"
@@ -27,8 +26,7 @@ const LocalStorageFile = "worker-local-storage.bolt.db"
 
 // Runtime is a single runtime.
 type Runtime struct {
-	id      signature.PublicKey
-	version version.Version
+	id signature.PublicKey
 
 	node *committee.Node
 }
@@ -243,9 +241,9 @@ func (w *Worker) registerRuntime(id signature.PublicKey) error {
 	}
 
 	rt := &Runtime{
-		id:      id,
-		version: version.Version{Major: 0, Minor: 0, Patch: 0}, // Version is populated once the runtime has been loaded. -Matevz
-		node:    node,
+		id: id,
+		// Version is populated once the runtime has been loaded.
+		node: node,
 	}
 	w.runtimes[rt.id] = rt
 

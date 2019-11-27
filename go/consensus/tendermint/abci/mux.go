@@ -36,8 +36,9 @@ import (
 )
 
 const (
-	stateKeyGenesisDigest  = "OasisGenesisDigest"
-	stateKeyGenesisRequest = "OasisGenesisRequest"
+	stateKeyGenesisDigest   = "OasisGenesisDigest"
+	stateKeyGenesisRequest  = "OasisGenesisRequest"
+	stateKeyInitChainEvents = "OasisInitChainEvents"
 
 	metricsUpdateInterval = 10 * time.Second
 )
@@ -391,18 +392,9 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	genesisDigest := sha512.Sum512_256(tmp.Bytes())
 	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisDigest), genesisDigest[:])
 
-	// HACK: Can't emit tags from InitChain, stash the genesis state
-	// so that processing can happen in BeginBlock.
-	//
-	// This is also stashed in the CheckTx tree (even though it will get
-	// rolled back), so that it is usable from the genesisHooks.
-	b, _ = req.Marshal()
-	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisRequest), b)
-	mux.state.checkTxTree.Set([]byte(stateKeyGenesisRequest), b)
-
 	resp := mux.BaseApplication.InitChain(req)
 
-	// HACK: The state is only updated iff validators or consensus paremeters
+	// HACK: The state is only updated iff validators or consensus parameters
 	// are returned.
 	//
 	// See: tendermint/consensus/replay.go (Handshaker.ReplayBlocks)
@@ -411,16 +403,48 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	}
 
 	// Dispatch registered genesis hooks.
-	mux.RLock()
-	defer mux.RUnlock()
+	func() {
+		mux.RLock()
+		defer mux.RUnlock()
 
-	mux.logger.Debug("Dispatching genesis hooks")
+		mux.logger.Debug("Dispatching genesis hooks")
 
-	for _, hook := range mux.genesisHooks {
-		hook()
+		for _, hook := range mux.genesisHooks {
+			hook()
+		}
+
+		mux.logger.Debug("Genesis hook dispatch complete")
+	}()
+
+	// TODO: remove stateKeyGenesisRequest here, see oasis-core#2426
+	b, _ = req.Marshal()
+	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisRequest), b)
+	mux.state.checkTxTree.Set([]byte(stateKeyGenesisRequest), b)
+
+	// Call InitChain() on all applications.
+	mux.logger.Debug("InitChain: initializing applications")
+	ctx := NewContext(ContextInitChain, mux.currentTime, mux.state)
+
+	for _, app := range mux.appsByLexOrder {
+		mux.logger.Debug("InitChain: calling InitChain on application",
+			"app", app.Name(),
+		)
+
+		if err = app.InitChain(ctx, req, st); err != nil {
+			mux.logger.Error("InitChain: fatal error in application",
+				"err", err,
+				"app", app.Name(),
+			)
+			panic("mux: InitChain: fatal error in application: '" + app.Name() + "': " + err.Error())
+		}
 	}
 
-	mux.logger.Debug("Genesis hook dispatch complete")
+	mux.logger.Debug("InitChain: initializing of applications complete", "num_collected_events", len(ctx.GetEvents()))
+
+	// Since returning emitted events doesn't work for InitChain() response yet,
+	// we store those and return them in BeginBlock().
+	evBinary := cbor.Marshal(ctx.GetEvents())
+	mux.state.deliverTxTree.Set([]byte(stateKeyInitChainEvents), evBinary)
 
 	return resp
 }
@@ -509,53 +533,6 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		panic("tendermint: after halt epoch, halting")
 	}
 
-	// HACK: Our entire system is driven with a tag backed pub-sub
-	// interface gluing the various components together.  While we
-	// desire to have things that would emit tags (like runtime
-	// registration) in InitChain, and tendermint does not allow
-	// emiting tags in the ABCI InitChain hook, we defer actually
-	// initializing the multiplexed application genesis state till
-	// the first block.
-	if blockHeight == 1 {
-		mux.logger.Debug("BeginBlock: processing defered InitChain")
-
-		_, b := mux.state.checkTxTree.Get([]byte(stateKeyGenesisRequest))
-
-		var initReq types.RequestInitChain
-		if err := initReq.Unmarshal(b); err != nil {
-			mux.logger.Error("BeginBlock: corrupted defered genesis state",
-				"err", err,
-			)
-			panic("mux: invalid defered genesis application state")
-		}
-
-		doc, err := parseGenesisAppState(initReq)
-		if err != nil {
-			mux.logger.Error("BeginBlock: corrupted defered genesis state",
-				"err", err,
-			)
-			panic("mux: invalid defered genesis application state")
-		}
-
-		ctx.outputType = ContextInitChain
-
-		for _, app := range mux.appsByLexOrder {
-			mux.logger.Debug("BeginBlock: defered InitChain",
-				"app", app.Name(),
-			)
-
-			if err = app.InitChain(ctx, initReq, doc); err != nil {
-				mux.logger.Error("BeginBlock: defered InitChain, fatal error in application",
-					"err", err,
-					"app", app.Name(),
-				)
-				panic("mux: BeginBlock: defered InitChain, fatal error in application: '" + app.Name() + "': " + err.Error())
-			}
-		}
-
-		ctx.outputType = ContextBeginBlock
-	}
-
 	// Dispatch BeginBlock to all applications.
 	for _, app := range mux.appsByLexOrder {
 		if err := app.BeginBlock(ctx, req); err != nil {
@@ -568,7 +545,23 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	}
 
 	response := mux.BaseApplication.BeginBlock(req)
+
+	// Collect and return events from the application's BeginBlock calls.
 	response.Events = ctx.GetEvents()
+
+	// During the first block, also collect and prepend application events
+	// generated during InitChain to BeginBlock events.
+	if mux.state.BlockHeight() == 0 {
+		_, evBinary := mux.state.deliverTxTree.Get([]byte(stateKeyInitChainEvents))
+		if evBinary != nil {
+			var events []types.Event
+			_ = cbor.Unmarshal(evBinary, &events)
+
+			response.Events = append(events, response.Events...)
+
+			mux.state.deliverTxTree.Remove([]byte(stateKeyInitChainEvents))
+		}
+	}
 
 	return response
 }
