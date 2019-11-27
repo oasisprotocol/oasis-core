@@ -9,6 +9,7 @@ import (
 	"github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/p2p/pex"
+	"github.com/tendermint/tendermint/types"
 	"github.com/tendermint/tendermint/version"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -119,7 +120,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 		),
 		ID_:        nodeKey.ID(),
 		ListenAddr: viper.GetString(CfgCoreListenAddress),
-		Network:    doc.ChainID,
+		Network:    doc.ChainContext()[:types.MaxChainIDLen],
 		Version:    "0.0.1",
 		Channels:   []byte{pex.PexChannel},
 		Moniker:    "oasis-seed-" + identity.NodeSigner.Public().String(),

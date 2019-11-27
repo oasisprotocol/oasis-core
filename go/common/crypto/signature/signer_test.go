@@ -59,9 +59,8 @@ func TestContext(t *testing.T) {
 
 	// Manually change the chain context to test that this generates different
 	// messages with different contexts (this is otherwise not allowed).
-	chainContextLock.Lock()
-	chainContext = Context("test: oasis-core tests")
-	chainContextLock.Unlock()
+	UnsafeResetChainContext()
+	SetChainContext("test: oasis-core tests")
 
 	msg2, err = PrepareSignerMessage(chainCtx, []byte("message"))
 	require.NoError(err, "PrepareSignerMessage should work with chain context")

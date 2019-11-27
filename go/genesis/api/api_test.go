@@ -29,7 +29,7 @@ import (
 
 var testDoc = &Document{
 	ChainID:   genesisTests.TestChainID,
-	Time:      time.Now(),
+	Time:      time.Unix(1574858284, 0),
 	HaltEpoch: epochtime.EpochTime(math.MaxUint64),
 	EpochTime: epochtime.Genesis{
 		Parameters: epochtime.ConsensusParameters{
@@ -92,6 +92,16 @@ func hex2pk(hex string) signature.PublicKey {
 		panic(err)
 	}
 	return pk
+}
+
+func TestGenesisChainContext(t *testing.T) {
+	// Ensure that the chain context is stable.
+	stableDoc := *testDoc
+	// NOTE: Staking part is not stable as it generates a new public key
+	//       on each run.
+	stableDoc.Staking = staking.Genesis{}
+
+	require.Equal(t, stableDoc.ChainContext(), "daba5eed9f82d37c76384f9f185dc0bfff60eb57a33b7d8955e265244e0a0a51")
 }
 
 func TestGenesisSanityCheck(t *testing.T) {

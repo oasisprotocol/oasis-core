@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
@@ -36,7 +35,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 	if err != nil {
 		return err
 	}
-	signature.SetChainContext(genesisDoc.ChainID)
+	genesisDoc.SetChainContext()
 
 	ht.service, err = tendermint.New(context.Background(), dataDir, id, genesis)
 	if err != nil {

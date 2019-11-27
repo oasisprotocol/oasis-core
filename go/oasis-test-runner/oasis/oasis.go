@@ -21,6 +21,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
 	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
@@ -334,10 +335,26 @@ func (net *Network) Start() error {
 		)
 	}
 
-	// Configure domain separation for cases where we do signing inside test
-	// cases and want to generate valid signatures. This assumes that the
-	// genesis file always uses the test ChainID.
-	genesisTests.SetTestChainContext()
+	// Retrieve the genesis document and use it to configure the context for
+	// signature domain separation.
+	genesisProvider, err := genesisFile.NewFileProvider(net.GenesisPath())
+	if err != nil {
+		net.logger.Error("failed to load genesis file",
+			"err", err,
+		)
+		return err
+	}
+	genesisDoc, err := genesisProvider.GetGenesisDocument()
+	if err != nil {
+		net.logger.Error("failed to retrieve genesis document",
+			"err", err,
+		)
+		return err
+	}
+	// NOTE: We need to reset the chain context here as E2E tests can run
+	//       with different genesis documents which would change the context.
+	signature.UnsafeResetChainContext()
+	genesisDoc.SetChainContext()
 
 	net.logger.Debug("provisioning seed node")
 	if _, err := net.newSeedNode(); err != nil {
