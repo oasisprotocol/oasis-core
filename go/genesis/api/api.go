@@ -9,6 +9,8 @@ import (
 	"time"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/genesis"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
@@ -50,6 +52,31 @@ type Document struct {
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by the protocol.
 	ExtraData map[string][]byte `json:"extra_data"`
+}
+
+// Hash returns the cryptographic hash of the encoded genesis document.
+func (d *Document) Hash() hash.Hash {
+	var h hash.Hash
+	h.From(d)
+	return h
+}
+
+// ChainContext returns a string that can be used as a chain domain separation
+// context. Changing this (or any data it is derived from) invalidates all
+// signatures that use chain domain separation.
+//
+// Currently this uses the hex-encoded cryptographic hash of the encoded
+// genesis document.
+func (d *Document) ChainContext() string {
+	return d.Hash().String()
+}
+
+// SetChainContext configures the global chain domain separation context.
+//
+// This method can only be called once during the application's lifetime and
+// will panic otherwise.
+func (d *Document) SetChainContext() {
+	signature.SetChainContext(d.ChainContext())
 }
 
 // WriteFileJSON writes the genesis document into a JSON file.

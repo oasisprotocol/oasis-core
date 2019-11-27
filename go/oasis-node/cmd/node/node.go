@@ -33,7 +33,8 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/genesis"
 	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
-	genesisfile "github.com/oasislabs/oasis-core/go/genesis/file"
+	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
+	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/ias"
 	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
@@ -400,7 +401,7 @@ func (n *Node) startWorkers(logger *logging.Logger) error {
 
 func (n *Node) initGenesis(testNode bool) error {
 	var err error
-	n.Genesis, err = genesisfile.DefaultFileProvider()
+	n.Genesis, err = genesisFile.DefaultFileProvider()
 	if err != nil {
 		if os.IsNotExist(err) && testNode {
 			// Well, there wasn't a genesis document and we're running unit tests,
@@ -408,9 +409,12 @@ func (n *Node) initGenesis(testNode bool) error {
 			if n.Genesis, err = tendermintTestsGenesis.NewTestNodeGenesisProvider(n.Identity); err != nil {
 				return err
 			}
-		} else {
-			return err
+
+			// In case of a test node, always use the test chain context.
+			genesisTests.SetTestChainContext()
+			return nil
 		}
+		return err
 	}
 
 	// Retrieve the genesis document and use it to configure the ChainID for
@@ -419,7 +423,7 @@ func (n *Node) initGenesis(testNode bool) error {
 	if err != nil {
 		return err
 	}
-	signature.SetChainContext(genesisDoc.ChainID)
+	genesisDoc.SetChainContext()
 
 	return nil
 }

@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	chainContextMaxSize   = 32
+	chainContextMaxSize   = 64
 	chainContextSeparator = " for chain "
 )
 
@@ -97,6 +97,18 @@ func NewContext(rawContext string, opts ...ContextOption) Context {
 	registeredContexts.Store(ctx, &opt)
 
 	return ctx
+}
+
+// UnsafeResetChainContext resets the chain context.
+//
+// This function should NOT be used during normal operation as changing
+// the chain context while an application is running is unsafe. The main
+// use case for having this function is unit tests.
+func UnsafeResetChainContext() {
+	chainContextLock.Lock()
+	defer chainContextLock.Unlock()
+
+	chainContext = Context("")
 }
 
 // SetChainContext configures the chain domain separation context that is

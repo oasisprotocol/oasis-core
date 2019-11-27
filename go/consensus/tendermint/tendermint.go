@@ -934,7 +934,7 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 	}
 
 	doc := tmtypes.GenesisDoc{
-		ChainID:     d.ChainID,
+		ChainID:     d.ChainContext()[:tmtypes.MaxChainIDLen],
 		GenesisTime: d.Time,
 		ConsensusParams: &tmtypes.ConsensusParams{
 			Block: tmtypes.BlockParams{

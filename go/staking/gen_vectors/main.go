@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
@@ -13,8 +14,6 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
-
-const chainID = "test-chain-id"
 
 func quantityInt64(v int64) quantity.Quantity {
 	var q quantity.Quantity
@@ -25,8 +24,10 @@ func quantityInt64(v int64) quantity.Quantity {
 }
 
 func main() {
-	// Configure chain context for all signatures using domain separation by ChainID.
-	signature.SetChainContext(chainID)
+	// Configure chain context for all signatures using chain domain separation.
+	var chainContext hash.Hash
+	chainContext.FromBytes([]byte("staking test vectors"))
+	signature.SetChainContext(chainContext.String())
 
 	var vectors []TestVector
 
