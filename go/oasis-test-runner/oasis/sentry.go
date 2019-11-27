@@ -23,6 +23,8 @@ type Sentry struct {
 
 // SentryCfg is the Oasis sentry node configuration.
 type SentryCfg struct {
+	NodeCfg
+
 	ValidatorIndices []int
 }
 
@@ -46,8 +48,8 @@ func (sentry *Sentry) startNode() error {
 		appendNetwork(sentry.net).
 		addValidatorsAsPrivatePeers(validators)
 
-	if sentry.cmd, _, err = sentry.net.startOasisNode(sentry.dir, nil, args, "sentry", false, false); err != nil {
-		return fmt.Errorf("oasis/sentry: failed to launch node: %w", err)
+	if sentry.cmd, _, err = sentry.net.startOasisNode(sentry.dir, nil, args, sentry.Name, false, false); err != nil {
+		return fmt.Errorf("oasis/sentry: failed to launch node %s: %w", sentry.Name, err)
 	}
 
 	return nil
@@ -82,8 +84,11 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 
 	sentry := &Sentry{
 		Node: Node{
-			net: net,
-			dir: sentryDir,
+			Name:                                     sentryName,
+			net:                                      net,
+			dir:                                      sentryDir,
+			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
+			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
 		validatorIndices: cfg.ValidatorIndices,
 		publicKey:        sentryPublicKey,
@@ -95,6 +100,14 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 
 	net.sentries = append(net.sentries, sentry)
 	net.nextNodePort += 2
+
+	if err := net.AddLogWatcher(&sentry.Node); err != nil {
+		net.logger.Error("failed to add log watcher",
+			"err", err,
+			"sentry_name", sentryName,
+		)
+		return nil, fmt.Errorf("oasis/sentry: failed to add log watcher for %s: %w", sentryName, err)
+	}
 
 	return sentry, nil
 }

@@ -1,6 +1,8 @@
 package oasis
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -24,8 +26,8 @@ func (seed *seedNode) startNode() error {
 		tendermintSeedMode()
 
 	var err error
-	if seed.cmd, seed.exitCh, err = seed.net.startOasisNode(seed.dir, nil, args, "seed", false, false); err != nil {
-		return errors.Wrap(err, "oasis/seed: failed to launch node")
+	if seed.cmd, seed.exitCh, err = seed.net.startOasisNode(seed.dir, nil, args, seed.Name, false, false); err != nil {
+		return fmt.Errorf("oasis/seed: failed to launch node %s: %w", seed.Name, err)
 	}
 
 	return nil
@@ -39,7 +41,9 @@ func (net *Network) newSeedNode() (*seedNode, error) {
 	// Why, yes, this *could* probably just use Oasis node's integrated seed
 	// node as a library, but this is more "realistic" for tests.
 
-	seedDir, err := net.baseDir.NewSubDir("seed")
+	seedName := "seed"
+
+	seedDir, err := net.baseDir.NewSubDir(seedName)
 	if err != nil {
 		net.logger.Error("failed to create seed node subdir",
 			"err", err,
@@ -59,8 +63,9 @@ func (net *Network) newSeedNode() (*seedNode, error) {
 
 	seedNode := &seedNode{
 		Node: Node{
-			net: net,
-			dir: seedDir,
+			Name: seedName,
+			net:  net,
+			dir:  seedDir,
 		},
 		tmAddress:     crypto.PublicKeyToTendermint(&seedPublicKey).Address().String(),
 		consensusPort: net.nextNodePort,

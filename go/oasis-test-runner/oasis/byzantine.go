@@ -47,8 +47,15 @@ func (worker *Byzantine) startNode() error {
 	}
 
 	var err error
-	if worker.cmd, worker.exitCh, err = worker.net.startOasisNode(worker.dir, []string{"debug", "byzantine", worker.script}, args, "byzantine", true, false); err != nil {
-		return errors.Wrap(err, "oasis/byzantine: failed to launch node")
+	if worker.cmd, worker.exitCh, err = worker.net.startOasisNode(
+		worker.dir,
+		[]string{"debug", "byzantine", worker.script},
+		args,
+		worker.Name,
+		true,
+		false,
+	); err != nil {
+		return fmt.Errorf("oasis/byzantine: failed to launch node %s: %w", worker.Name, err)
 	}
 
 	return nil
@@ -91,8 +98,11 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 
 	worker := &Byzantine{
 		Node: Node{
-			net: net,
-			dir: byzantineDir,
+			Name:                                     byzantineName,
+			net:                                      net,
+			dir:                                      byzantineDir,
+			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
+			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
 		script:        cfg.Script,
 		entity:        cfg.Entity,
@@ -103,6 +113,14 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 
 	net.byzantine = append(net.byzantine, worker)
 	net.nextNodePort += 2
+
+	if err := net.AddLogWatcher(&worker.Node); err != nil {
+		net.logger.Error("failed to add log watcher",
+			"err", err,
+			"byzantine_name", byzantineName,
+		)
+		return nil, fmt.Errorf("oasis/byzantine: failed to add log watcher for %s: %w", byzantineName, err)
+	}
 
 	return worker, nil
 }

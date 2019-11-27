@@ -22,6 +22,13 @@ import (
 var (
 	// RoothashMessages is the roothash messages scenario.
 	RoothashMessages scenario.Scenario = &roothashMessagesImpl{}
+
+	// DefaultRoothashLogWatcherHandlerFactories is a list of default log
+	// watcher handler factories for the roothash messages scenario.
+	DefaultRoothashLogWatcherHandlerFactories = append([]log.WatcherHandlerFactory{
+		oasis.LogAssertNotEvent(roothash.LogEventMessageUnsat, "unsatisfactory roothash message detected"),
+		oasis.LogAssertEvent(staking.LogEventGeneralAdjustment, "balance adjustment not detected"),
+	}, DefaultBasicLogWatcherHandlerFactories...)
 )
 
 type roothashMessagesImpl struct {
@@ -57,14 +64,11 @@ func (sc *roothashMessagesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			MrSigner: mrSigner,
 		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:          viper.GetString(cfgNodeBinary),
-			RuntimeLoaderBinary: viper.GetString(cfgRuntimeLoader),
-			EpochtimeMock:       true,
-			StakingGenesis:      "tests/fixture-data/roothash-messages/staking-genesis.json",
-			LogWatcherHandlers: append([]log.WatcherHandler{
-				oasis.LogAssertNotEvent(roothash.LogEventMessageUnsat, "unsatisfactory roothash message detected"),
-				oasis.LogAssertEvent(staking.LogEventGeneralAdjustment, "balance adjustment not detected"),
-			}, DefaultBasicLogWatcherHandlers...),
+			NodeBinary:                        viper.GetString(cfgNodeBinary),
+			RuntimeLoaderBinary:               viper.GetString(cfgRuntimeLoader),
+			EpochtimeMock:                     true,
+			StakingGenesis:                    "tests/fixture-data/roothash-messages/staking-genesis.json",
+			DefaultLogWatcherHandlerFactories: DefaultRoothashLogWatcherHandlerFactories,
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},

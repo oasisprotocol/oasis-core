@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 )
@@ -9,6 +10,10 @@ import (
 var (
 	// Sentry is the Tendermint Sentry node scenario.
 	Sentry scenario.Scenario = newSentryImpl()
+
+	ValidatorExtraLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
+		oasis.LogAssertPeerExchangeDisabled(),
+	}
 )
 
 type sentryImpl struct {
@@ -66,29 +71,21 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	f.Validators = []oasis.ValidatorFixture{
 		oasis.ValidatorFixture{
-			Entity:   1,
-			Sentries: []int{0, 1},
+			Entity:                     1,
+			LogWatcherHandlerFactories: ValidatorExtraLogWatcherHandlerFactories,
+			Sentries:                   []int{0, 1},
 		},
 		oasis.ValidatorFixture{
-			Entity:   1,
-			Sentries: []int{2},
+			Entity:                     1,
+			LogWatcherHandlerFactories: ValidatorExtraLogWatcherHandlerFactories,
+			Sentries:                   []int{2},
 		},
 		oasis.ValidatorFixture{
-			Entity:   1,
-			Sentries: []int{2},
+			Entity:                     1,
+			LogWatcherHandlerFactories: ValidatorExtraLogWatcherHandlerFactories,
+			Sentries:                   []int{2},
 		},
 	}
-
-	f.Network.LogWatcherHandlers = append(
-		f.Network.LogWatcherHandlers,
-		// NOTE: This currently works because logs from all nodes are checked
-		// by the same log watcher handler.
-		// It needs to be properly implemented after:
-		// - https://github.com/oasislabs/oasis-core/issues/2355
-		// - https://github.com/oasislabs/oasis-core/issues/2356
-		// are implemented.
-		oasis.LogAssertPeerExchangeDisabled(),
-	)
 
 	return f, nil
 }

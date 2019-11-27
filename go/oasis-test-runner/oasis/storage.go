@@ -88,8 +88,15 @@ func (worker *Storage) startNode() error {
 	}
 
 	var err error
-	if worker.cmd, worker.exitCh, err = worker.net.startOasisNode(worker.dir, nil, args, "storage", false, false); err != nil {
-		return errors.Wrap(err, "oasis/storage: failed to launch node")
+	if worker.cmd, worker.exitCh, err = worker.net.startOasisNode(
+		worker.dir,
+		nil,
+		args,
+		worker.Name,
+		false,
+		false,
+	); err != nil {
+		return fmt.Errorf("oasis/storage: failed to launch node %s: %w", worker.Name, err)
 	}
 
 	return nil
@@ -119,8 +126,11 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 
 	worker := &Storage{
 		Node: Node{
-			net: net,
-			dir: storageDir,
+			Name:                                     storageName,
+			net:                                      net,
+			dir:                                      storageDir,
+			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
+			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
 		backend:       cfg.Backend,
 		entity:        cfg.Entity,
@@ -133,6 +143,14 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 
 	net.storageWorkers = append(net.storageWorkers, worker)
 	net.nextNodePort += 3
+
+	if err := net.AddLogWatcher(&worker.Node); err != nil {
+		net.logger.Error("failed to add log watcher",
+			"err", err,
+			"storage_name", storageName,
+		)
+		return nil, fmt.Errorf("oasis/storage: failed to add log watcher for %s: %w", storageName, err)
+	}
 
 	return worker, nil
 }

@@ -191,8 +191,8 @@ func (km *Keymanager) startNode() error {
 	}
 
 	var err error
-	if km.cmd, km.exitCh, err = km.net.startOasisNode(km.dir, nil, args, "keymanager", false, km.restartable); err != nil {
-		return errors.Wrap(err, "oasis/keymanager: failed to launch node")
+	if km.cmd, km.exitCh, err = km.net.startOasisNode(km.dir, nil, args, km.Name, false, km.restartable); err != nil {
+		return fmt.Errorf("oasis/keymanager: failed to launch node %s: %w", km.Name, err)
 	}
 
 	return nil
@@ -205,7 +205,9 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		return nil, errors.New("oasis/keymanager: already provisioned")
 	}
 
-	kmDir, err := net.baseDir.NewSubDir("keymanager")
+	kmName := "keymanager"
+
+	kmDir, err := net.baseDir.NewSubDir(kmName)
 	if err != nil {
 		net.logger.Error("failed to create keymanager subdir",
 			"err", err,
@@ -224,9 +226,12 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 
 	km := &Keymanager{
 		Node: Node{
-			net:         net,
-			dir:         kmDir,
-			restartable: cfg.Restartable,
+			Name:                                     kmName,
+			net:                                      net,
+			dir:                                      kmDir,
+			restartable:                              cfg.Restartable,
+			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
+			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
 		runtime:          cfg.Runtime,
 		entity:           cfg.Entity,
@@ -237,6 +242,13 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 
 	net.keymanager = km
 	net.nextNodePort += 2
+
+	if err := net.AddLogWatcher(&km.Node); err != nil {
+		net.logger.Error("failed to add log watcher",
+			"err", err,
+		)
+		return nil, fmt.Errorf("oasis/keymanager: failed to add log watcher: %w", err)
+	}
 
 	return km, nil
 }

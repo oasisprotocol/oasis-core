@@ -84,8 +84,15 @@ func (val *Validator) startNode() error {
 	}
 
 	var err error
-	if val.cmd, val.exitCh, err = val.net.startOasisNode(val.dir, nil, args, "validator", false, val.restartable); err != nil {
-		return fmt.Errorf("oasis/validator: failed to launch node: %w", err)
+	if val.cmd, val.exitCh, err = val.net.startOasisNode(
+		val.dir,
+		nil,
+		args,
+		val.Name,
+		false,
+		val.restartable,
+	); err != nil {
+		return fmt.Errorf("oasis/validator: failed to launch node %s: %w", val.Name, err)
 	}
 
 	return nil
@@ -106,9 +113,12 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 
 	val := &Validator{
 		Node: Node{
-			net:         net,
-			dir:         valDir,
-			restartable: cfg.Restartable,
+			Name:                                     valName,
+			net:                                      net,
+			dir:                                      valDir,
+			restartable:                              cfg.Restartable,
+			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
+			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
 		entity:        cfg.Entity,
 		minGasPrice:   cfg.MinGasPrice,
@@ -180,6 +190,14 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		if net.controller, err = NewController(val.SocketPath()); err != nil {
 			return nil, errors.Wrap(err, "oasis/validator: failed to create controller")
 		}
+	}
+
+	if err := net.AddLogWatcher(&val.Node); err != nil {
+		net.logger.Error("failed to add log watcher",
+			"err", err,
+			"validator_name", valName,
+		)
+		return nil, fmt.Errorf("oasis/validator: failed to add log watcher for %s: %w", valName, err)
 	}
 
 	return val, nil

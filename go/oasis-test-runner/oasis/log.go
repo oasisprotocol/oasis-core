@@ -9,60 +9,60 @@ import (
 
 // LogAssertEvent returns a handler which checks whether a specific log event was
 // emitted based on JSON log output.
-func LogAssertEvent(event, message string) log.WatcherHandler {
+func LogAssertEvent(event, message string) log.WatcherHandlerFactory {
 	return log.AssertJSONContains(logging.LogEvent, event, message)
 }
 
 // LogAssertNotEvent returns a handler which checks whether a specific log event
 // was not emitted based on JSON log output.
-func LogAssertNotEvent(event, message string) log.WatcherHandler {
+func LogAssertNotEvent(event, message string) log.WatcherHandlerFactory {
 	return log.AssertNotJSONContains(logging.LogEvent, event, message)
 }
 
 // LogAssertTimeouts returns a handler which checks whether a timeout was
 // detected based on JSON log output.
-func LogAssertTimeouts() log.WatcherHandler {
+func LogAssertTimeouts() log.WatcherHandlerFactory {
 	return LogAssertEvent(roothash.LogEventTimerFired, "timeout not detected")
 }
 
 // LogAssertNoTimeouts returns a handler which checks whether a timeout was
 // detected based on JSON log output.
-func LogAssertNoTimeouts() log.WatcherHandler {
+func LogAssertNoTimeouts() log.WatcherHandlerFactory {
 	return LogAssertNotEvent(roothash.LogEventTimerFired, "timeout detected")
 }
 
 // LogAssertNoRoundFailures returns a handler which checks whether a round failure
 // was detected based on JSON log output.
-func LogAssertNoRoundFailures() log.WatcherHandler {
+func LogAssertNoRoundFailures() log.WatcherHandlerFactory {
 	return LogAssertNotEvent(roothash.LogEventRoundFailed, "round failure detected")
 }
 
 // LogAssertComputeDiscrepancyDetected returns a handler which checks whether a
 // compute discrepancy was detected based on JSON log output.
-func LogAssertComputeDiscrepancyDetected() log.WatcherHandler {
+func LogAssertComputeDiscrepancyDetected() log.WatcherHandlerFactory {
 	return LogAssertEvent(roothash.LogEventComputeDiscrepancyDetected, "compute discrepancy not detected")
 }
 
 // LogAssertNoComputeDiscrepancyDetected returns a handler which checks whether a
 // compute discrepancy was not detected based on JSON log output.
-func LogAssertNoComputeDiscrepancyDetected() log.WatcherHandler {
+func LogAssertNoComputeDiscrepancyDetected() log.WatcherHandlerFactory {
 	return LogAssertNotEvent(roothash.LogEventComputeDiscrepancyDetected, "compute discrepancy detected")
 }
 
 // LogAssertMergeDiscrepancyDetected returns a handler which checks whether a
 // merge discrepancy was detected based on JSON log output.
-func LogAssertMergeDiscrepancyDetected() log.WatcherHandler {
+func LogAssertMergeDiscrepancyDetected() log.WatcherHandlerFactory {
 	return LogAssertEvent(roothash.LogEventMergeDiscrepancyDetected, "merge discrepancy not detected")
 }
 
 // LogAssertNoMergeDiscrepancyDetected returns a handler which checks whether a
 // merge discrepancy was not detected based on JSON log output.
-func LogAssertNoMergeDiscrepancyDetected() log.WatcherHandler {
+func LogAssertNoMergeDiscrepancyDetected() log.WatcherHandlerFactory {
 	return LogAssertNotEvent(roothash.LogEventMergeDiscrepancyDetected, "merge discrepancy detected")
 }
 
 // LogAssertPeerExchangeDisabled returns a handler which checks whether a peer
 // exchange disabled event was detected based on JSON log output.
-func LogAssertPeerExchangeDisabled() log.WatcherHandler {
+func LogAssertPeerExchangeDisabled() log.WatcherHandlerFactory {
 	return LogAssertEvent(tendermint.LogEventPeerExchangeDisabled, "peer exchange not disabled")
 }

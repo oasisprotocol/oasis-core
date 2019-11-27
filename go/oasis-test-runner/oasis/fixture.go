@@ -7,6 +7,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
@@ -118,6 +119,8 @@ type ValidatorFixture struct {
 
 	Entity int `json:"entity"`
 
+	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
+
 	MinGasPrice uint64 `json:"min_gas_price"`
 
 	Sentries []int `json:"sentries,omitempty"`
@@ -136,7 +139,8 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 
 	return net.NewValidator(&ValidatorCfg{
 		NodeCfg: NodeCfg{
-			Restartable: f.Restartable,
+			Restartable:                f.Restartable,
+			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 		},
 		Entity:      entity,
 		MinGasPrice: f.MinGasPrice,
@@ -201,6 +205,8 @@ type KeymanagerFixture struct {
 	Entity  int `json:"entity"`
 
 	Restartable bool `json:"restartable"`
+
+	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 }
 
 // Create instantiates the key manager described by the fixture.
@@ -216,7 +222,8 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 
 	return net.NewKeymanager(&KeymanagerCfg{
 		NodeCfg: NodeCfg{
-			Restartable: f.Restartable,
+			Restartable:                f.Restartable,
+			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 		},
 		Runtime: runtime,
 		Entity:  entity,
@@ -227,6 +234,8 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 type StorageWorkerFixture struct {
 	Backend string `json:"backend"`
 	Entity  int    `json:"entity"`
+
+	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
 	IgnoreApplies bool `json:"ignore_applies,omitempty"`
 }
@@ -239,6 +248,9 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 	}
 
 	return net.NewStorage(&StorageCfg{
+		NodeCfg: NodeCfg{
+			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
+		},
 		Backend:       f.Backend,
 		Entity:        entity,
 		IgnoreApplies: f.IgnoreApplies,
@@ -252,6 +264,8 @@ type ComputeWorkerFixture struct {
 	RuntimeBackend string `json:"runtime_backend"`
 
 	Restartable bool `json:"restartable"`
+
+	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 }
 
 // Create instantiates the compute worker described by the fixture.
@@ -263,7 +277,8 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 
 	return net.NewCompute(&ComputeCfg{
 		NodeCfg: NodeCfg{
-			Restartable: f.Restartable,
+			Restartable:                f.Restartable,
+			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 		},
 		Entity:         entity,
 		RuntimeBackend: f.RuntimeBackend,
@@ -272,12 +287,17 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 
 // SentryFixture is a sentry node fixture.
 type SentryFixture struct {
+	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
+
 	Validators []int `json:"validators"`
 }
 
 // Create instantiates the client node described by the fixture.
 func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 	return net.NewSentry(&SentryCfg{
+		NodeCfg: NodeCfg{
+			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
+		},
 		ValidatorIndices: f.Validators,
 	})
 }
@@ -296,6 +316,9 @@ type ByzantineFixture struct {
 	Script       string `json:"script"`
 	IdentitySeed string `json:"identity_seed"`
 	Entity       int    `json:"entity"`
+
+	EnableDefaultLogWatcherHandlerFactories bool                        `json:"enable_default_log_fac"`
+	LogWatcherHandlerFactories              []log.WatcherHandlerFactory `json:"-"`
 }
 
 // Create instantiates the byzantine node described by the fixture.
@@ -306,6 +329,10 @@ func (f *ByzantineFixture) Create(net *Network) (*Byzantine, error) {
 	}
 
 	return net.NewByzantine(&ByzantineCfg{
+		NodeCfg: NodeCfg{
+			DisableDefaultLogWatcherHandlerFactories: !f.EnableDefaultLogWatcherHandlerFactories,
+			LogWatcherHandlerFactories:               f.LogWatcherHandlerFactories,
+		},
 		Script:       f.Script,
 		IdentitySeed: f.IdentitySeed,
 		Entity:       entity,
