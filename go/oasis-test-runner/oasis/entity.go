@@ -90,7 +90,7 @@ func (ent *Entity) update() error {
 
 	args := []string{
 		"registry", "entity", "update",
-		"--datadir", ent.dir.String(),
+		"--" + common.CfgDataDir, ent.dir.String(),
 	}
 	for _, n := range ent.nodes {
 		args = append(args, "--entity.node.id", n.String())
@@ -142,7 +142,7 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 		if !cfg.Restore {
 			args := []string{
 				"registry", "entity", "init",
-				"--datadir", entityDir.String(),
+				"--" + common.CfgDataDir, entityDir.String(),
 			}
 			if cfg.AllowEntitySignedNodes {
 				args = append(args, "--entity.debug.allow_entity_signed_nodes")

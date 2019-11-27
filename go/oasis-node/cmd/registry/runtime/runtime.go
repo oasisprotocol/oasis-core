@@ -41,7 +41,7 @@ const (
 	CfgKind           = "runtime.kind"
 	CfgKeyManager     = "runtime.keymanager"
 	cfgOutput         = "runtime.genesis.file"
-	cfgVersion        = "runtime.version"
+	CfgVersion        = "runtime.version"
 	CfgVersionEnclave = "runtime.version.enclave"
 
 	// Compute commiteee flags.
@@ -330,7 +330,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		Kind:        kind,
 		TEEHardware: teeHardware,
 		Version: registry.VersionInfo{
-			Version: version.FromU64(viper.GetUint64(cfgVersion)),
+			Version: version.FromU64(viper.GetUint64(CfgVersion)),
 		},
 		KeyManager: kmID,
 		Compute: registry.ComputeParameters{
@@ -441,7 +441,7 @@ func init() {
 	runtimeFlags.String(CfgGenesisState, "", "Runtime state at genesis")
 	runtimeFlags.String(CfgKeyManager, "", "Key Manager Runtime ID")
 	runtimeFlags.String(CfgKind, "compute", "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
-	runtimeFlags.String(cfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")
+	runtimeFlags.String(CfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")
 	runtimeFlags.StringSlice(CfgVersionEnclave, nil, "Runtime TEE enclave version(s)")
 
 	// Init Compute commitee flags.

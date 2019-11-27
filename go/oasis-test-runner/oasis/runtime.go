@@ -10,7 +10,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
-	regRtCmd "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/runtime"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdRegRt "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/runtime"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
@@ -71,30 +72,30 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 
 	args := []string{
 		"registry", "runtime", "init_genesis",
-		"--datadir", rtDir.String(),
-		"--" + regRtCmd.CfgID, cfg.ID.String(),
-		"--" + regRtCmd.CfgKind, cfg.Kind.String(),
+		"--" + common.CfgDataDir, rtDir.String(),
+		"--" + cmdRegRt.CfgID, cfg.ID.String(),
+		"--" + cmdRegRt.CfgKind, cfg.Kind.String(),
 	}
 	if cfg.Kind == registry.KindCompute {
 		args = append(args, []string{
-			"--" + regRtCmd.CfgComputeGroupSize, strconv.FormatUint(cfg.Compute.GroupSize, 10),
-			"--" + regRtCmd.CfgComputeGroupBackupSize, strconv.FormatUint(cfg.Compute.GroupBackupSize, 10),
-			"--" + regRtCmd.CfgComputeAllowedStragglers, strconv.FormatUint(cfg.Compute.AllowedStragglers, 10),
-			"--" + regRtCmd.CfgComputeRoundTimeout, cfg.Compute.RoundTimeout.String(),
-			"--" + regRtCmd.CfgMergeGroupSize, strconv.FormatUint(cfg.Merge.GroupSize, 10),
-			"--" + regRtCmd.CfgMergeGroupBackupSize, strconv.FormatUint(cfg.Merge.GroupBackupSize, 10),
-			"--" + regRtCmd.CfgMergeAllowedStragglers, strconv.FormatUint(cfg.Merge.AllowedStragglers, 10),
-			"--" + regRtCmd.CfgMergeRoundTimeout, cfg.Merge.RoundTimeout.String(),
-			"--" + regRtCmd.CfgTxnSchedulerGroupSize, strconv.FormatUint(cfg.TxnScheduler.GroupSize, 10),
-			"--" + regRtCmd.CfgTxnSchedulerMaxBatchSize, strconv.FormatUint(cfg.TxnScheduler.MaxBatchSize, 10),
-			"--" + regRtCmd.CfgTxnSchedulerMaxBatchSizeBytes, strconv.FormatUint(cfg.TxnScheduler.MaxBatchSizeBytes, 10),
-			"--" + regRtCmd.CfgTxnSchedulerAlgorithm, cfg.TxnScheduler.Algorithm,
-			"--" + regRtCmd.CfgTxnSchedulerBatchFlushTimeout, cfg.TxnScheduler.BatchFlushTimeout.String(),
-			"--" + regRtCmd.CfgStorageGroupSize, strconv.FormatUint(cfg.Storage.GroupSize, 10),
+			"--" + cmdRegRt.CfgComputeGroupSize, strconv.FormatUint(cfg.Compute.GroupSize, 10),
+			"--" + cmdRegRt.CfgComputeGroupBackupSize, strconv.FormatUint(cfg.Compute.GroupBackupSize, 10),
+			"--" + cmdRegRt.CfgComputeAllowedStragglers, strconv.FormatUint(cfg.Compute.AllowedStragglers, 10),
+			"--" + cmdRegRt.CfgComputeRoundTimeout, cfg.Compute.RoundTimeout.String(),
+			"--" + cmdRegRt.CfgMergeGroupSize, strconv.FormatUint(cfg.Merge.GroupSize, 10),
+			"--" + cmdRegRt.CfgMergeGroupBackupSize, strconv.FormatUint(cfg.Merge.GroupBackupSize, 10),
+			"--" + cmdRegRt.CfgMergeAllowedStragglers, strconv.FormatUint(cfg.Merge.AllowedStragglers, 10),
+			"--" + cmdRegRt.CfgMergeRoundTimeout, cfg.Merge.RoundTimeout.String(),
+			"--" + cmdRegRt.CfgTxnSchedulerGroupSize, strconv.FormatUint(cfg.TxnScheduler.GroupSize, 10),
+			"--" + cmdRegRt.CfgTxnSchedulerMaxBatchSize, strconv.FormatUint(cfg.TxnScheduler.MaxBatchSize, 10),
+			"--" + cmdRegRt.CfgTxnSchedulerMaxBatchSizeBytes, strconv.FormatUint(cfg.TxnScheduler.MaxBatchSizeBytes, 10),
+			"--" + cmdRegRt.CfgTxnSchedulerAlgorithm, cfg.TxnScheduler.Algorithm,
+			"--" + cmdRegRt.CfgTxnSchedulerBatchFlushTimeout, cfg.TxnScheduler.BatchFlushTimeout.String(),
+			"--" + cmdRegRt.CfgStorageGroupSize, strconv.FormatUint(cfg.Storage.GroupSize, 10),
 		}...)
 
 		if cfg.GenesisState != "" {
-			args = append(args, "--"+regRtCmd.CfgGenesisState, cfg.GenesisState)
+			args = append(args, "--"+cmdRegRt.CfgGenesisState, cfg.GenesisState)
 		}
 	}
 	var mrEnclave *sgx.MrEnclave
@@ -104,13 +105,13 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		}
 
 		args = append(args, []string{
-			"--" + regRtCmd.CfgTEEHardware, cfg.TEEHardware.String(),
-			"--" + regRtCmd.CfgVersionEnclave, mrEnclave.String() + cfg.MrSigner.String(),
+			"--" + cmdRegRt.CfgTEEHardware, cfg.TEEHardware.String(),
+			"--" + cmdRegRt.CfgVersionEnclave, mrEnclave.String() + cfg.MrSigner.String(),
 		}...)
 	}
 	if cfg.Keymanager != nil {
 		args = append(args, []string{
-			"--" + regRtCmd.CfgKeyManager, cfg.Keymanager.id.String(),
+			"--" + cmdRegRt.CfgKeyManager, cfg.Keymanager.id.String(),
 		}...)
 	}
 	args = append(args, cfg.Entity.toGenesisArgs()...)

@@ -26,7 +26,7 @@ const (
 	CfgDebugAllowTestKeys = "debug.allow_test_keys"
 
 	cfgConfigFile = "config"
-	cfgDataDir    = "datadir"
+	CfgDataDir    = "datadir"
 )
 
 var (
@@ -42,7 +42,7 @@ var (
 
 // DataDir retuns the data directory iff one is set.
 func DataDir() string {
-	return viper.GetString(cfgDataDir)
+	return viper.GetString(CfgDataDir)
 }
 
 // DataDirOrPwd returns the data directory iff one is set, pwd otherwise.
@@ -98,7 +98,7 @@ func init() {
 	_ = viper.BindPFlags(debugAllowTestKeysFlag)
 
 	RootFlags.StringVar(&cfgFile, cfgConfigFile, "", "config file")
-	RootFlags.String(cfgDataDir, "", "data directory")
+	RootFlags.String(CfgDataDir, "", "data directory")
 	_ = viper.BindPFlags(RootFlags)
 
 	RootFlags.AddFlagSet(loggingFlags)
@@ -121,7 +121,7 @@ func InitConfig() {
 		}
 	}
 
-	dataDir := viper.GetString(cfgDataDir)
+	dataDir := viper.GetString(CfgDataDir)
 
 	// Force the DataDir to be an absolute path.
 	if dataDir != "" {
@@ -139,11 +139,11 @@ func InitConfig() {
 	// Note: This is only for flags that are common across all
 	// sub-commands, so excludes things such as the gRPC/Metrics/etc
 	// configuration.
-	viper.Set(cfgDataDir, dataDir)
+	viper.Set(CfgDataDir, dataDir)
 }
 
 func initDataDir() error {
-	dataDir := viper.GetString(cfgDataDir)
+	dataDir := viper.GetString(CfgDataDir)
 	if dataDir == "" {
 		return nil
 	}
@@ -152,7 +152,7 @@ func initDataDir() error {
 
 func normalizePath(f string) string {
 	if !filepath.IsAbs(f) {
-		dataDir := viper.GetString(cfgDataDir)
+		dataDir := viper.GetString(CfgDataDir)
 		f = filepath.Join(dataDir, f)
 		return filepath.Clean(f)
 	}

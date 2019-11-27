@@ -9,7 +9,7 @@ import (
 // Mkdir creates a directory iff it does not exist, and otherwise
 // ensures that the filesystem permissions are sufficiently restrictive.
 func Mkdir(d string) error {
-	const permDir = 0700
+	const permDir = os.FileMode(0700)
 
 	fi, err := os.Lstat(d)
 	if err != nil {

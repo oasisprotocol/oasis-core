@@ -183,7 +183,7 @@ func (s *stakeCLIImpl) testTransfer(childEnv *env.Env, src signature.PublicKey, 
 		return err
 	}
 
-	if err := s.submitTx(childEnv, src, transferTxPath); err != nil {
+	if err := s.submitTx(childEnv, transferTxPath); err != nil {
 		return err
 	}
 
@@ -214,7 +214,7 @@ func (s *stakeCLIImpl) testBurn(childEnv *env.Env, src signature.PublicKey) erro
 		return err
 	}
 
-	if err := s.submitTx(childEnv, src, burnTxPath); err != nil {
+	if err := s.submitTx(childEnv, burnTxPath); err != nil {
 		return err
 	}
 
@@ -242,7 +242,7 @@ func (s *stakeCLIImpl) testEscrow(childEnv *env.Env, src signature.PublicKey, es
 		return err
 	}
 
-	if err := s.submitTx(childEnv, src, escrowTxPath); err != nil {
+	if err := s.submitTx(childEnv, escrowTxPath); err != nil {
 		return err
 	}
 
@@ -273,7 +273,7 @@ func (s *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, src signature.Public
 		return err
 	}
 
-	if err := s.submitTx(childEnv, src, reclaimEscrowTxPath); err != nil {
+	if err := s.submitTx(childEnv, reclaimEscrowTxPath); err != nil {
 		return err
 
 	}
@@ -329,7 +329,7 @@ func (s *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, src signat
 		return err
 	}
 
-	if err := s.submitTx(childEnv, src, amendCommissionScheduleTxPath); err != nil {
+	if err := s.submitTx(childEnv, amendCommissionScheduleTxPath); err != nil {
 		return err
 	}
 
@@ -367,18 +367,9 @@ func (s *stakeCLIImpl) listAccounts(childEnv *env.Env) ([]signature.PublicKey, e
 	return accounts, nil
 }
 
-func (s *stakeCLIImpl) submitTx(childEnv *env.Env, src signature.PublicKey, txPath string) error {
-	s.logger.Info("submitting tx", consensus.CfgTxFile, txPath)
-	args := []string{
-		"consensus", "submit_tx",
-		"--" + consensus.CfgTxFile, txPath,
-		"--" + grpc.CfgAddress, "unix:" + s.basicImpl.net.Validators()[0].SocketPath(),
-		"--" + common.CfgDebugAllowTestKeys,
-	}
-	if err := runSubCommand(childEnv, "submit", s.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("scenario/e2e/stake: failed to submit transfer tx: %w", err)
-	}
-	return nil
+// submitTx is a wrapper for consensus submit_tx command.
+func (s *stakeCLIImpl) submitTx(childEnv *env.Env, txPath string) error {
+	return submitTx(childEnv, txPath, s.logger, s.basicImpl.net.Validators()[0].SocketPath(), s.basicImpl.net.Config().NodeBinary)
 }
 
 func (s *stakeCLIImpl) getAccountInfo(childEnv *env.Env, src signature.PublicKey) (*stake.AccountInfo, error) {

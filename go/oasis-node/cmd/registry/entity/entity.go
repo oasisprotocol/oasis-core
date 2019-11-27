@@ -29,8 +29,8 @@ import (
 
 const (
 	cfgAllowEntitySignedNodes = "entity.debug.allow_entity_signed_nodes"
-	cfgNodeID                 = "entity.node.id"
-	cfgNodeDescriptor         = "entity.node.descriptor"
+	CfgNodeID                 = "entity.node.id"
+	CfgNodeDescriptor         = "entity.node.descriptor"
 
 	entityGenesisFilename = "entity_genesis.json"
 )
@@ -162,7 +162,7 @@ func doUpdate(cmd *cobra.Command, args []string) {
 	ent.AllowEntitySignedNodes = viper.GetBool(cfgAllowEntitySignedNodes)
 
 	ent.Nodes = nil
-	for _, v := range viper.GetStringSlice(cfgNodeID) {
+	for _, v := range viper.GetStringSlice(CfgNodeID) {
 		var nodeID signature.PublicKey
 		if err = nodeID.UnmarshalHex(v); err != nil {
 			logger.Error("failed to parse node ID",
@@ -173,7 +173,7 @@ func doUpdate(cmd *cobra.Command, args []string) {
 		}
 		ent.Nodes = append(ent.Nodes, nodeID)
 	}
-	for _, v := range viper.GetStringSlice(cfgNodeDescriptor) {
+	for _, v := range viper.GetStringSlice(CfgNodeDescriptor) {
 		var b []byte
 		if b, err = ioutil.ReadFile(v); err != nil {
 			logger.Error("failed to read node descriptor",
@@ -354,6 +354,10 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 		return entity.TestEntity()
 	}
 
+	if viper.GetBool(cfgAllowEntitySignedNodes) && !cmdFlags.DebugDontBlameOasis() {
+		return nil, nil, fmt.Errorf("loadOrGenerateEntity: sanity check failed: one or more unsafe debug flags set")
+	}
+
 	// TODO/hsm: Configure factory dynamically.
 	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
 	if generate {
@@ -392,16 +396,19 @@ func Register(parentCmd *cobra.Command) {
 
 func init() {
 	entityFlags.Bool(cfgAllowEntitySignedNodes, false, "Entity signing key may be used for node registration (UNSAFE)")
+	_ = entityFlags.MarkHidden(cfgAllowEntitySignedNodes)
 	_ = viper.BindPFlags(entityFlags)
 
 	initFlags.AddFlagSet(cmdFlags.ForceFlags)
 	initFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
+	initFlags.AddFlagSet(cmdFlags.DebugDontBlameOasisFlag)
 	initFlags.AddFlagSet(entityFlags)
 
-	updateFlags.StringSlice(cfgNodeID, nil, "ID(s) of nodes associated with this entity")
-	updateFlags.StringSlice(cfgNodeDescriptor, nil, "Node genesis descriptor(s) of nodes associated with this entity")
+	updateFlags.StringSlice(CfgNodeID, nil, "ID(s) of nodes associated with this entity")
+	updateFlags.StringSlice(CfgNodeDescriptor, nil, "Node genesis descriptor(s) of nodes associated with this entity")
 	_ = viper.BindPFlags(updateFlags)
 	updateFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
+	updateFlags.AddFlagSet(cmdFlags.DebugDontBlameOasisFlag)
 	updateFlags.AddFlagSet(entityFlags)
 
 	registerOrDeregisterFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
