@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-net-runner/fixtures"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 )
 
@@ -180,5 +181,7 @@ func init() {
 				common.EarlyLogAndExit(err)
 			}
 		}
+
+		viper.Set(cmdFlags.CfgDebugDontBlameOasis, true)
 	})
 }
