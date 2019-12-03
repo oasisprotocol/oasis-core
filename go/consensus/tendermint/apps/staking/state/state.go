@@ -1,7 +1,10 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
+	"math"
+	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
@@ -385,6 +388,44 @@ func (s *ImmutableState) LastBlockFees() (*quantity.Quantity, error) {
 type EpochSigning struct {
 	Total    uint64
 	ByEntity map[signature.PublicKey]uint64
+}
+
+func (es *EpochSigning) Update(signingEntities []signature.PublicKey) error {
+	oldTotal := es.Total
+	es.Total = oldTotal + 1
+	if es.Total <= oldTotal {
+		return fmt.Errorf("incrementing total blocks count: overflow, old_total=%d", oldTotal)
+	}
+
+	for _, entityID := range signingEntities {
+		oldCount := es.ByEntity[entityID]
+		es.ByEntity[entityID] = oldCount + 1
+		if es.ByEntity[entityID] <= oldCount {
+			return fmt.Errorf("incrementing count for entity %s: overflow, old_count=%d", entityID, oldCount)
+		}
+	}
+
+	return nil
+}
+
+func (es *EpochSigning) EligibleEntities(thresholdNumerator, thresholdDenominator uint64) ([]signature.PublicKey, error) {
+	var eligibleEntities []signature.PublicKey
+	if es.Total > math.MaxUint64/thresholdNumerator {
+		return nil, fmt.Errorf("overflow in total blocks, total=%d", es.Total)
+	}
+	for entityID, count := range es.ByEntity {
+		if count > math.MaxUint64/thresholdDenominator {
+			return nil, fmt.Errorf("entity %s: overflow in threshold comparison, count=%d", entityID, count)
+		}
+		if count*thresholdDenominator < es.Total*thresholdNumerator {
+			continue
+		}
+		eligibleEntities = append(eligibleEntities, entityID)
+	}
+	sort.Slice(eligibleEntities, func(i, j int) bool {
+		return bytes.Compare(eligibleEntities[i][:], eligibleEntities[j][:]) < 0
+	})
+	return eligibleEntities, nil
 }
 
 func (s *ImmutableState) EpochSigning() (*EpochSigning, error) {
