@@ -387,21 +387,21 @@ type EpochSigning struct {
 	ByEntity map[signature.PublicKey]uint64
 }
 
-func (s *ImmutableState) EpochSigning() (EpochSigning, error) {
+func (s *ImmutableState) EpochSigning() (*EpochSigning, error) {
 	_, value := s.Snapshot.Get(epochSigningKeyFmt.Encode())
 	if value == nil {
 		// Not present means zero everything.
-		return EpochSigning{
+		return &EpochSigning{
 			ByEntity: make(map[signature.PublicKey]uint64),
 		}, nil
 	}
 
 	var es EpochSigning
 	if err := cbor.Unmarshal(value, &es); err != nil {
-		return EpochSigning{}, err
+		return nil, err
 	}
 
-	return es, nil
+	return &es, nil
 }
 
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
@@ -469,7 +469,7 @@ func (s *MutableState) SetLastBlockFees(q *quantity.Quantity) {
 	s.tree.Set(lastBlockFeesKeyFmt.Encode(), cbor.Marshal(q))
 }
 
-func (s *MutableState) SetEpochSigning(es EpochSigning) {
+func (s *MutableState) SetEpochSigning(es *EpochSigning) {
 	s.tree.Set(epochSigningKeyFmt.Encode(), cbor.Marshal(es))
 }
 
