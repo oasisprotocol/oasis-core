@@ -150,3 +150,44 @@ func TestRewardAndSlash(t *testing.T) {
 	require.NoError(t, err, "load common pool")
 	require.Equal(t, mustInitQuantityP(t, 9840), commonPool, "slash - common pool")
 }
+
+func TestEpochSigning(t *testing.T) {
+	db := dbm.NewMemDB()
+	tree := iavl.NewMutableTree(db, 128)
+	s := NewMutableState(tree)
+
+	es, err := s.EpochSigning()
+	require.NoError(t, err, "load epoch signing info")
+	require.Zero(t, es.Total, "empty epoch signing info total")
+	require.Empty(t, es.ByEntity, "empty epoch signing info by entity")
+
+	var truant, exact, perfect signature.PublicKey
+	require.NoError(t, truant.UnmarshalHex("1111111111111111111111111111111111111111111111111111111111111111"), "initializing 'truant' ID")
+	require.NoError(t, exact.UnmarshalHex("3333333333333333333333333333333333333333333333333333333333333333"), "initializing 'exact' ID")
+	require.NoError(t, perfect.UnmarshalHex("4444444444444444444444444444444444444444444444444444444444444444"), "initializing 'perfect' ID")
+
+	require.NoError(t, es.Update([]signature.PublicKey{truant, exact, perfect}), "updating epoch signing info")
+	require.NoError(t, es.Update([]signature.PublicKey{exact, perfect}), "updating epoch signing info")
+	require.NoError(t, es.Update([]signature.PublicKey{exact, perfect}), "updating epoch signing info")
+	require.NoError(t, es.Update([]signature.PublicKey{perfect}), "updating epoch signing info")
+	require.EqualValues(t, 4, es.Total, "populated epoch signing info total")
+	require.Len(t, es.ByEntity, 3, "populated epoch signing info by entity")
+
+	s.SetEpochSigning(es)
+	esRoundTrip, err := s.EpochSigning()
+	require.NoError(t, err, "load epoch signing info 2")
+	require.Equal(t, es, esRoundTrip, "epoch signing info round trip")
+
+	eligibleEntities, err := es.EligibleEntities(3, 4)
+	require.NoError(t, err, "determining eligible entities")
+	require.Len(t, eligibleEntities, 2, "eligible entities")
+	require.NotContains(t, eligibleEntities, truant, "'truant' not eligible")
+	require.Contains(t, eligibleEntities, exact, "'exact' eligible")
+	require.Contains(t, eligibleEntities, perfect, "'perfect' eligible")
+
+	s.ClearEpochSigning()
+	esClear, err := s.EpochSigning()
+	require.NoError(t, err, "load cleared epoch signing info")
+	require.Zero(t, esClear.Total, "cleared epoch signing info total")
+	require.Empty(t, esClear.ByEntity, "cleared epoch signing info by entity")
+}
