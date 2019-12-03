@@ -55,9 +55,17 @@ func (app *stakingApplication) OnCleanup() {
 }
 
 func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
+	// Go through all signers of the previous block and resolve entities.
+	signingEntities := app.resolveEntityIDsFromVotes(ctx, request.GetLastCommitInfo())
+
 	// Disburse fees from previous block.
-	if err := app.disburseFees(ctx, request.GetLastCommitInfo()); err != nil {
+	if err := app.disburseFees(ctx, signingEntities); err != nil {
 		return fmt.Errorf("staking: failed to disburse fees: %w", err)
+	}
+
+	// Track signing for rewards.
+	if err := app.updateEpochSigning(ctx, signingEntities); err != nil {
+		return fmt.Errorf("staking: failed to update epoch signing info: %w", err)
 	}
 
 	// Iterate over any submitted evidence of a validator misbehaving. Note that
@@ -195,6 +203,14 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 			Tokens: *tokenAmount,
 		}
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyReclaimEscrow, cbor.Marshal(evt)))
+	}
+
+	// Add signing rewards.
+	if err := app.rewardEpochSigning(ctx, epoch); err != nil {
+		app.logger.Error("failed to add signing rewards",
+			"err", err,
+		)
+		return errors.Wrap(err, "staking/tendermint: failed to add signing rewards")
 	}
 
 	return nil

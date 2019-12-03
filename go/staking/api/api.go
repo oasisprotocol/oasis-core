@@ -29,6 +29,10 @@ const (
 )
 
 var (
+	// RewardFactorEpochSigned is the factor for a reward
+	// distributed per epoch to entities that have signed 3/4 of the blocks.
+	RewardFactorEpochSigned *quantity.Quantity
+
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New(ModuleName, 1, "staking: invalid argument")
 
@@ -557,4 +561,11 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocycl
 	}
 
 	return nil
+}
+
+func init() {
+	RewardFactorEpochSigned = quantity.NewQuantity()
+	if err := RewardFactorEpochSigned.FromInt64(1); err != nil {
+		panic(err)
+	}
 }

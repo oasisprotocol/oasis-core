@@ -3,8 +3,6 @@ package staking
 import (
 	"fmt"
 
-	"github.com/tendermint/tendermint/abci/types"
-
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -19,7 +17,7 @@ type disbursement struct {
 // disburseFees disburses fees.
 //
 // In case of errors the state may be inconsistent.
-func (app *stakingApplication) disburseFees(ctx *abci.Context, lastCommitInfo types.LastCommitInfo) error {
+func (app *stakingApplication) disburseFees(ctx *abci.Context, signingEntities []signature.PublicKey) error {
 	stakeState := stakingState.NewMutableState(ctx.State())
 
 	totalFees, err := stakeState.LastBlockFees()
@@ -34,9 +32,6 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, lastCommitInfo ty
 		// Nothing to disburse.
 		return nil
 	}
-
-	// Go through all signers of the previous block and resolve entities.
-	signingEntities := app.resolveEntityIDsFromVotes(ctx, lastCommitInfo)
 
 	var rewardAccounts []disbursement
 	var totalWeight int64

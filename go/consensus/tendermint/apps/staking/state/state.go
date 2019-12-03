@@ -62,6 +62,10 @@ var (
 	//
 	// Value is CBOR-serialized quantity.
 	lastBlockFeesKeyFmt = keyformat.New(0x57)
+	// epochSigningKeyFmt is the key format for epoch signing information.
+	//
+	// Value is CBOR-serialized EpochSigning.
+	epochSigningKeyFmt = keyformat.New(0x58)
 
 	logger = logging.GetLogger("tendermint/staking")
 )
@@ -378,6 +382,28 @@ func (s *ImmutableState) LastBlockFees() (*quantity.Quantity, error) {
 	return &q, nil
 }
 
+type EpochSigning struct {
+	Total    uint64
+	ByEntity map[signature.PublicKey]uint64
+}
+
+func (s *ImmutableState) EpochSigning() (EpochSigning, error) {
+	_, value := s.Snapshot.Get(epochSigningKeyFmt.Encode())
+	if value == nil {
+		// Not present means zero everything.
+		return EpochSigning{
+			ByEntity: make(map[signature.PublicKey]uint64),
+		}, nil
+	}
+
+	var es EpochSigning
+	if err := cbor.Unmarshal(value, &es); err != nil {
+		return EpochSigning{}, err
+	}
+
+	return es, nil
+}
+
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -441,6 +467,14 @@ func (s *MutableState) RemoveFromDebondingQueue(epoch epochtime.EpochTime, deleg
 
 func (s *MutableState) SetLastBlockFees(q *quantity.Quantity) {
 	s.tree.Set(lastBlockFeesKeyFmt.Encode(), cbor.Marshal(q))
+}
+
+func (s *MutableState) SetEpochSigning(es EpochSigning) {
+	s.tree.Set(epochSigningKeyFmt.Encode(), cbor.Marshal(es))
+}
+
+func (s *MutableState) ClearEpochSigning() {
+	s.tree.Remove(epochSigningKeyFmt.Encode())
 }
 
 func slashPool(dst *quantity.Quantity, p *staking.SharePool, amount, total *quantity.Quantity) error {
