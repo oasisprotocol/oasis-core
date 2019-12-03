@@ -13,11 +13,6 @@ import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-const (
-	SigningThresholdNumerator   = 3
-	SigningThresholdDenominator = 4
-)
-
 func (app *stakingApplication) updateEpochSigning(ctx *abci.Context, signingEntities []signature.PublicKey) error {
 	stakeState := stakingState.NewMutableState(ctx.State())
 
@@ -48,6 +43,15 @@ func (app *stakingApplication) updateEpochSigning(ctx *abci.Context, signingEnti
 func (app *stakingApplication) rewardEpochSigning(ctx *abci.Context, time epochtime.EpochTime) error {
 	stakeState := stakingState.NewMutableState(ctx.State())
 
+	params, err := stakeState.ConsensusParameters()
+	if err != nil {
+		return fmt.Errorf("loading consensus parameters: %w", err)
+	}
+	if params.SigningRewardThresholdDenominator == 0 {
+		stakeState.ClearEpochSigning()
+		return nil
+	}
+
 	epochSigning, err := stakeState.EpochSigning()
 	if err != nil {
 		return fmt.Errorf("loading epoch signing info: %w", err)
@@ -60,14 +64,14 @@ func (app *stakingApplication) rewardEpochSigning(ctx *abci.Context, time epocht
 	}
 
 	var eligibleEntities []signature.PublicKey
-	if epochSigning.Total > math.MaxUint64/SigningThresholdNumerator {
+	if epochSigning.Total > math.MaxUint64/params.SigningRewardThresholdNumerator {
 		return fmt.Errorf("determining eligibility: overflow in total blocks, total=%d", epochSigning.Total)
 	}
 	for entityID, count := range epochSigning.ByEntity {
-		if count > math.MaxUint64/SigningThresholdDenominator {
+		if count > math.MaxUint64/params.SigningRewardThresholdDenominator {
 			return fmt.Errorf("determining eligibility for entity %s: overflow in threshold comparison, count=%d", entityID, count)
 		}
-		if count*SigningThresholdDenominator < epochSigning.Total*SigningThresholdNumerator {
+		if count*params.SigningRewardThresholdDenominator < epochSigning.Total*params.SigningRewardThresholdNumerator {
 			continue
 		}
 		eligibleEntities = append(eligibleEntities, entityID)

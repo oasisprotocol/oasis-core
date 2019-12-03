@@ -390,14 +390,16 @@ type Genesis struct {
 
 // ConsensusParameters are the staking consensus parameters.
 type ConsensusParameters struct {
-	Thresholds              map[ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
-	DebondingInterval       epochtime.EpochTime                 `json:"debonding_interval,omitempty"`
-	RewardSchedule          []RewardStep                        `json:"reward_schedule,omitempty"`
-	CommissionScheduleRules CommissionScheduleRules             `json:"commission_schedule_rules,omitempty"`
-	AcceptableTransferPeers map[signature.PublicKey]bool        `json:"acceptable_transfer_peers,omitempty"`
-	Slashing                map[SlashReason]Slash               `json:"slashing,omitempty"`
-	GasCosts                transaction.Costs                   `json:"gas_costs,omitempty"`
-	MinDelegationAmount     quantity.Quantity                   `json:"min_delegation,omitempty"`
+	Thresholds                        map[ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
+	DebondingInterval                 epochtime.EpochTime                 `json:"debonding_interval,omitempty"`
+	RewardSchedule                    []RewardStep                        `json:"reward_schedule,omitempty"`
+	SigningRewardThresholdNumerator   uint64                              `json:"signing_reward_threshold_numerator,omitempty"`
+	SigningRewardThresholdDenominator uint64                              `json:"signing_reward_threshold_denominator,omitempty"`
+	CommissionScheduleRules           CommissionScheduleRules             `json:"commission_schedule_rules,omitempty"`
+	AcceptableTransferPeers           map[signature.PublicKey]bool        `json:"acceptable_transfer_peers,omitempty"`
+	Slashing                          map[SlashReason]Slash               `json:"slashing,omitempty"`
+	GasCosts                          transaction.Costs                   `json:"gas_costs,omitempty"`
+	MinDelegationAmount               quantity.Quantity                   `json:"min_delegation,omitempty"`
 }
 
 const (
