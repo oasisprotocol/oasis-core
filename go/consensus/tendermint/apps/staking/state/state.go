@@ -413,11 +413,12 @@ func (es *EpochSigning) EligibleEntities(thresholdNumerator, thresholdDenominato
 	if es.Total > math.MaxUint64/thresholdNumerator {
 		return nil, fmt.Errorf("overflow in total blocks, total=%d", es.Total)
 	}
+	thresholdPremultiplied := es.Total * thresholdNumerator
 	for entityID, count := range es.ByEntity {
 		if count > math.MaxUint64/thresholdDenominator {
 			return nil, fmt.Errorf("entity %s: overflow in threshold comparison, count=%d", entityID, count)
 		}
-		if count*thresholdDenominator < es.Total*thresholdNumerator {
+		if count*thresholdDenominator < thresholdPremultiplied {
 			continue
 		}
 		eligibleEntities = append(eligibleEntities, entityID)
