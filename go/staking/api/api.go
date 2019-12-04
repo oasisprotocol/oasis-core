@@ -29,8 +29,8 @@ const (
 )
 
 var (
-	// RewardFactorEpochSigned is the factor for a reward
-	// distributed per epoch to entities that have signed 3/4 of the blocks.
+	// RewardFactorEpochSigned is the factor for a reward distributed per epoch to
+	// entities that have signed at least a threshold fraction of the blocks.
 	RewardFactorEpochSigned *quantity.Quantity
 
 	// ErrInvalidArgument is the error returned on malformed arguments.
