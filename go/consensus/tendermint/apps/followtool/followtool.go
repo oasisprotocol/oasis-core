@@ -1,6 +1,8 @@
 package followtool
 
 import (
+	"math/rand"
+
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
@@ -19,8 +21,13 @@ var (
 
 // followToolApplication is a non-normative mux app that performs additional checks on the consensus state.
 // It should not alter the Tendermint application state.
+// It's okay for it to have this additional local state, because it won't affect anything that needs to be agreed upon
+// in consensus.
 type followToolApplication struct {
-	state *abci.ApplicationState
+	state           *abci.ApplicationState
+	interval        int64
+	currentInterval int64
+	checkHeight     int64
 }
 
 func (app *followToolApplication) Name() string {
@@ -71,21 +78,46 @@ func (app *followToolApplication) BeginBlock(*abci.Context, types.RequestBeginBl
 }
 
 func (app *followToolApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+	return types.ResponseEndBlock{}, app.endBlockImpl(ctx, request)
+}
+
+func (app *followToolApplication) endBlockImpl(ctx *abci.Context, request types.RequestEndBlock) error {
 	if request.Height == 1 {
-		logger.Debug("skipping total supply check on first block")
-	} else {
-		if err := checkNonzeroSupply(ctx.State()); err != nil {
-			return types.ResponseEndBlock{}, errors.Wrap(err, "checkNonzeroSupply")
-		}
+		logger.Debug("skipping checks before InitChain")
+		return nil
 	}
 
-	return types.ResponseEndBlock{}, nil
+	newInterval := request.Height / app.interval
+	if newInterval != app.currentInterval {
+		min := request.Height % app.interval
+		offset := rand.Int63n(app.interval-min) + min
+		app.currentInterval = newInterval
+		app.checkHeight = newInterval*app.interval + offset
+		logger.Debug("Entering new interval",
+			"height", request.Height,
+			"check_height", app.checkHeight,
+		)
+	}
+
+	if request.Height != app.checkHeight {
+		return nil
+	}
+
+	logger.Debug("checking this block", "height", request.Height)
+
+	if err := checkNonzeroSupply(ctx.State()); err != nil {
+		return errors.Wrap(err, "checkNonzeroSupply")
+	}
+
+	return nil
 }
 
 func (app *followToolApplication) FireTimer(*abci.Context, *abci.Timer) error {
 	return errors.New("followtool: unexpected timer")
 }
 
-func New() abci.Application {
-	return &followToolApplication{}
+func New(interval int64) abci.Application {
+	return &followToolApplication{
+		interval: interval,
+	}
 }
