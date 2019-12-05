@@ -4,7 +4,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -223,8 +222,4 @@ func (g *Genesis) SanityCheck() error {
 
 func init() {
 	RewardFactorEpochElectionAny = quantity.NewQuantity()
-	err := RewardFactorEpochElectionAny.FromBigInt(big.NewInt(1))
-	if err != nil {
-		panic(err)
-	}
 }

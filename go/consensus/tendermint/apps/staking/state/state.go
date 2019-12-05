@@ -1,7 +1,10 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
+	"math"
+	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
@@ -62,6 +65,10 @@ var (
 	//
 	// Value is CBOR-serialized quantity.
 	lastBlockFeesKeyFmt = keyformat.New(0x57)
+	// epochSigningKeyFmt is the key format for epoch signing information.
+	//
+	// Value is CBOR-serialized EpochSigning.
+	epochSigningKeyFmt = keyformat.New(0x58)
 
 	logger = logging.GetLogger("tendermint/staking")
 )
@@ -378,6 +385,67 @@ func (s *ImmutableState) LastBlockFees() (*quantity.Quantity, error) {
 	return &q, nil
 }
 
+type EpochSigning struct {
+	Total    uint64
+	ByEntity map[signature.PublicKey]uint64
+}
+
+func (es *EpochSigning) Update(signingEntities []signature.PublicKey) error {
+	oldTotal := es.Total
+	es.Total = oldTotal + 1
+	if es.Total <= oldTotal {
+		return fmt.Errorf("incrementing total blocks count: overflow, old_total=%d", oldTotal)
+	}
+
+	for _, entityID := range signingEntities {
+		oldCount := es.ByEntity[entityID]
+		es.ByEntity[entityID] = oldCount + 1
+		if es.ByEntity[entityID] <= oldCount {
+			return fmt.Errorf("incrementing count for entity %s: overflow, old_count=%d", entityID, oldCount)
+		}
+	}
+
+	return nil
+}
+
+func (es *EpochSigning) EligibleEntities(thresholdNumerator, thresholdDenominator uint64) ([]signature.PublicKey, error) {
+	var eligibleEntities []signature.PublicKey
+	if es.Total > math.MaxUint64/thresholdNumerator {
+		return nil, fmt.Errorf("overflow in total blocks, total=%d", es.Total)
+	}
+	thresholdPremultiplied := es.Total * thresholdNumerator
+	for entityID, count := range es.ByEntity {
+		if count > math.MaxUint64/thresholdDenominator {
+			return nil, fmt.Errorf("entity %s: overflow in threshold comparison, count=%d", entityID, count)
+		}
+		if count*thresholdDenominator < thresholdPremultiplied {
+			continue
+		}
+		eligibleEntities = append(eligibleEntities, entityID)
+	}
+	sort.Slice(eligibleEntities, func(i, j int) bool {
+		return bytes.Compare(eligibleEntities[i][:], eligibleEntities[j][:]) < 0
+	})
+	return eligibleEntities, nil
+}
+
+func (s *ImmutableState) EpochSigning() (*EpochSigning, error) {
+	_, value := s.Snapshot.Get(epochSigningKeyFmt.Encode())
+	if value == nil {
+		// Not present means zero everything.
+		return &EpochSigning{
+			ByEntity: make(map[signature.PublicKey]uint64),
+		}, nil
+	}
+
+	var es EpochSigning
+	if err := cbor.Unmarshal(value, &es); err != nil {
+		return nil, err
+	}
+
+	return &es, nil
+}
+
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -441,6 +509,14 @@ func (s *MutableState) RemoveFromDebondingQueue(epoch epochtime.EpochTime, deleg
 
 func (s *MutableState) SetLastBlockFees(q *quantity.Quantity) {
 	s.tree.Set(lastBlockFeesKeyFmt.Encode(), cbor.Marshal(q))
+}
+
+func (s *MutableState) SetEpochSigning(es *EpochSigning) {
+	s.tree.Set(epochSigningKeyFmt.Encode(), cbor.Marshal(es))
+}
+
+func (s *MutableState) ClearEpochSigning() {
+	s.tree.Remove(epochSigningKeyFmt.Encode())
 }
 
 func slashPool(dst *quantity.Quantity, p *staking.SharePool, amount, total *quantity.Quantity) error {
