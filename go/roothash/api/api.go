@@ -3,9 +3,6 @@ package api
 
 import (
 	"context"
-	"fmt"
-	"time"
-
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
@@ -165,36 +162,10 @@ type PrunedBlock struct {
 
 // Genesis is the roothash genesis state.
 type Genesis struct {
-	// Blocks is the per-runtime map of genesis blocks.
-	Blocks map[signature.PublicKey]*block.Block `json:"blocks,omitempty"`
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {
-	// Check blocks.
-	for _, blk := range g.Blocks {
-		hdr := blk.Header
-
-		if hdr.HeaderType != block.Normal {
-			return fmt.Errorf("roothash: sanity check failed: invalid block header type")
-		}
-
-		if !hdr.PreviousHash.IsEmpty() {
-			return fmt.Errorf("roothash: sanity check failed: non-empty previous hash")
-		}
-
-		if hdr.Timestamp > uint64(time.Now().Unix()+61*60) {
-			return fmt.Errorf("roothash: sanity check failed: block header timestamp is more than 1h1m in the future")
-		}
-
-		if len(hdr.StorageSignatures) != 0 {
-			return fmt.Errorf("roothash: sanity check failed: non-empty storage signatures")
-		}
-
-		if len(hdr.RoothashMessages) != 0 {
-			return fmt.Errorf("roothash: sanity check failed: non-empty roothash messages")
-		}
-	}
-
+	// No checks yet.
 	return nil
 }

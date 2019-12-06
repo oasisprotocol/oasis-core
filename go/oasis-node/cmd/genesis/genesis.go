@@ -33,7 +33,6 @@ import (
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests/debug"
@@ -405,40 +404,16 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 // AppendRootHashState appends the roothash genesis state given a vector
 // of exported roothash blocks.
 func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Logger) error {
-	rootSt := roothash.Genesis{
-		Blocks: make(map[signature.PublicKey]*block.Block),
-	}
+	var rootSt roothash.Genesis
 
 	for _, v := range exports {
-		b, err := ioutil.ReadFile(v)
+		_, err := ioutil.ReadFile(v)
 		if err != nil {
 			l.Error("failed to load genesis roothash blocks",
 				"err", err,
 				"filename", v,
 			)
 			return err
-		}
-
-		var blocks []*block.Block
-		if err = json.Unmarshal(b, &blocks); err != nil {
-			l.Error("failed to parse genesis roothash blocks",
-				"err", err,
-				"filename", v,
-			)
-			return err
-		}
-
-		for _, blk := range blocks {
-			var key signature.PublicKey
-			copy(key[:], blk.Header.Namespace[:])
-			if _, ok := rootSt.Blocks[key]; ok {
-				l.Error("duplicate genesis roothash block",
-					"runtime_id", blk.Header.Namespace,
-					"block", blk,
-				)
-				return errors.New("duplicate genesis roothash block")
-			}
-			rootSt.Blocks[key] = blk
 		}
 	}
 

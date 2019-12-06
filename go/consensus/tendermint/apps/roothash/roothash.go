@@ -383,13 +383,14 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 	}
 
 	// Create genesis block.
-	genesisBlock := genesis.Blocks[runtime.ID]
-	if genesisBlock == nil {
+	var genesisBlock *block.Block
+	if runtime.Genesis.Round == 0 {
 		now := ctx.Now().Unix()
 		genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
 		if !runtime.Genesis.StateRoot.IsEmpty() {
 			genesisBlock.Header.StateRoot = runtime.Genesis.StateRoot
 		}
+		runtime.Genesis.Round = 1
 	}
 
 	// Create new state containing the genesis block.

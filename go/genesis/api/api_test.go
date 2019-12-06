@@ -21,7 +21,6 @@ import (
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests/debug"
@@ -230,76 +229,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 		},
 	}
 	require.Error(d.SanityCheck(), "invalid keymanager ID should be rejected")
-
-	// Test roothash genesis checks.
-	d = *testDoc
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType: 123,
-		},
-	}
-	require.Error(d.SanityCheck(), "invalid block header should be rejected")
-
-	d = *testDoc
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType:   block.Normal,
-			PreviousHash: hash.Hash{},
-		},
-	}
-	require.Error(d.SanityCheck(), "invalid previous hash should be rejected")
-
-	d = *testDoc
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType:   block.Normal,
-			PreviousHash: emptyHash,
-			Timestamp:    uint64(time.Now().Unix() + 62*60),
-		},
-	}
-	require.Error(d.SanityCheck(), "invalid timestamp should be rejected")
-
-	d = *testDoc
-	sigCtx := signature.NewContext("genesis sanity check storage sig test")
-	sig, grr := signature.Sign(signer, sigCtx, []byte{1, 2, 3})
-	require.NoError(grr, "should be able to sign")
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType:        block.Normal,
-			PreviousHash:      emptyHash,
-			Timestamp:         uint64(time.Now().Unix()),
-			StorageSignatures: []signature.Signature{*sig},
-		},
-	}
-	require.Error(d.SanityCheck(), "non-empty storage signature array should be rejected")
-
-	d = *testDoc
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType:        block.Normal,
-			PreviousHash:      emptyHash,
-			Timestamp:         uint64(time.Now().Unix()),
-			StorageSignatures: []signature.Signature{},
-			RoothashMessages:  []*block.RoothashMessage{nil, nil, nil},
-		},
-	}
-	require.Error(d.SanityCheck(), "non-empty roothash message array should be rejected")
-
-	d = *testDoc
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType:   block.Normal,
-			PreviousHash: emptyHash,
-			Timestamp:    uint64(time.Now().Unix()),
-		},
-	}
-	require.NoError(d.SanityCheck(), "well-formed block should pass")
 
 	// Test registry genesis checks.
 	d = *testDoc

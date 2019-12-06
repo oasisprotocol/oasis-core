@@ -329,4 +329,7 @@ type RuntimeGenesis struct {
 	// StorageReceipt is the storage receipt for the state root. It may be
 	// invalid iff the State is non-empty or StateRoot is an empty hash.
 	StorageReceipt signature.Signature `json:"storage_receipt"`
+
+	// Round is the block round.
+	Round uint64 `json:"round"`
 }
