@@ -9,6 +9,8 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
+	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdRegNode "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/node"
 )
 
 // Validator is an Oasis validator.
@@ -148,12 +150,12 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 
 	args := []string{
 		"registry", "node", "init",
-		"--datadir", val.dir.String(),
-		"--node.expiration", "1",
-		"--node.role", "validator",
+		"--" + cmdCommon.CfgDataDir, val.dir.String(),
+		"--" + cmdRegNode.CfgExpiration, "1",
+		"--" + cmdRegNode.CfgRole, "validator",
 	}
 	for _, v := range consensusAddrs {
-		args = append(args, []string{"--node.consensus_address", v.String()}...)
+		args = append(args, []string{"--" + cmdRegNode.CfgConsensusAddress, v.String()}...)
 	}
 	args = append(args, cfg.Entity.toGenesisArgs()...)
 

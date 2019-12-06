@@ -9,6 +9,7 @@ import (
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
@@ -51,7 +52,7 @@ func (i *identityCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 func (i *identityCLIImpl) Run(childEnv *env.Env) error {
 	args := []string{
 		"identity", "init",
-		"--datadir", i.dataDir,
+		"--" + common.CfgDataDir, i.dataDir,
 	}
 	if err := runSubCommand(childEnv, "identity-init", i.nodeBinary, args); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: failed provision node identity: %w", err)

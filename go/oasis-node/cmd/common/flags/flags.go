@@ -22,7 +22,7 @@ const (
 	cfgVerbose = "verbose"
 	cfgForce   = "force"
 	cfgRetries = "retries"
-	cfgEntity  = "entity"
+	CfgEntity  = "entity"
 )
 
 var (
@@ -73,7 +73,7 @@ func DebugTestEntity() bool {
 
 // Entity returns the set entity directory.
 func Entity() string {
-	return viper.GetString(cfgEntity)
+	return viper.GetString(CfgEntity)
 }
 
 // GenesisFile returns the set genesis file.
@@ -98,7 +98,7 @@ func init() {
 	DebugTestEntityFlags.Bool(CfgDebugTestEntity, false, "use the test entity (UNSAFE)")
 	_ = DebugTestEntityFlags.MarkHidden(CfgDebugTestEntity)
 
-	EntityFlags.StringP(cfgEntity, "e", "", "Path to directory containing entity private key and descriptor")
+	EntityFlags.StringP(CfgEntity, "e", "", "Path to directory containing entity private key and descriptor")
 
 	GenesisFileFlags.StringP(CfgGenesisFile, "g", "genesis.json", "path to genesis file")
 

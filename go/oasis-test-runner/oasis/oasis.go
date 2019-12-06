@@ -23,6 +23,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
 	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/genesis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 )
@@ -175,6 +177,9 @@ type NetworkCfg struct { // nolint: maligned
 
 	// StakingGenesis is the name of a file with a staking genesis document to use if GenesisFile isn't set.
 	StakingGenesis string `json:"staking_genesis"`
+
+	// RegistryDebugAllowRuntimeRegistration enables runtime registration.
+	RegistryDebugAllowRuntimeRegistration bool `json:"registry_debug_allow_runtime_registration"`
 
 	// A set of log watcher handler factories used by default on all nodes
 	// created in this test network.
@@ -513,7 +518,7 @@ func (net *Network) startOasisNode(
 	restartable bool,
 ) (*exec.Cmd, chan error, error) {
 	baseArgs := []string{
-		"--datadir", dir.String(),
+		"--" + common.CfgDataDir, dir.String(),
 		"--log.level", "debug",
 		"--log.format", "json",
 		"--log.file", nodeLogPath(dir),
@@ -606,6 +611,9 @@ func (net *Network) makeGenesis() error {
 	}
 	if net.cfg.StakingGenesis != "" {
 		args = append(args, "--staking", net.cfg.StakingGenesis)
+	}
+	if net.cfg.RegistryDebugAllowRuntimeRegistration {
+		args = append(args, "--"+genesis.CfgRegistryDebugAllowRuntimeRegistration)
 	}
 
 	w, err := net.baseDir.NewLogWriter("genesis_provision.log")

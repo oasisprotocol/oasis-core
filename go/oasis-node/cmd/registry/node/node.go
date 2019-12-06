@@ -30,14 +30,14 @@ import (
 )
 
 const (
-	cfgEntityID         = "node.entity_id"
-	cfgExpiration       = "node.expiration"
-	cfgCommitteeAddress = "node.committee_address"
-	cfgP2PAddress       = "node.p2p_address"
-	cfgConsensusAddress = "node.consensus_address"
-	cfgRole             = "node.role"
-	cfgSelfSigned       = "node.is_self_signed"
-	cfgNodeRuntimeID    = "node.runtime.id"
+	CfgEntityID         = "node.entity_id"
+	CfgExpiration       = "node.expiration"
+	CfgCommitteeAddress = "node.committee_address"
+	CfgP2PAddress       = "node.p2p_address"
+	CfgConsensusAddress = "node.consensus_address"
+	CfgRole             = "node.role"
+	CfgSelfSigned       = "node.is_self_signed"
+	CfgNodeRuntimeID    = "node.runtime.id"
 
 	optRoleComputeWorker        = "compute-worker"
 	optRoleStorageWorker        = "storage-worker"
@@ -46,7 +46,7 @@ const (
 	optRoleMergeWorker          = "merge-worker"
 	optRoleValidator            = "validator"
 
-	nodeGenesisFilename = "node_genesis.json"
+	NodeGenesisFilename = "node_genesis.json"
 
 	maskCommitteeMember = node.RoleComputeWorker | node.RoleStorageWorker | node.RoleTransactionScheduler | node.RoleKeyManager | node.RoleMergeWorker
 )
@@ -110,7 +110,7 @@ func doInit(cmd *cobra.Command, args []string) {
 
 		isSelfSigned bool
 	)
-	if idStr := viper.GetString(cfgEntityID); idStr != "" {
+	if idStr := viper.GetString(CfgEntityID); idStr != "" {
 		if err = entityID.UnmarshalHex(idStr); err != nil {
 			logger.Error("malformed entity ID",
 				"err", err,
@@ -131,7 +131,7 @@ func doInit(cmd *cobra.Command, args []string) {
 
 		entityID = entity.ID
 		isSelfSigned = !entity.AllowEntitySignedNodes
-		if viper.GetBool(cfgSelfSigned) {
+		if viper.GetBool(CfgSelfSigned) {
 			isSelfSigned = true
 		}
 		defer signer.Reset()
@@ -161,7 +161,7 @@ func doInit(cmd *cobra.Command, args []string) {
 	n := &node.Node{
 		ID:         nodeIdentity.NodeSigner.Public(),
 		EntityID:   entityID,
-		Expiration: viper.GetUint64(cfgExpiration),
+		Expiration: viper.GetUint64(CfgExpiration),
 		Committee: node.CommitteeInfo{
 			Certificate: nodeIdentity.TLSCertificate.Certificate[0],
 		},
@@ -179,7 +179,7 @@ func doInit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	runtimeIDs, err := configparser.GetRuntimes(viper.GetStringSlice(cfgNodeRuntimeID))
+	runtimeIDs, err := configparser.GetRuntimes(viper.GetStringSlice(CfgNodeRuntimeID))
 	if err != nil {
 		logger.Error("failed to parse node runtime id",
 			"err", err,
@@ -192,7 +192,7 @@ func doInit(cmd *cobra.Command, args []string) {
 		n.Runtimes = append(n.Runtimes, runtime)
 	}
 
-	for _, v := range viper.GetStringSlice(cfgCommitteeAddress) {
+	for _, v := range viper.GetStringSlice(CfgCommitteeAddress) {
 		var addr node.Address
 		if err = addr.UnmarshalText([]byte(v)); err != nil {
 			logger.Error("failed to parse node committee address",
@@ -203,7 +203,7 @@ func doInit(cmd *cobra.Command, args []string) {
 		}
 		n.Committee.Addresses = append(n.Committee.Addresses, addr)
 	}
-	for _, v := range viper.GetStringSlice(cfgP2PAddress) {
+	for _, v := range viper.GetStringSlice(CfgP2PAddress) {
 		var addr node.Address
 		if err = addr.UnmarshalText([]byte(v)); err != nil {
 			logger.Error("failed to parse node P2P address",
@@ -220,7 +220,7 @@ func doInit(cmd *cobra.Command, args []string) {
 	}
 
 	if n.HasRoles(node.RoleValidator) {
-		consensusAddrs := viper.GetStringSlice(cfgConsensusAddress)
+		consensusAddrs := viper.GetStringSlice(CfgConsensusAddress)
 		if len(consensusAddrs) == 0 {
 			logger.Error("validator nodes require a consensus address")
 			os.Exit(1)
@@ -251,7 +251,7 @@ func doInit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	b, _ := json.Marshal(signed)
-	if err = ioutil.WriteFile(filepath.Join(dataDir, nodeGenesisFilename), b, 0600); err != nil {
+	if err = ioutil.WriteFile(filepath.Join(dataDir, NodeGenesisFilename), b, 0600); err != nil {
 		logger.Error("failed to write signed node genesis registration",
 			"err", err,
 		)
@@ -261,7 +261,7 @@ func doInit(cmd *cobra.Command, args []string) {
 
 func argsToRolesMask() (node.RolesMask, error) {
 	var rolesMask node.RolesMask
-	for _, v := range viper.GetStringSlice(cfgRole) {
+	for _, v := range viper.GetStringSlice(CfgRole) {
 		v = strings.ToLower(v)
 		switch v {
 		case optRoleComputeWorker:
@@ -351,14 +351,14 @@ func Register(parentCmd *cobra.Command) {
 }
 
 func init() {
-	flags.String(cfgEntityID, "", "Entity ID that controls this node")
-	flags.Uint64(cfgExpiration, 0, "Epoch that the node registration should expire")
-	flags.StringSlice(cfgCommitteeAddress, nil, "Address(es) the node can be reached as a committee member")
-	flags.StringSlice(cfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
-	flags.StringSlice(cfgConsensusAddress, nil, "Address(es) the node can be reached as a consensus member of the form [ID@]ip:port (where the ID@ part is optional and ID represents the node's public key)")
-	flags.StringSlice(cfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-scheduler\", \"key-manager\", \"merge-worker\", and \"validator\"")
-	flags.Bool(cfgSelfSigned, false, "Node registration should be self-signed")
-	flags.StringSlice(cfgNodeRuntimeID, nil, "Hex Encoded Runtime ID(s) of the node.")
+	flags.String(CfgEntityID, "", "Entity ID that controls this node")
+	flags.Uint64(CfgExpiration, 0, "Epoch that the node registration should expire")
+	flags.StringSlice(CfgCommitteeAddress, nil, "Address(es) the node can be reached as a committee member")
+	flags.StringSlice(CfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
+	flags.StringSlice(CfgConsensusAddress, nil, "Address(es) the node can be reached as a consensus member of the form [ID@]ip:port (where the ID@ part is optional and ID represents the node's public key)")
+	flags.StringSlice(CfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-scheduler\", \"key-manager\", \"merge-worker\", and \"validator\"")
+	flags.Bool(CfgSelfSigned, false, "Node registration should be self-signed")
+	flags.StringSlice(CfgNodeRuntimeID, nil, "Hex Encoded Runtime ID(s) of the node.")
 
 	_ = viper.BindPFlags(flags)
 }
