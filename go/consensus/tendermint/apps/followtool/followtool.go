@@ -1,6 +1,7 @@
 package followtool
 
 import (
+	"github.com/tendermint/iavl"
 	"math/rand"
 
 	"github.com/pkg/errors"
@@ -65,7 +66,7 @@ func (app *followToolApplication) ExecuteTx(*abci.Context, *transaction.Transact
 	return errors.New("followtool: unexpected transaction")
 }
 
-func (app *followToolApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *followToolApplication) ForeignExecuteTx(*abci.Context, abci.Application, *transaction.Transaction) error {
 	return nil
 }
 
@@ -105,8 +106,25 @@ func (app *followToolApplication) endBlockImpl(ctx *abci.Context, request types.
 
 	logger.Debug("checking this block", "height", request.Height)
 
-	if err := checkNonzeroSupply(ctx.State()); err != nil {
-		return errors.Wrap(err, "checkNonzeroSupply")
+	state := ctx.State()
+	for _, tt := range []struct {
+		name    string
+		checker func(state *iavl.MutableTree) error
+	}{
+		{"checkNonzeroSupply", checkNonzeroSupply},
+		{"checkEpochTime", checkEpochTime},
+		{"checkRegistry", checkRegistry},
+		{"checkRootHash", checkRootHash},
+		{"checkStaking", checkStaking},
+		{"checkKeyManager", checkKeyManager},
+		{"checkScheduler", checkScheduler},
+		{"checkBeacon", checkBeacon},
+		{"checkConsensus", checkConsensus},
+		{"checkHalt", checkHalt},
+	} {
+		if err := tt.checker(state); err != nil {
+			return errors.Wrap(err, tt.name)
+		}
 	}
 
 	return nil
