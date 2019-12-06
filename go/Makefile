@@ -1,15 +1,9 @@
 SHELL = /bin/bash
 OASIS_GO ?= go
 
-# The following flags enable additional behavior for deterministic builds.
-#
-# * -trimpath as of Go 1.13 will strip all host dependent filesystem paths
-#   from binaries.
-#
-# * -ldflags=-buildid= will set the `.note.go.buildid` section to empty,
-#   to work around https://github.com/golang/go/issues/33772.  Once we
-#   migrate to a version of Go that has the fix, it can be removed.
-GOFLAGS ?= -trimpath -ldflags=-buildid= -v
+# NOTE: The -trimpath flag strips all host dependent filesystem paths from
+# binaries which is required for deterministic builds.
+GOFLAGS ?= -trimpath -v
 
 # Append git HEAD commit to the oasis node version, if git command exists and
 # this folder is in some git repository. Use a truncated commit hash and append
