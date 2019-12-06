@@ -177,6 +177,10 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				require.Error(err, "register node with invalid consensus address")
 				require.Equal(err, api.ErrInvalidArgument)
 
+				err = v.Register(consensus, v.SignedInvalidRegistration10)
+				require.Error(err, "register node with same consensus and p2p IDs")
+				require.Equal(err, api.ErrInvalidArgument)
+
 				err = v.Register(consensus, v.SignedRegistration)
 				require.NoError(err, "RegisterNode")
 
@@ -193,8 +197,16 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				require.NoError(err, "GetNode")
 				require.EqualValues(v.Node, nod, "retrieved node")
 
+				err = v.Register(consensus, v.SignedInvalidRegistration11)
+				require.Error(err, "register node with duplicate p2p id")
+				require.Equal(err, api.ErrInvalidArgument)
+
+				err = v.Register(consensus, v.SignedInvalidRegistration12)
+				require.Error(err, "register node with duplicate consensus id")
+				require.Equal(err, api.ErrInvalidArgument)
+
 				err = v.Register(consensus, v.SignedValidReRegistration)
-				require.NoError(err, "Re-registering a node with differnet address should work")
+				require.NoError(err, "Re-registering a node with different address should work")
 
 				err = v.Register(consensus, v.SignedInvalidReRegistration)
 				require.Error(err, "Re-registering a node with different runtimes should fail")
@@ -529,6 +541,9 @@ type TestNode struct {
 	SignedInvalidRegistration7  *node.SignedNode
 	SignedInvalidRegistration8  *node.SignedNode
 	SignedInvalidRegistration9  *node.SignedNode
+	SignedInvalidRegistration10 *node.SignedNode
+	SignedInvalidRegistration11 *node.SignedNode
+	SignedInvalidRegistration12 *node.SignedNode
 	SignedValidReRegistration   *node.SignedNode
 	SignedInvalidReRegistration *node.SignedNode
 }
@@ -537,6 +552,22 @@ type TestNode struct {
 func (n *TestNode) Register(consensus consensusAPI.Backend, sigNode *node.SignedNode) error {
 	// NOTE: Node registrations in tests are entity-signed.
 	return consensusAPI.SignAndSubmitTx(context.Background(), consensus, n.Entity.Signer, api.NewRegisterNodeTx(0, nil, sigNode))
+}
+
+func randomPK(rng *drbg.Drbg) signature.PublicKey {
+	signer, err := memorySigner.NewSigner(rng)
+	if err != nil {
+		panic(err)
+	}
+	return signer.Public()
+}
+
+func randomCert() []byte {
+	tlsCert, err := tls.Generate(identity.CommonName)
+	if err != nil {
+		panic(err)
+	}
+	return tlsCert.Certificate[0]
 }
 
 // NewTestNodes returns the specified number of TestNodes, generated
@@ -580,16 +611,12 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 				Port: 451,
 			},
 		}
-		nod.Node.P2P.ID = nod.Node.ID
+		nod.Node.P2P.ID = randomPK(rng)
 		nod.Node.P2P.Addresses = append(nod.Node.P2P.Addresses, addr)
 		nod.Node.Committee.Addresses = append(nod.Node.Committee.Addresses, addr)
-		nod.Node.Consensus.ID = nod.Node.ID
+		nod.Node.Consensus.ID = randomPK(rng)
 		// Generate dummy TLS certificate.
-		tlsCert, err := tls.Generate(identity.CommonName)
-		if err != nil {
-			return nil, err
-		}
-		nod.Node.Committee.Certificate = tlsCert.Certificate[0]
+		nod.Node.Committee.Certificate = randomCert()
 
 		nod.SignedRegistration, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, nod.Node)
 		if err != nil {
@@ -682,6 +709,36 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 			return nil, err
 		}
 
+		// Add a registration with same consensus and P2P IDs.
+		invalid10 := *nod.Node
+		invalid10.P2P.ID = randomPK(rng)
+		invalid10.Consensus.ID = invalid10.P2P.ID
+
+		nod.SignedInvalidRegistration10, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid10)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add a registration with duplicate P2P ID.
+		invalid11 := *nod.Node
+		invalid11.ID = randomPK(rng)
+		invalid11.Consensus.ID = randomPK(rng)
+
+		nod.SignedInvalidRegistration11, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid11)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add a registration with duplicate consensus ID.
+		invalid12 := *nod.Node
+		invalid12.ID = randomPK(rng)
+		invalid12.P2P.ID = randomPK(rng)
+
+		nod.SignedInvalidRegistration12, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid12)
+		if err != nil {
+			return nil, err
+		}
+
 		// Add another Re-Registration with different address field.
 		nod.UpdatedNode = &node.Node{
 			ID:         nod.Signer.Public(),
@@ -696,18 +753,18 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 				Port: 452,
 			},
 		}
-		nod.UpdatedNode.P2P.ID = nod.UpdatedNode.ID
+		nod.UpdatedNode.P2P.ID = randomPK(rng)
 		nod.UpdatedNode.P2P.Addresses = append(nod.UpdatedNode.P2P.Addresses, addr)
 		nod.UpdatedNode.Committee.Addresses = append(nod.UpdatedNode.Committee.Addresses, addr)
-		nod.UpdatedNode.Committee.Certificate = nod.Node.Committee.Certificate
-		nod.UpdatedNode.Consensus.ID = nod.UpdatedNode.ID
+		nod.UpdatedNode.Committee.Certificate = randomCert()
+		nod.UpdatedNode.Consensus.ID = nod.Node.Consensus.ID // This should remain the same or we'll get "node update not allowed".
 		nod.SignedValidReRegistration, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, nod.UpdatedNode)
 		if err != nil {
 			return nil, err
 		}
 
 		// Add invalid Re-Registration with changed Roles field.
-		testRuntimeSigner := memorySigner.NewTestSigner("invalod-registration-runtime-seed")
+		testRuntimeSigner := memorySigner.NewTestSigner("invalid-registration-runtime-seed")
 		newNode := &node.Node{
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
@@ -717,6 +774,9 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 			P2P:        nod.Node.P2P,
 			Committee:  nod.Node.Committee,
 		}
+		newNode.P2P.ID = randomPK(rng)
+		newNode.Consensus.ID = randomPK(rng)
+		newNode.Committee.Certificate = randomCert()
 		nod.SignedInvalidReRegistration, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, newNode)
 		if err != nil {
 			return nil, err

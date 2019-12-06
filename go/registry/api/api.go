@@ -314,6 +314,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	now time.Time,
 	isGenesis bool,
 	regRuntimes []*Runtime,
+	regNodes []*node.Node,
 ) (*node.Node, error) {
 	var n node.Node
 	if sigNode == nil {
@@ -503,6 +504,46 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"p2p_addrs", addrs,
 		)
 		return nil, err
+	}
+
+	// Make sure that the consensus and P2P keys, as well as the
+	// committee certificate are unique (between themselves and compared to
+	// other nodes).
+	if n.Consensus.ID.Equal(n.P2P.ID) {
+		logger.Error("RegisterNode: node consensus and P2P IDs must differ",
+			"node", n,
+		)
+		return nil, ErrInvalidArgument
+	}
+	for _, rn := range regNodes {
+		if rn.ID.Equal(n.ID) {
+			// Node descriptor is being updated, IDs below are not duplicates.
+			continue
+		}
+
+		if rn.Consensus.ID.Equal(n.Consensus.ID) {
+			logger.Error("RegisterNode: duplicate node consensus ID",
+				"node", n,
+				"existing_node", rn,
+			)
+			return nil, ErrInvalidArgument
+		}
+
+		if rn.P2P.ID.Equal(n.P2P.ID) {
+			logger.Error("RegisterNode: duplicate node p2p ID",
+				"node", n,
+				"existing_node", rn,
+			)
+			return nil, ErrInvalidArgument
+		}
+
+		if bytes.Equal(rn.Committee.Certificate, n.Committee.Certificate) {
+			logger.Error("RegisterNode: duplicate node committee certificate",
+				"node", n,
+				"existing_node", rn,
+			)
+			return nil, ErrInvalidArgument
+		}
 	}
 
 	return &n, nil
