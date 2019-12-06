@@ -977,100 +977,93 @@ const (
 	GasOpRegisterRuntime transaction.Op = "register_runtime"
 )
 
-// SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck() error { // nolint: gocyclo
-	unsafeFlags := g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugAllowRuntimeRegistration || g.Parameters.DebugBypassStake
-	if unsafeFlags && !flags.DebugDontBlameOasis() {
-		return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
-	}
-
-	// This could check KeyManagerOperator, but some configurations don't
-	// use a key manager, so the parameter is optional.
-
-	// Check entities.
+func SanityCheckEntities(entities []*entity.SignedEntity) (map[signature.PublicKey]*entity.Entity, error) {
 	seenEntities := make(map[signature.PublicKey]*entity.Entity)
-	for _, sent := range g.Entities {
+	for _, sent := range entities {
 		var ent entity.Entity
 		if err := sent.Open(RegisterGenesisEntitySignatureContext, &ent); err != nil {
-			return fmt.Errorf("registry: sanity check failed: unable to open signed entity")
+			return nil, fmt.Errorf("unable to open signed entity")
 		}
 
 		if !ent.ID.IsValid() {
-			return fmt.Errorf("registry: sanity check failed: entity ID %s is invalid", ent.ID.String())
+			return nil, fmt.Errorf("entity ID %s is invalid", ent.ID.String())
 		}
 
 		for _, pk := range ent.Nodes {
 			if !pk.IsValid() {
-				return fmt.Errorf("registry: sanity check failed: entity ID %s has node with invalid ID %s", ent.ID.String(), pk.String())
+				return nil, fmt.Errorf("entity ID %s has node with invalid ID %s", ent.ID.String(), pk.String())
 			}
 		}
 
 		seenEntities[ent.ID] = &ent
 	}
 
-	// Check runtimes.
+	return seenEntities, nil
+}
+
+func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[signature.PublicKey]*Runtime, error) {
 	seenRuntimes := make(map[signature.PublicKey]*Runtime)
-	for _, srt := range g.Runtimes {
+	for _, srt := range runtimes {
 		var rt Runtime
 		if err := srt.Open(RegisterGenesisRuntimeSignatureContext, &rt); err != nil {
-			return fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
+			return nil, fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
 		}
 
 		if rt.Kind != KindCompute && rt.Kind != KindKeyManager {
-			return fmt.Errorf("registry: sanity check failed: runtime ID %s is of invalid kind", rt.ID.String())
+			return nil, fmt.Errorf("registry: sanity check failed: runtime ID %s is of invalid kind", rt.ID.String())
 		}
 
 		if seenRuntimes[rt.ID] != nil {
-			return fmt.Errorf("registry: sanity check failed: duplicate runtime ID %s", rt.ID.String())
+			return nil, fmt.Errorf("registry: sanity check failed: duplicate runtime ID %s", rt.ID.String())
 		}
 
 		// Check compute runtime parameters.
 		if rt.Kind == KindCompute {
 			// Check runtime's Compute committee parameters.
 			if rt.Compute.GroupSize < 1 {
-				return fmt.Errorf("registry: sanity check failed: compute group size must be >= 1 node")
+				return nil, fmt.Errorf("registry: sanity check failed: compute group size must be >= 1 node")
 			}
 
 			if rt.Compute.RoundTimeout < 1*time.Second {
-				return fmt.Errorf("registry: sanity check failed: compute round timeout must be >= 1 second")
+				return nil, fmt.Errorf("registry: sanity check failed: compute round timeout must be >= 1 second")
 			}
 
 			if rt.Compute.RoundTimeout.Truncate(time.Second) != rt.Compute.RoundTimeout {
-				return fmt.Errorf("registry: sanity check failed: granularity of compute round timeout must be a second")
+				return nil, fmt.Errorf("registry: sanity check failed: granularity of compute round timeout must be a second")
 			}
 
 			// Check runtime's Merge committee parameters.
 			if rt.Merge.GroupSize < 1 {
-				return fmt.Errorf("registry: sanity check failed: merge group size must be >= 1 node")
+				return nil, fmt.Errorf("registry: sanity check failed: merge group size must be >= 1 node")
 			}
 
 			if rt.Merge.RoundTimeout < 1*time.Second {
-				return fmt.Errorf("registry: sanity check failed: merge round timeout must be >= 1 second")
+				return nil, fmt.Errorf("registry: sanity check failed: merge round timeout must be >= 1 second")
 			}
 
 			if rt.Merge.RoundTimeout.Truncate(time.Second) != rt.Merge.RoundTimeout {
-				return fmt.Errorf("registry: sanity check failed: granularity of compute round timeout must be a second")
+				return nil, fmt.Errorf("registry: sanity check failed: granularity of compute round timeout must be a second")
 			}
 
 			// Check runtime's Transaction scheduler committee parameters.
 			if rt.TxnScheduler.Algorithm != TxnSchedulerAlgorithmBatching {
-				return fmt.Errorf("registry: sanity check failed: invalid txn scheduler algorithm")
+				return nil, fmt.Errorf("registry: sanity check failed: invalid txn scheduler algorithm")
 			}
 
 			if rt.TxnScheduler.BatchFlushTimeout < 1*time.Second {
-				return fmt.Errorf("registry: sanity check failed: batch flush timeout must be >= 1 second")
+				return nil, fmt.Errorf("registry: sanity check failed: batch flush timeout must be >= 1 second")
 			}
 
 			if rt.TxnScheduler.BatchFlushTimeout.Truncate(time.Second) != rt.TxnScheduler.BatchFlushTimeout {
-				return fmt.Errorf("registry: sanity check failed: granularity of txn scheduler batch flush timeout must be a second")
+				return nil, fmt.Errorf("registry: sanity check failed: granularity of txn scheduler batch flush timeout must be a second")
 			}
 
 			if rt.TxnScheduler.MaxBatchSize < 1 {
-				return fmt.Errorf("registry: sanity check failed: max batch size must be >= 1")
+				return nil, fmt.Errorf("registry: sanity check failed: max batch size must be >= 1")
 			}
 
 			if rt.TxnScheduler.MaxBatchSizeBytes < 1 {
-				return fmt.Errorf("registry: sanity check failed: max batch size in bytes must be >= 1")
+				return nil, fmt.Errorf("registry: sanity check failed: max batch size in bytes must be >= 1")
 			}
 
 			// Check that the given key manager runtime is a valid key manager runtime.
@@ -1079,10 +1072,10 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 				// Not seen yet, traverse the entire runtime list (the KM runtimes
 				// aren't guaranteed to be sorted before the other runtimes).
 				var found bool
-				for _, skrt := range g.Runtimes {
+				for _, skrt := range runtimes {
 					var kmrt Runtime
 					if err := skrt.Open(RegisterGenesisRuntimeSignatureContext, &kmrt); err != nil {
-						return fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
+						return nil, fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
 					}
 					if kmrt.ID.Equal(rt.KeyManager) {
 						found = true
@@ -1092,20 +1085,23 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 				}
 
 				if !found {
-					return fmt.Errorf("registry: sanity check failed: compute runtime ID %s has an unknown key manager runtime ID", rt.ID.String())
+					return nil, fmt.Errorf("registry: sanity check failed: compute runtime ID %s has an unknown key manager runtime ID", rt.ID.String())
 				}
 			}
 
 			if krt.Kind != KindKeyManager {
-				return fmt.Errorf("registry: sanity check failed: compute runtime ID %s specifies a key manager runtime that isn't a key manager runtime", rt.ID.String())
+				return nil, fmt.Errorf("registry: sanity check failed: compute runtime ID %s specifies a key manager runtime that isn't a key manager runtime", rt.ID.String())
 			}
 		}
 
 		seenRuntimes[rt.ID] = &rt
 	}
 
-	// Check nodes.
-	for _, sn := range g.Nodes {
+	return seenRuntimes, nil
+}
+
+func SanityCheckNodes(nodes []*node.SignedNode, seenEntities map[signature.PublicKey]*entity.Entity, seenRuntimes map[signature.PublicKey]*Runtime) error { // nolint: gocyclo
+	for _, sn := range nodes {
 		var n node.Node
 		if err := sn.Open(RegisterGenesisNodeSignatureContext, &n); err != nil {
 			return fmt.Errorf("registry: sanity check failed: unable to open signed node")
@@ -1194,4 +1190,30 @@ func (g *Genesis) SanityCheck() error { // nolint: gocyclo
 	}
 
 	return nil
+}
+
+// SanityCheck does basic sanity checking on the genesis state.
+func (g *Genesis) SanityCheck() error {
+	unsafeFlags := g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugAllowRuntimeRegistration || g.Parameters.DebugBypassStake
+	if unsafeFlags && !flags.DebugDontBlameOasis() {
+		return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
+	}
+
+	// This could check KeyManagerOperator, but some configurations don't
+	// use a key manager, so the parameter is optional.
+
+	// Check entities.
+	seenEntities, err := SanityCheckEntities(g.Entities)
+	if err != nil {
+		return err
+	}
+
+	// Check runtimes.
+	seenRuntimes, err := SanityCheckRuntimes(g.Runtimes)
+	if err != nil {
+		return err
+	}
+
+	// Check nodes.
+	return SanityCheckNodes(g.Nodes, seenEntities, seenRuntimes)
 }
