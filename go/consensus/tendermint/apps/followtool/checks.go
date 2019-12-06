@@ -5,8 +5,12 @@ import (
 
 	"github.com/tendermint/iavl"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
+	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 )
 
 func checkEpochTime(*iavl.MutableTree) error {
@@ -50,7 +54,21 @@ func checkRegistry(state *iavl.MutableTree) error {
 	return nil
 }
 
-func checkRootHash(*iavl.MutableTree) error {
+func checkRootHash(state *iavl.MutableTree) error {
+	st := roothashState.NewMutableState(state)
+
+	// Check blocks.
+	runtimes := st.Runtimes()
+
+	blocks := make(map[signature.PublicKey]*block.Block)
+	for _, rt := range runtimes {
+		blocks[rt.Runtime.ID] = rt.CurrentBlock
+	}
+	err := roothash.SanityCheckBlocks(blocks)
+	if err != nil {
+		return fmt.Errorf("SanityCheckBlocks: %w", err)
+	}
+
 	// nothing to check yet
 	return nil
 }

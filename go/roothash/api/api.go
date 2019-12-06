@@ -169,10 +169,8 @@ type Genesis struct {
 	Blocks map[signature.PublicKey]*block.Block `json:"blocks,omitempty"`
 }
 
-// SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck() error {
-	// Check blocks.
-	for _, blk := range g.Blocks {
+func SanityCheckBlocks(blocks map[signature.PublicKey]*block.Block) error {
+	for _, blk := range blocks {
 		hdr := blk.Header
 
 		if hdr.HeaderType != block.Normal {
@@ -194,6 +192,16 @@ func (g *Genesis) SanityCheck() error {
 		if len(hdr.RoothashMessages) != 0 {
 			return fmt.Errorf("roothash: sanity check failed: non-empty roothash messages")
 		}
+	}
+	return nil
+}
+
+// SanityCheck does basic sanity checking on the genesis state.
+func (g *Genesis) SanityCheck() error {
+	// Check blocks.
+	err := SanityCheckBlocks(g.Blocks)
+	if err != nil {
+		return err
 	}
 
 	return nil
