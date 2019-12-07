@@ -10,7 +10,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	stakingstate "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
+	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	"github.com/oasislabs/oasis-core/go/genesis/api"
 )
 
@@ -48,7 +48,7 @@ func (app *followToolApplication) Blessed() bool {
 }
 
 func (app *followToolApplication) Dependencies() []string {
-	return []string{stakingstate.AppName}
+	return []string{stakingState.AppName}
 }
 
 func (app *followToolApplication) QueryFactory() interface{} {

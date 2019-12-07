@@ -4,13 +4,13 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tendermint/iavl"
 
-	stakingstate "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
+	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 )
 
 func checkNonzeroSupply(state *iavl.MutableTree) error {
 	// The total supply should never fall to zero.
 
-	st := stakingstate.NewMutableState(state)
+	st := stakingState.NewMutableState(state)
 
 	totalSupply, err := st.TotalSupply()
 	if err != nil {
