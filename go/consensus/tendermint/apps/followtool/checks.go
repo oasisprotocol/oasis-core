@@ -115,7 +115,7 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 		return fmt.Errorf("Accounts: %w", err)
 	}
 	for _, id := range accounts {
-		err := staking.SanityCheckAccount(&total, parameters, now, id, st.Account(id))
+		err = staking.SanityCheckAccount(&total, parameters, now, id, st.Account(id))
 		if err != nil {
 			return fmt.Errorf("SanityCheckAccount %s: %w", id, err)
 		}
@@ -132,7 +132,7 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 		return fmt.Errorf("Delegations: %w", err)
 	}
 	for acct, delegations := range delegationses {
-		err := staking.SanityCheckDelegations(st.Account(acct), delegations)
+		err = staking.SanityCheckDelegations(st.Account(acct), delegations)
 		if err != nil {
 			return fmt.Errorf("SanityCheckDelegations %s: %w", acct, err)
 		}
