@@ -1,10 +1,10 @@
 package followtool
 
 import (
-	"github.com/tendermint/iavl"
 	"math/rand"
 
 	"github.com/pkg/errors"
+	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
