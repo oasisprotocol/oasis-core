@@ -116,7 +116,6 @@ func (app *followToolApplication) endBlockImpl(ctx *abci.Context, request types.
 		name    string
 		checker func(state *iavl.MutableTree, now epochtime.EpochTime) error
 	}{
-		{"checkNonzeroSupply", checkNonzeroSupply},
 		{"checkEpochTime", checkEpochTime},
 		{"checkRegistry", checkRegistry},
 		{"checkRootHash", checkRootHash},
