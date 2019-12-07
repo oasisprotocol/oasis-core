@@ -7,10 +7,12 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
+	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
@@ -155,8 +157,18 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkKeyManager(*iavl.MutableTree) error {
-	// nothing to check yet
+func checkKeyManager(state *iavl.MutableTree) error {
+	st := keymanagerState.NewMutableState(state)
+
+	statuses, err := st.Statuses()
+	if err != nil {
+		return fmt.Errorf("Statuses: %w", err)
+	}
+	err = keymanager.SanityCheckStatuses(statuses)
+	if err != nil {
+		return fmt.Errorf("SanityCheckStatuses: %w", err)
+	}
+
 	return nil
 }
 
