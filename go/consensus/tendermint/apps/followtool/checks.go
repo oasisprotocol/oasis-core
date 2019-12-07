@@ -6,11 +6,15 @@ import (
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
+	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 func checkEpochTime(*iavl.MutableTree) error {
@@ -73,8 +77,81 @@ func checkRootHash(state *iavl.MutableTree) error {
 	return nil
 }
 
-func checkStaking(*iavl.MutableTree) error {
-	// nothing to check yet
+func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
+	st := stakingState.NewMutableState(state)
+
+	parameters, err := st.ConsensusParameters()
+	if err != nil {
+		return fmt.Errorf("ConsensusParameters: %w", err)
+	}
+
+	totalSupply, err := st.TotalSupply()
+	if err != nil {
+		return fmt.Errorf("TotalSupply: %w", err)
+	}
+	if !totalSupply.IsValid() {
+		return fmt.Errorf("total supply %v is invalid", totalSupply)
+	}
+
+	commonPool, err := st.CommonPool()
+	if err != nil {
+		return fmt.Errorf("CommonPool: %w", err)
+	}
+	if !commonPool.IsValid() {
+		return fmt.Errorf("common pool %v is invalid", commonPool)
+	}
+
+	// Check if the total supply adds up (common pool + all balances in the ledger).
+	// Check all commission schedules.
+	var total quantity.Quantity
+	accounts, err := st.Accounts()
+	if err != nil {
+		return fmt.Errorf("Accounts: %w", err)
+	}
+	for _, id := range accounts {
+		err := staking.SanityCheckAccount(&total, parameters, now, id, st.Account(id))
+		if err != nil {
+			return fmt.Errorf("SanityCheckAccount %s: %w", id, err)
+		}
+	}
+
+	_ = total.Add(commonPool)
+	if total.Cmp(totalSupply) != 0 {
+		return fmt.Errorf("balances in accounts plus common pool (%s) does not add up to total supply (%s)", total.String(), totalSupply.String())
+	}
+
+	// All shares of all delegations for a given account must add up to account's Escrow.Active.TotalShares.
+	delegationses, err := st.Delegations()
+	if err != nil {
+		return fmt.Errorf("Delegations: %w", err)
+	}
+	for acct, delegations := range delegationses {
+		err := staking.SanityCheckDelegations(st.Account(acct), delegations)
+		if err != nil {
+			return fmt.Errorf("SanityCheckDelegations %s: %w", acct, err)
+		}
+	}
+
+	// All shares of all debonding delegations for a given account must add up to account's Escrow.Debonding.TotalShares.
+	debondingDelegationses, err := st.DebondingDelegations()
+	if err != nil {
+		return fmt.Errorf("DebondingDelegations: %w", err)
+	}
+	for acct, debondingDelegations := range debondingDelegationses {
+		err := staking.SanityCheckDebondingDelegations(st.Account(acct), debondingDelegations)
+		if err != nil {
+			return fmt.Errorf("SanityCheckDebondingDelegations %s: %w", acct, err)
+		}
+	}
+
+	// Check the above two invariants for each account as well.
+	for _, id := range accounts {
+		err := staking.SanityCheckAccountShares(st.Account(id), delegationses[id], debondingDelegationses[id])
+		if err != nil {
+			return fmt.Errorf("SanityCheckAccountShares %s: %w", id, err)
+		}
+	}
+
 	return nil
 }
 
