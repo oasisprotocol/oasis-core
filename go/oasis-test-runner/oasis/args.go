@@ -127,6 +127,9 @@ func (args *argBuilder) storageBackend(backend string) *argBuilder {
 
 func (args *argBuilder) followtoolEnabled() *argBuilder {
 	args.vec = append(args.vec, "--"+followtool.CfgEnabled)
+	args.vec = append(args.vec, []string{
+		"--" + followtool.CfgInterval, "1",
+	}...)
 	return args
 }
 

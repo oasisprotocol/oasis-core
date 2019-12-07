@@ -76,6 +76,7 @@ var (
 		{txnscheduler.CfgWorkerEnabled, true},
 		{mergeWorker.CfgWorkerEnabled, true},
 		{followtool.CfgEnabled, true},
+		{followtool.CfgInterval, 1},
 		{cmdCommon.CfgDebugAllowTestKeys, true},
 	}
 
