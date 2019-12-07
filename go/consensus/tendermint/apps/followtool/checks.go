@@ -19,7 +19,11 @@ import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-func checkEpochTime(*iavl.MutableTree) error {
+func checkEpochTime(state *iavl.MutableTree, now epochtime.EpochTime) error {
+	if now == epochtime.EpochInvalid {
+		return fmt.Errorf("current epoch is invalid")
+	}
+
 	// nothing to check yet
 	return nil
 }
