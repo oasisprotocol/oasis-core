@@ -5,9 +5,10 @@ import (
 	"github.com/tendermint/iavl"
 
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
-func checkNonzeroSupply(state *iavl.MutableTree) error {
+func checkNonzeroSupply(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	// The total supply should never fall to zero.
 
 	st := stakingState.NewMutableState(state)

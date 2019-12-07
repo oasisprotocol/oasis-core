@@ -28,7 +28,7 @@ func checkEpochTime(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkRegistry(state *iavl.MutableTree) error {
+func checkRegistry(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	st := registryState.NewMutableState(state)
 
 	// Check entities.
@@ -64,7 +64,7 @@ func checkRegistry(state *iavl.MutableTree) error {
 	return nil
 }
 
-func checkRootHash(state *iavl.MutableTree) error {
+func checkRootHash(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	st := roothashState.NewMutableState(state)
 
 	// Check blocks.
@@ -161,7 +161,7 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkKeyManager(state *iavl.MutableTree) error {
+func checkKeyManager(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	st := keymanagerState.NewMutableState(state)
 
 	statuses, err := st.Statuses()
@@ -176,22 +176,22 @@ func checkKeyManager(state *iavl.MutableTree) error {
 	return nil
 }
 
-func checkScheduler(*iavl.MutableTree) error {
+func checkScheduler(*iavl.MutableTree, epochtime.EpochTime) error {
 	// nothing to check yet
 	return nil
 }
 
-func checkBeacon(*iavl.MutableTree) error {
+func checkBeacon(*iavl.MutableTree, epochtime.EpochTime) error {
 	// nothing to check yet
 	return nil
 }
 
-func checkConsensus(*iavl.MutableTree) error {
+func checkConsensus(*iavl.MutableTree, epochtime.EpochTime) error {
 	// nothing to check yet
 	return nil
 }
 
-func checkHalt(*iavl.MutableTree) error {
+func checkHalt(*iavl.MutableTree, epochtime.EpochTime) error {
 	// nothing to check yet
 	return nil
 }

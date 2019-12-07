@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/genesis/api"
 )
 
@@ -106,10 +107,14 @@ func (app *followToolApplication) endBlockImpl(ctx *abci.Context, request types.
 
 	logger.Debug("checking this block", "height", request.Height)
 
+	now, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	if err != nil {
+		return errors.Wrap(err, "GetEpoch")
+	}
 	state := ctx.State()
 	for _, tt := range []struct {
 		name    string
-		checker func(state *iavl.MutableTree) error
+		checker func(state *iavl.MutableTree, now epochtime.EpochTime) error
 	}{
 		{"checkNonzeroSupply", checkNonzeroSupply},
 		{"checkEpochTime", checkEpochTime},
@@ -122,7 +127,7 @@ func (app *followToolApplication) endBlockImpl(ctx *abci.Context, request types.
 		{"checkConsensus", checkConsensus},
 		{"checkHalt", checkHalt},
 	} {
-		if err := tt.checker(state); err != nil {
+		if err := tt.checker(state, now); err != nil {
 			return errors.Wrap(err, tt.name)
 		}
 	}
