@@ -19,12 +19,14 @@ const (
 	// CfgConsensusValidator is the flag used to opt-in to being a validator.
 	CfgConsensusValidator = "consensus.validator"
 
-	cfgVerbose             = "verbose"
-	cfgForce               = "force"
-	cfgRetries             = "retries"
+	cfgVerbose = "verbose"
+	cfgForce   = "force"
+	cfgRetries = "retries"
+
 	cfgSigner              = "signer"
 	cfgSignerFileDir       = "signer.file.dir"
 	cfgSignerLedgerAddress = "signer.ledger.address"
+	cfgSignerLedgerIndex   = "signer.ledger.index"
 )
 
 var (
@@ -88,6 +90,11 @@ func SignerLedgerAddress() string {
 	return viper.GetString(cfgSignerLedgerAddress)
 }
 
+// SignerLedgerIndex returns the address index to be used for address derivation.
+func SignerLedgerIndex() uint32 {
+	return viper.GetUint32(cfgSignerLedgerIndex)
+}
+
 // GenesisFile returns the set genesis file.
 func GenesisFile() string {
 	return viper.GetString(CfgGenesisFile)
@@ -113,6 +120,7 @@ func init() {
 	SignerFlags.StringP(cfgSigner, "s", "file", "Signer backend [file, ledger]")
 	SignerFlags.String(cfgSignerFileDir, "", "File signer: path to directory containing private key")
 	SignerFlags.String(cfgSignerLedgerAddress, "", "Ledger signer: select Ledger device based on this specified address. If blank, any available Ledger device will be connected to.")
+	SignerFlags.Uint32(cfgSignerLedgerIndex, 0, "Ledger signer: address index used to derive address on Ledger device")
 
 	GenesisFileFlags.StringP(CfgGenesisFile, "g", "genesis.json", "path to genesis file")
 

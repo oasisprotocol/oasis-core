@@ -411,7 +411,7 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 			"--" + cmdRegNode.CfgP2PAddress, strings.Join(testAddressesStr, ","),
 			"--" + cmdRegNode.CfgRole, testNode.Roles.String(),
 			"--" + cmdRegNode.CfgNodeRuntimeID, testNode.Runtimes[0].ID.String(),
-			"--" + flags.CfgEntity, entDir,
+			"--" + common.CfgDataDir, entDir,
 			"--" + common.CfgDataDir, dataDir,
 		}
 		_, err = runSubCommandWithOutput(childEnv, "init-node", r.basicImpl.net.Config().NodeBinary, args)
@@ -503,7 +503,7 @@ func (r *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPa
 		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + flags.CfgEntity, entDir,
+		"--" + common.CfgDataDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
 	if err := runSubCommand(childEnv, "gen_register", r.basicImpl.net.Config().NodeBinary, args); err != nil {
@@ -525,7 +525,7 @@ func (r *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, tx
 		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + flags.CfgEntity, entDir,
+		"--" + common.CfgDataDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
 	if err := runSubCommand(childEnv, "gen_deregister", r.basicImpl.net.Config().NodeBinary, args); err != nil {

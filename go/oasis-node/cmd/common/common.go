@@ -199,13 +199,17 @@ func LoadEntity(signerBackend string) (*entity.Entity, signature.Signer, error) 
 	}
 
 	var factory signature.SignerFactory
-	switch backend {
+	switch signerBackend {
 	case ledgerSigner.SignerName:
-		factory = ledgerSigner.NewFactory(flags.SignerFileDir(), signature.SignerEntity)
+		config := ledgerSigner.FactoryConfig{
+			Address: flags.SignerLedgerAddress(),
+			Index:   flags.SignerLedgerIndex(),
+		}
+		factory = ledgerSigner.NewFactory(&config, signature.SignerEntity)
 	case fileSigner.SignerName:
-		factory = fileSigner.NewFactory(flags.SignerLedgerAddress(), signature.SignerEntity)
+		factory = fileSigner.NewFactory(flags.SignerFileDir(), signature.SignerEntity)
 	default:
-		return nil, nil, fmt.Errorf("unsupported signer backend: %s", backend)
+		return nil, nil, fmt.Errorf("unsupported signer backend: %s", signerBackend)
 	}
 
 	dataDir, err := DataDirOrPwd()

@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	ledger "github.com/zondax/ledger-oasis-go"
-
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	ledgerCommon "github.com/oasislabs/oasis-core/go/common/ledger"
 )
 
 const (
@@ -20,12 +19,12 @@ var (
 	_ signature.SignerFactory     = (*Factory)(nil)
 	_ signature.Signer            = (*Signer)(nil)
 
-	// SignerDerivationPath is the derivation path used for generating
-	// the signature key on the Ledger device.
-	SignerDerivationPath = []uint32{44, 118, 0, 0, 0}
+	// SignerDerivationRootPath is the derivation path prefix used for
+	// generating the signature key on the Ledger device.
+	SignerDerivationRootPath = []uint32{44, 118, 0, 0}
 
-	roleDerivationPaths = map[signature.SignerRole][]uint32{
-		signature.SignerEntity: SignerDerivationPath,
+	roleDerivationRootPaths = map[signature.SignerRole][]uint32{
+		signature.SignerEntity: SignerDerivationRootPath,
 	}
 )
 
@@ -33,13 +32,25 @@ var (
 type Factory struct {
 	roles   []signature.SignerRole
 	address string
+	index   uint32
+}
+
+// FactoryConfig is the config necessary to create a Factory for Ledger Signers
+type FactoryConfig struct {
+	Address string
+	Index   uint32
 }
 
 // NewFactory creates a new factory with the specified roles.
-func NewFactory(address string, roles ...signature.SignerRole) signature.SignerFactory {
+func NewFactory(config interface{}, roles ...signature.SignerRole) signature.SignerFactory {
+	ledgerConfig, ok := config.(*FactoryConfig)
+	if !ok {
+		panic("invalid Ledger signer configuration provided")
+	}
 	return &Factory{
 		roles:   append([]signature.SignerRole{}, roles...),
-		address: address,
+		address: ledgerConfig.Address,
+		index:   ledgerConfig.Index,
 	}
 }
 
@@ -65,22 +76,21 @@ func (fac *Factory) Generate(role signature.SignerRole, _rng io.Reader) (signatu
 // created a Signer with the first Ledger device it finds.
 // The only role allowed is SignerEntity.
 func (fac *Factory) Load(role signature.SignerRole) (signature.Signer, error) {
-	path, ok := roleDerivationPaths[role]
+	pathPrefix, ok := roleDerivationRootPaths[role]
 	if !ok {
-		return nil, fmt.Errorf("role %s is not supported when using the Ledger backed signer", role)
+		return nil, fmt.Errorf("role %d is not supported when using the Ledger backed signer", role)
 	}
-
-	device, err := ledger.ConnectLedgerOasisApp(fac.address, path)
+	device, err := ledgerCommon.ConnectToDevice(fac.address)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Signer{device, path, nil}, nil
+	return &Signer{device, append(pathPrefix, fac.index), nil}, nil
 }
 
 // Signer is a Ledger backed Signer.
 type Signer struct {
-	device    *ledger.LedgerOasis
+	device    *ledgerCommon.Device
 	path      []uint32
 	publicKey *signature.PublicKey
 }
@@ -115,9 +125,4 @@ func (s *Signer) String() string {
 // Reset tears down the Signer.
 func (s *Signer) Reset() {
 	s.device.Close()
-}
-
-// ListDevices lists all available Ledger devices by address.
-func ListDevices() {
-	ledger.ListOasisDevices(SignerDerivationPath)
 }

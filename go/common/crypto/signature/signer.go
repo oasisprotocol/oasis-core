@@ -140,7 +140,7 @@ const (
 )
 
 // SignerFactoryCtor is an SignerFactory constructor.
-type SignerFactoryCtor func(string, ...SignerRole) SignerFactory
+type SignerFactoryCtor func(interface{}, ...SignerRole) SignerFactory
 
 // SignerFactory is the opaque factory interface for Signers.
 type SignerFactory interface {
