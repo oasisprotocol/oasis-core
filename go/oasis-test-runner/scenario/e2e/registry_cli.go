@@ -256,7 +256,8 @@ func (r *registryCLIImpl) initEntity(childEnv *env.Env, entDir string) (*entity.
 
 	args := []string{
 		"registry", "entity", "init",
-		"--" + common.CfgDataDir, entDir,
+		"--" + flags.CfgSigner, fileSigner.SignerName,
+		"--" + flags.CfgSignerDir, entDir,
 	}
 	_, err := runSubCommandWithOutput(childEnv, "entity-init", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
@@ -277,7 +278,8 @@ func (r *registryCLIImpl) updateEntity(childEnv *env.Env, nodes []*node.Node, no
 
 	args := []string{
 		"registry", "entity", "update",
-		"--" + common.CfgDataDir, entDir,
+		"--" + flags.CfgSigner, fileSigner.SignerName,
+		"--" + flags.CfgSignerDir, entDir,
 		"--" + cmdRegEnt.CfgNodeID, strings.Join(nodeIDs, ","),
 		"--" + cmdRegEnt.CfgNodeDescriptor, strings.Join(nodeGenesisFiles, ","),
 	}
@@ -411,7 +413,8 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 			"--" + cmdRegNode.CfgP2PAddress, strings.Join(testAddressesStr, ","),
 			"--" + cmdRegNode.CfgRole, testNode.Roles.String(),
 			"--" + cmdRegNode.CfgNodeRuntimeID, testNode.Runtimes[0].ID.String(),
-			"--" + common.CfgDataDir, entDir,
+			"--" + flags.CfgSigner, fileSigner.SignerName,
+			"--" + flags.CfgSignerDir, entDir,
 			"--" + common.CfgDataDir, dataDir,
 		}
 		_, err = runSubCommandWithOutput(childEnv, "init-node", r.basicImpl.net.Config().NodeBinary, args)
@@ -503,7 +506,8 @@ func (r *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPa
 		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + common.CfgDataDir, entDir,
+		"--" + flags.CfgSigner, fileSigner.SignerName,
+		"--" + flags.CfgSignerDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
 	if err := runSubCommand(childEnv, "gen_register", r.basicImpl.net.Config().NodeBinary, args); err != nil {
@@ -525,7 +529,8 @@ func (r *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, tx
 		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + common.CfgDataDir, entDir,
+		"--" + flags.CfgSigner, fileSigner.SignerName,
+		"--" + flags.CfgSignerDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
 	if err := runSubCommand(childEnv, "gen_deregister", r.basicImpl.net.Config().NodeBinary, args); err != nil {

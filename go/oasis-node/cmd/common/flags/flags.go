@@ -3,6 +3,8 @@
 package flags
 
 import (
+	"os"
+
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -23,8 +25,11 @@ const (
 	cfgForce   = "force"
 	cfgRetries = "retries"
 
-	cfgSigner              = "signer"
-	cfgSignerFileDir       = "signer.file.dir"
+	// CfgSigner is the flag used to specify the backend of the signer.
+	CfgSigner = "signer"
+	// CfgSignerDir is the flag used to specify the directory with the entity files.
+	// It also contains the private keys of a signer if using a file backend.
+	CfgSignerDir           = "signer.dir"
 	cfgSignerLedgerAddress = "signer.ledger.address"
 	cfgSignerLedgerIndex   = "signer.ledger.index"
 )
@@ -77,12 +82,19 @@ func DebugTestEntity() bool {
 
 // Signer returns the configured signer backend name.
 func Signer() string {
-	return viper.GetString(cfgSigner)
+	return viper.GetString(CfgSigner)
 }
 
-// SignerFileDir returns the directory with the signer keys (for file-based signer).
-func SignerFileDir() string {
-	return viper.GetString(cfgSignerFileDir)
+// SignerDir returns the directory with the entity files, (and the signer keys for file-based signer).
+func SignerDirOrPwd() (string, error) {
+	signerDir := viper.GetString(CfgSignerDir)
+	if signerDir == "" {
+		var err error
+		if signerDir, err = os.Getwd(); err != nil {
+			return "", err
+		}
+	}
+	return signerDir, nil
 }
 
 // SignerLedgerAddress returns the address to search for (for Ledger-based signer).
@@ -117,8 +129,8 @@ func init() {
 	DebugTestEntityFlags.Bool(CfgDebugTestEntity, false, "use the test entity (UNSAFE)")
 	_ = DebugTestEntityFlags.MarkHidden(CfgDebugTestEntity)
 
-	SignerFlags.StringP(cfgSigner, "s", "file", "Signer backend [file, ledger]")
-	SignerFlags.String(cfgSignerFileDir, "", "File signer: path to directory containing private key")
+	SignerFlags.StringP(CfgSigner, "s", "file", "signer backend [file, ledger]")
+	SignerFlags.String(CfgSignerDir, "", "path to directory containing the entity files. If file signer backend is being used, the directory must also contain the private key. If blank, defaults to the working directory.")
 	SignerFlags.String(cfgSignerLedgerAddress, "", "Ledger signer: select Ledger device based on this specified address. If blank, any available Ledger device will be connected to.")
 	SignerFlags.Uint32(cfgSignerLedgerIndex, 0, "Ledger signer: address index used to derive address on Ledger device")
 

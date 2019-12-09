@@ -59,6 +59,22 @@ func DataDirOrPwd() (string, error) {
 	return dataDir, nil
 }
 
+// SignerFactory returns the appropriate SignerFactory based on flags.
+func SignerFactory(signerBackend string, signerDir string) (signature.SignerFactory, error) {
+	switch signerBackend {
+	case ledgerSigner.SignerName:
+		config := ledgerSigner.FactoryConfig{
+			Address: flags.SignerLedgerAddress(),
+			Index:   flags.SignerLedgerIndex(),
+		}
+		return ledgerSigner.NewFactory(&config, signature.SignerEntity), nil
+	case fileSigner.SignerName:
+		return fileSigner.NewFactory(signerDir, signature.SignerEntity), nil
+	default:
+		return nil, fmt.Errorf("unsupported signer backend: %s", signerBackend)
+	}
+}
+
 // EarlyLogAndExit logs the error and exits.
 //
 // Note: This routine should only be used prior to the logging system
@@ -193,28 +209,15 @@ func GetInputReader(cmd *cobra.Command, cfg string) (io.ReadCloser, bool, error)
 }
 
 // LoadEntity loads the entity and it's signer.
-func LoadEntity(signerBackend string) (*entity.Entity, signature.Signer, error) {
+func LoadEntity(signerBackend string, entityDir string) (*entity.Entity, signature.Signer, error) {
 	if flags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
 
-	var factory signature.SignerFactory
-	switch signerBackend {
-	case ledgerSigner.SignerName:
-		config := ledgerSigner.FactoryConfig{
-			Address: flags.SignerLedgerAddress(),
-			Index:   flags.SignerLedgerIndex(),
-		}
-		factory = ledgerSigner.NewFactory(&config, signature.SignerEntity)
-	case fileSigner.SignerName:
-		factory = fileSigner.NewFactory(flags.SignerFileDir(), signature.SignerEntity)
-	default:
-		return nil, nil, fmt.Errorf("unsupported signer backend: %s", signerBackend)
-	}
-
-	dataDir, err := DataDirOrPwd()
+	factory, err := SignerFactory(signerBackend, entityDir)
 	if err != nil {
 		return nil, nil, err
 	}
-	return entity.Load(dataDir, factory)
+
+	return entity.Load(entityDir, factory)
 }

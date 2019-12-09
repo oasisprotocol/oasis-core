@@ -15,7 +15,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -98,7 +97,7 @@ func doInit(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	dataDir, err := cmdCommon.DataDirOrPwd()
+	dataDir, err := cmdFlags.SignerDirOrPwd()
 	if err != nil {
 		logger.Error("failed to query data directory",
 			"err", err,
@@ -141,7 +140,7 @@ func doUpdate(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	dataDir, err := cmdCommon.DataDirOrPwd()
+	dataDir, err := cmdFlags.SignerDirOrPwd()
 	if err != nil {
 		logger.Error("failed to query data directory",
 			"err", err,
@@ -273,7 +272,15 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	ent, signer, err := cmdCommon.LoadEntity(cmdFlags.Signer())
+	entityDir, err := cmdFlags.SignerDirOrPwd()
+	if err != nil {
+		logger.Error("failed to retrieve entity dir",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	ent, signer, err := cmdCommon.LoadEntity(cmdFlags.Signer(), entityDir)
 	if err != nil {
 		logger.Error("failed to load entity",
 			"err", err,
@@ -358,8 +365,18 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 		return nil, nil, fmt.Errorf("loadOrGenerateEntity: sanity check failed: one or more unsafe debug flags set")
 	}
 
-	// TODO/hsm: Configure factory dynamically.
-	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
+	entityDir, err := cmdFlags.SignerDirOrPwd()
+	if err != nil {
+		logger.Error("failed to retrieve entity dir",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	entitySignerFactory, err := cmdCommon.SignerFactory(cmdFlags.Signer(), entityDir)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	if generate {
 		template := &entity.Entity{
 			AllowEntitySignedNodes: viper.GetBool(cfgAllowEntitySignedNodes),
@@ -396,6 +413,7 @@ func Register(parentCmd *cobra.Command) {
 
 func init() {
 	entityFlags.Bool(cfgAllowEntitySignedNodes, false, "Entity signing key may be used for node registration (UNSAFE)")
+	entityFlags.AddFlagSet(cmdFlags.SignerFlags)
 	_ = entityFlags.MarkHidden(cfgAllowEntitySignedNodes)
 	_ = viper.BindPFlags(entityFlags)
 

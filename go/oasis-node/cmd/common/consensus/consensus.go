@@ -82,7 +82,14 @@ func GetTxNonceAndFee() (uint64, *transaction.Fee) {
 }
 
 func SignAndSaveTx(tx *transaction.Transaction) {
-	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Signer())
+	entityDir, err := cmdFlags.SignerDirOrPwd()
+	if err != nil {
+		logger.Error("failed to retrieve signer dir",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Signer(), entityDir)
 	if err != nil {
 		logger.Error("failed to load account entity",
 			"err", err,

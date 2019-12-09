@@ -65,7 +65,7 @@ func (ent *Entity) DescriptorPath() string {
 
 func (ent *Entity) toGenesisArgs() []string {
 	if ent.dir != nil {
-		return []string{"--entity", ent.dir.String()}
+		return []string{"--signer", fileSigner.SignerName, "--signer.dir", ent.dir.String()}
 	} else if ent.isDebugTestEntity {
 		return entityArgsDebugTest
 	}
@@ -90,7 +90,8 @@ func (ent *Entity) update() error {
 
 	args := []string{
 		"registry", "entity", "update",
-		"--" + common.CfgDataDir, ent.dir.String(),
+		"--" + flags.CfgSigner, fileSigner.SignerName,
+		"--" + flags.CfgSignerDir, ent.dir.String(),
 	}
 	for _, n := range ent.nodes {
 		args = append(args, "--entity.node.id", n.String())
@@ -142,7 +143,8 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 		if !cfg.Restore {
 			args := []string{
 				"registry", "entity", "init",
-				"--" + common.CfgDataDir, entityDir.String(),
+				"--" + flags.CfgSigner, fileSigner.SignerName,
+				"--" + flags.CfgSignerDir, entityDir.String(),
 			}
 			if cfg.AllowEntitySignedNodes {
 				args = append(args, "--entity.debug.allow_entity_signed_nodes")

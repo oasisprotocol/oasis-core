@@ -12,6 +12,14 @@ import (
 const (
 	// SignerName is the name used to identify the Ledger backed signer.
 	SignerName = "ledger"
+
+	// SignerPathCoinType is set to 118, the number owned by Cosmos via SLIP-0044 registration.
+	// TODO: Update this number after SLIP-0044 registration is complete.
+	SignerPathCoinType uint32 = 118
+	// SignerPathAccount is the account index used to sign transactions.
+	SignerPathAccount uint32 = 0
+	// SignerPathChange indicates an external chain.
+	SignerPathChange uint32 = 0
 )
 
 var (
@@ -21,7 +29,7 @@ var (
 
 	// SignerDerivationRootPath is the derivation path prefix used for
 	// generating the signature key on the Ledger device.
-	SignerDerivationRootPath = []uint32{44, 118, 0, 0}
+	SignerDerivationRootPath = []uint32{ledgerCommon.PathPurpose, SignerPathCoinType, SignerPathAccount, SignerPathChange}
 
 	roleDerivationRootPaths = map[signature.SignerRole][]uint32{
 		signature.SignerEntity: SignerDerivationRootPath,
@@ -114,7 +122,11 @@ func (s *Signer) Public() signature.PublicKey {
 // ContextSign generates a signature with the private key over the context and
 // message.
 func (s *Signer) ContextSign(context signature.Context, message []byte) ([]byte, error) {
-	return s.device.SignEd25519(s.path, []byte(context), message)
+	preparedContext, err := signature.PrepareSignerContext(context)
+	if err != nil {
+		return nil, err
+	}
+	return s.device.SignEd25519(s.path, preparedContext, message)
 }
 
 // String returns the address of the account on the Ledger device.

@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	// ListingPathPurpose is set to 44 to indicate use of the BIP-0044 specification.
-	ListingPathPurpose uint32 = 44
+	// PathPurpose is set to 44 to indicate use of the BIP-0044 specification.
+	PathPurpose uint32 = 44
+
 	// ListingPathCoinType is set to 118, the number owned by Cosmos via SLIP-0044 registration.
 	// TODO: Update this number after SLIP-0044 registration is complete.
 	ListingPathCoinType uint32 = 118
@@ -21,10 +22,10 @@ const (
 
 var (
 	// ListingDerivationPath is the path used to list and connect to devices by address.
-	ListingDerivationPath = []uint32{ListingPathPurpose, ListingPathCoinType, ListingPathAccount, ListingPathChange, ListingPathIndex}
+	ListingDerivationPath = []uint32{PathPurpose, ListingPathCoinType, ListingPathAccount, ListingPathChange, ListingPathIndex}
 )
 
-// Device is to clean up imports of ledger-oasis-go.
+// Device is a Ledger device.
 type Device = ledger.LedgerOasis
 
 // ListDevices will list Ledger devices by address, derived from ListingDerivationPath.
