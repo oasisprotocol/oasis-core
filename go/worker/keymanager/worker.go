@@ -489,7 +489,7 @@ func (w *Worker) worker() {
 				initialSyncDone = true
 			}
 		case rt := <-rtCh:
-			if rt.Kind != registry.KindCompute || !rt.KeyManager.Equal(w.runtimeID) {
+			if rt.Kind != registry.KindCompute || rt.KeyManagerOpt == nil || !rt.KeyManagerOpt.Equal(w.runtimeID) {
 				continue
 			}
 			if clientRuntimes[rt.ID] != nil {

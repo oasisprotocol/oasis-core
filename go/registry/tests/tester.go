@@ -1028,11 +1028,6 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 		return nil, err
 	}
 
-	kmSigner, err := memorySigner.NewSigner(rng)
-	if err != nil {
-		return nil, err
-	}
-
 	rt.Runtime = &api.Runtime{
 		ID: rt.Signer.Public(),
 		Compute: api.ComputeParameters{
@@ -1053,8 +1048,6 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 				PublicKey: rt.Signer.Public(),
 			},
 		},
-		// We don't want an invalid public key so we pass something.
-		KeyManager: kmSigner.Public(),
 	}
 	if entity != nil {
 		rt.Signer = entity.Signer

@@ -858,7 +858,7 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 	// TODO: Who should sign the runtime? Current compute node assumes an entity (deployer).
 	switch rt.Kind {
 	case KindCompute:
-		if rt.ID.Equal(rt.KeyManager) {
+		if rt.KeyManagerOpt != nil && rt.ID.Equal(*rt.KeyManagerOpt) {
 			return nil, ErrInvalidArgument
 		}
 
@@ -878,7 +878,7 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 			return nil, ErrInvalidArgument
 		}
 	case KindKeyManager:
-		if !rt.ID.Equal(rt.KeyManager) {
+		if rt.KeyManagerOpt != nil {
 			return nil, ErrInvalidArgument
 		}
 	default:
@@ -1067,30 +1067,32 @@ func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[signature.PublicKey]*Ru
 			}
 
 			// Check that the given key manager runtime is a valid key manager runtime.
-			krt := seenRuntimes[rt.KeyManager]
-			if krt == nil {
-				// Not seen yet, traverse the entire runtime list (the KM runtimes
-				// aren't guaranteed to be sorted before the other runtimes).
-				var found bool
-				for _, skrt := range runtimes {
-					var kmrt Runtime
-					if err := skrt.Open(RegisterGenesisRuntimeSignatureContext, &kmrt); err != nil {
-						return nil, fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
+			if rt.KeyManagerOpt != nil {
+				krt := seenRuntimes[*rt.KeyManagerOpt]
+				if krt == nil {
+					// Not seen yet, traverse the entire runtime list (the KM runtimes
+					// aren't guaranteed to be sorted before the other runtimes).
+					var found bool
+					for _, skrt := range runtimes {
+						var kmrt Runtime
+						if err := skrt.Open(RegisterGenesisRuntimeSignatureContext, &kmrt); err != nil {
+							return nil, fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
+						}
+						if kmrt.ID.Equal(*rt.KeyManagerOpt) {
+							found = true
+							krt = &kmrt
+							break
+						}
 					}
-					if kmrt.ID.Equal(rt.KeyManager) {
-						found = true
-						krt = &kmrt
-						break
+
+					if !found {
+						return nil, fmt.Errorf("registry: sanity check failed: compute runtime ID %s has an unknown key manager runtime ID", rt.ID.String())
 					}
 				}
 
-				if !found {
-					return nil, fmt.Errorf("registry: sanity check failed: compute runtime ID %s has an unknown key manager runtime ID", rt.ID.String())
+				if krt.Kind != KindKeyManager {
+					return nil, fmt.Errorf("registry: sanity check failed: compute runtime ID %s specifies a key manager runtime that isn't a key manager runtime", rt.ID.String())
 				}
-			}
-
-			if krt.Kind != KindKeyManager {
-				return nil, fmt.Errorf("registry: sanity check failed: compute runtime ID %s specifies a key manager runtime that isn't a key manager runtime", rt.ID.String())
 			}
 		}
 

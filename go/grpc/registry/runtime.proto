@@ -14,7 +14,7 @@ message Runtime {
 
     VersionInfo version = 5;
 
-    bytes key_manager = 6;
+    bytes key_manager_opt = 6;
 
     uint64 compute_group_size = 7;
 
