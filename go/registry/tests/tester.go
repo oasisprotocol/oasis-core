@@ -1034,14 +1034,22 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 			GroupSize:         3,
 			GroupBackupSize:   5,
 			AllowedStragglers: 1,
+			RoundTimeout:      20 * time.Second,
 		},
 		Merge: api.MergeParameters{
 			GroupSize:         3,
 			GroupBackupSize:   5,
 			AllowedStragglers: 1,
+			RoundTimeout:      20 * time.Second,
 		},
-		TxnScheduler: api.TxnSchedulerParameters{GroupSize: 3},
-		Storage:      api.StorageParameters{GroupSize: 3},
+		TxnScheduler: api.TxnSchedulerParameters{
+			GroupSize:         3,
+			Algorithm:         api.TxnSchedulerAlgorithmBatching,
+			BatchFlushTimeout: 20 * time.Second,
+			MaxBatchSize:      1,
+			MaxBatchSizeBytes: 1000,
+		},
+		Storage: api.StorageParameters{GroupSize: 3},
 		Genesis: api.RuntimeGenesis{
 			StorageReceipt: signature.Signature{
 				// We don't want an invalid public key so we pass something.
