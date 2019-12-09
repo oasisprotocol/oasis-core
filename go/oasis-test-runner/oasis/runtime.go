@@ -41,6 +41,7 @@ type RuntimeCfg struct { // nolint: maligned
 
 	Binary       string
 	GenesisState string
+	GenesisRound uint64
 
 	Compute      registry.ComputeParameters
 	Merge        registry.MergeParameters
@@ -74,6 +75,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		"--datadir", rtDir.String(),
 		"--" + regRtCmd.CfgID, cfg.ID.String(),
 		"--" + regRtCmd.CfgKind, cfg.Kind.String(),
+		"--" + regRtCmd.CfgGenesisRound, strconv.FormatUint(cfg.GenesisRound, 10),
 	}
 	if cfg.Kind == registry.KindCompute {
 		args = append(args, []string{

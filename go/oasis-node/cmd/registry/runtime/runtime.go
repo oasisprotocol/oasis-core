@@ -41,6 +41,7 @@ const (
 	CfgKind           = "runtime.kind"
 	CfgKeyManager     = "runtime.keymanager"
 	cfgOutput         = "runtime.genesis.file"
+	CfgGenesisRound   = "runtime.genesis.round"
 	cfgVersion        = "runtime.version"
 	CfgVersionEnclave = "runtime.version.enclave"
 
@@ -272,6 +273,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 
 	// TODO: Support root upload when registering.
 	gen := registry.RuntimeGenesis{}
+	gen.Round = viper.GetUint64(CfgGenesisRound)
 	switch state := viper.GetString(CfgGenesisState); state {
 	case "":
 		gen.StateRoot.Empty()
@@ -439,6 +441,7 @@ func init() {
 	runtimeFlags.String(CfgID, "", "Runtime ID")
 	runtimeFlags.String(CfgTEEHardware, "invalid", "Type of TEE hardware.  Supported values are \"invalid\" and \"intel-sgx\"")
 	runtimeFlags.String(CfgGenesisState, "", "Runtime state at genesis")
+	runtimeFlags.Uint64(CfgGenesisRound, 0, "Runtime round at genesis")
 	runtimeFlags.String(CfgKeyManager, "", "Key Manager Runtime ID")
 	runtimeFlags.String(CfgKind, "compute", "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
 	runtimeFlags.String(cfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")

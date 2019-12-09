@@ -157,6 +157,7 @@ type RuntimeFixture struct {
 
 	Binary       string `json:"binary"`
 	GenesisState string `json:"genesis_state"`
+	GenesisRound uint64 `json:"genesis_round"`
 
 	Compute      registry.ComputeParameters      `json:"compute"`
 	Merge        registry.MergeParameters        `json:"merge"`
@@ -196,6 +197,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		Storage:      f.Storage,
 		Binary:       f.Binary,
 		GenesisState: f.GenesisState,
+		GenesisRound: f.GenesisRound,
 	})
 }
 
