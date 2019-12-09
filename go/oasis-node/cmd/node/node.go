@@ -13,8 +13,6 @@ import (
 	flag "github.com/spf13/pflag"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	runtimeClient "github.com/oasislabs/oasis-core/go/client"
-	runtimeClientAPI "github.com/oasislabs/oasis-core/go/client/api"
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -47,6 +45,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/tracing"
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client"
+	runtimeClientAPI "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/sentry"

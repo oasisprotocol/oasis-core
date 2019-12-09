@@ -1,3 +1,4 @@
+// Package client contains the runtime client.
 package client
 
 import (
@@ -14,8 +15,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/oasis-core/go/client/api"
-	"github.com/oasislabs/oasis-core/go/client/indexer"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -26,6 +25,8 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/runtime/client/api"
+	"github.com/oasislabs/oasis-core/go/runtime/client/indexer"
 	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"

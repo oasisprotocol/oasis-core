@@ -10,13 +10,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	runtimeClient "github.com/oasislabs/oasis-core/go/client/api"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	cmdControl "github.com/oasislabs/oasis-core/go/oasis-node/cmd/control"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"

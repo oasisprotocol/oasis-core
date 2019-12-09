@@ -3,10 +3,10 @@ package oasis
 import (
 	"google.golang.org/grpc"
 
-	runtimeClient "github.com/oasislabs/oasis-core/go/client/api"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	control "github.com/oasislabs/oasis-core/go/control/api"
+	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 

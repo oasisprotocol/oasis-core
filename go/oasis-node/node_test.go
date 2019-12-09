@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc"
 
 	beaconTests "github.com/oasislabs/oasis-core/go/beacon/tests"
-	clientTests "github.com/oasislabs/oasis-core/go/client/tests"
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -32,6 +31,7 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	registryTests "github.com/oasislabs/oasis-core/go/registry/tests"
 	roothashTests "github.com/oasislabs/oasis-core/go/roothash/tests"
+	clientTests "github.com/oasislabs/oasis-core/go/runtime/client/tests"
 	schedulerTests "github.com/oasislabs/oasis-core/go/scheduler/tests"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
