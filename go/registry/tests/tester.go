@@ -596,18 +596,21 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		}
 		nod.Entity = ent
 
+		var thisNodeRuntimes []*node.Runtime
 		var role node.RolesMask
 		if i < nCompute {
 			role = node.RoleComputeWorker | node.RoleTransactionScheduler | node.RoleMergeWorker
+			thisNodeRuntimes = runtimes
 		} else {
 			role = node.RoleStorageWorker
+			thisNodeRuntimes = nil
 		}
 
 		nod.Node = &node.Node{
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
 			Expiration: uint64(expiration),
-			Runtimes:   runtimes,
+			Runtimes:   thisNodeRuntimes,
 			Roles:      role,
 		}
 		addr := node.Address{
@@ -762,7 +765,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
 			Expiration: uint64(expiration),
-			Runtimes:   runtimes,
+			Runtimes:   thisNodeRuntimes,
 			Roles:      role,
 		}
 		addr = node.Address{
@@ -783,11 +786,13 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 
 		// Add invalid Re-Registration with changed Roles field.
 		testRuntimeSigner := memorySigner.NewTestSigner("invalid-registration-runtime-seed")
+		newRuntimes := append([]*node.Runtime(nil), thisNodeRuntimes...)
+		newRuntimes = append(newRuntimes, &node.Runtime{ID: testRuntimeSigner.Public()})
 		newNode := &node.Node{
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
 			Expiration: uint64(expiration),
-			Runtimes:   append(runtimes, &node.Runtime{ID: testRuntimeSigner.Public()}),
+			Runtimes:   newRuntimes,
 			Roles:      role,
 			P2P:        nod.Node.P2P,
 			Committee:  nod.Node.Committee,
