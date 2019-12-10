@@ -723,20 +723,36 @@ func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, mess
 			return errors.Errorf("staking general adjustment message received from unacceptable runtime %s", runtimeID), nil
 		}
 
+		totalSupply, err := s.TotalSupply()
+		if err != nil {
+			return nil, errors.Wrap(err, "TotalSupply")
+		}
 		account := s.Account(message.StakingGeneralAdjustmentRoothashMessage.Account)
 
 		switch message.StakingGeneralAdjustmentRoothashMessage.Op {
 		case block.Increase:
 			err = account.General.Balance.Add(message.StakingGeneralAdjustmentRoothashMessage.Amount)
+			if err != nil {
+				return errors.Wrapf(err, "couldn't apply adjustment in staking general adjustment message"), nil
+			}
+			err = totalSupply.Add(message.StakingGeneralAdjustmentRoothashMessage.Amount)
+			if err != nil {
+				return errors.Wrapf(err, "couldn't adjust total supply in staking general adjustment message"), nil
+			}
 		case block.Decrease:
 			err = account.General.Balance.Sub(message.StakingGeneralAdjustmentRoothashMessage.Amount)
+			if err != nil {
+				return errors.Wrapf(err, "couldn't apply adjustment in staking general adjustment message"), nil
+			}
+			err = totalSupply.Sub(message.StakingGeneralAdjustmentRoothashMessage.Amount)
+			if err != nil {
+				return errors.Wrapf(err, "couldn't adjust total supply in staking general adjustment message"), nil
+			}
 		default:
 			return errors.Errorf("staking general adjustment message has invalid op"), nil
 		}
-		if err != nil {
-			return errors.Wrapf(err, "couldn't apply adjustment in staking general adjustment message"), nil
-		}
 
+		s.SetTotalSupply(totalSupply)
 		s.SetAccount(message.StakingGeneralAdjustmentRoothashMessage.Account, account)
 		logger.Debug("handled StakingGeneralAdjustmentRoothashMessage",
 			logging.LogEvent, staking.LogEventGeneralAdjustment,
