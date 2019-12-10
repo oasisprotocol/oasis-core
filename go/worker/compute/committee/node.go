@@ -114,14 +114,6 @@ var (
 	metricsOnce sync.Once
 )
 
-// Config is a committee node configuration.
-type Config struct {
-	// TODO: Move this to common worker config.
-	StorageCommitTimeout time.Duration
-
-	ByzantineInjectDiscrepancies bool
-}
-
 // Node is a committee node.
 type Node struct {
 	*commonWorker.RuntimeHostNode
@@ -129,7 +121,7 @@ type Node struct {
 	commonNode *committee.Node
 	mergeNode  *mergeCommittee.Node
 
-	cfg Config
+	commonCfg commonWorker.Config
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -191,7 +183,7 @@ func (n *Node) WatchStateTransitions() (<-chan NodeState, *pubsub.Subscription) 
 
 func (n *Node) getMetricLabels() prometheus.Labels {
 	return prometheus.Labels{
-		"runtime": n.commonNode.RuntimeID.String(),
+		"runtime": n.commonNode.Runtime.ID().String(),
 	}
 }
 
@@ -236,7 +228,8 @@ func (n *Node) queueBatchBlocking(
 	txnSchedSig signature.Signature,
 ) error {
 	// Quick check to see if header is compatible.
-	if !bytes.Equal(hdr.Namespace[:], n.commonNode.RuntimeID[:]) {
+	rtID := n.commonNode.Runtime.ID()
+	if !bytes.Equal(hdr.Namespace[:], rtID[:]) {
 		n.logger.Warn("received incompatible header in external batch",
 			"header", hdr,
 		)
@@ -621,7 +614,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		)
 		defer span.Finish()
 
-		ctx, cancel := context.WithTimeout(ctx, n.cfg.StorageCommitTimeout)
+		ctx, cancel := context.WithTimeout(ctx, n.commonCfg.StorageCommitTimeout)
 		defer cancel()
 
 		lastHeader := n.commonNode.CurrentBlock.Header
@@ -870,7 +863,7 @@ func (n *Node) worker() {
 	n.logger.Info("starting committee node")
 
 	// Initialize worker host for the new runtime.
-	if err := n.InitializeRuntimeWorkerHost(); err != nil {
+	if err := n.InitializeRuntimeWorkerHost(n.ctx); err != nil {
 		n.logger.Error("failed to initialize worker host",
 			"err", err,
 		)
@@ -926,7 +919,7 @@ func NewNode(
 	commonNode *committee.Node,
 	mergeNode *mergeCommittee.Node,
 	workerHostFactory host.Factory,
-	cfg Config,
+	commonCfg commonWorker.Config,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -938,7 +931,7 @@ func NewNode(
 		RuntimeHostNode:  commonWorker.NewRuntimeHostNode(commonNode, workerHostFactory),
 		commonNode:       commonNode,
 		mergeNode:        mergeNode,
-		cfg:              cfg,
+		commonCfg:        commonCfg,
 		ctx:              ctx,
 		cancelCtx:        cancel,
 		stopCh:           make(chan struct{}),
@@ -947,7 +940,7 @@ func NewNode(
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
 		reselect:         make(chan struct{}, 1),
-		logger:           logging.GetLogger("worker/compute/committee").With("runtime_id", commonNode.RuntimeID),
+		logger:           logging.GetLogger("worker/compute/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
 	return n, nil

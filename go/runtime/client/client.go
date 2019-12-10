@@ -28,18 +28,15 @@ import (
 	"github.com/oasislabs/oasis-core/go/runtime/client/api"
 	"github.com/oasislabs/oasis-core/go/runtime/client/indexer"
 	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	txnscheduler "github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
 )
 
-const (
-	// CfgIndexRuntimes configures the runtime IDs to index tags for.
-	CfgIndexRuntimes = "client.indexer.runtimes"
-
-	cfgIndexBackend = "client.indexer.backend"
-)
+// CfgIndexerBackend configures the runtime tag indexer backend.
+const CfgIndexerBackend = "runtime.history.tag_indexer.backend"
 
 var (
 	// Flags has the configuration flags.
@@ -78,7 +75,10 @@ func (c *submitContext) cancel() {
 
 type runtimeClient struct {
 	sync.Mutex
-	common   *clientCommon
+
+	common          *clientCommon
+	runtimeRegistry runtimeRegistry.Registry
+
 	watchers map[signature.PublicKey]*blockWatcher
 
 	indexers       map[signature.PublicKey]*indexer.Service
@@ -223,7 +223,13 @@ func (c *runtimeClient) GetBlock(ctx context.Context, request *api.GetBlockReque
 	if request.Round == api.RoundLatest {
 		return c.common.roothash.GetLatestBlock(ctx, request.RuntimeID, consensus.HeightLatest)
 	}
-	return c.common.roothash.GetBlock(ctx, request.RuntimeID, request.Round)
+
+	rt, err := c.runtimeRegistry.GetRuntime(request.RuntimeID)
+	if err != nil {
+		return nil, err
+	}
+
+	return rt.History().GetBlock(ctx, request.Round)
 }
 
 func (c *runtimeClient) getTxnTree(blk *block.Block) *transaction.Tree {
@@ -470,6 +476,7 @@ func New(
 	registry registry.Backend,
 	consensus consensus.Backend,
 	keyManager *keymanager.Client,
+	runtimeRegistry runtimeRegistry.Registry,
 ) (api.RuntimeClient, error) {
 	c := &runtimeClient{
 		common: &clientCommon{
@@ -481,18 +488,18 @@ func New(
 			keyManager: keyManager,
 			ctx:        ctx,
 		},
-		watchers: make(map[signature.PublicKey]*blockWatcher),
-		indexers: make(map[signature.PublicKey]*indexer.Service),
-		logger:   logging.GetLogger("runtime/client"),
+		runtimeRegistry: runtimeRegistry,
+		watchers:        make(map[signature.PublicKey]*blockWatcher),
+		indexers:        make(map[signature.PublicKey]*indexer.Service),
+		logger:          logging.GetLogger("runtime/client"),
 	}
 
 	// Initialize the tag indexer(s) when configured.
-	indexRuntimes := viper.GetStringSlice(CfgIndexRuntimes)
-	if indexRuntimes != nil {
+	backend := viper.GetString(CfgIndexerBackend)
+	if backend != "" {
 		var impl indexer.Backend
 		var err error
 
-		backend := viper.GetString(cfgIndexBackend)
 		switch strings.ToLower(backend) {
 		case indexer.BleveBackendName:
 			impl, err = indexer.NewBleveBackend(dataDir)
@@ -504,19 +511,14 @@ func New(
 		}
 		c.indexerBackend = impl
 
-		for _, rawID := range indexRuntimes {
-			var id signature.PublicKey
-			if err = id.UnmarshalHex(rawID); err != nil {
-				return nil, err
-			}
-
+		for _, rt := range runtimeRegistry.Runtimes() {
 			var idx *indexer.Service
-			idx, err = indexer.New(id, c.indexerBackend, roothash, storage)
+			idx, err = indexer.New(rt, c.indexerBackend, roothash, storage)
 			if err != nil {
 				return nil, err
 			}
 
-			c.indexers[id] = idx
+			c.indexers[rt.ID()] = idx
 		}
 
 		// Start all indexers.
@@ -531,8 +533,7 @@ func New(
 }
 
 func init() {
-	Flags.String(cfgIndexBackend, indexer.BleveBackendName, "Tag indexer backend")
-	Flags.StringSlice(CfgIndexRuntimes, nil, "IDs of runtimes to index tags for")
+	Flags.String(CfgIndexerBackend, "", "Runtime tag indexer backend (disabled by default)")
 
 	_ = viper.BindPFlags(Flags)
 }

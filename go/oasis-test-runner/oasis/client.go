@@ -21,14 +21,14 @@ func (client *Client) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(client.consensusPort).
-		roothashTendermintIndexBlocks().
 		storageBackend(storageClient.BackendName).
-		appendNetwork(client.net)
+		appendNetwork(client.net).
+		runtimeHistoryTagIndexerBackend("bleve")
 	for _, v := range client.net.runtimes {
 		if v.kind != registry.KindCompute {
 			continue
 		}
-		args = args.clientIndexRuntimes(v.id)
+		args = args.runtimeSupported(v.id)
 	}
 
 	var err error

@@ -22,6 +22,7 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	sentryClient "github.com/oasislabs/oasis-core/go/sentry/client"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
@@ -66,11 +67,12 @@ type Worker struct { // nolint: maligned
 	entityID           signature.PublicKey
 	registrationSigner signature.Signer
 
-	epochtime epochtime.Backend
-	registry  registry.Backend
-	identity  *identity.Identity
-	p2p       *p2p.P2P
-	ctx       context.Context
+	runtimeRegistry runtimeRegistry.Registry
+	epochtime       epochtime.Backend
+	registry        registry.Backend
+	identity        *identity.Identity
+	p2p             *p2p.P2P
+	ctx             context.Context
 
 	// Bandaid: Idempotent Stop for testing.
 	stopped      uint32
@@ -288,9 +290,9 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 		nodeDesc.AddRoles(role)
 	}
 	if nodeDesc.HasRoles(registry.RuntimesRequiredRoles) {
-		for _, runtime := range w.workerCommonCfg.Runtimes {
+		for _, runtime := range w.runtimeRegistry.Runtimes() {
 			nodeDesc.Runtimes = append(nodeDesc.Runtimes, &node.Runtime{
-				ID: runtime,
+				ID: runtime.ID(),
 			})
 		}
 	}
@@ -518,6 +520,7 @@ func New(
 	workerCommonCfg *workerCommon.Config,
 	store *persistent.CommonStore,
 	delegate Delegate,
+	runtimeRegistry runtimeRegistry.Registry,
 ) (*Worker, error) {
 	logger := logging.GetLogger("worker/registration")
 
@@ -555,6 +558,7 @@ func New(
 		delegate:           delegate,
 		entityID:           entityID,
 		registrationSigner: registrationSigner,
+		runtimeRegistry:    runtimeRegistry,
 		epochtime:          epochtime,
 		registry:           registry,
 		identity:           identity,

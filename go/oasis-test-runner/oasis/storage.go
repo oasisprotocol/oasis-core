@@ -72,7 +72,6 @@ func (worker *Storage) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
-		roothashTendermintIndexBlocks().
 		storageBackend(worker.backend).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
@@ -84,7 +83,7 @@ func (worker *Storage) startNode() error {
 		if v.kind != registry.KindCompute {
 			continue
 		}
-		args = args.workerRuntimeID(v.id)
+		args = args.runtimeSupported(v.id)
 	}
 
 	var err error

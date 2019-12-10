@@ -9,8 +9,11 @@ import (
 	"github.com/cenkalti/backoff"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/service"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasislabs/oasis-core/go/runtime/history"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
@@ -27,16 +30,39 @@ var (
 	ErrCorrupted = errors.New("indexer: index corrupted")
 	// ErrUnsupported is the error when the given method is not supported.
 	ErrUnsupported = errors.New("indexer: method not supported")
+
+	_ history.PruneHandler = (*pruneHandler)(nil)
 )
+
+type pruneHandler struct {
+	logger    *logging.Logger
+	backend   Backend
+	runtimeID signature.PublicKey
+}
+
+func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
+	// New blocks to prune from the index.
+	for _, round := range rounds {
+		if err := p.backend.Prune(ctx, p.runtimeID, round); err != nil {
+			p.logger.Error("failed to prune index",
+				"err", err,
+				"round", round,
+			)
+			return err
+		}
+	}
+
+	return nil
+}
 
 // Service is an indexer service.
 type Service struct {
 	service.BaseBackgroundService
 
-	runtimeID signature.PublicKey
-	backend   Backend
-	roothash  roothash.Backend
-	storage   storage.Backend
+	runtime  runtimeRegistry.Runtime
+	backend  Backend
+	roothash roothash.Backend
+	storage  storage.Backend
 
 	stopCh chan struct{}
 }
@@ -44,22 +70,12 @@ type Service struct {
 func (s *Service) worker() {
 	defer s.BaseBackgroundService.Stop()
 
-	logger := s.Logger.With("runtime_id", s.runtimeID.String())
-	logger.Info("started indexer for runtime")
+	ctx := context.TODO()
 
-	// If using a storage client, it should watch the configured runtimes.
-	if storageClient, ok := s.storage.(storage.ClientBackend); ok {
-		if err := storageClient.WatchRuntime(s.runtimeID); err != nil {
-			logger.Warn("indexer: error watching storage runtime, expected if using metricswrapper with local backend",
-				"err", err,
-			)
-		}
-	} else {
-		logger.Info("not watching storage runtime since not using a storage client backend")
-	}
+	s.Logger.Info("started indexer for runtime")
 
 	// Start watching roothash blocks.
-	blocksCh, blocksSub, err := s.roothash.WatchBlocks(s.runtimeID)
+	blocksCh, blocksSub, err := s.roothash.WatchBlocks(s.runtime.ID())
 	if err != nil {
 		s.Logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
@@ -68,33 +84,11 @@ func (s *Service) worker() {
 	}
 	defer blocksSub.Close()
 
-	// Start watching pruned blocks.
-	prunedCh, pruneSub, err := s.roothash.WatchPrunedBlocks()
-	if err != nil {
-		s.Logger.Error("failed to subscribe to pruned roothash blocks",
-			"err", err,
-		)
-		return
-	}
-	defer pruneSub.Close()
-
 	for {
 		select {
 		case <-s.stopCh:
-			logger.Info("stop requested, terminating indexer")
+			s.Logger.Info("stop requested, terminating indexer")
 			return
-		case pruned := <-prunedCh:
-			// New blocks to prune from the index.
-			if !s.runtimeID.Equal(pruned.RuntimeID) {
-				continue
-			}
-
-			if err = s.backend.Prune(context.TODO(), pruned.RuntimeID, pruned.Round); err != nil {
-				logger.Error("failed to prune index",
-					"round", pruned.Round,
-				)
-				continue
-			}
 		case annBlk := <-blocksCh:
 			// New blocks to index.
 			blk := annBlk.Block
@@ -112,7 +106,7 @@ func (s *Service) worker() {
 				off.MaxElapsedTime = storageRetryTimeout
 
 				err = backoff.Retry(func() error {
-					ctx, cancel := context.WithTimeout(context.TODO(), storageRequestTimeout)
+					bctx, cancel := context.WithTimeout(ctx, storageRequestTimeout)
 					defer cancel()
 
 					ioRoot := storage.Root{
@@ -124,12 +118,12 @@ func (s *Service) worker() {
 					tree := transaction.NewTree(s.storage, ioRoot)
 					defer tree.Close()
 
-					txs, err = tree.GetTransactions(ctx)
+					txs, err = tree.GetTransactions(bctx)
 					if err != nil {
 						return err
 					}
 
-					tags, err = tree.GetTags(ctx)
+					tags, err = tree.GetTags(bctx)
 					if err != nil {
 						return err
 					}
@@ -138,7 +132,7 @@ func (s *Service) worker() {
 				}, off)
 
 				if err != nil {
-					logger.Error("can't get I/O root from storage",
+					s.Logger.Error("can't get I/O root from storage",
 						"err", err,
 						"round", blk.Header.Round,
 					)
@@ -147,14 +141,14 @@ func (s *Service) worker() {
 			}
 
 			if err = s.backend.Index(
-				context.TODO(),
-				s.runtimeID,
+				ctx,
+				s.runtime.ID(),
 				blk.Header.Round,
 				blk.Header.EncodedHash(),
 				txs,
 				tags,
 			); err != nil {
-				logger.Error("failed to index tags",
+				s.Logger.Error("failed to index tags",
 					"err", err,
 					"round", blk.Header.Round,
 				)
@@ -175,18 +169,27 @@ func (s *Service) Stop() {
 
 // New creates a new indexer service.
 func New(
-	id signature.PublicKey,
+	runtime runtimeRegistry.Runtime,
 	backend Backend,
 	roothash roothash.Backend,
 	storage storage.Backend,
 ) (*Service, error) {
-	svc := service.NewBaseBackgroundService("client/indexer")
-	return &Service{
-		BaseBackgroundService: *svc,
-		runtimeID:             id,
+	s := &Service{
+		BaseBackgroundService: *service.NewBaseBackgroundService("client/indexer"),
+		runtime:               runtime,
 		backend:               backend,
 		roothash:              roothash,
 		storage:               storage,
 		stopCh:                make(chan struct{}),
-	}, nil
+	}
+	s.Logger = s.Logger.With("runtime_id", s.runtime.ID().String())
+
+	// Register prune handler.
+	runtime.History().Pruner().RegisterHandler(&pruneHandler{
+		logger:    s.Logger,
+		backend:   s.backend,
+		runtimeID: s.runtime.ID(),
+	})
+
+	return s, nil
 }

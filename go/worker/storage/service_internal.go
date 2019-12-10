@@ -28,5 +28,5 @@ func (w *Worker) ForceFinalize(ctx context.Context, request *api.ForceFinalizeRe
 		return api.ErrRuntimeNotFound
 	}
 
-	return node.ForceFinalize(ctx, request.RuntimeID, request.Round)
+	return node.ForceFinalize(ctx, request.Round)
 }

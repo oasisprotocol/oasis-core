@@ -1254,5 +1254,4 @@ func init() {
 
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(db.Flags)
-	Flags.AddFlagSet(tmroothash.Flags)
 }

@@ -20,6 +20,7 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
+	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 	storageWorkerAPI "github.com/oasislabs/oasis-core/go/worker/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/storage/committee"
@@ -127,8 +128,8 @@ func New(
 		}
 
 		// Start storage node for every runtime.
-		for _, runtimeID := range s.commonWorker.GetConfig().Runtimes {
-			if err := s.registerRuntime(commonWorker.GetRuntime(runtimeID)); err != nil {
+		for _, rt := range s.commonWorker.GetRuntimes() {
+			if err := s.registerRuntime(rt); err != nil {
 				return nil, err
 			}
 		}
@@ -140,14 +141,13 @@ func New(
 	return s, nil
 }
 
-func (s *Worker) registerRuntime(rt *workerCommon.Runtime) error {
-	commonNode := rt.GetNode()
+func (s *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	node, err := committee.NewNode(commonNode, s.grpcPolicy, s.fetchPool, s.watchState)
 	if err != nil {
 		return err
 	}
 	commonNode.AddHooks(node)
-	s.runtimes[commonNode.RuntimeID] = node
+	s.runtimes[commonNode.Runtime.ID()] = node
 	return nil
 }
 

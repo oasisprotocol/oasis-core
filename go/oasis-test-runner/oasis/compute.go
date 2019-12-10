@@ -69,7 +69,6 @@ func (worker *Compute) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
-		roothashTendermintIndexBlocks().
 		storageBackend(storageClient.BackendName).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).

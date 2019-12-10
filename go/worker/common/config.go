@@ -4,6 +4,7 @@ import (
 	tlsPkg "crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"time"
 
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -13,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	runtimeHelpers "github.com/oasislabs/oasis-core/go/runtime"
 	"github.com/oasislabs/oasis-core/go/worker/common/configparser"
 )
 
@@ -29,14 +31,14 @@ var (
 	// the worker should connect to.
 	CfgSentryCertFiles = "worker.sentry.cert_file"
 
-	// CfgRuntimeID configures the worker runtime ID(s).
-	CfgRuntimeID = "worker.runtime.id"
 	// CfgRuntimeBackend configures the runtime backend.
 	CfgRuntimeBackend = "worker.runtime.backend"
 	// CfgRuntimeLoader configures the runtime loader binary.
 	CfgRuntimeLoader = "worker.runtime.loader"
 	// CfgRuntimeBinary confgures the runtime binary.
 	CfgRuntimeBinary = "worker.runtime.binary"
+
+	cfgStorageCommitTimeout = "worker.storage_commit_timeout"
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -48,12 +50,13 @@ type Config struct { // nolint: maligned
 	ClientAddresses    []node.Address
 	SentryAddresses    []node.Address
 	SentryCertificates []*x509.Certificate
-	Runtimes           []signature.PublicKey
 
 	// RuntimeHost contains configuration for a worker that hosts
 	// runtimes. It may be nil if the worker is not configured to
 	// host runtimes.
 	RuntimeHost *RuntimeHostConfig
+
+	StorageCommitTimeout time.Duration
 
 	logger *logging.Logger
 }
@@ -135,25 +138,20 @@ func newConfig() (*Config, error) {
 		sentryCerts = append(sentryCerts, x509Cert)
 	}
 
-	runtimes, err := configparser.GetRuntimes(viper.GetStringSlice(CfgRuntimeID))
-	if err != nil {
-		return nil, err
-	}
-
 	cfg := Config{
-		ClientPort:         uint16(viper.GetInt(CfgClientPort)),
-		ClientAddresses:    clientAddresses,
-		SentryAddresses:    sentryAddresses,
-		SentryCertificates: sentryCerts,
-		Runtimes:           runtimes,
-		logger:             logging.GetLogger("worker/config"),
+		ClientPort:           uint16(viper.GetInt(CfgClientPort)),
+		ClientAddresses:      clientAddresses,
+		SentryAddresses:      sentryAddresses,
+		SentryCertificates:   sentryCerts,
+		StorageCommitTimeout: viper.GetDuration(cfgStorageCommitTimeout),
+		logger:               logging.GetLogger("worker/config"),
 	}
 
 	// Check if runtime host is configured for the runtimes.
 	if runtimeLoader := viper.GetString(CfgRuntimeLoader); runtimeLoader != "" {
-		runtimeBinaries := viper.GetStringSlice(CfgRuntimeBinary)
-		if len(runtimeBinaries) != len(runtimes) {
-			return nil, fmt.Errorf("runtime binary/id count mismatch")
+		runtimeBinaries, err := runtimeHelpers.ParseRuntimeMap(viper.GetStringSlice(CfgRuntimeBinary))
+		if err != nil {
+			return nil, err
 		}
 
 		cfg.RuntimeHost = &RuntimeHostConfig{
@@ -162,12 +160,10 @@ func newConfig() (*Config, error) {
 			Runtimes: make(map[signature.PublicKey]RuntimeHostRuntimeConfig),
 		}
 
-		for idx, runtimeBinary := range runtimeBinaries {
-			runtimeID := runtimes[idx]
-
-			cfg.RuntimeHost.Runtimes[runtimeID] = RuntimeHostRuntimeConfig{
-				ID:     runtimeID,
-				Binary: runtimeBinary,
+		for id, path := range runtimeBinaries {
+			cfg.RuntimeHost.Runtimes[id] = RuntimeHostRuntimeConfig{
+				ID:     id,
+				Binary: path,
 			}
 		}
 	}
@@ -182,11 +178,11 @@ func init() {
 	Flags.StringSlice(CfgSentryAddresses, []string{}, fmt.Sprintf("Address(es) of sentry node(s) to connect to (each address should have a corresponding certificate file set in %s)", CfgSentryCertFiles))
 	Flags.StringSlice(CfgSentryCertFiles, []string{}, fmt.Sprintf("Certificate file(s) of sentry node(s) to connect to (each certificate file should have a corresponding address set in %s)", CfgSentryAddresses))
 
-	Flags.StringSlice(CfgRuntimeID, []string{}, "List of IDs (hex) of runtimes that this node will participate in")
-
 	Flags.String(CfgRuntimeBackend, "sandboxed", "Runtime worker host backend")
 	Flags.String(CfgRuntimeLoader, "", "Path to runtime loader binary")
-	Flags.StringSlice(CfgRuntimeBinary, nil, "Path to runtime binary")
+	Flags.StringSlice(CfgRuntimeBinary, nil, "Path to runtime binary (format: <runtime-ID>:<path>)")
+
+	Flags.Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 
 	_ = viper.BindPFlags(Flags)
 }

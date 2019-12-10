@@ -114,7 +114,7 @@ func (n *Node) WatchStateTransitions() (<-chan NodeState, *pubsub.Subscription) 
 
 func (n *Node) getMetricLabels() prometheus.Labels {
 	return prometheus.Labels{
-		"runtime": n.commonNode.RuntimeID.String(),
+		"runtime": n.commonNode.Runtime.ID().String(),
 	}
 }
 
@@ -369,7 +369,13 @@ func (n *Node) worker() {
 	n.logger.Info("starting committee node")
 
 	// Initialize transaction scheduler's algorithm.
-	runtime := n.commonNode.Runtime
+	runtime, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to fetch runtime registry descriptor",
+			"err", err,
+		)
+		return
+	}
 	txnAlgorithm, err := txnSchedulerAlgorithm.New(
 		runtime.TxnScheduler.Algorithm,
 		runtime.TxnScheduler.MaxBatchSize,
@@ -393,7 +399,7 @@ func (n *Node) worker() {
 	n.algorithmMutex.Unlock()
 
 	// Check incoming queue every FlushTimeout.
-	scheduleTicker := time.NewTicker(n.commonNode.Runtime.TxnScheduler.BatchFlushTimeout)
+	scheduleTicker := time.NewTicker(runtime.TxnScheduler.BatchFlushTimeout)
 	defer scheduleTicker.Stop()
 
 	// We are initialized.
@@ -431,7 +437,7 @@ func NewNode(
 		initCh:           make(chan struct{}),
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
-		logger:           logging.GetLogger("worker/txnscheduler/committee").With("runtime_id", commonNode.RuntimeID),
+		logger:           logging.GetLogger("worker/txnscheduler/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
 	return n, nil

@@ -11,14 +11,13 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
-	roothashTm "github.com/oasislabs/oasis-core/go/consensus/tendermint/roothash"
 	"github.com/oasislabs/oasis-core/go/ias"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
-	"github.com/oasislabs/oasis-core/go/runtime/client"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	"github.com/oasislabs/oasis-core/go/storage"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
@@ -113,14 +112,16 @@ func (args *argBuilder) tendermintDebugAddrBookLenient() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) roothashTendermintIndexBlocks() *argBuilder {
-	args.vec = append(args.vec, "--"+roothashTm.CfgIndexBlocks)
-	return args
-}
-
 func (args *argBuilder) storageBackend(backend string) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + storage.CfgBackend, backend,
+	}...)
+	return args
+}
+
+func (args *argBuilder) runtimeSupported(id signature.PublicKey) *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + runtimeRegistry.CfgSupported, id.String(),
 	}...)
 	return args
 }
@@ -133,9 +134,9 @@ func (args *argBuilder) supplementarysanityEnabled() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) clientIndexRuntimes(id signature.PublicKey) *argBuilder {
+func (args *argBuilder) runtimeHistoryTagIndexerBackend(backend string) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + client.CfgIndexRuntimes, id.String(),
+		"--" + runtimeRegistry.CfgHistoryTagIndexerBackend, backend,
 	}...)
 	return args
 }
@@ -172,13 +173,6 @@ func (args *argBuilder) workerP2pPort(port uint16) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerRuntimeID(id signature.PublicKey) *argBuilder {
-	args.vec = append(args.vec, []string{
-		"--" + workerCommon.CfgRuntimeID, id.String(),
-	}...)
-	return args
-}
-
 func (args *argBuilder) workerRuntimeBackend(backend string) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + workerCommon.CfgRuntimeBackend, backend,
@@ -193,9 +187,9 @@ func (args *argBuilder) workerRuntimeLoader(fn string) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerRuntimeBinary(fn string) *argBuilder {
+func (args *argBuilder) workerRuntimeBinary(id signature.PublicKey, fn string) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + workerCommon.CfgRuntimeBinary, fn,
+		"--" + workerCommon.CfgRuntimeBinary, id.String() + ":" + fn,
 	}...)
 	return args
 }
@@ -341,8 +335,8 @@ func (args *argBuilder) appendNetwork(net *Network) *argBuilder {
 }
 
 func (args *argBuilder) appendComputeNodeRuntime(rt *Runtime) *argBuilder {
-	args = args.workerRuntimeID(rt.id).
-		workerRuntimeBinary(rt.binary)
+	args = args.runtimeSupported(rt.id).
+		workerRuntimeBinary(rt.id, rt.binary)
 	return args
 }
 

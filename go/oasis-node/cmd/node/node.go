@@ -49,6 +49,7 @@ import (
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client"
 	runtimeClientAPI "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/sentry"
 	sentryAPI "github.com/oasislabs/oasis-core/go/sentry/api"
@@ -100,26 +101,28 @@ type Node struct {
 
 	commonStore *persistent.CommonStore
 
+	NodeController  controlAPI.NodeController
+	DebugController controlAPI.DebugController
+
 	Consensus consensusAPI.Backend
 
-	Genesis       genesisAPI.Provider
-	Identity      *identity.Identity
-	Beacon        beacon.Backend
-	Epochtime     epochtime.Backend
-	Registry      registryAPI.Backend
-	RootHash      roothash.Backend
-	Scheduler     scheduler.Backend
-	Sentry        sentryAPI.Backend
-	Staking       stakingAPI.Backend
-	Storage       storageAPI.Backend
-	IAS           iasAPI.Endpoint
-	RuntimeClient runtimeClientAPI.RuntimeClient
+	Genesis   genesisAPI.Provider
+	Identity  *identity.Identity
+	Beacon    beacon.Backend
+	Epochtime epochtime.Backend
+	Registry  registryAPI.Backend
+	RootHash  roothash.Backend
+	Scheduler scheduler.Backend
+	Sentry    sentryAPI.Backend
+	Staking   stakingAPI.Backend
+	Storage   storageAPI.Backend
+	IAS       iasAPI.Endpoint
 
 	KeyManager       keymanagerAPI.Backend
 	KeyManagerClient *keymanagerClient.Client
 
-	NodeController  controlAPI.NodeController
-	DebugController controlAPI.DebugController
+	RuntimeRegistry runtimeRegistry.Registry
+	RuntimeClient   runtimeClientAPI.RuntimeClient
 
 	CommonWorker               *workerCommon.Worker
 	ComputeWorker              *compute.Worker
@@ -242,6 +245,7 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		n.IAS,
 		n.KeyManager,
 		n.KeyManagerClient,
+		n.RuntimeRegistry,
 		genesisDoc,
 	)
 	if err != nil {
@@ -266,6 +270,7 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		&workerCommonCfg,
 		n.commonStore,
 		n, // the delegate to be called on registration shutdown
+		n.RuntimeRegistry,
 	)
 	if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 		registration.DebugForceAllowUnroutableAddresses()
@@ -676,6 +681,13 @@ func newNode(testNode bool) (*Node, error) {
 
 	logger.Info("starting Oasis node")
 
+	// Initialize the node's runtime registry.
+	node.RuntimeRegistry, err = runtimeRegistry.New(node.svcMgr.Ctx, cmdCommon.DataDir(), node.Consensus, node.Storage)
+	if err != nil {
+		return nil, err
+	}
+	node.svcMgr.RegisterCleanupOnly(node.RuntimeRegistry, "runtime registry")
+
 	// Initialize the key manager client service.
 	node.KeyManagerClient, err = keymanagerClient.New(node.KeyManager, node.Registry, node.Identity)
 	if err != nil {
@@ -695,6 +707,7 @@ func newNode(testNode bool) (*Node, error) {
 		node.Registry,
 		node.svcTmnt,
 		node.KeyManagerClient,
+		node.RuntimeRegistry,
 	)
 	if err != nil {
 		return nil, err
@@ -777,6 +790,7 @@ func init() {
 		tendermint.Flags,
 		ias.Flags,
 		workerKeymanager.Flags,
+		runtimeRegistry.Flags,
 		runtimeClient.Flags,
 		compute.Flags,
 		p2p.Flags,

@@ -14,12 +14,10 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/persistent"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/workerpool"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	roothashApi "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -184,7 +182,7 @@ func NewNode(
 	node := &Node{
 		commonNode: commonNode,
 
-		logger: logging.GetLogger("worker/storage/committee").With("runtime_id", commonNode.RuntimeID),
+		logger: logging.GetLogger("worker/storage/committee").With("runtime_id", commonNode.Runtime.ID()),
 
 		localStorage: localStorage,
 		grpcPolicy:   grpcPolicy,
@@ -202,7 +200,8 @@ func NewNode(
 	}
 
 	node.syncedState.LastBlock.Round = defaultUndefinedRound
-	err := store.GetCBOR(commonNode.RuntimeID[:], &node.syncedState)
+	rtID := commonNode.Runtime.ID()
+	err := store.GetCBOR(rtID[:], &node.syncedState)
 	if err != nil && err != persistent.ErrNotFound {
 		return nil, err
 	}
@@ -215,12 +214,23 @@ func NewNode(
 		return nil, err
 	}
 	node.storageClient = scl.(storageApi.ClientBackend)
-	if err := node.storageClient.WatchRuntime(commonNode.RuntimeID); err != nil {
+	if err := node.storageClient.WatchRuntime(commonNode.Runtime.ID()); err != nil {
 		node.logger.Error("error watching storage runtime",
 			"err", err,
 		)
 		return nil, err
 	}
+
+	// Register prune handler.
+	var ns common.Namespace
+	runtimeID := commonNode.Runtime.ID()
+	copy(ns[:], runtimeID[:])
+
+	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{
+		logger:    node.logger,
+		node:      node,
+		namespace: ns,
+	})
 
 	return node, nil
 }
@@ -289,7 +299,7 @@ func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
 		n.logger.Error("couldn't get nodes from registry", "err", err)
 	}
 	// Update storage gRPC access policy for the current runtime.
-	n.grpcPolicy.SetAccessPolicy(policy, n.commonNode.RuntimeID)
+	n.grpcPolicy.SetAccessPolicy(policy, n.commonNode.Runtime.ID())
 	n.logger.Debug("set new storage gRPC access policy", "policy", policy)
 }
 
@@ -322,19 +332,18 @@ func (n *Node) GetLastSynced() (uint64, urkelNode.Root, urkelNode.Root) {
 }
 
 // ForceFinalize forces a storage finalization for the given round.
-func (n *Node) ForceFinalize(ctx context.Context, runtimeID signature.PublicKey, round uint64) error {
+func (n *Node) ForceFinalize(ctx context.Context, round uint64) error {
 	n.logger.Debug("forcing round finalization",
 		"round", round,
-		"runtime_id", runtimeID,
 	)
 
 	var block *block.Block
 	var err error
 
 	if round == RoundLatest {
-		block, err = n.commonNode.Roothash.GetLatestBlock(ctx, runtimeID, consensus.HeightLatest)
+		block, err = n.commonNode.Roothash.GetLatestBlock(ctx, n.commonNode.Runtime.ID(), consensus.HeightLatest)
 	} else {
-		block, err = n.commonNode.Roothash.GetBlock(ctx, runtimeID, round)
+		block, err = n.commonNode.Runtime.History().GetBlock(ctx, round)
 	}
 
 	if err != nil {
@@ -446,22 +455,12 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	n.logger.Info("starting committee node")
 
-	genesisBlock, err := n.commonNode.Roothash.GetGenesisBlock(n.ctx, n.commonNode.RuntimeID, consensus.HeightLatest)
+	genesisBlock, err := n.commonNode.Roothash.GetGenesisBlock(n.ctx, n.commonNode.Runtime.ID(), consensus.HeightLatest)
 	if err != nil {
 		n.logger.Error("can't retrieve genesis block", "err", err)
 		return
 	}
 	n.undefinedRound = genesisBlock.Header.Round - 1
-
-	// Subscribe to pruned roothash blocks.
-	var pruneCh <-chan *roothashApi.PrunedBlock
-	var pruneSub *pubsub.Subscription
-	pruneCh, pruneSub, err = n.commonNode.Roothash.WatchPrunedBlocks()
-	if err != nil {
-		n.logger.Error("failed to watch pruned blocks", "err", err)
-		return
-	}
-	defer pruneSub.Close()
 
 	var fetcherGroup sync.WaitGroup
 
@@ -558,20 +557,6 @@ mainLoop:
 		}
 
 		select {
-		case prunedBlk := <-pruneCh:
-			n.logger.Debug("pruning storage for round", "round", prunedBlk.Round)
-
-			// Prune given block.
-			var ns common.Namespace
-			copy(ns[:], prunedBlk.RuntimeID[:])
-
-			if _, err = n.localStorage.Prune(n.ctx, ns, prunedBlk.Round); err != nil {
-				n.logger.Error("failed to prune block",
-					"err", err,
-				)
-				continue mainLoop
-			}
-
 		case inBlk := <-n.blockCh.Out():
 			blk := inBlk.(*block.Block)
 			n.logger.Debug("incoming block",
@@ -603,7 +588,7 @@ mainLoop:
 					continue
 				}
 				var oldBlock *block.Block
-				oldBlock, err = n.commonNode.Roothash.GetBlock(n.ctx, n.commonNode.RuntimeID, i)
+				oldBlock, err = n.commonNode.Runtime.History().GetBlock(n.ctx, i)
 				if err != nil {
 					n.logger.Error("can't get block for round",
 						"err", err,
@@ -687,7 +672,8 @@ mainLoop:
 			n.syncedState.LastBlock.Round = finalized.Round
 			n.syncedState.LastBlock.IORoot = finalized.IORoot
 			n.syncedState.LastBlock.StateRoot = finalized.StateRoot
-			err = n.stateStore.PutCBOR(n.commonNode.RuntimeID[:], &n.syncedState)
+			rtID := n.commonNode.Runtime.ID()
+			err = n.stateStore.PutCBOR(rtID[:], &n.syncedState)
 			n.syncedLock.Unlock()
 			cachedLastRound = finalized.Round
 			if err != nil {
@@ -703,4 +689,35 @@ mainLoop:
 	// blockCh will be garbage-collected without being closed. It can potentially still contain
 	// some new blocks, but only as many as were already in-flight at the point when the main
 	// context was canceled.
+}
+
+type pruneHandler struct {
+	logger    *logging.Logger
+	node      *Node
+	namespace common.Namespace
+}
+
+func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
+	// Make sure we never prune past what was synced.
+	lastSycnedRound, _, _ := p.node.GetLastSynced()
+
+	for _, round := range rounds {
+		if round >= lastSycnedRound {
+			return fmt.Errorf("worker/storage: tried to prune past last synced round (last synced: %d)",
+				lastSycnedRound,
+			)
+		}
+
+		p.logger.Debug("pruning storage for round", "round", round)
+
+		// Prune given block.
+		if _, err := p.node.localStorage.Prune(ctx, p.namespace, round); err != nil {
+			p.logger.Error("failed to prune block",
+				"err", err,
+			)
+			return err
+		}
+	}
+
+	return nil
 }

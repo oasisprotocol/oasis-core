@@ -24,7 +24,6 @@ require (
 	github.com/eapache/channels v1.1.0
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
-	github.com/etcd-io/bbolt v1.3.3
 	github.com/fxamacker/cbor v1.3.2
 	github.com/glycerine/goconvey v0.0.0-20190410193231-58a59202ab31 // indirect
 	github.com/go-kit/kit v0.9.0

@@ -506,7 +506,8 @@ func (w *Worker) worker() {
 				"runtime_id", rt.ID,
 			)
 
-			node, err := w.commonWorker.NewUnmanagedCommitteeNode(rt.ID, false)
+			runtimeUnmg := w.commonWorker.RuntimeRegistry.NewUnmanagedRuntime(rt.ID)
+			node, err := w.commonWorker.NewUnmanagedCommitteeNode(runtimeUnmg, false)
 			if err != nil {
 				w.logger.Error("unable to create new committee node",
 					"runtime_id", rt.ID,
@@ -543,7 +544,7 @@ func (w *Worker) worker() {
 			clientRuntimes[rt.ID] = crw
 		case crw := <-clientRuntimesQuitCh:
 			w.logger.Error("client runtime watcher quit unexpectedly, terminating",
-				"runtme_id", crw.node.RuntimeID,
+				"runtme_id", crw.node.Runtime.ID(),
 			)
 			return
 		case <-w.stopCh:
@@ -597,7 +598,7 @@ func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committee
 		kmNodesPolicy.AddRulesForNodeRoles(&policy, kmNodes, node.RoleKeyManager)
 	}
 
-	crw.w.grpcPolicy.SetAccessPolicy(policy, crw.node.RuntimeID)
+	crw.w.grpcPolicy.SetAccessPolicy(policy, crw.node.Runtime.ID())
 	crw.w.logger.Debug("worker/keymanager: new access policy in effect", "policy", policy)
 }
 

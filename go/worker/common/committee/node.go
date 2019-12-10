@@ -7,7 +7,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
@@ -16,6 +15,7 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/host"
@@ -77,8 +77,7 @@ type NodeHooks interface {
 
 // Node is a committee node.
 type Node struct {
-	RuntimeID signature.PublicKey
-	Runtime   *registry.Runtime
+	Runtime runtimeRegistry.Runtime
 
 	Identity         *identity.Identity
 	KeyManager       keymanagerApi.Backend
@@ -148,7 +147,7 @@ func (n *Node) AddHooks(hooks NodeHooks) {
 
 func (n *Node) getMetricLabels() prometheus.Labels {
 	return prometheus.Labels{
-		"runtime": n.RuntimeID.String(),
+		"runtime": n.Runtime.ID().String(),
 	}
 }
 
@@ -249,48 +248,6 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 	}
 }
 
-// waitForRuntime waits for the following:
-// - that the consensus service has finished initial synchronization,
-// - that the runtime for which this worker is running has been registered
-//   in the registry.
-func (n *Node) waitForRuntime() error {
-	// Delay starting of committee node until after the consensus service
-	// has finished initial synchronization, if applicable.
-	if n.Consensus != nil {
-		n.logger.Info("delaying committee node start until after initial synchronization")
-		select {
-		case <-n.quitCh:
-			return context.Canceled
-		case <-n.Consensus.Synced():
-		}
-	}
-
-	// Wait for the runtime to be registered.
-	n.logger.Info("delaying committee node start until the runtime is registered")
-	ch, sub, err := n.Registry.WatchRuntimes(n.ctx)
-	if err != nil {
-		n.logger.Error("failed to watch runtimes",
-			"err", err,
-		)
-		return err
-	}
-	defer sub.Close()
-	for {
-		select {
-		case <-n.stopCh:
-			return context.Canceled
-		case rt := <-ch:
-			if rt.ID.Equal(n.RuntimeID) {
-				n.logger.Info("runtime is registered")
-
-				// Save runtime descriptor.
-				n.Runtime = rt
-				return nil
-			}
-		}
-	}
-}
-
 func (n *Node) worker() {
 	n.logger.Info("starting committee node")
 
@@ -298,12 +255,15 @@ func (n *Node) worker() {
 	defer (n.cancelCtx)()
 
 	// Wait for the runtime.
-	if err := n.waitForRuntime(); err != nil {
+	if _, err := n.Runtime.RegistryDescriptor(n.ctx); err != nil {
+		n.logger.Error("failed to wait for registry descriptor",
+			"err", err,
+		)
 		return
 	}
 
 	// Start watching roothash blocks.
-	blocks, blocksSub, err := n.Roothash.WatchBlocks(n.RuntimeID)
+	blocks, blocksSub, err := n.Roothash.WatchBlocks(n.Runtime.ID())
 	if err != nil {
 		n.logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
@@ -313,7 +273,7 @@ func (n *Node) worker() {
 	defer blocksSub.Close()
 
 	// Start watching roothash events.
-	events, eventsSub, err := n.Roothash.WatchEvents(n.RuntimeID)
+	events, eventsSub, err := n.Roothash.WatchEvents(n.Runtime.ID())
 	if err != nil {
 		n.logger.Error("failed to subscribe to roothash events",
 			"err", err,
@@ -349,7 +309,7 @@ func (n *Node) worker() {
 }
 
 func NewNode(
-	runtimeID signature.PublicKey,
+	runtime runtimeRegistry.Runtime,
 	identity *identity.Identity,
 	keymanager keymanagerApi.Backend,
 	keymanagerClient *keymanagerClient.Client,
@@ -368,7 +328,7 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		RuntimeID:        runtimeID,
+		Runtime:          runtime,
 		Identity:         identity,
 		KeyManager:       keymanager,
 		KeyManagerClient: keymanagerClient,
@@ -383,10 +343,10 @@ func NewNode(
 		stopCh:           make(chan struct{}),
 		quitCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
-		logger:           logging.GetLogger("worker/common/committee").With("runtime_id", runtimeID),
+		logger:           logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
 	}
 
-	group, err := NewGroup(identity, runtimeID, n, registry, roothash, scheduler, p2p)
+	group, err := NewGroup(identity, runtime.ID(), n, registry, roothash, scheduler, p2p)
 	if err != nil {
 		return nil, err
 	}

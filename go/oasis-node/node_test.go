@@ -22,7 +22,6 @@ import (
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	tendermintAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/roothash"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -32,7 +31,9 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	registryTests "github.com/oasislabs/oasis-core/go/registry/tests"
 	roothashTests "github.com/oasislabs/oasis-core/go/roothash/tests"
+	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client"
 	clientTests "github.com/oasislabs/oasis-core/go/runtime/client/tests"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	schedulerTests "github.com/oasislabs/oasis-core/go/scheduler/tests"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
@@ -66,12 +67,10 @@ var (
 		{"log.level.default", "DEBUG"},
 		{cmdCommonFlags.CfgConsensusValidator, true},
 		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
-		{roothash.CfgIndexBlocks, true},
 		{storage.CfgBackend, "badger"},
 		{computeWorker.CfgWorkerEnabled, true},
 		{workerCommon.CfgRuntimeBackend, "mock"},
 		{workerCommon.CfgRuntimeLoader, "mock-runtime"},
-		{workerCommon.CfgRuntimeBinary, "mock-runtime"},
 		{workerCommon.CfgClientPort, workerClientPort},
 		{storageWorker.CfgWorkerEnabled, true},
 		{txnscheduler.CfgWorkerEnabled, true},
@@ -154,8 +153,9 @@ func newTestNode(t *testing.T) *testNode {
 
 	viper.Set("datadir", dataDir)
 	viper.Set("log.file", filepath.Join(dataDir, "test-node.log"))
-	viper.Set("worker.runtime.id", testRuntimeID.String())
-	viper.Set("client.indexer.runtimes", []string{testRuntimeID.String()})
+	viper.Set(runtimeRegistry.CfgSupported, testRuntimeID.String())
+	viper.Set(runtimeClient.CfgIndexerBackend, "bleve")
+	viper.Set(workerCommon.CfgRuntimeBinary, testRuntimeID.String()+":mock-runtime")
 	viper.Set("worker.registration.entity", filepath.Join(dataDir, "entity.json"))
 	for _, kv := range testNodeStaticConfig {
 		viper.Set(kv.key, kv.value)
@@ -275,13 +275,12 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	// Get the runtime and the corresponding compute committee node instance.
 	computeRT := node.ComputeWorker.GetRuntime(testRuntime.ID)
 	require.NotNil(t, computeRT)
-	node.computeCommitteeNode = computeRT.GetNode()
+	node.computeCommitteeNode = computeRT
 
 	// Get the runtime and the corresponding transaction scheduler committee node instance.
-	require.Equal(node.TransactionSchedulerWorker.GetConfig().Runtimes[0].ID, testRuntime.ID)
 	txnschedulerRT := node.TransactionSchedulerWorker.GetRuntime(testRuntime.ID)
 	require.NotNil(t, txnschedulerRT)
-	node.txnschedulerCommitteeNode = txnschedulerRT.GetNode()
+	node.txnschedulerCommitteeNode = txnschedulerRT
 }
 
 func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
