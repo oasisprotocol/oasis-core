@@ -786,7 +786,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 			return nil, err
 		}
 
-		// Add invalid Re-Registration with changed Roles field.
+		// Add invalid Re-Registration with changed Runtimes field.
 		testRuntimeSigner := memorySigner.NewTestSigner("invalid-registration-runtime-seed")
 		newRuntimes := append([]*node.Runtime(nil), thisNodeRuntimes...)
 		newRuntimes = append(newRuntimes, &node.Runtime{ID: testRuntimeSigner.Public()})
