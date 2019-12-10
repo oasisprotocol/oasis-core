@@ -165,9 +165,11 @@ func testRegistryEntityNodes( // nolint: gocyclo
 					require.Equal(err, api.ErrInvalidArgument)
 				}
 
-				err = v.Register(consensus, v.SignedInvalidRegistration7)
-				require.Error(err, "register node without runtimes")
-				require.Equal(err, api.ErrInvalidArgument)
+				if v.Node.Roles&node.RoleComputeWorker != 0 {
+					err = v.Register(consensus, v.SignedInvalidRegistration7)
+					require.Error(err, "register node without runtimes")
+					require.Equal(err, api.ErrInvalidArgument)
+				}
 
 				err = v.Register(consensus, v.SignedInvalidRegistration8)
 				require.Error(err, "register node with invalid runtimes")
