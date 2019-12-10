@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	"github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 )
@@ -153,8 +154,8 @@ type MetricsMonitorable interface {
 
 // Genesis is the roothash genesis state.
 type Genesis struct {
-	// Blocks is the per-runtime map of genesis blocks.
-	Blocks map[signature.PublicKey]*block.Block `json:"blocks,omitempty"`
+	// RuntimeStates is the per-runtime map of genesis blocks.
+	RuntimeStates map[signature.PublicKey]*api.RuntimeGenesis `json:"runtime_states,omitempty"`
 }
 
 // SanityCheckBlocks examines the blocks table.
@@ -169,42 +170,13 @@ func SanityCheckBlocks(blocks map[signature.PublicKey]*block.Block) error {
 	return nil
 }
 
-// checkBlocksForGenesis examines the blocks for extra properties specific to genesis state.
-func checkBlocksForGenesis(blocks map[signature.PublicKey]*block.Block) error {
-	for _, blk := range blocks {
-		hdr := blk.Header
-
-		if hdr.HeaderType != block.Normal {
-			return fmt.Errorf("roothash: sanity check failed: invalid block header type %v", hdr.HeaderType)
-		}
-
-		if !hdr.PreviousHash.IsEmpty() {
-			return fmt.Errorf("roothash: sanity check failed: non-empty previous hash")
-		}
-
-		if len(hdr.StorageSignatures) != 0 {
-			return fmt.Errorf("roothash: sanity check failed: non-empty storage signatures")
-		}
-
-		if len(hdr.Messages) != 0 {
-			return fmt.Errorf("roothash: sanity check failed: non-empty roothash messages")
-		}
-	}
-	return nil
-}
-
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {
 	// Check blocks.
-	err := SanityCheckBlocks(g.Blocks)
-	if err != nil {
-		return err
+	for _, rtg := range g.RuntimeStates {
+		if err := rtg.SanityCheck(true); err != nil {
+			return err
+		}
 	}
-
-	err = checkBlocksForGenesis(g.Blocks)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }

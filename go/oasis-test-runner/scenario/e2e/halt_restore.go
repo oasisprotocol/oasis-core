@@ -183,6 +183,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		sc.logger.Error("scenario/e2e/halt_restore: failed getting genesis file provider",
 			"err", err,
+			"genesis_file", files[0],
 		)
 		return err
 	}

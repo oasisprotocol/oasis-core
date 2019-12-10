@@ -151,7 +151,11 @@ macro_rules! impl_bytes {
             where
                 S: ::serde::Serializer,
             {
-                serializer.serialize_bytes(self.as_ref())
+                if serializer.is_human_readable() {
+                    serializer.serialize_str(&base64::encode(&self))
+                } else {
+                    serializer.serialize_bytes(self.as_ref())
+                }
             }
         }
 
@@ -171,37 +175,97 @@ macro_rules! impl_bytes {
                         &self,
                         formatter: &mut ::std::fmt::Formatter,
                     ) -> ::std::fmt::Result {
-                        formatter.write_str("bytes or sequence of u8")
+                        formatter.write_str("bytes or string expected")
                     }
 
-                    fn visit_seq<A>(self, mut seq: A) -> Result<$name, A::Error>
-                    where
-                        A: ::serde::de::SeqAccess<'de>,
-                    {
-                        let mut array = [0; $size];
-                        for i in 0..$size {
-                            array[i] = seq
-                                .next_element()?
-                                .ok_or_else(|| ::serde::de::Error::invalid_length(i, &self))?;
-                        }
-                        Ok($name(array))
-                    }
-
-                    fn visit_bytes<E>(self, data: &[u8]) -> Result<$name, E>
+                    fn visit_str<E>(self, data: &str) -> Result<$name, E>
                     where
                         E: ::serde::de::Error,
                     {
                         let mut array = [0; $size];
+                        let bytes = match base64::decode(data) {
+                            Ok(b) => b,
+                            Err(err) => return match err {
+                                base64::DecodeError::InvalidByte(pos, v) => Err(::serde::de::Error::custom(format!("invalid base64-encoded string: invalid byte '{}' at position {}", v, pos))),
+                                base64::DecodeError::InvalidLength => Err(::serde::de::Error::custom(format!("invalid base64-encoded string: invalid length {}", data.len()))),
+                                base64::DecodeError::InvalidLastSymbol(pos, v) => Err(::serde::de::Error::custom(format!("invalid base64-encoded string: invalid last symbol '{}' at position {}", v, pos))),
+                            },
+                        };
+                        if bytes.len() != $size {
+                            return Err(::serde::de::Error::invalid_length(bytes.len(), &self));
+                        }
+                        array[..].copy_from_slice(&bytes);
+
+                        Ok($name(array))
+                    }
+
+                   fn visit_bytes<E>(self, data: &[u8]) -> Result<$name, E>
+                    where
+                        E: ::serde::de::Error,
+                    {
                         if data.len() != $size {
                             return Err(::serde::de::Error::invalid_length(data.len(), &self));
                         }
+                        let mut array = [0; $size];
                         array[..].copy_from_slice(data);
+
                         Ok($name(array))
                     }
                 }
 
-                Ok(deserializer.deserialize_bytes(BytesVisitor)?)
+                if deserializer.is_human_readable() {
+                    Ok(deserializer.deserialize_string(BytesVisitor)?)
+                } else {
+                    Ok(deserializer.deserialize_bytes(BytesVisitor)?)
+                }
+
             }
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Use hash of an empty string as a test key.
+    const TEST_KEY_BYTES: [u8; 32] = [
+        0xc6, 0x72, 0xb8, 0xd1, 0xef, 0x56, 0xed, 0x28, 0xab, 0x87, 0xc3, 0x62, 0x2c, 0x51, 0x14,
+        0x06, 0x9b, 0xdd, 0x3a, 0xd7, 0xb8, 0xf9, 0x73, 0x74, 0x98, 0xd0, 0xc0, 0x1e, 0xce, 0xf0,
+        0x96, 0x7a,
+    ];
+
+    #[test]
+    fn test_serde_base64() {
+        // Serialize.
+        impl_bytes!(TestKey, 32, "test key");
+        let test_key = TestKey(TEST_KEY_BYTES);
+        let test_key_str = serde_json::to_string(&test_key).unwrap();
+        assert_eq!(
+            test_key_str,
+            "\"xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=\""
+        );
+
+        // Deserialize.
+        let new_test_key: TestKey = serde_json::from_str(&test_key_str).unwrap();
+        assert_eq!(new_test_key, test_key);
+    }
+
+    #[test]
+    fn test_serde_cbor() {
+        // Serialize.
+        impl_bytes!(TestKey, 32, "test key");
+
+        let test_key = TestKey(TEST_KEY_BYTES);
+        let test_key_vec = serde_cbor::to_vec(&test_key).unwrap();
+
+        // CBOR prepends "X " to the binary value.
+        let mut expected_test_key_vec = vec![88, 32];
+        expected_test_key_vec.extend_from_slice(&TEST_KEY_BYTES);
+        assert_eq!(test_key_vec, expected_test_key_vec);
+
+        // Deserialize.
+        let new_test_key: TestKey = serde_cbor::from_slice(&test_key_vec).unwrap();
+        assert_eq!(new_test_key, test_key);
+    }
 }

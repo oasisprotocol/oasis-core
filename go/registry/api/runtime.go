@@ -231,10 +231,44 @@ type RuntimeGenesis struct {
 	StateRoot hash.Hash `json:"state_root"`
 
 	// State is the state identified by the StateRoot. It may be empty iff
-	// the StorageReceipt is not invalid or StateRoot is an empty hash.
+	// all StorageReceipts are valid or StateRoot is an empty hash or if used
+	// in network genesis (e.g. during consensus chain init).
 	State storage.WriteLog `json:"state"`
 
-	// StorageReceipt is the storage receipt for the state root. It may be
-	// invalid iff the State is non-empty or StateRoot is an empty hash.
-	StorageReceipt signature.Signature `json:"storage_receipt"`
+	// StorageReceipts are the storage receipts for the state root. The list
+	// may be empty or a signature in the list invalid iff the State is non-
+	// empty or StateRoot is an empty hash or if used in network genesis
+	// (e.g. during consensus chain init).
+	StorageReceipts []signature.Signature `json:"storage_receipts"`
+
+	// Round is the runtime round in the genesis.
+	Round uint64 `json:"round"`
+}
+
+// SanityCheck does basic sanity checking of RuntimeGenesis.
+// isGenesis is true, if it is called during consensus chain init.
+func (rtg *RuntimeGenesis) SanityCheck(isGenesis bool) error {
+	if isGenesis {
+		return nil
+	}
+
+	// Require that either State is non-empty or Storage receipt being valid or StateRoot being non-empty.
+	if len(rtg.State) == 0 && !rtg.StateRoot.IsEmpty() {
+		// If State is empty and StateRoot is not, then all StorageReceipts must correctly verify StorageRoot.
+		if len(rtg.StorageReceipts) == 0 {
+			return fmt.Errorf("runtimegenesis: sanity check failed: when State is empty either StorageReceipts must be populated or StateRoot must be empty")
+		}
+		for _, sr := range rtg.StorageReceipts {
+			if !sr.PublicKey.IsValid() {
+				return fmt.Errorf("runtimegenesis: sanity check failed: when State is empty either all StorageReceipts must be valid or StateRoot must be empty (public_key %s)", sr.PublicKey)
+			}
+
+			// TODO: Even if Verify below succeeds, runtime registration should still be rejected until oasis-core#1686 is solved!
+			if !sr.Verify(storage.ReceiptSignatureContext, rtg.StateRoot[:]) {
+				return fmt.Errorf("runtimegenesis: sanity check failed: StorageReceipt verification on StateRoot failed (public_key %s)", sr.PublicKey)
+			}
+		}
+	}
+
+	return nil
 }

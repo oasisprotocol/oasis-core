@@ -663,6 +663,7 @@ func (r *registryCLIImpl) genRegisterRuntimeTx(childEnv *env.Env, runtime regist
 		"--" + cmdRegRt.CfgID, runtime.ID.String(),
 		"--" + cmdRegRt.CfgTEEHardware, runtime.TEEHardware.String(),
 		"--" + cmdRegRt.CfgGenesisState, genesisStateFile,
+		"--" + cmdRegRt.CfgGenesisRound, strconv.FormatUint(runtime.Genesis.Round, 10),
 		"--" + cmdRegRt.CfgKind, runtime.Kind.String(),
 		"--" + cmdRegRt.CfgVersion, runtime.Version.Version.String(),
 		"--" + cmdRegRt.CfgVersionEnclave, string(runtime.Version.TEE),

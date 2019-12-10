@@ -80,16 +80,20 @@ func doExport(cmd *cobra.Command, args []string) {
 	defer storageBackend.Cleanup()
 
 	// For each storage root.
-	for runtimeID, blk := range genesisDoc.RootHash.Blocks {
+	for runtimeID, rtg := range genesisDoc.RootHash.RuntimeStates {
 		logger.Info("fetching checkpoint write log",
 			"runtime_id", runtimeID,
 		)
 
+		// Use RuntimeID for the Roothash namespace.
+		var ns common.Namespace
+		_ = ns.UnmarshalBinary(runtimeID[:])
+
 		// Get the checkpoint iterator.
 		root := storageAPI.Root{
-			Namespace: blk.Header.Namespace,
-			Round:     blk.Header.Round,
-			Hash:      blk.Header.StateRoot,
+			Namespace: ns,
+			Round:     rtg.Round,
+			Hash:      rtg.StateRoot,
 		}
 		it, err := storageBackend.GetCheckpoint(context.Background(),
 			&storageAPI.GetCheckpointRequest{
@@ -108,7 +112,7 @@ func doExport(cmd *cobra.Command, args []string) {
 
 		fn := fmt.Sprintf("storage-dump-%v-%d.json",
 			runtimeID.String(),
-			blk.Header.Round,
+			rtg.Round,
 		)
 		fn = filepath.Join(destDir, fn)
 		if err = exportIterator(fn, &root, it); err != nil {

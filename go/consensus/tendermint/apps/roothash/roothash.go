@@ -382,12 +382,18 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 	}
 
 	// Create genesis block.
-	genesisBlock := genesis.Blocks[runtime.ID]
-	if genesisBlock == nil {
-		now := ctx.Now().Unix()
-		genesisBlock = block.NewGenesisBlock(runtime.ID, uint64(now))
-		if !runtime.Genesis.StateRoot.IsEmpty() {
-			genesisBlock.Header.StateRoot = runtime.Genesis.StateRoot
+	now := ctx.Now().Unix()
+	genesisBlock := block.NewGenesisBlock(runtime.ID, uint64(now))
+	// Fill the Header fields with Genesis runtime states, if this was called during InitChain().
+	genesisBlock.Header.Round = runtime.Genesis.Round
+	genesisBlock.Header.StateRoot = runtime.Genesis.StateRoot
+	genesisBlock.Header.StorageSignatures = runtime.Genesis.StorageReceipts
+	if ctx.IsInitChain() {
+		genesisRts := genesis.RuntimeStates[runtime.ID]
+		if genesisRts != nil {
+			genesisBlock.Header.Round = genesisRts.Round
+			genesisBlock.Header.StateRoot = genesisRts.StateRoot
+			genesisBlock.Header.StorageSignatures = runtime.Genesis.StorageReceipts
 		}
 	}
 
