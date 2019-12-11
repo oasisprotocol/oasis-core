@@ -140,6 +140,10 @@ var (
 		MethodRegisterRuntime,
 	}
 
+	// RuntimesRequiredRoles are the Node roles that require runtimes.
+	RuntimesRequiredRoles = node.RoleComputeWorker |
+		node.RoleKeyManager
+
 	// ConsensusAddressRequiredRoles are the Node roles that require Consensus Address.
 	ConsensusAddressRequiredRoles = node.RoleValidator
 
@@ -403,15 +407,10 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 
 	// TODO: Key manager nodes maybe should be restricted to only being a
 	// key manager at the expense of breaking some of our test configs.
-	needRuntimes := n.HasRoles(
-		node.RoleComputeWorker |
-			node.RoleKeyManager |
-			node.RoleMergeWorker,
-	)
 
 	switch len(n.Runtimes) {
 	case 0:
-		if needRuntimes {
+		if n.HasRoles(RuntimesRequiredRoles) {
 			logger.Error("RegisterNode: no runtimes in registration",
 				"node", n,
 			)
