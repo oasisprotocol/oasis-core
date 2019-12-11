@@ -24,6 +24,15 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 		return errors.New("nil registrationSigner")
 	}
 
+	var runtimes []*node.Runtime
+	if roles&registry.RuntimesRequiredRoles != 0 {
+		runtimes = []*node.Runtime{
+			&node.Runtime{
+				ID: runtimeID,
+			},
+		}
+	}
+
 	nodeDesc := &node.Node{
 		ID:         id.NodeSigner.Public(),
 		EntityID:   entityID,
@@ -39,12 +48,8 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 		Consensus: node.ConsensusInfo{
 			ID: id.ConsensusSigner.Public(),
 		},
-		Runtimes: []*node.Runtime{
-			&node.Runtime{
-				ID: runtimeID,
-			},
-		},
-		Roles: roles,
+		Runtimes: runtimes,
+		Roles:    roles,
 	}
 	if capabilities != nil {
 		nodeDesc.Runtimes[0].Capabilities = *capabilities
