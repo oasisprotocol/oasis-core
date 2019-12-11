@@ -405,7 +405,6 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	// key manager at the expense of breaking some of our test configs.
 	needRuntimes := n.HasRoles(
 		node.RoleComputeWorker |
-			node.RoleTransactionScheduler |
 			node.RoleKeyManager |
 			node.RoleMergeWorker,
 	)
