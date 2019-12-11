@@ -871,6 +871,7 @@ func newABCIMux(ctx context.Context, cfg *ApplicationConfig) (*abciMux, error) {
 		appsByName:     make(map[string]Application),
 		appsByMethod:   make(map[transaction.MethodName]Application),
 		lastBeginBlock: -1,
+		currentTime:    time.Unix(0, 0),
 	}
 
 	mux.logger.Debug("ABCI multiplexer initialized",
