@@ -857,7 +857,7 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 	// TODO: Who should sign the runtime? Current compute node assumes an entity (deployer).
 	switch rt.Kind {
 	case KindCompute:
-		if rt.KeyManagerOpt != nil && rt.ID.Equal(*rt.KeyManagerOpt) {
+		if rt.KeyManager != nil && rt.ID.Equal(*rt.KeyManager) {
 			return nil, ErrInvalidArgument
 		}
 
@@ -877,7 +877,7 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 			return nil, ErrInvalidArgument
 		}
 	case KindKeyManager:
-		if rt.KeyManagerOpt != nil {
+		if rt.KeyManager != nil {
 			return nil, ErrInvalidArgument
 		}
 	default:
@@ -1066,8 +1066,8 @@ func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[signature.PublicKey]*Ru
 			}
 
 			// Check that the given key manager runtime is a valid key manager runtime.
-			if rt.KeyManagerOpt != nil {
-				krt := seenRuntimes[*rt.KeyManagerOpt]
+			if rt.KeyManager != nil {
+				krt := seenRuntimes[*rt.KeyManager]
 				if krt == nil {
 					// Not seen yet, traverse the entire runtime list (the KM runtimes
 					// aren't guaranteed to be sorted before the other runtimes).
@@ -1077,7 +1077,7 @@ func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[signature.PublicKey]*Ru
 						if err := skrt.Open(RegisterGenesisRuntimeSignatureContext, &kmrt); err != nil {
 							return nil, fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
 						}
-						if kmrt.ID.Equal(*rt.KeyManagerOpt) {
+						if kmrt.ID.Equal(*rt.KeyManager) {
 							found = true
 							krt = &kmrt
 							break

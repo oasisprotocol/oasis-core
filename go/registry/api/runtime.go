@@ -150,7 +150,7 @@ type Runtime struct {
 	Version VersionInfo `json:"versions"`
 
 	// KeyManager is the key manager runtime ID for this runtime.
-	KeyManagerOpt *signature.PublicKey `json:"key_manager_opt,omitempty"`
+	KeyManager *signature.PublicKey `json:"key_manager,omitempty"`
 
 	// Compute stores parameters of the compute committee.
 	Compute ComputeParameters `json:"compute,omitempty"`
@@ -189,10 +189,10 @@ func (c *Runtime) FromProto(pb *pbRegistry.Runtime) error {
 		return err
 	}
 
-	kmID := pb.GetKeyManagerOpt()
+	kmID := pb.GetKeyManager()
 	if kmID != nil {
-		c.KeyManagerOpt = &signature.PublicKey{}
-		if err := c.KeyManagerOpt.UnmarshalBinary(kmID); err != nil {
+		c.KeyManager = &signature.PublicKey{}
+		if err := c.KeyManager.UnmarshalBinary(kmID); err != nil {
 			return err
 		}
 	}
@@ -231,8 +231,8 @@ func (c *Runtime) ToProto() *pbRegistry.Runtime {
 	if pb.TeeHardware, err = c.TEEHardware.ToProto(); err != nil {
 		panic(err)
 	}
-	if c.KeyManagerOpt != nil {
-		if pb.KeyManagerOpt, err = c.KeyManagerOpt.MarshalBinary(); err != nil {
+	if c.KeyManager != nil {
+		if pb.KeyManager, err = c.KeyManager.MarshalBinary(); err != nil {
 			panic(err)
 		}
 	}

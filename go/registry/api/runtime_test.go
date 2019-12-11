@@ -30,9 +30,9 @@ func TestSerialization(t *testing.T) {
 			GroupBackupSize:   72,
 			AllowedStragglers: 81,
 		},
-		Storage:       StorageParameters{GroupSize: 90},
-		KeyManagerOpt: &publicKey,
-		Kind:          KindCompute,
+		Storage:    StorageParameters{GroupSize: 90},
+		KeyManager: &publicKey,
+		Kind:       KindCompute,
 		Version: VersionInfo{
 			TEE:     []byte{},
 			Version: version.Version{Major: 1, Minor: 2, Patch: 3},

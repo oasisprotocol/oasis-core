@@ -136,9 +136,9 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	testRuntimeID := hex2pk("0000000000000000000000000000000000000000000000000000000000000001")
 	testRuntime := &registry.Runtime{
-		ID:            testRuntimeID,
-		Kind:          registry.KindCompute,
-		KeyManagerOpt: &testKMRuntime.ID,
+		ID:         testRuntimeID,
+		Kind:       registry.KindCompute,
+		KeyManager: &testKMRuntime.ID,
 		Compute: registry.ComputeParameters{
 			GroupSize:    1,
 			RoundTimeout: 1 * time.Second,

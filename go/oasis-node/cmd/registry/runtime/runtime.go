@@ -334,7 +334,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		Version: registry.VersionInfo{
 			Version: version.FromU64(viper.GetUint64(CfgVersion)),
 		},
-		KeyManagerOpt: kmID,
+		KeyManager: kmID,
 		Compute: registry.ComputeParameters{
 			GroupSize:         uint64(viper.GetInt64(CfgComputeGroupSize)),
 			GroupBackupSize:   uint64(viper.GetInt64(CfgComputeGroupBackupSize)),

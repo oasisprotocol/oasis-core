@@ -41,10 +41,10 @@ type runtimeHostHandler struct {
 func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
 	// Key manager.
 	if body.HostKeyManagerPolicyRequest != nil {
-		if h.runtime.KeyManagerOpt == nil {
+		if h.runtime.KeyManager == nil {
 			return nil, errors.New("runtime has no key manager")
 		}
-		status, err := h.keyManager.GetStatus(ctx, *h.runtime.KeyManagerOpt, 0)
+		status, err := h.keyManager.GetStatus(ctx, *h.runtime.KeyManager, 0)
 		if err != nil {
 			return nil, err
 		}
