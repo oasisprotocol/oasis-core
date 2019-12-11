@@ -392,16 +392,7 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt
 }
 
 func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
-	if !n.HasRoles(node.RoleMergeWorker) {
-		return false
-	}
-	for _, nrt := range n.Runtimes {
-		if !nrt.ID.Equal(rt.ID) {
-			continue
-		}
-		return true
-	}
-	return false
+	return n.HasRoles(node.RoleMergeWorker)
 }
 
 // Operates on consensus connection.
