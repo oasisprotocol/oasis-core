@@ -162,15 +162,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		)
 		return err
 	}
-	regNodes, err := state.Nodes()
-	if err != nil {
-		app.logger.Error("RegisterNode: failed to obtain registry nodes",
-			"err", err,
-			"signed_node", sigNode,
-		)
-		return err
-	}
-	newNode, err := registry.VerifyRegisterNodeArgs(params, app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), regRuntimes, regNodes)
+	newNode, err := registry.VerifyRegisterNodeArgs(params, app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), regRuntimes, state)
 	if err != nil {
 		return err
 	}
