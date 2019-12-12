@@ -501,10 +501,12 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 
 	// Validate P2PInfo.
 	if !n.P2P.ID.IsValid() {
-		logger.Error("RegisterNode: invalid P2P id",
+		// XXX: Validate P2P.ID after existing deployments have cleared up registry.
+		// https://github.com/oasislabs/oasis-core/issues/2428
+		logger.Warn("RegisterNode: invalid P2P id",
 			"node", n,
 		)
-		return nil, ErrInvalidArgument
+		//return nil, ErrInvalidArgument
 	}
 	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
 	if err := verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
@@ -554,11 +556,13 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, ErrInvalidArgument
 	}
 	if existingNode != nil && existingNode.ID != n.ID {
-		logger.Error("RegisterNode: duplicate node p2p ID",
+		// XXX: Validate P2P.ID after existing deployments have cleared up registry.
+		// https://github.com/oasislabs/oasis-core/issues/2428
+		logger.Warn("RegisterNode: duplicate node p2p ID",
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
 		)
-		return nil, ErrInvalidArgument
+		//return nil, ErrInvalidArgument
 	}
 
 	existingNode, err = nodeLookup.NodeByCertificate(n.Committee.Certificate)

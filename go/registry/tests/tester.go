@@ -159,11 +159,13 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				require.Error(err, "register node with reserved roles")
 				require.Equal(err, api.ErrInvalidArgument)
 
-				if v.Node.Roles&node.RoleComputeWorker != 0 {
-					err = v.Register(consensus, v.SignedInvalidRegistration6)
-					require.Error(err, "register node without a valid p2p id")
-					require.Equal(err, api.ErrInvalidArgument)
-				}
+				// XXX: Validate P2P.ID after existing deployments have cleared up registry.
+				// https://github.com/oasislabs/oasis-core/issues/2428
+				// if v.Node.Roles&node.RoleComputeWorker != 0 {
+				// 	err = v.Register(consensus, v.SignedInvalidRegistration6)
+				// 	require.Error(err, "register node without a valid p2p id")
+				// 	require.Equal(err, api.ErrInvalidArgument)
+				//}
 
 				err = v.Register(consensus, v.SignedInvalidRegistration7)
 				require.Error(err, "register node without runtimes")
@@ -197,9 +199,11 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				require.NoError(err, "GetNode")
 				require.EqualValues(v.Node, nod, "retrieved node")
 
-				err = v.Register(consensus, v.SignedInvalidRegistration11)
-				require.Error(err, "register node with duplicate p2p id")
-				require.Equal(err, api.ErrInvalidArgument)
+				// XXX: Validate P2P.ID after existing deployments have cleared up registry.
+				// https://github.com/oasislabs/oasis-core/issues/2428
+				// err = v.Register(consensus, v.SignedInvalidRegistration11)
+				// require.Error(err, "register node with duplicate p2p id")
+				// require.Equal(err, api.ErrInvalidArgument)
 
 				err = v.Register(consensus, v.SignedInvalidRegistration12)
 				require.Error(err, "register node with duplicate consensus id")
