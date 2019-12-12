@@ -205,6 +205,10 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				require.Error(err, "register node with duplicate consensus id")
 				require.Equal(err, api.ErrInvalidArgument)
 
+				err = v.Register(consensus, v.SignedInvalidRegistration13)
+				require.Error(err, "register node with duplicate certificate")
+				require.Equal(err, api.ErrInvalidArgument)
+
 				err = v.Register(consensus, v.SignedValidReRegistration)
 				require.NoError(err, "Re-registering a node with different address should work")
 
@@ -544,6 +548,7 @@ type TestNode struct {
 	SignedInvalidRegistration10 *node.SignedNode
 	SignedInvalidRegistration11 *node.SignedNode
 	SignedInvalidRegistration12 *node.SignedNode
+	SignedInvalidRegistration13 *node.SignedNode
 	SignedValidReRegistration   *node.SignedNode
 	SignedInvalidReRegistration *node.SignedNode
 }
@@ -723,6 +728,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		invalid11 := *nod.Node
 		invalid11.ID = randomPK(rng)
 		invalid11.Consensus.ID = randomPK(rng)
+		invalid11.Committee.Certificate = randomCert()
 
 		nod.SignedInvalidRegistration11, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid11)
 		if err != nil {
@@ -733,8 +739,20 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		invalid12 := *nod.Node
 		invalid12.ID = randomPK(rng)
 		invalid12.P2P.ID = randomPK(rng)
+		invalid12.Committee.Certificate = randomCert()
 
 		nod.SignedInvalidRegistration12, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid12)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add a registration with duplicate certificate.
+		invalid13 := *nod.Node
+		invalid13.ID = randomPK(rng)
+		invalid13.P2P.ID = randomPK(rng)
+		invalid13.Consensus.ID = randomPK(rng)
+
+		nod.SignedInvalidRegistration13, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid13)
 		if err != nil {
 			return nil, err
 		}

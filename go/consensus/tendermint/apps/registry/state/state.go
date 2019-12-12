@@ -6,6 +6,7 @@ import (
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
@@ -16,6 +17,8 @@ import (
 )
 
 var (
+	_ registry.NodeLookup = (*ImmutableState)(nil)
+
 	// signedEntityKeyFmt is the key format used for signed entities.
 	//
 	// Value is CBOR-serialized signed entity.
@@ -50,6 +53,16 @@ var (
 	//
 	// Value is CBOR-serialized roothash.ConsensusParameters.
 	parametersKeyFmt = keyformat.New(0x16)
+	// keyMapKeyFmt is the key format used for key-to-node-id map.
+	// This stores the consensus and P2P to Node ID mappings.
+	//
+	// Value is binary signature.PublicKey (node ID).
+	keyMapKeyFmt = keyformat.New(0x17, &signature.PublicKey{})
+	// certificateMapKeyFmt is the key format used for certificate-to-node-id map.
+	// This stores the hash-of-certificate to Node ID mappings.
+	//
+	// Value is binary signature.PublicKey (node ID).
+	certificateMapKeyFmt = keyformat.New(0x18, &hash.Hash{})
 )
 
 type ImmutableState struct {
@@ -390,6 +403,40 @@ func (s *ImmutableState) ConsensusParameters() (*registry.ConsensusParameters, e
 	return &params, err
 }
 
+func (s *ImmutableState) NodeByConsensusOrP2PKey(key signature.PublicKey) (*node.Node, error) {
+	_, rawID := s.Snapshot.Get(keyMapKeyFmt.Encode(&key))
+	if rawID == nil {
+		return nil, registry.ErrNoSuchNode
+	}
+
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(rawID); err != nil {
+		return nil, err
+	}
+	return s.Node(id)
+}
+
+// Hashes a node's committee certificate into a key for the certificate to node ID map.
+func nodeCertificateToMapKey(cert []byte) hash.Hash {
+	var h hash.Hash
+	h.FromBytes(cert)
+	return h
+}
+
+func (s *ImmutableState) NodeByCertificate(cert []byte) (*node.Node, error) {
+	certHash := nodeCertificateToMapKey(cert)
+	_, rawID := s.Snapshot.Get(certificateMapKeyFmt.Encode(&certHash))
+	if rawID == nil {
+		return nil, registry.ErrNoSuchNode
+	}
+
+	var id signature.PublicKey
+	if err := id.UnmarshalBinary(rawID); err != nil {
+		return nil, err
+	}
+	return s.Node(id)
+}
+
 func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
@@ -441,6 +488,12 @@ func (s *MutableState) CreateNode(node *node.Node, signedNode *node.SignedNode) 
 	}
 	s.tree.Set(nodeByConsAddressKeyFmt.Encode(address), rawNodeID)
 
+	s.tree.Set(keyMapKeyFmt.Encode(&node.Consensus.ID), rawNodeID)
+	s.tree.Set(keyMapKeyFmt.Encode(&node.P2P.ID), rawNodeID)
+
+	certHash := nodeCertificateToMapKey(node.Committee.Certificate)
+	s.tree.Set(certificateMapKeyFmt.Encode(&certHash), rawNodeID)
+
 	return nil
 }
 
@@ -451,6 +504,12 @@ func (s *MutableState) RemoveNode(node *node.Node) {
 
 	address := []byte(tmcrypto.PublicKeyToTendermint(&node.Consensus.ID).Address())
 	s.tree.Remove(nodeByConsAddressKeyFmt.Encode(address))
+
+	s.tree.Remove(keyMapKeyFmt.Encode(&node.Consensus.ID))
+	s.tree.Remove(keyMapKeyFmt.Encode(&node.P2P.ID))
+
+	certHash := nodeCertificateToMapKey(node.Committee.Certificate)
+	s.tree.Remove(certificateMapKeyFmt.Encode(&certHash))
 }
 
 func (s *MutableState) CreateRuntime(rt *registry.Runtime, sigRt *registry.SignedRuntime) error {

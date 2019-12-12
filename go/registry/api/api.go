@@ -254,6 +254,16 @@ type NodeList struct {
 	Nodes []*node.Node
 }
 
+// NodeLookup interface implements various ways for the verification
+// functions to look-up nodes in the registry's state.
+type NodeLookup interface {
+	// Returns the node that corresponds to the given consensus or P2P ID.
+	NodeByConsensusOrP2PKey(key signature.PublicKey) (*node.Node, error)
+
+	// Returns the node that corresponds to the given committee certificate.
+	NodeByCertificate(cert []byte) (*node.Node, error)
+}
+
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
 func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis bool) (*entity.Entity, error) {
 	var ent entity.Entity
@@ -314,7 +324,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	now time.Time,
 	isGenesis bool,
 	regRuntimes []*Runtime,
-	regNodes []*node.Node,
+	nodeLookup NodeLookup,
 ) (*node.Node, error) {
 	var n node.Node
 	if sigNode == nil {
@@ -506,44 +516,64 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, err
 	}
 
-	// Make sure that the consensus and P2P keys, as well as the
-	// committee certificate are unique (between themselves and compared to
-	// other nodes).
+	// Make sure that the consensus and P2P keys, as well as the committee
+	// certificate are unique (between themselves and compared to other nodes).
+	//
+	// Note that if a key exists and belongs to the same node ID, this is not
+	// counted as an error, since it is possible that the node descriptor is
+	// just being updated (this check is called in both cases).
 	if n.Consensus.ID.Equal(n.P2P.ID) {
 		logger.Error("RegisterNode: node consensus and P2P IDs must differ",
 			"node", n,
 		)
 		return nil, ErrInvalidArgument
 	}
-	for _, rn := range regNodes {
-		if rn.ID.Equal(n.ID) {
-			// Node descriptor is being updated, IDs below are not duplicates.
-			continue
-		}
 
-		if rn.Consensus.ID.Equal(n.Consensus.ID) {
-			logger.Error("RegisterNode: duplicate node consensus ID",
-				"node", n,
-				"existing_node", rn,
-			)
-			return nil, ErrInvalidArgument
-		}
+	existingNode, err := nodeLookup.NodeByConsensusOrP2PKey(n.Consensus.ID)
+	if err != nil && err != ErrNoSuchNode {
+		logger.Error("RegisterNode: failed to get node by consensus ID",
+			"err", err,
+			"consensus_id", n.Consensus.ID.String(),
+		)
+		return nil, ErrInvalidArgument
+	}
+	if existingNode != nil && existingNode.ID != n.ID {
+		logger.Error("RegisterNode: duplicate node consensus ID",
+			"node_id", n.ID,
+			"existing_node_id", existingNode.ID,
+		)
+		return nil, ErrInvalidArgument
+	}
 
-		if rn.P2P.ID.Equal(n.P2P.ID) {
-			logger.Error("RegisterNode: duplicate node p2p ID",
-				"node", n,
-				"existing_node", rn,
-			)
-			return nil, ErrInvalidArgument
-		}
+	existingNode, err = nodeLookup.NodeByConsensusOrP2PKey(n.P2P.ID)
+	if err != nil && err != ErrNoSuchNode {
+		logger.Error("RegisterNode: failed to get node by p2p ID",
+			"err", err,
+			"p2p_id", n.P2P.ID.String(),
+		)
+		return nil, ErrInvalidArgument
+	}
+	if existingNode != nil && existingNode.ID != n.ID {
+		logger.Error("RegisterNode: duplicate node p2p ID",
+			"node_id", n.ID,
+			"existing_node_id", existingNode.ID,
+		)
+		return nil, ErrInvalidArgument
+	}
 
-		if bytes.Equal(rn.Committee.Certificate, n.Committee.Certificate) {
-			logger.Error("RegisterNode: duplicate node committee certificate",
-				"node", n,
-				"existing_node", rn,
-			)
-			return nil, ErrInvalidArgument
-		}
+	existingNode, err = nodeLookup.NodeByCertificate(n.Committee.Certificate)
+	if err != nil && err != ErrNoSuchNode {
+		logger.Error("RegisterNode: failed to get node by committee certificate",
+			"err", err,
+		)
+		return nil, ErrInvalidArgument
+	}
+	if existingNode != nil && existingNode.ID != n.ID {
+		logger.Error("RegisterNode: duplicate node committee certificate",
+			"node_id", n.ID,
+			"existing_node_id", existingNode.ID,
+		)
+		return nil, ErrInvalidArgument
 	}
 
 	return &n, nil
