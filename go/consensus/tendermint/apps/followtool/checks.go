@@ -121,7 +121,16 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 		}
 	}
 
+	totalFees, err := st.LastBlockFees()
+	if err != nil {
+		return fmt.Errorf("LastBlockFees: %w", err)
+	}
+	if !totalFees.IsValid() {
+		return fmt.Errorf("common pool %v is invalid", commonPool)
+	}
+
 	_ = total.Add(commonPool)
+	_ = total.Add(totalFees)
 	if total.Cmp(totalSupply) != 0 {
 		return fmt.Errorf("balances in accounts plus common pool (%s) does not add up to total supply (%s)", total.String(), totalSupply.String())
 	}
