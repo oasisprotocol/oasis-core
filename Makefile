@@ -1,46 +1,27 @@
 #!/usr/bin/env gmake
 
-# List of paths to runtimes that we should build.
-RUNTIMES = keymanager-runtime \
+include common.mk
+
+# List of runtimes to build.
+RUNTIMES := keymanager-runtime \
 	tests/runtimes/simple-keyvalue \
 	tests/runtimes/staking-arbitrary
 
-# Check if we're running in an interactive terminal.
-ISATTY := $(shell [ -t 0 ] && echo 1)
-
-ifdef ISATTY
-# Running in interactive terminal, OK to use colors!
-MAGENTA = \e[35;1m
-CYAN = \e[36;1m
-OFF = \e[0m
-
-# Built-in echo doesn't support '-e'.
-ECHO = /bin/echo -e
-else
-# Don't use colors if not running interactively.
-MAGENTA = ""
-CYAN = ""
-OFF = ""
-
-# OK to use built-in echo.
-ECHO = echo
-endif
-
-
-.PHONY: all tools runtimes rust go clean clean-runtimes clean-go fmt test test-unit test-e2e
-
-all: tools runtimes rust go
+# Set all target as the default target.
+all: build
 	@$(ECHO) "$(CYAN)*** Everything built successfully!$(OFF)"
 
-tools:
-	@$(ECHO) "$(CYAN)*** Building Rust tools...$(OFF)"
+# Build.
+build-targets := build-tools build-runtimes build-rust build-go
+
+build-tools:
+	@$(ECHO) "$(MAGENTA)*** Building Rust tools...$(OFF)"
 	@# Suppress "binary already exists" error by redirecting stderr and stdout to /dev/null.
 	@cargo install --path tools >/dev/null 2>&1 || true
 
-runtimes:
-	@$(ECHO) "$(CYAN)*** Building test runtimes...$(OFF)"
+build-runtimes:
 	@for e in $(RUNTIMES); do \
-		$(ECHO) "$(MAGENTA)*** Building runtime: $$e$(OFF)"; \
+		$(ECHO) "$(MAGENTA)*** Building runtime: $$e...$(OFF)"; \
 		(cd $$e && \
 			cargo build --target x86_64-fortanix-unknown-sgx && \
 			cargo build && \
@@ -48,32 +29,54 @@ runtimes:
 		) || exit 1; \
 	done
 
-rust:
-	@$(ECHO) "$(CYAN)*** Building Rust libraries and runtime loader...$(OFF)"
+build-rust:
+	@$(ECHO) "$(MAGENTA)*** Building Rust libraries and runtime loader...$(OFF)"
 	@cargo build
 
-go:
-	@$(ECHO) "$(CYAN)*** Building Go binaries...$(OFF)"
-	@$(MAKE) -C go
+build-go go:
+	@$(MAKE) -C go build
 
-fmt:
+build: $(build-targets)
+
+build-helpers-go:
+	@$(MAKE) -C go build-helpers
+
+build-helpers: build-helpers-go
+
+# Format code.
+fmt-targets := fmt-rust fmt-go
+
+fmt-rust:
+	@$(ECHO) "$(CYAN)*** Running cargo fmt... $(OFF)"
 	@cargo fmt
+
+fmt-go:
 	@$(MAKE) -C go fmt
 
-test: test-unit test-e2e
+fmt: $(fmt-targets)
 
-test-unit:
-	@$(ECHO) "$(CYAN)*** Building storage interoperability test helpers...$(OFF)"
-	@$(MAKE) -C go urkel-test-helpers
+# Test.
+test-unit-targets := test-unit-rust test-unit-go
+test-targets := test-unit test-e2e
+
+test-unit-rust: build-helpers
 	@$(ECHO) "$(CYAN)*** Running Rust unit tests...$(OFF)"
-	@export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers) && \
+	@export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/$(GO_TEST_HELPER_URKEL_PATH)) && \
 		cargo test
-	@$(ECHO) "$(CYAN)*** Running Go unit tests...$(OFF)"
+
+test-unit-go:
 	@$(MAKE) -C go test
+
+test-unit: $(test-unit-targets)
 
 test-e2e:
 	@$(ECHO) "$(CYAN)*** Running E2E tests...$(OFF)"
 	@.buildkite/scripts/test_e2e.sh
+
+test: $(test-targets)
+
+# Clean.
+clean-targets := clean-runtimes clean-rust clean-go
 
 clean-runtimes:
 	@$(ECHO) "$(CYAN)*** Cleaning up runtimes...$(OFF)"
@@ -81,14 +84,16 @@ clean-runtimes:
 		(cd $$e && cargo clean) || exit 1; \
 	done
 
-clean-go:
-	@$(ECHO) "$(CYAN)*** Cleaning up Go node...$(OFF)"
-	@$(MAKE) -C go clean
-
-clean: clean-go clean-runtimes
-	@$(ECHO) "$(CYAN)*** Cleaning up...$(OFF)"
+clean-rust:
+	@$(ECHO) "$(CYAN)*** Cleaning up Rust...$(OFF)"
 	@cargo clean
 
+clean-go:
+	@$(MAKE) -C go clean
+
+clean: $(clean-targets)
+
+# Develop in a Docker container.
 docker-shell:
 	@docker run -t -i --rm \
 	  --name oasis-core \
@@ -98,3 +103,12 @@ docker-shell:
 	  -w /code \
 	  oasislabs/development:0.3.0 \
 	  bash
+
+# List of targets that are not actual files.
+.PHONY: \
+	$(build-targets) go build \
+	$(fmt-targets) fmt \
+	$(test-unit-targets) $(test-targets) test \
+	$(clean-targets) clean \
+	docker-shell \
+	all
