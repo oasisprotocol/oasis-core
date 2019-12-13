@@ -103,13 +103,15 @@ func doInit(cmd *cobra.Command, args []string) {
 
 	// Get the entity ID or entity.
 	var (
-		entityID signature.PublicKey
+		entityDir string
+		entityID  signature.PublicKey
 
 		entity *entity.Entity
 		signer signature.Signer
 
 		isSelfSigned bool
 	)
+
 	if idStr := viper.GetString(CfgEntityID); idStr != "" {
 		if err = entityID.UnmarshalHex(idStr); err != nil {
 			logger.Error("malformed entity ID",
@@ -121,7 +123,14 @@ func doInit(cmd *cobra.Command, args []string) {
 
 		isSelfSigned = true
 	} else {
-		entity, signer, err = cmdCommon.LoadEntity(cmdFlags.Entity())
+		entityDir, err = cmdFlags.SignerDirOrPwd()
+		if err != nil {
+			logger.Error("failed to retrieve entity dir",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+		entity, signer, err = cmdCommon.LoadEntity(cmdFlags.Signer(), entityDir)
 		if err != nil {
 			logger.Error("failed to load entity",
 				"err", err,
@@ -337,7 +346,7 @@ func Register(parentCmd *cobra.Command) {
 		initCmd,
 	} {
 		v.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
-		v.Flags().AddFlagSet(cmdFlags.EntityFlags)
+		v.Flags().AddFlagSet(cmdFlags.SignerFlags)
 		v.Flags().AddFlagSet(flags)
 	}
 

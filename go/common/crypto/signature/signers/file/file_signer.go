@@ -18,6 +18,9 @@ const (
 	privateKeyPemType = "ED25519 PRIVATE KEY"
 
 	filePerm = 0600
+
+	// SignerName is the name used to identify the file backed signer.
+	SignerName = "file"
 )
 
 var (
@@ -44,7 +47,12 @@ var (
 
 // NewFactory creates a new factory with the specified roles, with the
 // specified dataDir.
-func NewFactory(dataDir string, roles ...signature.SignerRole) signature.SignerFactory {
+func NewFactory(config interface{}, roles ...signature.SignerRole) signature.SignerFactory {
+	dataDir, ok := config.(string)
+	if !ok {
+		panic("invalid file signer configuration provided")
+	}
+
 	return &Factory{
 		roles:   append([]signature.SignerRole{}, roles...),
 		dataDir: dataDir,

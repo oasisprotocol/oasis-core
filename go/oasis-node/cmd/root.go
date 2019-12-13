@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/keymanager"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/node"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/signer"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/stake"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/storage"
 )
@@ -77,6 +78,7 @@ func init() {
 		identity.Register,
 		keymanager.Register,
 		registry.Register,
+		signer.Register,
 		stake.Register,
 		storage.Register,
 		consensus.Register,

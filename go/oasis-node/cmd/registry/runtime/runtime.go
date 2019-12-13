@@ -238,7 +238,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	_, signer, err := loadEntity(cmdFlags.Entity())
+	_, signer, err := loadEntity(cmdFlags.Signer())
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
@@ -467,7 +467,7 @@ func init() {
 	runtimeFlags.Uint64(CfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
 
 	_ = viper.BindPFlags(runtimeFlags)
-	runtimeFlags.AddFlagSet(cmdFlags.EntityFlags)
+	runtimeFlags.AddFlagSet(cmdFlags.SignerFlags)
 
 	registerFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	registerFlags.AddFlagSet(cmdConsensus.TxFlags)
