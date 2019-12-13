@@ -65,22 +65,30 @@ integrationrunner:
 	@$(GO) test $(GOFLAGS) -c -covermode=atomic -coverpkg=./... -o oasis-node/$@/$@.test ./oasis-node/$@
 
 # Fuzzing binaries.
-build-fuzz: consensus/tendermint/fuzz/fuzz-fuzz.zip
-consensus/tendermint/fuzz/fuzz-fuzz.zip: .FORCE
-	@echo "Building consensus fuzzer"
+build-fuzz: consensus/tendermint/fuzz/fuzz-fuzz.zip storage/fuzz/fuzz-fuzz.zip
+%/fuzz-fuzz.zip: .FORCE
+	@echo "Building $@"
 	@cd "$$(dirname "$@")"; go-fuzz-build
 	@cd "$$(dirname "$@")/gencorpus"; env -u GOPATH $(OASIS_GO) build -tags gofuzz
 
 # Run fuzzing.
+define canned-fuzz-run
+set -x; cd "$<"; \
+if ! [ -d corpus ]; then \
+	mkdir corpus; \
+	pushd corpus; \
+	../gencorpus/gencorpus; \
+	popd; \
+fi; \
+go-fuzz -bin=./fuzz-fuzz.zip
+endef
 fuzz-consensus: consensus/tendermint/fuzz/
-	set -x; cd "$<"; \
-	if ! [ -d corpus ]; then \
-		mkdir corpus; \
-		pushd corpus; \
-		../gencorpus/gencorpus; \
-		popd; \
-	fi; \
-	go-fuzz -bin=./fuzz-fuzz.zip
+	$(canned-fuzz-run)
+fuzz-storage: storage/fuzz/ oasis-node/oasis-node
+	@mkdir -p /tmp/oasis-node-fuzz-storage/identity
+	@chmod 0700 /tmp/oasis-node-fuzz-storage/identity
+	@oasis-node/oasis-node identity init --datadir /tmp/oasis-node-fuzz-storage/identity
+	$(canned-fuzz-run)
 
 # Clean.
 clean:
