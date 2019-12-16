@@ -70,11 +70,10 @@ func NewServerLocal(installWrapper bool) (*cmnGrpc.Server, error) {
 	return cmnGrpc.NewServer(config)
 }
 
-// NewClient connects to a remote gRPC server.
 func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
 	addr, _ := cmd.Flags().GetString(CfgAddress)
 
-	conn, err := grpc.Dial(
+	conn, err := cmnGrpc.Dial(
 		addr,
 		grpc.WithInsecure(),
 		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),

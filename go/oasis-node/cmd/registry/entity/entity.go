@@ -18,7 +18,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	grpcRegistry "github.com/oasislabs/oasis-core/go/grpc/registry"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -78,7 +78,7 @@ var (
 	logger = logging.GetLogger("cmd/registry/entity")
 )
 
-func doConnect(cmd *cobra.Command) (*grpc.ClientConn, grpcRegistry.EntityRegistryClient) {
+func doConnect(cmd *cobra.Command) (*grpc.ClientConn, registry.Backend) {
 	conn, err := cmdGrpc.NewClient(cmd)
 	if err != nil {
 		logger.Error("failed to establish connection with node",
@@ -87,8 +87,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, grpcRegistry.EntityRegistr
 		os.Exit(1)
 	}
 
-	client := grpcRegistry.NewEntityRegistryClient(conn)
-
+	client := registry.NewRegistryClient(conn)
 	return conn, client
 }
 
@@ -325,7 +324,7 @@ func doList(cmd *cobra.Command, args []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
-	entities, err := client.GetEntities(context.Background(), &grpcRegistry.EntitiesRequest{})
+	entities, err := client.GetEntities(context.Background(), consensus.HeightLatest)
 	if err != nil {
 		logger.Error("failed to query entities",
 			"err", err,
@@ -333,20 +332,11 @@ func doList(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	for _, v := range entities.GetEntity() {
-		var ent entity.Entity
-		if err = ent.FromProto(v); err != nil {
-			logger.Error("failed to de-serialize entity",
-				"err", err,
-				"pb", v,
-			)
-			continue
-		}
-
+	for _, ent := range entities {
 		var s string
 		switch cmdFlags.Verbose() {
 		case true:
-			b, _ := json.Marshal(&ent)
+			b, _ := json.Marshal(ent)
 			s = string(b)
 		default:
 			s = ent.ID.String()

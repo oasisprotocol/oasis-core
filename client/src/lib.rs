@@ -4,8 +4,6 @@ extern crate futures;
 extern crate grpcio;
 extern crate oasis_core_runtime;
 #[cfg(not(target_env = "sgx"))]
-extern crate protobuf;
-#[cfg(not(target_env = "sgx"))]
 extern crate rustracing;
 #[cfg(not(target_env = "sgx"))]
 extern crate rustracing_jaeger;
@@ -21,7 +19,11 @@ extern crate tokio_current_thread;
 extern crate tokio_executor;
 
 #[cfg(not(target_env = "sgx"))]
+#[macro_use]
+pub mod grpc;
+#[cfg(not(target_env = "sgx"))]
 pub mod node;
+// TODO: Rename "rpc" module to "enclave_rpc" or similar.
 pub mod rpc;
 #[cfg(not(target_env = "sgx"))]
 pub mod transaction;

@@ -136,7 +136,8 @@ impl RemoteClient {
             RpcClient::new_grpc(
                 session::Builder::new().remote_enclaves(enclaves),
                 channel,
-                &format!("{}://{:?}", KEY_MANAGER_ENDPOINT, runtime_id),
+                runtime_id,
+                KEY_MANAGER_ENDPOINT,
             ),
             keys_cache_sizes,
         )

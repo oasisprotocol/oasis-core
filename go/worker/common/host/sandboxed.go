@@ -22,9 +22,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx/aesm"
-	cias "github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	cmnIAS "github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/common/version"
-	"github.com/oasislabs/oasis-core/go/ias"
+	ias "github.com/oasislabs/oasis-core/go/ias/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
@@ -317,14 +317,14 @@ type teeState interface {
 }
 
 type teeStateIntelSGX struct {
-	ias  *ias.IAS
+	ias  ias.Endpoint
 	aesm *aesm.Client
 
 	runtimeID signature.PublicKey
 
 	epidGID   uint32
-	spid      cias.SPID
-	quoteType *cias.SignatureType
+	spid      cmnIAS.SPID
+	quoteType *cmnIAS.SignatureType
 }
 
 func (st *teeStateIntelSGX) InitCapabilityTEE(worker *process) error {
@@ -337,12 +337,12 @@ func (st *teeStateIntelSGX) InitCapabilityTEE(worker *process) error {
 	}
 	st.epidGID = binary.LittleEndian.Uint32(qi.GID[:])
 
-	if st.spid, err = st.ias.GetSPID(ctx); err != nil {
-		return errors.Wrap(err, "worker: error while getting IAS SPID")
+	spidInfo, err := st.ias.GetSPIDInfo(ctx)
+	if err != nil {
+		return errors.Wrap(err, "worker: error while getting IAS SPID information")
 	}
-	if st.quoteType, err = st.ias.GetQuoteSignatureType(ctx); err != nil {
-		return errors.Wrap(err, "worker: error while getting IAS signature type")
-	}
+	st.spid = spidInfo.SPID
+	st.quoteType = &spidInfo.QuoteSignatureType
 
 	if _, err = worker.protocol.Call(
 		ctx,
@@ -393,21 +393,26 @@ func (st *teeStateIntelSGX) UpdateCapabilityTEE(worker *process) (*node.Capabili
 		return nil, errors.Wrap(err, "worker: error while getting quote")
 	}
 
-	avr, sig, chain, err := st.ias.VerifyEvidence(ctx, st.runtimeID, quote, nil, nonce)
+	evidence := ias.Evidence{
+		RuntimeID: st.runtimeID,
+		Quote:     quote,
+		Nonce:     nonce,
+	}
+
+	avrBundle, err := st.ias.VerifyEvidence(ctx, &evidence)
 	if err != nil {
 		return nil, errors.Wrap(err, "worker: error while verifying attestation evidence")
 	}
 
-	avrBundle := cias.AVRBundle{
-		Body:             avr,
-		CertificateChain: chain,
-		Signature:        sig,
-	}
+	avrBundle.Body = cbor.FixSliceForSerde(avrBundle.Body)
+	avrBundle.CertificateChain = cbor.FixSliceForSerde(avrBundle.CertificateChain)
+	avrBundle.Signature = cbor.FixSliceForSerde(avrBundle.Signature)
+
 	_, err = worker.protocol.Call(
 		ctx,
 		&protocol.Body{
 			WorkerCapabilityTEERakAvrRequest: &protocol.WorkerCapabilityTEERakAvrRequest{
-				AVR: avrBundle,
+				AVR: *avrBundle,
 			},
 		},
 	)
@@ -444,8 +449,8 @@ type Config struct { //nolint: maligned
 	// worker host environment.
 	TEEHardware node.TEEHardware
 
-	// IAS is the Intel Attestation Service backend.
-	IAS *ias.IAS
+	// IAS is the Intel Attestation Service endpoint.
+	IAS ias.Endpoint
 
 	// MessageHandler is the IPC message handler.
 	MessageHandler protocol.Handler

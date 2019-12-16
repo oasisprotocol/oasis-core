@@ -19,8 +19,13 @@ import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-// moduleName is the module name used for error definitions.
-const moduleName = "consensus"
+const (
+	// moduleName is the module name used for error definitions.
+	moduleName = "consensus"
+
+	// HeightLatest is the height that represents the most recent block height.
+	HeightLatest int64 = 0
+)
 
 // ErrNoCommittedBlocks is the error returned when there are no committed
 // blocks and as such no state can be queried.
@@ -31,6 +36,16 @@ var ErrNoCommittedBlocks = errors.New(moduleName, 1, "consensus: no committed bl
 type ClientBackend interface {
 	// SubmitTx submits a signed consensus transaction.
 	SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error
+
+	// StateToGenesis returns the genesis state at the specified block height.
+	StateToGenesis(ctx context.Context, blockHeight int64) (*genesis.Document, error)
+
+	// WaitEpoch waits for consensus to reach an epoch.
+	//
+	// Note that an epoch is considered reached even if any epoch greater than
+	// the one specified is reached (e.g., that the current epoch is already
+	// in the future).
+	WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error
 
 	// TODO: Add things like following consensus blocks.
 }
@@ -90,9 +105,6 @@ type Backend interface {
 
 	// Scheduler returns the scheduler backend.
 	Scheduler() scheduler.Backend
-
-	// ToGenesis returns the genesis state at the specified block height.
-	ToGenesis(ctx context.Context, blockHeight int64) (*genesis.Document, error)
 }
 
 // TransactionAuthHandler is the interface for handling transaction authentication

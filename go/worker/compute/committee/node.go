@@ -644,7 +644,11 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 			},
 		}
 
-		receipts, err := n.commonNode.Storage.ApplyBatch(ctx, lastHeader.Namespace, lastHeader.Round+1, applyOps)
+		receipts, err := n.commonNode.Storage.ApplyBatch(ctx, &storage.ApplyBatchRequest{
+			Namespace: lastHeader.Namespace,
+			DstRound:  lastHeader.Round + 1,
+			Ops:       applyOps,
+		})
 		if err != nil {
 			n.logger.Error("failed to apply to storage",
 				"err", err,

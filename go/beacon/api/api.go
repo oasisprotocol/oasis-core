@@ -28,8 +28,8 @@ type Backend interface {
 	// beacon for latest finalized block.
 	GetBeacon(context.Context, int64) ([]byte, error)
 
-	// ToGenesis returns the genesis state at specified block height.
-	ToGenesis(context.Context, int64) (*Genesis, error)
+	// StateToGenesis returns the genesis state at specified block height.
+	StateToGenesis(context.Context, int64) (*Genesis, error)
 }
 
 // Genesis is the beacon genesis state.

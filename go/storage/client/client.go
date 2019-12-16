@@ -5,7 +5,6 @@ package client
 import (
 	"context"
 	cryptorand "crypto/rand"
-	"io"
 	"math/rand"
 	"sync"
 	"time"
@@ -16,18 +15,15 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/grpc/storage"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
 var (
@@ -151,7 +147,7 @@ func (b *storageClientBackend) writeWithClient(
 	ctx context.Context,
 	ns common.Namespace,
 	round uint64,
-	fn func(context.Context, storage.StorageClient, *node.Node) (interface{}, error),
+	fn func(context.Context, api.Backend, *node.Node) (interface{}, error),
 	expectedNewRoots []hash.Hash,
 ) ([]*api.Receipt, error) {
 	runtimeID, err := b.getRequestRuntime(ns)
@@ -194,23 +190,23 @@ func (b *storageClientBackend) writeWithClient(
 				numRetries int
 			)
 			op := func() error {
-				var err error
-				resp, err = fn(ctx, client, node)
-				if status.Code(err) == codes.PermissionDenied && numRetries < maxRetries {
+				var rerr error
+				resp, rerr = fn(ctx, client, node)
+				if status.Code(rerr) == codes.PermissionDenied && numRetries < maxRetries {
 					// Writes can fail around an epoch transition due to policy errors,
 					// make sure to retry in this case (up to maxRetries).
 					numRetries++
-					return err
+					return rerr
 				}
-				return backoff.Permanent(err)
+				return backoff.Permanent(rerr)
 			}
 
 			sched := backoff.NewConstantBackOff(retryInterval)
-			err := backoff.Retry(op, backoff.WithContext(sched, ctx))
+			rerr := backoff.Retry(op, backoff.WithContext(sched, ctx))
 
 			ch <- &grpcResponse{
 				resp: resp,
-				err:  err,
+				err:  rerr,
 				node: node,
 			}
 		}()
@@ -233,44 +229,28 @@ func (b *storageClientBackend) writeWithClient(
 			continue
 		}
 
-		var receiptsRaw []byte
-		var err error
-		switch resp := response.resp.(type) {
-		case *storage.ApplyResponse:
-			receiptsRaw = resp.GetReceipts()
-		case *storage.ApplyBatchResponse:
-			receiptsRaw = resp.GetReceipts()
-		case *storage.MergeResponse:
-			receiptsRaw = resp.GetReceipts()
-		case *storage.MergeBatchResponse:
-			receiptsRaw = resp.GetReceipts()
-		default:
+		var receiptList []*api.Receipt
+		var ok bool
+		if receiptList, ok = response.resp.([]*api.Receipt); !ok {
 			b.logger.Error("got unexpected response type from a storage node",
 				"node", response.node,
-				"resp", resp,
+				"resp", response.resp,
 			)
 			continue
 		}
+
 		// NOTE: All storage backend implementations of apply operations return
 		// a list of storage receipts. However, a concrete storage backend,
 		// e.g. storage/database, actually returns a single storage receipt
 		// in a list.
-		receiptInAList := make([]api.Receipt, 1)
-		if err = cbor.Unmarshal(receiptsRaw, &receiptInAList); err != nil {
-			b.logger.Error("failed to unmarshal receipt in a list from a storage node",
-				"node", response.node,
-				"err", err,
-			)
-			continue
-		}
-		if len(receiptInAList) != 1 {
+		if len(receiptList) != 1 {
 			b.logger.Error("got more than one receipt from a storage node",
 				"node", response.node,
-				"num_receipts", len(receiptInAList),
+				"num_receipts", len(receiptList),
 			)
 			continue
 		}
-		receipt := receiptInAList[0]
+		receipt := receiptList[0]
 
 		// Validate the receipt signature, and unmarshal the body.
 		//
@@ -320,7 +300,7 @@ func (b *storageClientBackend) writeWithClient(
 		}
 		// TODO: Only wait for F+1 successful writes:
 		// https://github.com/oasislabs/oasis-core/issues/1821.
-		receipts = append(receipts, &receipt)
+		receipts = append(receipts, receipt)
 	}
 
 	successes := len(receipts)
@@ -333,133 +313,54 @@ func (b *storageClientBackend) writeWithClient(
 	return receipts, nil
 }
 
-func (b *storageClientBackend) Apply(
-	ctx context.Context,
-	ns common.Namespace,
-	srcRound uint64,
-	srcRoot hash.Hash,
-	dstRound uint64,
-	dstRoot hash.Hash,
-	writeLog api.WriteLog,
-) ([]*api.Receipt, error) {
-	var req storage.ApplyRequest
-	req.Namespace, _ = ns.MarshalBinary()
-	req.SrcRound = srcRound
-	req.SrcRoot, _ = srcRoot.MarshalBinary()
-	req.DstRound = dstRound
-	req.DstRoot, _ = dstRoot.MarshalBinary()
-	req.Log = make([]*storage.LogEntry, 0, len(writeLog))
-	for _, e := range writeLog {
-		req.Log = append(req.Log, &storage.LogEntry{
-			Key:   e.Key,
-			Value: e.Value,
-		})
-	}
-
+func (b *storageClientBackend) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {
 	return b.writeWithClient(
 		ctx,
-		ns,
-		dstRound,
-		func(ctx context.Context, c storage.StorageClient, node *node.Node) (interface{}, error) {
-			return c.Apply(ctx, &req)
+		request.Namespace,
+		request.DstRound,
+		func(ctx context.Context, c api.Backend, node *node.Node) (interface{}, error) {
+			return c.Apply(ctx, request)
 		},
-		[]hash.Hash{dstRoot},
+		[]hash.Hash{request.DstRoot},
 	)
 }
 
-func (b *storageClientBackend) ApplyBatch(
-	ctx context.Context,
-	ns common.Namespace,
-	dstRound uint64,
-	ops []api.ApplyOp,
-) ([]*api.Receipt, error) {
-	var req storage.ApplyBatchRequest
-	req.Namespace, _ = ns.MarshalBinary()
-	req.DstRound = dstRound
-	req.Ops = make([]*storage.ApplyOp, 0, len(ops))
-	expectedNewRoots := make([]hash.Hash, 0, len(ops))
-	for _, op := range ops {
-		var pOp storage.ApplyOp
-		pOp.SrcRound = op.SrcRound
-		pOp.SrcRoot, _ = op.SrcRoot.MarshalBinary()
-		pOp.DstRoot, _ = op.DstRoot.MarshalBinary()
-		pOp.Log = make([]*storage.LogEntry, 0, len(op.WriteLog))
-		for _, e := range op.WriteLog {
-			pOp.Log = append(pOp.Log, &storage.LogEntry{
-				Key:   e.Key,
-				Value: e.Value,
-			})
-		}
-		req.Ops = append(req.Ops, &pOp)
+func (b *storageClientBackend) ApplyBatch(ctx context.Context, request *api.ApplyBatchRequest) ([]*api.Receipt, error) {
+	expectedNewRoots := make([]hash.Hash, 0, len(request.Ops))
+	for _, op := range request.Ops {
 		expectedNewRoots = append(expectedNewRoots, op.DstRoot)
 	}
 
 	return b.writeWithClient(
 		ctx,
-		ns,
-		dstRound,
-		func(ctx context.Context, c storage.StorageClient, node *node.Node) (interface{}, error) {
-			return c.ApplyBatch(ctx, &req)
+		request.Namespace,
+		request.DstRound,
+		func(ctx context.Context, c api.Backend, node *node.Node) (interface{}, error) {
+			return c.ApplyBatch(ctx, request)
 		},
 		expectedNewRoots,
 	)
 }
 
-func (b *storageClientBackend) Merge(
-	ctx context.Context,
-	ns common.Namespace,
-	round uint64,
-	base hash.Hash,
-	others []hash.Hash,
-) ([]*api.Receipt, error) {
-	var req storage.MergeRequest
-	req.Namespace, _ = ns.MarshalBinary()
-	req.Round = round
-	req.Base, _ = base.MarshalBinary()
-	req.Others = make([][]byte, 0, len(others))
-	for _, h := range others {
-		raw, _ := h.MarshalBinary()
-		req.Others = append(req.Others, raw)
-	}
-
+func (b *storageClientBackend) Merge(ctx context.Context, request *api.MergeRequest) ([]*api.Receipt, error) {
 	return b.writeWithClient(
 		ctx,
-		ns,
-		round+1,
-		func(ctx context.Context, c storage.StorageClient, node *node.Node) (interface{}, error) {
-			return c.Merge(ctx, &req)
+		request.Namespace,
+		request.Round+1,
+		func(ctx context.Context, c api.Backend, node *node.Node) (interface{}, error) {
+			return c.Merge(ctx, request)
 		},
 		nil,
 	)
 }
 
-func (b *storageClientBackend) MergeBatch(
-	ctx context.Context,
-	ns common.Namespace,
-	round uint64,
-	ops []api.MergeOp,
-) ([]*api.Receipt, error) {
-	var req storage.MergeBatchRequest
-	req.Namespace, _ = ns.MarshalBinary()
-	req.Round = round
-	req.Ops = make([]*storage.MergeOp, 0, len(ops))
-	for _, op := range ops {
-		var pOp storage.MergeOp
-		pOp.Base, _ = op.Base.MarshalBinary()
-		pOp.Others = make([][]byte, 0, len(op.Others))
-		for _, h := range op.Others {
-			raw, _ := h.MarshalBinary()
-			pOp.Others = append(pOp.Others, raw)
-		}
-		req.Ops = append(req.Ops, &pOp)
-	}
-
+func (b *storageClientBackend) MergeBatch(ctx context.Context, request *api.MergeBatchRequest) ([]*api.Receipt, error) {
 	return b.writeWithClient(
 		ctx,
-		ns,
-		round+1,
-		func(ctx context.Context, c storage.StorageClient, node *node.Node) (interface{}, error) {
-			return c.MergeBatch(ctx, &req)
+		request.Namespace,
+		request.Round+1,
+		func(ctx context.Context, c api.Backend, node *node.Node) (interface{}, error) {
+			return c.MergeBatch(ctx, request)
 		},
 		nil,
 	)
@@ -468,7 +369,7 @@ func (b *storageClientBackend) MergeBatch(
 func (b *storageClientBackend) readWithClient(
 	ctx context.Context,
 	ns common.Namespace,
-	fn func(context.Context, storage.StorageClient) (interface{}, error),
+	fn func(context.Context, api.Backend) (interface{}, error),
 ) (interface{}, error) {
 	runtimeID, err := b.getRequestRuntime(ns)
 	if err != nil {
@@ -525,163 +426,73 @@ func (b *storageClientBackend) readWithClient(
 }
 
 func (b *storageClientBackend) SyncGet(ctx context.Context, request *api.GetRequest) (*api.ProofResponse, error) {
-	rq := storage.ReadSyncerRequest{
-		Request: cbor.Marshal(request),
-	}
-	rspRaw, err := b.readWithClient(
+	rsp, err := b.readWithClient(
 		ctx,
 		request.Tree.Root.Namespace,
-		func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
-			return c.SyncGet(ctx, &rq)
+		func(ctx context.Context, c api.Backend) (interface{}, error) {
+			return c.SyncGet(ctx, request)
 		},
 	)
 	if err != nil {
 		return nil, err
 	}
-	rsp := rspRaw.(*storage.ReadSyncerResponse)
-
-	var syncerRsp api.ProofResponse
-	if err = cbor.Unmarshal(rsp.Response, &syncerRsp); err != nil {
-		return nil, err
-	}
-	return &syncerRsp, nil
+	return rsp.(*api.ProofResponse), nil
 }
 
 func (b *storageClientBackend) SyncGetPrefixes(ctx context.Context, request *api.GetPrefixesRequest) (*api.ProofResponse, error) {
-	rq := storage.ReadSyncerRequest{
-		Request: cbor.Marshal(request),
-	}
-	rspRaw, err := b.readWithClient(
+	rsp, err := b.readWithClient(
 		ctx,
 		request.Tree.Root.Namespace,
-		func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
-			return c.SyncGetPrefixes(ctx, &rq)
+		func(ctx context.Context, c api.Backend) (interface{}, error) {
+			return c.SyncGetPrefixes(ctx, request)
 		},
 	)
 	if err != nil {
 		return nil, err
 	}
-	rsp := rspRaw.(*storage.ReadSyncerResponse)
-
-	var syncerRsp api.ProofResponse
-	if err = cbor.Unmarshal(rsp.Response, &syncerRsp); err != nil {
-		return nil, err
-	}
-	return &syncerRsp, nil
+	return rsp.(*api.ProofResponse), nil
 }
 
 func (b *storageClientBackend) SyncIterate(ctx context.Context, request *api.IterateRequest) (*api.ProofResponse, error) {
-	rq := storage.ReadSyncerRequest{
-		Request: cbor.Marshal(request),
-	}
-	rspRaw, err := b.readWithClient(
+	rsp, err := b.readWithClient(
 		ctx,
 		request.Tree.Root.Namespace,
-		func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
-			return c.SyncIterate(ctx, &rq)
+		func(ctx context.Context, c api.Backend) (interface{}, error) {
+			return c.SyncIterate(ctx, request)
 		},
 	)
 	if err != nil {
 		return nil, err
 	}
-	rsp := rspRaw.(*storage.ReadSyncerResponse)
-
-	var syncerRsp api.ProofResponse
-	if err = cbor.Unmarshal(rsp.Response, &syncerRsp); err != nil {
-		return nil, err
-	}
-	return &syncerRsp, nil
+	return rsp.(*api.ProofResponse), nil
 }
 
-func (b *storageClientBackend) GetDiff(ctx context.Context, startRoot api.Root, endRoot api.Root) (api.WriteLogIterator, error) {
-	var req storage.GetDiffRequest
-	req.StartRoot = cbor.Marshal(startRoot)
-	req.EndRoot = cbor.Marshal(endRoot)
-
-	respRaw, err := b.readWithClient(ctx, startRoot.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
-		return c.GetDiff(ctx, &req)
-	})
+func (b *storageClientBackend) GetDiff(ctx context.Context, request *api.GetDiffRequest) (api.WriteLogIterator, error) {
+	rsp, err := b.readWithClient(
+		ctx,
+		request.StartRoot.Namespace,
+		func(ctx context.Context, c api.Backend) (interface{}, error) {
+			return c.GetDiff(ctx, request)
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
-	respClient := respRaw.(storage.Storage_GetDiffClient)
-
-	pipe := writelog.NewPipeIterator(ctx)
-
-	go func() {
-		defer pipe.Close()
-		for {
-			diffResp, err := respClient.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				_ = pipe.PutError(err)
-			}
-
-			for _, entry := range diffResp.GetLog() {
-				entry := api.LogEntry{
-					Key:   entry.Key,
-					Value: entry.Value,
-				}
-				if err := pipe.Put(&entry); err != nil {
-					_ = pipe.PutError(err)
-				}
-			}
-
-			if diffResp.GetFinal() {
-				break
-			}
-		}
-	}()
-
-	return &pipe, nil
+	return rsp.(api.WriteLogIterator), nil
 }
 
-func (b *storageClientBackend) GetCheckpoint(ctx context.Context, root api.Root) (api.WriteLogIterator, error) {
-	var req storage.GetCheckpointRequest
-	req.Root = cbor.Marshal(root)
-
-	respRaw, err := b.readWithClient(ctx, root.Namespace, func(ctx context.Context, c storage.StorageClient) (interface{}, error) {
-		return c.GetCheckpoint(ctx, &req)
-	})
+func (b *storageClientBackend) GetCheckpoint(ctx context.Context, request *api.GetCheckpointRequest) (api.WriteLogIterator, error) {
+	rsp, err := b.readWithClient(
+		ctx,
+		request.Root.Namespace,
+		func(ctx context.Context, c api.Backend) (interface{}, error) {
+			return c.GetCheckpoint(ctx, request)
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
-	respClient := respRaw.(storage.Storage_GetCheckpointClient)
-
-	pipe := writelog.NewPipeIterator(ctx)
-
-	go func() {
-		defer pipe.Close()
-		for {
-			checkpointResp, err := respClient.Recv()
-			if err == io.EOF {
-				return
-			}
-			if err != nil {
-				b.logger.Error("storage client GetCheckpoint error",
-					"err", err)
-				_ = pipe.PutError(err)
-			}
-
-			for _, entry := range checkpointResp.GetLog() {
-				entry := api.LogEntry{
-					Key:   entry.Key,
-					Value: entry.Value,
-				}
-				if err := pipe.Put(&entry); err != nil {
-					_ = pipe.PutError(err)
-				}
-			}
-
-			if checkpointResp.GetFinal() {
-				return
-			}
-		}
-	}()
-
-	return &pipe, nil
+	return rsp.(api.WriteLogIterator), nil
 }
 
 func (b *storageClientBackend) Cleanup() {

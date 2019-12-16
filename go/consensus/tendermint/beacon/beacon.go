@@ -28,7 +28,7 @@ func (t *tendermintBackend) GetBeacon(ctx context.Context, height int64) ([]byte
 	return q.Beacon(ctx)
 }
 
-func (t *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (t *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := t.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err

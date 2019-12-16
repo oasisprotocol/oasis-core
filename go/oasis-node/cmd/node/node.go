@@ -13,7 +13,6 @@ import (
 	flag "github.com/spf13/pflag"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	"github.com/oasislabs/oasis-core/go/client"
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -23,19 +22,18 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/persistent"
 	"github.com/oasislabs/oasis-core/go/common/service"
-	"github.com/oasislabs/oasis-core/go/consensus"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
 	tmService "github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	tendermintTestsGenesis "github.com/oasislabs/oasis-core/go/consensus/tendermint/tests/genesis"
 	"github.com/oasislabs/oasis-core/go/control"
-	"github.com/oasislabs/oasis-core/go/dummydebug"
+	controlAPI "github.com/oasislabs/oasis-core/go/control/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	"github.com/oasislabs/oasis-core/go/genesis"
 	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
 	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/ias"
+	iasAPI "github.com/oasislabs/oasis-core/go/ias/api"
 	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -45,13 +43,14 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/pprof"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/tracing"
-	"github.com/oasislabs/oasis-core/go/registry"
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client"
+	runtimeClientAPI "github.com/oasislabs/oasis-core/go/runtime/client/api"
+	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/sentry"
 	sentryAPI "github.com/oasislabs/oasis-core/go/sentry/api"
-	"github.com/oasislabs/oasis-core/go/staking"
 	stakingAPI "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/storage"
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
@@ -67,7 +66,7 @@ import (
 )
 
 var (
-	_ control.Shutdownable = (*Node)(nil)
+	_ controlAPI.Shutdownable = (*Node)(nil)
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -102,21 +101,24 @@ type Node struct {
 
 	Consensus consensusAPI.Backend
 
-	Genesis   genesisAPI.Provider
-	Identity  *identity.Identity
-	Beacon    beacon.Backend
-	Epochtime epochtime.Backend
-	Registry  registryAPI.Backend
-	RootHash  roothash.Backend
-	Scheduler scheduler.Backend
-	Sentry    sentryAPI.Backend
-	Staking   stakingAPI.Backend
-	Storage   storageAPI.Backend
-	IAS       *ias.IAS
-	Client    *client.Client
+	Genesis       genesisAPI.Provider
+	Identity      *identity.Identity
+	Beacon        beacon.Backend
+	Epochtime     epochtime.Backend
+	Registry      registryAPI.Backend
+	RootHash      roothash.Backend
+	Scheduler     scheduler.Backend
+	Sentry        sentryAPI.Backend
+	Staking       stakingAPI.Backend
+	Storage       storageAPI.Backend
+	IAS           iasAPI.Endpoint
+	RuntimeClient runtimeClientAPI.RuntimeClient
 
 	KeyManager       keymanagerAPI.Backend
 	KeyManagerClient *keymanagerClient.Client
+
+	NodeController  controlAPI.NodeController
+	DebugController controlAPI.DebugController
 
 	CommonWorker               *workerCommon.Worker
 	ComputeWorker              *compute.Worker
@@ -180,12 +182,10 @@ func (n *Node) initBackends() error {
 
 	// Initialize and register the internal gRPC services.
 	grpcSrv := n.grpcInternal.Server()
-	registry.NewGRPCServer(grpcSrv, n.Registry)
-	staking.NewGRPCServer(grpcSrv, n.Staking)
-	storage.NewGRPCServer(grpcSrv, n.Storage, &grpc.AllowAllRuntimePolicyChecker{}, false)
-	dummydebug.NewGRPCServer(grpcSrv, n.Epochtime, n.Registry)
-	genesis.NewGRPCServer(grpcSrv, n.Consensus)
-	consensus.NewGRPCServer(grpcSrv, n.Consensus)
+	registryAPI.RegisterService(grpcSrv, n.Registry)
+	stakingAPI.RegisterService(grpcSrv, n.Staking)
+	storageAPI.RegisterService(grpcSrv, n.Storage)
+	consensusAPI.RegisterService(grpcSrv, n.Consensus)
 
 	cmdCommon.Logger().Debug("backends initialized")
 
@@ -429,7 +429,7 @@ func (n *Node) initGenesis(testNode bool) error {
 }
 
 func (n *Node) dumpGenesis(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) error {
-	doc, err := n.svcTmnt.ToGenesis(ctx, blockHeight)
+	doc, err := n.svcTmnt.StateToGenesis(ctx, blockHeight)
 	if err != nil {
 		return fmt.Errorf("dumpGenesis: failed to get genesis: %w", err)
 	}
@@ -678,8 +678,8 @@ func newNode(testNode bool) (*Node, error) {
 		return nil, err
 	}
 
-	// Initialize the client.
-	node.Client, err = client.New(
+	// Initialize the runtime client.
+	node.RuntimeClient, err = runtimeClient.New(
 		node.svcMgr.Ctx,
 		cmdCommon.DataDir(),
 		node.RootHash,
@@ -692,8 +692,9 @@ func newNode(testNode bool) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	node.svcMgr.RegisterCleanupOnly(node.Client, "client service")
-	client.NewGRPCServer(node.grpcInternal.Server(), node.Client)
+	node.svcMgr.RegisterCleanupOnly(node.RuntimeClient, "client service")
+	runtimeClientAPI.RegisterService(node.grpcInternal.Server(), node.RuntimeClient)
+	enclaverpc.RegisterService(node.grpcInternal.Server(), node.RuntimeClient)
 
 	// Start metric server.
 	if err = metrics.Start(); err != nil {
@@ -719,8 +720,14 @@ func newNode(testNode bool) (*Node, error) {
 		return nil, err
 	}
 
-	// Start the node control server.
-	control.NewGRPCServer(node.grpcInternal, node, node.Client)
+	// Initialize and start the node controller.
+	node.NodeController = control.New(node, node.Consensus)
+	controlAPI.RegisterService(node.grpcInternal.Server(), node.NodeController)
+	if flags.DebugDontBlameOasis() {
+		// Initialize and start the debug controller if we are in debug mode.
+		node.DebugController = control.NewDebug(node.Epochtime, node.Registry)
+		controlAPI.RegisterDebugService(node.grpcInternal.Server(), node.DebugController)
+	}
 
 	// Start the tendermint service.
 	//
@@ -762,7 +769,7 @@ func init() {
 		tendermint.Flags,
 		ias.Flags,
 		workerKeymanager.Flags,
-		client.Flags,
+		runtimeClient.Flags,
 		compute.Flags,
 		p2p.Flags,
 		registration.Flags,

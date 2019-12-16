@@ -17,7 +17,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/common/version"
-	pbCommon "github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
 var (
@@ -28,9 +27,6 @@ var (
 	// ErrRAKHashMismatch is the error returned when the TEE attestation
 	// does not contain the node's RAK hash.
 	ErrRAKHashMismatch = errors.New("node: RAK hash mismatch")
-
-	// ErrNilProtobuf is the error returned when a protobuf is nil.
-	ErrNilProtobuf = errors.New("node: Protobuf is nil")
 
 	teeHashContext = []byte("oasis-core/node: TEE RAK binding")
 
@@ -155,39 +151,6 @@ type Runtime struct {
 	ExtraInfo []byte `json:"extra_info"`
 }
 
-func (r *Runtime) fromProto(pb *pbCommon.NodeRuntime) error {
-	if err := r.ID.UnmarshalBinary(pb.GetId()); err != nil {
-		return err
-	}
-
-	if pbCapa := pb.GetCapabilities(); pbCapa != nil {
-		if err := r.Capabilities.fromProto(pbCapa); err != nil {
-			return err
-		}
-	}
-
-	r.ExtraInfo = pb.GetExtraInfo()
-	r.Version = version.FromU64(pb.GetVersion())
-
-	return nil
-}
-
-func (r *Runtime) toProto() *pbCommon.NodeRuntime {
-	pb := new(pbCommon.NodeRuntime)
-
-	pb.Id, _ = r.ID.MarshalBinary()
-
-	pb.Capabilities = new(pbCommon.Capabilities)
-	if r.Capabilities.TEE != nil {
-		pb.Capabilities.Tee = r.Capabilities.TEE.toProto()
-	}
-
-	pb.ExtraInfo = r.ExtraInfo
-	pb.Version = r.Version.ToU64()
-
-	return pb
-}
-
 // CommitteInfo contains information for connecting to this node as a
 // committee member.
 type CommitteeInfo struct {
@@ -203,36 +166,6 @@ func (info *CommitteeInfo) ParseCertificate() (*x509.Certificate, error) {
 	return x509.ParseCertificate(info.Certificate)
 }
 
-func (info *CommitteeInfo) toProto() *pbCommon.CommitteeInfo {
-	pb := new(pbCommon.CommitteeInfo)
-
-	pb.Certificate = info.Certificate
-	pb.Addresses = ToProtoAddresses(info.Addresses)
-
-	return pb
-}
-
-func (info *CommitteeInfo) fromProto(pb *pbCommon.CommitteeInfo) error {
-	if pb == nil {
-		return ErrNilProtobuf
-	}
-
-	info.Certificate = pb.GetCertificate()
-
-	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
-		info.Addresses = make([]Address, 0, len(pbAddresses))
-		for _, v := range pbAddresses {
-			addr, err := parseProtoAddress(v)
-			if err != nil {
-				return err
-			}
-			info.Addresses = append(info.Addresses, *addr)
-		}
-	}
-
-	return nil
-}
-
 // P2PInfo contains information for connecting to this node via P2P transport.
 type P2PInfo struct {
 	// ID is the unique identifier of the node on the P2P transport.
@@ -240,38 +173,6 @@ type P2PInfo struct {
 
 	// Addresses is the list of addresses at which the node can be reached.
 	Addresses []Address `json:"addresses"`
-}
-
-func (info *P2PInfo) toProto() *pbCommon.P2PInfo {
-	pb := new(pbCommon.P2PInfo)
-
-	pb.Id, _ = info.ID.MarshalBinary()
-	pb.Addresses = ToProtoAddresses(info.Addresses)
-
-	return pb
-}
-
-func (info *P2PInfo) fromProto(pb *pbCommon.P2PInfo) error {
-	if pb == nil {
-		return ErrNilProtobuf
-	}
-
-	if err := info.ID.UnmarshalBinary(pb.GetId()); err != nil {
-		return err
-	}
-
-	if pbAddresses := pb.GetAddresses(); pbAddresses != nil {
-		info.Addresses = make([]Address, 0, len(pbAddresses))
-		for _, v := range pbAddresses {
-			addr, err := parseProtoAddress(v)
-			if err != nil {
-				return err
-			}
-			info.Addresses = append(info.Addresses, *addr)
-		}
-	}
-
-	return nil
 }
 
 // ConsensusInfo contains information for connecting to this node as a
@@ -284,48 +185,10 @@ type ConsensusInfo struct {
 	Addresses []ConsensusAddress `json:"addresses"`
 }
 
-func (info *ConsensusInfo) toProto() *pbCommon.ConsensusInfo {
-	pb := new(pbCommon.ConsensusInfo)
-	pb.Id, _ = info.ID.MarshalBinary()
-	pb.Addresses = ToProtoConsensusAddresses(info.Addresses)
-	return pb
-}
-
-func (info *ConsensusInfo) fromProto(pb *pbCommon.ConsensusInfo) error {
-	if err := info.ID.UnmarshalBinary(pb.GetId()); err != nil {
-		return err
-	}
-
-	if pbConsensusAddrs := pb.GetAddresses(); pbConsensusAddrs != nil {
-		consensusAddrs, err := FromProtoConsensusAddresses(pbConsensusAddrs)
-		if err != nil {
-			return err
-		}
-		info.Addresses = consensusAddrs
-	}
-
-	return nil
-}
-
 // Capabilities represents a node's capabilities.
 type Capabilities struct {
 	// TEE is the capability of a node executing batches in a TEE.
 	TEE *CapabilityTEE `json:"tee,omitempty"`
-}
-
-func (c *Capabilities) fromProto(pb *pbCommon.Capabilities) error {
-	if pb == nil {
-		return ErrNilProtobuf
-	}
-
-	if pbTee := pb.GetTee(); pbTee != nil {
-		c.TEE = new(CapabilityTEE)
-		if err := c.TEE.fromProto(pbTee); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // TEEHardware is a TEE hardware implementation.
@@ -372,31 +235,6 @@ func (h *TEEHardware) FromString(str string) error {
 	return nil
 }
 
-// FromProto deserializes a protobuf into a TEEHardware.
-func (h *TEEHardware) FromProto(pb pbCommon.CapabilitiesTEE_Hardware) error {
-	switch pb {
-	case pbCommon.CapabilitiesTEE_Invalid:
-		*h = TEEHardwareInvalid
-	case pbCommon.CapabilitiesTEE_IntelSGX:
-		*h = TEEHardwareIntelSGX
-	default:
-		return ErrInvalidTEEHardware
-	}
-	return nil
-}
-
-// ToProto serializes a TEEHardware into a protobuf.
-func (h *TEEHardware) ToProto() (pbCommon.CapabilitiesTEE_Hardware, error) {
-	switch *h {
-	case TEEHardwareInvalid:
-		return pbCommon.CapabilitiesTEE_Invalid, nil
-	case TEEHardwareIntelSGX:
-		return pbCommon.CapabilitiesTEE_IntelSGX, nil
-	default:
-		return pbCommon.CapabilitiesTEE_Invalid, ErrInvalidTEEHardware
-	}
-}
-
 // CapabilityTEE represents the node's TEE capability.
 type CapabilityTEE struct {
 	// TEE hardware type.
@@ -407,41 +245,6 @@ type CapabilityTEE struct {
 
 	// Attestation.
 	Attestation []byte `json:"attestation"`
-}
-
-func (c *CapabilityTEE) fromProto(pb *pbCommon.CapabilitiesTEE) error {
-	if pb == nil {
-		return ErrNilProtobuf
-	}
-
-	if err := c.Hardware.FromProto(pb.GetHardware()); err != nil {
-		return err
-	}
-
-	if err := c.RAK.UnmarshalBinary(pb.GetRak()); err != nil {
-		return err
-	}
-
-	c.Attestation = pb.GetAttestation()
-
-	return nil
-}
-
-func (c *CapabilityTEE) toProto() *pbCommon.CapabilitiesTEE {
-	pb := new(pbCommon.CapabilitiesTEE)
-
-	var err error
-	if pb.Hardware, err = c.Hardware.ToProto(); err != nil {
-		panic(err)
-	}
-
-	pb.Rak, _ = c.RAK.MarshalBinary()
-
-	if c.Attestation != nil {
-		pb.Attestation = append([]byte{}, c.Attestation...)
-	}
-
-	return pb
 }
 
 // RAKHash computes the expected AVR report hash bound to a given public RAK.
@@ -496,72 +299,6 @@ func (c *CapabilityTEE) Verify(ts time.Time) error {
 // String returns a string representation of itself.
 func (n *Node) String() string {
 	return "<Node id=" + n.ID.String() + ">"
-}
-
-// FromProto deserializes a protobuf into a Node.
-func (n *Node) FromProto(pb *pbCommon.Node) error { // nolint:gocyclo
-	if pb == nil {
-		return ErrNilProtobuf
-	}
-
-	if err := n.ID.UnmarshalBinary(pb.GetId()); err != nil {
-		return err
-	}
-
-	if err := n.EntityID.UnmarshalBinary(pb.GetEntityId()); err != nil {
-		return err
-	}
-
-	n.Expiration = pb.GetExpiration()
-
-	if err := n.Committee.fromProto(pb.GetCommittee()); err != nil {
-		return err
-	}
-
-	if err := n.P2P.fromProto(pb.GetP2P()); err != nil {
-		return err
-	}
-
-	if err := n.Consensus.fromProto(pb.GetConsensus()); err != nil {
-		return err
-	}
-
-	if pbRuntimes := pb.GetRuntimes(); pbRuntimes != nil {
-		n.Runtimes = make([]*Runtime, 0, len(pbRuntimes))
-		for _, v := range pbRuntimes {
-			rt := new(Runtime)
-			if err := rt.fromProto(v); err != nil {
-				return err
-			}
-			n.Runtimes = append(n.Runtimes, rt)
-		}
-	}
-
-	n.Roles = RolesMask(pb.GetRoles())
-
-	return nil
-}
-
-// ToProto serializes the Node into a protobuf.
-func (n *Node) ToProto() *pbCommon.Node {
-	pb := new(pbCommon.Node)
-
-	pb.Id, _ = n.ID.MarshalBinary()
-	pb.EntityId, _ = n.EntityID.MarshalBinary()
-	pb.Expiration = n.Expiration
-	pb.Committee = n.Committee.toProto()
-	pb.P2P = n.P2P.toProto()
-	pb.Consensus = n.Consensus.toProto()
-	if n.Runtimes != nil {
-		pb.Runtimes = make([]*pbCommon.NodeRuntime, 0, len(n.Runtimes))
-		for _, v := range n.Runtimes {
-			pb.Runtimes = append(pb.Runtimes, v.toProto())
-		}
-	}
-
-	pb.Roles = uint32(n.Roles)
-
-	return pb
 }
 
 // SignedNode is a signed blob containing a CBOR-serialized Node.

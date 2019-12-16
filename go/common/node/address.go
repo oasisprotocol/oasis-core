@@ -4,12 +4,10 @@ import (
 	"encoding"
 	"errors"
 	"fmt"
-	"math"
 	"net"
 	"strings"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	pbCommon "github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
 var (
@@ -81,75 +79,6 @@ func (a Address) String() string {
 	return a.TCPAddr.String()
 }
 
-// ToProtoAddresses converts a list of Addresses to protocol buffers.
-func ToProtoAddresses(addrs []Address) []*pbCommon.Address {
-	var pbAddrs []*pbCommon.Address
-	for _, addr := range addrs {
-		pbAddrs = append(pbAddrs, toProtoAddress(addr))
-	}
-	return pbAddrs
-}
-
-// FromProtoAddresses converts a list of protocol buffer addresses to a list of
-// Addresses.
-func FromProtoAddresses(pbAddrs []*pbCommon.Address) ([]Address, error) {
-	addrs := make([]Address, 0, len(pbAddrs))
-	for _, v := range pbAddrs {
-		addr, err := parseProtoAddress(v)
-		if err != nil {
-			return nil, err
-		}
-		addrs = append(addrs, *addr)
-	}
-	return addrs, nil
-}
-
-func parseProtoAddress(pb *pbCommon.Address) (*Address, error) {
-	var ipLen int
-	switch pb.GetTransport() {
-	case pbCommon.Address_TCPv4:
-		ipLen = 4
-	case pbCommon.Address_TCPv6:
-		ipLen = 16
-	default:
-		return nil, ErrInvalidAddress
-	}
-
-	rawIP := pb.GetAddress()
-	if len(rawIP) != ipLen {
-		return nil, ErrInvalidAddress
-	}
-
-	rawPort := pb.GetPort()
-	if rawPort > math.MaxUint16 {
-		return nil, ErrInvalidAddress
-	}
-
-	inner := net.TCPAddr{
-		IP:   net.IP(rawIP),
-		Port: int(rawPort),
-	}
-
-	return &Address{inner}, nil
-}
-
-func toProtoAddress(addr Address) *pbCommon.Address {
-	pbAddr := new(pbCommon.Address)
-	var rawIP []byte
-	if rawIP = addr.IP.To4(); rawIP != nil {
-		pbAddr.Transport = pbCommon.Address_TCPv4
-	} else if rawIP = addr.IP.To16(); rawIP != nil {
-		pbAddr.Transport = pbCommon.Address_TCPv6
-	} else {
-		panic("node: address is neither IPv4 nor IPv6")
-	}
-
-	pbAddr.Address = append([]byte{}, rawIP...)
-	pbAddr.Port = uint32(addr.Port)
-
-	return pbAddr
-}
-
 // ConsensusAddress represents a Tendermint consensus address that includes an
 // ID and a TCP address.
 // NOTE: The consensus address ID could be different from the consensus ID
@@ -187,37 +116,6 @@ func (ca *ConsensusAddress) UnmarshalText(text []byte) error {
 // String returns a string representation of a consensus address.
 func (ca *ConsensusAddress) String() string {
 	return fmt.Sprintf("%s@%s", ca.ID, ca.Address)
-}
-
-// ToProtoConsensusAddresses converts a list of ConsensusAddresses to protocol buffers.
-func ToProtoConsensusAddresses(addrs []ConsensusAddress) []*pbCommon.ConsensusAddress {
-	var pbConsensusAddrs []*pbCommon.ConsensusAddress
-	for _, addr := range addrs {
-		pbAddr := new(pbCommon.ConsensusAddress)
-		pbAddr.Id, _ = addr.ID.MarshalBinary()
-		pbAddr.Address = toProtoAddress(addr.Address)
-		pbConsensusAddrs = append(pbConsensusAddrs, pbAddr)
-	}
-	return pbConsensusAddrs
-}
-
-// FromProtoAddresses converts a list of protocol buffer addresses to a list of
-// Addresses.
-func FromProtoConsensusAddresses(pbAddrs []*pbCommon.ConsensusAddress) ([]ConsensusAddress, error) {
-	consensusAddrs := make([]ConsensusAddress, 0, len(pbAddrs))
-	for _, v := range pbAddrs {
-		consensusAddr := new(ConsensusAddress)
-		if err := consensusAddr.ID.UnmarshalBinary(v.GetId()); err != nil {
-			return nil, err
-		}
-		addr, err := parseProtoAddress(v.GetAddress())
-		if err != nil {
-			return nil, err
-		}
-		consensusAddr.Address = *addr
-		consensusAddrs = append(consensusAddrs, *consensusAddr)
-	}
-	return consensusAddrs, nil
 }
 
 func init() {

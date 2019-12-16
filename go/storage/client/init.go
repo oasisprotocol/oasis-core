@@ -11,10 +11,9 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	commonGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
+	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/grpc/storage"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -55,7 +54,7 @@ func New(
 
 		var opts grpc.DialOption
 		if certFile := viper.GetString(CfgDebugClientCert); certFile != "" {
-			tlsConfig, err := commonGrpc.NewClientTLSConfigFromFile(certFile, identity.CommonName)
+			tlsConfig, err := cmnGrpc.NewClientTLSConfigFromFile(certFile, identity.CommonName)
 			if err != nil {
 				logger.Error("failed creating client tls config from file",
 					"file", viper.GetString(certFile),
@@ -70,14 +69,14 @@ func New(
 			opts = grpc.WithInsecure()
 		}
 
-		conn, err := grpc.Dial(addr, opts)
+		conn, err := cmnGrpc.Dial(addr, opts)
 		if err != nil {
 			logger.Error("unable to dial debug client",
 				"error", err,
 			)
 			return nil, err
 		}
-		client := storage.NewStorageClient(conn)
+		client := api.NewStorageClient(conn)
 
 		testRuntimeSigner := memorySigner.NewTestSigner(debugModeFakeRuntimeSeed)
 		debugRuntimeID := testRuntimeSigner.Public()

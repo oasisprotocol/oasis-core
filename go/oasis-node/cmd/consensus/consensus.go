@@ -12,9 +12,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	consensusClient "github.com/oasislabs/oasis-core/go/consensus/client"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -42,7 +41,7 @@ var (
 	logger = logging.GetLogger("cmd/consensus")
 )
 
-func doConnect(cmd *cobra.Command) (*grpc.ClientConn, consensusAPI.ClientBackend) {
+func doConnect(cmd *cobra.Command) (*grpc.ClientConn, consensus.ClientBackend) {
 	conn, err := cmdGrpc.NewClient(cmd)
 	if err != nil {
 		logger.Error("failed to establish connection with node",
@@ -51,13 +50,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, consensusAPI.ClientBackend
 		os.Exit(1)
 	}
 
-	client, err := consensusClient.New(conn)
-	if err != nil {
-		logger.Error("failed to create consensus client",
-			"err", err,
-		)
-		os.Exit(1)
-	}
+	client := consensus.NewConsensusClient(conn)
 	return conn, client
 }
 

@@ -174,8 +174,8 @@ type Backend interface {
 	// be sent immediately.
 	WatchCommittees() (<-chan *Committee, *pubsub.Subscription)
 
-	// ToGenesis returns the genesis state at specified block height.
-	ToGenesis(context.Context, int64) (*Genesis, error)
+	// StateToGenesis returns the genesis state at specified block height.
+	StateToGenesis(context.Context, int64) (*Genesis, error)
 
 	// Cleanup cleans up the scheduler backend.
 	Cleanup()

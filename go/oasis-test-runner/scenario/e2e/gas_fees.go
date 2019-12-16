@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
@@ -137,7 +138,7 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 	// there is only one operation per block and there are 3 validators, each
 	// operation should put 1 unit to the common pool.
 	st := sc.net.Controller().Staking
-	commonPool, err := st.CommonPool(ctx, 0)
+	commonPool, err := st.CommonPool(ctx, consensus.HeightLatest)
 	if err != nil {
 		return err
 	}
@@ -180,7 +181,7 @@ func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Qua
 	for _, e := range sc.net.Entities()[1:] { // Only count entities with validators.
 		ent, _ := e.Inner()
 
-		acct, err := st.AccountInfo(ctx, ent.ID, 0)
+		acct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: ent.ID, Height: consensus.HeightLatest})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get account info: %w", err)
 		}
@@ -278,7 +279,7 @@ func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.S
 		for {
 			select {
 			case ev := <-ch:
-				if _, ok := ev.(*staking.ReclaimEscrowEvent); ok {
+				if ev.Reclaim != nil {
 					return nil
 				}
 			case <-ctx.Done():
@@ -354,7 +355,7 @@ func (sc *gasFeesImpl) testStakingGasOp(
 	st := sc.net.Controller().Staking
 
 	// Fetch initial account info.
-	acct, err := st.AccountInfo(ctx, signer.Public(), 0)
+	acct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: signer.Public(), Height: consensus.HeightLatest})
 	if err != nil {
 		return fmt.Errorf("failed to get account info: %w", err)
 	}
@@ -407,7 +408,7 @@ func (sc *gasFeesImpl) testStakingGasOp(
 	}
 
 	// Check account after the (failed) operation.
-	newAcct, err := st.AccountInfo(ctx, signer.Public(), 0)
+	newAcct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: signer.Public(), Height: consensus.HeightLatest})
 	if err != nil {
 		return fmt.Errorf("failed to get account info: %w", err)
 	}

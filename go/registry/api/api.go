@@ -159,27 +159,27 @@ var (
 // Backend is a registry implementation.
 type Backend interface {
 	// GetEntity gets an entity by ID.
-	GetEntity(context.Context, signature.PublicKey, int64) (*entity.Entity, error)
+	GetEntity(context.Context, *IDQuery) (*entity.Entity, error)
 
 	// GetEntities gets a list of all registered entities.
 	GetEntities(context.Context, int64) ([]*entity.Entity, error)
 
 	// WatchEntities returns a channel that produces a stream of
 	// EntityEvent on entity registration changes.
-	WatchEntities() (<-chan *EntityEvent, *pubsub.Subscription)
+	WatchEntities(context.Context) (<-chan *EntityEvent, pubsub.ClosableSubscription, error)
 
 	// GetNode gets a node by ID.
-	GetNode(context.Context, signature.PublicKey, int64) (*node.Node, error)
+	GetNode(context.Context, *IDQuery) (*node.Node, error)
 
 	// GetNodeStatus returns a node's status.
-	GetNodeStatus(context.Context, signature.PublicKey, int64) (*NodeStatus, error)
+	GetNodeStatus(context.Context, *IDQuery) (*NodeStatus, error)
 
 	// GetNodes gets a list of all registered nodes.
 	GetNodes(context.Context, int64) ([]*node.Node, error)
 
 	// WatchNodes returns a channel that produces a stream of
 	// NodeEvent on node registration changes.
-	WatchNodes() (<-chan *NodeEvent, *pubsub.Subscription)
+	WatchNodes(context.Context) (<-chan *NodeEvent, pubsub.ClosableSubscription, error)
 
 	// WatchNodeList returns a channel that produces a stream of NodeList.
 	// Upon subscription, the node list for the current epoch will be sent
@@ -187,10 +187,10 @@ type Backend interface {
 	//
 	// Each node list will be sorted by node ID in lexographically ascending
 	// order.
-	WatchNodeList() (<-chan *NodeList, *pubsub.Subscription)
+	WatchNodeList(context.Context) (<-chan *NodeList, pubsub.ClosableSubscription, error)
 
 	// GetRuntime gets a runtime by ID.
-	GetRuntime(context.Context, signature.PublicKey, int64) (*Runtime, error)
+	GetRuntime(context.Context, *IDQuery) (*Runtime, error)
 
 	// GetRuntimes returns the registered Runtimes at the specified
 	// block height.
@@ -201,13 +201,19 @@ type Backend interface {
 
 	// WatchRuntimes returns a stream of Runtime.  Upon subscription,
 	// all runtimes will be sent immediately.
-	WatchRuntimes() (<-chan *Runtime, *pubsub.Subscription)
+	WatchRuntimes(context.Context) (<-chan *Runtime, pubsub.ClosableSubscription, error)
 
-	// ToGenesis returns the genesis state at specified block height.
-	ToGenesis(context.Context, int64) (*Genesis, error)
+	// StateToGenesis returns the genesis state at specified block height.
+	StateToGenesis(context.Context, int64) (*Genesis, error)
 
 	// Cleanup cleans up the registry backend.
 	Cleanup()
+}
+
+// IDQuery is a registry query by ID.
+type IDQuery struct {
+	Height int64               `json:"height"`
+	ID     signature.PublicKey `json:"id"`
 }
 
 // NewRegisterEntityTx creates a new register entity transaction.

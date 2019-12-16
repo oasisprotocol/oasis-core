@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -41,7 +42,7 @@ type runtimeHostHandler struct {
 func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
 	// Key manager.
 	if body.HostKeyManagerPolicyRequest != nil {
-		status, err := h.keyManager.GetStatus(ctx, h.runtime.KeyManager, 0)
+		status, err := h.keyManager.GetStatus(ctx, h.runtime.KeyManager, consensus.HeightLatest)
 		if err != nil {
 			return nil, err
 		}
@@ -57,7 +58,7 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 	// RPC.
 	if body.HostRPCCallRequest != nil {
 		switch body.HostRPCCallRequest.Endpoint {
-		case protocol.EndpointKeyManager:
+		case keymanagerApi.EnclaveRPCEndpoint:
 			// Call into the remote key manager.
 			res, err := h.keyManagerClient.CallRemote(ctx, h.runtime.ID, body.HostRPCCallRequest.Request)
 			if err != nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -29,7 +30,7 @@ type tendermintBackend struct {
 	notifier *pubsub.Broker
 }
 
-func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "scheduler: genesis query failed")
@@ -79,7 +80,7 @@ func (tb *tendermintBackend) WatchCommittees() (<-chan *api.Committee, *pubsub.S
 }
 
 func (tb *tendermintBackend) getCurrentCommittees() ([]*api.Committee, error) {
-	q, err := tb.querier.QueryAt(context.TODO(), 0)
+	q, err := tb.querier.QueryAt(context.TODO(), consensus.HeightLatest)
 	if err != nil {
 		return nil, err
 	}

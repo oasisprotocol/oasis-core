@@ -1,4 +1,6 @@
 //! Canonical CBOR serialization/deserialization functions.
+use std::io::Write;
+
 use serde::{Deserialize, Serialize};
 pub use serde_cbor::value::{from_value, Value};
 use serde_cbor::{self, Result};
@@ -18,6 +20,16 @@ where
 {
     // Use to_value first to force serialization into canonical format.
     serde_cbor::to_vec(&to_value(&value)).unwrap()
+}
+
+/// Serializes a value to a writer.
+pub fn to_writer<W, T>(writer: W, value: &T)
+where
+    W: Write,
+    T: Serialize,
+{
+    // Use to_value first to force serialization into canonical format.
+    serde_cbor::to_writer(writer, &to_value(&value)).unwrap()
 }
 
 /// Deserializes a slice to a value.

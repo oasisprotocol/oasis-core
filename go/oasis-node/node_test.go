@@ -14,12 +14,12 @@ import (
 	"google.golang.org/grpc"
 
 	beaconTests "github.com/oasislabs/oasis-core/go/beacon/tests"
-	clientTests "github.com/oasislabs/oasis-core/go/client/tests"
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
+	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	tendermintAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/roothash"
@@ -31,8 +31,9 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	registryTests "github.com/oasislabs/oasis-core/go/registry/tests"
 	roothashTests "github.com/oasislabs/oasis-core/go/roothash/tests"
+	clientTests "github.com/oasislabs/oasis-core/go/runtime/client/tests"
 	schedulerTests "github.com/oasislabs/oasis-core/go/scheduler/tests"
-	stakingClient "github.com/oasislabs/oasis-core/go/staking/client"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
 	"github.com/oasislabs/oasis-core/go/storage"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
@@ -287,7 +288,8 @@ func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
 	<-node.RegistrationWorker.Quit()
 
 	// Subscribe to node deregistration event.
-	nodeCh, sub := node.Node.Registry.WatchNodes()
+	nodeCh, sub, err := node.Node.Registry.WatchNodes(context.Background())
+	require.NoError(t, err, "WatchNodes")
 	defer sub.Close()
 
 	// Perform an epoch transition to expire the node as otherwise there is no way
@@ -314,11 +316,12 @@ WaitLoop:
 	}
 
 	// Subscribe to entity deregistration event.
-	entityCh, sub := node.Node.Registry.WatchEntities()
+	entityCh, sub, err := node.Node.Registry.WatchEntities(context.Background())
+	require.NoError(t, err, "WatchEntities")
 	defer sub.Close()
 
 	tx := registry.NewDeregisterEntityTx(0, nil)
-	err := consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, node.entitySigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, node.entitySigner, tx)
 	require.NoError(t, err, "deregister test entity")
 
 	select {
@@ -344,7 +347,7 @@ func testBeacon(t *testing.T, node *testNode) {
 func testStorage(t *testing.T, node *testNode) {
 	// Determine the current round. This is required so that we can commit into
 	// storage at the next (non-finalized) round.
-	blk, err := node.RootHash.GetLatestBlock(context.Background(), testRuntimeID, 0)
+	blk, err := node.RootHash.GetLatestBlock(context.Background(), testRuntimeID, consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetLatestBlock")
 
 	storageTests.StorageImplementationTests(t, node.Storage, testNamespace, blk.Header.Round+1)
@@ -361,7 +364,7 @@ func testScheduler(t *testing.T, node *testNode) {
 func testSchedulerGetValidators(t *testing.T, node *testNode) {
 	// Since the integration tests run with validator elections disabled,
 	// just ensure that the GetValidators query returns the node's identity.
-	validators, err := node.Scheduler.GetValidators(context.Background(), 0)
+	validators, err := node.Scheduler.GetValidators(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetValidators")
 
 	require.Len(t, validators, 1, "should be only one static validator")
@@ -375,11 +378,10 @@ func testStaking(t *testing.T, node *testNode) {
 
 func testStakingClient(t *testing.T, node *testNode) {
 	// Create a client backend connected to the local node's internal socket.
-	conn, err := grpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"), grpc.WithInsecure())
+	conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"), grpc.WithInsecure())
 	require.NoError(t, err, "Dial")
 
-	client, err := stakingClient.New(conn)
-	require.NoError(t, err, "stakingClient.New")
+	client := staking.NewStakingClient(conn)
 	stakingTests.StakingClientImplementationTests(t, client, node.Consensus)
 }
 
@@ -406,7 +408,7 @@ func testTransactionSchedulerWorker(t *testing.T, node *testNode) {
 }
 
 func testClient(t *testing.T, node *testNode) {
-	clientTests.ClientImplementationTests(t, node.Client, node.runtimeID)
+	clientTests.ClientImplementationTests(t, node.RuntimeClient, node.runtimeID)
 }
 
 func testStorageClientWithNode(t *testing.T, node *testNode) {
@@ -428,7 +430,7 @@ func testStorageClientWithNode(t *testing.T, node *testNode) {
 
 	// Determine the current round. This is required so that we can commit into
 	// storage at the next (non-finalized) round.
-	blk, err := node.RootHash.GetLatestBlock(ctx, testRuntimeID, 0)
+	blk, err := node.RootHash.GetLatestBlock(ctx, testRuntimeID, consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetLatestBlock")
 
 	storageTests.StorageImplementationTests(t, debugClient, testNamespace, blk.Header.Round+1)

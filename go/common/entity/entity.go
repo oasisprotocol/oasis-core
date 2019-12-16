@@ -4,7 +4,6 @@ package entity
 import (
 	"crypto/rand"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -14,7 +13,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
-	pbCommon "github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
 const (
@@ -24,9 +22,6 @@ const (
 )
 
 var (
-	// ErrNilProtobuf is the error returned when a protobuf is nil.
-	ErrNilProtobuf = errors.New("entity: Protobuf is nil")
-
 	testEntity       Entity
 	testEntitySigner signature.Signer
 
@@ -52,47 +47,6 @@ type Entity struct {
 // String returns a string representation of itself.
 func (e *Entity) String() string {
 	return "<Entity id=" + e.ID.String() + ">"
-}
-
-// FromProto deserializes a protobuf into an Entity.
-func (e *Entity) FromProto(pb *pbCommon.Entity) error {
-	if pb == nil {
-		return ErrNilProtobuf
-	}
-
-	if err := e.ID.UnmarshalBinary(pb.GetId()); err != nil {
-		return err
-	}
-
-	e.Nodes = nil
-	for _, v := range pb.GetNodes() {
-		var nodeID signature.PublicKey
-		if err := nodeID.UnmarshalBinary(v); err != nil {
-			return err
-		}
-		e.Nodes = append(e.Nodes, nodeID)
-	}
-
-	e.AllowEntitySignedNodes = pb.GetAllowEntitySignedNodes()
-
-	return nil
-}
-
-// ToProto serializes the Entity into a protobuf.
-func (e *Entity) ToProto() *pbCommon.Entity {
-	pb := new(pbCommon.Entity)
-
-	pb.Id, _ = e.ID.MarshalBinary()
-	pb.AllowEntitySignedNodes = e.AllowEntitySignedNodes
-
-	var pbNodes [][]byte
-	for _, v := range e.Nodes {
-		rawNodeID, _ := v.MarshalBinary()
-		pbNodes = append(pbNodes, rawNodeID)
-	}
-	pb.Nodes = pbNodes
-
-	return pb
 }
 
 // Save saves the JSON serialized entity descriptor.

@@ -12,8 +12,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/ias"
+	ias "github.com/oasislabs/oasis-core/go/ias/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
+	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/host"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
@@ -47,7 +48,7 @@ func Enabled() bool {
 func New(
 	dataDir string,
 	commonWorker *workerCommon.Worker,
-	ias *ias.IAS,
+	ias ias.Endpoint,
 	r *registration.Worker,
 	backend api.Backend,
 ) (*Worker, error) {
@@ -107,7 +108,8 @@ func New(
 			MessageHandler: newHostHandler(w),
 		}
 
-		newEnclaveRPCGRPCServer(w)
+		// Register the EnclaveRPC transport gRPC service.
+		enclaverpc.RegisterService(w.commonWorker.Grpc.Server(), w)
 	}
 
 	return w, nil

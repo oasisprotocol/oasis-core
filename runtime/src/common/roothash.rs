@@ -15,11 +15,20 @@ use super::{
     },
 };
 
-/// Block.
+/// Runtime block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Block {
     /// Header.
     pub header: Header,
+}
+
+/// Runtime block annotated with consensus information.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AnnotatedBlock {
+    /// Consensus height at which this runtime block was produced.
+    pub consensus_height: i64,
+    /// Runtime block.
+    pub block: Block,
 }
 
 impl_bytes!(Namespace, 32, "Chain namespace.");

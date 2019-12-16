@@ -2,7 +2,6 @@ package ias
 
 import (
 	"context"
-	"io"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -10,10 +9,9 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
-	grpcRegistry "github.com/oasislabs/oasis-core/go/grpc/registry"
+	ias "github.com/oasislabs/oasis-core/go/ias/api"
+	iasProxy "github.com/oasislabs/oasis-core/go/ias/proxy"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
@@ -22,7 +20,7 @@ type registryAuthenticator struct {
 	logger *logging.Logger
 
 	conn   *grpc.ClientConn
-	client grpcRegistry.RuntimeRegistryClient
+	client registry.Backend
 
 	enclaves *enclaveStore
 
@@ -30,7 +28,7 @@ type registryAuthenticator struct {
 	initCh   chan struct{}
 }
 
-func (auth *registryAuthenticator) VerifyEvidence(signer signature.PublicKey, evidence *ias.Evidence) error {
+func (auth *registryAuthenticator) VerifyEvidence(ctx context.Context, evidence *ias.Evidence) error {
 	<-auth.initCh
 
 	// TODO: This could/should do something clever with respect to verifying
@@ -44,13 +42,13 @@ func (auth *registryAuthenticator) VerifyEvidence(signer signature.PublicKey, ev
 	if err != nil {
 		auth.logger.Error("rejecting proxy request, invalid runtime",
 			"err", err,
-			"id", evidence.ID,
+			"runtime_id", evidence.RuntimeID,
 		)
 		return err
 	}
 
 	auth.logger.Debug("allowing proxy request, found enclave identity",
-		"id", evidence.ID,
+		"runtime_id", evidence.RuntimeID,
 	)
 	return nil
 }
@@ -63,42 +61,28 @@ func (auth *registryAuthenticator) worker(ctx context.Context) {
 		close(auth.initCh)
 	}
 
-	stream, err := auth.client.WatchRuntimes(ctx, &grpcRegistry.WatchRuntimesRequest{})
+	ch, sub, err := auth.client.WatchRuntimes(ctx)
 	if err != nil {
 		auth.logger.Error("failed to start the WatchRuntimes stream",
 			"err", err,
 		)
 		panic("unable to watch runtimes")
 	}
+	defer sub.Close()
 
 	for {
+		var runtime *registry.Runtime
 		select {
+		case runtime = <-ch:
+			if runtime == nil {
+				auth.logger.Error("data source stream closed by peer")
+				panic("data source disappeared")
+			}
 		case <-ctx.Done():
 			return
-		default:
 		}
 
-		pb, err := stream.Recv()
-		if err == io.EOF {
-			auth.logger.Error("data source stream closed by peer")
-			panic("data source disappeared")
-		}
-		if err != nil {
-			auth.logger.Error("runtime stream returned error",
-				"err", err,
-			)
-			continue
-		}
-
-		var runtime registry.Runtime
-		if err = runtime.FromProto(pb.GetRuntime()); err != nil {
-			auth.logger.Error("malformed runtime protobuf",
-				"err", err,
-			)
-			continue
-		}
-
-		n, err := auth.enclaves.addRuntime(&runtime)
+		n, err := auth.enclaves.addRuntime(runtime)
 		if err != nil {
 			auth.logger.Error("failed to add runtime",
 				"err", err,
@@ -115,7 +99,7 @@ func (auth *registryAuthenticator) worker(ctx context.Context) {
 	}
 }
 
-func newRegistryAuthenticator(ctx context.Context, cmd *cobra.Command) (ias.GRPCAuthenticator, error) {
+func newRegistryAuthenticator(ctx context.Context, cmd *cobra.Command) (iasProxy.Authenticator, error) {
 	conn, err := cmdGrpc.NewClient(cmd)
 	if err != nil {
 		return nil, errors.Wrap(err, "ias: failed to create gRPC client")
@@ -124,7 +108,7 @@ func newRegistryAuthenticator(ctx context.Context, cmd *cobra.Command) (ias.GRPC
 	auth := &registryAuthenticator{
 		logger:   logging.GetLogger("cmd/ias/proxy/auth/registry"),
 		conn:     conn,
-		client:   grpcRegistry.NewRuntimeRegistryClient(conn),
+		client:   registry.NewRegistryClient(conn),
 		enclaves: newEnclaveStore(),
 		initCh:   make(chan struct{}),
 	}
