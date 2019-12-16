@@ -1,69 +1,76 @@
-SHELL = /bin/bash
-OASIS_GO ?= go
+include ../common.mk
 
-# The following flags enable additional behavior for deterministic builds.
-#
-# * -trimpath as of Go 1.13 will strip all host dependent filesystem paths
-#   from binaries.
-#
-# * -ldflags=-buildid= will set the `.note.go.buildid` section to empty,
-#   to work around https://github.com/golang/go/issues/33772.  Once we
-#   migrate to a version of Go that has the fix, it can be removed.
-GOFLAGS ?= -trimpath -ldflags=-buildid= -v
-
-# Append git HEAD commit to the oasis node version, if git command exists and
-# this folder is in some git repository. Use a truncated commit hash and append
-# +, if the branch is dirty.
-VERSION_BUILD = $(shell git describe --always --match "" --dirty=+ 2>/dev/null)
-ifneq ($(VERSION_BUILD),)
-	GOFLAGS_VERSION_EXTRA = -ldflags "-X github.com/oasislabs/oasis-core/go/common/version.Build=+$(VERSION_BUILD)"
+# Check if Go's linkers flags are set in common.mk and add them as extra flags.
+ifneq ($(GOLDFLAGS),)
+	GO_EXTRA_FLAGS += -ldflags $(GOLDFLAGS)
 endif
 
-all: generate build
+# Set all target as the default target.
+all: build
 
-# Generate required files.
-#
-# Note: For now this still uses GOPATH because it is unknown if the protoc
-# compiler plugin supports modules.
+# Build.
+# List of Go binaries to build.
+go-binaries := oasis-node oasis-test-runner oasis-net-runner
+# List of test helpers to build.
+test-helpers := urkel
+# List of test vectors to generate.
+test-vectors := staking
+
 generate:
-	@echo "Running go generate"
-	@env -u GOPATH $(OASIS_GO) generate -v ./...
+	@$(ECHO) "$(MAGENTA)*** Running go generate...$(OFF)"
+	@$(GO) generate ./...
 
-# Build all the things.
-build: generate
-	@echo "Building Oasis node"
-	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) $(GOFLAGS_VERSION_EXTRA) -o ./oasis-node/oasis-node ./oasis-node
-	@echo "Building Oasis test harness"
-	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) -o ./oasis-test-runner/oasis-test-runner ./oasis-test-runner
-	@echo "Building Oasis local network runner"
-	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) -o ./oasis-net-runner/oasis-net-runner ./oasis-net-runner
+$(go-binaries):
+	@$(ECHO) "$(MAGENTA)*** Building $@...$(OFF)"
+	$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$@/$@ ./$@
 
-# Oasis node with coverage.
-integrationrunner: oasis-node/integrationrunner/integrationrunner.test
-oasis-node/integrationrunner/integrationrunner.test: generate
-	env -u GOPATH $(OASIS_GO) test $(GOFLAGS) -c -covermode=atomic -coverpkg=./... -o $@ ./oasis-node/integrationrunner
+oasis-node: generate
 
-# Run go fmt.
+build: $(go-binaries)
+
+# Build test helpers.
+# Urkel interoperability test helpers.
+urkel: generate
+	@$(ECHO) "$(MAGENTA)*** Building test helpers for $@...$(OFF)"
+	@$(GO) build $(GOFLAGS) -o ./$(GO_TEST_HELPER_URKEL_PATH) ./$(shell dirname $(GO_TEST_HELPER_URKEL_PATH))
+
+build-helpers: $(test-helpers)
+
+$(test-vectors):
+	@$(ECHO) "$(MAGENTA)*** Generating test vectors for $@...$(OFF)"
+	@$(GO) run ./$@/gen_vectors
+
+staking: generate
+
+gen-test-vectors: $(test-vectors)
+
+# Format code.
 fmt:
-	@env -u GOPATH $(OASIS_GO) fmt ./...
+	@$(ECHO) "$(CYAN)*** Running go fmt...$(OFF)"
+	@$(GO) fmt ./...
 
 # Lint.
-lint:
+lint: generate
+	@$(ECHO) "$(CYAN)*** Running Go linters...$(OFF)"
 	@env -u GOPATH golangci-lint run
 
 # Test.
 test: generate
-	@env -u GOPATH $(OASIS_GO) test -timeout 5m -race -v ./...
+	@$(ECHO) "$(CYAN)*** Running Go unit tests...$(OFF)"
+	@$(GO) test -timeout 5m -race -v ./...
 
-# Urkel interoperability test helpers.
-urkel-test-helpers: generate
-	@env -u GOPATH $(OASIS_GO) build $(GOFLAGS) -o ./storage/mkvs/urkel/interop/urkel_test_helpers ./storage/mkvs/urkel/interop
-
-test-vectors/staking: generate
-	@env -u GOPATH $(OASIS_GO) run ./staking/gen_vectors
+# Test oasis-node with coverage.
+integrationrunner: generate
+	@$(ECHO) "$(CYAN)*** Testing oasis-node with coverate...$(OFF)"
+	@$(GO) test $(GOFLAGS) -c -covermode=atomic -coverpkg=./... -o oasis-node/$@/$@.test ./oasis-node/$@
 
 # Clean.
 clean:
-	@env -u GOPATH $(OASIS_GO) clean
+	@$(ECHO) "$(CYAN)*** Cleaning up Go...$(OFF)"
+	@$(GO) clean
 
-.PHONY: all generate build integrationrunner lint test clean test-vectors/staking
+# List of targets that are not actual files.
+.PHONY: \
+	generate $(go-binaries) build \
+	$(test-helpers) build-helpers $(test-vectors) gen-test-vectors \
+	fmt lint test integrationrunner clean all

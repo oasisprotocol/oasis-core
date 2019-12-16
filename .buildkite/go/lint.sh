@@ -15,6 +15,5 @@ set -euxo pipefail
 # Run golangci
 ##############
 pushd go
-  make generate
   make lint
 popd

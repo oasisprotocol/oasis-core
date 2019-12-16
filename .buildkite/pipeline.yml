@@ -158,8 +158,8 @@ steps:
   - label: Test Rust crates
     command:
       # Build storage interoperability test helpers first.
-      - make -C go urkel-test-helpers
-      - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers)
+      - make build-helpers
+      - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel-test-helpers)
       - .buildkite/rust/test_generic.sh .
     agents:
       buildkite_agent_size: large
@@ -231,8 +231,8 @@ steps:
     branches: master
     command:
       # Build storage interoperability test helpers first.
-      - make -C go urkel-test-helpers
-      - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel_test_helpers)
+      - make build-helpers
+      - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel-test-helpers)
       - .buildkite/rust/coverage.sh
     # Don't cause the build to fail, as tarpaulin is pretty unstable at the moment.
     soft_fail: true
