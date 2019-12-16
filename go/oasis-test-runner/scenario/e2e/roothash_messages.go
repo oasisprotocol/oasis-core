@@ -17,6 +17,7 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasislabs/oasis-core/go/storage/database"
 )
 
 var (
@@ -117,7 +118,7 @@ func (sc *roothashMessagesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			oasis.KeymanagerFixture{Runtime: 0, Entity: 1},
 		},
 		StorageWorkers: []oasis.StorageWorkerFixture{
-			oasis.StorageWorkerFixture{Backend: "badger", Entity: 1},
+			oasis.StorageWorkerFixture{Backend: database.BackendNameBadgerDB, Entity: 1},
 		},
 		ComputeWorkers: []oasis.ComputeWorkerFixture{
 			oasis.ComputeWorkerFixture{Entity: 1},

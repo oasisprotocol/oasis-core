@@ -24,7 +24,7 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 
 	var (
 		cfg = api.Config{
-			Backend: database.BackendNameLevelDB,
+			Backend: database.BackendNameBadgerDB,
 		}
 		err error
 	)
@@ -32,7 +32,7 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 	cfg.Signer, err = memorySigner.NewSigner(rand.Reader)
 	require.NoError(err, "NewSigner()")
 
-	cfg.DB, err = ioutil.TempDir("", "crashing.test.leveldb")
+	cfg.DB, err = ioutil.TempDir("", "crashing.test.badgerdb")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(cfg.DB)
 

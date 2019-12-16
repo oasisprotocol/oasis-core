@@ -3,15 +3,14 @@ package badger
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"sync"
-	"time"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	ekbadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
@@ -19,11 +18,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
-)
-
-const (
-	gcInterval     = 5 * time.Minute
-	gcDiscardRatio = 0.5
 )
 
 var (
@@ -107,15 +101,14 @@ func (m *metadata) setLastFinalizedRound(ns common.Namespace, round uint64) {
 // New creates a new BadgerDB-backed node database.
 func New(cfg *api.Config) (api.NodeDB, error) {
 	db := &badgerNodeDB{
-		logger:   logging.GetLogger("urkel/db/badger"),
-		closeCh:  make(chan struct{}),
-		closedCh: make(chan struct{}),
+		logger: logging.GetLogger("urkel/db/badger"),
 	}
 	db.CheckpointableDB = api.NewCheckpointableDB(db)
 
 	opts := badger.DefaultOptions(cfg.DB)
-	opts = opts.WithLogger(NewLogAdapter(db.logger))
+	opts = opts.WithLogger(ekbadger.NewLogAdapter(db.logger))
 	opts = opts.WithSyncWrites(!cfg.DebugNoFsync)
+	opts = opts.WithCompression(options.None)
 
 	var err error
 	if db.db, err = badger.Open(opts); err != nil {
@@ -128,7 +121,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 		return nil, errors.Wrap(err, "urkel/db/badger: failed to load metadata")
 	}
 
-	go db.gcWorker()
+	db.gc = ekbadger.NewGCWorker(db.logger, db.db)
 
 	return db, nil
 }
@@ -139,11 +132,10 @@ type badgerNodeDB struct {
 	logger *logging.Logger
 
 	db   *badger.DB
+	gc   *ekbadger.GCWorker
 	meta metadata
 
 	closeOnce sync.Once
-	closeCh   chan struct{}
-	closedCh  chan struct{}
 }
 
 func (d *badgerNodeDB) load() error {
@@ -635,7 +627,7 @@ func (d *badgerNodeDB) Prune(ctx context.Context, namespace common.Namespace, ro
 		var nextRoot hash.Hash
 
 		if !rootLinkKeyFmt.Decode(item.Key(), &decNs, &decRound, &rootHash, &nextRoot) {
-			// This should not happen as the LevelDB iterator should take care of it.
+			// This should not happen as the iterator should take care of it.
 			panic("urkel/db/badger: bad iterator")
 		}
 
@@ -718,8 +710,7 @@ func (d *badgerNodeDB) NewBatch(namespace common.Namespace, round uint64, oldRoo
 
 func (d *badgerNodeDB) Close() {
 	d.closeOnce.Do(func() {
-		close(d.closeCh)
-		<-d.closedCh
+		d.gc.Close()
 
 		if err := d.db.Close(); err != nil {
 			d.logger.Error("close returned error",
@@ -727,39 +718,6 @@ func (d *badgerNodeDB) Close() {
 			)
 		}
 	})
-}
-
-func (d *badgerNodeDB) gcWorker() {
-	defer close(d.closedCh)
-
-	ticker := time.NewTicker(gcInterval)
-	defer ticker.Stop()
-
-	doGC := func() error {
-		for {
-			if err := d.db.RunValueLogGC(gcDiscardRatio); err != nil {
-				return err
-			}
-		}
-	}
-
-	for {
-		select {
-		case <-d.closeCh:
-			return
-		case <-ticker.C:
-		}
-
-		// Run the value log GC.
-		err := doGC()
-		switch err {
-		case nil, badger.ErrNoRewrite:
-		default:
-			d.logger.Error("failed to GC value log",
-				"err", err,
-			)
-		}
-	}
 }
 
 func getPreviousRound(tx *badger.Txn, namespace common.Namespace, round uint64) (uint64, error) {
@@ -981,31 +939,4 @@ func (s *badgerSubtree) VisitCleanNode(depth node.Depth, ptr *node.Pointer) erro
 
 func (s *badgerSubtree) Commit() error {
 	return nil
-}
-
-// NewLogAdapter returns a badger.Logger backed by an oasis-node logger.
-func NewLogAdapter(logger *logging.Logger) badger.Logger {
-	return &badgerLogger{
-		logger: logger,
-	}
-}
-
-type badgerLogger struct {
-	logger *logging.Logger
-}
-
-func (l *badgerLogger) Errorf(format string, a ...interface{}) {
-	l.logger.Error(strings.TrimSpace(fmt.Sprintf(format, a...)))
-}
-
-func (l *badgerLogger) Warningf(format string, a ...interface{}) {
-	l.logger.Warn(strings.TrimSpace(fmt.Sprintf(format, a...)))
-}
-
-func (l *badgerLogger) Infof(format string, a ...interface{}) {
-	l.logger.Info(strings.TrimSpace(fmt.Sprintf(format, a...)))
-}
-
-func (l *badgerLogger) Debugf(format string, a ...interface{}) {
-	l.logger.Debug(strings.TrimSpace(fmt.Sprintf(format, a...)))
 }

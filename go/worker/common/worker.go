@@ -22,7 +22,7 @@ import (
 )
 
 // LocalStorageFile is the filename of the worker's local storage database.
-const LocalStorageFile = "worker-local-storage.bolt.db"
+const LocalStorageFile = "worker-local-storage.badger.db"
 
 // Runtime is a single runtime.
 type Runtime struct {

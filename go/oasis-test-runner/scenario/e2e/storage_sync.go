@@ -7,6 +7,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
+	"github.com/oasislabs/oasis-core/go/storage/database"
 )
 
 var (
@@ -42,7 +43,7 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Provision another storage node and make it ignore all applies.
 	f.StorageWorkers = append(f.StorageWorkers, oasis.StorageWorkerFixture{
-		Backend:       "badger",
+		Backend:       database.BackendNameBadgerDB,
 		Entity:        1,
 		IgnoreApplies: true,
 	})

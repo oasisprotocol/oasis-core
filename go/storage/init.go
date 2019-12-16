@@ -51,7 +51,7 @@ func New(
 		impl api.Backend
 	)
 	switch cfg.Backend {
-	case database.BackendNameLevelDB, database.BackendNameBadgerDB:
+	case database.BackendNameBadgerDB:
 		cfg.DB = filepath.Join(cfg.DB, database.DefaultFileName(cfg.Backend))
 		impl, err = database.New(cfg)
 	case client.BackendName:
@@ -73,7 +73,7 @@ func New(
 }
 
 func init() {
-	Flags.String(CfgBackend, database.BackendNameLevelDB, "Storage backend")
+	Flags.String(CfgBackend, database.BackendNameBadgerDB, "Storage backend")
 	Flags.Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
 	Flags.Int(cfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
 

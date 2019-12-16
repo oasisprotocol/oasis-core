@@ -72,7 +72,7 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 
 	// Initialize a dummy storage backend.
 	storageCfg := storageApi.Config{
-		Backend:            database.BackendNameLevelDB,
+		Backend:            database.BackendNameBadgerDB,
 		DB:                 dataDir,
 		Signer:             ident.NodeSigner,
 		ApplyLockLRUSlots:  1,
