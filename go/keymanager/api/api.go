@@ -139,6 +139,7 @@ type Genesis struct {
 	Statuses []*Status `json:"statuses,omitempty"`
 }
 
+// SanityCheckStatuses examines the statuses table.
 func SanityCheckStatuses(statuses []*Status) error {
 	for _, status := range statuses {
 		// Verify key manager runtime ID.

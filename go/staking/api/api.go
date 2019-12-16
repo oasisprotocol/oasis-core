@@ -435,6 +435,8 @@ func (p *ConsensusParameters) SanityCheck() error {
 	return nil
 }
 
+// SanityCheckAccount examines an account's balances.
+// Adds the balances to a running total `total`.
 func SanityCheckAccount(total *quantity.Quantity, parameters *ConsensusParameters, now epochtime.EpochTime, id signature.PublicKey, acct *Account) error {
 	if !acct.General.Balance.IsValid() {
 		return fmt.Errorf("staking: sanity check failed: account balance is invalid")
@@ -458,6 +460,7 @@ func SanityCheckAccount(total *quantity.Quantity, parameters *ConsensusParameter
 	return nil
 }
 
+// SanityCheckDelegations examines an account's delegations.
 func SanityCheckDelegations(account *Account, delegations map[signature.PublicKey]*Delegation) error {
 	var shares quantity.Quantity
 	var numDelegations uint64
@@ -482,6 +485,7 @@ func SanityCheckDelegations(account *Account, delegations map[signature.PublicKe
 	return nil
 }
 
+// SanityCheckDebondingDelegations examines an account's debonding delegations.
 func SanityCheckDebondingDelegations(account *Account, delegations map[signature.PublicKey][]*DebondingDelegation) error {
 	var shares quantity.Quantity
 	var numDebondingDelegations uint64
@@ -507,6 +511,7 @@ func SanityCheckDebondingDelegations(account *Account, delegations map[signature
 	return nil
 }
 
+// SanityCheckAccountShares examine's an account's share pools.
 func SanityCheckAccountShares(acct *Account, delegations map[signature.PublicKey]*Delegation, debondingDelegations map[signature.PublicKey][]*DebondingDelegation) error {
 	// Count the delegations for this account and add up the total shares.
 	var shares quantity.Quantity

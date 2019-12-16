@@ -980,6 +980,8 @@ const (
 	GasOpRegisterRuntime transaction.Op = "register_runtime"
 )
 
+// SanityCheckEntities examines the entities table.
+// Returns lookup of entity ID to the entity record for use in other checks.
 func SanityCheckEntities(entities []*entity.SignedEntity) (map[signature.PublicKey]*entity.Entity, error) {
 	seenEntities := make(map[signature.PublicKey]*entity.Entity)
 	for _, sent := range entities {
@@ -1004,6 +1006,8 @@ func SanityCheckEntities(entities []*entity.SignedEntity) (map[signature.PublicK
 	return seenEntities, nil
 }
 
+// SanityCheckRuntimes examines the runtimes table.
+// Returns lookup of runtime ID to the runtime record for use in other checks.
 func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[signature.PublicKey]*Runtime, error) {
 	seenRuntimes := make(map[signature.PublicKey]*Runtime)
 	for _, srt := range runtimes {
@@ -1105,6 +1109,9 @@ func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[signature.PublicKey]*Ru
 	return seenRuntimes, nil
 }
 
+// SanityCheckNodes examines the nodes table.
+// Pass lookups of entities and runtimes from SanityCheckEntities
+// and SanityCheckRuntimes for cross referencing purposes.
 func SanityCheckNodes(nodes []*node.SignedNode, seenEntities map[signature.PublicKey]*entity.Entity, seenRuntimes map[signature.PublicKey]*Runtime) error { // nolint: gocyclo
 	for _, sn := range nodes {
 		var n node.Node

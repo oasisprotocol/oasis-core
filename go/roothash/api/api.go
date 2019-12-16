@@ -169,6 +169,7 @@ type Genesis struct {
 	Blocks map[signature.PublicKey]*block.Block `json:"blocks,omitempty"`
 }
 
+// SanityCheckBlocks examines the blocks table.
 func SanityCheckBlocks(blocks map[signature.PublicKey]*block.Block) error {
 	for _, blk := range blocks {
 		hdr := blk.Header
@@ -180,6 +181,7 @@ func SanityCheckBlocks(blocks map[signature.PublicKey]*block.Block) error {
 	return nil
 }
 
+// checkBlocksForGenesis examines the blocks for extra properties specific to genesis state.
 func checkBlocksForGenesis(blocks map[signature.PublicKey]*block.Block) error {
 	for _, blk := range blocks {
 		hdr := blk.Header
