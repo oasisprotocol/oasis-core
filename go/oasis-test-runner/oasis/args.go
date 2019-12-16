@@ -125,7 +125,7 @@ func (args *argBuilder) storageBackend(backend string) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) followtoolEnabled() *argBuilder {
+func (args *argBuilder) supplementarysanityEnabled() *argBuilder {
 	args.vec = append(args.vec, "--"+supplementarysanity.CfgEnabled)
 	args.vec = append(args.vec, []string{
 		"--" + supplementarysanity.CfgInterval, "1",

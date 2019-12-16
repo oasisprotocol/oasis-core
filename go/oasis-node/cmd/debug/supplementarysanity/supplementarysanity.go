@@ -13,10 +13,10 @@ import (
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 const (
-	// CfgEnabled enables the follow tool.
-	CfgEnabled = "followtool.enabled"
+	// CfgEnabled enables the supplementary sanity app.
+	CfgEnabled = "supplementarysanity.enabled"
 	// CfgInterval sets the interval.
-	CfgInterval = "followtool.interval"
+	CfgInterval = "supplementarysanity.interval"
 )
 
 // Enabled reads our enabled flag from viper.
@@ -27,13 +27,13 @@ func Enabled() bool {
 func New(tm service.TendermintService) error {
 	fta := app.New(viper.GetInt64(CfgInterval))
 	if err := tm.RegisterApplication(fta); err != nil {
-		return errors.Wrap(err, "RegisterApplication followtool app")
+		return errors.Wrap(err, "RegisterApplication supplementarysanity app")
 	}
 	return nil
 }
 
 func init() {
-	Flags.Bool(CfgEnabled, false, "Enable follow tool")
+	Flags.Bool(CfgEnabled, false, "Enable supplementary sanity app")
 	Flags.Int64(CfgInterval, 10, "Interval for checking Tendermint blocks (in blocks)")
 
 	_ = viper.BindPFlags(Flags)

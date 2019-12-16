@@ -86,7 +86,7 @@ func (val *Validator) startNode() error {
 	}
 
 	if len(val.net.validators) >= 1 && val == val.net.validators[0] {
-		args = args.followtoolEnabled()
+		args = args.supplementarysanityEnabled()
 	}
 
 	var err error

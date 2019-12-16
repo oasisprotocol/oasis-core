@@ -16,74 +16,74 @@ import (
 )
 
 var (
-	logger = logging.GetLogger("followtool")
+	logger = logging.GetLogger("supplementarysanity")
 
-	_ abci.Application = (*followToolApplication)(nil)
+	_ abci.Application = (*supplementarySanityApplication)(nil)
 )
 
-// followToolApplication is a non-normative mux app that performs additional checks on the consensus state.
+// supplementarySanityApplication is a non-normative mux app that performs additional checks on the consensus state.
 // It should not alter the Tendermint application state.
 // It's okay for it to have this additional local state, because it won't affect anything that needs to be agreed upon
 // in consensus.
-type followToolApplication struct {
+type supplementarySanityApplication struct {
 	state           *abci.ApplicationState
 	interval        int64
 	currentInterval int64
 	checkHeight     int64
 }
 
-func (app *followToolApplication) Name() string {
+func (app *supplementarySanityApplication) Name() string {
 	return AppName
 }
 
-func (app *followToolApplication) ID() uint8 {
+func (app *supplementarySanityApplication) ID() uint8 {
 	return AppID
 }
 
-func (app *followToolApplication) Methods() []transaction.MethodName {
+func (app *supplementarySanityApplication) Methods() []transaction.MethodName {
 	return nil
 }
 
-func (app *followToolApplication) Blessed() bool {
+func (app *supplementarySanityApplication) Blessed() bool {
 	return false
 }
 
-func (app *followToolApplication) Dependencies() []string {
+func (app *supplementarySanityApplication) Dependencies() []string {
 	return []string{stakingState.AppName}
 }
 
-func (app *followToolApplication) QueryFactory() interface{} {
+func (app *supplementarySanityApplication) QueryFactory() interface{} {
 	return nil
 }
 
-func (app *followToolApplication) OnRegister(state *abci.ApplicationState) {
+func (app *supplementarySanityApplication) OnRegister(state *abci.ApplicationState) {
 	app.state = state
 }
 
-func (app *followToolApplication) OnCleanup() {
+func (app *supplementarySanityApplication) OnCleanup() {
 }
 
-func (app *followToolApplication) ExecuteTx(*abci.Context, *transaction.Transaction) error {
-	return errors.New("followtool: unexpected transaction")
+func (app *supplementarySanityApplication) ExecuteTx(*abci.Context, *transaction.Transaction) error {
+	return errors.New("supplementarysanity: unexpected transaction")
 }
 
-func (app *followToolApplication) ForeignExecuteTx(*abci.Context, abci.Application, *transaction.Transaction) error {
+func (app *supplementarySanityApplication) ForeignExecuteTx(*abci.Context, abci.Application, *transaction.Transaction) error {
 	return nil
 }
 
-func (app *followToolApplication) InitChain(*abci.Context, types.RequestInitChain, *api.Document) error {
+func (app *supplementarySanityApplication) InitChain(*abci.Context, types.RequestInitChain, *api.Document) error {
 	return nil
 }
 
-func (app *followToolApplication) BeginBlock(*abci.Context, types.RequestBeginBlock) error {
+func (app *supplementarySanityApplication) BeginBlock(*abci.Context, types.RequestBeginBlock) error {
 	return nil
 }
 
-func (app *followToolApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *supplementarySanityApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, app.endBlockImpl(ctx, request)
 }
 
-func (app *followToolApplication) endBlockImpl(ctx *abci.Context, request types.RequestEndBlock) error {
+func (app *supplementarySanityApplication) endBlockImpl(ctx *abci.Context, request types.RequestEndBlock) error {
 	if request.Height == 1 {
 		logger.Debug("skipping checks before InitChain")
 		return nil
@@ -134,12 +134,12 @@ func (app *followToolApplication) endBlockImpl(ctx *abci.Context, request types.
 	return nil
 }
 
-func (app *followToolApplication) FireTimer(*abci.Context, *abci.Timer) error {
-	return errors.New("followtool: unexpected timer")
+func (app *supplementarySanityApplication) FireTimer(*abci.Context, *abci.Timer) error {
+	return errors.New("supplementarysanity: unexpected timer")
 }
 
 func New(interval int64) abci.Application {
-	return &followToolApplication{
+	return &supplementarySanityApplication{
 		interval: interval,
 	}
 }
