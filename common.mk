@@ -30,6 +30,7 @@ ifeq ($(and $(LATEST_TAG),$(IS_TAG)),NO)
 	# the version.
 	VERSION := $(VERSION)-git$(shell git describe --always --match '' --dirty=+dirty 2>/dev/null)
 endif
+export VERSION
 
 # Go binary to use for all Go commands.
 OASIS_GO ?= go
@@ -43,7 +44,7 @@ GOFLAGS ?= -trimpath -v
 
 # Add Oasis Core's version as a linker string value definition.
 ifneq ($(VERSION),)
-	GOLDFLAGS += "-X github.com/oasislabs/oasis-core/go/common/version.SoftwareVersion=$(VERSION)"
+	export GOLDFLAGS += "-X github.com/oasislabs/oasis-core/go/common/version.SoftwareVersion=$(VERSION)"
 endif
 
 # Go build command to use by default.
@@ -51,3 +52,14 @@ GO_BUILD_CMD := env -u GOPATH $(OASIS_GO) build $(GOFLAGS)
 
 # Path to the Urkel interoperability test helpers binary in go/.
 GO_TEST_HELPER_URKEL_PATH := storage/mkvs/urkel/interop/urkel-test-helpers
+
+# Instruct GoReleaser to create a "snapshot" release by default.
+GORELEASER_ARGS ?= release --snapshot --rm-dist
+ifeq ($(GITHUB_ACTIONS), true)
+	# Running inside GitHub Actions, create a real release.
+	# TODO: Prepare Release notes from the automatically generated changelog
+	# after https://github.com/oasislabs/oasis-core/issues/759 is implemented.
+	RELEASE_NOTES := $(shell mktemp /tmp/oasis-core.XXXXX)
+	_ := $(shell echo "We're are pleased to present you Oasis Core $(VERSION)!" > $(RELEASE_NOTES))
+	GORELEASER_ARGS = release --release-notes $(RELEASE_NOTES)
+endif

@@ -1,0 +1,41 @@
+# GoReleaser configuration file.
+#
+# For more info, browse to http://goreleaser.com.
+#
+# NOTE: The GoReleaser is not meant to be run directly, but rather through
+# Make's release target.
+
+project_name: Oasis Core
+
+env:
+  # Require use of Go modules.
+  - GO111MODULE=on
+
+builds:
+  - env:
+      - CGO_ENABLED=1
+    id: oasis-node
+    main: ./oasis-node/main.go
+    binary: oasis-node
+    dir: go/
+    flags:
+      - -trimpath
+    ldflags:
+      - -X github.com/oasislabs/oasis-core/go/common/version.SoftwareVersion={{.Env.VERSION}}
+    goos:
+      - linux
+    goarch:
+      - amd64
+
+archives:
+  - name_template: "{{.Binary}}_{{.Version}}_{{.Os}}_{{.Arch}}"
+
+checksum:
+  name_template: SHA256SUMS
+  algorithm: sha256
+
+snapshot:
+  name_template: "{{.Version}}-dev"
+
+release:
+  name_template: "{{.ProjectName}} {{.Version}}"

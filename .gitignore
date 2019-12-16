@@ -5,6 +5,7 @@ target/
 *.o
 *.so
 **/generated
+/dist/
 
 # IDE.
 .idea/*
