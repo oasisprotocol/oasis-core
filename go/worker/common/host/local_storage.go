@@ -9,11 +9,11 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 
+	ekbadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	ekbadger "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
 )
 
 var (
@@ -26,6 +26,7 @@ type LocalStorage struct {
 	logger *logging.Logger
 
 	db *badger.DB
+	gc *ekbadger.GCWorker
 }
 
 func (s *LocalStorage) Get(id signature.PublicKey, key []byte) ([]byte, error) {
@@ -81,6 +82,7 @@ func (s *LocalStorage) Set(id signature.PublicKey, key, value []byte) error {
 }
 
 func (s *LocalStorage) Stop() {
+	s.gc.Close()
 	if err := s.db.Close(); err != nil {
 		s.logger.Error("failed to close local storage",
 			"err", err,
@@ -103,6 +105,7 @@ func NewLocalStorage(dataDir, fn string) (*LocalStorage, error) {
 	if s.db, err = badger.Open(opts); err != nil {
 		return nil, fmt.Errorf("failed to open local storage database: %w", err)
 	}
+	s.gc = ekbadger.NewGCWorker(s.logger, s.db)
 
 	// TODO: The file format could be versioned, but it's not like this
 	// really is subject to change.

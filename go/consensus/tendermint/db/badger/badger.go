@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
@@ -15,8 +14,8 @@ import (
 	"github.com/tendermint/tendermint/node"
 	dbm "github.com/tendermint/tm-db"
 
+	ekbadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	ekbadger "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
 )
 
 const (
@@ -25,9 +24,6 @@ const (
 
 	dbVersion = 1
 	dbSuffix  = ".badger.db"
-
-	gcInterval     = 5 * time.Minute
-	gcDiscardRatio = 0.5
 )
 
 var (
@@ -47,10 +43,9 @@ type badgerDBImpl struct {
 	logger *logging.Logger
 
 	db *badger.DB
+	gc *ekbadger.GCWorker
 
 	closeOnce sync.Once
-	closeCh   chan struct{}
-	closedCh  chan struct{}
 }
 
 // New constructs a new tendermint DB, backed by a Badger database at
@@ -76,12 +71,10 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	}
 
 	impl := &badgerDBImpl{
-		logger:   logger,
-		db:       db,
-		closeCh:  make(chan struct{}),
-		closedCh: make(chan struct{}),
+		logger: logger,
+		db:     db,
+		gc:     ekbadger.NewGCWorker(logger, db),
 	}
-	go impl.gcWorker()
 
 	return impl, nil
 }
@@ -203,8 +196,7 @@ func (d *badgerDBImpl) ReverseIterator(start, end []byte) dbm.Iterator {
 
 func (d *badgerDBImpl) Close() {
 	d.closeOnce.Do(func() {
-		close(d.closeCh)
-		<-d.closedCh
+		d.gc.Close()
 
 		if err := d.db.Close(); err != nil {
 			d.logger.Error("Close failed",
@@ -404,39 +396,6 @@ func (it *badgerDBIterator) Close() {
 		it.current.item = nil
 	}
 	it.isValid = false
-}
-
-func (d *badgerDBImpl) gcWorker() {
-	defer close(d.closedCh)
-
-	ticker := time.NewTicker(gcInterval)
-	defer ticker.Stop()
-
-	doGC := func() error {
-		for {
-			if err := d.db.RunValueLogGC(gcDiscardRatio); err != nil {
-				return err
-			}
-		}
-	}
-
-	for {
-		select {
-		case <-d.closeCh:
-			return
-		case <-ticker.C:
-		}
-
-		// Run the value log GC.
-		err := doGC()
-		switch err {
-		case nil, badger.ErrNoRewrite:
-		default:
-			d.logger.Error("failed to GC value log",
-				"err", err,
-			)
-		}
-	}
 }
 
 type setDeleter interface {

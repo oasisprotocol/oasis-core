@@ -11,9 +11,9 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 
+	ekbadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	ekbadger "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
 )
 
 const dbName = "persistent-store.badger.db"
@@ -24,10 +24,12 @@ var ErrNotFound = errors.New("persistent: key not found in database")
 // CommonStore is the interface to the common storage for the node.
 type CommonStore struct {
 	db *badger.DB
+	gc *ekbadger.GCWorker
 }
 
 // Close closes the database handle.
 func (cs *CommonStore) Close() {
+	cs.gc.Close()
 	cs.db.Close()
 }
 
@@ -42,8 +44,10 @@ func (cs *CommonStore) GetServiceStore(name string) (*ServiceStore, error) {
 
 // NewCommonStore opens the default common node storage and returns a handle.
 func NewCommonStore(dataDir string) (*CommonStore, error) {
+	logger := logging.GetLogger("common/persistent")
+
 	opts := badger.DefaultOptions(filepath.Join(dataDir, dbName))
-	opts = opts.WithLogger(ekbadger.NewLogAdapter(logging.GetLogger("common/persistent")))
+	opts = opts.WithLogger(ekbadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(true)
 	opts = opts.WithCompression(options.None)
 
@@ -54,6 +58,7 @@ func NewCommonStore(dataDir string) (*CommonStore, error) {
 
 	cs := &CommonStore{
 		db: db,
+		gc: ekbadger.NewGCWorker(logger, db),
 	}
 
 	return cs, nil
