@@ -8,7 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
@@ -116,6 +117,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	opts := badger.DefaultOptions(cfg.DB)
 	opts = opts.WithLogger(NewLogAdapter(db.logger))
 	opts = opts.WithSyncWrites(!cfg.DebugNoFsync)
+	opts = opts.WithCompression(options.None)
 
 	var err error
 	if db.db, err = badger.Open(opts); err != nil {

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/golang/snappy"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/node"
 	dbm "github.com/tendermint/tm-db"
@@ -68,6 +68,7 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	opts := badger.DefaultOptions(fn) // This may benefit from LSMOnlyOptions.
 	opts = opts.WithLogger(ekbadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(false)
+	opts = opts.WithCompression(options.Snappy)
 
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -100,8 +101,8 @@ func (d *badgerDBImpl) Get(key []byte) []byte {
 		}
 
 		return item.Value(func(val []byte) error {
-			value, txErr = snappy.Decode(nil, val)
-			return txErr
+			value = append([]byte{}, val...)
+			return nil
 		})
 	}); err != nil {
 		d.logger.Error("Get failed",
@@ -141,10 +142,9 @@ func (d *badgerDBImpl) Has(key []byte) bool {
 
 func (d *badgerDBImpl) Set(key, value []byte) {
 	k := toDBKey(key)
-	valueCompressed := snappy.Encode(nil, value)
 
 	if err := d.db.Update(func(tx *badger.Txn) error {
-		return tx.Set(k, valueCompressed)
+		return tx.Set(k, value)
 	}); err != nil {
 		d.logger.Error("Set failed",
 			"err", err,
@@ -355,7 +355,7 @@ func (it *badgerDBIterator) Next() {
 		if dbm.IsKeyInDomain(k, it.start, it.end) {
 			it.current.item = item
 			it.current.key = k
-			it.current.value = nil // Decompress done on access.
+			it.current.value = nil // Copy done on access.
 			return
 		}
 	}
@@ -379,9 +379,8 @@ func (it *badgerDBIterator) Value() []byte {
 
 	if it.current.value == nil {
 		if err := it.current.item.Value(func(val []byte) error {
-			var decErr error
-			it.current.value, decErr = snappy.Decode(nil, val)
-			return decErr
+			it.current.value = append([]byte{}, val...)
+			return nil
 		}); err != nil {
 			it.db.logger.Error("failed to retrieve/decompress iterator value",
 				"err", err,
@@ -482,7 +481,7 @@ type badgerDBBatch struct {
 func (ba *badgerDBBatch) Set(key, value []byte) {
 	ba.cmds = append(ba.cmds, &setCmd{
 		key:   toDBKey(key),
-		value: snappy.Encode(nil, value),
+		value: append([]byte{}, value...),
 	})
 }
 
