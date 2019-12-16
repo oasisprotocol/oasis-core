@@ -3,26 +3,27 @@
 package persistent
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"path/filepath"
 
-	bolt "github.com/etcd-io/bbolt"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	ekbadger "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
 )
 
-const dbName = "persistent-store.db"
+const dbName = "persistent-store.badger.db"
 
-var (
-	// ErrNotFound is returned when the requested key could not be found in the database.
-	ErrNotFound = errors.New("persistent: key not found in database")
-)
-
-type StoreTxFunc func(*bolt.Tx, *bolt.Bucket) error
+// ErrNotFound is returned when the requested key could not be found in the database.
+var ErrNotFound = errors.New("persistent: key not found in database")
 
 // CommonStore is the interface to the common storage for the node.
 type CommonStore struct {
-	db *bolt.DB
+	db *badger.DB
 }
 
 // Close closes the database handle.
@@ -32,28 +33,23 @@ func (cs *CommonStore) Close() {
 
 // GetServiceStore returns a handle to a per-service bucket for the given service.
 func (cs *CommonStore) GetServiceStore(name string) (*ServiceStore, error) {
-	byteName := []byte(name)
-	err := cs.db.Update(func(tx *bolt.Tx) error {
-		_, berr := tx.CreateBucketIfNotExists(byteName)
-		return berr
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	ss := &ServiceStore{
-		store:    cs,
-		name:     name,
-		byteName: byteName,
+		store: cs,
+		name:  []byte(name),
 	}
 	return ss, nil
 }
 
 // NewCommonStore opens the default common node storage and returns a handle.
 func NewCommonStore(dataDir string) (*CommonStore, error) {
-	db, err := bolt.Open(filepath.Join(dataDir, dbName), 0600, nil)
+	opts := badger.DefaultOptions(filepath.Join(dataDir, dbName))
+	opts = opts.WithLogger(ekbadger.NewLogAdapter(logging.GetLogger("common/persistent")))
+	opts = opts.WithSyncWrites(true)
+	opts = opts.WithCompression(options.None)
+
+	db, err := badger.Open(opts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open persistence database: %w", err)
 	}
 
 	cs := &CommonStore{
@@ -67,8 +63,7 @@ func NewCommonStore(dataDir string) (*CommonStore, error) {
 type ServiceStore struct {
 	store *CommonStore
 
-	name     string
-	byteName []byte
+	name []byte
 }
 
 // Close invalidates the per-service database handle.
@@ -76,37 +71,33 @@ func (ss *ServiceStore) Close() {
 	ss.store = nil
 }
 
-// View executes the given callback within a read-only transaction.
-func (ss *ServiceStore) View(cb StoreTxFunc) error {
-	return ss.store.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(ss.byteName)
-		return cb(tx, bkt)
-	})
-}
-
-// Update executes the given callback within a read-write transaction.
-func (ss *ServiceStore) Update(cb StoreTxFunc) error {
-	return ss.store.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(ss.byteName)
-		return cb(tx, bkt)
-	})
-}
-
 // GetCBOR is a helper for retrieving CBOR-serialized values.
 func (ss *ServiceStore) GetCBOR(key []byte, value interface{}) error {
-	return ss.View(func(tx *bolt.Tx, bkt *bolt.Bucket) error {
-		bytes := bkt.Get(key)
-		if bytes != nil {
-			return cbor.Unmarshal(bytes, value)
+	return ss.store.db.View(func(tx *badger.Txn) error {
+		item, txErr := tx.Get(ss.dbKey(key))
+		switch txErr {
+		case nil:
+		case badger.ErrKeyNotFound:
+			return ErrNotFound
+		default:
+			return txErr
 		}
-		return ErrNotFound
+		return item.Value(func(val []byte) error {
+			if val == nil {
+				return ErrNotFound
+			}
+			return cbor.Unmarshal(val, value)
+		})
 	})
 }
 
 // PutCBOR is a helper for storing CBOR-serialized values.
 func (ss *ServiceStore) PutCBOR(key []byte, value interface{}) error {
-	return ss.Update(func(tx *bolt.Tx, bkt *bolt.Bucket) error {
-		bytes := cbor.Marshal(value)
-		return bkt.Put(key, bytes)
+	return ss.store.db.Update(func(tx *badger.Txn) error {
+		return tx.Set(ss.dbKey(key), cbor.Marshal(value))
 	})
+}
+
+func (ss *ServiceStore) dbKey(key []byte) []byte {
+	return bytes.Join([][]byte{ss.name, key}, []byte{'.'})
 }
