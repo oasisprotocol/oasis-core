@@ -1,4 +1,4 @@
-package followtool
+package supplementarysanity
 
 const (
 	AppID   uint8  = 0x98

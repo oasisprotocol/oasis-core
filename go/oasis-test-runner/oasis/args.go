@@ -17,7 +17,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/followtool"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
 	"github.com/oasislabs/oasis-core/go/runtime/client"
 	"github.com/oasislabs/oasis-core/go/storage"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
@@ -126,9 +126,9 @@ func (args *argBuilder) storageBackend(backend string) *argBuilder {
 }
 
 func (args *argBuilder) followtoolEnabled() *argBuilder {
-	args.vec = append(args.vec, "--"+followtool.CfgEnabled)
+	args.vec = append(args.vec, "--"+supplementarysanity.CfgEnabled)
 	args.vec = append(args.vec, []string{
-		"--" + followtool.CfgInterval, "1",
+		"--" + supplementarysanity.CfgInterval, "1",
 	}...)
 	return args
 }

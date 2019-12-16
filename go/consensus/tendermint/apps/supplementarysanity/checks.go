@@ -1,4 +1,4 @@
-package followtool
+package supplementarysanity
 
 import (
 	"fmt"

@@ -43,7 +43,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/pprof"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/tracing"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/followtool"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client"
@@ -181,8 +181,8 @@ func (n *Node) initBackends() error {
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")
 
-	if followtool.Enabled() {
-		if err = followtool.New(n.svcTmnt); err != nil {
+	if supplementarysanity.Enabled() {
+		if err = supplementarysanity.New(n.svcTmnt); err != nil {
 			return err
 		}
 	}
@@ -773,7 +773,7 @@ func init() {
 		cmdGrpc.ServerLocalFlags,
 		pprof.Flags,
 		storage.Flags,
-		followtool.Flags,
+		supplementarysanity.Flags,
 		tendermint.Flags,
 		ias.Flags,
 		workerKeymanager.Flags,

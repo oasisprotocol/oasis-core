@@ -1,11 +1,11 @@
-package followtool
+package supplementarysanity
 
 import (
 	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/followtool"
+	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/supplementarysanity"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 )
 
