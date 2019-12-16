@@ -580,7 +580,8 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env) error {
 	}
 	// Runtime ID 0x0 is for simple-keyvalue, 0xf... is for the keymanager. Let's use 0x1.
 	_ = testRuntime.ID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000001")
-	_ = testRuntime.KeyManager.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
+	testRuntime.KeyManager = &signature.PublicKey{}
+	_ = testRuntime.KeyManager.UnmarshalHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	// Empty genesis state root.
 	testRuntime.Genesis.StateRoot.Empty()
 
@@ -663,7 +664,6 @@ func (r *registryCLIImpl) genRegisterRuntimeTx(childEnv *env.Env, runtime regist
 		"--" + cmdRegRt.CfgTEEHardware, runtime.TEEHardware.String(),
 		"--" + cmdRegRt.CfgGenesisState, genesisStateFile,
 		"--" + cmdRegRt.CfgKind, runtime.Kind.String(),
-		"--" + cmdRegRt.CfgKeyManager, runtime.KeyManager.String(),
 		"--" + cmdRegRt.CfgVersion, runtime.Version.Version.String(),
 		"--" + cmdRegRt.CfgVersionEnclave, string(runtime.Version.TEE),
 		"--" + cmdRegRt.CfgComputeGroupSize, strconv.FormatUint(runtime.Compute.GroupSize, 10),
@@ -688,6 +688,9 @@ func (r *registryCLIImpl) genRegisterRuntimeTx(childEnv *env.Env, runtime regist
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgDebugTestEntity,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
+	}
+	if runtime.KeyManager != nil {
+		args = append(args, "--"+cmdRegRt.CfgKeyManager, runtime.KeyManager.String())
 	}
 	if err := runSubCommand(childEnv, "gen_register", r.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genRegisterRuntimeTx: failed to generate register runtime tx: %w", err)

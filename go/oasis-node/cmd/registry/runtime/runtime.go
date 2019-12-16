@@ -237,7 +237,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 	}
 
 	var (
-		kmID signature.PublicKey
+		kmID *signature.PublicKey
 		kind registry.RuntimeKind
 	)
 	s = viper.GetString(CfgKind)
@@ -249,15 +249,17 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 	}
 	switch kind {
 	case registry.KindCompute:
-		if err = kmID.UnmarshalHex(viper.GetString(CfgKeyManager)); err != nil {
-			logger.Error("failed to parse key manager ID",
-				"err", err,
-			)
-			return nil, nil, err
+		if viper.IsSet(CfgKeyManager) {
+			kmID = &signature.PublicKey{}
+			if err = kmID.UnmarshalHex(viper.GetString(CfgKeyManager)); err != nil {
+				logger.Error("failed to parse key manager ID",
+					"err", err,
+				)
+				return nil, nil, err
+			}
 		}
 	case registry.KindKeyManager:
 		// Key managers don't have their own key manager.
-		kmID = id
 	}
 
 	// TODO: Support root upload when registering.

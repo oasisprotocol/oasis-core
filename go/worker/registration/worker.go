@@ -284,10 +284,15 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 			ID: w.consensus.ConsensusKey(),
 		},
 	}
-	for _, runtime := range w.workerCommonCfg.Runtimes {
-		nodeDesc.Runtimes = append(nodeDesc.Runtimes, &node.Runtime{
-			ID: runtime,
-		})
+	for role := range w.roleHooks {
+		nodeDesc.AddRoles(role)
+	}
+	if nodeDesc.HasRoles(registry.RuntimesRequiredRoles) {
+		for _, runtime := range w.workerCommonCfg.Runtimes {
+			nodeDesc.Runtimes = append(nodeDesc.Runtimes, &node.Runtime{
+				ID: runtime,
+			})
+		}
 	}
 
 	w.Lock()
@@ -295,8 +300,6 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 
 	// Apply worker role hooks:
 	for role, h := range w.roleHooks {
-		nodeDesc.AddRoles(role)
-
 		if err := h(&nodeDesc); err != nil {
 			w.logger.Error("failed to apply role hook",
 				"role", role,

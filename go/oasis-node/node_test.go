@@ -27,6 +27,7 @@ import (
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdCommonFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/node"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	registryTests "github.com/oasislabs/oasis-core/go/registry/tests"
@@ -75,6 +76,8 @@ var (
 		{storageWorker.CfgWorkerEnabled, true},
 		{txnscheduler.CfgWorkerEnabled, true},
 		{mergeWorker.CfgWorkerEnabled, true},
+		{supplementarysanity.CfgEnabled, true},
+		{supplementarysanity.CfgInterval, 1},
 		{cmdCommon.CfgDebugAllowTestKeys, true},
 	}
 

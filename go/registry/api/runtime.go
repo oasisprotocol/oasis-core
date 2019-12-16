@@ -146,7 +146,7 @@ type Runtime struct {
 	Version VersionInfo `json:"versions"`
 
 	// KeyManager is the key manager runtime ID for this runtime.
-	KeyManager signature.PublicKey `json:"key_manager"`
+	KeyManager *signature.PublicKey `json:"key_manager,omitempty"`
 
 	// Compute stores parameters of the compute committee.
 	Compute ComputeParameters `json:"compute,omitempty"`

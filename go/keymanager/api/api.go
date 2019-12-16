@@ -139,9 +139,9 @@ type Genesis struct {
 	Statuses []*Status `json:"statuses,omitempty"`
 }
 
-// SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck() error {
-	for _, status := range g.Statuses {
+// SanityCheckStatuses examines the statuses table.
+func SanityCheckStatuses(statuses []*Status) error {
+	for _, status := range statuses {
 		// Verify key manager runtime ID.
 		if !status.ID.IsValid() {
 			return fmt.Errorf("keymanager: sanity check failed: key manager runtime ID %s is invalid", status.ID.String())
@@ -167,6 +167,15 @@ func (g *Genesis) SanityCheck() error {
 				}
 			}
 		}
+	}
+	return nil
+}
+
+// SanityCheck does basic sanity checking on the genesis state.
+func (g *Genesis) SanityCheck() error {
+	err := SanityCheckStatuses(g.Statuses)
+	if err != nil {
+		return err
 	}
 
 	return nil

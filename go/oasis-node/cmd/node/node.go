@@ -43,6 +43,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/pprof"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/tracing"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client"
@@ -179,6 +180,12 @@ func (n *Node) initBackends() error {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")
+
+	if supplementarysanity.Enabled() {
+		if err = supplementarysanity.New(n.svcTmnt); err != nil {
+			return err
+		}
+	}
 
 	// Initialize and register the internal gRPC services.
 	grpcSrv := n.grpcInternal.Server()
@@ -766,6 +773,7 @@ func init() {
 		cmdGrpc.ServerLocalFlags,
 		pprof.Flags,
 		storage.Flags,
+		supplementarysanity.Flags,
 		tendermint.Flags,
 		ias.Flags,
 		workerKeymanager.Flags,

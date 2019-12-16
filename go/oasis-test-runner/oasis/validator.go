@@ -85,6 +85,10 @@ func (val *Validator) startNode() error {
 			tendermintDisablePeerExchange()
 	}
 
+	if len(val.net.validators) >= 1 && val == val.net.validators[0] {
+		args = args.supplementarysanityEnabled()
+	}
+
 	var err error
 	if val.cmd, val.exitCh, err = val.net.startOasisNode(
 		val.dir,

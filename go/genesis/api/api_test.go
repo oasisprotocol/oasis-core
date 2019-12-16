@@ -138,7 +138,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	testRuntime := &registry.Runtime{
 		ID:         testRuntimeID,
 		Kind:       registry.KindCompute,
-		KeyManager: testKMRuntime.ID,
+		KeyManager: &testKMRuntime.ID,
 		Compute: registry.ComputeParameters{
 			GroupSize:    1,
 			RoundTimeout: 1 * time.Second,

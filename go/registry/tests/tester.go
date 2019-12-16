@@ -167,9 +167,11 @@ func testRegistryEntityNodes( // nolint: gocyclo
 					require.Equal(err, api.ErrInvalidArgument)
 				}
 
-				err = v.Register(consensus, v.SignedInvalidRegistration7)
-				require.Error(err, "register node without runtimes")
-				require.Equal(err, api.ErrInvalidArgument)
+				if v.Node.Roles&node.RoleComputeWorker != 0 {
+					err = v.Register(consensus, v.SignedInvalidRegistration7)
+					require.Error(err, "register node without runtimes")
+					require.Equal(err, api.ErrInvalidArgument)
+				}
 
 				err = v.Register(consensus, v.SignedInvalidRegistration8)
 				require.Error(err, "register node with invalid runtimes")
@@ -599,18 +601,21 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		}
 		nod.Entity = ent
 
+		var thisNodeRuntimes []*node.Runtime
 		var role node.RolesMask
 		if i < nCompute {
 			role = node.RoleComputeWorker | node.RoleTransactionScheduler | node.RoleMergeWorker
+			thisNodeRuntimes = runtimes
 		} else {
 			role = node.RoleStorageWorker
+			thisNodeRuntimes = nil
 		}
 
 		nod.Node = &node.Node{
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
 			Expiration: uint64(expiration),
-			Runtimes:   runtimes,
+			Runtimes:   thisNodeRuntimes,
 			Roles:      role,
 		}
 		addr := node.Address{
@@ -765,7 +770,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
 			Expiration: uint64(expiration),
-			Runtimes:   runtimes,
+			Runtimes:   thisNodeRuntimes,
 			Roles:      role,
 		}
 		addr = node.Address{
@@ -784,13 +789,15 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 			return nil, err
 		}
 
-		// Add invalid Re-Registration with changed Roles field.
+		// Add invalid Re-Registration with changed Runtimes field.
 		testRuntimeSigner := memorySigner.NewTestSigner("invalid-registration-runtime-seed")
+		newRuntimes := append([]*node.Runtime(nil), thisNodeRuntimes...)
+		newRuntimes = append(newRuntimes, &node.Runtime{ID: testRuntimeSigner.Public()})
 		newNode := &node.Node{
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
 			Expiration: uint64(expiration),
-			Runtimes:   append(runtimes, &node.Runtime{ID: testRuntimeSigner.Public()}),
+			Runtimes:   newRuntimes,
 			Roles:      role,
 			P2P:        nod.Node.P2P,
 			Committee:  nod.Node.Committee,
@@ -1036,33 +1043,34 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 		return nil, err
 	}
 
-	kmSigner, err := memorySigner.NewSigner(rng)
-	if err != nil {
-		return nil, err
-	}
-
 	rt.Runtime = &api.Runtime{
 		ID: rt.Signer.Public(),
 		Compute: api.ComputeParameters{
 			GroupSize:         3,
 			GroupBackupSize:   5,
 			AllowedStragglers: 1,
+			RoundTimeout:      20 * time.Second,
 		},
 		Merge: api.MergeParameters{
 			GroupSize:         3,
 			GroupBackupSize:   5,
 			AllowedStragglers: 1,
+			RoundTimeout:      20 * time.Second,
 		},
-		TxnScheduler: api.TxnSchedulerParameters{GroupSize: 3},
-		Storage:      api.StorageParameters{GroupSize: 3},
+		TxnScheduler: api.TxnSchedulerParameters{
+			GroupSize:         3,
+			Algorithm:         api.TxnSchedulerAlgorithmBatching,
+			BatchFlushTimeout: 20 * time.Second,
+			MaxBatchSize:      1,
+			MaxBatchSizeBytes: 1000,
+		},
+		Storage: api.StorageParameters{GroupSize: 3},
 		Genesis: api.RuntimeGenesis{
 			StorageReceipt: signature.Signature{
 				// We don't want an invalid public key so we pass something.
 				PublicKey: rt.Signer.Public(),
 			},
 		},
-		// We don't want an invalid public key so we pass something.
-		KeyManager: kmSigner.Public(),
 	}
 	if entity != nil {
 		rt.Signer = entity.Signer

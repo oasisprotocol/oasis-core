@@ -182,11 +182,13 @@ func (c *Client) updateRuntime(rt *registry.Runtime) {
 
 	switch rt.Kind {
 	case registry.KindCompute:
+		if rt.KeyManager != nil {
+			c.kmMap[rt.ID] = *rt.KeyManager
+		}
 		c.logger.Debug("set new runtime key manager",
 			"id", rt.ID,
 			"km_id", rt.KeyManager,
 		)
-		c.kmMap[rt.ID] = rt.KeyManager
 	case registry.KindKeyManager:
 		c.kmMap[rt.ID] = rt.ID
 	default:

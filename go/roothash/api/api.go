@@ -169,22 +169,29 @@ type Genesis struct {
 	Blocks map[signature.PublicKey]*block.Block `json:"blocks,omitempty"`
 }
 
-// SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck() error {
-	// Check blocks.
-	for _, blk := range g.Blocks {
+// SanityCheckBlocks examines the blocks table.
+func SanityCheckBlocks(blocks map[signature.PublicKey]*block.Block) error {
+	for _, blk := range blocks {
+		hdr := blk.Header
+
+		if hdr.Timestamp > uint64(time.Now().Unix()+61*60) {
+			return fmt.Errorf("roothash: sanity check failed: block header timestamp is more than 1h1m in the future")
+		}
+	}
+	return nil
+}
+
+// checkBlocksForGenesis examines the blocks for extra properties specific to genesis state.
+func checkBlocksForGenesis(blocks map[signature.PublicKey]*block.Block) error {
+	for _, blk := range blocks {
 		hdr := blk.Header
 
 		if hdr.HeaderType != block.Normal {
-			return fmt.Errorf("roothash: sanity check failed: invalid block header type")
+			return fmt.Errorf("roothash: sanity check failed: invalid block header type %v", hdr.HeaderType)
 		}
 
 		if !hdr.PreviousHash.IsEmpty() {
 			return fmt.Errorf("roothash: sanity check failed: non-empty previous hash")
-		}
-
-		if hdr.Timestamp > uint64(time.Now().Unix()+61*60) {
-			return fmt.Errorf("roothash: sanity check failed: block header timestamp is more than 1h1m in the future")
 		}
 
 		if len(hdr.StorageSignatures) != 0 {
@@ -194,6 +201,21 @@ func (g *Genesis) SanityCheck() error {
 		if len(hdr.RoothashMessages) != 0 {
 			return fmt.Errorf("roothash: sanity check failed: non-empty roothash messages")
 		}
+	}
+	return nil
+}
+
+// SanityCheck does basic sanity checking on the genesis state.
+func (g *Genesis) SanityCheck() error {
+	// Check blocks.
+	err := SanityCheckBlocks(g.Blocks)
+	if err != nil {
+		return err
+	}
+
+	err = checkBlocksForGenesis(g.Blocks)
+	if err != nil {
+		return err
 	}
 
 	return nil
