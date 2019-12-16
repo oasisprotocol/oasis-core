@@ -253,8 +253,8 @@ func (b *storageClientBackend) writeWithClient(
 		}
 		// NOTE: All storage backend implementations of apply operations return
 		// a list of storage receipts. However, a concrete storage backend,
-		// e.g. storage/leveldb, actually returns a single storage receipt in a
-		// list.
+		// e.g. storage/database, actually returns a single storage receipt
+		// in a list.
 		receiptInAList := make([]api.Receipt, 1)
 		if err = cbor.Unmarshal(receiptsRaw, &receiptInAList); err != nil {
 			b.logger.Error("failed to unmarshal receipt in a list from a storage node",

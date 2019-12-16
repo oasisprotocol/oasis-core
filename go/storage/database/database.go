@@ -12,18 +12,11 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/api"
 	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
 	badgerNodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
-	levelNodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/leveldb"
 )
 
 const (
-	// BackendNameLevelDB is the name of the LevelDB backed database backend.
-	BackendNameLevelDB = "leveldb"
-
 	// BackendNameBadgerDB is the name of the BadgeDB backed database backend.
 	BackendNameBadgerDB = "badger"
-
-	// DBFileLevelDB is the default LevelDB backing store filename.
-	DBFileLevelDB = "mkvs_storage.leveldb.db"
 
 	// DBFileBadgerDB is the default BadgerDB backing store filename.
 	DBFileBadgerDB = "mkvs_storage.badger.db"
@@ -33,8 +26,6 @@ const (
 // backend.
 func DefaultFileName(backend string) string {
 	switch backend {
-	case BackendNameLevelDB:
-		return DBFileLevelDB
 	case BackendNameBadgerDB:
 		return DBFileBadgerDB
 	default:
@@ -61,8 +52,6 @@ func New(cfg *api.Config) (api.Backend, error) {
 	switch cfg.Backend {
 	case BackendNameBadgerDB:
 		ndb, err = badgerNodedb.New(ndbCfg)
-	case BackendNameLevelDB:
-		ndb, err = levelNodedb.New(ndbCfg)
 	default:
 		err = errors.New("storage/database: unsupported backend")
 	}

@@ -635,7 +635,7 @@ func (d *badgerNodeDB) Prune(ctx context.Context, namespace common.Namespace, ro
 		var nextRoot hash.Hash
 
 		if !rootLinkKeyFmt.Decode(item.Key(), &decNs, &decRound, &rootHash, &nextRoot) {
-			// This should not happen as the LevelDB iterator should take care of it.
+			// This should not happen as the iterator should take care of it.
 			panic("urkel/db/badger: bad iterator")
 		}
 

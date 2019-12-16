@@ -16,7 +16,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	db "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
 	badgerDb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
-	levelDb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/leveldb"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
@@ -1866,31 +1865,6 @@ func testBackend(
 	}
 }
 
-func TestUrkelLevelDBBackend(t *testing.T) {
-	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
-		// Create a new random temporary directory under /tmp.
-		dir, err := ioutil.TempDir("", "mkvs.test.leveldb")
-		require.NoError(t, err, "TempDir")
-
-		// Create a LevelDB-backed Node DB.
-		ndb, err := levelDb.New(&db.Config{
-			DB:           dir,
-			DebugNoFsync: true,
-		})
-		require.NoError(t, err, "New")
-
-		return ndb, dir
-	},
-		func(t *testing.T, ndb db.NodeDB, custom interface{}) {
-			ndb.Close()
-
-			dir, ok := custom.(string)
-			require.True(t, ok, "finiBackend")
-
-			os.RemoveAll(dir)
-		}, nil)
-}
-
 func TestUrkelBadgerBackend(t *testing.T) {
 	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
 		// Create a new random temporary directory under /tmp.
@@ -1952,10 +1926,10 @@ func benchmarkInsertBatch(b *testing.B, numValues int, commit bool) {
 	ctx := context.Background()
 
 	for n := 0; n < b.N; n++ {
-		dir, err := ioutil.TempDir("", "mkvs.bench.leveldb")
+		dir, err := ioutil.TempDir("", "mkvs.bench.badgerdb")
 		require.NoError(b, err, "TempDir")
 		defer os.RemoveAll(dir)
-		ndb, err := levelDb.New(&db.Config{
+		ndb, err := badgerDb.New(&db.Config{
 			DB: dir,
 		})
 		require.NoError(b, err, "New")

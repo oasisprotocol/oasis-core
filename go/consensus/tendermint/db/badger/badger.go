@@ -237,6 +237,11 @@ func (d *badgerDBImpl) Stats() map[string]string {
 	return m
 }
 
+func (d *badgerDBImpl) Size() (int64, error) {
+	lsm, vlog := d.db.Size()
+	return lsm + vlog, nil
+}
+
 func (d *badgerDBImpl) newIterator(start, end []byte, isForward bool) dbm.Iterator {
 	opts := badger.DefaultIteratorOptions
 	opts.Reverse = !isForward

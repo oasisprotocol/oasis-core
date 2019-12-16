@@ -65,7 +65,7 @@ var (
 		{cmdCommonFlags.CfgConsensusValidator, true},
 		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
 		{roothash.CfgIndexBlocks, true},
-		{storage.CfgBackend, "leveldb"},
+		{storage.CfgBackend, "badger"},
 		{computeWorker.CfgWorkerEnabled, true},
 		{workerCommon.CfgRuntimeBackend, "mock"},
 		{workerCommon.CfgRuntimeLoader, "mock-runtime"},
