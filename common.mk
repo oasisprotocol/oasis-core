@@ -21,9 +21,15 @@ else
 	ECHO := echo
 endif
 
-# Try to determine Oasis Core's git revision and if the working directory is
-# dirty.
-VERSION_BUILD = $(shell git describe --always --match "" --dirty=+ 2>/dev/null)
+# Try to determine Oasis Core's version from git.
+LATEST_TAG := $(shell git describe --tags --match 'v*' --abbrev=0 2>/dev/null)
+VERSION := $(subst v,,$(LATEST_TAG))
+IS_TAG := $(shell git describe --tags --match 'v*' --exact-match 2>/dev/null && echo YES || echo NO)
+ifeq ($(and $(LATEST_TAG),$(IS_TAG)),NO)
+	# The current commit is not exactly a tag, append commit and dirty info to
+	# the version.
+	VERSION := $(VERSION)-git$(shell git describe --always --match '' --dirty=+dirty 2>/dev/null)
+endif
 
 # Go binary to use for all Go commands.
 OASIS_GO ?= go
@@ -36,8 +42,8 @@ GO := env -u GOPATH $(OASIS_GO)
 GOFLAGS ?= -trimpath -v
 
 # Add Oasis Core's version as a linker string value definition.
-ifneq ($(VERSION_BUILD),)
-	GOLDFLAGS += "-X github.com/oasislabs/oasis-core/go/common/version.Build=+$(VERSION_BUILD)"
+ifneq ($(VERSION),)
+	GOLDFLAGS += "-X github.com/oasislabs/oasis-core/go/common/version.SoftwareVersion=$(VERSION)"
 endif
 
 # Go build command to use by default.

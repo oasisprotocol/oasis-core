@@ -32,7 +32,7 @@ build: $(go-binaries)
 # Urkel interoperability test helpers.
 urkel: generate
 	@$(ECHO) "$(MAGENTA)*** Building test helpers for $@...$(OFF)"
-	@$(GO) build $(GOFLAGS) -o ./$(GO_TEST_HELPER_URKEL_PATH) ./$(shell dirname $(GO_TEST_HELPER_URKEL_PATH))
+	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$(GO_TEST_HELPER_URKEL_PATH) ./$(shell dirname $(GO_TEST_HELPER_URKEL_PATH))
 
 build-helpers: $(test-helpers)
 
