@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
-	runtimeHelpers "github.com/oasislabs/oasis-core/go/runtime"
 )
 
 const recvTimeout = 1 * time.Second
@@ -91,10 +89,7 @@ func TestHistory(t *testing.T) {
 
 	// Try to manually load the block index database with incorrect runtime ID.
 	// Use path from the first runtime.
-	path, err := runtimeHelpers.EnsureRuntimeStateDir(dataDir, runtimeID)
-	require.NoError(err, "EnsureRuntimeStateDir")
-	// But use a different runtime ID.
-	_, err = newDB(filepath.Join(path, dbFilename), runtimeID2)
+	_, err = New(dataDir, runtimeID2, NewDefaultConfig())
 	require.Error(err, "New should return an error on runtime mismatch")
 
 	history, err = New(dataDir, runtimeID, NewDefaultConfig())

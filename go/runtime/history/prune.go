@@ -10,6 +10,13 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 )
 
+const (
+	// PrunerStrategyNone is the name of the none pruner strategy.
+	PrunerStrategyNone = "none"
+	// PrunerStrategyKeepLast is the name of the keep last pruner strategy.
+	PrunerStrategyKeepLast = "keep_last"
+)
+
 // PrunerFactory is the runtime history pruner factory interface.
 type PrunerFactory func(db *DB) (Pruner, error)
 

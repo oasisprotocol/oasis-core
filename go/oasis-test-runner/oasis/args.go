@@ -134,9 +134,9 @@ func (args *argBuilder) supplementarysanityEnabled() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) runtimeHistoryTagIndexerBackend(backend string) *argBuilder {
+func (args *argBuilder) runtimeTagIndexerBackend(backend string) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + runtimeRegistry.CfgHistoryTagIndexerBackend, backend,
+		"--" + runtimeRegistry.CfgTagIndexerBackend, backend,
 	}...)
 	return args
 }

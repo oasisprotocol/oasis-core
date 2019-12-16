@@ -31,7 +31,6 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	registryTests "github.com/oasislabs/oasis-core/go/registry/tests"
 	roothashTests "github.com/oasislabs/oasis-core/go/roothash/tests"
-	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client"
 	clientTests "github.com/oasislabs/oasis-core/go/runtime/client/tests"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	schedulerTests "github.com/oasislabs/oasis-core/go/scheduler/tests"
@@ -154,7 +153,7 @@ func newTestNode(t *testing.T) *testNode {
 	viper.Set("datadir", dataDir)
 	viper.Set("log.file", filepath.Join(dataDir, "test-node.log"))
 	viper.Set(runtimeRegistry.CfgSupported, testRuntimeID.String())
-	viper.Set(runtimeClient.CfgIndexerBackend, "bleve")
+	viper.Set(runtimeRegistry.CfgTagIndexerBackend, "bleve")
 	viper.Set(workerCommon.CfgRuntimeBinary, testRuntimeID.String()+":mock-runtime")
 	viper.Set("worker.registration.entity", filepath.Join(dataDir, "entity.json"))
 	for _, kv := range testNodeStaticConfig {

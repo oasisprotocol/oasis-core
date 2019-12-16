@@ -13,7 +13,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
-	runtimeHelpers "github.com/oasislabs/oasis-core/go/runtime"
 )
 
 const dbFilename = "history.db"
@@ -192,11 +191,7 @@ func (h *runtimeHistory) pruneWorker() {
 
 // New creates a new runtime history keeper.
 func New(dataDir string, runtimeID signature.PublicKey, cfg *Config) (History, error) {
-	path, err := runtimeHelpers.EnsureRuntimeStateDir(dataDir, runtimeID)
-	if err != nil {
-		return nil, err
-	}
-	db, err := newDB(filepath.Join(path, dbFilename), runtimeID)
+	db, err := newDB(filepath.Join(dataDir, dbFilename), runtimeID)
 	if err != nil {
 		return nil, err
 	}

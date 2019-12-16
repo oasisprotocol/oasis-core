@@ -14,8 +14,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	runtimeHelpers "github.com/oasislabs/oasis-core/go/runtime"
 	"github.com/oasislabs/oasis-core/go/runtime/history"
+	"github.com/oasislabs/oasis-core/go/runtime/tagindexer"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
@@ -52,14 +52,19 @@ type Runtime interface {
 
 	// History returns the history for this runtime.
 	History() history.History
+
+	// TagIndexer returns the tag indexer backend.
+	TagIndexer() tagindexer.QueryableBackend
 }
 
 type runtime struct {
 	id         signature.PublicKey
 	descriptor *registry.Runtime
-	history    history.History
 
 	consensus consensus.Backend
+
+	history    history.History
+	tagIndexer *tagindexer.Service
 }
 
 func (r *runtime) ID() signature.PublicKey {
@@ -92,6 +97,10 @@ func (r *runtime) RegistryDescriptor(ctx context.Context) (*registry.Runtime, er
 
 func (r *runtime) History() history.History {
 	return r.history
+}
+
+func (r *runtime) TagIndexer() tagindexer.QueryableBackend {
+	return r.tagIndexer
 }
 
 type runtimeRegistry struct {
@@ -141,6 +150,9 @@ func (r *runtimeRegistry) Cleanup() {
 	defer r.Unlock()
 
 	for _, rt := range r.runtimes {
+		// Close tag indexer service.
+		rt.tagIndexer.Stop()
+		<-rt.tagIndexer.Quit()
 		// Close history keeper.
 		rt.history.Close()
 	}
@@ -158,15 +170,29 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id signature.
 		return fmt.Errorf("runtime/registry: runtime already registered: %s", id)
 	}
 
-	history, err := history.New(r.dataDir, id, &cfg.History)
+	path, err := EnsureRuntimeStateDir(r.dataDir, id)
+	if err != nil {
+		return err
+	}
+
+	history, err := history.New(path, id, &cfg.History)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
 	}
 
+	tagIndexer, err := tagindexer.New(path, cfg.TagIndexer, history, r.consensus.RootHash(), r.storage)
+	if err != nil {
+		return fmt.Errorf("runtime/registry: cannot create tag indexer for runtime %s: %w", id, err)
+	}
+	if err = tagIndexer.Start(); err != nil {
+		return fmt.Errorf("runtime/registry: failed to start tag indexer for runtime %s: %w", id, err)
+	}
+
 	r.runtimes[id] = &runtime{
-		id:        id,
-		history:   history,
-		consensus: r.consensus,
+		id:         id,
+		consensus:  r.consensus,
+		history:    history,
+		tagIndexer: tagIndexer,
 	}
 
 	// Start tracking this runtime.
@@ -203,7 +229,7 @@ func New(ctx context.Context, dataDir string, consensus consensus.Backend, stora
 		return nil, err
 	}
 
-	runtimes, err := runtimeHelpers.ParseRuntimeMap(viper.GetStringSlice(CfgSupported))
+	runtimes, err := ParseRuntimeMap(viper.GetStringSlice(CfgSupported))
 	if err != nil {
 		return nil, err
 	}

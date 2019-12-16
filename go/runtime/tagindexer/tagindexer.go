@@ -1,9 +1,8 @@
-// Package indexer implements the block/transaction tag indexer.
-package indexer
+// Package tagindexer implements the runtime transaction tag indexer.
+package tagindexer
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -13,7 +12,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/service"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/runtime/history"
-	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
@@ -23,46 +21,20 @@ const (
 	storageRetryTimeout   = 120 * time.Second
 )
 
-var (
-	// ErrTagTooLong is the error when either key or value is too long.
-	ErrTagTooLong = errors.New("indexer: tag too long to process")
-	// ErrCorrupted is the error when index corruption is detected.
-	ErrCorrupted = errors.New("indexer: index corrupted")
-	// ErrUnsupported is the error when the given method is not supported.
-	ErrUnsupported = errors.New("indexer: method not supported")
-
-	_ history.PruneHandler = (*pruneHandler)(nil)
-)
-
-type pruneHandler struct {
-	logger    *logging.Logger
-	backend   Backend
-	runtimeID signature.PublicKey
-}
-
-func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
-	// New blocks to prune from the index.
-	for _, round := range rounds {
-		if err := p.backend.Prune(ctx, p.runtimeID, round); err != nil {
-			p.logger.Error("failed to prune index",
-				"err", err,
-				"round", round,
-			)
-			return err
-		}
-	}
-
-	return nil
-}
+var _ history.PruneHandler = (*pruneHandler)(nil)
 
 // Service is an indexer service.
 type Service struct {
 	service.BaseBackgroundService
+	QueryableBackend
 
-	runtime  runtimeRegistry.Runtime
-	backend  Backend
-	roothash roothash.Backend
-	storage  storage.Backend
+	runtimeID signature.PublicKey
+	backend   Backend
+	roothash  roothash.Backend
+	storage   storage.Backend
+
+	ctx       context.Context
+	cancelCtx context.CancelFunc
 
 	stopCh chan struct{}
 }
@@ -70,12 +42,10 @@ type Service struct {
 func (s *Service) worker() {
 	defer s.BaseBackgroundService.Stop()
 
-	ctx := context.TODO()
-
 	s.Logger.Info("started indexer for runtime")
 
 	// Start watching roothash blocks.
-	blocksCh, blocksSub, err := s.roothash.WatchBlocks(s.runtime.ID())
+	blocksCh, blocksSub, err := s.roothash.WatchBlocks(s.runtimeID)
 	if err != nil {
 		s.Logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
@@ -106,7 +76,7 @@ func (s *Service) worker() {
 				off.MaxElapsedTime = storageRetryTimeout
 
 				err = backoff.Retry(func() error {
-					bctx, cancel := context.WithTimeout(ctx, storageRequestTimeout)
+					bctx, cancel := context.WithTimeout(s.ctx, storageRequestTimeout)
 					defer cancel()
 
 					ioRoot := storage.Root{
@@ -140,14 +110,7 @@ func (s *Service) worker() {
 				}
 			}
 
-			if err = s.backend.Index(
-				ctx,
-				s.runtime.ID(),
-				blk.Header.Round,
-				blk.Header.EncodedHash(),
-				txs,
-				tags,
-			); err != nil {
+			if err = s.backend.Index(s.ctx, blk.Header.Round, blk.Header.EncodedHash(), txs, tags); err != nil {
 				s.Logger.Error("failed to index tags",
 					"err", err,
 					"round", blk.Header.Round,
@@ -164,32 +127,64 @@ func (s *Service) Start() error {
 }
 
 func (s *Service) Stop() {
+	s.cancelCtx()
 	close(s.stopCh)
 }
 
-// New creates a new indexer service.
+// New creates a new tag indexer service.
 func New(
-	runtime runtimeRegistry.Runtime,
-	backend Backend,
+	dataDir string,
+	backendFactory BackendFactory,
+	history history.History,
 	roothash roothash.Backend,
 	storage storage.Backend,
 ) (*Service, error) {
+	runtimeID := history.RuntimeID()
+	backend, err := backendFactory(dataDir, runtimeID)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancelCtx := context.WithCancel(context.Background())
+
 	s := &Service{
-		BaseBackgroundService: *service.NewBaseBackgroundService("client/indexer"),
-		runtime:               runtime,
+		BaseBackgroundService: *service.NewBaseBackgroundService("runtime/history/tagindexer"),
+		QueryableBackend:      backend,
+		runtimeID:             runtimeID,
 		backend:               backend,
 		roothash:              roothash,
 		storage:               storage,
+		ctx:                   ctx,
+		cancelCtx:             cancelCtx,
 		stopCh:                make(chan struct{}),
 	}
-	s.Logger = s.Logger.With("runtime_id", s.runtime.ID().String())
+	s.Logger = s.Logger.With("runtime_id", s.runtimeID.String())
 
 	// Register prune handler.
-	runtime.History().Pruner().RegisterHandler(&pruneHandler{
-		logger:    s.Logger,
-		backend:   s.backend,
-		runtimeID: s.runtime.ID(),
+	history.Pruner().RegisterHandler(&pruneHandler{
+		logger:  s.Logger,
+		backend: s.backend,
 	})
 
 	return s, nil
+}
+
+type pruneHandler struct {
+	logger  *logging.Logger
+	backend Backend
+}
+
+func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
+	// New blocks to prune from the index.
+	for _, round := range rounds {
+		if err := p.backend.Prune(ctx, round); err != nil {
+			p.logger.Error("failed to prune index",
+				"err", err,
+				"round", round,
+			)
+			return err
+		}
+	}
+
+	return nil
 }

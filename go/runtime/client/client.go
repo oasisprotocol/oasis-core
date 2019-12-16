@@ -4,14 +4,11 @@ package client
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -26,22 +23,16 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/runtime/client/api"
-	"github.com/oasislabs/oasis-core/go/runtime/client/indexer"
 	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
+	"github.com/oasislabs/oasis-core/go/runtime/tagindexer"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	txnscheduler "github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
 )
 
-// CfgIndexerBackend configures the runtime tag indexer backend.
-const CfgIndexerBackend = "runtime.history.tag_indexer.backend"
-
 var (
-	// Flags has the configuration flags.
-	Flags = flag.NewFlagSet("", flag.ContinueOnError)
-
 	_ api.RuntimeClient    = (*runtimeClient)(nil)
 	_ enclaverpc.Transport = (*runtimeClient)(nil)
 )
@@ -81,10 +72,16 @@ type runtimeClient struct {
 
 	watchers map[signature.PublicKey]*blockWatcher
 
-	indexers       map[signature.PublicKey]*indexer.Service
-	indexerBackend indexer.Backend
-
 	logger *logging.Logger
+}
+
+func (c *runtimeClient) tagIndexer(runtimeID signature.PublicKey) (tagindexer.QueryableBackend, error) {
+	rt, err := c.runtimeRegistry.GetRuntime(runtimeID)
+	if err != nil {
+		return nil, err
+	}
+
+	return rt.TagIndexer(), nil
 }
 
 func (c *runtimeClient) doSubmitTxToLeader(
@@ -251,8 +248,9 @@ func (c *runtimeClient) getTxnByHash(ctx context.Context, blk *block.Block, txHa
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) GetTx(ctx context.Context, request *api.GetTxRequest) (*api.TxResult, error) {
-	if c.indexerBackend == nil {
-		return nil, api.ErrIndexerDisabled
+	tagIndexer, err := c.tagIndexer(request.RuntimeID)
+	if err != nil {
+		return nil, err
 	}
 
 	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: request.Round})
@@ -260,7 +258,7 @@ func (c *runtimeClient) GetTx(ctx context.Context, request *api.GetTxRequest) (*
 		return nil, err
 	}
 
-	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, request.RuntimeID, blk.Header.Round, request.Index)
+	txHash, err := tagIndexer.QueryTxnByIndex(ctx, blk.Header.Round, request.Index)
 	if err != nil {
 		return nil, err
 	}
@@ -280,8 +278,9 @@ func (c *runtimeClient) GetTx(ctx context.Context, request *api.GetTxRequest) (*
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) GetTxByBlockHash(ctx context.Context, request *api.GetTxByBlockHashRequest) (*api.TxResult, error) {
-	if c.indexerBackend == nil {
-		return nil, api.ErrIndexerDisabled
+	tagIndexer, err := c.tagIndexer(request.RuntimeID)
+	if err != nil {
+		return nil, err
 	}
 
 	blk, err := c.GetBlockByHash(ctx, &api.GetBlockByHashRequest{RuntimeID: request.RuntimeID, BlockHash: request.BlockHash})
@@ -289,7 +288,7 @@ func (c *runtimeClient) GetTxByBlockHash(ctx context.Context, request *api.GetTx
 		return nil, err
 	}
 
-	txHash, err := c.indexerBackend.QueryTxnByIndex(ctx, request.RuntimeID, blk.Header.Round, request.Index)
+	txHash, err := tagIndexer.QueryTxnByIndex(ctx, blk.Header.Round, request.Index)
 	if err != nil {
 		return nil, err
 	}
@@ -337,11 +336,12 @@ func (c *runtimeClient) GetTxs(ctx context.Context, request *api.GetTxsRequest) 
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) GetBlockByHash(ctx context.Context, request *api.GetBlockByHashRequest) (*block.Block, error) {
-	if c.indexerBackend == nil {
-		return nil, api.ErrIndexerDisabled
+	tagIndexer, err := c.tagIndexer(request.RuntimeID)
+	if err != nil {
+		return nil, err
 	}
 
-	round, err := c.indexerBackend.QueryBlock(ctx, request.RuntimeID, request.BlockHash)
+	round, err := tagIndexer.QueryBlock(ctx, request.BlockHash)
 	if err != nil {
 		return nil, err
 	}
@@ -351,11 +351,12 @@ func (c *runtimeClient) GetBlockByHash(ctx context.Context, request *api.GetBloc
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) QueryTx(ctx context.Context, request *api.QueryTxRequest) (*api.TxResult, error) {
-	if c.indexerBackend == nil {
-		return nil, api.ErrIndexerDisabled
+	tagIndexer, err := c.tagIndexer(request.RuntimeID)
+	if err != nil {
+		return nil, err
 	}
 
-	round, txHash, txIndex, err := c.indexerBackend.QueryTxn(ctx, request.RuntimeID, request.Key, request.Value)
+	round, txHash, txIndex, err := tagIndexer.QueryTxn(ctx, request.Key, request.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -380,11 +381,12 @@ func (c *runtimeClient) QueryTx(ctx context.Context, request *api.QueryTxRequest
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) QueryTxs(ctx context.Context, request *api.QueryTxsRequest) ([]*api.TxResult, error) {
-	if c.indexerBackend == nil {
-		return nil, api.ErrIndexerDisabled
+	tagIndexer, err := c.tagIndexer(request.RuntimeID)
+	if err != nil {
+		return nil, err
 	}
 
-	results, err := c.indexerBackend.QueryTxns(ctx, request.RuntimeID, request.Query)
+	results, err := tagIndexer.QueryTxns(ctx, request.Query)
 	if err != nil {
 		return nil, err
 	}
@@ -422,11 +424,12 @@ func (c *runtimeClient) QueryTxs(ctx context.Context, request *api.QueryTxsReque
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) WaitBlockIndexed(ctx context.Context, request *api.WaitBlockIndexedRequest) error {
-	if c.indexerBackend == nil {
-		return api.ErrIndexerDisabled
+	tagIndexer, err := c.tagIndexer(request.RuntimeID)
+	if err != nil {
+		return err
 	}
 
-	return c.indexerBackend.WaitBlockIndexed(ctx, request.RuntimeID, request.Round)
+	return tagIndexer.WaitBlockIndexed(ctx, request.Round)
 }
 
 // Implements enclaverpc.Transport.
@@ -443,8 +446,7 @@ func (c *runtimeClient) CallEnclave(ctx context.Context, request *enclaverpc.Cal
 	}
 }
 
-// Cleanup stops all running block watchers and indexers and waits for them
-// to finish.
+// Cleanup stops all running block watchers and waits for them to finish.
 func (c *runtimeClient) Cleanup() {
 	// Watchers.
 	for _, watcher := range c.watchers {
@@ -452,17 +454,6 @@ func (c *runtimeClient) Cleanup() {
 	}
 	for _, watcher := range c.watchers {
 		<-watcher.Quit()
-	}
-
-	// Indexers.
-	for _, indexer := range c.indexers {
-		indexer.Stop()
-	}
-	for _, indexer := range c.indexers {
-		<-indexer.Quit()
-	}
-	if c.indexerBackend != nil {
-		c.indexerBackend.Stop()
 	}
 }
 
@@ -490,50 +481,7 @@ func New(
 		},
 		runtimeRegistry: runtimeRegistry,
 		watchers:        make(map[signature.PublicKey]*blockWatcher),
-		indexers:        make(map[signature.PublicKey]*indexer.Service),
 		logger:          logging.GetLogger("runtime/client"),
 	}
-
-	// Initialize the tag indexer(s) when configured.
-	backend := viper.GetString(CfgIndexerBackend)
-	if backend != "" {
-		var impl indexer.Backend
-		var err error
-
-		switch strings.ToLower(backend) {
-		case indexer.BleveBackendName:
-			impl, err = indexer.NewBleveBackend(dataDir)
-		default:
-			return nil, errors.Errorf("client: unsupported indexer backend: %s", backend)
-		}
-		if err != nil {
-			return nil, err
-		}
-		c.indexerBackend = impl
-
-		for _, rt := range runtimeRegistry.Runtimes() {
-			var idx *indexer.Service
-			idx, err = indexer.New(rt, c.indexerBackend, roothash, storage)
-			if err != nil {
-				return nil, err
-			}
-
-			c.indexers[rt.ID()] = idx
-		}
-
-		// Start all indexers.
-		for _, indexer := range c.indexers {
-			if err = indexer.Start(); err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	return c, nil
-}
-
-func init() {
-	Flags.String(CfgIndexerBackend, "", "Runtime tag indexer backend (disabled by default)")
-
-	_ = viper.BindPFlags(Flags)
 }

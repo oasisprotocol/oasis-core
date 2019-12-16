@@ -14,7 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	runtimeHelpers "github.com/oasislabs/oasis-core/go/runtime"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	"github.com/oasislabs/oasis-core/go/worker/common/configparser"
 )
 
@@ -149,7 +149,7 @@ func newConfig() (*Config, error) {
 
 	// Check if runtime host is configured for the runtimes.
 	if runtimeLoader := viper.GetString(CfgRuntimeLoader); runtimeLoader != "" {
-		runtimeBinaries, err := runtimeHelpers.ParseRuntimeMap(viper.GetStringSlice(CfgRuntimeBinary))
+		runtimeBinaries, err := runtimeRegistry.ParseRuntimeMap(viper.GetStringSlice(CfgRuntimeBinary))
 		if err != nil {
 			return nil, err
 		}

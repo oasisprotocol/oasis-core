@@ -791,7 +791,6 @@ func init() {
 		ias.Flags,
 		workerKeymanager.Flags,
 		runtimeRegistry.Flags,
-		runtimeClient.Flags,
 		compute.Flags,
 		p2p.Flags,
 		registration.Flags,
