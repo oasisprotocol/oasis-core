@@ -21,12 +21,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/genesis"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
+	consensusGenesis "github.com/oasislabs/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
-	genesisGrpc "github.com/oasislabs/oasis-core/go/grpc/genesis"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -205,9 +205,9 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		},
 	}
 
-	doc.Consensus = consensus.Genesis{
+	doc.Consensus = consensusGenesis.Genesis{
 		Backend: viper.GetString(cfgConsensusBackend),
-		Parameters: consensus.Parameters{
+		Parameters: consensusGenesis.Parameters{
 			TimeoutCommit:      viper.GetDuration(cfgConsensusTimeoutCommit),
 			SkipTimeoutCommit:  viper.GetBool(cfgConsensusSkipTimeoutCommit),
 			EmptyBlockInterval: viper.GetDuration(cfgConsensusEmptyBlockInterval),
@@ -583,12 +583,9 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 	}
 	defer conn.Close()
 
-	client := genesisGrpc.NewGenesisClient(conn)
+	client := consensus.NewConsensusClient(conn)
 
-	req := &genesisGrpc.GenesisRequest{
-		Height: viper.GetInt64(cfgBlockHeight),
-	}
-	result, err := client.ToGenesis(ctx, req)
+	doc, err := client.StateToGenesis(ctx, viper.GetInt64(cfgBlockHeight))
 	if err != nil {
 		logger.Error("failed to generate genesis document",
 			"err", err,
@@ -607,7 +604,14 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 		defer w.Close()
 	}
 
-	if _, err = w.Write(result.Json); err != nil {
+	data, err := json.Marshal(doc)
+	if err != nil {
+		logger.Error("failed to marshal genesis document into JSON",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if _, err = w.Write(data); err != nil {
 		logger.Error("failed to write genesis file",
 			"err", err,
 		)
@@ -663,7 +667,7 @@ func init() {
 	_ = viper.BindPFlags(checkGenesisFlags)
 	checkGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
 
-	dumpGenesisFlags.Int64(cfgBlockHeight, 0, "block height at which to dump state")
+	dumpGenesisFlags.Int64(cfgBlockHeight, consensus.HeightLatest, "block height at which to dump state")
 	_ = viper.BindPFlags(dumpGenesisFlags)
 	dumpGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
 

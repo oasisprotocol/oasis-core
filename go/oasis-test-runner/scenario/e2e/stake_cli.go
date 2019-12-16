@@ -372,7 +372,7 @@ func (s *stakeCLIImpl) submitTx(childEnv *env.Env, txPath string) error {
 	return submitTx(childEnv, txPath, s.logger, s.basicImpl.net.Validators()[0].SocketPath(), s.basicImpl.net.Config().NodeBinary)
 }
 
-func (s *stakeCLIImpl) getAccountInfo(childEnv *env.Env, src signature.PublicKey) (*stake.AccountInfo, error) {
+func (s *stakeCLIImpl) getAccountInfo(childEnv *env.Env, src signature.PublicKey) (*api.Account, error) {
 	s.logger.Info("checking account balance", stake.CfgAccountID, src.String())
 	args := []string{
 		"stake", "account", "info",
@@ -385,12 +385,12 @@ func (s *stakeCLIImpl) getAccountInfo(childEnv *env.Env, src signature.PublicKey
 		return nil, fmt.Errorf("scenario/e2e/stake: failed to check account info: %w", err)
 	}
 
-	ai := stake.AccountInfo{}
-	if err = json.Unmarshal(b.Bytes(), &ai); err != nil {
+	var acct api.Account
+	if err = json.Unmarshal(b.Bytes(), &acct); err != nil {
 		return nil, err
 	}
 
-	return &ai, nil
+	return &acct, nil
 }
 
 func (s *stakeCLIImpl) checkBalance(childEnv *env.Env, src signature.PublicKey, expected int64) error {
@@ -403,8 +403,8 @@ func (s *stakeCLIImpl) checkBalance(childEnv *env.Env, src signature.PublicKey, 
 	if err = q.FromBigInt(big.NewInt(expected)); err != nil {
 		return err
 	}
-	if ai.GeneralBalance.Cmp(&q) != 0 {
-		return fmt.Errorf("checkBalance: wrong general balance of account. Expected %s got %s", q.String(), ai.GeneralBalance.String())
+	if ai.General.Balance.Cmp(&q) != 0 {
+		return fmt.Errorf("checkBalance: wrong general balance of account. Expected %s got %s", q, ai.General.Balance)
 	}
 
 	return nil
@@ -420,8 +420,8 @@ func (s *stakeCLIImpl) checkEscrowBalance(childEnv *env.Env, src signature.Publi
 	if err = q.FromBigInt(big.NewInt(expected)); err != nil {
 		return err
 	}
-	if ai.EscrowBalance.Cmp(&q) != 0 {
-		return fmt.Errorf("checkEscrowBalance: wrong escrow balance of account. Expected %s got %s", q.String(), ai.EscrowBalance.String())
+	if ai.Escrow.Active.Balance.Cmp(&q) != 0 {
+		return fmt.Errorf("checkEscrowBalance: wrong escrow balance of account. Expected %s got %s", q, ai.Escrow.Active.Balance)
 	}
 
 	return nil

@@ -432,7 +432,13 @@ func (w *Worker) worker() {
 	clientRuntimes := make(map[signature.PublicKey]*clientRuntimeWatcher)
 	clientRuntimesQuitCh := make(chan *clientRuntimeWatcher)
 	defer close(clientRuntimesQuitCh)
-	rtCh, rtSub := w.commonWorker.Registry.WatchRuntimes()
+	rtCh, rtSub, err := w.commonWorker.Registry.WatchRuntimes(w.ctx)
+	if err != nil {
+		w.logger.Error("failed to watch runtimes",
+			"err", err,
+		)
+		return
+	}
 	defer rtSub.Close()
 
 	var initialSyncDone bool
@@ -580,7 +586,7 @@ func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committee
 		var kmNodes []*node.Node
 
 		for _, pk := range status.Nodes {
-			n, err := crw.node.Registry.GetNode(crw.w.ctx, pk, height)
+			n, err := crw.node.Registry.GetNode(crw.w.ctx, &registry.IDQuery{ID: pk, Height: height})
 			if err != nil {
 				crw.w.logger.Error("worker/keymanager: unable to get KM node info", "err", err)
 			} else {

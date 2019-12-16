@@ -9,7 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
-	"github.com/oasislabs/oasis-core/go/ias"
+	ias "github.com/oasislabs/oasis-core/go/ias/api"
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -22,7 +22,7 @@ import (
 )
 
 // LocalStorageFile is the filename of the worker's local storage database.
-const LocalStorageFile = "worker-local-storage.bolt.db"
+const LocalStorageFile = "worker-local-storage.badger.db"
 
 // Runtime is a single runtime.
 type Runtime struct {
@@ -57,7 +57,7 @@ type Worker struct {
 	Consensus        consensus.Backend
 	Grpc             *grpc.Server
 	P2P              *p2p.P2P
-	IAS              *ias.IAS
+	IAS              ias.Endpoint
 	KeyManager       keymanagerApi.Backend
 	KeyManagerClient *keymanagerClient.Client
 	LocalStorage     *host.LocalStorage
@@ -279,7 +279,7 @@ func newWorker(
 	consensus consensus.Backend,
 	grpc *grpc.Server,
 	p2p *p2p.P2P,
-	ias *ias.IAS,
+	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
 	keyManagerClient *keymanagerClient.Client,
 	cfg Config,
@@ -340,7 +340,7 @@ func New(
 	scheduler scheduler.Backend,
 	consensus consensus.Backend,
 	p2p *p2p.P2P,
-	ias *ias.IAS,
+	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
 	keyManagerClient *keymanagerClient.Client,
 	genesisDoc *genesis.Document,

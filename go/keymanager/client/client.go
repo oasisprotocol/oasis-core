@@ -19,18 +19,18 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	"github.com/oasislabs/oasis-core/go/worker/common/enclaverpc"
+	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
 )
 
 const (
-	kmEndpoint = "key-manager"
-
 	retryInterval = 1 * time.Second
 	maxRetries    = 15
 )
@@ -51,13 +51,13 @@ type Client struct {
 	state map[signature.PublicKey]*clientState
 	kmMap map[signature.PublicKey]signature.PublicKey
 
-	debugClient *enclaverpc.Client
+	debugClient enclaverpc.Transport
 }
 
 type clientState struct {
 	status            *api.Status
 	conn              *grpc.ClientConn
-	client            *enclaverpc.Client
+	client            enclaverpc.Transport
 	resolverCleanupFn func()
 }
 
@@ -75,7 +75,11 @@ func (st *clientState) kill() {
 // CallRemote calls a runtime-specific key manager via remote EnclaveRPC.
 func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, data []byte) ([]byte, error) {
 	if c.debugClient != nil {
-		return c.debugClient.CallEnclave(ctx, data, runtimeID)
+		return c.debugClient.CallEnclave(ctx, &enclaverpc.CallEnclaveRequest{
+			RuntimeID: runtimeID,
+			Endpoint:  api.EnclaveRPCEndpoint,
+			Payload:   data,
+		})
 	}
 
 	c.logger.Debug("remote query",
@@ -109,7 +113,11 @@ func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, 
 	)
 	call := func() error {
 		var err error
-		resp, err = st.client.CallEnclave(ctx, data, runtimeID)
+		resp, err = st.client.CallEnclave(ctx, &enclaverpc.CallEnclaveRequest{
+			RuntimeID: runtimeID,
+			Endpoint:  api.EnclaveRPCEndpoint,
+			Payload:   data,
+		})
 		if status.Code(err) == codes.PermissionDenied && numRetries < maxRetries {
 			// Calls can fail around epoch transitions, as the access policy
 			// is being updated, so we must retry (up to maxRetries).
@@ -126,19 +134,33 @@ func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, 
 }
 
 func (c *Client) worker() {
+	ctx := context.TODO()
+
 	stCh, stSub := c.backend.WatchStatuses()
 	defer stSub.Close()
 
-	rtCh, rtSub := c.registry.WatchRuntimes()
+	rtCh, rtSub, err := c.registry.WatchRuntimes(ctx)
+	if err != nil {
+		c.logger.Error("failed to watch runtimes",
+			"err", err,
+		)
+		panic("failed to watch runtimes")
+	}
 	defer rtSub.Close()
 
-	nlCh, nlSub := c.registry.WatchNodeList()
+	nlCh, nlSub, err := c.registry.WatchNodeList(ctx)
+	if err != nil {
+		c.logger.Error("failed to watch node lists",
+			"err", err,
+		)
+		panic("failed to watch node lists")
+	}
 	defer nlSub.Close()
 
 	for {
 		select {
 		case st := <-stCh:
-			nl, err := c.registry.GetNodes(context.TODO(), 0)
+			nl, err := c.registry.GetNodes(ctx, consensus.HeightLatest)
 			if err != nil {
 				c.logger.Error("failed to poll node list",
 					"err", err,
@@ -251,7 +273,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 	// before populating addresses, dialing is defered till use, which can't
 	// happen.
 	manualResolver, address, cleanupFn := manual.NewManualResolver()
-	conn, err := grpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name)) //nolint: staticcheck
+	conn, err := cmnGrpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name)) //nolint: staticcheck
 	if err != nil {
 		cleanupFn()
 		c.logger.Error("failed to create new gRPC client",
@@ -268,7 +290,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 	c.state[status.ID] = &clientState{
 		status:            status,
 		conn:              conn,
-		client:            enclaverpc.NewFromConn(conn, kmEndpoint),
+		client:            enclaverpc.NewTransportClient(conn),
 		resolverCleanupFn: cleanupFn,
 	}
 }

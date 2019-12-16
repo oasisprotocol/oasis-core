@@ -21,6 +21,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/persistent"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/workerpool"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	roothashApi "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
@@ -331,7 +332,7 @@ func (n *Node) ForceFinalize(ctx context.Context, runtimeID signature.PublicKey,
 	var err error
 
 	if round == RoundLatest {
-		block, err = n.commonNode.Roothash.GetLatestBlock(ctx, runtimeID, 0)
+		block, err = n.commonNode.Roothash.GetLatestBlock(ctx, runtimeID, consensus.HeightLatest)
 	} else {
 		block, err = n.commonNode.Roothash.GetBlock(ctx, runtimeID, round)
 	}
@@ -374,7 +375,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot *urkelNode.Root, thisRoot *urkel
 				"fetch_mask", fetchMask,
 			)
 
-			it, err := n.storageClient.GetDiff(n.ctx, *prevRoot, *thisRoot)
+			it, err := n.storageClient.GetDiff(n.ctx, &storageApi.GetDiffRequest{StartRoot: *prevRoot, EndRoot: *thisRoot})
 			if err != nil {
 				result.err = err
 				return
@@ -445,7 +446,7 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	n.logger.Info("starting committee node")
 
-	genesisBlock, err := n.commonNode.Roothash.GetGenesisBlock(n.ctx, n.commonNode.RuntimeID, 0)
+	genesisBlock, err := n.commonNode.Roothash.GetGenesisBlock(n.ctx, n.commonNode.RuntimeID, consensus.HeightLatest)
 	if err != nil {
 		n.logger.Error("can't retrieve genesis block", "err", err)
 		return
@@ -505,10 +506,14 @@ mainLoop:
 			lastDiff := heap.Pop(outOfOrderDiffs).(*fetchedDiff)
 			// Apply the write log if one exists.
 			if lastDiff.fetched {
-				_, err = n.localStorage.Apply(n.ctx, lastDiff.thisRoot.Namespace,
-					lastDiff.prevRoot.Round, lastDiff.prevRoot.Hash,
-					lastDiff.thisRoot.Round, lastDiff.thisRoot.Hash,
-					lastDiff.writeLog)
+				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+					Namespace: lastDiff.thisRoot.Namespace,
+					SrcRound:  lastDiff.prevRoot.Round,
+					SrcRoot:   lastDiff.prevRoot.Hash,
+					DstRound:  lastDiff.thisRoot.Round,
+					DstRoot:   lastDiff.thisRoot.Hash,
+					WriteLog:  lastDiff.writeLog,
+				})
 				if err != nil {
 					n.logger.Error("can't apply write log",
 						"err", err,

@@ -23,6 +23,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
 	stakingTestsDebug "github.com/oasislabs/oasis-core/go/staking/tests/debug"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
@@ -129,7 +130,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 		t.Fatalf("failed to receive block")
 	}
 
-	blk, err := backend.GetLatestBlock(context.Background(), id, 0)
+	blk, err := backend.GetLatestBlock(context.Background(), id, consensusAPI.HeightLatest)
 	require.NoError(err, "GetLatestBlock")
 	require.EqualValues(genesisBlock, blk, "retreived block is genesis block")
 
@@ -141,7 +142,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	require.NoError(err, "GetBlock")
 	require.EqualValues(genesisBlock, blk, "retreived block is genesis block")
 
-	blk, err = backend.GetGenesisBlock(context.Background(), id, 0)
+	blk, err = backend.GetGenesisBlock(context.Background(), id, consensusAPI.HeightLatest)
 	require.NoError(err, "GetGenesisBlock")
 	require.EqualValues(genesisBlock, blk, "retrieved block is genesis block")
 }
@@ -151,7 +152,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 
 	// Before an epoch transition there should just be a genesis block.
 	for _, v := range states {
-		genesisBlock, err := backend.GetLatestBlock(context.Background(), v.rt.Runtime.ID, 0)
+		genesisBlock, err := backend.GetLatestBlock(context.Background(), v.rt.Runtime.ID, consensusAPI.HeightLatest)
 		require.NoError(err, "GetLatestBlock")
 		require.EqualValues(0, genesisBlock.Header.Round, "genesis block round")
 
@@ -159,7 +160,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 	}
 
 	// Advance the epoch, get the committee.
-	epoch, err := consensus.EpochTime().GetEpoch(context.Background(), 0)
+	epoch, err := consensus.EpochTime().GetEpoch(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
 	// Subscribe to blocks for all of the runtimes.
@@ -188,7 +189,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 	// Check if GetGenesisBlock still returns the correct genesis block.
 	for i := range states {
 		var blk *block.Block
-		blk, err = backend.GetGenesisBlock(context.Background(), states[i].rt.Runtime.ID, 0)
+		blk, err = backend.GetGenesisBlock(context.Background(), states[i].rt.Runtime.ID, consensusAPI.HeightLatest)
 		require.NoError(err, "GetGenesisBlock")
 		require.EqualValues(0, blk.Header.Round, "retrieved block is genesis block")
 	}
@@ -237,7 +238,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 
 	rt, computeCommittee, mergeCommittee := s.rt, s.computeCommittee, s.mergeCommittee
 
-	child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID, 0)
+	child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID, consensusAPI.HeightLatest)
 	require.NoError(err, "GetLatestBlock")
 
 	ch, sub, err := backend.WatchBlocks(rt.Runtime.ID)
@@ -405,12 +406,12 @@ func testRoothashMessages(t *testing.T, backend api.Backend, consensus consensus
 	emptyRoot.Empty()
 
 	adjustmentAmount := stakingTestsDebug.QtyFromInt(1004)
-	srcAcc, err := stakingBackend.AccountInfo(context.Background(), stakingTests.SrcID, 0)
+	srcAcc, err := stakingBackend.AccountInfo(context.Background(), &staking.OwnerQuery{Owner: stakingTests.SrcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "AccountInfo %s", stakingTests.SrcID)
 	srcStartBalance := &srcAcc.General.Balance
 	srcPlusAdjustment := srcStartBalance.Clone()
 	require.NoError(srcPlusAdjustment.Add(&adjustmentAmount), "Quantity Add")
-	destAcc, err := stakingBackend.AccountInfo(context.Background(), stakingTests.DestID, 0)
+	destAcc, err := stakingBackend.AccountInfo(context.Background(), &staking.OwnerQuery{Owner: stakingTests.DestID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "AccountInfo %s", stakingTests.DestID)
 	destStartBalance := &destAcc.General.Balance
 	require.True(adjustmentAmount.Cmp(destStartBalance) > 0, "adjustment large enough for overdraw")
@@ -542,7 +543,7 @@ func testRoothashMessages(t *testing.T, backend api.Backend, consensus consensus
 		t.Run(testCase.name, func(t *testing.T) {
 			rt, computeCommittee, mergeCommittee := testCase.runtimeState.rt, testCase.runtimeState.computeCommittee, testCase.runtimeState.mergeCommittee
 
-			child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID, 0)
+			child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID, consensusAPI.HeightLatest)
 			require.NoError(err, "GetLatestBlock")
 			require.NotEqual(testCase.commitStateRoot, child.Header.StateRoot, "trying to commit to a different state root")
 
@@ -651,7 +652,7 @@ func testRoothashMessages(t *testing.T, backend api.Backend, consensus consensus
 					}
 
 					// Ensure that staking balances are correct.
-					acc, err := stakingBackend.AccountInfo(context.Background(), testCase.checkStakingAccount, 0)
+					acc, err := stakingBackend.AccountInfo(context.Background(), &staking.OwnerQuery{Owner: testCase.checkStakingAccount, Height: consensusAPI.HeightLatest})
 					require.NoError(err, "AccountInfo %s", testCase.checkStakingAccount)
 					require.Equal(testCase.checkStakingBalance, &acc.General.Balance, "staking balance matches")
 
@@ -769,7 +770,11 @@ func mustStore(
 ) []signature.Signature {
 	require := require.New(t)
 
-	receipts, err := store.ApplyBatch(context.Background(), ns, round, ops)
+	receipts, err := store.ApplyBatch(context.Background(), &storage.ApplyBatchRequest{
+		Namespace: ns,
+		DstRound:  round,
+		Ops:       ops,
+	})
 	require.NoError(err, "ApplyBatch")
 	require.NotEmpty(receipts, "ApplyBatch must return some storage receipts")
 

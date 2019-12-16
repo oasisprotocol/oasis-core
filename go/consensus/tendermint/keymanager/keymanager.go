@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
@@ -54,7 +55,7 @@ func (tb *tendermintBackend) WatchStatuses() (<-chan *api.Status, *pubsub.Subscr
 	return ch, sub
 }
 
-func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -134,7 +135,7 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
 	tb.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
-		statuses, err := tb.GetStatuses(ctx, 0)
+		statuses, err := tb.GetStatuses(ctx, consensus.HeightLatest)
 		if err != nil {
 			tb.logger.Error("status notifier: unable to get a list of statuses",
 				"err", err,

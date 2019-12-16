@@ -87,11 +87,11 @@ func StakingClientImplementationTests(t *testing.T, backend api.Backend, consens
 func testInitialEnv(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
-	totalSupply, err := backend.TotalSupply(context.Background(), 0)
+	totalSupply, err := backend.TotalSupply(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "TotalSupply")
 	require.Equal(&testTotalSupply, totalSupply, "TotalSupply - value")
 
-	accounts, err := backend.Accounts(context.Background(), 0)
+	accounts, err := backend.Accounts(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "Accounts")
 	// Since all operations now cause nonce updates, we have some more accounts here:
 	//
@@ -103,21 +103,21 @@ func testInitialEnv(t *testing.T, backend api.Backend, consensus consensusAPI.Ba
 	require.Len(accounts, 4, "Accounts - nr entries")
 	require.Contains(accounts, SrcID, "Accounts[0] == testID")
 
-	acc, err := backend.AccountInfo(context.Background(), SrcID, 0)
+	acc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo")
 	require.Equal(testTotalSupply, acc.General.Balance, "src: general balance")
 	require.True(acc.Escrow.Active.Balance.IsZero(), "src: active escrow balance")
 	require.True(acc.Escrow.Debonding.Balance.IsZero(), "src: debonding escrow balance")
 	require.EqualValues(0, acc.General.Nonce, "src: nonce")
 
-	acc, err = backend.AccountInfo(context.Background(), DestID, 0)
+	acc, err = backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: DestID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "dest: AccountInfo")
 	require.True(acc.General.Balance.IsZero(), "dest: general balance")
 	require.True(acc.Escrow.Active.Balance.IsZero(), "dest: active escrow balance")
 	require.True(acc.Escrow.Debonding.Balance.IsZero(), "dest: debonding escrow balance")
 	require.EqualValues(0, acc.General.Nonce, "dest: nonce")
 
-	commonPool, err := backend.CommonPool(context.Background(), 0)
+	commonPool, err := backend.CommonPool(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "CommonPool")
 	require.True(commonPool.IsZero(), "CommonPool - initial value")
 
@@ -126,7 +126,7 @@ func testInitialEnv(t *testing.T, backend api.Backend, consensus consensusAPI.Ba
 		api.KindCompute,
 		api.KindStorage,
 	} {
-		qty, err := backend.Threshold(context.Background(), kind, 0)
+		qty, err := backend.Threshold(context.Background(), &api.ThresholdQuery{Kind: kind, Height: consensusAPI.HeightLatest})
 		require.NoError(err, "Threshold")
 		require.NotNil(qty, "Threshold != nil")
 		require.Equal(debugGenesisState.Parameters.Thresholds[kind], *qty, "Threshold - value")
@@ -136,10 +136,10 @@ func testInitialEnv(t *testing.T, backend api.Backend, consensus consensusAPI.Ba
 func testTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
-	dstAcc, err := backend.AccountInfo(context.Background(), DestID, 0)
+	dstAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: DestID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "dest: AccountInfo")
 
-	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
+	srcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo - before")
 
 	ch, sub, err := backend.WatchTransfers(context.Background())
@@ -164,13 +164,13 @@ func testTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	}
 
 	_ = srcAcc.General.Balance.Sub(&xfer.Tokens)
-	newSrcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
+	newSrcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo - after")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
 	require.Equal(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 
 	_ = dstAcc.General.Balance.Add(&xfer.Tokens)
-	newDstAcc, err := backend.AccountInfo(context.Background(), DestID, 0)
+	newDstAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: DestID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "dest: AccountInfo - after")
 	require.Equal(dstAcc.General.Balance, newDstAcc.General.Balance, "dest: general balance - after")
 	require.EqualValues(dstAcc.General.Nonce, newDstAcc.General.Nonce, "dest: nonce - after")
@@ -187,7 +187,7 @@ func testTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 func testSelfTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
-	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
+	srcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo - before")
 
 	ch, sub, err := backend.WatchTransfers(context.Background())
@@ -211,7 +211,7 @@ func testSelfTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.
 		t.Fatalf("failed to receive transfer event")
 	}
 
-	newSrcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
+	newSrcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo - after")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
 	require.Equal(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
@@ -228,10 +228,10 @@ func testSelfTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.
 func testBurn(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
-	totalSupply, err := backend.TotalSupply(context.Background(), 0)
+	totalSupply, err := backend.TotalSupply(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "TotalSupply - before")
 
-	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
+	srcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo")
 
 	ch, sub, err := backend.WatchBurns(context.Background())
@@ -254,12 +254,12 @@ func testBurn(t *testing.T, backend api.Backend, consensus consensusAPI.Backend)
 	}
 
 	_ = totalSupply.Sub(&burn.Tokens)
-	newTotalSupply, err := backend.TotalSupply(context.Background(), 0)
+	newTotalSupply, err := backend.TotalSupply(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "TotalSupply - after")
 	require.Equal(totalSupply, newTotalSupply, "totalSupply is reduced by burn")
 
 	_ = srcAcc.General.Balance.Sub(&burn.Tokens)
-	newSrcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
+	newSrcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
 	require.EqualValues(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
@@ -283,13 +283,13 @@ func testEscrowEx(
 ) {
 	require := require.New(t)
 
-	srcAcc, err := backend.AccountInfo(context.Background(), srcID, 0)
+	srcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: srcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo - before")
 	require.False(srcAcc.General.Balance.IsZero(), "src: general balance != 0")
 	require.True(srcAcc.Escrow.Active.Balance.IsZero(), "src: active escrow balance == 0")
 	require.True(srcAcc.Escrow.Debonding.Balance.IsZero(), "src: debonding escrow balance == 0")
 
-	dstAcc, err := backend.AccountInfo(context.Background(), dstID, 0)
+	dstAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: dstID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "dst: AccountInfo - before")
 	require.True(dstAcc.Escrow.Active.Balance.IsZero(), "dst: active escrow balance == 0")
 	require.True(dstAcc.Escrow.Active.TotalShares.IsZero(), "dst: active escrow total shares == 0")
@@ -314,7 +314,8 @@ func testEscrowEx(
 
 	select {
 	case rawEv := <-ch:
-		ev := rawEv.(*api.EscrowEvent)
+		ev := rawEv.Add
+		require.NotNil(ev)
 		require.Equal(srcID, ev.Owner, "Event: owner")
 		require.Equal(dstID, ev.Escrow, "Event: escrow")
 		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
@@ -323,7 +324,7 @@ func testEscrowEx(
 	}
 
 	_ = srcAcc.General.Balance.Sub(&escrow.Tokens)
-	newSrcAcc, err := backend.AccountInfo(context.Background(), srcID, 0)
+	newSrcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: srcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo - after")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
 	if !srcID.Equal(dstID) {
@@ -333,7 +334,7 @@ func testEscrowEx(
 	require.Equal(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 
 	_ = dstAcc.Escrow.Active.Balance.Add(&escrow.Tokens)
-	newDstAcc, err := backend.AccountInfo(context.Background(), dstID, 0)
+	newDstAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: dstID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "dst: AccountInfo - after")
 	if !srcID.Equal(dstID) {
 		require.Equal(dstAcc.General.Balance, newDstAcc.General.Balance, "dst: general balance - after")
@@ -361,7 +362,8 @@ func testEscrowEx(
 
 	select {
 	case rawEv := <-ch:
-		ev := rawEv.(*api.EscrowEvent)
+		ev := rawEv.Add
+		require.NotNil(ev)
 		require.Equal(srcID, ev.Owner, "Event: owner")
 		require.Equal(dstID, ev.Escrow, "Event: escrow")
 		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
@@ -370,7 +372,7 @@ func testEscrowEx(
 	}
 
 	_ = srcAcc.General.Balance.Sub(&escrow.Tokens)
-	newSrcAcc, err = backend.AccountInfo(context.Background(), srcID, 0)
+	newSrcAcc, err = backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: srcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo - after 2nd")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after 2nd")
 	if !srcID.Equal(dstID) {
@@ -380,7 +382,7 @@ func testEscrowEx(
 	require.Equal(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after 2nd")
 
 	_ = dstAcc.Escrow.Active.Balance.Add(&escrow.Tokens)
-	newDstAcc, err = backend.AccountInfo(context.Background(), dstID, 0)
+	newDstAcc, err = backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: dstID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "dst: AccountInfo - after 2nd")
 	if !srcID.Equal(dstID) {
 		require.Equal(dstAcc.General.Balance, newDstAcc.General.Balance, "dst: general balance - after 2nd")
@@ -397,7 +399,7 @@ func testEscrowEx(
 	newDstAcc = nil
 
 	// Reclaim escrow (subject to debonding).
-	debs, err := backend.DebondingDelegations(context.Background(), srcID, 0)
+	debs, err := backend.DebondingDelegations(context.Background(), &api.OwnerQuery{Owner: srcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "DebondingDelegations - before")
 	require.Len(debs, 0, "no debonding delegations before reclaiming escrow")
 
@@ -410,7 +412,7 @@ func testEscrowEx(
 	require.NoError(err, "ReclaimEscrow")
 
 	// Query debonding delegations.
-	debs, err = backend.DebondingDelegations(context.Background(), srcID, 0)
+	debs, err = backend.DebondingDelegations(context.Background(), &api.OwnerQuery{Owner: srcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "DebondingDelegations - after (in debonding)")
 	require.Len(debs, 1, "one debonding delegation after reclaiming escrow")
 	require.Len(debs[dstID], 1, "one debonding delegation after reclaiming escrow")
@@ -422,7 +424,8 @@ func testEscrowEx(
 	// Wait for debonding period to pass.
 	select {
 	case rawEv := <-ch:
-		ev := rawEv.(*api.ReclaimEscrowEvent)
+		ev := rawEv.Reclaim
+		require.NotNil(ev)
 		require.Equal(srcID, ev.Owner, "Event: owner")
 		require.Equal(dstID, ev.Escrow, "Event: escrow")
 		require.Equal(&totalEscrowed, &ev.Tokens, "Event: tokens")
@@ -431,7 +434,7 @@ func testEscrowEx(
 	}
 
 	_ = srcAcc.General.Balance.Add(&totalEscrowed)
-	newSrcAcc, err = backend.AccountInfo(context.Background(), srcID, 0)
+	newSrcAcc, err = backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: srcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo - after debond")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after debond")
 	if !srcID.Equal(dstID) {
@@ -440,7 +443,7 @@ func testEscrowEx(
 	}
 	require.Equal(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after debond")
 
-	newDstAcc, err = backend.AccountInfo(context.Background(), dstID, 0)
+	newDstAcc, err = backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: dstID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "dst: AccountInfo - after debond")
 	if !srcID.Equal(dstID) {
 		require.Equal(dstAcc.General.Balance, newDstAcc.General.Balance, "dst: general balance - after debond")
@@ -451,7 +454,7 @@ func testEscrowEx(
 	require.True(newDstAcc.Escrow.Debonding.Balance.IsZero(), "dst: debonding escrow balance == 0 - after debond")
 	require.True(newDstAcc.Escrow.Debonding.TotalShares.IsZero(), "dst: debonding escrow total shares == 0 - after debond")
 
-	debs, err = backend.DebondingDelegations(context.Background(), srcID, 0)
+	debs, err = backend.DebondingDelegations(context.Background(), &api.OwnerQuery{Owner: srcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "DebondingDelegations - after (debonding completed)")
 	require.Len(debs, 0, "no debonding delegations after debonding has completed")
 
@@ -464,7 +467,7 @@ func testEscrowEx(
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.Error(err, "ReclaimEscrow")
 
-	debs, err = backend.DebondingDelegations(context.Background(), srcID, 0)
+	debs, err = backend.DebondingDelegations(context.Background(), &api.OwnerQuery{Owner: srcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "DebondingDelegations")
 	require.Len(debs, 0, "no debonding delegations after failed reclaim")
 
@@ -490,7 +493,7 @@ func testSlashDoubleSigning(
 	require := require.New(t)
 
 	// Delegate some stake to the validator so we can check if slashing works.
-	srcAcc, err := backend.AccountInfo(context.Background(), SrcID, 0)
+	srcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "AccountInfo")
 
 	escrowCh, escrowSub, err := backend.WatchEscrows(context.Background())
@@ -507,7 +510,8 @@ func testSlashDoubleSigning(
 
 	select {
 	case rawEv := <-escrowCh:
-		ev := rawEv.(*api.EscrowEvent)
+		ev := rawEv.Add
+		require.NotNil(ev)
 		require.Equal(SrcID, ev.Owner, "Event: owner")
 		require.Equal(ent.ID, ev.Escrow, "Event: escrow")
 		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
@@ -535,7 +539,7 @@ WaitLoop:
 	for {
 		select {
 		case ev := <-slashCh:
-			if e, ok := ev.(*api.TakeEscrowEvent); ok {
+			if e := ev.Take; e != nil {
 				require.Equal(ent.ID, e.Owner, "TakeEscrowEvent - owner must be entity")
 				// All tokens must be slashed as defined in debugGenesisState.
 				require.Equal(escrow.Tokens, e.Tokens, "TakeEscrowEvent - all tokens slashed")
@@ -547,7 +551,7 @@ WaitLoop:
 	}
 
 	// Make sure the node is frozen.
-	nodeStatus, err := consensus.Registry().GetNodeStatus(context.Background(), ident.NodeSigner.Public(), 0)
+	nodeStatus, err := consensus.Registry().GetNodeStatus(context.Background(), &registry.IDQuery{ID: ident.NodeSigner.Public(), Height: consensusAPI.HeightLatest})
 	require.NoError(err, "GetNodeStatus")
 	require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
 	require.True(nodeStatus.IsFrozen(), "IsFrozen() should return true")
@@ -582,7 +586,7 @@ WaitLoop:
 	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Make sure the node is no longer frozen.
-	nodeStatus, err = consensus.Registry().GetNodeStatus(context.Background(), ident.NodeSigner.Public(), 0)
+	nodeStatus, err = consensus.Registry().GetNodeStatus(context.Background(), &registry.IDQuery{ID: ident.NodeSigner.Public(), Height: consensusAPI.HeightLatest})
 	require.NoError(err, "GetNodeStatus")
 	require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
 	require.False(nodeStatus.IsFrozen(), "IsFrozen() should return false")

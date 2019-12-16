@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 	dbm "github.com/tendermint/tm-db"
@@ -1081,18 +1080,6 @@ func (s *ApplicationState) updateMetrics() error {
 	var dbSize int64
 
 	switch m := s.db.(type) {
-	case *dbm.GoLevelDB:
-		var stats leveldb.DBStats
-		if err := m.DB().Stats(&stats); err != nil {
-			s.logger.Error("Stats",
-				"err", err,
-			)
-			return err
-		}
-
-		for _, v := range stats.LevelSizes {
-			dbSize += v
-		}
 	case api.SizeableDB:
 		var err error
 		if dbSize, err = m.Size(); err != nil {

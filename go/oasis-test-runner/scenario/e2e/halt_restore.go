@@ -139,7 +139,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	sc.logger.Info("waiting for halt epoch")
 	// Wait for halt epoch.
-	err = sc.net.Controller().WaitEpoch(ctx, haltEpoch)
+	err = sc.net.Controller().Consensus.WaitEpoch(ctx, haltEpoch)
 	if err != nil {
 		return fmt.Errorf("scenario/e2e/halt_restore: failed waiting for halt epoch: %w", err)
 	}

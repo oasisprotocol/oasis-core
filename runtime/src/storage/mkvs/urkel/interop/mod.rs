@@ -4,8 +4,8 @@ use crate::{
     storage::mkvs::WriteLog,
 };
 
-mod grpc;
 mod protocol_server;
+mod rpc;
 
 /// Urkel interoperability driver.
 pub trait Driver {

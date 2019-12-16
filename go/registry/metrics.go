@@ -7,6 +7,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/registry/api"
 )
 
@@ -42,6 +44,8 @@ var (
 
 // MetricsUpdater is a registry metric updater.
 type MetricsUpdater struct {
+	logger *logging.Logger
+
 	backend api.Backend
 
 	closeOnce sync.Once
@@ -63,7 +67,13 @@ func (m *MetricsUpdater) worker(ctx context.Context) {
 	t := time.NewTicker(metricsUpdateInterval)
 	defer t.Stop()
 
-	runtimeCh, sub := m.backend.WatchRuntimes()
+	runtimeCh, sub, err := m.backend.WatchRuntimes(ctx)
+	if err != nil {
+		m.logger.Error("failed to watch runtimes, metrics will not be updated",
+			"err", err,
+		)
+		return
+	}
 	defer sub.Close()
 
 	for {
@@ -81,12 +91,12 @@ func (m *MetricsUpdater) worker(ctx context.Context) {
 }
 
 func (m *MetricsUpdater) updatePeriodicMetrics(ctx context.Context) {
-	nodes, err := m.backend.GetNodes(ctx, 0)
+	nodes, err := m.backend.GetNodes(ctx, consensus.HeightLatest)
 	if err == nil {
 		registryNodes.Set(float64(len(nodes)))
 	}
 
-	entities, err := m.backend.GetEntities(ctx, 0)
+	entities, err := m.backend.GetEntities(ctx, consensus.HeightLatest)
 	if err == nil {
 		registryEntities.Set(float64(len(entities)))
 	}
@@ -99,6 +109,7 @@ func NewMetricsUpdater(ctx context.Context, backend api.Backend) *MetricsUpdater
 	})
 
 	m := &MetricsUpdater{
+		logger:   logging.GetLogger("go/registry/metrics"),
 		backend:  backend,
 		closeCh:  make(chan struct{}),
 		closedCh: make(chan struct{}),

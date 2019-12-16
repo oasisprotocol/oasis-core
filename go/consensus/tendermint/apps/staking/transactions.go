@@ -179,7 +179,7 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 		"amount", escrow.Tokens,
 	)
 
-	evt := &staking.EscrowEvent{
+	evt := &staking.AddEscrowEvent{
 		Owner:  id,
 		Escrow: escrow.Account,
 		Tokens: escrow.Tokens,

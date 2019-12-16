@@ -2,6 +2,7 @@
 use std::any::Any;
 
 use failure::{Fallible, ResultExt};
+use grpcio::CallOption;
 use io_context::Context;
 use oasis_core_runtime::{
     common::{
@@ -38,13 +39,12 @@ impl TransactionSnapshot {
     pub(super) fn new(
         storage_client: api::storage::StorageClient,
         block: Block,
-        block_hash: Hash,
         index: u32,
         input: Vec<u8>,
         output: Vec<u8>,
     ) -> Fallible<Self> {
         Ok(Self {
-            block_snapshot: BlockSnapshot::new(storage_client, block, block_hash),
+            block_snapshot: BlockSnapshot::new(storage_client, block),
             index,
             input: cbor::from_slice(&input).context("input is malformed")?,
             output: cbor::from_slice(&output).context("output is malformed")?,
@@ -66,7 +66,7 @@ pub struct BlockSnapshot {
 impl Clone for BlockSnapshot {
     fn clone(&self) -> Self {
         let block = self.block.clone();
-        let block_hash = self.block_hash.clone();
+        let block_hash = self.block_hash;
         let read_syncer = self.read_syncer.clone();
         let mkvs = UrkelTree::make()
             .with_root(Root {
@@ -86,11 +86,7 @@ impl Clone for BlockSnapshot {
 }
 
 impl BlockSnapshot {
-    pub(super) fn new(
-        storage_client: api::storage::StorageClient,
-        block: Block,
-        block_hash: Hash,
-    ) -> Self {
+    pub(super) fn new(storage_client: api::storage::StorageClient, block: Block) -> Self {
         let read_syncer = RemoteReadSync(storage_client);
         let mkvs = UrkelTree::make()
             .with_root(Root {
@@ -101,8 +97,8 @@ impl BlockSnapshot {
             .new(Box::new(read_syncer.clone()));
 
         Self {
+            block_hash: block.header.encoded_hash(),
             block,
-            block_hash,
             read_syncer,
             mkvs,
         }
@@ -149,15 +145,10 @@ impl ReadSync for RemoteReadSync {
     }
 
     fn sync_get(&mut self, _ctx: Context, request: GetRequest) -> Fallible<ProofResponse> {
-        let mut rq = api::storage::ReadSyncerRequest::new();
-        rq.set_request(cbor::to_vec(&request));
-
-        let response = self
+        Ok(self
             .0
-            .sync_get(&rq)
-            .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?;
-
-        Ok(cbor::from_slice(response.get_response())?)
+            .sync_get(&request, CallOption::default().wait_for_ready(true))
+            .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?)
     }
 
     fn sync_get_prefixes(
@@ -165,26 +156,16 @@ impl ReadSync for RemoteReadSync {
         _ctx: Context,
         request: GetPrefixesRequest,
     ) -> Fallible<ProofResponse> {
-        let mut rq = api::storage::ReadSyncerRequest::new();
-        rq.set_request(cbor::to_vec(&request));
-
-        let response = self
+        Ok(self
             .0
-            .sync_get_prefixes(&rq)
-            .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?;
-
-        Ok(cbor::from_slice(response.get_response())?)
+            .sync_get_prefixes(&request, CallOption::default().wait_for_ready(true))
+            .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?)
     }
 
     fn sync_iterate(&mut self, _ctx: Context, request: IterateRequest) -> Fallible<ProofResponse> {
-        let mut rq = api::storage::ReadSyncerRequest::new();
-        rq.set_request(cbor::to_vec(&request));
-
-        let response = self
+        Ok(self
             .0
-            .sync_iterate(&rq)
-            .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?;
-
-        Ok(cbor::from_slice(response.get_response())?)
+            .sync_iterate(&request, CallOption::default().wait_for_ready(true))
+            .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?)
     }
 }

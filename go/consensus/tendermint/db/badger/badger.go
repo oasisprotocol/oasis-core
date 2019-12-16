@@ -7,16 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/golang/snappy"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/node"
 	dbm "github.com/tendermint/tm-db"
 
+	ekbadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	ekbadger "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
 )
 
 const (
@@ -25,9 +24,6 @@ const (
 
 	dbVersion = 1
 	dbSuffix  = ".badger.db"
-
-	gcInterval     = 5 * time.Minute
-	gcDiscardRatio = 0.5
 )
 
 var (
@@ -47,10 +43,9 @@ type badgerDBImpl struct {
 	logger *logging.Logger
 
 	db *badger.DB
+	gc *ekbadger.GCWorker
 
 	closeOnce sync.Once
-	closeCh   chan struct{}
-	closedCh  chan struct{}
 }
 
 // New constructs a new tendermint DB, backed by a Badger database at
@@ -68,6 +63,7 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	opts := badger.DefaultOptions(fn) // This may benefit from LSMOnlyOptions.
 	opts = opts.WithLogger(ekbadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(false)
+	opts = opts.WithCompression(options.Snappy)
 
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -75,12 +71,10 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	}
 
 	impl := &badgerDBImpl{
-		logger:   logger,
-		db:       db,
-		closeCh:  make(chan struct{}),
-		closedCh: make(chan struct{}),
+		logger: logger,
+		db:     db,
+		gc:     ekbadger.NewGCWorker(logger, db),
 	}
-	go impl.gcWorker()
 
 	return impl, nil
 }
@@ -100,8 +94,8 @@ func (d *badgerDBImpl) Get(key []byte) []byte {
 		}
 
 		return item.Value(func(val []byte) error {
-			value, txErr = snappy.Decode(nil, val)
-			return txErr
+			value = append([]byte{}, val...)
+			return nil
 		})
 	}); err != nil {
 		d.logger.Error("Get failed",
@@ -141,10 +135,9 @@ func (d *badgerDBImpl) Has(key []byte) bool {
 
 func (d *badgerDBImpl) Set(key, value []byte) {
 	k := toDBKey(key)
-	valueCompressed := snappy.Encode(nil, value)
 
 	if err := d.db.Update(func(tx *badger.Txn) error {
-		return tx.Set(k, valueCompressed)
+		return tx.Set(k, value)
 	}); err != nil {
 		d.logger.Error("Set failed",
 			"err", err,
@@ -203,8 +196,7 @@ func (d *badgerDBImpl) ReverseIterator(start, end []byte) dbm.Iterator {
 
 func (d *badgerDBImpl) Close() {
 	d.closeOnce.Do(func() {
-		close(d.closeCh)
-		<-d.closedCh
+		d.gc.Close()
 
 		if err := d.db.Close(); err != nil {
 			d.logger.Error("Close failed",
@@ -235,6 +227,11 @@ func (d *badgerDBImpl) Stats() map[string]string {
 	m["database.vlog_size"] = fmt.Sprintf("%v", vlog)
 
 	return m
+}
+
+func (d *badgerDBImpl) Size() (int64, error) {
+	lsm, vlog := d.db.Size()
+	return lsm + vlog, nil
 }
 
 func (d *badgerDBImpl) newIterator(start, end []byte, isForward bool) dbm.Iterator {
@@ -350,7 +347,7 @@ func (it *badgerDBIterator) Next() {
 		if dbm.IsKeyInDomain(k, it.start, it.end) {
 			it.current.item = item
 			it.current.key = k
-			it.current.value = nil // Decompress done on access.
+			it.current.value = nil // Copy done on access.
 			return
 		}
 	}
@@ -374,9 +371,8 @@ func (it *badgerDBIterator) Value() []byte {
 
 	if it.current.value == nil {
 		if err := it.current.item.Value(func(val []byte) error {
-			var decErr error
-			it.current.value, decErr = snappy.Decode(nil, val)
-			return decErr
+			it.current.value = append([]byte{}, val...)
+			return nil
 		}); err != nil {
 			it.db.logger.Error("failed to retrieve/decompress iterator value",
 				"err", err,
@@ -400,39 +396,6 @@ func (it *badgerDBIterator) Close() {
 		it.current.item = nil
 	}
 	it.isValid = false
-}
-
-func (d *badgerDBImpl) gcWorker() {
-	defer close(d.closedCh)
-
-	ticker := time.NewTicker(gcInterval)
-	defer ticker.Stop()
-
-	doGC := func() error {
-		for {
-			if err := d.db.RunValueLogGC(gcDiscardRatio); err != nil {
-				return err
-			}
-		}
-	}
-
-	for {
-		select {
-		case <-d.closeCh:
-			return
-		case <-ticker.C:
-		}
-
-		// Run the value log GC.
-		err := doGC()
-		switch err {
-		case nil, badger.ErrNoRewrite:
-		default:
-			d.logger.Error("failed to GC value log",
-				"err", err,
-			)
-		}
-	}
 }
 
 type setDeleter interface {
@@ -477,7 +440,7 @@ type badgerDBBatch struct {
 func (ba *badgerDBBatch) Set(key, value []byte) {
 	ba.cmds = append(ba.cmds, &setCmd{
 		key:   toDBKey(key),
-		value: snappy.Encode(nil, value),
+		value: append([]byte{}, value...),
 	})
 }
 

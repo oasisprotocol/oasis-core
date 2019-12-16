@@ -33,7 +33,7 @@ type submissionManager struct {
 func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
 	// Update transaction nonce.
 	var err error
-	tx.Nonce, err = m.backend.TransactionAuthHandler().GetSignerNonce(ctx, signer.Public(), 0)
+	tx.Nonce, err = m.backend.TransactionAuthHandler().GetSignerNonce(ctx, signer.Public(), HeightLatest)
 	if err != nil {
 		if errors.Is(err, ErrNoCommittedBlocks) {
 			// No committed blocks available, retry submission.

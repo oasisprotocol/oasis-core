@@ -76,7 +76,7 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
-	if err = kmCtrl.WaitReady(context.Background()); err != nil {
+	if err = kmCtrl.WaitSync(context.Background()); err != nil {
 		return err
 	}
 

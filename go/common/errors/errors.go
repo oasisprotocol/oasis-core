@@ -36,7 +36,14 @@ func (e *codedError) Error() string {
 //
 // Module and code pair must be unique. If they are not, this method
 // will panic.
+//
+// The error code must not be equal to zero as that value is reserved
+// to mean "no error".
 func New(module string, code uint32, msg string) error {
+	if code == 0 {
+		panic(fmt.Errorf("error: code cannot be zero"))
+	}
+
 	e := &codedError{
 		module: module,
 		code:   code,

@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	iasProxyApi "github.com/oasislabs/oasis-core/go/ias/proxy"
 	iasCmd "github.com/oasislabs/oasis-core/go/oasis-node/cmd/ias"
 )
 
@@ -66,7 +66,7 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 	// Pre-provision the IAS TLS certificates as they are used by other nodes
 	// during startup.
 	tlsCertPath, tlsKeyPath := iasCmd.TLSCertPaths(iasDir.String())
-	if _, err = tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, ias.CommonName); err != nil {
+	if _, err = tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, iasProxyApi.CommonName); err != nil {
 		net.logger.Error("failed to generate IAS proxy TLS cert",
 			"err", err,
 		)

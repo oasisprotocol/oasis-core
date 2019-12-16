@@ -18,7 +18,10 @@ import (
 	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	cmnIAS "github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	ias "github.com/oasislabs/oasis-core/go/ias/api"
+	iasHTTP "github.com/oasislabs/oasis-core/go/ias/http"
+	iasProxy "github.com/oasislabs/oasis-core/go/ias/proxy"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/background"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -100,7 +103,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 	}
 
 	tlsCertPath, tlsKeyPath := TLSCertPaths(dataDir)
-	cert, err := tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, ias.CommonName)
+	cert, err := tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, iasProxy.CommonName)
 	if err != nil {
 		logger.Error("failed to load or generate TLS cert",
 			"err", err,
@@ -155,16 +158,17 @@ func doProxy(cmd *cobra.Command, args []string) {
 	}
 
 	// Initialize the IAS proxy authenticator.
-	grpcAuth, err := grpcAuthenticatorFromFlags(env.svcMgr.Ctx, cmd)
+	authenticator, err := grpcAuthenticatorFromFlags(env.svcMgr.Ctx, cmd)
 	if err != nil {
-		logger.Error("failed to initialize IAS gRPC authentiator",
+		logger.Error("failed to initialize IAS gRPC authenticator",
 			"err", err,
 		)
 		return
 	}
 
 	// Initialize the IAS proxy.
-	ias.NewGRPCServer(env.grpcSrv.Server(), endpoint, grpcAuth)
+	proxy := iasProxy.New(endpoint, authenticator)
+	ias.RegisterService(env.grpcSrv.Server(), proxy)
 
 	// Start metric server.
 	if err = metrics.Start(); err != nil {
@@ -191,16 +195,16 @@ func doProxy(cmd *cobra.Command, args []string) {
 }
 
 func iasEndpointFromFlags() (ias.Endpoint, error) {
-	cfg := &ias.EndpointConfig{
+	cfg := &iasHTTP.Config{
 		SPID: viper.GetString(cfgSPID),
 	}
 
 	quoteSigType := viper.GetString(cfgQuoteSigType)
 	switch strings.ToLower(quoteSigType) {
 	case "unlinkable":
-		cfg.QuoteSignatureType = ias.SignatureUnlinkable
+		cfg.QuoteSignatureType = cmnIAS.SignatureUnlinkable
 	case "linkable":
-		cfg.QuoteSignatureType = ias.SignatureLinkable
+		cfg.QuoteSignatureType = cmnIAS.SignatureLinkable
 	default:
 		return nil, fmt.Errorf("ias: invalid signature type: %s", quoteSigType)
 	}
@@ -212,7 +216,7 @@ func iasEndpointFromFlags() (ias.Endpoint, error) {
 				return nil, err
 			}
 
-			cfg.AuthCertCA, _, err = ias.CertFromPEM(certData)
+			cfg.AuthCertCA, _, err = cmnIAS.CertFromPEM(certData)
 			if err != nil {
 				return nil, err
 			}
@@ -236,10 +240,10 @@ func iasEndpointFromFlags() (ias.Endpoint, error) {
 		cfg.DebugIsMock = true
 	}
 
-	return ias.NewIASEndpoint(cfg)
+	return iasHTTP.New(cfg)
 }
 
-func grpcAuthenticatorFromFlags(ctx context.Context, cmd *cobra.Command) (ias.GRPCAuthenticator, error) {
+func grpcAuthenticatorFromFlags(ctx context.Context, cmd *cobra.Command) (iasProxy.Authenticator, error) {
 	if viper.GetBool(cfgDebugSkipAuth) {
 		if !flags.DebugDontBlameOasis() {
 			return nil, fmt.Errorf("ias: refusing to disable gRPC authentication")

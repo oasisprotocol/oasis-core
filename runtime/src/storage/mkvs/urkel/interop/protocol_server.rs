@@ -9,16 +9,13 @@ use std::{
 };
 
 use failure::Fallible;
-use grpcio::{CallOption, ChannelBuilder, EnvBuilder};
+use grpcio::{ChannelBuilder, EnvBuilder};
 use io_context::Context;
 use tempfile::{self, TempDir};
 
-use super::{
-    grpc::{self, storage::StorageClient},
-    Driver,
-};
+use super::{rpc, Driver};
 use crate::{
-    common::{cbor, crypto::hash::Hash, roothash::Namespace},
+    common::{crypto::hash::Hash, roothash::Namespace},
     storage::mkvs::{urkel::sync::*, WriteLog},
 };
 
@@ -28,13 +25,13 @@ const PROTOCOL_SERVER_BINARY: &'static str = env!("OASIS_STORAGE_PROTOCOL_SERVER
 /// Interoperability protocol server for testing storage.
 pub struct ProtocolServer {
     server_process: Child,
-    client: StorageClient,
+    client: rpc::StorageClient,
     #[allow(unused)]
     datadir: TempDir,
 }
 
 struct ProtocolServerReadSyncer {
-    client: StorageClient,
+    client: rpc::StorageClient,
 }
 
 impl ProtocolServer {
@@ -62,7 +59,7 @@ impl ProtocolServer {
             .max_receive_message_len(i32::max_value())
             .max_send_message_len(i32::max_value())
             .connect(&format!("unix:{}", socket_path.to_str().unwrap()));
-        let client = StorageClient::new(channel);
+        let client = rpc::StorageClient::new(channel);
 
         Self {
             server_process,
@@ -89,28 +86,16 @@ impl Drop for ProtocolServer {
 
 impl Driver for ProtocolServer {
     fn apply(&self, write_log: &WriteLog, root_hash: Hash, namespace: Namespace, round: u64) {
-        let mut rq = grpc::storage::ApplyRequest::new();
-        rq.set_namespace(namespace.as_ref().to_vec());
-        rq.set_src_round(round);
-        rq.set_src_root(Hash::empty_hash().as_ref().to_vec());
-        rq.set_dst_round(round);
-        rq.set_dst_root(root_hash.as_ref().to_vec());
-        rq.set_log(
-            write_log
-                .iter()
-                .map(|entry| {
-                    let mut e = grpc::storage::LogEntry::new();
-                    e.set_key(entry.key.clone());
-                    e.set_value(entry.value.clone());
-                    e
-                })
-                .collect::<Vec<_>>()
-                .into(),
-        );
-
         self.client
-            .apply_opt(&rq, CallOption::default().wait_for_ready(true))
-            .expect("apply failed");
+            .apply(&rpc::ApplyRequest {
+                namespace,
+                src_round: round,
+                src_root: Hash::empty_hash(),
+                dst_round: round,
+                dst_root: root_hash,
+                writelog: write_log.clone(),
+            })
+            .expect("apply failed")
     }
 }
 
@@ -120,13 +105,7 @@ impl ReadSync for ProtocolServerReadSyncer {
     }
 
     fn sync_get(&mut self, _ctx: Context, request: GetRequest) -> Fallible<ProofResponse> {
-        let mut rq = grpc::storage::ReadSyncerRequest::new();
-        rq.set_request(cbor::to_vec(&request));
-
-        let response = self
-            .client
-            .sync_get_opt(&rq, CallOption::default().wait_for_ready(true))?;
-        Ok(cbor::from_slice(response.get_response())?)
+        Ok(self.client.sync_get(&request)?)
     }
 
     fn sync_get_prefixes(
@@ -134,22 +113,10 @@ impl ReadSync for ProtocolServerReadSyncer {
         _ctx: Context,
         request: GetPrefixesRequest,
     ) -> Fallible<ProofResponse> {
-        let mut rq = grpc::storage::ReadSyncerRequest::new();
-        rq.set_request(cbor::to_vec(&request));
-
-        let response = self
-            .client
-            .sync_get_prefixes_opt(&rq, CallOption::default().wait_for_ready(true))?;
-        Ok(cbor::from_slice(response.get_response())?)
+        Ok(self.client.sync_get_prefixes(&request)?)
     }
 
     fn sync_iterate(&mut self, _ctx: Context, request: IterateRequest) -> Fallible<ProofResponse> {
-        let mut rq = grpc::storage::ReadSyncerRequest::new();
-        rq.set_request(cbor::to_vec(&request));
-
-        let response = self
-            .client
-            .sync_iterate_opt(&rq, CallOption::default().wait_for_ready(true))?;
-        Ok(cbor::from_slice(response.get_response())?)
+        Ok(self.client.sync_iterate(&request)?)
     }
 }

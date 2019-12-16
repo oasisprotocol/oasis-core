@@ -157,7 +157,7 @@ fn main() {
     )
     .expect("wait block indexed");
 
-    // Test query_block call by block hash.
+    // Test get_block_by_hash call.
     println!(
         "Querying block by hash ({:?})...",
         latest_snapshot.block_hash
@@ -166,28 +166,28 @@ fn main() {
         .block_on(
             kv_client
                 .txn_client()
-                .query_block(latest_snapshot.block_hash),
+                .get_block_by_hash(latest_snapshot.block_hash),
         )
         .expect("query block snapshot")
         .expect("block must exist");
     println!("Found block: {:?}", snapshot.block);
 
-    // Test get_transactions call.
+    // Test get_txs call.
     println!("Fetching transaction inputs...");
     let txns = rt
         .block_on(
             kv_client
                 .txn_client()
-                .get_transactions(snapshot.block.header.round, snapshot.block.header.io_root),
+                .get_txs(snapshot.block.header.round, snapshot.block.header.io_root),
         )
         .expect("get transactions");
     println!("Found transactions: {:?}", txns);
     assert_eq!(txns.len(), 1);
 
-    // Test query_txn call.
+    // Test query_tx call.
     println!("Querying transaction tags (kv_op=insert)...");
     let snapshot = rt
-        .block_on(kv_client.txn_client().query_txn(b"kv_op", b"insert"))
+        .block_on(kv_client.txn_client().query_tx(b"kv_op", b"insert"))
         .expect("query transaction snapshot")
         .expect("transaction must exist");
     println!(
@@ -195,7 +195,7 @@ fn main() {
         snapshot.index, snapshot.input, snapshot.output
     );
 
-    // Test query_txns call.
+    // Test query_txs call.
     println!("Querying transaction tags (kv_op=insert)...");
     let query = Query {
         round_min: 0,
@@ -207,7 +207,7 @@ fn main() {
         limit: 0,
     };
     let txns = rt
-        .block_on(kv_client.txn_client().query_txns(query))
+        .block_on(kv_client.txn_client().query_txs(query))
         .expect("query transactions");
     println!("Found transactions:");
     for txn in txns {

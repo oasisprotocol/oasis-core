@@ -79,7 +79,7 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, consensus c
 			}
 		}
 
-		committees, err := backend.GetCommittees(context.Background(), rt.Runtime.ID, 0)
+		committees, err := backend.GetCommittees(context.Background(), rt.Runtime.ID, consensusAPI.HeightLatest)
 		require.NoError(err, "GetCommittees")
 		for _, committee := range committees {
 			switch committee.Kind {

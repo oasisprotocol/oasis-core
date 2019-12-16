@@ -60,13 +60,14 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	require.NoError(t, err, "NewTestEntities")
 
 	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
-	epoch, err := timeSource.GetEpoch(context.Background(), 0)
+	epoch, err := timeSource.GetEpoch(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetEpoch")
 
 	// All of these tests are combined because the Entity and Node structures
 	// are linked togehter.
 
-	entityCh, entitySub := backend.WatchEntities()
+	entityCh, entitySub, err := backend.WatchEntities(context.Background())
+	require.NoError(t, err, "WatchEntities")
 	defer entitySub.Close()
 
 	t.Run("EntityRegistration", func(t *testing.T) {
@@ -87,13 +88,13 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		for _, v := range entities {
 			var ent *entity.Entity
-			ent, err = backend.GetEntity(context.Background(), v.Entity.ID, 0)
+			ent, err = backend.GetEntity(context.Background(), &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
 			require.NoError(err, "GetEntity")
 			require.EqualValues(v.Entity, ent, "retrieved entity")
 		}
 
 		var registeredEntities []*entity.Entity
-		registeredEntities, err = backend.GetEntities(context.Background(), 0)
+		registeredEntities, err = backend.GetEntities(context.Background(), consensusAPI.HeightLatest)
 		require.NoError(err, "GetEntities")
 		require.Len(registeredEntities, len(entities), "entities after registration")
 
@@ -129,7 +130,8 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		numNodes += len(entityNodes)
 	}
 
-	nodeCh, nodeSub := backend.WatchNodes()
+	nodeCh, nodeSub, err := backend.WatchNodes(context.Background())
+	require.NoError(t, err, "WatchNodes")
 	defer nodeSub.Close()
 
 	t.Run("NodeRegistration", func(t *testing.T) {
@@ -195,7 +197,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				}
 
 				var nod *node.Node
-				nod, err = backend.GetNode(context.Background(), v.Node.ID, 0)
+				nod, err = backend.GetNode(context.Background(), &api.IDQuery{ID: v.Node.ID, Height: consensusAPI.HeightLatest})
 				require.NoError(err, "GetNode")
 				require.EqualValues(v.Node, nod, "retrieved node")
 
@@ -248,7 +250,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		expectedNodeList := getExpectedNodeList()
 		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
-		registeredNodes, nerr := backend.GetNodes(context.Background(), 0)
+		registeredNodes, nerr := backend.GetNodes(context.Background(), consensusAPI.HeightLatest)
 		require.NoError(nerr, "GetNodes")
 		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 	})
@@ -264,7 +266,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		// Get node status.
 		var nodeStatus *api.NodeStatus
-		nodeStatus, err = backend.GetNodeStatus(ctx, node.Node.ID, 0)
+		nodeStatus, err = backend.GetNodeStatus(ctx, &api.IDQuery{ID: node.Node.ID, Height: consensusAPI.HeightLatest})
 		require.NoError(err, "GetNodeStatus")
 		require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
 		require.False(nodeStatus.IsFrozen(), "IsFrozen() should return false")
@@ -339,7 +341,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		// Ensure the node list doesn't have the expired nodes.
 		expectedNodeList := getExpectedNodeList()
-		registeredNodes, nerr := backend.GetNodes(context.Background(), 0)
+		registeredNodes, nerr := backend.GetNodes(context.Background(), consensusAPI.HeightLatest)
 		require.NoError(nerr, "GetNodes")
 		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 
@@ -403,7 +405,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		// There should be no more entities.
 		for _, v := range entities {
-			_, err := backend.GetEntity(context.Background(), v.Entity.ID, 0)
+			_, err := backend.GetEntity(context.Background(), &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
 			require.Equal(api.ErrNoSuchEntity, err, "GetEntity")
 		}
 	})
@@ -443,7 +445,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 
 	require := require.New(t)
 
-	existingRuntimes, err := backend.GetRuntimes(context.Background(), 0)
+	existingRuntimes, err := backend.GetRuntimes(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetRuntimes")
 
 	entities, err := NewTestEntities(seed, 1)
@@ -458,7 +460,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 
 	rt.MustRegister(t, backend, consensus)
 
-	registeredRuntimes, err := backend.GetRuntimes(context.Background(), 0)
+	registeredRuntimes, err := backend.GetRuntimes(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetRuntimes")
 	// NOTE: There can be two runtimes registered here instead of one because the worker
 	//       tests that run before this register their own runtime and this runtime
@@ -475,7 +477,8 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	require.Equal(true, rtFound, "newly registered runtime not found")
 
 	// Subscribe to entity deregistration event.
-	ch, sub := backend.WatchEntities()
+	ch, sub, err := backend.WatchEntities(context.Background())
+	require.NoError(err, "WatchEntities")
 	defer sub.Close()
 
 	err = entity.Deregister(consensus)
@@ -500,11 +503,11 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 //
 // Note: Runtimes are allowed, as there is no way to deregister them.
 func EnsureRegistryEmpty(t *testing.T, backend api.Backend) {
-	registeredEntities, err := backend.GetEntities(context.Background(), 0)
+	registeredEntities, err := backend.GetEntities(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetEntities")
 	require.Len(t, registeredEntities, 0, "registered entities")
 
-	registeredNodes, err := backend.GetNodes(context.Background(), 0)
+	registeredNodes, err := backend.GetNodes(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetNodes")
 	require.Len(t, registeredNodes, 0, "registered nodes")
 }
@@ -860,7 +863,8 @@ type TestRuntime struct {
 func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
-	ch, sub := backend.WatchRuntimes()
+	ch, sub, err := backend.WatchRuntimes(context.Background())
+	require.NoError(err, "WatchRuntimes")
 	defer sub.Close()
 
 	signed, err := signature.SignSigned(rt.Signer, api.RegisterRuntimeSignatureContext, rt.Runtime)
@@ -912,7 +916,8 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 
 	// Create the one entity that has ownership of every single node
 	// that will be associated with every runtime.
-	entityCh, entitySub := backend.WatchEntities()
+	entityCh, entitySub, err := backend.WatchEntities(context.Background())
+	require.NoError(err, "WatchEntities")
 	defer entitySub.Close()
 
 	entities, err := NewTestEntities(seed, 1)
@@ -938,10 +943,11 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	// For the sake of simplicity, require that all runtimes have the same
 	// number of nodes for now.
 
-	nodeCh, nodeSub := backend.WatchNodes()
+	nodeCh, nodeSub, err := backend.WatchNodes(context.Background())
+	require.NoError(err, "WatchNodes")
 	defer nodeSub.Close()
 
-	epoch, err := consensus.EpochTime().GetEpoch(context.Background(), 0)
+	epoch, err := consensus.EpochTime().GetEpoch(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
 	numCompute := int(runtimes[0].Runtime.Compute.GroupSize + runtimes[0].Runtime.Compute.GroupBackupSize)
@@ -985,17 +991,19 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus cons
 	require.NotNil(rt.entity, "runtime has an associated entity")
 	require.NotNil(rt.nodes, "runtime has associated nodes")
 
-	entityCh, entitySub := backend.WatchEntities()
+	entityCh, entitySub, err := backend.WatchEntities(context.Background())
+	require.NoError(err, "WatchEntities")
 	defer entitySub.Close()
 
-	nodeCh, nodeSub := backend.WatchNodes()
+	nodeCh, nodeSub, err := backend.WatchNodes(context.Background())
+	require.NoError(err, "WatchNodes")
 	defer nodeSub.Close()
 
 	// Make sure all nodes expire so we can remove the entity.
 	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
 	_ = epochtimeTests.MustAdvanceEpoch(t, timeSource, uint64(testRuntimeNodeExpiration+2))
 
-	err := rt.entity.Deregister(consensus)
+	err = rt.entity.Deregister(consensus)
 	require.NoError(err, "DeregisterEntity")
 
 	select {

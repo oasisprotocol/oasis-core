@@ -429,10 +429,12 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		logAdapter.unaryLogger,
 		grpc_opentracing.UnaryServerInterceptor(),
+		serverUnaryErrorMapper,
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		logAdapter.streamLogger,
 		grpc_opentracing.StreamServerInterceptor(),
+		serverStreamErrorMapper,
 	}
 	if config.InstallWrapper {
 		wrapper = newWrapper()
@@ -444,6 +446,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	sOpts = append(sOpts, grpc.MaxRecvMsgSize(maxRecvMsgSize))
 	sOpts = append(sOpts, grpc.MaxSendMsgSize(maxSendMsgSize))
 	sOpts = append(sOpts, grpc.KeepaliveParams(serverKeepAliveParams))
+	sOpts = append(sOpts, grpc.CustomCodec(&CBORCodec{}))
 	sOpts = append(sOpts, config.CustomOptions...)
 
 	if config.Certificate != nil {
@@ -463,6 +466,16 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		unsafeDebug:           unsafeDebug,
 		wrapper:               wrapper,
 	}, nil
+}
+
+// Dial creates a client connection to the given target.
+func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	opts = append(opts, grpc.WithDefaultCallOptions(
+		grpc.ForceCodec(&CBORCodec{}),
+	))
+	opts = append(opts, grpc.WithChainUnaryInterceptor(clientUnaryErrorMapper))
+	opts = append(opts, grpc.WithChainStreamInterceptor(clientStreamErrorMapper))
+	return grpc.Dial(target, opts...)
 }
 
 func init() {

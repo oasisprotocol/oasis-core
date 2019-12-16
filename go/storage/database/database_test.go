@@ -20,7 +20,6 @@ var testNs common.Namespace
 
 func TestStorageDatabase(t *testing.T) {
 	for _, v := range []string{
-		BackendNameLevelDB,
 		BackendNameBadgerDB,
 	} {
 		t.Run(v, func(t *testing.T) {

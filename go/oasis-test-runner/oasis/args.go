@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/oasislabs/oasis-core/go/client"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	commonGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -19,6 +18,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/followtool"
+	"github.com/oasislabs/oasis-core/go/runtime/client"
 	"github.com/oasislabs/oasis-core/go/storage"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"

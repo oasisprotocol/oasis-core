@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/oasis-core/go/beacon/api"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 )
@@ -17,13 +18,13 @@ import (
 func BeaconImplementationTests(t *testing.T, backend api.Backend, epochtime epochtime.SetableBackend) {
 	require := require.New(t)
 
-	beacon, err := backend.GetBeacon(context.Background(), 0)
+	beacon, err := backend.GetBeacon(context.Background(), consensus.HeightLatest)
 	require.NoError(err, "GetBeacon")
 	require.Len(beacon, api.BeaconSize, "GetBeacon - length")
 
 	_ = epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
-	newBeacon, err := backend.GetBeacon(context.Background(), 0)
+	newBeacon, err := backend.GetBeacon(context.Background(), consensus.HeightLatest)
 	require.NoError(err, "GetBeacon")
 	require.Len(newBeacon, api.BeaconSize, "GetBeacon - length")
 	require.NotEqual(beacon, newBeacon, "After epoch transition, new beacon should be generated.")

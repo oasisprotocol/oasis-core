@@ -20,7 +20,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/pem"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
-	"github.com/oasislabs/oasis-core/go/grpc/common"
 )
 
 const (
@@ -47,9 +46,6 @@ var (
 	// ErrPublicKeyMismatch is the error returned when a signature was
 	// not produced by the expected public key.
 	ErrPublicKeyMismatch = errors.New("signature: public key mismatch")
-
-	// ErrNilProtobuf is the error returned when a protobuf is nil.
-	ErrNilProtobuf = errors.New("signature: protobuf is nil")
 
 	// ErrVerifyFailed is the error return when a signature verification
 	// fails when opening a signed blob.
@@ -319,32 +315,6 @@ func (s *Signature) SanityCheck(expectedPubKey PublicKey) error {
 	return nil
 }
 
-// FromProto deserializes a protobuf into a Signature.
-func (s *Signature) FromProto(pb *common.Signature) error {
-	if pb == nil {
-		return ErrNilProtobuf
-	}
-
-	if err := s.PublicKey.UnmarshalBinary(pb.GetPubkey()); err != nil {
-		return err
-	}
-	if err := s.Signature.UnmarshalBinary(pb.GetSignature()); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ToProto serializes a protobuf version of the Signature.
-func (s *Signature) ToProto() *common.Signature {
-	pb := new(common.Signature)
-
-	pb.Pubkey, _ = s.PublicKey.MarshalBinary()
-	pb.Signature, _ = s.Signature.MarshalBinary()
-
-	return pb
-}
-
 // MarshalPEM encodes a signature into PEM format.
 func (s Signature) MarshalPEM() (data []byte, err error) {
 	pk, err := s.PublicKey.MarshalPEM()
@@ -420,24 +390,6 @@ func (s *Signed) Open(context Context, dst interface{}) error {
 	}
 
 	return cbor.Unmarshal(s.Blob, dst)
-}
-
-// FromProto deserializes a protobuf into a Signed.
-func (s *Signed) FromProto(pb *common.Signed) error {
-	if pb == nil {
-		return ErrNilProtobuf
-	}
-
-	s.Blob = pb.GetBlob()
-	return s.Signature.FromProto(pb.GetSignature())
-}
-
-// ToProto serializes a protobuf version of the Signed.
-func (s *Signed) ToProto() *common.Signed {
-	return &common.Signed{
-		Blob:      s.Blob,
-		Signature: s.Signature.ToProto(),
-	}
 }
 
 // PrettySigned is used for pretty-printing signed messages so that

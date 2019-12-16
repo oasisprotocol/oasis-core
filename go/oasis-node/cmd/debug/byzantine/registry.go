@@ -67,5 +67,5 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 }
 
 func registryGetNode(ht *honestTendermint, height int64, nodeID signature.PublicKey) (*node.Node, error) {
-	return ht.service.Registry().GetNode(context.Background(), nodeID, height)
+	return ht.service.Registry().GetNode(context.Background(), &registry.IDQuery{ID: nodeID, Height: height})
 }

@@ -16,6 +16,8 @@ use io_context::Context;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio_executor::spawn;
 
+#[cfg(not(target_env = "sgx"))]
+use oasis_core_runtime::common::runtime::RuntimeId;
 use oasis_core_runtime::{
     common::cbor,
     protocol::Protocol,
@@ -27,7 +29,7 @@ use oasis_core_runtime::{
 };
 
 #[cfg(not(target_env = "sgx"))]
-use super::api::{CallEnclaveRequest, EnclaveRpcClient};
+use super::api::{CallEnclaveRequest, EnclaveRPCClient};
 use crate::BoxFuture;
 
 /// Internal send queue backlog.
@@ -100,19 +102,22 @@ impl Transport for RuntimeTransport {
 
 #[cfg(not(target_env = "sgx"))]
 struct GrpcTransport {
-    grpc_client: EnclaveRpcClient,
+    grpc_client: EnclaveRPCClient,
+    runtime_id: RuntimeId,
     endpoint: String,
 }
 
 #[cfg(not(target_env = "sgx"))]
 impl Transport for GrpcTransport {
     fn write_message_impl(&self, _ctx: Context, data: Vec<u8>) -> BoxFuture<Vec<u8>> {
-        let mut req = CallEnclaveRequest::new();
-        req.set_payload(data);
-        req.set_endpoint(self.endpoint.clone());
+        let req = CallEnclaveRequest {
+            runtime_id: self.runtime_id,
+            endpoint: self.endpoint.clone(),
+            payload: data,
+        };
 
-        match self.grpc_client.call_enclave_async(&req) {
-            Ok(rsp) => Box::new(rsp.map(|r| r.payload).map_err(|error| error.into())),
+        match self.grpc_client.call_enclave(&req, Default::default()) {
+            Ok(rsp) => Box::new(rsp.map(|r| r.into()).map_err(|error| error.into())),
             Err(error) => Box::new(future::err(error.into())),
         }
     }
@@ -181,10 +186,16 @@ impl RpcClient {
 
     /// Construct an unconnected RPC client with gRPC transport.
     #[cfg(not(target_env = "sgx"))]
-    pub fn new_grpc(builder: Builder, channel: Channel, endpoint: &str) -> Self {
+    pub fn new_grpc(
+        builder: Builder,
+        channel: Channel,
+        runtime_id: RuntimeId,
+        endpoint: &str,
+    ) -> Self {
         Self::new(
             Box::new(GrpcTransport {
-                grpc_client: EnclaveRpcClient::new(channel),
+                grpc_client: EnclaveRPCClient::new(channel),
+                runtime_id,
                 endpoint: endpoint.to_owned(),
             }),
             builder,

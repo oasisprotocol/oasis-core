@@ -36,8 +36,8 @@ type Backend interface {
 	// Upon subscription the current epoch is sent immediately.
 	WatchEpochs() (<-chan EpochTime, *pubsub.Subscription)
 
-	// ToGenesis returns the genesis state at the specified block height.
-	ToGenesis(ctx context.Context, height int64) (*Genesis, error)
+	// StateToGenesis returns the genesis state at the specified block height.
+	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
 }
 
 // SetableBackend is a Backend that supports setting the current epoch.

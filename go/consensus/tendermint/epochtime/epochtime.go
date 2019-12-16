@@ -63,7 +63,7 @@ func (t *tendermintBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscri
 	return typedCh, sub
 }
 
-func (t *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (t *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	now, err := t.GetEpoch(ctx, height)
 	if err != nil {
 		return nil, err

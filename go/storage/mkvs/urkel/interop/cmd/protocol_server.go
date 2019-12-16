@@ -11,8 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/background"
-	"github.com/oasislabs/oasis-core/go/storage"
-	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/database"
 )
 
@@ -71,8 +70,8 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 	svcMgr.Register(grpcSrv)
 
 	// Initialize a dummy storage backend.
-	storageCfg := storageApi.Config{
-		Backend:            database.BackendNameLevelDB,
+	storageCfg := storage.Config{
+		Backend:            database.BackendNameBadgerDB,
 		DB:                 dataDir,
 		Signer:             ident.NodeSigner,
 		ApplyLockLRUSlots:  1,
@@ -85,7 +84,7 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 		)
 		return
 	}
-	storage.NewGRPCServer(grpcSrv.Server(), backend, &grpc.AllowAllRuntimePolicyChecker{}, false)
+	storage.RegisterService(grpcSrv.Server(), backend)
 
 	// Start the gRPC server.
 	if err := grpcSrv.Start(); err != nil {

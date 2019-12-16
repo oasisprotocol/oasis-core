@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/roothash/api"
@@ -197,7 +198,7 @@ func (tb *tendermintBackend) WatchPrunedBlocks() (<-chan *api.PrunedBlock, *pubs
 	return ch, sub, nil
 }
 
-func (tb *tendermintBackend) ToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -219,7 +220,7 @@ func (tb *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtim
 	notifiers := tb.runtimeNotifiers[id]
 	if notifiers == nil {
 		// Fetch the latest block.
-		block, _ := tb.GetLatestBlock(tb.ctx, id, 0)
+		block, _ := tb.GetLatestBlock(tb.ctx, id, consensus.HeightLatest)
 
 		notifiers = &runtimeBrokers{
 			blockNotifier: pubsub.NewBroker(false),

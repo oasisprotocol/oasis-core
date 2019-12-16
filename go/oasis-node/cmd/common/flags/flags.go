@@ -3,6 +3,8 @@
 package flags
 
 import (
+	"os"
+
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -22,7 +24,14 @@ const (
 	cfgVerbose = "verbose"
 	cfgForce   = "force"
 	cfgRetries = "retries"
-	CfgEntity  = "entity"
+
+	// CfgSigner is the flag used to specify the backend of the signer.
+	CfgSigner = "signer"
+	// CfgSignerDir is the flag used to specify the directory with the entity files.
+	// It also contains the private keys of a signer if using a file backend.
+	CfgSignerDir           = "signer.dir"
+	cfgSignerLedgerAddress = "signer.ledger.address"
+	cfgSignerLedgerIndex   = "signer.ledger.index"
 )
 
 var (
@@ -34,8 +43,8 @@ var (
 	RetriesFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	// DebugTestEntityFlags has the test entity enable flag.
 	DebugTestEntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
-	// EntityFlags has the entity flag.
-	EntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	// SignerFlags has the signer-related flags.
+	SignerFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	// GenesisFileFlags has the genesis file flag.
 	GenesisFileFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
@@ -71,9 +80,31 @@ func DebugTestEntity() bool {
 	return DebugDontBlameOasis() && viper.GetBool(CfgDebugTestEntity)
 }
 
-// Entity returns the set entity directory.
-func Entity() string {
-	return viper.GetString(CfgEntity)
+// Signer returns the configured signer backend name.
+func Signer() string {
+	return viper.GetString(CfgSigner)
+}
+
+// SignerDir returns the directory with the entity files, (and the signer keys for file-based signer).
+func SignerDirOrPwd() (string, error) {
+	signerDir := viper.GetString(CfgSignerDir)
+	if signerDir == "" {
+		var err error
+		if signerDir, err = os.Getwd(); err != nil {
+			return "", err
+		}
+	}
+	return signerDir, nil
+}
+
+// SignerLedgerAddress returns the address to search for (for Ledger-based signer).
+func SignerLedgerAddress() string {
+	return viper.GetString(cfgSignerLedgerAddress)
+}
+
+// SignerLedgerIndex returns the address index to be used for address derivation.
+func SignerLedgerIndex() uint32 {
+	return viper.GetUint32(cfgSignerLedgerIndex)
 }
 
 // GenesisFile returns the set genesis file.
@@ -98,7 +129,10 @@ func init() {
 	DebugTestEntityFlags.Bool(CfgDebugTestEntity, false, "use the test entity (UNSAFE)")
 	_ = DebugTestEntityFlags.MarkHidden(CfgDebugTestEntity)
 
-	EntityFlags.StringP(CfgEntity, "e", "", "Path to directory containing entity private key and descriptor")
+	SignerFlags.StringP(CfgSigner, "s", "file", "signer backend [file, ledger]")
+	SignerFlags.String(CfgSignerDir, "", "path to directory containing the entity files. If file signer backend is being used, the directory must also contain the private key. If blank, defaults to the working directory.")
+	SignerFlags.String(cfgSignerLedgerAddress, "", "Ledger signer: select Ledger device based on this specified address. If blank, any available Ledger device will be connected to.")
+	SignerFlags.Uint32(cfgSignerLedgerIndex, 0, "Ledger signer: address index used to derive address on Ledger device")
 
 	GenesisFileFlags.StringP(CfgGenesisFile, "g", "genesis.json", "path to genesis file")
 
@@ -110,7 +144,7 @@ func init() {
 		ForceFlags,
 		RetriesFlags,
 		DebugTestEntityFlags,
-		EntityFlags,
+		SignerFlags,
 		GenesisFileFlags,
 		ConsensusValidatorFlag,
 		DebugDontBlameOasisFlag,

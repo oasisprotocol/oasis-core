@@ -108,7 +108,14 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 	var err error
 
 	// Apply write log to an empty root.
-	receipts, err = backend.Apply(ctx, namespace, round, rootHash, round, expectedNewRoot, wl)
+	receipts, err = backend.Apply(ctx, &api.ApplyRequest{
+		Namespace: namespace,
+		SrcRound:  round,
+		SrcRoot:   rootHash,
+		DstRound:  round,
+		DstRoot:   expectedNewRoot,
+		WriteLog:  wl,
+	})
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -133,7 +140,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 	}
 
 	// Apply a batch of operations against the MKVS.
-	receipts, err = backend.ApplyBatch(ctx, namespace, round, applyOps)
+	receipts, err = backend.ApplyBatch(ctx, &api.ApplyBatchRequest{Namespace: namespace, DstRound: round, Ops: applyOps})
 	require.NoError(t, err, "ApplyBatch() should not return an error")
 	require.NotNil(t, receipts, "ApplyBatch() should return receipts")
 
@@ -197,7 +204,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 		Round:     round,
 		Hash:      rootHash,
 	}
-	it, err := backend.GetDiff(ctx, root, newRoot)
+	it, err := backend.GetDiff(ctx, &api.GetDiffRequest{StartRoot: root, EndRoot: newRoot})
 	require.NoError(t, err, "GetDiff()")
 	getDiffWl := foldWriteLogIterator(t, it)
 	originalWl := make(api.WriteLog, len(wl))
@@ -207,7 +214,14 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 	require.Equal(t, getDiffWl, originalWl)
 
 	// Now try applying the same operations again, we should get the same root.
-	receipts, err = backend.Apply(ctx, namespace, round, rootHash, round, receiptBody.Roots[0], wl)
+	receipts, err = backend.Apply(ctx, &api.ApplyRequest{
+		Namespace: namespace,
+		SrcRound:  round,
+		SrcRoot:   rootHash,
+		DstRound:  round,
+		DstRoot:   receiptBody.Roots[0],
+		WriteLog:  wl,
+	})
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -224,7 +238,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 	}
 
 	// Test GetCheckpoint.
-	logsIter, err := backend.GetCheckpoint(ctx, newRoot)
+	logsIter, err := backend.GetCheckpoint(ctx, &api.GetCheckpointRequest{Root: newRoot})
 	require.NoError(t, err, "GetCheckpoint()")
 	logs := foldWriteLogIterator(t, logsIter)
 	// Applying the writeLog should return same root.
@@ -236,7 +250,14 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 	wl3 := prepareWriteLog([][]byte{testValues[0]})
 	expectedNewRoot3 := CalculateExpectedNewRoot(t, wl3, namespace, round)
 
-	receipts, err = backend.Apply(ctx, namespace, round, rootHash, round, expectedNewRoot3, wl3)
+	receipts, err = backend.Apply(ctx, &api.ApplyRequest{
+		Namespace: namespace,
+		SrcRound:  round,
+		SrcRoot:   rootHash,
+		DstRound:  round,
+		DstRoot:   expectedNewRoot3,
+		WriteLog:  wl3,
+	})
 	require.NoError(t, err, "Apply() should not return an error")
 	require.NotNil(t, receipts, "Apply() should return receipts")
 
@@ -251,7 +272,7 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 		}
 	}
 
-	logsIter, err = backend.GetCheckpoint(ctx, newRoot)
+	logsIter, err = backend.GetCheckpoint(ctx, &api.GetCheckpointRequest{Root: newRoot})
 	require.NoError(t, err, "GetCheckpoint()")
 	logs = foldWriteLogIterator(t, logsIter)
 	// Applying the writeLog should return same root.
@@ -304,18 +325,25 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 		require.NoError(t, err, "Commit")
 
 		// Apply to storage backend.
-		_, err = backend.Apply(ctx, namespace, round, baseRoot, dstRound, root, writeLog)
+		_, err = backend.Apply(ctx, &api.ApplyRequest{
+			Namespace: namespace,
+			SrcRound:  round,
+			SrcRoot:   baseRoot,
+			DstRound:  dstRound,
+			DstRoot:   root,
+			WriteLog:  writeLog,
+		})
 		require.NoError(t, err, "Apply")
 
 		roots = append(roots, root)
 	}
 
 	// Try to merge with only specifying the base.
-	_, err := backend.Merge(ctx, namespace, round, roots[0], nil)
+	_, err := backend.Merge(ctx, &api.MergeRequest{Namespace: namespace, Round: round, Base: roots[0]})
 	require.Error(t, err, "Merge without other roots should return an error")
 
 	// Try to merge with only specifying the base and first root.
-	receipts, err := backend.Merge(ctx, namespace, round, roots[0], roots[1:2])
+	receipts, err := backend.Merge(ctx, &api.MergeRequest{Namespace: namespace, Round: round, Base: roots[0], Others: roots[1:2]})
 	require.NoError(t, err, "Merge")
 	require.NotNil(t, receipts, "Merge should return receipts")
 
@@ -328,7 +356,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 	}
 
 	// Try to merge with specifying the base and all three roots.
-	receipts, err = backend.Merge(ctx, namespace, round, roots[0], roots[1:])
+	receipts, err = backend.Merge(ctx, &api.MergeRequest{Namespace: namespace, Round: round, Base: roots[0], Others: roots[1:]})
 	require.NoError(t, err, "Merge")
 	require.NotNil(t, receipts, "Merge should return receipts")
 
