@@ -4,6 +4,7 @@ package roothash
 import (
 	"bytes"
 	"context"
+	"math"
 	"sync"
 
 	"github.com/eapache/channels"
@@ -18,7 +19,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/roothash/api"
@@ -105,9 +105,7 @@ func (tb *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.An
 	notifiers := tb.getRuntimeNotifiers(id)
 
 	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
-		// Replay the latest block if it exists.  This isn't handled by
-		// the Broker because the same notifier is used to handle
-		// WatchBlocksSince.
+		// Replay the latest block if it exists.
 		notifiers.Lock()
 		defer notifiers.Unlock()
 		if notifiers.lastBlock != nil {
@@ -120,7 +118,27 @@ func (tb *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.An
 	ch := make(chan *api.AnnotatedBlock)
 	sub.Unwrap(ch)
 
-	return ch, sub, nil
+	// Make sure that we only ever emit monotonically increasing blocks. Without
+	// special handling this can happen for the first received block due to
+	// replaying the latest block (see above).
+	invalidRound := uint64(math.MaxUint64)
+	lastRound := invalidRound
+	monotonicCh := make(chan *api.AnnotatedBlock)
+	go func() {
+		for {
+			blk, ok := <-ch
+			if !ok {
+				return
+			}
+			if lastRound != invalidRound && blk.Block.Header.Round <= lastRound {
+				continue
+			}
+			lastRound = blk.Block.Header.Round
+			monotonicCh <- blk
+		}
+	}()
+
+	return monotonicCh, sub, nil
 }
 
 func (tb *tendermintBackend) getBlockFromFinalizedTag(ctx context.Context, rawValue []byte, height int64) (*block.Block, *app.ValueFinalized, error) {
@@ -188,15 +206,10 @@ func (tb *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtim
 
 	notifiers := tb.runtimeNotifiers[id]
 	if notifiers == nil {
-		// Fetch the latest block.
-		block, _ := tb.GetLatestBlock(tb.ctx, id, consensus.HeightLatest)
-
 		notifiers = &runtimeBrokers{
 			blockNotifier: pubsub.NewBroker(false),
 			eventNotifier: pubsub.NewBroker(false),
-			lastBlock:     block,
 		}
-
 		tb.runtimeNotifiers[id] = notifiers
 	}
 
