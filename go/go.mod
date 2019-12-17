@@ -55,7 +55,6 @@ require (
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.5.0
 	github.com/steveyen/gtreap v0.0.0-20150807155958-0abe01ef9be2 // indirect
-	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/tecbot/gorocksdb v0.0.0-20190519120508-025c3cf4ffb4 // indirect
 	github.com/tendermint/go-amino v0.15.0 // indirect
