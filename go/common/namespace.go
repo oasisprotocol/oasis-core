@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"encoding"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 
@@ -41,6 +42,21 @@ func (n *Namespace) UnmarshalBinary(data []byte) error {
 	copy(n[:], data)
 
 	return nil
+}
+
+// MarshalText encodes a namespace identifier into text form.
+func (n Namespace) MarshalText() (data []byte, err error) {
+	return []byte(base64.StdEncoding.EncodeToString(n[:])), nil
+}
+
+// UnmarshalText decodes a text marshaled namespace identifier.
+func (n *Namespace) UnmarshalText(text []byte) error {
+	b, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return err
+	}
+
+	return n.UnmarshalBinary(b)
 }
 
 // Equal compares vs another namespace for equality.
