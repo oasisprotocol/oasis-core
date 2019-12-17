@@ -81,6 +81,11 @@ steps:
     plugins:
       <<: *docker_plugin
 
+  - label: Audit Go dependencies for vulnerabilities
+    command: .buildkite/go/nancy_audit.sh
+    plugins:
+      <<: *docker_plugin
+
   ############
   # Build jobs
   ############
