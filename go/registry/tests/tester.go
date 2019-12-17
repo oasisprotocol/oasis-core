@@ -143,9 +143,11 @@ func testRegistryEntityNodes( // nolint: gocyclo
 					require.Equal(err, api.ErrInvalidArgument)
 				}
 
-				err = v.Register(consensus, v.SignedInvalidRegistration2)
-				require.Error(err, "register committee node without committee addresses")
-				require.Equal(err, api.ErrInvalidArgument)
+				// XXX: Validate committee addresses after existing deployments have cleared up registry.
+				// https://github.com/oasislabs/oasis-core/issues/2428
+				// err = v.Register(consensus, v.SignedInvalidRegistration2)
+				// require.Error(err, "register committee node without committee addresses")
+				// require.Equal(err, api.ErrInvalidArgument)
 
 				err = v.Register(consensus, v.SignedInvalidRegistration3)
 				require.Error(err, "register committee node without committee certificate")

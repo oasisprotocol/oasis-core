@@ -491,12 +491,14 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	}
 	committeeAddressRequired := n.HasRoles(CommitteeAddressRequiredRoles)
 	if err := verifyAddresses(params, committeeAddressRequired, n.Committee.Addresses); err != nil {
+		// XXX: Validate committee addresses after existing deployments have cleared up registry.
+		// https://github.com/oasislabs/oasis-core/issues/2428
 		addrs, _ := json.Marshal(n.Committee.Addresses)
-		logger.Error("RegisterNode: missing/invalid committee addresses",
+		logger.Warn("RegisterNode: missing/invalid committee addresses",
 			"node", n,
 			"committee_addrs", addrs,
 		)
-		return nil, err
+		//return nil, err
 	}
 
 	// Validate P2PInfo.
