@@ -1,4 +1,4 @@
-package indexer
+package tagindexer
 
 import (
 	"context"
@@ -17,9 +17,6 @@ import (
 func testOperations(t *testing.T, backend Backend) {
 	ctx := context.Background()
 
-	var id signature.PublicKey
-	_ = id.UnmarshalBinary(make([]byte, signature.PublicKeySize))
-
 	tx1 := []byte("i am a transaction")
 	tx2 := []byte("i am a second transaction")
 	tx3 := []byte("i am a third transaction")
@@ -34,7 +31,6 @@ func testOperations(t *testing.T, backend Backend) {
 
 	err := backend.Index(
 		ctx,
-		id,
 		42,
 		blockHash1,
 		// Transactions.
@@ -52,42 +48,42 @@ func testOperations(t *testing.T, backend Backend) {
 	)
 	require.NoError(t, err, "Index")
 
-	err = backend.WaitBlockIndexed(ctx, id, 41)
+	err = backend.WaitBlockIndexed(ctx, 41)
 	require.NoError(t, err, "WaitBlockIndexed")
-	err = backend.WaitBlockIndexed(ctx, id, 42)
+	err = backend.WaitBlockIndexed(ctx, 42)
 	require.NoError(t, err, "WaitBlockIndexed")
 
 	var invalidBlockHash hash.Hash
-	_, err = backend.QueryBlock(ctx, id, invalidBlockHash)
+	_, err = backend.QueryBlock(ctx, invalidBlockHash)
 	require.Equal(t, api.ErrNotFound, err, "QueryBlock must return a not found error")
 
-	round, err := backend.QueryBlock(ctx, id, blockHash1)
+	round, err := backend.QueryBlock(ctx, blockHash1)
 	require.NoError(t, err, "QueryBlock")
 	require.EqualValues(t, 42, round)
 
-	_, _, _, err = backend.QueryTxn(ctx, id, []byte("key"), []byte("value"))
+	_, _, _, err = backend.QueryTxn(ctx, []byte("key"), []byte("value"))
 	require.Equal(t, api.ErrNotFound, err, "QueryTxn must return a not found error")
 
-	_, _, _, err = backend.QueryTxn(ctx, id, []byte("key2"), []byte("value2"))
+	_, _, _, err = backend.QueryTxn(ctx, []byte("key2"), []byte("value2"))
 	require.Equal(t, api.ErrNotFound, err, "QueryTxn must return a not found error")
 
-	round, txnHash, txnIndex, err := backend.QueryTxn(ctx, id, []byte("hello2"), []byte("world"))
+	round, txnHash, txnIndex, err := backend.QueryTxn(ctx, []byte("hello2"), []byte("world"))
 	require.NoError(t, err, "QueryTxn")
 	require.EqualValues(t, 42, round)
 	require.EqualValues(t, tx2Hash, txnHash)
 	require.EqualValues(t, 1, txnIndex)
 
-	round, txnHash, txnIndex, err = backend.QueryTxn(ctx, id, []byte("some"), []byte("world"))
+	round, txnHash, txnIndex, err = backend.QueryTxn(ctx, []byte("some"), []byte("world"))
 	require.NoError(t, err, "QueryTxn")
 	require.EqualValues(t, 42, round)
 	require.EqualValues(t, tx1Hash, txnHash)
 	require.EqualValues(t, 0, txnIndex)
 
-	txnHash, err = backend.QueryTxnByIndex(ctx, id, 42, 0)
+	txnHash, err = backend.QueryTxnByIndex(ctx, 42, 0)
 	require.NoError(t, err, "QueryTxnByIndex")
 	require.EqualValues(t, tx1Hash, txnHash)
 
-	txnHash, err = backend.QueryTxnByIndex(ctx, id, 42, 1)
+	txnHash, err = backend.QueryTxnByIndex(ctx, 42, 1)
 	require.NoError(t, err, "QueryTxnByIndex")
 	require.EqualValues(t, tx2Hash, txnHash)
 
@@ -96,7 +92,6 @@ func testOperations(t *testing.T, backend Backend) {
 
 	err = backend.Index(
 		ctx,
-		id,
 		43,
 		blockHash2,
 		// Transactions.
@@ -110,17 +105,17 @@ func testOperations(t *testing.T, backend Backend) {
 	)
 	require.NoError(t, err, "Index")
 
-	round, err = backend.QueryBlock(ctx, id, blockHash2)
+	round, err = backend.QueryBlock(ctx, blockHash2)
 	require.NoError(t, err, "QueryBlock")
 	require.EqualValues(t, 43, round)
 
-	round, txnHash, txnIndex, err = backend.QueryTxn(ctx, id, []byte("foo"), []byte("bar"))
+	round, txnHash, txnIndex, err = backend.QueryTxn(ctx, []byte("foo"), []byte("bar"))
 	require.NoError(t, err, "QueryTxn")
 	require.EqualValues(t, 43, round)
 	require.EqualValues(t, tx3Hash, txnHash)
 	require.EqualValues(t, 0, txnIndex)
 
-	round, err = backend.QueryBlock(ctx, id, blockHash1)
+	round, err = backend.QueryBlock(ctx, blockHash1)
 	require.NoError(t, err, "QueryBlock")
 	require.EqualValues(t, 42, round)
 
@@ -132,76 +127,69 @@ func testOperations(t *testing.T, backend Backend) {
 			api.QueryCondition{Key: []byte("hello"), Values: [][]byte{[]byte("world")}},
 		},
 	}
-	results, err := backend.QueryTxns(ctx, id, query)
-	if err != ErrUnsupported {
-		// Ignore for backends that don't support QueryTxns.
-		require.NoError(t, err, "QueryTxns")
-		require.Len(t, results, 1)
-		require.Contains(t, results, uint64(42))
-		require.Len(t, results[42], 2)
-		require.Contains(t, results[42], Result{TxHash: tx1Hash, TxIndex: 0})
-		require.Contains(t, results[42], Result{TxHash: tx2Hash, TxIndex: 1})
-	}
+	results, err := backend.QueryTxns(ctx, query)
+	require.NoError(t, err, "QueryTxns")
+	require.Len(t, results, 1)
+	require.Contains(t, results, uint64(42))
+	require.Len(t, results[42], 2)
+	require.Contains(t, results[42], Result{TxHash: tx1Hash, TxIndex: 0})
+	require.Contains(t, results[42], Result{TxHash: tx2Hash, TxIndex: 1})
 
 	query = api.Query{
 		Conditions: []api.QueryCondition{
 			api.QueryCondition{Key: []byte("hello"), Values: [][]byte{[]byte("worlx"), []byte("world")}},
 		},
 	}
-	results, err = backend.QueryTxns(ctx, id, query)
-	if err != ErrUnsupported {
-		// Ignore for backends that don't support QueryTxns.
-		require.NoError(t, err, "QueryTxns")
-		require.NoError(t, err, "QueryTxns")
-		require.Len(t, results, 1)
-		require.Contains(t, results, uint64(42))
-		require.Len(t, results[42], 2)
-		require.Contains(t, results[42], Result{TxHash: tx1Hash, TxIndex: 0})
-		require.Contains(t, results[42], Result{TxHash: tx2Hash, TxIndex: 1})
-	}
+	results, err = backend.QueryTxns(ctx, query)
+	require.NoError(t, err, "QueryTxns")
+	require.NoError(t, err, "QueryTxns")
+	require.Len(t, results, 1)
+	require.Contains(t, results, uint64(42))
+	require.Len(t, results[42], 2)
+	require.Contains(t, results[42], Result{TxHash: tx1Hash, TxIndex: 0})
+	require.Contains(t, results[42], Result{TxHash: tx2Hash, TxIndex: 1})
 }
 
 func testLoadIndex(t *testing.T, backend Backend) {
 	ctx := context.Background()
 
-	var id signature.PublicKey
-	_ = id.UnmarshalBinary(make([]byte, signature.PublicKeySize))
-
-	err := backend.WaitBlockIndexed(ctx, id, 42)
+	err := backend.WaitBlockIndexed(ctx, 42)
 	require.NoError(t, err, "WaitBlockIndexed")
 
 	var blockHash1 hash.Hash
 	blockHash1.FromBytes([]byte("this is a fake block hash 1"))
 
-	round, err := backend.QueryBlock(ctx, id, blockHash1)
+	round, err := backend.QueryBlock(ctx, blockHash1)
 	require.NoError(t, err, "QueryBlock")
 	require.EqualValues(t, 42, round)
 }
 
-func testBackend(t *testing.T, factory func(string) (Backend, error)) {
+func testBackend(t *testing.T, factory BackendFactory) {
 	// Create a new random temporary directory under /tmp.
 	dataDir, err := ioutil.TempDir("", "oasis-client-indexer-test_")
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
+	var id signature.PublicKey
+
 	t.Run("Operations", func(t *testing.T) {
 		var backend Backend
-		backend, err = factory(dataDir)
+		backend, err = factory(dataDir, id)
 		require.NoError(t, err, "New")
-		defer backend.Stop()
+		defer backend.Close()
 
 		testOperations(t, backend)
 	})
 	t.Run("LoadIndex", func(t *testing.T) {
 		var backend Backend
-		backend, err = factory(dataDir)
+		backend, err = factory(dataDir, id)
 		require.NoError(t, err, "New")
-		defer backend.Stop()
+		defer backend.Close()
 
 		testLoadIndex(t, backend)
 	})
 }
 
 func TestBleveBackend(t *testing.T) {
-	testBackend(t, NewBleveBackend)
+	testBackend(t, NewBleveBackend())
 }

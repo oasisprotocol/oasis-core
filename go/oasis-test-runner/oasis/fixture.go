@@ -162,6 +162,8 @@ type RuntimeFixture struct {
 	Merge        registry.MergeParameters        `json:"merge"`
 	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
 	Storage      registry.StorageParameters      `json:"storage"`
+
+	Pruner RuntimePrunerCfg `json:"pruner,omitempty"`
 }
 
 // Create instantiates the runtime described by the fixture.
@@ -196,6 +198,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		Storage:      f.Storage,
 		Binary:       f.Binary,
 		GenesisState: f.GenesisState,
+		Pruner:       f.Pruner,
 	})
 }
 

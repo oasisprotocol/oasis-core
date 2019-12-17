@@ -8,8 +8,6 @@ type TxnCall struct {
 	Method string `json:"method"`
 	// Args are the method arguments.
 	Args interface{} `json:"args"`
-	// PredictedReadWriteSet is the predicted read/write set.
-	PredictedReadWriteSet ReadWriteSet `json:"predicted_rw_set"`
 }
 
 // TxnOutput is a transaction call output.

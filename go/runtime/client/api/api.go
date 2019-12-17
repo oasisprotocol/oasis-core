@@ -22,10 +22,8 @@ const (
 )
 
 var (
-	// ErrIndexerDisabled is an error returned when the indexer is disabled.
-	ErrIndexerDisabled = errors.New(ModuleName, 1, "client: indexer not enabled")
 	// ErrNotFound is an error returned when the item is not found.
-	ErrNotFound = errors.New(ModuleName, 2, "client: not found")
+	ErrNotFound = errors.New(ModuleName, 1, "client: not found")
 )
 
 // RuntimeClient is the runtime client interface.

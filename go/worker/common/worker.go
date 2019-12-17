@@ -14,6 +14,7 @@ import (
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
@@ -23,26 +24,6 @@ import (
 
 // LocalStorageFile is the filename of the worker's local storage database.
 const LocalStorageFile = "worker-local-storage.badger.db"
-
-// Runtime is a single runtime.
-type Runtime struct {
-	id signature.PublicKey
-
-	node *committee.Node
-}
-
-// GetNode returns the committee node for this runtime.
-func (r *Runtime) GetNode() *committee.Node {
-	if r == nil {
-		return nil
-	}
-	return r.node
-}
-
-// GetID returns the ID of this runtime.
-func (r *Runtime) GetID() signature.PublicKey {
-	return r.id
-}
 
 // Worker is a garbage bag with lower level services and common runtime objects.
 type Worker struct {
@@ -61,9 +42,10 @@ type Worker struct {
 	KeyManager       keymanagerApi.Backend
 	KeyManagerClient *keymanagerClient.Client
 	LocalStorage     *host.LocalStorage
+	RuntimeRegistry  runtimeRegistry.Registry
 	GenesisDoc       *genesis.Document
 
-	runtimes map[signature.PublicKey]*Runtime
+	runtimes map[signature.PublicKey]*committee.Node
 
 	quitCh chan struct{}
 	initCh chan struct{}
@@ -92,7 +74,7 @@ func (w *Worker) Start() error {
 		defer close(w.quitCh)
 
 		for _, rt := range w.runtimes {
-			<-rt.node.Quit()
+			<-rt.Quit()
 		}
 
 		<-w.Grpc.Quit()
@@ -101,19 +83,19 @@ func (w *Worker) Start() error {
 	// Wait for all runtimes to be initialized.
 	go func() {
 		for _, rt := range w.runtimes {
-			<-rt.node.Initialized()
+			<-rt.Initialized()
 		}
 
 		close(w.initCh)
 	}()
 
 	// Start runtime services.
-	for _, rt := range w.runtimes {
+	for id, rt := range w.runtimes {
 		w.logger.Info("starting services for runtime",
-			"runtime_id", rt.id,
+			"runtime_id", id,
 		)
 
-		if err := rt.node.Start(); err != nil {
+		if err := rt.Start(); err != nil {
 			return err
 		}
 	}
@@ -128,12 +110,12 @@ func (w *Worker) Stop() {
 		return
 	}
 
-	for _, rt := range w.runtimes {
+	for id, rt := range w.runtimes {
 		w.logger.Info("stopping services for runtime",
-			"runtime_id", rt.id,
+			"runtime_id", id,
 		)
 
-		rt.node.Stop()
+		rt.Stop()
 	}
 
 	w.Grpc.Stop()
@@ -160,7 +142,7 @@ func (w *Worker) Cleanup() {
 	}
 
 	for _, rt := range w.runtimes {
-		rt.node.Cleanup()
+		rt.Cleanup()
 	}
 
 	w.Grpc.Cleanup()
@@ -178,7 +160,7 @@ func (w *Worker) GetConfig() Config {
 }
 
 // GetRuntimes returns a map of registered runtimes.
-func (w *Worker) GetRuntimes() map[signature.PublicKey]*Runtime {
+func (w *Worker) GetRuntimes() map[signature.PublicKey]*committee.Node {
 	return w.runtimes
 }
 
@@ -186,13 +168,8 @@ func (w *Worker) GetRuntimes() map[signature.PublicKey]*Runtime {
 //
 // In case the runtime with the specified id was not registered it
 // returns nil.
-func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
-	rt, ok := w.runtimes[id]
-	if !ok {
-		return nil
-	}
-
-	return rt
+func (w *Worker) GetRuntime(id signature.PublicKey) *committee.Node {
+	return w.runtimes[id]
 }
 
 // NewUnmanagedCommitteeNode creates a new common committee node that is not
@@ -203,20 +180,20 @@ func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
 //
 // Note that this does not instruct the storage backend to watch the given
 // runtime.
-func (w *Worker) NewUnmanagedCommitteeNode(id signature.PublicKey, enableP2P bool) (*committee.Node, error) {
+func (w *Worker) NewUnmanagedCommitteeNode(runtime runtimeRegistry.Runtime, enableP2P bool) (*committee.Node, error) {
 	var p2p *p2p.P2P
 	if enableP2P {
 		// Make sure that there is no other (managed) runtime already registered
 		// with the same identifier as registering another will overwrite the
 		// P2P handler.
-		if w.runtimes[id] != nil {
-			return nil, fmt.Errorf("worker/common: managed runtime with id %s already exists", id)
+		if w.runtimes[runtime.ID()] != nil {
+			return nil, fmt.Errorf("worker/common: managed runtime with id %s already exists", runtime.ID())
 		}
 		p2p = w.P2P
 	}
 
 	return committee.NewNode(
-		id,
+		runtime,
 		w.Identity,
 		w.KeyManager,
 		w.KeyManagerClient,
@@ -230,40 +207,21 @@ func (w *Worker) NewUnmanagedCommitteeNode(id signature.PublicKey, enableP2P boo
 	)
 }
 
-func (w *Worker) registerRuntime(id signature.PublicKey) error {
+func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
+	id := runtime.ID()
 	w.logger.Info("registering new runtime",
 		"runtime_id", id,
 	)
 
-	node, err := w.NewUnmanagedCommitteeNode(id, true)
+	node, err := w.NewUnmanagedCommitteeNode(runtime, true)
 	if err != nil {
 		return err
 	}
-
-	rt := &Runtime{
-		id: id,
-		// Version is populated once the runtime has been loaded.
-		node: node,
-	}
-	w.runtimes[rt.id] = rt
+	w.runtimes[id] = node
 
 	w.logger.Info("new runtime registered",
-		"runtime_id", rt.id,
+		"runtime_id", id,
 	)
-
-	// If using a storage client, it should watch the configured runtimes.
-	if storageClient, ok := w.Storage.(storage.ClientBackend); ok {
-		if err := storageClient.WatchRuntime(id); err != nil {
-			w.logger.Warn("common/worker: error watching storage runtime",
-				"err", err,
-				"runtime_id", id,
-			)
-		}
-	} else {
-		w.logger.Info("not watching storage runtime since not using a storage client backend",
-			"runtime_id", id,
-		)
-	}
 
 	return nil
 }
@@ -282,6 +240,7 @@ func newWorker(
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
 	keyManagerClient *keymanagerClient.Client,
+	runtimeRegistry runtimeRegistry.Registry,
 	cfg Config,
 	genesisDoc *genesis.Document,
 ) (*Worker, error) {
@@ -299,8 +258,9 @@ func newWorker(
 		IAS:              ias,
 		KeyManager:       keyManager,
 		KeyManagerClient: keyManagerClient,
+		RuntimeRegistry:  runtimeRegistry,
 		GenesisDoc:       genesisDoc,
-		runtimes:         make(map[signature.PublicKey]*Runtime),
+		runtimes:         make(map[signature.PublicKey]*committee.Node),
 		quitCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
 		logger:           logging.GetLogger("worker/common"),
@@ -318,9 +278,9 @@ func newWorker(
 			return nil, err
 		}
 
-		for _, id := range cfg.Runtimes {
+		for _, rt := range runtimeRegistry.Runtimes() {
 			// Register all configured runtimes.
-			if err := w.registerRuntime(id); err != nil {
+			if err := w.registerRuntime(rt); err != nil {
 				return nil, err
 			}
 		}
@@ -343,6 +303,7 @@ func New(
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
 	keyManagerClient *keymanagerClient.Client,
+	runtimeRegistry runtimeRegistry.Registry,
 	genesisDoc *genesis.Document,
 ) (*Worker, error) {
 	cfg, err := newConfig()
@@ -361,5 +322,22 @@ func New(
 		return nil, err
 	}
 
-	return newWorker(dataDir, enabled, identity, storage, roothash, registry, scheduler, consensus, grpc, p2p, ias, keyManager, keyManagerClient, *cfg, genesisDoc)
+	return newWorker(
+		dataDir,
+		enabled,
+		identity,
+		storage,
+		roothash,
+		registry,
+		scheduler,
+		consensus,
+		grpc,
+		p2p,
+		ias,
+		keyManager,
+		keyManagerClient,
+		runtimeRegistry,
+		*cfg,
+		genesisDoc,
+	)
 }

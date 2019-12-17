@@ -19,6 +19,10 @@ var (
 	// ErrNotLeader is the error returned when the transaction scheduler does not
 	// currently consider itself a leader.
 	ErrNotLeader = errors.New(ModuleName, 2, "txnscheduler: not leader")
+
+	// ErrNotReady is the error returned when the transaction scheduler is not
+	// yet ready to process transactions.
+	ErrNotReady = errors.New(ModuleName, 3, "txnscheduler: not ready")
 )
 
 // TransactionScheduler is the transaction scheduler API interface.

@@ -53,7 +53,12 @@ type Node struct {
 	commonNode  *committee.Node
 	computeNode *computeCommittee.Node
 
-	algorithmMutex sync.Mutex
+	// The algorithm mutex is here to protect the initialization
+	// of the algorithm variable. After initialization the variable
+	// will never change though -- so if the variable is non-nil
+	// (which must be checked while holding the read lock) it can
+	// safely be used without holding the lock.
+	algorithmMutex sync.RWMutex
 	algorithm      txnSchedulerAlgorithmApi.Algorithm
 
 	ctx       context.Context
@@ -114,7 +119,7 @@ func (n *Node) WatchStateTransitions() (<-chan NodeState, *pubsub.Subscription) 
 
 func (n *Node) getMetricLabels() prometheus.Labels {
 	return prometheus.Labels{
-		"runtime": n.commonNode.RuntimeID.String(),
+		"runtime": n.commonNode.Runtime.ID().String(),
 	}
 }
 
@@ -131,6 +136,12 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 		return api.ErrNotLeader
 	}
 
+	n.algorithmMutex.RLock()
+	defer n.algorithmMutex.RUnlock()
+
+	if n.algorithm == nil || !n.algorithm.IsInitialized() {
+		return api.ErrNotReady
+	}
 	if err := n.algorithm.ScheduleTx(call); err != nil {
 		return err
 	}
@@ -150,6 +161,12 @@ func (n *Node) IsTransactionQueued(ctx context.Context, id hash.Hash) (bool, err
 		return false, api.ErrNotLeader
 	}
 
+	n.algorithmMutex.RLock()
+	defer n.algorithmMutex.RUnlock()
+
+	if n.algorithm == nil || !n.algorithm.IsInitialized() {
+		return false, api.ErrNotReady
+	}
 	return n.algorithm.IsQueued(id), nil
 }
 
@@ -182,13 +199,13 @@ func (n *Node) transitionLocked(state NodeState) {
 // HandleEpochTransitionLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
-	n.algorithmMutex.Lock()
+	n.algorithmMutex.RLock()
 	if n.algorithm == nil || !n.algorithm.IsInitialized() {
 		n.logger.Error("scheduling algorithm not available yet")
-		n.algorithmMutex.Unlock()
+		n.algorithmMutex.RUnlock()
 		return
 	}
-	n.algorithmMutex.Unlock()
+	n.algorithmMutex.RUnlock()
 
 	if epoch.IsTransactionSchedulerLeader() {
 		if err := n.algorithm.EpochTransition(epoch); err != nil {
@@ -369,20 +386,26 @@ func (n *Node) worker() {
 	n.logger.Info("starting committee node")
 
 	// Initialize transaction scheduler's algorithm.
-	runtime := n.commonNode.Runtime
+	runtime, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to fetch runtime registry descriptor",
+			"err", err,
+		)
+		return
+	}
 	txnAlgorithm, err := txnSchedulerAlgorithm.New(
 		runtime.TxnScheduler.Algorithm,
 		runtime.TxnScheduler.MaxBatchSize,
 		runtime.TxnScheduler.MaxBatchSizeBytes,
 	)
 	if err != nil {
-		n.logger.Error("Failed to create new transaction scheduler algorithm",
+		n.logger.Error("failed to create new transaction scheduler algorithm",
 			"err", err,
 		)
 		return
 	}
 	if err := txnAlgorithm.Initialize(n); err != nil {
-		n.logger.Error("Failed initializing transaction scheduler algorithm",
+		n.logger.Error("failed initializing transaction scheduler algorithm",
 			"err", err,
 		)
 		return
@@ -393,7 +416,7 @@ func (n *Node) worker() {
 	n.algorithmMutex.Unlock()
 
 	// Check incoming queue every FlushTimeout.
-	scheduleTicker := time.NewTicker(n.commonNode.Runtime.TxnScheduler.BatchFlushTimeout)
+	scheduleTicker := time.NewTicker(runtime.TxnScheduler.BatchFlushTimeout)
 	defer scheduleTicker.Stop()
 
 	// We are initialized.
@@ -431,7 +454,7 @@ func NewNode(
 		initCh:           make(chan struct{}),
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
-		logger:           logging.GetLogger("worker/txnscheduler/committee").With("runtime_id", commonNode.RuntimeID),
+		logger:           logging.GetLogger("worker/txnscheduler/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
 	return n, nil

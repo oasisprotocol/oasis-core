@@ -51,6 +51,8 @@ func main() {
 	_ = cmd.Register(e2e.GasFees)
 	// Identity CLI test.
 	_ = cmd.Register(e2e.IdentityCLI)
+	// Runtime prune test.
+	_ = cmd.Register(e2e.RuntimePrune)
 
 	// Execute the command, now that everything has been initialized.
 	cmd.Execute()

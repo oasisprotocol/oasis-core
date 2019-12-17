@@ -15,7 +15,7 @@ func (w *Worker) SubmitTx(ctx context.Context, rq *api.SubmitTxRequest) (*api.Su
 		return nil, api.ErrUnknownRuntime
 	}
 
-	if err := runtime.node.QueueCall(ctx, rq.Data); err != nil {
+	if err := runtime.QueueCall(ctx, rq.Data); err != nil {
 		return nil, err
 	}
 	return &api.SubmitTxResponse{}, nil
@@ -30,7 +30,7 @@ func (w *Worker) IsTransactionQueued(ctx context.Context, rq *api.IsTransactionQ
 		return nil, api.ErrUnknownRuntime
 	}
 
-	isQueued, err := runtime.node.IsTransactionQueued(ctx, rq.TxHash)
+	isQueued, err := runtime.IsTransactionQueued(ctx, rq.TxHash)
 	if err != nil {
 		return nil, err
 	}

@@ -55,16 +55,13 @@ var (
 // Backend is a root hash implementation.
 type Backend interface {
 	// GetGenesisBlock returns the genesis block.
-	GetGenesisBlock(context.Context, signature.PublicKey, int64) (*block.Block, error)
+	GetGenesisBlock(ctx context.Context, runtimeID signature.PublicKey, height int64) (*block.Block, error)
 
 	// GetLatestBlock returns the latest block.
 	//
 	// The metadata contained in this block can be further used to get
 	// the latest state from the storage backend.
-	GetLatestBlock(context.Context, signature.PublicKey, int64) (*block.Block, error)
-
-	// GetBlock returns the block at a specific round.
-	GetBlock(context.Context, signature.PublicKey, uint64) (*block.Block, error)
+	GetLatestBlock(ctx context.Context, runtimeID signature.PublicKey, height int64) (*block.Block, error)
 
 	// WatchBlocks returns a channel that produces a stream of
 	// annotated blocks.
@@ -72,17 +69,16 @@ type Backend interface {
 	// The latest block if any will get pushed to the stream immediately.
 	// Subsequent blocks will be pushed into the stream as they are
 	// confirmed.
-	WatchBlocks(signature.PublicKey) (<-chan *AnnotatedBlock, *pubsub.Subscription, error)
+	WatchBlocks(runtimeID signature.PublicKey) (<-chan *AnnotatedBlock, *pubsub.Subscription, error)
 
 	// WatchEvents returns a stream of protocol events.
-	WatchEvents(signature.PublicKey) (<-chan *Event, *pubsub.Subscription, error)
+	WatchEvents(runtimeID signature.PublicKey) (<-chan *Event, *pubsub.Subscription, error)
 
-	// WatchPrunedBlocks returns a channel that produces a stream of pruned
-	// blocks.
-	WatchPrunedBlocks() (<-chan *PrunedBlock, *pubsub.Subscription, error)
+	// TrackRuntime adds a runtime the history of which should be tracked.
+	TrackRuntime(ctx context.Context, history BlockHistory) error
 
 	// StateToGenesis returns the genesis state at specified block height.
-	StateToGenesis(context.Context, int64) (*Genesis, error)
+	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
 
 	// Cleanup cleans up the roothash backend.
 	Cleanup()
@@ -153,14 +149,6 @@ type MetricsMonitorable interface {
 	// All blocks from all runtimes will be pushed into the stream
 	// immediately as they are finalized.
 	WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription)
-}
-
-// PrunedBlock describes a block that was pruned.
-type PrunedBlock struct {
-	// RuntimeID is the runtime identifier of the block that was pruned.
-	RuntimeID signature.PublicKey
-	// Round is the block round.
-	Round uint64
 }
 
 // Genesis is the roothash genesis state.

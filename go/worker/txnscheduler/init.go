@@ -29,20 +29,7 @@ func New(
 	compute *compute.Worker,
 	registration *registration.Worker,
 ) (*Worker, error) {
-	// Setup runtimes.
-	var runtimes []RuntimeConfig
-
-	for _, runtimeID := range commonWorker.GetConfig().Runtimes {
-		runtimes = append(runtimes, RuntimeConfig{
-			ID: runtimeID,
-		})
-	}
-
-	cfg := Config{
-		Runtimes: runtimes,
-	}
-
-	return newWorker(Enabled(), commonWorker, compute, registration, cfg)
+	return newWorker(Enabled(), commonWorker, compute, registration)
 }
 
 func init() {

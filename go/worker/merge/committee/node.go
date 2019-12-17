@@ -22,6 +22,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
@@ -73,19 +74,10 @@ var (
 	infiniteTimeout = time.Duration(math.MaxInt64)
 )
 
-// Config is a committee node configuration.
-type Config struct {
-	// TODO: Move this to common worker config.
-	StorageCommitTimeout time.Duration
-
-	ByzantineInjectDiscrepancies bool
-}
-
 // Node is a committee node.
 type Node struct { // nolint: maligned
 	commonNode *committee.Node
-
-	cfg Config
+	commonCfg  workerCommon.Config
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -151,7 +143,7 @@ func (n *Node) WatchStateTransitions() (<-chan NodeState, *pubsub.Subscription) 
 
 func (n *Node) getMetricLabels() prometheus.Labels {
 	return prometheus.Labels{
-		"runtime": n.commonNode.RuntimeID.String(),
+		"runtime": n.commonNode.Runtime.ID().String(),
 	}
 }
 
@@ -217,7 +209,7 @@ func (n *Node) newStateWaitingForResultsLocked(epoch *committee.EpochSnapshot) S
 		for idx, nd := range ci.Nodes {
 			var nodeRuntime *node.Runtime
 			for _, r := range nd.Runtimes {
-				if !r.ID.Equal(n.commonNode.RuntimeID) {
+				if !r.ID.Equal(n.commonNode.Runtime.ID()) {
 					continue
 				}
 				nodeRuntime = r
@@ -371,10 +363,17 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 	// case of a local-only timeout, we will submit what compute commitments we have
 	// to consensus and not change the internal Discrepancy flag.
 	cid := pool.GetCommitteeID()
-	consensusTimeout := state.consensusTimeout[cid]
-	runtimeTimeout := n.commonNode.Runtime.Compute.RoundTimeout
-
 	logger := n.logger.With("committee_id", cid)
+	consensusTimeout := state.consensusTimeout[cid]
+	rt, err := n.commonNode.Runtime.RegistryDescriptor(n.roundCtx)
+	if err != nil {
+		logger.Error("failed to retrieve runtime registry descriptor",
+			"err", err,
+		)
+		return
+	}
+	runtimeTimeout := rt.Compute.RoundTimeout
+
 	commit, err := pool.TryFinalize(now, runtimeTimeout, didTimeout, consensusTimeout)
 	switch err {
 	case nil:
@@ -401,7 +400,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		// Submit compute commit to BFT.
 		ccs := pool.GetComputeCommitments()
 		go func() {
-			tx := roothash.NewComputeCommitTx(0, nil, n.commonNode.RuntimeID, ccs)
+			tx := roothash.NewComputeCommitTx(0, nil, n.commonNode.Runtime.ID(), ccs)
 			ccErr := consensus.SignAndSubmitTx(n.roundCtx, n.commonNode.Consensus, n.commonNode.Identity.NodeSigner, tx)
 
 			switch ccErr {
@@ -462,7 +461,7 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 		defer close(doneCh)
 
 		// Merge results to storage.
-		ctx, cancel = context.WithTimeout(ctx, n.cfg.StorageCommitTimeout)
+		ctx, cancel = context.WithTimeout(ctx, n.commonCfg.StorageCommitTimeout)
 		defer cancel()
 
 		var ioRoots, stateRoots []hash.Hash
@@ -591,7 +590,7 @@ func (n *Node) proposeHeaderLocked(result *commitment.MergeBody) {
 	mcs := []commitment.MergeCommitment{*mc}
 	mergeCommitStart := time.Now()
 	go func() {
-		tx := roothash.NewMergeCommitTx(0, nil, n.commonNode.RuntimeID, mcs)
+		tx := roothash.NewMergeCommitTx(0, nil, n.commonNode.Runtime.ID(), mcs)
 		mcErr := consensus.SignAndSubmitTx(n.roundCtx, n.commonNode.Consensus, n.commonNode.Identity.NodeSigner, tx)
 		// Record merge commit latency.
 		roothashCommitLatency.With(n.getMetricLabels()).Observe(time.Since(mergeCommitStart).Seconds())
@@ -775,10 +774,7 @@ func (n *Node) worker() {
 	}
 }
 
-func NewNode(
-	commonNode *committee.Node,
-	cfg Config,
-) (*Node, error) {
+func NewNode(commonNode *committee.Node, commonCfg workerCommon.Config) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
 	})
@@ -787,7 +783,7 @@ func NewNode(
 
 	n := &Node{
 		commonNode:       commonNode,
-		cfg:              cfg,
+		commonCfg:        commonCfg,
 		ctx:              ctx,
 		cancelCtx:        cancel,
 		stopCh:           make(chan struct{}),
@@ -796,7 +792,7 @@ func NewNode(
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
 		reselect:         make(chan struct{}, 1),
-		logger:           logging.GetLogger("worker/merge/committee").With("runtime_id", commonNode.RuntimeID),
+		logger:           logging.GetLogger("worker/merge/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
 	return n, nil

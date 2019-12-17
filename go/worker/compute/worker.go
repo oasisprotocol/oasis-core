@@ -7,45 +7,23 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
+	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/compute/committee"
 	"github.com/oasislabs/oasis-core/go/worker/merge"
-	mergeCommittee "github.com/oasislabs/oasis-core/go/worker/merge/committee"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
-
-// Config is the compute worker configuration.
-type Config struct {
-	// Committee is the compute committee configuration.
-	Committee committee.Config
-}
-
-// Runtime is a single runtime.
-type Runtime struct {
-	id signature.PublicKey
-
-	node *committee.Node
-}
-
-// GetNode returns the committee node for this runtime.
-func (r *Runtime) GetNode() *committee.Node {
-	if r == nil {
-		return nil
-	}
-	return r.node
-}
 
 // Worker is a compute worker handling many runtimes.
 type Worker struct {
 	*workerCommon.RuntimeHostWorker
 
 	enabled bool
-	cfg     Config
 
 	commonWorker *workerCommon.Worker
 	merge        *merge.Worker
 	registration *registration.Worker
 
-	runtimes map[signature.PublicKey]*Runtime
+	runtimes map[signature.PublicKey]*committee.Node
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -77,7 +55,7 @@ func (w *Worker) Start() error {
 		defer (w.cancelCtx)()
 
 		for _, rt := range w.runtimes {
-			<-rt.node.Quit()
+			<-rt.Quit()
 		}
 	}()
 
@@ -85,7 +63,7 @@ func (w *Worker) Start() error {
 	// to be registered for the current epoch.
 	go func() {
 		for _, rt := range w.runtimes {
-			<-rt.node.Initialized()
+			<-rt.Initialized()
 		}
 
 		<-w.registration.InitialRegistrationCh()
@@ -94,12 +72,12 @@ func (w *Worker) Start() error {
 	}()
 
 	// Start runtime services.
-	for _, rt := range w.runtimes {
+	for id, rt := range w.runtimes {
 		w.logger.Info("starting services for runtime",
-			"runtime_id", rt.id,
+			"runtime_id", id,
 		)
 
-		if err := rt.node.Start(); err != nil {
+		if err := rt.Start(); err != nil {
 			return err
 		}
 	}
@@ -114,12 +92,12 @@ func (w *Worker) Stop() {
 		return
 	}
 
-	for _, rt := range w.runtimes {
+	for id, rt := range w.runtimes {
 		w.logger.Info("stopping services for runtime",
-			"runtime_id", rt.id,
+			"runtime_id", id,
 		)
 
-		rt.node.Stop()
+		rt.Stop()
 	}
 }
 
@@ -140,7 +118,7 @@ func (w *Worker) Cleanup() {
 	}
 
 	for _, rt := range w.runtimes {
-		rt.node.Cleanup()
+		rt.Cleanup()
 	}
 }
 
@@ -150,63 +128,40 @@ func (w *Worker) Initialized() <-chan struct{} {
 	return w.initCh
 }
 
-// GetConfig returns the worker's configuration.
-func (w *Worker) GetConfig() Config {
-	return w.cfg
-}
-
 // GetRuntime returns a registered runtime.
 //
 // In case the runtime with the specified id was not registered it
 // returns nil.
-func (w *Worker) GetRuntime(id signature.PublicKey) *Runtime {
-	rt, ok := w.runtimes[id]
-	if !ok {
-		return nil
-	}
-
-	return rt
+func (w *Worker) GetRuntime(id signature.PublicKey) *committee.Node {
+	return w.runtimes[id]
 }
 
-func (w *Worker) registerRuntime(cfg *Config, rt *workerCommon.Runtime) error {
+func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
+	id := commonNode.Runtime.ID()
 	w.logger.Info("registering new runtime",
-		"runtime_id", rt.GetID(),
+		"runtime_id", id,
 	)
 
 	// Get other nodes from this runtime.
-	commonNode := rt.GetNode()
-	var mergeNode *mergeCommittee.Node
-	if w.merge.Enabled() {
-		mergeNode = w.merge.GetRuntime(rt.GetID()).GetNode()
-	}
+	mergeNode := w.merge.GetRuntime(id)
 
 	// Create worker host for the given runtime.
-	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleComputeWorker, rt.GetID())
+	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleComputeWorker, id)
 	if err != nil {
 		return err
 	}
 
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(
-		commonNode,
-		mergeNode,
-		workerHostFactory,
-		cfg.Committee,
-	)
+	node, err := committee.NewNode(commonNode, mergeNode, workerHostFactory, w.commonWorker.GetConfig())
 	if err != nil {
 		return err
 	}
 
 	commonNode.AddHooks(node)
-
-	crt := &Runtime{
-		id:   rt.GetID(),
-		node: node,
-	}
-	w.runtimes[crt.id] = crt
+	w.runtimes[id] = node
 
 	w.logger.Info("new runtime registered",
-		"runtime_id", rt.GetID(),
+		"runtime_id", id,
 	)
 
 	return nil
@@ -218,17 +173,15 @@ func newWorker(
 	commonWorker *workerCommon.Worker,
 	merge *merge.Worker,
 	registration *registration.Worker,
-	cfg Config,
 ) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
 		enabled:      enabled,
-		cfg:          cfg,
 		commonWorker: commonWorker,
 		merge:        merge,
 		registration: registration,
-		runtimes:     make(map[signature.PublicKey]*Runtime),
+		runtimes:     make(map[signature.PublicKey]*committee.Node),
 		ctx:          ctx,
 		cancelCtx:    cancelCtx,
 		quitCh:       make(chan struct{}),
@@ -250,7 +203,7 @@ func newWorker(
 
 		// Register all configured runtimes.
 		for _, rt := range commonWorker.GetRuntimes() {
-			if err = w.registerRuntime(&cfg, rt); err != nil {
+			if err = w.registerRuntime(rt); err != nil {
 				return nil, err
 			}
 		}
@@ -260,7 +213,7 @@ func newWorker(
 			// Wait until all the runtimes are initialized.
 			for _, rt := range w.runtimes {
 				select {
-				case <-rt.node.Initialized():
+				case <-rt.Initialized():
 				case <-w.ctx.Done():
 					return w.ctx.Err()
 				}
@@ -274,7 +227,7 @@ func newWorker(
 					continue
 				}
 
-				workerHost := workerRT.GetNode().GetWorkerHost()
+				workerHost := workerRT.GetWorkerHost()
 				if workerHost == nil {
 					w.logger.Debug("runtime has shut down",
 						"runtime", rt.ID,

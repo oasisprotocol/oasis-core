@@ -207,21 +207,19 @@ type RuntimeHostNode struct {
 
 // InitializeRuntimeWorkerHost initializes the runtime worker host for this
 // given runtime.
-//
-// This method must only be called once a runtime has been configured by
-// the common committee node -- otherwise the method will panic.
-func (n *RuntimeHostNode) InitializeRuntimeWorkerHost() error {
+func (n *RuntimeHostNode) InitializeRuntimeWorkerHost(ctx context.Context) error {
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
 
-	if n.commonNode.Runtime == nil {
-		panic("runtime host node: initialize runtime worker host without runtime descriptor")
+	rt, err := n.commonNode.Runtime.RegistryDescriptor(ctx)
+	if err != nil {
+		return err
 	}
 
 	cfg := host.Config{
-		TEEHardware: n.commonNode.Runtime.TEEHardware,
+		TEEHardware: rt.TEEHardware,
 		MessageHandler: NewRuntimeHostHandler(
-			n.commonNode.Runtime,
+			rt,
 			n.commonNode.Storage,
 			n.commonNode.KeyManager,
 			n.commonNode.KeyManagerClient,
