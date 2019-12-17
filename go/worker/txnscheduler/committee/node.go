@@ -53,7 +53,12 @@ type Node struct {
 	commonNode  *committee.Node
 	computeNode *computeCommittee.Node
 
-	algorithmMutex sync.Mutex
+	// The algorithm mutex is here to protect the initialization
+	// of the algorithm variable. After initialization the variable
+	// will never change though -- so if the variable is non-nil
+	// (which must be checked while holding the read lock) it can
+	// safely be used without holding the lock.
+	algorithmMutex sync.RWMutex
 	algorithm      txnSchedulerAlgorithmApi.Algorithm
 
 	ctx       context.Context
@@ -131,6 +136,12 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 		return api.ErrNotLeader
 	}
 
+	n.algorithmMutex.RLock()
+	defer n.algorithmMutex.RUnlock()
+
+	if n.algorithm == nil || !n.algorithm.IsInitialized() {
+		return api.ErrNotReady
+	}
 	if err := n.algorithm.ScheduleTx(call); err != nil {
 		return err
 	}
@@ -150,6 +161,12 @@ func (n *Node) IsTransactionQueued(ctx context.Context, id hash.Hash) (bool, err
 		return false, api.ErrNotLeader
 	}
 
+	n.algorithmMutex.RLock()
+	defer n.algorithmMutex.RUnlock()
+
+	if n.algorithm == nil || !n.algorithm.IsInitialized() {
+		return false, api.ErrNotReady
+	}
 	return n.algorithm.IsQueued(id), nil
 }
 
@@ -182,13 +199,13 @@ func (n *Node) transitionLocked(state NodeState) {
 // HandleEpochTransitionLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
-	n.algorithmMutex.Lock()
+	n.algorithmMutex.RLock()
 	if n.algorithm == nil || !n.algorithm.IsInitialized() {
 		n.logger.Error("scheduling algorithm not available yet")
-		n.algorithmMutex.Unlock()
+		n.algorithmMutex.RUnlock()
 		return
 	}
-	n.algorithmMutex.Unlock()
+	n.algorithmMutex.RUnlock()
 
 	if epoch.IsTransactionSchedulerLeader() {
 		if err := n.algorithm.EpochTransition(epoch); err != nil {
@@ -382,13 +399,13 @@ func (n *Node) worker() {
 		runtime.TxnScheduler.MaxBatchSizeBytes,
 	)
 	if err != nil {
-		n.logger.Error("Failed to create new transaction scheduler algorithm",
+		n.logger.Error("failed to create new transaction scheduler algorithm",
 			"err", err,
 		)
 		return
 	}
 	if err := txnAlgorithm.Initialize(n); err != nil {
-		n.logger.Error("Failed initializing transaction scheduler algorithm",
+		n.logger.Error("failed initializing transaction scheduler algorithm",
 			"err", err,
 		)
 		return
