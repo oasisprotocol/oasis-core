@@ -1,0 +1,15 @@
+{
+  "total_supply": "1000",
+  "ledger": {
+    "qihOAOzylETIN28lq+XmtKSFmTiEo3NKfHXHnjrV0rA=": {"general": {"balance": "100"}},
+    "bOnQrjMOkH9k3tgRy+zJYvYsPGxAOAr+heQNwuCkxQs=": {"general": {"balance": "100"}},
+    "MY5gEDGOVhG2JkvJqLtuFzEyLBXOwnwPRZSmd1ljCdg=": {"general": {"balance": "100"}},
+    "4ohqzsjinLP+HE8Jh1HmvBPgbWfOolAoBRfs5D5IC0A=": {"general": {"balance": "100"}},
+    "5EOJGxu1d6BSvH95BxWPSl0cAy270+JpHMhIvdBjbWc=": {"general": {"balance": "100"}},
+    "Y9b7wxlaXDmqaFNg2B6xTCcyTefHm9yEVXnTL+/C3kA=": {"general": {"balance": "100"}},
+    "CqvWofjPCXbJdxAdxmFtiZ2AMb/fH+UxGYHymO28ppU=": {"general": {"balance": "100"}},
+    "IJrjaBnQqXVtylLKiI70VjOIyV/Dk3zWsxIrz8ovha4=": {"general": {"balance": "100"}},
+    "7hJlJ4x1dcqxCV0bGO8iTCPMucXHLcj5JeGBnTn7dQ4=": {"general": {"balance": "100"}},
+    "Q16jPsco2bGCiacAlffWSHsDaMG0UBWv+FajU3c3MXg=": {"general": {"balance": "100"}}
+  }
+}
