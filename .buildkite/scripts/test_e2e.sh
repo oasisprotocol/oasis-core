@@ -48,3 +48,14 @@ ${WORKDIR}/go/oasis-test-runner/oasis-test-runner \
     ${BUILDKITE_PARALLEL_JOB_COUNT:+--parallel.job_count ${BUILDKITE_PARALLEL_JOB_COUNT}} \
     ${BUILDKITE_PARALLEL_JOB:+--parallel.job_index ${BUILDKITE_PARALLEL_JOB}} \
     "$@"
+
+# Gather the coverage output.
+if [[ "${BUILDKITE:-""}" != "" ]]; then
+    if [[ ${OASIS_E2E_COVERAGE:-""} != "" ]]; then
+        if [[ "${OASIS_TEE_HARDWARE:-""}" == "intel-sgx" ]]; then
+            tar -zvcf coverage-e2e-sgx-${BUILDKITE_PARALLEL_JOB}.tar.gz coverage-e2e-*.txt
+        else
+            tar -zvcf coverage-e2e-${BUILDKITE_PARALLEL_JOB}.tar.gz coverage-e2e-*.txt
+        fi
+    fi
+fi

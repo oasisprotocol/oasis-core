@@ -194,7 +194,7 @@ steps:
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
       - e2e/**/*.log
-      - coverage-e2e-*.txt
+      - coverage-e2e-*.tar.gz
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: e2e
@@ -214,7 +214,7 @@ steps:
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
       - e2e/**/*.log
-      - coverage-e2e-*.txt
+      - coverage-e2e-sgx-*.tar.gz
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: e2e
@@ -264,9 +264,7 @@ steps:
 
   - label: "Merge and upload coverage"
     command:
-      - mkdir -p /tmp/coverage-to-merge
-      - buildkite-agent artifact download "coverage-*.txt" /tmp/coverage-to-merge
-      - gocovmerge /tmp/coverage-to-merge/coverage-*.txt >merged-coverage.txt
+      - .buildkite/scripts/merge_coverage.sh
       - .buildkite/scripts/upload_coverage.sh
     artifact_paths:
       - merged-coverage.txt
