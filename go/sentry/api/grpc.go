@@ -60,7 +60,7 @@ type sentryClient struct {
 
 func (c *sentryClient) GetConsensusAddresses(ctx context.Context) ([]node.ConsensusAddress, error) {
 	var rsp []node.ConsensusAddress
-	if err := c.conn.Invoke(ctx, methodGetConsensusAddresses.Full(), nil, rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetConsensusAddresses.Full(), nil, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
