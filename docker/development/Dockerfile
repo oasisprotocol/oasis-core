@@ -58,7 +58,12 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v${GOLANGCILINT_VERSION} && \
     mv /tmp/bin/golangci-lint /go/bin && \
     # Install gocovmerge for e2e coverage.
-    GO111MODULE=on go get github.com/wadey/gocovmerge@${GOCOVMERGE_VERSION}
+    GO111MODULE=on go get github.com/wadey/gocovmerge@${GOCOVMERGE_VERSION} && \
+    # Install nancy for auditing dependencies.
+    curl -sfL -o nancy https://github.com/sonatype-nexus-community/nancy/releases/download/v0.0.39/nancy-linux.amd64-v0.0.39 && \
+    echo 'eb3a93d7db24d115e6e67a2b17dba402978f856c891fa6f0ff09ad17ac53ebb5 nancy' | sha256sum -c && \
+    mv nancy /go/bin/nancy && \
+    chmod +x /go/bin/nancy
 
 # Install node / npm / truffle.
 RUN curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh | bash
