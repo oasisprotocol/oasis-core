@@ -23,6 +23,10 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 		return err
 	}
 
+	if params.DisableTransfers {
+		return staking.ErrForbidden
+	}
+
 	fromID := ctx.TxSigner()
 	from := state.Account(fromID)
 
@@ -149,6 +153,9 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 	if id.Equal(escrow.Account) {
 		to = from
 	} else {
+		if params.DisableDelegation {
+			return staking.ErrForbidden
+		}
 		to = state.Account(escrow.Account)
 	}
 
@@ -219,6 +226,9 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	if id.Equal(reclaim.Account) {
 		from = to
 	} else {
+		if params.DisableDelegation {
+			return staking.ErrForbidden
+		}
 		from = state.Account(reclaim.Account)
 	}
 

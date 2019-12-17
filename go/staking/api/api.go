@@ -41,6 +41,10 @@ var (
 	// due to insufficient stake.
 	ErrInsufficientStake = errors.New(ModuleName, 4, "staking: insufficient stake")
 
+	// ErrForbidden is the error returned when an operation is forbiden by
+	// policy.
+	ErrForbidden = errors.New(ModuleName, 5, "staking: forbidden by policy")
+
 	// MethodTransfer is the method name for transfers.
 	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", Transfer{})
 	// MethodBurn is the method name for burns.
@@ -406,6 +410,9 @@ type ConsensusParameters struct {
 	Slashing                          map[SlashReason]Slash               `json:"slashing,omitempty"`
 	GasCosts                          transaction.Costs                   `json:"gas_costs,omitempty"`
 	MinDelegationAmount               quantity.Quantity                   `json:"min_delegation,omitempty"`
+
+	DisableTransfers  bool `json:"disable_transfers,omitempty"`
+	DisableDelegation bool `json:"disable_delegation,omitempty"`
 }
 
 const (
