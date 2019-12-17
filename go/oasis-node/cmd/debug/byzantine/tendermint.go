@@ -44,7 +44,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 
 	// Wait for height=1 to pass, during which mux apps perform deferred initialization.
 	blockOne := make(chan struct{})
-	blocksCh, blocksSub := ht.service.WatchBlocks()
+	blocksCh, blocksSub := ht.service.WatchTendermintBlocks()
 	go func() {
 		defer blocksSub.Close()
 		for {

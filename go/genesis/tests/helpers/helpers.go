@@ -1,4 +1,5 @@
-package tests
+// Package helpers contains genesis test helpers.
+package helpers
 
 import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"

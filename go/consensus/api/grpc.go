@@ -6,6 +6,7 @@ import (
 	"google.golang.org/grpc"
 
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
@@ -21,6 +22,13 @@ var (
 	methodStateToGenesis = serviceName.NewMethodName("StateToGenesis")
 	// methodWaitEpoch is the name of the WaitEpoch method.
 	methodWaitEpoch = serviceName.NewMethodName("WaitEpoch")
+	// methodGetBlock is the name of the GetBlock method.
+	methodGetBlock = serviceName.NewMethodName("GetBlock")
+	// methodGetTransactions is the name of the GetTransactions method.
+	methodGetTransactions = serviceName.NewMethodName("GetTransactions")
+
+	// methodWatchBlocks is the name of the WatchBlocks method.
+	methodWatchBlocks = serviceName.NewMethodName("WatchBlocks")
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -39,8 +47,22 @@ var (
 				MethodName: methodWaitEpoch.Short(),
 				Handler:    handlerWaitEpoch,
 			},
+			{
+				MethodName: methodGetBlock.Short(),
+				Handler:    handlerGetBlock,
+			},
+			{
+				MethodName: methodGetTransactions.Short(),
+				Handler:    handlerGetTransactions,
+			},
 		},
-		Streams: []grpc.StreamDesc{},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName:    methodWatchBlocks.Short(),
+				Handler:       handlerWatchBlocks,
+				ServerStreams: true,
+			},
+		},
 	}
 )
 
@@ -73,12 +95,12 @@ func handlerStateToGenesis( // nolint: golint
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
-	var blockHeight int64
-	if err := dec(&blockHeight); err != nil {
+	var height int64
+	if err := dec(&height); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).StateToGenesis(ctx, blockHeight)
+		return srv.(Backend).StateToGenesis(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
@@ -87,7 +109,7 @@ func handlerStateToGenesis( // nolint: golint
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
 	}
-	return interceptor(ctx, blockHeight, info, handler)
+	return interceptor(ctx, height, info, handler)
 }
 
 func handlerWaitEpoch( // nolint: golint
@@ -113,6 +135,80 @@ func handlerWaitEpoch( // nolint: golint
 	return interceptor(ctx, epoch, info, handler)
 }
 
+func handlerGetBlock( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetBlock(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetBlock.Full(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetBlock(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetTransactions( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetTransactions(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetTransactions.Full(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetTransactions(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerWatchBlocks(srv interface{}, stream grpc.ServerStream) error {
+	if err := stream.RecvMsg(nil); err != nil {
+		return err
+	}
+
+	ctx := stream.Context()
+	ch, sub, err := srv.(Backend).WatchBlocks(ctx)
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case blk, ok := <-ch:
+			if !ok {
+				return nil
+			}
+
+			if err := stream.SendMsg(blk); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 // RegisterService registers a new consensus backend service with the
 // given gRPC server.
 func RegisterService(server *grpc.Server, service Backend) {
@@ -127,9 +223,9 @@ func (c *consensusClient) SubmitTx(ctx context.Context, tx *transaction.SignedTr
 	return c.conn.Invoke(ctx, methodSubmitTx.Full(), tx, nil)
 }
 
-func (c *consensusClient) StateToGenesis(ctx context.Context, blockHeight int64) (*genesis.Document, error) {
+func (c *consensusClient) StateToGenesis(ctx context.Context, height int64) (*genesis.Document, error) {
 	var rsp genesis.Document
-	if err := c.conn.Invoke(ctx, methodStateToGenesis.Full(), blockHeight, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodStateToGenesis.Full(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -137,6 +233,57 @@ func (c *consensusClient) StateToGenesis(ctx context.Context, blockHeight int64)
 
 func (c *consensusClient) WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error {
 	return c.conn.Invoke(ctx, methodWaitEpoch.Full(), epoch, nil)
+}
+
+func (c *consensusClient) GetBlock(ctx context.Context, height int64) (*Block, error) {
+	var rsp Block
+	if err := c.conn.Invoke(ctx, methodGetBlock.Full(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *consensusClient) GetTransactions(ctx context.Context, height int64) ([][]byte, error) {
+	var rsp [][]byte
+	if err := c.conn.Invoke(ctx, methodGetTransactions.Full(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (c *consensusClient) WatchBlocks(ctx context.Context) (<-chan *Block, pubsub.ClosableSubscription, error) {
+	ctx, sub := pubsub.NewContextSubscription(ctx)
+
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchBlocks.Full())
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = stream.SendMsg(nil); err != nil {
+		return nil, nil, err
+	}
+	if err = stream.CloseSend(); err != nil {
+		return nil, nil, err
+	}
+
+	ch := make(chan *Block)
+	go func() {
+		defer close(ch)
+
+		for {
+			var blk Block
+			if serr := stream.RecvMsg(&blk); serr != nil {
+				return
+			}
+
+			select {
+			case ch <- &blk:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return ch, sub, nil
 }
 
 // NewConsensusClient creates a new gRPC consensus client service.

@@ -2,6 +2,8 @@
 package service
 
 import (
+	"context"
+
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -35,18 +37,18 @@ type TendermintService interface {
 	GetGenesis() *genesis.Document
 
 	// GetHeight returns the Tendermint block height.
-	GetHeight() (int64, error)
+	GetHeight(ctx context.Context) (int64, error)
 
 	// GetBlock returns the Tendermint block at the specified height.
-	GetBlock(height *int64) (*tmtypes.Block, error)
+	GetTendermintBlock(ctx context.Context, height int64) (*tmtypes.Block, error)
 
 	// GetBlockResults returns the ABCI results from processing a block
 	// at a specific height.
 	GetBlockResults(height *int64) (*tmrpctypes.ResultBlockResults, error)
 
-	// WatchBlocks returns a stream of Tendermint blocks as they are
+	// WatchTendermintBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
-	WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
+	WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
 
 	// Subscribe subscribes to tendermint events.
 	Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error)

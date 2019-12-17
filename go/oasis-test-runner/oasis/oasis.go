@@ -22,7 +22,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
-	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
+	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests/helpers"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/genesis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
@@ -610,7 +610,7 @@ func (net *Network) makeGenesis() error {
 	args := []string{
 		"genesis", "init",
 		"--genesis.file", net.GenesisPath(),
-		"--chain.id", genesisTests.TestChainID,
+		"--chain.id", genesisTestHelpers.TestChainID,
 		"--halt.epoch", strconv.FormatUint(net.cfg.HaltEpoch, 10),
 		"--consensus.backend", net.cfg.ConsensusBackend,
 		"--epochtime.tendermint.interval", strconv.FormatInt(net.cfg.EpochtimeTendermintInterval, 10),

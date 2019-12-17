@@ -10,9 +10,11 @@ import (
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
 	tmp2p "github.com/tendermint/tendermint/p2p"
+	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 )
 
@@ -128,4 +130,24 @@ func EventTypeForApp(eventApp string) string {
 // specified App.
 func QueryForApp(eventApp string) tmpubsub.Query {
 	return tmquery.MustParse(fmt.Sprintf("%s EXISTS", EventTypeForApp(eventApp)))
+}
+
+// BlockMeta is the Tendermint-specific per-block metadata that is
+// exposed via the consensus API.
+type BlockMeta struct {
+	// Header is the Tendermint block header.
+	Header *tmtypes.Header `json:"header"`
+	// LastCommit is the Tendermint last commit info.
+	LastCommit *tmtypes.Commit `json:"last_commit"`
+}
+
+// NewBlock creates a new consensus.Block from a Tendermint block.
+func NewBlock(blk *tmtypes.Block) *consensus.Block {
+	return &consensus.Block{
+		Height: blk.Header.Height,
+		Meta: BlockMeta{
+			Header:     &blk.Header,
+			LastCommit: blk.LastCommit,
+		},
+	}
 }

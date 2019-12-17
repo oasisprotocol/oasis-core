@@ -22,6 +22,7 @@ import (
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	tendermintAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
+	consensusTests "github.com/oasislabs/oasis-core/go/consensus/tests"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -236,6 +237,8 @@ func TestNode(t *testing.T) {
 		// Clean up and ensure the registry is empty for the following tests.
 		{"DeregisterTestEntityRuntime", testDeregisterEntityRuntime},
 
+		{"Consensus", testConsensus},
+		{"ConsensusClient", testConsensusClient},
 		{"EpochTime", testEpochTime},
 		{"Beacon", testBeacon},
 		{"Storage", testStorage},
@@ -333,6 +336,19 @@ WaitLoop:
 	}
 
 	registryTests.EnsureRegistryEmpty(t, node.Node.Registry)
+}
+
+func testConsensus(t *testing.T, node *testNode) {
+	consensusTests.ConsensusImplementationTests(t, node.Consensus)
+}
+
+func testConsensusClient(t *testing.T, node *testNode) {
+	// Create a client backend connected to the local node's internal socket.
+	conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"), grpc.WithInsecure())
+	require.NoError(t, err, "Dial")
+
+	client := consensusAPI.NewConsensusClient(conn)
+	consensusTests.ConsensusImplementationTests(t, client)
 }
 
 func testEpochTime(t *testing.T, node *testNode) {

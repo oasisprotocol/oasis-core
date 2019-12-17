@@ -9,7 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
+	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests/helpers"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/background"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/database"
@@ -42,7 +42,7 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	genesisTests.SetTestChainContext()
+	genesisTestHelpers.SetTestChainContext()
 
 	// Generate dummy identity.
 	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory())

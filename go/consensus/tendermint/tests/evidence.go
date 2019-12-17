@@ -12,7 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	tmcrypto "github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
-	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
+	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests/helpers"
 )
 
 // MakeDoubleSignEvidence creates consensus evidence of double signing.
@@ -59,8 +59,8 @@ func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) consensus.Ev
 	ev := &tmtypes.DuplicateVoteEvidence{
 		PubKey: pv1.GetPubKey(),
 		// NOTE: ChainID must match the unit test genesis block.
-		VoteA: makeVote(pv1, genesisTests.TestChainID, 0, 1, 2, 1, blockID1),
-		VoteB: makeVote(pv2, genesisTests.TestChainID, 0, 1, 2, 1, blockID2),
+		VoteA: makeVote(pv1, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID1),
+		VoteB: makeVote(pv2, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID2),
 	}
 	return consensus.NewConsensusEvidence(ev)
 }

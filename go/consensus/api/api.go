@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
@@ -38,7 +39,7 @@ type ClientBackend interface {
 	SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error
 
 	// StateToGenesis returns the genesis state at the specified block height.
-	StateToGenesis(ctx context.Context, blockHeight int64) (*genesis.Document, error)
+	StateToGenesis(ctx context.Context, height int64) (*genesis.Document, error)
 
 	// WaitEpoch waits for consensus to reach an epoch.
 	//
@@ -47,7 +48,29 @@ type ClientBackend interface {
 	// in the future).
 	WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error
 
-	// TODO: Add things like following consensus blocks.
+	// GetBlock returns a consensus block at a specific height.
+	GetBlock(ctx context.Context, height int64) (*Block, error)
+
+	// GetTransactions returns a list of all transactions contained within a
+	// consensus block at a specific height.
+	//
+	// NOTE: Any of these transactions could be invalid.
+	GetTransactions(ctx context.Context, height int64) ([][]byte, error)
+
+	// WatchBlocks returns a channel that produces a stream of consensus
+	// blocks as they are being finalized.
+	WatchBlocks(ctx context.Context) (<-chan *Block, pubsub.ClosableSubscription, error)
+}
+
+// Block is a consensus block.
+//
+// While some common fields are provided, most of the structure is dependent on
+// the actual backend implementation.
+type Block struct {
+	// Height contains the block height.
+	Height int64 `json:"height"`
+	// Meta contains the consensus backend specific block metadata.
+	Meta interface{} `json:"meta"`
 }
 
 // Backend is an interface that a consensus backend must provide.
