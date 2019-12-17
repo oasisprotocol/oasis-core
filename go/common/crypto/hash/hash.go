@@ -5,6 +5,7 @@ import (
 	"crypto/sha512"
 	"crypto/subtle"
 	"encoding"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 
@@ -42,6 +43,21 @@ func (h *Hash) UnmarshalBinary(data []byte) error {
 	copy(h[:], data)
 
 	return nil
+}
+
+// MarshalText encodes a Hash into text form.
+func (h Hash) MarshalText() (data []byte, err error) {
+	return []byte(base64.StdEncoding.EncodeToString(h[:])), nil
+}
+
+// UnmarshalText decodes a text marshaled Hash.
+func (h *Hash) UnmarshalText(text []byte) error {
+	b, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return err
+	}
+
+	return h.UnmarshalBinary(b)
 }
 
 // UnmarshalHex deserializes a hexadecimal text string into the given type.
