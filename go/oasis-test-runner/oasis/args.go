@@ -334,9 +334,23 @@ func (args *argBuilder) appendNetwork(net *Network) *argBuilder {
 	return args
 }
 
+func (args *argBuilder) appendRuntimePruner(p *RuntimePrunerCfg) *argBuilder {
+	if p.Strategy == "" {
+		return args
+	}
+
+	args.vec = append(args.vec, []string{
+		"--" + runtimeRegistry.CfgHistoryPrunerStrategy, p.Strategy,
+		"--" + runtimeRegistry.CfgHistoryPrunerInterval, p.Interval.String(),
+		"--" + runtimeRegistry.CfgHistoryPrunerKeepLastNum, strconv.Itoa(int(p.NumKept)),
+	}...)
+	return args
+}
+
 func (args *argBuilder) appendComputeNodeRuntime(rt *Runtime) *argBuilder {
 	args = args.runtimeSupported(rt.id).
-		workerRuntimeBinary(rt.id, rt.binary)
+		workerRuntimeBinary(rt.id, rt.binary).
+		appendRuntimePruner(&rt.pruner)
 	return args
 }
 

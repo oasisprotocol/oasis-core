@@ -28,7 +28,8 @@ func (client *Client) startNode() error {
 		if v.kind != registry.KindCompute {
 			continue
 		}
-		args = args.runtimeSupported(v.id)
+		args = args.runtimeSupported(v.id).
+			appendRuntimePruner(&v.pruner)
 	}
 
 	var err error

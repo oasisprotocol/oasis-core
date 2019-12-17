@@ -139,7 +139,8 @@ type Network struct {
 
 	logWatchers []*log.Watcher
 
-	controller *Controller
+	controller       *Controller
+	clientController *Controller
 
 	errCh chan error
 }
@@ -244,6 +245,11 @@ func (net *Network) Errors() <-chan error {
 // Controller returns the network controller.
 func (net *Network) Controller() *Controller {
 	return net.controller
+}
+
+// ClientController returns the client controller connected to the first client node.
+func (net *Network) ClientController() *Controller {
+	return net.clientController
 }
 
 // NumRegisterNodes returns the number of all nodes that need to register.
@@ -362,7 +368,7 @@ func (net *Network) Start() error {
 	genesisDoc.SetChainContext()
 
 	net.logger.Debug("provisioning seed node")
-	if _, err := net.newSeedNode(); err != nil {
+	if _, err = net.newSeedNode(); err != nil {
 		net.logger.Error("failed to provision seed node",
 			"err", err,
 		)
@@ -371,7 +377,7 @@ func (net *Network) Start() error {
 
 	net.logger.Debug("starting IAS proxy node")
 	if net.iasProxy != nil {
-		if err := net.iasProxy.startNode(); err != nil {
+		if err = net.iasProxy.startNode(); err != nil {
 			net.logger.Error("failed to start IAS proxy node",
 				"err", err,
 			)
@@ -380,7 +386,7 @@ func (net *Network) Start() error {
 	}
 
 	net.logger.Debug("starting seed node")
-	if err := net.seedNode.startNode(); err != nil {
+	if err = net.seedNode.startNode(); err != nil {
 		net.logger.Error("failed to start seed node",
 			"err", err,
 		)
@@ -389,7 +395,7 @@ func (net *Network) Start() error {
 
 	net.logger.Debug("starting validator node(s)")
 	for _, v := range net.validators {
-		if err := v.startNode(); err != nil {
+		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start validator",
 				"err", err,
 			)
@@ -408,7 +414,7 @@ func (net *Network) Start() error {
 
 	if net.keymanager != nil {
 		net.logger.Debug("starting keymanager")
-		if err := net.keymanager.startNode(); err != nil {
+		if err = net.keymanager.startNode(); err != nil {
 			net.logger.Error("failed to start keymanager node",
 				"err", err,
 			)
@@ -418,7 +424,7 @@ func (net *Network) Start() error {
 
 	net.logger.Debug("starting storage node(s)")
 	for _, v := range net.storageWorkers {
-		if err := v.startNode(); err != nil {
+		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start storage worker",
 				"err", err,
 			)
@@ -428,7 +434,7 @@ func (net *Network) Start() error {
 
 	net.logger.Debug("starting compute node(s)")
 	for _, v := range net.computeWorkers {
-		if err := v.startNode(); err != nil {
+		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start compute worker",
 				"err", err,
 			)
@@ -438,7 +444,7 @@ func (net *Network) Start() error {
 
 	net.logger.Debug("starting sentry node(s)")
 	for _, v := range net.sentries {
-		if err := v.startNode(); err != nil {
+		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start sentry node",
 				"err", err,
 			)
@@ -448,7 +454,7 @@ func (net *Network) Start() error {
 
 	net.logger.Debug("starting client node(s)")
 	for _, v := range net.clients {
-		if err := v.startNode(); err != nil {
+		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start client node",
 				"err", err,
 			)
@@ -458,11 +464,30 @@ func (net *Network) Start() error {
 
 	net.logger.Debug("starting byzantine node(s)")
 	for _, v := range net.byzantine {
-		if err := v.startNode(); err != nil {
+		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start byzantine node",
 				"err", err,
 			)
 			return err
+		}
+	}
+
+	// Use the first validator as a controller.
+	if len(net.validators) >= 1 {
+		if net.controller, err = NewController(net.validators[0].SocketPath()); err != nil {
+			net.logger.Error("failed to create controller",
+				"err", err,
+			)
+			return errors.Wrap(err, "oasis: failed to create controller")
+		}
+	}
+	// Create a client controller for the first client node.
+	if len(net.clients) >= 1 {
+		if net.clientController, err = NewController(net.clients[0].SocketPath()); err != nil {
+			net.logger.Error("failed to create client controller",
+				"err", err,
+			)
+			return errors.Wrap(err, "oasis: failed to create client controller")
 		}
 	}
 

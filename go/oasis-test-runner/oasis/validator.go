@@ -191,13 +191,6 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	net.validators = append(net.validators, val)
 	net.nextNodePort++
 
-	// Use the first validator as a controller.
-	if len(net.validators) == 1 {
-		if net.controller, err = NewController(val.SocketPath()); err != nil {
-			return nil, errors.Wrap(err, "oasis/validator: failed to create controller")
-		}
-	}
-
 	if err := net.AddLogWatcher(&val.Node); err != nil {
 		net.logger.Error("failed to add log watcher",
 			"err", err,

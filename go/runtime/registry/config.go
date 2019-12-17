@@ -55,6 +55,9 @@ func newConfig() (*RuntimeConfig, error) {
 	}
 
 	cfg.History.PruneInterval = viper.GetDuration(CfgHistoryPrunerInterval)
+	if cfg.History.PruneInterval.Seconds() < 1.0 {
+		return nil, fmt.Errorf("runtime/registry: history prune interval must be >= 1s (got %s)", cfg.History.PruneInterval)
+	}
 
 	tagIndexer := viper.GetString(CfgTagIndexerBackend)
 	switch strings.ToLower(tagIndexer) {

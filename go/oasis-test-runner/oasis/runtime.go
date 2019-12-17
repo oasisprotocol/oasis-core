@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -29,6 +30,8 @@ type Runtime struct { // nolint: maligned
 	teeHardware node.TEEHardware
 	mrEnclave   *sgx.MrEnclave
 	mrSigner    *sgx.MrSigner
+
+	pruner RuntimePrunerCfg
 }
 
 // RuntimeCfg is the Oasis runtime provisioning configuration.
@@ -47,6 +50,16 @@ type RuntimeCfg struct { // nolint: maligned
 	Merge        registry.MergeParameters
 	TxnScheduler registry.TxnSchedulerParameters
 	Storage      registry.StorageParameters
+
+	Pruner RuntimePrunerCfg
+}
+
+// RuntimePrunerCfg is the pruner configuration for an Oasis runtime.
+type RuntimePrunerCfg struct {
+	Strategy string        `json:"strategy"`
+	Interval time.Duration `json:"interval"`
+
+	NumKept uint64 `json:"num_kept"`
 }
 
 // ID returns the runtime ID.
@@ -137,6 +150,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		teeHardware: cfg.TEEHardware,
 		mrEnclave:   mrEnclave,
 		mrSigner:    cfg.MrSigner,
+		pruner:      cfg.Pruner,
 	}
 	net.runtimes = append(net.runtimes, rt)
 

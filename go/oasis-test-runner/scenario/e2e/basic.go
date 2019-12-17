@@ -117,7 +117,7 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 					GroupSize:         1,
 					MaxBatchSize:      1,
 					MaxBatchSizeBytes: 1000,
-					BatchFlushTimeout: 10 * time.Second,
+					BatchFlushTimeout: 1 * time.Second,
 				},
 				Storage: registry.StorageParameters{GroupSize: 2},
 			},
