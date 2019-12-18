@@ -391,7 +391,8 @@ func mustGetCommittee(
 ) {
 	require := require.New(t)
 
-	ch, sub := sched.WatchCommittees()
+	ch, sub, err := sched.WatchCommittees(context.Background())
+	require.NoError(err, "WatchCommittees")
 	defer sub.Close()
 
 	for {

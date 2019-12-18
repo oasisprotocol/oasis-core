@@ -9,8 +9,8 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
@@ -112,7 +112,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 			return fmt.Errorf("scheduler: invalid genesis validator public key: %w", err)
 		}
 
-		if power := v.GetPower(); power != api.VotingPower {
+		if power := v.GetPower(); power != consensus.VotingPower {
 			app.logger.Error("invalid voting power",
 				"id", id,
 				"power", power,

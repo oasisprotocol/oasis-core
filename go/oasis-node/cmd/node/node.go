@@ -192,6 +192,7 @@ func (n *Node) initBackends() error {
 
 	// Initialize and register the internal gRPC services.
 	grpcSrv := n.grpcInternal.Server()
+	scheduler.RegisterService(grpcSrv, n.Scheduler)
 	registryAPI.RegisterService(grpcSrv, n.Registry)
 	stakingAPI.RegisterService(grpcSrv, n.Staking)
 	storageAPI.RegisterService(grpcSrv, n.Storage)

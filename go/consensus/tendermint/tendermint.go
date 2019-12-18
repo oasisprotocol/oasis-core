@@ -1033,7 +1033,7 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 		validator := tmtypes.GenesisValidator{
 			Address: pk.Address(),
 			PubKey:  pk,
-			Power:   api.VotingPower,
+			Power:   consensusAPI.VotingPower,
 			Name:    "oasis-validator-" + openedNode.ID.String(),
 		}
 		tmValidators = append(tmValidators, validator)

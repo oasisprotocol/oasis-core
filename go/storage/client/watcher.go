@@ -282,7 +282,13 @@ func (w *watcherState) updateScheduledNodes(nodes []*scheduler.CommitteeNode) {
 }
 
 func (w *watcherState) watch(ctx context.Context) {
-	committeeCh, sub := w.scheduler.WatchCommittees()
+	committeeCh, sub, err := w.scheduler.WatchCommittees(ctx)
+	if err != nil {
+		w.logger.Error("failed to watch committees",
+			"err", err,
+		)
+		return
+	}
 	defer sub.Close()
 
 	nodeListCh, nodeListSub, err := w.registry.WatchNodeList(ctx)

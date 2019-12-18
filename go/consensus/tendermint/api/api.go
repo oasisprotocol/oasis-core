@@ -27,9 +27,6 @@ const (
 	LogEventPeerExchangeDisabled = "tendermint/peer_exchange_disabled"
 )
 
-// VotingPower is the default voting power for all validator nodes.
-const VotingPower = 1
-
 // PublicKeyToValidatorUpdate converts an Oasis node public key to a
 // tendermint validator update.
 func PublicKeyToValidatorUpdate(id signature.PublicKey, power int64) types.ValidatorUpdate {

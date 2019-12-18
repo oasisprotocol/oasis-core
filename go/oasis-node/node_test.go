@@ -21,7 +21,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
-	tendermintAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	consensusTests "github.com/oasislabs/oasis-core/go/consensus/tests"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
@@ -34,6 +33,7 @@ import (
 	roothashTests "github.com/oasislabs/oasis-core/go/roothash/tests"
 	clientTests "github.com/oasislabs/oasis-core/go/runtime/client/tests"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
+	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	schedulerTests "github.com/oasislabs/oasis-core/go/scheduler/tests"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
@@ -244,7 +244,7 @@ func TestNode(t *testing.T) {
 		{"Storage", testStorage},
 		{"Registry", testRegistry},
 		{"Scheduler", testScheduler},
-		{"Scheduler/GetValidators", testSchedulerGetValidators},
+		{"SchedulerClient", testSchedulerClient},
 		{"RootHash", testRootHash},
 
 		// TestStorageClientWithoutNode runs client tests that use a mock storage
@@ -375,18 +375,16 @@ func testRegistry(t *testing.T, node *testNode) {
 }
 
 func testScheduler(t *testing.T, node *testNode) {
-	schedulerTests.SchedulerImplementationTests(t, node.Scheduler, node.Consensus)
+	schedulerTests.SchedulerImplementationTests(t, "", node.Scheduler, node.Consensus)
 }
 
-func testSchedulerGetValidators(t *testing.T, node *testNode) {
-	// Since the integration tests run with validator elections disabled,
-	// just ensure that the GetValidators query returns the node's identity.
-	validators, err := node.Scheduler.GetValidators(context.Background(), consensusAPI.HeightLatest)
-	require.NoError(t, err, "GetValidators")
+func testSchedulerClient(t *testing.T, node *testNode) {
+	// Create a client backend connected to the local node's internal socket.
+	conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"), grpc.WithInsecure())
+	require.NoError(t, err, "Dial")
 
-	require.Len(t, validators, 1, "should be only one static validator")
-	require.Equal(t, node.Identity.ConsensusSigner.Public(), validators[0].ID)
-	require.EqualValues(t, tendermintAPI.VotingPower, validators[0].VotingPower)
+	client := scheduler.NewSchedulerClient(conn)
+	schedulerTests.SchedulerImplementationTests(t, "client", client, node.Consensus)
 }
 
 func testStaking(t *testing.T, node *testNode) {
