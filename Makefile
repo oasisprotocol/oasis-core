@@ -43,6 +43,9 @@ build-helpers-go:
 
 build-helpers: build-helpers-go
 
+build-go-generate:
+	@$(MAKE) -C go generate
+
 # Format code.
 fmt-targets := fmt-rust fmt-go
 
@@ -93,6 +96,10 @@ clean-go:
 
 clean: $(clean-targets)
 
+# Prepare release.
+release: build-go-generate
+	@goreleaser $(GORELEASER_ARGS)
+
 # Develop in a Docker container.
 docker-shell:
 	@docker run -t -i --rm \
@@ -107,8 +114,9 @@ docker-shell:
 # List of targets that are not actual files.
 .PHONY: \
 	$(build-targets) go build \
+	build-helpers-go build-helpers build-go-generate \
 	$(fmt-targets) fmt \
 	$(test-unit-targets) $(test-targets) test \
 	$(clean-targets) clean \
-	docker-shell \
+	release docker-shell \
 	all

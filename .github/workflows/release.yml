@@ -1,0 +1,50 @@
+name: Release manager
+
+on:
+  push:
+    tags:
+      # Pattern that roughly matches Oasis Core's version tags.
+      # For more details on GitHub Actions' pattern match syntax, see:
+      # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions#patterns-to-match-branches-and-tags.
+      - 'v[0-9]+.[0-9]+*'
+
+jobs:
+
+  prepare-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v1
+      - name: Set up Go 1.13
+        uses: actions/setup-go@v1.1.2
+        with:
+          go-version: "1.13.x"
+      - name: Install Oasis Core prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev
+          go get github.com/golang/protobuf/protoc-gen-go
+          sudo GOBIN=/usr/local/bin go install github.com/golang/protobuf/protoc-gen-go
+      - name: Install GoReleaser
+        run: |
+          cd $(mktemp --directory /tmp/goreleaser.XXXXX)
+          ${CURL_CMD} ${GORELEASER_URL_PREFIX}/v${GORELEASER_VERSION}/${GORELEASER_TARBALL} \
+            --output ${GORELEASER_TARBALL}
+          ${CURL_CMD} ${GORELEASER_URL_PREFIX}/v${GORELEASER_VERSION}/goreleaser_checksums.txt \
+            --output CHECKSUMS
+          sha256sum --check --ignore-missing CHECKSUMS
+          tar -xf ${GORELEASER_TARBALL}
+          sudo mv goreleaser /usr/local/bin
+        env:
+          GORELEASER_URL_PREFIX: https://github.com/oasislabs/goreleaser/releases/download/
+          GORELEASER_VERSION: 0.123.3-oasis1
+          GORELEASER_TARBALL: goreleaser_Linux_x86_64.tar.gz
+          CURL_CMD: curl --proto =https --tlsv1.2 -sSL
+      - name: Create release
+        run: |
+          make release
+        env:
+          # Pass automatically created GitHub App installation token to the action.
+          # For more info, see:
+          # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/authenticating-with-the-github_token.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

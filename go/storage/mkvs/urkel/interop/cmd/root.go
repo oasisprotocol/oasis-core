@@ -3,13 +3,15 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+
+	"github.com/oasislabs/oasis-core/go/common/version"
 )
 
 var (
 	rootCmd = &cobra.Command{
 		Use:     "urkel-test-helpers",
 		Short:   "Urkel interoperability test helpers",
-		Version: "0.2.0-alpha",
+		Version: version.SoftwareVersion,
 	}
 )
 
