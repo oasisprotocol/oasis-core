@@ -23,8 +23,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev
-          go get github.com/golang/protobuf/protoc-gen-go
-          sudo GOBIN=/usr/local/bin go install github.com/golang/protobuf/protoc-gen-go
       - name: Install GoReleaser
         run: |
           cd $(mktemp --directory /tmp/goreleaser.XXXXX)
