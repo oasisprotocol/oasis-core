@@ -24,13 +24,13 @@ $(go-binaries):
 	@$(ECHO) "$(MAGENTA)*** Building $@...$(OFF)"
 	$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$@/$@ ./$@
 
-oasis-node: generate
+oasis-node:
 
 build: $(go-binaries)
 
 # Build test helpers.
 # Urkel interoperability test helpers.
-urkel: generate
+urkel:
 	@$(ECHO) "$(MAGENTA)*** Building test helpers for $@...$(OFF)"
 	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$(GO_TEST_HELPER_URKEL_PATH) ./$(shell dirname $(GO_TEST_HELPER_URKEL_PATH))
 
@@ -40,7 +40,7 @@ $(test-vectors):
 	@$(ECHO) "$(MAGENTA)*** Generating test vectors for $@...$(OFF)"
 	@$(GO) run ./$@/gen_vectors
 
-staking: generate
+staking:
 
 gen-test-vectors: $(test-vectors)
 
@@ -50,17 +50,17 @@ fmt:
 	@$(GO) fmt ./...
 
 # Lint.
-lint: generate
+lint:
 	@$(ECHO) "$(CYAN)*** Running Go linters...$(OFF)"
 	@env -u GOPATH golangci-lint run
 
 # Test.
-test: generate
+test:
 	@$(ECHO) "$(CYAN)*** Running Go unit tests...$(OFF)"
 	@$(GO) test -timeout 5m -race -v ./...
 
 # Test oasis-node with coverage.
-integrationrunner: generate
+integrationrunner:
 	@$(ECHO) "$(CYAN)*** Testing oasis-node with coverate...$(OFF)"
 	@$(GO) test $(GOFLAGS) -c -covermode=atomic -coverpkg=./... -o oasis-node/$@/$@.test ./oasis-node/$@
 

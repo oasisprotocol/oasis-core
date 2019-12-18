@@ -6,6 +6,3 @@ oasis-node/integrationrunner/integrationrunner.test
 oasis-test-runner/oasis-test-runner
 oasis-net-runner/oasis-net-runner
 storage/mkvs/urkel/interop/urkel-test-helpers
-
-# Ignore output from protoc created via `go generate`.
-common/sgx/aesm/*.pb.go

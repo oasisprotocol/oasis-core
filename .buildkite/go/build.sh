@@ -11,9 +11,19 @@
 # https://buildkite.com/docs/pipelines/writing-build-scripts
 set -euxo pipefail
 
+RED='\033[0;31m'
+OFF='\033[0m'
+
 ####################
 # Build the Go parts
 ####################
 pushd go
+  # Ensure that the `go generate` output in git is up-to-date.
+  make generate
+  if [ -n "$(git status --porcelain)" ]; then
+    echo -e "${RED}ERROR: go/ directory is dirty after 'go generate'${OFF}"
+    exit 1
+  fi
+
   make all integrationrunner
 popd

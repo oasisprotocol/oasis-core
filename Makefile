@@ -97,7 +97,7 @@ clean-go:
 clean: $(clean-targets)
 
 # Prepare release.
-release: build-go-generate
+release:
 	@goreleaser $(GORELEASER_ARGS)
 
 # Develop in a Docker container.
