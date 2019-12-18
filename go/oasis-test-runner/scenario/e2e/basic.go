@@ -1,9 +1,7 @@
 package e2e
 
 import (
-	"os"
 	"os/exec"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/viper"
@@ -11,6 +9,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdNode "github.com/oasislabs/oasis-core/go/oasis-node/cmd/node"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
@@ -169,86 +169,47 @@ func (sc *basicImpl) start(childEnv *env.Env) (<-chan error, *exec.Cmd, error) {
 	return clientErrCh, cmd, nil
 }
 
-func (sc *basicImpl) cleanTendermintStorage() error {
-	var err error
-	preservePaths := make(map[string]bool)
-	preserveComponents := make(map[string]bool)
-	preservePath := func(path string) {
-		preservePaths[path] = true
+func (sc *basicImpl) cleanTendermintStorage(childEnv *env.Env) error {
+	doClean := func(dataDir string, cleanArgs []string) error {
+		args := append([]string{
+			"unsafe-reset",
+			"--" + common.CfgDataDir, dataDir,
+		}, cleanArgs...)
 
-		for len(path) > 1 {
-			path = filepath.Clean(path)
-			preserveComponents[path] = true
-			path, _ = filepath.Split(path)
-		}
+		return runSubCommand(childEnv, "unsafe-reset", sc.net.Config().NodeBinary, args)
 	}
 
-	// Preserve all identities and exported data.
-	for _, ent := range sc.net.Entities() {
-		preservePath(ent.EntityKeyPath())
-		preservePath(ent.DescriptorPath())
-	}
 	for _, val := range sc.net.Validators() {
-		preservePath(val.IdentityKeyPath())
-		preservePath(val.P2PKeyPath())
-		preservePath(val.ConsensusKeyPath())
-		preservePath(val.ExportsPath())
-	}
-	for _, sw := range sc.net.StorageWorkers() {
-		preservePath(sw.IdentityKeyPath())
-		preservePath(sw.P2PKeyPath())
-		preservePath(sw.ConsensusKeyPath())
-		preservePath(sw.TLSKeyPath())
-		preservePath(sw.TLSCertPath())
-		preservePath(sw.ExportsPath())
-	}
-	for _, cw := range sc.net.ComputeWorkers() {
-		preservePath(cw.IdentityKeyPath())
-		preservePath(cw.P2PKeyPath())
-		preservePath(cw.ConsensusKeyPath())
-		preservePath(cw.TLSKeyPath())
-		preservePath(cw.TLSCertPath())
-		preservePath(cw.ExportsPath())
-	}
-	km := sc.net.Keymanager()
-	preservePath(km.IdentityKeyPath())
-	preservePath(km.P2PKeyPath())
-	preservePath(km.ConsensusKeyPath())
-	preservePath(km.TLSKeyPath())
-	preservePath(km.TLSCertPath())
-	preservePath(km.ExportsPath())
-	// Preserve key manager state.
-	preservePath(km.LocalStoragePath())
-
-	// Preserve storage.
-	for _, sw := range sc.net.StorageWorkers() {
-		preservePath(sw.DatabasePath())
-	}
-
-	// Remove all files except what should be preserved.
-	err = filepath.Walk(sc.net.BasePath(), func(path string, info os.FileInfo, fErr error) error {
-		// Preserve everything under a path.
-		if preservePaths[path] {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		// Also preserve any components of paths.
-		if preserveComponents[path] {
-			return nil
-		}
-		// Remove everything else.
-		if err = os.RemoveAll(path); err != nil {
+		if err := doClean(val.DataDir(), nil); err != nil {
 			return err
 		}
-		if info.IsDir() {
-			// No need to recurse into directory as it has been removed.
-			return filepath.SkipDir
+	}
+	for _, cw := range sc.net.ComputeWorkers() {
+		if err := doClean(cw.DataDir(), nil); err != nil {
+			return err
 		}
-		return nil
-	})
-	if err != nil {
+	}
+	for _, cl := range sc.net.Clients() {
+		if err := doClean(cl.DataDir(), nil); err != nil {
+			return err
+		}
+	}
+	for _, bz := range sc.net.Byzantine() {
+		if err := doClean(bz.DataDir(), nil); err != nil {
+			return err
+		}
+	}
+	for _, se := range sc.net.Sentries() {
+		if err := doClean(se.DataDir(), nil); err != nil {
+			return err
+		}
+	}
+	for _, sw := range sc.net.StorageWorkers() {
+		if err := doClean(sw.DataDir(), []string{"--" + cmdNode.CfgPreserveMKVSDatabase}); err != nil {
+			return err
+		}
+	}
+	if err := doClean(sc.net.Keymanager().DataDir(), []string{"--" + cmdNode.CfgPreserveLocalStorage}); err != nil {
 		return err
 	}
 
