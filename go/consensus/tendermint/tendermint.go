@@ -94,6 +94,10 @@ const (
 
 	// CfgConsensusMinGasPrice configures the minimum gas price for this validator.
 	CfgConsensusMinGasPrice = "consensus.tendermint.min_gas_price"
+
+	// StateDir is the name of the directory located inside the node's data
+	// directory which contains the tendermint state.
+	StateDir = "tendermint"
 )
 
 var (
@@ -822,7 +826,7 @@ func (t *tendermintService) lazyInit() error {
 	// Tendermint needs the on-disk directories to be present when
 	// launched like this, so create the relevant sub-directories
 	// under the node DataDir.
-	tendermintDataDir := filepath.Join(t.dataDir, "tendermint")
+	tendermintDataDir := filepath.Join(t.dataDir, StateDir)
 	if err = initDataDir(tendermintDataDir); err != nil {
 		return err
 	}
