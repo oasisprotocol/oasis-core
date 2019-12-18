@@ -44,7 +44,7 @@ GOFLAGS ?= -trimpath -v
 
 # Add Oasis Core's version as a linker string value definition.
 ifneq ($(VERSION),)
-	export GOLDFLAGS += "-X github.com/oasislabs/oasis-core/go/common/version.SoftwareVersion=$(VERSION)"
+	export GOLDFLAGS ?= "-X github.com/oasislabs/oasis-core/go/common/version.SoftwareVersion=$(VERSION)"
 endif
 
 # Go build command to use by default.
