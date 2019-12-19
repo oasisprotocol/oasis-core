@@ -538,6 +538,11 @@ func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (
 		if err != nil {
 			return nil, err
 		}
+		// Oh yes, this can actually return a nil subscription even though the
+		// error was also nil if the node is just shutting down.
+		if sub == (*tmpubsub.Subscription)(nil) {
+			return nil, context.Canceled
+		}
 		return newTendermintPubsubBuffer(sub), nil
 	}
 
