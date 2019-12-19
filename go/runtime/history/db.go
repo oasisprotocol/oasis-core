@@ -52,6 +52,8 @@ func newDB(fn string, runtimeID signature.PublicKey) (*DB, error) {
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(true)
 	opts = opts.WithCompression(options.None)
+	// Reduce cache size to 10 MiB as the default is 1 GiB.
+	opts = opts.WithMaxCacheSize(10 * 1024 * 1024)
 
 	db, err := badger.Open(opts)
 	if err != nil {

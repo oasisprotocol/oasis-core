@@ -11,7 +11,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 
-	ekbadger "github.com/oasislabs/oasis-core/go/common/badger"
+	cmnBadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 )
@@ -24,7 +24,7 @@ var ErrNotFound = errors.New("persistent: key not found in database")
 // CommonStore is the interface to the common storage for the node.
 type CommonStore struct {
 	db *badger.DB
-	gc *ekbadger.GCWorker
+	gc *cmnBadger.GCWorker
 }
 
 // Close closes the database handle.
@@ -47,9 +47,11 @@ func NewCommonStore(dataDir string) (*CommonStore, error) {
 	logger := logging.GetLogger("common/persistent")
 
 	opts := badger.DefaultOptions(filepath.Join(dataDir, dbName))
-	opts = opts.WithLogger(ekbadger.NewLogAdapter(logger))
+	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(true)
 	opts = opts.WithCompression(options.None)
+	// Reduce cache size to 128 KiB as the default is 1 GiB.
+	opts = opts.WithMaxCacheSize(128 * 1024)
 
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -58,7 +60,7 @@ func NewCommonStore(dataDir string) (*CommonStore, error) {
 
 	cs := &CommonStore{
 		db: db,
-		gc: ekbadger.NewGCWorker(logger, db),
+		gc: cmnBadger.NewGCWorker(logger, db),
 	}
 
 	return cs, nil

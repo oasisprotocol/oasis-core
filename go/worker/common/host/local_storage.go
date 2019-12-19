@@ -9,7 +9,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 
-	ekbadger "github.com/oasislabs/oasis-core/go/common/badger"
+	cmnBadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
@@ -26,7 +26,7 @@ type LocalStorage struct {
 	logger *logging.Logger
 
 	db *badger.DB
-	gc *ekbadger.GCWorker
+	gc *cmnBadger.GCWorker
 }
 
 func (s *LocalStorage) Get(id signature.PublicKey, key []byte) ([]byte, error) {
@@ -97,15 +97,17 @@ func NewLocalStorage(dataDir, fn string) (*LocalStorage, error) {
 	}
 
 	opts := badger.DefaultOptions(filepath.Join(dataDir, fn))
-	opts = opts.WithLogger(ekbadger.NewLogAdapter(s.logger))
+	opts = opts.WithLogger(cmnBadger.NewLogAdapter(s.logger))
 	opts = opts.WithSyncWrites(true)
 	opts = opts.WithCompression(options.None)
+	// Reduce cache size to 128 KiB as the default is 1 GiB.
+	opts = opts.WithMaxCacheSize(128 * 1024)
 
 	var err error
 	if s.db, err = badger.Open(opts); err != nil {
 		return nil, fmt.Errorf("failed to open local storage database: %w", err)
 	}
-	s.gc = ekbadger.NewGCWorker(s.logger, s.db)
+	s.gc = cmnBadger.NewGCWorker(s.logger, s.db)
 
 	// TODO: The file format could be versioned, but it's not like this
 	// really is subject to change.
