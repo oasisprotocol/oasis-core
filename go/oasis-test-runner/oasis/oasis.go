@@ -81,6 +81,11 @@ func (n *Node) LogPath() string {
 	return nodeLogPath(n.dir)
 }
 
+// DataDir returns the path to the node's data directory.
+func (n *Node) DataDir() string {
+	return n.dir.String()
+}
+
 func (n *Node) stopNode() error {
 	if n.cmd == nil {
 		return nil

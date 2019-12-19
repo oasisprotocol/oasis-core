@@ -32,6 +32,9 @@ const (
 	CfgSignerDir           = "signer.dir"
 	cfgSignerLedgerAddress = "signer.ledger.address"
 	cfgSignerLedgerIndex   = "signer.ledger.index"
+
+	// CfgDryRun is the flag used to specify a dry-run of an operation.
+	CfgDryRun = "dry_run"
 )
 
 var (
@@ -52,6 +55,9 @@ var (
 	ConsensusValidatorFlag = flag.NewFlagSet("", flag.ContinueOnError)
 	// DebugDontBlameOasisFlag has the "don't blame oasis" flag.
 	DebugDontBlameOasisFlag = flag.NewFlagSet("", flag.ContinueOnError)
+
+	// DryRunFlag has the dry-run flag.
+	DryRunFlag = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // Verbose returns true iff the verbose flag is set.
@@ -117,6 +123,11 @@ func DebugDontBlameOasis() bool {
 	return viper.GetBool(CfgDebugDontBlameOasis)
 }
 
+// DryRun returns true iff the dry-run flag is set.
+func DryRun() bool {
+	return viper.GetBool(CfgDryRun)
+}
+
 func init() {
 	VerboseFlags.BoolP(cfgVerbose, "v", false, "verbose output")
 
@@ -139,6 +150,8 @@ func init() {
 	DebugDontBlameOasisFlag.Bool(CfgDebugDontBlameOasis, false, "Enable debug/unsafe/insecure options")
 	_ = DebugDontBlameOasisFlag.MarkHidden(CfgDebugDontBlameOasis)
 
+	DryRunFlag.BoolP(CfgDryRun, "n", false, "don't actually do anything, just show what will be done")
+
 	for _, v := range []*flag.FlagSet{
 		VerboseFlags,
 		ForceFlags,
@@ -148,6 +161,7 @@ func init() {
 		GenesisFileFlags,
 		ConsensusValidatorFlag,
 		DebugDontBlameOasisFlag,
+		DryRunFlag,
 	} {
 		_ = viper.BindPFlags(v)
 	}

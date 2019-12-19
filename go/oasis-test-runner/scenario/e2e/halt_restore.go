@@ -164,7 +164,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	// Stop the network.
 	sc.logger.Info("stopping the network")
 	sc.basicImpl.net.Stop()
-	if err = sc.basicImpl.cleanTendermintStorage(); err != nil {
+	if err = sc.basicImpl.cleanTendermintStorage(childEnv); err != nil {
 		return fmt.Errorf("scenario/e2e/halt_restore: failed to clean tendemint storage: %w", err)
 	}
 

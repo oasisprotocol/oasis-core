@@ -82,6 +82,7 @@ func init() {
 		stake.Register,
 		storage.Register,
 		consensus.Register,
+		node.Register,
 	} {
 		v(rootCmd)
 	}

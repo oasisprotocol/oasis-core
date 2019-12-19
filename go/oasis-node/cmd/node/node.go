@@ -774,6 +774,15 @@ func newNode(testNode bool) (*Node, error) {
 	return node, nil
 }
 
+// Register registers the node maintenance sub-commands and all of it's
+// children.
+func Register(parentCmd *cobra.Command) {
+	unsafeResetCmd.Flags().AddFlagSet(flags.DryRunFlag)
+	unsafeResetCmd.Flags().AddFlagSet(unsafeResetFlags)
+
+	parentCmd.AddCommand(unsafeResetCmd)
+}
+
 func init() {
 	Flags.AddFlagSet(flags.DebugTestEntityFlags)
 	Flags.AddFlagSet(flags.ConsensusValidatorFlag)
