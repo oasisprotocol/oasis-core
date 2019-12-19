@@ -23,8 +23,8 @@ const recvTimeout = 5 * time.Second
 
 // SchedulerImplementationTests exercises the basic functionality of a
 // scheduler backend.
-func SchedulerImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
-	seed := []byte("SchedulerImplementationTests")
+func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend, consensus consensusAPI.Backend) {
+	seed := []byte("SchedulerImplementationTests/" + name)
 
 	require := require.New(t)
 
@@ -34,7 +34,8 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, consensus c
 	// Populate the registry with an entity and nodes.
 	nodes := rt.Populate(t, consensus.Registry(), consensus, seed)
 
-	ch, sub := backend.WatchCommittees()
+	ch, sub, err := backend.WatchCommittees(context.Background())
+	require.NoError(err, "WatchCommittees")
 	defer sub.Close()
 
 	// Advance the epoch.
@@ -79,7 +80,11 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, consensus c
 			}
 		}
 
-		committees, err := backend.GetCommittees(context.Background(), rt.Runtime.ID, consensusAPI.HeightLatest)
+		var committees []*api.Committee
+		committees, err = backend.GetCommittees(context.Background(), &api.GetCommitteesRequest{
+			RuntimeID: rt.Runtime.ID,
+			Height:    consensusAPI.HeightLatest,
+		})
 		require.NoError(err, "GetCommittees")
 		for _, committee := range committees {
 			switch committee.Kind {
@@ -123,6 +128,15 @@ func SchedulerImplementationTests(t *testing.T, backend api.Backend, consensus c
 
 	// Cleanup the registry.
 	rt.Cleanup(t, consensus.Registry(), consensus)
+
+	// Since the integration tests run with validator elections disabled,
+	// just ensure that the GetValidators query returns the node's identity.
+	validators, err := backend.GetValidators(context.Background(), consensusAPI.HeightLatest)
+	require.NoError(err, "GetValidators")
+
+	require.Len(validators, 1, "should be only one static validator")
+	require.Equal(consensus.ConsensusKey(), validators[0].ID)
+	require.EqualValues(consensusAPI.VotingPower, validators[0].VotingPower)
 }
 
 func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtime *registry.Runtime, nodes []*node.Node) {

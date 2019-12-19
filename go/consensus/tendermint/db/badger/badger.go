@@ -14,7 +14,7 @@ import (
 	"github.com/tendermint/tendermint/node"
 	dbm "github.com/tendermint/tm-db"
 
-	ekbadger "github.com/oasislabs/oasis-core/go/common/badger"
+	cmnBadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 )
 
@@ -43,7 +43,7 @@ type badgerDBImpl struct {
 	logger *logging.Logger
 
 	db *badger.DB
-	gc *ekbadger.GCWorker
+	gc *cmnBadger.GCWorker
 
 	closeOnce sync.Once
 }
@@ -61,9 +61,11 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	logger := baseLogger.With("path", fn)
 
 	opts := badger.DefaultOptions(fn) // This may benefit from LSMOnlyOptions.
-	opts = opts.WithLogger(ekbadger.NewLogAdapter(logger))
+	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(false)
 	opts = opts.WithCompression(options.Snappy)
+	// Reduce cache size to 64 MiB as the default is 1 GiB.
+	opts = opts.WithMaxCacheSize(64 * 1024 * 1024)
 
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -73,7 +75,7 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	impl := &badgerDBImpl{
 		logger: logger,
 		db:     db,
-		gc:     ekbadger.NewGCWorker(logger, db),
+		gc:     cmnBadger.NewGCWorker(logger, db),
 	}
 
 	return impl, nil

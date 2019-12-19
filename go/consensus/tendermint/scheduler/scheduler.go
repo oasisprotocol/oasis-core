@@ -10,7 +10,6 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
@@ -50,8 +49,8 @@ func (tb *tendermintBackend) GetValidators(ctx context.Context, height int64) ([
 	return q.Validators(ctx)
 }
 
-func (tb *tendermintBackend) GetCommittees(ctx context.Context, id signature.PublicKey, height int64) ([]*api.Committee, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (tb *tendermintBackend) GetCommittees(ctx context.Context, request *api.GetCommitteesRequest) ([]*api.Committee, error) {
+	q, err := tb.querier.QueryAt(ctx, request.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +62,7 @@ func (tb *tendermintBackend) GetCommittees(ctx context.Context, id signature.Pub
 
 	var runtimeCommittees []*api.Committee
 	for _, c := range committees {
-		if c.RuntimeID.Equal(id) {
+		if c.RuntimeID.Equal(request.RuntimeID) {
 			runtimeCommittees = append(runtimeCommittees, c)
 		}
 	}
@@ -71,12 +70,12 @@ func (tb *tendermintBackend) GetCommittees(ctx context.Context, id signature.Pub
 	return runtimeCommittees, nil
 }
 
-func (tb *tendermintBackend) WatchCommittees() (<-chan *api.Committee, *pubsub.Subscription) {
+func (tb *tendermintBackend) WatchCommittees(ctx context.Context) (<-chan *api.Committee, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Committee)
 	sub := tb.notifier.Subscribe()
 	sub.Unwrap(typedCh)
 
-	return typedCh, sub
+	return typedCh, sub, nil
 }
 
 func (tb *tendermintBackend) getCurrentCommittees() ([]*api.Committee, error) {

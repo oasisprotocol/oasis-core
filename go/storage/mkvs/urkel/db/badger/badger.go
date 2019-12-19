@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	ekbadger "github.com/oasislabs/oasis-core/go/common/badger"
+	cmnBadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
@@ -106,9 +106,11 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	db.CheckpointableDB = api.NewCheckpointableDB(db)
 
 	opts := badger.DefaultOptions(cfg.DB)
-	opts = opts.WithLogger(ekbadger.NewLogAdapter(db.logger))
+	opts = opts.WithLogger(cmnBadger.NewLogAdapter(db.logger))
 	opts = opts.WithSyncWrites(!cfg.DebugNoFsync)
 	opts = opts.WithCompression(options.None)
+	// Reduce cache size to 64 MiB as the default is 1 GiB.
+	opts = opts.WithMaxCacheSize(64 * 1024 * 1024)
 
 	var err error
 	if db.db, err = badger.Open(opts); err != nil {
@@ -121,7 +123,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 		return nil, errors.Wrap(err, "urkel/db/badger: failed to load metadata")
 	}
 
-	db.gc = ekbadger.NewGCWorker(db.logger, db.db)
+	db.gc = cmnBadger.NewGCWorker(db.logger, db.db)
 
 	return db, nil
 }
@@ -132,7 +134,7 @@ type badgerNodeDB struct {
 	logger *logging.Logger
 
 	db   *badger.DB
-	gc   *ekbadger.GCWorker
+	gc   *cmnBadger.GCWorker
 	meta metadata
 
 	closeOnce sync.Once

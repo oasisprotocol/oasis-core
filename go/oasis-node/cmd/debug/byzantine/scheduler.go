@@ -49,7 +49,10 @@ func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.C
 }
 
 func schedulerGetCommittee(ht *honestTendermint, height int64, kind scheduler.CommitteeKind, runtimeID signature.PublicKey) (*scheduler.Committee, error) {
-	committees, err := ht.service.Scheduler().GetCommittees(context.Background(), runtimeID, height)
+	committees, err := ht.service.Scheduler().GetCommittees(context.Background(), &scheduler.GetCommitteesRequest{
+		RuntimeID: runtimeID,
+		Height:    height,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("Scheduler GetCommittees() error: %w", err)
 	}

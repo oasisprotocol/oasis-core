@@ -158,27 +158,33 @@ type Validator struct {
 type Backend interface {
 	// GetValidators returns the vector of consensus validators for
 	// a given epoch.
-	GetValidators(context.Context, int64) ([]*Validator, error)
+	GetValidators(ctx context.Context, height int64) ([]*Validator, error)
 
 	// GetCommittees returns the vector of committees for a given
 	// runtime ID, at the specified block height, and optional callback
 	// for querying the beacon for a given epoch/block height.
 	//
 	// Iff the callback is nil, `beacon.GetBlockBeacon` will be used.
-	GetCommittees(context.Context, signature.PublicKey, int64) ([]*Committee, error)
+	GetCommittees(ctx context.Context, request *GetCommitteesRequest) ([]*Committee, error)
 
 	// WatchCommittees returns a channel that produces a stream of
 	// Committee.
 	//
 	// Upon subscription, all committees for the current epoch will
 	// be sent immediately.
-	WatchCommittees() (<-chan *Committee, *pubsub.Subscription)
+	WatchCommittees(ctx context.Context) (<-chan *Committee, pubsub.ClosableSubscription, error)
 
 	// StateToGenesis returns the genesis state at specified block height.
-	StateToGenesis(context.Context, int64) (*Genesis, error)
+	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
 
 	// Cleanup cleans up the scheduler backend.
 	Cleanup()
+}
+
+// GetCommitteesRequest is a GetCommittees request.
+type GetCommitteesRequest struct {
+	Height    int64               `json:"height"`
+	RuntimeID signature.PublicKey `json:"runtime_id"`
 }
 
 // Genesis is the committee scheduler genesis state.

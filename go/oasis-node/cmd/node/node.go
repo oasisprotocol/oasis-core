@@ -31,7 +31,7 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
-	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
+	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests/helpers"
 	"github.com/oasislabs/oasis-core/go/ias"
 	iasAPI "github.com/oasislabs/oasis-core/go/ias/api"
 	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
@@ -192,6 +192,7 @@ func (n *Node) initBackends() error {
 
 	// Initialize and register the internal gRPC services.
 	grpcSrv := n.grpcInternal.Server()
+	scheduler.RegisterService(grpcSrv, n.Scheduler)
 	registryAPI.RegisterService(grpcSrv, n.Registry)
 	stakingAPI.RegisterService(grpcSrv, n.Staking)
 	storageAPI.RegisterService(grpcSrv, n.Storage)
@@ -423,7 +424,7 @@ func (n *Node) initGenesis(testNode bool) error {
 			}
 
 			// In case of a test node, always use the test chain context.
-			genesisTests.SetTestChainContext()
+			genesisTestHelpers.SetTestChainContext()
 			return nil
 		}
 		return err

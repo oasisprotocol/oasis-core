@@ -79,7 +79,7 @@ func (t *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*
 }
 
 func (t *tendermintBackend) worker(ctx context.Context) {
-	ch, sub := t.service.WatchBlocks()
+	ch, sub := t.service.WatchTendermintBlocks()
 	defer sub.Close()
 
 	for {

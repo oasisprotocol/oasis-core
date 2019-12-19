@@ -1,4 +1,4 @@
-package api
+package tests
 
 import (
 	"math"
@@ -17,7 +17,8 @@ import (
 	consensus "github.com/oasislabs/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	genesisTests "github.com/oasislabs/oasis-core/go/genesis/tests"
+	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests/helpers"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -27,8 +28,8 @@ import (
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests/debug"
 )
 
-var testDoc = &Document{
-	ChainID:   genesisTests.TestChainID,
+var testDoc = &genesis.Document{
+	ChainID:   genesisTestHelpers.TestChainID,
 	Time:      time.Unix(1574858284, 0),
 	HaltEpoch: epochtime.EpochTime(math.MaxUint64),
 	EpochTime: epochtime.Genesis{

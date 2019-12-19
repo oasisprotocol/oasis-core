@@ -4,8 +4,6 @@ package genesis
 import (
 	"fmt"
 	"time"
-
-	tendermint "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 )
 
 // Genesis contains various consensus config flags that should be part of the genesis state.
@@ -28,10 +26,6 @@ type Parameters struct {
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {
-	if g.Backend != tendermint.BackendName {
-		return fmt.Errorf("consensus: sanity check failed: backend is invalid")
-	}
-
 	if g.Parameters.TimeoutCommit < 1*time.Millisecond && !g.Parameters.SkipTimeoutCommit {
 		return fmt.Errorf("consensus: sanity check failed: timeout commit must be >= 1ms")
 	}

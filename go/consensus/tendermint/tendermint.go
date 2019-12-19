@@ -311,18 +311,7 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 }
 
 func (t *tendermintService) StateToGenesis(ctx context.Context, blockHeight int64) (*genesisAPI.Document, error) {
-	if blockHeight <= 0 {
-		var err error
-		if blockHeight, err = t.GetHeight(); err != nil {
-			t.Logger.Error("failed querying height",
-				"err", err,
-				"height", blockHeight,
-			)
-			return nil, err
-		}
-	}
-
-	blk, err := t.GetBlock(&blockHeight)
+	blk, err := t.GetTendermintBlock(ctx, blockHeight)
 	if err != nil {
 		t.Logger.Error("failed to get tendermint block",
 			"err", err,
@@ -330,6 +319,7 @@ func (t *tendermintService) StateToGenesis(ctx context.Context, blockHeight int6
 		)
 		return nil, err
 	}
+	blockHeight = blk.Header.Height
 
 	// Get initial genesis doc.
 	genesisFileProvider, err := file.DefaultFileProvider()
@@ -548,6 +538,11 @@ func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (
 		if err != nil {
 			return nil, err
 		}
+		// Oh yes, this can actually return a nil subscription even though the
+		// error was also nil if the node is just shutting down.
+		if sub == (*tmpubsub.Subscription)(nil) {
+			return nil, context.Canceled
+		}
 		return newTendermintPubsubBuffer(sub), nil
 	}
 
@@ -652,6 +647,51 @@ func (t *tendermintService) WaitEpoch(ctx context.Context, epoch epochtimeAPI.Ep
 	}
 }
 
+func (t *tendermintService) GetBlock(ctx context.Context, height int64) (*consensusAPI.Block, error) {
+	blk, err := t.GetTendermintBlock(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.NewBlock(blk), nil
+}
+
+func (t *tendermintService) GetTransactions(ctx context.Context, height int64) ([][]byte, error) {
+	blk, err := t.GetTendermintBlock(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	txs := make([][]byte, 0, len(blk.Data.Txs))
+	for _, v := range blk.Data.Txs {
+		txs = append(txs, v[:])
+	}
+	return txs, nil
+}
+
+func (t *tendermintService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
+	ch, sub := t.WatchTendermintBlocks()
+	mapCh := make(chan *consensusAPI.Block)
+	go func() {
+		defer close(mapCh)
+
+		for {
+			select {
+			case tmBlk, ok := <-ch:
+				if !ok {
+					return
+				}
+
+				mapCh <- api.NewBlock(tmBlk)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return mapCh, sub, nil
+}
+
 func (t *tendermintService) initialize() error {
 	t.Lock()
 	defer t.Unlock()
@@ -725,25 +765,35 @@ func (t *tendermintService) initialize() error {
 	return nil
 }
 
-func (t *tendermintService) GetBlock(height *int64) (*tmtypes.Block, error) {
-	if t.client == nil {
-		panic("client not available yet")
+func (t *tendermintService) GetTendermintBlock(ctx context.Context, height int64) (*tmtypes.Block, error) {
+	// Make sure that the Tendermint service has started so that we
+	// have the client interface available.
+	select {
+	case <-t.startedCh:
+	case <-t.ctx.Done():
+		return nil, t.ctx.Err()
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 
-	result, err := t.client.Block(height)
+	var tmHeight *int64
+	if height == consensusAPI.HeightLatest {
+		tmHeight = nil
+	} else {
+		tmHeight = &height
+	}
+	result, err := t.client.Block(tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: block query failed: %w", err)
 	}
-
 	return result.Block, nil
 }
 
-func (t *tendermintService) GetHeight() (int64, error) {
-	blk, err := t.GetBlock(nil)
+func (t *tendermintService) GetHeight(ctx context.Context) (int64, error) {
+	blk, err := t.GetTendermintBlock(ctx, consensusAPI.HeightLatest)
 	if err != nil {
 		return 0, err
 	}
-
 	return blk.Header.Height, nil
 }
 
@@ -760,7 +810,7 @@ func (t *tendermintService) GetBlockResults(height *int64) (*tmrpctypes.ResultBl
 	return result, nil
 }
 
-func (t *tendermintService) WatchBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription) {
+func (t *tendermintService) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription) {
 	typedCh := make(chan *tmtypes.Block)
 	sub := t.blockNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -988,7 +1038,7 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 		validator := tmtypes.GenesisValidator{
 			Address: pk.Address(),
 			PubKey:  pk,
-			Power:   api.VotingPower,
+			Power:   consensusAPI.VotingPower,
 			Name:    "oasis-validator-" + openedNode.ID.String(),
 		}
 		tmValidators = append(tmValidators, validator)
@@ -1089,9 +1139,12 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 		return nil, fmt.Errorf("tendermint: failed to get genesis doc: %w", err)
 	}
 
-	// Sanity check genesis document.
-	if err = genesisDoc.SanityCheck(); err != nil {
-		return nil, err
+	// Make sure that the consensus backend specified in the genesis
+	// document is the correct one.
+	if genesisDoc.Consensus.Backend != api.BackendName {
+		return nil, fmt.Errorf("tendermint: genesis document contains incorrect consensus backend: %s",
+			genesisDoc.Consensus.Backend,
+		)
 	}
 
 	t := &tendermintService{

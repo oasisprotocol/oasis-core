@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/roothash/api"
@@ -125,6 +126,8 @@ func (tb *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.An
 	lastRound := invalidRound
 	monotonicCh := make(chan *api.AnnotatedBlock)
 	go func() {
+		defer close(monotonicCh)
+
 		for {
 			blk, ok := <-ch
 			if !ok {
@@ -230,7 +233,7 @@ func (tb *tendermintBackend) reindexBlocks(bh api.BlockHistory) error {
 	// we can safely snapshot the current height as we have already subscribed
 	// to new blocks.
 	var currentBlk *tmtypes.Block
-	if currentBlk, err = tb.service.GetBlock(nil); err != nil {
+	if currentBlk, err = tb.service.GetTendermintBlock(tb.ctx, consensus.HeightLatest); err != nil {
 		tb.logger.Error("failed to get latest block",
 			"err", err,
 		)

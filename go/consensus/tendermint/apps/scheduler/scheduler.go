@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
@@ -318,7 +319,7 @@ func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEn
 			app.logger.Debug("adding new validator to validator set",
 				"id", v,
 			)
-			updates = append(updates, api.PublicKeyToValidatorUpdate(v, api.VotingPower))
+			updates = append(updates, api.PublicKeyToValidatorUpdate(v, consensus.VotingPower))
 		} else {
 			app.logger.Debug("keeping existing validator in the validator set",
 				"id", v,

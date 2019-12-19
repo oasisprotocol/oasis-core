@@ -3,8 +3,8 @@ package scheduler
 import (
 	"context"
 
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 )
@@ -59,13 +59,13 @@ func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Valida
 	}
 
 	// Since we use flat voting power for now, doing it this way saves
-	// having to store api.VotingPower repeatedly in the validator set
+	// having to store consensus.VotingPower repeatedly in the validator set
 	// ABCI state.
 	ret := make([]*scheduler.Validator, 0, len(valPks))
 	for _, v := range valPks {
 		ret = append(ret, &scheduler.Validator{
 			ID:          v,
-			VotingPower: api.VotingPower,
+			VotingPower: consensus.VotingPower,
 		})
 	}
 

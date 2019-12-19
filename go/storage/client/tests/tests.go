@@ -88,7 +88,8 @@ func ClientWorkerTests(
 
 	// Get scheduled storage nodes.
 	scheduledStorageNodes := []*node.Node{}
-	ch, sub := consensus.Scheduler().WatchCommittees()
+	ch, sub, err := consensus.Scheduler().WatchCommittees(ctx)
+	require.NoError(err, "WatchCommittees")
 	defer sub.Close()
 recvLoop:
 	for {
