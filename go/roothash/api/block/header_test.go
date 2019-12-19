@@ -15,13 +15,13 @@ import (
 func TestConsistentHash(t *testing.T) {
 	// NOTE: These hashes MUST be synced with runtime/src/common/roothash.rs.
 	var emptyHeaderHash hash.Hash
-	_ = emptyHeaderHash.UnmarshalHex("96227abf446627117cd990023d9201f79ee2e3cc5119eded59259b913a1d79f5")
+	_ = emptyHeaderHash.UnmarshalHex("727b8c92cd436abc597df9ccbe3a02eeba8d7409cc68fcdf0ce3b577450631ac")
 
 	var empty Header
 	require.EqualValues(t, emptyHeaderHash, empty.EncodedHash())
 
 	var populatedHeaderHash hash.Hash
-	_ = populatedHeaderHash.UnmarshalHex("480a773c029e57cc9f4c520ae659de28eba69bde92371a0dd0f076725382515e")
+	_ = populatedHeaderHash.UnmarshalHex("e42c423b85e6ac261712f65b50ddbdef4758ed214c316c1f61ee76db28d1d8a5")
 
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
@@ -44,15 +44,7 @@ func TestConsistentHash(t *testing.T) {
 		PreviousHash: emptyHeaderHash,
 		IORoot:       emptyRoot,
 		StateRoot:    emptyRoot,
-		RoothashMessages: []*RoothashMessage{
-			{
-				StakingGeneralAdjustmentRoothashMessage: &StakingGeneralAdjustmentRoothashMessage{
-					Account: account,
-					Op:      Increase,
-					Amount:  &amount,
-				},
-			},
-		},
+		Messages:     nil,
 	}
 	require.EqualValues(t, populatedHeaderHash, populated.EncodedHash())
 }

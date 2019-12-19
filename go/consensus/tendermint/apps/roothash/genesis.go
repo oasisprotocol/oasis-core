@@ -46,8 +46,8 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothash.Genesis, erro
 		blk.Header.HeaderType = block.Normal
 		// There should be no previous hash.
 		blk.Header.PreviousHash.Empty()
-		// No roothash messages.
-		blk.Header.RoothashMessages = []*block.RoothashMessage{}
+		// No messages.
+		blk.Header.Messages = nil
 		// No storage signatures.
 		blk.Header.StorageSignatures = []signature.Signature{}
 		blocks[rt.Runtime.ID] = &blk

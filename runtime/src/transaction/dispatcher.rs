@@ -9,7 +9,7 @@ use super::{
     tags::Tags,
     types::{TxnBatch, TxnCall, TxnCheckResult, TxnOutput},
 };
-use crate::common::{cbor, crypto::hash::Hash, roothash::RoothashMessage};
+use crate::common::{cbor, crypto::hash::Hash, roothash::Message as RoothashMessage};
 
 /// Dispatch error.
 #[derive(Debug, Fail)]

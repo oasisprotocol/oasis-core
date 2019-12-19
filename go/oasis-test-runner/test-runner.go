@@ -39,8 +39,6 @@ func main() {
 	_ = cmd.Register(e2e.DumpRestore)
 	// Halt test.
 	_ = cmd.Register(e2e.HaltRestore)
-	// Roothash messages test.
-	_ = cmd.Register(e2e.RoothashMessages)
 	// Registry CLI test.
 	_ = cmd.Register(e2e.RegistryCLI)
 	// Stake CLI test.

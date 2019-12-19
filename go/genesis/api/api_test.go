@@ -285,7 +285,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 			PreviousHash:      emptyHash,
 			Timestamp:         uint64(time.Now().Unix()),
 			StorageSignatures: []signature.Signature{},
-			RoothashMessages:  []*block.RoothashMessage{nil, nil, nil},
+			Messages:          []*block.Message{nil, nil, nil},
 		},
 	}
 	require.Error(d.SanityCheck(), "non-empty roothash message array should be rejected")

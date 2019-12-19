@@ -406,7 +406,6 @@ type ConsensusParameters struct {
 	SigningRewardThresholdNumerator   uint64                              `json:"signing_reward_threshold_numerator,omitempty"`
 	SigningRewardThresholdDenominator uint64                              `json:"signing_reward_threshold_denominator,omitempty"`
 	CommissionScheduleRules           CommissionScheduleRules             `json:"commission_schedule_rules,omitempty"`
-	AcceptableTransferPeers           map[signature.PublicKey]bool        `json:"acceptable_transfer_peers,omitempty"`
 	Slashing                          map[SlashReason]Slash               `json:"slashing,omitempty"`
 	GasCosts                          transaction.Costs                   `json:"gas_costs,omitempty"`
 	MinDelegationAmount               quantity.Quantity                   `json:"min_delegation,omitempty"`

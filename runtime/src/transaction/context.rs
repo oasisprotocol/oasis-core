@@ -4,7 +4,7 @@ use std::{any::Any, sync::Arc};
 use io_context::Context as IoContext;
 
 use super::tags::{Tag, Tags};
-use crate::common::roothash::{Header, RoothashMessage};
+use crate::common::roothash::{Header, Message};
 
 struct NoRuntimeContext;
 
@@ -24,8 +24,8 @@ pub struct Context<'a> {
     /// List of emitted tags for each transaction.
     tags: Vec<Tags>,
 
-    /// List of roothash messages emitted.
-    roothash_messages: Vec<RoothashMessage>,
+    /// List of messages emitted.
+    messages: Vec<Message>,
 }
 
 impl<'a> Context<'a> {
@@ -37,7 +37,7 @@ impl<'a> Context<'a> {
             runtime: Box::new(NoRuntimeContext),
             check_only,
             tags: Vec::new(),
-            roothash_messages: Vec::new(),
+            messages: Vec::new(),
         }
     }
 
@@ -47,8 +47,8 @@ impl<'a> Context<'a> {
     }
 
     /// Close the context and return the emitted tags and sent roothash messages.
-    pub(crate) fn close(self) -> (Vec<Tags>, Vec<RoothashMessage>) {
-        (self.tags, self.roothash_messages)
+    pub(crate) fn close(self) -> (Vec<Tags>, Vec<Message>) {
+        (self.tags, self.messages)
     }
 
     /// Emit a runtime-specific indexable tag refering to the specific
@@ -79,7 +79,7 @@ impl<'a> Context<'a> {
 
     /// Send a roothash message as part of the block that contains this transaction.
     /// See RFC 0065 for information on roothash messages.
-    pub fn send_roothash_message(&mut self, roothash_message: RoothashMessage) {
-        self.roothash_messages.push(roothash_message);
+    pub fn send_roothash_message(&mut self, message: Message) {
+        self.messages.push(message);
     }
 }

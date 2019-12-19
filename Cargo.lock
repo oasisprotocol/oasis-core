@@ -1477,36 +1477,6 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "staking-arbitrary"
-version = "0.3.0-alpha"
-dependencies = [
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "oasis-core-runtime 0.3.0-alpha",
- "staking-arbitrary-api 0.3.0-alpha",
-]
-
-[[package]]
-name = "staking-arbitrary-api"
-version = "0.3.0-alpha"
-dependencies = [
- "oasis-core-runtime 0.3.0-alpha",
- "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "staking-arbitrary-client"
-version = "0.3.0-alpha"
-dependencies = [
- "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "oasis-core-client 0.3.0-alpha",
- "oasis-core-runtime 0.3.0-alpha",
- "staking-arbitrary-api 0.3.0-alpha",
- "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "static_slice"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

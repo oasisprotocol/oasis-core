@@ -23,10 +23,6 @@ var (
 				api.KindCompute:   QtyFromInt(3),
 				api.KindStorage:   QtyFromInt(4),
 			},
-			AcceptableTransferPeers: map[signature.PublicKey]bool{
-				// test runtime 0 from roothash tester
-				publicKeyFromHex("612b31ddd66fc99e41cc9996f4029ea84752785d7af329d4595c4bcf8f5e4215"): true,
-			},
 			Slashing: map[api.SlashReason]api.Slash{
 				api.SlashDoubleSigning: api.Slash{
 					Amount:         QtyFromInt(math.MaxInt64), // Slash everything.
@@ -66,12 +62,4 @@ func mustGenerateSigner() signature.Signer {
 	}
 
 	return k
-}
-
-func publicKeyFromHex(s string) signature.PublicKey {
-	var pk signature.PublicKey
-	if err := pk.UnmarshalHex(s); err != nil {
-		panic(err)
-	}
-	return pk
 }

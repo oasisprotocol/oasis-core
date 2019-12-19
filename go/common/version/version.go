@@ -58,11 +58,11 @@ var (
 	// the runtime.
 	//
 	// NOTE: This version must be synced with runtime/src/common/version.rs.
-	RuntimeProtocol = Version{Major: 0, Minor: 9, Patch: 0}
+	RuntimeProtocol = Version{Major: 0, Minor: 10, Patch: 0}
 
 	// CommitteeProtocol versions the P2P protocol used by the
 	// committee members.
-	CommitteeProtocol = Version{Major: 0, Minor: 6, Patch: 0}
+	CommitteeProtocol = Version{Major: 0, Minor: 7, Patch: 0}
 
 	// ConsensusProtocol versions all data structures and processing used by
 	// the epochtime, beacon, registry, roothash, etc. modules that are
@@ -70,7 +70,7 @@ var (
 	//
 	// NOTE: Any change in the major or minor versions are considered
 	//       breaking changes for the protocol.
-	ConsensusProtocol = Version{Major: 0, Minor: 21, Patch: 0}
+	ConsensusProtocol = Version{Major: 0, Minor: 22, Patch: 0}
 
 	// Tendermint exposes the tendermint core version.
 	Tendermint = parseSemVerStr(version.TMCoreSemVer)

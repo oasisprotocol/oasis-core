@@ -162,7 +162,7 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 		IORoot:       cbc.newIORoot,
 		StateRoot:    cbc.newStateRoot,
 		// TODO: allow script to set roothash messages?
-		RoothashMessages: []*block.RoothashMessage{},
+		Messages: []*block.Message{},
 	}
 	computeBody := &commitment.ComputeBody{
 		CommitteeID:       committeeID,

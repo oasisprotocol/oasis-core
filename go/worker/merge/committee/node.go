@@ -465,19 +465,19 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 		defer cancel()
 
 		var ioRoots, stateRoots []hash.Hash
-		var roothashMessages []*block.RoothashMessage
+		var messages []*block.Message
 		for _, result := range results {
 			ioRoots = append(ioRoots, result.IORoot)
 			stateRoots = append(stateRoots, result.StateRoot)
 
 			// Merge roothash messages.
 			// The rule is that at most one result can have sent roothash messages.
-			if len(result.RoothashMessages) > 0 {
-				if roothashMessages != nil {
+			if len(result.Messages) > 0 {
+				if messages != nil {
 					n.logger.Error("multiple committees sent roothash messages")
 					return
 				}
-				roothashMessages = result.RoothashMessages
+				messages = result.Messages
 			}
 		}
 
@@ -553,7 +553,7 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 			)
 			return
 		}
-		blk.Header.RoothashMessages = roothashMessages
+		blk.Header.Messages = messages
 		blk.Header.StorageSignatures = signatures
 
 		doneCh <- &commitment.MergeBody{

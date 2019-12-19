@@ -68,7 +68,7 @@ func (mbc *mergeBatchContext) receiveCommitments(ph *p2pHandle, count int) error
 func (mbc *mergeBatchContext) process(ctx context.Context, hnss []*honestNodeStorage) error {
 	collectedCommittees := make(map[hash.Hash]bool)
 	var ioRoots, stateRoots []hash.Hash
-	var roothashMessages []*block.RoothashMessage
+	var messages []*block.Message
 	for _, commitment := range mbc.commitments {
 		if collectedCommittees[commitment.Body.CommitteeID] {
 			continue
@@ -76,8 +76,8 @@ func (mbc *mergeBatchContext) process(ctx context.Context, hnss []*honestNodeSto
 		collectedCommittees[commitment.Body.CommitteeID] = true
 		ioRoots = append(ioRoots, commitment.Body.Header.IORoot)
 		stateRoots = append(stateRoots, commitment.Body.Header.StateRoot)
-		if len(commitment.Body.Header.RoothashMessages) > 0 {
-			roothashMessages = append(roothashMessages, commitment.Body.Header.RoothashMessages...)
+		if len(commitment.Body.Header.Messages) > 0 {
+			messages = append(messages, commitment.Body.Header.Messages...)
 		}
 	}
 
@@ -111,7 +111,7 @@ func (mbc *mergeBatchContext) process(ctx context.Context, hnss []*honestNodeSto
 	mbc.newBlock = block.NewEmptyBlock(mbc.currentBlock, 0, block.Normal)
 	mbc.newBlock.Header.IORoot = firstReceiptBody.Roots[0]
 	mbc.newBlock.Header.StateRoot = firstReceiptBody.Roots[1]
-	mbc.newBlock.Header.RoothashMessages = roothashMessages
+	mbc.newBlock.Header.Messages = messages
 	mbc.newBlock.Header.StorageSignatures = signatures
 
 	return nil
