@@ -49,8 +49,9 @@ var (
 
 	cfgFile string
 
-	scenarioMap = make(map[string]scenario.Scenario)
-	scenarios   []scenario.Scenario
+	scenarioMap      = make(map[string]scenario.Scenario)
+	defaultScenarios []scenario.Scenario
+	scenarios        []scenario.Scenario
 )
 
 // RootCmd returns the root command's structure that will be executed, so that
@@ -69,8 +70,8 @@ func Execute() {
 	}
 }
 
-// Register adds a scenario to the runner.
-func Register(scenario scenario.Scenario) error {
+// RegisterNondefault adds a scenario to the runner.
+func RegisterNondefault(scenario scenario.Scenario) error {
 	n := strings.ToLower(scenario.Name())
 	if _, ok := scenarioMap[n]; ok {
 		return errors.New("root: scenario already registered: " + n)
@@ -78,6 +79,16 @@ func Register(scenario scenario.Scenario) error {
 
 	scenarioMap[n] = scenario
 	scenarios = append(scenarios, scenario)
+	return nil
+}
+
+// Register adds a scenario to the runner and the default scenarios list.
+func Register(scenario scenario.Scenario) error {
+	if err := RegisterNondefault(scenario); err != nil {
+		return err
+	}
+
+	defaultScenarios = append(defaultScenarios, scenario)
 	return nil
 }
 
@@ -137,7 +148,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	logger := logging.GetLogger("test-runner")
 
 	// Enumerate the requested test cases.
-	toRun := scenarios // Default to everything.
+	toRun := defaultScenarios // Run all default scenarios if not set.
 	if vec := viper.GetStringSlice(cfgTest); len(vec) > 0 {
 		toRun = nil
 		for _, v := range vec {
