@@ -4,8 +4,7 @@ include common.mk
 
 # List of runtimes to build.
 RUNTIMES := keymanager-runtime \
-	tests/runtimes/simple-keyvalue \
-	tests/runtimes/staking-arbitrary
+	tests/runtimes/simple-keyvalue
 
 # Set all target as the default target.
 all: build

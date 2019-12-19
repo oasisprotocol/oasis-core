@@ -24,7 +24,6 @@ import (
 	schedulerapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	stakingapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking"
-	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -783,17 +782,16 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, rtS
 	checkpoint := ctx.NewStateCheckpoint()
 	defer checkpoint.Close()
 
-	for _, message := range blk.Header.RoothashMessages {
-		// Check with staking.
-		stakingState := stakingState.NewMutableState(ctx.State())
-		unsat, err := stakingState.HandleRoothashMessage(rtState.Runtime.ID, message)
-		if err != nil {
-			return err
-		}
+	for _, message := range blk.Header.Messages {
+		// Currently there are no valid roothash messages, so any message
+		// is treated as unsatisfactory. This is the place which would
+		// otherwise contain message handlers.
+		unsat := errors.New("tendermint/roothash: message is invalid")
+
 		if unsat != nil {
-			app.logger.Error("staking not satisfied with roothash message",
-				"roothash_message", message,
+			app.logger.Error("handler not satisfied with message",
 				"err", unsat,
+				"message", message,
 				logging.LogEvent, roothash.LogEventMessageUnsat,
 			)
 

@@ -17,7 +17,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
@@ -142,23 +141,6 @@ func (s *ImmutableState) CommissionScheduleRules() (*staking.CommissionScheduleR
 	}
 
 	return &params.CommissionScheduleRules, nil
-}
-
-func (s *ImmutableState) AcceptableTransferPeers() (map[signature.PublicKey]bool, error) {
-	params, err := s.ConsensusParameters()
-	if err != nil {
-		return nil, err
-	}
-
-	return params.AcceptableTransferPeers, nil
-}
-
-func (s *ImmutableState) isAcceptableTransferPeer(runtimeID signature.PublicKey) (bool, error) {
-	peers, err := s.AcceptableTransferPeers()
-	if err != nil {
-		return false, err
-	}
-	return peers[runtimeID], nil
 }
 
 // Thresholds returns the currently configured thresholds if any.
@@ -711,57 +693,6 @@ func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *quantity.Qua
 	s.SetCommonPool(commonPool)
 
 	return nil
-}
-
-func (s *MutableState) HandleRoothashMessage(runtimeID signature.PublicKey, message *block.RoothashMessage) (error, error) {
-	if message.StakingGeneralAdjustmentRoothashMessage != nil {
-		acceptable, err := s.isAcceptableTransferPeer(runtimeID)
-		if err != nil {
-			return nil, errors.Wrap(err, "state corrupted")
-		}
-		if !acceptable {
-			return errors.Errorf("staking general adjustment message received from unacceptable runtime %s", runtimeID), nil
-		}
-
-		totalSupply, err := s.TotalSupply()
-		if err != nil {
-			return nil, errors.Wrap(err, "TotalSupply")
-		}
-		account := s.Account(message.StakingGeneralAdjustmentRoothashMessage.Account)
-
-		switch message.StakingGeneralAdjustmentRoothashMessage.Op {
-		case block.Increase:
-			err = account.General.Balance.Add(message.StakingGeneralAdjustmentRoothashMessage.Amount)
-			if err != nil {
-				return errors.Wrapf(err, "couldn't apply adjustment in staking general adjustment message"), nil
-			}
-			err = totalSupply.Add(message.StakingGeneralAdjustmentRoothashMessage.Amount)
-			if err != nil {
-				return errors.Wrapf(err, "couldn't adjust total supply in staking general adjustment message"), nil
-			}
-		case block.Decrease:
-			err = account.General.Balance.Sub(message.StakingGeneralAdjustmentRoothashMessage.Amount)
-			if err != nil {
-				return errors.Wrapf(err, "couldn't apply adjustment in staking general adjustment message"), nil
-			}
-			err = totalSupply.Sub(message.StakingGeneralAdjustmentRoothashMessage.Amount)
-			if err != nil {
-				return errors.Wrapf(err, "couldn't adjust total supply in staking general adjustment message"), nil
-			}
-		default:
-			return errors.Errorf("staking general adjustment message has invalid op"), nil
-		}
-
-		s.SetTotalSupply(totalSupply)
-		s.SetAccount(message.StakingGeneralAdjustmentRoothashMessage.Account, account)
-		logger.Debug("handled StakingGeneralAdjustmentRoothashMessage",
-			logging.LogEvent, staking.LogEventGeneralAdjustment,
-			"account", message.StakingGeneralAdjustmentRoothashMessage.Account,
-			"general_balance_after", account.General.Balance,
-		)
-	}
-
-	return nil, nil
 }
 
 // NewMutableState creates a new mutable staking state wrapper.

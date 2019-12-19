@@ -32,10 +32,10 @@ var (
 //
 // Keep the roothash RAK validation in sync with changes to this structure.
 type ComputeResultsHeader struct {
-	PreviousHash     hash.Hash                `json:"previous_hash"`
-	IORoot           hash.Hash                `json:"io_root"`
-	StateRoot        hash.Hash                `json:"state_root"`
-	RoothashMessages []*block.RoothashMessage `json:"roothash_messages"`
+	PreviousHash hash.Hash        `json:"previous_hash"`
+	IORoot       hash.Hash        `json:"io_root"`
+	StateRoot    hash.Hash        `json:"state_root"`
+	Messages     []*block.Message `json:"messages"`
 }
 
 // IsParentOf returns true iff the header is the parent of a child header.

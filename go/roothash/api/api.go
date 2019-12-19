@@ -186,7 +186,7 @@ func checkBlocksForGenesis(blocks map[signature.PublicKey]*block.Block) error {
 			return fmt.Errorf("roothash: sanity check failed: non-empty storage signatures")
 		}
 
-		if len(hdr.RoothashMessages) != 0 {
+		if len(hdr.Messages) != 0 {
 			return fmt.Errorf("roothash: sanity check failed: non-empty roothash messages")
 		}
 	}

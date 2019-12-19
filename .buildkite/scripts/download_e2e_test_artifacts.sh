@@ -30,9 +30,3 @@ download_artifact simple-keyvalue-ops-client target/debug 755
 
 download_artifact simple-keyvalue.sgxs target/x86_64-fortanix-unknown-sgx/debug 755
 download_artifact simple-keyvalue target/debug 755
-
-# Test staking-arbitrary runtime and client.
-download_artifact staking-arbitrary-client target/debug 755
-
-download_artifact staking-arbitrary.sgxs target/x86_64-fortanix-unknown-sgx/debug 755
-download_artifact staking-arbitrary target/debug 755

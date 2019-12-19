@@ -31,6 +31,7 @@ var (
 	ErrBadComputeCommits      = errors.New(moduleName, 11, "roothash/commitment: bad compute commitments")
 	ErrInvalidCommitteeID     = errors.New(moduleName, 12, "roothash/commitment: invalid committee ID")
 	ErrTxnSchedSigInvalid     = errors.New(moduleName, 13, "roothash/commitment: txn scheduler signature invalid")
+	ErrInvalidMessages        = errors.New(moduleName, 14, "roothash/commitment: invalid messages")
 )
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
@@ -146,6 +147,12 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 
 	if p.Runtime == nil {
 		return ErrNoRuntime
+	}
+
+	// Make sure the commitment does not contain any messages as these are currently
+	// not supported and should be rejected.
+	if len(header.Messages) > 0 {
+		return ErrInvalidMessages
 	}
 
 	// Verify RAK-attestation.

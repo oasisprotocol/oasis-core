@@ -9,12 +9,10 @@ members = [
 
     # Test runtimes.
     "tests/runtimes/simple-keyvalue",
-    "tests/runtimes/staking-arbitrary",
     # Test clients.
     "tests/clients/simple-keyvalue",
     "tests/clients/simple-keyvalue-enc",
     "tests/clients/simple-keyvalue-ops",
-    "tests/clients/staking-arbitrary",
     "tests/clients/test-long-term",
 ]
 
