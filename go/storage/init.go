@@ -21,9 +21,10 @@ import (
 
 const (
 	// CfgBackend configures the storage backend flag.
-	CfgBackend            = "storage.backend"
-	cfgCrashEnabled       = "storage.crash.enabled"
-	cfgLRUSlots           = "storage.root_cache.apply_lock_lru_slots"
+	CfgBackend      = "storage.backend"
+	cfgCrashEnabled = "storage.crash.enabled"
+	// CfgLRUSlots configures the LRU apply lock slots.
+	CfgLRUSlots           = "storage.root_cache.apply_lock_lru_slots"
 	cfgInsecureSkipChecks = "storage.debug.insecure_skip_checks"
 )
 
@@ -42,7 +43,7 @@ func New(
 		Backend:            strings.ToLower(viper.GetString(CfgBackend)),
 		DB:                 dataDir,
 		Signer:             identity.NodeSigner,
-		ApplyLockLRUSlots:  uint64(viper.GetInt(cfgLRUSlots)),
+		ApplyLockLRUSlots:  uint64(viper.GetInt(CfgLRUSlots)),
 		InsecureSkipChecks: viper.GetBool(cfgInsecureSkipChecks) && cmdFlags.DebugDontBlameOasis(),
 	}
 
@@ -75,7 +76,7 @@ func New(
 func init() {
 	Flags.String(CfgBackend, database.BackendNameBadgerDB, "Storage backend")
 	Flags.Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
-	Flags.Int(cfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
+	Flags.Int(CfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
 
 	Flags.Bool(cfgInsecureSkipChecks, false, "INSECURE: Skip known root checks")
 

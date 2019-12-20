@@ -11,6 +11,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -47,7 +48,7 @@ func AssertTxFileOK() {
 	// XXX: Other checks to see if we can write to the file?
 }
 
-func InitGenesis() {
+func InitGenesis() *genesisAPI.Document {
 	genesis, err := genesisFile.DefaultFileProvider()
 	if err != nil {
 		logger.Error("failed to load genesis file",
@@ -66,6 +67,8 @@ func InitGenesis() {
 		os.Exit(1)
 	}
 	genesisDoc.SetChainContext()
+
+	return genesisDoc
 }
 
 func GetTxNonceAndFee() (uint64, *transaction.Fee) {
