@@ -1,5 +1,4 @@
 #!/bin/sh
-# (no merge)
 ./go/oasis-test-runner/oasis-test-runner \
     --basedir.no_cleanup \
     --e2e.node.binary go/oasis-node/oasis-node \
