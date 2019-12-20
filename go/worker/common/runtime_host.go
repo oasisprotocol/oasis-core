@@ -15,6 +15,7 @@ import (
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/host"
@@ -36,7 +37,7 @@ type runtimeHostHandler struct {
 	storage          storage.Backend
 	keyManager       keymanagerApi.Backend
 	keyManagerClient *keymanagerClient.Client
-	localStorage     *host.LocalStorage
+	localStorage     localstorage.LocalStorage
 }
 
 func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
@@ -100,14 +101,14 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 	}
 	// Local storage.
 	if body.HostLocalStorageGetRequest != nil {
-		value, err := h.localStorage.Get(h.runtime.ID, body.HostLocalStorageGetRequest.Key)
+		value, err := h.localStorage.Get(body.HostLocalStorageGetRequest.Key)
 		if err != nil {
 			return nil, err
 		}
 		return &protocol.Body{HostLocalStorageGetResponse: &protocol.HostLocalStorageGetResponse{Value: value}}, nil
 	}
 	if body.HostLocalStorageSetRequest != nil {
-		if err := h.localStorage.Set(h.runtime.ID, body.HostLocalStorageSetRequest.Key, body.HostLocalStorageSetRequest.Value); err != nil {
+		if err := h.localStorage.Set(body.HostLocalStorageSetRequest.Key, body.HostLocalStorageSetRequest.Value); err != nil {
 			return nil, err
 		}
 		return &protocol.Body{HostLocalStorageSetResponse: &protocol.Empty{}}, nil
@@ -122,7 +123,7 @@ func NewRuntimeHostHandler(
 	storage storage.Backend,
 	keyManager keymanagerApi.Backend,
 	keyManagerClient *keymanagerClient.Client,
-	localStorage *host.LocalStorage,
+	localStorage localstorage.LocalStorage,
 ) protocol.Handler {
 	return &runtimeHostHandler{runtime, storage, keyManager, keyManagerClient, localStorage}
 }
@@ -220,10 +221,10 @@ func (n *RuntimeHostNode) InitializeRuntimeWorkerHost(ctx context.Context) error
 		TEEHardware: rt.TEEHardware,
 		MessageHandler: NewRuntimeHostHandler(
 			rt,
-			n.commonNode.Storage,
+			n.commonNode.Runtime.Storage(),
 			n.commonNode.KeyManager,
 			n.commonNode.KeyManagerClient,
-			n.commonNode.LocalStorage,
+			n.commonNode.Runtime.LocalStorage(),
 		),
 	}
 	workerHost, err := n.workerHostFactory.NewWorkerHost(cfg)

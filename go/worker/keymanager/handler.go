@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
 	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
@@ -14,20 +15,21 @@ var (
 )
 
 type hostHandler struct {
-	w *Worker
+	w            *Worker
+	localStorage localstorage.LocalStorage
 }
 
 func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
 	// Local storage.
 	if body.HostLocalStorageGetRequest != nil {
-		value, err := h.w.commonWorker.LocalStorage.Get(h.w.runtimeID, body.HostLocalStorageGetRequest.Key)
+		value, err := h.localStorage.Get(body.HostLocalStorageGetRequest.Key)
 		if err != nil {
 			return nil, err
 		}
 		return &protocol.Body{HostLocalStorageGetResponse: &protocol.HostLocalStorageGetResponse{Value: value}}, nil
 	}
 	if body.HostLocalStorageSetRequest != nil {
-		if err := h.w.commonWorker.LocalStorage.Set(h.w.runtimeID, body.HostLocalStorageSetRequest.Key, body.HostLocalStorageSetRequest.Value); err != nil {
+		if err := h.localStorage.Set(body.HostLocalStorageSetRequest.Key, body.HostLocalStorageSetRequest.Value); err != nil {
 			return nil, err
 		}
 		return &protocol.Body{HostLocalStorageSetResponse: &protocol.Empty{}}, nil
@@ -36,6 +38,6 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 	return nil, errMethodNotSupported
 }
 
-func newHostHandler(w *Worker) protocol.Handler {
-	return &hostHandler{w}
+func newHostHandler(w *Worker, localStorage localstorage.LocalStorage) protocol.Handler {
+	return &hostHandler{w, localStorage}
 }

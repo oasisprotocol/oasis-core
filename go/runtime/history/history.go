@@ -15,7 +15,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 )
 
-const dbFilename = "history.db"
+// DbFilename is the filename of the history database.
+const DbFilename = "history.db"
 
 var (
 	errNopHistory = errors.New("runtime/history: not supported")
@@ -191,7 +192,7 @@ func (h *runtimeHistory) pruneWorker() {
 
 // New creates a new runtime history keeper.
 func New(dataDir string, runtimeID signature.PublicKey, cfg *Config) (History, error) {
-	db, err := newDB(filepath.Join(dataDir, dbFilename), runtimeID)
+	db, err := newDB(filepath.Join(dataDir, DbFilename), runtimeID)
 	if err != nil {
 		return nil, err
 	}

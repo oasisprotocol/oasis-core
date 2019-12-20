@@ -1,4 +1,6 @@
-package host
+// Package localstorage implements untrusted local storage that is used
+// by runtimes to store per-node key/value pairs.
+package localstorage
 
 import (
 	"encoding/hex"
@@ -12,31 +14,42 @@ import (
 	cmnBadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 )
 
 var (
 	errInvalidKey = errors.New("invalid local storage key")
 
-	runtimeKeyFmt = keyformat.New(0x00, &signature.PublicKey{}, []byte{})
+	_ LocalStorage = (*localStorage)(nil)
 )
 
-type LocalStorage struct {
+// LocalStorage is the untrusted local storage interface.
+type LocalStorage interface {
+	// Get retrieves a previously stored value under the given key.
+	Get(key []byte) ([]byte, error)
+
+	// Set sets a key to a specific value.
+	Set(key, value []byte) error
+
+	// Stop stops local storage.
+	Stop()
+}
+
+type localStorage struct {
 	logger *logging.Logger
 
 	db *badger.DB
 	gc *cmnBadger.GCWorker
 }
 
-func (s *LocalStorage) Get(id signature.PublicKey, key []byte) ([]byte, error) {
+func (s *localStorage) Get(key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, errInvalidKey
 	}
 
 	var value []byte
 	if err := s.db.View(func(tx *badger.Txn) error {
-		item, txErr := tx.Get(runtimeKeyFmt.Encode(&id, key))
+		item, txErr := tx.Get(key)
 		switch txErr {
 		case nil:
 		case badger.ErrKeyNotFound:
@@ -52,7 +65,6 @@ func (s *LocalStorage) Get(id signature.PublicKey, key []byte) ([]byte, error) {
 	}); err != nil {
 		s.logger.Error("failed get",
 			"err", err,
-			"id", id,
 			"key", hex.EncodeToString(key),
 		)
 		return nil, err
@@ -61,17 +73,16 @@ func (s *LocalStorage) Get(id signature.PublicKey, key []byte) ([]byte, error) {
 	return cbor.FixSliceForSerde(value), nil
 }
 
-func (s *LocalStorage) Set(id signature.PublicKey, key, value []byte) error {
+func (s *localStorage) Set(key, value []byte) error {
 	if len(key) == 0 {
 		return errInvalidKey
 	}
 
 	if err := s.db.Update(func(tx *badger.Txn) error {
-		return tx.Set(runtimeKeyFmt.Encode(&id, key), value)
+		return tx.Set(key, value)
 	}); err != nil {
 		s.logger.Error("failed put",
 			"err", err,
-			"id", id,
 			"key", hex.EncodeToString(key),
 			"value", hex.EncodeToString(value),
 		)
@@ -81,7 +92,7 @@ func (s *LocalStorage) Set(id signature.PublicKey, key, value []byte) error {
 	return nil
 }
 
-func (s *LocalStorage) Stop() {
+func (s *localStorage) Stop() {
 	s.gc.Close()
 	if err := s.db.Close(); err != nil {
 		s.logger.Error("failed to close local storage",
@@ -91,9 +102,10 @@ func (s *LocalStorage) Stop() {
 	s.db = nil
 }
 
-func NewLocalStorage(dataDir, fn string) (*LocalStorage, error) {
-	s := &LocalStorage{
-		logger: logging.GetLogger("worker/common/host/localStorage"),
+// New creates new untrusted local storage.
+func New(dataDir, fn string, runtimeID signature.PublicKey) (LocalStorage, error) {
+	s := &localStorage{
+		logger: logging.GetLogger("runtime/localstorage").With("runtime_id", runtimeID),
 	}
 
 	opts := badger.DefaultOptions(filepath.Join(dataDir, fn))

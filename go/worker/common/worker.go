@@ -17,12 +17,8 @@ import (
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/common/host"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
-
-// LocalStorageFile is the filename of the worker's local storage database.
-const LocalStorageFile = "worker-local-storage.badger.db"
 
 // Worker is a garbage bag with lower level services and common runtime objects.
 type Worker struct {
@@ -39,7 +35,6 @@ type Worker struct {
 	IAS              ias.Endpoint
 	KeyManager       keymanagerApi.Backend
 	KeyManagerClient *keymanagerClient.Client
-	LocalStorage     *host.LocalStorage
 	RuntimeRegistry  runtimeRegistry.Registry
 	GenesisDoc       *genesis.Document
 
@@ -117,10 +112,6 @@ func (w *Worker) Stop() {
 	}
 
 	w.Grpc.Stop()
-
-	if w.LocalStorage != nil {
-		w.LocalStorage.Stop()
-	}
 }
 
 // Enabled returns if worker is enabled.
@@ -195,7 +186,6 @@ func (w *Worker) NewUnmanagedCommitteeNode(runtime runtimeRegistry.Runtime, enab
 		w.Identity,
 		w.KeyManager,
 		w.KeyManagerClient,
-		w.LocalStorage,
 		w.Roothash,
 		w.Registry,
 		w.Scheduler,
@@ -262,17 +252,6 @@ func newWorker(
 	}
 
 	if enabled {
-		// Open the local storage.
-		var err error
-		if w.LocalStorage, err = host.NewLocalStorage(dataDir, LocalStorageFile); err != nil {
-			w.logger.Error("failed to initialize local storage",
-				"err", err,
-				"data_dir", dataDir,
-				"local_storage_file", LocalStorageFile,
-			)
-			return nil, err
-		}
-
 		for _, rt := range runtimeRegistry.Runtimes() {
 			// Register all configured runtimes.
 			if err := w.registerRuntime(rt); err != nil {

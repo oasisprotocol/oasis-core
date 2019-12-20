@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasislabs/oasis-core/go/runtime/history"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 )
 
@@ -34,15 +35,17 @@ var (
 		Run:   doUnsafeReset,
 	}
 
+	runtimesGlob = filepath.Join(runtimeRegistry.RuntimesDir, "*")
+
 	nodeStateGlobs = []string{
 		"abci-mux-state.*.db",
 		"persistent-store.*.db",
 		tendermint.StateDir,
-		runtimeRegistry.RuntimesDir,
+		filepath.Join(runtimesGlob, history.DbFilename),
 	}
 
-	localStorageGlob = "worker-local-storage.*.db"
-	mkvsDatabaseGlob = "mkvs_storage.*.db"
+	runtimeLocalStorageGlob = filepath.Join(runtimesGlob, "worker-local-storage.*.db")
+	runtimeMkvsDatabaseGlob = filepath.Join(runtimesGlob, "mkvs_storage.*.db")
 
 	logger = logging.GetLogger("cmd/unsafe-reset")
 )
@@ -74,12 +77,12 @@ func doUnsafeReset(cmd *cobra.Command, args []string) {
 	if viper.GetBool(CfgPreserveLocalStorage) {
 		logger.Info("preserving untrusted local storage")
 	} else {
-		globs = append(globs, localStorageGlob)
+		globs = append(globs, filepath.Join(runtimesGlob, runtimeLocalStorageGlob))
 	}
 	if viper.GetBool(CfgPreserveMKVSDatabase) {
 		logger.Info("preserving MKVS database")
 	} else {
-		globs = append(globs, mkvsDatabaseGlob)
+		globs = append(globs, filepath.Join(runtimesGlob, runtimeMkvsDatabaseGlob))
 	}
 
 	// Enumerate the locations to purge.
@@ -126,7 +129,7 @@ func doUnsafeReset(cmd *cobra.Command, args []string) {
 }
 
 func init() {
-	unsafeResetFlags.Bool(CfgPreserveLocalStorage, false, "preserve untrusted local storage")
-	unsafeResetFlags.Bool(CfgPreserveMKVSDatabase, false, "preserve MKVS database")
+	unsafeResetFlags.Bool(CfgPreserveLocalStorage, false, "preserve per-runtime untrusted local storage")
+	unsafeResetFlags.Bool(CfgPreserveMKVSDatabase, false, "preserve per-runtime MKVS database")
 	_ = viper.BindPFlags(unsafeResetFlags)
 }

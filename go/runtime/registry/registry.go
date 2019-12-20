@@ -16,6 +16,7 @@ import (
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/runtime/history"
+	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
 	"github.com/oasislabs/oasis-core/go/runtime/tagindexer"
 	"github.com/oasislabs/oasis-core/go/storage"
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
@@ -25,6 +26,9 @@ const (
 	// MaxRuntimeCount is the maximum number of runtimes that can be supported
 	// by a single node.
 	MaxRuntimeCount = 64
+
+	// LocalStorageFile is the filename of the worker's local storage database.
+	LocalStorageFile = "worker-local-storage.badger.db"
 )
 
 // Registry is the running node's runtime registry interface.
@@ -65,14 +69,18 @@ type Runtime interface {
 
 	// Storage returns the per-runtime storage backend.
 	Storage() storageAPI.Backend
+
+	// LocalStorage returns the per-runtime local storage.
+	LocalStorage() localstorage.LocalStorage
 }
 
 type runtime struct {
 	id         signature.PublicKey
 	descriptor *registry.Runtime
 
-	consensus consensus.Backend
-	storage   storageAPI.Backend
+	consensus    consensus.Backend
+	storage      storageAPI.Backend
+	localStorage localstorage.LocalStorage
 
 	history    history.History
 	tagIndexer *tagindexer.Service
@@ -116,6 +124,10 @@ func (r *runtime) TagIndexer() tagindexer.QueryableBackend {
 
 func (r *runtime) Storage() storageAPI.Backend {
 	return r.storage
+}
+
+func (r *runtime) LocalStorage() localstorage.LocalStorage {
+	return r.localStorage
 }
 
 type runtimeRegistry struct {
@@ -169,6 +181,8 @@ func (r *runtimeRegistry) Cleanup() {
 	defer r.Unlock()
 
 	for _, rt := range r.runtimes {
+		// Close local storage backend.
+		rt.localStorage.Stop()
 		// Close storage backend.
 		rt.storage.Cleanup()
 		// Close tag indexer service.
@@ -202,6 +216,12 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id signature.
 		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
 	}
 
+	// Create runtime-specific local storage backend.
+	localStorage, err := localstorage.New(path, LocalStorageFile, id)
+	if err != nil {
+		return fmt.Errorf("runtime/registry: cannot create local storage for runtime %s: %w", id, err)
+	}
+
 	// Create runtime-specific storage backend.
 	// TODO: Pass runtime identifier.
 	storageBackend, err := storage.New(ctx, path, r.identity, r.consensus.Scheduler(), r.consensus.Registry())
@@ -231,11 +251,12 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id signature.
 	}
 
 	r.runtimes[id] = &runtime{
-		id:         id,
-		consensus:  r.consensus,
-		storage:    storageBackend,
-		history:    history,
-		tagIndexer: tagIndexer,
+		id:           id,
+		consensus:    r.consensus,
+		storage:      storageBackend,
+		localStorage: localStorage,
+		history:      history,
+		tagIndexer:   tagIndexer,
 	}
 
 	// Start tracking this runtime.
