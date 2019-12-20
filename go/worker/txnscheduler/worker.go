@@ -1,6 +1,8 @@
 package txnscheduler
 
 import (
+	"context"
+
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -14,6 +16,8 @@ import (
 
 // Worker is a transaction scheduler handling many runtimes.
 type Worker struct {
+	*workerCommon.RuntimeHostWorker
+
 	enabled bool
 
 	commonWorker *workerCommon.Worker
@@ -22,8 +26,10 @@ type Worker struct {
 
 	runtimes map[common.Namespace]*committee.Node
 
-	quitCh chan struct{}
-	initCh chan struct{}
+	ctx       context.Context
+	cancelCtx context.CancelFunc
+	quitCh    chan struct{}
+	initCh    chan struct{}
 
 	logger *logging.Logger
 }
@@ -139,7 +145,14 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	// Get other nodes from this runtime.
 	computeNode := w.compute.GetRuntime(id)
 
-	node, err := committee.NewNode(commonNode, computeNode)
+	// Create worker host for the given runtime.
+	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleTransactionScheduler, id)
+	if err != nil {
+		return err
+	}
+
+	// Create committee node for the given runtime.
+	node, err := committee.NewNode(commonNode, computeNode, workerHostFactory)
 	if err != nil {
 		return err
 	}
@@ -160,12 +173,16 @@ func newWorker(
 	compute *compute.Worker,
 	registration *registration.Worker,
 ) (*Worker, error) {
+	ctx, cancelCtx := context.WithCancel(context.Background())
+
 	w := &Worker{
 		enabled:      enabled,
 		commonWorker: commonWorker,
 		registration: registration,
 		compute:      compute,
 		runtimes:     make(map[common.Namespace]*committee.Node),
+		ctx:          ctx,
+		cancelCtx:    cancelCtx,
 		quitCh:       make(chan struct{}),
 		initCh:       make(chan struct{}),
 		logger:       logging.GetLogger("worker/txnscheduler"),
@@ -176,19 +193,72 @@ func newWorker(
 			panic("common worker should have been enabled for transaction scheduler")
 		}
 
+		// Create the runtime host worker.
+		var err error
+		w.RuntimeHostWorker, err = workerCommon.NewRuntimeHostWorker(commonWorker)
+		if err != nil {
+			return nil, err
+		}
+
 		// Use existing gRPC server passed from the node.
 		api.RegisterService(commonWorker.Grpc.Server(), w)
 
 		// Register all configured runtimes.
 		for _, rt := range commonWorker.GetRuntimes() {
-			if err := w.registerRuntime(rt); err != nil {
+			if err = w.registerRuntime(rt); err != nil {
 				return nil, err
 			}
 		}
 
 		// Register transaction scheduler worker role.
-		if err := w.registration.RegisterRole(node.RoleTransactionScheduler,
-			func(n *node.Node) error { return nil }); err != nil {
+		if err = w.registration.RegisterRole(node.RoleTransactionScheduler, func(n *node.Node) error {
+			// Wait until all the runtimes are initialized.
+			for _, rt := range w.runtimes {
+				select {
+				case <-rt.Initialized():
+				case <-w.ctx.Done():
+					return w.ctx.Err()
+				}
+			}
+
+			for _, rt := range n.Runtimes {
+				var grr error
+
+				workerRT := w.runtimes[rt.ID]
+				if workerRT == nil {
+					continue
+				}
+
+				workerHost := workerRT.GetWorkerHost()
+				if workerHost == nil {
+					w.logger.Debug("runtime has shut down",
+						"runtime", rt.ID,
+					)
+					continue
+				}
+				if rt.Capabilities.TEE, grr = workerHost.WaitForCapabilityTEE(w.ctx); grr != nil {
+					w.logger.Error("failed to obtain CapabilityTEE",
+						"err", grr,
+						"runtime", rt.ID,
+					)
+					continue
+				}
+
+				runtimeVersion, grr := workerHost.WaitForRuntimeVersion(w.ctx)
+				if grr == nil && runtimeVersion != nil {
+					rt.Version = *runtimeVersion
+				} else {
+					w.logger.Error("failed to obtain RuntimeVersion",
+						"err", grr,
+						"runtime", rt.ID,
+						"runtime_version", runtimeVersion,
+					)
+					continue
+				}
+			}
+
+			return nil
+		}); err != nil {
 			return nil, err
 		}
 	}

@@ -20,7 +20,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	commonWorker "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
+	"github.com/oasislabs/oasis-core/go/worker/common/host"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	computeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/committee"
 	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm"
@@ -50,6 +52,8 @@ var (
 
 // Node is a committee node.
 type Node struct {
+	*commonWorker.RuntimeHostNode
+
 	commonNode  *committee.Node
 	computeNode *computeCommittee.Node
 
@@ -385,6 +389,15 @@ func (n *Node) worker() {
 
 	n.logger.Info("starting committee node")
 
+	// Initialize worker host for the new runtime.
+	if err := n.InitializeRuntimeWorkerHost(n.ctx); err != nil {
+		n.logger.Error("failed to initialize worker host",
+			"err", err,
+		)
+		return
+	}
+	defer n.StopRuntimeWorkerHost()
+
 	// Initialize transaction scheduler's algorithm.
 	runtime, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
 	if err != nil {
@@ -437,6 +450,7 @@ func (n *Node) worker() {
 func NewNode(
 	commonNode *committee.Node,
 	computeNode *computeCommittee.Node,
+	workerHostFactory host.Factory,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -445,6 +459,7 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
+		RuntimeHostNode:  commonWorker.NewRuntimeHostNode(commonNode, workerHostFactory),
 		commonNode:       commonNode,
 		computeNode:      computeNode,
 		ctx:              ctx,

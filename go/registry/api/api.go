@@ -143,7 +143,8 @@ var (
 
 	// RuntimesRequiredRoles are the Node roles that require runtimes.
 	RuntimesRequiredRoles = node.RoleComputeWorker |
-		node.RoleKeyManager
+		node.RoleKeyManager |
+		node.RoleTransactionScheduler
 
 	// ConsensusAddressRequiredRoles are the Node roles that require Consensus Address.
 	ConsensusAddressRequiredRoles = node.RoleValidator
@@ -1228,12 +1229,12 @@ func SanityCheckNodes(nodes []*node.SignedNode, seenEntities map[signature.Publi
 			return fmt.Errorf("registry: sanity check failed: key manager node must have runtime(s)")
 		}
 
-		if n.HasRoles(node.RoleStorageWorker) && !n.HasRoles(node.RoleComputeWorker) && !n.HasRoles(node.RoleKeyManager) && len(n.Runtimes) > 0 {
-			return fmt.Errorf("registry: sanity check failed: storage worker node shouldn't have any runtimes")
+		if n.HasRoles(node.RoleTransactionScheduler) && len(n.Runtimes) == 0 {
+			return fmt.Errorf("registry: sanity check failed: transaction scheduler node must have runtime(s)")
 		}
 
-		if n.HasRoles(node.RoleTransactionScheduler) && !n.HasRoles(node.RoleComputeWorker) && !n.HasRoles(node.RoleKeyManager) && len(n.Runtimes) > 0 {
-			return fmt.Errorf("registry: sanity check failed: transaction scheduler node shouldn't have any runtimes")
+		if n.HasRoles(node.RoleStorageWorker) && !n.HasRoles(node.RoleComputeWorker) && !n.HasRoles(node.RoleKeyManager) && len(n.Runtimes) > 0 {
+			return fmt.Errorf("registry: sanity check failed: storage worker node shouldn't have any runtimes")
 		}
 
 		if n.HasRoles(node.RoleMergeWorker) && !n.HasRoles(node.RoleComputeWorker) && !n.HasRoles(node.RoleKeyManager) && len(n.Runtimes) > 0 {
