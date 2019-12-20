@@ -6,6 +6,10 @@ The format is inspired by [Keep a Changelog].
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.0.0/
 
+<!-- NOTE: towncrier will not alter content above the TOWNCRIER line below. -->
+
+<!-- TOWNCRIER -->
+
 ## 19.0 (2019-12-18)
 
 ### Process

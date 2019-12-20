@@ -1,0 +1,16 @@
+[tool.towncrier]
+filename = "CHANGELOG.md"
+directory = ".changelog"
+issue_format = "[#{issue}](https://github.com/oasislabs/oasis-core/issues/{issue})"
+start_string = "<!-- TOWNCRIER -->\n"
+# Custom Jinja2 template for preparing a new section of the Change Log.
+template = ".changelog/template.md.j2"
+# Custom definition of Change Log fragment types.
+type = [
+  { name = "Process",                    directory = "process", showcontent = true },
+  { name = "Deprecations and Removals",  directory = "removal", showcontent = true },
+  { name = "Features",                   directory = "feature", showcontent = true },
+  { name = "Bug Fixes",                  directory = "bugfix",  showcontent = true },
+  { name = "Documentation improvements", directory = "doc",     showcontent = true },
+  { name = "Trivial Changes",            directory = "trivial", showcontent = false },
+]
