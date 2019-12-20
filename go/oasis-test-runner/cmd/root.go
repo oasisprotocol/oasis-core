@@ -153,6 +153,13 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	excludeMap := make(map[string]bool)
+	if excludeEnv := os.Getenv("OASIS_EXCLUDE_E2E"); excludeEnv != "" {
+		for _, v := range strings.Split(excludeEnv, ",") {
+			excludeMap[strings.ToLower(v)] = true
+		}
+	}
+
 	// Run the required test scenarios.
 	parallelJobCount := viper.GetInt(cfgParallelJobCount)
 	parallelJobIndex := viper.GetInt(cfgParallelJobIndex)
@@ -162,6 +169,13 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 		if index%parallelJobCount != parallelJobIndex {
 			logger.Info("skipping test case (assigned to different parallel job)",
+				"test", n,
+			)
+			continue
+		}
+
+		if excludeMap[strings.ToLower(n)] {
+			logger.Info("skipping test case (excluded by environment)",
 				"test", n,
 			)
 			continue
