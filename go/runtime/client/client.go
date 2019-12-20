@@ -43,12 +43,13 @@ const (
 )
 
 type clientCommon struct {
-	roothash   roothash.Backend
-	storage    storage.Backend
-	scheduler  scheduler.Backend
-	registry   registry.Backend
-	consensus  consensus.Backend
-	keyManager *keymanager.Client
+	roothash        roothash.Backend
+	storage         storage.Backend
+	scheduler       scheduler.Backend
+	registry        registry.Backend
+	consensus       consensus.Backend
+	keyManager      *keymanager.Client
+	runtimeRegistry runtimeRegistry.Registry
 
 	ctx context.Context
 }
@@ -67,8 +68,7 @@ func (c *submitContext) cancel() {
 type runtimeClient struct {
 	sync.Mutex
 
-	common          *clientCommon
-	runtimeRegistry runtimeRegistry.Registry
+	common *clientCommon
 
 	watchers map[signature.PublicKey]*blockWatcher
 
@@ -76,7 +76,7 @@ type runtimeClient struct {
 }
 
 func (c *runtimeClient) tagIndexer(runtimeID signature.PublicKey) (tagindexer.QueryableBackend, error) {
-	rt, err := c.runtimeRegistry.GetRuntime(runtimeID)
+	rt, err := c.common.runtimeRegistry.GetRuntime(runtimeID)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +221,7 @@ func (c *runtimeClient) GetBlock(ctx context.Context, request *api.GetBlockReque
 		return c.common.roothash.GetLatestBlock(ctx, request.RuntimeID, consensus.HeightLatest)
 	}
 
-	rt, err := c.runtimeRegistry.GetRuntime(request.RuntimeID)
+	rt, err := c.common.runtimeRegistry.GetRuntime(request.RuntimeID)
 	if err != nil {
 		return nil, err
 	}
@@ -462,7 +462,6 @@ func New(
 	ctx context.Context,
 	dataDir string,
 	roothash roothash.Backend,
-	storage storage.Backend,
 	scheduler scheduler.Backend,
 	registry registry.Backend,
 	consensus consensus.Backend,
@@ -471,17 +470,17 @@ func New(
 ) (api.RuntimeClient, error) {
 	c := &runtimeClient{
 		common: &clientCommon{
-			roothash:   roothash,
-			storage:    storage,
-			scheduler:  scheduler,
-			registry:   registry,
-			consensus:  consensus,
-			keyManager: keyManager,
-			ctx:        ctx,
+			roothash:        roothash,
+			storage:         runtimeRegistry.StorageRouter(),
+			scheduler:       scheduler,
+			registry:        registry,
+			consensus:       consensus,
+			keyManager:      keyManager,
+			runtimeRegistry: runtimeRegistry,
+			ctx:             ctx,
 		},
-		runtimeRegistry: runtimeRegistry,
-		watchers:        make(map[signature.PublicKey]*blockWatcher),
-		logger:          logging.GetLogger("runtime/client"),
+		watchers: make(map[signature.PublicKey]*blockWatcher),
+		logger:   logging.GetLogger("runtime/client"),
 	}
 	return c, nil
 }

@@ -11,12 +11,14 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/runtime/history"
 	"github.com/oasislabs/oasis-core/go/runtime/tagindexer"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage"
+	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
 const (
@@ -37,6 +39,11 @@ type Registry interface {
 	// registry.
 	NewUnmanagedRuntime(runtimeID signature.PublicKey) Runtime
 
+	// StorageRouter returns a storage backend which routes requests to the
+	// correct per-runtime storage backend based on the namespace contained
+	// in the request.
+	StorageRouter() storageAPI.Backend
+
 	// Cleanup performs post-termination cleanup.
 	Cleanup()
 }
@@ -55,6 +62,9 @@ type Runtime interface {
 
 	// TagIndexer returns the tag indexer backend.
 	TagIndexer() tagindexer.QueryableBackend
+
+	// Storage returns the per-runtime storage backend.
+	Storage() storageAPI.Backend
 }
 
 type runtime struct {
@@ -62,6 +72,7 @@ type runtime struct {
 	descriptor *registry.Runtime
 
 	consensus consensus.Backend
+	storage   storageAPI.Backend
 
 	history    history.History
 	tagIndexer *tagindexer.Service
@@ -103,6 +114,10 @@ func (r *runtime) TagIndexer() tagindexer.QueryableBackend {
 	return r.tagIndexer
 }
 
+func (r *runtime) Storage() storageAPI.Backend {
+	return r.storage
+}
+
 type runtimeRegistry struct {
 	sync.RWMutex
 
@@ -110,7 +125,7 @@ type runtimeRegistry struct {
 
 	dataDir   string
 	consensus consensus.Backend
-	storage   storage.Backend
+	identity  *identity.Identity
 
 	runtimes map[signature.PublicKey]*runtime
 }
@@ -145,11 +160,17 @@ func (r *runtimeRegistry) NewUnmanagedRuntime(runtimeID signature.PublicKey) Run
 	}
 }
 
+func (r *runtimeRegistry) StorageRouter() storageAPI.Backend {
+	return &storageRouter{registry: r}
+}
+
 func (r *runtimeRegistry) Cleanup() {
 	r.Lock()
 	defer r.Unlock()
 
 	for _, rt := range r.runtimes {
+		// Close storage backend.
+		rt.storage.Cleanup()
 		// Close tag indexer service.
 		rt.tagIndexer.Stop()
 		<-rt.tagIndexer.Quit()
@@ -175,12 +196,21 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id signature.
 		return err
 	}
 
+	// Create runtime history keeper.
 	history, err := history.New(path, id, &cfg.History)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
 	}
 
-	tagIndexer, err := tagindexer.New(path, cfg.TagIndexer, history, r.consensus.RootHash(), r.storage)
+	// Create runtime-specific storage backend.
+	// TODO: Pass runtime identifier.
+	storageBackend, err := storage.New(ctx, path, r.identity, r.consensus.Scheduler(), r.consensus.Registry())
+	if err != nil {
+		return fmt.Errorf("runtime/registry: cannot create storage for runtime %s: %w", id, err)
+	}
+
+	// Create runtime tag indexer.
+	tagIndexer, err := tagindexer.New(path, cfg.TagIndexer, history, r.consensus.RootHash(), storageBackend)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create tag indexer for runtime %s: %w", id, err)
 	}
@@ -188,9 +218,22 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id signature.
 		return fmt.Errorf("runtime/registry: failed to start tag indexer for runtime %s: %w", id, err)
 	}
 
+	// If using a storage client, it should watch the configured runtimes.
+	// TODO: This should be done automatically by the storage backend when we add a runtime parameter.
+	if storageClient, ok := storageBackend.(storageAPI.ClientBackend); ok {
+		if err = storageClient.WatchRuntime(id); err != nil {
+			r.logger.Warn("error watching storage runtime, expected if using metricswrapper with local backend",
+				"err", err,
+			)
+		}
+	} else {
+		r.logger.Info("not watching storage runtime since not using a storage client backend")
+	}
+
 	r.runtimes[id] = &runtime{
 		id:         id,
 		consensus:  r.consensus,
+		storage:    storageBackend,
 		history:    history,
 		tagIndexer: tagIndexer,
 	}
@@ -200,27 +243,16 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id signature.
 		return fmt.Errorf("runtime/registry: cannot track runtime %s: %w", id, err)
 	}
 
-	// If using a storage client, it should watch the configured runtimes.
-	if storageClient, ok := r.storage.(storage.ClientBackend); ok {
-		if err := storageClient.WatchRuntime(id); err != nil {
-			r.logger.Warn("error watching storage runtime, expected if using metricswrapper with local backend",
-				"err", err,
-			)
-		}
-	} else {
-		r.logger.Info("not watching storage runtime since not using a storage client backend")
-	}
-
 	return nil
 }
 
 // New creates a new runtime registry.
-func New(ctx context.Context, dataDir string, consensus consensus.Backend, storage storage.Backend) (Registry, error) {
+func New(ctx context.Context, dataDir string, consensus consensus.Backend, identity *identity.Identity) (Registry, error) {
 	r := &runtimeRegistry{
 		logger:    logging.GetLogger("runtime/registry"),
 		dataDir:   dataDir,
 		consensus: consensus,
-		storage:   storage,
+		identity:  identity,
 		runtimes:  make(map[signature.PublicKey]*runtime),
 	}
 
@@ -245,6 +277,10 @@ func New(ctx context.Context, dataDir string, consensus consensus.Backend, stora
 			)
 			return nil, fmt.Errorf("failed to add runtime %s: %w", id, err)
 		}
+	}
+
+	if len(runtimes) == 0 {
+		r.logger.Info("no supported runtimes configured")
 	}
 
 	return r, nil

@@ -362,12 +362,15 @@ func testBeacon(t *testing.T, node *testNode) {
 }
 
 func testStorage(t *testing.T, node *testNode) {
-	// Determine the current round. This is required so that we can commit into
-	// storage at the next (non-finalized) round.
-	blk, err := node.RootHash.GetLatestBlock(context.Background(), testRuntimeID, consensusAPI.HeightLatest)
-	require.NoError(t, err, "GetLatestBlock")
+	dataDir, err := ioutil.TempDir("", "oasis-storage-test_")
+	require.NoError(t, err, "TempDir")
+	defer os.RemoveAll(dataDir)
 
-	storageTests.StorageImplementationTests(t, node.Storage, testNamespace, blk.Header.Round+1)
+	storage, err := storage.New(context.Background(), dataDir, node.Identity, node.Scheduler, node.Registry)
+	require.NoError(t, err, "storage.New")
+	defer storage.Cleanup()
+
+	storageTests.StorageImplementationTests(t, storage, testNamespace, 0)
 }
 
 func testRegistry(t *testing.T, node *testNode) {
@@ -401,7 +404,15 @@ func testStakingClient(t *testing.T, node *testNode) {
 }
 
 func testRootHash(t *testing.T, node *testNode) {
-	roothashTests.RootHashImplementationTests(t, node.RootHash, node.Consensus, node.Storage)
+	dataDir, err := ioutil.TempDir("", "oasis-storage-test_")
+	require.NoError(t, err, "TempDir")
+	defer os.RemoveAll(dataDir)
+
+	storage, err := storage.New(context.Background(), dataDir, node.Identity, node.Scheduler, node.Registry)
+	require.NoError(t, err, "storage.New")
+	defer storage.Cleanup()
+
+	roothashTests.RootHashImplementationTests(t, node.RootHash, node.Consensus, storage)
 }
 
 func testComputeWorker(t *testing.T, node *testNode) {
@@ -419,7 +430,15 @@ func testTransactionSchedulerWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
 	require.NotNil(t, node.txnschedulerCommitteeNode)
-	txnschedulerWorkerTests.WorkerImplementationTests(t, node.TransactionSchedulerWorker, node.runtimeID, node.txnschedulerCommitteeNode, timeSource, node.RootHash, node.Storage)
+	txnschedulerWorkerTests.WorkerImplementationTests(
+		t,
+		node.TransactionSchedulerWorker,
+		node.runtimeID,
+		node.txnschedulerCommitteeNode,
+		timeSource,
+		node.RootHash,
+		node.RuntimeRegistry.StorageRouter(),
+	)
 }
 
 func testClient(t *testing.T, node *testNode) {

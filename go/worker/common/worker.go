@@ -16,7 +16,6 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/host"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
@@ -31,7 +30,6 @@ type Worker struct {
 	cfg     Config
 
 	Identity         *identity.Identity
-	Storage          storage.Backend
 	Roothash         roothash.Backend
 	Registry         registry.Backend
 	Scheduler        scheduler.Backend
@@ -198,7 +196,6 @@ func (w *Worker) NewUnmanagedCommitteeNode(runtime runtimeRegistry.Runtime, enab
 		w.KeyManager,
 		w.KeyManagerClient,
 		w.LocalStorage,
-		w.Storage,
 		w.Roothash,
 		w.Registry,
 		w.Scheduler,
@@ -230,7 +227,6 @@ func newWorker(
 	dataDir string,
 	enabled bool,
 	identity *identity.Identity,
-	storageBackend storage.Backend,
 	roothash roothash.Backend,
 	registryInst registry.Backend,
 	scheduler scheduler.Backend,
@@ -248,7 +244,6 @@ func newWorker(
 		enabled:          enabled,
 		cfg:              cfg,
 		Identity:         identity,
-		Storage:          storageBackend,
 		Roothash:         roothash,
 		Registry:         registryInst,
 		Scheduler:        scheduler,
@@ -294,7 +289,6 @@ func New(
 	dataDir string,
 	enabled bool,
 	identity *identity.Identity,
-	storage storage.Backend,
 	roothash roothash.Backend,
 	registry registry.Backend,
 	scheduler scheduler.Backend,
@@ -326,7 +320,6 @@ func New(
 		dataDir,
 		enabled,
 		identity,
-		storage,
 		roothash,
 		registry,
 		scheduler,

@@ -11,7 +11,8 @@ import (
 
 // storageService is the service exposed to external clients via gRPC.
 type storageService struct {
-	w *Worker
+	w       *Worker
+	storage api.Backend
 
 	debugRejectUpdates bool
 }
@@ -39,21 +40,21 @@ func (s *storageService) SyncGet(ctx context.Context, request *api.GetRequest) (
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	return s.w.commonWorker.Storage.SyncGet(ctx, request)
+	return s.storage.SyncGet(ctx, request)
 }
 
 func (s *storageService) SyncGetPrefixes(ctx context.Context, request *api.GetPrefixesRequest) (*api.ProofResponse, error) {
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	return s.w.commonWorker.Storage.SyncGetPrefixes(ctx, request)
+	return s.storage.SyncGetPrefixes(ctx, request)
 }
 
 func (s *storageService) SyncIterate(ctx context.Context, request *api.IterateRequest) (*api.ProofResponse, error) {
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	return s.w.commonWorker.Storage.SyncIterate(ctx, request)
+	return s.storage.SyncIterate(ctx, request)
 }
 
 func (s *storageService) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {
@@ -63,7 +64,7 @@ func (s *storageService) Apply(ctx context.Context, request *api.ApplyRequest) (
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	return s.w.commonWorker.Storage.Apply(ctx, request)
+	return s.storage.Apply(ctx, request)
 }
 
 func (s *storageService) ApplyBatch(ctx context.Context, request *api.ApplyBatchRequest) ([]*api.Receipt, error) {
@@ -73,7 +74,7 @@ func (s *storageService) ApplyBatch(ctx context.Context, request *api.ApplyBatch
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	return s.w.commonWorker.Storage.ApplyBatch(ctx, request)
+	return s.storage.ApplyBatch(ctx, request)
 }
 
 func (s *storageService) Merge(ctx context.Context, request *api.MergeRequest) ([]*api.Receipt, error) {
@@ -83,7 +84,7 @@ func (s *storageService) Merge(ctx context.Context, request *api.MergeRequest) (
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	return s.w.commonWorker.Storage.Merge(ctx, request)
+	return s.storage.Merge(ctx, request)
 }
 
 func (s *storageService) MergeBatch(ctx context.Context, request *api.MergeBatchRequest) ([]*api.Receipt, error) {
@@ -93,7 +94,7 @@ func (s *storageService) MergeBatch(ctx context.Context, request *api.MergeBatch
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	return s.w.commonWorker.Storage.MergeBatch(ctx, request)
+	return s.storage.MergeBatch(ctx, request)
 }
 
 func (s *storageService) GetDiff(ctx context.Context, request *api.GetDiffRequest) (api.WriteLogIterator, error) {
@@ -103,7 +104,7 @@ func (s *storageService) GetDiff(ctx context.Context, request *api.GetDiffReques
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	return s.w.commonWorker.Storage.GetDiff(ctx, request)
+	return s.storage.GetDiff(ctx, request)
 }
 
 func (s *storageService) GetCheckpoint(ctx context.Context, request *api.GetCheckpointRequest) (api.WriteLogIterator, error) {
@@ -113,12 +114,12 @@ func (s *storageService) GetCheckpoint(ctx context.Context, request *api.GetChec
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	return s.w.commonWorker.Storage.GetCheckpoint(ctx, request)
+	return s.storage.GetCheckpoint(ctx, request)
 }
 
 func (s *storageService) Cleanup() {
 }
 
 func (s *storageService) Initialized() <-chan struct{} {
-	return s.w.commonWorker.Storage.Initialized()
+	return s.storage.Initialized()
 }
