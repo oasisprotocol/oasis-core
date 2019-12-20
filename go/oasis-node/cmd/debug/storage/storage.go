@@ -17,6 +17,7 @@ import (
 	cmdControl "github.com/oasislabs/oasis-core/go/oasis-node/cmd/control"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
+	"github.com/oasislabs/oasis-core/go/storage"
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
@@ -292,7 +293,13 @@ func Register(parentCmd *cobra.Command) {
 	storageForceFinalizeCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 	storageForceFinalizeCmd.PersistentFlags().AddFlagSet(cmdFlags.DebugDontBlameOasisFlag)
 
+	storageExportCmd.Flags().AddFlagSet(storage.Flags)
+	storageExportCmd.Flags().AddFlagSet(cmdFlags.GenesisFileFlags)
+	storageExportCmd.Flags().AddFlagSet(cmdFlags.DebugDontBlameOasisFlag)
+	storageExportCmd.Flags().AddFlagSet(storageExportFlags)
+
 	storageCmd.AddCommand(storageCheckRootsCmd)
 	storageCmd.AddCommand(storageForceFinalizeCmd)
+	storageCmd.AddCommand(storageExportCmd)
 	parentCmd.AddCommand(storageCmd)
 }

@@ -68,6 +68,21 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	// Stop the network.
 	sc.logger.Info("stopping the network")
 	sc.basicImpl.net.Stop()
+
+	// Dump storage.
+	args = []string{
+		"debug", "storage", "export",
+		"--genesis.file", dumpPath,
+		"--datadir", sc.basicImpl.net.StorageWorkers()[0].DataDir(),
+		"--storage.export.dir", filepath.Join(childEnv.Dir(), "storage_dumps"),
+		"--debug.dont_blame_oasis",
+		"--debug.allow_test_keys",
+	}
+	if err = runSubCommand(childEnv, "storage-dump", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("scenario/e2e/dump_restore: failed to dump storage: %w", err)
+	}
+
+	// Reset all the state back to the vanilla state.
 	if err = sc.basicImpl.cleanTendermintStorage(childEnv); err != nil {
 		return fmt.Errorf("scenario/e2e/dump_restore: failed to clean tendemint storage: %w", err)
 	}
