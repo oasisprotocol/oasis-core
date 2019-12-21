@@ -22,7 +22,7 @@ generate:
 
 $(go-binaries):
 	@$(ECHO) "$(MAGENTA)*** Building $@...$(OFF)"
-	$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$@/$@ ./$@
+	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$@/$@ ./$@
 
 oasis-node:
 
