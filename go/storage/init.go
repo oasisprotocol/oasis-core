@@ -10,6 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -35,6 +36,7 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 func New(
 	ctx context.Context,
 	dataDir string,
+	namespace common.Namespace,
 	identity *identity.Identity,
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
@@ -45,6 +47,7 @@ func New(
 		Signer:             identity.NodeSigner,
 		ApplyLockLRUSlots:  uint64(viper.GetInt(CfgLRUSlots)),
 		InsecureSkipChecks: viper.GetBool(cfgInsecureSkipChecks) && cmdFlags.DebugDontBlameOasis(),
+		Namespace:          namespace,
 	}
 
 	var (

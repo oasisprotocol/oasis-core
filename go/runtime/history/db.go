@@ -14,9 +14,7 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 )
 
-const (
-	dbVersion = 1
-)
+const dbVersion = 1
 
 var (
 	// metadataKeyFmt is the metadata key format.
@@ -30,11 +28,15 @@ var (
 )
 
 type dbMetadata struct {
+	// RuntimeID is the runtime ID this database is for.
 	RuntimeID signature.PublicKey `json:"runtime_id"`
-	Version   uint64              `json:"version"`
+	// Version is the database schema version.
+	Version uint64 `json:"version"`
 
-	LastConsensusHeight int64  `json:"last_consensus_height"`
-	LastRound           uint64 `json:"last_round"`
+	// LastConsensusHeight is the last consensus height.
+	LastConsensusHeight int64 `json:"last_consensus_height"`
+	// LastRound is the last round.
+	LastRound uint64 `json:"last_round"`
 }
 
 // DB is the history database.

@@ -35,6 +35,7 @@ func doTestImpl(t *testing.T, backend string) {
 		cfg = api.Config{
 			Backend:           backend,
 			ApplyLockLRUSlots: 100,
+			Namespace:         testNs,
 		}
 		err error
 	)

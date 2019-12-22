@@ -35,6 +35,9 @@ var (
 	ErrRootNotFound = errors.New("urkel: root not found")
 	// ErrRootMustFollowOld indicates that the passed new root does not follow old root.
 	ErrRootMustFollowOld = errors.New("urkel: root must follow old root")
+	// ErrBadNamespace indicates that the passed namespace does not match what is
+	// actually contained within the database.
+	ErrBadNamespace = errors.New("urkel: bad namespace")
 )
 
 // Config is the node database backend configuration.
@@ -44,6 +47,9 @@ type Config struct {
 
 	// DebugNoFsync will disable fsync() where possible.
 	DebugNoFsync bool
+
+	// Namespace is the namespace contained within the database.
+	Namespace common.Namespace
 }
 
 // NodeDB is the persistence layer used for persisting the in-memory tree.

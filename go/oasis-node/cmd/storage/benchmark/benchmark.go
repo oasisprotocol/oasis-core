@@ -81,7 +81,9 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	// Disable expected root checks.
 	viper.Set("storage.debug.insecure_skip_checks", true)
 
-	storage, err := storage.New(context.Background(), dataDir, ident, nil, nil)
+	var ns common.Namespace
+
+	storage, err := storage.New(context.Background(), dataDir, ns, ident, nil, nil)
 	if err != nil {
 		logger.Error("failed to initialize storage",
 			"err", err,
@@ -111,8 +113,6 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		}
 		defer pprof.StopCPUProfile()
 	}
-
-	var ns common.Namespace
 
 	// Benchmark MKVS storage (single-insert).
 	for _, sz := range []int{

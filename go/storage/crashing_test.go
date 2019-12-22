@@ -24,7 +24,8 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 
 	var (
 		cfg = api.Config{
-			Backend: database.BackendNameBadgerDB,
+			Backend:   database.BackendNameBadgerDB,
+			Namespace: testNs,
 		}
 		err error
 	)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -223,8 +224,10 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id signature.
 	}
 
 	// Create runtime-specific storage backend.
-	// TODO: Pass runtime identifier.
-	storageBackend, err := storage.New(ctx, path, r.identity, r.consensus.Scheduler(), r.consensus.Registry())
+	var ns common.Namespace
+	copy(ns[:], id[:])
+
+	storageBackend, err := storage.New(ctx, path, ns, r.identity, r.consensus.Scheduler(), r.consensus.Registry())
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create storage for runtime %s: %w", id, err)
 	}

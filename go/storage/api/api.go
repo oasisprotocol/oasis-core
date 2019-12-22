@@ -87,12 +87,16 @@ type Config struct {
 
 	// InsecureSkipChecks bypasses the known root checks.
 	InsecureSkipChecks bool
+
+	// Namespace is the namespace contained within the database.
+	Namespace common.Namespace
 }
 
 // ToNodeDB converts from a Config to a node DB Config.
 func (cfg *Config) ToNodeDB() *nodedb.Config {
 	return &nodedb.Config{
-		DB: cfg.DB,
+		DB:        cfg.DB,
+		Namespace: cfg.Namespace,
 	}
 }
 

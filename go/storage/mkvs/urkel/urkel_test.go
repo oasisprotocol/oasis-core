@@ -1432,7 +1432,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
 		Items     []item
 	}{
 		{
-			Namespace: common.Namespace{},
+			Namespace: testNs,
 			Round:     4,
 			SrcRoot:   "xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
 			DstRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
@@ -1449,7 +1449,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
 			},
 		},
 		{
-			Namespace: common.Namespace{},
+			Namespace: testNs,
 			Round:     4,
 			SrcRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
 			DstRoot:   "XeNxDPHiY0PAQI5vFxFNxjwgAj++Sf0kCohpaUvImUg=",
@@ -1471,7 +1471,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
 			},
 		},
 		{
-			Namespace: common.Namespace{},
+			Namespace: testNs,
 			Round:     4,
 			SrcRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
 			DstRoot:   "rgbZz2sV2QlI/XG/+GiQoYlDpmxrMbY/hFs6PhTu1hA=",
@@ -1805,6 +1805,17 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	_, _, err = tree.Commit(ctx, testNs, 0)
 	require.Error(t, err, "Commit should fail for already finalized round")
 	require.Equal(t, db.ErrAlreadyFinalized, err)
+
+	// Commit for a different namespace should fail.
+	var badNs common.Namespace
+	_ = badNs.UnmarshalText([]byte("badbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadb"))
+
+	tree = New(nil, ndb)
+	err = tree.Insert(ctx, []byte("bad namespace"), []byte("woohoo"))
+	require.NoError(t, err, "Insert")
+	_, _, err = tree.Commit(ctx, badNs, 0)
+	require.Error(t, err, "Commit should fail for bad namespace")
+	require.Equal(t, db.ErrBadNamespace, err)
 }
 
 func testBackend(
@@ -1875,6 +1886,7 @@ func TestUrkelBadgerBackend(t *testing.T) {
 		ndb, err := badgerDb.New(&db.Config{
 			DB:           dir,
 			DebugNoFsync: true,
+			Namespace:    testNs,
 		})
 		require.NoError(t, err, "New")
 

@@ -366,7 +366,7 @@ func testStorage(t *testing.T, node *testNode) {
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	storage, err := storage.New(context.Background(), dataDir, node.Identity, node.Scheduler, node.Registry)
+	storage, err := storage.New(context.Background(), dataDir, testNamespace, node.Identity, node.Scheduler, node.Registry)
 	require.NoError(t, err, "storage.New")
 	defer storage.Cleanup()
 
@@ -404,15 +404,7 @@ func testStakingClient(t *testing.T, node *testNode) {
 }
 
 func testRootHash(t *testing.T, node *testNode) {
-	dataDir, err := ioutil.TempDir("", "oasis-storage-test_")
-	require.NoError(t, err, "TempDir")
-	defer os.RemoveAll(dataDir)
-
-	storage, err := storage.New(context.Background(), dataDir, node.Identity, node.Scheduler, node.Registry)
-	require.NoError(t, err, "storage.New")
-	defer storage.Cleanup()
-
-	roothashTests.RootHashImplementationTests(t, node.RootHash, node.Consensus, storage)
+	roothashTests.RootHashImplementationTests(t, node.RootHash, node.Consensus, node.Identity)
 }
 
 func testComputeWorker(t *testing.T, node *testNode) {
