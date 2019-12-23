@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/txsource/workload"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 )
 
@@ -84,7 +85,7 @@ func doRun(cmd *cobra.Command, args []string) error {
 	logger.Debug("node synced")
 
 	logger.Debug("entering workload")
-	if err = workloadTransfer(rng, conn, cnsc, rtc); err != nil {
+	if err = workload.WorkloadTransfer(rng, conn, cnsc, rtc); err != nil {
 		return fmt.Errorf("workload: %w", err)
 	}
 	logger.Debug("workload returned")
