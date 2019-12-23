@@ -112,6 +112,10 @@ https://github.com/oasislabs/oasis-core/blob/master/README.md).
     * Try to instrument anything that would be relevant to an operational
       network.
 
+* **Change Log:** Please write a [Change Log fragment](.changelog/README.md)
+  that will be included in the next section of the [Change Log](CHANGELOG.md)
+  once a new version is released.
+
 * **Documentation:** Please write documentation in the code as you go.
 
 * **Check CI:** Don’t break the build!

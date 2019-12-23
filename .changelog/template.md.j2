@@ -1,0 +1,41 @@
+{# This a Jinja2 template for preparing a new section of the Change Log with the towncrier utility.#}
+## {{ versiondata.version }} ({{ versiondata.date }})
+{% for section, _ in sections.items() %}
+
+{% if sections[section] %}
+{% for category, val in definitions.items() if category in sections[section] %}
+{{ "### " + definitions[category]['name'] }}
+
+{% if definitions[category]['showcontent'] %}
+{% for text, values in sections[section][category].items() %}
+{% set lines = text.splitlines() %}
+{% if lines | length > 2 and lines[1] == "" %}
+- {{ lines[0] }}
+  ({{ values | join(', ') }})
+
+{{ lines[2:] | join('\n') }}
+{% else %}
+- {{ text }}
+  ({{ values | join(', ') }})
+{% endif %}
+{% if not loop.last %}
+
+{% endif %}
+{% endfor %}
+{% else %}
+- {{ sections[section][category]['']|join(', ') }}
+
+{% endif %}
+{% if sections[section][category]|length == 0 %}
+No significant changes.
+
+{% else %}
+{% endif %}
+
+{% endfor %}
+{% else %}
+No significant changes.
+
+
+{% endif %}
+{% endfor %}

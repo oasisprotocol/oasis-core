@@ -1,0 +1,23 @@
+name: Continuous integration
+
+on: push
+
+jobs:
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Python 3
+        uses: actions/setup-python@v1
+      - name: Install prerequisites
+        run: |
+          python -m pip install https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz
+      - name: Check for presence of a Change Log fragment
+        run: |
+          # Fetch the master branch so towncrier will be able to compare the
+          # current branch to the master branch.
+          # Source: https://github.com/actions/checkout/#fetch-all-branches.
+          git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
+          towncrier check
