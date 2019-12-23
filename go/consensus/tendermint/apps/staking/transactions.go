@@ -2,12 +2,24 @@ package staking
 
 import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
+
+func isTransferPermitted(params *staking.ConsensusParameters, fromID signature.PublicKey) (permitted bool) {
+	permitted = true
+	if params.DisableTransfers {
+		permitted = false
+		if params.UndisableTransfersFrom != nil && params.UndisableTransfersFrom[fromID] {
+			permitted = true
+		}
+	}
+	return
+}
 
 func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.MutableState, xfer *staking.Transfer) error {
 	if ctx.IsCheckOnly() {
@@ -23,11 +35,11 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 		return err
 	}
 
-	if params.DisableTransfers {
+	fromID := ctx.TxSigner()
+	if !isTransferPermitted(params, fromID) {
 		return staking.ErrForbidden
 	}
 
-	fromID := ctx.TxSigner()
 	from := state.Account(fromID)
 
 	if fromID.Equal(xfer.To) {

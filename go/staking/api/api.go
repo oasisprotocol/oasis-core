@@ -410,8 +410,9 @@ type ConsensusParameters struct {
 	GasCosts                          transaction.Costs                   `json:"gas_costs,omitempty"`
 	MinDelegationAmount               quantity.Quantity                   `json:"min_delegation,omitempty"`
 
-	DisableTransfers  bool `json:"disable_transfers,omitempty"`
-	DisableDelegation bool `json:"disable_delegation,omitempty"`
+	DisableTransfers       bool                         `json:"disable_transfers,omitempty"`
+	DisableDelegation      bool                         `json:"disable_delegation,omitempty"`
+	UndisableTransfersFrom map[signature.PublicKey]bool `json:"undisable_transfers_from,omitempty"`
 }
 
 const (
