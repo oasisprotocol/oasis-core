@@ -6,6 +6,7 @@ import (
 	"context"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -73,7 +74,7 @@ type Block struct {
 	// Height contains the block height.
 	Height int64 `json:"height"`
 	// Meta contains the consensus backend specific block metadata.
-	Meta interface{} `json:"meta"`
+	Meta cbor.RawMessage `json:"meta"`
 }
 
 // Backend is an interface that a consensus backend must provide.
