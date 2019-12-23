@@ -18,20 +18,21 @@ import (
 )
 
 const (
-	NumAccounts    = 10
-	TransferAmount = 1
+	NameTransfer        = "transfer"
+	TransferNumAccounts = 10
+	TransferAmount      = 1
 )
 
 var logger = logging.GetLogger("cmd/txsource/workload/transfer")
 
-func WorkloadTransfer(rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, _ runtimeClient.RuntimeClient) error {
+func runTransfer(rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, _ runtimeClient.RuntimeClient) error {
 	// Load all the keys up front. Like, how annoyed would you be if down the line one of them turned out to be
 	// corrupted or something, ya know?
 	accounts := make([]struct {
 		signer          signature.Signer
 		reckonedNonce   uint64
 		reckonedBalance quantity.Quantity
-	}, NumAccounts)
+	}, TransferNumAccounts)
 	var err error
 	fac := memorySigner.NewFactory()
 	for i := range accounts {
@@ -73,17 +74,17 @@ func WorkloadTransfer(rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.Clie
 		return fmt.Errorf("min balance %v Add fee amount %v: %w", minBalance, fee.Amount, err)
 	}
 	for {
-		perm := rng.Perm(NumAccounts)
+		perm := rng.Perm(TransferNumAccounts)
 		fromPermIdx := 0
-		for ; fromPermIdx < NumAccounts; fromPermIdx++ {
+		for ; fromPermIdx < TransferNumAccounts; fromPermIdx++ {
 			if accounts[perm[fromPermIdx]].reckonedBalance.Cmp(&minBalance) >= 0 {
 				break
 			}
 		}
-		if fromPermIdx >= NumAccounts {
+		if fromPermIdx >= TransferNumAccounts {
 			return fmt.Errorf("all accounts %#v have gone broke", accounts)
 		}
-		toPermIdx := (fromPermIdx + 1) % NumAccounts
+		toPermIdx := (fromPermIdx + 1) % TransferNumAccounts
 		from := &accounts[perm[fromPermIdx]]
 		to := &accounts[perm[toPermIdx]]
 
@@ -116,16 +117,4 @@ func WorkloadTransfer(rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.Clie
 			return fmt.Errorf("to reckoned balance %v Add transfer tokens %v: %w", to.reckonedBalance, transfer.Tokens, err)
 		}
 	}
-}
-
-func _(_ *rand.Rand, _ consensus.ClientBackend, rtc runtimeClient.RuntimeClient) error {
-	ctx := context.Background()
-	var tx *runtimeClient.SubmitTxRequest
-	// Placeholder for sending a runtime transaction from a workload.
-	out, err := rtc.SubmitTx(ctx, tx)
-	if err != nil {
-		return fmt.Errorf("rtc.SubmitTx: %w", err)
-	}
-	logger.Debug("output", "out", out)
-	return nil
 }

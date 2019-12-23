@@ -17,6 +17,7 @@ else
 fi
 
 exec ./go/oasis-node/oasis-node debug txsource \
+  --workload transfer \
   --address "$node_address" \
   --debug.allow_test_keys \
   --debug.dont_blame_oasis \

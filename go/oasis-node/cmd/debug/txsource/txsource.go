@@ -23,7 +23,10 @@ import (
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 )
 
-const CfgSeed = "seed"
+const (
+	CfgWorkload = "workload"
+	CfgSeed     = "seed"
+)
 
 var (
 	logger      = logging.GetLogger("cmd/txsource")
@@ -52,6 +55,13 @@ func doRun(cmd *cobra.Command, args []string) error {
 	}
 	logger.Debug("setting chain context", "chain_context", genesisDoc.ChainContext())
 	genesisDoc.SetChainContext()
+
+	// Resolve the workload.
+	name := viper.GetString(CfgWorkload)
+	runner, ok := workload.ByName[name]
+	if !ok {
+		return fmt.Errorf("workload %s not found", name)
+	}
 
 	// Set up the deterministic random source.
 	hash := crypto.SHA512
@@ -85,7 +95,7 @@ func doRun(cmd *cobra.Command, args []string) error {
 	logger.Debug("node synced")
 
 	logger.Debug("entering workload")
-	if err = workload.WorkloadTransfer(rng, conn, cnsc, rtc); err != nil {
+	if err = runner(rng, conn, cnsc, rtc); err != nil {
 		return fmt.Errorf("workload: %w", err)
 	}
 	logger.Debug("workload returned")
@@ -99,6 +109,7 @@ func Register(parentCmd *cobra.Command) {
 
 func init() {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	fs.String(CfgWorkload, workload.NameTransfer, "Name of the workload to run (see source for listing)")
 	fs.String(CfgSeed, "seeeeeeeeeeeeeeeeeeeeeeeeeeeeeed", "Seed to use for randomized workloads")
 	_ = viper.BindPFlags(fs)
 	txsourceCmd.Flags().AddFlagSet(fs)
