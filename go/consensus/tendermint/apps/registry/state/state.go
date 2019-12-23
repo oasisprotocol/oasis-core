@@ -243,11 +243,13 @@ func (s *ImmutableState) getSignedRuntimeRaw(id common.Namespace) ([]byte, error
 	return value, nil
 }
 
-// GetRuntime looks up a runtime by its identifier and returns it.
 func (s *ImmutableState) Runtime(id common.Namespace) (*registry.Runtime, error) {
 	raw, err := s.getSignedRuntimeRaw(id)
 	if err != nil {
 		return nil, err
+	}
+	if raw == nil {
+		return nil, registry.ErrNoSuchRuntime
 	}
 
 	var signedRuntime registry.SignedRuntime
