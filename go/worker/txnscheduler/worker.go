@@ -18,7 +18,8 @@ import (
 type Worker struct {
 	*workerCommon.RuntimeHostWorker
 
-	enabled bool
+	enabled        bool
+	checkTxEnabled bool
 
 	commonWorker *workerCommon.Worker
 	registration *registration.Worker
@@ -26,10 +27,9 @@ type Worker struct {
 
 	runtimes map[common.Namespace]*committee.Node
 
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	quitCh    chan struct{}
-	initCh    chan struct{}
+	ctx    context.Context
+	quitCh chan struct{}
+	initCh chan struct{}
 
 	logger *logging.Logger
 }
@@ -152,7 +152,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	}
 
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(commonNode, computeNode, workerHostFactory)
+	node, err := committee.NewNode(commonNode, computeNode, workerHostFactory, w.checkTxEnabled)
 	if err != nil {
 		return err
 	}
@@ -172,20 +172,21 @@ func newWorker(
 	commonWorker *workerCommon.Worker,
 	compute *compute.Worker,
 	registration *registration.Worker,
+	checkTxEnabled bool,
 ) (*Worker, error) {
-	ctx, cancelCtx := context.WithCancel(context.Background())
+	ctx := context.Background()
 
 	w := &Worker{
-		enabled:      enabled,
-		commonWorker: commonWorker,
-		registration: registration,
-		compute:      compute,
-		runtimes:     make(map[common.Namespace]*committee.Node),
-		ctx:          ctx,
-		cancelCtx:    cancelCtx,
-		quitCh:       make(chan struct{}),
-		initCh:       make(chan struct{}),
-		logger:       logging.GetLogger("worker/txnscheduler"),
+		enabled:        enabled,
+		checkTxEnabled: checkTxEnabled,
+		commonWorker:   commonWorker,
+		registration:   registration,
+		compute:        compute,
+		runtimes:       make(map[common.Namespace]*committee.Node),
+		ctx:            ctx,
+		quitCh:         make(chan struct{}),
+		initCh:         make(chan struct{}),
+		logger:         logging.GetLogger("worker/txnscheduler"),
 	}
 
 	if enabled {
@@ -193,8 +194,9 @@ func newWorker(
 			panic("common worker should have been enabled for transaction scheduler")
 		}
 
-		// Create the runtime host worker.
 		var err error
+
+		// Create the runtime host worker.
 		w.RuntimeHostWorker, err = workerCommon.NewRuntimeHostWorker(commonWorker)
 		if err != nil {
 			return nil, err
@@ -212,48 +214,14 @@ func newWorker(
 
 		// Register transaction scheduler worker role.
 		if err = w.registration.RegisterRole(node.RoleTransactionScheduler, func(n *node.Node) error {
-			// Wait until all the runtimes are initialized.
-			for _, rt := range w.runtimes {
-				select {
-				case <-rt.Initialized():
-				case <-w.ctx.Done():
-					return w.ctx.Err()
-				}
-			}
-
-			for _, rt := range n.Runtimes {
-				var grr error
-
-				workerRT := w.runtimes[rt.ID]
-				if workerRT == nil {
-					continue
-				}
-
-				workerHost := workerRT.GetWorkerHost()
-				if workerHost == nil {
-					w.logger.Debug("runtime has shut down",
-						"runtime", rt.ID,
-					)
-					continue
-				}
-				if rt.Capabilities.TEE, grr = workerHost.WaitForCapabilityTEE(w.ctx); grr != nil {
-					w.logger.Error("failed to obtain CapabilityTEE",
-						"err", grr,
-						"runtime", rt.ID,
-					)
-					continue
-				}
-
-				runtimeVersion, grr := workerHost.WaitForRuntimeVersion(w.ctx)
-				if grr == nil && runtimeVersion != nil {
-					rt.Version = *runtimeVersion
-				} else {
-					w.logger.Error("failed to obtain RuntimeVersion",
-						"err", grr,
-						"runtime", rt.ID,
-						"runtime_version", runtimeVersion,
-					)
-					continue
+			if w.checkTxEnabled {
+				// Wait until all the runtimes are initialized.
+				for _, rt := range w.runtimes {
+					select {
+					case <-rt.Initialized():
+					case <-w.ctx.Done():
+						return w.ctx.Err()
+					}
 				}
 			}
 

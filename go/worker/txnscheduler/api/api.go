@@ -23,6 +23,9 @@ var (
 	// ErrNotReady is the error returned when the transaction scheduler is not
 	// yet ready to process transactions.
 	ErrNotReady = errors.New(ModuleName, 3, "txnscheduler: not ready")
+
+	// ErrCheckTxFailed is the error returned when CheckTx fails.
+	ErrCheckTxFailed = errors.New(ModuleName, 4, "txnscheduler: CheckTx failed")
 )
 
 // TransactionScheduler is the transaction scheduler API interface.
