@@ -66,7 +66,7 @@ func doRun(cmd *cobra.Command, args []string) error {
 	// Set up the deterministic random source.
 	hash := crypto.SHA512
 	seed := []byte(viper.GetString(CfgSeed))
-	src, err := drbg.New(hash, seed, nil, []byte("txsource workload generator v1"))
+	src, err := drbg.New(hash, seed, nil, []byte(fmt.Sprintf("txsource workload generator v1, workload %s", name)))
 	if err != nil {
 		return fmt.Errorf("drbg.New: %w", err)
 	}
