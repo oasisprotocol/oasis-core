@@ -5,13 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 )
@@ -93,13 +90,6 @@ func (w *metricsWrapper) GetConnectedNodes() []*node.Node {
 		return clientBackend.GetConnectedNodes()
 	}
 	return []*node.Node{}
-}
-
-func (w *metricsWrapper) WatchRuntime(id signature.PublicKey) error {
-	if clientBackend, ok := w.Backend.(api.ClientBackend); ok {
-		return clientBackend.WatchRuntime(id)
-	}
-	return errors.New("storage/metricswrapper: backend not ClientBackend")
 }
 
 func (w *metricsWrapper) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {

@@ -14,8 +14,11 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	"github.com/oasislabs/oasis-core/go/storage"
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
@@ -66,61 +69,66 @@ func doExport(cmd *cobra.Command, args []string) {
 	// Load the genesis document.
 	genesisDoc := cmdConsensus.InitGenesis()
 
-	// Initialize the storage backend.
-	storageBackend, err := newDirectStorageBackend(dataDir)
-	if err != nil {
-		logger.Error("failed to construct storage backend",
-			"err", err,
-		)
-		return
-	}
-
-	logger.Info("waiting for storage backend initialization")
-	<-storageBackend.Initialized()
-	defer storageBackend.Cleanup()
-
 	// For each storage root.
 	for runtimeID, rtg := range genesisDoc.RootHash.RuntimeStates {
 		logger.Info("fetching checkpoint write log",
 			"runtime_id", runtimeID,
 		)
 
-		// Use RuntimeID for the Roothash namespace.
-		var ns common.Namespace
-		_ = ns.UnmarshalBinary(runtimeID[:])
-
-		// Get the checkpoint iterator.
-		root := storageAPI.Root{
-			Namespace: ns,
-			Round:     rtg.Round,
-			Hash:      rtg.StateRoot,
-		}
-		it, err := storageBackend.GetCheckpoint(context.Background(),
-			&storageAPI.GetCheckpointRequest{
-				Root: root,
-			},
-		)
-		if err != nil {
-			logger.Error("failed getting checkpoint",
-				"err", err,
-				"namespace", root.Namespace,
-				"round", root.Round,
-				"root", root.Hash,
-			)
-			return
-		}
-
-		fn := fmt.Sprintf("storage-dump-%v-%d.json",
-			runtimeID.String(),
-			rtg.Round,
-		)
-		fn = filepath.Join(destDir, fn)
-		if err = exportIterator(fn, &root, it); err != nil {
+		if err := exportRuntime(dataDir, destDir, runtimeID, rtg); err != nil {
 			return
 		}
 	}
 
 	ok = true
+}
+
+func exportRuntime(dataDir, destDir string, id signature.PublicKey, rtg *registry.RuntimeGenesis) error {
+	dataDir = filepath.Join(dataDir, runtimeRegistry.RuntimesDir, id.String())
+
+	// Initialize the storage backend.
+	var ns common.Namespace
+	_ = ns.UnmarshalBinary(id[:])
+
+	storageBackend, err := newDirectStorageBackend(dataDir, ns)
+	if err != nil {
+		logger.Error("failed to construct storage backend",
+			"err", err,
+		)
+		return err
+	}
+
+	logger.Info("waiting for storage backend initialization")
+	<-storageBackend.Initialized()
+	defer storageBackend.Cleanup()
+
+	// Get the checkpoint iterator.
+	root := storageAPI.Root{
+		Namespace: ns,
+		Round:     rtg.Round,
+		Hash:      rtg.StateRoot,
+	}
+	it, err := storageBackend.GetCheckpoint(context.Background(),
+		&storageAPI.GetCheckpointRequest{
+			Root: root,
+		},
+	)
+	if err != nil {
+		logger.Error("failed getting checkpoint",
+			"err", err,
+			"namespace", root.Namespace,
+			"round", root.Round,
+			"root", root.Hash,
+		)
+		return err
+	}
+
+	fn := fmt.Sprintf("storage-dump-%v-%d.json",
+		root.Namespace.String(),
+		root.Round,
+	)
+	fn = filepath.Join(destDir, fn)
+	return exportIterator(fn, &root, it)
 }
 
 func exportIterator(fn string, root *storageAPI.Root, it storageAPI.WriteLogIterator) error {
@@ -179,13 +187,14 @@ func exportIterator(fn string, root *storageAPI.Root, it storageAPI.WriteLogIter
 	}
 }
 
-func newDirectStorageBackend(dataDir string) (storageAPI.Backend, error) {
+func newDirectStorageBackend(dataDir string, namespace common.Namespace) (storageAPI.Backend, error) {
 	// The right thing to do will be to use storage.New, but the backend config
 	// assumes that identity is valid, and we don't have one.
 	cfg := &storageAPI.Config{
 		Backend:           strings.ToLower(viper.GetString(storage.CfgBackend)),
 		DB:                dataDir,
 		ApplyLockLRUSlots: uint64(viper.GetInt(storage.CfgLRUSlots)),
+		Namespace:         namespace,
 	}
 
 	b := strings.ToLower(viper.GetString(storage.CfgBackend))
@@ -194,7 +203,7 @@ func newDirectStorageBackend(dataDir string) (storageAPI.Backend, error) {
 		cfg.DB = filepath.Join(cfg.DB, storageDatabase.DefaultFileName(cfg.Backend))
 		return storageDatabase.New(cfg)
 	case storageClient.BackendName:
-		return storageClient.New(context.Background(), nil, nil, nil)
+		return storageClient.New(context.Background(), namespace, nil, nil, nil)
 	default:
 		return nil, fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
 	}

@@ -95,8 +95,8 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 		// It only makes sense to run the SuccessfulRound test in case the
 		// EpochTransitionBlock was successful. Otherwise this may leave the
 		// committees set to nil and cause a crash.
-		t.Run("SucessfulRound", func(t *testing.T) {
-			testSucessfulRound(t, backend, consensus, identity, rtStates)
+		t.Run("SuccessfulRound", func(t *testing.T) {
+			testSuccessfulRound(t, backend, consensus, identity, rtStates)
 		})
 	}
 
@@ -219,7 +219,7 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 	}
 }
 
-func testSucessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity, states []*runtimeState) {
+func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity, states []*runtimeState) {
 	for _, state := range states {
 		state.testSuccessfulRound(t, backend, consensus, identity)
 	}

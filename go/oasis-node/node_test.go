@@ -451,7 +451,7 @@ func testStorageClientWithNode(t *testing.T, node *testNode) {
 	for _, kv := range config {
 		viper.Set(kv.key, kv.value)
 	}
-	debugClient, err := storageClient.New(ctx, node.Identity, nil, nil)
+	debugClient, err := storageClient.New(ctx, testNamespace, node.Identity, nil, nil)
 	require.NoError(t, err, "NewDebugStorageClient")
 
 	// Determine the current round. This is required so that we can commit into

@@ -6,7 +6,6 @@ import (
 	"context"
 	cryptorand "crypto/rand"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -18,11 +17,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 )
 
@@ -32,8 +28,6 @@ var (
 )
 
 var (
-	// ErrNoWatcher is an error when watcher for runtime is missing.
-	ErrNoWatcher = errors.New("storage/client: no watcher for runtime")
 	// ErrStorageNotAvailable is the error returned when no storage node is available.
 	ErrStorageNotAvailable = errors.New("storage/client: storage not available")
 )
@@ -51,78 +45,18 @@ type storageClientBackend struct {
 
 	logger *logging.Logger
 
-	initCh       chan struct{}
-	signaledInit bool
-
 	debugRuntimeID *signature.PublicKey
 
-	scheduler scheduler.Backend
-	registry  registry.Backend
-
-	runtimeWatchersLock sync.RWMutex
-	runtimeWatchers     map[signature.PublicKey]storageWatcher
-
-	identity *identity.Identity
+	runtimeWatcher storageWatcher
 
 	haltCtx  context.Context
 	cancelFn context.CancelFunc
 }
 
-func (b *storageClientBackend) getStorageWatcher(runtimeID signature.PublicKey) (storageWatcher, error) {
-	b.runtimeWatchersLock.RLock()
-	defer b.runtimeWatchersLock.RUnlock()
-
-	watcher := b.runtimeWatchers[runtimeID]
-	if watcher == nil {
-		b.logger.Error("worker/storage/client: no watcher for runtime",
-			"runtime_id", runtimeID,
-		)
-		return nil, ErrNoWatcher
-	}
-	return watcher, nil
-}
-
 // GetConnectedNodes returns registry node information about all connected
 // storage nodes.
 func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
-	b.runtimeWatchersLock.RLock()
-	defer b.runtimeWatchersLock.RUnlock()
-
-	nodes := []*node.Node{}
-	for _, watcher := range b.runtimeWatchers {
-		nodes = append(nodes, watcher.getConnectedNodes()...)
-	}
-	return nodes
-}
-
-func (b *storageClientBackend) WatchRuntime(id signature.PublicKey) error {
-	b.runtimeWatchersLock.Lock()
-	defer b.runtimeWatchersLock.Unlock()
-
-	watcher := b.runtimeWatchers[id]
-	if watcher != nil {
-		// Already watching, nothing to do.
-		return nil
-	}
-
-	// Watcher doesn't exist. Start new watcher.
-	watcher = newWatcher(b.ctx, id, b.identity, b.scheduler, b.registry)
-	b.runtimeWatchers[id] = watcher
-
-	// Signal init when the first registered runtime is initialized.
-	if !b.signaledInit {
-		b.signaledInit = true
-		go func() {
-			select {
-			case <-watcher.initialized():
-			case <-b.ctx.Done():
-				return
-			}
-			close(b.initCh)
-		}()
-	}
-
-	return nil
+	return b.runtimeWatcher.getConnectedNodes()
 }
 
 type grpcResponse struct {
@@ -159,17 +93,7 @@ func (b *storageClientBackend) writeWithClient(
 		return nil, ErrStorageNotAvailable
 	}
 
-	// Get watcher for runtime.
-	watcher, err := b.getStorageWatcher(runtimeID)
-	if err != nil {
-		b.logger.Error("writeWithClient: cannot get watcher for runtime",
-			"runtime_id", runtimeID,
-			"err", err,
-		)
-		return nil, ErrStorageNotAvailable
-	}
-
-	clientStates := watcher.getClientStates()
+	clientStates := b.runtimeWatcher.getClientStates()
 	n := len(clientStates)
 	if n == 0 {
 		b.logger.Error("writeWithClient: no connected nodes for runtime",
@@ -380,17 +304,7 @@ func (b *storageClientBackend) readWithClient(
 		return nil, ErrStorageNotAvailable
 	}
 
-	// Get watcher for runtime.
-	watcher, err := b.getStorageWatcher(runtimeID)
-	if err != nil {
-		b.logger.Error("readWithClient: cannot get watcher for runtime",
-			"runtime_id", runtimeID,
-			"err", err,
-		)
-		return nil, ErrStorageNotAvailable
-	}
-
-	clientStates := watcher.getClientStates()
+	clientStates := b.runtimeWatcher.getClientStates()
 	n := len(clientStates)
 	if n == 0 {
 		b.logger.Error("readWithClient: no connected nodes for runtime",
@@ -497,14 +411,9 @@ func (b *storageClientBackend) GetCheckpoint(ctx context.Context, request *api.G
 
 func (b *storageClientBackend) Cleanup() {
 	b.cancelFn()
-
-	b.runtimeWatchersLock.Lock()
-	defer b.runtimeWatchersLock.Unlock()
-	for _, watcher := range b.runtimeWatchers {
-		watcher.cleanup()
-	}
+	b.runtimeWatcher.cleanup()
 }
 
 func (b *storageClientBackend) Initialized() <-chan struct{} {
-	return b.initCh
+	return b.runtimeWatcher.initialized()
 }

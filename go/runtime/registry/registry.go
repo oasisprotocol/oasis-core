@@ -241,18 +241,6 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id signature.
 		return fmt.Errorf("runtime/registry: failed to start tag indexer for runtime %s: %w", id, err)
 	}
 
-	// If using a storage client, it should watch the configured runtimes.
-	// TODO: This should be done automatically by the storage backend when we add a runtime parameter.
-	if storageClient, ok := storageBackend.(storageAPI.ClientBackend); ok {
-		if err = storageClient.WatchRuntime(id); err != nil {
-			r.logger.Warn("error watching storage runtime, expected if using metricswrapper with local backend",
-				"err", err,
-			)
-		}
-	} else {
-		r.logger.Info("not watching storage runtime since not using a storage client backend")
-	}
-
 	r.runtimes[id] = &runtime{
 		id:           id,
 		consensus:    r.consensus,

@@ -49,10 +49,10 @@ func ClientWorkerTests(
 	// Populate the registry with an entity and nodes.
 	nodes := rt.Populate(t, consensus.Registry(), consensus, seed)
 
-	// Initialize storage client
-	client, err := storageClient.New(ctx, identity, consensus.Scheduler(), consensus.Registry())
-	require.NoError(err, "NewStorageClient")
-	err = client.(api.ClientBackend).WatchRuntime(rt.Runtime.ID)
+	ns := runtimeIDToNamespace(t, rt.Runtime.ID)
+
+	// Initialize storage client.
+	client, err := storageClient.New(ctx, ns, identity, consensus.Scheduler(), consensus.Registry())
 	require.NoError(err, "NewStorageClient")
 
 	// Create mock root hash.
@@ -60,7 +60,7 @@ func ClientWorkerTests(
 	rootHash.FromBytes([]byte("non-existing"))
 
 	root := api.Root{
-		Namespace: runtimeIDToNamespace(t, rt.Runtime.ID),
+		Namespace: ns,
 		Round:     0,
 		Hash:      rootHash,
 	}

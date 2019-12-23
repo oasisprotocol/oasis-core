@@ -208,24 +208,18 @@ func NewNode(
 
 	node.ctx, node.ctxCancel = context.WithCancel(context.Background())
 
-	// Create a new storage client that will be used for remote sync.
-	scl, err := client.New(node.ctx, node.commonNode.Identity, node.commonNode.Scheduler, node.commonNode.Registry)
-	if err != nil {
-		return nil, err
-	}
-	node.storageClient = scl.(storageApi.ClientBackend)
-	if err := node.storageClient.WatchRuntime(commonNode.Runtime.ID()); err != nil {
-		node.logger.Error("error watching storage runtime",
-			"err", err,
-		)
-		return nil, err
-	}
-
-	// Register prune handler.
 	var ns common.Namespace
 	runtimeID := commonNode.Runtime.ID()
 	copy(ns[:], runtimeID[:])
 
+	// Create a new storage client that will be used for remote sync.
+	scl, err := client.New(node.ctx, ns, node.commonNode.Identity, node.commonNode.Scheduler, node.commonNode.Registry)
+	if err != nil {
+		return nil, err
+	}
+	node.storageClient = scl.(storageApi.ClientBackend)
+
+	// Register prune handler.
 	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{
 		logger:    node.logger,
 		node:      node,

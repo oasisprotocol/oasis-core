@@ -59,7 +59,7 @@ func New(
 		cfg.DB = filepath.Join(cfg.DB, database.DefaultFileName(cfg.Backend))
 		impl, err = database.New(cfg)
 	case client.BackendName:
-		impl, err = client.New(ctx, identity, schedulerBackend, registryBackend)
+		impl, err = client.New(ctx, namespace, identity, schedulerBackend, registryBackend)
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
 	}
