@@ -889,8 +889,11 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 	}
 
 	if !isGenesis && !rt.Genesis.StateRoot.IsEmpty() {
-		// TODO: Verify storage receipt for the state root, reject such registrations for now.
+		// TODO: Verify storage receipt for the state root, reject such registrations for now. See oasis-core#1686.
 		return nil, ErrInvalidArgument
+	}
+	if err := rt.Genesis.SanityCheck(isGenesis); err != nil {
+		return nil, err
 	}
 
 	// Ensure there is at least one member of the compute group.

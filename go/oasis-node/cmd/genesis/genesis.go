@@ -33,7 +33,6 @@ import (
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests/debug"
@@ -406,39 +405,37 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 // of exported roothash blocks.
 func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Logger) error {
 	rootSt := roothash.Genesis{
-		Blocks: make(map[signature.PublicKey]*block.Block),
+		RuntimeStates: make(map[signature.PublicKey]*registry.RuntimeGenesis),
 	}
 
 	for _, v := range exports {
 		b, err := ioutil.ReadFile(v)
 		if err != nil {
-			l.Error("failed to load genesis roothash blocks",
+			l.Error("failed to load genesis roothash runtime states",
 				"err", err,
 				"filename", v,
 			)
 			return err
 		}
 
-		var blocks []*block.Block
-		if err = json.Unmarshal(b, &blocks); err != nil {
-			l.Error("failed to parse genesis roothash blocks",
+		var rtStates map[signature.PublicKey]*registry.RuntimeGenesis
+		if err = json.Unmarshal(b, &rtStates); err != nil {
+			l.Error("failed to parse genesis roothash runtime states",
 				"err", err,
 				"filename", v,
 			)
 			return err
 		}
 
-		for _, blk := range blocks {
-			var key signature.PublicKey
-			copy(key[:], blk.Header.Namespace[:])
-			if _, ok := rootSt.Blocks[key]; ok {
-				l.Error("duplicate genesis roothash block",
-					"runtime_id", blk.Header.Namespace,
-					"block", blk,
+		for key, rtg := range rtStates {
+			if _, ok := rootSt.RuntimeStates[key]; ok {
+				l.Error("duplicate genesis roothash runtime state",
+					"runtime_id", key,
+					"block", rtg,
 				)
-				return errors.New("duplicate genesis roothash block")
+				return errors.New("duplicate genesis roothash runtime states")
 			}
-			rootSt.Blocks[key] = blk
+			rootSt.RuntimeStates[key] = rtg
 		}
 	}
 

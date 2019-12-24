@@ -98,6 +98,7 @@ func NewDefaultFixture() (*oasis.NetworkFixture, error) {
 				},
 				Storage:      registry.StorageParameters{GroupSize: 1},
 				GenesisState: viper.GetString(cfgRuntimeGenesisState),
+				GenesisRound: 0,
 			},
 		},
 		Validators: []oasis.ValidatorFixture{

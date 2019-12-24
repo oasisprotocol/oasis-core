@@ -1066,10 +1066,10 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 		},
 		Storage: api.StorageParameters{GroupSize: 3},
 		Genesis: api.RuntimeGenesis{
-			StorageReceipt: signature.Signature{
+			StorageReceipts: []signature.Signature{{
 				// We don't want an invalid public key so we pass something.
 				PublicKey: rt.Signer.Public(),
-			},
+			}},
 		},
 	}
 	if entity != nil {

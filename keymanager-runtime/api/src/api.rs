@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use base64;
 use failure::Fail;
 use rand::{rngs::OsRng, Rng};
 use serde_derive::{Deserialize, Serialize};

@@ -22,10 +22,11 @@ import (
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	roothashAPI "github.com/oasislabs/oasis-core/go/roothash/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests/debug"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
 var testDoc = &genesis.Document{
@@ -111,6 +112,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	// First, set up a few things we'll need in the tests below.
 	signer := memorySigner.NewTestSigner("genesis sanity checks signer")
+	signer2 := memorySigner.NewTestSigner("another genesis sanity checks signer")
 	validPK := signer.Public()
 
 	invalidPK := hex2pk("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a")
@@ -119,6 +121,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	var emptyHash hash.Hash
 	emptyHash.Empty()
+	var nonEmptyHash hash.Hash
+	_ = nonEmptyHash.UnmarshalHex("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 
 	// Note that this test entity has no nodes by design, those will be added
 	// later by various tests.
@@ -233,74 +237,81 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "invalid keymanager ID should be rejected")
 
 	// Test roothash genesis checks.
-	d = *testDoc
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType: 123,
-		},
+	// First we define a helper function for calling the SanityCheck() on RuntimeStates.
+	rtsSanityCheck := func(g roothashAPI.Genesis, isGenesis bool) error {
+		for _, rts := range g.RuntimeStates {
+			if err = rts.SanityCheck(isGenesis); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	require.Error(d.SanityCheck(), "invalid block header should be rejected")
 
 	d = *testDoc
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType:   block.Normal,
-			PreviousHash: hash.Hash{},
-		},
+	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+		StateRoot: nonEmptyHash,
+		// Empty list of storage receipts.
+		StorageReceipts: []signature.Signature{},
 	}
-	require.Error(d.SanityCheck(), "invalid previous hash should be rejected")
+	require.Error(rtsSanityCheck(d.RootHash, false), "empty StorageReceipts for StateRoot should be rejected")
+	require.NoError(rtsSanityCheck(d.RootHash, true), "empty StorageReceipts for StateRoot should be ignored, if isGenesis=true")
 
 	d = *testDoc
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType:   block.Normal,
-			PreviousHash: emptyHash,
-			Timestamp:    uint64(time.Now().Unix() + 62*60),
-		},
+	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+		StateRoot: nonEmptyHash,
+		// List with one empty (invalid) storage receipt.
+		StorageReceipts: []signature.Signature{signature.Signature{}},
 	}
-	require.Error(d.SanityCheck(), "invalid timestamp should be rejected")
+	require.Error(rtsSanityCheck(d.RootHash, false), "empty StorageReceipt for StateRoot should be rejected")
+	require.NoError(rtsSanityCheck(d.RootHash, true), "empty StorageReceipt for StateRoot should be ignored, if isGenesis=true")
 
 	d = *testDoc
-	sigCtx := signature.NewContext("genesis sanity check storage sig test")
-	sig, grr := signature.Sign(signer, sigCtx, []byte{1, 2, 3})
-	require.NoError(grr, "should be able to sign")
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType:        block.Normal,
-			PreviousHash:      emptyHash,
-			Timestamp:         uint64(time.Now().Unix()),
-			StorageSignatures: []signature.Signature{*sig},
-		},
+	signature.SetChainContext("test: oasis-core tests")
+	stateRootSig, _ := signature.Sign(signer, storage.ReceiptSignatureContext, nonEmptyHash[:])
+	stateRootSig2, _ := signature.Sign(signer2, storage.ReceiptSignatureContext, nonEmptyHash[:])
+	wrongSig, _ := signature.Sign(signer, storage.ReceiptSignatureContext, []byte{1, 2, 3})
+	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+		StateRoot: nonEmptyHash,
+		// Some non-empty signature, but not related to StateRoot.
+		StorageReceipts: []signature.Signature{*wrongSig, *stateRootSig, *stateRootSig2},
 	}
-	require.Error(d.SanityCheck(), "non-empty storage signature array should be rejected")
+	require.Error(rtsSanityCheck(d.RootHash, false), "some incorrect StorageReceipt for StateRoot should be rejected")
+	require.NoError(rtsSanityCheck(d.RootHash, true), "some incorrect StorageReceipt for StateRoot should be ignored, if isGenesis=true")
 
 	d = *testDoc
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType:        block.Normal,
-			PreviousHash:      emptyHash,
-			Timestamp:         uint64(time.Now().Unix()),
-			StorageSignatures: []signature.Signature{},
-			Messages:          []*block.Message{nil, nil, nil},
-		},
+	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+		StateRoot:       nonEmptyHash,
+		StorageReceipts: []signature.Signature{*stateRootSig, *stateRootSig2},
 	}
-	require.Error(d.SanityCheck(), "non-empty roothash message array should be rejected")
+	require.NoError(rtsSanityCheck(d.RootHash, false), "non-empty StateRoot with all correct StorageReceipts should pass")
+	require.NoError(rtsSanityCheck(d.RootHash, true), "non-empty StateRoot with all correct StorageReceipts should pass, if isGenesis=true")
 
 	d = *testDoc
-	d.RootHash.Blocks = make(map[signature.PublicKey]*block.Block)
-	d.RootHash.Blocks[validPK] = &block.Block{
-		Header: block.Header{
-			HeaderType:   block.Normal,
-			PreviousHash: emptyHash,
-			Timestamp:    uint64(time.Now().Unix()),
-		},
+	nonEmptyState := storage.WriteLog{storage.LogEntry{
+		Key:   []byte{1, 2, 3},
+		Value: []byte{1, 2, 3},
+	}}
+	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+		State:           nonEmptyState,
+		StateRoot:       nonEmptyHash,
+		StorageReceipts: []signature.Signature{*wrongSig, *stateRootSig, *stateRootSig2},
 	}
-	require.NoError(d.SanityCheck(), "well-formed block should pass")
+	require.NoError(rtsSanityCheck(d.RootHash, false), "non-empty StateRoot with non-empty State and some invalid StorageReceipt should pass")
+	require.NoError(rtsSanityCheck(d.RootHash, true), "non-empty StateRoot with non-empty State and some invalid StorageReceipt should pass, if isGenesis=true")
+
+	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+		State:           nonEmptyState,
+		StateRoot:       nonEmptyHash,
+		StorageReceipts: []signature.Signature{*stateRootSig, *stateRootSig2},
+	}
+	require.NoError(rtsSanityCheck(d.RootHash, false), "non-empty StateRoot with non-empty State and all valid StorageReceipts should pass")
+	require.NoError(rtsSanityCheck(d.RootHash, true), "non-empty StateRoot with non-empty State and all valid StorageReceipts should pass, if isGenesis=true")
 
 	// Test registry genesis checks.
 	d = *testDoc

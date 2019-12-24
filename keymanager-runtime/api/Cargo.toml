@@ -4,6 +4,7 @@ version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 
 [dependencies]
+base64 = "0.10.1"
 oasis-core-runtime = { path = "../../runtime" }
 serde = "1.0.71"
 serde_derive = "1.0"

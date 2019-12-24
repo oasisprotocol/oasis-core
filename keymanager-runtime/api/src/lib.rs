@@ -1,4 +1,5 @@
 //! Key manager API.
+extern crate base64;
 extern crate failure;
 extern crate lazy_static;
 extern crate oasis_core_runtime;

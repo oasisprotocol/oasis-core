@@ -8,12 +8,13 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
-	genesisApi "github.com/oasislabs/oasis-core/go/genesis/api"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
+	"github.com/oasislabs/oasis-core/go/registry/api"
+	roothashAPI "github.com/oasislabs/oasis-core/go/roothash/api"
+	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
-func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesisApi.Document) error {
+func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesisAPI.Document) error {
 	st := doc.RootHash
 
 	// The per-runtime roothash state is done primarily via DeliverTx, but
@@ -35,26 +36,25 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 	return nil
 }
 
-func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothash.Genesis, error) {
+func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothashAPI.Genesis, error) {
 	runtimes := rq.state.Runtimes()
 
-	// Get per-runtime blocks.
-	blocks := make(map[signature.PublicKey]*block.Block)
+	// Get per-runtime states.
+	rtStates := make(map[signature.PublicKey]*api.RuntimeGenesis)
 	for _, rt := range runtimes {
-		blk := *rt.CurrentBlock
-		// Header should be a normal header for genesis.
-		blk.Header.HeaderType = block.Normal
-		// There should be no previous hash.
-		blk.Header.PreviousHash.Empty()
-		// No messages.
-		blk.Header.Messages = nil
-		// No storage signatures.
-		blk.Header.StorageSignatures = []signature.Signature{}
-		blocks[rt.Runtime.ID] = &blk
+		rtState := api.RuntimeGenesis{
+			StateRoot: rt.CurrentBlock.Header.StateRoot,
+			// State is always empty in Genesis regardless of StateRoot.
+			State:           storageAPI.WriteLog{},
+			StorageReceipts: []signature.Signature{},
+			Round:           rt.CurrentBlock.Header.Round,
+		}
+
+		rtStates[rt.Runtime.ID] = &rtState
 	}
 
-	genesis := &roothash.Genesis{
-		Blocks: blocks,
+	genesis := &roothashAPI.Genesis{
+		RuntimeStates: rtStates,
 	}
 	return genesis, nil
 }
