@@ -9,8 +9,10 @@ import (
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 )
 
-type Runner func(rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, _ runtimeClient.RuntimeClient) error
+type Workload interface {
+	Run(rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient) error
+}
 
-var ByName = map[string]Runner{
-	NameTransfer: runTransfer,
+var ByName = map[string]Workload{
+	NameTransfer: transfer{},
 }

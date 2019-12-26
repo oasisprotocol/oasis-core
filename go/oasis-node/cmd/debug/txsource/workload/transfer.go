@@ -25,7 +25,9 @@ const (
 
 var logger = logging.GetLogger("cmd/txsource/workload/transfer")
 
-func runTransfer(rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, _ runtimeClient.RuntimeClient) error {
+type transfer struct{}
+
+func (transfer) Run(rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, _ runtimeClient.RuntimeClient) error {
 	// Load all the keys up front. Like, how annoyed would you be if down the line one of them turned out to be
 	// corrupted or something, ya know?
 	accounts := make([]struct {

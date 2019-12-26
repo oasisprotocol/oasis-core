@@ -58,7 +58,7 @@ func doRun(cmd *cobra.Command, args []string) error {
 
 	// Resolve the workload.
 	name := viper.GetString(CfgWorkload)
-	runner, ok := workload.ByName[name]
+	w, ok := workload.ByName[name]
 	if !ok {
 		return fmt.Errorf("workload %s not found", name)
 	}
@@ -95,7 +95,7 @@ func doRun(cmd *cobra.Command, args []string) error {
 	logger.Debug("node synced")
 
 	logger.Debug("entering workload")
-	if err = runner(rng, conn, cnsc, rtc); err != nil {
+	if err = w.Run(rng, conn, cnsc, rtc); err != nil {
 		return fmt.Errorf("workload: %w", err)
 	}
 	logger.Debug("workload returned")
