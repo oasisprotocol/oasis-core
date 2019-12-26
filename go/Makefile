@@ -10,7 +10,7 @@ all: build
 
 # Build.
 # List of Go binaries to build.
-go-binaries := oasis-node oasis-test-runner oasis-net-runner
+go-binaries := oasis-node oasis-test-runner oasis-net-runner extra/stats
 # List of test helpers to build.
 test-helpers := urkel
 # List of test vectors to generate.
@@ -22,7 +22,7 @@ generate:
 
 $(go-binaries):
 	@$(ECHO) "$(MAGENTA)*** Building $@...$(OFF)"
-	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$@/$@ ./$@
+	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$@/$(notdir $@) ./$@
 
 oasis-node:
 
