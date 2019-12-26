@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 )
 
+// TxSource is a network with the txsource program as a client.
 var TxSource scenario.Scenario = &txSourceImpl{basicImpl{
 	name:         "txsource",
 	clientBinary: "txsource-wrapper.sh",

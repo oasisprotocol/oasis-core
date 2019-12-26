@@ -94,15 +94,16 @@ func doRun(cmd *cobra.Command, args []string) error {
 	}
 	logger.Debug("node synced")
 
-	logger.Debug("entering workload")
+	logger.Debug("entering workload", "name", name)
 	if err = w.Run(rng, conn, cnsc, rtc); err != nil {
-		return fmt.Errorf("workload: %w", err)
+		return fmt.Errorf("workload %s: %w", name, err)
 	}
-	logger.Debug("workload returned")
+	logger.Debug("workload returned", "name", name)
 
 	return nil
 }
 
+// Register registers the txsource sub-command.
 func Register(parentCmd *cobra.Command) {
 	parentCmd.AddCommand(txsourceCmd)
 }
