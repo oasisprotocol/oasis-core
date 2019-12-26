@@ -1,6 +1,7 @@
 package workload
 
 import (
+	"context"
 	"math/rand"
 
 	"google.golang.org/grpc"
@@ -10,7 +11,11 @@ import (
 )
 
 type Workload interface {
-	Run(rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient) error
+	// Run executes the workload.
+	// If `gracefulExit`'s deadline passes, it is not an error.
+	// Return `nil` after any short-ish amount of time in that case.
+	// Prefer to do at least one "iteration" even so.
+	Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient) error
 }
 
 // ByName is the registry of workloads that you can access with `--workload <name>` on the command line.

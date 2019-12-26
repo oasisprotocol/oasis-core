@@ -24,8 +24,9 @@ import (
 )
 
 const (
-	CfgWorkload = "workload"
-	CfgSeed     = "seed"
+	CfgWorkload  = "workload"
+	CfgSeed      = "seed"
+	CfgTimeLimit = "time_limit"
 )
 
 var (
@@ -42,6 +43,15 @@ func doRun(cmd *cobra.Command, args []string) error {
 
 	if err := common.Init(); err != nil {
 		common.EarlyLogAndExit(err)
+	}
+
+	// Set up the time limit.
+	ctx := context.Background()
+	timeLimit := viper.GetDuration(CfgTimeLimit)
+	if timeLimit != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeLimit)
+		defer cancel()
 	}
 
 	// Set up the genesis system for the signature system's chain context.
@@ -95,7 +105,7 @@ func doRun(cmd *cobra.Command, args []string) error {
 	logger.Debug("node synced")
 
 	logger.Debug("entering workload", "name", name)
-	if err = w.Run(rng, conn, cnsc, rtc); err != nil {
+	if err = w.Run(ctx, rng, conn, cnsc, rtc); err != nil {
 		return fmt.Errorf("workload %s: %w", name, err)
 	}
 	logger.Debug("workload returned", "name", name)
@@ -112,6 +122,7 @@ func init() {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fs.String(CfgWorkload, workload.NameTransfer, "Name of the workload to run (see source for listing)")
 	fs.String(CfgSeed, "seeeeeeeeeeeeeeeeeeeeeeeeeeeeeed", "Seed to use for randomized workloads")
+	fs.Duration(CfgTimeLimit, 0, "Exit successfully after this long, or 0 to run forever")
 	_ = viper.BindPFlags(fs)
 	txsourceCmd.Flags().AddFlagSet(fs)
 

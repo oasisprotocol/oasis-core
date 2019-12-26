@@ -27,7 +27,7 @@ var logger = logging.GetLogger("cmd/txsource/workload/transfer")
 
 type transfer struct{}
 
-func (transfer) Run(rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, _ runtimeClient.RuntimeClient) error {
+func (transfer) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient) error {
 	// Load all the keys up front. Like, how annoyed would you be if down the line one of them turned out to be
 	// corrupted or something, ya know?
 	accounts := make([]struct {
@@ -117,6 +117,13 @@ func (transfer) Run(rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.Client
 		}
 		if err = to.reckonedBalance.Add(&transfer.Tokens); err != nil {
 			return fmt.Errorf("to reckoned balance %v Add transfer tokens %v: %w", to.reckonedBalance, transfer.Tokens, err)
+		}
+
+		select {
+		case <-gracefulExit.Done():
+			logger.Debug("time's up")
+			return nil
+		default:
 		}
 	}
 }

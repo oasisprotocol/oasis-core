@@ -40,6 +40,7 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 
 	cmd, err := startClient(childEnv, sc.net, sc.clientBinary, append([]string{
 		"--genesis-path", sc.net.GenesisPath(),
+		"--time-limit", "2m", // %%% low value for validation (:
 	}, sc.clientArgs...))
 	if err != nil {
 		return fmt.Errorf("startClient: %w", err)
