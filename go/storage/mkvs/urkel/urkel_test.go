@@ -1887,6 +1887,7 @@ func TestUrkelBadgerBackend(t *testing.T) {
 			DB:           dir,
 			DebugNoFsync: true,
 			Namespace:    testNs,
+			MaxCacheSize: 16 * 1024 * 1024,
 		})
 		require.NoError(t, err, "New")
 
@@ -1942,7 +1943,9 @@ func benchmarkInsertBatch(b *testing.B, numValues int, commit bool) {
 		require.NoError(b, err, "TempDir")
 		defer os.RemoveAll(dir)
 		ndb, err := badgerDb.New(&db.Config{
-			DB: dir,
+			DB:           dir,
+			Namespace:    testNs,
+			MaxCacheSize: 16 * 1024 * 1024,
 		})
 		require.NoError(b, err, "New")
 		tree := New(nil, ndb)
@@ -1973,12 +1976,6 @@ func generateKeyValuePairsEx(prefix string, count int) ([][]byte, [][]byte) {
 
 func generateKeyValuePairs() ([][]byte, [][]byte) {
 	return generateKeyValuePairsEx("", insertItems)
-}
-
-func init() {
-	var ns hash.Hash
-	ns.FromBytes([]byte("oasis urkel test ns"))
-	copy(testNs[:], ns[:])
 }
 
 func generateLongKeyValuePairs() ([][]byte, [][]byte) {
@@ -2012,4 +2009,10 @@ func generatePopulatedTree(t *testing.T, ndb db.NodeDB) ([][]byte, [][]byte, nod
 		Hash:      rootHash,
 	}
 	return keys, values, root, tree
+}
+
+func init() {
+	var ns hash.Hash
+	ns.FromBytes([]byte("oasis urkel test ns"))
+	copy(testNs[:], ns[:])
 }

@@ -50,6 +50,9 @@ type Config struct {
 
 	// Namespace is the namespace contained within the database.
 	Namespace common.Namespace
+
+	// MaxCacheSize is the maximum in-memory cache size for the database.
+	MaxCacheSize int64
 }
 
 // NodeDB is the persistence layer used for persisting the in-memory tree.

@@ -22,10 +22,15 @@ import (
 
 const (
 	// CfgBackend configures the storage backend flag.
-	CfgBackend      = "storage.backend"
-	cfgCrashEnabled = "storage.crash.enabled"
+	CfgBackend = "storage.backend"
+
 	// CfgLRUSlots configures the LRU apply lock slots.
-	CfgLRUSlots           = "storage.root_cache.apply_lock_lru_slots"
+	CfgLRUSlots = "storage.root_cache.apply_lock_lru_slots"
+
+	// CfgMaxCacheSize configures the maximum in-memory cache size.
+	CfgMaxCacheSize = "storage.max_cache_size"
+
+	cfgCrashEnabled       = "storage.crash.enabled"
 	cfgInsecureSkipChecks = "storage.debug.insecure_skip_checks"
 )
 
@@ -48,6 +53,7 @@ func New(
 		ApplyLockLRUSlots:  uint64(viper.GetInt(CfgLRUSlots)),
 		InsecureSkipChecks: viper.GetBool(cfgInsecureSkipChecks) && cmdFlags.DebugDontBlameOasis(),
 		Namespace:          namespace,
+		MaxCacheSize:       int64(viper.GetSizeInBytes(CfgMaxCacheSize)),
 	}
 
 	var (
@@ -80,6 +86,7 @@ func init() {
 	Flags.String(CfgBackend, database.BackendNameBadgerDB, "Storage backend")
 	Flags.Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
 	Flags.Int(CfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
+	Flags.String(CfgMaxCacheSize, "64mb", "Maximum in-memory cache size")
 
 	Flags.Bool(cfgInsecureSkipChecks, false, "INSECURE: Skip known root checks")
 

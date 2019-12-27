@@ -76,6 +76,7 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 		Signer:             ident.NodeSigner,
 		ApplyLockLRUSlots:  1,
 		InsecureSkipChecks: false,
+		MaxCacheSize:       16 * 1024 * 1024,
 	}
 	backend, err := database.New(&storageCfg)
 	if err != nil {

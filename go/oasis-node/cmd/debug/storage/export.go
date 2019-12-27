@@ -195,6 +195,7 @@ func newDirectStorageBackend(dataDir string, namespace common.Namespace) (storag
 		DB:                dataDir,
 		ApplyLockLRUSlots: uint64(viper.GetInt(storage.CfgLRUSlots)),
 		Namespace:         namespace,
+		MaxCacheSize:      int64(viper.GetSizeInBytes(storage.CfgMaxCacheSize)),
 	}
 
 	b := strings.ToLower(viper.GetString(storage.CfgBackend))

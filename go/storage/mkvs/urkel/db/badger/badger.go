@@ -127,8 +127,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(db.logger))
 	opts = opts.WithSyncWrites(!cfg.DebugNoFsync)
 	opts = opts.WithCompression(options.None)
-	// Reduce cache size to 64 MiB as the default is 1 GiB.
-	opts = opts.WithMaxCacheSize(64 * 1024 * 1024)
+	opts = opts.WithMaxCacheSize(cfg.MaxCacheSize)
 
 	var err error
 	if db.db, err = badger.Open(opts); err != nil {

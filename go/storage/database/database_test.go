@@ -36,6 +36,7 @@ func doTestImpl(t *testing.T, backend string) {
 			Backend:           backend,
 			ApplyLockLRUSlots: 100,
 			Namespace:         testNs,
+			MaxCacheSize:      16 * 1024 * 1024,
 		}
 		err error
 	)

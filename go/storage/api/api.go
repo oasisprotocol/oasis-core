@@ -90,13 +90,17 @@ type Config struct {
 
 	// Namespace is the namespace contained within the database.
 	Namespace common.Namespace
+
+	// MaxCacheSize is the maximum in-memory cache size for the database.
+	MaxCacheSize int64
 }
 
 // ToNodeDB converts from a Config to a node DB Config.
 func (cfg *Config) ToNodeDB() *nodedb.Config {
 	return &nodedb.Config{
-		DB:        cfg.DB,
-		Namespace: cfg.Namespace,
+		DB:           cfg.DB,
+		Namespace:    cfg.Namespace,
+		MaxCacheSize: cfg.MaxCacheSize,
 	}
 }
 
