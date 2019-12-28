@@ -3,6 +3,8 @@ package tests
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -22,7 +25,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage"
+	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
 const (
@@ -43,7 +47,7 @@ type runtimeState struct {
 
 // RootHashImplementationTests exercises the basic functionality of a
 // roothash backend.
-func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, storage storage.Backend) {
+func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
 	seedBase := []byte("RootHashImplementationTests")
 
 	require := require.New(t)
@@ -91,8 +95,8 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 		// It only makes sense to run the SuccessfulRound test in case the
 		// EpochTransitionBlock was successful. Otherwise this may leave the
 		// committees set to nil and cause a crash.
-		t.Run("SucessfulRound", func(t *testing.T) {
-			testSucessfulRound(t, backend, consensus, storage, rtStates)
+		t.Run("SuccessfulRound", func(t *testing.T) {
+			testSuccessfulRound(t, backend, consensus, identity, rtStates)
 		})
 	}
 
@@ -215,16 +219,27 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 	}
 }
 
-func testSucessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, storage storage.Backend, states []*runtimeState) {
+func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity, states []*runtimeState) {
 	for _, state := range states {
-		state.testSuccessfulRound(t, backend, consensus, storage)
+		state.testSuccessfulRound(t, backend, consensus, identity)
 	}
 }
 
-func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, storageBackend storage.Backend) {
+func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
 	require := require.New(t)
 
 	rt, computeCommittee, mergeCommittee := s.rt, s.computeCommittee, s.mergeCommittee
+
+	dataDir, err := ioutil.TempDir("", "oasis-storage-test_")
+	require.NoError(err, "TempDir")
+	defer os.RemoveAll(dataDir)
+
+	var ns common.Namespace
+	copy(ns[:], rt.Runtime.ID[:])
+
+	storageBackend, err := storage.New(context.Background(), dataDir, ns, identity, consensus.Scheduler(), consensus.Registry())
+	require.NoError(err, "storage.New")
+	defer storageBackend.Cleanup()
 
 	child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID, consensusAPI.HeightLatest)
 	require.NoError(err, "GetLatestBlock")
@@ -234,7 +249,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	defer sub.Close()
 
 	// Generate a dummy I/O root.
-	ioRoot := storage.Root{
+	ioRoot := storageAPI.Root{
 		Namespace: child.Header.Namespace,
 		Round:     child.Header.Round + 1,
 	}
@@ -271,10 +286,10 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 		s.storageCommittee,
 		child.Header.Namespace,
 		child.Header.Round+1,
-		[]storage.ApplyOp{
-			storage.ApplyOp{SrcRound: child.Header.Round + 1, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
+		[]storageAPI.ApplyOp{
+			storageAPI.ApplyOp{SrcRound: child.Header.Round + 1, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
 			// NOTE: Twice to get a receipt over both roots which we set to the same value.
-			storage.ApplyOp{SrcRound: child.Header.Round, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
+			storageAPI.ApplyOp{SrcRound: child.Header.Round, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
 		},
 	)
 
@@ -467,15 +482,15 @@ func mustGetCommittee(
 
 func mustStore(
 	t *testing.T,
-	store storage.Backend,
+	store storageAPI.Backend,
 	committee *testCommittee,
 	ns common.Namespace,
 	round uint64,
-	ops []storage.ApplyOp,
+	ops []storageAPI.ApplyOp,
 ) []signature.Signature {
 	require := require.New(t)
 
-	receipts, err := store.ApplyBatch(context.Background(), &storage.ApplyBatchRequest{
+	receipts, err := store.ApplyBatch(context.Background(), &storageAPI.ApplyBatchRequest{
 		Namespace: ns,
 		DstRound:  round,
 		Ops:       ops,
@@ -486,14 +501,14 @@ func mustStore(
 	// We need to fake the storage signatures as the storage committee under test
 	// does not contain the key of the actual storage backend.
 
-	var body storage.ReceiptBody
+	var body storageAPI.ReceiptBody
 	err = receipts[0].Open(&body)
 	require.NoError(err, "Open")
 
 	var signatures []signature.Signature
 	for _, node := range committee.workers {
-		var receipt *storage.Receipt
-		receipt, err = storage.SignReceipt(node.Signer, ns, round, body.Roots)
+		var receipt *storageAPI.Receipt
+		receipt, err = storageAPI.SignReceipt(node.Signer, ns, round, body.Roots)
 		require.NoError(err, "SignReceipt")
 
 		signatures = append(signatures, receipt.Signed.Signature)

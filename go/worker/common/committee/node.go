@@ -18,7 +18,6 @@ import (
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/worker/common/host"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
 
@@ -82,7 +81,6 @@ type Node struct {
 	Identity         *identity.Identity
 	KeyManager       keymanagerApi.Backend
 	KeyManagerClient *keymanagerClient.Client
-	LocalStorage     *host.LocalStorage
 	Storage          storage.Backend
 	Roothash         roothash.Backend
 	Registry         registry.Backend
@@ -313,8 +311,6 @@ func NewNode(
 	identity *identity.Identity,
 	keymanager keymanagerApi.Backend,
 	keymanagerClient *keymanagerClient.Client,
-	localStorage *host.LocalStorage,
-	storage storage.Backend,
 	roothash roothash.Backend,
 	registry registry.Backend,
 	scheduler scheduler.Backend,
@@ -332,8 +328,7 @@ func NewNode(
 		Identity:         identity,
 		KeyManager:       keymanager,
 		KeyManagerClient: keymanagerClient,
-		LocalStorage:     localStorage,
-		Storage:          storage,
+		Storage:          runtime.Storage(),
 		Roothash:         roothash,
 		Registry:         registry,
 		Scheduler:        scheduler,

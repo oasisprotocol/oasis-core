@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -147,7 +148,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 	storageWorkerClient := storageWorkerAPI.NewStorageWorkerClient(conn)
 	defer conn.Close()
 
-	storageClient, err := storageClient.New(ctx, nil, nil, nil)
+	storageClient, err := storageClient.New(ctx, common.Namespace{}, nil, nil, nil)
 	if err != nil {
 		logger.Error("error while connecting to storage client",
 			"err", err,

@@ -118,6 +118,7 @@ func New(
 		s.grpcPolicy = grpc.NewDynamicRuntimePolicyChecker()
 		api.RegisterService(s.commonWorker.Grpc.Server(), &storageService{
 			w:                  s,
+			storage:            s.commonWorker.RuntimeRegistry.StorageRouter(),
 			debugRejectUpdates: viper.GetBool(CfgWorkerDebugIgnoreApply) && flags.DebugDontBlameOasis(),
 		})
 
@@ -256,11 +257,20 @@ func (s *Worker) initGenesis(gen *genesis.Document) error {
 				return err
 			}
 
+			regRt, err := s.commonWorker.RuntimeRegistry.GetRuntime(rt.ID)
+			if err != nil {
+				// Skip unsupported runtimes.
+				s.logger.Warn("skipping unsupported runtime",
+					"runtime_id", rt.ID,
+				)
+				continue
+			}
+
 			if rt.Genesis.State != nil {
 				var ns common.Namespace
 				copy(ns[:], rt.ID[:])
 
-				_, err = s.commonWorker.Storage.Apply(ctx, &api.ApplyRequest{
+				_, err = regRt.Storage().Apply(ctx, &api.ApplyRequest{
 					Namespace: ns,
 					SrcRound:  0,
 					SrcRoot:   emptyRoot,

@@ -115,7 +115,6 @@ type Node struct {
 	Scheduler scheduler.Backend
 	Sentry    sentryAPI.Backend
 	Staking   stakingAPI.Backend
-	Storage   storageAPI.Backend
 	IAS       iasAPI.Endpoint
 
 	KeyManager       keymanagerAPI.Backend
@@ -171,18 +170,10 @@ func (n *Node) RegistrationStopped() {
 }
 
 func (n *Node) initBackends() error {
-	dataDir := cmdCommon.DataDir()
-
 	var err error
-
 	if n.Sentry, err = sentry.New(n.Consensus); err != nil {
 		return err
 	}
-
-	if n.Storage, err = storage.New(n.svcMgr.Ctx, dataDir, n.Identity, n.Scheduler, n.Registry); err != nil {
-		return err
-	}
-	n.svcMgr.RegisterCleanupOnly(n.Storage, "storage backend")
 
 	if supplementarysanity.Enabled() {
 		if err = supplementarysanity.New(n.svcTmnt); err != nil {
@@ -195,7 +186,6 @@ func (n *Node) initBackends() error {
 	scheduler.RegisterService(grpcSrv, n.Scheduler)
 	registryAPI.RegisterService(grpcSrv, n.Registry)
 	stakingAPI.RegisterService(grpcSrv, n.Staking)
-	storageAPI.RegisterService(grpcSrv, n.Storage)
 	consensusAPI.RegisterService(grpcSrv, n.Consensus)
 
 	cmdCommon.Logger().Debug("backends initialized")
@@ -237,7 +227,6 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		dataDir,
 		compute.Enabled() || workerStorage.Enabled() || txnscheduler.Enabled() || merge.Enabled() || workerKeymanager.Enabled(),
 		n.Identity,
-		n.Storage,
 		n.RootHash,
 		n.Registry,
 		n.Scheduler,
@@ -683,11 +672,12 @@ func newNode(testNode bool) (*Node, error) {
 	logger.Info("starting Oasis node")
 
 	// Initialize the node's runtime registry.
-	node.RuntimeRegistry, err = runtimeRegistry.New(node.svcMgr.Ctx, cmdCommon.DataDir(), node.Consensus, node.Storage)
+	node.RuntimeRegistry, err = runtimeRegistry.New(node.svcMgr.Ctx, cmdCommon.DataDir(), node.Consensus, node.Identity)
 	if err != nil {
 		return nil, err
 	}
 	node.svcMgr.RegisterCleanupOnly(node.RuntimeRegistry, "runtime registry")
+	storageAPI.RegisterService(node.grpcInternal.Server(), node.RuntimeRegistry.StorageRouter())
 
 	// Initialize the key manager client service.
 	node.KeyManagerClient, err = keymanagerClient.New(node.KeyManager, node.Registry, node.Identity)
@@ -703,7 +693,6 @@ func newNode(testNode bool) (*Node, error) {
 		node.svcMgr.Ctx,
 		cmdCommon.DataDir(),
 		node.RootHash,
-		node.Storage,
 		node.Scheduler,
 		node.Registry,
 		node.svcTmnt,

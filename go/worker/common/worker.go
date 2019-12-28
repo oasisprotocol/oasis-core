@@ -16,14 +16,9 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/common/host"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
-
-// LocalStorageFile is the filename of the worker's local storage database.
-const LocalStorageFile = "worker-local-storage.badger.db"
 
 // Worker is a garbage bag with lower level services and common runtime objects.
 type Worker struct {
@@ -31,7 +26,6 @@ type Worker struct {
 	cfg     Config
 
 	Identity         *identity.Identity
-	Storage          storage.Backend
 	Roothash         roothash.Backend
 	Registry         registry.Backend
 	Scheduler        scheduler.Backend
@@ -41,7 +35,6 @@ type Worker struct {
 	IAS              ias.Endpoint
 	KeyManager       keymanagerApi.Backend
 	KeyManagerClient *keymanagerClient.Client
-	LocalStorage     *host.LocalStorage
 	RuntimeRegistry  runtimeRegistry.Registry
 	GenesisDoc       *genesis.Document
 
@@ -119,10 +112,6 @@ func (w *Worker) Stop() {
 	}
 
 	w.Grpc.Stop()
-
-	if w.LocalStorage != nil {
-		w.LocalStorage.Stop()
-	}
 }
 
 // Enabled returns if worker is enabled.
@@ -197,8 +186,6 @@ func (w *Worker) NewUnmanagedCommitteeNode(runtime runtimeRegistry.Runtime, enab
 		w.Identity,
 		w.KeyManager,
 		w.KeyManagerClient,
-		w.LocalStorage,
-		w.Storage,
 		w.Roothash,
 		w.Registry,
 		w.Scheduler,
@@ -230,7 +217,6 @@ func newWorker(
 	dataDir string,
 	enabled bool,
 	identity *identity.Identity,
-	storageBackend storage.Backend,
 	roothash roothash.Backend,
 	registryInst registry.Backend,
 	scheduler scheduler.Backend,
@@ -248,7 +234,6 @@ func newWorker(
 		enabled:          enabled,
 		cfg:              cfg,
 		Identity:         identity,
-		Storage:          storageBackend,
 		Roothash:         roothash,
 		Registry:         registryInst,
 		Scheduler:        scheduler,
@@ -267,17 +252,6 @@ func newWorker(
 	}
 
 	if enabled {
-		// Open the local storage.
-		var err error
-		if w.LocalStorage, err = host.NewLocalStorage(dataDir, LocalStorageFile); err != nil {
-			w.logger.Error("failed to initialize local storage",
-				"err", err,
-				"data_dir", dataDir,
-				"local_storage_file", LocalStorageFile,
-			)
-			return nil, err
-		}
-
 		for _, rt := range runtimeRegistry.Runtimes() {
 			// Register all configured runtimes.
 			if err := w.registerRuntime(rt); err != nil {
@@ -294,7 +268,6 @@ func New(
 	dataDir string,
 	enabled bool,
 	identity *identity.Identity,
-	storage storage.Backend,
 	roothash roothash.Backend,
 	registry registry.Backend,
 	scheduler scheduler.Backend,
@@ -326,7 +299,6 @@ func New(
 		dataDir,
 		enabled,
 		identity,
-		storage,
 		roothash,
 		registry,
 		scheduler,

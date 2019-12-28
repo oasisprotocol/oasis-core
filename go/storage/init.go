@@ -10,6 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -21,10 +22,15 @@ import (
 
 const (
 	// CfgBackend configures the storage backend flag.
-	CfgBackend      = "storage.backend"
-	cfgCrashEnabled = "storage.crash.enabled"
+	CfgBackend = "storage.backend"
+
 	// CfgLRUSlots configures the LRU apply lock slots.
-	CfgLRUSlots           = "storage.root_cache.apply_lock_lru_slots"
+	CfgLRUSlots = "storage.root_cache.apply_lock_lru_slots"
+
+	// CfgMaxCacheSize configures the maximum in-memory cache size.
+	CfgMaxCacheSize = "storage.max_cache_size"
+
+	cfgCrashEnabled       = "storage.crash.enabled"
 	cfgInsecureSkipChecks = "storage.debug.insecure_skip_checks"
 )
 
@@ -35,6 +41,7 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 func New(
 	ctx context.Context,
 	dataDir string,
+	namespace common.Namespace,
 	identity *identity.Identity,
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
@@ -45,6 +52,8 @@ func New(
 		Signer:             identity.NodeSigner,
 		ApplyLockLRUSlots:  uint64(viper.GetInt(CfgLRUSlots)),
 		InsecureSkipChecks: viper.GetBool(cfgInsecureSkipChecks) && cmdFlags.DebugDontBlameOasis(),
+		Namespace:          namespace,
+		MaxCacheSize:       int64(viper.GetSizeInBytes(CfgMaxCacheSize)),
 	}
 
 	var (
@@ -56,7 +65,7 @@ func New(
 		cfg.DB = filepath.Join(cfg.DB, database.DefaultFileName(cfg.Backend))
 		impl, err = database.New(cfg)
 	case client.BackendName:
-		impl, err = client.New(ctx, identity, schedulerBackend, registryBackend)
+		impl, err = client.New(ctx, namespace, identity, schedulerBackend, registryBackend)
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
 	}
@@ -77,6 +86,7 @@ func init() {
 	Flags.String(CfgBackend, database.BackendNameBadgerDB, "Storage backend")
 	Flags.Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
 	Flags.Int(CfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
+	Flags.String(CfgMaxCacheSize, "64mb", "Maximum in-memory cache size")
 
 	Flags.Bool(cfgInsecureSkipChecks, false, "INSECURE: Skip known root checks")
 

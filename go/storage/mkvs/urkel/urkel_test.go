@@ -1432,7 +1432,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
 		Items     []item
 	}{
 		{
-			Namespace: common.Namespace{},
+			Namespace: testNs,
 			Round:     4,
 			SrcRoot:   "xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
 			DstRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
@@ -1449,7 +1449,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
 			},
 		},
 		{
-			Namespace: common.Namespace{},
+			Namespace: testNs,
 			Round:     4,
 			SrcRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
 			DstRoot:   "XeNxDPHiY0PAQI5vFxFNxjwgAj++Sf0kCohpaUvImUg=",
@@ -1471,7 +1471,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
 			},
 		},
 		{
-			Namespace: common.Namespace{},
+			Namespace: testNs,
 			Round:     4,
 			SrcRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
 			DstRoot:   "rgbZz2sV2QlI/XG/+GiQoYlDpmxrMbY/hFs6PhTu1hA=",
@@ -1805,6 +1805,17 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	_, _, err = tree.Commit(ctx, testNs, 0)
 	require.Error(t, err, "Commit should fail for already finalized round")
 	require.Equal(t, db.ErrAlreadyFinalized, err)
+
+	// Commit for a different namespace should fail.
+	var badNs common.Namespace
+	_ = badNs.UnmarshalText([]byte("badbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadb"))
+
+	tree = New(nil, ndb)
+	err = tree.Insert(ctx, []byte("bad namespace"), []byte("woohoo"))
+	require.NoError(t, err, "Insert")
+	_, _, err = tree.Commit(ctx, badNs, 0)
+	require.Error(t, err, "Commit should fail for bad namespace")
+	require.Equal(t, db.ErrBadNamespace, err)
 }
 
 func testBackend(
@@ -1875,6 +1886,8 @@ func TestUrkelBadgerBackend(t *testing.T) {
 		ndb, err := badgerDb.New(&db.Config{
 			DB:           dir,
 			DebugNoFsync: true,
+			Namespace:    testNs,
+			MaxCacheSize: 16 * 1024 * 1024,
 		})
 		require.NoError(t, err, "New")
 
@@ -1930,7 +1943,9 @@ func benchmarkInsertBatch(b *testing.B, numValues int, commit bool) {
 		require.NoError(b, err, "TempDir")
 		defer os.RemoveAll(dir)
 		ndb, err := badgerDb.New(&db.Config{
-			DB: dir,
+			DB:           dir,
+			Namespace:    testNs,
+			MaxCacheSize: 16 * 1024 * 1024,
 		})
 		require.NoError(b, err, "New")
 		tree := New(nil, ndb)
@@ -1961,12 +1976,6 @@ func generateKeyValuePairsEx(prefix string, count int) ([][]byte, [][]byte) {
 
 func generateKeyValuePairs() ([][]byte, [][]byte) {
 	return generateKeyValuePairsEx("", insertItems)
-}
-
-func init() {
-	var ns hash.Hash
-	ns.FromBytes([]byte("oasis urkel test ns"))
-	copy(testNs[:], ns[:])
 }
 
 func generateLongKeyValuePairs() ([][]byte, [][]byte) {
@@ -2000,4 +2009,10 @@ func generatePopulatedTree(t *testing.T, ndb db.NodeDB) ([][]byte, [][]byte, nod
 		Hash:      rootHash,
 	}
 	return keys, values, root, tree
+}
+
+func init() {
+	var ns hash.Hash
+	ns.FromBytes([]byte("oasis urkel test ns"))
+	copy(testNs[:], ns[:])
 }

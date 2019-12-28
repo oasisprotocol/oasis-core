@@ -15,6 +15,8 @@ import (
 	ias "github.com/oasislabs/oasis-core/go/ias/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
 	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/host"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
@@ -94,6 +96,16 @@ func New(
 			return nil, fmt.Errorf("worker/keymanager: runtime binary not configured")
 		}
 
+		// Create local storage for the key manager.
+		path, err := runtimeRegistry.EnsureRuntimeStateDir(dataDir, w.runtimeID)
+		if err != nil {
+			return nil, fmt.Errorf("worker/keymanager: failed to ensure runtime state directory: %w", err)
+		}
+		localStorage, err := localstorage.New(path, runtimeRegistry.LocalStorageFile, w.runtimeID)
+		if err != nil {
+			return nil, fmt.Errorf("worker/keymanager: cannot create local storage: %w", err)
+		}
+
 		if err := w.registration.RegisterRole(node.RoleKeyManager, w.onNodeRegistration); err != nil {
 			return nil, fmt.Errorf("worker/keymanager: failed to register role: %w", err)
 		}
@@ -105,7 +117,7 @@ func New(
 			RuntimeBinary:  runtimeBinary,
 			TEEHardware:    teeHardware,
 			IAS:            ias,
-			MessageHandler: newHostHandler(w),
+			MessageHandler: newHostHandler(w, localStorage),
 		}
 
 		// Register the EnclaveRPC transport gRPC service.

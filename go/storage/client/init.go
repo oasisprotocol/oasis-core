@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/identity"
@@ -41,11 +41,17 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 // New creates a new storage client.
 func New(
 	ctx context.Context,
+	namespace common.Namespace,
 	ident *identity.Identity,
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
 ) (api.Backend, error) {
 	logger := logging.GetLogger("storage/client")
+
+	runtimeID, err := namespace.ToRuntimeID()
+	if err != nil {
+		return nil, err
+	}
 
 	if addr := viper.GetString(CfgDebugClientAddress); addr != "" && cmdFlags.DebugDontBlameOasis() {
 		logger.Warn("Storage client in debug mode, connecting to provided client",
@@ -81,32 +87,22 @@ func New(
 		testRuntimeSigner := memorySigner.NewTestSigner(debugModeFakeRuntimeSeed)
 		debugRuntimeID := testRuntimeSigner.Public()
 		b := &storageClientBackend{
-			ctx:             ctx,
-			initCh:          make(chan struct{}),
-			logger:          logger,
-			debugRuntimeID:  &debugRuntimeID,
-			scheduler:       schedulerBackend,
-			registry:        registryBackend,
-			runtimeWatchers: make(map[signature.PublicKey]storageWatcher),
-			identity:        ident,
+			ctx:            ctx,
+			logger:         logger,
+			debugRuntimeID: &debugRuntimeID,
 		}
 		state := &clientState{
 			client: client,
 			conn:   conn,
 		}
-		close(b.initCh)
-		b.runtimeWatchers[debugRuntimeID] = newDebugWatcher(state)
+		b.runtimeWatcher = newDebugWatcher(state)
 		return b, nil
 	}
 
 	b := &storageClientBackend{
-		ctx:             ctx,
-		initCh:          make(chan struct{}),
-		logger:          logger,
-		scheduler:       schedulerBackend,
-		registry:        registryBackend,
-		runtimeWatchers: make(map[signature.PublicKey]storageWatcher),
-		identity:        ident,
+		ctx:            ctx,
+		logger:         logger,
+		runtimeWatcher: newWatcher(ctx, runtimeID, ident, schedulerBackend, registryBackend),
 	}
 
 	b.haltCtx, b.cancelFn = context.WithCancel(ctx)

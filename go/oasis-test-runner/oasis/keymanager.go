@@ -8,7 +8,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/node"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 )
 
 const (
@@ -63,11 +62,6 @@ func (km *Keymanager) TLSCertPath() string {
 // Exports path returns the path to the node's exports data dir.
 func (km *Keymanager) ExportsPath() string {
 	return nodeExportsPath(km.dir)
-}
-
-// LocalStoragePath returns the path to the node's local storage.
-func (km *Keymanager) LocalStoragePath() string {
-	return filepath.Join(km.dir.String(), workerCommon.LocalStorageFile)
 }
 
 func (km *Keymanager) provisionGenesis() error {
