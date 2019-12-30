@@ -10,6 +10,7 @@ import (
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 )
 
+// Workload is a DRBG-backed schedule of transactions.
 type Workload interface {
 	// Run executes the workload.
 	// If `gracefulExit`'s deadline passes, it is not an error.

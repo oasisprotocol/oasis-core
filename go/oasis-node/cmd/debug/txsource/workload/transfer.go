@@ -23,7 +23,7 @@ const (
 	TransferAmount      = 1
 )
 
-var logger = logging.GetLogger("cmd/txsource/workload/transfer")
+var transferLogger = logging.GetLogger("cmd/txsource/workload/transfer")
 
 type transfer struct{}
 
@@ -50,13 +50,13 @@ func (transfer) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cli
 	for i := range accounts {
 		var account *staking.Account
 		account, err = stakingClient.AccountInfo(ctx, &staking.OwnerQuery{
-			Height: 0,
+			Height: consensus.HeightLatest,
 			Owner:  accounts[i].signer.Public(),
 		})
 		if err != nil {
 			return fmt.Errorf("stakingClient.AccountInfo %s: %w", accounts[i].signer.Public(), err)
 		}
-		logger.Debug("account info",
+		transferLogger.Debug("account info",
 			"i", i,
 			"pub", accounts[i].signer.Public(),
 			"info", account,
@@ -101,7 +101,7 @@ func (transfer) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cli
 		if err != nil {
 			return fmt.Errorf("transaction.Sign: %w", err)
 		}
-		logger.Debug("submitting transfer",
+		transferLogger.Debug("submitting transfer",
 			"from", from.signer.Public(),
 			"to", to.signer.Public(),
 		)
@@ -121,7 +121,7 @@ func (transfer) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cli
 
 		select {
 		case <-gracefulExit.Done():
-			logger.Debug("time's up")
+			transferLogger.Debug("time's up")
 			return nil
 		default:
 		}

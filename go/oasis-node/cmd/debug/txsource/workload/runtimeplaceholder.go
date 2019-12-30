@@ -7,11 +7,16 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/oasis-core/go/common/logging"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 )
 
-var _ Workload = runtimePlaceholder{}
+var (
+	_ Workload = runtimePlaceholder{}
+
+	runtimePlaceholderLogger = logging.GetLogger("cmd/txsource/workload/runtimeplaceholder")
+)
 
 type runtimePlaceholder struct{}
 
@@ -23,6 +28,6 @@ func (runtimePlaceholder) Run(_ context.Context, _ *rand.Rand, _ *grpc.ClientCon
 	if err != nil {
 		return fmt.Errorf("rtc.SubmitTx: %w", err)
 	}
-	logger.Debug("output", "out", out)
+	runtimePlaceholderLogger.Debug("output", "out", out)
 	return nil
 }
