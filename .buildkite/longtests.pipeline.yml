@@ -37,12 +37,12 @@ docker_plugin: &docker_plugin
 steps:
   - label: Transaction source tests
     parallelism: 1
-    timeout_in_minutes: 480
+    timeout_in_minutes: 55
     command:
       - make
       - >-
         ./.buildkite/scripts/test_e2e.sh
-        -t txsource
+        -t txsource-transfer
     env:
       TEST_BASE_DIR: e2e
     agents:

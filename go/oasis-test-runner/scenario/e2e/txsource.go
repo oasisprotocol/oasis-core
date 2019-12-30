@@ -14,13 +14,34 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 )
 
-// TxSource is a network with the txsource program as a client.
-var TxSource scenario.Scenario = &txSourceImpl{basicImpl{
-	name: "txsource",
-}}
+const (
+	timeLimitShort = time.Minute
+	timeLimitLong  = 43 * time.Minute
+)
+
+// TxSourceTransferShort uses the transfer workload for a short time.
+var TxSourceTransferShort scenario.Scenario = &txSourceImpl{
+	basicImpl: basicImpl{
+		name: "txsource-transfer-short",
+	},
+	workload:  workload.NameTransfer,
+	timeLimit: timeLimitShort,
+}
+
+// TxSourceTransfer uses the transfer workload.
+var TxSourceTransfer scenario.Scenario = &txSourceImpl{
+	basicImpl: basicImpl{
+		name: "txsource-transfer",
+	},
+	workload:  workload.NameTransfer,
+	timeLimit: timeLimitLong,
+}
 
 type txSourceImpl struct {
 	basicImpl
+
+	workload  string
+	timeLimit time.Duration
 }
 
 func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
@@ -53,8 +74,8 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 		"--log.format", logFmt.String(),
 		"--log.level", logLevel.String(),
 		"--" + flags.CfgGenesisFile, sc.net.GenesisPath(),
-		"--" + txsource.CfgWorkload, workload.NameTransfer,
-		"--" + txsource.CfgTimeLimit, (2 * time.Minute).String(), // %%% low value for validation (:
+		"--" + txsource.CfgWorkload, sc.workload,
+		"--" + txsource.CfgTimeLimit, sc.timeLimit.String(),
 	}, sc.clientArgs...))
 	if err != nil {
 		return fmt.Errorf("startClient: %w", err)
