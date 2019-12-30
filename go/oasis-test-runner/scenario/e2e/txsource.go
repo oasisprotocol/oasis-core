@@ -16,8 +16,7 @@ import (
 
 // TxSource is a network with the txsource program as a client.
 var TxSource scenario.Scenario = &txSourceImpl{basicImpl{
-	name:         "txsource",
-	clientBinary: "txsource-wrapper.sh",
+	name: "txsource",
 }}
 
 type txSourceImpl struct {
@@ -46,7 +45,7 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 
 	logFmt := logging.FmtJSON
 	logLevel := logging.LevelDebug
-	cmd, err := startClient(childEnv, sc.net, sc.clientBinary, append([]string{
+	cmd, err := startClient(childEnv, sc.net, "scripts/txsource-wrapper.sh", append([]string{
 		"--",
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgDebugDontBlameOasis,

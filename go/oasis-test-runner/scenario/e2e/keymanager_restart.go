@@ -83,7 +83,7 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 	// Run the second client on a different key so that it will require
 	// a second trip to the keymanager.
 	sc.logger.Info("starting a second client to check if key manager works")
-	cmd, err = startClient(childEnv, sc.basicImpl.net, sc.basicImpl.clientBinary, []string{"--key", "key2"})
+	cmd, err = startClient(childEnv, sc.basicImpl.net, resolveClientBinary(sc.basicImpl.clientBinary), []string{"--key", "key2"})
 	if err != nil {
 		return err
 	}
