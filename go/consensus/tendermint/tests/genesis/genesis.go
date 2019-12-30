@@ -16,6 +16,7 @@ import (
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests/helpers"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests/debug"
 )
@@ -63,6 +64,11 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 				MaxValidatorsPerEntity: 100,
 				DebugBypassStake:       true,
 				DebugStaticValidators:  true,
+			},
+		},
+		RootHash: roothash.Genesis{
+			Parameters: roothash.ConsensusParameters{
+				DebugDoNotSuspendRuntimes: true,
 			},
 		},
 		Consensus: consensus.Genesis{

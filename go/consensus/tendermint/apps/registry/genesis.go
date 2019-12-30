@@ -75,6 +75,25 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 			}
 		}
 	}
+	for _, v := range st.SuspendedRuntimes {
+		app.logger.Debug("InitChain: Registering genesis suspended runtime",
+			"runtime_owner", v.Signature.PublicKey,
+		)
+		if err := app.registerRuntime(ctx, state, v); err != nil {
+			app.logger.Error("InitChain: failed to register runtime",
+				"err", err,
+				"runtime", v,
+			)
+			return errors.Wrap(err, "registry: genesis suspended runtime registration failure")
+		}
+		var rt registry.Runtime
+		if err := cbor.Unmarshal(v.Blob, &rt); err != nil {
+			return errors.Wrap(err, "registry: malformed genesis suspended runtime")
+		}
+		if err := state.SuspendRuntime(rt.ID); err != nil {
+			return errors.Wrap(err, "registry: failed to suspend runtime at genesis")
+		}
+	}
 	for _, v := range st.Nodes {
 		app.logger.Debug("InitChain: Registering genesis node",
 			"node_owner", v.Signature.PublicKey,
@@ -120,6 +139,10 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 	if err != nil {
 		return nil, err
 	}
+	suspendedRuntimes, err := rq.state.SuspendedRuntimes()
+	if err != nil {
+		return nil, err
+	}
 	signedNodes, err := rq.state.SignedNodes()
 	if err != nil {
 		return nil, err
@@ -149,11 +172,12 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 	}
 
 	gen := registry.Genesis{
-		Parameters:   *params,
-		Entities:     signedEntities,
-		Runtimes:     signedRuntimes,
-		Nodes:        validatorNodes,
-		NodeStatuses: nodeStatuses,
+		Parameters:        *params,
+		Entities:          signedEntities,
+		Runtimes:          signedRuntimes,
+		SuspendedRuntimes: suspendedRuntimes,
+		Nodes:             validatorNodes,
+		NodeStatuses:      nodeStatuses,
 	}
 	return &gen, nil
 }

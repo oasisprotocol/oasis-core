@@ -4,6 +4,7 @@ package roothash
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
@@ -90,46 +91,58 @@ func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.Requ
 
 func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epochtime.EpochTime) error {
 	state := roothashState.NewMutableState(ctx.State())
-
-	// Query the updated runtime list.
+	schedState := schedulerState.NewMutableState(ctx.State())
 	regState := registryState.NewMutableState(ctx.State())
 	runtimes, _ := regState.Runtimes()
-	newDescriptors := make(map[common.Namespace]*registry.Runtime)
-	for _, v := range runtimes {
-		if v.Kind == registry.KindCompute {
-			newDescriptors[v.ID] = v
-		}
+
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		return fmt.Errorf("failed to get consensus parameters: %w", err)
 	}
 
-	schedState := schedulerState.NewMutableState(ctx.State())
-	for _, rtState := range state.Runtimes() {
-		rtID := rtState.Runtime.ID
-
-		if !rtState.Runtime.IsCompute() {
-			app.logger.Debug("checkCommittees: skipping non-compute runtime",
-				"runtime", rtID,
+	for _, rt := range runtimes {
+		if !rt.IsCompute() {
+			app.logger.Debug("skipping non-compute runtime",
+				"runtime", rt.ID,
 			)
 			continue
 		}
 
+		rtState, err := state.RuntimeState(rt.ID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch runtime state: %w", err)
+		}
+
+		// Since the runtime is in the list of active runtimes in the registry we
+		// can safely clear the suspended flag.
+		rtState.Suspended = false
+
 		// Prepare new runtime committees based on what the scheduler did.
-		committeeID, computePool, mergePool, err := app.prepareNewCommittees(ctx, epoch, rtState, schedState, regState)
+		committeeID, computePool, mergePool, empty, err := app.prepareNewCommittees(ctx, epoch, rtState, schedState, regState)
 		if err != nil {
 			return err
 		}
 
+		// If there are no committees for this runtime, suspend the runtime as this
+		// means that there is noone to pay the maintenance fees.
+		if empty && !params.DebugDoNotSuspendRuntimes {
+			if err := app.suspendUnpaidRuntime(ctx, rtState, regState); err != nil {
+				return err
+			}
+		}
+
 		// If the committee has actually changed, force a new round.
-		if round := rtState.Round; round == nil || !round.CommitteeID.Equal(&committeeID) {
-			app.logger.Debug("checkCommittees: updating committee for runtime",
-				"runtime", rtID,
+		if !rtState.Suspended && (rtState.Round == nil || !rtState.Round.CommitteeID.Equal(&committeeID)) {
+			app.logger.Debug("updating committee for runtime",
+				"runtime_id", rt.ID,
 			)
 
 			// Transition the round.
 			blk := rtState.CurrentBlock
 			blockNr := blk.Header.Round
 
-			app.logger.Debug("checkCommittees: new committee, transitioning round",
-				"runtime", rtID,
+			app.logger.Debug("new committee, transitioning round",
+				"runtime_id", rt.ID,
 				"committee_id", committeeID,
 				"round", blockNr,
 			)
@@ -143,10 +156,32 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 		}
 
 		// Update the runtime descriptor to the latest per-epoch value.
-		rtState.Runtime = newDescriptors[rtID]
+		rtState.Runtime = rt
 
 		state.SetRuntimeState(rtState)
 	}
+
+	return nil
+}
+
+func (app *rootHashApplication) suspendUnpaidRuntime(
+	ctx *abci.Context,
+	rtState *roothashState.RuntimeState,
+	regState *registryState.MutableState,
+) error {
+	app.logger.Warn("maintenance fees not paid for runtime, suspending",
+		"runtime_id", rtState.Runtime.ID,
+	)
+
+	if err := regState.SuspendRuntime(rtState.Runtime.ID); err != nil {
+		return err
+	}
+
+	rtState.Suspended = true
+	rtState.Round = nil
+
+	// Emity an empty block signalling that the runtime was suspended.
+	app.emitEmptyBlock(ctx, rtState, block.Suspended)
 
 	return nil
 }
@@ -161,6 +196,7 @@ func (app *rootHashApplication) prepareNewCommittees(
 	committeeID hash.Hash,
 	computePool *commitment.MultiPool,
 	mergePool *commitment.Pool,
+	empty bool,
 	err error,
 ) {
 	rtID := rtState.Runtime.ID
@@ -208,6 +244,7 @@ func (app *rootHashApplication) prepareNewCommittees(
 		app.logger.Warn("checkCommittees: no compute committees",
 			"runtime", rtID,
 		)
+		empty = true
 	}
 	for _, computeCommittee := range computeCommittees {
 		computeNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
@@ -215,7 +252,7 @@ func (app *rootHashApplication) prepareNewCommittees(
 			var nodeRuntime *node.Runtime
 			node, err1 := regState.Node(n.PublicKey)
 			if err1 != nil {
-				return hash.Hash{}, nil, nil, errors.Wrap(err1, "checkCommittees: failed to query node")
+				return hash.Hash{}, nil, nil, false, errors.Wrap(err1, "checkCommittees: failed to query node")
 			}
 			for _, r := range node.Runtimes {
 				if !r.ID.Equal(&rtID) {
@@ -261,6 +298,7 @@ func (app *rootHashApplication) prepareNewCommittees(
 		app.logger.Warn("checkCommittees: no merge committee",
 			"runtime", rtID,
 		)
+		empty = true
 	} else {
 		mergeNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
 		for idx, n := range mergeCommittee.Members {
@@ -362,9 +400,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 	}
 
 	// Check if state already exists for the given runtime.
-	rtState, _ := state.RuntimeState(runtime.ID)
-	if rtState != nil {
-		// Do not propagate the error as this would fail the transaction.
+	if _, err := state.RuntimeState(runtime.ID); err != roothash.ErrInvalidRuntime {
 		app.logger.Warn("onNewRuntime: state for runtime already exists",
 			"runtime", runtime,
 		)

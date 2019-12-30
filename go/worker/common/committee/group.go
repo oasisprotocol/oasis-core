@@ -243,6 +243,23 @@ func (g *Group) RoundTransition(ctx context.Context) {
 	g.activeEpoch.cancelRoundCtx = cancel
 }
 
+// Suspend processes a runtime suspension that just happened.
+//
+// Resumption will be processed as a regular epoch transition.
+func (g *Group) Suspend(ctx context.Context) {
+	g.Lock()
+	defer g.Unlock()
+
+	if g.activeEpoch == nil {
+		return
+	}
+
+	// Cancel context for the previous epoch.
+	(g.activeEpoch.cancelRoundCtx)()
+	// Invalidate current epoch.
+	g.activeEpoch = nil
+}
+
 // EpochTransition processes an epoch transition that just happened.
 func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	g.Lock()

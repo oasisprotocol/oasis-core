@@ -246,6 +246,28 @@ type RuntimeGenesis struct {
 	Round uint64 `json:"round"`
 }
 
+// Equal compares vs another RuntimeGenesis for equality.
+func (rtg *RuntimeGenesis) Equal(cmp *RuntimeGenesis) bool {
+	if !rtg.StateRoot.Equal(&cmp.StateRoot) {
+		return false
+	}
+	if rtg.Round != cmp.Round {
+		return false
+	}
+	if !rtg.State.Equal(cmp.State) {
+		return false
+	}
+	if len(rtg.StorageReceipts) != len(cmp.StorageReceipts) {
+		return false
+	}
+	for k, v := range rtg.StorageReceipts {
+		if !v.Equal(&cmp.StorageReceipts[k]) {
+			return false
+		}
+	}
+	return true
+}
+
 // SanityCheck does basic sanity checking of RuntimeGenesis.
 // isGenesis is true, if it is called during consensus chain init.
 func (rtg *RuntimeGenesis) SanityCheck(isGenesis bool) error {

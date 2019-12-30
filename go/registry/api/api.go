@@ -118,8 +118,12 @@ var (
 	// policy.
 	ErrForbidden = errors.New(ModuleName, 16, "registry: forbidden by policy")
 
-	// ErrNodeUpdateNotAllowed is the error returned when trying to update an existing node with unallowed changes.
+	// ErrNodeUpdateNotAllowed is the error returned when trying to update an existing node with
+	// disallowed changes.
 	ErrNodeUpdateNotAllowed = errors.New(ModuleName, 17, "registry: node update not allowed")
+
+	// ErrRuntimeUpdateNotAllowed is the error returned when trying to update an existing runtime.
+	ErrRuntimeUpdateNotAllowed = errors.New(ModuleName, 18, "registry: runtime update not allowed")
 
 	// MethodRegisterEntity is the method name for entity registrations.
 	MethodRegisterEntity = transaction.NewMethodName(ModuleName, "RegisterEntity", entity.SignedEntity{})
@@ -998,6 +1002,64 @@ func VerifyRegisterComputeRuntimeArgs(logger *logging.Logger, rt *Runtime, runti
 	return nil
 }
 
+// VerifyRuntimeUpdate verifies changes while updating the runtime.
+//
+// The function assumes that the signature on the current runtime is valid and thus does not perform
+// re-verification. In case the passed current runtime descriptor is corrupted, this method will
+// panic as this indicates state corruption.
+func VerifyRuntimeUpdate(logger *logging.Logger, currentSigRt, newSigRt *SignedRuntime, newRt *Runtime) error {
+	if !currentSigRt.Signature.PublicKey.Equal(newSigRt.Signature.PublicKey) {
+		logger.Error("RegisterRuntime: trying to change runtime owner",
+			"current_owner", currentSigRt.Signature.PublicKey,
+			"new_owner", newSigRt.Signature.PublicKey,
+		)
+		return ErrRuntimeUpdateNotAllowed
+	}
+
+	var currentRt Runtime
+	if err := cbor.Unmarshal(currentSigRt.Blob, &currentRt); err != nil {
+		logger.Error("RegisterRuntime: corrupted current runtime descriptor",
+			"err", err,
+		)
+		panic("registry: current runtime state is corrupted")
+	}
+
+	if !currentRt.ID.Equal(&newRt.ID) {
+		logger.Error("RegisterRuntime: trying to update runtime ID",
+			"current_id", currentRt.ID.String(),
+			"new_id", newRt.ID.String(),
+		)
+		return ErrRuntimeUpdateNotAllowed
+	}
+	if currentRt.Kind != newRt.Kind {
+		logger.Error("RegisterRuntime: trying to update runtime kind",
+			"current_kind", currentRt.Kind,
+			"new_kind", newRt.Kind,
+		)
+		return ErrRuntimeUpdateNotAllowed
+	}
+	if !currentRt.Genesis.Equal(&newRt.Genesis) {
+		logger.Error("RegisterRuntime: trying to update genesis")
+		return ErrRuntimeUpdateNotAllowed
+	}
+	if (currentRt.KeyManager == nil) != (newRt.KeyManager == nil) {
+		logger.Error("RegisterRuntime: trying to change key manager",
+			"current_km", currentRt.KeyManager,
+			"new_km", newRt.KeyManager,
+		)
+		return ErrRuntimeUpdateNotAllowed
+	}
+	// Both descriptors must either have the key manager set or not.
+	if currentRt.KeyManager != nil && !currentRt.KeyManager.Equal(newRt.KeyManager) {
+		logger.Error("RegisterRuntime: trying to change key manager",
+			"current_km", currentRt.KeyManager,
+			"new_km", newRt.KeyManager,
+		)
+		return ErrRuntimeUpdateNotAllowed
+	}
+	return nil
+}
+
 // SortNodeList sorts the given node list to ensure a canonical order.
 func SortNodeList(nodes []*node.Node) {
 	sort.Slice(nodes, func(i, j int) bool {
@@ -1015,6 +1077,8 @@ type Genesis struct {
 
 	// Runtimes is the initial list of runtimes.
 	Runtimes []*SignedRuntime `json:"runtimes,omitempty"`
+	// SuspendedRuntimes is the list of suspended runtimes.
+	SuspendedRuntimes []*SignedRuntime `json:"suspended_runtimes,omitempty"`
 
 	// Nodes is the initial list of nodes.
 	Nodes []*node.SignedNode `json:"nodes,omitempty"`
@@ -1031,11 +1095,11 @@ type ConsensusParameters struct {
 
 	// DebugAllowUnroutableAddresses is true iff node registration should
 	// allow unroutable addreses.
-	DebugAllowUnroutableAddresses bool `json:"debug_allow_unroutable_addresses"`
+	DebugAllowUnroutableAddresses bool `json:"debug_allow_unroutable_addresses,omitempty"`
 
 	// DebugAllowRuntimeRegistration is true iff runtime registration should be
 	// allowed outside of the genesis block.
-	DebugAllowRuntimeRegistration bool `json:"debug_allow_runtime_registration"`
+	DebugAllowRuntimeRegistration bool `json:"debug_allow_runtime_registration,omitempty"`
 
 	// DebugAllowTestRuntimes is true iff test runtimes should be allowed to
 	// be registered.
@@ -1043,7 +1107,7 @@ type ConsensusParameters struct {
 
 	// DebugBypassStake is true iff the registry should bypass all of the staking
 	// related checks and operations.
-	DebugBypassStake bool `json:"debug_bypass_stake"`
+	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
 
 	// GasCosts are the registry transaction gas costs.
 	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
@@ -1060,6 +1124,9 @@ const (
 	GasOpUnfreezeNode transaction.Op = "unfreeze_node"
 	// GasOpRegisterRuntime is the gas operation identifier for runtime registration.
 	GasOpRegisterRuntime transaction.Op = "register_runtime"
+	// GasOpRuntimeEpochMaintenance is the gas operation identifier for per-epoch
+	// runtime maintenance costs.
+	GasOpRuntimeEpochMaintenance transaction.Op = "runtime_epoch_maintenance"
 )
 
 // SanityCheckEntities examines the entities table.
@@ -1312,7 +1379,9 @@ func (g *Genesis) SanityCheck() error {
 	}
 
 	// Check runtimes.
-	seenRuntimes, err := SanityCheckRuntimes(g.Runtimes)
+	runtimes := append([]*SignedRuntime{}, g.Runtimes...)
+	runtimes = append(runtimes, g.SuspendedRuntimes...)
+	seenRuntimes, err := SanityCheckRuntimes(runtimes)
 	if err != nil {
 		return err
 	}

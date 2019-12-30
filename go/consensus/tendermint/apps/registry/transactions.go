@@ -1,6 +1,8 @@
 package registry
 
 import (
+	"fmt"
+
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -58,7 +60,7 @@ func (app *registryApplication) registerEntity(
 		return registry.ErrIncorrectTxSigner
 	}
 
-	state.CreateEntity(ent, sigEnt)
+	state.SetEntity(ent, sigEnt)
 
 	app.logger.Debug("RegisterEntity: registered",
 		"entity", ent,
@@ -154,7 +156,8 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		)
 		return err
 	}
-	regRuntimes, err := state.Runtimes()
+	// TODO: Avoid loading a list of all runtimes.
+	regRuntimes, err := state.AllRuntimes()
 	if err != nil {
 		app.logger.Error("RegisterNode: failed to obtain registry runtimes",
 			"err", err,
@@ -169,7 +172,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 	// Charge gas for node registration if signed by entity. For node-signed
 	// registrations, the gas charges are pre-paid by the entity.
-	if sigNode.Signature.PublicKey.Equal(untrustedNode.EntityID) {
+	if sigNode.Signature.PublicKey.Equal(newNode.EntityID) {
 		if err = ctx.Gas().UseGas(1, registry.GasOpRegisterNode, params.GasCosts); err != nil {
 			return err
 		}
@@ -212,12 +215,14 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 	}
 
-	// Ensure node is not expired.
+	// Ensure node is not expired. Even though the expiration in the current epoch is technically
+	// not yet expired, we treat it as expired as it doesn't make sense to have a new node that will
+	// immediately expire.
 	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}
-	if newNode.IsExpired(uint64(epoch)) {
+	if newNode.Expiration <= uint64(epoch) {
 		return registry.ErrNodeExpired
 	}
 
@@ -225,6 +230,56 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	existingNode, err := state.Node(newNode.ID)
 	isNewNode := err == registry.ErrNoSuchNode
 	isExpiredNode := err == nil && existingNode.IsExpired(uint64(epoch))
+	if !isNewNode && err != nil {
+		// Something went horribly wrong, and we failed to query the node.
+		app.logger.Error("RegisterNode: failed to query node",
+			"err", err,
+			"new_node", newNode,
+			"existing_node", existingNode,
+			"entity", newNode.EntityID,
+		)
+		return registry.ErrInvalidArgument
+	}
+
+	// For each runtime the node registers for, require it to pay a maintenance fee for
+	// each epoch the node is registered in.
+	additionalEpochs := newNode.Expiration - uint64(epoch)
+	if !isNewNode && !isExpiredNode {
+		// Remaining epochs are credited so the node doesn't end up paying twice.
+		// NOTE: This assumes that changing runtimes is not allowed as otherwise we
+		//       would need to account this per-runtime.
+		remainingEpochs := existingNode.Expiration - uint64(epoch)
+		if additionalEpochs > remainingEpochs {
+			additionalEpochs = additionalEpochs - remainingEpochs
+		} else {
+			additionalEpochs = 0
+		}
+	}
+	var paidRuntimes []*registry.Runtime
+	for _, nodeRt := range newNode.Runtimes {
+		var rt *registry.Runtime
+		rt, err = state.AnyRuntime(nodeRt.ID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch runtime: %w", err)
+		}
+
+		paidRuntimes = append(paidRuntimes, rt)
+	}
+	feeCount := len(paidRuntimes) * int(additionalEpochs)
+	if err = ctx.Gas().UseGas(feeCount, registry.GasOpRuntimeEpochMaintenance, params.GasCosts); err != nil {
+		return err
+	}
+
+	// Create a new state checkpoint and rollback in case we fail.
+	var ok bool
+	sc := ctx.NewStateCheckpoint()
+	defer func() {
+		if !ok {
+			sc.Rollback()
+		}
+		sc.Close()
+	}()
+
 	if isNewNode || isExpiredNode {
 		// Check that the entity has enough stake for this node registration.
 		if !params.DebugBypassStake {
@@ -238,7 +293,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 
 		// Node doesn't exist (or is expired). Create node.
-		if err = state.CreateNode(newNode, sigNode); err != nil {
+		if err = state.SetNode(newNode, sigNode); err != nil {
 			app.logger.Error("RegisterNode: failed to create node",
 				"err", err,
 				"node", newNode,
@@ -270,15 +325,6 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			)
 			return registry.ErrInvalidArgument
 		}
-	} else if err != nil {
-		// Something went horribly wrong, and we failed to query the node.
-		app.logger.Error("RegisterNode: failed to query node",
-			"err", err,
-			"new_node", newNode,
-			"existing_node", existingNode,
-			"entity", newNode.EntityID,
-		)
-		return registry.ErrInvalidArgument
 	} else {
 		// Check that the entity has enough stake for the existing node
 		// registrations.
@@ -302,7 +348,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			)
 			return err
 		}
-		if err = state.CreateNode(newNode, sigNode); err != nil {
+		if err = state.SetNode(newNode, sigNode); err != nil {
 			app.logger.Error("RegisterNode: failed to update node",
 				"err", err,
 				"node", newNode,
@@ -311,6 +357,30 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			return registry.ErrBadEntityForNode
 		}
 	}
+
+	// If a runtime was previously suspended and this node now paid maintenance
+	// fees for it, resume the runtime.
+	for _, rt := range paidRuntimes {
+		err := state.ResumeRuntime(rt.ID)
+		switch err {
+		case nil:
+			app.logger.Debug("RegisterNode: resumed runtime",
+				"runtime_id", rt.ID,
+			)
+
+			ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
+		case registry.ErrNoSuchRuntime:
+			// Runtime was not suspended.
+		default:
+			app.logger.Error("RegisterNode: failed to resume suspended runtime",
+				"err", err,
+				"runtime_id", rt.ID,
+			)
+			return fmt.Errorf("failed to resume suspended runtime %s: %w", rt.ID, err)
+		}
+	}
+
+	ok = true
 
 	app.logger.Debug("RegisterNode: registered",
 		"node", newNode,
@@ -446,7 +516,33 @@ func (app *registryApplication) registerRuntime(
 		}
 	}
 
-	if err = state.CreateRuntime(rt, sigRt); err != nil {
+	// Make sure the runtime doesn't exist yet.
+	var suspended bool
+	existingRt, err := state.SignedRuntime(rt.ID)
+	switch err {
+	case nil:
+	case registry.ErrNoSuchRuntime:
+		// Make sure the runtime isn't suspended.
+		existingRt, err = state.SignedSuspendedRuntime(rt.ID)
+		switch err {
+		case nil:
+			suspended = true
+		case registry.ErrNoSuchRuntime:
+		default:
+			return fmt.Errorf("failed to fetch suspended runtime: %w", err)
+		}
+	default:
+		return fmt.Errorf("failed to fetch runtime: %w", err)
+	}
+	// If there is an existing runtime, verify update.
+	if existingRt != nil {
+		err = registry.VerifyRuntimeUpdate(app.logger, existingRt, sigRt, rt)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err = state.SetRuntime(rt, sigRt, suspended); err != nil {
 		app.logger.Error("RegisterRuntime: failed to create runtime",
 			"err", err,
 			"runtime", rt,
@@ -455,11 +551,13 @@ func (app *registryApplication) registerRuntime(
 		return registry.ErrBadEntityForRuntime
 	}
 
-	app.logger.Debug("RegisterRuntime: registered",
-		"runtime", rt,
-	)
+	if !suspended {
+		app.logger.Debug("RegisterRuntime: registered",
+			"runtime", rt,
+		)
 
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
+	}
 
 	return nil
 }

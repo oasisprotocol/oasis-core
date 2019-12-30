@@ -57,10 +57,6 @@ func (rq *rootHashQuerier) LatestBlock(ctx context.Context, id common.Namespace)
 	if err != nil {
 		return nil, err
 	}
-	if runtime == nil {
-		return nil, roothash.ErrInvalidRuntime
-	}
-
 	return runtime.CurrentBlock, nil
 }
 
@@ -69,10 +65,6 @@ func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id common.Namespace
 	if err != nil {
 		return nil, err
 	}
-	if runtime == nil {
-		return nil, roothash.ErrInvalidRuntime
-	}
-
 	return runtime.GenesisBlock, nil
 }
 

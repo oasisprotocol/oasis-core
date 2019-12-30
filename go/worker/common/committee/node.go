@@ -183,6 +183,19 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 }
 
 // Guarded by n.CrossNode.
+func (n *Node) handleSuspendLocked(height int64) {
+	n.logger.Warn("runtime has been suspended")
+
+	// Suspend group.
+	n.Group.Suspend(n.ctx)
+
+	epoch := n.Group.GetEpochSnapshot()
+	for _, hooks := range n.hooks {
+		hooks.HandleEpochTransitionLocked(epoch)
+	}
+}
+
+// Guarded by n.CrossNode.
 func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 	processedBlockCount.With(n.getMetricLabels()).Inc()
 
@@ -225,6 +238,9 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 	case block.EpochTransition:
 		// Process an epoch transition.
 		n.handleEpochTransitionLocked(height)
+	case block.Suspended:
+		// Process runtime being suspended.
+		n.handleSuspendLocked(height)
 	default:
 		n.logger.Error("invalid block type",
 			"block", blk,

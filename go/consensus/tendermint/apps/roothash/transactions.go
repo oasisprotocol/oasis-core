@@ -65,8 +65,8 @@ func (app *rootHashApplication) getRuntimeState(
 	if err != nil {
 		return nil, nil, fmt.Errorf("roothash: failed to fetch runtime state: %w", err)
 	}
-	if rtState == nil {
-		return nil, nil, roothash.ErrInvalidRuntime
+	if rtState.Suspended {
+		return nil, nil, roothash.ErrRuntimeSuspended
 	}
 	if rtState.Round == nil {
 		return nil, nil, roothash.ErrNoRound
@@ -100,7 +100,16 @@ func (app *rootHashApplication) computeCommit(
 	}
 
 	// Charge gas for this transaction.
-	// TODO
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		app.logger.Error("ComputeCommit: failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, roothash.GasOpComputeCommit, params.GasCosts); err != nil {
+		return err
+	}
 
 	rtState, sv, err := app.getRuntimeState(ctx, state, cc.ID)
 	if err != nil {
@@ -140,7 +149,16 @@ func (app *rootHashApplication) mergeCommit(
 	}
 
 	// Charge gas for this transaction.
-	// TODO
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		app.logger.Error("MergeCommit: failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, roothash.GasOpMergeCommit, params.GasCosts); err != nil {
+		return err
+	}
 
 	rtState, sv, err := app.getRuntimeState(ctx, state, mc.ID)
 	if err != nil {

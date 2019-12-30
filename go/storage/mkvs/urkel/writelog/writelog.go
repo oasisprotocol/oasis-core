@@ -1,6 +1,7 @@
 package writelog
 
 import (
+	"bytes"
 	"encoding/json"
 
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
@@ -11,12 +12,36 @@ import (
 // The keys in the write log must be unique.
 type WriteLog []LogEntry
 
+// Equal compares vs another write log for equality.
+func (wl WriteLog) Equal(cmp WriteLog) bool {
+	if len(wl) != len(cmp) {
+		return false
+	}
+	for k, v := range wl {
+		if !v.Equal(&cmp[k]) {
+			return false
+		}
+	}
+	return true
+}
+
 // LogEntry is a write log entry.
 type LogEntry struct {
 	_ struct{} `cbor:",toarray"` //nolint
 
 	Key   []byte
 	Value []byte
+}
+
+// Equal compares vs another log entry for equality.
+func (k *LogEntry) Equal(cmp *LogEntry) bool {
+	if !bytes.Equal(k.Key, cmp.Key) {
+		return false
+	}
+	if !bytes.Equal(k.Value, cmp.Value) {
+		return false
+	}
+	return true
 }
 
 func (k *LogEntry) UnmarshalJSON(src []byte) error {

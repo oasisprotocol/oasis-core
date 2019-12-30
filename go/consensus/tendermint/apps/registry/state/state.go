@@ -52,7 +52,7 @@ var (
 	nodeStatusKeyFmt = keyformat.New(0x15, &signature.PublicKey{})
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
-	// Value is CBOR-serialized roothash.ConsensusParameters.
+	// Value is CBOR-serialized registry.ConsensusParameters.
 	parametersKeyFmt = keyformat.New(0x16)
 	// keyMapKeyFmt is the key format used for key-to-node-id map.
 	// This stores the consensus and P2P to Node ID mappings.
@@ -64,6 +64,10 @@ var (
 	//
 	// Value is binary signature.PublicKey (node ID).
 	certificateMapKeyFmt = keyformat.New(0x18, &hash.Hash{})
+	// suspendedRuntimeKeyFmt is the key format used for suspended runtimes.
+	//
+	// Value is CBOR-serialized signed runtime.
+	suspendedRuntimeKeyFmt = keyformat.New(0x19, &common.Namespace{})
 )
 
 type ImmutableState struct {
@@ -238,40 +242,77 @@ func (s *ImmutableState) SignedNodes() ([]*node.SignedNode, error) {
 	return nodes, nil
 }
 
-func (s *ImmutableState) getSignedRuntimeRaw(id common.Namespace) ([]byte, error) {
-	_, value := s.Snapshot.Get(signedRuntimeKeyFmt.Encode(&id))
-	return value, nil
-}
-
-func (s *ImmutableState) Runtime(id common.Namespace) (*registry.Runtime, error) {
-	raw, err := s.getSignedRuntimeRaw(id)
-	if err != nil {
-		return nil, err
-	}
+func (s *ImmutableState) getSignedRuntime(keyFmt *keyformat.KeyFormat, id common.Namespace) (*registry.SignedRuntime, error) {
+	_, raw := s.Snapshot.Get(keyFmt.Encode(&id))
 	if raw == nil {
 		return nil, registry.ErrNoSuchRuntime
 	}
 
 	var signedRuntime registry.SignedRuntime
-	if err = cbor.Unmarshal(raw, &signedRuntime); err != nil {
+	if err := cbor.Unmarshal(raw, &signedRuntime); err != nil {
+		return nil, err
+	}
+	return &signedRuntime, nil
+}
+
+func (s *ImmutableState) getRuntime(keyFmt *keyformat.KeyFormat, id common.Namespace) (*registry.Runtime, error) {
+	signedRuntime, err := s.getSignedRuntime(keyFmt, id)
+	if err != nil {
 		return nil, err
 	}
 	var runtime registry.Runtime
 	if err = cbor.Unmarshal(signedRuntime.Blob, &runtime); err != nil {
 		return nil, err
 	}
-	return &runtime, err
+	return &runtime, nil
 }
 
-// GetRuntimes returns a list of all registered runtimes.
-func (s *ImmutableState) Runtimes() ([]*registry.Runtime, error) {
-	var runtimes []*registry.Runtime
+// Runtime looks up a runtime by its identifier and returns it.
+//
+// This excludes any suspended runtimes, use SuspendedRuntime to query
+// suspended runtimes only.
+func (s *ImmutableState) Runtime(id common.Namespace) (*registry.Runtime, error) {
+	return s.getRuntime(signedRuntimeKeyFmt, id)
+}
+
+// SuspendedRuntime looks up a suspended runtime by its identifier and
+// returns it.
+func (s *ImmutableState) SuspendedRuntime(id common.Namespace) (*registry.Runtime, error) {
+	return s.getRuntime(suspendedRuntimeKeyFmt, id)
+}
+
+// AnyRuntime looks up either an active or suspended runtime by its identifier and returns it.
+func (s *ImmutableState) AnyRuntime(id common.Namespace) (rt *registry.Runtime, err error) {
+	rt, err = s.Runtime(id)
+	if err == registry.ErrNoSuchRuntime {
+		rt, err = s.SuspendedRuntime(id)
+	}
+	return
+}
+
+// SignedRuntime looks up a (signed) runtime by its identifier and returns it.
+//
+// This excludes any suspended runtimes, use SuspendedSignedRuntime to query
+// suspended runtimes only.
+func (s *ImmutableState) SignedRuntime(id common.Namespace) (*registry.SignedRuntime, error) {
+	return s.getSignedRuntime(signedRuntimeKeyFmt, id)
+}
+
+// SignedSuspendedRuntime looks up a (signed) suspended runtime by its identifier and returns it.
+func (s *ImmutableState) SignedSuspendedRuntime(id common.Namespace) (*registry.SignedRuntime, error) {
+	return s.getSignedRuntime(suspendedRuntimeKeyFmt, id)
+}
+
+func (s *ImmutableState) iterateRuntimes(
+	keyFmt *keyformat.KeyFormat,
+	cb func(*registry.SignedRuntime),
+) {
 	s.Snapshot.IterateRange(
-		signedRuntimeKeyFmt.Encode(),
+		keyFmt.Encode(),
 		nil,
 		true,
 		func(key, value []byte) bool {
-			if !signedRuntimeKeyFmt.Decode(key) {
+			if !keyFmt.Decode(key) {
 				return true
 			}
 
@@ -279,41 +320,77 @@ func (s *ImmutableState) Runtimes() ([]*registry.Runtime, error) {
 			if err := cbor.Unmarshal(value, &signedRt); err != nil {
 				panic("tendermint/registry: corrupted state: " + err.Error())
 			}
-			var runtime registry.Runtime
-			if err := cbor.Unmarshal(signedRt.Blob, &runtime); err != nil {
-				panic("tendermint/registry: corrupted state: " + err.Error())
-			}
 
-			runtimes = append(runtimes, &runtime)
+			cb(&signedRt)
 
 			return false
 		},
 	)
+}
+
+// SignedRuntimes returns a list of all registered runtimes (signed).
+//
+// This excludes any suspended runtimes.
+func (s *ImmutableState) SignedRuntimes() ([]*registry.SignedRuntime, error) {
+	var runtimes []*registry.SignedRuntime
+	s.iterateRuntimes(signedRuntimeKeyFmt, func(rt *registry.SignedRuntime) {
+		runtimes = append(runtimes, rt)
+	})
 
 	return runtimes, nil
 }
 
-func (s *ImmutableState) SignedRuntimes() ([]*registry.SignedRuntime, error) {
+// SuspendedRuntimes returns a list of all suspended runtimes (signed).
+func (s *ImmutableState) SuspendedRuntimes() ([]*registry.SignedRuntime, error) {
 	var runtimes []*registry.SignedRuntime
-	s.Snapshot.IterateRange(
-		signedRuntimeKeyFmt.Encode(),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			if !signedRuntimeKeyFmt.Decode(key) {
-				return true
-			}
+	s.iterateRuntimes(suspendedRuntimeKeyFmt, func(rt *registry.SignedRuntime) {
+		runtimes = append(runtimes, rt)
+	})
 
-			var signedRt registry.SignedRuntime
-			if err := cbor.Unmarshal(value, &signedRt); err != nil {
-				panic("tendermint/registry: corrupted state: " + err.Error())
-			}
+	return runtimes, nil
+}
 
-			runtimes = append(runtimes, &signedRt)
+// AllSignedRuntimes returns a list of all runtimes (suspended included).
+func (s *ImmutableState) AllSignedRuntimes() ([]*registry.SignedRuntime, error) {
+	var runtimes []*registry.SignedRuntime
+	s.iterateRuntimes(signedRuntimeKeyFmt, func(rt *registry.SignedRuntime) {
+		runtimes = append(runtimes, rt)
+	})
+	s.iterateRuntimes(suspendedRuntimeKeyFmt, func(rt *registry.SignedRuntime) {
+		runtimes = append(runtimes, rt)
+	})
 
-			return false
-		},
-	)
+	return runtimes, nil
+}
+
+// Runtimes returns a list of all registered runtimes.
+//
+// This excludes any suspended runtimes.
+func (s *ImmutableState) Runtimes() ([]*registry.Runtime, error) {
+	var runtimes []*registry.Runtime
+	s.iterateRuntimes(signedRuntimeKeyFmt, func(sigRt *registry.SignedRuntime) {
+		var rt registry.Runtime
+		if err := cbor.Unmarshal(sigRt.Blob, &rt); err != nil {
+			panic("tendermint/registry: corrupted state: " + err.Error())
+		}
+		runtimes = append(runtimes, &rt)
+	})
+
+	return runtimes, nil
+}
+
+// AllRuntimes returns a list of all registered runtimes (suspended included).
+func (s *ImmutableState) AllRuntimes() ([]*registry.Runtime, error) {
+	var runtimes []*registry.Runtime
+	unpackFn := func(sigRt *registry.SignedRuntime) {
+		var rt registry.Runtime
+		if err := cbor.Unmarshal(sigRt.Blob, &rt); err != nil {
+			panic("tendermint/registry: corrupted state: " + err.Error())
+		}
+		runtimes = append(runtimes, &rt)
+	}
+	s.iterateRuntimes(signedRuntimeKeyFmt, unpackFn)
+	s.iterateRuntimes(suspendedRuntimeKeyFmt, unpackFn)
 
 	return runtimes, nil
 }
@@ -456,7 +533,7 @@ type MutableState struct {
 	tree *iavl.MutableTree
 }
 
-func (s *MutableState) CreateEntity(ent *entity.Entity, sigEnt *entity.SignedEntity) {
+func (s *MutableState) SetEntity(ent *entity.Entity, sigEnt *entity.SignedEntity) {
 	s.tree.Set(signedEntityKeyFmt.Encode(&ent.ID), cbor.Marshal(sigEnt))
 }
 
@@ -474,7 +551,7 @@ func (s *MutableState) RemoveEntity(id signature.PublicKey) (*entity.Entity, err
 	return nil, registry.ErrNoSuchEntity
 }
 
-func (s *MutableState) CreateNode(node *node.Node, signedNode *node.SignedNode) error {
+func (s *MutableState) SetNode(node *node.Node, signedNode *node.SignedNode) error {
 	// Ensure that the entity exists.
 	ent, err := s.getSignedEntityRaw(node.EntityID)
 	if ent == nil || err != nil {
@@ -515,15 +592,41 @@ func (s *MutableState) RemoveNode(node *node.Node) {
 	s.tree.Remove(certificateMapKeyFmt.Encode(&certHash))
 }
 
-func (s *MutableState) CreateRuntime(rt *registry.Runtime, sigRt *registry.SignedRuntime) error {
+func (s *MutableState) SetRuntime(rt *registry.Runtime, sigRt *registry.SignedRuntime, suspended bool) error {
 	entID := sigRt.Signature.PublicKey
 	ent, err := s.getSignedEntityRaw(entID)
 	if ent == nil || err != nil {
 		return registry.ErrNoSuchEntity
 	}
 
-	s.tree.Set(signedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(sigRt))
+	if suspended {
+		s.tree.Set(suspendedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(sigRt))
+	} else {
+		s.tree.Set(signedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(sigRt))
+	}
 
+	return nil
+}
+
+func (s *MutableState) SuspendRuntime(id common.Namespace) error {
+	_, raw := s.Snapshot.Get(signedRuntimeKeyFmt.Encode(&id))
+	if raw == nil {
+		return registry.ErrNoSuchRuntime
+	}
+
+	s.tree.Remove(signedRuntimeKeyFmt.Encode(&id))
+	s.tree.Set(suspendedRuntimeKeyFmt.Encode(&id), raw)
+	return nil
+}
+
+func (s *MutableState) ResumeRuntime(id common.Namespace) error {
+	_, raw := s.Snapshot.Get(suspendedRuntimeKeyFmt.Encode(&id))
+	if raw == nil {
+		return registry.ErrNoSuchRuntime
+	}
+
+	s.tree.Remove(suspendedRuntimeKeyFmt.Encode(&id))
+	s.tree.Set(signedRuntimeKeyFmt.Encode(&id), raw)
 	return nil
 }
 

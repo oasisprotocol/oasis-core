@@ -27,10 +27,17 @@ const (
 	RoundFailed HeaderType = 1
 
 	// EpochTransition is a header resulting from an epoch transition.
+	//
 	// Such a header contains no transactions but advances the round as
 	// normal.
 	// TODO: Consider renaming this to CommitteeTransition.
 	EpochTransition HeaderType = 2
+
+	// Suspended is a header resulting from the runtime being suspended.
+	//
+	// Such a header contains no transactions but advances the round as
+	// normal.
+	Suspended HeaderType = 3
 )
 
 // Header is a block header.
