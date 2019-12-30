@@ -7,6 +7,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/storage"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/tendermint"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/txsource"
 )
 
 var debugCmd = &cobra.Command{
@@ -19,6 +20,7 @@ func Register(parentCmd *cobra.Command) {
 	storage.Register(debugCmd)
 	tendermint.Register(debugCmd)
 	byzantine.Register(debugCmd)
+	txsource.Register(debugCmd)
 
 	parentCmd.AddCommand(debugCmd)
 }
