@@ -35,12 +35,7 @@ import (
 // timerKindRound is the round timer kind.
 const timerKindRound = 0x01
 
-var (
-	errNoSuchRuntime = errors.New("tendermint/roothash: no such runtime")
-	errNoRound       = errors.New("tendermint/roothash: no round in progress")
-
-	_ abci.Application = (*rootHashApplication)(nil)
-)
+var _ abci.Application = (*rootHashApplication)(nil)
 
 type timerContext struct {
 	ID    common.Namespace `json:"id"`
@@ -314,14 +309,14 @@ func (app *rootHashApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Tra
 			return err
 		}
 
-		return app.commit(ctx, state, cc.ID, &cc)
+		return app.computeCommit(ctx, state, &cc)
 	case roothash.MethodMergeCommit:
 		var mc roothash.MergeCommit
 		if err := cbor.Unmarshal(tx.Body, &mc); err != nil {
 			return err
 		}
 
-		return app.commit(ctx, state, mc.ID, &mc)
+		return app.mergeCommit(ctx, state, &mc)
 	default:
 		return roothash.ErrInvalidArgument
 	}
@@ -444,7 +439,6 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		)
 		return err
 	}
-	runtime := rtState.Runtime
 
 	latestBlock := rtState.CurrentBlock
 	if latestBlock.Header.Round != tCtx.Round {
@@ -468,7 +462,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	defer state.SetRuntimeState(rtState)
 
 	if rtState.Round.MergePool.IsTimeout(ctx.Now()) {
-		if err := app.tryFinalizeBlock(ctx, runtime, rtState, true); err != nil {
+		if err := app.tryFinalizeBlock(ctx, rtState, true); err != nil {
 			app.logger.Error("failed to finalize block",
 				"err", err,
 			)
@@ -476,7 +470,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		}
 	}
 	for _, pool := range rtState.Round.ComputePool.GetTimeoutCommittees(ctx.Now()) {
-		app.tryFinalizeCompute(ctx, runtime, rtState, pool, true)
+		app.tryFinalizeCompute(ctx, rtState, pool, true)
 	}
 
 	return nil
@@ -484,7 +478,6 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 
 func (app *rootHashApplication) updateTimer(
 	ctx *abci.Context,
-	runtime *registry.Runtime,
 	rtState *roothashState.RuntimeState,
 	blockNr uint64,
 ) {
@@ -503,7 +496,7 @@ func (app *rootHashApplication) updateTimer(
 		app.logger.Debug("(re-)arming round timeout")
 
 		timerCtx := &timerContext{
-			ID:    runtime.ID,
+			ID:    rtState.Runtime.ID,
 			Round: blockNr,
 		}
 		rtState.Timer.Reset(ctx, nextTimeout.Sub(ctx.Now()), cbor.Marshal(timerCtx))
@@ -512,17 +505,16 @@ func (app *rootHashApplication) updateTimer(
 
 func (app *rootHashApplication) tryFinalizeCompute(
 	ctx *abci.Context,
-	runtime *registry.Runtime,
 	rtState *roothashState.RuntimeState,
 	pool *commitment.Pool,
 	forced bool,
 ) {
+	runtime := rtState.Runtime
 	latestBlock := rtState.CurrentBlock
 	blockNr := latestBlock.Header.Round
-	//id, _ := runtime.ID.MarshalBinary()
 	committeeID := pool.GetCommitteeID()
 
-	defer app.updateTimer(ctx, runtime, rtState, blockNr)
+	defer app.updateTimer(ctx, rtState, blockNr)
 
 	if rtState.Round.Finalized {
 		app.logger.Error("attempted to finalize compute when block already finalized",
@@ -577,7 +569,7 @@ func (app *rootHashApplication) tryFinalizeCompute(
 	// to abort everything even if only one committee failed to finalize as
 	// there is otherwise no way to make progress as merge committees will
 	// refuse to merge if there are discrepancies.
-	app.logger.Error("worker: round failed",
+	app.logger.Error("round failed",
 		"round", blockNr,
 		"err", err,
 		logging.LogEvent, roothash.LogEventRoundFailed,
@@ -588,14 +580,14 @@ func (app *rootHashApplication) tryFinalizeCompute(
 
 func (app *rootHashApplication) tryFinalizeMerge(
 	ctx *abci.Context,
-	runtime *registry.Runtime,
 	rtState *roothashState.RuntimeState,
 	forced bool,
 ) *block.Block {
+	runtime := rtState.Runtime
 	latestBlock := rtState.CurrentBlock
 	blockNr := latestBlock.Header.Round
 
-	defer app.updateTimer(ctx, runtime, rtState, blockNr)
+	defer app.updateTimer(ctx, rtState, blockNr)
 
 	if rtState.Round.Finalized {
 		app.logger.Error("attempted to finalize merge when block already finalized",
@@ -646,7 +638,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 	}
 
 	// Something else went wrong, emit empty error block.
-	app.logger.Error("worker: round failed",
+	app.logger.Error("round failed",
 		"round", blockNr,
 		"err", err,
 		logging.LogEvent, roothash.LogEventRoundFailed,
@@ -698,11 +690,10 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, rtS
 
 func (app *rootHashApplication) tryFinalizeBlock(
 	ctx *abci.Context,
-	runtime *registry.Runtime,
 	rtState *roothashState.RuntimeState,
 	mergeForced bool,
 ) error {
-	finalizedBlock := app.tryFinalizeMerge(ctx, runtime, rtState, mergeForced)
+	finalizedBlock := app.tryFinalizeMerge(ctx, rtState, mergeForced)
 	if finalizedBlock == nil {
 		return nil
 	}

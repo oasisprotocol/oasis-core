@@ -41,6 +41,12 @@ var (
 	// ErrNotFound is the error returned when a block is not found.
 	ErrNotFound = errors.New(ModuleName, 2, "roothash: block not found")
 
+	// ErrInvalidRuntime is the error returned when the passed runtime is invalid.
+	ErrInvalidRuntime = errors.New(ModuleName, 3, "roothash: invalid runtime")
+
+	// ErrNoRound is the error returned when no round is in progress.
+	ErrNoRound = errors.New(ModuleName, 4, "roothash: no round is in progress")
+
 	// MethodComputeCommit is the method name for compute commit submission.
 	MethodComputeCommit = transaction.NewMethodName(ModuleName, "ComputeCommit", ComputeCommit{})
 	// MethodMergeCommit is the method name for merge commit submission.

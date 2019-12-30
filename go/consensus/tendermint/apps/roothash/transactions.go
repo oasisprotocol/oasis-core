@@ -15,6 +15,8 @@ import (
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 )
 
+var _ commitment.SignatureVerifier = (*roothashSignatureVerifier)(nil)
+
 type roothashSignatureVerifier struct {
 	runtimeID common.Namespace
 	scheduler *schedulerState.MutableState
@@ -34,7 +36,7 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 		return err
 	}
 	if committee == nil {
-		return errors.New("roothash: no committee with which to verify signatures")
+		return roothash.ErrInvalidRuntime
 	}
 
 	// TODO: Consider caching this set?
@@ -51,93 +53,118 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 	return nil
 }
 
-func (app *rootHashApplication) commit(
+// getRuntimeState fetches the current runtime state and performs common
+// processing and error handling.
+func (app *rootHashApplication) getRuntimeState(
 	ctx *abci.Context,
 	state *roothashState.MutableState,
 	id common.Namespace,
-	msg interface{},
-) error {
-	logger := app.logger.With("is_check_only", ctx.IsCheckOnly())
-
+) (*roothashState.RuntimeState, commitment.SignatureVerifier, error) {
+	// Fetch current runtime state.
 	rtState, err := state.RuntimeState(id)
 	if err != nil {
-		return errors.Wrap(err, "roothash: failed to fetch runtime state")
+		return nil, nil, fmt.Errorf("roothash: failed to fetch runtime state: %w", err)
 	}
 	if rtState == nil {
-		return errNoSuchRuntime
+		return nil, nil, roothash.ErrInvalidRuntime
 	}
-	runtime := rtState.Runtime
-
 	if rtState.Round == nil {
-		logger.Error("commit recevied when no round in progress")
-		return errNoRound
+		return nil, nil, roothash.ErrNoRound
 	}
 
-	latestBlock := rtState.CurrentBlock
-	blockNr := latestBlock.Header.Round
-
-	defer state.SetRuntimeState(rtState)
-
-	// If the round was finalized, transition.
-	if rtState.Round.CurrentBlock.Header.Round != latestBlock.Header.Round {
-		logger.Debug("round was finalized, transitioning round",
-			"round", blockNr,
-		)
-
-		rtState.Round.Transition(latestBlock)
-	}
-
-	// Create storage signature verifier.
+	// Create signature verifier.
 	sv := &roothashSignatureVerifier{
 		runtimeID: id,
 		scheduler: schedulerState.NewMutableState(ctx.State()),
 	}
 
-	// Add the commitments.
-	switch c := msg.(type) {
-	case *roothash.MergeCommit:
-		for _, commit := range c.Commits {
-			if err = rtState.Round.AddMergeCommitment(&commit, sv); err != nil {
-				logger.Error("failed to add merge commitment to round",
-					"err", err,
-					"round", blockNr,
-				)
-				return err
-			}
+	// If the round was finalized, transition.
+	if rtState.Round.CurrentBlock.Header.Round != rtState.CurrentBlock.Header.Round {
+		app.logger.Debug("round was finalized, transitioning round",
+			"round", rtState.CurrentBlock.Header.Round,
+		)
+
+		rtState.Round.Transition(rtState.CurrentBlock)
+	}
+
+	return rtState, sv, nil
+}
+
+func (app *rootHashApplication) computeCommit(
+	ctx *abci.Context,
+	state *roothashState.MutableState,
+	cc *roothash.ComputeCommit,
+) error {
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Charge gas for this transaction.
+	// TODO
+
+	rtState, sv, err := app.getRuntimeState(ctx, state, cc.ID)
+	if err != nil {
+		return err
+	}
+	defer state.SetRuntimeState(rtState)
+
+	pools := make(map[*commitment.Pool]bool)
+	for _, commit := range cc.Commits {
+		var pool *commitment.Pool
+		if pool, err = rtState.Round.AddComputeCommitment(&commit, sv); err != nil {
+			app.logger.Error("failed to add compute commitment to round",
+				"err", err,
+				"round", rtState.CurrentBlock.Header.Round,
+			)
+			return err
 		}
 
-		// Try to finalize round.
-		if !ctx.IsCheckOnly() {
-			if err = app.tryFinalizeBlock(ctx, runtime, rtState, false); err != nil {
-				logger.Error("failed to finalize block",
-					"err", err,
-				)
-				return err
-			}
-		}
-	case *roothash.ComputeCommit:
-		pools := make(map[*commitment.Pool]bool)
-		for _, commit := range c.Commits {
-			var pool *commitment.Pool
-			if pool, err = rtState.Round.AddComputeCommitment(&commit, sv); err != nil {
-				logger.Error("failed to add compute commitment to round",
-					"err", err,
-					"round", blockNr,
-				)
-				return err
-			}
+		pools[pool] = true
+	}
 
-			pools[pool] = true
-		}
+	// Try to finalize compute rounds.
+	for pool := range pools {
+		app.tryFinalizeCompute(ctx, rtState, pool, false)
+	}
 
-		// Try to finalize compute rounds.
-		if !ctx.IsCheckOnly() {
-			for pool := range pools {
-				app.tryFinalizeCompute(ctx, runtime, rtState, pool, false)
-			}
+	return nil
+}
+
+func (app *rootHashApplication) mergeCommit(
+	ctx *abci.Context,
+	state *roothashState.MutableState,
+	mc *roothash.MergeCommit,
+) error {
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Charge gas for this transaction.
+	// TODO
+
+	rtState, sv, err := app.getRuntimeState(ctx, state, mc.ID)
+	if err != nil {
+		return err
+	}
+	defer state.SetRuntimeState(rtState)
+
+	// Add commitments.
+	for _, commit := range mc.Commits {
+		if err = rtState.Round.AddMergeCommitment(&commit, sv); err != nil {
+			app.logger.Error("failed to add merge commitment to round",
+				"err", err,
+				"round", rtState.CurrentBlock.Header.Round,
+			)
+			return err
 		}
-	default:
-		panic(fmt.Errorf("roothash: invalid type passed to commit(): %T", c))
+	}
+
+	// Try to finalize round.
+	if err = app.tryFinalizeBlock(ctx, rtState, false); err != nil {
+		app.logger.Error("failed to finalize block",
+			"err", err,
+		)
+		return err
 	}
 
 	return nil
