@@ -2,7 +2,13 @@ package e2e
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/txsource"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/txsource/workload"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
@@ -38,9 +44,18 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("scenario net Start: %w", err)
 	}
 
+	logFmt := logging.FmtJSON
+	logLevel := logging.LevelDebug
 	cmd, err := startClient(childEnv, sc.net, sc.clientBinary, append([]string{
-		"--genesis-path", sc.net.GenesisPath(),
-		"--time-limit", "2m", // %%% low value for validation (:
+		"--",
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgDebugDontBlameOasis,
+		"--" + flags.CfgDebugTestEntity,
+		"--log.format", logFmt.String(),
+		"--log.level", logLevel.String(),
+		"--" + flags.CfgGenesisFile, sc.net.GenesisPath(),
+		"--" + txsource.CfgWorkload, workload.NameTransfer,
+		"--" + txsource.CfgTimeLimit, (2 * time.Minute).String(), // %%% low value for validation (:
 	}, sc.clientArgs...))
 	if err != nil {
 		return fmt.Errorf("startClient: %w", err)
