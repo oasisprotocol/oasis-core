@@ -88,7 +88,7 @@ func (app *rootHashApplication) BeginBlock(ctx *abci.Context, request types.Requ
 	return nil
 }
 
-func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epochtime.EpochTime) error { // nolint: gocyclo
+func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epochtime.EpochTime) error {
 	state := roothashState.NewMutableState(ctx.State())
 
 	// Query the updated runtime list.
@@ -112,178 +112,173 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 			continue
 		}
 
-		// Derive a deterministic committee identifier that depends on memberships
-		// of all committees. We need this to be able to quickly see if any
-		// committee members have changed.
-		//
-		// We first include the current epoch, then all compute committee member
-		// hashes and then the merge committee member hash:
-		//
-		//   [little-endian epoch]
-		//   "compute committees follow"
-		//   [compute committe 1 members hash]
-		//   [compute committe 2 members hash]
-		//   ...
-		//   [compute committe n members hash]
-		//   "merge committee follows"
-		//   [merge committee members hash]
-		//
-		var committeeIDParts [][]byte
-		var rawEpoch [8]byte
-		binary.LittleEndian.PutUint64(rawEpoch[:], uint64(epoch))
-		committeeIDParts = append(committeeIDParts, rawEpoch[:])
-		committeeIDParts = append(committeeIDParts, []byte("compute committees follow"))
-
-		// NOTE: There will later be multiple compute committees.
-		var computeCommittees []*scheduler.Committee
-		cc1, err := schedState.Committee(scheduler.KindCompute, rtID)
+		// Prepare new runtime committees based on what the scheduler did.
+		committeeID, computePool, mergePool, err := app.prepareNewCommittees(ctx, epoch, rtState, schedState, regState)
 		if err != nil {
-			app.logger.Error("checkCommittees: failed to get compute committee from scheduler",
-				"err", err,
+			return err
+		}
+
+		// If the committee has actually changed, force a new round.
+		if round := rtState.Round; round == nil || !round.CommitteeID.Equal(&committeeID) {
+			app.logger.Debug("checkCommittees: updating committee for runtime",
 				"runtime", rtID,
 			)
-			continue
-		}
-		if cc1 != nil {
-			computeCommittees = append(computeCommittees, cc1)
-		}
 
-		computePool := &commitment.MultiPool{
-			Committees: make(map[hash.Hash]*commitment.Pool),
-		}
-		if len(computeCommittees) == 0 {
-			app.logger.Warn("checkCommittees: no compute committees",
-				"runtime", rtID,
-			)
-		}
-		for _, computeCommittee := range computeCommittees {
-			computeNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
-			for idx, n := range computeCommittee.Members {
-				var nodeRuntime *node.Runtime
-				node, err1 := regState.Node(n.PublicKey)
-				if err1 != nil {
-					return errors.Wrap(err1, "checkCommittees: failed to query node")
-				}
-				for _, r := range node.Runtimes {
-					if !r.ID.Equal(&rtID) {
-						continue
-					}
-					nodeRuntime = r
-					break
-				}
-				if nodeRuntime == nil {
-					// We currently prevent this case throughout the rest of the system.
-					// Still, it's prudent to check.
-					app.logger.Warn("checkCommittees: committee member not registered with this runtime",
-						"node", n.PublicKey,
-					)
-					continue
-				}
-				computeNodeInfo[n.PublicKey] = commitment.NodeInfo{
-					CommitteeNode: idx,
-					Runtime:       nodeRuntime,
-				}
-			}
-			computeCommitteeID := computeCommittee.EncodedMembersHash()
-			committeeIDParts = append(committeeIDParts, computeCommitteeID[:])
+			// Transition the round.
+			blk := rtState.CurrentBlock
+			blockNr := blk.Header.Round
 
-			computePool.Committees[computeCommitteeID] = &commitment.Pool{
-				Runtime:   rtState.Runtime,
-				Committee: computeCommittee,
-				NodeInfo:  computeNodeInfo,
-			}
-		}
-
-		var mergePool commitment.Pool
-		committeeIDParts = append(committeeIDParts, []byte("merge committee follows"))
-		mergeCommittee, err := schedState.Committee(scheduler.KindMerge, rtID)
-		if err != nil {
-			app.logger.Error("checkCommittees: failed to get merge committee from scheduler",
-				"err", err,
-				"runtime", rtID,
-			)
-			continue
-		}
-		if mergeCommittee == nil {
-			app.logger.Warn("checkCommittees: no merge committee",
-				"runtime", rtID,
-			)
-		} else {
-			mergeNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
-			for idx, n := range mergeCommittee.Members {
-				mergeNodeInfo[n.PublicKey] = commitment.NodeInfo{
-					CommitteeNode: idx,
-				}
-			}
-			mergePool = commitment.Pool{
-				Runtime:   rtState.Runtime,
-				Committee: mergeCommittee,
-				NodeInfo:  mergeNodeInfo,
-			}
-			mergeCommitteeID := mergeCommittee.EncodedMembersHash()
-			committeeIDParts = append(committeeIDParts, mergeCommitteeID[:])
-		}
-
-		app.logger.Debug("checkCommittees: updating committee for runtime",
-			"runtime", rtID,
-		)
-
-		// If the committee is the "same", ignore this.
-		var committeeID hash.Hash
-		committeeID.FromBytes(committeeIDParts...)
-
-		round := rtState.Round
-		if round != nil && round.CommitteeID.Equal(&committeeID) {
-			app.logger.Debug("checkCommittees: duplicate committee, ignoring",
+			app.logger.Debug("checkCommittees: new committee, transitioning round",
 				"runtime", rtID,
 				"committee_id", committeeID,
+				"round", blockNr,
 			)
-			delete(newDescriptors, rtID)
-			continue
+
+			// Emit an empty epoch transition block in the new round. This is required so that
+			// the clients can be sure what state is final when an epoch transition occurs.
+			app.emitEmptyBlock(ctx, rtState, block.EpochTransition)
+
+			// Create a new round.
+			rtState.Round = roothashState.NewRound(committeeID, computePool, mergePool, rtState.CurrentBlock)
 		}
 
-		// Transition the round.
-		blk := rtState.CurrentBlock
-		blockNr := blk.Header.Round
+		// Update the runtime descriptor to the latest per-epoch value.
+		rtState.Runtime = newDescriptors[rtID]
 
-		app.logger.Debug("checkCommittees: new committee, transitioning round",
-			"runtime", rtID,
-			"committee_id", committeeID,
-			"round", blockNr,
-		)
-
-		rtState.Timer.Stop(ctx)
-		rtState.Round = roothashState.NewRound(committeeID, computePool, &mergePool, blk)
-
-		// Emit an empty epoch transition block in the new round. This is required so that
-		// the clients can be sure what state is final when an epoch transition occurs.
-		app.emitEmptyBlock(ctx, rtState, block.EpochTransition)
-
-		if rt, ok := newDescriptors[rtID]; ok {
-			// Update the runtime descriptor to the latest per-epoch value.
-			rtState.Runtime = rt
-			delete(newDescriptors, rtID)
-		}
-
-		state.SetRuntimeState(rtState)
-	}
-
-	// Just because a runtime didn't have committees, it doesn't mean that
-	// it's state does not need to be updated. Do so now where possible.
-	for _, v := range newDescriptors {
-		rtState, err := state.RuntimeState(v.ID)
-		if err != nil {
-			app.logger.Warn("onEpochChange: unknown runtime in update pass",
-				"runtime", v,
-			)
-			continue
-		}
-
-		rtState.Runtime = v
 		state.SetRuntimeState(rtState)
 	}
 
 	return nil
+}
+
+func (app *rootHashApplication) prepareNewCommittees(
+	ctx *abci.Context,
+	epoch epochtime.EpochTime,
+	rtState *roothashState.RuntimeState,
+	schedState *schedulerState.MutableState,
+	regState *registryState.MutableState,
+) (
+	committeeID hash.Hash,
+	computePool *commitment.MultiPool,
+	mergePool *commitment.Pool,
+	err error,
+) {
+	rtID := rtState.Runtime.ID
+
+	// Derive a deterministic committee identifier that depends on memberships
+	// of all committees. We need this to be able to quickly see if any
+	// committee members have changed.
+	//
+	// We first include the current epoch, then all compute committee member
+	// hashes and then the merge committee member hash:
+	//
+	//   [little-endian epoch]
+	//   "compute committees follow"
+	//   [compute committe 1 members hash]
+	//   [compute committe 2 members hash]
+	//   ...
+	//   [compute committe n members hash]
+	//   "merge committee follows"
+	//   [merge committee members hash]
+	//
+	var committeeIDParts [][]byte
+	var rawEpoch [8]byte
+	binary.LittleEndian.PutUint64(rawEpoch[:], uint64(epoch))
+	committeeIDParts = append(committeeIDParts, rawEpoch[:])
+	committeeIDParts = append(committeeIDParts, []byte("compute committees follow"))
+
+	// NOTE: There will later be multiple compute committees.
+	var computeCommittees []*scheduler.Committee
+	cc1, err := schedState.Committee(scheduler.KindCompute, rtID)
+	if err != nil {
+		app.logger.Error("checkCommittees: failed to get compute committee from scheduler",
+			"err", err,
+			"runtime", rtID,
+		)
+		return
+	}
+	if cc1 != nil {
+		computeCommittees = append(computeCommittees, cc1)
+	}
+
+	computePool = &commitment.MultiPool{
+		Committees: make(map[hash.Hash]*commitment.Pool),
+	}
+	if len(computeCommittees) == 0 {
+		app.logger.Warn("checkCommittees: no compute committees",
+			"runtime", rtID,
+		)
+	}
+	for _, computeCommittee := range computeCommittees {
+		computeNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
+		for idx, n := range computeCommittee.Members {
+			var nodeRuntime *node.Runtime
+			node, err1 := regState.Node(n.PublicKey)
+			if err1 != nil {
+				return hash.Hash{}, nil, nil, errors.Wrap(err1, "checkCommittees: failed to query node")
+			}
+			for _, r := range node.Runtimes {
+				if !r.ID.Equal(&rtID) {
+					continue
+				}
+				nodeRuntime = r
+				break
+			}
+			if nodeRuntime == nil {
+				// We currently prevent this case throughout the rest of the system.
+				// Still, it's prudent to check.
+				app.logger.Warn("checkCommittees: committee member not registered with this runtime",
+					"node", n.PublicKey,
+				)
+				continue
+			}
+			computeNodeInfo[n.PublicKey] = commitment.NodeInfo{
+				CommitteeNode: idx,
+				Runtime:       nodeRuntime,
+			}
+		}
+		computeCommitteeID := computeCommittee.EncodedMembersHash()
+		committeeIDParts = append(committeeIDParts, computeCommitteeID[:])
+
+		computePool.Committees[computeCommitteeID] = &commitment.Pool{
+			Runtime:   rtState.Runtime,
+			Committee: computeCommittee,
+			NodeInfo:  computeNodeInfo,
+		}
+	}
+
+	mergePool = new(commitment.Pool)
+	committeeIDParts = append(committeeIDParts, []byte("merge committee follows"))
+	mergeCommittee, err := schedState.Committee(scheduler.KindMerge, rtID)
+	if err != nil {
+		app.logger.Error("checkCommittees: failed to get merge committee from scheduler",
+			"err", err,
+			"runtime", rtID,
+		)
+		return
+	}
+	if mergeCommittee == nil {
+		app.logger.Warn("checkCommittees: no merge committee",
+			"runtime", rtID,
+		)
+	} else {
+		mergeNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
+		for idx, n := range mergeCommittee.Members {
+			mergeNodeInfo[n.PublicKey] = commitment.NodeInfo{
+				CommitteeNode: idx,
+			}
+		}
+		mergePool = &commitment.Pool{
+			Runtime:   rtState.Runtime,
+			Committee: mergeCommittee,
+			NodeInfo:  mergeNodeInfo,
+		}
+		mergeCommitteeID := mergeCommittee.EncodedMembersHash()
+		committeeIDParts = append(committeeIDParts, mergeCommitteeID[:])
+	}
+
+	committeeID.FromBytes(committeeIDParts...)
+	return
 }
 
 func (app *rootHashApplication) emitEmptyBlock(ctx *abci.Context, runtime *roothashState.RuntimeState, hdrType block.HeaderType) {
