@@ -67,6 +67,7 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 	logFmt := logging.FmtJSON
 	logLevel := logging.LevelDebug
 	cmd, err := startClient(childEnv, sc.net, "scripts/txsource-wrapper.sh", append([]string{
+		"--node-binary", sc.net.Config().NodeBinary,
 		"--",
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgDebugDontBlameOasis,
