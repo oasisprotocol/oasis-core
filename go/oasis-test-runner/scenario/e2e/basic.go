@@ -157,7 +157,7 @@ func (sc *basicImpl) start(childEnv *env.Env) (<-chan error, *exec.Cmd, error) {
 		return nil, nil, err
 	}
 
-	cmd, err := startClient(childEnv, sc.net, sc.clientBinary, sc.clientArgs)
+	cmd, err := startClient(childEnv, sc.net, resolveClientBinary(sc.clientBinary), sc.clientArgs)
 	if err != nil {
 		return nil, nil, err
 	}

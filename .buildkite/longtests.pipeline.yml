@@ -35,11 +35,14 @@ docker_plugin: &docker_plugin
     <<: *docker_plugin_default_config
 
 steps:
-  - label: Transaction source test
-    timeout_in_minutes: 480
+  - label: Transaction source tests
+    parallelism: 1
+    timeout_in_minutes: 55
     command:
       - make
-      - ./scripts/run-e2e-txsource.sh
+      - >-
+        ./.buildkite/scripts/test_e2e.sh
+        -t txsource-transfer
     env:
       TEST_BASE_DIR: e2e
     agents:

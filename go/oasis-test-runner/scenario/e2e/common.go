@@ -66,7 +66,7 @@ func resolveDefaultKeyManagerBinary() (string, error) {
 	return resolveRuntimeBinary("oasis-core-keymanager-runtime")
 }
 
-func startClient(env *env.Env, net *oasis.Network, clientBinary string, clientArgs []string) (*exec.Cmd, error) {
+func startClient(env *env.Env, net *oasis.Network, binary string, clientArgs []string) (*exec.Cmd, error) {
 	clients := net.Clients()
 	if len(clients) == 0 {
 		return nil, fmt.Errorf("scenario/e2e: network has no client nodes")
@@ -82,7 +82,6 @@ func startClient(env *env.Env, net *oasis.Network, clientBinary string, clientAr
 		return nil, err
 	}
 
-	binary := resolveClientBinary(clientBinary)
 	args := []string{
 		"--node-address", "unix:" + clients[0].SocketPath(),
 		"--runtime-id", runtimeID.String(),

@@ -2,20 +2,46 @@ package e2e
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/txsource"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/txsource/workload"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 )
 
-// TxSource is a network with the txsource program as a client.
-var TxSource scenario.Scenario = &txSourceImpl{basicImpl{
-	name:         "txsource",
-	clientBinary: "txsource-wrapper.sh",
-}}
+const (
+	timeLimitShort = time.Minute
+	timeLimitLong  = 43 * time.Minute
+)
+
+// TxSourceTransferShort uses the transfer workload for a short time.
+var TxSourceTransferShort scenario.Scenario = &txSourceImpl{
+	basicImpl: basicImpl{
+		name: "txsource-transfer-short",
+	},
+	workload:  workload.NameTransfer,
+	timeLimit: timeLimitShort,
+}
+
+// TxSourceTransfer uses the transfer workload.
+var TxSourceTransfer scenario.Scenario = &txSourceImpl{
+	basicImpl: basicImpl{
+		name: "txsource-transfer",
+	},
+	workload:  workload.NameTransfer,
+	timeLimit: timeLimitLong,
+}
 
 type txSourceImpl struct {
 	basicImpl
+
+	workload  string
+	timeLimit time.Duration
 }
 
 func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
@@ -38,9 +64,18 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("scenario net Start: %w", err)
 	}
 
-	cmd, err := startClient(childEnv, sc.net, sc.clientBinary, append([]string{
-		"--genesis-path", sc.net.GenesisPath(),
-		"--time-limit", "2m", // %%% low value for validation (:
+	logFmt := logging.FmtJSON
+	logLevel := logging.LevelDebug
+	cmd, err := startClient(childEnv, sc.net, "scripts/txsource-wrapper.sh", append([]string{
+		"--",
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgDebugDontBlameOasis,
+		"--" + flags.CfgDebugTestEntity,
+		"--log.format", logFmt.String(),
+		"--log.level", logLevel.String(),
+		"--" + flags.CfgGenesisFile, sc.net.GenesisPath(),
+		"--" + txsource.CfgWorkload, sc.workload,
+		"--" + txsource.CfgTimeLimit, sc.timeLimit.String(),
 	}, sc.clientArgs...))
 	if err != nil {
 		return fmt.Errorf("startClient: %w", err)

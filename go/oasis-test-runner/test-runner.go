@@ -52,7 +52,8 @@ func main() {
 	// Runtime prune test.
 	_ = cmd.Register(e2e.RuntimePrune)
 	// Transaction source test.
-	_ = cmd.RegisterNondefault(e2e.TxSource)
+	_ = cmd.Register(e2e.TxSourceTransferShort)
+	_ = cmd.RegisterNondefault(e2e.TxSourceTransfer)
 
 	// Execute the command, now that everything has been initialized.
 	cmd.Execute()
