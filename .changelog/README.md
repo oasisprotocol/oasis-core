@@ -52,7 +52,7 @@ issue or pull request number, and `<TYPE>` is one of:
 
 - `process`: a change in Oasis Core's processes (e.g. development process,
   release process, ...),
-- `removal`: a deprecation or removal of functionality,
+- `breaking`: a removal of functionality or a breaking change,
 - `feature`: a new feature,
 - `bugfix`: a bug fix,
 - `doc`: a documentation-related change,
