@@ -1,7 +1,7 @@
 package p2p
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 )
 
@@ -12,7 +12,7 @@ import (
 type Message struct {
 	// RuntimeID is the identifier of the runtime this message
 	// belongs to. It is used as a namespace.
-	RuntimeID signature.PublicKey `json:"runtime_id,omitempty"`
+	RuntimeID common.Namespace `json:"runtime_id,omitempty"`
 
 	// GroupVersion is the version of all elected committees (the consensus
 	// block height of last processed committee election). Messages with

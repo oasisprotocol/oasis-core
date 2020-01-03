@@ -5,8 +5,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	cmnIAS "github.com/oasislabs/oasis-core/go/common/sgx/ias"
@@ -17,7 +17,7 @@ import (
 type enclaveStore struct {
 	sync.RWMutex
 
-	enclaves map[signature.PublicKey][]sgx.EnclaveIdentity
+	enclaves map[common.Namespace][]sgx.EnclaveIdentity
 }
 
 func (st *enclaveStore) verifyEvidence(evidence *ias.Evidence) error {
@@ -68,6 +68,6 @@ func (st *enclaveStore) addRuntime(runtime *registry.Runtime) (int, error) {
 
 func newEnclaveStore() *enclaveStore {
 	return &enclaveStore{
-		enclaves: make(map[signature.PublicKey][]sgx.EnclaveIdentity),
+		enclaves: make(map[common.Namespace][]sgx.EnclaveIdentity),
 	}
 }

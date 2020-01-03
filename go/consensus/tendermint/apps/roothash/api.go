@@ -1,7 +1,7 @@
 package roothash
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 )
@@ -37,20 +37,20 @@ var (
 
 // ValueFinalized is the value component of a TagFinalized.
 type ValueFinalized struct {
-	ID    signature.PublicKey `json:"id"`
-	Round uint64              `json:"round"`
+	ID    common.Namespace `json:"id"`
+	Round uint64           `json:"round"`
 }
 
 // ValueMergeDiscrepancyDetected is the value component of a
 // TagMergeDiscrepancyDetected.
 type ValueMergeDiscrepancyDetected struct {
 	Event roothash.MergeDiscrepancyDetectedEvent `json:"event"`
-	ID    signature.PublicKey                    `json:"id"`
+	ID    common.Namespace                       `json:"id"`
 }
 
 // ValueComputeDiscrepancyDetected is the value component of a
 // TagMergeDiscrepancyDetected.
 type ValueComputeDiscrepancyDetected struct {
-	ID    signature.PublicKey                      `json:"id"`
+	ID    common.Namespace                         `json:"id"`
 	Event roothash.ComputeDiscrepancyDetectedEvent `json:"event"`
 }

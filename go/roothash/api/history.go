@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 )
 
@@ -12,7 +12,7 @@ import (
 // All methods operate on a specific runtime.
 type BlockHistory interface {
 	// RuntimeID returns the runtime ID of the runtime this block history is for.
-	RuntimeID() signature.PublicKey
+	RuntimeID() common.Namespace
 
 	// Commit commits an annotated block into history.
 	//

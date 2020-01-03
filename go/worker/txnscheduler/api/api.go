@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 )
 
@@ -38,8 +38,8 @@ type TransactionScheduler interface {
 
 // SubmitTxRequest is a SubmitTx request.
 type SubmitTxRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	Data      []byte              `json:"data"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Data      []byte           `json:"data"`
 }
 
 // SubmitTxResponse is a SubmitTx response.
@@ -48,8 +48,8 @@ type SubmitTxResponse struct {
 
 // IsTransactionQueuedRequest is an IsTransactionQueued request.
 type IsTransactionQueuedRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	TxHash    hash.Hash           `json:"tx_hash"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	TxHash    hash.Hash        `json:"tx_hash"`
 }
 
 // IsTransactionQueuedResponse is an IsTransactionQueued response.

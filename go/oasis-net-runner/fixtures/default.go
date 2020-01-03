@@ -8,7 +8,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
@@ -31,8 +31,8 @@ var (
 	// Flags is the command line flags for the fixtures.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
-	runtimeID    signature.PublicKey
-	keymanagerID signature.PublicKey
+	runtimeID    common.Namespace
+	keymanagerID common.Namespace
 )
 
 // NewDefaultFixture returns a default network fixture.

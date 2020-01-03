@@ -108,7 +108,7 @@ func (tb *tendermintBackend) WatchNodeList(ctx context.Context) (<-chan *api.Nod
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) GetRuntime(ctx context.Context, query *api.IDQuery) (*api.Runtime, error) {
+func (tb *tendermintBackend) GetRuntime(ctx context.Context, query *api.NamespaceQuery) (*api.Runtime, error) {
 	q, err := tb.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err

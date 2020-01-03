@@ -14,7 +14,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
@@ -34,8 +34,8 @@ var (
 	// Flags is the command line flags for the e2e tests.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
-	runtimeID    signature.PublicKey
-	keymanagerID signature.PublicKey
+	runtimeID    common.Namespace
+	keymanagerID common.Namespace
 
 	logger = logging.GetLogger("e2e/common")
 )

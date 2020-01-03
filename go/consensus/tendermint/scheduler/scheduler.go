@@ -62,7 +62,7 @@ func (tb *tendermintBackend) GetCommittees(ctx context.Context, request *api.Get
 
 	var runtimeCommittees []*api.Committee
 	for _, c := range committees {
-		if c.RuntimeID.Equal(request.RuntimeID) {
+		if c.RuntimeID.Equal(&request.RuntimeID) {
 			runtimeCommittees = append(runtimeCommittees, c)
 		}
 	}

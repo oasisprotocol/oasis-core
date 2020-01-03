@@ -160,14 +160,11 @@ func TestAccessPolicy(t *testing.T) {
 	grpcServer, err := NewServer(serverConfig)
 	require.NoErrorf(err, "Failed to create a new gRPC server: %v", err)
 
-	runtimeID, err := testNs.ToRuntimeID()
-	require.NoErrorf(err, "Failed to obtain runtime ID from namespace: %v", testNs)
-
 	// Create a new pingServer with a new RuntimePolicyChecker.
 	policyChecker := NewDynamicRuntimePolicyChecker()
 	server := &pingServer{policyChecker}
 	policy := accessctl.NewPolicy()
-	policyChecker.SetAccessPolicy(policy, runtimeID)
+	policyChecker.SetAccessPolicy(policy, testNs)
 
 	// Register the pingServer with the PingService.
 	grpcServer.Server().RegisterService(&serviceDesc, server)
@@ -218,7 +215,7 @@ func TestAccessPolicy(t *testing.T) {
 	policy = accessctl.NewPolicy()
 	subject := accessctl.SubjectFromX509Certificate(clientX509Cert)
 	policy.Allow(subject, "Ping")
-	policyChecker.SetAccessPolicy(policy, runtimeID)
+	policyChecker.SetAccessPolicy(policy, testNs)
 
 	res, err := client.Ping(ctx, &PingQuery{testNs})
 	require.NoError(err, "Calling Ping with proper access policy set should succeed")

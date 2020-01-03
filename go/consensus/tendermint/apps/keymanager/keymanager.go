@@ -164,7 +164,7 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 
 		var nodeRt *node.Runtime
 		for _, rt := range n.Runtimes {
-			if rt.ID.Equal(kmrt.ID) {
+			if rt.ID.Equal(&kmrt.ID) {
 				nodeRt = rt
 				break
 			}

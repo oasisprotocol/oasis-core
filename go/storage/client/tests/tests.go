@@ -9,9 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
@@ -24,12 +22,6 @@ import (
 )
 
 const recvTimeout = 5 * time.Second
-
-func runtimeIDToNamespace(t *testing.T, runtimeID signature.PublicKey) (ns common.Namespace) {
-	err := ns.UnmarshalBinary(runtimeID[:])
-	require.NoError(t, err, "runtimeIDToNamespace")
-	return
-}
 
 // ClientWorkerTests implements tests for client worker.
 func ClientWorkerTests(
@@ -49,7 +41,7 @@ func ClientWorkerTests(
 	// Populate the registry with an entity and nodes.
 	nodes := rt.Populate(t, consensus.Registry(), consensus, seed)
 
-	ns := runtimeIDToNamespace(t, rt.Runtime.ID)
+	ns := rt.Runtime.ID
 
 	// Initialize storage client.
 	client, err := storageClient.New(ctx, ns, identity, consensus.Scheduler(), consensus.Registry())

@@ -10,8 +10,8 @@ import (
 	"github.com/blevesearch/bleve/index/scorch"
 	bleveQuery "github.com/blevesearch/bleve/search/query"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -388,7 +388,7 @@ func (b *bleveBackend) Close() {
 	b.index = nil
 }
 
-func newBleveBackend(dataDir string, runtimeID signature.PublicKey) (Backend, error) {
+func newBleveBackend(dataDir string, runtimeID common.Namespace) (Backend, error) {
 	b := &bleveBackend{
 		logger:               logging.GetLogger("runtime/history/tagindexer/bleve").With("runtime_id", runtimeID),
 		blockIndexedNotifier: pubsub.NewBroker(true),

@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -60,7 +61,7 @@ func TestPoolDefault(t *testing.T) {
 	sk, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "NewSigner")
 
-	var id signature.PublicKey
+	var id common.Namespace
 	blk := block.NewGenesisBlock(id, 0)
 
 	body := ComputeBody{
@@ -92,7 +93,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	genesisTestHelpers.SetTestChainContext()
 
 	// Generate a non-TEE runtime.
-	var rtID signature.PublicKey
+	var rtID common.Namespace
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt := &registry.Runtime{
@@ -198,7 +199,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	genesisTestHelpers.SetTestChainContext()
 
 	// Generate a TEE runtime.
-	var rtID signature.PublicKey
+	var rtID common.Namespace
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt := &registry.Runtime{
@@ -434,7 +435,7 @@ func TestPoolSerialization(t *testing.T) {
 	genesisTestHelpers.SetTestChainContext()
 
 	// Generate a non-TEE runtime.
-	var rtID signature.PublicKey
+	var rtID common.Namespace
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt := &registry.Runtime{
@@ -1096,7 +1097,7 @@ func generateMockCommittee(t *testing.T) (
 	nodeInfo map[signature.PublicKey]NodeInfo,
 ) {
 	// Generate a non-TEE runtime.
-	var rtID signature.PublicKey
+	var rtID common.Namespace
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt = &registry.Runtime{
@@ -1158,7 +1159,7 @@ func generateMockCommittee(t *testing.T) (
 }
 
 func generateComputeBody(t *testing.T, committee *scheduler.Committee) (*block.Block, *block.Block, ComputeBody) {
-	var id signature.PublicKey
+	var id common.Namespace
 	childBlk := block.NewGenesisBlock(id, 0)
 	parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
 

@@ -16,8 +16,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/ctxsync"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -320,7 +320,7 @@ type teeStateIntelSGX struct {
 	ias  ias.Endpoint
 	aesm *aesm.Client
 
-	runtimeID signature.PublicKey
+	runtimeID common.Namespace
 
 	epidGID   uint32
 	spid      cmnIAS.SPID
@@ -436,7 +436,7 @@ type Config struct { //nolint: maligned
 	Role node.RolesMask
 
 	// ID is the runtime ID of this worker host.
-	ID signature.PublicKey
+	ID common.Namespace
 
 	// WorkerBinary is the path to the worker executable binary, typically
 	// the loader.

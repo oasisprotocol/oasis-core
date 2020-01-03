@@ -2,7 +2,8 @@ package oasis
 
 import (
 	"fmt"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
@@ -150,7 +151,7 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 
 // RuntimeFixture is a runtime fixture.
 type RuntimeFixture struct {
-	ID         signature.PublicKey  `json:"id"`
+	ID         common.Namespace     `json:"id"`
 	Kind       registry.RuntimeKind `json:"kind"`
 	Entity     int                  `json:"entity"`
 	Keymanager int                  `json:"keymanager"`

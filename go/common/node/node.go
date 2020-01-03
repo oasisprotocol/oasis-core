@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -138,7 +139,7 @@ func (n *Node) IsExpired(epoch uint64) bool {
 // Runtime represents the runtimes supported by a given Oasis node.
 type Runtime struct {
 	// ID is the public key identifying the runtime.
-	ID signature.PublicKey `json:"id"`
+	ID common.Namespace `json:"id"`
 
 	// Version is the version of the runtime.
 	Version version.Version `json:"version"`

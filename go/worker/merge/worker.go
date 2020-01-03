@@ -3,7 +3,7 @@ package merge
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
@@ -19,7 +19,7 @@ type Worker struct {
 	commonWorker       *workerCommon.Worker
 	registrationWorker *registration.Worker
 
-	runtimes map[signature.PublicKey]*committee.Node
+	runtimes map[common.Namespace]*committee.Node
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -127,7 +127,7 @@ func (w *Worker) Initialized() <-chan struct{} {
 //
 // In case the runtime with the specified id was not registered it
 // returns nil.
-func (w *Worker) GetRuntime(id signature.PublicKey) *committee.Node {
+func (w *Worker) GetRuntime(id common.Namespace) *committee.Node {
 	return w.runtimes[id]
 }
 
@@ -159,7 +159,7 @@ func newWorker(enabled bool, commonWorker *workerCommon.Worker, registrationWork
 		enabled:            enabled,
 		commonWorker:       commonWorker,
 		registrationWorker: registrationWorker,
-		runtimes:           make(map[signature.PublicKey]*committee.Node),
+		runtimes:           make(map[common.Namespace]*committee.Node),
 		ctx:                ctx,
 		cancelCtx:          cancelCtx,
 		quitCh:             make(chan struct{}),

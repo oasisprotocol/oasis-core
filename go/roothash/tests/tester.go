@@ -416,7 +416,7 @@ func mustGetCommittee(
 			if committee.ValidFor < epoch {
 				continue
 			}
-			if !rt.Runtime.ID.Equal(committee.RuntimeID) {
+			if !rt.Runtime.ID.Equal(&committee.RuntimeID) {
 				continue
 			}
 

@@ -231,7 +231,7 @@ func handlerGetRuntime( // nolint: golint
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
-	var query IDQuery
+	var query NamespaceQuery
 	if err := dec(&query); err != nil {
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func handlerGetRuntime( // nolint: golint
 		FullMethod: methodGetRuntime.Full(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetRuntime(ctx, req.(*IDQuery))
+		return srv.(Backend).GetRuntime(ctx, req.(*NamespaceQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
@@ -583,7 +583,7 @@ func (c *registryClient) WatchNodeList(ctx context.Context) (<-chan *NodeList, p
 	return ch, sub, nil
 }
 
-func (c *registryClient) GetRuntime(ctx context.Context, query *IDQuery) (*Runtime, error) {
+func (c *registryClient) GetRuntime(ctx context.Context, query *NamespaceQuery) (*Runtime, error) {
 	var rsp Runtime
 	if err := c.conn.Invoke(ctx, methodGetRuntime.Full(), query, &rsp); err != nil {
 		return nil, err

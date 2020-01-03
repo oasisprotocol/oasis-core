@@ -4,8 +4,8 @@ import (
 	"context"
 	"math"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -56,7 +56,7 @@ type RuntimeClient interface {
 	QueryTxs(ctx context.Context, request *QueryTxsRequest) ([]*TxResult, error)
 
 	// WatchBlocks subscribes to blocks for a specific runtimes.
-	WatchBlocks(ctx context.Context, runtimeID signature.PublicKey) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error)
+	WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error)
 
 	// WaitBlockIndexed waits for a runtime block to be indexed by the indexer.
 	WaitBlockIndexed(ctx context.Context, request *WaitBlockIndexedRequest) error
@@ -67,20 +67,20 @@ type RuntimeClient interface {
 
 // SubmitTxRequest is a SubmitTx request.
 type SubmitTxRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	Data      []byte              `json:"data"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Data      []byte           `json:"data"`
 }
 
 // GetBlockRequest is a GetBlock request.
 type GetBlockRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	Round     uint64              `json:"round"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Round     uint64           `json:"round"`
 }
 
 // GetBlockByHashRequest is a GetBlockByHash request.
 type GetBlockByHashRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	BlockHash hash.Hash           `json:"block_hash"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	BlockHash hash.Hash        `json:"block_hash"`
 }
 
 // TxResult is the transaction query result.
@@ -93,30 +93,30 @@ type TxResult struct {
 
 // GetTxRequest is a GetTx request.
 type GetTxRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	Round     uint64              `json:"round"`
-	Index     uint32              `json:"index"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Round     uint64           `json:"round"`
+	Index     uint32           `json:"index"`
 }
 
 // GetTxByBlockHashRequest is a GetTxByBlockHash request.
 type GetTxByBlockHashRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	BlockHash hash.Hash           `json:"block_hash"`
-	Index     uint32              `json:"index"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	BlockHash hash.Hash        `json:"block_hash"`
+	Index     uint32           `json:"index"`
 }
 
 // GetTxsRequest is a GetTxs request.
 type GetTxsRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	Round     uint64              `json:"round"`
-	IORoot    hash.Hash           `json:"io_root"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Round     uint64           `json:"round"`
+	IORoot    hash.Hash        `json:"io_root"`
 }
 
 // QueryTxRequest is a QueryTx request.
 type QueryTxRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	Key       []byte              `json:"key"`
-	Value     []byte              `json:"value"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Key       []byte           `json:"key"`
+	Value     []byte           `json:"value"`
 }
 
 // QueryCondition is a query condition.
@@ -152,12 +152,12 @@ type Query struct {
 
 // QueryTxsRequest is a QueryTxs request.
 type QueryTxsRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	Query     Query               `json:"query"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Query     Query            `json:"query"`
 }
 
 // WaitBlockIndexedRequest is a WaitBlockIndexed request.
 type WaitBlockIndexedRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	Round     uint64              `json:"round"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Round     uint64           `json:"round"`
 }

@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/oasis-core/go/common/identity"
@@ -96,7 +96,7 @@ type blockWatcher struct {
 	service.BaseBackgroundService
 
 	common *clientCommon
-	id     signature.PublicKey
+	id     common.Namespace
 
 	watched map[hash.Hash]*watchRequest
 	newCh   chan *watchRequest
@@ -281,7 +281,7 @@ func (w *blockWatcher) Stop() {
 	close(w.stopCh)
 }
 
-func newWatcher(common *clientCommon, id signature.PublicKey) (*blockWatcher, error) {
+func newWatcher(common *clientCommon, id common.Namespace) (*blockWatcher, error) {
 	svc := service.NewBaseBackgroundService("client/watcher")
 	watcher := &blockWatcher{
 		BaseBackgroundService:   *svc,

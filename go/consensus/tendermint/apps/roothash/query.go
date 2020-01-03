@@ -3,7 +3,7 @@ package roothash
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -12,8 +12,8 @@ import (
 
 // Query is the roothash query interface.
 type Query interface {
-	LatestBlock(context.Context, signature.PublicKey) (*block.Block, error)
-	GenesisBlock(context.Context, signature.PublicKey) (*block.Block, error)
+	LatestBlock(context.Context, common.Namespace) (*block.Block, error)
+	GenesisBlock(context.Context, common.Namespace) (*block.Block, error)
 	Genesis(context.Context) (*roothash.Genesis, error)
 }
 
@@ -52,7 +52,7 @@ type rootHashQuerier struct {
 	state *roothashState.ImmutableState
 }
 
-func (rq *rootHashQuerier) LatestBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
+func (rq *rootHashQuerier) LatestBlock(ctx context.Context, id common.Namespace) (*block.Block, error) {
 	runtime, err := rq.state.RuntimeState(id)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (rq *rootHashQuerier) LatestBlock(ctx context.Context, id signature.PublicK
 	return runtime.CurrentBlock, nil
 }
 
-func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id signature.PublicKey) (*block.Block, error) {
+func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id common.Namespace) (*block.Block, error) {
 	runtime, err := rq.state.RuntimeState(id)
 	if err != nil {
 		return nil, err

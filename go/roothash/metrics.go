@@ -7,7 +7,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/roothash/api"
 )
@@ -40,7 +39,7 @@ type metricsWrapper struct {
 	api.Backend
 }
 
-func (w *metricsWrapper) WatchBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
+func (w *metricsWrapper) WatchBlocks(id common.Namespace) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
 	return w.Backend.WatchBlocks(id)
 }
 

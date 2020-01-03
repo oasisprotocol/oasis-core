@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -65,7 +66,7 @@ func TestSandboxedHost(t *testing.T) {
 	ias, err := ias.New(nil)
 	require.NoError(t, err, "ias.New")
 
-	var testID signature.PublicKey
+	var testID common.Namespace
 	_ = testID.UnmarshalBinary(make([]byte, signature.PublicKeySize))
 
 	// Create host with sandbox disabled.

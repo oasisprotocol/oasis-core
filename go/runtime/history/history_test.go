@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 )
@@ -25,9 +25,9 @@ func TestHistory(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	var runtimeID signature.PublicKey
+	var runtimeID common.Namespace
 	_ = runtimeID.UnmarshalHex("1000000000000000000000000000000000000000000000000000000000000001")
-	var runtimeID2 signature.PublicKey
+	var runtimeID2 common.Namespace
 	_ = runtimeID2.UnmarshalHex("1000000000000000000000000000000000000000000000000000000000000002")
 
 	history, err := New(dataDir, runtimeID, NewDefaultConfig())
@@ -139,7 +139,7 @@ func TestHistoryPrune(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	var runtimeID signature.PublicKey
+	var runtimeID common.Namespace
 	_ = runtimeID.UnmarshalHex("1000000000000000000000000000000000000000000000000000000000000001")
 
 	history, err := New(dataDir, runtimeID, &Config{
@@ -209,7 +209,7 @@ func TestHistoryPruneError(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	var runtimeID signature.PublicKey
+	var runtimeID common.Namespace
 	_ = runtimeID.UnmarshalHex("1000000000000000000000000000000000000000000000000000000000000001")
 
 	history, err := New(dataDir, runtimeID, &Config{

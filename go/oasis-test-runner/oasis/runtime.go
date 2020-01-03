@@ -8,10 +8,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdRegRt "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/runtime"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -23,7 +23,7 @@ const rtDescriptorFile = "runtime_genesis.json"
 type Runtime struct { // nolint: maligned
 	dir *env.Dir
 
-	id   signature.PublicKey
+	id   common.Namespace
 	kind registry.RuntimeKind
 
 	binary      string
@@ -36,7 +36,7 @@ type Runtime struct { // nolint: maligned
 
 // RuntimeCfg is the Oasis runtime provisioning configuration.
 type RuntimeCfg struct { // nolint: maligned
-	ID          signature.PublicKey
+	ID          common.Namespace
 	Kind        registry.RuntimeKind
 	Entity      *Entity
 	Keymanager  *Runtime
@@ -64,7 +64,7 @@ type RuntimePrunerCfg struct {
 }
 
 // ID returns the runtime ID.
-func (rt *Runtime) ID() signature.PublicKey {
+func (rt *Runtime) ID() common.Namespace {
 	return rt.id
 }
 
@@ -86,7 +86,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 
 	args := []string{
 		"registry", "runtime", "init_genesis",
-		"--" + common.CfgDataDir, rtDir.String(),
+		"--" + cmdCommon.CfgDataDir, rtDir.String(),
 		"--" + cmdRegRt.CfgID, cfg.ID.String(),
 		"--" + cmdRegRt.CfgKind, cfg.Kind.String(),
 		"--" + cmdRegRt.CfgGenesisRound, strconv.FormatUint(cfg.GenesisRound, 10),

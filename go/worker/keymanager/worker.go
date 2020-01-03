@@ -10,6 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -62,7 +63,7 @@ type Worker struct {
 	quitCh    chan struct{}
 	initCh    chan struct{}
 
-	runtimeID     signature.PublicKey
+	runtimeID     common.Namespace
 	workerHost    host.Host
 	workerHostCfg host.Config
 
@@ -429,7 +430,7 @@ func (w *Worker) worker() {
 
 	// Subscribe to runtime registrations in order to know which runtimes
 	// are using us as a key manager.
-	clientRuntimes := make(map[signature.PublicKey]*clientRuntimeWatcher)
+	clientRuntimes := make(map[common.Namespace]*clientRuntimeWatcher)
 	clientRuntimesQuitCh := make(chan *clientRuntimeWatcher)
 	defer close(clientRuntimesQuitCh)
 	rtCh, rtSub, err := w.commonWorker.Registry.WatchRuntimes(w.ctx)
@@ -445,7 +446,7 @@ func (w *Worker) worker() {
 	for {
 		select {
 		case status := <-statusCh:
-			if !status.ID.Equal(w.runtimeID) {
+			if !status.ID.Equal(&w.runtimeID) {
 				continue
 			}
 
@@ -495,7 +496,7 @@ func (w *Worker) worker() {
 				initialSyncDone = true
 			}
 		case rt := <-rtCh:
-			if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(w.runtimeID) {
+			if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&w.runtimeID) {
 				continue
 			}
 			if clientRuntimes[rt.ID] != nil {

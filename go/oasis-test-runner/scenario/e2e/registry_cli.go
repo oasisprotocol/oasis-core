@@ -13,12 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
@@ -381,7 +382,7 @@ func (r *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node,
 		},
 		Runtimes: []*node.Runtime{
 			{
-				ID: signature.PublicKey{}, // ID is set below.
+				ID: common.Namespace{}, // ID is set below.
 			},
 		},
 		Roles: node.RoleValidator,
@@ -415,7 +416,7 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 			"--" + cmdRegNode.CfgNodeRuntimeID, testNode.Runtimes[0].ID.String(),
 			"--" + flags.CfgSigner, fileSigner.SignerName,
 			"--" + flags.CfgSignerDir, entDir,
-			"--" + common.CfgDataDir, dataDir,
+			"--" + cmdCommon.CfgDataDir, dataDir,
 		}
 		_, err = runSubCommandWithOutput(childEnv, "init-node", r.basicImpl.net.Config().NodeBinary, args)
 		if err != nil {
@@ -505,7 +506,7 @@ func (r *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPa
 		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(0),
 		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugDontBlameOasis,
-		"--" + common.CfgDebugAllowTestKeys,
+		"--" + cmdCommon.CfgDebugAllowTestKeys,
 		"--" + flags.CfgSigner, fileSigner.SignerName,
 		"--" + flags.CfgSignerDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
@@ -528,7 +529,7 @@ func (r *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, tx
 		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(0),
 		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugDontBlameOasis,
-		"--" + common.CfgDebugAllowTestKeys,
+		"--" + cmdCommon.CfgDebugAllowTestKeys,
 		"--" + flags.CfgSigner, fileSigner.SignerName,
 		"--" + flags.CfgSignerDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
@@ -580,7 +581,7 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env) error {
 	}
 	// Runtime ID 0x0 is for simple-keyvalue, 0xf... is for the keymanager. Let's use 0x1.
 	_ = testRuntime.ID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000001")
-	testRuntime.KeyManager = &signature.PublicKey{}
+	testRuntime.KeyManager = &common.Namespace{}
 	_ = testRuntime.KeyManager.UnmarshalHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	// Empty genesis state root.
 	testRuntime.Genesis.StateRoot.Empty()
@@ -623,7 +624,7 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env) error {
 }
 
 // listRuntimes lists currently registered runtimes.
-func (r *registryCLIImpl) listRuntimes(childEnv *env.Env) (map[signature.PublicKey]registry.Runtime, error) {
+func (r *registryCLIImpl) listRuntimes(childEnv *env.Env) (map[common.Namespace]registry.Runtime, error) {
 	r.logger.Info("listing all runtimes")
 	args := []string{
 		"registry", "runtime", "list",
@@ -636,7 +637,7 @@ func (r *registryCLIImpl) listRuntimes(childEnv *env.Env) (map[signature.PublicK
 	}
 	runtimesStr := strings.Split(b.String(), "\n")
 
-	runtimes := map[signature.PublicKey]registry.Runtime{}
+	runtimes := map[common.Namespace]registry.Runtime{}
 	for _, rtStr := range runtimesStr {
 		// Ignore last newline.
 		if rtStr == "" {
@@ -686,7 +687,7 @@ func (r *registryCLIImpl) genRegisterRuntimeTx(childEnv *env.Env, runtime regist
 		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(0),
 		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
 		"--" + flags.CfgDebugDontBlameOasis,
-		"--" + common.CfgDebugAllowTestKeys,
+		"--" + cmdCommon.CfgDebugAllowTestKeys,
 		"--" + flags.CfgDebugTestEntity,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}

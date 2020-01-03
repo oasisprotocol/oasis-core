@@ -3,7 +3,7 @@ package common
 import (
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -38,7 +38,7 @@ type Worker struct {
 	RuntimeRegistry  runtimeRegistry.Registry
 	GenesisDoc       *genesis.Document
 
-	runtimes map[signature.PublicKey]*committee.Node
+	runtimes map[common.Namespace]*committee.Node
 
 	quitCh chan struct{}
 	initCh chan struct{}
@@ -149,7 +149,7 @@ func (w *Worker) GetConfig() Config {
 }
 
 // GetRuntimes returns a map of registered runtimes.
-func (w *Worker) GetRuntimes() map[signature.PublicKey]*committee.Node {
+func (w *Worker) GetRuntimes() map[common.Namespace]*committee.Node {
 	return w.runtimes
 }
 
@@ -157,7 +157,7 @@ func (w *Worker) GetRuntimes() map[signature.PublicKey]*committee.Node {
 //
 // In case the runtime with the specified id was not registered it
 // returns nil.
-func (w *Worker) GetRuntime(id signature.PublicKey) *committee.Node {
+func (w *Worker) GetRuntime(id common.Namespace) *committee.Node {
 	return w.runtimes[id]
 }
 
@@ -245,7 +245,7 @@ func newWorker(
 		KeyManagerClient: keyManagerClient,
 		RuntimeRegistry:  runtimeRegistry,
 		GenesisDoc:       genesisDoc,
-		runtimes:         make(map[signature.PublicKey]*committee.Node),
+		runtimes:         make(map[common.Namespace]*committee.Node),
 		quitCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
 		logger:           logging.GetLogger("worker/common"),

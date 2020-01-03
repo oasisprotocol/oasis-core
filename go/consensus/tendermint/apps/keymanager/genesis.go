@@ -7,8 +7,8 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
@@ -29,7 +29,7 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 	// before the keymanager, and just query the registry for the runtime
 	// list.
 	regSt := doc.Registry
-	rtMap := make(map[signature.PublicKey]*registry.Runtime)
+	rtMap := make(map[common.Namespace]*registry.Runtime)
 	for _, v := range regSt.Runtimes {
 		rt, err := registry.VerifyRegisterRuntimeArgs(app.logger, v, true)
 		if err != nil {

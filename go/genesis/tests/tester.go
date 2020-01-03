@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
@@ -96,6 +97,14 @@ func hex2pk(hex string) signature.PublicKey {
 	return pk
 }
 
+func hex2ns(hex string) common.Namespace {
+	var ns common.Namespace
+	if err := ns.UnmarshalHex(hex); err != nil {
+		panic(err)
+	}
+	return ns
+}
+
 func TestGenesisChainContext(t *testing.T) {
 	// Ensure that the chain context is stable.
 	stableDoc := *testDoc
@@ -114,8 +123,11 @@ func TestGenesisSanityCheck(t *testing.T) {
 	signer := memorySigner.NewTestSigner("genesis sanity checks signer")
 	signer2 := memorySigner.NewTestSigner("another genesis sanity checks signer")
 	validPK := signer.Public()
+	var validNS common.Namespace
+	_ = validNS.UnmarshalBinary(validPK[:])
 
 	invalidPK := hex2pk("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a")
+	invalidNS := hex2ns("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a")
 
 	signature.BuildPublicKeyBlacklist(true)
 
@@ -132,14 +144,14 @@ func TestGenesisSanityCheck(t *testing.T) {
 	}
 	signedTestEntity := signEntityOrDie(signer, testEntity)
 
-	kmRuntimeID := hex2pk("0000000000000000000000000000000000000000000000000000000000000000")
+	kmRuntimeID := hex2ns("0000000000000000000000000000000000000000000000000000000000000000")
 	testKMRuntime := &registry.Runtime{
 		ID:   kmRuntimeID,
 		Kind: registry.KindKeyManager,
 	}
 	signedTestKMRuntime := signRuntimeOrDie(signer, testKMRuntime)
 
-	testRuntimeID := hex2pk("0000000000000000000000000000000000000000000000000000000000000001")
+	testRuntimeID := hex2ns("0000000000000000000000000000000000000000000000000000000000000001")
 	testRuntime := &registry.Runtime{
 		ID:         testRuntimeID,
 		Kind:       registry.KindCompute,
@@ -230,7 +242,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.KeyManager = keymanager.Genesis{
 		Statuses: []*keymanager.Status{
 			{
-				ID: invalidPK,
+				ID: invalidNS,
 			},
 		},
 	}
@@ -248,8 +260,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 	}
 
 	d = *testDoc
-	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
-	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+	d.RootHash.RuntimeStates = make(map[common.Namespace]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validNS] = &registry.RuntimeGenesis{
 		StateRoot: nonEmptyHash,
 		// Empty list of storage receipts.
 		StorageReceipts: []signature.Signature{},
@@ -258,8 +270,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.NoError(rtsSanityCheck(d.RootHash, true), "empty StorageReceipts for StateRoot should be ignored, if isGenesis=true")
 
 	d = *testDoc
-	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
-	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+	d.RootHash.RuntimeStates = make(map[common.Namespace]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validNS] = &registry.RuntimeGenesis{
 		StateRoot: nonEmptyHash,
 		// List with one empty (invalid) storage receipt.
 		StorageReceipts: []signature.Signature{signature.Signature{}},
@@ -272,8 +284,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 	stateRootSig, _ := signature.Sign(signer, storage.ReceiptSignatureContext, nonEmptyHash[:])
 	stateRootSig2, _ := signature.Sign(signer2, storage.ReceiptSignatureContext, nonEmptyHash[:])
 	wrongSig, _ := signature.Sign(signer, storage.ReceiptSignatureContext, []byte{1, 2, 3})
-	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
-	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+	d.RootHash.RuntimeStates = make(map[common.Namespace]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validNS] = &registry.RuntimeGenesis{
 		StateRoot: nonEmptyHash,
 		// Some non-empty signature, but not related to StateRoot.
 		StorageReceipts: []signature.Signature{*wrongSig, *stateRootSig, *stateRootSig2},
@@ -282,8 +294,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.NoError(rtsSanityCheck(d.RootHash, true), "some incorrect StorageReceipt for StateRoot should be ignored, if isGenesis=true")
 
 	d = *testDoc
-	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
-	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+	d.RootHash.RuntimeStates = make(map[common.Namespace]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validNS] = &registry.RuntimeGenesis{
 		StateRoot:       nonEmptyHash,
 		StorageReceipts: []signature.Signature{*stateRootSig, *stateRootSig2},
 	}
@@ -295,8 +307,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 		Key:   []byte{1, 2, 3},
 		Value: []byte{1, 2, 3},
 	}}
-	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
-	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+	d.RootHash.RuntimeStates = make(map[common.Namespace]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validNS] = &registry.RuntimeGenesis{
 		State:           nonEmptyState,
 		StateRoot:       nonEmptyHash,
 		StorageReceipts: []signature.Signature{*wrongSig, *stateRootSig, *stateRootSig2},
@@ -304,8 +316,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.NoError(rtsSanityCheck(d.RootHash, false), "non-empty StateRoot with non-empty State and some invalid StorageReceipt should pass")
 	require.NoError(rtsSanityCheck(d.RootHash, true), "non-empty StateRoot with non-empty State and some invalid StorageReceipt should pass, if isGenesis=true")
 
-	d.RootHash.RuntimeStates = make(map[signature.PublicKey]*registry.RuntimeGenesis)
-	d.RootHash.RuntimeStates[validPK] = &registry.RuntimeGenesis{
+	d.RootHash.RuntimeStates = make(map[common.Namespace]*registry.RuntimeGenesis)
+	d.RootHash.RuntimeStates[validNS] = &registry.RuntimeGenesis{
 		State:           nonEmptyState,
 		StateRoot:       nonEmptyHash,
 		StorageReceipts: []signature.Signature{*stateRootSig, *stateRootSig2},
@@ -379,7 +391,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	d = *testDoc
 	te = *testEntity
-	te.Nodes = []signature.PublicKey{testRuntime.ID}
+	te.Nodes = []signature.PublicKey{invalidPK}
 	te.AllowEntitySignedNodes = false
 	signedEntityWithBrokenNode := signEntityOrDie(signer, &te)
 	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithBrokenNode}
@@ -389,7 +401,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	d = *testDoc
 	te = *testEntity
-	te.Nodes = []signature.PublicKey{testRuntime.ID}
+	te.Nodes = []signature.PublicKey{invalidPK}
 	te.AllowEntitySignedNodes = true
 	signedEntityWithBrokenNode = signEntityOrDie(signer, &te)
 	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithBrokenNode}
@@ -399,7 +411,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	d = *testDoc
 	tn := *testNode
-	tn.EntityID = testRuntime.ID
+	tn.EntityID = invalidPK
 	signedBrokenTestNode := signNodeOrDie(signer, &tn)
 	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithTestNode}
 	d.Registry.Runtimes = []*registry.SignedRuntime{signedTestKMRuntime}

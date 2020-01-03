@@ -5,7 +5,7 @@ import (
 
 	"github.com/tendermint/iavl"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -70,7 +70,7 @@ func checkRootHash(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	// Check blocks.
 	runtimes := st.Runtimes()
 
-	blocks := make(map[signature.PublicKey]*block.Block)
+	blocks := make(map[common.Namespace]*block.Block)
 	for _, rt := range runtimes {
 		blocks[rt.Runtime.ID] = rt.CurrentBlock
 	}

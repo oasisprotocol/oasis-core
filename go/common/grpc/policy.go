@@ -13,7 +13,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 )
 
 var (
@@ -24,7 +23,7 @@ var (
 // ErrForbiddenByPolicy is the error returned when an action is not allowed by policy.
 type ErrForbiddenByPolicy struct {
 	method    accessctl.Action
-	runtimeID signature.PublicKey
+	runtimeID common.Namespace
 	subject   string
 }
 
@@ -57,13 +56,13 @@ type DynamicRuntimePolicyChecker struct {
 	sync.RWMutex
 
 	// Map from runtime IDs to corresponding access control policies.
-	accessPolicies map[signature.PublicKey]accessctl.Policy
+	accessPolicies map[common.Namespace]accessctl.Policy
 }
 
 // SetAccessPolicy sets the PolicyChecker's access policy.
 //
 // After this method is called the passed policy must not be used anymore.
-func (c *DynamicRuntimePolicyChecker) SetAccessPolicy(policy accessctl.Policy, runtimeID signature.PublicKey) {
+func (c *DynamicRuntimePolicyChecker) SetAccessPolicy(policy accessctl.Policy, runtimeID common.Namespace) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -75,15 +74,11 @@ func (c *DynamicRuntimePolicyChecker) SetAccessPolicy(policy accessctl.Policy, r
 func (c *DynamicRuntimePolicyChecker) CheckAccessAllowed(
 	ctx context.Context,
 	method accessctl.Action,
-	namespace common.Namespace,
+	runtimeID common.Namespace,
 ) error {
 	c.RLock()
 	defer c.RUnlock()
 
-	runtimeID, err := namespace.ToRuntimeID()
-	if err != nil {
-		return errors.Wrap(err, "grpc: failed to derive runtime ID from namespace")
-	}
 	peer, ok := peer.FromContext(ctx)
 	if !ok {
 		return errors.New("grpc: failed to obtain connection peer from context")
@@ -111,6 +106,6 @@ func (c *DynamicRuntimePolicyChecker) CheckAccessAllowed(
 // NewDynamicRuntimePolicyChecker creates a new dynamic runtime policy checker instance.
 func NewDynamicRuntimePolicyChecker() *DynamicRuntimePolicyChecker {
 	return &DynamicRuntimePolicyChecker{
-		accessPolicies: make(map[signature.PublicKey]accessctl.Policy),
+		accessPolicies: make(map[common.Namespace]accessctl.Policy),
 	}
 }

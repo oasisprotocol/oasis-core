@@ -5,6 +5,7 @@ import (
 
 	"github.com/tendermint/iavl"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
@@ -17,7 +18,7 @@ var (
 	// committeeKeyFmt is the key format used for committees.
 	//
 	// Value is CBOR-serialized committee.
-	committeeKeyFmt = keyformat.New(0x60, uint8(0), &signature.PublicKey{})
+	committeeKeyFmt = keyformat.New(0x60, uint8(0), &common.Namespace{})
 	// validatorsCurrentKeyFmt is the key format used for the current set of
 	// validators.
 	//
@@ -40,7 +41,7 @@ type ImmutableState struct {
 	*abci.ImmutableState
 }
 
-func (s *ImmutableState) Committee(kind api.CommitteeKind, runtimeID signature.PublicKey) (*api.Committee, error) {
+func (s *ImmutableState) Committee(kind api.CommitteeKind, runtimeID common.Namespace) (*api.Committee, error) {
 	_, raw := s.Snapshot.Get(committeeKeyFmt.Encode(uint8(kind), &runtimeID))
 	if raw == nil {
 		return nil, nil
@@ -163,7 +164,7 @@ func (s *MutableState) PutCommittee(c *api.Committee) {
 	s.tree.Set(committeeKeyFmt.Encode(uint8(c.Kind), &c.RuntimeID), cbor.Marshal(c))
 }
 
-func (s *MutableState) DropCommittee(kind api.CommitteeKind, runtimeID signature.PublicKey) {
+func (s *MutableState) DropCommittee(kind api.CommitteeKind, runtimeID common.Namespace) {
 	s.tree.Remove(committeeKeyFmt.Encode(uint8(kind), &runtimeID))
 }
 

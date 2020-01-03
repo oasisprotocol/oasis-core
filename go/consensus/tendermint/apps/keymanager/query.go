@@ -3,7 +3,7 @@ package keymanager
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
@@ -11,7 +11,7 @@ import (
 
 // Query is the key manager query interface.
 type Query interface {
-	Status(context.Context, signature.PublicKey) (*keymanager.Status, error)
+	Status(context.Context, common.Namespace) (*keymanager.Status, error)
 	Statuses(context.Context) ([]*keymanager.Status, error)
 	Genesis(context.Context) (*keymanager.Genesis, error)
 }
@@ -51,7 +51,7 @@ type keymanagerQuerier struct {
 	state *keymanagerState.ImmutableState
 }
 
-func (kq *keymanagerQuerier) Status(ctx context.Context, id signature.PublicKey) (*keymanager.Status, error) {
+func (kq *keymanagerQuerier) Status(ctx context.Context, id common.Namespace) (*keymanager.Status, error) {
 	return kq.state.Status(id)
 }
 

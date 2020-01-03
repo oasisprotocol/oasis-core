@@ -9,7 +9,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -59,7 +58,7 @@ type Worker struct {
 	initCh chan struct{}
 	quitCh chan struct{}
 
-	runtimes   map[signature.PublicKey]*committee.Node
+	runtimes   map[common.Namespace]*committee.Node
 	watchState *persistent.ServiceStore
 	fetchPool  *workerpool.Pool
 
@@ -82,7 +81,7 @@ func New(
 		logger:             logging.GetLogger("worker/storage"),
 		initCh:             make(chan struct{}),
 		quitCh:             make(chan struct{}),
-		runtimes:           make(map[signature.PublicKey]*committee.Node),
+		runtimes:           make(map[common.Namespace]*committee.Node),
 	}
 
 	if s.enabled {

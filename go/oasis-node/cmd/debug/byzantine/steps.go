@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
@@ -25,7 +26,7 @@ const (
 )
 
 var (
-	defaultRuntimeID signature.PublicKey
+	defaultRuntimeID common.Namespace
 	fakeAddresses    = []node.Address{
 		node.Address{
 			TCPAddr: net.TCPAddr{

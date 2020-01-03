@@ -16,7 +16,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/storage/api"
@@ -45,7 +44,7 @@ type storageClientBackend struct {
 
 	logger *logging.Logger
 
-	debugRuntimeID *signature.PublicKey
+	debugRuntimeID *common.Namespace
 
 	runtimeWatcher storageWatcher
 
@@ -66,15 +65,14 @@ type grpcResponse struct {
 	node *node.Node
 }
 
-func (b *storageClientBackend) getRequestRuntime(ns common.Namespace) (runtimeID signature.PublicKey, err error) {
+func (b *storageClientBackend) getRequestRuntime(ns common.Namespace) common.Namespace {
 	// In debug mode always connect to the debug watcher.
 	if b.debugRuntimeID != nil {
-		runtimeID = *b.debugRuntimeID
-	} else {
-		// Otherwise, determine runtime from request namsepace.
-		return ns.ToRuntimeID()
+		return *b.debugRuntimeID
 	}
-	return
+
+	// Otherwise, use the request namespace.
+	return ns
 }
 
 func (b *storageClientBackend) writeWithClient(
@@ -84,15 +82,7 @@ func (b *storageClientBackend) writeWithClient(
 	fn func(context.Context, api.Backend, *node.Node) (interface{}, error),
 	expectedNewRoots []hash.Hash,
 ) ([]*api.Receipt, error) {
-	runtimeID, err := b.getRequestRuntime(ns)
-	if err != nil {
-		b.logger.Error("writeWithClient: failure when deriving runtimeID from storage namespace",
-			"namespace", ns,
-			"err", err,
-		)
-		return nil, ErrStorageNotAvailable
-	}
-
+	runtimeID := b.getRequestRuntime(ns)
 	clientStates := b.runtimeWatcher.getClientStates()
 	n := len(clientStates)
 	if n == 0 {
@@ -186,7 +176,7 @@ func (b *storageClientBackend) writeWithClient(
 		// As it is likely that network delay will dominate, the
 		// signature verification is done serially here.
 		var receiptBody api.ReceiptBody
-		if err = receipt.Open(&receiptBody); err != nil {
+		if err := receipt.Open(&receiptBody); err != nil {
 			b.logger.Error("failed to open receipt for a storage node",
 				"node", response.node,
 				"err", err,
@@ -295,15 +285,7 @@ func (b *storageClientBackend) readWithClient(
 	ns common.Namespace,
 	fn func(context.Context, api.Backend) (interface{}, error),
 ) (interface{}, error) {
-	runtimeID, err := b.getRequestRuntime(ns)
-	if err != nil {
-		b.logger.Error("readWithClient: failure when deriving runtimeID from storage namespace",
-			"namespace", ns,
-			"err", err,
-		)
-		return nil, ErrStorageNotAvailable
-	}
-
+	runtimeID := b.getRequestRuntime(ns)
 	clientStates := b.runtimeWatcher.getClientStates()
 	n := len(clientStates)
 	if n == 0 {
@@ -318,7 +300,10 @@ func (b *storageClientBackend) readWithClient(
 	// https://github.com/oasislabs/oasis-core/issues/1815.
 	rng := rand.New(mathrand.New(cryptorand.Reader))
 
-	var resp interface{}
+	var (
+		err  error
+		resp interface{}
+	)
 	for _, randIndex := range rng.Perm(n) {
 		state := clientStates[randIndex]
 

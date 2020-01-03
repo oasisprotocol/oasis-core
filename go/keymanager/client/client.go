@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
@@ -48,8 +49,8 @@ type Client struct {
 	backend  api.Backend
 	registry registry.Backend
 
-	state map[signature.PublicKey]*clientState
-	kmMap map[signature.PublicKey]signature.PublicKey
+	state map[common.Namespace]*clientState
+	kmMap map[common.Namespace]common.Namespace
 
 	debugClient enclaverpc.Transport
 }
@@ -73,7 +74,7 @@ func (st *clientState) kill() {
 }
 
 // CallRemote calls a runtime-specific key manager via remote EnclaveRPC.
-func (c *Client) CallRemote(ctx context.Context, runtimeID signature.PublicKey, data []byte) ([]byte, error) {
+func (c *Client) CallRemote(ctx context.Context, runtimeID common.Namespace, data []byte) ([]byte, error) {
 	if c.debugClient != nil {
 		return c.debugClient.CallEnclave(ctx, &enclaverpc.CallEnclaveRequest{
 			RuntimeID: runtimeID,
@@ -316,8 +317,8 @@ func New(backend api.Backend, registryBackend registry.Backend, nodeIdentity *id
 	c := &Client{
 		logger:       logging.GetLogger("keymanager/client"),
 		nodeIdentity: nodeIdentity,
-		state:        make(map[signature.PublicKey]*clientState),
-		kmMap:        make(map[signature.PublicKey]signature.PublicKey),
+		state:        make(map[common.Namespace]*clientState),
+		kmMap:        make(map[common.Namespace]common.Namespace),
 	}
 
 	// Standard configuration watches the various backends.

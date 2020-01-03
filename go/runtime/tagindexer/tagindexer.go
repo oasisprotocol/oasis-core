@@ -7,7 +7,7 @@ import (
 
 	"github.com/cenkalti/backoff"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/service"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -28,7 +28,7 @@ type Service struct {
 	service.BaseBackgroundService
 	QueryableBackend
 
-	runtimeID signature.PublicKey
+	runtimeID common.Namespace
 	backend   Backend
 	roothash  roothash.Backend
 	storage   storage.Backend

@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
@@ -101,7 +102,7 @@ type watcherState struct {
 	scheduler scheduler.Backend
 	registry  registry.Backend
 
-	runtimeID signature.PublicKey
+	runtimeID common.Namespace
 
 	identity *identity.Identity
 
@@ -350,7 +351,7 @@ func (w *watcherState) watch(ctx context.Context) {
 
 func newWatcher(
 	ctx context.Context,
-	runtimeID signature.PublicKey,
+	runtimeID common.Namespace,
 	identity *identity.Identity,
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,

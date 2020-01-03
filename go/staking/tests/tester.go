@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/identity"
@@ -45,7 +46,7 @@ func StakingImplementationTests(
 	identity *identity.Identity,
 	entity *entity.Entity,
 	entitySigner signature.Signer,
-	runtimeID signature.PublicKey,
+	runtimeID common.Namespace,
 ) {
 	for _, tc := range []struct {
 		n  string
@@ -488,7 +489,7 @@ func testSlashDoubleSigning(
 	ident *identity.Identity,
 	ent *entity.Entity,
 	entSigner signature.Signer,
-	runtimeID signature.PublicKey,
+	runtimeID common.Namespace,
 ) {
 	require := require.New(t)
 

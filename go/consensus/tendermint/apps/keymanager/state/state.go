@@ -3,8 +3,8 @@ package state
 import (
 	"github.com/tendermint/iavl"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
@@ -14,7 +14,7 @@ var (
 	// statusKeyFmt is the key manager status key format.
 	//
 	// Value is CBOR-serialized key manager status.
-	statusKeyFmt = keyformat.New(0x70, &signature.PublicKey{})
+	statusKeyFmt = keyformat.New(0x70, &common.Namespace{})
 )
 
 type ImmutableState struct {
@@ -57,7 +57,7 @@ func (st *ImmutableState) getStatusesRaw() ([][]byte, error) {
 	return rawVec, nil
 }
 
-func (st *ImmutableState) Status(id signature.PublicKey) (*api.Status, error) {
+func (st *ImmutableState) Status(id common.Namespace) (*api.Status, error) {
 	_, raw := st.Snapshot.Get(statusKeyFmt.Encode(&id))
 	if raw == nil {
 		return nil, nil

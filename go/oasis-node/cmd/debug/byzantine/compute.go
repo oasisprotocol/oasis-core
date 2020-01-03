@@ -5,6 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -189,7 +190,7 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 	return nil
 }
 
-func (cbc *computeBatchContext) publishToCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, runtimeID signature.PublicKey, groupVersion int64) error {
+func (cbc *computeBatchContext) publishToCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, runtimeID common.Namespace, groupVersion int64) error {
 	if err := schedulerPublishToCommittee(ht, height, committee, role, ph, &p2p.Message{
 		RuntimeID:    runtimeID,
 		GroupVersion: groupVersion,

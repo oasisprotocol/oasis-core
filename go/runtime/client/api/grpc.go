@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -339,7 +339,7 @@ func handlerWaitBlockIndexed( // nolint: golint
 }
 
 func handlerWatchBlocks(srv interface{}, stream grpc.ServerStream) error {
-	var runtimeID signature.PublicKey
+	var runtimeID common.Namespace
 	if err := stream.RecvMsg(&runtimeID); err != nil {
 		return err
 	}
@@ -446,7 +446,7 @@ func (c *runtimeClient) WaitBlockIndexed(ctx context.Context, request *WaitBlock
 	return c.conn.Invoke(ctx, methodWaitBlockIndexed.Full(), request, nil)
 }
 
-func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID signature.PublicKey) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
+func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchBlocks.Full())

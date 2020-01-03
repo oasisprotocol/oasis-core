@@ -7,6 +7,7 @@ import (
 
 	tmtypes "github.com/tendermint/tendermint/types"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -48,7 +49,7 @@ func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.C
 	}
 }
 
-func schedulerGetCommittee(ht *honestTendermint, height int64, kind scheduler.CommitteeKind, runtimeID signature.PublicKey) (*scheduler.Committee, error) {
+func schedulerGetCommittee(ht *honestTendermint, height int64, kind scheduler.CommitteeKind, runtimeID common.Namespace) (*scheduler.Committee, error) {
 	committees, err := ht.service.Scheduler().GetCommittees(context.Background(), &scheduler.GetCommitteesRequest{
 		RuntimeID: runtimeID,
 		Height:    height,
@@ -62,7 +63,7 @@ func schedulerGetCommittee(ht *honestTendermint, height int64, kind scheduler.Co
 			continue
 		}
 
-		if !committee.RuntimeID.Equal(runtimeID) {
+		if !committee.RuntimeID.Equal(&runtimeID) {
 			continue
 		}
 

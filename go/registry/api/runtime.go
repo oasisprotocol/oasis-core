@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -131,7 +132,7 @@ type StorageParameters struct {
 // Runtime represents a runtime.
 type Runtime struct {
 	// ID is a globally unique long term identifier of the runtime.
-	ID signature.PublicKey `json:"id"`
+	ID common.Namespace `json:"id"`
 
 	// Genesis is the runtime genesis information.
 	Genesis RuntimeGenesis `json:"genesis"`
@@ -146,7 +147,7 @@ type Runtime struct {
 	Version VersionInfo `json:"versions"`
 
 	// KeyManager is the key manager runtime ID for this runtime.
-	KeyManager *signature.PublicKey `json:"key_manager,omitempty"`
+	KeyManager *common.Namespace `json:"key_manager,omitempty"`
 
 	// Compute stores parameters of the compute committee.
 	Compute ComputeParameters `json:"compute,omitempty"`

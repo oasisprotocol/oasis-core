@@ -9,6 +9,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
@@ -194,7 +195,7 @@ type Backend interface {
 	WatchNodeList(context.Context) (<-chan *NodeList, pubsub.ClosableSubscription, error)
 
 	// GetRuntime gets a runtime by ID.
-	GetRuntime(context.Context, *IDQuery) (*Runtime, error)
+	GetRuntime(context.Context, *NamespaceQuery) (*Runtime, error)
 
 	// GetRuntimes returns the registered Runtimes at the specified
 	// block height.
@@ -218,6 +219,12 @@ type Backend interface {
 type IDQuery struct {
 	Height int64               `json:"height"`
 	ID     signature.PublicKey `json:"id"`
+}
+
+// NamespaceQuery is a registry query by namespace (Runtime ID).
+type NamespaceQuery struct {
+	Height int64            `json:"height"`
+	ID     common.Namespace `json:"id"`
 }
 
 // NewRegisterEntityTx creates a new register entity transaction.
@@ -423,8 +430,8 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			return nil, ErrInvalidArgument
 		}
 	default:
-		rtMap := make(map[signature.PublicKey]bool)
-		regRtMap := make(map[signature.PublicKey]bool)
+		rtMap := make(map[common.Namespace]bool)
+		regRtMap := make(map[common.Namespace]bool)
 
 		for _, rt := range regRuntimes {
 			regRtMap[rt.ID] = true
@@ -613,7 +620,7 @@ func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRu
 	regRtLoop:
 		for _, regRt := range regRuntimes {
 			// Make sure we compare EnclaveIdentity of the same registered RuntimeIDs only!
-			if !regRt.ID.Equal(rt.ID) {
+			if !regRt.ID.Equal(&rt.ID) {
 				continue
 			}
 
@@ -741,7 +748,7 @@ func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes []*node.Ru
 	}
 	for i, currentRuntime := range currentRuntimes {
 		newRuntime := newRuntimes[i]
-		if !currentRuntime.ID.Equal(newRuntime.ID) {
+		if !currentRuntime.ID.Equal(&newRuntime.ID) {
 			logger.Error("RegisterNode: trying to update runtimes, runtime ID changed",
 				"current_runtime", currentRuntime,
 				"new_runtime", newRuntime,
@@ -861,7 +868,7 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 	// TODO: Who should sign the runtime? Current compute node assumes an entity (deployer).
 	switch rt.Kind {
 	case KindCompute:
-		if rt.KeyManager != nil && rt.ID.Equal(*rt.KeyManager) {
+		if rt.KeyManager != nil && rt.ID.Equal(rt.KeyManager) {
 			return nil, ErrInvalidArgument
 		}
 
@@ -1011,8 +1018,8 @@ func SanityCheckEntities(entities []*entity.SignedEntity) (map[signature.PublicK
 
 // SanityCheckRuntimes examines the runtimes table.
 // Returns lookup of runtime ID to the runtime record for use in other checks.
-func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[signature.PublicKey]*Runtime, error) {
-	seenRuntimes := make(map[signature.PublicKey]*Runtime)
+func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[common.Namespace]*Runtime, error) {
+	seenRuntimes := make(map[common.Namespace]*Runtime)
 	for _, srt := range runtimes {
 		var rt Runtime
 		if err := srt.Open(RegisterGenesisRuntimeSignatureContext, &rt); err != nil {
@@ -1088,7 +1095,7 @@ func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[signature.PublicKey]*Ru
 						if err := skrt.Open(RegisterGenesisRuntimeSignatureContext, &kmrt); err != nil {
 							return nil, fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
 						}
-						if kmrt.ID.Equal(*rt.KeyManager) {
+						if kmrt.ID.Equal(rt.KeyManager) {
 							found = true
 							krt = &kmrt
 							break
@@ -1115,7 +1122,7 @@ func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[signature.PublicKey]*Ru
 // SanityCheckNodes examines the nodes table.
 // Pass lookups of entities and runtimes from SanityCheckEntities
 // and SanityCheckRuntimes for cross referencing purposes.
-func SanityCheckNodes(nodes []*node.SignedNode, seenEntities map[signature.PublicKey]*entity.Entity, seenRuntimes map[signature.PublicKey]*Runtime) error { // nolint: gocyclo
+func SanityCheckNodes(nodes []*node.SignedNode, seenEntities map[signature.PublicKey]*entity.Entity, seenRuntimes map[common.Namespace]*Runtime) error { // nolint: gocyclo
 	for _, sn := range nodes {
 		var n node.Node
 		if err := sn.Open(RegisterGenesisNodeSignatureContext, &n); err != nil {

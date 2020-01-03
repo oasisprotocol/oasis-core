@@ -4,7 +4,7 @@ package api
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 )
 
 // Transport is the EnclaveRPC transport interface.
@@ -15,8 +15,8 @@ type Transport interface {
 
 // CallEnclaveRequest is a CallEnclave request.
 type CallEnclaveRequest struct {
-	RuntimeID signature.PublicKey `json:"runtime_id"`
-	Endpoint  string              `json:"endpoint"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Endpoint  string           `json:"endpoint"`
 
 	Payload []byte `json:"payload"`
 }
