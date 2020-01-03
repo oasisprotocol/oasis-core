@@ -424,7 +424,7 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -518,7 +518,7 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -636,7 +636,7 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 

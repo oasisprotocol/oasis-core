@@ -59,6 +59,7 @@ import (
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
+	"github.com/oasislabs/oasis-core/go/worker/computeenable"
 	workerKeymanager "github.com/oasislabs/oasis-core/go/worker/keymanager"
 	"github.com/oasislabs/oasis-core/go/worker/merge"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
@@ -203,14 +204,14 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		return err
 	}
 
-	// Initialize the P2P worker if any workers are enabled. Since the P2P
+	// Initialize the P2P worker if the compute worker is enabled. Since the P2P
 	// layer does not have a separate Start method and starts listening
 	// immediately when created, make sure that we don't start it if it is not
 	// needed.
 	//
 	// Currently, only compute, txn scheduler and merge workers need P2P
 	// transport.
-	if compute.Enabled() || txnscheduler.Enabled() || merge.Enabled() {
+	if computeenable.Enabled() {
 		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
 		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 			p2p.DebugForceAllowUnroutableAddresses()
@@ -225,7 +226,7 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(
 		dataDir,
-		compute.Enabled() || workerStorage.Enabled() || txnscheduler.Enabled() || merge.Enabled() || workerKeymanager.Enabled(),
+		computeenable.Enabled() || workerStorage.Enabled() || workerKeymanager.Enabled(),
 		n.Identity,
 		n.RootHash,
 		n.Registry,
@@ -790,13 +791,12 @@ func init() {
 		ias.Flags,
 		workerKeymanager.Flags,
 		runtimeRegistry.Flags,
-		compute.Flags,
+		computeenable.Flags,
 		p2p.Flags,
 		registration.Flags,
 		txnscheduler.Flags,
 		workerCommon.Flags,
 		workerStorage.Flags,
-		merge.Flags,
 		workerSentry.Flags,
 		crash.InitFlags(),
 	} {

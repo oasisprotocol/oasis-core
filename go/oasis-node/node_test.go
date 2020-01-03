@@ -41,10 +41,9 @@ import (
 	storageClientTests "github.com/oasislabs/oasis-core/go/storage/client/tests"
 	storageTests "github.com/oasislabs/oasis-core/go/storage/tests"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
-	computeWorker "github.com/oasislabs/oasis-core/go/worker/compute"
 	computeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/committee"
 	computeWorkerTests "github.com/oasislabs/oasis-core/go/worker/compute/tests"
-	mergeWorker "github.com/oasislabs/oasis-core/go/worker/merge"
+	"github.com/oasislabs/oasis-core/go/worker/computeenable"
 	storageWorker "github.com/oasislabs/oasis-core/go/worker/storage"
 	storageWorkerTests "github.com/oasislabs/oasis-core/go/worker/storage/tests"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
@@ -67,14 +66,12 @@ var (
 		{cmdCommonFlags.CfgConsensusValidator, true},
 		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
 		{storage.CfgBackend, "badger"},
-		{computeWorker.CfgWorkerEnabled, true},
+		{computeenable.CfgWorkerEnabled, true},
 		{workerCommon.CfgRuntimeBackend, "mock"},
 		{workerCommon.CfgRuntimeLoader, "mock-runtime"},
 		{workerCommon.CfgClientPort, workerClientPort},
 		{storageWorker.CfgWorkerEnabled, true},
-		{txnscheduler.CfgWorkerEnabled, true},
 		{txnscheduler.CfgCheckTxEnabled, false},
-		{mergeWorker.CfgWorkerEnabled, true},
 		{supplementarysanity.CfgEnabled, true},
 		{supplementarysanity.CfgInterval, 1},
 		{cmdCommon.CfgDebugAllowTestKeys, true},

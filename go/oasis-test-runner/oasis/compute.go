@@ -80,8 +80,6 @@ func (worker *Compute) startNode() error {
 		workerComputeEnabled().
 		workerRuntimeBackend(worker.runtimeBackend).
 		workerRuntimeLoader(worker.net.cfg.RuntimeLoaderBinary).
-		workerMergeEnabled().
-		workerTxnschedulerEnabled().
 		workerTxnschedulerCheckTxEnabled().
 		appendNetwork(worker.net).
 		appendEntity(worker.entity)
