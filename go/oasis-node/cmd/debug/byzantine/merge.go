@@ -43,7 +43,7 @@ func mergeReceiveCommitment(ph *p2pHandle) (*commitment.OpenComputeCommitment, e
 	req.responseCh <- nil
 
 	if req.msg.ComputeWorkerFinished == nil {
-		return nil, errors.Errorf("expecting signed transaction scheduler batch dispatch message, got %+v", req.msg)
+		return nil, errors.Errorf("expecting compute worker finished message, got %+v", req.msg)
 	}
 
 	openCom, err := req.msg.ComputeWorkerFinished.Commitment.Open()
