@@ -88,6 +88,19 @@ func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.Pu
 	return fmt.Errorf("we're not scheduled")
 }
 
+func schedulerCheckNotScheduled(committee *scheduler.Committee, nodeID signature.PublicKey) error {
+	for _, member := range committee.Members {
+		if !member.PublicKey.Equal(nodeID) {
+			continue
+		}
+
+		return fmt.Errorf("we're scheduled as %s", member.Role)
+	}
+
+	// All good.
+	return nil
+}
+
 func schedulerForRoleInCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, fn func(*node.Node) error) error {
 	for _, member := range committee.Members {
 		if member.Role != role {
