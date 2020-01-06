@@ -218,7 +218,9 @@ func (sc *StateCheckpoint) Rollback() {
 	if sc.ctx == nil {
 		return
 	}
-	sc.ctx.State().ImmutableTree = &sc.ImmutableTree
+	st := sc.ctx.State()
+	st.Rollback()
+	st.ImmutableTree = &sc.ImmutableTree
 }
 
 // BlockContextKey is an interface for a block context key.
