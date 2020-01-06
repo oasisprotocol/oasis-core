@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/storage/database"
@@ -176,7 +177,7 @@ func (sc *basicImpl) cleanTendermintStorage(childEnv *env.Env) error {
 			"--" + common.CfgDataDir, dataDir,
 		}, cleanArgs...)
 
-		return runSubCommand(childEnv, "unsafe-reset", sc.net.Config().NodeBinary, args)
+		return cli.RunSubCommand(childEnv, logger, "unsafe-reset", sc.net.Config().NodeBinary, args)
 	}
 
 	for _, val := range sc.net.Validators() {

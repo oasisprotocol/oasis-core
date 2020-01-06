@@ -25,14 +25,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	cmdRegEnt "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/entity"
 	cmdRegNode "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/node"
-	cmdRegRt "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/runtime"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
-
-const ()
 
 var (
 	// RegistryCLI is the staking scenario.
@@ -79,14 +77,16 @@ func (r *registryCLIImpl) Run(childEnv *env.Env) error {
 	}
 	logger.Info("nodes registered")
 
+	cli := cli.New(childEnv, r.net, r.logger)
+
 	// Run the tests
 	// registry entity and registry node subcommands
-	if err := r.testEntityAndNode(childEnv); err != nil {
+	if err := r.testEntityAndNode(childEnv, cli); err != nil {
 		return fmt.Errorf("scenario/e2e/registry: error while running registry entity and node test: %w", err)
 	}
 
 	// registry runtime subcommands
-	if err := r.testRuntime(childEnv); err != nil {
+	if err := r.testRuntime(childEnv, cli); err != nil {
 		return fmt.Errorf("scenario/e2e/registry: error while running registry runtime test: %w", err)
 	}
 
@@ -98,7 +98,7 @@ func (r *registryCLIImpl) Run(childEnv *env.Env) error {
 }
 
 // testEntity tests registry entity subcommands.
-func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env) error {
+func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers) error {
 	// List entities.
 	entities, err := r.listEntities(childEnv)
 	if err != nil {
@@ -172,7 +172,7 @@ func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env) error {
 	}
 
 	// Submit register entity transaction.
-	if err = r.submitTx(childEnv, registerTxPath); err != nil {
+	if err = cli.Consensus.SubmitTx(registerTxPath); err != nil {
 		return fmt.Errorf("scenario/e2e/registry/entity: failed to submit entity register tx: %w", err)
 	}
 
@@ -193,7 +193,7 @@ func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env) error {
 	}
 
 	// Submit deregister entity transaction.
-	if err = r.submitTx(childEnv, deregisterTxPath); err != nil {
+	if err = cli.Consensus.SubmitTx(deregisterTxPath); err != nil {
 		return fmt.Errorf("scenario/e2e/registry/entity: failed to submit entity deregister tx: %w", err)
 	}
 
@@ -217,7 +217,7 @@ func (r *registryCLIImpl) listEntities(childEnv *env.Env) ([]signature.PublicKey
 		"registry", "entity", "list",
 		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
 	}
-	b, err := runSubCommandWithOutput(childEnv, "list", r.basicImpl.net.Config().NodeBinary, args)
+	b, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "list", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("scenario/e2e/registry/entity: failed to list entities: %s error: %w", b.String(), err)
 	}
@@ -260,7 +260,7 @@ func (r *registryCLIImpl) initEntity(childEnv *env.Env, entDir string) (*entity.
 		"--" + flags.CfgSigner, fileSigner.SignerName,
 		"--" + flags.CfgSignerDir, entDir,
 	}
-	_, err := runSubCommandWithOutput(childEnv, "entity-init", r.basicImpl.net.Config().NodeBinary, args)
+	_, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "entity-init", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("scenario/e2e/registry/entity: failed to init entity: %w", err)
 	}
@@ -284,7 +284,7 @@ func (r *registryCLIImpl) updateEntity(childEnv *env.Env, nodes []*node.Node, no
 		"--" + cmdRegEnt.CfgNodeID, strings.Join(nodeIDs, ","),
 		"--" + cmdRegEnt.CfgNodeDescriptor, strings.Join(nodeGenesisFiles, ","),
 	}
-	_, err := runSubCommandWithOutput(childEnv, "entity-update", r.basicImpl.net.Config().NodeBinary, args)
+	_, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "entity-update", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("scenario/e2e/registry/entity: failed to update entity: %w", err)
 	}
@@ -299,7 +299,7 @@ func (r *registryCLIImpl) listNodes(childEnv *env.Env) ([]signature.PublicKey, e
 		"registry", "node", "list",
 		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
 	}
-	b, err := runSubCommandWithOutput(childEnv, "node-list", r.basicImpl.net.Config().NodeBinary, args)
+	b, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "node-list", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("scenario/e2e/registry/entity: failed to list nodes: %s error: %w", b.String(), err)
 	}
@@ -418,7 +418,7 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 			"--" + flags.CfgSignerDir, entDir,
 			"--" + cmdCommon.CfgDataDir, dataDir,
 		}
-		_, err = runSubCommandWithOutput(childEnv, "init-node", r.basicImpl.net.Config().NodeBinary, args)
+		_, err = cli.RunSubCommandWithOutput(childEnv, r.logger, "init-node", r.basicImpl.net.Config().NodeBinary, args)
 		if err != nil {
 			return nil, fmt.Errorf("scenario/e2e/registry: failed to init node: %w", err)
 		}
@@ -490,11 +490,6 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 	return n, nil
 }
 
-// submitTx is a wrapper for consensus submit_tx command.
-func (r *registryCLIImpl) submitTx(childEnv *env.Env, txPath string) error {
-	return submitTx(childEnv, txPath, r.logger, r.basicImpl.net.Validators()[0].SocketPath(), r.basicImpl.net.Config().NodeBinary)
-}
-
 // genRegisterEntityTx calls registry entity gen_register.
 func (r *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPath string, entDir string) error {
 	r.logger.Info("generating register entity tx")
@@ -511,7 +506,7 @@ func (r *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPa
 		"--" + flags.CfgSignerDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
-	if err := runSubCommand(childEnv, "gen_register", r.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err := cli.RunSubCommand(childEnv, r.logger, "gen_register", r.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genRegisterEntityTx: failed to generate register entity tx: %w", err)
 	}
 
@@ -534,7 +529,7 @@ func (r *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, tx
 		"--" + flags.CfgSignerDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
-	if err := runSubCommand(childEnv, "gen_deregister", r.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err := cli.RunSubCommand(childEnv, r.logger, "gen_deregister", r.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genDeregisterEntityTx: failed to generate deregister entity tx: %w", err)
 	}
 
@@ -542,7 +537,7 @@ func (r *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, tx
 }
 
 // testRuntime tests registry runtime subcommands.
-func (r *registryCLIImpl) testRuntime(childEnv *env.Env) error {
+func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error {
 	// List runtimes.
 	runtimes, err := r.listRuntimes(childEnv)
 	if err != nil {
@@ -593,12 +588,12 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env) error {
 	if err = ioutil.WriteFile(genesisStatePath, genesisStateStr, 0600); err != nil {
 		return err
 	}
-	if err = r.genRegisterRuntimeTx(childEnv, testRuntime, registerTxPath, genesisStatePath); err != nil {
+	if err = cli.Registry.GenerateRegisterRuntimeTx(0, testRuntime, registerTxPath, genesisStatePath); err != nil {
 		return fmt.Errorf("scenario/e2e/registry/runtime: failed to generate runtime register tx: %w", err)
 	}
 
 	// Submit register runtime transaction.
-	if err = r.submitTx(childEnv, registerTxPath); err != nil {
+	if err = cli.Consensus.SubmitTx(registerTxPath); err != nil {
 		return fmt.Errorf("scenario/e2e/registry/runtime: failed to submit runtime register tx: %w", err)
 	}
 
@@ -631,7 +626,7 @@ func (r *registryCLIImpl) listRuntimes(childEnv *env.Env) (map[common.Namespace]
 		"-v",
 		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
 	}
-	b, err := runSubCommandWithOutput(childEnv, "list", r.basicImpl.net.Config().NodeBinary, args)
+	b, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "list", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("scenario/e2e/registry/runtime: failed to list runtimes: %s error: %w", b.String(), err)
 	}
@@ -652,51 +647,4 @@ func (r *registryCLIImpl) listRuntimes(childEnv *env.Env) (map[common.Namespace]
 	}
 
 	return runtimes, nil
-}
-
-// genRegisterRuntimeTx calls registry entity gen_register.
-func (r *registryCLIImpl) genRegisterRuntimeTx(childEnv *env.Env, runtime registry.Runtime, txPath string, genesisStateFile string) error {
-	r.logger.Info("generating register entity tx")
-
-	// Generate a runtime register transaction file with debug test entity.
-	args := []string{
-		"registry", "runtime", "gen_register",
-		"--" + cmdRegRt.CfgID, runtime.ID.String(),
-		"--" + cmdRegRt.CfgTEEHardware, runtime.TEEHardware.String(),
-		"--" + cmdRegRt.CfgGenesisState, genesisStateFile,
-		"--" + cmdRegRt.CfgGenesisRound, strconv.FormatUint(runtime.Genesis.Round, 10),
-		"--" + cmdRegRt.CfgKind, runtime.Kind.String(),
-		"--" + cmdRegRt.CfgVersion, runtime.Version.Version.String(),
-		"--" + cmdRegRt.CfgVersionEnclave, string(runtime.Version.TEE),
-		"--" + cmdRegRt.CfgComputeGroupSize, strconv.FormatUint(runtime.Compute.GroupSize, 10),
-		"--" + cmdRegRt.CfgComputeGroupBackupSize, strconv.FormatUint(runtime.Compute.GroupBackupSize, 10),
-		"--" + cmdRegRt.CfgComputeAllowedStragglers, strconv.FormatUint(runtime.Compute.AllowedStragglers, 10),
-		"--" + cmdRegRt.CfgComputeRoundTimeout, runtime.Compute.RoundTimeout.String(),
-		"--" + cmdRegRt.CfgMergeGroupSize, strconv.FormatUint(runtime.Merge.GroupSize, 10),
-		"--" + cmdRegRt.CfgMergeGroupBackupSize, strconv.FormatUint(runtime.Merge.GroupBackupSize, 10),
-		"--" + cmdRegRt.CfgMergeAllowedStragglers, strconv.FormatUint(runtime.Merge.AllowedStragglers, 10),
-		"--" + cmdRegRt.CfgMergeRoundTimeout, runtime.Merge.RoundTimeout.String(),
-		"--" + cmdRegRt.CfgStorageGroupSize, strconv.FormatUint(runtime.Storage.GroupSize, 10),
-		"--" + cmdRegRt.CfgTxnSchedulerGroupSize, strconv.FormatUint(runtime.TxnScheduler.GroupSize, 10),
-		"--" + cmdRegRt.CfgTxnSchedulerAlgorithm, runtime.TxnScheduler.Algorithm,
-		"--" + cmdRegRt.CfgTxnSchedulerBatchFlushTimeout, runtime.TxnScheduler.BatchFlushTimeout.String(),
-		"--" + cmdRegRt.CfgTxnSchedulerMaxBatchSize, strconv.FormatUint(runtime.TxnScheduler.MaxBatchSize, 10),
-		"--" + cmdRegRt.CfgTxnSchedulerMaxBatchSizeBytes, strconv.FormatUint(runtime.TxnScheduler.MaxBatchSizeBytes, 10),
-		"--" + consensus.CfgTxNonce, strconv.Itoa(0),
-		"--" + consensus.CfgTxFile, txPath,
-		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(0),
-		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
-		"--" + flags.CfgDebugDontBlameOasis,
-		"--" + cmdCommon.CfgDebugAllowTestKeys,
-		"--" + flags.CfgDebugTestEntity,
-		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
-	}
-	if runtime.KeyManager != nil {
-		args = append(args, "--"+cmdRegRt.CfgKeyManager, runtime.KeyManager.String())
-	}
-	if err := runSubCommand(childEnv, "gen_register", r.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("genRegisterRuntimeTx: failed to generate register runtime tx: %w", err)
-	}
-
-	return nil
 }

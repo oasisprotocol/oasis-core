@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 )
 
@@ -61,7 +62,7 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 		"--genesis.file", dumpPath,
 		"--address", "unix:" + sc.basicImpl.net.Validators()[0].SocketPath(),
 	}
-	if err = runSubCommand(childEnv, "genesis-dump", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err = cli.RunSubCommand(childEnv, sc.logger, "genesis-dump", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("scenario/e2e/dump_restore: failed to dump state: %w", err)
 	}
 
@@ -78,7 +79,7 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 		"--debug.dont_blame_oasis",
 		"--debug.allow_test_keys",
 	}
-	if err = runSubCommand(childEnv, "storage-dump", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err = cli.RunSubCommand(childEnv, sc.logger, "storage-dump", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("scenario/e2e/dump_restore: failed to dump storage: %w", err)
 	}
 

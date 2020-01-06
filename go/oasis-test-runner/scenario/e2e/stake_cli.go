@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/stake"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasislabs/oasis-core/go/staking/api"
 )
@@ -98,6 +99,8 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 	}
 	logger.Info("nodes registered")
 
+	cli := cli.New(childEnv, s.net, s.logger)
+
 	// Account list.
 	accounts, err := s.listAccounts(childEnv)
 	if err != nil {
@@ -136,27 +139,27 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 
 	// Run the tests
 	// Transfer
-	if err = s.testTransfer(childEnv, src, dst); err != nil {
+	if err = s.testTransfer(childEnv, cli, src, dst); err != nil {
 		return fmt.Errorf("scenario/e2e/stake: error while running Transfer test: %w", err)
 	}
 
 	// Burn
-	if err = s.testBurn(childEnv, src); err != nil {
+	if err = s.testBurn(childEnv, cli, src); err != nil {
 		return fmt.Errorf("scenario/e2e/stake: error while running Burn test: %w", err)
 	}
 
 	// Escrow
-	if err = s.testEscrow(childEnv, src, escrow); err != nil {
+	if err = s.testEscrow(childEnv, cli, src, escrow); err != nil {
 		return fmt.Errorf("scenario/e2e/stake: error while running Escrow test: %w", err)
 	}
 
 	// ReclaimEscrow
-	if err = s.testReclaimEscrow(childEnv, src, escrow); err != nil {
+	if err = s.testReclaimEscrow(childEnv, cli, src, escrow); err != nil {
 		return fmt.Errorf("scenario/e2e/stake: error while running ReclaimEscrow test: %w", err)
 	}
 
 	// AmendCommissionSchedule
-	if err = s.testAmendCommissionSchedule(childEnv, src); err != nil {
+	if err = s.testAmendCommissionSchedule(childEnv, cli, src); err != nil {
 		return fmt.Errorf("scenario/e2e/stake: error while running AmendCommissionSchedule: %w", err)
 	}
 
@@ -168,7 +171,7 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 }
 
 // testTransfer tests transfer of 1000 tokens from src to dst.
-func (s *stakeCLIImpl) testTransfer(childEnv *env.Env, src signature.PublicKey, dst signature.PublicKey) error {
+func (s *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src signature.PublicKey, dst signature.PublicKey) error {
 	transferTxPath := filepath.Join(childEnv.Dir(), "stake_transfer.json")
 	if err := s.genTransferTx(childEnv, transferAmount, 0, dst, transferTxPath); err != nil {
 		return err
@@ -183,7 +186,7 @@ func (s *stakeCLIImpl) testTransfer(childEnv *env.Env, src signature.PublicKey, 
 		return err
 	}
 
-	if err := s.submitTx(childEnv, transferTxPath); err != nil {
+	if err := cli.Consensus.SubmitTx(transferTxPath); err != nil {
 		return err
 	}
 
@@ -205,7 +208,7 @@ func (s *stakeCLIImpl) testTransfer(childEnv *env.Env, src signature.PublicKey, 
 }
 
 // testBurn tests burning of 2000 tokens owned by src.
-func (s *stakeCLIImpl) testBurn(childEnv *env.Env, src signature.PublicKey) error {
+func (s *stakeCLIImpl) testBurn(childEnv *env.Env, cli *cli.Helpers, src signature.PublicKey) error {
 	burnTxPath := filepath.Join(childEnv.Dir(), "stake_burn.json")
 	if err := s.genBurnTx(childEnv, burnAmount, 1, burnTxPath); err != nil {
 		return err
@@ -214,7 +217,7 @@ func (s *stakeCLIImpl) testBurn(childEnv *env.Env, src signature.PublicKey) erro
 		return err
 	}
 
-	if err := s.submitTx(childEnv, burnTxPath); err != nil {
+	if err := cli.Consensus.SubmitTx(burnTxPath); err != nil {
 		return err
 	}
 
@@ -233,7 +236,7 @@ func (s *stakeCLIImpl) testBurn(childEnv *env.Env, src signature.PublicKey) erro
 }
 
 // testEscrow tests escrowing of 3000 tokens from src to dst.
-func (s *stakeCLIImpl) testEscrow(childEnv *env.Env, src signature.PublicKey, escrow signature.PublicKey) error {
+func (s *stakeCLIImpl) testEscrow(childEnv *env.Env, cli *cli.Helpers, src signature.PublicKey, escrow signature.PublicKey) error {
 	escrowTxPath := filepath.Join(childEnv.Dir(), "stake_escrow.json")
 	if err := s.genEscrowTx(childEnv, escrowAmount, 2, escrow, escrowTxPath); err != nil {
 		return err
@@ -242,7 +245,7 @@ func (s *stakeCLIImpl) testEscrow(childEnv *env.Env, src signature.PublicKey, es
 		return err
 	}
 
-	if err := s.submitTx(childEnv, escrowTxPath); err != nil {
+	if err := cli.Consensus.SubmitTx(escrowTxPath); err != nil {
 		return err
 	}
 
@@ -264,7 +267,7 @@ func (s *stakeCLIImpl) testEscrow(childEnv *env.Env, src signature.PublicKey, es
 }
 
 // testReclaimEscrow test reclaiming an escrow of 3000 tokens from escrow account.
-func (s *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, src signature.PublicKey, escrow signature.PublicKey) error {
+func (s *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, cli *cli.Helpers, src signature.PublicKey, escrow signature.PublicKey) error {
 	reclaimEscrowTxPath := filepath.Join(childEnv.Dir(), "stake_reclaim_escrow.json")
 	if err := s.genReclaimEscrowTx(childEnv, escrowAmount, 3, escrow, reclaimEscrowTxPath); err != nil {
 		return err
@@ -273,7 +276,7 @@ func (s *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, src signature.Public
 		return err
 	}
 
-	if err := s.submitTx(childEnv, reclaimEscrowTxPath); err != nil {
+	if err := cli.Consensus.SubmitTx(reclaimEscrowTxPath); err != nil {
 		return err
 
 	}
@@ -306,7 +309,7 @@ func mustInitQuantity(i int64) (q quantity.Quantity) {
 	return
 }
 
-func (s *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, src signature.PublicKey) error {
+func (s *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, cli *cli.Helpers, src signature.PublicKey) error {
 	amendCommissionScheduleTxPath := filepath.Join(childEnv.Dir(), "amend_commission_schedule.json")
 	if err := s.genAmendCommissionScheduleTx(childEnv, 4, &api.CommissionSchedule{
 		Rates: []api.CommissionRateStep{
@@ -329,7 +332,7 @@ func (s *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, src signat
 		return err
 	}
 
-	if err := s.submitTx(childEnv, amendCommissionScheduleTxPath); err != nil {
+	if err := cli.Consensus.SubmitTx(amendCommissionScheduleTxPath); err != nil {
 		return err
 	}
 
@@ -344,7 +347,7 @@ func (s *stakeCLIImpl) listAccounts(childEnv *env.Env) ([]signature.PublicKey, e
 		"stake", "list",
 		"--" + grpc.CfgAddress, "unix:" + s.basicImpl.net.Validators()[0].SocketPath(),
 	}
-	b, err := runSubCommandWithOutput(childEnv, "list", s.basicImpl.net.Config().NodeBinary, args)
+	b, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "list", s.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("scenario/e2e/stake: failed to list accounts: %s error: %w", b.String(), err)
 	}
@@ -367,11 +370,6 @@ func (s *stakeCLIImpl) listAccounts(childEnv *env.Env) ([]signature.PublicKey, e
 	return accounts, nil
 }
 
-// submitTx is a wrapper for consensus submit_tx command.
-func (s *stakeCLIImpl) submitTx(childEnv *env.Env, txPath string) error {
-	return submitTx(childEnv, txPath, s.logger, s.basicImpl.net.Validators()[0].SocketPath(), s.basicImpl.net.Config().NodeBinary)
-}
-
 func (s *stakeCLIImpl) getAccountInfo(childEnv *env.Env, src signature.PublicKey) (*api.Account, error) {
 	s.logger.Info("checking account balance", stake.CfgAccountID, src.String())
 	args := []string{
@@ -380,7 +378,7 @@ func (s *stakeCLIImpl) getAccountInfo(childEnv *env.Env, src signature.PublicKey
 		"--" + grpc.CfgAddress, "unix:" + s.basicImpl.net.Validators()[0].SocketPath(),
 	}
 
-	b, err := runSubCommandWithOutput(childEnv, "info", s.basicImpl.net.Config().NodeBinary, args)
+	b, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("scenario/e2e/stake: failed to check account info: %w", err)
 	}
@@ -437,7 +435,7 @@ func (s *stakeCLIImpl) showTx(childEnv *env.Env, txPath string) error {
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
-	if err := runSubCommand(childEnv, "show_tx", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err := cli.RunSubCommand(childEnv, s.logger, "show_tx", s.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("showTx: failed to show tx: %w", err)
 	}
 	return nil
@@ -459,7 +457,7 @@ func (s *stakeCLIImpl) genTransferTx(childEnv *env.Env, amount int, nonce int, d
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
-	if err := runSubCommand(childEnv, "gen_transfer", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err := cli.RunSubCommand(childEnv, s.logger, "gen_transfer", s.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genTransferTx: failed to generate transfer tx: %w", err)
 	}
 	return nil
@@ -480,7 +478,7 @@ func (s *stakeCLIImpl) genBurnTx(childEnv *env.Env, amount int, nonce int, txPat
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
-	if err := runSubCommand(childEnv, "gen_burn", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err := cli.RunSubCommand(childEnv, s.logger, "gen_burn", s.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genBurnTx: failed to generate burn tx: %w", err)
 	}
 	return nil
@@ -502,7 +500,7 @@ func (s *stakeCLIImpl) genEscrowTx(childEnv *env.Env, amount int, nonce int, esc
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
-	if err := runSubCommand(childEnv, "gen_escrow", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err := cli.RunSubCommand(childEnv, s.logger, "gen_escrow", s.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genEscrowTx: failed to generate escrow tx: %w", err)
 	}
 	return nil
@@ -524,7 +522,7 @@ func (s *stakeCLIImpl) genReclaimEscrowTx(childEnv *env.Env, amount int, nonce i
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
-	if err := runSubCommand(childEnv, "gen_reclaim_escrow", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err := cli.RunSubCommand(childEnv, s.logger, "gen_reclaim_escrow", s.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genReclaimEscrowTx: failed to generate reclaim escrow tx: %w", err)
 	}
 	return nil
@@ -550,7 +548,7 @@ func (s *stakeCLIImpl) genAmendCommissionScheduleTx(childEnv *env.Env, nonce int
 	for _, step := range cs.Bounds {
 		args = append(args, "--"+stake.CfgCommissionScheduleBounds, fmt.Sprintf("%d/%d/%d", step.Start, step.RateMin.ToBigInt(), step.RateMax.ToBigInt()))
 	}
-	if err := runSubCommand(childEnv, "gen_amend_commission_schedule", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err := cli.RunSubCommand(childEnv, s.logger, "gen_amend_commission_schedule", s.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genAmendCommissionScheduleTx: failed to generate amend commission schedule tx: %w", err)
 	}
 	return nil

@@ -2,9 +2,7 @@
 package e2e
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"math"
 	"os/exec"
 	"path/filepath"
@@ -103,56 +101,6 @@ func startClient(env *env.Env, net *oasis.Network, binary string, clientArgs []s
 	}
 
 	return cmd, nil
-}
-
-func startSubCommand(env *env.Env, name, binary string, args []string, stdout io.Writer, stderr io.Writer) (*exec.Cmd, error) {
-	cmd := exec.Command(binary, args...)
-	cmd.SysProcAttr = oasis.CmdAttrs
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-
-	logger.Info("launching subcommand",
-		"binary", binary,
-		"args", strings.Join(args, " "),
-	)
-
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	return cmd, nil
-}
-
-func runSubCommand(env *env.Env, name, binary string, args []string) error {
-	d, err := env.NewSubDir(name)
-	if err != nil {
-		return err
-	}
-
-	w, err := d.NewLogWriter("command.log")
-	if err != nil {
-		return err
-	}
-
-	cmd, err := startSubCommand(env, name, binary, args, w, w)
-	if err != nil {
-		return err
-	}
-	if err = cmd.Wait(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func runSubCommandWithOutput(env *env.Env, name, binary string, args []string) (bytes.Buffer, error) {
-	var b bytes.Buffer
-	cmd, err := startSubCommand(env, name, binary, args, &b, &b)
-	if err != nil {
-		return b, err
-	}
-	if err = cmd.Wait(); err != nil {
-		return b, err
-	}
-	return b, nil
 }
 
 func init() {
