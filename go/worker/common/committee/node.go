@@ -276,6 +276,8 @@ func (n *Node) worker() {
 		return
 	}
 
+	n.logger.Info("runtime is registered with the registry")
+
 	// Start watching roothash blocks.
 	blocks, blocksSub, err := n.Roothash.WatchBlocks(n.Runtime.ID())
 	if err != nil {

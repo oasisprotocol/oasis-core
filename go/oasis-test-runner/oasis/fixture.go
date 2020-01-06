@@ -150,7 +150,7 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 }
 
 // RuntimeFixture is a runtime fixture.
-type RuntimeFixture struct {
+type RuntimeFixture struct { // nolint: maligned
 	ID         common.Namespace     `json:"id"`
 	Kind       registry.RuntimeKind `json:"kind"`
 	Entity     int                  `json:"entity"`
@@ -166,6 +166,8 @@ type RuntimeFixture struct {
 	Storage      registry.StorageParameters      `json:"storage"`
 
 	Pruner RuntimePrunerCfg `json:"pruner,omitempty"`
+
+	ExcludeFromGenesis bool `json:"exclude_from_genesis,omitempty"`
 }
 
 // Create instantiates the runtime described by the fixture.
@@ -188,20 +190,21 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 	}
 
 	return net.NewRuntime(&RuntimeCfg{
-		ID:           f.ID,
-		Kind:         f.Kind,
-		Entity:       entity,
-		Keymanager:   km,
-		TEEHardware:  netFixture.TEE.Hardware,
-		MrSigner:     netFixture.TEE.MrSigner,
-		Compute:      f.Compute,
-		Merge:        f.Merge,
-		TxnScheduler: f.TxnScheduler,
-		Storage:      f.Storage,
-		Binary:       f.Binary,
-		GenesisState: f.GenesisState,
-		GenesisRound: f.GenesisRound,
-		Pruner:       f.Pruner,
+		ID:                 f.ID,
+		Kind:               f.Kind,
+		Entity:             entity,
+		Keymanager:         km,
+		TEEHardware:        netFixture.TEE.Hardware,
+		MrSigner:           netFixture.TEE.MrSigner,
+		Compute:            f.Compute,
+		Merge:              f.Merge,
+		TxnScheduler:       f.TxnScheduler,
+		Storage:            f.Storage,
+		Binary:             f.Binary,
+		GenesisState:       f.GenesisState,
+		GenesisRound:       f.GenesisRound,
+		Pruner:             f.Pruner,
+		ExcludeFromGenesis: f.ExcludeFromGenesis,
 	})
 }
 
@@ -237,9 +240,11 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 }
 
 // StorageWorkerFixture is a storage worker fixture.
-type StorageWorkerFixture struct {
+type StorageWorkerFixture struct { // nolint: maligned
 	Backend string `json:"backend"`
 	Entity  int    `json:"entity"`
+
+	Restartable bool `json:"restartable"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
@@ -255,6 +260,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 
 	return net.NewStorage(&StorageCfg{
 		NodeCfg: NodeCfg{
+			Restartable:                f.Restartable,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 		},
 		Backend:       f.Backend,

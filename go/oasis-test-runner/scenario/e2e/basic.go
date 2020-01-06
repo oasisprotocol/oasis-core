@@ -1,11 +1,14 @@
 package e2e
 
 import (
+	"context"
+	"fmt"
 	"os/exec"
 	"time"
 
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
@@ -17,6 +20,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
+	runtimeTransaction "github.com/oasislabs/oasis-core/go/runtime/transaction"
 	"github.com/oasislabs/oasis-core/go/storage/database"
 )
 
@@ -28,7 +33,7 @@ var (
 	}
 	// BasicEncryption is the basic network + client with encryption test case.
 	BasicEncryption scenario.Scenario = &basicImpl{
-		name:         "basic_encryption",
+		name:         "basic-encryption",
 		clientBinary: "simple-keyvalue-enc-client",
 	}
 
@@ -242,4 +247,34 @@ func (sc *basicImpl) Run(childEnv *env.Env) error {
 	}
 
 	return sc.wait(childEnv, cmd, clientErrCh)
+}
+
+func (sc *basicImpl) submitRuntimeTx(ctx context.Context, key, value string) error {
+	c := sc.net.ClientController().RuntimeClient
+
+	// Submit a transaction and check the result.
+	var rsp runtimeTransaction.TxnOutput
+	rawRsp, err := c.SubmitTx(ctx, &runtimeClient.SubmitTxRequest{
+		RuntimeID: runtimeID,
+		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
+			Method: "insert",
+			Args: struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			}{
+				Key:   key,
+				Value: value,
+			},
+		}),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to submit runtime tx: %w", err)
+	}
+	if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
+		return fmt.Errorf("malformed tx output from runtime: %w", err)
+	}
+	if rsp.Error != nil {
+		return fmt.Errorf("runtime tx failed: %s", *rsp.Error)
+	}
+	return nil
 }

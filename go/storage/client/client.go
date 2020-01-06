@@ -221,7 +221,10 @@ func (b *storageClientBackend) writeWithClient(
 	if successes == 0 {
 		return nil, errors.New("storage client: failed to write to any storage node")
 	} else if successes < n {
-		b.logger.Warn("write operation was only successfully applied to %d out of %d connected nodes", successes, n)
+		b.logger.Warn("write operation only partially applied",
+			"connected_nodes", n,
+			"successful_writes", successes,
+		)
 	}
 
 	return receipts, nil

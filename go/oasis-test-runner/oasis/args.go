@@ -34,6 +34,11 @@ type argBuilder struct {
 	vec []string
 }
 
+func (args *argBuilder) internalSocketAddress(path string) *argBuilder {
+	args.vec = append(args.vec, "--"+grpc.CfgAddress, "unix:"+path)
+	return args
+}
+
 func (args *argBuilder) debugDontBlameOasis() *argBuilder {
 	args.vec = append(args.vec, "--"+flags.CfgDebugDontBlameOasis)
 	return args

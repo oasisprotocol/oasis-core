@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasislabs/oasis-core/go/runtime/client/api"
 	"github.com/oasislabs/oasis-core/go/runtime/history"
-	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 )
 
 var (
@@ -68,12 +66,6 @@ func (sc *runtimePruneImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-// keyValue is a key/value argument for the simple-keyvalue runtime.
-type keyValue struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
 func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 	if err := sc.net.Start(); err != nil {
 		return err
@@ -102,26 +94,8 @@ func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 			"seq", i,
 		)
 
-		// Submit a transaction and check the result.
-		var rsp transaction.TxnOutput
-		rawRsp, err := c.SubmitTx(ctx, &api.SubmitTxRequest{
-			RuntimeID: runtimeID,
-			Data: cbor.Marshal(&transaction.TxnCall{
-				Method: "insert",
-				Args: keyValue{
-					Key:   "hello",
-					Value: "world",
-				},
-			}),
-		})
-		if err != nil {
-			return fmt.Errorf("failed to submit runtime tx: %w", err)
-		}
-		if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
-			return fmt.Errorf("malformed tx output from runtime: %w", err)
-		}
-		if rsp.Error != nil {
-			return fmt.Errorf("runtime tx failed: %s", *rsp.Error)
+		if err := sc.submitRuntimeTx(ctx, "hello", fmt.Sprintf("world %d", i)); err != nil {
+			return err
 		}
 	}
 

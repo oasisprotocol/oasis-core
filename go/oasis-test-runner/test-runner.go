@@ -51,6 +51,8 @@ func main() {
 	_ = cmd.Register(e2e.IdentityCLI)
 	// Runtime prune test.
 	_ = cmd.Register(e2e.RuntimePrune)
+	// Runtime dynamic registration test.
+	_ = cmd.Register(e2e.RuntimeDynamic)
 	// Transaction source test.
 	_ = cmd.Register(e2e.TxSourceTransferShort)
 	_ = cmd.RegisterNondefault(e2e.TxSourceTransfer)

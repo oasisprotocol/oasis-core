@@ -59,9 +59,14 @@ func (km *Keymanager) TLSCertPath() string {
 	return nodeTLSCertPath(km.dir)
 }
 
-// Exports path returns the path to the node's exports data dir.
+// ExportsPath returns the path to the node's exports data dir.
 func (km *Keymanager) ExportsPath() string {
 	return nodeExportsPath(km.dir)
+}
+
+// Start starts an Oasis node.
+func (km *Keymanager) Start() error {
+	return km.startNode()
 }
 
 func (km *Keymanager) provisionGenesis() error {
