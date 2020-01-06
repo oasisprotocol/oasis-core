@@ -16,5 +16,6 @@ COPY go/oasis-node/oasis-node /oasis/bin/oasis-node
 COPY target/release/oasis-core-runtime-loader /oasis/bin/
 COPY target/release/oasis-core-keymanager-runtime /oasis/lib/
 COPY target/x86_64-fortanix-unknown-sgx/release/oasis-core-keymanager-runtime.sgxs /oasis/lib/
+COPY scripts/initialize-client.sh scripts/initialize-client.sh
 
 ENV PATH "/oasis/bin:${PATH}"
