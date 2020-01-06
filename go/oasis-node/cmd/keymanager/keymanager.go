@@ -15,6 +15,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
@@ -374,7 +375,7 @@ func doInitStatus(cmd *cobra.Command, args []string) {
 }
 
 func statusFromFlags() (*kmApi.Status, error) {
-	var id signature.PublicKey
+	var id common.Namespace
 	if err := id.UnmarshalHex(viper.GetString(cfgStatusID)); err != nil {
 		logger.Error("failed to parse key manager status ID",
 			"err", err,

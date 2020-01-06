@@ -8,8 +8,8 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
@@ -153,7 +153,7 @@ func (f *runtimeWorkerHostSandboxedFactory) NewWorkerHost(cfg host.Config) (host
 }
 
 // NewRuntimeWorkerHostFactory creates a new worker host factory for the given runtime.
-func (rw *RuntimeHostWorker) NewRuntimeWorkerHostFactory(role node.RolesMask, id signature.PublicKey) (h host.Factory, err error) {
+func (rw *RuntimeHostWorker) NewRuntimeWorkerHostFactory(role node.RolesMask, id common.Namespace) (h host.Factory, err error) {
 	cfg := rw.commonWorker.GetConfig().RuntimeHost
 	rtCfg, ok := cfg.Runtimes[id]
 	if !ok {

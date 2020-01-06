@@ -48,11 +48,6 @@ func New(
 ) (api.Backend, error) {
 	logger := logging.GetLogger("storage/client")
 
-	runtimeID, err := namespace.ToRuntimeID()
-	if err != nil {
-		return nil, err
-	}
-
 	if addr := viper.GetString(CfgDebugClientAddress); addr != "" && cmdFlags.DebugDontBlameOasis() {
 		logger.Warn("Storage client in debug mode, connecting to provided client",
 			"address", CfgDebugClientAddress,
@@ -85,7 +80,9 @@ func New(
 		client := api.NewStorageClient(conn)
 
 		testRuntimeSigner := memorySigner.NewTestSigner(debugModeFakeRuntimeSeed)
-		debugRuntimeID := testRuntimeSigner.Public()
+		testPublicKey := testRuntimeSigner.Public()
+		var debugRuntimeID common.Namespace
+		_ = debugRuntimeID.UnmarshalBinary(testPublicKey[:])
 		b := &storageClientBackend{
 			ctx:            ctx,
 			logger:         logger,
@@ -102,7 +99,7 @@ func New(
 	b := &storageClientBackend{
 		ctx:            ctx,
 		logger:         logger,
-		runtimeWatcher: newWatcher(ctx, runtimeID, ident, schedulerBackend, registryBackend),
+		runtimeWatcher: newWatcher(ctx, namespace, ident, schedulerBackend, registryBackend),
 	}
 
 	b.haltCtx, b.cancelFn = context.WithCancel(ctx)

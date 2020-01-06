@@ -14,11 +14,7 @@ type storageRouter struct {
 }
 
 func (sr *storageRouter) getRuntime(ns common.Namespace) (Runtime, error) {
-	id, err := ns.ToRuntimeID()
-	if err != nil {
-		return nil, err
-	}
-	return sr.registry.GetRuntime(id)
+	return sr.registry.GetRuntime(ns)
 }
 
 func (sr *storageRouter) SyncGet(ctx context.Context, request *api.GetRequest) (*api.ProofResponse, error) {

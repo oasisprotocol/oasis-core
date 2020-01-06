@@ -103,7 +103,7 @@ var (
 	}
 
 	testNamespace common.Namespace
-	testRuntimeID signature.PublicKey
+	testRuntimeID common.Namespace
 
 	initConfigOnce sync.Once
 )
@@ -111,7 +111,7 @@ var (
 type testNode struct {
 	*node.Node
 
-	runtimeID                 signature.PublicKey
+	runtimeID                 common.Namespace
 	computeCommitteeNode      *computeCommittee.Node
 	txnschedulerCommitteeNode *txnschedulerCommittee.Node
 
@@ -477,11 +477,7 @@ func init() {
 	ns.FromBytes([]byte("oasis node test namespace"))
 	copy(testNamespace[:], ns[:])
 
-	var err error
-	testRuntimeID, err = testNamespace.ToRuntimeID()
-	if err != nil {
-		panic("Unable to convert namespace to runtime ID")
-	}
+	testRuntimeID = testNamespace
 	testRuntime.ID = testRuntimeID
 
 	testRuntime.Genesis.StateRoot.Empty()

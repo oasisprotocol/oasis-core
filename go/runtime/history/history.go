@@ -9,7 +9,7 @@ import (
 
 	"github.com/eapache/channels"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
@@ -53,10 +53,10 @@ type History interface {
 }
 
 type nopHistory struct {
-	runtimeID signature.PublicKey
+	runtimeID common.Namespace
 }
 
-func (h *nopHistory) RuntimeID() signature.PublicKey {
+func (h *nopHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
@@ -85,12 +85,12 @@ func (h *nopHistory) Close() {
 }
 
 // NewNop creates a new no-op runtime history keeper.
-func NewNop(runtimeID signature.PublicKey) History {
+func NewNop(runtimeID common.Namespace) History {
 	return &nopHistory{runtimeID: runtimeID}
 }
 
 type runtimeHistory struct {
-	runtimeID signature.PublicKey
+	runtimeID common.Namespace
 
 	logger *logging.Logger
 
@@ -106,7 +106,7 @@ type runtimeHistory struct {
 	quitCh        chan struct{}
 }
 
-func (h *runtimeHistory) RuntimeID() signature.PublicKey {
+func (h *runtimeHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
@@ -191,7 +191,7 @@ func (h *runtimeHistory) pruneWorker() {
 }
 
 // New creates a new runtime history keeper.
-func New(dataDir string, runtimeID signature.PublicKey, cfg *Config) (History, error) {
+func New(dataDir string, runtimeID common.Namespace, cfg *Config) (History, error) {
 	db, err := newDB(filepath.Join(dataDir, DbFilename), runtimeID)
 	if err != nil {
 		return nil, err

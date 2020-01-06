@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/runtime/client/api"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 )
@@ -39,7 +39,7 @@ type Result struct {
 type Results map[uint64][]Result
 
 // BackendFactory is the tag indexer backend factory interface.
-type BackendFactory func(dataDir string, runtimeID signature.PublicKey) (Backend, error)
+type BackendFactory func(dataDir string, runtimeID common.Namespace) (Backend, error)
 
 // QueryableBackend is the read-only tag indexer backend interface.
 type QueryableBackend interface {
@@ -132,7 +132,7 @@ func (n *nopBackend) Close() {
 
 // NewNopBackend creates a new no-op backend that doesn't perform any indexing.
 func NewNopBackend() BackendFactory {
-	return func(string, signature.PublicKey) (Backend, error) {
+	return func(string, common.Namespace) (Backend, error) {
 		return &nopBackend{}, nil
 	}
 }

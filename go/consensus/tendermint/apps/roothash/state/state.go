@@ -3,8 +3,8 @@ package state
 import (
 	"github.com/tendermint/iavl"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -15,7 +15,7 @@ var (
 	// runtimeKeyFmt is the key format used for per-runtime roothash state.
 	//
 	// Value is CBOR-serialized runtime state.
-	runtimeKeyFmt = keyformat.New(0x20, &signature.PublicKey{})
+	runtimeKeyFmt = keyformat.New(0x20, &common.Namespace{})
 )
 
 type RuntimeState struct {
@@ -39,7 +39,7 @@ func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableS
 	return &ImmutableState{inner}, nil
 }
 
-func (s *ImmutableState) RuntimeState(id signature.PublicKey) (*RuntimeState, error) {
+func (s *ImmutableState) RuntimeState(id common.Namespace) (*RuntimeState, error) {
 	_, raw := s.Snapshot.Get(runtimeKeyFmt.Encode(&id))
 	if raw == nil {
 		return nil, nil

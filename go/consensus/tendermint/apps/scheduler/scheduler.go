@@ -344,7 +344,7 @@ func (app *schedulerApplication) isSuitableComputeWorker(n *node.Node, rt *regis
 		return false
 	}
 	for _, nrt := range n.Runtimes {
-		if !nrt.ID.Equal(rt.ID) {
+		if !nrt.ID.Equal(&rt.ID) {
 			continue
 		}
 		switch rt.TEEHardware {
@@ -384,7 +384,7 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt
 		return false
 	}
 	for _, nrt := range n.Runtimes {
-		if !nrt.ID.Equal(rt.ID) {
+		if !nrt.ID.Equal(&rt.ID) {
 			continue
 		}
 		return true

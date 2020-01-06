@@ -5,6 +5,7 @@ import (
 
 	"github.com/tendermint/iavl"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -35,7 +36,7 @@ var (
 	// signedRuntimeKeyFmt is the key format used for signed runtimes.
 	//
 	// Value is CBOR-serialized signed runtime.
-	signedRuntimeKeyFmt = keyformat.New(0x13, &signature.PublicKey{})
+	signedRuntimeKeyFmt = keyformat.New(0x13, &common.Namespace{})
 	// nodeByConsAddressKeyFmt is the key format used for the consensus address to
 	// node public key mapping.
 	//
@@ -237,13 +238,13 @@ func (s *ImmutableState) SignedNodes() ([]*node.SignedNode, error) {
 	return nodes, nil
 }
 
-func (s *ImmutableState) getSignedRuntimeRaw(id signature.PublicKey) ([]byte, error) {
+func (s *ImmutableState) getSignedRuntimeRaw(id common.Namespace) ([]byte, error) {
 	_, value := s.Snapshot.Get(signedRuntimeKeyFmt.Encode(&id))
 	return value, nil
 }
 
 // GetRuntime looks up a runtime by its identifier and returns it.
-func (s *ImmutableState) Runtime(id signature.PublicKey) (*registry.Runtime, error) {
+func (s *ImmutableState) Runtime(id common.Namespace) (*registry.Runtime, error) {
 	raw, err := s.getSignedRuntimeRaw(id)
 	if err != nil {
 		return nil, err

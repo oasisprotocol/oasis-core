@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -30,7 +30,7 @@ const recvTimeout = 5 * time.Second
 func WorkerImplementationTests(
 	t *testing.T,
 	worker *txnscheduler.Worker,
-	runtimeID signature.PublicKey,
+	runtimeID common.Namespace,
 	rtNode *committee.Node,
 	epochtime epochtime.SetableBackend,
 	roothash roothash.Backend,
@@ -65,7 +65,7 @@ func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState
 
 func testQueueCall(
 	t *testing.T,
-	runtimeID signature.PublicKey,
+	runtimeID common.Namespace,
 	stateCh <-chan committee.NodeState,
 	rtNode *committee.Node,
 	roothash roothash.Backend,

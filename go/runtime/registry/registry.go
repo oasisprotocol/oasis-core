@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
@@ -35,14 +34,14 @@ const (
 // Registry is the running node's runtime registry interface.
 type Registry interface {
 	// GetRuntime returns the per-runtime interface if the runtime is supported.
-	GetRuntime(runtimeID signature.PublicKey) (Runtime, error)
+	GetRuntime(runtimeID common.Namespace) (Runtime, error)
 
 	// Runtimes returns a list of all supported runtimes.
 	Runtimes() []Runtime
 
 	// NewUnmanagedRuntime creates a new runtime that is not managed by this
 	// registry.
-	NewUnmanagedRuntime(runtimeID signature.PublicKey) Runtime
+	NewUnmanagedRuntime(runtimeID common.Namespace) Runtime
 
 	// StorageRouter returns a storage backend which routes requests to the
 	// correct per-runtime storage backend based on the namespace contained
@@ -56,7 +55,7 @@ type Registry interface {
 // Runtime is the running node's supported runtime interface.
 type Runtime interface {
 	// ID is the runtime identifier.
-	ID() signature.PublicKey
+	ID() common.Namespace
 
 	// RegistryDescriptor waits for the runtime to be registered and
 	// then returns its registry descriptor.
@@ -76,7 +75,7 @@ type Runtime interface {
 }
 
 type runtime struct {
-	id         signature.PublicKey
+	id         common.Namespace
 	descriptor *registry.Runtime
 
 	consensus    consensus.Backend
@@ -87,7 +86,7 @@ type runtime struct {
 	tagIndexer *tagindexer.Service
 }
 
-func (r *runtime) ID() signature.PublicKey {
+func (r *runtime) ID() common.Namespace {
 	return r.id
 }
 
@@ -107,7 +106,7 @@ func (r *runtime) RegistryDescriptor(ctx context.Context) (*registry.Runtime, er
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case rt := <-ch:
-			if rt.ID.Equal(r.id) {
+			if rt.ID.Equal(&r.id) {
 				r.descriptor = rt
 				return rt, nil
 			}
@@ -140,10 +139,10 @@ type runtimeRegistry struct {
 	consensus consensus.Backend
 	identity  *identity.Identity
 
-	runtimes map[signature.PublicKey]*runtime
+	runtimes map[common.Namespace]*runtime
 }
 
-func (r *runtimeRegistry) GetRuntime(runtimeID signature.PublicKey) (Runtime, error) {
+func (r *runtimeRegistry) GetRuntime(runtimeID common.Namespace) (Runtime, error) {
 	r.RLock()
 	defer r.RUnlock()
 
@@ -165,7 +164,7 @@ func (r *runtimeRegistry) Runtimes() []Runtime {
 	return rts
 }
 
-func (r *runtimeRegistry) NewUnmanagedRuntime(runtimeID signature.PublicKey) Runtime {
+func (r *runtimeRegistry) NewUnmanagedRuntime(runtimeID common.Namespace) Runtime {
 	return &runtime{
 		id:        runtimeID,
 		history:   history.NewNop(runtimeID),
@@ -194,7 +193,7 @@ func (r *runtimeRegistry) Cleanup() {
 	}
 }
 
-func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id signature.PublicKey, cfg *RuntimeConfig) error {
+func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Namespace, cfg *RuntimeConfig) error {
 	r.Lock()
 	defer r.Unlock()
 
@@ -265,7 +264,7 @@ func New(ctx context.Context, dataDir string, consensus consensus.Backend, ident
 		dataDir:   dataDir,
 		consensus: consensus,
 		identity:  identity,
-		runtimes:  make(map[signature.PublicKey]*runtime),
+		runtimes:  make(map[common.Namespace]*runtime),
 	}
 
 	cfg, err := newConfig()

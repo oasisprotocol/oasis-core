@@ -10,6 +10,7 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -43,8 +44,8 @@ var (
 )
 
 type timerContext struct {
-	ID    signature.PublicKey `json:"id"`
-	Round uint64              `json:"round"`
+	ID    common.Namespace `json:"id"`
+	Round uint64           `json:"round"`
 }
 
 type rootHashApplication struct {
@@ -99,7 +100,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 	// Query the updated runtime list.
 	regState := registryState.NewMutableState(ctx.State())
 	runtimes, _ := regState.Runtimes()
-	newDescriptors := make(map[signature.PublicKey]*registry.Runtime)
+	newDescriptors := make(map[common.Namespace]*registry.Runtime)
 	for _, v := range runtimes {
 		if v.Kind == registry.KindCompute {
 			newDescriptors[v.ID] = v
@@ -170,7 +171,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 					return errors.Wrap(err1, "checkCommittees: failed to query node")
 				}
 				for _, r := range node.Runtimes {
-					if !r.ID.Equal(rtID) {
+					if !r.ID.Equal(&rtID) {
 						continue
 					}
 					nodeRuntime = r
@@ -483,7 +484,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 }
 
 type roothashSignatureVerifier struct {
-	runtimeID signature.PublicKey
+	runtimeID common.Namespace
 	scheduler *schedulerState.MutableState
 }
 
@@ -521,7 +522,7 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 func (app *rootHashApplication) commit(
 	ctx *abci.Context,
 	state *roothashState.MutableState,
-	id signature.PublicKey,
+	id common.Namespace,
 	msg interface{},
 ) error {
 	logger := app.logger.With("is_check_only", ctx.IsCheckOnly())

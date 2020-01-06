@@ -11,9 +11,9 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	cmnBadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 )
 
@@ -103,7 +103,7 @@ func (s *localStorage) Stop() {
 }
 
 // New creates new untrusted local storage.
-func New(dataDir, fn string, runtimeID signature.PublicKey) (LocalStorage, error) {
+func New(dataDir, fn string, runtimeID common.Namespace) (LocalStorage, error) {
 	s := &localStorage{
 		logger: logging.GetLogger("runtime/localstorage").With("runtime_id", runtimeID),
 	}

@@ -1,7 +1,7 @@
 // Package block implements the roothash block and header.
 package block
 
-import "github.com/oasislabs/oasis-core/go/common/crypto/signature"
+import "github.com/oasislabs/oasis-core/go/common"
 
 // Block is an Oasis block.
 //
@@ -13,12 +13,12 @@ type Block struct {
 
 // NewGenesisBlock creates a new empty genesis block given a runtime
 // id and POSIX timestamp.
-func NewGenesisBlock(id signature.PublicKey, timestamp uint64) *Block {
+func NewGenesisBlock(id common.Namespace, timestamp uint64) *Block {
 	var blk Block
 
 	blk.Header.Version = 0
 	blk.Header.Timestamp = timestamp
-	_ = blk.Header.Namespace.UnmarshalBinary(id[:])
+	blk.Header.Namespace = id
 	blk.Header.PreviousHash.Empty()
 	blk.Header.IORoot.Empty()
 	blk.Header.StateRoot.Empty()

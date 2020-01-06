@@ -5,6 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
@@ -27,7 +28,7 @@ func newMergeBatchContext() *mergeBatchContext {
 	return &mergeBatchContext{}
 }
 
-func (mbc *mergeBatchContext) loadCurrentBlock(ht *honestTendermint, runtimeID signature.PublicKey) error {
+func (mbc *mergeBatchContext) loadCurrentBlock(ht *honestTendermint, runtimeID common.Namespace) error {
 	var err error
 	mbc.currentBlock, err = roothashGetLatestBlock(ht, 0, runtimeID)
 	if err != nil {
@@ -134,7 +135,7 @@ func (mbc *mergeBatchContext) createCommitment(id *identity.Identity) error {
 	return nil
 }
 
-func (mbc *mergeBatchContext) publishToChain(svc service.TendermintService, id *identity.Identity, runtimeID signature.PublicKey) error {
+func (mbc *mergeBatchContext) publishToChain(svc service.TendermintService, id *identity.Identity, runtimeID common.Namespace) error {
 	if err := roothashMergeCommit(svc, id, runtimeID, []commitment.MergeCommitment{*mbc.commit}); err != nil {
 		return errors.Wrap(err, "roothash merge commentment")
 	}

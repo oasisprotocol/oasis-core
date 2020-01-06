@@ -156,7 +156,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	var id signature.PublicKey
+	var id common.Namespace
 	if err = id.UnmarshalHex(args[0]); err != nil {
 		logger.Error("failed to decode runtime id",
 			"err", err,
@@ -256,7 +256,7 @@ func doForceFinalize(cmd *cobra.Command, args []string) {
 
 	failed := false
 	for _, arg := range args {
-		var id signature.PublicKey
+		var id common.Namespace
 		if err := id.UnmarshalHex(arg); err != nil {
 			logger.Error("failed to decode runtime id",
 				"err", err,

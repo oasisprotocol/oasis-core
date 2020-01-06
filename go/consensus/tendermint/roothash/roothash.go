@@ -14,9 +14,9 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
@@ -52,8 +52,8 @@ type tendermintBackend struct {
 	lastBlockHeight int64
 
 	allBlockNotifier *pubsub.Broker
-	runtimeNotifiers map[signature.PublicKey]*runtimeBrokers
-	genesisBlocks    map[signature.PublicKey]*block.Block
+	runtimeNotifiers map[common.Namespace]*runtimeBrokers
+	genesisBlocks    map[common.Namespace]*block.Block
 
 	closeOnce      sync.Once
 	closedCh       chan struct{}
@@ -61,7 +61,7 @@ type tendermintBackend struct {
 	blockHistoryCh chan api.BlockHistory
 }
 
-func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.PublicKey, height int64) (*block.Block, error) {
+func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id common.Namespace, height int64) (*block.Block, error) {
 	// First check if we have the genesis blocks cached. They are immutable so easy
 	// to cache to avoid repeated requests to the Tendermint app.
 	tb.RLock()
@@ -89,11 +89,11 @@ func (tb *tendermintBackend) GetGenesisBlock(ctx context.Context, id signature.P
 	return blk, nil
 }
 
-func (tb *tendermintBackend) GetLatestBlock(ctx context.Context, id signature.PublicKey, height int64) (*block.Block, error) {
+func (tb *tendermintBackend) GetLatestBlock(ctx context.Context, id common.Namespace, height int64) (*block.Block, error) {
 	return tb.getLatestBlockAt(ctx, id, height)
 }
 
-func (tb *tendermintBackend) getLatestBlockAt(ctx context.Context, id signature.PublicKey, height int64) (*block.Block, error) {
+func (tb *tendermintBackend) getLatestBlockAt(ctx context.Context, id common.Namespace, height int64) (*block.Block, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func (tb *tendermintBackend) getLatestBlockAt(ctx context.Context, id signature.
 	return q.LatestBlock(ctx, id)
 }
 
-func (tb *tendermintBackend) WatchBlocks(id signature.PublicKey) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
+func (tb *tendermintBackend) WatchBlocks(id common.Namespace) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
 	notifiers := tb.getRuntimeNotifiers(id)
 
 	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
@@ -170,7 +170,7 @@ func (tb *tendermintBackend) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subs
 	return ch, sub
 }
 
-func (tb *tendermintBackend) WatchEvents(id signature.PublicKey) (<-chan *api.Event, *pubsub.Subscription, error) {
+func (tb *tendermintBackend) WatchEvents(id common.Namespace) (<-chan *api.Event, *pubsub.Subscription, error) {
 	notifiers := tb.getRuntimeNotifiers(id)
 	sub := notifiers.eventNotifier.Subscribe()
 	ch := make(chan *api.Event)
@@ -203,7 +203,7 @@ func (tb *tendermintBackend) Cleanup() {
 	})
 }
 
-func (tb *tendermintBackend) getRuntimeNotifiers(id signature.PublicKey) *runtimeBrokers {
+func (tb *tendermintBackend) getRuntimeNotifiers(id common.Namespace) *runtimeBrokers {
 	tb.Lock()
 	defer tb.Unlock()
 
@@ -322,7 +322,7 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 	close(tb.initCh)
 
 	// Initialize block history keepers.
-	blockHistory := make(map[signature.PublicKey]api.BlockHistory)
+	blockHistory := make(map[common.Namespace]api.BlockHistory)
 
 	// Process transactions and emit notifications for our subscribers.
 	for {
@@ -468,8 +468,8 @@ func New(
 		service:          service,
 		querier:          a.QueryFactory().(*app.QueryFactory),
 		allBlockNotifier: pubsub.NewBroker(false),
-		runtimeNotifiers: make(map[signature.PublicKey]*runtimeBrokers),
-		genesisBlocks:    make(map[signature.PublicKey]*block.Block),
+		runtimeNotifiers: make(map[common.Namespace]*runtimeBrokers),
+		genesisBlocks:    make(map[common.Namespace]*block.Block),
 		closedCh:         make(chan struct{}),
 		initCh:           make(chan struct{}),
 		blockHistoryCh:   make(chan api.BlockHistory, runtimeRegistry.MaxRuntimeCount),

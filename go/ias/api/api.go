@@ -4,7 +4,7 @@ package api
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 )
 
@@ -33,8 +33,8 @@ type SPIDInfo struct {
 
 // Evidence is attestation evidence.
 type Evidence struct {
-	RuntimeID   signature.PublicKey `json:"runtime_id"`
-	Quote       []byte              `json:"quote"`
-	PSEManifest []byte              `json:"pse_manifest"`
-	Nonce       string              `json:"nonce"`
+	RuntimeID   common.Namespace `json:"runtime_id"`
+	Quote       []byte           `json:"quote"`
+	PSEManifest []byte           `json:"pse_manifest"`
+	Nonce       string           `json:"nonce"`
 }

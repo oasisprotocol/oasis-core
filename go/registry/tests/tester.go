@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
@@ -41,7 +42,7 @@ func RegistryImplementationTests(t *testing.T, backend api.Backend, consensus co
 
 	// We need a runtime ID as otherwise the registry will not allow us to
 	// register nodes for roles which require runtimes.
-	var runtimeID signature.PublicKey
+	var runtimeID common.Namespace
 	t.Run("Runtime", func(t *testing.T) {
 		runtimeID = testRegistryRuntime(t, backend, consensus)
 	})
@@ -53,7 +54,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	t *testing.T,
 	backend api.Backend,
 	consensus consensusAPI.Backend,
-	runtimeID signature.PublicKey,
+	runtimeID common.Namespace,
 ) {
 	// Generate the entities used for the test cases.
 	entities, err := NewTestEntities([]byte("testRegistryEntityNodes"), 3)
@@ -440,7 +441,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	EnsureRegistryEmpty(t, backend)
 }
 
-func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) signature.PublicKey {
+func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) common.Namespace {
 	seed := []byte("testRegistryRuntime")
 
 	require := require.New(t)
@@ -468,7 +469,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	require.Len(registeredRuntimes, len(existingRuntimes)+1, "registry has one new runtime")
 	rtFound := false
 	for _, regRuntime := range registeredRuntimes {
-		if regRuntime.ID.Equal(rt.Runtime.ID) {
+		if regRuntime.ID.Equal(&rt.Runtime.ID) {
 			rtFound = true
 			require.EqualValues(rt.Runtime, regRuntime, "expected runtime is registered")
 			break
@@ -701,7 +702,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 
 		// Add a registration with invalid runtimes.
 		invalid8 := *nod.Node
-		invalid8.Runtimes = []*node.Runtime{&node.Runtime{ID: ent.Signer.Public()}}
+		invalid8.Runtimes = []*node.Runtime{&node.Runtime{ID: publicKeyToNamespace(ent.Signer.Public())}}
 
 		nod.SignedInvalidRegistration8, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid8)
 		if err != nil {
@@ -792,7 +793,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		// Add invalid Re-Registration with changed Runtimes field.
 		testRuntimeSigner := memorySigner.NewTestSigner("invalid-registration-runtime-seed")
 		newRuntimes := append([]*node.Runtime(nil), thisNodeRuntimes...)
-		newRuntimes = append(newRuntimes, &node.Runtime{ID: testRuntimeSigner.Public()})
+		newRuntimes = append(newRuntimes, &node.Runtime{ID: publicKeyToNamespace(testRuntimeSigner.Public())})
 		newNode := &node.Node{
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
@@ -878,7 +879,7 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 	for {
 		select {
 		case v := <-ch:
-			if !rt.Runtime.ID.Equal(v.ID) {
+			if !rt.Runtime.ID.Equal(&v.ID) {
 				continue
 			}
 
@@ -1044,7 +1045,7 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 	}
 
 	rt.Runtime = &api.Runtime{
-		ID: rt.Signer.Public(),
+		ID: publicKeyToNamespace(rt.Signer.Public()),
 		Compute: api.ComputeParameters{
 			GroupSize:         3,
 			GroupBackupSize:   5,
@@ -1086,4 +1087,12 @@ func hashForDrbg(seed []byte) []byte {
 	h := crypto.SHA512.New()
 	_, _ = h.Write(seed)
 	return h.Sum(nil)
+}
+
+func publicKeyToNamespace(pk signature.PublicKey) common.Namespace {
+	// For testing purposes only, since this is sort of convenient.
+	var ns common.Namespace
+	_ = ns.UnmarshalBinary(pk[:])
+
+	return ns
 }

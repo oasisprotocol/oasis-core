@@ -12,8 +12,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
@@ -70,12 +70,12 @@ type runtimeClient struct {
 
 	common *clientCommon
 
-	watchers map[signature.PublicKey]*blockWatcher
+	watchers map[common.Namespace]*blockWatcher
 
 	logger *logging.Logger
 }
 
-func (c *runtimeClient) tagIndexer(runtimeID signature.PublicKey) (tagindexer.QueryableBackend, error) {
+func (c *runtimeClient) tagIndexer(runtimeID common.Namespace) (tagindexer.QueryableBackend, error) {
 	rt, err := c.common.runtimeRegistry.GetRuntime(runtimeID)
 	if err != nil {
 		return nil, err
@@ -211,7 +211,7 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 }
 
 // Implements api.RuntimeClient.
-func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID signature.PublicKey) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
+func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	return c.common.roothash.WatchBlocks(runtimeID)
 }
 
@@ -479,7 +479,7 @@ func New(
 			runtimeRegistry: runtimeRegistry,
 			ctx:             ctx,
 		},
-		watchers: make(map[signature.PublicKey]*blockWatcher),
+		watchers: make(map[common.Namespace]*blockWatcher),
 		logger:   logging.GetLogger("runtime/client"),
 	}
 	return c, nil

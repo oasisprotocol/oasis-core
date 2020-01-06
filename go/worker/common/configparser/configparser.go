@@ -5,7 +5,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/node"
 )
 
@@ -40,10 +40,10 @@ func ParseAddressList(addresses []string) ([]node.Address, error) {
 }
 
 // GetRuntimes parses hex strings to PublicKeys
-func GetRuntimes(runtimeIDsHex []string) ([]signature.PublicKey, error) {
-	var runtimes []signature.PublicKey
+func GetRuntimes(runtimeIDsHex []string) ([]common.Namespace, error) {
+	var runtimes []common.Namespace
 	for _, runtimeHex := range runtimeIDsHex {
-		var runtime signature.PublicKey
+		var runtime common.Namespace
 		if err := runtime.UnmarshalHex(runtimeHex); err != nil {
 			return nil, err
 		}

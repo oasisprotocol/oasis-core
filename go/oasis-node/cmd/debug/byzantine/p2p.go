@@ -5,6 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
@@ -54,7 +55,7 @@ func (h *p2pRecvHandler) HandlePeerMessage(peerID signature.PublicKey, msg *p2p.
 	return <-responseCh
 }
 
-func (ph *p2pHandle) start(id *identity.Identity, runtimeID signature.PublicKey) error {
+func (ph *p2pHandle) start(id *identity.Identity, runtimeID common.Namespace) error {
 	if ph.service != nil {
 		return errors.New("P2P service already started")
 	}

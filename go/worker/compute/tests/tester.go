@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
@@ -22,7 +22,7 @@ const recvTimeout = 5 * time.Second
 func WorkerImplementationTests(
 	t *testing.T,
 	worker *compute.Worker,
-	runtimeID signature.PublicKey,
+	runtimeID common.Namespace,
 	rtNode *committee.Node,
 	epochtime epochtime.SetableBackend,
 ) {

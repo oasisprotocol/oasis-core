@@ -212,7 +212,7 @@ func doList(cmd *cobra.Command, args []string) {
 }
 
 func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
-	var id signature.PublicKey
+	var id common.Namespace
 	if err := id.UnmarshalHex(viper.GetString(CfgID)); err != nil {
 		logger.Error("failed to parse runtime ID",
 			"err", err,
@@ -238,7 +238,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 	}
 
 	var (
-		kmID *signature.PublicKey
+		kmID *common.Namespace
 		kind registry.RuntimeKind
 	)
 	s = viper.GetString(CfgKind)
@@ -251,13 +251,14 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 	switch kind {
 	case registry.KindCompute:
 		if viper.IsSet(CfgKeyManager) {
-			kmID = &signature.PublicKey{}
-			if err = kmID.UnmarshalHex(viper.GetString(CfgKeyManager)); err != nil {
+			var tmpKmID common.Namespace
+			if err = tmpKmID.UnmarshalHex(viper.GetString(CfgKeyManager)); err != nil {
 				logger.Error("failed to parse key manager ID",
 					"err", err,
 				)
 				return nil, nil, err
 			}
+			kmID = &tmpKmID
 		}
 	case registry.KindKeyManager:
 		// Key managers don't have their own key manager.

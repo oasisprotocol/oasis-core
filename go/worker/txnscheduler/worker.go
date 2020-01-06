@@ -1,7 +1,7 @@
 package txnscheduler
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
@@ -20,7 +20,7 @@ type Worker struct {
 	registration *registration.Worker
 	compute      *compute.Worker
 
-	runtimes map[signature.PublicKey]*committee.Node
+	runtimes map[common.Namespace]*committee.Node
 
 	quitCh chan struct{}
 	initCh chan struct{}
@@ -126,7 +126,7 @@ func (w *Worker) Initialized() <-chan struct{} {
 //
 // In case the runtime with the specified id was not registered it
 // returns nil.
-func (w *Worker) GetRuntime(id signature.PublicKey) *committee.Node {
+func (w *Worker) GetRuntime(id common.Namespace) *committee.Node {
 	return w.runtimes[id]
 }
 
@@ -165,7 +165,7 @@ func newWorker(
 		commonWorker: commonWorker,
 		registration: registration,
 		compute:      compute,
-		runtimes:     make(map[signature.PublicKey]*committee.Node),
+		runtimes:     make(map[common.Namespace]*committee.Node),
 		quitCh:       make(chan struct{}),
 		initCh:       make(chan struct{}),
 		logger:       logging.GetLogger("worker/txnscheduler"),

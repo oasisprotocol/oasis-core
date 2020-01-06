@@ -20,6 +20,7 @@ import (
 	"github.com/multiformats/go-multiaddr-net"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -58,7 +59,7 @@ type P2P struct {
 	registerAddresses []multiaddr.Multiaddr
 
 	host     core.Host
-	handlers map[signature.PublicKey]Handler
+	handlers map[common.Namespace]Handler
 
 	logger *logging.Logger
 }
@@ -224,7 +225,7 @@ func (p *P2P) Flush() {
 }
 
 // RegisterHandler registeres a message handler for the specified runtime.
-func (p *P2P) RegisterHandler(runtimeID signature.PublicKey, handler Handler) {
+func (p *P2P) RegisterHandler(runtimeID common.Namespace, handler Handler) {
 	p.Lock()
 	p.handlers[runtimeID] = handler
 	p.Unlock()
@@ -395,7 +396,7 @@ func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
 	p := &P2P{
 		registerAddresses: registerAddresses,
 		host:              host,
-		handlers:          make(map[signature.PublicKey]Handler),
+		handlers:          make(map[common.Namespace]Handler),
 		logger:            logging.GetLogger("worker/common/p2p"),
 	}
 

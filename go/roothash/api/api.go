@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
@@ -56,13 +56,13 @@ var (
 // Backend is a root hash implementation.
 type Backend interface {
 	// GetGenesisBlock returns the genesis block.
-	GetGenesisBlock(ctx context.Context, runtimeID signature.PublicKey, height int64) (*block.Block, error)
+	GetGenesisBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error)
 
 	// GetLatestBlock returns the latest block.
 	//
 	// The metadata contained in this block can be further used to get
 	// the latest state from the storage backend.
-	GetLatestBlock(ctx context.Context, runtimeID signature.PublicKey, height int64) (*block.Block, error)
+	GetLatestBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error)
 
 	// WatchBlocks returns a channel that produces a stream of
 	// annotated blocks.
@@ -70,10 +70,10 @@ type Backend interface {
 	// The latest block if any will get pushed to the stream immediately.
 	// Subsequent blocks will be pushed into the stream as they are
 	// confirmed.
-	WatchBlocks(runtimeID signature.PublicKey) (<-chan *AnnotatedBlock, *pubsub.Subscription, error)
+	WatchBlocks(runtimeID common.Namespace) (<-chan *AnnotatedBlock, *pubsub.Subscription, error)
 
 	// WatchEvents returns a stream of protocol events.
-	WatchEvents(runtimeID signature.PublicKey) (<-chan *Event, *pubsub.Subscription, error)
+	WatchEvents(runtimeID common.Namespace) (<-chan *Event, *pubsub.Subscription, error)
 
 	// TrackRuntime adds a runtime the history of which should be tracked.
 	TrackRuntime(ctx context.Context, history BlockHistory) error
@@ -87,12 +87,12 @@ type Backend interface {
 
 // ComputeCommit is the argument set for the ComputeCommit method.
 type ComputeCommit struct {
-	ID      signature.PublicKey            `json:"id"`
+	ID      common.Namespace               `json:"id"`
 	Commits []commitment.ComputeCommitment `json:"commits"`
 }
 
 // NewComputeCommitTx creates a new compute commit transaction.
-func NewComputeCommitTx(nonce uint64, fee *transaction.Fee, runtimeID signature.PublicKey, commits []commitment.ComputeCommitment) *transaction.Transaction {
+func NewComputeCommitTx(nonce uint64, fee *transaction.Fee, runtimeID common.Namespace, commits []commitment.ComputeCommitment) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodComputeCommit, &ComputeCommit{
 		ID:      runtimeID,
 		Commits: commits,
@@ -101,12 +101,12 @@ func NewComputeCommitTx(nonce uint64, fee *transaction.Fee, runtimeID signature.
 
 // MergeCommit is the argument set for the MergeCommit method.
 type MergeCommit struct {
-	ID      signature.PublicKey          `json:"id"`
+	ID      common.Namespace             `json:"id"`
 	Commits []commitment.MergeCommitment `json:"commits"`
 }
 
 // NewMergeCommitTx creates a new compute commit transaction.
-func NewMergeCommitTx(nonce uint64, fee *transaction.Fee, runtimeID signature.PublicKey, commits []commitment.MergeCommitment) *transaction.Transaction {
+func NewMergeCommitTx(nonce uint64, fee *transaction.Fee, runtimeID common.Namespace, commits []commitment.MergeCommitment) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodMergeCommit, &MergeCommit{
 		ID:      runtimeID,
 		Commits: commits,
@@ -155,11 +155,11 @@ type MetricsMonitorable interface {
 // Genesis is the roothash genesis state.
 type Genesis struct {
 	// RuntimeStates is the per-runtime map of genesis blocks.
-	RuntimeStates map[signature.PublicKey]*api.RuntimeGenesis `json:"runtime_states,omitempty"`
+	RuntimeStates map[common.Namespace]*api.RuntimeGenesis `json:"runtime_states,omitempty"`
 }
 
 // SanityCheckBlocks examines the blocks table.
-func SanityCheckBlocks(blocks map[signature.PublicKey]*block.Block) error {
+func SanityCheckBlocks(blocks map[common.Namespace]*block.Block) error {
 	for _, blk := range blocks {
 		hdr := blk.Header
 

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common"
 	commonGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
@@ -119,7 +119,7 @@ func (args *argBuilder) storageBackend(backend string) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) runtimeSupported(id signature.PublicKey) *argBuilder {
+func (args *argBuilder) runtimeSupported(id common.Namespace) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + runtimeRegistry.CfgSupported, id.String(),
 	}...)
@@ -187,7 +187,7 @@ func (args *argBuilder) workerRuntimeLoader(fn string) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerRuntimeBinary(id signature.PublicKey, fn string) *argBuilder {
+func (args *argBuilder) workerRuntimeBinary(id common.Namespace, fn string) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + workerCommon.CfgRuntimeBinary, id.String() + ":" + fn,
 	}...)
@@ -225,7 +225,7 @@ func (args *argBuilder) workerKeymanagerTEEHardware(hw node.TEEHardware) *argBui
 	return args
 }
 
-func (args *argBuilder) workerKeymanagerRuntimeID(id signature.PublicKey) *argBuilder {
+func (args *argBuilder) workerKeymanagerRuntimeID(id common.Namespace) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + keymanager.CfgRuntimeID, id.String(),
 	}...)

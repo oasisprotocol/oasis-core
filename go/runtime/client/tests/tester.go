@@ -10,8 +10,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/runtime/client/api"
 )
 
@@ -22,7 +22,7 @@ const timeout = 2 * time.Second
 func ClientImplementationTests(
 	t *testing.T,
 	client api.RuntimeClient,
-	runtimeID signature.PublicKey,
+	runtimeID common.Namespace,
 ) {
 	t.Run("SubmitTx", func(t *testing.T) {
 		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
@@ -40,7 +40,7 @@ func ClientImplementationTests(
 func testSubmitTransaction(
 	ctx context.Context,
 	t *testing.T,
-	runtimeID signature.PublicKey,
+	runtimeID common.Namespace,
 	c api.RuntimeClient,
 ) {
 	// Submit a test transaction.
@@ -55,7 +55,7 @@ func testSubmitTransaction(
 func testQuery(
 	ctx context.Context,
 	t *testing.T,
-	runtimeID signature.PublicKey,
+	runtimeID common.Namespace,
 	c api.RuntimeClient,
 ) {
 	err := c.WaitBlockIndexed(ctx, &api.WaitBlockIndexedRequest{RuntimeID: runtimeID, Round: 4})

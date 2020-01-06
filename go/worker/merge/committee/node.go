@@ -209,7 +209,8 @@ func (n *Node) newStateWaitingForResultsLocked(epoch *committee.EpochSnapshot) S
 		for idx, nd := range ci.Nodes {
 			var nodeRuntime *node.Runtime
 			for _, r := range nd.Runtimes {
-				if !r.ID.Equal(n.commonNode.Runtime.ID()) {
+				nrtID := n.commonNode.Runtime.ID()
+				if !r.ID.Equal(&nrtID) {
 					continue
 				}
 				nodeRuntime = r

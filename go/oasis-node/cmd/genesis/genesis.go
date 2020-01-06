@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/viper"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -405,7 +406,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 // of exported roothash blocks.
 func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Logger) error {
 	rootSt := roothash.Genesis{
-		RuntimeStates: make(map[signature.PublicKey]*registry.RuntimeGenesis),
+		RuntimeStates: make(map[common.Namespace]*registry.RuntimeGenesis),
 	}
 
 	for _, v := range exports {
@@ -418,7 +419,7 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 			return err
 		}
 
-		var rtStates map[signature.PublicKey]*registry.RuntimeGenesis
+		var rtStates map[common.Namespace]*registry.RuntimeGenesis
 		if err = json.Unmarshal(b, &rtStates); err != nil {
 			l.Error("failed to parse genesis roothash runtime states",
 				"err", err,
@@ -427,15 +428,15 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 			return err
 		}
 
-		for key, rtg := range rtStates {
-			if _, ok := rootSt.RuntimeStates[key]; ok {
+		for id, rtg := range rtStates {
+			if _, ok := rootSt.RuntimeStates[id]; ok {
 				l.Error("duplicate genesis roothash runtime state",
-					"runtime_id", key,
+					"runtime_id", id,
 					"block", rtg,
 				)
 				return errors.New("duplicate genesis roothash runtime states")
 			}
-			rootSt.RuntimeStates[key] = rtg
+			rootSt.RuntimeStates[id] = rtg
 		}
 	}
 

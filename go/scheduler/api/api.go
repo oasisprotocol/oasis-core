@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -121,7 +122,7 @@ type Committee struct {
 	Members []*CommitteeNode `json:"members"`
 
 	// RuntimeID is the runtime ID that this committee is for.
-	RuntimeID signature.PublicKey `json:"runtime_id"`
+	RuntimeID common.Namespace `json:"runtime_id"`
 
 	// ValidFor is the epoch for which the committee is valid.
 	ValidFor epochtime.EpochTime `json:"valid_for"`
@@ -183,8 +184,8 @@ type Backend interface {
 
 // GetCommitteesRequest is a GetCommittees request.
 type GetCommitteesRequest struct {
-	Height    int64               `json:"height"`
-	RuntimeID signature.PublicKey `json:"runtime_id"`
+	Height    int64            `json:"height"`
+	RuntimeID common.Namespace `json:"runtime_id"`
 }
 
 // Genesis is the committee scheduler genesis state.

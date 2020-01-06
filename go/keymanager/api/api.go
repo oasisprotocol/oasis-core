@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
@@ -45,7 +46,7 @@ var (
 // Status is the current key manager status.
 type Status struct {
 	// ID is the runtime ID of the key manager.
-	ID signature.PublicKey `json:"id"`
+	ID common.Namespace `json:"id"`
 
 	// IsInitialized is true iff the key manager is done initializing.
 	IsInitialized bool `json:"is_initialized"`
@@ -66,7 +67,7 @@ type Status struct {
 // Backend is a key manager management implementation.
 type Backend interface {
 	// GetStatus returns a key manager status by key manager ID.
-	GetStatus(context.Context, signature.PublicKey, int64) (*Status, error)
+	GetStatus(context.Context, common.Namespace, int64) (*Status, error)
 
 	// GetStatuses returns all currently tracked key manager statuses.
 	GetStatuses(context.Context, int64) ([]*Status, error)
@@ -142,10 +143,7 @@ type Genesis struct {
 // SanityCheckStatuses examines the statuses table.
 func SanityCheckStatuses(statuses []*Status) error {
 	for _, status := range statuses {
-		// Verify key manager runtime ID.
-		if !status.ID.IsValid() {
-			return fmt.Errorf("keymanager: sanity check failed: key manager runtime ID %s is invalid", status.ID.String())
-		}
+		// TODO: Verify key manager runtime ID.
 
 		// Verify currently active key manager node IDs.
 		for _, node := range status.Nodes {

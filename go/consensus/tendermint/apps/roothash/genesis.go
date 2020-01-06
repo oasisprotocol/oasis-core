@@ -5,6 +5,7 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -40,7 +41,7 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothashAPI.Genesis, e
 	runtimes := rq.state.Runtimes()
 
 	// Get per-runtime states.
-	rtStates := make(map[signature.PublicKey]*api.RuntimeGenesis)
+	rtStates := make(map[common.Namespace]*api.RuntimeGenesis)
 	for _, rt := range runtimes {
 		rtState := api.RuntimeGenesis{
 			StateRoot: rt.CurrentBlock.Header.StateRoot,

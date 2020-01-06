@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -63,7 +62,7 @@ type Config struct { // nolint: maligned
 
 // RuntimeHostRuntimeConfig is a single runtime's host configuration.
 type RuntimeHostRuntimeConfig struct {
-	ID     signature.PublicKey
+	ID     common.Namespace
 	Binary string
 }
 
@@ -71,7 +70,7 @@ type RuntimeHostRuntimeConfig struct {
 type RuntimeHostConfig struct {
 	Backend  string
 	Loader   string
-	Runtimes map[signature.PublicKey]RuntimeHostRuntimeConfig
+	Runtimes map[common.Namespace]RuntimeHostRuntimeConfig
 }
 
 // GetNodeAddresses returns worker node addresses.
@@ -157,7 +156,7 @@ func newConfig() (*Config, error) {
 		cfg.RuntimeHost = &RuntimeHostConfig{
 			Backend:  viper.GetString(CfgRuntimeBackend),
 			Loader:   runtimeLoader,
-			Runtimes: make(map[signature.PublicKey]RuntimeHostRuntimeConfig),
+			Runtimes: make(map[common.Namespace]RuntimeHostRuntimeConfig),
 		}
 
 		for id, path := range runtimeBinaries {

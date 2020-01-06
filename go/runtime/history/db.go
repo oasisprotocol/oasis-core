@@ -6,9 +6,9 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	cmnBadger "github.com/oasislabs/oasis-core/go/common/badger"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -29,7 +29,7 @@ var (
 
 type dbMetadata struct {
 	// RuntimeID is the runtime ID this database is for.
-	RuntimeID signature.PublicKey `json:"runtime_id"`
+	RuntimeID common.Namespace `json:"runtime_id"`
 	// Version is the database schema version.
 	Version uint64 `json:"version"`
 
@@ -47,7 +47,7 @@ type DB struct {
 	gc *cmnBadger.GCWorker
 }
 
-func newDB(fn string, runtimeID signature.PublicKey) (*DB, error) {
+func newDB(fn string, runtimeID common.Namespace) (*DB, error) {
 	logger := logging.GetLogger("runtime/history").With("path", fn)
 
 	opts := badger.DefaultOptions(fn)
@@ -93,7 +93,7 @@ func (d *DB) queryGetMetadata(tx *badger.Txn) (*dbMetadata, error) {
 	return &meta, nil
 }
 
-func (d *DB) ensureMetadata(runtimeID signature.PublicKey) error {
+func (d *DB) ensureMetadata(runtimeID common.Namespace) error {
 	return d.db.Update(func(tx *badger.Txn) error {
 		meta, err := d.queryGetMetadata(tx)
 		switch err {
@@ -117,7 +117,7 @@ func (d *DB) ensureMetadata(runtimeID signature.PublicKey) error {
 			)
 		}
 
-		if !meta.RuntimeID.Equal(runtimeID) {
+		if !meta.RuntimeID.Equal(&runtimeID) {
 			return fmt.Errorf("runtime/history: database for different runtime (expected: %s got: %s)",
 				runtimeID,
 				meta.RuntimeID,
@@ -167,11 +167,8 @@ func (d *DB) commit(blk *roothash.AnnotatedBlock) error {
 			return err
 		}
 
-		rtID, err := blk.Block.Header.Namespace.ToRuntimeID()
-		if err != nil {
-			return err
-		}
-		if !rtID.Equal(meta.RuntimeID) {
+		rtID := blk.Block.Header.Namespace
+		if !rtID.Equal(&meta.RuntimeID) {
 			return fmt.Errorf("runtime/history: runtime mismatch (expected: %s got: %s)",
 				meta.RuntimeID,
 				rtID,

@@ -5,6 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -15,7 +16,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 
-func registryRegisterNode(svc service.TendermintService, id *identity.Identity, dataDir string, committeeAddresses []node.Address, p2pAddresses []node.Address, runtimeID signature.PublicKey, capabilities *node.Capabilities, roles node.RolesMask) error {
+func registryRegisterNode(svc service.TendermintService, id *identity.Identity, dataDir string, committeeAddresses []node.Address, p2pAddresses []node.Address, runtimeID common.Namespace, capabilities *node.Capabilities, roles node.RolesMask) error {
 	entityID, registrationSigner, err := registration.GetRegistrationSigner(logging.GetLogger("cmd/byzantine/registration"), dataDir, id)
 	if err != nil {
 		return errors.Wrap(err, "registration GetRegistrationSigner")

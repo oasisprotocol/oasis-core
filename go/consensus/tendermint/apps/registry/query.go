@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -19,7 +20,7 @@ type Query interface {
 	Node(context.Context, signature.PublicKey) (*node.Node, error)
 	NodeStatus(context.Context, signature.PublicKey) (*registry.NodeStatus, error)
 	Nodes(context.Context) ([]*node.Node, error)
-	Runtime(context.Context, signature.PublicKey) (*registry.Runtime, error)
+	Runtime(context.Context, common.Namespace) (*registry.Runtime, error)
 	Runtimes(context.Context) ([]*registry.Runtime, error)
 	Genesis(context.Context) (*registry.Genesis, error)
 }
@@ -113,7 +114,7 @@ func (rq *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {
 	return filteredNodes, nil
 }
 
-func (rq *registryQuerier) Runtime(ctx context.Context, id signature.PublicKey) (*registry.Runtime, error) {
+func (rq *registryQuerier) Runtime(ctx context.Context, id common.Namespace) (*registry.Runtime, error) {
 	return rq.state.Runtime(id)
 }
 

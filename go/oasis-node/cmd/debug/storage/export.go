@@ -14,7 +14,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -83,14 +82,11 @@ func doExport(cmd *cobra.Command, args []string) {
 	ok = true
 }
 
-func exportRuntime(dataDir, destDir string, id signature.PublicKey, rtg *registry.RuntimeGenesis) error {
+func exportRuntime(dataDir, destDir string, id common.Namespace, rtg *registry.RuntimeGenesis) error {
 	dataDir = filepath.Join(dataDir, runtimeRegistry.RuntimesDir, id.String())
 
 	// Initialize the storage backend.
-	var ns common.Namespace
-	_ = ns.UnmarshalBinary(id[:])
-
-	storageBackend, err := newDirectStorageBackend(dataDir, ns)
+	storageBackend, err := newDirectStorageBackend(dataDir, id)
 	if err != nil {
 		logger.Error("failed to construct storage backend",
 			"err", err,
@@ -104,7 +100,7 @@ func exportRuntime(dataDir, destDir string, id signature.PublicKey, rtg *registr
 
 	// Get the checkpoint iterator.
 	root := storageAPI.Root{
-		Namespace: ns,
+		Namespace: id,
 		Round:     rtg.Round,
 		Hash:      rtg.StateRoot,
 	}

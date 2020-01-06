@@ -8,6 +8,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	opentracingExt "github.com/opentracing/opentracing-go/ext"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
@@ -211,7 +212,7 @@ type Group struct {
 	sync.RWMutex
 
 	identity  *identity.Identity
-	runtimeID signature.PublicKey
+	runtimeID common.Namespace
 
 	scheduler scheduler.Backend
 	registry  registry.Backend
@@ -350,7 +351,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	}
 
 	// Fetch current runtime descriptor.
-	runtime, err := g.registry.GetRuntime(ctx, &registry.IDQuery{ID: g.runtimeID, Height: height})
+	runtime, err := g.registry.GetRuntime(ctx, &registry.NamespaceQuery{ID: g.runtimeID, Height: height})
 	if err != nil {
 		return err
 	}
@@ -587,7 +588,7 @@ func (g *Group) PublishComputeFinished(spanCtx opentracing.SpanContext, c *commi
 // NewGroup creates a new group.
 func NewGroup(
 	identity *identity.Identity,
-	runtimeID signature.PublicKey,
+	runtimeID common.Namespace,
 	handler MessageHandler,
 	registry registry.Backend,
 	roothash roothash.Backend,
