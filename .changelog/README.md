@@ -47,23 +47,44 @@ tool will add them automatically._
 
 ## File name
 
-Each file should be named like `<ISSUE>.<TYPE>.md`, where `<ISSUE>` is a GitHub
-issue or pull request number, and `<TYPE>` is one of:
+Each Change Log fragment should be in its own file named according to the
+following syntax:
 
-- `process`: a change in Oasis Core's processes (e.g. development process,
-  release process, ...),
-- `breaking`: a removal of functionality or a breaking change,
-- `feature`: a new feature,
-- `bugfix`: a bug fix,
-- `doc`: a documentation-related change,
-- `trivial`: a trivial change that is _not_ included in the Change Log.
+```text
+<ISSUE>.<TYPE>[.<COUNTER>].md
+```
 
-For example: ``1234.feature.md`` or ``2345.bugfix.md``.
+where:
 
-If your pull requests closes an issue, use that number here.
-If there is no issue for the change you've implemented, then after you submit
-the pull request and get your pull request number, amend your commit(s) with an
-appropriately named Change Log fragment.
+- `<ISSUE>` is a GitHub issue or pull request number.
+
+  If your pull request closes an issue, use that number here.
+
+  If there is no issue for the change you've implemented, then after you submit
+  the pull request and get your pull request number, amend your commit(s) with an
+  appropriately named Change Log fragment.
+
+- `<TYPE>` is one of:
+
+  - `process`: a change in Oasis Core's processes (e.g. development process,
+    release process, ...),
+  - `breaking`: a removal of functionality or a breaking change,
+  - `feature`: a new feature,
+  - `bugfix`: a bug fix,
+  - `doc`: a documentation-related change,
+  - `trivial`: a trivial change that is _not_ included in the Change Log.
+
+- `.<COUNTER>` part is optional and can be used when a single issue or pull
+  request needs multiple Change Log fragments. For example, when a pull request
+  contains multiple bug fixes and each bug fix deserves a separate Change Log
+  fragment describing what it fixes.
+
+Example file names:
+
+- `1234.feature.md`,
+- `2345.bugfix.md`,
+- `3456.bugfix.1.md`,
+- `3456.bugfix.2.md`.
 
 ## Render Change Log preview
 
