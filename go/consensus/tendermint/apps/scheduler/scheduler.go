@@ -376,7 +376,16 @@ func (app *schedulerApplication) isSuitableComputeWorker(n *node.Node, rt *regis
 }
 
 func (app *schedulerApplication) isSuitableStorageWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
-	return n.HasRoles(node.RoleStorageWorker)
+	if !n.HasRoles(node.RoleStorageWorker) {
+		return false
+	}
+	for _, nrt := range n.Runtimes {
+		if !nrt.ID.Equal(&rt.ID) {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
@@ -393,7 +402,16 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt
 }
 
 func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
-	return n.HasRoles(node.RoleComputeWorker)
+	if !n.HasRoles(node.RoleComputeWorker) {
+		return false
+	}
+	for _, nrt := range n.Runtimes {
+		if !nrt.ID.Equal(&rt.ID) {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // Operates on consensus connection.
