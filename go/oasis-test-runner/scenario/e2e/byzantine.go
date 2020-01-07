@@ -9,42 +9,40 @@ import (
 
 // TODO: Consider referencing script names directly from the Byzantine node.
 
-const byzantineDefaultIdentitySeed = "ekiden byzantine node worker, luck=1"
-
 var (
 	// ByzantineComputeHonest is the byzantine compute honest scenario.
-	ByzantineComputeHonest scenario.Scenario = newByzantineImpl("compute-honest", nil)
+	ByzantineComputeHonest scenario.Scenario = newByzantineImpl("compute-honest", nil, oasis.ByzantineDefaultIdentitySeed)
 	// ByzantineComputeWrong is the byzantine compute wrong scenario.
 	ByzantineComputeWrong scenario.Scenario = newByzantineImpl("compute-wrong", []log.WatcherHandlerFactory{
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertComputeDiscrepancyDetected(),
 		oasis.LogAssertNoMergeDiscrepancyDetected(),
-	})
+	}, oasis.ByzantineDefaultIdentitySeed)
 	// ByzantineComputeStraggler is the byzantine compute straggler scenario.
 	ByzantineComputeStraggler scenario.Scenario = newByzantineImpl("compute-straggler", []log.WatcherHandlerFactory{
 		oasis.LogAssertTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertComputeDiscrepancyDetected(),
 		oasis.LogAssertNoMergeDiscrepancyDetected(),
-	})
+	}, oasis.ByzantineDefaultIdentitySeed)
 
 	// ByzantineMergeHonest is the byzantine merge honest scenario.
-	ByzantineMergeHonest scenario.Scenario = newByzantineImpl("merge-honest", nil)
+	ByzantineMergeHonest scenario.Scenario = newByzantineImpl("merge-honest", nil, oasis.ByzantineDefaultIdentitySeed)
 	// ByzantineMergeWrong is the byzantine merge wrong scenario.
 	ByzantineMergeWrong scenario.Scenario = newByzantineImpl("merge-wrong", []log.WatcherHandlerFactory{
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertNoComputeDiscrepancyDetected(),
 		oasis.LogAssertMergeDiscrepancyDetected(),
-	})
+	}, oasis.ByzantineDefaultIdentitySeed)
 	// ByzantineMergeStraggler is the byzantine merge straggler scenario.
 	ByzantineMergeStraggler scenario.Scenario = newByzantineImpl("merge-straggler", []log.WatcherHandlerFactory{
 		oasis.LogAssertTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertNoComputeDiscrepancyDetected(),
 		oasis.LogAssertMergeDiscrepancyDetected(),
-	})
+	}, oasis.ByzantineDefaultIdentitySeed)
 )
 
 type byzantineImpl struct {
@@ -55,7 +53,7 @@ type byzantineImpl struct {
 	logWatcherHandlerFactories []log.WatcherHandlerFactory
 }
 
-func newByzantineImpl(script string, logWatcherHandlerFactories []log.WatcherHandlerFactory) scenario.Scenario {
+func newByzantineImpl(script string, logWatcherHandlerFactories []log.WatcherHandlerFactory, identitySeed string) scenario.Scenario {
 	return &byzantineImpl{
 		basicImpl: *newBasicImpl(
 			"byzantine/"+script,
@@ -63,7 +61,7 @@ func newByzantineImpl(script string, logWatcherHandlerFactories []log.WatcherHan
 			[]string{"set", "hello_key", "hello_value"},
 		),
 		script:                     script,
-		identitySeed:               byzantineDefaultIdentitySeed,
+		identitySeed:               identitySeed,
 		logWatcherHandlerFactories: logWatcherHandlerFactories,
 	}
 }

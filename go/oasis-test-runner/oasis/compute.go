@@ -10,7 +10,14 @@ import (
 	workerHost "github.com/oasislabs/oasis-core/go/worker/common/host"
 )
 
-const computeIdentitySeedTemplate = "ekiden node worker %d"
+const (
+	computeIdentitySeedTemplate = "ekiden node worker %d"
+
+	ByzantineDefaultIdentitySeed = "ekiden byzantine node worker" // index 0
+	ByzantineIndex1IdentitySeed  = "ekiden byzantine node worker, luck=1"
+	ByzantineIndex2IdentitySeed  = "ekiden byzantine node worker, luck=11"
+	ByzantineIndex3IdentitySeed  = "ekiden byzantine node worker, luck=6"
+)
 
 // Compute is an Oasis compute node.
 type Compute struct { // nolint: maligned
