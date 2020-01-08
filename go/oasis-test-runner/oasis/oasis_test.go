@@ -34,9 +34,9 @@ func TestNodeIdentity(t *testing.T) {
 	require.Equal(t, 1, bytes.Compare(c1, c2))
 
 	b0, _ := generateDeterministicNodeKeys(t, ByzantineDefaultIdentitySeed)
-	b1, _ := generateDeterministicNodeKeys(t, ByzantineIndex1IdentitySeed)
-	b2, _ := generateDeterministicNodeKeys(t, ByzantineIndex2IdentitySeed)
-	b3, _ := generateDeterministicNodeKeys(t, ByzantineIndex3IdentitySeed)
+	b1, _ := generateDeterministicNodeKeys(t, ByzantineSlot1IdentitySeed)
+	b2, _ := generateDeterministicNodeKeys(t, ByzantineSlot2IdentitySeed)
+	b3, _ := generateDeterministicNodeKeys(t, ByzantineSlot3IdentitySeed)
 	require.Equal(t, 1, bytes.Compare(c0, b0))
 	require.Equal(t, 1, bytes.Compare(b1, c0))
 	require.Equal(t, 1, bytes.Compare(c2, b1))

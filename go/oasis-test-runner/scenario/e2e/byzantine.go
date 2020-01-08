@@ -10,39 +10,49 @@ import (
 // TODO: Consider referencing script names directly from the Byzantine node.
 
 var (
+	// Permutations generated in the epoch 2 election are
+	// compute:               3 (w), 0 (w), 2 (b), 1 (i)
+	// transaction scheduler: 0 (w), 3 (i), 1 (i), 2 (i)
+	// merge:                 1 (w), 2 (w), 0 (b), 3 (i)
+	// w = worker; b = backup; i = invalid
+	// For compute scripts, it suffices to be index 3.
+	// For merge scripts, it suffices to be index 1.
+	// No index is transaction scheduler only.
+	// Indices are by order of node ID.
+
 	// ByzantineComputeHonest is the byzantine compute honest scenario.
-	ByzantineComputeHonest scenario.Scenario = newByzantineImpl("compute-honest", nil, oasis.ByzantineDefaultIdentitySeed)
+	ByzantineComputeHonest scenario.Scenario = newByzantineImpl("compute-honest", nil, oasis.ByzantineSlot3IdentitySeed)
 	// ByzantineComputeWrong is the byzantine compute wrong scenario.
 	ByzantineComputeWrong scenario.Scenario = newByzantineImpl("compute-wrong", []log.WatcherHandlerFactory{
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertComputeDiscrepancyDetected(),
 		oasis.LogAssertNoMergeDiscrepancyDetected(),
-	}, oasis.ByzantineDefaultIdentitySeed)
+	}, oasis.ByzantineSlot3IdentitySeed)
 	// ByzantineComputeStraggler is the byzantine compute straggler scenario.
 	ByzantineComputeStraggler scenario.Scenario = newByzantineImpl("compute-straggler", []log.WatcherHandlerFactory{
 		oasis.LogAssertTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertComputeDiscrepancyDetected(),
 		oasis.LogAssertNoMergeDiscrepancyDetected(),
-	}, oasis.ByzantineDefaultIdentitySeed)
+	}, oasis.ByzantineSlot3IdentitySeed)
 
 	// ByzantineMergeHonest is the byzantine merge honest scenario.
-	ByzantineMergeHonest scenario.Scenario = newByzantineImpl("merge-honest", nil, oasis.ByzantineDefaultIdentitySeed)
+	ByzantineMergeHonest scenario.Scenario = newByzantineImpl("merge-honest", nil, oasis.ByzantineSlot1IdentitySeed)
 	// ByzantineMergeWrong is the byzantine merge wrong scenario.
 	ByzantineMergeWrong scenario.Scenario = newByzantineImpl("merge-wrong", []log.WatcherHandlerFactory{
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertNoComputeDiscrepancyDetected(),
 		oasis.LogAssertMergeDiscrepancyDetected(),
-	}, oasis.ByzantineDefaultIdentitySeed)
+	}, oasis.ByzantineSlot1IdentitySeed)
 	// ByzantineMergeStraggler is the byzantine merge straggler scenario.
 	ByzantineMergeStraggler scenario.Scenario = newByzantineImpl("merge-straggler", []log.WatcherHandlerFactory{
 		oasis.LogAssertTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertNoComputeDiscrepancyDetected(),
 		oasis.LogAssertMergeDiscrepancyDetected(),
-	}, oasis.ByzantineDefaultIdentitySeed)
+	}, oasis.ByzantineSlot1IdentitySeed)
 )
 
 type byzantineImpl struct {

@@ -122,7 +122,12 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 	case true:
 		// UNSAFE/DEBUG - Deterministic beacon.
 		entropyCtx = DebugEntropyCtx
-		entropy = []byte("If you change this, you will fuck up the byzantine tests!!!")
+		// We're setting this random seed so that we have suitable committee schedules for Byzantine E2E scenarios,
+		// where we want nodes to be scheduled for only one committee. The permutations derived from this on the first
+		// epoch need to have (i) an index that's compute worker only and (ii) an index that's merge worker only. See
+		// /go/oasis-test-runner/scenario/e2e/byzantine.go for the permutations generated from this seed. These
+		// permutations are generated independently of the deterministic node IDs.
+		entropy = []byte("If you change this, you will fuck up the byzantine tests!!")
 	}
 
 	b := GetBeacon(epoch, entropyCtx, entropy)

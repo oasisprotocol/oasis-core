@@ -76,10 +76,10 @@ func hasSuitablePermutations(t *testing.T, beacon []byte, runtimeID common.Names
 }
 
 func TestDebugSchedule(t *testing.T) {
-	var epoch epochtime.EpochTime = 1
+	var epoch epochtime.EpochTime = 2
 	var runtimeID common.Namespace
 	require.NoError(t, runtimeID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000"), "runtimeID.UnmarshalHex")
-	deterministicBeaconEntropy := []byte("If you change this, you will fuck up the byzantine tests!!!")
+	deterministicBeaconEntropy := []byte("If you change this, you will fuck up the byzantine tests!!")
 	for {
 		fmt.Printf("assessing seed %s\n", deterministicBeaconEntropy)
 

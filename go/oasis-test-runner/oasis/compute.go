@@ -13,10 +13,10 @@ import (
 const (
 	computeIdentitySeedTemplate = "ekiden node worker %d"
 
-	ByzantineDefaultIdentitySeed = "ekiden byzantine node worker" // index 0
-	ByzantineIndex1IdentitySeed  = "ekiden byzantine node worker, luck=1"
-	ByzantineIndex2IdentitySeed  = "ekiden byzantine node worker, luck=11"
-	ByzantineIndex3IdentitySeed  = "ekiden byzantine node worker, luck=6"
+	ByzantineDefaultIdentitySeed = "ekiden byzantine node worker" // slot 0
+	ByzantineSlot1IdentitySeed   = "ekiden byzantine node worker, luck=1"
+	ByzantineSlot2IdentitySeed   = "ekiden byzantine node worker, luck=11"
+	ByzantineSlot3IdentitySeed   = "ekiden byzantine node worker, luck=6"
 )
 
 // Compute is an Oasis compute node.
