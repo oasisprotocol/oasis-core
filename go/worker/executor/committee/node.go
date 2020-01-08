@@ -33,21 +33,21 @@ import (
 )
 
 var (
-	errSeenNewerBlock     = errors.New("compute: seen newer block")
-	errWorkerAborted      = errors.New("compute: worker aborted batch processing")
-	errIncompatibleHeader = errors.New("compute: incompatible header")
-	errInvalidReceipt     = errors.New("compute: invalid storage receipt")
-	errStorageFailed      = errors.New("compute: failed to fetch from storage")
-	errIncorrectRole      = errors.New("compute: incorrect role")
-	errIncorrectState     = errors.New("compute: incorrect state")
-	errMsgFromNonTxnSched = errors.New("compute: received txn scheduler dispatch msg from non-txn scheduler")
+	errSeenNewerBlock     = errors.New("executor: seen newer block")
+	errWorkerAborted      = errors.New("executor: worker aborted batch processing")
+	errIncompatibleHeader = errors.New("executor: incompatible header")
+	errInvalidReceipt     = errors.New("executor: invalid storage receipt")
+	errStorageFailed      = errors.New("executor: failed to fetch from storage")
+	errIncorrectRole      = errors.New("executor: incorrect role")
+	errIncorrectState     = errors.New("executor: incorrect state")
+	errMsgFromNonTxnSched = errors.New("executor: received txn scheduler dispatch msg from non-txn scheduler")
 )
 
 var (
 	discrepancyDetectedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "oasis_worker_compute_discrepancy_detected_count",
-			Help: "Number of detected compute discrepancies",
+			Name: "oasis_worker_execution_discrepancy_detected_count",
+			Help: "Number of detected execute discrepancies",
 		},
 		[]string{"runtime"},
 	)
@@ -306,7 +306,7 @@ func (n *Node) HandleBatchFromTransactionSchedulerLocked(
 	inputStorageSigs []signature.Signature,
 ) {
 	epoch := n.commonNode.Group.GetEpochSnapshot()
-	expectedID := epoch.GetComputeCommitteeID()
+	expectedID := epoch.GetExecutorCommitteeID()
 	if !expectedID.Equal(&committeeID) {
 		return
 	}
@@ -353,7 +353,7 @@ func (n *Node) transitionLocked(state NodeState) {
 // HandleEpochTransitionLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
-	if epoch.IsComputeMember() {
+	if epoch.IsExecutorMember() {
 		n.transitionLocked(StateWaitingForBatch{})
 	} else {
 		n.transitionLocked(StateNotReady{})
@@ -431,10 +431,10 @@ func (n *Node) maybeStartProcessingBatchLocked(
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	switch {
-	case epoch.IsComputeWorker():
+	case epoch.IsExecutorWorker():
 		// Worker, start processing immediately.
 		n.startProcessingBatchLocked(ioRoot, batch, batchSpanCtx, txnSchedSig, inputStorageSigs)
-	case epoch.IsComputeBackupWorker():
+	case epoch.IsExecutorBackupWorker():
 		// Backup worker, wait for discrepancy event.
 		state, ok := n.state.(StateWaitingForBatch)
 		if ok && state.pendingEvent != nil {
@@ -452,8 +452,8 @@ func (n *Node) maybeStartProcessingBatchLocked(
 			inputStorageSigs: inputStorageSigs,
 		})
 	default:
-		// Currently not a member of a compute committee, log.
-		n.logger.Warn("not a compute committee member, ignoring batch")
+		// Currently not a member of an executor committee, log.
+		n.logger.Warn("not an executor committee member, ignoring batch")
 	}
 }
 
@@ -491,7 +491,7 @@ func (n *Node) startProcessingBatchLocked(
 
 	workerHost := n.GetWorkerHostLocked()
 	if workerHost == nil {
-		// This should not happen as we only register to be a compute worker
+		// This should not happen as we only register to be an executor worker
 		// once the worker host is ready.
 		n.logger.Error("received a batch while worker host is not yet initialized")
 		n.abortBatchLocked(errWorkerAborted)
@@ -598,7 +598,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 
 	// Generate proposed compute results.
 	proposedResults := &commitment.ComputeBody{
-		CommitteeID:      epoch.GetComputeCommitteeID(),
+		CommitteeID:      epoch.GetExecutorCommitteeID(),
 		Header:           batch.Header,
 		RakSig:           batch.RakSig,
 		TxnSchedSig:      state.txnSchedSig,
@@ -687,7 +687,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 	}
 
 	// Commit.
-	commit, err := commitment.SignComputeCommitment(n.commonNode.Identity.NodeSigner, proposedResults)
+	commit, err := commitment.SignExecutorCommitment(n.commonNode.Identity.NodeSigner, proposedResults)
 	if err != nil {
 		n.logger.Error("failed to sign commitment",
 			"err", err,
@@ -697,10 +697,10 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 	}
 
 	// Publish commitment to merge committee.
-	spanPublish := opentracing.StartSpan("PublishComputeFinished(commitment)",
+	spanPublish := opentracing.StartSpan("PublishExecuteFinished(commitment)",
 		opentracing.ChildOf(state.batchSpanCtx),
 	)
-	err = n.commonNode.Group.PublishComputeFinished(state.batchSpanCtx, commit)
+	err = n.commonNode.Group.PublishExecuteFinished(state.batchSpanCtx, commit)
 	if err != nil {
 		spanPublish.Finish()
 		n.logger.Error("failed to publish results to committee",
@@ -724,7 +724,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		if n.mergeNode == nil {
 			n.logger.Error("scheduler says we are a merge worker, but we are not")
 		} else {
-			n.mergeNode.HandleResultsFromComputeWorkerLocked(state.batchSpanCtx, commit)
+			n.mergeNode.HandleResultsFromExecutorWorkerLocked(state.batchSpanCtx, commit)
 		}
 	}
 
@@ -734,7 +734,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 // HandleNewEventLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
-	dis := ev.ComputeDiscrepancyDetected
+	dis := ev.ExecutionDiscrepancyDetected
 	if dis == nil {
 		// Ignore other events.
 		return
@@ -742,7 +742,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 
 	// Check if the discrepancy occurred in our committee.
 	epoch := n.commonNode.Group.GetEpochSnapshot()
-	expectedID := epoch.GetComputeCommitteeID()
+	expectedID := epoch.GetExecutorCommitteeID()
 	if !expectedID.Equal(&dis.CommitteeID) {
 		n.logger.Debug("ignoring discrepancy event for a different committee",
 			"expected_committee", expectedID,
@@ -751,7 +751,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 		return
 	}
 
-	n.logger.Warn("compute discrepancy detected",
+	n.logger.Warn("execution discrepancy detected",
 		"committee_id", dis.CommitteeID,
 	)
 
@@ -759,7 +759,7 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 
 	discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
 
-	if !n.commonNode.Group.GetEpochSnapshot().IsComputeBackupWorker() {
+	if !n.commonNode.Group.GetEpochSnapshot().IsExecutorBackupWorker() {
 		return
 	}
 
@@ -802,16 +802,16 @@ func (n *Node) handleExternalBatchLocked(
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
-	// We can only receive external batches if we are a compute member.
-	if !epoch.IsComputeMember() {
+	// We can only receive external batches if we are an executor member.
+	if !epoch.IsExecutorMember() {
 		n.logger.Error("got external batch while in incorrect role")
 		return errIncorrectRole
 	}
 
 	// We only accept batches for our own committee.
-	expectedID := epoch.GetComputeCommitteeID()
+	expectedID := epoch.GetExecutorCommitteeID()
 	if !expectedID.Equal(&committeeID) {
-		n.logger.Error("got external batch for a different compute committee",
+		n.logger.Error("got external batch for a different executor committee",
 			"expected_committee", expectedID,
 			"committee", committeeID,
 		)
@@ -940,7 +940,7 @@ func NewNode(
 		state:            StateNotReady{},
 		stateTransitions: pubsub.NewBroker(false),
 		reselect:         make(chan struct{}, 1),
-		logger:           logging.GetLogger("worker/compute/committee").With("runtime_id", commonNode.Runtime.ID()),
+		logger:           logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
 	return n, nil

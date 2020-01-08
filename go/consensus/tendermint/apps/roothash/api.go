@@ -26,10 +26,10 @@ var (
 	// merge discrepancy detected events (value is a CBOR serialized
 	// ValueMergeDiscrepancyDetected).
 	KeyMergeDiscrepancyDetected = []byte("merge-discrepancy")
-	// KeyComputeDiscrepancyDetected is an ABCI event attribute key for
+	// KeyExecutionDiscrepancyDetected is an ABCI event attribute key for
 	// merge discrepancy detected events (value is a CBOR serialized
-	// ValueComputeDiscrepancyDetected).
-	KeyComputeDiscrepancyDetected = []byte("compute-discrepancy")
+	// ValueExecutionDiscrepancyDetected).
+	KeyExecutionDiscrepancyDetected = []byte("execution-discrepancy")
 	// KeyFinalized is an ABCI event attribute key for finalized blocks
 	// (value is a CBOR serialized ValueFinalized).
 	KeyFinalized = []byte("finalized")
@@ -48,9 +48,9 @@ type ValueMergeDiscrepancyDetected struct {
 	ID    common.Namespace                       `json:"id"`
 }
 
-// ValueComputeDiscrepancyDetected is the value component of a
+// ValueExecutionDiscrepancyDetected is the value component of a
 // TagMergeDiscrepancyDetected.
-type ValueComputeDiscrepancyDetected struct {
-	ID    common.Namespace                         `json:"id"`
-	Event roothash.ComputeDiscrepancyDetectedEvent `json:"event"`
+type ValueExecutionDiscrepancyDetected struct {
+	ID    common.Namespace                           `json:"id"`
+	Event roothash.ExecutionDiscrepancyDetectedEvent `json:"event"`
 }

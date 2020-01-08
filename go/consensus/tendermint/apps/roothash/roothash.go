@@ -118,7 +118,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 		rtState.Suspended = false
 
 		// Prepare new runtime committees based on what the scheduler did.
-		committeeID, computePool, mergePool, empty, err := app.prepareNewCommittees(ctx, epoch, rtState, schedState, regState)
+		committeeID, executorPool, mergePool, empty, err := app.prepareNewCommittees(ctx, epoch, rtState, schedState, regState)
 		if err != nil {
 			return err
 		}
@@ -152,7 +152,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 			app.emitEmptyBlock(ctx, rtState, block.EpochTransition)
 
 			// Create a new round.
-			rtState.Round = roothashState.NewRound(committeeID, computePool, mergePool, rtState.CurrentBlock)
+			rtState.Round = roothashState.NewRound(committeeID, executorPool, mergePool, rtState.CurrentBlock)
 		}
 
 		// Update the runtime descriptor to the latest per-epoch value.
@@ -194,7 +194,7 @@ func (app *rootHashApplication) prepareNewCommittees(
 	regState *registryState.MutableState,
 ) (
 	committeeID hash.Hash,
-	computePool *commitment.MultiPool,
+	executorPool *commitment.MultiPool,
 	mergePool *commitment.Pool,
 	empty bool,
 	err error,
@@ -205,15 +205,15 @@ func (app *rootHashApplication) prepareNewCommittees(
 	// of all committees. We need this to be able to quickly see if any
 	// committee members have changed.
 	//
-	// We first include the current epoch, then all compute committee member
+	// We first include the current epoch, then all executor committee member
 	// hashes and then the merge committee member hash:
 	//
 	//   [little-endian epoch]
-	//   "compute committees follow"
-	//   [compute committe 1 members hash]
-	//   [compute committe 2 members hash]
+	//   "executor committees follow"
+	//   [executor committe 1 members hash]
+	//   [executor committe 2 members hash]
 	//   ...
-	//   [compute committe n members hash]
+	//   [executor committe n members hash]
 	//   "merge committee follows"
 	//   [merge committee members hash]
 	//
@@ -221,34 +221,34 @@ func (app *rootHashApplication) prepareNewCommittees(
 	var rawEpoch [8]byte
 	binary.LittleEndian.PutUint64(rawEpoch[:], uint64(epoch))
 	committeeIDParts = append(committeeIDParts, rawEpoch[:])
-	committeeIDParts = append(committeeIDParts, []byte("compute committees follow"))
+	committeeIDParts = append(committeeIDParts, []byte("executor committees follow"))
 
-	// NOTE: There will later be multiple compute committees.
-	var computeCommittees []*scheduler.Committee
-	cc1, err := schedState.Committee(scheduler.KindCompute, rtID)
+	// NOTE: There will later be multiple executor committees.
+	var executorCommittees []*scheduler.Committee
+	xc1, err := schedState.Committee(scheduler.KindExecutor, rtID)
 	if err != nil {
-		app.logger.Error("checkCommittees: failed to get compute committee from scheduler",
+		app.logger.Error("checkCommittees: failed to get executor committee from scheduler",
 			"err", err,
 			"runtime", rtID,
 		)
 		return
 	}
-	if cc1 != nil {
-		computeCommittees = append(computeCommittees, cc1)
+	if xc1 != nil {
+		executorCommittees = append(executorCommittees, xc1)
 	}
 
-	computePool = &commitment.MultiPool{
+	executorPool = &commitment.MultiPool{
 		Committees: make(map[hash.Hash]*commitment.Pool),
 	}
-	if len(computeCommittees) == 0 {
-		app.logger.Warn("checkCommittees: no compute committees",
+	if len(executorCommittees) == 0 {
+		app.logger.Warn("checkCommittees: no executor committees",
 			"runtime", rtID,
 		)
 		empty = true
 	}
-	for _, computeCommittee := range computeCommittees {
-		computeNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
-		for idx, n := range computeCommittee.Members {
+	for _, executorCommittee := range executorCommittees {
+		executorNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
+		for idx, n := range executorCommittee.Members {
 			var nodeRuntime *node.Runtime
 			node, err1 := regState.Node(n.PublicKey)
 			if err1 != nil {
@@ -269,18 +269,18 @@ func (app *rootHashApplication) prepareNewCommittees(
 				)
 				continue
 			}
-			computeNodeInfo[n.PublicKey] = commitment.NodeInfo{
+			executorNodeInfo[n.PublicKey] = commitment.NodeInfo{
 				CommitteeNode: idx,
 				Runtime:       nodeRuntime,
 			}
 		}
-		computeCommitteeID := computeCommittee.EncodedMembersHash()
-		committeeIDParts = append(committeeIDParts, computeCommitteeID[:])
+		executorCommitteeID := executorCommittee.EncodedMembersHash()
+		committeeIDParts = append(committeeIDParts, executorCommitteeID[:])
 
-		computePool.Committees[computeCommitteeID] = &commitment.Pool{
+		executorPool.Committees[executorCommitteeID] = &commitment.Pool{
 			Runtime:   rtState.Runtime,
-			Committee: computeCommittee,
-			NodeInfo:  computeNodeInfo,
+			Committee: executorCommittee,
+			NodeInfo:  executorNodeInfo,
 		}
 	}
 
@@ -336,13 +336,13 @@ func (app *rootHashApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Tra
 	state := roothashState.NewMutableState(ctx.State())
 
 	switch tx.Method {
-	case roothash.MethodComputeCommit:
-		var cc roothash.ComputeCommit
-		if err := cbor.Unmarshal(tx.Body, &cc); err != nil {
+	case roothash.MethodExecutorCommit:
+		var xc roothash.ExecutorCommit
+		if err := cbor.Unmarshal(tx.Body, &xc); err != nil {
 			return err
 		}
 
-		return app.computeCommit(ctx, state, &cc)
+		return app.executorCommit(ctx, state, &xc)
 	case roothash.MethodMergeCommit:
 		var mc roothash.MergeCommit
 		if err := cbor.Unmarshal(tx.Body, &mc); err != nil {
@@ -500,8 +500,8 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 			panic(err)
 		}
 	}
-	for _, pool := range rtState.Round.ComputePool.GetTimeoutCommittees(ctx.Now()) {
-		app.tryFinalizeCompute(ctx, rtState, pool, true)
+	for _, pool := range rtState.Round.ExecutorPool.GetTimeoutCommittees(ctx.Now()) {
+		app.tryFinalizeExecute(ctx, rtState, pool, true)
 	}
 
 	return nil
@@ -534,7 +534,7 @@ func (app *rootHashApplication) updateTimer(
 	}
 }
 
-func (app *rootHashApplication) tryFinalizeCompute(
+func (app *rootHashApplication) tryFinalizeExecute(
 	ctx *abci.Context,
 	rtState *roothashState.RuntimeState,
 	pool *commitment.Pool,
@@ -548,22 +548,22 @@ func (app *rootHashApplication) tryFinalizeCompute(
 	defer app.updateTimer(ctx, rtState, blockNr)
 
 	if rtState.Round.Finalized {
-		app.logger.Error("attempted to finalize compute when block already finalized",
+		app.logger.Error("attempted to finalize execute when block already finalized",
 			"round", blockNr,
 			"committee_id", committeeID,
 		)
 		return
 	}
 
-	_, err := pool.TryFinalize(ctx.Now(), runtime.Compute.RoundTimeout, forced, true)
+	_, err := pool.TryFinalize(ctx.Now(), runtime.Executor.RoundTimeout, forced, true)
 	switch err {
 	case nil:
 		// No error -- there is no discrepancy. But only the merge committee
-		// can make progress even if we have all compute commitments.
+		// can make progress even if we have all executor commitments.
 
 		// TODO: Check if we need to punish the merge committee.
 
-		app.logger.Warn("no compute discrepancy, but only merge committee can make progress",
+		app.logger.Warn("no execution discrepancy, but only merge committee can make progress",
 			"round", blockNr,
 			"committee_id", committeeID,
 		)
@@ -578,20 +578,20 @@ func (app *rootHashApplication) tryFinalizeCompute(
 		return
 	case commitment.ErrDiscrepancyDetected:
 		// Discrepancy has been detected.
-		app.logger.Warn("compute discrepancy detected",
+		app.logger.Warn("execution discrepancy detected",
 			"round", blockNr,
 			"committee_id", committeeID,
-			logging.LogEvent, roothash.LogEventComputeDiscrepancyDetected,
+			logging.LogEvent, roothash.LogEventExecutionDiscrepancyDetected,
 		)
 
-		tagV := ValueComputeDiscrepancyDetected{
+		tagV := ValueExecutionDiscrepancyDetected{
 			ID: runtime.ID,
-			Event: roothash.ComputeDiscrepancyDetectedEvent{
+			Event: roothash.ExecutionDiscrepancyDetectedEvent{
 				CommitteeID: pool.GetCommitteeID(),
 				Timeout:     forced,
 			},
 		}
-		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyComputeDiscrepancyDetected, cbor.Marshal(tagV)))
+		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyExecutionDiscrepancyDetected, cbor.Marshal(tagV)))
 		return
 	default:
 	}
@@ -641,7 +641,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		blk.Header.Timestamp = uint64(ctx.Now().Unix())
 
 		rtState.Round.MergePool.ResetCommitments()
-		rtState.Round.ComputePool.ResetCommitments()
+		rtState.Round.ExecutorPool.ResetCommitments()
 		rtState.Round.Finalized = true
 
 		return blk

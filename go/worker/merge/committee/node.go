@@ -149,11 +149,11 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 
 // HandlePeerMessage implements NodeHooks.
 func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (bool, error) {
-	if message.ComputeWorkerFinished != nil {
+	if message.ExecutorWorkerFinished != nil {
 		n.commonNode.CrossNode.Lock()
 		defer n.commonNode.CrossNode.Unlock()
 
-		m := message.ComputeWorkerFinished
+		m := message.ExecutorWorkerFinished
 		err := n.handleResultsLocked(ctx, &m.Commitment)
 		if err != nil {
 			return false, err
@@ -204,7 +204,7 @@ func (n *Node) newStateWaitingForResultsLocked(epoch *committee.EpochSnapshot) S
 		Committees: make(map[hash.Hash]*commitment.Pool),
 	}
 
-	for cID, ci := range epoch.GetComputeCommittees() {
+	for cID, ci := range epoch.GetExecutorCommittees() {
 		nodeInfo := make(map[signature.PublicKey]commitment.NodeInfo, len(ci.Nodes))
 		for idx, nd := range ci.Nodes {
 			var nodeRuntime *node.Runtime
@@ -293,32 +293,32 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	}
 }
 
-// HandleResultsFromComputeWorkerLocked processes results from a compute worker.
+// HandleResultsFromExecutorWorkerLocked processes results from an executor worker.
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleResultsFromComputeWorkerLocked(spanCtx opentracing.SpanContext, commit *commitment.ComputeCommitment) {
+func (n *Node) HandleResultsFromExecutorWorkerLocked(spanCtx opentracing.SpanContext, commit *commitment.ExecutorCommitment) {
 	// TODO: Context.
 	if err := n.handleResultsLocked(context.TODO(), commit); err != nil {
-		n.logger.Warn("failed to handle results from local compute worker",
+		n.logger.Warn("failed to handle results from local executor worker",
 			"err", err,
 		)
 	}
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) handleResultsLocked(ctx context.Context, commit *commitment.ComputeCommitment) error {
+func (n *Node) handleResultsLocked(ctx context.Context, commit *commitment.ExecutorCommitment) error {
 	// If we are not waiting for results, don't do anything.
 	state, ok := n.state.(StateWaitingForResults)
 	if !ok {
 		return errIncorrectState
 	}
 
-	n.logger.Debug("received new compute commitment",
+	n.logger.Debug("received new executor commitment",
 		"node_id", commit.Signature.PublicKey,
 	)
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
-	sp, err := state.pool.AddComputeCommitment(n.commonNode.CurrentBlock, epoch, commit)
+	sp, err := state.pool.AddExecutorCommitment(n.commonNode.CurrentBlock, epoch, commit)
 	if err != nil {
 		return err
 	}
@@ -356,12 +356,12 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 	//
 	// We have two kinds of timeouts -- the first is based on local monotonic time and
 	// starts counting as soon as the first commitment for a committee is received. It
-	// is used to trigger submission of compute commitments to the consensus layer for
+	// is used to trigger submission of executor commitments to the consensus layer for
 	// proof of timeout. The consensus layer starts its own timeout and this is the
 	// second timeout.
 	//
 	// The timeout is only considered authoritative once confirmed by consensus. In
-	// case of a local-only timeout, we will submit what compute commitments we have
+	// case of a local-only timeout, we will submit what executor commitments we have
 	// to consensus and not change the internal Discrepancy flag.
 	cid := pool.GetCommitteeID()
 	logger := n.logger.With("committee_id", cid)
@@ -373,7 +373,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		)
 		return
 	}
-	runtimeTimeout := rt.Compute.RoundTimeout
+	runtimeTimeout := rt.Executor.RoundTimeout
 
 	commit, err := pool.TryFinalize(now, runtimeTimeout, didTimeout, consensusTimeout)
 	switch err {
@@ -396,19 +396,19 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 		fallthrough
 	case commitment.ErrInsufficientVotes:
 		// Discrepancy resolution failed.
-		logger.Warn("insufficient votes, performing compute commit")
+		logger.Warn("insufficient votes, performing executor commit")
 
-		// Submit compute commit to BFT.
-		ccs := pool.GetComputeCommitments()
+		// Submit executor commit to BFT.
+		ccs := pool.GetExecutorCommitments()
 		go func() {
-			tx := roothash.NewComputeCommitTx(0, nil, n.commonNode.Runtime.ID(), ccs)
+			tx := roothash.NewExecutorCommitTx(0, nil, n.commonNode.Runtime.ID(), ccs)
 			ccErr := consensus.SignAndSubmitTx(n.roundCtx, n.commonNode.Consensus, n.commonNode.Identity.NodeSigner, tx)
 
 			switch ccErr {
 			case nil:
-				logger.Info("compute commit finalized")
+				logger.Info("executor commit finalized")
 			default:
-				logger.Warn("failed to submit compute commit",
+				logger.Warn("failed to submit executor commit",
 					"err", ccErr,
 				)
 			}
@@ -431,7 +431,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 
 	n.logger.Info("have valid commitments from all committees, merging")
 
-	commitments := state.pool.GetComputeCommitments()
+	commitments := state.pool.GetExecutorCommitments()
 
 	if epoch.IsMergeBackupWorker() && state.pendingEvent == nil {
 		// Backup workers only perform merge after receiving a discrepancy event.
@@ -444,7 +444,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, results []*commitment.ComputeResultsHeader) {
+func (n *Node) startMergeLocked(commitments []commitment.ExecutorCommitment, results []*commitment.ComputeResultsHeader) {
 	doneCh := make(chan *commitment.MergeBody, 1)
 	ctx, cancel := context.WithCancel(n.roundCtx)
 
@@ -558,8 +558,8 @@ func (n *Node) startMergeLocked(commitments []commitment.ComputeCommitment, resu
 		blk.Header.StorageSignatures = signatures
 
 		doneCh <- &commitment.MergeBody{
-			ComputeCommits: commitments,
-			Header:         blk.Header,
+			ExecutorCommits: commitments,
+			Header:          blk.Header,
 		}
 	}()
 }
@@ -637,8 +637,8 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 	switch {
 	case ev.MergeDiscrepancyDetected != nil:
 		n.handleMergeDiscrepancyLocked(ev.MergeDiscrepancyDetected)
-	case ev.ComputeDiscrepancyDetected != nil:
-		n.handleComputeDiscrepancyLocked(ev.ComputeDiscrepancyDetected)
+	case ev.ExecutionDiscrepancyDetected != nil:
+		n.handleExecutorDiscrepancyLocked(ev.ExecutionDiscrepancyDetected)
 	default:
 		// Ignore other events.
 	}
@@ -677,8 +677,8 @@ func (n *Node) handleMergeDiscrepancyLocked(ev *roothash.MergeDiscrepancyDetecte
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) handleComputeDiscrepancyLocked(ev *roothash.ComputeDiscrepancyDetectedEvent) {
-	n.logger.Warn("compute discrepancy detected",
+func (n *Node) handleExecutorDiscrepancyLocked(ev *roothash.ExecutionDiscrepancyDetectedEvent) {
+	n.logger.Warn("execution discrepancy detected",
 		"committee_id", ev.CommitteeID,
 		"timeout", ev.Timeout,
 	)
@@ -688,7 +688,7 @@ func (n *Node) handleComputeDiscrepancyLocked(ev *roothash.ComputeDiscrepancyDet
 		// If the discrepancy was due to a timeout, record it.
 		pool := s.pool.Committees[ev.CommitteeID]
 		if pool == nil {
-			n.logger.Error("compute discrepancy event for unknown committee",
+			n.logger.Error("execution discrepancy event for unknown committee",
 				"committee_id", ev.CommitteeID,
 			)
 			return

@@ -34,8 +34,8 @@ type TransactionScheduler interface {
 	SubmitTx(context.Context, *SubmitTxRequest) (*SubmitTxResponse, error)
 
 	// IsTransactionQueued checks if the given transaction is present in the
-	// transaction scheduler queue and is waiting to be dispatched to a
-	// compute committee.
+	// transaction scheduler queue and is waiting to be dispatched to an
+	// executor committee.
 	IsTransactionQueued(context.Context, *IsTransactionQueuedRequest) (*IsTransactionQueuedResponse, error)
 }
 

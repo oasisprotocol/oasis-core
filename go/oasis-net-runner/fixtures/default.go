@@ -79,7 +79,7 @@ func NewDefaultFixture() (*oasis.NetworkFixture, error) {
 				Entity:     0,
 				Keymanager: 0,
 				Binary:     viper.GetString(cfgRuntimeBinary),
-				Compute: registry.ComputeParameters{
+				Executor: registry.ExecutorParameters{
 					GroupSize:       2,
 					GroupBackupSize: 1,
 					RoundTimeout:    20 * time.Second,

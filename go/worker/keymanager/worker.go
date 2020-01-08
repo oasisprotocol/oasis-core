@@ -50,7 +50,7 @@ var (
 // The key manager worker.
 //
 // It behaves differently from other workers as the key manager has its
-// own runtime. It needs to keep track of compute committees for other
+// own runtime. It needs to keep track of executor committees for other
 // runtimes in order to update the access control lists.
 type Worker struct {
 	sync.RWMutex
@@ -569,10 +569,10 @@ func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committee
 	// Update key manager access control policy on epoch transitions.
 	policy := accessctl.NewPolicy()
 
-	// Apply rules to current compute committee members.
-	for _, cc := range snapshot.GetComputeCommittees() {
-		if cc != nil {
-			computeCommitteePolicy.AddRulesForCommittee(&policy, cc)
+	// Apply rules to current executor committee members.
+	for _, xc := range snapshot.GetExecutorCommittees() {
+		if xc != nil {
+			executorCommitteePolicy.AddRulesForCommittee(&policy, xc)
 		}
 	}
 

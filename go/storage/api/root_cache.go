@@ -160,7 +160,7 @@ func (rc *RootCache) Apply(
 
 func (rc *RootCache) getApplyLock(root, expectedNewRoot Root) *sync.Mutex {
 	// Lock the Apply call based on (oldRoot, expectedNewRoot), so that when
-	// multiple compute committees commit the same write logs, we only write
+	// multiple executor committees commit the same write logs, we only write
 	// the first one and go through the fast path for the rest.
 	lockID := root.EncodedHash().String() + expectedNewRoot.EncodedHash().String()
 

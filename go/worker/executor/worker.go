@@ -1,4 +1,4 @@
-package compute
+package executor
 
 import (
 	"context"
@@ -8,12 +8,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/compute/committee"
+	"github.com/oasislabs/oasis-core/go/worker/executor/committee"
 	"github.com/oasislabs/oasis-core/go/worker/merge"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 
-// Worker is a compute worker handling many runtimes.
+// Worker is an executor worker handling many runtimes.
 type Worker struct {
 	*workerCommon.RuntimeHostWorker
 
@@ -35,13 +35,13 @@ type Worker struct {
 
 // Name returns the service name.
 func (w *Worker) Name() string {
-	return "compute worker"
+	return "executor worker"
 }
 
 // Start starts the service.
 func (w *Worker) Start() error {
 	if !w.enabled {
-		w.logger.Info("not starting compute worker as it is disabled")
+		w.logger.Info("not starting executor worker as it is disabled")
 
 		// In case the worker is not enabled, close the init channel immediately.
 		close(w.initCh)
@@ -122,7 +122,7 @@ func (w *Worker) Cleanup() {
 	}
 }
 
-// Initialized returns a channel that will be closed when the compute worker
+// Initialized returns a channel that will be closed when the executor worker
 // is initialized and ready to service requests.
 func (w *Worker) Initialized() <-chan struct{} {
 	return w.initCh
@@ -186,12 +186,12 @@ func newWorker(
 		cancelCtx:    cancelCtx,
 		quitCh:       make(chan struct{}),
 		initCh:       make(chan struct{}),
-		logger:       logging.GetLogger("worker/compute"),
+		logger:       logging.GetLogger("worker/executor"),
 	}
 
 	if enabled {
 		if !w.commonWorker.Enabled() {
-			panic("common worker should have been enabled for compute worker")
+			panic("common worker should have been enabled for executor worker")
 		}
 
 		// Create the runtime host worker.

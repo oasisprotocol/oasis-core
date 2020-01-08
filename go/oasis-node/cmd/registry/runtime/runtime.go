@@ -45,11 +45,11 @@ const (
 	CfgVersion        = "runtime.version"
 	CfgVersionEnclave = "runtime.version.enclave"
 
-	// Compute commiteee flags.
-	CfgComputeGroupSize         = "runtime.compute.group_size"
-	CfgComputeGroupBackupSize   = "runtime.compute.group_backup_size"
-	CfgComputeAllowedStragglers = "runtime.compute.allowed_stragglers"
-	CfgComputeRoundTimeout      = "runtime.compute.round_timeout"
+	// Executor committee flags.
+	CfgExecutorGroupSize         = "runtime.executor.group_size"
+	CfgExecutorGroupBackupSize   = "runtime.executor.group_backup_size"
+	CfgExecutorAllowedStragglers = "runtime.executor.allowed_stragglers"
+	CfgExecutorRoundTimeout      = "runtime.executor.round_timeout"
 
 	// Merge committee flags.
 	CfgMergeGroupSize         = "runtime.merge.group_size"
@@ -340,11 +340,11 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 			Version: version.FromU64(viper.GetUint64(CfgVersion)),
 		},
 		KeyManager: kmID,
-		Compute: registry.ComputeParameters{
-			GroupSize:         uint64(viper.GetInt64(CfgComputeGroupSize)),
-			GroupBackupSize:   uint64(viper.GetInt64(CfgComputeGroupBackupSize)),
-			AllowedStragglers: uint64(viper.GetInt64(CfgComputeAllowedStragglers)),
-			RoundTimeout:      viper.GetDuration(CfgComputeRoundTimeout),
+		Executor: registry.ExecutorParameters{
+			GroupSize:         uint64(viper.GetInt64(CfgExecutorGroupSize)),
+			GroupBackupSize:   uint64(viper.GetInt64(CfgExecutorGroupBackupSize)),
+			AllowedStragglers: uint64(viper.GetInt64(CfgExecutorAllowedStragglers)),
+			RoundTimeout:      viper.GetDuration(CfgExecutorRoundTimeout),
 		},
 		Merge: registry.MergeParameters{
 			GroupSize:         uint64(viper.GetInt64(CfgMergeGroupSize)),
@@ -452,11 +452,11 @@ func init() {
 	runtimeFlags.String(CfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")
 	runtimeFlags.StringSlice(CfgVersionEnclave, nil, "Runtime TEE enclave version(s)")
 
-	// Init Compute commitee flags.
-	runtimeFlags.Uint64(CfgComputeGroupSize, 1, "Number of workers in the runtime compute group/committee")
-	runtimeFlags.Uint64(CfgComputeGroupBackupSize, 0, "Number of backup workers in the runtime compute group/committee")
-	runtimeFlags.Uint64(CfgComputeAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime compute group")
-	runtimeFlags.Duration(CfgComputeRoundTimeout, 10*time.Second, "Compute committee round timeout for this runtime")
+	// Init Executor committee flags.
+	runtimeFlags.Uint64(CfgExecutorGroupSize, 1, "Number of workers in the runtime executor group/committee")
+	runtimeFlags.Uint64(CfgExecutorGroupBackupSize, 0, "Number of backup workers in the runtime executor group/committee")
+	runtimeFlags.Uint64(CfgExecutorAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime executor group")
+	runtimeFlags.Duration(CfgExecutorRoundTimeout, 10*time.Second, "Executor committee round timeout for this runtime")
 
 	// Init Merge committee flags.
 	runtimeFlags.Uint64(CfgMergeGroupSize, 1, "Number of workers in the runtime merge group/committee")

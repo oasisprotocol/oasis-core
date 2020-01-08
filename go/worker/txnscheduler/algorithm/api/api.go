@@ -41,8 +41,8 @@ type Algorithm interface {
 	Clear()
 }
 
-// TransactionDispatcher dispatches transactions to a scheduled compute committee.
+// TransactionDispatcher dispatches transactions to a scheduled executor committee.
 type TransactionDispatcher interface {
-	// Dispatch attempts to dispatch a batch to a compute committee.
+	// Dispatch attempts to dispatch a batch to a executor committee.
 	Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error
 }

@@ -44,7 +44,7 @@ type config struct {
 }
 
 func (s *batchingState) scheduleBatch(force bool) error {
-	// The simple batching algorithm only supports a single compute committee. Use
+	// The simple batching algorithm only supports a single executor committee. Use
 	// with multiple committees will currently cause the rounds to fail as all other
 	// committees will be idle.
 	var committeeID *hash.Hash
@@ -58,7 +58,7 @@ func (s *batchingState) scheduleBatch(force bool) error {
 			return
 		}
 
-		for id := range s.epoch.GetComputeCommittees() {
+		for id := range s.epoch.GetExecutorCommittees() {
 			committeeID = &id
 			break
 		}

@@ -16,14 +16,14 @@ import (
 
 func hasSuitablePermutations(t *testing.T, beacon []byte, runtimeID common.Namespace) bool {
 	numComputeNodes := 4
-	computeIdxs, err := schedulerapp.GetPerm(beacon, runtimeID, schedulerapp.RNGContextCompute, numComputeNodes)
+	computeIdxs, err := schedulerapp.GetPerm(beacon, runtimeID, schedulerapp.RNGContextExecutor, numComputeNodes)
 	require.NoError(t, err, "schedulerapp.GetPerm compute")
 	transactionSchedulerIdxs, err := schedulerapp.GetPerm(beacon, runtimeID, schedulerapp.RNGContextTransactionScheduler, numComputeNodes)
 	require.NoError(t, err, "schedulerapp.GetPerm transaction scheduler")
 	mergeIdxs, err := schedulerapp.GetPerm(beacon, runtimeID, schedulerapp.RNGContextMerge, numComputeNodes)
 	require.NoError(t, err, "schedulerapp.GetPerm merge")
 
-	fmt.Printf("%20s schedule %v\n", scheduler.KindCompute, computeIdxs)
+	fmt.Printf("%20s schedule %v\n", scheduler.KindExecutor, computeIdxs)
 	fmt.Printf("%20s schedule %v\n", scheduler.KindTransactionScheduler, transactionSchedulerIdxs)
 	fmt.Printf("%20s schedule %v\n", scheduler.KindMerge, mergeIdxs)
 
@@ -32,13 +32,13 @@ func hasSuitablePermutations(t *testing.T, beacon []byte, runtimeID common.Names
 		backupWorkers int
 		perm          []int
 	}{
-		scheduler.KindCompute:              {workers: 2, backupWorkers: 1, perm: computeIdxs},
+		scheduler.KindExecutor:             {workers: 2, backupWorkers: 1, perm: computeIdxs},
 		scheduler.KindTransactionScheduler: {workers: 1, backupWorkers: 0, perm: transactionSchedulerIdxs},
 		scheduler.KindMerge:                {workers: 2, backupWorkers: 1, perm: mergeIdxs},
 	}
 
 	for _, c1Kind := range []scheduler.CommitteeKind{
-		scheduler.KindCompute,
+		scheduler.KindExecutor,
 		scheduler.KindMerge,
 	} {
 		c1 := committees[c1Kind]

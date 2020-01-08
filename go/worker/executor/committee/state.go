@@ -114,9 +114,9 @@ func (s StateNotReady) String() string {
 
 // StateWaitingForBatch is the waiting for batch state.
 type StateWaitingForBatch struct {
-	// Pending compute discrepancy detected event in case the node is a
+	// Pending execute discrepancy detected event in case the node is a
 	// backup worker and the event was received before the batch.
-	pendingEvent *roothash.ComputeDiscrepancyDetectedEvent
+	pendingEvent *roothash.ExecutionDiscrepancyDetectedEvent
 }
 
 // Name returns the name of the state.

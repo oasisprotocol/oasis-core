@@ -432,8 +432,8 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 
 					notifiers := tb.getRuntimeNotifiers(value.ID)
 					notifiers.eventNotifier.Broadcast(&api.Event{MergeDiscrepancyDetected: &value.Event})
-				} else if bytes.Equal(pair.GetKey(), app.KeyComputeDiscrepancyDetected) {
-					var value app.ValueComputeDiscrepancyDetected
+				} else if bytes.Equal(pair.GetKey(), app.KeyExecutionDiscrepancyDetected) {
+					var value app.ValueExecutionDiscrepancyDetected
 					if err := cbor.Unmarshal(pair.GetValue(), &value); err != nil {
 						tb.logger.Error("worker: failed to get discrepancy from tag",
 							"err", err,
@@ -442,7 +442,7 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 					}
 
 					notifiers := tb.getRuntimeNotifiers(value.ID)
-					notifiers.eventNotifier.Broadcast(&api.Event{ComputeDiscrepancyDetected: &value.Event})
+					notifiers.eventNotifier.Broadcast(&api.Event{ExecutionDiscrepancyDetected: &value.Event})
 				}
 			}
 		}

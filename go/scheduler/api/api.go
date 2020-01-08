@@ -67,8 +67,8 @@ type CommitteeNode struct {
 type CommitteeKind uint8
 
 const (
-	// KindCompute is a compute committee.
-	KindCompute CommitteeKind = 0
+	// KindExecutor is an executor committee.
+	KindExecutor CommitteeKind = 0
 
 	// KindStorage is a storage committee.
 	KindStorage CommitteeKind = 1
@@ -86,7 +86,7 @@ const (
 // NeedsLeader returns if committee kind needs leader role.
 func (k CommitteeKind) NeedsLeader() bool {
 	switch k {
-	case KindCompute:
+	case KindExecutor:
 		return false
 	case KindMerge:
 		return false
@@ -100,8 +100,8 @@ func (k CommitteeKind) NeedsLeader() bool {
 // String returns a string representation of a CommitteeKind.
 func (k CommitteeKind) String() string {
 	switch k {
-	case KindCompute:
-		return "compute"
+	case KindExecutor:
+		return "executor"
 	case KindStorage:
 		return "storage"
 	case KindTransactionScheduler:

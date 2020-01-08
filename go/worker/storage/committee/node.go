@@ -273,9 +273,9 @@ func (n *Node) HandlePeerMessage(context.Context, *p2p.Message) (bool, error) {
 func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
 	// Create new storage gRPC access policy for the current runtime.
 	policy := accessctl.NewPolicy()
-	for _, cc := range snapshot.GetComputeCommittees() {
-		if cc != nil {
-			computeCommitteePolicy.AddRulesForCommittee(&policy, cc)
+	for _, xc := range snapshot.GetExecutorCommittees() {
+		if xc != nil {
+			executorCommitteePolicy.AddRulesForCommittee(&policy, xc)
 		}
 	}
 	if tsc := snapshot.GetTransactionSchedulerCommittee(); tsc != nil {

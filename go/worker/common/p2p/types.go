@@ -28,15 +28,15 @@ type Message struct {
 	Error *Error `json:"err,omitempty"`
 
 	SignedTxnSchedulerBatchDispatch *commitment.SignedTxnSchedulerBatchDispatch `json:",omitempty"`
-	ComputeWorkerFinished           *ComputeWorkerFinished                      `json:",omitempty"`
+	ExecutorWorkerFinished          *ExecutorWorkerFinished                     `json:",omitempty"`
 }
 
-// ComputeWorkerFinished is the message sent from the compute workers to
+// ExecutorWorkerFinished is the message sent from the executor workers to
 // the merge committee after a batch has been processed and is ready to
 // be merged.
-type ComputeWorkerFinished struct {
-	// Commitment is a compute worker commitment.
-	Commitment commitment.ComputeCommitment
+type ExecutorWorkerFinished struct {
+	// Commitment is an executor worker commitment.
+	Commitment commitment.ExecutorCommitment
 }
 
 // Ack is an acknowledgement that a message was received.

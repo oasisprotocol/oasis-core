@@ -17,7 +17,7 @@ import (
 
 type mergeBatchContext struct {
 	currentBlock *block.Block
-	commitments  []*commitment.OpenComputeCommitment
+	commitments  []*commitment.OpenExecutorCommitment
 
 	storageReceipts []*storage.Receipt
 	newBlock        *block.Block
@@ -38,17 +38,17 @@ func (mbc *mergeBatchContext) loadCurrentBlock(ht *honestTendermint, runtimeID c
 	return nil
 }
 
-func mergeReceiveCommitment(ph *p2pHandle) (*commitment.OpenComputeCommitment, error) {
+func mergeReceiveCommitment(ph *p2pHandle) (*commitment.OpenExecutorCommitment, error) {
 	req := <-ph.requests
 	req.responseCh <- nil
 
-	if req.msg.ComputeWorkerFinished == nil {
-		return nil, errors.Errorf("expecting compute worker finished message, got %+v", req.msg)
+	if req.msg.ExecutorWorkerFinished == nil {
+		return nil, errors.Errorf("expecting executor worker finished message, got %+v", req.msg)
 	}
 
-	openCom, err := req.msg.ComputeWorkerFinished.Commitment.Open()
+	openCom, err := req.msg.ExecutorWorkerFinished.Commitment.Open()
 	if err != nil {
-		return nil, errors.Wrap(err, "request message ComputeWorkerFinished Open")
+		return nil, errors.Wrap(err, "request message ExecutorWorkerFinished Open")
 	}
 
 	return openCom, nil
@@ -119,14 +119,14 @@ func (mbc *mergeBatchContext) process(ctx context.Context, hnss []*honestNodeSto
 }
 
 func (mbc *mergeBatchContext) createCommitment(id *identity.Identity) error {
-	var computeCommits []commitment.ComputeCommitment
+	var executorCommits []commitment.ExecutorCommitment
 	for _, openCom := range mbc.commitments {
-		computeCommits = append(computeCommits, openCom.ComputeCommitment)
+		executorCommits = append(executorCommits, openCom.ExecutorCommitment)
 	}
 	var err error
 	mbc.commit, err = commitment.SignMergeCommitment(id.NodeSigner, &commitment.MergeBody{
-		ComputeCommits: computeCommits,
-		Header:         mbc.newBlock.Header,
+		ExecutorCommits: executorCommits,
+		Header:          mbc.newBlock.Header,
 	})
 	if err != nil {
 		return errors.Wrap(err, "commitment sign merge commitment")

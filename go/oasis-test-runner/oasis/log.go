@@ -37,16 +37,16 @@ func LogAssertNoRoundFailures() log.WatcherHandlerFactory {
 	return LogAssertNotEvent(roothash.LogEventRoundFailed, "round failure detected")
 }
 
-// LogAssertComputeDiscrepancyDetected returns a handler which checks whether a
-// compute discrepancy was detected based on JSON log output.
-func LogAssertComputeDiscrepancyDetected() log.WatcherHandlerFactory {
-	return LogAssertEvent(roothash.LogEventComputeDiscrepancyDetected, "compute discrepancy not detected")
+// LogAssertExecutionDiscrepancyDetected returns a handler which checks whether an
+// execution discrepancy was detected based on JSON log output.
+func LogAssertExecutionDiscrepancyDetected() log.WatcherHandlerFactory {
+	return LogAssertEvent(roothash.LogEventExecutionDiscrepancyDetected, "execution discrepancy not detected")
 }
 
-// LogAssertNoComputeDiscrepancyDetected returns a handler which checks whether a
-// compute discrepancy was not detected based on JSON log output.
-func LogAssertNoComputeDiscrepancyDetected() log.WatcherHandlerFactory {
-	return LogAssertNotEvent(roothash.LogEventComputeDiscrepancyDetected, "compute discrepancy detected")
+// LogAssertNoExecutionDiscrepancyDetected returns a handler which checks whether an
+// execution discrepancy was not detected based on JSON log output.
+func LogAssertNoExecutionDiscrepancyDetected() log.WatcherHandlerFactory {
+	return LogAssertNotEvent(roothash.LogEventExecutionDiscrepancyDetected, "execution discrepancy detected")
 }
 
 // LogAssertMergeDiscrepancyDetected returns a handler which checks whether a

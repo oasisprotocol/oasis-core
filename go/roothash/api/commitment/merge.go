@@ -14,8 +14,8 @@ import (
 var MergeSignatureContext = signature.NewContext("oasis-core/roothash: merge commitment", signature.WithChainSeparation())
 
 type MergeBody struct {
-	ComputeCommits []ComputeCommitment `json:"commits"`
-	Header         block.Header        `json:"header"`
+	ExecutorCommits []ExecutorCommitment `json:"commits"`
+	Header          block.Header         `json:"header"`
 }
 
 // MergeCommitment is a roothash commitment from a merge worker.

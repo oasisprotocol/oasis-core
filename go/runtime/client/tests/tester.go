@@ -67,7 +67,7 @@ func testQuery(
 
 	// Fetch blocks.
 	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: 1})
-	// Epoch transition from TestNode/ComputeWorker/InitialEpochTransition
+	// Epoch transition from TestNode/ExecutorWorker/InitialEpochTransition
 	require.NoError(t, err, "GetBlock")
 	require.EqualValues(t, 1, blk.Header.Round)
 

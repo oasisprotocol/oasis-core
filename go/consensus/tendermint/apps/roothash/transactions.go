@@ -90,10 +90,10 @@ func (app *rootHashApplication) getRuntimeState(
 	return rtState, sv, nil
 }
 
-func (app *rootHashApplication) computeCommit(
+func (app *rootHashApplication) executorCommit(
 	ctx *abci.Context,
 	state *roothashState.MutableState,
-	cc *roothash.ComputeCommit,
+	cc *roothash.ExecutorCommit,
 ) error {
 	if ctx.IsCheckOnly() {
 		return nil
@@ -120,7 +120,7 @@ func (app *rootHashApplication) computeCommit(
 	pools := make(map[*commitment.Pool]bool)
 	for _, commit := range cc.Commits {
 		var pool *commitment.Pool
-		if pool, err = rtState.Round.AddComputeCommitment(&commit, sv); err != nil {
+		if pool, err = rtState.Round.AddExecutorCommitment(&commit, sv); err != nil {
 			app.logger.Error("failed to add compute commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,
@@ -133,7 +133,7 @@ func (app *rootHashApplication) computeCommit(
 
 	// Try to finalize compute rounds.
 	for pool := range pools {
-		app.tryFinalizeCompute(ctx, rtState, pool, false)
+		app.tryFinalizeExecute(ctx, rtState, pool, false)
 	}
 
 	return nil

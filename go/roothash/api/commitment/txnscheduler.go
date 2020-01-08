@@ -11,16 +11,16 @@ import (
 var TxnSchedulerBatchDispatchSigCtx = signature.NewContext("oasis-core/roothash: tx batch dispatch", signature.WithChainSeparation())
 
 // TxnSchedulerBatchDispatch is the message sent from the transaction
-// scheduler to compute workers after a batch is ready to be computed.
+// scheduler to executor workers after a batch is ready to be executed.
 //
 // Don't forget to bump CommitteeProtocol version in go/common/version
 // if you change anything in this struct.
 type TxnSchedulerBatchDispatch struct {
-	// CommitteeID is the committee ID of the target compute committee.
+	// CommitteeID is the committee ID of the target executor committee.
 	CommitteeID hash.Hash `json:"cid"`
 
 	// IORoot is the I/O root containing the inputs (transactions) that
-	// the compute node should use.
+	// the executor node should use.
 	IORoot hash.Hash `json:"io_root"`
 
 	// StorageSignatures are the storage receipt signatures for the I/O root.

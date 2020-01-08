@@ -159,7 +159,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		ID:         testRuntimeID,
 		Kind:       registry.KindCompute,
 		KeyManager: &testKMRuntime.ID,
-		Compute: registry.ComputeParameters{
+		Executor: registry.ExecutorParameters{
 			GroupSize:    1,
 			RoundTimeout: 1 * time.Second,
 		},
@@ -381,7 +381,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Runtimes = []*registry.SignedRuntime{signedTestKMRuntime, signedTestRuntime, signedTestRuntime}
 	require.Error(d.SanityCheck(), "duplicate runtime IDs should be rejected")
 
-	// TODO: fiddle with compute/merge/txnsched parameters.
+	// TODO: fiddle with executor/merge/txnsched parameters.
 
 	d = *testDoc
 	te = *testEntity

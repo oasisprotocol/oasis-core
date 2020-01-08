@@ -38,7 +38,7 @@ var (
 	DefaultBasicLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
-		oasis.LogAssertNoComputeDiscrepancyDetected(),
+		oasis.LogAssertNoExecutionDiscrepancyDetected(),
 		oasis.LogAssertNoMergeDiscrepancyDetected(),
 	}
 )
@@ -115,7 +115,7 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 				Entity:     0,
 				Keymanager: 0,
 				Binary:     runtimeBinary,
-				Compute: registry.ComputeParameters{
+				Executor: registry.ExecutorParameters{
 					GroupSize:       2,
 					GroupBackupSize: 1,
 					RoundTimeout:    10 * time.Second,

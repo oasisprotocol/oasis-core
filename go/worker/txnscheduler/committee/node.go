@@ -26,7 +26,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/common/host"
 	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
-	computeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/committee"
+	executorCommittee "github.com/oasislabs/oasis-core/go/worker/executor/committee"
 	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm"
 	txnSchedulerAlgorithmApi "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
@@ -58,8 +58,8 @@ type Node struct { // nolint: maligned
 
 	checkTxEnabled bool
 
-	commonNode  *committee.Node
-	computeNode *computeCommittee.Node
+	commonNode   *committee.Node
+	executorNode *executorCommittee.Node
 
 	// The algorithm mutex is here to protect the initialization
 	// of the algorithm variable. After initialization the variable
@@ -231,7 +231,7 @@ func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 
 // IsTransactionQueued checks if the given transaction is present in the
 // transaction scheduler queue and is waiting to be dispatched to a
-// compute committee.
+// executor committee.
 func (n *Node) IsTransactionQueued(ctx context.Context, id hash.Hash) (bool, error) {
 	// Check if we are a leader. Note that we may be in the middle of a
 	// transition, but this shouldn't matter as the client will retry.
@@ -326,7 +326,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 }
 
-// Dispatch dispatches a batch to the compute committee.
+// Dispatch dispatches a batch to the executor committee.
 func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error {
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
@@ -353,7 +353,7 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error
 	batchSpanCtx := batchSpan.Context()
 
 	// Generate the initial I/O root containing only the inputs (outputs and
-	// tags will be added later by the compute nodes).
+	// tags will be added later by the executor nodes).
 	emptyRoot := storage.Root{
 		Namespace: lastHeader.Namespace,
 		Round:     lastHeader.Round + 1,
@@ -431,11 +431,11 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error
 
 	n.transitionLocked(StateWaitingForFinalize{})
 
-	if epoch.IsComputeMember() {
-		if n.computeNode == nil {
-			n.logger.Error("scheduler says we are a compute worker, but we are not")
+	if epoch.IsExecutorMember() {
+		if n.executorNode == nil {
+			n.logger.Error("scheduler says we are a executor worker, but we are not")
 		} else {
-			n.computeNode.HandleBatchFromTransactionSchedulerLocked(
+			n.executorNode.HandleBatchFromTransactionSchedulerLocked(
 				batchSpanCtx,
 				committeeID,
 				ioRoot,
@@ -525,7 +525,7 @@ func (n *Node) worker() {
 
 func NewNode(
 	commonNode *committee.Node,
-	computeNode *computeCommittee.Node,
+	executorNode *executorCommittee.Node,
 	workerHostFactory host.Factory,
 	checkTxEnabled bool,
 ) (*Node, error) {
@@ -539,7 +539,7 @@ func NewNode(
 		RuntimeHostNode:  commonWorker.NewRuntimeHostNode(commonNode, workerHostFactory),
 		checkTxEnabled:   checkTxEnabled,
 		commonNode:       commonNode,
-		computeNode:      computeNode,
+		executorNode:     executorNode,
 		ctx:              ctx,
 		cancelCtx:        cancel,
 		stopCh:           make(chan struct{}),
