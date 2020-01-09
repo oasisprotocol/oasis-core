@@ -1395,6 +1395,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "simple-swdp"
+version = "0.1.0-alpha"
+dependencies = [
+ "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "oasis-core-client 0.3.0-alpha",
+ "oasis-core-keymanager-api 0.3.0-alpha",
+ "oasis-core-keymanager-client 0.3.0-alpha",
+ "oasis-core-runtime 0.3.0-alpha",
+ "oasis-core-tools 0.3.0-alpha",
+ "simple-swdp-api 0.1.0-alpha",
+]
+
+[[package]]
+name = "simple-swdp-api"
+version = "0.1.0-alpha"
+dependencies = [
+ "oasis-core-runtime 0.3.0-alpha",
+ "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

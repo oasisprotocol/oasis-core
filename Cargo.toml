@@ -9,6 +9,7 @@ members = [
 
     # Test runtimes.
     "tests/runtimes/simple-keyvalue",
+    "tests/runtimes/simple-swdp",
     # Test clients.
     "tests/clients/simple-keyvalue",
     "tests/clients/simple-keyvalue-enc",
