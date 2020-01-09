@@ -31,7 +31,7 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 	regSt := doc.Registry
 	rtMap := make(map[common.Namespace]*registry.Runtime)
 	for _, v := range regSt.Runtimes {
-		rt, err := registry.VerifyRegisterRuntimeArgs(app.logger, v, true)
+		rt, err := registry.VerifyRegisterRuntimeArgs(&regSt.Parameters, app.logger, v, true)
 		if err != nil {
 			app.logger.Error("InitChain: Invalid runtime",
 				"err", err,

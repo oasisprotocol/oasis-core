@@ -71,7 +71,7 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 		seed := append([]byte{}, seedBase...)
 		seed = append(seed, byte(i))
 
-		rt, err := registryTests.NewTestRuntime(seed, nil)
+		rt, err := registryTests.NewTestRuntime(seed, nil, false)
 		require.NoError(err, "NewTestRuntime")
 
 		rtStates = append(rtStates, &runtimeState{

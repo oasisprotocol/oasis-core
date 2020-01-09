@@ -28,7 +28,7 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 
 	require := require.New(t)
 
-	rt, err := registryTests.NewTestRuntime(seed, nil)
+	rt, err := registryTests.NewTestRuntime(seed, nil, false)
 	require.NoError(err, "NewTestRuntime")
 
 	// Populate the registry with an entity and nodes.

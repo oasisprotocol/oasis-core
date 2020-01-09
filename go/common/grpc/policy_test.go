@@ -17,7 +17,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 )
@@ -26,7 +25,7 @@ var (
 	_ PingServer = (*pingServer)(nil)
 	_ PingClient = (*pingClient)(nil)
 
-	testNs common.Namespace
+	testNs = common.NewTestNamespaceFromSeed([]byte("oasis common grpc policy test ns"))
 )
 
 func CreateCertificate(t *testing.T) (*tls.Certificate, *x509.Certificate) {
@@ -204,9 +203,10 @@ func TestAccessPolicy(t *testing.T) {
 	client = &pingClient{conn}
 
 	_, err = client.Ping(ctx, &PingQuery{testNs})
+	expectedStr := fmt.Sprintf("rpc error: code = PermissionDenied desc = grpc: calling Ping method for runtime %s not allowed for client CN=oasis-node", testNs)
 	require.EqualError(
 		err,
-		"rpc error: code = PermissionDenied desc = grpc: calling Ping method for runtime 06956b25ae9fabb8295ce6879f0995c7ad02f8b2a1b22cbade17960a70d765ea not allowed for client CN=oasis-node",
+		expectedStr,
 		"Calling Ping with an empty access policy should not be allowed",
 	)
 	require.Equal(codes.PermissionDenied, status.Code(err), "returned gRPC error should be PermissionDenied")
@@ -220,10 +220,4 @@ func TestAccessPolicy(t *testing.T) {
 	res, err := client.Ping(ctx, &PingQuery{testNs})
 	require.NoError(err, "Calling Ping with proper access policy set should succeed")
 	require.IsType(&PingResponse{}, res, "Calling Ping should return a response of the correct type")
-}
-
-func init() {
-	var ns hash.Hash
-	ns.FromBytes([]byte("oasis common grpc policy test ns"))
-	copy(testNs[:], ns[:])
 }

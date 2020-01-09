@@ -5,7 +5,7 @@ extern crate oasis_core_keymanager_client;
 extern crate oasis_core_runtime;
 extern crate simple_keyvalue_api;
 
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use failure::{format_err, Fallible};
 use io_context::Context as IoContext;
@@ -243,9 +243,14 @@ fn main() {
                 txn: &mut TxnDispatcher| {
         with_api! { register_runtime_txn_methods!(txn, api); }
 
+        // HACK: Tests always use this runtime ID.
+        let runtime_id =
+            RuntimeId::from_str("8000000000000000000000000000000000000000000000000000000000000000")
+                .unwrap();
+
         // Create the key manager client.
         let km_client = Arc::new(oasis_core_keymanager_client::RemoteClient::new_runtime(
-            RuntimeId::default(), // HACK: Tests always use the all 0 runtime ID.
+            runtime_id,
             protocol.clone(),
             rak.clone(),
             1024,

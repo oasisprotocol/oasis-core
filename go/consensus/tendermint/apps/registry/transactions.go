@@ -397,7 +397,15 @@ func (app *registryApplication) registerRuntime(
 	state *registryState.MutableState,
 	sigRt *registry.SignedRuntime,
 ) error {
-	rt, err := registry.VerifyRegisterRuntimeArgs(app.logger, sigRt, ctx.IsInitChain())
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		app.logger.Error("RegisterRuntime: failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+
+	rt, err := registry.VerifyRegisterRuntimeArgs(params, app.logger, sigRt, ctx.IsInitChain())
 	if err != nil {
 		return err
 	}
@@ -413,13 +421,6 @@ func (app *registryApplication) registerRuntime(
 	}
 
 	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters()
-	if err != nil {
-		app.logger.Error("RegisterRuntime: failed to fetch consensus parameters",
-			"err", err,
-		)
-		return err
-	}
 	if err = ctx.Gas().UseGas(1, registry.GasOpRegisterRuntime, params.GasCosts); err != nil {
 		return err
 	}

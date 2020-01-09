@@ -30,6 +30,9 @@ import (
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
+// Note: If you are here wanting to alter the genesis document used for
+// the node that is spun up as part of the tests, you really want
+// consensus/tendermint/tests/genesis/genesis.go.
 var testDoc = &genesis.Document{
 	ChainID:   genesisTestHelpers.TestChainID,
 	Time:      time.Unix(1574858284, 0),

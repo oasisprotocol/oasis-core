@@ -54,6 +54,7 @@ const (
 	// Registry config flags.
 	cfgRegistryDebugAllowUnroutableAddresses = "registry.debug.allow_unroutable_addresses"
 	CfgRegistryDebugAllowRuntimeRegistration = "registry.debug.allow_runtime_registration"
+	CfgRegistryDebugAllowTestRuntimes        = "registry.debug.allow_test_runtimes"
 	cfgRegistryDebugBypassStake              = "registry.debug.bypass_stake" // nolint: gosec
 
 	// Scheduler config flags.
@@ -244,6 +245,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 		Parameters: registry.ConsensusParameters{
 			DebugAllowUnroutableAddresses: viper.GetBool(cfgRegistryDebugAllowUnroutableAddresses),
 			DebugAllowRuntimeRegistration: viper.GetBool(CfgRegistryDebugAllowRuntimeRegistration),
+			DebugAllowTestRuntimes:        viper.GetBool(CfgRegistryDebugAllowTestRuntimes),
 			DebugBypassStake:              viper.GetBool(cfgRegistryDebugBypassStake),
 		},
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
@@ -681,9 +683,11 @@ func init() {
 	// Registry config flags.
 	initGenesisFlags.Bool(cfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
 	initGenesisFlags.Bool(CfgRegistryDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
+	initGenesisFlags.Bool(CfgRegistryDebugAllowTestRuntimes, false, "enable test runtime registration")
 	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowUnroutableAddresses)
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowRuntimeRegistration)
+	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowTestRuntimes)
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugBypassStake)
 
 	// Scheduler config flags.

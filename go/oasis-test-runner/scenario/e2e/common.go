@@ -164,6 +164,6 @@ func init() {
 	Flags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")
 	_ = viper.BindPFlags(Flags)
 
-	_ = runtimeID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
-	_ = keymanagerID.UnmarshalHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	_ = runtimeID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
+	_ = keymanagerID.UnmarshalHex("c000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff")
 }

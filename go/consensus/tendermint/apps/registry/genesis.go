@@ -56,7 +56,7 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	// Register runtimes. First key manager and then compute runtime(s).
 	for _, k := range []registry.RuntimeKind{registry.KindKeyManager, registry.KindCompute} {
 		for _, v := range st.Runtimes {
-			rt, err := registry.VerifyRegisterRuntimeArgs(app.logger, v, ctx.IsInitChain())
+			rt, err := registry.VerifyRegisterRuntimeArgs(&st.Parameters, app.logger, v, ctx.IsInitChain())
 			if err != nil {
 				return err
 			}

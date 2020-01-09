@@ -34,7 +34,7 @@ const (
 )
 
 var (
-	testNs common.Namespace
+	testNs = common.NewTestNamespaceFromSeed([]byte("oasis urkel test ns"))
 
 	_ syncer.ReadSyncer = (*dummySerialSyncer)(nil)
 )
@@ -2009,10 +2009,4 @@ func generatePopulatedTree(t *testing.T, ndb db.NodeDB) ([][]byte, [][]byte, nod
 		Hash:      rootHash,
 	}
 	return keys, values, root, tree
-}
-
-func init() {
-	var ns hash.Hash
-	ns.FromBytes([]byte("oasis urkel test ns"))
-	copy(testNs[:], ns[:])
 }

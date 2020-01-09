@@ -852,7 +852,12 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) e
 }
 
 // VerifyRegisterRuntimeArgs verifies arguments for RegisterRuntime.
-func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isGenesis bool) (*Runtime, error) {
+func VerifyRegisterRuntimeArgs(
+	params *ConsensusParameters,
+	logger *logging.Logger,
+	sigRt *SignedRuntime,
+	isGenesis bool,
+) (*Runtime, error) {
 	var rt Runtime
 	if sigRt == nil {
 		return nil, ErrInvalidArgument
@@ -895,11 +900,32 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 			)
 			return nil, ErrInvalidArgument
 		}
+
+		if rt.ID.IsKeyManager() {
+			logger.Error("RegisterRuntime: runtime ID flag mismatch",
+				"kind", rt.Kind,
+				"id", rt.ID,
+			)
+			return nil, ErrInvalidArgument
+		}
 	case KindKeyManager:
 		if rt.KeyManager != nil {
 			return nil, ErrInvalidArgument
 		}
+		if !rt.ID.IsKeyManager() {
+			logger.Error("RegisterRuntime: runtime ID flag mismatch, expected key manager",
+				"kind", rt.Kind,
+				"id", rt.ID,
+			)
+			return nil, ErrInvalidArgument
+		}
 	default:
+		return nil, ErrInvalidArgument
+	}
+	if rt.ID.IsTest() && !params.DebugAllowTestRuntimes {
+		logger.Error("RegisterRuntime: test runtime registration not allowed",
+			"id", rt.ID,
+		)
 		return nil, ErrInvalidArgument
 	}
 
@@ -1005,6 +1031,10 @@ type ConsensusParameters struct {
 	// allowed outside of the genesis block.
 	DebugAllowRuntimeRegistration bool `json:"debug_allow_runtime_registration"`
 
+	// DebugAllowTestRuntimes is true iff test runtimes should be allowed to
+	// be registered.
+	DebugAllowTestRuntimes bool `json:"debug_allow_test_runtimes"`
+
 	// DebugBypassStake is true iff the registry should bypass all of the staking
 	// related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake"`
@@ -1062,7 +1092,16 @@ func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[common.Namespace]*Runti
 			return nil, fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
 		}
 
-		if rt.Kind != KindCompute && rt.Kind != KindKeyManager {
+		switch rt.Kind {
+		case KindCompute:
+			if rt.ID.IsKeyManager() {
+				return nil, fmt.Errorf("registry: sanity check failed: compute runtime ID %s has a key manager runtime ID", rt.ID.String())
+			}
+		case KindKeyManager:
+			if !rt.ID.IsKeyManager() {
+				return nil, fmt.Errorf("registry: sanity check failed: key manager runtime ID %s does not have a key manager runtime ID", rt.ID.String())
+			}
+		default:
 			return nil, fmt.Errorf("registry: sanity check failed: runtime ID %s is of invalid kind", rt.ID.String())
 		}
 
