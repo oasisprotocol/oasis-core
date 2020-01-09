@@ -515,3 +515,41 @@ func mustStore(
 	}
 	return signatures
 }
+
+// MustTransitionEpoch waits till the roothash's view is past the epoch
+// transition for a given epoch.
+func MustTransitionEpoch(
+	t *testing.T,
+	runtimeID common.Namespace,
+	roothash api.Backend,
+	epochtime epochtime.Backend,
+	epoch epochtime.EpochTime,
+) {
+	require := require.New(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+	defer cancel()
+
+	blocksCh, sub, err := roothash.WatchBlocks(runtimeID)
+	require.NoError(err, "WatchBlocks")
+	defer sub.Close()
+
+	// Wait for any block that's in the required epoch.  This is done
+	// instead of specifically waiting for the epoch transition block
+	// on the off chance that we are already past the epoch transition
+	// block being broadcast.
+	for {
+		select {
+		case annBlk := <-blocksCh:
+			blkEpoch, err := epochtime.GetEpoch(ctx, annBlk.Height)
+			require.NoError(err, "GetEpoch")
+			if blkEpoch < epoch {
+				continue
+			}
+
+			return
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive epoch transition block")
+		}
+	}
+}
