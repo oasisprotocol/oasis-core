@@ -43,7 +43,7 @@ Prerequisites:
   ```
   sudo dnf install bubblewrap gcc gcc-c++ protobuf-compiler make cmake openssl-devel libseccomp-devel
   ```
-  On Ubuntu 18.10+, you can install all the above with:
+  On Ubuntu 18.10+ (18.04 LTS provides overly-old `bubblewrap`), you can install all the above with:
   ```
   sudo apt install bubblewrap gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev
   ```
@@ -264,6 +264,14 @@ make test
 
 Do not forget to set `OASIS_TEE_HARDWARE` flag (see above), if you want to
 execute tests under SGX.
+
+### Troubleshooting
+
+Check the console output for mentions of a path of the form `/tmp/oasis-test-runnerXXXXXXXXX` (where each `X` is a digit). That's the log directory. Start with coarsest-level debug output in `console.log` files:
+```
+cat $(find /tmp/oasis-test-runnerXXXXXXXXX -name console.log) | less
+```
+For even more output, check the other `*.log` files.
 
 ## Directories
 
