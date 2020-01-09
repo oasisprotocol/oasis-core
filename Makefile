@@ -95,6 +95,17 @@ clean-go:
 
 clean: $(clean-targets)
 
+# Assemble Change log.
+changelog:
+	@if [[ -z "$(NEXT_VERSION)" ]]; then \
+		echo "Error: Could not compute project's new version."; \
+		exit 1; \
+	else \
+		echo "Generating changelog for version $(NEXT_VERSION)..."; \
+		towncrier build --version $(NEXT_VERSION); \
+		echo "Next, review the staged changes, commit them and make a pull request."; \
+    fi
+
 # Prepare release.
 release:
 	@goreleaser $(GORELEASER_ARGS)
@@ -117,5 +128,5 @@ docker-shell:
 	$(fmt-targets) fmt \
 	$(test-unit-targets) $(test-targets) test \
 	$(clean-targets) clean \
-	release docker-shell \
+	changelog release docker-shell \
 	all

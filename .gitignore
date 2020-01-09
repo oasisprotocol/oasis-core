@@ -6,6 +6,7 @@ target/
 *.so
 **/generated
 /dist/
+/__pycache__/
 
 # IDE.
 .idea/*
