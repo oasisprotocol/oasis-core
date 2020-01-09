@@ -269,7 +269,8 @@ func (n *Node) worker() {
 	defer (n.cancelCtx)()
 
 	// Wait for the runtime.
-	if _, err := n.Runtime.RegistryDescriptor(n.ctx); err != nil {
+	rt, err := n.Runtime.RegistryDescriptor(n.ctx)
+	if err != nil {
 		n.logger.Error("failed to wait for registry descriptor",
 			"err", err,
 		)
@@ -277,6 +278,21 @@ func (n *Node) worker() {
 	}
 
 	n.logger.Info("runtime is registered with the registry")
+
+	// If the runtime requires a key manager, wait for the key manager to actually become available
+	// before processing any requests.
+	if rt.KeyManager != nil {
+		n.logger.Info("runtime indicates a key manager is required, waiting for it to be ready")
+
+		if err = n.KeyManagerClient.WaitReady(n.ctx, rt.ID); err != nil {
+			n.logger.Error("failed to wait for key manager",
+				"err", err,
+			)
+			return
+		}
+
+		n.logger.Info("runtime has a key manager available")
+	}
 
 	// Start watching roothash blocks.
 	blocks, blocksSub, err := n.Roothash.WatchBlocks(n.Runtime.ID())

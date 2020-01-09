@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
@@ -27,15 +28,9 @@ import (
 
 var (
 	// Basic is the basic network + client test case.
-	Basic scenario.Scenario = &basicImpl{
-		name:         "basic",
-		clientBinary: "simple-keyvalue-client",
-	}
+	Basic scenario.Scenario = newBasicImpl("basic", "simple-keyvalue-client", nil)
 	// BasicEncryption is the basic network + client with encryption test case.
-	BasicEncryption scenario.Scenario = &basicImpl{
-		name:         "basic-encryption",
-		clientBinary: "simple-keyvalue-enc-client",
-	}
+	BasicEncryption scenario.Scenario = newBasicImpl("basic-encryption", "simple-keyvalue-enc-client", nil)
 
 	// DefaultBasicLogWatcherHandlerFactories is a list of default log watcher
 	// handler factories for the basic scenario.
@@ -47,12 +42,23 @@ var (
 	}
 )
 
+func newBasicImpl(name, clientBinary string, clientArgs []string) *basicImpl {
+	return &basicImpl{
+		name:         name,
+		clientBinary: clientBinary,
+		clientArgs:   clientArgs,
+		logger:       logging.GetLogger("scenario/e2e/" + name),
+	}
+}
+
 type basicImpl struct {
 	net *oasis.Network
 
 	name         string
 	clientBinary string
 	clientArgs   []string
+
+	logger *logging.Logger
 }
 
 func (sc *basicImpl) Name() string {
@@ -276,5 +282,89 @@ func (sc *basicImpl) submitRuntimeTx(ctx context.Context, key, value string) err
 	if rsp.Error != nil {
 		return fmt.Errorf("runtime tx failed: %s", *rsp.Error)
 	}
+	return nil
+}
+
+func (sc *basicImpl) waitNodesSynced() error {
+	ctx := context.Background()
+
+	checkSynced := func(n *oasis.Node) error {
+		c, err := oasis.NewController(n.SocketPath())
+		if err != nil {
+			return fmt.Errorf("failed to create node controller: %w", err)
+		}
+		defer c.Close()
+
+		if err = c.WaitSync(ctx); err != nil {
+			return fmt.Errorf("failed to wait for node to sync: %w", err)
+		}
+		return nil
+	}
+
+	sc.logger.Info("waiting for all nodes to be synced")
+
+	for _, n := range sc.net.Validators() {
+		if err := checkSynced(&n.Node); err != nil {
+			return err
+		}
+	}
+	for _, n := range sc.net.StorageWorkers() {
+		if err := checkSynced(&n.Node); err != nil {
+			return err
+		}
+	}
+	for _, n := range sc.net.ComputeWorkers() {
+		if err := checkSynced(&n.Node); err != nil {
+			return err
+		}
+	}
+	for _, n := range sc.net.Clients() {
+		if err := checkSynced(&n.Node); err != nil {
+			return err
+		}
+	}
+
+	sc.logger.Info("nodes synced")
+	return nil
+}
+
+func (sc *basicImpl) initialEpochTransitions() error {
+	ctx := context.Background()
+
+	if sc.net.Keymanager() != nil {
+		// First wait for validator and key manager nodes to register. Then
+		// perform an epoch transition which will cause the compute nodes to
+		// register.
+		numNodes := len(sc.net.Validators()) + len(sc.net.StorageWorkers()) + 1
+		sc.logger.Info("waiting for (some) nodes to register",
+			"num_nodes", numNodes,
+		)
+
+		if err := sc.net.Controller().WaitNodesRegistered(ctx, numNodes); err != nil {
+			return fmt.Errorf("failed to wait for nodes: %w", err)
+		}
+
+		sc.logger.Info("triggering epoch transition")
+		if err := sc.net.Controller().SetEpoch(ctx, 1); err != nil {
+			return fmt.Errorf("failed to set epoch: %w", err)
+		}
+		sc.logger.Info("epoch transition done")
+	}
+
+	// Wait for all nodes to register.
+	sc.logger.Info("waiting for (all) nodes to register",
+		"num_nodes", sc.net.NumRegisterNodes(),
+	)
+
+	if err := sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
+		return fmt.Errorf("failed to wait for nodes: %w", err)
+	}
+
+	// Then perform another epoch transition to elect the committees.
+	sc.logger.Info("triggering epoch transition")
+	if err := sc.net.Controller().SetEpoch(ctx, 2); err != nil {
+		return fmt.Errorf("failed to set epoch: %w", err)
+	}
+	sc.logger.Info("epoch transition done")
 	return nil
 }

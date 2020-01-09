@@ -21,6 +21,13 @@ type Controller struct {
 	Staking       staking.Backend
 	Registry      registry.Backend
 	RuntimeClient runtimeClient.RuntimeClient
+
+	conn *grpc.ClientConn
+}
+
+// Close closes the gRPC connection with the node the controller is controlling.
+func (c *Controller) Close() {
+	c.conn.Close()
 }
 
 // NewController creates a new node controller given the path to
@@ -42,5 +49,7 @@ func NewController(socketPath string) (*Controller, error) {
 		Staking:         staking.NewStakingClient(conn),
 		Registry:        registry.NewRegistryClient(conn),
 		RuntimeClient:   runtimeClient.NewRuntimeClient(conn),
+
+		conn: conn,
 	}, nil
 }

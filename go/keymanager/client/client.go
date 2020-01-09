@@ -25,6 +25,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -36,7 +37,10 @@ const (
 	maxRetries    = 15
 )
 
+// ErrKeyManagerNotAvailable is the error when a key manager is not available.
 var ErrKeyManagerNotAvailable = errors.New("keymanager/client: key manager not available")
+
+// TODO: Consider making the key manager client per-runtime instead of it tracking all runtimes.
 
 // Client is a key manager client instance.
 type Client struct {
@@ -52,7 +56,7 @@ type Client struct {
 	state map[common.Namespace]*clientState
 	kmMap map[common.Namespace]common.Namespace
 
-	debugClient enclaverpc.Transport
+	readyNotifier *pubsub.Broker
 }
 
 type clientState struct {
@@ -73,16 +77,42 @@ func (st *clientState) kill() {
 	}
 }
 
+// WaitReady waits for the key manager for the specific runtime to become ready.
+func (c *Client) WaitReady(ctx context.Context, runtimeID common.Namespace) error {
+	sub := func() *pubsub.Subscription {
+		c.RLock()
+		defer c.RUnlock()
+
+		if kmID, ok := c.kmMap[runtimeID]; ok && c.state[kmID] != nil {
+			return nil
+		}
+
+		return c.readyNotifier.Subscribe()
+	}()
+	if sub == nil {
+		return nil
+	}
+	defer sub.Close()
+
+	typedCh := make(chan common.Namespace)
+	sub.Unwrap(typedCh)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case rtID := <-typedCh:
+			if !rtID.Equal(&runtimeID) {
+				continue
+			}
+
+			return nil
+		}
+	}
+}
+
 // CallRemote calls a runtime-specific key manager via remote EnclaveRPC.
 func (c *Client) CallRemote(ctx context.Context, runtimeID common.Namespace, data []byte) ([]byte, error) {
-	if c.debugClient != nil {
-		return c.debugClient.CallEnclave(ctx, &enclaverpc.CallEnclaveRequest{
-			RuntimeID: runtimeID,
-			Endpoint:  api.EnclaveRPCEndpoint,
-			Payload:   data,
-		})
-	}
-
 	c.logger.Debug("remote query",
 		"id", runtimeID,
 		"data", base64.StdEncoding.EncodeToString(data),
@@ -185,6 +215,11 @@ func (c *Client) updateRuntime(rt *registry.Runtime) {
 	case registry.KindCompute:
 		if rt.KeyManager != nil {
 			c.kmMap[rt.ID] = *rt.KeyManager
+
+			// Notify subscribers if a key manager is now available.
+			if st := c.state[*rt.KeyManager]; st != nil {
+				c.readyNotifier.Broadcast(rt.ID)
+			}
 		}
 		c.logger.Debug("set new runtime key manager",
 			"id", rt.ID,
@@ -294,6 +329,12 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 		client:            enclaverpc.NewTransportClient(conn),
 		resolverCleanupFn: cleanupFn,
 	}
+
+	for k, v := range c.kmMap {
+		if v.Equal(&status.ID) {
+			c.readyNotifier.Broadcast(k)
+		}
+	}
 }
 
 func (c *Client) updateNodes(nodeList []*node.Node) {
@@ -315,16 +356,14 @@ func (c *Client) updateNodes(nodeList []*node.Node) {
 // New creates a new key manager client instance.
 func New(backend api.Backend, registryBackend registry.Backend, nodeIdentity *identity.Identity) (*Client, error) {
 	c := &Client{
-		logger:       logging.GetLogger("keymanager/client"),
-		nodeIdentity: nodeIdentity,
-		state:        make(map[common.Namespace]*clientState),
-		kmMap:        make(map[common.Namespace]common.Namespace),
+		logger:        logging.GetLogger("keymanager/client"),
+		nodeIdentity:  nodeIdentity,
+		state:         make(map[common.Namespace]*clientState),
+		kmMap:         make(map[common.Namespace]common.Namespace),
+		backend:       backend,
+		registry:      registryBackend,
+		readyNotifier: pubsub.NewBroker(false),
 	}
-
-	// Standard configuration watches the various backends.
-	c.backend = backend
-	c.registry = registryBackend
-
 	go c.worker()
 
 	return c, nil

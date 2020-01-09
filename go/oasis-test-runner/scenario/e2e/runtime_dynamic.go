@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
@@ -25,22 +24,12 @@ type runtimeDynamicImpl struct {
 	basicImpl
 
 	epoch epochtime.EpochTime
-
-	logger *logging.Logger
 }
 
 func newRuntimeDynamicImpl() scenario.Scenario {
-	sc := &runtimeDynamicImpl{
-		basicImpl: basicImpl{
-			clientBinary: "", // We use a Go client.
-		},
-		logger: logging.GetLogger("scenario/e2e/runtime_dynamic"),
+	return &runtimeDynamicImpl{
+		basicImpl: *newBasicImpl("runtime-dynamic", "", nil),
 	}
-	return sc
-}
-
-func (sc *runtimeDynamicImpl) Name() string {
-	return "runtime-dynamic"
 }
 
 func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
@@ -97,10 +86,21 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	cli := cli.New(childEnv, sc.net, sc.logger)
 
-	sc.logger.Info("waiting for validator nodes to register",
-		"num_validator_nodes", len(sc.net.Validators()),
+	// Wait for all nodes to be synced before we proceed.
+	if err := sc.waitNodesSynced(); err != nil {
+		return err
+	}
+
+	// NOTE: We also wait for storage workers as they can currently register even before the
+	//       runtime is registered in the registry. If this changes, node count needs update.
+	numNodes := len(sc.net.Validators()) + len(sc.net.StorageWorkers())
+	if sc.net.Keymanager() != nil {
+		numNodes++
+	}
+	sc.logger.Info("waiting for (some) nodes to register",
+		"num_nodes", numNodes,
 	)
-	if err := sc.net.Controller().WaitNodesRegistered(ctx, len(sc.net.Validators())); err != nil {
+	if err := sc.net.Controller().WaitNodesRegistered(ctx, numNodes); err != nil {
 		return err
 	}
 

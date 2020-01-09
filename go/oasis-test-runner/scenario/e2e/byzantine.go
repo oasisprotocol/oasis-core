@@ -1,10 +1,6 @@
 package e2e
 
 import (
-	"context"
-	"fmt"
-
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
@@ -13,7 +9,7 @@ import (
 
 // TODO: Consider referencing script names directly from the Byzantine node.
 
-const byzantineDefaultIdentitySeed = "ekiden byzantine node worker"
+const byzantineDefaultIdentitySeed = "ekiden byzantine node worker, luck=1"
 
 var (
 	// ByzantineComputeHonest is the byzantine compute honest scenario.
@@ -57,26 +53,19 @@ type byzantineImpl struct {
 	script                     string
 	identitySeed               string
 	logWatcherHandlerFactories []log.WatcherHandlerFactory
-
-	logger *logging.Logger
 }
 
 func newByzantineImpl(script string, logWatcherHandlerFactories []log.WatcherHandlerFactory) scenario.Scenario {
-	sc := &byzantineImpl{
-		basicImpl: basicImpl{
-			clientBinary: "simple-keyvalue-ops-client",
-			clientArgs:   []string{"set", "hello_key", "hello_value"},
-		},
+	return &byzantineImpl{
+		basicImpl: *newBasicImpl(
+			"byzantine/"+script,
+			"simple-keyvalue-ops-client",
+			[]string{"set", "hello_key", "hello_value"},
+		),
 		script:                     script,
 		identitySeed:               byzantineDefaultIdentitySeed,
 		logWatcherHandlerFactories: logWatcherHandlerFactories,
-		logger:                     logging.GetLogger("scenario/e2e/byzantine/" + script),
 	}
-	return sc
-}
-
-func (sc *byzantineImpl) Name() string {
-	return "byzantine/" + sc.script
 }
 
 func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
@@ -97,9 +86,10 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Provision a Byzantine node.
 	f.ByzantineNodes = []oasis.ByzantineFixture{
 		oasis.ByzantineFixture{
-			Script:       sc.script,
-			IdentitySeed: sc.identitySeed,
-			Entity:       1,
+			Script:          sc.script,
+			IdentitySeed:    sc.identitySeed,
+			Entity:          1,
+			ActivationEpoch: 1,
 		},
 	}
 	return f, nil
@@ -111,23 +101,9 @@ func (sc *byzantineImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// Wait for the nodes to register and then perform an epoch transition
-	// as the byzantine node cannot handle intermediate epochs in which it
-	// is not elected.
-	sc.logger.Info("waiting for nodes to register",
-		"num_nodes", sc.net.NumRegisterNodes(),
-	)
-
-	ctx := context.Background()
-	if err = sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
-		return fmt.Errorf("failed to wait for nodes: %w", err)
+	if err = sc.initialEpochTransitions(); err != nil {
+		return err
 	}
-
-	sc.logger.Info("triggering epoch transition")
-	if err = sc.net.Controller().SetEpoch(ctx, 1); err != nil {
-		return fmt.Errorf("failed to set epoch: %w", err)
-	}
-	sc.logger.Info("epoch transition done")
 
 	return sc.wait(childEnv, cmd, clientErrCh)
 }

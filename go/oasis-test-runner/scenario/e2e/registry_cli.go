@@ -17,7 +17,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
@@ -35,19 +34,12 @@ import (
 var (
 	// RegistryCLI is the staking scenario.
 	RegistryCLI scenario.Scenario = &registryCLIImpl{
-		basicImpl: basicImpl{},
-		logger:    logging.GetLogger("scenario/e2e/registry"),
+		basicImpl: *newBasicImpl("registry-cli", "", nil),
 	}
 )
 
 type registryCLIImpl struct {
 	basicImpl
-
-	logger *logging.Logger
-}
-
-func (r *registryCLIImpl) Name() string {
-	return "registry-cli"
 }
 
 func (r *registryCLIImpl) Fixture() (*oasis.NetworkFixture, error) {

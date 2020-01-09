@@ -3,7 +3,6 @@ package e2e
 import (
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -18,22 +17,12 @@ var (
 
 type storageSyncImpl struct {
 	basicImpl
-
-	logger *logging.Logger
 }
 
 func newStorageSyncImpl() scenario.Scenario {
-	sc := &storageSyncImpl{
-		basicImpl: basicImpl{
-			clientBinary: "simple-keyvalue-client",
-		},
-		logger: logging.GetLogger("scenario/e2e/storage_sync"),
+	return &storageSyncImpl{
+		basicImpl: *newBasicImpl("storage-sync", "simple-keyvalue-client", nil),
 	}
-	return sc
-}
-
-func (sc *storageSyncImpl) Name() string {
-	return "storage-sync"
 }
 
 func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {

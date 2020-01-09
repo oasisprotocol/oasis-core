@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
@@ -57,19 +56,12 @@ const (
 var (
 	// StakeCLI is the staking scenario.
 	StakeCLI scenario.Scenario = &stakeCLIImpl{
-		basicImpl: basicImpl{},
-		logger:    logging.GetLogger("scenario/e2e/stake"),
+		basicImpl: *newBasicImpl("stake-cli", "", nil),
 	}
 )
 
 type stakeCLIImpl struct {
 	basicImpl
-
-	logger *logging.Logger
-}
-
-func (s *stakeCLIImpl) Name() string {
-	return "stake-cli"
 }
 
 func (s *stakeCLIImpl) Fixture() (*oasis.NetworkFixture, error) {

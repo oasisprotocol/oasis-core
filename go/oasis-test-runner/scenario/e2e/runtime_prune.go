@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
@@ -30,22 +29,12 @@ const (
 
 type runtimePruneImpl struct {
 	basicImpl
-
-	logger *logging.Logger
 }
 
 func newRuntimePruneImpl() scenario.Scenario {
-	sc := &runtimePruneImpl{
-		basicImpl: basicImpl{
-			clientBinary: "", // We use a Go client.
-		},
-		logger: logging.GetLogger("scenario/e2e/runtime_prune"),
+	return &runtimePruneImpl{
+		basicImpl: *newBasicImpl("runtime-prune", "", nil),
 	}
-	return sc
-}
-
-func (sc *runtimePruneImpl) Name() string {
-	return "runtime-prune"
 }
 
 func (sc *runtimePruneImpl) Fixture() (*oasis.NetworkFixture, error) {
@@ -71,21 +60,11 @@ func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	ctx := context.Background()
-
-	sc.logger.Info("waiting for nodes to register",
-		"num_nodes", sc.net.NumRegisterNodes(),
-	)
-	if err := sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
+	if err := sc.initialEpochTransitions(); err != nil {
 		return err
 	}
 
-	sc.logger.Info("triggering epoch transition")
-	if err := sc.net.Controller().SetEpoch(ctx, 1); err != nil {
-		return fmt.Errorf("failed to set epoch: %w", err)
-	}
-	sc.logger.Info("epoch transition done")
-
+	ctx := context.Background()
 	c := sc.net.ClientController().RuntimeClient
 
 	// Submit transactions.

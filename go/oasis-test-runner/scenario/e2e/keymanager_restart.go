@@ -3,7 +3,6 @@ package e2e
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
@@ -16,23 +15,16 @@ var (
 
 type kmRestartImpl struct {
 	basicImpl
-
-	logger *logging.Logger
 }
 
 func newKmRestartImpl() scenario.Scenario {
-	sc := &kmRestartImpl{
-		basicImpl: basicImpl{
-			clientBinary: "simple-keyvalue-enc-client",
-			clientArgs:   []string{"--key", "key1"},
-		},
-		logger: logging.GetLogger("scenario/e2e/keymanager_restart"),
+	return &kmRestartImpl{
+		basicImpl: *newBasicImpl(
+			"keymanager-restart",
+			"simple-keyvalue-enc-client",
+			[]string{"--key", "key1"},
+		),
 	}
-	return sc
-}
-
-func (sc *kmRestartImpl) Name() string {
-	return "keymanager-restart"
 }
 
 func (sc *kmRestartImpl) Fixture() (*oasis.NetworkFixture, error) {

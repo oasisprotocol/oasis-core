@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -19,14 +18,11 @@ var (
 
 type nodeShutdownImpl struct {
 	basicImpl
-
-	logger *logging.Logger
 }
 
 func newNodeShutdownImpl() scenario.Scenario {
 	sc := &nodeShutdownImpl{
-		basicImpl: basicImpl{},
-		logger:    logging.GetLogger("scenario/e2e/node_shutdown"),
+		basicImpl: *newBasicImpl("node-shutdown", "", nil),
 	}
 	return sc
 }
