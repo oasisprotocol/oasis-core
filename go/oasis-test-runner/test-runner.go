@@ -39,6 +39,8 @@ func main() {
 	_ = cmd.Register(e2e.DumpRestore)
 	// Halt test.
 	_ = cmd.Register(e2e.HaltRestore)
+	// Multiple runtimes test.
+	_ = cmd.Register(e2e.MultipleRuntimes)
 	// Registry CLI test.
 	_ = cmd.Register(e2e.RegistryCLI)
 	// Stake CLI test.

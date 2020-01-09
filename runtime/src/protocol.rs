@@ -15,7 +15,7 @@ use io_context::Context;
 use slog::Logger;
 
 use crate::{
-    common::{cbor, logger::get_logger, version::Version},
+    common::{cbor, logger::get_logger, runtime::RuntimeId, version::Version},
     dispatcher::Dispatcher,
     rak::RAK,
     storage::KeyValue,
@@ -43,6 +43,8 @@ pub enum ProtocolError {
     #[fail(display = "attestation required")]
     #[allow(unused)]
     AttestationRequired,
+    #[fail(display = "runtime id not set")]
+    RuntimeIDNotSet,
 }
 
 /// Worker part of the worker-host protocol.
@@ -62,6 +64,8 @@ pub struct Protocol {
     last_request_id: AtomicUsize,
     /// Pending outgoing requests.
     pending_out_requests: Mutex<HashMap<u64, channel::Sender<Body>>>,
+    /// Runtime identifier.
+    runtime_id: Mutex<Option<RuntimeId>>,
     /// Runtime version.
     runtime_version: Version,
 }
@@ -84,12 +88,25 @@ impl Protocol {
             stream,
             last_request_id: AtomicUsize::new(0),
             pending_out_requests: Mutex::new(HashMap::new()),
+            runtime_id: Mutex::new(None),
             runtime_version: runtime_version,
         }
     }
 
+    /// Return the runtime identifier for this worker.
+    ///
+    /// # Panics
+    ///
+    /// Panics, if the runtime identifier is not set.
+    pub fn get_runtime_id(self: &Protocol) -> RuntimeId {
+        self.runtime_id
+            .lock()
+            .unwrap()
+            .expect("runtime_id should be set")
+    }
+
     /// Start the protocol handler loop.
-    pub fn start(&self) {
+    pub fn start(self: &Arc<Protocol>) {
         info!(self.logger, "Starting protocol handler");
         let mut reader = BufReader::new(&self.stream);
 
@@ -171,7 +188,7 @@ impl Protocol {
         Ok(())
     }
 
-    fn handle_message<R: Read>(&self, reader: R) -> Fallible<()> {
+    fn handle_message<R: Read>(self: &Arc<Protocol>, reader: R) -> Fallible<()> {
         let message = self.decode_message(reader)?;
 
         match message.message_type {
@@ -225,12 +242,24 @@ impl Protocol {
         Ok(())
     }
 
-    fn handle_request(&self, ctx: Context, id: u64, request: Body) -> Fallible<Option<Body>> {
+    fn handle_request(
+        self: &Arc<Protocol>,
+        ctx: Context,
+        id: u64,
+        request: Body,
+    ) -> Fallible<Option<Body>> {
         match request {
-            Body::WorkerInfoRequest {} => Ok(Some(Body::WorkerInfoResponse {
-                protocol_version: BUILD_INFO.protocol_version.into(),
-                runtime_version: self.runtime_version.into(),
-            })),
+            Body::WorkerInfoRequest { runtime_id } => {
+                // Store the passed Runtime ID.
+                *self.runtime_id.lock().unwrap() = Some(runtime_id);
+
+                self.dispatcher.start(self.clone());
+
+                Ok(Some(Body::WorkerInfoResponse {
+                    protocol_version: BUILD_INFO.protocol_version.into(),
+                    runtime_version: self.runtime_version.into(),
+                }))
+            }
             Body::WorkerPingRequest {} => Ok(Some(Body::Empty {})),
             Body::WorkerShutdownRequest {} => {
                 info!(self.logger, "Received worker shutdown request");
@@ -301,6 +330,10 @@ impl Protocol {
     }
 
     fn can_handle_runtime_requests(&self) -> Fallible<()> {
+        if self.runtime_id.lock().unwrap().is_none() {
+            return Err(ProtocolError::RuntimeIDNotSet.into());
+        }
+
         #[cfg(target_env = "sgx")]
         {
             if self.rak.avr().is_none() {

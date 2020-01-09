@@ -5,7 +5,7 @@ extern crate oasis_core_keymanager_client;
 extern crate oasis_core_runtime;
 extern crate simple_keyvalue_api;
 
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use failure::{format_err, Fallible};
 use io_context::Context as IoContext;
@@ -30,7 +30,15 @@ use oasis_core_runtime::{
 use simple_keyvalue_api::{with_api, KeyValue};
 
 struct Context {
+    test_runtime_id: RuntimeId,
     km_client: Arc<dyn KeyManagerClient>,
+}
+
+/// Return previously set runtime ID of this runtime.
+fn get_runtime_id(_args: &(), ctx: &mut TxnContext) -> Fallible<Option<String>> {
+    let rctx = runtime_context!(ctx, Context);
+
+    Ok(Some(rctx.test_runtime_id.to_string()))
 }
 
 /// Insert a key/value pair.
@@ -243,14 +251,10 @@ fn main() {
                 txn: &mut TxnDispatcher| {
         with_api! { register_runtime_txn_methods!(txn, api); }
 
-        // HACK: Tests always use this runtime ID.
-        let runtime_id =
-            RuntimeId::from_str("8000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap();
-
         // Create the key manager client.
+        let rt_id = protocol.get_runtime_id();
         let km_client = Arc::new(oasis_core_keymanager_client::RemoteClient::new_runtime(
-            runtime_id,
+            rt_id,
             protocol.clone(),
             rak.clone(),
             1024,
@@ -258,6 +262,7 @@ fn main() {
 
         txn.set_context_initializer(move |ctx: &mut TxnContext| {
             ctx.runtime = Box::new(Context {
+                test_runtime_id: rt_id.clone(),
                 km_client: km_client.clone(),
             })
         });

@@ -29,7 +29,7 @@ var (
 	_ prettyprint.PrettyPrinter = (*SignedRuntime)(nil)
 )
 
-// RuntimeKind represents the runtime funtionality.
+// RuntimeKind represents the runtime functionality.
 type RuntimeKind uint32
 
 const (

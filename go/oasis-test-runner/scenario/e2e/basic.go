@@ -8,12 +8,13 @@ import (
 
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdNode "github.com/oasislabs/oasis-core/go/oasis-node/cmd/node"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
@@ -185,7 +186,7 @@ func (sc *basicImpl) cleanTendermintStorage(childEnv *env.Env) error {
 	doClean := func(dataDir string, cleanArgs []string) error {
 		args := append([]string{
 			"unsafe-reset",
-			"--" + common.CfgDataDir, dataDir,
+			"--" + cmdCommon.CfgDataDir, dataDir,
 		}, cleanArgs...)
 
 		return cli.RunSubCommand(childEnv, logger, "unsafe-reset", sc.net.Config().NodeBinary, args)
@@ -255,13 +256,13 @@ func (sc *basicImpl) Run(childEnv *env.Env) error {
 	return sc.wait(childEnv, cmd, clientErrCh)
 }
 
-func (sc *basicImpl) submitRuntimeTx(ctx context.Context, key, value string) error {
+func (sc *basicImpl) submitRuntimeTx(ctx context.Context, id common.Namespace, key, value string) error {
 	c := sc.net.ClientController().RuntimeClient
 
 	// Submit a transaction and check the result.
 	var rsp runtimeTransaction.TxnOutput
 	rawRsp, err := c.SubmitTx(ctx, &runtimeClient.SubmitTxRequest{
-		RuntimeID: runtimeID,
+		RuntimeID: id,
 		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
 			Method: "insert",
 			Args: struct {
@@ -330,7 +331,6 @@ func (sc *basicImpl) waitNodesSynced() error {
 
 func (sc *basicImpl) initialEpochTransitions() error {
 	ctx := context.Background()
-
 	if sc.net.Keymanager() != nil {
 		// First wait for validator and key manager nodes to register. Then
 		// perform an epoch transition which will cause the compute nodes to

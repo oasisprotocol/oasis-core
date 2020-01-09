@@ -208,7 +208,10 @@ func testCheckTxRequest(t *testing.T, host Host) {
 
 	select {
 	case rsp := <-rspCh:
+		require.Nil(t, rsp.Error, "worker should not return error", "err", rsp.Error)
+
 		require.NotNil(t, rsp, "worker channel should not be closed while waiting for response")
+		require.NotNil(t, rsp.WorkerCheckTxBatchResponse, "WorkerCheckTxBatchResponse instance should be returned")
 		require.NotNil(t, rsp.WorkerCheckTxBatchResponse.Results, "worker should respond to check tx call")
 		require.Len(t, rsp.WorkerCheckTxBatchResponse.Results, 3, "worker should return a check tx call result for each txn")
 

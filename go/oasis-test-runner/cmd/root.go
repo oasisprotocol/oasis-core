@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -289,6 +290,12 @@ func runList(cmd *cobra.Command, args []string) {
 		fmt.Printf("No supported test cases!\n")
 	default:
 		fmt.Printf("Supported test cases:\n")
+
+		// Sort scenarios alphabetically before printing.
+		sort.Slice(scenarios, func(i, j int) bool {
+			return scenarios[i].Name() < scenarios[j].Name()
+		})
+
 		for _, v := range scenarios {
 			fmt.Printf("  * %v\n", v.Name())
 		}

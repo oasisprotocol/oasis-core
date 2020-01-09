@@ -9,6 +9,9 @@ pub struct KeyValue {
 }
 
 runtime_api! {
+    //  Gets runtime ID of the runtime.
+    pub fn get_runtime_id(()) -> Option<String>;
+
     // Inserts key and corresponding value and returns old value, if any.
     // Both parameters are passed using a single serializable struct KeyValue.
     pub fn insert(KeyValue) -> Option<String>;
