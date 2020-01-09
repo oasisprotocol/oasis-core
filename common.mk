@@ -32,6 +32,26 @@ ifeq ($(and $(LATEST_TAG),$(IS_TAG)),NO)
 endif
 export VERSION
 
+# Try to compute the next version based on the current version using the Punch
+# tool.
+# NOTE: This is a little messy because Punch doesn't support the following at
+# the moment:
+#   - Passing current version as an CLI parameter.
+#   - Outputting the new version to stdout without making modifications to any
+#     files.
+_PUNCH_VERSION_FILE := $(shell mktemp /tmp/oasis-core.XXXXX.py)
+# NOTE: The "OUTPUT = $(eval OUTPUT := $$(shell some-comand))$(OUTPUT)" syntax
+# defers simple variable expansion so that it is only computed the first time it
+# is used. For more details, see:
+# http://make.mad-scientist.net/deferred-simple-variable-expansion/.
+NEXT_VERSION ?= $(eval NEXT_VERSION := $$(shell \
+	echo "Fetching all tags from the default remote..." 1>&2 && \
+	git fetch --tags && \
+	python3 -c "print('year=\"{}\"\nminor={}'.format(*'$(LATEST_TAG)'.lstrip('v').split('.')))" > $(_PUNCH_VERSION_FILE) 2>/dev/null && \
+	punch --config-file .punch_config.py --version-file $(_PUNCH_VERSION_FILE) --action custom_bump --quiet 2>/dev/null && \
+	python3 -c "exec(open('$(_PUNCH_VERSION_FILE)').read()); print('{}.{}'.format(year, minor))" \
+	))$(NEXT_VERSION)
+
 # Go binary to use for all Go commands.
 OASIS_GO ?= go
 
