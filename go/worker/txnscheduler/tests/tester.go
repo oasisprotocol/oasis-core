@@ -14,6 +14,7 @@ import (
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	roothashTests "github.com/oasislabs/oasis-core/go/roothash/tests"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
@@ -45,7 +46,7 @@ func WorkerImplementationTests(
 
 	// Run the various test cases. (Ordering matters.)
 	t.Run("InitialEpochTransition", func(t *testing.T) {
-		testInitialEpochTransition(t, stateCh, epochtime)
+		testInitialEpochTransition(t, runtimeID, stateCh, epochtime, roothash)
 	})
 
 	t.Run("QueueCall", func(t *testing.T) {
@@ -55,9 +56,19 @@ func WorkerImplementationTests(
 	// TODO: Add more tests.
 }
 
-func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, epochtime epochtime.SetableBackend) {
+func testInitialEpochTransition(
+	t *testing.T,
+	runtimeID common.Namespace,
+	stateCh <-chan committee.NodeState,
+	epochtime epochtime.SetableBackend,
+	roothash roothash.Backend,
+) {
 	// Perform an epoch transition, so that the node gets elected leader.
-	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+
+	// Ensure that the epoch transition block for the runtime ID we are
+	// are using has been received by the roothash backend.
+	roothashTests.MustTransitionEpoch(t, runtimeID, roothash, epochtime, epoch)
 
 	// Node should transition to WaitingForBatch state.
 	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)
@@ -99,11 +110,6 @@ blockLoop:
 		select {
 		case annBlk := <-blocksCh:
 			blk := annBlk.Block
-			// Epoch transitions can happen????
-			if blk.Header.HeaderType == block.EpochTransition {
-				t.Logf("Got epoch transition block, skipping")
-				continue
-			}
 
 			// Check that correct block was generated.
 			require.EqualValues(t, block.Normal, blk.Header.HeaderType)
