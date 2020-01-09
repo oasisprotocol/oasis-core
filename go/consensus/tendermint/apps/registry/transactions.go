@@ -402,6 +402,12 @@ func (app *registryApplication) registerRuntime(
 		return err
 	}
 
+	if rt.Kind == registry.KindCompute {
+		if err = registry.VerifyRegisterComputeRuntimeArgs(app.logger, rt, state); err != nil {
+			return err
+		}
+	}
+
 	if ctx.IsCheckOnly() {
 		return nil
 	}

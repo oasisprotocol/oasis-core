@@ -49,7 +49,7 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 	for _, v := range st.Statuses {
 		rt := rtMap[v.ID]
 		if rt == nil {
-			app.logger.Error("InitChain: State for unknown runtime",
+			app.logger.Error("InitChain: State for unknown key manager runtime",
 				"id", v.ID,
 			)
 			continue

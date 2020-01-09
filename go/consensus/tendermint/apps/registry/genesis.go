@@ -53,16 +53,26 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 			return errors.Wrap(err, "registry: genesis entity registration failure")
 		}
 	}
-	for _, v := range st.Runtimes {
-		app.logger.Debug("InitChain: Registering genesis runtime",
-			"runtime_owner", v.Signature.PublicKey,
-		)
-		if err := app.registerRuntime(ctx, state, v); err != nil {
-			app.logger.Error("InitChain: failed to register runtime",
-				"err", err,
-				"runtime", v,
+	// Register runtimes. First key manager and then compute runtime(s).
+	for _, k := range []registry.RuntimeKind{registry.KindKeyManager, registry.KindCompute} {
+		for _, v := range st.Runtimes {
+			rt, err := registry.VerifyRegisterRuntimeArgs(app.logger, v, ctx.IsInitChain())
+			if err != nil {
+				return err
+			}
+			if rt.Kind != k {
+				continue
+			}
+			app.logger.Debug("InitChain: Registering genesis runtime",
+				"runtime_owner", v.Signature.PublicKey,
 			)
-			return errors.Wrap(err, "registry: genesis runtime registration failure")
+			if err := app.registerRuntime(ctx, state, v); err != nil {
+				app.logger.Error("InitChain: failed to register runtime",
+					"err", err,
+					"runtime", v,
+				)
+				return errors.Wrap(err, "registry: genesis runtime registration failure")
+			}
 		}
 	}
 	for _, v := range st.Nodes {

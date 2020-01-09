@@ -442,40 +442,66 @@ func testRegistryEntityNodes( // nolint: gocyclo
 }
 
 func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) common.Namespace {
-	seed := []byte("testRegistryRuntime")
-
 	require := require.New(t)
 
 	existingRuntimes, err := backend.GetRuntimes(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetRuntimes")
 
-	entities, err := NewTestEntities(seed, 1)
+	entities, err := NewTestEntities([]byte("testRegistryEntity"), 1)
 	require.NoError(err, "NewTestEntities()")
 
 	entity := entities[0]
 	err = entity.Register(consensus)
 	require.NoError(err, "RegisterEntity")
 
-	rt, err := NewTestRuntime(seed, entity)
+	// Runtime without key manager set.
+	rtMap := make(map[common.Namespace]*api.Runtime)
+	rt, err := NewTestRuntime([]byte("testRegistryRuntime"), entity)
 	require.NoError(err, "NewTestRuntime")
+	rtMap[rt.Runtime.ID] = rt.Runtime
 
 	rt.MustRegister(t, backend, consensus)
+
+	// Register key manager runtime.
+	km, err := NewTestRuntime([]byte("testRegistryKM"), entity)
+	km.Runtime.Kind = api.KindKeyManager
+	require.NoError(err, "NewTestKm")
+	km.MustRegister(t, backend, consensus)
+	rtMap[km.Runtime.ID] = km.Runtime
+
+	// Runtime with key manager set.
+	rtKm, err := NewTestRuntime([]byte("testRegistryRuntimeWithKM"), entity)
+	require.NoError(err, "NewTestRuntimeWithKM")
+	rtKm.Runtime.KeyManager = &km.Runtime.ID
+	rtKm.MustRegister(t, backend, consensus)
+	rtMap[rtKm.Runtime.ID] = rtKm.Runtime
 
 	registeredRuntimes, err := backend.GetRuntimes(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetRuntimes")
 	// NOTE: There can be two runtimes registered here instead of one because the worker
 	//       tests that run before this register their own runtime and this runtime
 	//       cannot be deregistered.
-	require.Len(registeredRuntimes, len(existingRuntimes)+1, "registry has one new runtime")
-	rtFound := false
+	require.Len(registeredRuntimes, len(existingRuntimes)+3, "registry has three new runtimes")
 	for _, regRuntime := range registeredRuntimes {
-		if regRuntime.ID.Equal(&rt.Runtime.ID) {
-			rtFound = true
-			require.EqualValues(rt.Runtime, regRuntime, "expected runtime is registered")
-			break
+		if rtMap[regRuntime.ID] != nil {
+			require.EqualValues(rtMap[regRuntime.ID], regRuntime, "expected runtime is registered")
+			delete(rtMap, regRuntime.ID)
 		}
 	}
-	require.Equal(true, rtFound, "newly registered runtime not found")
+	require.Len(rtMap, 0, "all runtimes were registered")
+
+	// Test runtime registration failures.
+	// Non-existent key manager.
+	rtWrongKm, err := NewTestRuntime([]byte("testRegistryRuntimeWithWrongKM"), entity)
+	require.NoError(err, "NewTestRuntimeWithWrongKM")
+	// Set Key manager ID to some wrong value.
+	rtWrongKm.Runtime.KeyManager = &common.Namespace{0xab}
+
+	rtWrongKm.MustNotRegister(t, backend, consensus)
+
+	registeredRuntimesAfterFailures, err := backend.GetRuntimes(context.Background(), consensusAPI.HeightLatest)
+	require.NoError(err, "GetRuntimes")
+	require.Len(registeredRuntimesAfterFailures, len(registeredRuntimes), "wrong runtimes not registered")
 
 	// Subscribe to entity deregistration event.
 	ch, sub, err := backend.WatchEntities(context.Background())
@@ -491,8 +517,6 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	case <-time.After(recvTimeout):
 		t.Fatalf("Failed to receive entity deregistration event")
 	}
-
-	// TODO: Test the various failures.
 
 	// No way to de-register the runtime, so it will be left there.
 
@@ -898,6 +922,18 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 	}
 }
 
+// MustNotRegister attempts to register the TestRuntime with the provided registry and expects failure.
+func (rt *TestRuntime) MustNotRegister(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+	require := require.New(t)
+
+	signed, err := signature.SignSigned(rt.Signer, api.RegisterRuntimeSignatureContext, rt.Runtime)
+	require.NoError(err, "signed runtime descriptor")
+
+	tx := api.NewRegisterRuntimeTx(0, nil, &api.SignedRuntime{Signed: *signed})
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, rt.Signer, tx)
+	require.Error(err, "RegisterRuntime failure")
+}
+
 // Populate populates the registry for a given TestRuntime.
 func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, seed []byte) []*node.Node {
 	require := require.New(t)
@@ -1066,12 +1102,6 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 			MaxBatchSizeBytes: 1000,
 		},
 		Storage: api.StorageParameters{GroupSize: 3},
-		Genesis: api.RuntimeGenesis{
-			StorageReceipts: []signature.Signature{{
-				// We don't want an invalid public key so we pass something.
-				PublicKey: rt.Signer.Public(),
-			}},
-		},
 	}
 	if entity != nil {
 		rt.Signer = entity.Signer

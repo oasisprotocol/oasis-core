@@ -281,6 +281,14 @@ type NodeLookup interface {
 	NodeByCertificate(cert []byte) (*node.Node, error)
 }
 
+// RuntimeLookup interface implements various ways for the verification
+// functions to look-up runtimes in the registry's state.
+type RuntimeLookup interface {
+	// Runtime looks up a runtime by its identifier.
+	// It returns either the runtime with given id or error.
+	Runtime(id common.Namespace) (*Runtime, error)
+}
+
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
 func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis bool) (*entity.Entity, error) {
 	var ent entity.Entity
@@ -928,6 +936,34 @@ func VerifyRegisterRuntimeArgs(logger *logging.Logger, sigRt *SignedRuntime, isG
 	}
 
 	return &rt, nil
+}
+
+// VerifyRegisterComputeRuntimeArgs verifies compute runtime-specific arguments for RegisterRuntime.
+func VerifyRegisterComputeRuntimeArgs(logger *logging.Logger, rt *Runtime, runtimeLookup RuntimeLookup) error {
+	// Check runtime's key manager, if key manager ID is set.
+	if rt.KeyManager != nil {
+		km, err := runtimeLookup.Runtime(*rt.KeyManager)
+		if err != nil {
+			logger.Error("RegisterRuntime: error when fetching the runtime's key manager from registry",
+				"runtime", rt.ID,
+				"key_manager", rt.KeyManager,
+			)
+			return err
+		}
+
+		// Key manager runtime should be valid.
+		if km.Kind != KindKeyManager {
+			logger.Error("RegisterRuntime: provided key manager runtime is not key manager",
+				"runtime", rt.ID,
+				"key_manager", rt.KeyManager,
+				"expected_kind", KindKeyManager,
+				"actual_kind", km.Kind,
+			)
+			return ErrInvalidArgument
+		}
+	}
+
+	return nil
 }
 
 // SortNodeList sorts the given node list to ensure a canonical order.
