@@ -52,7 +52,7 @@ fmt:
 # Lint.
 lint:
 	@$(ECHO) "$(CYAN)*** Running Go linters...$(OFF)"
-	@env -u GOPATH golangci-lint run
+	@env -u GOPATH golangci-lint run --deadline 2m
 
 # Test.
 test:
