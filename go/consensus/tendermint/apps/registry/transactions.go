@@ -185,6 +185,26 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		return registry.ErrIncorrectTxSigner
 	}
 
+	// Check runtime's whitelist.
+	for _, nrt := range newNode.Runtimes {
+		var rt *registry.Runtime
+		rt, err = state.Runtime(nrt.ID)
+		if err != nil {
+			app.logger.Error("RegisterNode: failed to load runtime",
+				"err", err,
+				"runtime", nrt.ID,
+			)
+			return err
+		}
+		if rt.AdmissionPolicy.EntityWhitelist != nil && !rt.AdmissionPolicy.EntityWhitelist.Entities[newNode.EntityID] {
+			ctx.Logger().Error("RegisterNode: node's entity not in a runtime's whitelist",
+				"entity", newNode.EntityID,
+				"runtime", nrt.ID,
+			)
+			return registry.ErrForbidden
+		}
+	}
+
 	// Re-check that the entity has at sufficient stake to still be an entity.
 	var (
 		stakeCache     *stakingState.StakeCache
