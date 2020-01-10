@@ -13,6 +13,7 @@
 #![feature(test)]
 #![feature(box_into_pin)]
 #![feature(pin_into_inner)]
+#![feature(arbitrary_self_types)]
 
 #[macro_use]
 extern crate slog;

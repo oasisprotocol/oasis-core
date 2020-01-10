@@ -73,10 +73,10 @@ impl Protocol {
         rak: Arc<RAK>,
         dispatcher: Arc<Dispatcher>,
         runtime_version: Version,
-    ) -> Self {
+    ) -> Arc<Self> {
         let logger = get_logger("runtime/protocol");
 
-        Self {
+        Arc::new(Self {
             logger,
             rak,
             dispatcher,
@@ -85,11 +85,11 @@ impl Protocol {
             last_request_id: AtomicUsize::new(0),
             pending_out_requests: Mutex::new(HashMap::new()),
             runtime_version: runtime_version,
-        }
+        })
     }
 
     /// Start the protocol handler loop.
-    pub fn start(&self) {
+    pub fn start(self: &Arc<Self>) {
         info!(self.logger, "Starting protocol handler");
         let mut reader = BufReader::new(&self.stream);
 
@@ -171,7 +171,7 @@ impl Protocol {
         Ok(())
     }
 
-    fn handle_message<R: Read>(&self, reader: R) -> Fallible<()> {
+    fn handle_message<R: Read>(self: &Arc<Self>, reader: R) -> Fallible<()> {
         let message = self.decode_message(reader)?;
 
         match message.message_type {
@@ -225,7 +225,12 @@ impl Protocol {
         Ok(())
     }
 
-    fn handle_request(&self, ctx: Context, id: u64, request: Body) -> Fallible<Option<Body>> {
+    fn handle_request(
+        self: &Arc<Self>,
+        ctx: Context,
+        id: u64,
+        request: Body,
+    ) -> Fallible<Option<Body>> {
         match request {
             Body::WorkerInfoRequest {} => Ok(Some(Body::WorkerInfoResponse {
                 protocol_version: BUILD_INFO.protocol_version.into(),
@@ -241,10 +246,11 @@ impl Protocol {
                 Err(ProtocolError::MethodNotSupported.into())
             }
             #[cfg(target_env = "sgx")]
-            Body::WorkerCapabilityTEERakInitRequest { target_info } => {
-                info!(self.logger, "Initializing the runtime attestation key");
-                self.rak.init_rak(target_info)?;
-                Ok(Some(Body::WorkerCapabilityTEERakInitResponse {}))
+            req @ Body::WorkerCapabilityTEERakInitRequest { .. } => {
+                // Queue via dispatcher as we need to call the host to access untrusted
+                // local storage which is not possible while we are handling a request.
+                self.dispatcher.queue_request(ctx, id, req)?;
+                Ok(None)
             }
             #[cfg(target_env = "sgx")]
             Body::WorkerCapabilityTEERakReportRequest {} => {

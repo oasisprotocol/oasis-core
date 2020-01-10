@@ -2,14 +2,24 @@
 use std::sync::{Arc, RwLock};
 
 use failure::Fallible;
+#[cfg(target_env = "sgx")]
+use sgx_isa::Keypolicy;
 use sgx_isa::Targetinfo;
+#[cfg(target_env = "sgx")]
+use zeroize::Zeroize;
 
-#[cfg_attr(not(target_env = "sgx"), allow(unused))]
-use crate::common::crypto::hash::Hash;
 use crate::common::{
     crypto::signature::{PrivateKey, PublicKey, Signature, Signer},
     sgx::avr,
     time::insecure_posix_time,
+};
+#[cfg_attr(not(target_env = "sgx"), allow(unused))]
+use crate::{
+    common::{
+        crypto::hash::Hash,
+        sgx::seal::{seal, unseal},
+    },
+    storage::KeyValue,
 };
 
 #[cfg(target_env = "sgx")]
@@ -22,6 +32,10 @@ use sgx_isa::Report;
 /// Context used for computing the RAK digest.
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
 const RAK_HASH_CONTEXT: &'static [u8] = b"oasis-core/node: TEE RAK binding";
+#[cfg_attr(not(target_env = "sgx"), allow(unused))]
+const RAK_STORAGE_KEY: &'static [u8] = b"rak";
+#[cfg_attr(not(target_env = "sgx"), allow(unused))]
+const RAK_SEAL_CONTEXT: &'static [u8] = b"Oasis Core Runtime Seal RAK v0";
 
 /// RAK-related error.
 #[derive(Debug, Fail)]
@@ -123,7 +137,11 @@ impl RAK {
 
     /// Initialize the RAK.
     #[cfg(target_env = "sgx")]
-    pub(crate) fn init_rak(&self, target_info: Vec<u8>) -> Fallible<()> {
+    pub(crate) fn init_rak(
+        &self,
+        target_info: Vec<u8>,
+        untrusted_local: &dyn KeyValue,
+    ) -> Fallible<()> {
         let mut inner = self.inner.write().unwrap();
 
         // Set the Quoting Enclave target_info first, as unlike key generation
@@ -136,7 +154,27 @@ impl RAK {
 
         // Generate the ephemeral RAK iff one is not set.
         if inner.private_key.is_none() {
-            inner.private_key = Some(PrivateKey::generate())
+            let ciphertext = untrusted_local
+                .get(RAK_STORAGE_KEY.to_vec())
+                .expect("RAK load must succeed");
+
+            let private_key = unseal(Keypolicy::MRENCLAVE, &RAK_SEAL_CONTEXT, &ciphertext)
+                .map(|plaintext| PrivateKey::from_bytes(plaintext))
+                .or_else(|| {
+                    // No key exists in untrusted local storage, generate new one.
+                    let private_key = PrivateKey::generate();
+                    // Seal and store the key to untrusted storage.
+                    let mut plaintext = private_key.to_bytes();
+                    let ciphertext = seal(Keypolicy::MRENCLAVE, &RAK_SEAL_CONTEXT, &plaintext);
+                    plaintext.zeroize();
+                    untrusted_local
+                        .insert(RAK_STORAGE_KEY.to_vec(), ciphertext)
+                        .expect("RAK save must succeed");
+
+                    Some(private_key)
+                });
+
+            inner.private_key = private_key;
         }
 
         Ok(())

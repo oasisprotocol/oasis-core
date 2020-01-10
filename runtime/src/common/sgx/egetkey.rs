@@ -61,7 +61,7 @@ fn egetkey_impl(key_policy: Keypolicy, context: &[u8]) -> [u8; 16] {
 
 /// egetkey returns a 256 bit key suitable for sealing secrets to the
 /// enclave in cold storage, derived from the results of the `EGETKEY`
-/// instruction.  The `context` field a domain separation tag.
+/// instruction.  The `context` field is a domain separation tag.
 ///
 /// Note: The key can also be used for other things (eg: as an X25519
 /// private key).

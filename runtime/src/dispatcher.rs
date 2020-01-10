@@ -171,6 +171,20 @@ impl Dispatcher {
 
         'dispatch: loop {
             match rx.recv() {
+                #[cfg(target_env = "sgx")]
+                Ok((ctx, id, Body::WorkerCapabilityTEERakInitRequest { target_info })) => {
+                    // Initialize the runtime attestation key.
+                    info!(self.logger, "Initializing the runtime attestation key");
+                    let untrusted_local = ProtocolUntrustedLocalStorage::new(ctx, protocol.clone());
+                    let rsp = match self.rak.init_rak(target_info, &untrusted_local) {
+                        Ok(()) => Body::WorkerCapabilityTEERakInitResponse {},
+                        Err(error) => Body::Error {
+                            message: format!("{}", error),
+                        },
+                    };
+
+                    protocol.send_response(id, rsp).unwrap();
+                }
                 Ok((
                     ctx,
                     id,

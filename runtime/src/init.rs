@@ -50,12 +50,7 @@ pub fn start_runtime(initializer: Option<Box<dyn Initializer>>, version: Version
 
     // Start handling protocol messages. This blocks the main thread forever
     // (or until we get a shutdown request).
-    let protocol = Arc::new(Protocol::new(
-        stream,
-        rak.clone(),
-        dispatcher.clone(),
-        version,
-    ));
+    let protocol = Protocol::new(stream, rak.clone(), dispatcher.clone(), version);
     dispatcher.start(protocol.clone());
     protocol.start();
 

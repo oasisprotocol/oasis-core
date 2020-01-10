@@ -6,6 +6,7 @@ use ed25519_dalek;
 use failure::Fallible;
 use rand::rngs::OsRng;
 use serde_derive::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 use super::hash::Hash;
 
@@ -38,6 +39,27 @@ impl PrivateKey {
         let mut rng = OsRng::new().unwrap();
 
         PrivateKey(ed25519_dalek::Keypair::generate(&mut rng))
+    }
+
+    /// Convert this private key into bytes.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = self.0.secret.to_bytes();
+        let bvec = (&bytes).to_vec();
+        bytes.zeroize();
+        bvec
+    }
+
+    /// Construct a private key from bytes returned by `to_bytes`.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic in case the passed bytes do not have the correct length.
+    pub fn from_bytes(mut bytes: Vec<u8>) -> PrivateKey {
+        let secret = ed25519_dalek::SecretKey::from_bytes(&bytes).unwrap();
+        bytes.zeroize();
+        let public = (&secret).into();
+
+        PrivateKey(ed25519_dalek::Keypair { secret, public })
     }
 
     /// Generate a new private key from a test key seed.
@@ -192,5 +214,25 @@ mod tests {
             0x8d, 0x93, 0x39, 0xd4, 0xee, 0xf6, 0x76, 0x57, 0x33, 0x36, 0xa5, 0xc5, 0x1e, 0xb6,
             0xf9, 0x46, 0xb3, 0x1d,
         ]))
+    }
+
+    #[test]
+    fn test_private_key_to_bytes() {
+        let secret = PrivateKey::generate();
+        let bytes = secret.to_bytes();
+        let from_bytes = PrivateKey::from_bytes(bytes);
+        assert_eq!(secret.public_key(), from_bytes.public_key());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_private_key_to_bytes_malformed_a() {
+        PrivateKey::from_bytes(vec![]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_private_key_to_bytes_malformed_b() {
+        PrivateKey::from_bytes(vec![1, 2, 3]);
     }
 }
