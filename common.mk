@@ -32,8 +32,13 @@ ifeq ($(and $(LATEST_TAG),$(IS_TAG)),NO)
 endif
 export VERSION
 
-# Try to compute the next version based on the current version using the Punch
-# tool.
+# Try to compute the next version based on the latest tag of the origin remote
+# using the Punch tool.
+# First, all tags from the origin remote are fetched. Next, the latest tag on
+# the origin/master branch is determined. It represents Oasis Core's current
+# version. Lastly, the Punch tool is used to bump the version according to the
+# configurated versioning scheme in .punch_config.py.
+#
 # NOTE: This is a little messy because Punch doesn't support the following at
 # the moment:
 #   - Passing current version as an CLI parameter.
@@ -45,10 +50,13 @@ _PUNCH_VERSION_FILE := $(shell mktemp /tmp/oasis-core.XXXXX.py)
 # is used. For more details, see:
 # http://make.mad-scientist.net/deferred-simple-variable-expansion/.
 NEXT_VERSION ?= $(eval NEXT_VERSION := $$(shell \
-	echo "Fetching all tags from the default remote..." 1>&2 && \
-	git fetch --tags && \
-	python3 -c "print('year=\"{}\"\nminor={}'.format(*'$(LATEST_TAG)'.lstrip('v').split('.')))" > $(_PUNCH_VERSION_FILE) 2>/dev/null && \
-	punch --config-file .punch_config.py --version-file $(_PUNCH_VERSION_FILE) --action custom_bump --quiet 2>/dev/null && \
+	set -e; \
+	echo "Fetching all tags from the origin remote..." 1>&2; \
+	git fetch origin --tags; \
+	LATEST_TAG_ORIGIN=`git describe --tags --match 'v*' --abbrev=0 origin/master` \
+	python3 -c "import os; year, minor = os.environ['LATEST_TAG_ORIGIN'].lstrip('v').split('.'); \
+		print(f'year=\"{year}\"\nminor={minor}')" > $(_PUNCH_VERSION_FILE); \
+	punch --config-file .punch_config.py --version-file $(_PUNCH_VERSION_FILE) --action custom_bump --quiet; \
 	python3 -c "exec(open('$(_PUNCH_VERSION_FILE)').read()); print('{}.{}'.format(year, minor))" \
 	))$(NEXT_VERSION)
 
