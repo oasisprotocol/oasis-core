@@ -7,3 +7,4 @@ extern crate oasis_core_runtime;
 mod api;
 
 pub use api::WorkerInfo;
+pub use api::JobSubmission;

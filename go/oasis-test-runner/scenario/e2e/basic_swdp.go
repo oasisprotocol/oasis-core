@@ -100,10 +100,5 @@ func (sc *basicSwdpImpl) Run(childEnv *env.Env) error {
 
 	sc.logger.Info("Transaction successful", "return value", rsp.Success)
 
-	// Wait for changes to propagate (???)
-	// XXX: How do I wait for a TX to complete? Do I need to?
-	sc.logger.Info("sleeping 30s just in case")
-	time.Sleep(30 * time.Second)
-
 	return nil
 }

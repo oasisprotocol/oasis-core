@@ -15,8 +15,10 @@ oasis-core-client = { path = "../../../client" }
 oasis-core-keymanager-client = { path = "../../../keymanager-client" }
 oasis-core-keymanager-api = { path = "../../../keymanager-runtime/api" }
 simple-swdp-api = { path = "./api" }
+bincode = "1.0.0"
 failure = "0.1.5"
 io-context = "0.2.0"
+serde = "1.0.0"
 
 [build-dependencies]
 oasis-core-tools = { path = "../../../tools" }

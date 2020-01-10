@@ -1398,6 +1398,7 @@ dependencies = [
 name = "simple-swdp"
 version = "0.1.0-alpha"
 dependencies = [
+ "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-client 0.3.0-alpha",
@@ -1405,6 +1406,7 @@ dependencies = [
  "oasis-core-keymanager-client 0.3.0-alpha",
  "oasis-core-runtime 0.3.0-alpha",
  "oasis-core-tools 0.3.0-alpha",
+ "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
  "simple-swdp-api 0.1.0-alpha",
 ]
 
