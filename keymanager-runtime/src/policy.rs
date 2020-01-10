@@ -6,18 +6,18 @@ use std::{
 
 use failure::Fallible;
 use lazy_static::lazy_static;
-use rand::{rngs::OsRng, Rng};
 use sgx_isa::Keypolicy;
 use tiny_keccak::sha3_256;
-use zeroize::Zeroize;
 
 use oasis_core_keymanager_api::*;
 use oasis_core_runtime::{
     common::{
         cbor,
-        crypto::mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
         runtime::RuntimeId,
-        sgx::{avr::EnclaveIdentity, egetkey::egetkey},
+        sgx::{
+            avr::EnclaveIdentity,
+            seal::{seal, unseal},
+        },
     },
     rpc::Context as RpcContext,
     runtime_context,
@@ -175,51 +175,20 @@ impl Policy {
         })
         .unwrap();
 
-        let ct_len = ciphertext.len();
-        if ct_len == 0 {
-            return None;
-        } else if ct_len < TAG_SIZE + NONCE_SIZE {
-            panic!("persisted state is corrupted, invalid size");
-        }
-        let ct_len = ct_len - NONCE_SIZE;
-
-        // Split the ciphertext || tag || nonce.
-        let mut nonce = [0u8; NONCE_SIZE];
-        nonce.copy_from_slice(&ciphertext[ct_len..]);
-        let ciphertext = &ciphertext[..ct_len];
-
-        let d2 = Self::new_d2();
-        let plaintext = d2
-            .open(&nonce, ciphertext.to_vec(), vec![])
-            .expect("persisted state is corrupted");
-
-        // Deserialization failures are fatal, because it is state corruption.
-        Some(CachedPolicy::parse(&plaintext).expect("failed to deserialize persisted policy"))
+        unseal(Keypolicy::MRENCLAVE, &POLICY_SEAL_CONTEXT, &ciphertext).map(|plaintext| {
+            // Deserialization failures are fatal, because it is state corruption.
+            CachedPolicy::parse(&plaintext).expect("failed to deserialize persisted policy")
+        })
     }
 
     fn save_raw_policy(raw_policy: &Vec<u8>) {
-        let mut rng = OsRng::new().unwrap();
-
-        // Encrypt the raw policy.
-        let mut nonce = [0u8; NONCE_SIZE];
-        rng.fill(&mut nonce);
-        let d2 = Self::new_d2();
-        let mut ciphertext = d2.seal(&nonce, raw_policy.to_vec(), vec![]);
-        ciphertext.extend_from_slice(&nonce);
+        let ciphertext = seal(Keypolicy::MRENCLAVE, &POLICY_SEAL_CONTEXT, &raw_policy);
 
         // Persist the encrypted master secret.
         StorageContext::with_current(|_mkvs, untrusted_local| {
             untrusted_local.insert(POLICY_STORAGE_KEY.to_vec(), ciphertext)
         })
         .expect("failed to persist master secret");
-    }
-
-    fn new_d2() -> DeoxysII {
-        let mut seal_key = egetkey(Keypolicy::MRENCLAVE, &POLICY_SEAL_CONTEXT);
-        let d2 = DeoxysII::new(&seal_key);
-        seal_key.zeroize();
-
-        d2
     }
 }
 
