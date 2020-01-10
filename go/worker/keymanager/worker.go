@@ -432,7 +432,6 @@ func (w *Worker) worker() {
 	// are using us as a key manager.
 	clientRuntimes := make(map[common.Namespace]*clientRuntimeWatcher)
 	clientRuntimesQuitCh := make(chan *clientRuntimeWatcher)
-	defer close(clientRuntimesQuitCh)
 	rtCh, rtSub, err := w.commonWorker.Registry.WatchRuntimes(w.ctx)
 	if err != nil {
 		w.logger.Error("failed to watch runtimes",
