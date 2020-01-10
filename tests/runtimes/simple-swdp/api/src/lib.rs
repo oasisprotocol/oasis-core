@@ -6,4 +6,4 @@ extern crate oasis_core_runtime;
 #[macro_use]
 mod api;
 
-pub use api::KeyValue;
+pub use api::WorkerInfo;

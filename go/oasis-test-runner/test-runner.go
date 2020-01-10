@@ -21,6 +21,8 @@ func main() {
 	// Basic test.
 	_ = cmd.Register(e2e.Basic)
 	_ = cmd.Register(e2e.BasicEncryption)
+	// Basic test of the SWDP-hosting runtime.
+	_ = cmd.Register(e2e.BasicSwdp)
 	// Byzantine compute node.
 	_ = cmd.Register(e2e.ByzantineComputeHonest)
 	_ = cmd.Register(e2e.ByzantineComputeWrong)
