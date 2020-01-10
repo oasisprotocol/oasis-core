@@ -260,8 +260,20 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 			}
 			kmID = &tmpKmID
 		}
+		if id.IsKeyManager() {
+			logger.Error("runtime ID has the key manager flag set",
+				"id", id,
+			)
+			return nil, nil, fmt.Errorf("invalid runtime flags")
+		}
 	case registry.KindKeyManager:
 		// Key managers don't have their own key manager.
+		if !id.IsKeyManager() {
+			logger.Error("runtime ID does not have the key manager flag set",
+				"id", id,
+			)
+			return nil, nil, fmt.Errorf("invalid runtime flags")
+		}
 	}
 
 	// TODO: Support root upload when registering.

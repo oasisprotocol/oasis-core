@@ -251,7 +251,7 @@ func (s *Worker) initGenesis(gen *genesis.Document) error {
 		emptyRoot.Empty()
 
 		for _, sigRt := range gen.Registry.Runtimes {
-			rt, err := registry.VerifyRegisterRuntimeArgs(s.logger, sigRt, true)
+			rt, err := registry.VerifyRegisterRuntimeArgs(&gen.Registry.Parameters, s.logger, sigRt, true)
 			if err != nil {
 				return err
 			}

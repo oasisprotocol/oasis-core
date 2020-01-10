@@ -36,7 +36,7 @@ func ClientWorkerTests(
 	seed := []byte("StorageClientTests")
 
 	// Populate registry.
-	rt, err := registryTests.NewTestRuntime(seed, nil)
+	rt, err := registryTests.NewTestRuntime(seed, nil, false)
 	require.NoError(err, "NewTestRuntime")
 	// Populate the registry with an entity and nodes.
 	nodes := rt.Populate(t, consensus.Registry(), consensus, seed)

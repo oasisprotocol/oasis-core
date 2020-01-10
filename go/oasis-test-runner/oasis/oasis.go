@@ -616,6 +616,7 @@ func (net *Network) makeGenesis() error {
 		"--epochtime.tendermint.interval", strconv.FormatInt(net.cfg.EpochtimeTendermintInterval, 10),
 		"--consensus.tendermint.timeout_commit", net.cfg.ConsensusTimeoutCommit.String(),
 		"--registry.debug.allow_unroutable_addresses", "true",
+		"--" + genesis.CfgRegistryDebugAllowTestRuntimes, "true",
 		"--scheduler.max_validators_per_entity", strconv.Itoa(len(net.Validators())),
 	}
 	if net.cfg.EpochtimeMock {

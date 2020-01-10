@@ -3,7 +3,6 @@ package storage
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"time"
@@ -11,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
@@ -82,17 +80,8 @@ var (
 
 // ValidateRuntimeIDStr validates that the given string is a valid runtime id.
 func ValidateRuntimeIDStr(idStr string) error {
-	b, err := hex.DecodeString(idStr)
-	if err != nil {
-		return err
-	}
-
-	var id signature.PublicKey
-	if err = id.UnmarshalBinary(b); err != nil {
-		return err
-	}
-
-	return nil
+	var ns common.Namespace
+	return ns.UnmarshalHex(idStr)
 }
 
 func checkDiff(ctx context.Context, storageClient storageAPI.Backend, root string, oldRoot node.Root, newRoot node.Root) {
@@ -208,9 +197,13 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 	)
 
 	// Go through every block up to latestBlock and try getting write logs for each of them.
-	oldStateRoot := node.Root{}
+	oldStateRoot := node.Root{
+		Namespace: id,
+	}
 	oldStateRoot.Hash.Empty()
-	emptyRoot := node.Root{}
+	emptyRoot := node.Root{
+		Namespace: id,
+	}
 	emptyRoot.Hash.Empty()
 	for i := uint64(0); i <= latestBlock.Header.Round; i++ {
 		var blk *block.Block
@@ -224,8 +217,9 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 		}
 
 		stateRoot := node.Root{
-			Round: i,
-			Hash:  blk.Header.StateRoot,
+			Namespace: id,
+			Round:     i,
+			Hash:      blk.Header.StateRoot,
 		}
 		if !oldStateRoot.Hash.Equal(&stateRoot.Hash) {
 			checkDiff(ctx, storageClient, "state", oldStateRoot, stateRoot)
@@ -234,8 +228,9 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 
 		emptyRoot.Round = i
 		ioRoot := node.Root{
-			Round: i,
-			Hash:  blk.Header.IORoot,
+			Namespace: id,
+			Round:     i,
+			Hash:      blk.Header.IORoot,
 		}
 		if !ioRoot.Hash.IsEmpty() {
 			checkDiff(ctx, storageClient, "io", emptyRoot, ioRoot)

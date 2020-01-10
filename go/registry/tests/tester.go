@@ -456,21 +456,21 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 
 	// Runtime without key manager set.
 	rtMap := make(map[common.Namespace]*api.Runtime)
-	rt, err := NewTestRuntime([]byte("testRegistryRuntime"), entity)
+	rt, err := NewTestRuntime([]byte("testRegistryRuntime"), entity, false)
 	require.NoError(err, "NewTestRuntime")
 	rtMap[rt.Runtime.ID] = rt.Runtime
 
 	rt.MustRegister(t, backend, consensus)
 
 	// Register key manager runtime.
-	km, err := NewTestRuntime([]byte("testRegistryKM"), entity)
+	km, err := NewTestRuntime([]byte("testRegistryKM"), entity, true)
 	km.Runtime.Kind = api.KindKeyManager
 	require.NoError(err, "NewTestKm")
 	km.MustRegister(t, backend, consensus)
 	rtMap[km.Runtime.ID] = km.Runtime
 
 	// Runtime with key manager set.
-	rtKm, err := NewTestRuntime([]byte("testRegistryRuntimeWithKM"), entity)
+	rtKm, err := NewTestRuntime([]byte("testRegistryRuntimeWithKM"), entity, false)
 	require.NoError(err, "NewTestRuntimeWithKM")
 	rtKm.Runtime.KeyManager = &km.Runtime.ID
 	rtKm.MustRegister(t, backend, consensus)
@@ -492,7 +492,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 
 	// Test runtime registration failures.
 	// Non-existent key manager.
-	rtWrongKm, err := NewTestRuntime([]byte("testRegistryRuntimeWithWrongKM"), entity)
+	rtWrongKm, err := NewTestRuntime([]byte("testRegistryRuntimeWithWrongKM"), entity, false)
 	require.NoError(err, "NewTestRuntimeWithWrongKM")
 	// Set Key manager ID to some wrong value.
 	rtWrongKm.Runtime.KeyManager = &common.Namespace{0xab}
@@ -726,7 +726,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 
 		// Add a registration with invalid runtimes.
 		invalid8 := *nod.Node
-		invalid8.Runtimes = []*node.Runtime{&node.Runtime{ID: publicKeyToNamespace(ent.Signer.Public())}}
+		invalid8.Runtimes = []*node.Runtime{&node.Runtime{ID: publicKeyToNamespace(ent.Signer.Public(), false)}}
 
 		nod.SignedInvalidRegistration8, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, &invalid8)
 		if err != nil {
@@ -817,7 +817,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node
 		// Add invalid Re-Registration with changed Runtimes field.
 		testRuntimeSigner := memorySigner.NewTestSigner("invalid-registration-runtime-seed")
 		newRuntimes := append([]*node.Runtime(nil), thisNodeRuntimes...)
-		newRuntimes = append(newRuntimes, &node.Runtime{ID: publicKeyToNamespace(testRuntimeSigner.Public())})
+		newRuntimes = append(newRuntimes, &node.Runtime{ID: publicKeyToNamespace(testRuntimeSigner.Public(), false)})
 		newNode := &node.Node{
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
@@ -1069,7 +1069,7 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus cons
 
 // NewTestRuntime returns a pre-generated TestRuntime for use with various
 // tests, generated deterministically from the seed.
-func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
+func NewTestRuntime(seed []byte, entity *TestEntity, isKeyManager bool) (*TestRuntime, error) {
 	rng, err := drbg.New(crypto.SHA512, hashForDrbg(seed), nil, []byte("TestRuntime"))
 	if err != nil {
 		return nil, err
@@ -1081,7 +1081,7 @@ func NewTestRuntime(seed []byte, entity *TestEntity) (*TestRuntime, error) {
 	}
 
 	rt.Runtime = &api.Runtime{
-		ID: publicKeyToNamespace(rt.Signer.Public()),
+		ID: publicKeyToNamespace(rt.Signer.Public(), isKeyManager),
 		Compute: api.ComputeParameters{
 			GroupSize:         3,
 			GroupBackupSize:   5,
@@ -1119,10 +1119,16 @@ func hashForDrbg(seed []byte) []byte {
 	return h.Sum(nil)
 }
 
-func publicKeyToNamespace(pk signature.PublicKey) common.Namespace {
+func publicKeyToNamespace(pk signature.PublicKey, isKeyManager bool) common.Namespace {
+	flags := common.NamespaceTest
+	if isKeyManager {
+		flags = flags | common.NamespaceKeyManager
+	}
+
 	// For testing purposes only, since this is sort of convenient.
-	var ns common.Namespace
-	_ = ns.UnmarshalBinary(pk[:])
+	var rtID [common.NamespaceIDSize]byte
+	copy(rtID[:], pk[:])
+	ns, _ := common.NewNamespace(rtID, flags)
 
 	return ns
 }

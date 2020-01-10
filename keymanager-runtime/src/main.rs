@@ -69,7 +69,7 @@ fn main() {
         // HACK: There is no nice way of passing in the runtime ID at compile
         // time yet.
         let runtime_id =
-            RuntimeId::from_str("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+            RuntimeId::from_str("c000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff")
                 .unwrap();
 
         let km_proto = protocol.clone(); // Shut up the borrow checker.

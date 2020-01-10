@@ -387,7 +387,7 @@ func (r *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node,
 		},
 		Roles: node.RoleValidator,
 	}
-	_ = testNode.Runtimes[0].ID.UnmarshalHex("4000000000000000000000000000000000000000000000000000000000000000")
+	_ = testNode.Runtimes[0].ID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
 
 	return &testNode, testAddressesStr, testCAddressesStr, nil
 }
@@ -580,9 +580,9 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env) error {
 		},
 	}
 	// Runtime ID 0x0 is for simple-keyvalue, 0xf... is for the keymanager. Let's use 0x1.
-	_ = testRuntime.ID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000001")
+	_ = testRuntime.ID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000001")
 	testRuntime.KeyManager = &common.Namespace{}
-	_ = testRuntime.KeyManager.UnmarshalHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	_ = testRuntime.KeyManager.UnmarshalHex("c000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff")
 	// Empty genesis state root.
 	testRuntime.Genesis.StateRoot.Empty()
 

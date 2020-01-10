@@ -10,13 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/tests"
 )
-
-var testNs common.Namespace
 
 func TestStorageDatabase(t *testing.T) {
 	for _, v := range []string{
@@ -30,6 +27,8 @@ func TestStorageDatabase(t *testing.T) {
 
 func doTestImpl(t *testing.T, backend string) {
 	require := require.New(t)
+
+	testNs := common.NewTestNamespaceFromSeed([]byte("database backend test ns"))
 
 	var (
 		cfg = api.Config{
@@ -54,10 +53,4 @@ func doTestImpl(t *testing.T, backend string) {
 	defer impl.Cleanup()
 
 	tests.StorageImplementationTests(t, impl, testNs, 0)
-}
-
-func init() {
-	var ns hash.Hash
-	ns.FromBytes([]byte("oasis storage badger test ns"))
-	copy(testNs[:], ns[:])
 }

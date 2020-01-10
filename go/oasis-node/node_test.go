@@ -15,7 +15,6 @@ import (
 
 	beaconTests "github.com/oasislabs/oasis-core/go/beacon/tests"
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
@@ -102,7 +101,6 @@ var (
 		Storage: registry.StorageParameters{GroupSize: 1},
 	}
 
-	testNamespace common.Namespace
 	testRuntimeID common.Namespace
 
 	initConfigOnce sync.Once
@@ -366,11 +364,11 @@ func testStorage(t *testing.T, node *testNode) {
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	storage, err := storage.New(context.Background(), dataDir, testNamespace, node.Identity, node.Scheduler, node.Registry)
+	storage, err := storage.New(context.Background(), dataDir, testRuntimeID, node.Identity, node.Scheduler, node.Registry)
 	require.NoError(t, err, "storage.New")
 	defer storage.Cleanup()
 
-	storageTests.StorageImplementationTests(t, storage, testNamespace, 0)
+	storageTests.StorageImplementationTests(t, storage, testRuntimeID, 0)
 }
 
 func testRegistry(t *testing.T, node *testNode) {
@@ -451,7 +449,7 @@ func testStorageClientWithNode(t *testing.T, node *testNode) {
 	for _, kv := range config {
 		viper.Set(kv.key, kv.value)
 	}
-	debugClient, err := storageClient.New(ctx, testNamespace, node.Identity, nil, nil)
+	debugClient, err := storageClient.New(ctx, testRuntimeID, node.Identity, nil, nil)
 	require.NoError(t, err, "NewDebugStorageClient")
 
 	// Determine the current round. This is required so that we can commit into
@@ -459,7 +457,7 @@ func testStorageClientWithNode(t *testing.T, node *testNode) {
 	blk, err := node.RootHash.GetLatestBlock(ctx, testRuntimeID, consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetLatestBlock")
 
-	storageTests.StorageImplementationTests(t, debugClient, testNamespace, blk.Header.Round+1)
+	storageTests.StorageImplementationTests(t, debugClient, testRuntimeID, blk.Header.Round+1)
 
 	// Reset configuration flags.
 	for _, kv := range config {
@@ -473,11 +471,7 @@ func testStorageClientWithoutNode(t *testing.T, node *testNode) {
 }
 
 func init() {
-	var ns hash.Hash
-	ns.FromBytes([]byte("oasis node test namespace"))
-	copy(testNamespace[:], ns[:])
-
-	testRuntimeID = testNamespace
+	testRuntimeID = common.NewTestNamespaceFromSeed([]byte("oasis node test namespace"))
 	testRuntime.ID = testRuntimeID
 
 	testRuntime.Genesis.StateRoot.Empty()
