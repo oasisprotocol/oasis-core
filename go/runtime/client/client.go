@@ -326,7 +326,7 @@ func (c *runtimeClient) GetTxs(ctx context.Context, request *api.GetTxsRequest) 
 		return nil, err
 	}
 
-	var inputs [][]byte
+	inputs := [][]byte{}
 	for _, tx := range txs {
 		inputs = append(inputs, tx.Input)
 	}
@@ -391,7 +391,7 @@ func (c *runtimeClient) QueryTxs(ctx context.Context, request *api.QueryTxsReque
 		return nil, err
 	}
 
-	var output []*api.TxResult
+	output := []*api.TxResult{}
 	for round, txResults := range results {
 		// Fetch block for the given round.
 		var blk *block.Block
