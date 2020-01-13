@@ -156,16 +156,16 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		)
 		return err
 	}
-	// TODO: Avoid loading a list of all runtimes.
-	regRuntimes, err := state.AllRuntimes()
-	if err != nil {
-		app.logger.Error("RegisterNode: failed to obtain registry runtimes",
-			"err", err,
-			"signed_node", sigNode,
-		)
-		return err
-	}
-	newNode, err := registry.VerifyRegisterNodeArgs(params, app.logger, sigNode, untrustedEntity, ctx.Now(), ctx.IsInitChain(), regRuntimes, state)
+	newNode, paidRuntimes, err := registry.VerifyRegisterNodeArgs(
+		params,
+		app.logger,
+		sigNode,
+		untrustedEntity,
+		ctx.Now(),
+		ctx.IsInitChain(),
+		state,
+		state,
+	)
 	if err != nil {
 		return err
 	}
@@ -254,16 +254,6 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		} else {
 			additionalEpochs = 0
 		}
-	}
-	var paidRuntimes []*registry.Runtime
-	for _, nodeRt := range newNode.Runtimes {
-		var rt *registry.Runtime
-		rt, err = state.AnyRuntime(nodeRt.ID)
-		if err != nil {
-			return fmt.Errorf("failed to fetch runtime: %w", err)
-		}
-
-		paidRuntimes = append(paidRuntimes, rt)
 	}
 	feeCount := len(paidRuntimes) * int(additionalEpochs)
 	if err = ctx.Gas().UseGas(feeCount, registry.GasOpRuntimeEpochMaintenance, params.GasCosts); err != nil {
