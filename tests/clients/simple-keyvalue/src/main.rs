@@ -150,12 +150,9 @@ fn main() {
 
     // Test wait_block_indexed call.
     println!("Waiting for block to be indexed...");
-    rt.block_on(
-        kv_client
-            .txn_client()
-            .wait_block_indexed(latest_snapshot.block.header.round),
-    )
-    .expect("wait block indexed");
+    let latest_round = latest_snapshot.block.header.round;
+    rt.block_on(kv_client.txn_client().wait_block_indexed(latest_round))
+        .expect("wait block indexed");
 
     // Test get_block_by_hash call.
     println!(
@@ -199,7 +196,7 @@ fn main() {
     println!("Querying transaction tags (kv_op=insert)...");
     let query = Query {
         round_min: 0,
-        round_max: 3,
+        round_max: latest_round,
         conditions: vec![QueryCondition {
             key: b"kv_op".to_vec(),
             values: vec![b"insert".to_vec().into()],
