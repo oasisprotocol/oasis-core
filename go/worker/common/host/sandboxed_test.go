@@ -108,12 +108,8 @@ func testSandboxedHost(t *testing.T, host Host) {
 
 	// Run actual test cases.
 
-	t.Run("WaitForCapabilityTEE", func(t *testing.T) {
-		testWaitForCapabilityTEE(t, host)
-	})
-
-	t.Run("WaitForVersion", func(t *testing.T) {
-		testWaitForVersion(t, host)
+	t.Run("WaitForStart", func(t *testing.T) {
+		testWaitForStart(t, host)
 	})
 
 	t.Run("SimpleRequest", func(t *testing.T) {
@@ -129,28 +125,21 @@ func testSandboxedHost(t *testing.T, host Host) {
 	})
 }
 
-func testWaitForCapabilityTEE(t *testing.T, host Host) {
+func testWaitForStart(t *testing.T, host Host) {
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
 
-	cap, err := host.WaitForCapabilityTEE(ctx)
-	require.NoError(t, err, "WaitForCapabilityTEE")
+	ev, err := host.WaitForStart(ctx)
+	require.NoError(t, err, "WaitForStart")
+
+	// CapabilityTEE.
 	switch host.(*sandboxedHost).cfg.TEEHardware {
 	case node.TEEHardwareIntelSGX:
-		require.NotNil(t, cap, "capabilities should not be nil")
-		require.Equal(t, node.TEEHardwareIntelSGX, cap.Hardware, "TEE hardware should be Intel SGX")
+		require.NotNil(t, ev.CapabilityTEE, "capabilities should not be nil")
+		require.Equal(t, node.TEEHardwareIntelSGX, ev.CapabilityTEE.Hardware, "TEE hardware should be Intel SGX")
 	default:
-		require.Nil(t, cap, "capabilites should be nil")
+		require.Nil(t, ev.CapabilityTEE, "capabilites should be nil")
 	}
-}
-
-func testWaitForVersion(t *testing.T, host Host) {
-	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
-	defer cancel()
-
-	v, err := host.WaitForRuntimeVersion(ctx)
-	require.NoError(t, err, "WaitForVersion")
-	require.NotNil(t, v, "version should not be nil")
 }
 
 func testSimpleRequest(t *testing.T, host Host) {

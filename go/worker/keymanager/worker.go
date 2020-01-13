@@ -291,14 +291,14 @@ func (w *Worker) updateStatus(status *api.Status) error {
 	}
 
 	// Validate the signature.
-	tee, err := workerHost.WaitForCapabilityTEE(w.ctx)
+	ev, err := workerHost.WaitForStart(w.ctx)
 	if err != nil {
-		w.logger.Error("failed to get TEE capability",
+		w.logger.Error("failed to wait for the enclave to start",
 			"err", err,
 		)
-		return fmt.Errorf("worker/keymanager: failed to get TEE capability")
+		return fmt.Errorf("worker/keymanager: failed to wait for the enclave to start")
 	}
-	if tee != nil {
+	if tee := ev.CapabilityTEE; tee != nil {
 		var signingKey signature.PublicKey
 
 		switch tee.Hardware {
@@ -374,9 +374,9 @@ func (w *Worker) onNodeRegistration(n *node.Node) error {
 
 	// NOTE: Worker host should not be nil as we wait for initialization above.
 	workerHost := w.getWorkerHost()
-	tee, err := workerHost.WaitForCapabilityTEE(w.ctx)
+	ev, err := workerHost.WaitForStart(w.ctx)
 	if err != nil {
-		w.logger.Error("failed to obtain CapabilityTEE",
+		w.logger.Error("failed to wait for the enclave to start",
 			"err", err,
 		)
 		return err
@@ -391,23 +391,15 @@ func (w *Worker) onNodeRegistration(n *node.Node) error {
 		return fmt.Errorf("worker/keymanager: enclave not initialized")
 	}
 
-	rtVersion, err := workerHost.WaitForRuntimeVersion(w.ctx)
-	if err != nil {
-		w.logger.Error("failed to obtain RuntimeVersion",
-			"err", err,
-			"runtime", w.runtimeID,
-		)
-	}
-
 	// Add the key manager runtime to the node descriptor.  Done here instead
 	// of in the registration's generic handler since the registration handler
 	// only knows about normal runtimes.
 	rtDesc := &node.Runtime{
 		ID:        w.runtimeID,
-		Version:   *rtVersion,
+		Version:   ev.Version,
 		ExtraInfo: cbor.Marshal(enclaveStatus),
 	}
-	rtDesc.Capabilities.TEE = tee
+	rtDesc.Capabilities.TEE = ev.CapabilityTEE
 	n.Runtimes = append(n.Runtimes, rtDesc)
 
 	return nil

@@ -234,25 +234,17 @@ func newWorker(
 					)
 					continue
 				}
-				if rt.Capabilities.TEE, err = workerHost.WaitForCapabilityTEE(w.ctx); err != nil {
-					w.logger.Error("failed to obtain CapabilityTEE",
+				ev, err := workerHost.WaitForStart(w.ctx)
+				if err != nil {
+					w.logger.Error("failed to wait for the worker to start",
 						"err", err,
 						"runtime", rt.ID,
 					)
 					continue
 				}
 
-				runtimeVersion, err := workerHost.WaitForRuntimeVersion(w.ctx)
-				if err == nil && runtimeVersion != nil {
-					rt.Version = *runtimeVersion
-				} else {
-					w.logger.Error("failed to obtain RuntimeVersion",
-						"err", err,
-						"runtime", rt.ID,
-						"runtime_version", runtimeVersion,
-					)
-					continue
-				}
+				rt.Version = ev.Version
+				rt.Capabilities.TEE = ev.CapabilityTEE
 			}
 
 			return nil
