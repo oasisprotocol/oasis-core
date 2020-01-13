@@ -131,7 +131,7 @@ func TestTransaction(t *testing.T) {
 	// NOTE: This root is synced with tests in runtime/src/transaction/tree.rs.
 	writeLog, rootHash, err := tree.Commit(ctx)
 	require.NoError(t, err, "Commit")
-	require.EqualValues(t, "4cc8bb6bdb377cc7f1ff8fe972004e1d66fa2c6726ec9e5f870865c190b6a47d", rootHash.String(), "transaction root should be stable")
+	require.EqualValues(t, "c65f4e8bd5314c26f245337a859ad244f4b1544acf60ef334cf0d0eadb47363b", rootHash.String(), "transaction root should be stable")
 
 	// Apply write log to tree and check if everything is still there.
 	err = store.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))

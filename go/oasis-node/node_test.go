@@ -79,6 +79,7 @@ var (
 
 	testRuntime = &registry.Runtime{
 		// ID: default value,
+		Kind: registry.KindCompute,
 		Executor: registry.ExecutorParameters{
 			GroupSize:       1,
 			GroupBackupSize: 0,

@@ -64,10 +64,10 @@ type Pool struct {
 	// NodeInfo contains node information about committee members.
 	NodeInfo map[signature.PublicKey]NodeInfo `json:"node_info"`
 	// ExecuteCommitments are the commitments in the pool iff Committee.Kind
-	// is scheduler.KindExecutor.
+	// is scheduler.KindComputeExecutor.
 	ExecuteCommitments map[signature.PublicKey]OpenExecutorCommitment `json:"execute_commitments,omitempty"`
 	// MergeCommitments are the commitments in the pool iff Committee.Kind
-	// is scheduler.KindMerge.
+	// is scheduler.KindComputeMerge.
 	MergeCommitments map[signature.PublicKey]OpenMergeCommitment `json:"merge_commitments,omitempty"`
 	// Discrepancy is a flag signalling that a discrepancy has been detected.
 	Discrepancy bool `json:"discrepancy"`
@@ -107,9 +107,9 @@ func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
 	)
 
 	switch p.Committee.Kind {
-	case scheduler.KindExecutor:
+	case scheduler.KindComputeExecutor:
 		com, ok = p.ExecuteCommitments[id]
-	case scheduler.KindMerge:
+	case scheduler.KindComputeMerge:
 		com, ok = p.MergeCommitments[id]
 	default:
 		panic("roothash/commitment: unknown committee kind: " + p.Committee.Kind.String())
@@ -121,7 +121,7 @@ func (p *Pool) addOpenExecutorCommitment(blk *block.Block, sv SignatureVerifier,
 	if p.Committee == nil || p.NodeInfo == nil {
 		return ErrNoCommittee
 	}
-	if p.Committee.Kind != scheduler.KindExecutor {
+	if p.Committee.Kind != scheduler.KindComputeExecutor {
 		return ErrInvalidCommitteeKind
 	}
 
@@ -187,7 +187,7 @@ func (p *Pool) addOpenExecutorCommitment(blk *block.Block, sv SignatureVerifier,
 
 	// Verify that the txn scheduler signature for current commitment is valid.
 	currentTxnSchedSig := body.TxnSchedSig
-	if err := sv.VerifyCommitteeSignatures(scheduler.KindTransactionScheduler, []signature.Signature{body.TxnSchedSig}); err != nil {
+	if err := sv.VerifyCommitteeSignatures(scheduler.KindComputeTxnScheduler, []signature.Signature{body.TxnSchedSig}); err != nil {
 		logger.Debug("executor commitment has bad transaction scheduler signers",
 			"committee_id", cID,
 			"node_id", id,
@@ -284,9 +284,9 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 	// are allowed.
 	if didTimeout {
 		switch p.Committee.Kind {
-		case scheduler.KindExecutor:
+		case scheduler.KindComputeExecutor:
 			required -= int(p.Runtime.Executor.AllowedStragglers)
-		case scheduler.KindMerge:
+		case scheduler.KindComputeMerge:
 			required -= int(p.Runtime.Merge.AllowedStragglers)
 		default:
 			panic("roothash/commitment: unknown committee kind while checking commitments: " + p.Committee.Kind.String())
@@ -474,7 +474,7 @@ func (p *Pool) AddMergeCommitment(
 	if p.Committee == nil || p.NodeInfo == nil {
 		return ErrNoCommittee
 	}
-	if p.Committee.Kind != scheduler.KindMerge {
+	if p.Committee.Kind != scheduler.KindComputeMerge {
 		return ErrInvalidCommitteeKind
 	}
 

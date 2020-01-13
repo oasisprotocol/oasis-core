@@ -20,8 +20,10 @@ type contextKey struct{}
 type ContextMode uint
 
 const (
+	// ContextInvalid is invalid context and should never be used.
+	ContextInvalid ContextMode = iota
 	// ContextInitChain is InitChain context.
-	ContextInitChain ContextMode = iota
+	ContextInitChain
 	// ContextCheckTx is CheckTx context.
 	ContextCheckTx
 	// ContextDeliverTx is DeliverTx context.

@@ -18,6 +18,7 @@ func NewGenesisBlock(id common.Namespace, timestamp uint64) *Block {
 
 	blk.Header.Version = 0
 	blk.Header.Timestamp = timestamp
+	blk.Header.HeaderType = Normal
 	blk.Header.Namespace = id
 	blk.Header.PreviousHash.Empty()
 	blk.Header.IORoot.Empty()

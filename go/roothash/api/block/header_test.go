@@ -21,7 +21,7 @@ func TestConsistentHash(t *testing.T) {
 	require.EqualValues(t, emptyHeaderHash, empty.EncodedHash())
 
 	var populatedHeaderHash hash.Hash
-	_ = populatedHeaderHash.UnmarshalHex("e42c423b85e6ac261712f65b50ddbdef4758ed214c316c1f61ee76db28d1d8a5")
+	_ = populatedHeaderHash.UnmarshalHex("c39e8aefea5a1f794fb57f294a4ea8599381cd8739e67a8a9acb7763b54a630a")
 
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
@@ -46,5 +46,5 @@ func TestConsistentHash(t *testing.T) {
 		StateRoot:    emptyRoot,
 		Messages:     nil,
 	}
-	require.EqualValues(t, populatedHeaderHash, populated.EncodedHash())
+	require.EqualValues(t, populatedHeaderHash.String(), populated.EncodedHash().String())
 }

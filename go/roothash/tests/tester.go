@@ -437,19 +437,22 @@ func mustGetCommittee(
 
 			var groupSize, groupBackupSize int
 			switch committee.Kind {
-			case scheduler.KindTransactionScheduler:
+			case scheduler.KindComputeTxnScheduler:
 				groupSize = int(rt.Runtime.TxnScheduler.GroupSize)
 				groupBackupSize = 0
-			case scheduler.KindExecutor:
+			case scheduler.KindComputeExecutor:
 				fallthrough
-			case scheduler.KindMerge:
+			case scheduler.KindComputeMerge:
 				groupSize = int(rt.Runtime.Merge.GroupSize)
 				groupBackupSize = int(rt.Runtime.Merge.GroupBackupSize)
 			case scheduler.KindStorage:
 				groupSize = int(rt.Runtime.Storage.GroupSize)
 			}
 
-			if committee.Kind.NeedsLeader() {
+			var needsLeader bool
+			needsLeader, err = committee.Kind.NeedsLeader()
+			require.NoError(err, "needsLeader returns correctly")
+			if needsLeader {
 				require.Len(ret.workers, groupSize-1, "workers exist")
 				require.NotNil(ret.leader, "leader exist")
 			} else {
@@ -459,11 +462,11 @@ func mustGetCommittee(
 			require.Len(ret.backupWorkers, groupBackupSize, "backup workers exist")
 
 			switch committee.Kind {
-			case scheduler.KindTransactionScheduler:
+			case scheduler.KindComputeTxnScheduler:
 				txnSchedCommittee = &ret
-			case scheduler.KindExecutor:
+			case scheduler.KindComputeExecutor:
 				executorCommittee = &ret
-			case scheduler.KindMerge:
+			case scheduler.KindComputeMerge:
 				mergeCommittee = &ret
 			case scheduler.KindStorage:
 				storageCommittee = &ret

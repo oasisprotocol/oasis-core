@@ -192,7 +192,7 @@ func (e *EpochSnapshot) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, 
 	switch kind {
 	case scheduler.KindStorage:
 		committee = e.storageCommittee
-	case scheduler.KindTransactionScheduler:
+	case scheduler.KindComputeTxnScheduler:
 		committee = e.txnSchedulerCommittee
 	default:
 		return fmt.Errorf("epoch: unsupported committee kind: %s", kind)
@@ -327,7 +327,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		}
 
 		switch cm.Kind {
-		case scheduler.KindExecutor:
+		case scheduler.KindComputeExecutor:
 			// There can be multiple executor committees per runtime.
 			cID := cm.EncodedMembersHash()
 			executorCommittees[cID] = ci
@@ -343,12 +343,12 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			for _, n := range nodes {
 				executorCommitteesByPeer[n.P2P.ID] = true
 			}
-		case scheduler.KindTransactionScheduler:
+		case scheduler.KindComputeTxnScheduler:
 			txnSchedulerCommittee = ci
 			if leader != -1 {
 				txnSchedulerLeaderPeerID = nodes[leader].P2P.ID
 			}
-		case scheduler.KindMerge:
+		case scheduler.KindComputeMerge:
 			mergeCommittee = ci
 		case scheduler.KindStorage:
 			storageCommittee = ci

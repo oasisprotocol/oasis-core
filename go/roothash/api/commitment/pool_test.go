@@ -40,7 +40,7 @@ func (n *staticSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Commi
 	switch kind {
 	case scheduler.KindStorage:
 		pk = n.storagePublicKey
-	case scheduler.KindTransactionScheduler:
+	case scheduler.KindComputeTxnScheduler:
 		pk = n.txnSchedulerPublicKey
 	default:
 		return errors.New("unsupported committee kind")
@@ -98,6 +98,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 
 	rt := &registry.Runtime{
 		ID:          rtID,
+		Kind:        registry.KindCompute,
 		TEEHardware: node.TEEHardwareInvalid,
 	}
 
@@ -108,7 +109,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	// Generate a committee.
 	cID := sk.Public()
 	committee := &scheduler.Committee{
-		Kind: scheduler.KindExecutor,
+		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
 			&scheduler.CommitteeNode{
 				Role:      scheduler.Worker,
@@ -204,6 +205,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 
 	rt := &registry.Runtime{
 		ID:          rtID,
+		Kind:        registry.KindCompute,
 		TEEHardware: node.TEEHardwareIntelSGX,
 	}
 
@@ -218,7 +220,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	// Generate a committee.
 	cID := sk.Public()
 	committee := &scheduler.Committee{
-		Kind: scheduler.KindExecutor,
+		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
 			&scheduler.CommitteeNode{
 				Role:      scheduler.Worker,
@@ -440,6 +442,7 @@ func TestPoolSerialization(t *testing.T) {
 
 	rt := &registry.Runtime{
 		ID:          rtID,
+		Kind:        registry.KindCompute,
 		TEEHardware: node.TEEHardwareInvalid,
 	}
 
@@ -450,7 +453,7 @@ func TestPoolSerialization(t *testing.T) {
 	// Generate a committee.
 	cID := sk.Public()
 	committee := &scheduler.Committee{
-		Kind: scheduler.KindExecutor,
+		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
 			&scheduler.CommitteeNode{
 				Role:      scheduler.Worker,
@@ -578,7 +581,7 @@ func TestPoolMergeCommitment(t *testing.T) {
 
 	rt, executorSks, executorCommittee, executorNodeInfo := generateMockCommittee(t)
 	_, mergeSks, mergeCommittee, mergeNodeInfo := generateMockCommittee(t)
-	mergeCommittee.Kind = scheduler.KindMerge
+	mergeCommittee.Kind = scheduler.KindComputeMerge
 	executorCommitteeID := executorCommittee.EncodedMembersHash()
 
 	t.Run("NoDiscrepancy", func(t *testing.T) {
@@ -1102,6 +1105,7 @@ func generateMockCommittee(t *testing.T) (
 
 	rt = &registry.Runtime{
 		ID:          rtID,
+		Kind:        registry.KindCompute,
 		TEEHardware: node.TEEHardwareInvalid,
 	}
 
@@ -1119,7 +1123,7 @@ func generateMockCommittee(t *testing.T) (
 	c2ID := sk2.Public()
 	c3ID := sk3.Public()
 	committee = &scheduler.Committee{
-		Kind: scheduler.KindExecutor,
+		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
 			&scheduler.CommitteeNode{
 				Role:      scheduler.Worker,

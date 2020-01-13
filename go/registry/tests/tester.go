@@ -1069,7 +1069,8 @@ func NewTestRuntime(seed []byte, entity *TestEntity, isKeyManager bool) (*TestRu
 	}
 
 	rt.Runtime = &api.Runtime{
-		ID: publicKeyToNamespace(rt.Signer.Public(), isKeyManager),
+		ID:   publicKeyToNamespace(rt.Signer.Public(), isKeyManager),
+		Kind: api.KindCompute,
 		Executor: api.ExecutorParameters{
 			GroupSize:         3,
 			GroupBackupSize:   5,

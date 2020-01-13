@@ -67,47 +67,54 @@ type CommitteeNode struct {
 type CommitteeKind uint8
 
 const (
-	// KindExecutor is an executor committee.
-	KindExecutor CommitteeKind = 0
+	// KindInvalid is an invalid committee.
+	KindInvalid CommitteeKind = 0
+
+	// KindComputeExecutor is an executor committee.
+	KindComputeExecutor CommitteeKind = 1
+
+	// KindComputeTxnScheduler is a transaction scheduler committee.
+	KindComputeTxnScheduler CommitteeKind = 2
+
+	// KindComputeMerge is a merge committee.
+	KindComputeMerge CommitteeKind = 3
 
 	// KindStorage is a storage committee.
-	KindStorage CommitteeKind = 1
-
-	// KindTransactionScheduler is a transaction scheduler committee.
-	KindTransactionScheduler CommitteeKind = 2
-
-	// KindMerge is a merge committee.
-	KindMerge CommitteeKind = 3
+	KindStorage CommitteeKind = 4
 
 	// MaxCommitteeKind is a dummy value used for iterating all committee kinds.
-	MaxCommitteeKind = 4
+	MaxCommitteeKind = 5
 )
 
 // NeedsLeader returns if committee kind needs leader role.
-func (k CommitteeKind) NeedsLeader() bool {
+func (k CommitteeKind) NeedsLeader() (bool, error) {
 	switch k {
-	case KindExecutor:
-		return false
-	case KindMerge:
-		return false
+	case KindComputeExecutor:
+		return false, nil
+	case KindComputeTxnScheduler:
+		return true, nil
+	case KindComputeMerge:
+		return false, nil
 	case KindStorage:
-		return false
+		return false, nil
 	default:
-		return true
+		return false, fmt.Errorf("scheduler/NeedsLeader: unsupported committee kind %s", k)
 	}
 }
 
 // String returns a string representation of a CommitteeKind.
 func (k CommitteeKind) String() string {
 	switch k {
-	case KindExecutor:
+	case KindInvalid:
+		return "invalid"
+	case KindComputeExecutor:
 		return "executor"
+	case KindComputeTxnScheduler:
+		return "txn_scheduler"
+	case KindComputeMerge:
+		return "merge"
 	case KindStorage:
 		return "storage"
-	case KindTransactionScheduler:
-		return "txn_scheduler"
-	case KindMerge:
-		return "merge"
 	default:
 		return fmt.Sprintf("[unknown kind: %d]", k)
 	}

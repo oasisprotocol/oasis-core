@@ -18,26 +18,29 @@ var ErrInvalidVersion = errors.New("roothash: invalid version")
 type HeaderType uint8
 
 const (
+	// Invalid is an invalid header type and should never be stored.
+	Invalid HeaderType = 0
+
 	// Normal is a normal header.
-	Normal HeaderType = 0
+	Normal HeaderType = 1
 
 	// RoundFailed is a header resulting from a failed round. Such a
 	// header contains no transactions but advances the round as normal
 	// to prevent replays of old commitments.
-	RoundFailed HeaderType = 1
+	RoundFailed HeaderType = 2
 
 	// EpochTransition is a header resulting from an epoch transition.
 	//
 	// Such a header contains no transactions but advances the round as
 	// normal.
 	// TODO: Consider renaming this to CommitteeTransition.
-	EpochTransition HeaderType = 2
+	EpochTransition HeaderType = 3
 
 	// Suspended is a header resulting from the runtime being suspended.
 	//
 	// Such a header contains no transactions but advances the round as
 	// normal.
-	Suspended HeaderType = 3
+	Suspended HeaderType = 4
 )
 
 // Header is a block header.

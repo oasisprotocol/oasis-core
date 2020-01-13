@@ -35,15 +35,23 @@ const prefetchArtifactCount uint16 = 20000
 type artifactKind uint8
 
 const (
+	// kindInvalid is invalid (not set) artifact kind and should never be stored.
+	kindInvalid artifactKind = 0
 	// kindInput is the input artifact kind.
-	kindInput artifactKind = 0
+	kindInput artifactKind = 1
 	// kindOutput is the output artifact kind.
-	kindOutput artifactKind = 1
+	kindOutput artifactKind = 2
 )
 
 // MarshalBinary encodes an artifact kind into binary form.
 func (ak artifactKind) MarshalBinary() (data []byte, err error) {
+	// kindInvalid should not be marshaleld.
+	if ak == kindInvalid {
+		return nil, errMalformedArtifactKind
+	}
+
 	data = []byte{uint8(ak)}
+
 	return
 }
 
@@ -68,7 +76,8 @@ func (ak *artifactKind) UnmarshalBinary(data []byte) error {
 
 var (
 	// txnKeyFmt is the key format used for transaction artifacts.
-	txnKeyFmt = keyformat.New('T', &hash.Hash{}, artifactKind(0))
+	// The artifactKind parameter is needed to compute the enum size in bytes. We put some marshallable value there.
+	txnKeyFmt = keyformat.New('T', &hash.Hash{}, artifactKind(1))
 	// tagKeyFmt is the key format used for emitted tags.
 	//
 	// This is kept separate so that clients can query only tags they are
