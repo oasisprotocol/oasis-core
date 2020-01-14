@@ -9,10 +9,11 @@ WORKDIR=$PWD
 
 mkdir -p /tmp/coverage-to-merge
 
-buildkite-agent artifact download "coverage-*.txt" /tmp/coverage-to-merge
-buildkite-agent artifact download "coverage-e2e-*.tar.gz" /tmp/coverage-to-merge
+buildkite-agent artifact download "*coverage-*.txt" /tmp/coverage-to-merge
+buildkite-agent artifact download "*coverage-e2e-*.tar.gz" /tmp/coverage-to-merge
 
-for f in /tmp/coverage-to-merge/*.tar.gz; do
+shopt -s globstar
+for f in /tmp/**/*.tar.gz; do
 	tar xvzf $f -C /tmp/coverage-to-merge
 done
 gocovmerge /tmp/coverage-to-merge/coverage-*.txt >merged-coverage.txt
