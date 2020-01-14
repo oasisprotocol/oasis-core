@@ -97,14 +97,23 @@ clean: $(clean-targets)
 
 # Assemble Change log.
 changelog:
-	@if [[ -z "$(NEXT_VERSION)" ]]; then \
-		echo "Error: Could not compute project's new version."; \
-		exit 1; \
-	else \
-		echo "Generating changelog for version $(NEXT_VERSION)..."; \
-		towncrier build --version $(NEXT_VERSION); \
-		echo "Next, review the staged changes, commit them and make a pull request."; \
-    fi
+	@$(ENSURE_NEXT_VERSION)
+	@$(ECHO_STDERR) "Generating Change Log for version $(NEXT_VERSION)..."
+	towncrier build --version $(NEXT_VERSION)
+	@$(ECHO_STDERR) "Next, review the staged changes, commit them and make a pull request."
+
+# Tag the next release.
+tag-next-release:
+	@$(ENSURE_NEXT_VERSION)
+	@$(ECHO_STDERR) "Checking if we can tag version $(NEXT_VERSION) as the next release..."
+	@$(ENSURE_NO_CHANGELOG_FRAGMENTS)
+	@$(ENSURE_NEXT_VERSION_IN_CHANGELOG)
+	@$(ECHO_STDERR) "All checks have passed. Proceeding with tagging the $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master HEAD with tag 'v$(NEXT_VERSION)'."
+	@$(CONFIRM_ACTION)
+	@$(ECHO_STDERR) "If this appears to be stuck, you might need to touch your security key for GPG sign operation."
+	@git tag --sign --message="Version $(NEXT_VERSION)" v$(NEXT_VERSION) $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master
+	@git push $(OASIS_CORE_GIT_ORIGIN_REMOTE) v$(NEXT_VERSION)
+	@$(ECHO_STDERR) "$(CYAN)Tag 'v$(NEXT_VERSION)' has been successfully pushed to $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote.$(OFF)"
 
 # Prepare release.
 release:
@@ -128,5 +137,5 @@ docker-shell:
 	$(fmt-targets) fmt \
 	$(test-unit-targets) $(test-targets) test \
 	$(clean-targets) clean \
-	changelog release docker-shell \
+	changelog tag-next-release release docker-shell \
 	all
