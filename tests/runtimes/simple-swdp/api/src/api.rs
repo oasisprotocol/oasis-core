@@ -1,13 +1,21 @@
-use serde_derive::{Deserialize, Serialize};
+extern crate oasis_core_keymanager_client;
 
+use serde_derive::{Deserialize, Serialize};
+use oasis_core_runtime::{
+    common::runtime::RuntimeId
+};
+
+use self::oasis_core_keymanager_client::PublicKey;
 use oasis_core_runtime::runtime_api;
 
+// Information needed to register a stateless worker on the platform.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct WorkerInfo {
-    // Human-readable name (for logging).
-    pub name: String,
-    // Address at which the worker is listening.
-    pub address: String,  // XXX: Plain string (ip:port)? net.IP? Path to unix socket? Go channel?
+pub struct StatelessWorkerInfo {
+    // ID of the worker.
+    // XXX: Introduce a new type, StatelessWorkerId, here? (Like RuntimeId etc)
+    pub id: PublicKey,
+    // All the stateless runtimes supported by this worker.
+    pub runtimes: Vec<RuntimeId>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -17,11 +25,8 @@ pub struct JobSubmission {
     pub job_id: String,
     // ID of the worker that should run this job.
     pub worker_id: String,
-    // The full path (on the stateless worker) to the runtime to use for the job.
-    // The runtime has to be already installed.
-    // TODO: Use a more robust identifier that doesn't require callers to know
-    // the filesystem layout.
-    pub runtime_path: String,
+    // The stateless runtime to use for the job. The runtime has to be already deployed.
+    pub runtime_id: RuntimeId,
     // Arguments to the runtime.
     pub args: Vec<String>,
 }
@@ -29,8 +34,11 @@ pub struct JobSubmission {
 
 runtime_api! {
     // Registers a stateless worker.
-    pub fn swdp_register_worker(WorkerInfo) -> Option<String>;
+    pub fn swdp_register_worker(StatelessWorkerInfo) -> Option<String>;
 
     // Dispatches the results of a SWDP worker's computation.
     pub fn swdp_dispatch_result(String) -> Option<String>;
+
+    // Submit a job to the stateless workers (by emitting a tag).
+    pub fn swdp_submit_job(JobSubmission) -> Option<String>;
 }

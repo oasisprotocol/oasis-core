@@ -6,5 +6,6 @@ description = "Minimal runtime with Stateless Worker Dispatch Protocol support. 
 
 [dependencies]
 oasis-core-runtime = { path = "../../../../runtime" }
+oasis-core-keymanager-client = { path = "../../../../keymanager-client" }
 serde = "1.0.71"
 serde_derive = "1.0"

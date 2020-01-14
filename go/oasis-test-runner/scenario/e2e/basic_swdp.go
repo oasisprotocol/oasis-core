@@ -3,8 +3,8 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"time"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
@@ -27,7 +27,9 @@ type basicSwdpImpl struct {
 func newBasicSwdpImpl() scenario.Scenario {
 	sc := &basicSwdpImpl{
 		basicImpl: basicImpl{
-			clientBinary: "", // We use a Go client.
+			// The client is implemented in this file using the Go oasis-client API;
+			// we don't need an external binary to communicate with the blockchain.
+			clientBinary: "",
 		},
 		logger: logging.GetLogger("scenario/e2e/basic_swdp"),
 	}
@@ -38,13 +40,16 @@ func (sc *basicSwdpImpl) Name() string {
 	return "basic-swdp"
 }
 
+// Constructs and returns the network fixture (= all services) for the tests in this file.
+// Unlike most other e2e tests in oasis-core, we use the `simple-swdp` runtime (as opposed to simple-keyvalue),
+// lets us exercse the stateless worker.
 func (sc *basicSwdpImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f, err := sc.basicImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
 
-	// Use the simple-swdp runtime (as opposed to the default simple-keyvalue).
+	// Use the simple-swdp runtime.
 	simpleSwdpRuntimeBinary, err := resolveRuntimeBinary("simple-swdp")
 	if err != nil {
 		return nil, err
@@ -54,10 +59,11 @@ func (sc *basicSwdpImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-// XXX: Reuse other worker-info structs? From where?
-type workerInfo struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
+// Information needed to register a stateless worker; see
+// Rust for reference field documentation.
+type statelessWorkerInfo struct {
+	ID       common.Namespace   `json:"ID"`
+	Runtimes []common.Namespace `json:"runtimes"`
 }
 
 func (sc *basicSwdpImpl) Run(childEnv *env.Env) error {
@@ -77,14 +83,18 @@ func (sc *basicSwdpImpl) Run(childEnv *env.Env) error {
 
 	sc.logger.Info("submitting transaction to runtime")
 
+	var workerId, runtimeId, runtimeId2 common.Namespace
+	_ = workerId.UnmarshalHex("123")
+	_ = runtimeId.UnmarshalHex("99123")
+	_ = runtimeId2.UnmarshalHex("99789")
 	var rsp transaction.TxnOutput
 	rawRsp, err := c.SubmitTx(ctx, &api.SubmitTxRequest{
 		RuntimeID: runtimeID,
 		Data: cbor.Marshal(&transaction.TxnCall{
 			Method: "swdp_register_worker",
-			Args: workerInfo{
-				Name:    "MyWorker",
-				Address: "0.0.0.0:999",
+			Args: statelessWorkerInfo{
+				ID:       workerId,
+				Runtimes: []common.Namespace{runtimeId, runtimeId2},
 			},
 		}),
 	})
