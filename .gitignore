@@ -10,6 +10,7 @@ target/
 
 # IDE.
 .idea/*
+*.iml
 
 # Temporary files.
 *.swp
