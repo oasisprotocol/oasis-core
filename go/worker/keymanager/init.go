@@ -73,7 +73,6 @@ func New(
 		quitCh:       make(chan struct{}),
 		initCh:       make(chan struct{}),
 		commonWorker: commonWorker,
-		registration: r,
 		backend:      backend,
 		grpcPolicy:   grpc.NewDynamicRuntimePolicyChecker(),
 		enabled:      Enabled(),
@@ -106,8 +105,9 @@ func New(
 			return nil, fmt.Errorf("worker/keymanager: cannot create local storage: %w", err)
 		}
 
-		if err := w.registration.RegisterRole(node.RoleKeyManager, w.onNodeRegistration); err != nil {
-			return nil, fmt.Errorf("worker/keymanager: failed to register role: %w", err)
+		w.roleProvider, err = r.NewRuntimeRoleProvider(node.RoleKeyManager, w.runtimeID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create role provider: %w", err)
 		}
 
 		w.workerHostCfg = host.Config{

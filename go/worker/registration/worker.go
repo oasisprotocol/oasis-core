@@ -11,6 +11,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
@@ -48,15 +49,57 @@ var (
 	allowUnroutableAddresses bool
 )
 
+// RegisterNodeHook is a function that is used to update the node descriptor.
+type RegisterNodeHook func(*node.Node) error
+
 // Delegate is the interface for objects that wish to know about the worker's events.
 type Delegate interface {
 	// RegistrationStopped is called by the worker when the registration loop exits cleanly.
 	RegistrationStopped()
 }
 
+// RoleProvider is the node descriptor role provider interface.
+//
+// It is used to reserve a slot in the node descriptor that will be filled when the role provider
+// decides that it is available. This is used so that the registration worker knows when certain
+// roles are ready to be serviced by the node.
+//
+// An unavailable role provider will prevent the node from being (re-)registered.
+type RoleProvider interface {
+	// SetAvailable signals that the role provider is available and that node registration can
+	// thus proceed.
+	SetAvailable(hook RegisterNodeHook)
+
+	// SetUnavailable signals that the role provider is unavailable and that node registration
+	// should be blocked until the role provider becomes available.
+	SetUnavailable()
+}
+
+type roleProvider struct {
+	sync.Mutex
+
+	w *Worker
+
+	role      node.RolesMask
+	runtimeID *common.Namespace
+	hook      RegisterNodeHook
+}
+
+func (rp *roleProvider) SetAvailable(hook RegisterNodeHook) {
+	rp.Lock()
+	rp.hook = hook
+	rp.Unlock()
+
+	rp.w.registerCh <- struct{}{}
+}
+
+func (rp *roleProvider) SetUnavailable() {
+	rp.SetAvailable(nil)
+}
+
 // Worker is a service handling worker node registration.
 type Worker struct { // nolint: maligned
-	sync.Mutex
+	sync.RWMutex
 
 	workerCommonCfg *workerCommon.Config
 
@@ -82,8 +125,10 @@ type Worker struct { // nolint: maligned
 	stopReqCh    chan struct{} // closed internally to trigger clean registration lapse
 
 	logger    *logging.Logger
-	roleHooks map[node.RolesMask](func(*node.Node) error)
 	consensus consensus.Backend
+
+	roleProviders []*roleProvider
+	registerCh    chan struct{}
 }
 
 // DebugForceallowUnroutableAddresses allows unroutable addresses.
@@ -91,7 +136,7 @@ func DebugForceAllowUnroutableAddresses() {
 	allowUnroutableAddresses = true
 }
 
-func (w *Worker) registrationLoop() {
+func (w *Worker) registrationLoop() { // nolint: gocyclo
 	// Delay node registration till after the consensus service has
 	// finished initial synchronization if applicable.
 	if w.consensus != nil {
@@ -108,7 +153,7 @@ func (w *Worker) registrationLoop() {
 	ch, sub := w.epochtime.WatchEpochs()
 	defer sub.Close()
 
-	regFn := func(epoch epochtime.EpochTime, retry bool) error {
+	regFn := func(epoch epochtime.EpochTime, hook RegisterNodeHook, retry bool) error {
 		var off backoff.BackOff
 
 		switch retry {
@@ -140,46 +185,83 @@ func (w *Worker) registrationLoop() {
 			default:
 			}
 
-			return w.registerNode(epoch)
+			return w.registerNode(epoch, hook)
 		}, off)
 	}
 
+	var epoch epochtime.EpochTime
 	first := true
 Loop:
 	for {
 		select {
 		case <-w.stopCh:
 			return
-		case epoch := <-ch:
-			// Check first if a clean halt was requested.
-			select {
-			case <-w.stopReqCh:
-				w.logger.Info("node deregistration and eventual shutdown requested")
-				w.Stop()
-				break Loop
-			default:
-			}
+		case <-w.stopReqCh:
+			w.logger.Info("node deregistration and eventual shutdown requested")
+			return
+		case epoch = <-ch:
+			// Epoch updated, check if we can submit a registration.
+		case <-w.registerCh:
+			// Notification that a role provider has been updated.
+		}
 
-			if err := regFn(epoch, first); err != nil {
-				if first {
-					w.logger.Error("failed to register node",
-						"err", err,
-					)
-					// This is by definition a cancellation as the first
-					// registration retries until success. So we can avoid
-					// another iteration of the loop to figure this out
-					// and abort early.
-					return
+		// If there are any role providers which are still not ready, we must wait for more
+		// notifications.
+		hooks := func() (h []RegisterNodeHook) {
+			w.RLock()
+			defer w.RUnlock()
+
+			for _, rp := range w.roleProviders {
+				rp.Lock()
+				role := rp.role
+				hook := rp.hook
+				rp.Unlock()
+
+				if hook == nil {
+					return nil
 				}
-				w.logger.Error("failed to re-register node",
+
+				h = append(h, func(n *node.Node) error {
+					n.AddRoles(role)
+					return hook(n)
+				})
+			}
+			return
+		}()
+		if hooks == nil {
+			continue Loop
+		}
+
+		// Package all per-role/runtime hooks into a metahook.
+		hook := func(n *node.Node) error {
+			for _, hook := range hooks {
+				if err := hook(n); err != nil {
+					return fmt.Errorf("hook failed: %w", err)
+				}
+			}
+			return nil
+		}
+
+		// Attempt a registration.
+		if err := regFn(epoch, hook, first); err != nil {
+			if first {
+				w.logger.Error("failed to register node",
 					"err", err,
 				)
-				continue
+				// This is by definition a cancellation as the first
+				// registration retries until success. So we can avoid
+				// another iteration of the loop to figure this out
+				// and abort early.
+				return
 			}
-			if first {
-				close(w.initialRegCh)
-				first = false
-			}
+			w.logger.Error("failed to re-register node",
+				"err", err,
+			)
+			continue
+		}
+		if first {
+			close(w.initialRegCh)
+			first = false
 		}
 	}
 }
@@ -245,28 +327,47 @@ func (w *Worker) InitialRegistrationCh() chan struct{} {
 	return w.initialRegCh
 }
 
-// RegisterRole enables registering Node roles. Only one hook per role is
-// allowed.
+// NewRoleProvider creates a new role provider slot.
 //
-// hook is a callback that can be used to update node descriptor with role
-// specific settings, e.g. setting compute capabilities for compute worker.
-func (w *Worker) RegisterRole(role node.RolesMask, hook func(*node.Node) error) error {
-	w.Lock()
-	defer w.Unlock()
-
-	if !role.IsSingleRole() {
-		return fmt.Errorf("RegisterRole: registration role mask does not encode a single role. RoleMask: '%s'", role)
-	}
-
-	if _, exists := w.roleHooks[role]; exists {
-		return fmt.Errorf("RegisterRole: role already registered. Role: '%s'", role)
-	}
-	w.roleHooks[role] = hook
-
-	return nil
+// Each part of the code that wishes to contribute something to the node descriptor can use this
+// method to ask the registration worker to create a slot. The slot can (later) be toggled to be
+// either available or unavailable. An unavailable slot will prevent the node registration from
+// taking place.
+//
+// The returned role provider is in unavailable state.
+func (w *Worker) NewRoleProvider(role node.RolesMask) (RoleProvider, error) {
+	return w.newRoleProvider(role, nil)
 }
 
-func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
+// NewRuntimeRoleProvider creates a new runtime role provider slot.
+//
+// Each part of the code that wishes to contribute something to the node descriptor can use this
+// method to ask the registration worker to create a slot. The slot can (later) be toggled to be
+// either available or unavailable. An unavailable slot will prevent the node registration from
+// taking place.
+//
+// The returned role provider is in unavailable state.
+func (w *Worker) NewRuntimeRoleProvider(role node.RolesMask, runtimeID common.Namespace) (RoleProvider, error) {
+	return w.newRoleProvider(role, &runtimeID)
+}
+
+func (w *Worker) newRoleProvider(role node.RolesMask, runtimeID *common.Namespace) (RoleProvider, error) {
+	if !role.IsSingleRole() {
+		return nil, fmt.Errorf("RegisterRole: registration role mask does not encode a single role. RoleMask: '%s'", role)
+	}
+
+	rp := &roleProvider{
+		w:         w,
+		role:      role,
+		runtimeID: runtimeID,
+	}
+	w.Lock()
+	w.roleProviders = append(w.roleProviders, rp)
+	w.Unlock()
+	return rp, nil
+}
+
+func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) error {
 	w.logger.Info("performing node (re-)registration",
 		"epoch", epoch,
 	)
@@ -286,31 +387,21 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 			ID: w.consensus.ConsensusKey(),
 		},
 	}
-	for role := range w.roleHooks {
-		nodeDesc.AddRoles(role)
-	}
-	if nodeDesc.HasRoles(registry.RuntimesRequiredRoles) {
-		for _, runtime := range w.runtimeRegistry.Runtimes() {
-			nodeDesc.Runtimes = append(nodeDesc.Runtimes, &node.Runtime{
-				ID: runtime.ID(),
-			})
-		}
+
+	if err := hook(&nodeDesc); err != nil {
+		return err
 	}
 
-	w.Lock()
-	defer w.Unlock()
-
-	// Apply worker role hooks:
-	for role, h := range w.roleHooks {
-		if err := h(&nodeDesc); err != nil {
-			w.logger.Error("failed to apply role hook",
-				"role", role,
-				"err", err,
-			)
-		}
+	// Sanity check to prevent an invalid registration when no role provider added any runtimes but
+	// runtimes are required due to the specified role.
+	if nodeDesc.HasRoles(registry.RuntimesRequiredRoles) && len(nodeDesc.Runtimes) == 0 {
+		w.logger.Error("not registering: no runtimes provided while runtimes are required",
+			"node_descriptor", nodeDesc,
+		)
+		return fmt.Errorf("registration: no runtimes provided while runtimes are required")
 	}
 
-	// Add Committee Addresses if required.
+	// Add committee addresses if required.
 	if nodeDesc.HasRoles(registry.CommitteeAddressRequiredRoles) {
 		addresses, err := w.workerCommonCfg.GetNodeAddresses()
 		if err != nil {
@@ -328,29 +419,23 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime) error {
 		nodeDesc.P2P.Addresses = w.p2p.Addresses()
 	}
 
-	// Only register node if hooks exist.
-	if len(w.roleHooks) > 0 {
-		signedNode, err := node.SignNode(w.registrationSigner, registry.RegisterNodeSignatureContext, &nodeDesc)
-		if err != nil {
-			w.logger.Error("failed to register node: unable to sign node descriptor",
-				"err", err,
-			)
-			return err
-		}
-
-		tx := registry.NewRegisterNodeTx(0, nil, signedNode)
-		if err := consensus.SignAndSubmitTx(w.ctx, w.consensus, w.registrationSigner, tx); err != nil {
-			w.logger.Error("failed to register node",
-				"err", err,
-			)
-			return err
-		}
-
-		w.logger.Info("node registered with the registry")
-	} else {
-		w.logger.Info("skipping node registration as no registerted role hooks")
+	signedNode, err := node.SignNode(w.registrationSigner, registry.RegisterNodeSignatureContext, &nodeDesc)
+	if err != nil {
+		w.logger.Error("failed to register node: unable to sign node descriptor",
+			"err", err,
+		)
+		return err
 	}
 
+	tx := registry.NewRegisterNodeTx(0, nil, signedNode)
+	if err := consensus.SignAndSubmitTx(w.ctx, w.consensus, w.registrationSigner, tx); err != nil {
+		w.logger.Error("failed to register node",
+			"err", err,
+		)
+		return err
+	}
+
+	w.logger.Info("node registered with the registry")
 	return nil
 }
 
@@ -570,13 +655,17 @@ func New(
 		logger:             logger,
 		consensus:          consensus,
 		p2p:                p2p,
-		roleHooks:          make(map[node.RolesMask](func(*node.Node) error)),
+		registerCh:         make(chan struct{}, 64),
 	}
 
 	if flags.ConsensusValidator() {
-		if err := w.RegisterRole(node.RoleValidator, w.consensusValidatorHook); err != nil {
+		rp, err := w.NewRoleProvider(node.RoleValidator)
+		if err != nil {
 			return nil, err
 		}
+
+		// The consensus validator is available immediately.
+		rp.SetAvailable(w.consensusValidatorHook)
 	}
 
 	return w, nil

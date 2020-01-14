@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -145,14 +146,19 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	// Get other nodes from this runtime.
 	mergeNode := w.merge.GetRuntime(id)
 
+	rp, err := w.registration.NewRuntimeRoleProvider(node.RoleComputeWorker, id)
+	if err != nil {
+		return fmt.Errorf("failed to create role provider: %w", err)
+	}
+
 	// Create worker host for the given runtime.
 	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleComputeWorker, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create worker host: %w", err)
 	}
 
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(commonNode, mergeNode, workerHostFactory, w.commonWorker.GetConfig())
+	node, err := committee.NewNode(commonNode, mergeNode, workerHostFactory, w.commonWorker.GetConfig(), rp)
 	if err != nil {
 		return err
 	}
@@ -206,50 +212,6 @@ func newWorker(
 			if err = w.registerRuntime(rt); err != nil {
 				return nil, err
 			}
-		}
-
-		// Register compute worker role.
-		if err := w.registration.RegisterRole(node.RoleComputeWorker, func(n *node.Node) error {
-			// Wait until all the runtimes are initialized.
-			for _, rt := range w.runtimes {
-				select {
-				case <-rt.Initialized():
-				case <-w.ctx.Done():
-					return w.ctx.Err()
-				}
-			}
-
-			for _, rt := range n.Runtimes {
-				var err error
-
-				workerRT := w.runtimes[rt.ID]
-				if workerRT == nil {
-					continue
-				}
-
-				workerHost := workerRT.GetWorkerHost()
-				if workerHost == nil {
-					w.logger.Debug("runtime has shut down",
-						"runtime", rt.ID,
-					)
-					continue
-				}
-				ev, err := workerHost.WaitForStart(w.ctx)
-				if err != nil {
-					w.logger.Error("failed to wait for the worker to start",
-						"err", err,
-						"runtime", rt.ID,
-					)
-					continue
-				}
-
-				rt.Version = ev.Version
-				rt.Capabilities.TEE = ev.CapabilityTEE
-			}
-
-			return nil
-		}); err != nil {
-			return nil, err
 		}
 	}
 

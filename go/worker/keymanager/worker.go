@@ -18,6 +18,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/service"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -52,7 +53,7 @@ var (
 // It behaves differently from other workers as the key manager has its
 // own runtime. It needs to keep track of executor committees for other
 // runtimes in order to update the access control lists.
-type Worker struct {
+type Worker struct { // nolint: maligned
 	sync.RWMutex
 
 	logger *logging.Logger
@@ -63,12 +64,14 @@ type Worker struct {
 	quitCh    chan struct{}
 	initCh    chan struct{}
 
+	initialSyncDone bool
+
 	runtimeID     common.Namespace
 	workerHost    host.Host
 	workerHostCfg host.Config
 
 	commonWorker  *workerCommon.Worker
-	registration  *registration.Worker
+	roleProvider  registration.RoleProvider
 	enclaveStatus *api.SignedInitResponse
 	backend       api.Backend
 
@@ -218,7 +221,7 @@ func (w *Worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 	}
 }
 
-func (w *Worker) updateStatus(status *api.Status) error {
+func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEvent) error {
 	// Initialize the key manager.
 	type InitRequest struct {
 		Checksum    []byte `json:"checksum"`
@@ -291,14 +294,7 @@ func (w *Worker) updateStatus(status *api.Status) error {
 	}
 
 	// Validate the signature.
-	ev, err := workerHost.WaitForStart(w.ctx)
-	if err != nil {
-		w.logger.Error("failed to wait for the enclave to start",
-			"err", err,
-		)
-		return fmt.Errorf("worker/keymanager: failed to wait for the enclave to start")
-	}
-	if tee := ev.CapabilityTEE; tee != nil {
+	if tee := startedEvent.CapabilityTEE; tee != nil {
 		var signingKey signature.PublicKey
 
 		switch tee.Hardware {
@@ -323,11 +319,26 @@ func (w *Worker) updateStatus(status *api.Status) error {
 		"checksum", hex.EncodeToString(signedInitResp.InitResponse.Checksum),
 	)
 
+	// Register as we are now ready to handle requests.
+	w.roleProvider.SetAvailable(func(n *node.Node) error {
+		rt := n.AddOrUpdateRuntime(w.runtimeID)
+		rt.Version = startedEvent.Version
+		rt.ExtraInfo = cbor.Marshal(signedInitResp)
+		rt.Capabilities.TEE = startedEvent.CapabilityTEE
+		return nil
+	})
+
 	// Cache the key manager enclave status.
 	w.Lock()
 	defer w.Unlock()
 
 	w.enclaveStatus = &signedInitResp
+
+	if !w.initialSyncDone {
+		// Signal that we are initialized.
+		close(w.initCh)
+		w.initialSyncDone = true
+	}
 
 	return nil
 }
@@ -364,47 +375,6 @@ func extractMessageResponsePayload(raw []byte) ([]byte, error) {
 	return cbor.Marshal(msg.Response.Body.Success), nil
 }
 
-func (w *Worker) onNodeRegistration(n *node.Node) error {
-	// Wait for initialization to complete.
-	select {
-	case <-w.initCh:
-	case <-w.ctx.Done():
-		return w.ctx.Err()
-	}
-
-	// NOTE: Worker host should not be nil as we wait for initialization above.
-	workerHost := w.getWorkerHost()
-	ev, err := workerHost.WaitForStart(w.ctx)
-	if err != nil {
-		w.logger.Error("failed to wait for the enclave to start",
-			"err", err,
-		)
-		return err
-	}
-
-	// Pull out the enclave status to be appended to the node registration.
-	w.Lock()
-	enclaveStatus := w.enclaveStatus
-	w.Unlock()
-	if enclaveStatus == nil {
-		w.logger.Error("enclave not initialized")
-		return fmt.Errorf("worker/keymanager: enclave not initialized")
-	}
-
-	// Add the key manager runtime to the node descriptor.  Done here instead
-	// of in the registration's generic handler since the registration handler
-	// only knows about normal runtimes.
-	rtDesc := &node.Runtime{
-		ID:        w.runtimeID,
-		Version:   ev.Version,
-		ExtraInfo: cbor.Marshal(enclaveStatus),
-	}
-	rtDesc.Capabilities.TEE = ev.CapabilityTEE
-	n.Runtimes = append(n.Runtimes, rtDesc)
-
-	return nil
-}
-
 func (w *Worker) worker() {
 	defer close(w.quitCh)
 
@@ -433,9 +403,37 @@ func (w *Worker) worker() {
 	}
 	defer rtSub.Close()
 
-	var initialSyncDone bool
+	var workerHostCh <-chan *host.Event
+	var currentStatus *api.Status
+	var currentStartedEvent *host.StartedEvent
 	for {
 		select {
+		case ev := <-workerHostCh:
+			switch {
+			case ev.Started != nil:
+				// Runtime has started successfully.
+				currentStartedEvent = ev.Started
+				if currentStatus == nil {
+					continue
+				}
+
+				// Forward status update to key manager runtime.
+				if err := w.updateStatus(currentStatus, currentStartedEvent); err != nil {
+					w.logger.Error("failed to handle status update",
+						"err", err,
+					)
+					continue
+				}
+			case ev.FailedToStart != nil:
+				// Worker failed to start -- we can no longer service requests.
+				currentStartedEvent = nil
+				w.roleProvider.SetUnavailable()
+			default:
+				// Unknown event.
+				w.logger.Warn("unknown worker event",
+					"ev", ev,
+				)
+			}
 		case status := <-statusCh:
 			if !status.ID.Equal(&w.runtimeID) {
 				continue
@@ -458,6 +456,16 @@ func (w *Worker) worker() {
 					)
 					return
 				}
+
+				var sub pubsub.ClosableSubscription
+				if workerHostCh, sub, err = workerHost.WatchEvents(w.ctx); err != nil {
+					w.logger.Error("failed to subscribe to worker host events",
+						"err", err,
+					)
+					return
+				}
+				defer sub.Close()
+
 				if err := workerHost.Start(); err != nil {
 					w.logger.Error("failed to start worker host",
 						"err", err,
@@ -468,23 +476,23 @@ func (w *Worker) worker() {
 					workerHost.Stop()
 					<-workerHost.Quit()
 				}()
+
 				w.Lock()
 				w.workerHost = workerHost
 				w.Unlock()
 			}
 
+			currentStatus = status
+			if currentStartedEvent == nil {
+				continue
+			}
+
 			// Forward status update to key manager runtime.
-			if err := w.updateStatus(status); err != nil {
+			if err := w.updateStatus(currentStatus, currentStartedEvent); err != nil {
 				w.logger.Error("failed to handle status update",
 					"err", err,
 				)
 				continue
-			}
-
-			if !initialSyncDone {
-				// Signal that we are initialized.
-				close(w.initCh)
-				initialSyncDone = true
 			}
 		case rt := <-rtCh:
 			if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&w.runtimeID) {

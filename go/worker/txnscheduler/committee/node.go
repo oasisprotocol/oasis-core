@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/tracing"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -27,6 +28,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	executorCommittee "github.com/oasislabs/oasis-core/go/worker/executor/committee"
+	"github.com/oasislabs/oasis-core/go/worker/registration"
 	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm"
 	txnSchedulerAlgorithmApi "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
@@ -60,6 +62,8 @@ type Node struct { // nolint: maligned
 
 	commonNode   *committee.Node
 	executorNode *executorCommittee.Node
+
+	roleProvider registration.RoleProvider
 
 	// The algorithm mutex is here to protect the initialization
 	// of the algorithm variable. After initialization the variable
@@ -463,10 +467,29 @@ func (n *Node) worker() {
 
 	n.logger.Info("starting committee node")
 
+	var workerEventCh <-chan *host.Event
 	if n.checkTxEnabled {
 		// Initialize worker host for the new runtime.
-		if err := n.InitializeRuntimeWorkerHost(n.ctx); err != nil {
+		workerHost, err := n.InitializeRuntimeWorkerHost(n.ctx)
+		if err != nil {
 			n.logger.Error("failed to initialize worker host",
+				"err", err,
+			)
+			return
+		}
+
+		var workerSub pubsub.ClosableSubscription
+		workerEventCh, workerSub, err = workerHost.WatchEvents(n.ctx)
+		if err != nil {
+			n.logger.Error("failed to subscribe to worker host events",
+				"err", err,
+			)
+			return
+		}
+		defer workerSub.Close()
+
+		if err = workerHost.Start(); err != nil {
+			n.logger.Error("failed to start worker host",
 				"err", err,
 			)
 			return
@@ -511,11 +534,30 @@ func (n *Node) worker() {
 	// We are initialized.
 	close(n.initCh)
 
+	if !n.checkTxEnabled {
+		// We are now ready to service requests.
+		n.roleProvider.SetAvailable(func(*node.Node) error { return nil })
+	}
+
 	for {
 		select {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
+		case ev := <-workerEventCh:
+			switch {
+			case ev.Started != nil:
+				// We are now able to service requests for this runtime.
+				n.roleProvider.SetAvailable(func(*node.Node) error { return nil })
+			case ev.FailedToStart != nil:
+				// Worker failed to start -- we can no longer service requests.
+				n.roleProvider.SetUnavailable()
+			default:
+				// Unknown event.
+				n.logger.Warn("unknown worker event",
+					"ev", ev,
+				)
+			}
 		case <-scheduleTicker.C:
 			// Flush a batch from algorithm.
 			n.algorithm.Flush()
@@ -528,6 +570,7 @@ func NewNode(
 	executorNode *executorCommittee.Node,
 	workerHostFactory host.Factory,
 	checkTxEnabled bool,
+	roleProvider registration.RoleProvider,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -540,6 +583,7 @@ func NewNode(
 		checkTxEnabled:   checkTxEnabled,
 		commonNode:       commonNode,
 		executorNode:     executorNode,
+		roleProvider:     roleProvider,
 		ctx:              ctx,
 		cancelCtx:        cancel,
 		stopCh:           make(chan struct{}),

@@ -16,6 +16,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/tracing"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -30,6 +31,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	mergeCommittee "github.com/oasislabs/oasis-core/go/worker/merge/committee"
+	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 
 var (
@@ -121,7 +123,8 @@ type Node struct {
 	commonNode *committee.Node
 	mergeNode  *mergeCommittee.Node
 
-	commonCfg commonWorker.Config
+	commonCfg    commonWorker.Config
+	roleProvider registration.RoleProvider
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -863,8 +866,25 @@ func (n *Node) worker() {
 	n.logger.Info("starting committee node")
 
 	// Initialize worker host for the new runtime.
-	if err := n.InitializeRuntimeWorkerHost(n.ctx); err != nil {
+	workerHost, err := n.InitializeRuntimeWorkerHost(n.ctx)
+	if err != nil {
 		n.logger.Error("failed to initialize worker host",
+			"err", err,
+		)
+		return
+	}
+
+	workerEventCh, workerSub, err := workerHost.WatchEvents(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to subscribe to worker host events",
+			"err", err,
+		)
+		return
+	}
+	defer workerSub.Close()
+
+	if err = workerHost.Start(); err != nil {
+		n.logger.Error("failed to start worker host",
 			"err", err,
 		)
 		return
@@ -890,6 +910,25 @@ func (n *Node) worker() {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
+		case ev := <-workerEventCh:
+			switch {
+			case ev.Started != nil:
+				// We are now able to service requests for this runtime.
+				n.roleProvider.SetAvailable(func(nd *node.Node) error {
+					rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID())
+					rt.Version = ev.Started.Version
+					rt.Capabilities.TEE = ev.Started.CapabilityTEE
+					return nil
+				})
+			case ev.FailedToStart != nil:
+				// Worker failed to start -- we can no longer service requests.
+				n.roleProvider.SetUnavailable()
+			default:
+				// Unknown event.
+				n.logger.Warn("unknown worker event",
+					"ev", ev,
+				)
+			}
 		case batch := <-processingDoneCh:
 			// Batch processing has finished.
 			if batch == nil {
@@ -920,6 +959,7 @@ func NewNode(
 	mergeNode *mergeCommittee.Node,
 	workerHostFactory host.Factory,
 	commonCfg commonWorker.Config,
+	roleProvider registration.RoleProvider,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -932,6 +972,7 @@ func NewNode(
 		commonNode:       commonNode,
 		mergeNode:        mergeNode,
 		commonCfg:        commonCfg,
+		roleProvider:     roleProvider,
 		ctx:              ctx,
 		cancelCtx:        cancel,
 		stopCh:           make(chan struct{}),

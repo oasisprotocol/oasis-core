@@ -98,8 +98,13 @@ func TestSandboxedHost(t *testing.T) {
 }
 
 func testSandboxedHost(t *testing.T, host Host) {
+	// Watch events.
+	ch, sub, err := host.WatchEvents(context.Background())
+	require.NoError(t, err, "WatchEvents")
+	defer sub.Close()
+
 	// Start the host.
-	err := host.Start()
+	err = host.Start()
 	require.NoError(t, err, "Start")
 	defer func() {
 		host.Stop()
@@ -108,8 +113,8 @@ func testSandboxedHost(t *testing.T, host Host) {
 
 	// Run actual test cases.
 
-	t.Run("WaitForStart", func(t *testing.T) {
-		testWaitForStart(t, host)
+	t.Run("WatchEvents", func(t *testing.T) {
+		testWatchEvents(t, host, ch)
 	})
 
 	t.Run("SimpleRequest", func(t *testing.T) {
@@ -125,20 +130,24 @@ func testSandboxedHost(t *testing.T, host Host) {
 	})
 }
 
-func testWaitForStart(t *testing.T, host Host) {
+func testWatchEvents(t *testing.T, host Host, ch <-chan *Event) {
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
 
-	ev, err := host.WaitForStart(ctx)
-	require.NoError(t, err, "WaitForStart")
+	select {
+	case <-ctx.Done():
+		require.NoError(t, ctx.Err())
+	case ev := <-ch:
+		require.NotNil(t, ev.Started)
 
-	// CapabilityTEE.
-	switch host.(*sandboxedHost).cfg.TEEHardware {
-	case node.TEEHardwareIntelSGX:
-		require.NotNil(t, ev.CapabilityTEE, "capabilities should not be nil")
-		require.Equal(t, node.TEEHardwareIntelSGX, ev.CapabilityTEE.Hardware, "TEE hardware should be Intel SGX")
-	default:
-		require.Nil(t, ev.CapabilityTEE, "capabilites should be nil")
+		// CapabilityTEE.
+		switch host.(*sandboxedHost).cfg.TEEHardware {
+		case node.TEEHardwareIntelSGX:
+			require.NotNil(t, ev.Started.CapabilityTEE, "capabilities should not be nil")
+			require.Equal(t, node.TEEHardwareIntelSGX, ev.Started.CapabilityTEE.Hardware, "TEE hardware should be Intel SGX")
+		default:
+			require.Nil(t, ev.Started.CapabilityTEE, "capabilites should be nil")
+		}
 	}
 }
 

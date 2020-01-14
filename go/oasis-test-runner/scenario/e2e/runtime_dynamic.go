@@ -91,9 +91,8 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// NOTE: Storage workers need to wait until the runtime is registered in the registry.
-	//       If this changes, node count needs update.
 	numNodes := len(sc.net.Validators())
+	// TODO: Once dynamic key manager registration is supported, this shouldn't be needed.
 	if sc.net.Keymanager() != nil {
 		numNodes++
 	}

@@ -112,15 +112,15 @@ func (h *mockHost) InterruptWorker(ctx context.Context) error {
 	return nil
 }
 
-func (h *mockHost) WaitForStart(ctx context.Context) (*StartedEvent, error) {
-	return &StartedEvent{}, nil
-}
-
 func (h *mockHost) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
 	ch := make(chan *Event)
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 	go func() {
 		defer close(ch)
+		// Generate a mock worker host started event.
+		ch <- &Event{
+			Started: &StartedEvent{},
+		}
 		<-ctx.Done()
 	}()
 	return ch, sub, nil

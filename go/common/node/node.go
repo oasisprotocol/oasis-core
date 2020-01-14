@@ -126,6 +126,23 @@ func (n *Node) IsExpired(epoch uint64) bool {
 	return n.Expiration < epoch
 }
 
+// AddOrUpdateRuntime searches for an existing supported runtime descriptor in Runtimes and returns
+// it. In case a runtime descriptor for the given runtime doesn't exist yet, a new one is created
+// appended to the list of supported runtimes and returned.
+func (n *Node) AddOrUpdateRuntime(id common.Namespace) *Runtime {
+	for _, rt := range n.Runtimes {
+		if !rt.ID.Equal(&id) {
+			continue
+		}
+
+		return rt
+	}
+
+	rt := &Runtime{ID: id}
+	n.Runtimes = append(n.Runtimes, rt)
+	return rt
+}
+
 // Runtime represents the runtimes supported by a given Oasis node.
 type Runtime struct {
 	// ID is the public key identifying the runtime.

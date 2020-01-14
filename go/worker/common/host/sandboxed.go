@@ -471,27 +471,6 @@ func (h *sandboxedHost) Name() string {
 	return "sandboxed worker host"
 }
 
-func (h *sandboxedHost) WaitForStart(ctx context.Context) (*StartedEvent, error) {
-	ch, sub, err := h.WatchEvents(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to watch events: %w", err)
-	}
-	defer sub.Close()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case ev := <-ch:
-			if ev.Started == nil {
-				continue
-			}
-
-			return ev.Started, nil
-		}
-	}
-}
-
 func (h *sandboxedHost) Start() error {
 	h.logger.Info("starting worker host")
 	go h.manager()
@@ -981,7 +960,7 @@ func NewHost(cfg *Config) (Host, error) {
 		stopCh:      make(chan struct{}),
 		requestCh:   make(chan *hostRequest, 10),
 		interruptCh: make(chan *interruptRequest, 10),
-		notifier:    pubsub.NewBroker(true),
+		notifier:    pubsub.NewBroker(false),
 		logger:      logger,
 	}
 	host.BaseHost = BaseHost{Host: host}

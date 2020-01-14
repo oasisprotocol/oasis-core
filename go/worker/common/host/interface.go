@@ -25,11 +25,6 @@ type Host interface {
 	// respawning it if necessary.
 	InterruptWorker(ctx context.Context) error
 
-	// WaitForStart waits for the worker to start.
-	//
-	// The returned event may be out of date by the time this function returns.
-	WaitForStart(ctx context.Context) (*StartedEvent, error)
-
 	// WatchEvents returns a channel which produces status change events.
 	WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error)
 }
