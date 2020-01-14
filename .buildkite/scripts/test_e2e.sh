@@ -25,7 +25,7 @@ fi
 
 # We need a directory in the workdir so that Buildkite can fetch artifacts.
 if [[ "${BUILDKITE:-""}" != "" ]]; then
-    mkdir -p ${WORKDIR}/e2e
+    mkdir -p ${TEST_BASE_DIR:-$PWD}/e2e
 fi
 
 # Use integrationrunner-wrapper.sh as node binary if we need to compute E2E
@@ -37,7 +37,7 @@ fi
 
 # Run Oasis test runner.
 ${WORKDIR}/go/oasis-test-runner/oasis-test-runner \
-    ${BUILDKITE:+--basedir ${WORKDIR}/e2e} \
+    ${BUILDKITE:+--basedir ${TEST_BASE_DIR:-$PWD}/e2e} \
     --basedir.no_cleanup \
     --e2e.node.binary ${node_binary} \
     --e2e.client.binary_dir ${WORKDIR}/target/debug \

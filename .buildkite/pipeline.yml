@@ -9,8 +9,8 @@ docker_plugin_default_config: &docker_plugin_default_config
     - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
     - /var/lib/buildkite-agent/.codecov:/root/.codecov
     # Shared Rust incremental compile caches.
-    - /var/tmp/cargo_ic/debug:/tmp/artifacts/debug/incremental
-    - /var/tmp/cargo_ic/debug_sgx:/tmp/artifacts/x86_64-unknown-linux-sgx/debug/incremental
+    - /var/tmp/cargo_ic/debug:/var/tmp/artifacts/debug/incremental
+    - /var/tmp/cargo_ic/debug_sgx:/var/tmp/artifacts/x86_64-unknown-linux-sgx/debug/incremental
     # Shared Rust package checkouts directory.
     - /var/tmp/cargo_pkg/git:/root/.cargo/git
     - /var/tmp/cargo_pkg/registry:/root/.cargo/registry
@@ -21,12 +21,14 @@ docker_plugin_default_config: &docker_plugin_default_config
     # Intel SGX Application Enclave Services Manager (AESM) daemon running on
     # the Buildkite host.
     - /var/run/aesmd/aesm.socket:/var/run/aesmd/aesm.socket
-  # NOTE: When changing the environment variables below, also copy the changes
+    # Propapage the tmpfs mount.
+    - /tmp:/tmp
+    # NOTE: When changing the environment variables below, also copy the changes
   # to the docker_plugin_sgx_config.
   environment:
     - "LC_ALL=C.UTF-8"
     - "LANG=C.UTF-8"
-    - "CARGO_TARGET_DIR=/tmp/artifacts"
+    - "CARGO_TARGET_DIR=/var/tmp/artifacts"
     - "CARGO_INSTALL_ROOT=/root/.cargo"
     - "GOPROXY=https://proxy.golang.org/"
   propagate-environment: true
@@ -42,7 +44,7 @@ docker_plugin_sgx_config: &docker_plugin_sgx_config
     # Copy of environment variables defined in docker_plugin_default_config.
     - "LC_ALL=C.UTF-8"
     - "LANG=C.UTF-8"
-    - "CARGO_TARGET_DIR=/tmp/artifacts"
+    - "CARGO_TARGET_DIR=/var/tmp/artifacts"
     - "CARGO_INSTALL_ROOT=/root/.cargo"
     - "GOPROXY=https://proxy.golang.org/"
 
@@ -104,6 +106,9 @@ steps:
       - buildkite-agent artifact upload oasis-test-runner
       - cd /workdir/go/oasis-net-runner
       - buildkite-agent artifact upload oasis-net-runner
+    agents:
+      queue: staging-default
+      buildkite_agent_cloud_provider: gcp
     plugins:
       <<: *docker_plugin
 
@@ -118,7 +123,7 @@ steps:
       - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-ops-client
 
       # Upload the built artifacts.
-      - cd /tmp/artifacts/debug
+      - cd /var/tmp/artifacts/debug
       - buildkite-agent artifact upload oasis-core-runtime-loader
       # Clients for E2E tests.
       - buildkite-agent artifact upload test-long-term-client
@@ -141,10 +146,10 @@ steps:
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
 
       # Upload the built artifacts.
-      - cd /tmp/artifacts/x86_64-fortanix-unknown-sgx/debug
+      - cd /var/tmp/artifacts/x86_64-fortanix-unknown-sgx/debug
       - buildkite-agent artifact upload oasis-core-keymanager-runtime.sgxs
       - buildkite-agent artifact upload simple-keyvalue.sgxs
-      - cd /tmp/artifacts/debug
+      - cd /var/tmp/artifacts/debug
       - buildkite-agent artifact upload oasis-core-keymanager-runtime
       - buildkite-agent artifact upload simple-keyvalue
     agents:
@@ -193,11 +198,11 @@ steps:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
-      - e2e/**/*.log
+      - /tmp/e2e/**/*.log
       - coverage-e2e-*.tar.gz
     env:
       OASIS_E2E_COVERAGE: enable
-      TEST_BASE_DIR: e2e
+      TEST_BASE_DIR: /tmp
     agents:
       buildkite_agent_size: large
     plugins:
@@ -213,13 +218,13 @@ steps:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
-      - e2e/**/*.log
+      - /tmp/e2e/**/*.log
       - coverage-e2e-sgx-*.tar.gz
     env:
       OASIS_E2E_COVERAGE: enable
-      TEST_BASE_DIR: e2e
+      TEST_BASE_DIR: /tmp
     agents:
-      queue: intel-sgx
+      queue: staging-intel-sgx
     plugins:
       <<: *docker_plugin_sgx
 
