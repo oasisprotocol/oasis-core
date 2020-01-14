@@ -273,6 +273,11 @@ func (args *argBuilder) workerTxnschedulerEnabled() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) workerTxnschedulerCheckTxEnabled() *argBuilder {
+	args.vec = append(args.vec, "--"+txnscheduler.CfgCheckTxEnabled)
+	return args
+}
+
 func (args *argBuilder) iasUseGenesis() *argBuilder {
 	args.vec = append(args.vec, "--ias.use_genesis")
 	return args

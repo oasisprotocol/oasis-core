@@ -73,6 +73,7 @@ var (
 		{workerCommon.CfgClientPort, workerClientPort},
 		{storageWorker.CfgWorkerEnabled, true},
 		{txnscheduler.CfgWorkerEnabled, true},
+		{txnscheduler.CfgCheckTxEnabled, false},
 		{mergeWorker.CfgWorkerEnabled, true},
 		{supplementarysanity.CfgEnabled, true},
 		{supplementarysanity.CfgInterval, 1},

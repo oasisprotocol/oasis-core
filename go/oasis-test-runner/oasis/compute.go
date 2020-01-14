@@ -77,6 +77,7 @@ func (worker *Compute) startNode() error {
 		workerRuntimeLoader(worker.net.cfg.RuntimeLoaderBinary).
 		workerMergeEnabled().
 		workerTxnschedulerEnabled().
+		workerTxnschedulerCheckTxEnabled().
 		appendNetwork(worker.net).
 		appendEntity(worker.entity)
 	for _, v := range worker.net.runtimes {

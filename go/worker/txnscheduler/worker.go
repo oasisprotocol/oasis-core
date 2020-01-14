@@ -1,6 +1,8 @@
 package txnscheduler
 
 import (
+	"context"
+
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -14,7 +16,10 @@ import (
 
 // Worker is a transaction scheduler handling many runtimes.
 type Worker struct {
-	enabled bool
+	*workerCommon.RuntimeHostWorker
+
+	enabled        bool
+	checkTxEnabled bool
 
 	commonWorker *workerCommon.Worker
 	registration *registration.Worker
@@ -22,6 +27,7 @@ type Worker struct {
 
 	runtimes map[common.Namespace]*committee.Node
 
+	ctx    context.Context
 	quitCh chan struct{}
 	initCh chan struct{}
 
@@ -139,7 +145,14 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	// Get other nodes from this runtime.
 	computeNode := w.compute.GetRuntime(id)
 
-	node, err := committee.NewNode(commonNode, computeNode)
+	// Create worker host for the given runtime.
+	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleTransactionScheduler, id)
+	if err != nil {
+		return err
+	}
+
+	// Create committee node for the given runtime.
+	node, err := committee.NewNode(commonNode, computeNode, workerHostFactory, w.checkTxEnabled)
 	if err != nil {
 		return err
 	}
@@ -159,16 +172,21 @@ func newWorker(
 	commonWorker *workerCommon.Worker,
 	compute *compute.Worker,
 	registration *registration.Worker,
+	checkTxEnabled bool,
 ) (*Worker, error) {
+	ctx := context.Background()
+
 	w := &Worker{
-		enabled:      enabled,
-		commonWorker: commonWorker,
-		registration: registration,
-		compute:      compute,
-		runtimes:     make(map[common.Namespace]*committee.Node),
-		quitCh:       make(chan struct{}),
-		initCh:       make(chan struct{}),
-		logger:       logging.GetLogger("worker/txnscheduler"),
+		enabled:        enabled,
+		checkTxEnabled: checkTxEnabled,
+		commonWorker:   commonWorker,
+		registration:   registration,
+		compute:        compute,
+		runtimes:       make(map[common.Namespace]*committee.Node),
+		ctx:            ctx,
+		quitCh:         make(chan struct{}),
+		initCh:         make(chan struct{}),
+		logger:         logging.GetLogger("worker/txnscheduler"),
 	}
 
 	if enabled {
@@ -176,19 +194,39 @@ func newWorker(
 			panic("common worker should have been enabled for transaction scheduler")
 		}
 
+		var err error
+
+		// Create the runtime host worker.
+		w.RuntimeHostWorker, err = workerCommon.NewRuntimeHostWorker(commonWorker)
+		if err != nil {
+			return nil, err
+		}
+
 		// Use existing gRPC server passed from the node.
 		api.RegisterService(commonWorker.Grpc.Server(), w)
 
 		// Register all configured runtimes.
 		for _, rt := range commonWorker.GetRuntimes() {
-			if err := w.registerRuntime(rt); err != nil {
+			if err = w.registerRuntime(rt); err != nil {
 				return nil, err
 			}
 		}
 
 		// Register transaction scheduler worker role.
-		if err := w.registration.RegisterRole(node.RoleTransactionScheduler,
-			func(n *node.Node) error { return nil }); err != nil {
+		if err = w.registration.RegisterRole(node.RoleTransactionScheduler, func(n *node.Node) error {
+			if w.checkTxEnabled {
+				// Wait until all the runtimes are initialized.
+				for _, rt := range w.runtimes {
+					select {
+					case <-rt.Initialized():
+					case <-w.ctx.Done():
+						return w.ctx.Err()
+					}
+				}
+			}
+
+			return nil
+		}); err != nil {
 			return nil, err
 		}
 	}

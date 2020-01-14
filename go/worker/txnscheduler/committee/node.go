@@ -10,6 +10,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -20,7 +21,10 @@ import (
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	commonWorker "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
+	"github.com/oasislabs/oasis-core/go/worker/common/host"
+	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	computeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/committee"
 	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm"
@@ -49,7 +53,11 @@ var (
 )
 
 // Node is a committee node.
-type Node struct {
+type Node struct { // nolint: maligned
+	*commonWorker.RuntimeHostNode
+
+	checkTxEnabled bool
+
 	commonNode  *committee.Node
 	computeNode *computeCommittee.Node
 
@@ -128,12 +136,82 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 	return false, nil
 }
 
+// CheckTx checks the given call in the node's runtime.
+func (n *Node) CheckTx(ctx context.Context, call []byte) error {
+	n.commonNode.CrossNode.Lock()
+	currentBlock := n.commonNode.CurrentBlock
+	n.commonNode.CrossNode.Unlock()
+
+	if currentBlock == nil {
+		return api.ErrNotReady
+	}
+
+	checkRq := &protocol.Body{
+		WorkerCheckTxBatchRequest: &protocol.WorkerCheckTxBatchRequest{
+			Inputs: transaction.RawBatch{call},
+			Block:  *currentBlock,
+		},
+	}
+	workerHost := n.GetWorkerHost()
+	if workerHost == nil {
+		n.logger.Error("worker host not initialized")
+		return api.ErrNotReady
+	}
+	resp, err := workerHost.Call(ctx, checkRq)
+	if err != nil {
+		n.logger.Error("worker host CheckTx call error",
+			"err", err,
+		)
+		return err
+	}
+	if resp == nil {
+		n.logger.Error("worker host CheckTx reponse is nil")
+		return api.ErrCheckTxFailed
+	}
+	if resp.WorkerCheckTxBatchResponse.Results == nil {
+		n.logger.Error("worker host CheckTx response contains no results")
+		return api.ErrCheckTxFailed
+	}
+	if len(resp.WorkerCheckTxBatchResponse.Results) != 1 {
+		n.logger.Error("worker host CheckTx response doesn't contain exactly one result",
+			"num_results", len(resp.WorkerCheckTxBatchResponse.Results),
+		)
+		return api.ErrCheckTxFailed
+	}
+
+	// Interpret CheckTx result.
+	resultRaw := resp.WorkerCheckTxBatchResponse.Results[0]
+	var result transaction.TxnOutput
+	if err = cbor.Unmarshal(resultRaw, &result); err != nil {
+		n.logger.Error("worker host CheckTx response failed to deserialize",
+			"err", err,
+		)
+		return api.ErrCheckTxFailed
+	}
+	if result.Error != nil {
+		n.logger.Error("worker CheckTx failed with error",
+			"err", result.Error,
+		)
+		return fmt.Errorf("%w: %s", api.ErrCheckTxFailed, *result.Error)
+	}
+
+	return nil
+}
+
 // QueueCall queues a call for processing by this node.
 func (n *Node) QueueCall(ctx context.Context, call []byte) error {
 	// Check if we are a leader. Note that we may be in the middle of a
 	// transition, but this shouldn't matter as the client will retry.
 	if !n.commonNode.Group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
 		return api.ErrNotLeader
+	}
+
+	if n.checkTxEnabled {
+		// Check transaction before queuing it.
+		if err := n.CheckTx(ctx, call); err != nil {
+			return err
+		}
+		n.logger.Debug("worker CheckTx successful, queuing transaction")
 	}
 
 	n.algorithmMutex.RLock()
@@ -385,6 +463,17 @@ func (n *Node) worker() {
 
 	n.logger.Info("starting committee node")
 
+	if n.checkTxEnabled {
+		// Initialize worker host for the new runtime.
+		if err := n.InitializeRuntimeWorkerHost(n.ctx); err != nil {
+			n.logger.Error("failed to initialize worker host",
+				"err", err,
+			)
+			return
+		}
+		defer n.StopRuntimeWorkerHost()
+	}
+
 	// Initialize transaction scheduler's algorithm.
 	runtime, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
 	if err != nil {
@@ -437,6 +526,8 @@ func (n *Node) worker() {
 func NewNode(
 	commonNode *committee.Node,
 	computeNode *computeCommittee.Node,
+	workerHostFactory host.Factory,
+	checkTxEnabled bool,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -445,6 +536,8 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
+		RuntimeHostNode:  commonWorker.NewRuntimeHostNode(commonNode, workerHostFactory),
+		checkTxEnabled:   checkTxEnabled,
 		commonNode:       commonNode,
 		computeNode:      computeNode,
 		ctx:              ctx,
