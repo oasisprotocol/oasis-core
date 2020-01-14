@@ -10,6 +10,30 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.1 (2020-01-14)
+
+### Features
+
+- go/worker/txnscheduler: Check transactions before queuing them
+  ([#2502](https://github.com/oasislabs/oasis-core/issues/2502))
+
+  The transaction scheduler can now optionally run runtimes and
+  check transactions before scheduling them (see issue #1963).
+  This functionality is disabled by default, enable it with
+  `worker.txn_scheduler.check_tx.enabled`.
+
+### Bug Fixes
+
+- go/runtime/client: Return empty sequences instead of nil.
+  ([#2542](https://github.com/oasislabs/oasis-core/issues/2542))
+
+  The runtime client endpoint should return empty sequences instead of `nil` as serde doesn't know how
+  to decode a `NULL` when the expected type is a sequence.
+
+- Temporarily disable consensus address checks at genesis
+  ([#2552](https://github.com/oasislabs/oasis-core/issues/2552))
+
+
 ## 20.0 (2020-01-10)
 
 ### Removals and Breaking changes
