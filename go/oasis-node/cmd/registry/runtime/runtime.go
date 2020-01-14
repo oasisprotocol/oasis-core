@@ -362,6 +362,9 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 			MaxBatchSizeBytes: uint64(viper.GetSizeInBytes(CfgTxnSchedulerMaxBatchSizeBytes)),
 		},
 		Storage: registry.StorageParameters{GroupSize: uint64(viper.GetInt64(CfgStorageGroupSize))},
+		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+		},
 	}
 	if teeHardware == node.TEEHardwareIntelSGX {
 		var vi registry.VersionInfoIntelSGX
