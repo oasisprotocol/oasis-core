@@ -479,13 +479,18 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, ErrInvalidArgument
 	}
 	consensusAddressRequired := n.HasRoles(ConsensusAddressRequiredRoles)
-	if err := verifyAddresses(params, consensusAddressRequired, n.Consensus.Addresses); err != nil {
-		addrs, _ := json.Marshal(n.Consensus.Addresses)
-		logger.Error("RegisterNode: missing/invalid consensus addresses",
-			"node", n,
-			"consensus_addrs", addrs,
-		)
-		return nil, err
+	if !isGenesis {
+		// XXX: Re-enable consensus address checks at genesis after
+		// existing deployments have cleaned up registries.
+		// https://github.com/oasislabs/oasis-core/issues/2428
+		if err := verifyAddresses(params, consensusAddressRequired, n.Consensus.Addresses); err != nil {
+			addrs, _ := json.Marshal(n.Consensus.Addresses)
+			logger.Error("RegisterNode: missing/invalid consensus addresses",
+				"node", n,
+				"consensus_addrs", addrs,
+			)
+			return nil, err
+		}
 	}
 
 	// If node is a key manager, ensure that it is owned by the key manager
