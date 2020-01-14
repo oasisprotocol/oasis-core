@@ -31,6 +31,10 @@ define CONFIRM_ACTION =
 	$(ECHO_STDERR) -n "Are you sure? [y/N] " && read ans && [ $${ans:-N} = y ]
 endef
 
+# Name of git remote pointing to the canonical upstream git repository, i.e.
+# git@github.com:oasislabs/oasis-core.git.
+OASIS_CORE_GIT_ORIGIN_REMOTE ?= origin
+
 # Try to determine Oasis Core's version from git.
 LATEST_TAG := $(shell git describe --tags --match 'v*' --abbrev=0 2>/dev/null)
 VERSION := $(subst v,,$(LATEST_TAG))
@@ -61,9 +65,9 @@ _PUNCH_VERSION_FILE := $(shell mktemp /tmp/oasis-core.XXXXX.py)
 # http://make.mad-scientist.net/deferred-simple-variable-expansion/.
 NEXT_VERSION ?= $(eval NEXT_VERSION := $$(shell \
 	set -e; \
-	echo "Fetching all tags from the origin remote..." 1>&2; \
-	git fetch origin --tags; \
-	LATEST_TAG_ORIGIN=`git describe --tags --match 'v*' --abbrev=0 origin/master` \
+	echo "Fetching all tags from the $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote..." 1>&2; \
+	git fetch $(OASIS_CORE_GIT_ORIGIN_REMOTE) --tags; \
+	LATEST_TAG_ORIGIN=`git describe --tags --match 'v*' --abbrev=0 $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master` \
 	python3 -c "import os; year, minor = os.environ['LATEST_TAG_ORIGIN'].lstrip('v').split('.'); \
 		print(f'year=\"{year}\"\nminor={minor}')" > $(_PUNCH_VERSION_FILE); \
 	punch --config-file .punch_config.py --version-file $(_PUNCH_VERSION_FILE) --action custom_bump --quiet; \
@@ -134,10 +138,10 @@ endef
 
 # Helper that ensures the origin/master's HEAD doesn't contain any Change Log fragments.
 define ENSURE_NO_CHANGELOG_FRAGMENTS =
-	CHANGELOG_FRAGMENTS=`git ls-tree -r --name-only origin/master .changelog | \
-	       grep --invert-match --extended-regexp '(README.md|template.md.j2)'`; \
+	CHANGELOG_FRAGMENTS=`git ls-tree -r --name-only $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master .changelog | \
+	    grep --invert-match --extended-regexp '(README.md|template.md.j2)'`; \
 	if [[ -n $${CHANGELOG_FRAGMENTS} ]]; then \
-		$(ECHO_STDERR) "$(RED)Error: Found the following Change Log fragments on origin/master branch:"; \
+		$(ECHO_STDERR) "$(RED)Error: Found the following Change Log fragments on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master branch:"; \
 		$(ECHO_STDERR) "$${CHANGELOG_FRAGMENTS}$(OFF)"; \
 		exit 1; \
 	fi
@@ -145,7 +149,7 @@ endef
 
 # Helper that ensures the origin/master's HEAD contains a Change Log section for the next release.
 define ENSURE_NEXT_VERSION_IN_CHANGELOG =
-	if ! ( git show origin/master:CHANGELOG.md | \
+	if ! ( git show $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master:CHANGELOG.md | \
 		   grep --quiet '^## $(NEXT_VERSION) (.*)' ); then \
 		$(ECHO_STDERR) "$(RED)Error: Could not locate Change Log section for release $(NEXT_VERSION).$(OFF)"; \
 		exit 1; \

@@ -108,12 +108,12 @@ tag-next-release:
 	@$(ECHO_STDERR) "Checking if we can tag version $(NEXT_VERSION) as the next release..."
 	@$(ENSURE_NO_CHANGELOG_FRAGMENTS)
 	@$(ENSURE_NEXT_VERSION_IN_CHANGELOG)
-	@$(ECHO_STDERR) "All checks have passed. Proceeding with tagging the origin/master HEAD with tag 'v$(NEXT_VERSION)'."
+	@$(ECHO_STDERR) "All checks have passed. Proceeding with tagging the $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master HEAD with tag 'v$(NEXT_VERSION)'."
 	@$(CONFIRM_ACTION)
 	@$(ECHO_STDERR) "If this appears to be stuck, you might need to touch your security key for GPG sign operation."
-	@git tag --sign --message="Version $(NEXT_VERSION)" v$(NEXT_VERSION) origin/master
-	@git push origin v$(NEXT_VERSION)
-	@$(ECHO_STDERR) "$(CYAN)Tag 'v$(NEXT_VERSION)' has been successfully pushed to origin/master.$(OFF)"
+	@git tag --sign --message="Version $(NEXT_VERSION)" v$(NEXT_VERSION) $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master
+	@git push $(OASIS_CORE_GIT_ORIGIN_REMOTE) v$(NEXT_VERSION)
+	@$(ECHO_STDERR) "$(CYAN)Tag 'v$(NEXT_VERSION)' has been successfully pushed to $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote.$(OFF)"
 
 # Prepare release.
 release:
