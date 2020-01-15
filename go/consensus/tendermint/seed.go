@@ -13,6 +13,7 @@ import (
 	"github.com/tendermint/tendermint/version"
 
 	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
@@ -168,7 +169,10 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, o
 		var tmvAddr *p2p.NetAddress
 		tmvAddr, err := api.NodeToP2PAddr(&openedNode)
 		if err != nil {
-			return errors.Wrap(err, "tendermint/seed: failed to reformat genesis validator address")
+			logging.GetLogger("seed").Error("tendermint/seed: failed to reformat genesis validator address",
+				"err", err,
+			)
+			continue
 		}
 
 		addrs = append(addrs, tmvAddr)
@@ -182,7 +186,9 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, o
 		addrBook.RemoveAddress(v)
 
 		if err := addrBook.AddAddress(v, ourAddr); err != nil {
-			return errors.Wrap(err, "tendermint/seed: failed to add genesis validator to address book")
+			logging.GetLogger("seed").Error("tendermint/seed: failed to add genesis validator to address book",
+				"err", err,
+			)
 		}
 	}
 
