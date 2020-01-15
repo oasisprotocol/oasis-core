@@ -21,6 +21,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -259,6 +260,11 @@ func (a *ApplicationServer) WatchInvalidatedTx(txHash hash.Hash) (<-chan error, 
 	return a.mux.watchInvalidatedTx(txHash)
 }
 
+// EstimateGas calculates the amount of gas required to execute the given transaction.
+func (a *ApplicationServer) EstimateGas(caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error) {
+	return a.mux.EstimateGas(caller, tx)
+}
+
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
 func NewApplicationServer(ctx context.Context, cfg *ApplicationConfig) (*ApplicationServer, error) {
@@ -379,6 +385,8 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		"state", string(b),
 	)
 
+	mux.currentTime = st.Time
+
 	// Stick the digest of the genesis block (the RequestInitChain) into
 	// the state.
 	//
@@ -422,7 +430,9 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 
 	// Call InitChain() on all applications.
 	mux.logger.Debug("InitChain: initializing applications")
+
 	ctx := NewContext(ContextInitChain, mux.currentTime, mux.state)
+	defer ctx.Close()
 
 	for _, app := range mux.appsByLexOrder {
 		mux.logger.Debug("InitChain: calling InitChain on application",
@@ -501,6 +511,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	}
 	// Create BeginBlock context.
 	ctx := NewContext(ContextBeginBlock, mux.currentTime, mux.state)
+	defer ctx.Close()
 
 	switch mux.state.haltMode {
 	case false:
@@ -565,12 +576,12 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	return response
 }
 
-func (mux *abciMux) executeTx(ctx *Context, rawTx []byte) error {
-	logger := mux.logger.With("is_check_only", ctx.IsCheckOnly())
+func (mux *abciMux) decodeTx(ctx *Context, rawTx []byte) (*transaction.Transaction, *transaction.SignedTransaction, error) {
+	logger := mux.logger.With("mode", ctx.Mode())
 
 	if mux.state.haltMode {
 		logger.Debug("executeTx: in halt, rejecting all transactions")
-		return fmt.Errorf("halt mode, rejecting all transactions")
+		return nil, nil, fmt.Errorf("halt mode, rejecting all transactions")
 	}
 
 	if mux.maxTxSize > 0 && uint64(len(rawTx)) > mux.maxTxSize {
@@ -579,7 +590,7 @@ func (mux *abciMux) executeTx(ctx *Context, rawTx []byte) error {
 		logger.Error("received oversized transaction",
 			"tx_size", len(rawTx),
 		)
-		return errOversizedTx
+		return nil, nil, errOversizedTx
 	}
 
 	// Unmarshal envelope and verify transaction.
@@ -588,30 +599,33 @@ func (mux *abciMux) executeTx(ctx *Context, rawTx []byte) error {
 		logger.Error("failed to unmarshal signed transaction",
 			"tx", base64.StdEncoding.EncodeToString(rawTx),
 		)
-		return err
+		return nil, nil, err
 	}
 	var tx transaction.Transaction
 	if err := sigTx.Open(&tx); err != nil {
 		logger.Error("failed to verify transaction signature",
 			"tx", base64.StdEncoding.EncodeToString(rawTx),
 		)
-		return err
+		return nil, nil, err
 	}
 	if err := tx.SanityCheck(); err != nil {
 		logger.Error("bad transaction",
 			"tx", base64.StdEncoding.EncodeToString(rawTx),
 		)
-		return err
+		return nil, nil, err
 	}
 
-	// Set authenticated transaction signer.
-	ctx.SetTxSigner(sigTx.Signature.PublicKey)
+	return &tx, &sigTx, nil
+}
+
+func (mux *abciMux) processTx(ctx *Context, tx *transaction.Transaction) error {
+	logger := mux.logger.With("mode", ctx.Mode())
 
 	// Pass the transaction through the fee handler if configured.
 	if txAuthHandler := mux.state.txAuthHandler; txAuthHandler != nil {
-		if err := txAuthHandler.AuthenticateTx(ctx, &tx); err != nil {
+		if err := txAuthHandler.AuthenticateTx(ctx, tx); err != nil {
 			logger.Debug("failed to authenticate transaction",
-				"tx", base64.StdEncoding.EncodeToString(rawTx),
+				"tx", tx,
 				"tx_signer", ctx.TxSigner(),
 				"method", tx.Method,
 				"err", err,
@@ -624,7 +638,7 @@ func (mux *abciMux) executeTx(ctx *Context, rawTx []byte) error {
 	app := mux.appsByMethod[tx.Method]
 	if app == nil {
 		logger.Error("unknown method",
-			"tx", base64.StdEncoding.EncodeToString(rawTx),
+			"tx", tx,
 			"method", tx.Method,
 		)
 		return fmt.Errorf("mux: unknown method: %s", tx.Method)
@@ -632,10 +646,10 @@ func (mux *abciMux) executeTx(ctx *Context, rawTx []byte) error {
 
 	logger.Debug("dispatching",
 		"app", app.Name(),
-		"tx", base64.StdEncoding.EncodeToString(rawTx),
+		"tx", tx,
 	)
 
-	if err := app.ExecuteTx(ctx, &tx); err != nil {
+	if err := app.ExecuteTx(ctx, tx); err != nil {
 		return err
 	}
 
@@ -646,7 +660,7 @@ func (mux *abciMux) executeTx(ctx *Context, rawTx []byte) error {
 			continue
 		}
 
-		if err := foreignApp.ForeignExecuteTx(ctx, app, &tx); err != nil {
+		if err := foreignApp.ForeignExecuteTx(ctx, app, tx); err != nil {
 			return err
 		}
 	}
@@ -654,8 +668,38 @@ func (mux *abciMux) executeTx(ctx *Context, rawTx []byte) error {
 	return nil
 }
 
+func (mux *abciMux) executeTx(ctx *Context, rawTx []byte) error {
+	tx, sigTx, err := mux.decodeTx(ctx, rawTx)
+	if err != nil {
+		return err
+	}
+
+	// Set authenticated transaction signer.
+	ctx.SetTxSigner(sigTx.Signature.PublicKey)
+
+	return mux.processTx(ctx, tx)
+}
+
+func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error) {
+	// As opposed to other transaction dispatch entry points (CheckTx/DeliverTx), this method can
+	// be called in parallel to the consensus layer and to other invocations.
+	//
+	// For simulation mode, time will be filled in by NewContext from last block time.
+	ctx := NewContext(ContextSimulateTx, time.Time{}, mux.state)
+	defer ctx.Close()
+
+	ctx.SetTxSigner(caller)
+
+	// Ignore any errors that occurred during simulation as we only need to estimate gas even if the
+	// transaction seems like it will fail.
+	_ = mux.processTx(ctx, tx)
+
+	return ctx.Gas().GasUsed(), nil
+}
+
 func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	ctx := NewContext(ContextCheckTx, mux.currentTime, mux.state)
+	defer ctx.Close()
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
 		module, code := errors.Code(err)
@@ -701,6 +745,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 
 func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
 	ctx := NewContext(ContextDeliverTx, mux.currentTime, mux.state)
+	defer ctx.Close()
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
 		module, code := errors.Code(err)
@@ -735,6 +780,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	}
 
 	ctx := NewContext(ContextEndBlock, mux.currentTime, mux.state)
+	defer ctx.Close()
 
 	// Fire all application timers first.
 	for _, app := range mux.appsByLexOrder {
@@ -773,7 +819,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 }
 
 func (mux *abciMux) Commit() types.ResponseCommit {
-	if err := mux.state.doCommit(); err != nil {
+	if err := mux.state.doCommit(mux.currentTime); err != nil {
 		mux.logger.Error("Commit failed",
 			"err", err,
 		)
@@ -870,7 +916,6 @@ func newABCIMux(ctx context.Context, cfg *ApplicationConfig) (*abciMux, error) {
 		appsByName:     make(map[string]Application),
 		appsByMethod:   make(map[transaction.MethodName]Application),
 		lastBeginBlock: -1,
-		currentTime:    time.Unix(0, 0),
 	}
 
 	mux.logger.Debug("ABCI multiplexer initialized",
@@ -895,6 +940,7 @@ type ApplicationState struct {
 	blockLock   sync.RWMutex
 	blockHash   []byte
 	blockHeight int64
+	blockTime   time.Time
 	blockCtx    *BlockContext
 
 	txAuthHandler TransactionAuthHandler
@@ -1034,13 +1080,14 @@ func (s *ApplicationState) MinGasPrice() *quantity.Quantity {
 	return &s.minGasPrice
 }
 
-func (s *ApplicationState) doCommit() error {
+func (s *ApplicationState) doCommit(now time.Time) error {
 	// Save the new version of the persistent tree.
 	blockHash, blockHeight, err := s.deliverTxTree.SaveVersion()
 	if err == nil {
 		s.blockLock.Lock()
 		s.blockHash = blockHash
 		s.blockHeight = blockHeight
+		s.blockTime = now
 		s.blockLock.Unlock()
 
 		// Reset CheckTx state to latest version. This is safe because

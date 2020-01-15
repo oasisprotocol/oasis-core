@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -85,7 +86,7 @@ func NewSubmissionManager(backend Backend) SubmissionManager {
 	}
 }
 
-// SignAndSubmitTx is a helper method that signs and submits a transaction to
+// SignAndSubmitTx is a helper function that signs and submits a transaction to
 // the consensus backend.
 //
 // If a nonce is set to zero, the transaction will be submitted by using the

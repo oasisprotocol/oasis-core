@@ -81,6 +81,9 @@ type Block struct {
 type Backend interface {
 	ClientBackend
 
+	// EstimateGas calculates the amount of gas required to execute the given transaction.
+	EstimateGas(ctx context.Context, caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error)
+
 	// Synced returns a channel that is closed once synchronization is
 	// complete.
 	Synced() <-chan struct{}

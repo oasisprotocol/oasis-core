@@ -136,7 +136,7 @@ func TestRewardAndSlash(t *testing.T) {
 	escrowAccount = s.Account(escrowID)
 	require.Equal(t, mustInitQuantity(t, 300), escrowAccount.Escrow.Active.Balance, "reward late epoch - escrow active escrow")
 
-	slashedNonzero, err := s.SlashEscrow(abci.NewContext(abci.ContextDeliverTx, time.Now(), nil), escrowID, mustInitQuantityP(t, 40))
+	slashedNonzero, err := s.SlashEscrow(abci.NewMockContext(abci.ContextDeliverTx, time.Now()), escrowID, mustInitQuantityP(t, 40))
 	require.NoError(t, err, "slash escrow")
 	require.True(t, slashedNonzero, "slashed nonzero")
 

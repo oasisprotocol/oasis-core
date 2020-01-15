@@ -531,6 +531,10 @@ func (t *tendermintService) SubmitEvidence(ctx context.Context, evidence consens
 	return nil
 }
 
+func (t *tendermintService) EstimateGas(ctx context.Context, caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error) {
+	return t.mux.EstimateGas(caller, tx)
+}
+
 func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
 	// Note: The tendermint documentation claims using SubscribeUnbuffered can
 	// freeze the server, however, the buffered Subscribe can drop events, and
