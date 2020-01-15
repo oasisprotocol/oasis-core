@@ -22,7 +22,7 @@ var (
 	errUnexpectedTimer       = errors.New("beacon: unexpected timer")
 
 	prodEntropyCtx  = []byte("EkB-tmnt")
-	debugEntropyCtx = []byte("Ekb-Dumm")
+	DebugEntropyCtx = []byte("Ekb-Dumm")
 
 	_ abci.Application = (*beaconApplication)(nil)
 )
@@ -121,11 +121,11 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 		}
 	case true:
 		// UNSAFE/DEBUG - Deterministic beacon.
-		entropyCtx = debugEntropyCtx
+		entropyCtx = DebugEntropyCtx
 		entropy = []byte("If you change this, you will fuck up the byzantine tests!!!")
 	}
 
-	b := getBeacon(epoch, entropyCtx, entropy)
+	b := GetBeacon(epoch, entropyCtx, entropy)
 
 	app.logger.Debug("onBeaconEpochChange: generated beacon",
 		"epoch", epoch,
@@ -161,7 +161,7 @@ func New() abci.Application {
 	return app
 }
 
-func getBeacon(beaconEpoch epochtime.EpochTime, entropyCtx []byte, entropy []byte) []byte {
+func GetBeacon(beaconEpoch epochtime.EpochTime, entropyCtx []byte, entropy []byte) []byte {
 	var tmp [8]byte
 	binary.LittleEndian.PutUint64(tmp[:], uint64(beaconEpoch))
 

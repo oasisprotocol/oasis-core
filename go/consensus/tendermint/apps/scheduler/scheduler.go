@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
@@ -37,12 +38,12 @@ import (
 var (
 	_ abci.Application = (*schedulerApplication)(nil)
 
-	rngContextCompute              = []byte("EkS-ABCI-Compute")
-	rngContextStorage              = []byte("EkS-ABCI-Storage")
-	rngContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
-	rngContextMerge                = []byte("EkS-ABCI-Merge")
-	rngContextValidators           = []byte("EkS-ABCI-Validators")
-	rngContextEntities             = []byte("EkS-ABCI-Entities")
+	RNGContextCompute              = []byte("EkS-ABCI-Compute")
+	RNGContextStorage              = []byte("EkS-ABCI-Storage")
+	RNGContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
+	RNGContextMerge                = []byte("EkS-ABCI-Merge")
+	RNGContextValidators           = []byte("EkS-ABCI-Validators")
+	RNGContextEntities             = []byte("EkS-ABCI-Entities")
 
 	errUnexpectedTransaction = errors.New("tendermint/scheduler: unexpected transaction")
 )
@@ -414,6 +415,16 @@ func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registr
 	return false
 }
 
+// GetPerm generates a permutation that we use to choose nodes from a list of eligible nodes to elect.
+func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes int) ([]int, error) {
+	drbg, err := drbg.New(crypto.SHA512, beacon, runtimeID[:], rngCtx)
+	if err != nil {
+		return nil, errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
+	}
+	rng := rand.New(mathrand.New(drbg))
+	return rng.Perm(nrNodes), nil
+}
+
 // Operates on consensus connection.
 // Return error if node should crash.
 // For non-fatal problems, save a problem condition to the state and return successfully.
@@ -437,24 +448,24 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 
 	switch kind {
 	case scheduler.KindCompute:
-		rngCtx = rngContextCompute
+		rngCtx = RNGContextCompute
 		threshold = staking.KindCompute
 		isSuitableFn = app.isSuitableComputeWorker
 		workerSize = int(rt.Compute.GroupSize)
 		backupSize = int(rt.Compute.GroupBackupSize)
 	case scheduler.KindMerge:
-		rngCtx = rngContextMerge
+		rngCtx = RNGContextMerge
 		threshold = staking.KindCompute
 		isSuitableFn = app.isSuitableMergeWorker
 		workerSize = int(rt.Merge.GroupSize)
 		backupSize = int(rt.Merge.GroupBackupSize)
 	case scheduler.KindTransactionScheduler:
-		rngCtx = rngContextTransactionScheduler
+		rngCtx = RNGContextTransactionScheduler
 		threshold = staking.KindCompute
 		isSuitableFn = app.isSuitableTransactionScheduler
 		workerSize = int(rt.TxnScheduler.GroupSize)
 	case scheduler.KindStorage:
-		rngCtx = rngContextStorage
+		rngCtx = RNGContextStorage
 		threshold = staking.KindStorage
 		isSuitableFn = app.isSuitableStorageWorker
 		workerSize = int(rt.Storage.GroupSize)
@@ -499,12 +510,10 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 	}
 
 	// Do the actual election.
-	drbg, err := drbg.New(crypto.SHA512, beacon, rt.ID[:], rngCtx)
+	idxs, err := GetPerm(beacon, rt.ID, rngCtx, nrNodes)
 	if err != nil {
-		return errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
+		return err
 	}
-	rng := rand.New(mathrand.New(drbg))
-	idxs := rng.Perm(nrNodes)
 
 	var members []*scheduler.CommitteeNode
 	for i := 0; i < len(idxs); i++ {
@@ -585,7 +594,7 @@ func (app *schedulerApplication) electValidators(ctx *abci.Context, beacon []byt
 	}
 
 	// Shuffle the node list.
-	drbg, err := drbg.New(crypto.SHA512, beacon, nil, rngContextValidators)
+	drbg, err := drbg.New(crypto.SHA512, beacon, nil, RNGContextValidators)
 	if err != nil {
 		return errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
 	}
@@ -662,7 +671,7 @@ func publicKeyMapToSliceByStake(entMap map[signature.PublicKey]bool, entityStake
 	entities := publicKeyMapToSortedSlice(entMap)
 
 	// Shuffle the sorted slice to make tie-breaks "random".
-	drbg, err := drbg.New(crypto.SHA512, beacon, nil, rngContextEntities)
+	drbg, err := drbg.New(crypto.SHA512, beacon, nil, RNGContextEntities)
 	if err != nil {
 		return nil, errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
 	}
