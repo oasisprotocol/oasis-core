@@ -47,6 +47,11 @@ func (client *Client) startNode() error {
 	return nil
 }
 
+// Start starts an Oasis node.
+func (client *Client) Start() error {
+	return client.startNode()
+}
+
 // NewClient provisions a new client node and adds it to the network.
 func (net *Network) NewClient() (*Client, error) {
 	clientName := fmt.Sprintf("client-%d", len(net.clients))

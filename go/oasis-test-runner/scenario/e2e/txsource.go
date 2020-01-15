@@ -21,18 +21,14 @@ const (
 
 // TxSourceTransferShort uses the transfer workload for a short time.
 var TxSourceTransferShort scenario.Scenario = &txSourceImpl{
-	basicImpl: basicImpl{
-		name: "txsource-transfer-short",
-	},
+	basicImpl: *newBasicImpl("txsource-transfer-short", "", nil),
 	workload:  workload.NameTransfer,
 	timeLimit: timeLimitShort,
 }
 
 // TxSourceTransfer uses the transfer workload.
 var TxSourceTransfer scenario.Scenario = &txSourceImpl{
-	basicImpl: basicImpl{
-		name: "txsource-transfer",
-	},
+	basicImpl: *newBasicImpl("txsource-transfer", "", nil),
 	workload:  workload.NameTransfer,
 	timeLimit: timeLimitLong,
 }

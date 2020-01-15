@@ -16,7 +16,8 @@ var mockSPID []byte
 type iasProxy struct {
 	Node
 
-	grpcPort uint16
+	useRegistry bool
+	grpcPort    uint16
 }
 
 func (ias *iasProxy) tlsCertPath() string {
@@ -29,9 +30,13 @@ func (ias *iasProxy) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		grpcServerPort(ias.grpcPort).
-		iasUseGenesis().
 		iasDebugMock().
 		iasSPID(mockSPID)
+	if ias.useRegistry {
+		args = args.internalSocketAddress(ias.net.validators[0].SocketPath())
+	} else {
+		args = args.iasUseGenesis()
+	}
 
 	var err error
 	if ias.cmd, ias.exitCh, err = ias.net.startOasisNode(
@@ -79,7 +84,8 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 			net:  net,
 			dir:  iasDir,
 		},
-		grpcPort: net.nextNodePort,
+		useRegistry: net.cfg.IASUseRegistry,
+		grpcPort:    net.nextNodePort,
 	}
 	net.iasProxy.doStartNode = net.iasProxy.startNode
 

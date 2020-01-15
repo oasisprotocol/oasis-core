@@ -122,7 +122,7 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 	case true:
 		// UNSAFE/DEBUG - Deterministic beacon.
 		entropyCtx = debugEntropyCtx
-		entropy = []byte("If you change this, you will fuck up the byzantine tests!!")
+		entropy = []byte("If you change this, you will fuck up the byzantine tests!!!")
 	}
 
 	b := getBeacon(epoch, entropyCtx, entropy)

@@ -42,9 +42,9 @@ func checkRegistry(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	}
 
 	// Check runtimes.
-	runtimes, err := st.SignedRuntimes()
+	runtimes, err := st.AllSignedRuntimes()
 	if err != nil {
-		return fmt.Errorf("SignedRuntimes: %w", err)
+		return fmt.Errorf("AllSignedRuntimes: %w", err)
 	}
 	seenRuntimes, err := registry.SanityCheckRuntimes(runtimes)
 	if err != nil {

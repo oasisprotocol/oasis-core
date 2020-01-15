@@ -98,6 +98,11 @@ func (n *Node) stopNode() error {
 	return nil
 }
 
+// Stop stops the node.
+func (n *Node) Stop() error {
+	return n.stopNode()
+}
+
 // Restart kills the node, waits for it to stop, and starts it again.
 func (n *Node) Restart() error {
 	if err := n.stopNode(); err != nil {
@@ -179,7 +184,9 @@ type NetworkCfg struct { // nolint: maligned
 	// DeterministicIdentities is the deterministic identities flag.
 	DeterministicIdentities bool `json:"deterministic_identities"`
 
-	// XXX: Config for IAS proxy
+	// IASUseRegistry specifies whether the IAS proxy should use the registry instead of the
+	// genesis document for authenticating runtime IDs.
+	IASUseRegistry bool `json:"ias_use_registry,omitempty"`
 
 	// StakingGenesis is the name of a file with a staking genesis document to use if GenesisFile isn't set.
 	StakingGenesis string `json:"staking_genesis"`
@@ -259,8 +266,13 @@ func (net *Network) ClientController() *Controller {
 
 // NumRegisterNodes returns the number of all nodes that need to register.
 func (net *Network) NumRegisterNodes() int {
+	var keyManagers int
+	if net.keymanager != nil {
+		keyManagers = 1
+	}
+
 	return len(net.validators) +
-		1 + // Key manager.
+		keyManagers +
 		len(net.storageWorkers) +
 		len(net.computeWorkers) +
 		len(net.byzantine)

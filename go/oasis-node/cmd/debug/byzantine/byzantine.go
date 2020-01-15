@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
@@ -28,6 +29,8 @@ const (
 	CfgFakeSGX = "fake_sgx"
 	// CfgVersionFakeEnclaveID configures runtime's EnclaveIdentity.
 	CfgVersionFakeEnclaveID = "runtime.version.fake_enclave_id"
+	// CfgActivationEpoch configures the epoch at which the Byzantine node activates.
+	CfgActivationEpoch = "activation_epoch"
 )
 
 var (
@@ -105,6 +108,10 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 			panic(fmt.Sprintf("P2P stop failed: %+v", err1))
 		}
 	}()
+
+	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
+	}
 
 	var capabilities *node.Capabilities
 	var rak signature.Signer
@@ -224,6 +231,10 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		}
 	}()
 
+	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
+	}
+
 	var capabilities *node.Capabilities
 	var rak signature.Signer
 	if viper.GetBool(CfgFakeSGX) {
@@ -342,6 +353,10 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 		}
 	}()
 
+	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
+	}
+
 	var capabilities *node.Capabilities
 	if viper.GetBool(CfgFakeSGX) {
 		if _, capabilities, err = initFakeCapabilitiesSGX(); err != nil {
@@ -404,6 +419,10 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 			panic(fmt.Sprintf("P2P stop failed: %+v", err1))
 		}
 	}()
+
+	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
+	}
 
 	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
@@ -494,6 +513,10 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 			panic(fmt.Sprintf("P2P stop failed: %+v", err1))
 		}
 	}()
+
+	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
+	}
 
 	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
@@ -609,6 +632,10 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 		}
 	}()
 
+	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
+	}
+
 	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
@@ -651,7 +678,8 @@ func Register(parentCmd *cobra.Command) {
 func init() {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fs.Bool(CfgFakeSGX, false, "register with SGX capability")
-	fs.String(CfgVersionFakeEnclaveID, "", "Fake runtime enclave identity")
+	fs.String(CfgVersionFakeEnclaveID, "", "fake runtime enclave identity")
+	fs.Uint64(CfgActivationEpoch, 0, "epoch at which the Byzantine node should activate")
 	_ = viper.BindPFlags(fs)
 	byzantineCmd.PersistentFlags().AddFlagSet(fs)
 

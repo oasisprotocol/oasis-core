@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/node"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
@@ -16,8 +17,9 @@ type Byzantine struct {
 	script string
 	entity *Entity
 
-	consensusPort uint16
-	p2pPort       uint16
+	consensusPort   uint16
+	p2pPort         uint16
+	activationEpoch epochtime.EpochTime
 }
 
 // ByzantineCfg is the Oasis byzantine node configuration.
@@ -27,6 +29,8 @@ type ByzantineCfg struct {
 	Script       string
 	IdentitySeed string
 	Entity       *Entity
+
+	ActivationEpoch epochtime.EpochTime
 }
 
 func (worker *Byzantine) startNode() error {
@@ -37,7 +41,8 @@ func (worker *Byzantine) startNode() error {
 		tendermintDebugAddrBookLenient().
 		workerP2pPort(worker.p2pPort).
 		appendSeedNodes(worker.net).
-		appendEntity(worker.entity)
+		appendEntity(worker.entity).
+		byzantineActivationEpoch(worker.activationEpoch)
 
 	for _, v := range worker.net.Runtimes() {
 		if v.kind == registry.KindCompute && v.teeHardware == node.TEEHardwareIntelSGX {
@@ -104,10 +109,11 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
-		script:        cfg.Script,
-		entity:        cfg.Entity,
-		consensusPort: net.nextNodePort,
-		p2pPort:       net.nextNodePort + 1,
+		script:          cfg.Script,
+		entity:          cfg.Entity,
+		consensusPort:   net.nextNodePort,
+		p2pPort:         net.nextNodePort + 1,
+		activationEpoch: cfg.ActivationEpoch,
 	}
 	worker.doStartNode = worker.startNode
 

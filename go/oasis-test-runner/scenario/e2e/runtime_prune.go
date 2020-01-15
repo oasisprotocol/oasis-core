@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasislabs/oasis-core/go/runtime/client/api"
 	"github.com/oasislabs/oasis-core/go/runtime/history"
-	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 )
 
 var (
@@ -32,22 +29,12 @@ const (
 
 type runtimePruneImpl struct {
 	basicImpl
-
-	logger *logging.Logger
 }
 
 func newRuntimePruneImpl() scenario.Scenario {
-	sc := &runtimePruneImpl{
-		basicImpl: basicImpl{
-			clientBinary: "", // We use a Go client.
-		},
-		logger: logging.GetLogger("scenario/e2e/runtime_prune"),
+	return &runtimePruneImpl{
+		basicImpl: *newBasicImpl("runtime-prune", "", nil),
 	}
-	return sc
-}
-
-func (sc *runtimePruneImpl) Name() string {
-	return "runtime-prune"
 }
 
 func (sc *runtimePruneImpl) Fixture() (*oasis.NetworkFixture, error) {
@@ -68,32 +55,16 @@ func (sc *runtimePruneImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-// keyValue is a key/value argument for the simple-keyvalue runtime.
-type keyValue struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
 func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 	if err := sc.net.Start(); err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-
-	sc.logger.Info("waiting for nodes to register",
-		"num_nodes", sc.net.NumRegisterNodes(),
-	)
-	if err := sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
+	if err := sc.initialEpochTransitions(); err != nil {
 		return err
 	}
 
-	sc.logger.Info("triggering epoch transition")
-	if err := sc.net.Controller().SetEpoch(ctx, 1); err != nil {
-		return fmt.Errorf("failed to set epoch: %w", err)
-	}
-	sc.logger.Info("epoch transition done")
-
+	ctx := context.Background()
 	c := sc.net.ClientController().RuntimeClient
 
 	// Submit transactions.
@@ -102,26 +73,8 @@ func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 			"seq", i,
 		)
 
-		// Submit a transaction and check the result.
-		var rsp transaction.TxnOutput
-		rawRsp, err := c.SubmitTx(ctx, &api.SubmitTxRequest{
-			RuntimeID: runtimeID,
-			Data: cbor.Marshal(&transaction.TxnCall{
-				Method: "insert",
-				Args: keyValue{
-					Key:   "hello",
-					Value: "world",
-				},
-			}),
-		})
-		if err != nil {
-			return fmt.Errorf("failed to submit runtime tx: %w", err)
-		}
-		if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
-			return fmt.Errorf("malformed tx output from runtime: %w", err)
-		}
-		if rsp.Error != nil {
-			return fmt.Errorf("runtime tx failed: %s", *rsp.Error)
+		if err := sc.submitRuntimeTx(ctx, "hello", fmt.Sprintf("world %d", i)); err != nil {
+			return err
 		}
 	}
 

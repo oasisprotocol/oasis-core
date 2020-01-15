@@ -5,9 +5,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 )
 
@@ -18,14 +18,11 @@ var (
 
 type nodeShutdownImpl struct {
 	basicImpl
-
-	logger *logging.Logger
 }
 
 func newNodeShutdownImpl() scenario.Scenario {
 	sc := &nodeShutdownImpl{
-		basicImpl: basicImpl{},
-		logger:    logging.GetLogger("scenario/e2e/node_shutdown"),
+		basicImpl: *newBasicImpl("node-shutdown", "", nil),
 	}
 	return sc
 }
@@ -69,7 +66,7 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 		"--log.level", "debug",
 		"--address", "unix:" + computeWorker.SocketPath(),
 	}
-	if err = runSubCommand(childEnv, "control-shutdown", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err = cli.RunSubCommand(childEnv, sc.logger, "control-shutdown", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
 		return errors.Wrap(err, "scenario/e2e/node_shutdown: send request failed")
 	}
 

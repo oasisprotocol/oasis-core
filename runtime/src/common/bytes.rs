@@ -226,8 +226,6 @@ macro_rules! impl_bytes {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     // Use hash of an empty string as a test key.
     const TEST_KEY_BYTES: [u8; 32] = [
         0xc6, 0x72, 0xb8, 0xd1, 0xef, 0x56, 0xed, 0x28, 0xab, 0x87, 0xc3, 0x62, 0x2c, 0x51, 0x14,
@@ -235,10 +233,16 @@ mod tests {
         0x96, 0x7a,
     ];
 
+    impl_bytes!(TestKey, 32, "test key");
+
+    #[test]
+    fn test_length() {
+        assert_eq!(TestKey::len(), 32);
+    }
+
     #[test]
     fn test_serde_base64() {
         // Serialize.
-        impl_bytes!(TestKey, 32, "test key");
         let test_key = TestKey(TEST_KEY_BYTES);
         let test_key_str = serde_json::to_string(&test_key).unwrap();
         assert_eq!(
@@ -254,8 +258,6 @@ mod tests {
     #[test]
     fn test_serde_cbor() {
         // Serialize.
-        impl_bytes!(TestKey, 32, "test key");
-
         let test_key = TestKey(TEST_KEY_BYTES);
         let test_key_vec = serde_cbor::to_vec(&test_key).unwrap();
 

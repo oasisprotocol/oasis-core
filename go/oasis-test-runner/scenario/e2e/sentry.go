@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
@@ -18,22 +17,12 @@ var (
 
 type sentryImpl struct {
 	basicImpl
-
-	logger *logging.Logger
 }
 
 func newSentryImpl() scenario.Scenario {
-	s := &sentryImpl{
-		basicImpl: basicImpl{
-			clientBinary: "simple-keyvalue-client",
-		},
-		logger: logging.GetLogger("scenario/e2e/sentry"),
+	return &sentryImpl{
+		basicImpl: *newBasicImpl("sentry", "simple-keyvalue-client", nil),
 	}
-	return s
-}
-
-func (s *sentryImpl) Name() string {
-	return "sentry"
 }
 
 func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {

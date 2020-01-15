@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/file"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
@@ -29,19 +28,16 @@ const haltEpoch = 3
 
 type haltRestoreImpl struct {
 	basicImpl
-
-	logger *logging.Logger
 }
 
 func newHaltRestoreImpl() scenario.Scenario {
-	sc := &haltRestoreImpl{
-		basicImpl: basicImpl{
-			clientBinary: "test-long-term-client",
-			clientArgs:   []string{"--mode", "part1"},
-		},
-		logger: logging.GetLogger("scenario/e2e/halt_restore"),
+	return &haltRestoreImpl{
+		basicImpl: *newBasicImpl(
+			"halt-restore",
+			"test-long-term-client",
+			[]string{"--mode", "part1"},
+		),
 	}
-	return sc
 }
 
 func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
@@ -54,10 +50,6 @@ func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 		val.Restartable = true
 	}
 	return f, nil
-}
-
-func (sc *haltRestoreImpl) Name() string {
-	return "halt-restore"
 }
 
 func (sc *haltRestoreImpl) getExportedGenesisFiles() ([]string, error) {

@@ -67,6 +67,11 @@ func (worker *Storage) DatabasePath() string {
 	return filepath.Join(worker.dir.String(), database.DefaultFileName(worker.backend))
 }
 
+// Start starts an Oasis node.
+func (worker *Storage) Start() error {
+	return worker.startNode()
+}
+
 func (worker *Storage) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().

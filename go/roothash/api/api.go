@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
@@ -40,6 +41,15 @@ var (
 
 	// ErrNotFound is the error returned when a block is not found.
 	ErrNotFound = errors.New(ModuleName, 2, "roothash: block not found")
+
+	// ErrInvalidRuntime is the error returned when the passed runtime is invalid.
+	ErrInvalidRuntime = errors.New(ModuleName, 3, "roothash: invalid runtime")
+
+	// ErrNoRound is the error returned when no round is in progress.
+	ErrNoRound = errors.New(ModuleName, 4, "roothash: no round is in progress")
+
+	// ErrRuntimeSuspended is the error returned when the passed runtime is suspended.
+	ErrRuntimeSuspended = errors.New(ModuleName, 5, "roothash: runtime is suspended")
 
 	// MethodComputeCommit is the method name for compute commit submission.
 	MethodComputeCommit = transaction.NewMethodName(ModuleName, "ComputeCommit", ComputeCommit{})
@@ -154,9 +164,29 @@ type MetricsMonitorable interface {
 
 // Genesis is the roothash genesis state.
 type Genesis struct {
+	// Parameters are the roothash consensus parameters.
+	Parameters ConsensusParameters `json:"params"`
+
 	// RuntimeStates is the per-runtime map of genesis blocks.
 	RuntimeStates map[common.Namespace]*api.RuntimeGenesis `json:"runtime_states,omitempty"`
 }
+
+// ConsensusParameters are the roothash consensus parameters.
+type ConsensusParameters struct {
+	// GasCosts are the roothash transaction gas costs.
+	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
+
+	// DebugDoNotSuspendRuntimes is true iff runtimes should not be suspended
+	// for lack of paying maintenance fees.
+	DebugDoNotSuspendRuntimes bool `json:"debug_do_not_suspend_runtimes,omitempty"`
+}
+
+const (
+	// GasOpComputeCommit is the gas operation identifier for compute commits.
+	GasOpComputeCommit transaction.Op = "compute_commit"
+	// GasOpMergeCommit is the gas operation identifier for merge commits.
+	GasOpMergeCommit transaction.Op = "merge_commit"
+)
 
 // SanityCheckBlocks examines the blocks table.
 func SanityCheckBlocks(blocks map[common.Namespace]*block.Block) error {
@@ -172,6 +202,11 @@ func SanityCheckBlocks(blocks map[common.Namespace]*block.Block) error {
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {
+	unsafeFlags := g.Parameters.DebugDoNotSuspendRuntimes
+	if unsafeFlags && !flags.DebugDontBlameOasis() {
+		return fmt.Errorf("roothash: sanity check failed: one or more unsafe debug flags set")
+	}
+
 	// Check blocks.
 	for _, rtg := range g.RuntimeStates {
 		if err := rtg.SanityCheck(true); err != nil {

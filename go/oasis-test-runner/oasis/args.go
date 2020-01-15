@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/ias"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -32,6 +33,11 @@ import (
 
 type argBuilder struct {
 	vec []string
+}
+
+func (args *argBuilder) internalSocketAddress(path string) *argBuilder {
+	args.vec = append(args.vec, "--"+grpc.CfgAddress, "unix:"+path)
+	return args
 }
 
 func (args *argBuilder) debugDontBlameOasis() *argBuilder {
@@ -395,6 +401,11 @@ func (args *argBuilder) byzantineVersionFakeEnclaveID(rt *Runtime) *argBuilder {
 		MrSigner:  *rt.mrSigner,
 	}
 	args.vec = append(args.vec, "--"+byzantine.CfgVersionFakeEnclaveID, eid.String())
+	return args
+}
+
+func (args *argBuilder) byzantineActivationEpoch(epoch epochtime.EpochTime) *argBuilder {
+	args.vec = append(args.vec, "--"+byzantine.CfgActivationEpoch, strconv.FormatUint(uint64(epoch), 10))
 	return args
 }
 

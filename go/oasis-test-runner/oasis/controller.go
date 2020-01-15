@@ -6,6 +6,7 @@ import (
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	control "github.com/oasislabs/oasis-core/go/control/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
@@ -16,9 +17,17 @@ type Controller struct {
 	control.DebugController
 	control.NodeController
 
-	Staking       staking.Backend
 	Consensus     consensus.ClientBackend
+	Staking       staking.Backend
+	Registry      registry.Backend
 	RuntimeClient runtimeClient.RuntimeClient
+
+	conn *grpc.ClientConn
+}
+
+// Close closes the gRPC connection with the node the controller is controlling.
+func (c *Controller) Close() {
+	c.conn.Close()
 }
 
 // NewController creates a new node controller given the path to
@@ -36,8 +45,11 @@ func NewController(socketPath string) (*Controller, error) {
 	return &Controller{
 		DebugController: control.NewDebugControllerClient(conn),
 		NodeController:  control.NewNodeControllerClient(conn),
-		Staking:         staking.NewStakingClient(conn),
 		Consensus:       consensus.NewConsensusClient(conn),
+		Staking:         staking.NewStakingClient(conn),
+		Registry:        registry.NewRegistryClient(conn),
 		RuntimeClient:   runtimeClient.NewRuntimeClient(conn),
+
+		conn: conn,
 	}, nil
 }

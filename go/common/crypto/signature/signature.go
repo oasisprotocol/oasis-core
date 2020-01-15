@@ -222,6 +222,11 @@ func (r RawSignature) String() string {
 	return string(data)
 }
 
+// Equal compares vs another public key for equality.
+func (r RawSignature) Equal(cmp RawSignature) bool {
+	return bytes.Equal(r[:], cmp[:])
+}
+
 // MarshalBinary encodes a signature into binary form.
 func (r RawSignature) MarshalBinary() (data []byte, err error) {
 	data = append([]byte{}, r[:]...)
@@ -277,6 +282,17 @@ type Signature struct {
 
 	// Signature is the actual raw signature.
 	Signature RawSignature `json:"signature"`
+}
+
+// Equal compares vs another signature for equality.
+func (s *Signature) Equal(cmp *Signature) bool {
+	if !s.PublicKey.Equal(cmp.PublicKey) {
+		return false
+	}
+	if !s.Signature.Equal(cmp.Signature) {
+		return false
+	}
+	return true
 }
 
 // Sign generates a signature with the private key over the context and

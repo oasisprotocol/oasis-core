@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -32,6 +33,9 @@ type Runtime struct { // nolint: maligned
 	mrSigner    *sgx.MrSigner
 
 	pruner RuntimePrunerCfg
+
+	excludeFromGenesis bool
+	descriptor         registry.Runtime
 }
 
 // RuntimeCfg is the Oasis runtime provisioning configuration.
@@ -53,6 +57,8 @@ type RuntimeCfg struct { // nolint: maligned
 	Storage      registry.StorageParameters
 
 	Pruner RuntimePrunerCfg
+
+	ExcludeFromGenesis bool
 }
 
 // RuntimePrunerCfg is the pruner configuration for an Oasis runtime.
@@ -69,13 +75,32 @@ func (rt *Runtime) ID() common.Namespace {
 }
 
 func (rt *Runtime) toGenesisArgs() []string {
+	if rt.excludeFromGenesis {
+		return []string{}
+	}
+
 	return []string{
 		"--runtime", filepath.Join(rt.dir.String(), rtDescriptorFile),
 	}
 }
 
+// ToRuntimeDescriptor returns a registry runtime descriptor for this runtime.
+func (rt *Runtime) ToRuntimeDescriptor() registry.Runtime {
+	return rt.descriptor
+}
+
 // NewRuntime provisions a new runtime and adds it to the network.
 func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
+	descriptor := registry.Runtime{
+		ID:           cfg.ID,
+		Kind:         cfg.Kind,
+		TEEHardware:  cfg.TEEHardware,
+		Compute:      cfg.Compute,
+		Merge:        cfg.Merge,
+		TxnScheduler: cfg.TxnScheduler,
+		Storage:      cfg.Storage,
+	}
+
 	rtDir, err := net.baseDir.NewSubDir("runtime-" + cfg.ID.String())
 	if err != nil {
 		net.logger.Error("failed to create runtime subdir",
@@ -89,7 +114,6 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		"--" + cmdCommon.CfgDataDir, rtDir.String(),
 		"--" + cmdRegRt.CfgID, cfg.ID.String(),
 		"--" + cmdRegRt.CfgKind, cfg.Kind.String(),
-		"--" + cmdRegRt.CfgGenesisRound, strconv.FormatUint(cfg.GenesisRound, 10),
 	}
 	if cfg.Kind == registry.KindCompute {
 		args = append(args, []string{
@@ -110,7 +134,13 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		}...)
 
 		if cfg.GenesisState != "" {
-			args = append(args, "--"+cmdRegRt.CfgGenesisState, cfg.GenesisState)
+			args = append(args,
+				"--"+cmdRegRt.CfgGenesisRound, strconv.FormatUint(cfg.GenesisRound, 10),
+				"--"+cmdRegRt.CfgGenesisState, cfg.GenesisState,
+			)
+
+			descriptor.Genesis.Round = cfg.GenesisRound
+			// TODO: Support genesis state.
 		}
 	}
 	var mrEnclave *sgx.MrEnclave
@@ -123,11 +153,20 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 			"--" + cmdRegRt.CfgTEEHardware, cfg.TEEHardware.String(),
 			"--" + cmdRegRt.CfgVersionEnclave, mrEnclave.String() + cfg.MrSigner.String(),
 		}...)
+
+		descriptor.Version.TEE = cbor.Marshal(registry.VersionInfoIntelSGX{
+			Enclaves: []sgx.EnclaveIdentity{
+				{MrEnclave: *mrEnclave, MrSigner: *cfg.MrSigner},
+			},
+		})
 	}
 	if cfg.Keymanager != nil {
 		args = append(args, []string{
 			"--" + cmdRegRt.CfgKeyManager, cfg.Keymanager.id.String(),
 		}...)
+
+		descriptor.KeyManager = new(common.Namespace)
+		*descriptor.KeyManager = cfg.Keymanager.id
 	}
 	args = append(args, cfg.Entity.toGenesisArgs()...)
 
@@ -145,14 +184,16 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	}
 
 	rt := &Runtime{
-		dir:         rtDir,
-		id:          cfg.ID,
-		kind:        cfg.Kind,
-		binary:      cfg.Binary,
-		teeHardware: cfg.TEEHardware,
-		mrEnclave:   mrEnclave,
-		mrSigner:    cfg.MrSigner,
-		pruner:      cfg.Pruner,
+		dir:                rtDir,
+		id:                 cfg.ID,
+		kind:               cfg.Kind,
+		binary:             cfg.Binary,
+		teeHardware:        cfg.TEEHardware,
+		mrEnclave:          mrEnclave,
+		mrSigner:           cfg.MrSigner,
+		pruner:             cfg.Pruner,
+		excludeFromGenesis: cfg.ExcludeFromGenesis,
+		descriptor:         descriptor,
 	}
 	net.runtimes = append(net.runtimes, rt)
 

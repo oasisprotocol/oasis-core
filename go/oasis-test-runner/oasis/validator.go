@@ -68,6 +68,11 @@ func (val *Validator) ExportsPath() string {
 	return nodeExportsPath(val.dir)
 }
 
+// Start starts an Oasis node.
+func (val *Validator) Start() error {
+	return val.startNode()
+}
+
 func (val *Validator) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().

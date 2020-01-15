@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
+	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
 	"github.com/oasislabs/oasis-core/go/registry/api"
 	roothashAPI "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -17,6 +18,9 @@ import (
 
 func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesisAPI.Document) error {
 	st := doc.RootHash
+
+	state := roothashState.NewMutableState(ctx.State())
+	state.SetConsensusParameters(&st.Parameters)
 
 	// The per-runtime roothash state is done primarily via DeliverTx, but
 	// also needs to be done here since the genesis state can have runtime
@@ -54,7 +58,13 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothashAPI.Genesis, e
 		rtStates[rt.Runtime.ID] = &rtState
 	}
 
+	params, err := rq.state.ConsensusParameters()
+	if err != nil {
+		return nil, err
+	}
+
 	genesis := &roothashAPI.Genesis{
+		Parameters:    *params,
 		RuntimeStates: rtStates,
 	}
 	return genesis, nil

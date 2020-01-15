@@ -64,6 +64,11 @@ func (worker *Compute) ExportsPath() string {
 	return nodeExportsPath(worker.dir)
 }
 
+// Start starts an Oasis node.
+func (worker *Compute) Start() error {
+	return worker.startNode()
+}
+
 func (worker *Compute) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
