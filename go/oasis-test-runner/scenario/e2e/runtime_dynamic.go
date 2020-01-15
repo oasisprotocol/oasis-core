@@ -143,7 +143,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error {
 		sc.logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
-		if err := sc.submitRuntimeTx(ctx, "hello", fmt.Sprintf("world %d", i)); err != nil {
+		if err := sc.submitRuntimeTx(ctx, runtimeID, "hello", fmt.Sprintf("world %d", i)); err != nil {
 			return err
 		}
 	}
@@ -216,7 +216,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error {
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
 	sc.logger.Info("submitting transaction to runtime")
-	if err := sc.submitRuntimeTx(ctx, "hello", "final world"); err != nil {
+	if err := sc.submitRuntimeTx(ctx, runtimeID, "hello", "final world"); err != nil {
 		return err
 	}
 

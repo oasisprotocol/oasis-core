@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
@@ -53,7 +54,7 @@ type Body struct {
 	Error *Error `json:",omitempty"`
 
 	// Worker interface.
-	WorkerInfoRequest                    *Empty                                `json:",omitempty"`
+	WorkerInfoRequest                    *WorkerInfoRequest                    `json:",omitempty"`
 	WorkerInfoResponse                   *WorkerInfoResponse                   `json:",omitempty"`
 	WorkerPingRequest                    *Empty                                `json:",omitempty"`
 	WorkerShutdownRequest                *Empty                                `json:",omitempty"`
@@ -94,6 +95,12 @@ type Empty struct {
 // Error is a message body representing an error.
 type Error struct {
 	Message string `json:"message"`
+}
+
+// WorkerInfoRequest is a worker info request message body.
+type WorkerInfoRequest struct {
+	// RuntimeID is the assigned runtime ID of the loaded runtime.
+	RuntimeID common.Namespace `json:"runtime_id"`
 }
 
 // WorkerInfoResponse is a worker info response message body.

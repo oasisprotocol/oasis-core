@@ -56,7 +56,7 @@ pub fn start_runtime(initializer: Option<Box<dyn Initializer>>, version: Version
         dispatcher.clone(),
         version,
     ));
-    dispatcher.start(protocol.clone());
+
     protocol.start();
 
     info!(logger, "Protocol handler terminated, shutting down");

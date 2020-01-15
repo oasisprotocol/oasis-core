@@ -540,7 +540,9 @@ func (h *sandboxedHost) checkInfo(worker *process) error {
 
 	// Request information about the running runtime and abort if the protocol
 	// version is incompatible.
-	rsp, err := worker.protocol.Call(ctx, &protocol.Body{WorkerInfoRequest: &protocol.Empty{}})
+	rsp, err := worker.protocol.Call(ctx, &protocol.Body{WorkerInfoRequest: &protocol.WorkerInfoRequest{
+		RuntimeID: h.cfg.ID,
+	}})
 	if err != nil || rsp.WorkerInfoResponse == nil {
 		return errors.Wrap(err, "error while requesting runtime info")
 	}

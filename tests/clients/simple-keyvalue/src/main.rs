@@ -52,28 +52,32 @@ fn main() {
     let txn_client = TxnClient::new(node.channel(), runtime_id, None);
     let kv_client = SimpleKeyValueClient::new(txn_client);
 
+    // Check whether Runtime ID is also set remotely.
+    let r: Option<String> = rt.block_on(kv_client.get_runtime_id(())).unwrap();
+    assert_eq!(runtime_id.to_string(), r.expect("runtime_id"));
+
     // Test simple [set,get] key calls
     let kv = KeyValue {
         key: String::from("hello_key"),
-        value: String::from("hello_value"),
+        value: String::from("hello_value_from_") + &runtime_id.to_string(),
     };
     println!(
         "Storing \"{}\" as key and \"{}\" as value to database...",
         kv.key, kv.value
     );
-    let r: Option<String> = rt.block_on(kv_client.insert(kv)).unwrap();
+    let r: Option<String> = rt.block_on(kv_client.insert(kv.clone())).unwrap();
     assert_eq!(r, None); // key should not exist in db before
 
-    println!("Getting \"hello_key\"...");
-    let r = rt.block_on(kv_client.get("hello_key".to_string())).unwrap();
+    println!("Getting \"{}\"...", kv.key);
+    let r = rt.block_on(kv_client.get(kv.key.clone())).unwrap();
     match r {
         Some(val) => {
             println!("Got \"{}\"", val);
-            assert_eq!(val, "hello_value")
+            assert_eq!(val, kv.value)
         } // key should exist in db
         None => {
             println!("Key not found");
-            panic!("Key \"hello_value\" not found, but it should be.")
+            panic!("Key \"{}\" not found, but it should be.", kv.value)
         }
     }
 
@@ -107,14 +111,14 @@ fn main() {
     println!("Retrieved block: {:?}", snapshot.block);
     println!("Accessing read-only state snapshot...");
     let r = snapshot
-        .get(Context::background(), "hello_key".as_bytes())
+        .get(Context::background(), kv.key.as_bytes())
         .expect("read-only state get");
     println!(
         "Got \"{}\" ({:?})",
         String::from_utf8(r.clone()).unwrap(),
         r
     );
-    assert_eq!(&r[..], "hello_value".as_bytes());
+    assert_eq!(&r[..], kv.value.as_bytes());
 
     // Test get_block call.
     for round in 0..=snapshot.block.header.round {
@@ -134,14 +138,12 @@ fn main() {
         .expect("non-existent block must return None");
     assert!(snapshot.is_none(), "non-existent block must return None");
 
-    println!("Removing \"hello_key\" record from database...");
-    let r = rt
-        .block_on(kv_client.remove("hello_key".to_string()))
-        .unwrap();
-    assert_eq!(r, Some("hello_value".to_string())); // key should exist in db while removing it
+    println!("Removing \"{}\" record from database...", kv.key);
+    let r = rt.block_on(kv_client.remove(kv.key.clone())).unwrap();
+    assert_eq!(r, Some(kv.value)); // key should exist in db while removing it
 
-    println!("Getting \"hello_key\" to check whether it still exists...");
-    let r = rt.block_on(kv_client.get("hello_key".to_string())).unwrap();
+    println!("Getting \"{}\" to check whether it still exists...", kv.key);
+    let r = rt.block_on(kv_client.get(kv.key)).unwrap();
     match r {
         Some(_) => println!("Key still exists."),
         None => println!("Key not found anymore"),

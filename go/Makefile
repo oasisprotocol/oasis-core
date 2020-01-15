@@ -57,7 +57,12 @@ lint:
 # Test.
 test:
 	@$(ECHO) "$(CYAN)*** Running Go unit tests...$(OFF)"
-	@$(GO) test -timeout 5m -race -v ./...
+	@$(GO) test -timeout 5m -race -v $(GO_TEST_FLAGS) ./...
+
+# Test without caching.
+force-test:
+	@$(ECHO) "$(CYAN)*** Running Go unit tests in force mode...$(OFF)"
+	$(MAKE) test GO_TEST_FLAGS=-count=1
 
 # Test oasis-node with coverage.
 integrationrunner:

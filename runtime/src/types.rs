@@ -10,6 +10,7 @@ use crate::{
             signature::{PublicKey, Signature},
         },
         roothash::{Block, ComputeResultsHeader},
+        runtime::RuntimeId,
         sgx::avr::AVR,
     },
     storage::mkvs::{urkel::sync, WriteLog},
@@ -56,7 +57,9 @@ pub enum Body {
     },
 
     // Runtime worker interface.
-    WorkerInfoRequest {},
+    WorkerInfoRequest {
+        runtime_id: RuntimeId,
+    },
     WorkerInfoResponse {
         protocol_version: u64,
         runtime_version: u64,
