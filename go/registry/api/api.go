@@ -289,9 +289,17 @@ type NodeLookup interface {
 // RuntimeLookup interface implements various ways for the verification
 // functions to look-up runtimes in the registry's state.
 type RuntimeLookup interface {
-	// Runtime looks up a runtime by its identifier.
-	// It returns either the runtime with given id or error.
+	// Runtime looks up a runtime by its identifier and returns it.
+	//
+	// This excludes any suspended runtimes, use SuspendedRuntime to query suspended runtimes only.
 	Runtime(id common.Namespace) (*Runtime, error)
+
+	// SuspendedRuntime looks up a suspended runtime by its identifier and
+	// returns it.
+	SuspendedRuntime(id common.Namespace) (*Runtime, error)
+
+	// AnyRuntime looks up either an active or suspended runtime by its identifier and returns it.
+	AnyRuntime(id common.Namespace) (*Runtime, error)
 }
 
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
@@ -346,6 +354,8 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 }
 
 // VerifyRegisterNodeArgs verifies arguments for RegisterNode.
+//
+// Returns the node descriptor and a list of runtime descriptors the node is registering for.
 func VerifyRegisterNodeArgs( // nolint: gocyclo
 	params *ConsensusParameters,
 	logger *logging.Logger,
@@ -353,12 +363,12 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	entity *entity.Entity,
 	now time.Time,
 	isGenesis bool,
-	regRuntimes []*Runtime,
+	runtimeLookup RuntimeLookup,
 	nodeLookup NodeLookup,
-) (*node.Node, error) {
+) (*node.Node, []*Runtime, error) {
 	var n node.Node
 	if sigNode == nil {
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 
 	var ctx signature.Context
@@ -373,7 +383,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		logger.Error("RegisterNode: invalid signature",
 			"signed_node", sigNode,
 		)
-		return nil, ErrInvalidSignature
+		return nil, nil, ErrInvalidSignature
 	}
 
 	// This should never happen, unless there's a bug in the caller.
@@ -382,7 +392,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"entity", entity,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 
 	// Determine which key should be expected to have signed the node descriptor.
@@ -404,7 +414,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"entity", entity,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 
 	// Validate that the node is signed by the correct signer.
@@ -414,7 +424,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"entity", entity,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 
 	// Make sure that a node has at least one valid role.
@@ -423,55 +433,55 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		logger.Error("RegisterNode: no roles specified",
 			"node", n,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	case n.HasRoles(node.RoleReserved):
 		logger.Error("RegisterNode: invalid role specified",
 			"node", n,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 
 	// TODO: Key manager nodes maybe should be restricted to only being a
 	// key manager at the expense of breaking some of our test configs.
 
+	var runtimes []*Runtime
 	switch len(n.Runtimes) {
 	case 0:
 		if n.HasRoles(RuntimesRequiredRoles) {
 			logger.Error("RegisterNode: no runtimes in registration",
 				"node", n,
 			)
-			return nil, ErrInvalidArgument
+			return nil, nil, ErrInvalidArgument
 		}
 	default:
 		rtMap := make(map[common.Namespace]bool)
-		regRtMap := make(map[common.Namespace]bool)
-
-		for _, rt := range regRuntimes {
-			regRtMap[rt.ID] = true
-		}
 
 		for _, rt := range n.Runtimes {
 			if rtMap[rt.ID] {
 				logger.Error("RegisterNode: duplicate runtime IDs",
-					"id", rt.ID,
+					"runtime_id", rt.ID,
 				)
-				return nil, ErrInvalidArgument
+				return nil, nil, ErrInvalidArgument
 			}
 			rtMap[rt.ID] = true
 
 			// Make sure that the claimed runtime actually exists.
-			if !regRtMap[rt.ID] {
-				logger.Error("RegisterNode: runtime does not exist",
-					"id", rt.ID,
+			regRt, err := runtimeLookup.AnyRuntime(rt.ID)
+			if err != nil {
+				logger.Error("RegisterNode: failed to fetch supported runtime",
+					"err", err,
+					"runtime_id", rt.ID,
 				)
-				return nil, ErrInvalidArgument
+				return nil, nil, ErrInvalidArgument
 			}
 
 			// If the node indicates TEE support for any of it's runtimes,
 			// validate the attestation evidence.
-			if err := VerifyNodeRuntimeEnclaveIDs(logger, rt, regRuntimes, now); err != nil {
-				return nil, err
+			if err := VerifyNodeRuntimeEnclaveIDs(logger, rt, regRt, now); err != nil {
+				return nil, nil, err
 			}
+
+			runtimes = append(runtimes, regRt)
 		}
 	}
 
@@ -480,7 +490,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		logger.Error("RegisterNode: invalid consensus id",
 			"node", n,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 	consensusAddressRequired := n.HasRoles(ConsensusAddressRequiredRoles)
 	if !isGenesis {
@@ -493,7 +503,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 				"node", n,
 				"consensus_addrs", addrs,
 			)
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -504,7 +514,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			logger.Error("RegisterNode: key manager not owned by key manager operator",
 				"node", n,
 			)
-			return nil, ErrInvalidArgument
+			return nil, nil, ErrInvalidArgument
 		}
 	}
 
@@ -515,7 +525,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"err", err,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 	committeeAddressRequired := n.HasRoles(CommitteeAddressRequiredRoles)
 	if err := verifyAddresses(params, committeeAddressRequired, n.Committee.Addresses); err != nil {
@@ -524,7 +534,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"committee_addrs", addrs,
 		)
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Validate P2PInfo.
@@ -532,7 +542,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		logger.Error("RegisterNode: invalid P2P id",
 			"node", n,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
 	if err := verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
@@ -541,7 +551,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"p2p_addrs", addrs,
 		)
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Make sure that the consensus and P2P keys, as well as the committee
@@ -554,7 +564,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		logger.Error("RegisterNode: node consensus and P2P IDs must differ",
 			"node", n,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 
 	existingNode, err := nodeLookup.NodeByConsensusOrP2PKey(n.Consensus.ID)
@@ -563,14 +573,14 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"err", err,
 			"consensus_id", n.Consensus.ID.String(),
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 	if existingNode != nil && existingNode.ID != n.ID {
 		logger.Error("RegisterNode: duplicate node consensus ID",
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 
 	existingNode, err = nodeLookup.NodeByConsensusOrP2PKey(n.P2P.ID)
@@ -579,14 +589,14 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"err", err,
 			"p2p_id", n.P2P.ID.String(),
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 	if existingNode != nil && existingNode.ID != n.ID {
 		logger.Error("RegisterNode: duplicate node p2p ID",
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 
 	existingNode, err = nodeLookup.NodeByCertificate(n.Committee.Certificate)
@@ -594,21 +604,21 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		logger.Error("RegisterNode: failed to get node by committee certificate",
 			"err", err,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 	if existingNode != nil && existingNode.ID != n.ID {
 		logger.Error("RegisterNode: duplicate node committee certificate",
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
 		)
-		return nil, ErrInvalidArgument
+		return nil, nil, ErrInvalidArgument
 	}
 
-	return &n, nil
+	return &n, runtimes, nil
 }
 
 // VerifyNodeRuntimeEnclaveIDs verifies TEE-specific attributes of the node's runtime.
-func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRuntimes []*Runtime, ts time.Time) error {
+func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRt *Runtime, ts time.Time) error {
 	// If no TEE available, do nothing.
 	if rt.Capabilities.TEE == nil {
 		return nil
@@ -618,7 +628,6 @@ func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRu
 	case node.TEEHardwareInvalid:
 	case node.TEEHardwareIntelSGX:
 		// Check MRENCLAVE/MRSIGNER.
-		var eidValid bool
 		var avrBundle ias.AVRBundle
 		if err := cbor.Unmarshal(rt.Capabilities.TEE.Attestation, &avrBundle); err != nil {
 			return err
@@ -635,54 +644,38 @@ func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRu
 			return err
 		}
 
-	regRtLoop:
-		for _, regRt := range regRuntimes {
-			// Make sure we compare EnclaveIdentity of the same registered RuntimeIDs only!
-			if !regRt.ID.Equal(&rt.ID) {
-				continue
-			}
+		if regRt.TEEHardware != rt.Capabilities.TEE.Hardware {
+			logger.Error("VerifyNodeRuntimeEnclaveIDs: runtime TEE.Hardware mismatch",
+				"quote", q,
+				"node_runtime", rt,
+				"registry_runtime", regRt,
+				"ts", ts,
+			)
+			return ErrTEEHardwareMismatch
+		}
 
-			if regRt.TEEHardware != rt.Capabilities.TEE.Hardware {
-				rtJSON, _ := json.Marshal(rt)
-				regRtJSON, _ := json.Marshal(regRt)
-				quoteJSON, _ := json.Marshal(q)
-				logger.Error("VerifyNodeRuntimeEnclaveIDs: runtime TEE.Hardware mismatch",
-					"quote", quoteJSON,
-					"node.Runtime", rtJSON,
-					"registered runtime", regRtJSON,
-					"ts", ts,
-				)
-				return ErrTEEHardwareMismatch
-			}
-
-			var vi VersionInfoIntelSGX
-			if err := cbor.Unmarshal(regRt.Version.TEE, &vi); err != nil {
-				return err
-			}
-			for _, eid := range vi.Enclaves {
-				eidMrenclave := eid.MrEnclave
-				eidMrsigner := eid.MrSigner
-				// Compare MRENCLAVE/MRSIGNER to the one stored in the registry.
-				if bytes.Equal(eidMrenclave[:], q.Report.MRENCLAVE[:]) && bytes.Equal(eidMrsigner[:], q.Report.MRSIGNER[:]) {
-					eidValid = true
-					break regRtLoop
-				}
+		var vi VersionInfoIntelSGX
+		if err := cbor.Unmarshal(regRt.Version.TEE, &vi); err != nil {
+			return err
+		}
+		var eidValid bool
+		for _, eid := range vi.Enclaves {
+			eidMrenclave := eid.MrEnclave
+			eidMrsigner := eid.MrSigner
+			// Compare MRENCLAVE/MRSIGNER to the one stored in the registry.
+			if bytes.Equal(eidMrenclave[:], q.Report.MRENCLAVE[:]) && bytes.Equal(eidMrsigner[:], q.Report.MRSIGNER[:]) {
+				eidValid = true
+				break
 			}
 		}
 
 		if !eidValid {
-			if logger != nil {
-				rtJSON, _ := json.Marshal(rt)
-				regRuntimesJSON, _ := json.Marshal(regRuntimes)
-				quoteJSON, _ := json.Marshal(q)
-				logger.Error("VerifyNodeRuntimeEnclaveIDs: bad enclave ID",
-					"quote", quoteJSON,
-					"node.Runtime", rtJSON,
-					"registered runtimes", regRuntimesJSON,
-					"ts", ts,
-				)
-			}
-
+			logger.Error("VerifyNodeRuntimeEnclaveIDs: bad enclave ID",
+				"quote", q,
+				"node_runtime", rt,
+				"registry_runtime", regRt,
+				"ts", ts,
+			)
 			return ErrBadEnclaveIdentity
 		}
 	default:
@@ -691,7 +684,7 @@ func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRu
 
 	if err := rt.Capabilities.TEE.Verify(ts); err != nil {
 		logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
-			"runtime", rt.ID,
+			"runtime_id", rt.ID,
 			"ts", ts,
 			"err", err,
 		)

@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/oasis-core/go/common/errors"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -107,7 +108,7 @@ func (r *SignedInitResponse) Verify(pk signature.PublicKey) error {
 
 // VerifyExtraInfo verifies and parses the per-node + per-runtime ExtraInfo
 // blob for a key manager.
-func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime, ts time.Time) (*InitResponse, error) {
+func VerifyExtraInfo(logger *logging.Logger, rt *registry.Runtime, nodeRt *node.Runtime, ts time.Time) (*InitResponse, error) {
 	var (
 		hw  node.TEEHardware
 		rak signature.PublicKey
@@ -121,7 +122,7 @@ func VerifyExtraInfo(rt *registry.Runtime, nodeRt *node.Runtime, ts time.Time) (
 	}
 	if hw != rt.TEEHardware {
 		return nil, fmt.Errorf("keymanger: TEEHardware mismatch")
-	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(nil, nodeRt, []*registry.Runtime{rt}, ts); err != nil {
+	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeRt, rt, ts); err != nil {
 		return nil, err
 	}
 

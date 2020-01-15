@@ -187,7 +187,7 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 			continue
 		}
 
-		initResponse, err := api.VerifyExtraInfo(kmrt, nodeRt, ts)
+		initResponse, err := api.VerifyExtraInfo(app.logger, kmrt, nodeRt, ts)
 		if err != nil {
 			app.logger.Error("failed to validate ExtraInfo",
 				"err", err,
