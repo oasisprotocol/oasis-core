@@ -160,19 +160,19 @@ func (args *argBuilder) workerClientPort(port uint16) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerCommonSentryAddresses(addrs []string) *argBuilder {
+func (args *argBuilder) workerRegistrySentryAddresses(addrs []string) *argBuilder {
 	for _, addr := range addrs {
 		args.vec = append(args.vec, []string{
-			"--" + workerCommon.CfgSentryAddresses, addr,
+			"--" + registration.CfgSentryAddress, addr,
 		}...)
 	}
 	return args
 }
 
-func (args *argBuilder) workerCommonSentryCertFiles(certFiles []string) *argBuilder {
+func (args *argBuilder) workerRegistrySentryCertFiles(certFiles []string) *argBuilder {
 	for _, certFile := range certFiles {
 		args.vec = append(args.vec, []string{
-			"--" + workerCommon.CfgSentryCertFiles, certFile,
+			"--" + registration.CfgSentryCert, certFile,
 		}...)
 	}
 	return args
@@ -303,8 +303,8 @@ func (args *argBuilder) addSentries(sentries []*Sentry) *argBuilder {
 		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", sentry.controlPort))
 		certFiles = append(certFiles, sentry.TLSCertPath())
 	}
-	args = args.workerCommonSentryAddresses(addrs)
-	args = args.workerCommonSentryCertFiles(certFiles)
+	args = args.workerRegistrySentryAddresses(addrs)
+	args = args.workerRegistrySentryCertFiles(certFiles)
 	return args
 }
 

@@ -10,7 +10,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/sentry/api"
-	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 )
 
 const (
@@ -32,8 +31,6 @@ func Enabled() bool {
 // enabling them to hide their real address(es).
 type Worker struct {
 	enabled bool
-
-	workerCommonCfg *workerCommon.Config
 
 	backend api.Backend
 
@@ -102,22 +99,16 @@ func (w *Worker) Cleanup() {
 }
 
 // New creates a new sentry worker.
-func New(workerCommonCfg *workerCommon.Config, backend api.Backend, identity *identity.Identity) (*Worker, error) {
+func New(backend api.Backend, identity *identity.Identity) (*Worker, error) {
 	w := &Worker{
-		enabled:         Enabled(),
-		workerCommonCfg: workerCommonCfg,
-		backend:         backend,
-		quitCh:          make(chan struct{}),
-		initCh:          make(chan struct{}),
-		logger:          logging.GetLogger("worker/sentry"),
+		enabled: Enabled(),
+		backend: backend,
+		quitCh:  make(chan struct{}),
+		initCh:  make(chan struct{}),
+		logger:  logging.GetLogger("worker/sentry"),
 	}
 
 	if w.enabled {
-		if len(w.workerCommonCfg.SentryAddresses) > 0 {
-			return nil, fmt.Errorf(
-				"worker/sentry: invalid configuration: sentry worker is enabled, but the node is configured to connect to sentry node(s)",
-			)
-		}
 		grpcServer, err := grpc.NewServer(&grpc.ServerConfig{
 			Name:        "sentry",
 			Port:        uint16(viper.GetInt(CfgControlPort)),
