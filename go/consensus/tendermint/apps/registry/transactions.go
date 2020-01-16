@@ -186,20 +186,11 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	}
 
 	// Check runtime's whitelist.
-	for _, nrt := range newNode.Runtimes {
-		var rt *registry.Runtime
-		rt, err = state.Runtime(nrt.ID)
-		if err != nil {
-			app.logger.Error("RegisterNode: failed to load runtime",
-				"err", err,
-				"runtime", nrt.ID,
-			)
-			return err
-		}
+	for _, rt := range paidRuntimes {
 		if rt.AdmissionPolicy.EntityWhitelist != nil && !rt.AdmissionPolicy.EntityWhitelist.Entities[newNode.EntityID] {
 			ctx.Logger().Error("RegisterNode: node's entity not in a runtime's whitelist",
 				"entity", newNode.EntityID,
-				"runtime", nrt.ID,
+				"runtime", rt.ID,
 			)
 			return registry.ErrForbidden
 		}
