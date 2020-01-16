@@ -91,9 +91,9 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// NOTE: We also wait for storage workers as they can currently register even before the
-	//       runtime is registered in the registry. If this changes, node count needs update.
-	numNodes := len(sc.net.Validators()) + len(sc.net.StorageWorkers())
+	// NOTE: Storage workers need to wait until the runtime is registered in the registry.
+	//       If this changes, node count needs update.
+	numNodes := len(sc.net.Validators())
 	if sc.net.Keymanager() != nil {
 		numNodes++
 	}
