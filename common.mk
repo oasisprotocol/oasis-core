@@ -58,11 +58,14 @@ export VERSION
 #   - Passing current version as an CLI parameter.
 #   - Outputting the new version to stdout without making modifications to any
 #     files.
-_PUNCH_VERSION_FILE := $(shell mktemp /tmp/oasis-core.XXXXX.py)
+_PUNCH_VERSION_FILE_PATH_PREFIX := /tmp/oasis-core
 # NOTE: The "OUTPUT = $(eval OUTPUT := $$(shell some-comand))$(OUTPUT)" syntax
 # defers simple variable expansion so that it is only computed the first time it
 # is used. For more details, see:
 # http://make.mad-scientist.net/deferred-simple-variable-expansion/.
+_PUNCH_VERSION_FILE = $(eval _PUNCH_VERSION_FILE := $$(shell \
+	mktemp $(_PUNCH_VERSION_FILE_PATH_PREFIX).XXXXX.py \
+	))$(_PUNCH_VERSION_FILE)
 NEXT_VERSION ?= $(eval NEXT_VERSION := $$(shell \
 	set -e; \
 	echo "Fetching all tags from the $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote..." 1>&2; \
