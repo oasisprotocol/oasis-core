@@ -91,6 +91,8 @@ const (
 
 	// CfgDebugP2PAddrBookLenient configures allowing non-routable addresses.
 	CfgDebugP2PAddrBookLenient = "tendermint.debug.addr_book_lenient"
+	// CfgP2PDebugAllowDuplicateIP allows multiple connections from the same IP.
+	CfgDebugP2PAllowDuplicateIP = "tendermint.debug.allow_duplicate_ip"
 
 	// CfgConsensusMinGasPrice configures the minimum gas price for this validator.
 	CfgConsensusMinGasPrice = "consensus.tendermint.min_gas_price"
@@ -896,7 +898,6 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.TxIndex.Indexer = "null"
 	tenderConfig.P2P.ListenAddress = viper.GetString(CfgCoreListenAddress)
 	tenderConfig.P2P.ExternalAddress = viper.GetString(cfgCoreExternalAddress)
-	tenderConfig.P2P.AllowDuplicateIP = true // HACK: e2e tests need this.
 	// Convert persistent peer IDs to lowercase (like other IDs) since
 	// Tendermint stores them in a map and uses a case sensitive string
 	// comparison to check ID equality.
@@ -914,6 +915,7 @@ func (t *tendermintService) lazyInit() error {
 	// lowercasing the whole string is ok.
 	tenderConfig.P2P.Seeds = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PSeed), ","))
 	tenderConfig.P2P.AddrBookStrict = !(viper.GetBool(CfgDebugP2PAddrBookLenient) && cmflags.DebugDontBlameOasis())
+	tenderConfig.P2P.AllowDuplicateIP = viper.GetBool(CfgDebugP2PAllowDuplicateIP) && cmflags.DebugDontBlameOasis()
 	tenderConfig.RPC.ListenAddress = ""
 
 	if !tenderConfig.P2P.PexReactor {
@@ -1304,10 +1306,12 @@ func init() {
 	Flags.StringSlice(CfgP2PSeed, []string{}, "Tendermint seed node(s) of the form ID@host:port")
 	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 	Flags.Bool(CfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
+	Flags.Bool(CfgDebugP2PAllowDuplicateIP, false, "Allow multiple connections from the same IP")
 	Flags.Uint64(CfgConsensusMinGasPrice, 0, "minimum gas price")
 
 	_ = Flags.MarkHidden(cfgLogDebug)
 	_ = Flags.MarkHidden(CfgDebugP2PAddrBookLenient)
+	_ = Flags.MarkHidden(CfgDebugP2PAllowDuplicateIP)
 
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(db.Flags)

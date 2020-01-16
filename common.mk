@@ -35,6 +35,9 @@ endef
 # git@github.com:oasislabs/oasis-core.git.
 OASIS_CORE_GIT_ORIGIN_REMOTE ?= origin
 
+# Name of the branch where to tag the next release.
+RELEASE_BRANCH ?= master
+
 # Try to determine Oasis Core's version from git.
 LATEST_TAG := $(shell git describe --tags --match 'v*' --abbrev=0 2>/dev/null)
 VERSION := $(subst v,,$(LATEST_TAG))
@@ -49,7 +52,7 @@ export VERSION
 # Try to compute the next version based on the latest tag of the origin remote
 # using the Punch tool.
 # First, all tags from the origin remote are fetched. Next, the latest tag on
-# the origin/master branch is determined. It represents Oasis Core's current
+# origin's release branch is determined. It represents Oasis Core's current
 # version. Lastly, the Punch tool is used to bump the version according to the
 # configurated versioning scheme in .punch_config.py.
 #
@@ -58,15 +61,16 @@ export VERSION
 #   - Passing current version as an CLI parameter.
 #   - Outputting the new version to stdout without making modifications to any
 #     files.
-_PUNCH_VERSION_FILE := $(shell mktemp /tmp/oasis-core.XXXXX.py)
+_PUNCH_VERSION_FILE_PATH_PREFIX := /tmp/oasis-core
 # NOTE: The "OUTPUT = $(eval OUTPUT := $$(shell some-comand))$(OUTPUT)" syntax
 # defers simple variable expansion so that it is only computed the first time it
 # is used. For more details, see:
 # http://make.mad-scientist.net/deferred-simple-variable-expansion/.
+_PUNCH_VERSION_FILE = $(eval _PUNCH_VERSION_FILE := $$(shell \
+	mktemp $(_PUNCH_VERSION_FILE_PATH_PREFIX).XXXXX.py \
+	))$(_PUNCH_VERSION_FILE)
 NEXT_VERSION ?= $(eval NEXT_VERSION := $$(shell \
 	set -e; \
-	echo "Fetching all tags from the $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote..." 1>&2; \
-	git fetch $(OASIS_CORE_GIT_ORIGIN_REMOTE) --tags; \
 	LATEST_TAG_ORIGIN=`git describe --tags --match 'v*' --abbrev=0 $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master` \
 	python3 -c "import os; year, minor = os.environ['LATEST_TAG_ORIGIN'].lstrip('v').split('.'); \
 		print(f'year=\"{year}\"\nminor={minor}')" > $(_PUNCH_VERSION_FILE); \
@@ -136,22 +140,32 @@ define ENSURE_NEXT_VERSION =
 	fi
 endef
 
-# Helper that ensures the origin/master's HEAD doesn't contain any Change Log fragments.
+# Helper that ensures $(RELEASE_BRANCH) variable contains a valid release branch name.
+define ENSURE_VALID_RELEASE_BRANCH_NAME =
+	if [[ ! $(RELEASE_BRANCH) =~ ^(master|(stable/[0-9]+\.[0-9]+\.x$$)) ]]; then \
+		$(ECHO_STDERR) "$(RED)Error: Invalid release branch name: $(RELEASE_BRANCH)."; \
+		exit 1; \
+	fi
+endef
+
+# Helper that ensures the origin's release branch's HEAD doesn't contain any Change Log fragments.
 define ENSURE_NO_CHANGELOG_FRAGMENTS =
-	CHANGELOG_FRAGMENTS=`git ls-tree -r --name-only $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master .changelog | \
-	    grep --invert-match --extended-regexp '(README.md|template.md.j2)'`; \
-	if [[ -n $${CHANGELOG_FRAGMENTS} ]]; then \
-		$(ECHO_STDERR) "$(RED)Error: Found the following Change Log fragments on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master branch:"; \
+	if ! CHANGELOG_FILES=`git ls-tree -r --name-only $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) .changelog`; then \
+		$(ECHO_STDERR) "$(RED)Error: Could not obtain Change Log fragments for $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
+		exit 1; \
+	fi; \
+	if CHANGELOG_FRAGMENTS=`echo "$$CHANGELOG_FILES" | grep --invert-match --extended-regexp '(README.md|template.md.j2)'`; then \
+		$(ECHO_STDERR) "$(RED)Error: Found the following Change Log fragments on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch:"; \
 		$(ECHO_STDERR) "$${CHANGELOG_FRAGMENTS}$(OFF)"; \
 		exit 1; \
 	fi
 endef
 
-# Helper that ensures the origin/master's HEAD contains a Change Log section for the next release.
+# Helper that ensures the origin's release branch's HEAD contains a Change Log section for the next release.
 define ENSURE_NEXT_VERSION_IN_CHANGELOG =
-	if ! ( git show $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master:CHANGELOG.md | \
-		   grep --quiet '^## $(NEXT_VERSION) (.*)' ); then \
-		$(ECHO_STDERR) "$(RED)Error: Could not locate Change Log section for release $(NEXT_VERSION).$(OFF)"; \
+	if ! ( git show $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH):CHANGELOG.md | \
+			grep --quiet '^## $(NEXT_VERSION) (.*)' ); then \
+		$(ECHO_STDERR) "$(RED)Error: Could not locate Change Log section for release $(NEXT_VERSION) on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
 		exit 1; \
 	fi
 endef

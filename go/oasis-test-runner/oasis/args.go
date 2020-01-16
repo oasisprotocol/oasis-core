@@ -112,6 +112,13 @@ func (args *argBuilder) tendermintDebugAddrBookLenient() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) tendermintDebugAllowDuplicateIP() *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + tendermint.CfgDebugP2PAllowDuplicateIP,
+	}...)
+	return args
+}
+
 func (args *argBuilder) storageBackend(backend string) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + storage.CfgBackend, backend,
