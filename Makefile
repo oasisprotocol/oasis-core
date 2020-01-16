@@ -78,7 +78,7 @@ test-e2e:
 test: $(test-targets)
 
 # Clean.
-clean-targets := clean-runtimes clean-rust clean-go
+clean-targets := clean-runtimes clean-rust clean-go clean-version-files
 
 clean-runtimes:
 	@$(ECHO) "$(CYAN)*** Cleaning up runtimes...$(OFF)"
@@ -92,6 +92,10 @@ clean-rust:
 
 clean-go:
 	@$(MAKE) -C go clean
+
+clean-version-files:
+	@$(ECHO) "$(CYAN)*** Cleaning Punch version files...$(OFF)"
+	@rm --force $(_PUNCH_VERSION_FILE_PATH_PREFIX)*.py
 
 clean: $(clean-targets)
 
