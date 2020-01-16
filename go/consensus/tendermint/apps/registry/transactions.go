@@ -199,7 +199,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 
 		if err = stakeCache.EnsureSufficientStake(newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
-			ctx.Logger().Error("RegisterNode: insufficent stake, entity no longer valid",
+			ctx.Logger().Error("RegisterNode: insufficient stake, entity no longer valid",
 				"err", err,
 				"id", newNode.EntityID,
 			)
