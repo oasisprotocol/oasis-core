@@ -10,6 +10,14 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.1.1 (2020-01-16)
+
+### Bug Fixes
+
+- Don't allow duplicate P2P connections from the same IP by default.
+  ([#2558](https://github.com/oasislabs/oasis-core/issues/2558))
+
+
 ## 20.1 (2020-01-14)
 
 ### Features
