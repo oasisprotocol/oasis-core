@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
@@ -33,6 +34,9 @@ var (
 	// exist.
 	ErrNoSuchStatus = errors.New(ModuleName, 1, "keymanager: no such status")
 
+	// MethodUpdatePolicy is the method name for policy updates.
+	MethodUpdatePolicy = transaction.NewMethodName(ModuleName, "UpdatePolicy", SignedPolicySGX{})
+
 	// TestPublicKey is the insecure hardcoded key manager public key, used
 	// in insecure builds when a RAK is unavailable.
 	TestPublicKey signature.PublicKey
@@ -40,6 +44,11 @@ var (
 	// TestSigners contains a list of signers with corresponding test keys, used
 	// in insecure builds when a RAK is unavailable.
 	TestSigners []signature.Signer
+
+	// Methods is the list of all methods supported by the key manager backend.
+	Methods = []transaction.MethodName{
+		MethodUpdatePolicy,
+	}
 
 	initResponseContext = signature.NewContext("oasis-core/keymanager: init response")
 )
@@ -81,6 +90,11 @@ type Backend interface {
 
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(context.Context, int64) (*Genesis, error)
+}
+
+// NewUpdatePolicyTx creates a new policy update transaction.
+func NewUpdatePolicyTx(nonce uint64, fee *transaction.Fee, sigPol *SignedPolicySGX) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodUpdatePolicy, sigPol)
 }
 
 // InitResponse is the initialization RPC response, returned as part of a
@@ -158,15 +172,8 @@ func SanityCheckStatuses(statuses []*Status) error {
 
 		// Verify SGX policy signatures if the policy exists.
 		if status.Policy != nil {
-			for _, sig := range status.Policy.Signatures {
-				if !sig.PublicKey.IsValid() {
-					return fmt.Errorf("keymanager: sanity check failed: SGX policy signature's public key %s is invalid", sig.PublicKey.String())
-				}
-
-				policy := cbor.Marshal(status.Policy.Policy)
-				if !sig.Verify(PolicySGXSignatureContext, policy) {
-					return fmt.Errorf("keymanager: sanity check failed: SGX policy signature from %s is invalid", sig.PublicKey.String())
-				}
+			if err := SanityCheckSignedPolicySGX(nil, status.Policy); err != nil {
+				return err
 			}
 		}
 	}

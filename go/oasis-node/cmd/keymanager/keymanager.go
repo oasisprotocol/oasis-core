@@ -23,6 +23,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	kmApi "github.com/oasislabs/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	cmdConsensus "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
@@ -81,6 +82,12 @@ var (
 		Run:   doInitStatus,
 	}
 
+	genUpdateCmd = &cobra.Command{
+		Use:   "gen_update",
+		Short: "generate a update transaction",
+		Run:   doGenUpdate,
+	}
+
 	logger = logging.GetLogger("cmd/keymanager")
 )
 
@@ -109,7 +116,7 @@ func doInitPolicy(cmd *cobra.Command, args []string) {
 }
 
 func policyFromFlags() (*kmApi.PolicySGX, error) {
-	var id signature.PublicKey
+	var id common.Namespace
 	if err := id.UnmarshalHex(viper.GetString(cfgPolicyID)); err != nil {
 		logger.Error("failed to parse key manager runtime ID",
 			"err", err,
@@ -374,6 +381,67 @@ func doInitStatus(cmd *cobra.Command, args []string) {
 	)
 }
 
+func doGenUpdate(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	cmdConsensus.InitGenesis()
+	cmdConsensus.AssertTxFileOK()
+
+	// Assemble the SignedPolicySGX from the policy document and detached
+	// signatures.
+	var signedPolicy kmApi.SignedPolicySGX
+
+	policyBytes, err := ioutil.ReadFile(viper.GetString(cfgPolicyFile))
+	if err != nil {
+		logger.Error("failed to read policy file",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if err = json.Unmarshal(policyBytes, &signedPolicy.Policy); err != nil {
+		logger.Error("failed to unmarshal policy file",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	for _, sigFile := range viper.GetStringSlice(cfgPolicySigFile) {
+		var policySigBytes []byte
+		if policySigBytes, err = ioutil.ReadFile(sigFile); err != nil {
+			logger.Error("failed to read signature file",
+				"err", err,
+				"sig_file", sigFile,
+			)
+			os.Exit(1)
+		}
+
+		var s signature.Signature
+		if err = s.UnmarshalPEM(policySigBytes); err != nil {
+			logger.Error("failed to unmarshal signature",
+				"err", err,
+				"sig_file", sigFile,
+			)
+			os.Exit(1)
+		}
+		signedPolicy.Signatures = append(signedPolicy.Signatures, s)
+	}
+
+	// Validate the SignedPolicySGX.
+	if err = kmApi.SanityCheckSignedPolicySGX(nil, &signedPolicy); err != nil {
+		logger.Error("failed to validate SignedPolicySGX",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	// Build, sign, and write the UpdatePolicy transaction.
+	nonce, fee := cmdConsensus.GetTxNonceAndFee()
+	tx := kmApi.NewUpdatePolicyTx(nonce, fee, &signedPolicy)
+	cmdConsensus.SignAndSaveTx(tx)
+}
+
 func statusFromFlags() (*kmApi.Status, error) {
 	var id common.Namespace
 	if err := id.UnmarshalHex(viper.GetString(cfgStatusID)); err != nil {
@@ -550,6 +618,7 @@ func Register(parentCmd *cobra.Command) {
 		signPolicyCmd,
 		verifyPolicyCmd,
 		initStatusCmd,
+		genUpdateCmd,
 	} {
 		keyManagerCmd.AddCommand(v)
 	}
