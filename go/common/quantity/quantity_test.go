@@ -58,6 +58,22 @@ func TestFromInt64(t *testing.T) {
 	require.True(q.eqInt(23), "FromInt64(23) value")
 }
 
+func TestFromUint64(t *testing.T) {
+	require := require.New(t)
+
+	var q Quantity
+	err := q.FromUint64(46)
+	require.NoError(err, "FromUint64(46)")
+	require.True(q.eqInt(46), "FromUint64(46) value")
+
+	err = q.FromUint64(0xFFFFFFFFFFFFFFFF)
+	require.NoError(err, "FromUint64(0xFFFFFFFFFFFFFFFF)")
+
+	var p Quantity
+	p.inner.SetUint64(0xFFFFFFFFFFFFFFFF)
+	require.True(q.Cmp(&p) == 0)
+}
+
 func TestQuantityBinaryRoundTrip(t *testing.T) {
 	const expected int = 0xdeadbeef
 
