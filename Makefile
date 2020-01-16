@@ -78,7 +78,7 @@ test-e2e:
 test: $(test-targets)
 
 # Clean.
-clean-targets := clean-runtimes clean-rust clean-go
+clean-targets := clean-runtimes clean-rust clean-go clean-version-files
 
 clean-runtimes:
 	@$(ECHO) "$(CYAN)*** Cleaning up runtimes...$(OFF)"
@@ -93,25 +93,36 @@ clean-rust:
 clean-go:
 	@$(MAKE) -C go clean
 
+clean-version-files:
+	@$(ECHO) "$(CYAN)*** Cleaning Punch version files...$(OFF)"
+	@rm --force $(_PUNCH_VERSION_FILE_PATH_PREFIX)*.py
+
 clean: $(clean-targets)
 
+# Fetch all the latest changes (including tags) from the canonical upstream git
+# repository.
+fetch-git:
+	@$(ECHO_STDERR) "Fetching the latests changes (including tags) from $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote..."
+	@git fetch $(OASIS_CORE_GIT_ORIGIN_REMOTE) --tags
+
 # Assemble Change log.
-changelog:
+changelog: fetch-git
 	@$(ENSURE_NEXT_VERSION)
 	@$(ECHO_STDERR) "Generating Change Log for version $(NEXT_VERSION)..."
 	towncrier build --version $(NEXT_VERSION)
 	@$(ECHO_STDERR) "Next, review the staged changes, commit them and make a pull request."
 
 # Tag the next release.
-tag-next-release:
+tag-next-release: fetch-git
 	@$(ENSURE_NEXT_VERSION)
 	@$(ECHO_STDERR) "Checking if we can tag version $(NEXT_VERSION) as the next release..."
+	@$(ENSURE_VALID_RELEASE_BRANCH_NAME)
 	@$(ENSURE_NO_CHANGELOG_FRAGMENTS)
 	@$(ENSURE_NEXT_VERSION_IN_CHANGELOG)
-	@$(ECHO_STDERR) "All checks have passed. Proceeding with tagging the $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master HEAD with tag 'v$(NEXT_VERSION)'."
+	@$(ECHO_STDERR) "All checks have passed. Proceeding with tagging the $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)'s HEAD with tag 'v$(NEXT_VERSION)'."
 	@$(CONFIRM_ACTION)
 	@$(ECHO_STDERR) "If this appears to be stuck, you might need to touch your security key for GPG sign operation."
-	@git tag --sign --message="Version $(NEXT_VERSION)" v$(NEXT_VERSION) $(OASIS_CORE_GIT_ORIGIN_REMOTE)/master
+	@git tag --sign --message="Version $(NEXT_VERSION)" v$(NEXT_VERSION) $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)
 	@git push $(OASIS_CORE_GIT_ORIGIN_REMOTE) v$(NEXT_VERSION)
 	@$(ECHO_STDERR) "$(CYAN)Tag 'v$(NEXT_VERSION)' has been successfully pushed to $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote.$(OFF)"
 
@@ -137,5 +148,5 @@ docker-shell:
 	$(fmt-targets) fmt \
 	$(test-unit-targets) $(test-targets) test \
 	$(clean-targets) clean \
-	changelog tag-next-release release docker-shell \
+	fetch-git changelog tag-next-release release docker-shell \
 	all

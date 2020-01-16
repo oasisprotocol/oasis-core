@@ -1,6 +1,18 @@
 name: Continuous integration
 
-on: push
+# Trigger the workflow when:
+on:
+  # A push occurs to one of the matched branches.
+  push:
+    branches:
+      - master
+      - stable/*
+  # Or when a pull request event occurs for a pull request against one of the
+  # matched branches.
+  pull_request:
+    branches:
+      - master
+      - stable/*
 
 jobs:
 
@@ -14,10 +26,13 @@ jobs:
       - name: Install prerequisites
         run: |
           python -m pip install https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz
-      - name: Check for presence of a Change Log fragment
+      - name: Check for presence of a Change Log fragment (only pull requests)
         run: |
-          # Fetch the master branch so towncrier will be able to compare the
-          # current branch to the master branch.
+          # Fetch the pull request' base branch so towncrier will be able to
+          # compare the current branch with the base branch.
           # Source: https://github.com/actions/checkout/#fetch-all-branches.
-          git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
-          towncrier check
+          git fetch --no-tags --prune --depth=1 origin +refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}
+          towncrier check --compare-with origin/${BASE_BRANCH}
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+        if: github.event_name == 'pull_request'
