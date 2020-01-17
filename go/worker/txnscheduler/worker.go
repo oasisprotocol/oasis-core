@@ -2,6 +2,7 @@ package txnscheduler
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -145,14 +146,19 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	// Get other nodes from this runtime.
 	executorNode := w.executor.GetRuntime(id)
 
+	rp, err := w.registration.NewRuntimeRoleProvider(node.RoleComputeWorker, id)
+	if err != nil {
+		return fmt.Errorf("failed to create role provider: %w", err)
+	}
+
 	// Create worker host for the given runtime.
 	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleComputeWorker, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create worker host: %w", err)
 	}
 
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(commonNode, executorNode, workerHostFactory, w.checkTxEnabled)
+	node, err := committee.NewNode(commonNode, executorNode, workerHostFactory, w.checkTxEnabled, rp)
 	if err != nil {
 		return err
 	}

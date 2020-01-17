@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/service"
 	"github.com/oasislabs/oasis-core/go/common/version"
 	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
@@ -20,19 +21,34 @@ type Host interface {
 	// Call sends a request to the worker process and returns the response or error.
 	Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error)
 
-	// WaitForCapabilityTEE gets the active worker's CapabilityTEE,
-	// blocking if the active worker is not yet available. The returned
-	// CapabilityTEE may be out of date by the time this function returns.
-	WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error)
-
-	// WaitForRuntimeVersion gets the active worker's version of the Runtime,
-	// blocking if the active worker is not yet available. The returned
-	// Version may be out of date by the time this function returns.
-	WaitForRuntimeVersion(ctx context.Context) (*version.Version, error)
-
 	// InterruptWorker attempts to interrupt the worker, killing and
 	// respawning it if necessary.
 	InterruptWorker(ctx context.Context) error
+
+	// WatchEvents returns a channel which produces status change events.
+	WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error)
+}
+
+// Event is a worker event.
+type Event struct {
+	Started       *StartedEvent
+	FailedToStart *FailedToStartEvent
+}
+
+// StartedEvent is a worker started event.
+type StartedEvent struct {
+	// Version is the runtime version.
+	Version version.Version
+
+	// CapabilityTEE is the newly started worker's CapabilityTEE. It may be nil in case the worker
+	// is not running inside a TEE.
+	CapabilityTEE *node.CapabilityTEE
+}
+
+// FailedToStartEvent is a worker failed to start event.
+type FailedToStartEvent struct {
+	// Error is the error that has occurred.
+	Error error
 }
 
 // Factory is a factory of worker hosts.

@@ -5,8 +5,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/common/version"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
@@ -109,16 +108,22 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 	return ch, nil
 }
 
-func (h *mockHost) WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
-	return nil, nil
-}
-
-func (h *mockHost) WaitForRuntimeVersion(ctx context.Context) (*version.Version, error) {
-	return nil, nil
-}
-
 func (h *mockHost) InterruptWorker(ctx context.Context) error {
 	return nil
+}
+
+func (h *mockHost) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
+	ch := make(chan *Event)
+	ctx, sub := pubsub.NewContextSubscription(ctx)
+	go func() {
+		defer close(ch)
+		// Generate a mock worker host started event.
+		ch <- &Event{
+			Started: &StartedEvent{},
+		}
+		<-ctx.Done()
+	}()
+	return ch, sub, nil
 }
 
 // NewMockHost creates a new mock worker host.

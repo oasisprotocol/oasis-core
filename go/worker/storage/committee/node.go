@@ -27,6 +27,7 @@ import (
 	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
+	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 
 var (
@@ -143,6 +144,8 @@ type watcherState struct {
 type Node struct {
 	commonNode *committee.Node
 
+	roleProvider registration.RoleProvider
+
 	logger *logging.Logger
 
 	localStorage   storageApi.LocalBackend
@@ -173,6 +176,7 @@ func NewNode(
 	grpcPolicy *grpc.DynamicRuntimePolicyChecker,
 	fetchPool *workerpool.Pool,
 	store *persistent.ServiceStore,
+	roleProvider registration.RoleProvider,
 ) (*Node, error) {
 	localStorage, ok := commonNode.Storage.(storageApi.LocalBackend)
 	if !ok {
@@ -181,6 +185,8 @@ func NewNode(
 
 	node := &Node{
 		commonNode: commonNode,
+
+		roleProvider: roleProvider,
 
 		logger: logging.GetLogger("worker/storage/committee").With("runtime_id", commonNode.Runtime.ID()),
 
@@ -479,6 +485,12 @@ func (n *Node) worker() { // nolint: gocyclo
 	heap.Init(outOfOrderDiffs)
 
 	close(n.initCh)
+
+	// We are now ready to service requests.
+	n.roleProvider.SetAvailable(func(nd *node.Node) error {
+		nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID())
+		return nil
+	})
 
 	// Main processing loop. When a new block comes in, its state and io roots are inspected and their
 	// writelogs fetched from remote storage nodes in case we don't have them locally yet. Fetches are

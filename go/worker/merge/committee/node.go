@@ -25,6 +25,7 @@ import (
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
+	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 
 var (
@@ -78,6 +79,8 @@ var (
 type Node struct { // nolint: maligned
 	commonNode *committee.Node
 	commonCfg  workerCommon.Config
+
+	roleProvider registration.RoleProvider
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -719,6 +722,9 @@ func (n *Node) worker() {
 	// We are initialized.
 	close(n.initCh)
 
+	// We are now ready to service requests.
+	n.roleProvider.SetAvailable(func(*node.Node) error { return nil })
+
 	for {
 		// Select over some channels based on current state.
 		var timerCh <-chan time.Time
@@ -775,7 +781,7 @@ func (n *Node) worker() {
 	}
 }
 
-func NewNode(commonNode *committee.Node, commonCfg workerCommon.Config) (*Node, error) {
+func NewNode(commonNode *committee.Node, commonCfg workerCommon.Config, roleProvider registration.RoleProvider) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
 	})
@@ -785,6 +791,7 @@ func NewNode(commonNode *committee.Node, commonCfg workerCommon.Config) (*Node, 
 	n := &Node{
 		commonNode:       commonNode,
 		commonCfg:        commonCfg,
+		roleProvider:     roleProvider,
 		ctx:              ctx,
 		cancelCtx:        cancel,
 		stopCh:           make(chan struct{}),

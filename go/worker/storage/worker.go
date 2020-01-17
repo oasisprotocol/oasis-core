@@ -51,9 +51,9 @@ func Enabled() bool {
 type Worker struct {
 	enabled bool
 
-	commonWorker       *workerCommon.Worker
-	registrationWorker *registration.Worker
-	logger             *logging.Logger
+	commonWorker *workerCommon.Worker
+	registration *registration.Worker
+	logger       *logging.Logger
 
 	initCh chan struct{}
 	quitCh chan struct{}
@@ -69,19 +69,19 @@ type Worker struct {
 func New(
 	grpcInternal *grpc.Server,
 	commonWorker *workerCommon.Worker,
-	registrationWorker *registration.Worker,
+	registration *registration.Worker,
 	genesis genesis.Provider,
 	commonStore *persistent.CommonStore,
 ) (*Worker, error) {
 
 	s := &Worker{
-		enabled:            viper.GetBool(CfgWorkerEnabled),
-		commonWorker:       commonWorker,
-		registrationWorker: registrationWorker,
-		logger:             logging.GetLogger("worker/storage"),
-		initCh:             make(chan struct{}),
-		quitCh:             make(chan struct{}),
-		runtimes:           make(map[common.Namespace]*committee.Node),
+		enabled:      viper.GetBool(CfgWorkerEnabled),
+		commonWorker: commonWorker,
+		registration: registration,
+		logger:       logging.GetLogger("worker/storage"),
+		initCh:       make(chan struct{}),
+		quitCh:       make(chan struct{}),
+		runtimes:     make(map[common.Namespace]*committee.Node),
 	}
 
 	if s.enabled {
@@ -121,12 +121,6 @@ func New(
 			debugRejectUpdates: viper.GetBool(CfgWorkerDebugIgnoreApply) && flags.DebugDontBlameOasis(),
 		})
 
-		// Register storage worker role.
-		if err := s.registrationWorker.RegisterRole(node.RoleStorageWorker,
-			func(n *node.Node) error { return nil }); err != nil {
-			return nil, err
-		}
-
 		// Start storage node for every runtime.
 		for _, rt := range s.commonWorker.GetRuntimes() {
 			if err := s.registerRuntime(rt); err != nil {
@@ -142,12 +136,27 @@ func New(
 }
 
 func (s *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
-	node, err := committee.NewNode(commonNode, s.grpcPolicy, s.fetchPool, s.watchState)
+	id := commonNode.Runtime.ID()
+	s.logger.Info("registering new runtime",
+		"runtime_id", id,
+	)
+
+	rp, err := s.registration.NewRuntimeRoleProvider(node.RoleStorageWorker, id)
+	if err != nil {
+		return fmt.Errorf("failed to create role provider: %w", err)
+	}
+
+	node, err := committee.NewNode(commonNode, s.grpcPolicy, s.fetchPool, s.watchState, rp)
 	if err != nil {
 		return err
 	}
 	commonNode.AddHooks(node)
-	s.runtimes[commonNode.Runtime.ID()] = node
+	s.runtimes[id] = node
+
+	s.logger.Info("new runtime registered",
+		"runtime_id", id,
+	)
+
 	return nil
 }
 
@@ -202,7 +211,7 @@ func (s *Worker) Start() error {
 			<-r.Initialized()
 		}
 
-		<-s.registrationWorker.InitialRegistrationCh()
+		<-s.registration.InitialRegistrationCh()
 
 		s.logger.Info("storage worker started")
 

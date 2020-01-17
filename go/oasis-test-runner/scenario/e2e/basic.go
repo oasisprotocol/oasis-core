@@ -332,10 +332,9 @@ func (sc *basicImpl) waitNodesSynced() error {
 func (sc *basicImpl) initialEpochTransitions() error {
 	ctx := context.Background()
 	if sc.net.Keymanager() != nil {
-		// First wait for validator and key manager nodes to register. Then
-		// perform an epoch transition which will cause the compute nodes to
-		// register.
-		numNodes := len(sc.net.Validators()) + len(sc.net.StorageWorkers()) + 1
+		// First wait for validator and key manager nodes to register. Then perform an epoch
+		// transition which will cause the compute and storage nodes to register.
+		numNodes := len(sc.net.Validators()) + 1
 		sc.logger.Info("waiting for (some) nodes to register",
 			"num_nodes", numNodes,
 		)

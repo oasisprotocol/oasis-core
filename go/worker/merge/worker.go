@@ -2,9 +2,11 @@ package merge
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/merge/committee"
@@ -15,8 +17,8 @@ import (
 type Worker struct {
 	enabled bool
 
-	commonWorker       *workerCommon.Worker
-	registrationWorker *registration.Worker
+	commonWorker *workerCommon.Worker
+	registration *registration.Worker
 
 	runtimes map[common.Namespace]*committee.Node
 
@@ -60,7 +62,7 @@ func (w *Worker) Start() error {
 			<-rt.Initialized()
 		}
 
-		<-w.registrationWorker.InitialRegistrationCh()
+		<-w.registration.InitialRegistrationCh()
 
 		close(w.initCh)
 	}()
@@ -136,7 +138,12 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		"runtime_id", id,
 	)
 
-	node, err := committee.NewNode(commonNode, w.commonWorker.GetConfig())
+	rp, err := w.registration.NewRuntimeRoleProvider(node.RoleComputeWorker, id)
+	if err != nil {
+		return fmt.Errorf("failed to create role provider: %w", err)
+	}
+
+	node, err := committee.NewNode(commonNode, w.commonWorker.GetConfig(), rp)
 	if err != nil {
 		return err
 	}
@@ -151,19 +158,19 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	return nil
 }
 
-func newWorker(enabled bool, commonWorker *workerCommon.Worker, registrationWorker *registration.Worker) (*Worker, error) {
+func newWorker(enabled bool, commonWorker *workerCommon.Worker, registration *registration.Worker) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
-		enabled:            enabled,
-		commonWorker:       commonWorker,
-		registrationWorker: registrationWorker,
-		runtimes:           make(map[common.Namespace]*committee.Node),
-		ctx:                ctx,
-		cancelCtx:          cancelCtx,
-		quitCh:             make(chan struct{}),
-		initCh:             make(chan struct{}),
-		logger:             logging.GetLogger("worker/merge"),
+		enabled:      enabled,
+		commonWorker: commonWorker,
+		registration: registration,
+		runtimes:     make(map[common.Namespace]*committee.Node),
+		ctx:          ctx,
+		cancelCtx:    cancelCtx,
+		quitCh:       make(chan struct{}),
+		initCh:       make(chan struct{}),
+		logger:       logging.GetLogger("worker/merge"),
 	}
 
 	if enabled {

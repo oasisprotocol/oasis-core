@@ -98,8 +98,13 @@ func TestSandboxedHost(t *testing.T) {
 }
 
 func testSandboxedHost(t *testing.T, host Host) {
+	// Watch events.
+	ch, sub, err := host.WatchEvents(context.Background())
+	require.NoError(t, err, "WatchEvents")
+	defer sub.Close()
+
 	// Start the host.
-	err := host.Start()
+	err = host.Start()
 	require.NoError(t, err, "Start")
 	defer func() {
 		host.Stop()
@@ -108,12 +113,8 @@ func testSandboxedHost(t *testing.T, host Host) {
 
 	// Run actual test cases.
 
-	t.Run("WaitForCapabilityTEE", func(t *testing.T) {
-		testWaitForCapabilityTEE(t, host)
-	})
-
-	t.Run("WaitForVersion", func(t *testing.T) {
-		testWaitForVersion(t, host)
+	t.Run("WatchEvents", func(t *testing.T) {
+		testWatchEvents(t, host, ch)
 	})
 
 	t.Run("SimpleRequest", func(t *testing.T) {
@@ -129,28 +130,25 @@ func testSandboxedHost(t *testing.T, host Host) {
 	})
 }
 
-func testWaitForCapabilityTEE(t *testing.T, host Host) {
+func testWatchEvents(t *testing.T, host Host, ch <-chan *Event) {
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
 
-	cap, err := host.WaitForCapabilityTEE(ctx)
-	require.NoError(t, err, "WaitForCapabilityTEE")
-	switch host.(*sandboxedHost).cfg.TEEHardware {
-	case node.TEEHardwareIntelSGX:
-		require.NotNil(t, cap, "capabilities should not be nil")
-		require.Equal(t, node.TEEHardwareIntelSGX, cap.Hardware, "TEE hardware should be Intel SGX")
-	default:
-		require.Nil(t, cap, "capabilites should be nil")
+	select {
+	case <-ctx.Done():
+		require.NoError(t, ctx.Err())
+	case ev := <-ch:
+		require.NotNil(t, ev.Started)
+
+		// CapabilityTEE.
+		switch host.(*sandboxedHost).cfg.TEEHardware {
+		case node.TEEHardwareIntelSGX:
+			require.NotNil(t, ev.Started.CapabilityTEE, "capabilities should not be nil")
+			require.Equal(t, node.TEEHardwareIntelSGX, ev.Started.CapabilityTEE.Hardware, "TEE hardware should be Intel SGX")
+		default:
+			require.Nil(t, ev.Started.CapabilityTEE, "capabilites should be nil")
+		}
 	}
-}
-
-func testWaitForVersion(t *testing.T, host Host) {
-	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
-	defer cancel()
-
-	v, err := host.WaitForRuntimeVersion(ctx)
-	require.NoError(t, err, "WaitForVersion")
-	require.NotNil(t, v, "version should not be nil")
 }
 
 func testSimpleRequest(t *testing.T, host Host) {

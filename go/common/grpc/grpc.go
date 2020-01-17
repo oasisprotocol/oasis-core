@@ -273,6 +273,7 @@ func (s *grpcStreamLogger) SendMsg(m interface{}) error {
 
 // Server is a gRPC server service.
 type Server struct {
+	sync.Mutex
 	service.BaseBackgroundService
 
 	listenerCfgs     []listenerConfig
@@ -312,6 +313,15 @@ type listenerConfig struct {
 
 // Start starts the Server.
 func (s *Server) Start() error {
+	s.Lock()
+	defer s.Unlock()
+
+	if s.server == nil {
+		// Could happen if Stop is called before Start.
+		return fmt.Errorf("gRPC server has already been stopped")
+	}
+	server := s.server
+
 	s.Logger.Info("starting gRPC server")
 	if s.unsafeDebug {
 		s.Logger.Warn("The debug gRPC port is NOT FOR PRODUCTION USE.")
@@ -330,7 +340,7 @@ func (s *Server) Start() error {
 		s.startedListeners = append(s.startedListeners, ln)
 
 		go func() {
-			if err := s.server.Serve(ln); err != nil {
+			if err := server.Serve(ln); err != nil {
 				s.BaseBackgroundService.Stop()
 				s.errCh <- err
 			}
@@ -342,6 +352,9 @@ func (s *Server) Start() error {
 
 // Stop stops the Server.
 func (s *Server) Stop() {
+	s.Lock()
+	defer s.Unlock()
+
 	if s.server != nil {
 		select {
 		case err := <-s.errCh:
@@ -360,6 +373,9 @@ func (s *Server) Stop() {
 
 // Cleanup cleans up after the Server.
 func (s *Server) Cleanup() {
+	s.Lock()
+	defer s.Unlock()
+
 	for _, v := range s.startedListeners {
 		_ = v.Close()
 	}

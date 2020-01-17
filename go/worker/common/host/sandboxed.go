@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -18,9 +17,9 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/ctxsync"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/sgx/aesm"
 	cmnIAS "github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/common/version"
@@ -70,8 +69,6 @@ var _ Host = (*sandboxedHost)(nil)
 type OnProcessStart func(*protocol.Protocol, *node.CapabilityTEE) error
 
 type process struct {
-	sync.Mutex
-
 	process  *os.Process
 	protocol *protocol.Protocol
 
@@ -169,25 +166,9 @@ func (p *process) attestationWorker(h *sandboxedHost) {
 				continue
 			}
 
-			p.Lock()
 			p.capabilityTEE = capabilityTEE
-			p.Unlock()
 		}
 	}
-}
-
-func (p *process) getCapabilityTEE() *node.CapabilityTEE {
-	p.Lock()
-	defer p.Unlock()
-
-	return p.capabilityTEE
-}
-
-func (p *process) getRuntimeVersion() *version.Version {
-	p.Lock()
-	defer p.Unlock()
-
-	return p.runtimeVersion
 }
 
 func prepareSandboxArgs(hostSocket, workerBinary, runtimeBinary string, hardware node.TEEHardware) ([]string, error) {
@@ -474,10 +455,11 @@ type sandboxedHost struct { //nolint: maligned
 	stopCh chan struct{}
 	quitCh chan struct{}
 
-	activeWorker          *process
-	activeWorkerAvailable *ctxsync.CancelableCond
-	requestCh             chan *hostRequest
-	interruptCh           chan *interruptRequest
+	activeWorker *process
+	requestCh    chan *hostRequest
+	interruptCh  chan *interruptRequest
+
+	notifier *pubsub.Broker
 
 	logger *logging.Logger
 }
@@ -487,34 +469,6 @@ func (h *sandboxedHost) Name() string {
 		return "unconfined worker host"
 	}
 	return "sandboxed worker host"
-}
-
-func (h *sandboxedHost) WaitForCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
-	h.activeWorkerAvailable.L.Lock()
-	defer h.activeWorkerAvailable.L.Unlock()
-	for {
-		activeWorker := h.activeWorker
-		if activeWorker != nil {
-			return activeWorker.getCapabilityTEE(), nil
-		}
-		if !h.activeWorkerAvailable.Wait(ctx) {
-			return nil, errors.New("aborted by context")
-		}
-	}
-}
-
-func (h *sandboxedHost) WaitForRuntimeVersion(ctx context.Context) (*version.Version, error) {
-	h.activeWorkerAvailable.L.Lock()
-	defer h.activeWorkerAvailable.L.Unlock()
-	for {
-		activeWorker := h.activeWorker
-		if activeWorker != nil {
-			return activeWorker.getRuntimeVersion(), nil
-		}
-		if !h.activeWorkerAvailable.Wait(ctx) {
-			return nil, errors.New("aborted by context")
-		}
-	}
 }
 
 func (h *sandboxedHost) Start() error {
@@ -600,6 +554,14 @@ func (h *sandboxedHost) InterruptWorker(ctx context.Context) error {
 	case <-ctx.Done():
 		return context.Canceled
 	}
+}
+
+func (h *sandboxedHost) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
+	typedCh := make(chan *Event)
+	sub := h.notifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub, nil
 }
 
 func (h *sandboxedHost) spawnWorker() (*process, error) { //nolint: gocyclo
@@ -838,13 +800,22 @@ func (h *sandboxedHost) spawnWorker() (*process, error) { //nolint: gocyclo
 func (h *sandboxedHost) spawnAndReplaceWorker() error {
 	worker, err := h.spawnWorker()
 	if err != nil {
+		h.notifier.Broadcast(&Event{
+			FailedToStart: &FailedToStartEvent{
+				Error: err,
+			},
+		})
 		return err
 	}
 
-	h.activeWorkerAvailable.L.Lock()
 	h.activeWorker = worker
-	h.activeWorkerAvailable.Broadcast()
-	h.activeWorkerAvailable.L.Unlock()
+
+	h.notifier.Broadcast(&Event{
+		Started: &StartedEvent{
+			Version:       *worker.runtimeVersion,
+			CapabilityTEE: worker.capabilityTEE,
+		},
+	})
 
 	return nil
 }
@@ -925,9 +896,7 @@ ManagerLoop:
 				<-h.activeWorker.quitCh
 			}
 
-			h.activeWorkerAvailable.L.Lock()
 			h.activeWorker = nil
-			h.activeWorkerAvailable.L.Unlock()
 		}
 
 		if !wantWorker {
@@ -985,14 +954,14 @@ func NewHost(cfg *Config) (Host, error) {
 	)
 
 	host := &sandboxedHost{
-		cfg:                   cfg,
-		teeState:              hostTeeState,
-		quitCh:                make(chan struct{}),
-		stopCh:                make(chan struct{}),
-		activeWorkerAvailable: ctxsync.NewCancelableCond(new(sync.Mutex)),
-		requestCh:             make(chan *hostRequest, 10),
-		interruptCh:           make(chan *interruptRequest, 10),
-		logger:                logger,
+		cfg:         cfg,
+		teeState:    hostTeeState,
+		quitCh:      make(chan struct{}),
+		stopCh:      make(chan struct{}),
+		requestCh:   make(chan *hostRequest, 10),
+		interruptCh: make(chan *interruptRequest, 10),
+		notifier:    pubsub.NewBroker(false),
+		logger:      logger,
 	}
 	host.BaseHost = BaseHost{Host: host}
 

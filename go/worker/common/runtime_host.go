@@ -206,15 +206,16 @@ type RuntimeHostNode struct {
 	workerHost        host.Host
 }
 
-// InitializeRuntimeWorkerHost initializes the runtime worker host for this
-// given runtime.
-func (n *RuntimeHostNode) InitializeRuntimeWorkerHost(ctx context.Context) error {
+// InitializeRuntimeWorkerHost initializes the runtime worker host for this runtime.
+//
+// NOTE: This does not start the worker host, call Start on the returned worker to do so.
+func (n *RuntimeHostNode) InitializeRuntimeWorkerHost(ctx context.Context) (host.Host, error) {
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
 
 	rt, err := n.commonNode.Runtime.RegistryDescriptor(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	cfg := host.Config{
@@ -229,13 +230,10 @@ func (n *RuntimeHostNode) InitializeRuntimeWorkerHost(ctx context.Context) error
 	}
 	workerHost, err := n.workerHostFactory.NewWorkerHost(cfg)
 	if err != nil {
-		return err
-	}
-	if err := workerHost.Start(); err != nil {
-		return err
+		return nil, err
 	}
 	n.workerHost = workerHost
-	return nil
+	return workerHost, nil
 }
 
 // StopRuntimeWorkerHost signals the worker host to stop and waits for it
