@@ -17,8 +17,8 @@ import (
 	roothashTests "github.com/oasislabs/oasis-core/go/roothash/tests"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/committee"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/committee"
 )
 
 const recvTimeout = 5 * time.Second

@@ -27,11 +27,11 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/common/host"
 	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
-	executorCommittee "github.com/oasislabs/oasis-core/go/worker/executor/committee"
+	executorCommittee "github.com/oasislabs/oasis-core/go/worker/compute/executor/committee"
+	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/algorithm"
+	txnSchedulerAlgorithmApi "github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/algorithm/api"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/api"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
-	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm"
-	txnSchedulerAlgorithmApi "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
 )
 
 var (

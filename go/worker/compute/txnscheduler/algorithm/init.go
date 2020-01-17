@@ -5,8 +5,8 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/batching"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/algorithm/api"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/algorithm/batching"
 )
 
 // Flags has the configuration flags.

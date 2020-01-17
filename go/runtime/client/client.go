@@ -29,7 +29,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
-	txnscheduler "github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
+	txnscheduler "github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/api"
 )
 
 var (
