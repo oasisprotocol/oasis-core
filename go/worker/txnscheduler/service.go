@@ -23,7 +23,7 @@ func (w *Worker) SubmitTx(ctx context.Context, rq *api.SubmitTxRequest) (*api.Su
 
 // IsTransactionQueued checks if the given transaction is present in the
 // transaction scheduler queue and is waiting to be dispatched to a
-// compute committee.
+// executor committee.
 func (w *Worker) IsTransactionQueued(ctx context.Context, rq *api.IsTransactionQueuedRequest) (*api.IsTransactionQueuedResponse, error) {
 	runtime, ok := w.runtimes[rq.RuntimeID]
 	if !ok {

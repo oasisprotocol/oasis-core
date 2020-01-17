@@ -40,20 +40,20 @@ var (
 		Short:            "run some node behaviors for testing, often not honest",
 		PersistentPreRun: activateCommonConfig,
 	}
-	computeHonestCmd = &cobra.Command{
-		Use:   "compute-honest",
-		Short: "act as an honest compute worker",
-		Run:   doComputeHonest,
+	executorHonestCmd = &cobra.Command{
+		Use:   "executor-honest",
+		Short: "act as an honest executor worker",
+		Run:   doExecutorHonest,
 	}
-	computeWrongCmd = &cobra.Command{
-		Use:   "compute-wrong",
-		Short: "act as a compute worker that sends wrong output",
-		Run:   doComputeWrong,
+	executorWrongCmd = &cobra.Command{
+		Use:   "executor-wrong",
+		Short: "act as an executor worker that sends wrong output",
+		Run:   doExecutorWrong,
 	}
-	computeStragglerCmd = &cobra.Command{
-		Use:   "compute-straggler",
-		Short: "act as a compute worker that registers and doesn't do any work",
-		Run:   doComputeStraggler,
+	executorStragglerCmd = &cobra.Command{
+		Use:   "executor-straggler",
+		Short: "act as an executor worker that registers and doesn't do any work",
+		Run:   doExecutorStraggler,
 	}
 	mergeHonestCmd = &cobra.Command{
 		Use:   "merge-honest",
@@ -79,7 +79,7 @@ func activateCommonConfig(cmd *cobra.Command, args []string) {
 	ias.SetAllowDebugEnclaves()
 }
 
-func doComputeHonest(cmd *cobra.Command, args []string) {
+func doExecutorHonest(cmd *cobra.Command, args []string) {
 	if err := common.Init(); err != nil {
 		common.EarlyLogAndExit(err)
 	}
@@ -124,18 +124,18 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindCompute)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindExecutor)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
-	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindExecutor, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindExecutor, err))
 	}
-	if err = schedulerCheckScheduled(computeCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
+	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
-	logger.Debug("compute honest: compute schedule ok")
+	logger.Debug("executor honest: executor schedule ok")
 	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
@@ -155,7 +155,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check not scheduled merge failed: %+v", err))
 	}
 
-	logger.Debug("compute honest: connecting to storage committee")
+	logger.Debug("executor honest: connecting to storage committee")
 	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
 	if err != nil {
 		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
@@ -167,7 +167,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 	if err = cbc.receiveBatch(ph); err != nil {
 		panic(fmt.Sprintf("compute receive batch failed: %+v", err))
 	}
-	logger.Debug("compute honest: received batch", "bd", cbc.bd)
+	logger.Debug("executor honest: received batch", "bd", cbc.bd)
 
 	ctx := context.Background()
 
@@ -190,7 +190,7 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 	if err = cbc.commitTrees(ctx); err != nil {
 		panic(fmt.Sprintf("compute commit trees failed: %+v", err))
 	}
-	logger.Debug("compute honest: committed storage trees",
+	logger.Debug("executor honest: committed storage trees",
 		"io_write_log", cbc.ioWriteLog,
 		"new_io_root", cbc.newIORoot,
 		"state_write_log", cbc.stateWriteLog,
@@ -201,17 +201,17 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute upload batch failed: %+v", err))
 	}
 
-	if err = cbc.createCommitment(defaultIdentity, rak, computeCommittee.EncodedMembersHash()); err != nil {
+	if err = cbc.createCommitment(defaultIdentity, rak, executorCommittee.EncodedMembersHash()); err != nil {
 		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
 
 	if err = cbc.publishToCommittee(ht, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight); err != nil {
 		panic(fmt.Sprintf("compute publish to committee merge worker failed: %+v", err))
 	}
-	logger.Debug("compute honest: commitment sent")
+	logger.Debug("executor honest: commitment sent")
 }
 
-func doComputeWrong(cmd *cobra.Command, args []string) {
+func doExecutorWrong(cmd *cobra.Command, args []string) {
 	if err := common.Init(); err != nil {
 		common.EarlyLogAndExit(err)
 	}
@@ -256,18 +256,18 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindCompute)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindExecutor)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
-	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindExecutor, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindExecutor, err))
 	}
-	if err = schedulerCheckScheduled(computeCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
+	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
-	logger.Debug("compute wrong: compute schedule ok")
+	logger.Debug("executor wrong: executor schedule ok")
 	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
@@ -287,7 +287,7 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check not scheduled merge failed: %+v", err))
 	}
 
-	logger.Debug("compute honest: connecting to storage committee")
+	logger.Debug("executor honest: connecting to storage committee")
 	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
 	if err != nil {
 		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
@@ -299,7 +299,7 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 	if err = cbc.receiveBatch(ph); err != nil {
 		panic(fmt.Sprintf("compute receive batch failed: %+v", err))
 	}
-	logger.Debug("compute wrong: received batch", "bd", cbc.bd)
+	logger.Debug("executor wrong: received batch", "bd", cbc.bd)
 
 	ctx := context.Background()
 
@@ -322,7 +322,7 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 	if err = cbc.commitTrees(ctx); err != nil {
 		panic(fmt.Sprintf("compute commit trees failed: %+v", err))
 	}
-	logger.Debug("compute wrong: committed storage trees",
+	logger.Debug("executor wrong: committed storage trees",
 		"io_write_log", cbc.ioWriteLog,
 		"new_io_root", cbc.newIORoot,
 		"state_write_log", cbc.stateWriteLog,
@@ -333,17 +333,17 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute upload batch failed: %+v", err))
 	}
 
-	if err = cbc.createCommitment(defaultIdentity, rak, computeCommittee.EncodedMembersHash()); err != nil {
+	if err = cbc.createCommitment(defaultIdentity, rak, executorCommittee.EncodedMembersHash()); err != nil {
 		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
 
 	if err = cbc.publishToCommittee(ht, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight); err != nil {
 		panic(fmt.Sprintf("compute publish to committee merge worker failed: %+v", err))
 	}
-	logger.Debug("compute wrong: commitment sent")
+	logger.Debug("executor wrong: commitment sent")
 }
 
-func doComputeStraggler(cmd *cobra.Command, args []string) {
+func doExecutorStraggler(cmd *cobra.Command, args []string) {
 	if err := common.Init(); err != nil {
 		common.EarlyLogAndExit(err)
 	}
@@ -387,18 +387,18 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindCompute)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindExecutor)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
-	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindExecutor, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindExecutor, err))
 	}
-	if err = schedulerCheckScheduled(computeCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
+	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
-	logger.Debug("compute straggler: compute schedule ok")
+	logger.Debug("executor straggler: executor schedule ok")
 	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindTransactionScheduler, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindTransactionScheduler, err))
@@ -419,9 +419,9 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 	if err = cbc.receiveBatch(ph); err != nil {
 		panic(fmt.Sprintf("compute receive batch failed: %+v", err))
 	}
-	logger.Debug("compute straggler: received batch", "bd", cbc.bd)
+	logger.Debug("executor straggler: received batch", "bd", cbc.bd)
 
-	logger.Debug("compute straggler: bailing")
+	logger.Debug("executor straggler: bailing")
 }
 
 func doMergeHonest(cmd *cobra.Command, args []string) {
@@ -462,7 +462,7 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindCompute)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindExecutor)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
@@ -474,12 +474,12 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("merge honest: merge schedule ok")
-	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindExecutor, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindExecutor, err))
 	}
-	if err = schedulerCheckNotScheduled(computeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled compute failed: %+v", err))
+	if err = schedulerCheckNotScheduled(executorCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled executor failed: %+v", err))
 	}
 	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
@@ -570,7 +570,7 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindCompute)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindExecutor)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
@@ -582,12 +582,12 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("merge wrong: merge schedule ok")
-	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindExecutor, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindExecutor, err))
 	}
-	if err = schedulerCheckNotScheduled(computeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled compute failed: %+v", err))
+	if err = schedulerCheckNotScheduled(executorCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled executor failed: %+v", err))
 	}
 	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
@@ -626,8 +626,8 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 	origCommitments := mbc.commitments
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
-	mbc.commitments = []*commitment.OpenComputeCommitment{
-		&commitment.OpenComputeCommitment{
+	mbc.commitments = []*commitment.OpenExecutorCommitment{
+		&commitment.OpenExecutorCommitment{
 			Body: &commitment.ComputeBody{
 				Header: commitment.ComputeResultsHeader{
 					IORoot:    emptyRoot,
@@ -702,7 +702,7 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindCompute)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindExecutor)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
@@ -714,12 +714,12 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("merge straggler: merge schedule ok")
-	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindExecutor, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindExecutor, err))
 	}
-	if err = schedulerCheckNotScheduled(computeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled compute failed: %+v", err))
+	if err = schedulerCheckNotScheduled(executorCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled executor failed: %+v", err))
 	}
 	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindTransactionScheduler, defaultRuntimeID)
 	if err != nil {
@@ -742,9 +742,9 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 
 // Register registers the byzantine sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
-	byzantineCmd.AddCommand(computeHonestCmd)
-	byzantineCmd.AddCommand(computeWrongCmd)
-	byzantineCmd.AddCommand(computeStragglerCmd)
+	byzantineCmd.AddCommand(executorHonestCmd)
+	byzantineCmd.AddCommand(executorWrongCmd)
+	byzantineCmd.AddCommand(executorStragglerCmd)
 	byzantineCmd.AddCommand(mergeHonestCmd)
 	byzantineCmd.AddCommand(mergeWrongCmd)
 	byzantineCmd.AddCommand(mergeStragglerCmd)

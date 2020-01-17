@@ -937,7 +937,7 @@ func VerifyRegisterRuntimeArgs(
 	}
 
 	// Ensure there is at least one member of the compute group.
-	if rt.Compute.GroupSize == 0 {
+	if rt.Executor.GroupSize == 0 {
 		logger.Error("RegisterRuntime: compute group size too small",
 			"runtime", rt,
 		)
@@ -1173,17 +1173,17 @@ func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[common.Namespace]*Runti
 
 		// Check compute runtime parameters.
 		if rt.Kind == KindCompute {
-			// Check runtime's Compute committee parameters.
-			if rt.Compute.GroupSize < 1 {
-				return nil, fmt.Errorf("registry: sanity check failed: compute group size must be >= 1 node")
+			// Check runtime's Executor committee parameters.
+			if rt.Executor.GroupSize < 1 {
+				return nil, fmt.Errorf("registry: sanity check failed: executor group size must be >= 1 node")
 			}
 
-			if rt.Compute.RoundTimeout < 1*time.Second {
-				return nil, fmt.Errorf("registry: sanity check failed: compute round timeout must be >= 1 second")
+			if rt.Executor.RoundTimeout < 1*time.Second {
+				return nil, fmt.Errorf("registry: sanity check failed: executor round timeout must be >= 1 second")
 			}
 
-			if rt.Compute.RoundTimeout.Truncate(time.Second) != rt.Compute.RoundTimeout {
-				return nil, fmt.Errorf("registry: sanity check failed: granularity of compute round timeout must be a second")
+			if rt.Executor.RoundTimeout.Truncate(time.Second) != rt.Executor.RoundTimeout {
+				return nil, fmt.Errorf("registry: sanity check failed: granularity of executor round timeout must be a second")
 			}
 
 			// Check runtime's Merge committee parameters.
@@ -1196,7 +1196,7 @@ func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[common.Namespace]*Runti
 			}
 
 			if rt.Merge.RoundTimeout.Truncate(time.Second) != rt.Merge.RoundTimeout {
-				return nil, fmt.Errorf("registry: sanity check failed: granularity of compute round timeout must be a second")
+				return nil, fmt.Errorf("registry: sanity check failed: granularity of merge round timeout must be a second")
 			}
 
 			// Check runtime's Transaction scheduler committee parameters.

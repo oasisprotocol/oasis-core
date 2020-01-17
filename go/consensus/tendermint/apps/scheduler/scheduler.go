@@ -38,7 +38,7 @@ import (
 var (
 	_ abci.Application = (*schedulerApplication)(nil)
 
-	RNGContextCompute              = []byte("EkS-ABCI-Compute")
+	RNGContextExecutor             = []byte("EkS-ABCI-Compute")
 	RNGContextStorage              = []byte("EkS-ABCI-Storage")
 	RNGContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
 	RNGContextMerge                = []byte("EkS-ABCI-Merge")
@@ -216,7 +216,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		}
 
 		kinds := []scheduler.CommitteeKind{
-			scheduler.KindCompute,
+			scheduler.KindExecutor,
 			scheduler.KindStorage,
 			scheduler.KindTransactionScheduler,
 			scheduler.KindMerge,
@@ -340,7 +340,7 @@ func (app *schedulerApplication) FireTimer(ctx *abci.Context, t *abci.Timer) err
 	return errors.New("tendermint/scheduler: unexpected timer")
 }
 
-func (app *schedulerApplication) isSuitableComputeWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
+func (app *schedulerApplication) isSuitableExecutorWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
 	if !n.HasRoles(node.RoleComputeWorker) {
 		return false
 	}
@@ -430,7 +430,7 @@ func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes i
 // For non-fatal problems, save a problem condition to the state and return successfully.
 func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.PublicKey]bool, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
-	if !rt.IsCompute() && kind != scheduler.KindCompute {
+	if !rt.IsCompute() && kind != scheduler.KindExecutor {
 		return nil
 	}
 
@@ -447,12 +447,12 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 	)
 
 	switch kind {
-	case scheduler.KindCompute:
-		rngCtx = RNGContextCompute
+	case scheduler.KindExecutor:
+		rngCtx = RNGContextExecutor
 		threshold = staking.KindCompute
-		isSuitableFn = app.isSuitableComputeWorker
-		workerSize = int(rt.Compute.GroupSize)
-		backupSize = int(rt.Compute.GroupBackupSize)
+		isSuitableFn = app.isSuitableExecutorWorker
+		workerSize = int(rt.Executor.GroupSize)
+		backupSize = int(rt.Executor.GroupBackupSize)
 	case scheduler.KindMerge:
 		rngCtx = RNGContextMerge
 		threshold = staking.KindCompute

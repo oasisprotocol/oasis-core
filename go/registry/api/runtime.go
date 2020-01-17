@@ -33,7 +33,7 @@ var (
 type RuntimeKind uint32
 
 const (
-	// KindCompute is a generic compute runtime.
+	// KindCompute is a generic executor runtime.
 	KindCompute RuntimeKind = 0
 
 	// KindKeyManager is a key manager runtime.
@@ -72,8 +72,8 @@ func (k *RuntimeKind) FromString(str string) error {
 	return nil
 }
 
-// ComputeParameters are parameters for the compute committee.
-type ComputeParameters struct {
+// ExecutorParameters are parameters for the executor committee.
+type ExecutorParameters struct {
 	// GroupSize is the size of the committee.
 	GroupSize uint64 `json:"group_size"`
 
@@ -149,8 +149,8 @@ type Runtime struct {
 	// KeyManager is the key manager runtime ID for this runtime.
 	KeyManager *common.Namespace `json:"key_manager,omitempty"`
 
-	// Compute stores parameters of the compute committee.
-	Compute ComputeParameters `json:"compute,omitempty"`
+	// Executor stores parameters of the executor committee.
+	Executor ExecutorParameters `json:"executor,omitempty"`
 
 	// Merge stores parameters of the merge committee.
 	Merge MergeParameters `json:"merge,omitempty"`

@@ -8,8 +8,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
-	"github.com/oasislabs/oasis-core/go/worker/compute"
-	"github.com/oasislabs/oasis-core/go/worker/compute/committee"
+	"github.com/oasislabs/oasis-core/go/worker/executor"
+	"github.com/oasislabs/oasis-core/go/worker/executor/committee"
 )
 
 const recvTimeout = 5 * time.Second
@@ -21,7 +21,7 @@ const recvTimeout = 5 * time.Second
 // after the node was registered.
 func WorkerImplementationTests(
 	t *testing.T,
-	worker *compute.Worker,
+	worker *executor.Worker,
 	runtimeID common.Namespace,
 	rtNode *committee.Node,
 	epochtime epochtime.SetableBackend,

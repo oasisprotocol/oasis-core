@@ -22,7 +22,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
-	"github.com/oasislabs/oasis-core/go/worker/computeenable"
+	"github.com/oasislabs/oasis-core/go/worker/compute"
 	"github.com/oasislabs/oasis-core/go/worker/keymanager"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasislabs/oasis-core/go/worker/sentry"
@@ -207,7 +207,7 @@ func (args *argBuilder) workerRuntimeBinary(id common.Namespace, fn string) *arg
 }
 
 func (args *argBuilder) workerComputeEnabled() *argBuilder {
-	args.vec = append(args.vec, "--"+computeenable.CfgWorkerEnabled)
+	args.vec = append(args.vec, "--"+compute.CfgWorkerEnabled)
 	return args
 }
 

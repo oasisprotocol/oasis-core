@@ -47,15 +47,15 @@ type epoch struct {
 	// committee election.
 	groupVersion int64
 
-	// computeCommittee is the compute committee we are a member of.
-	computeCommittee *CommitteeInfo
-	// computeCommitteeID is the identifier of our compute committee.
-	computeCommitteeID hash.Hash
-	// computeCommittees are all compute committees.
-	computeCommittees map[hash.Hash]*CommitteeInfo
-	// computeCommitteesByPeer is a set of P2P public keys of compute committee
+	// executorCommittee is the executor committee we are a member of.
+	executorCommittee *CommitteeInfo
+	// executorCommitteeID is the identifier of our executor committee.
+	executorCommitteeID hash.Hash
+	// executorCommittees are all executor committees.
+	executorCommittees map[hash.Hash]*CommitteeInfo
+	// executorCommitteesByPeer is a set of P2P public keys of executor committee
 	// members.
-	computeCommitteesByPeer map[signature.PublicKey]bool
+	executorCommitteesByPeer map[signature.PublicKey]bool
 
 	// txnSchedulerCommitee is the txn scheduler committee we are a member of.
 	txnSchedulerCommittee *CommitteeInfo
@@ -75,15 +75,15 @@ type epoch struct {
 type EpochSnapshot struct {
 	groupVersion int64
 
-	computeCommitteeID hash.Hash
+	executorCommitteeID hash.Hash
 
-	computeRole      scheduler.Role
+	executorRole     scheduler.Role
 	txnSchedulerRole scheduler.Role
 	mergeRole        scheduler.Role
 
 	runtime *registry.Runtime
 
-	computeCommittees     map[hash.Hash]*CommitteeInfo
+	executorCommittees    map[hash.Hash]*CommitteeInfo
 	txnSchedulerCommittee *CommitteeInfo
 	mergeCommittee        *CommitteeInfo
 	storageCommittee      *CommitteeInfo
@@ -91,13 +91,13 @@ type EpochSnapshot struct {
 
 // NewMockEpochSnapshot returns a mock epoch snapshot to be used in tests.
 func NewMockEpochSnapshot() *EpochSnapshot {
-	var computeCommitteeID hash.Hash
-	computeCommitteeID.FromBytes([]byte("mock committee id"))
+	var executorCommitteeID hash.Hash
+	executorCommitteeID.FromBytes([]byte("mock committee id"))
 
 	return &EpochSnapshot{
-		computeCommitteeID: computeCommitteeID,
-		computeCommittees: map[hash.Hash]*CommitteeInfo{
-			computeCommitteeID: &CommitteeInfo{},
+		executorCommitteeID: executorCommitteeID,
+		executorCommittees: map[hash.Hash]*CommitteeInfo{
+			executorCommitteeID: &CommitteeInfo{},
 		},
 	}
 }
@@ -113,35 +113,35 @@ func (e *EpochSnapshot) GetRuntime() *registry.Runtime {
 	return e.runtime
 }
 
-// GetComputeCommittees returns the current compute committees.
-func (e *EpochSnapshot) GetComputeCommittees() map[hash.Hash]*CommitteeInfo {
-	return e.computeCommittees
+// GetExecutorCommittees returns the current executor committees.
+func (e *EpochSnapshot) GetExecutorCommittees() map[hash.Hash]*CommitteeInfo {
+	return e.executorCommittees
 }
 
-// GetComputeCommitteeID returns ID of the compute committee the current node is
+// GetExecutorCommitteeID returns ID of the executor committee the current node is
 // a member of.
 //
 // NOTE: Will return an invalid all-zero ID if not a member.
-func (e *EpochSnapshot) GetComputeCommitteeID() hash.Hash {
-	return e.computeCommitteeID
+func (e *EpochSnapshot) GetExecutorCommitteeID() hash.Hash {
+	return e.executorCommitteeID
 }
 
-// IsComputeMember checks if the current node is a member of the compute committee
+// IsExecutorMember checks if the current node is a member of the executor committee
 // in the current epoch.
-func (e *EpochSnapshot) IsComputeMember() bool {
-	return e.computeRole != scheduler.Invalid
+func (e *EpochSnapshot) IsExecutorMember() bool {
+	return e.executorRole != scheduler.Invalid
 }
 
-// IsComputeWorker checks if the current node is a worker of the compute committee
+// IsExecutorWorker checks if the current node is a worker of the executor committee
 // in the current epoch.
-func (e *EpochSnapshot) IsComputeWorker() bool {
-	return e.computeRole == scheduler.Worker
+func (e *EpochSnapshot) IsExecutorWorker() bool {
+	return e.executorRole == scheduler.Worker
 }
 
-// IsComputeBackupWorker checks if the current node is a backup worker of the compute
+// IsExecutorBackupWorker checks if the current node is a backup worker of the executor
 // committee in the current epoch.
-func (e *EpochSnapshot) IsComputeBackupWorker() bool {
-	return e.computeRole == scheduler.BackupWorker
+func (e *EpochSnapshot) IsExecutorBackupWorker() bool {
+	return e.executorRole == scheduler.BackupWorker
 }
 
 // GetTransactionSchedulerCommittee returns the current txn scheduler committee.
@@ -207,7 +207,7 @@ func (e *EpochSnapshot) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, 
 }
 
 // Group encapsulates communication with a group of nodes in the
-// compute committee.
+// executor committee.
 type Group struct {
 	sync.RWMutex
 
@@ -289,10 +289,10 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	publicIdentity := g.identity.NodeSigner.Public()
 
 	// Find the current committees.
-	computeCommittees := make(map[hash.Hash]*CommitteeInfo)
-	computeCommitteesByPeer := make(map[signature.PublicKey]bool)
-	var computeCommittee, txnSchedulerCommittee, mergeCommittee, storageCommittee *CommitteeInfo
-	var computeCommitteeID hash.Hash
+	executorCommittees := make(map[hash.Hash]*CommitteeInfo)
+	executorCommitteesByPeer := make(map[signature.PublicKey]bool)
+	var executorCommittee, txnSchedulerCommittee, mergeCommittee, storageCommittee *CommitteeInfo
+	var executorCommitteeID hash.Hash
 	var txnSchedulerLeaderPeerID signature.PublicKey
 	for _, cm := range committees {
 		var nodes []*node.Node
@@ -327,21 +327,21 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		}
 
 		switch cm.Kind {
-		case scheduler.KindCompute:
-			// There can be multiple compute committees per runtime.
+		case scheduler.KindExecutor:
+			// There can be multiple executor committees per runtime.
 			cID := cm.EncodedMembersHash()
-			computeCommittees[cID] = ci
+			executorCommittees[cID] = ci
 			if role != scheduler.Invalid {
-				if computeCommittee != nil {
-					return fmt.Errorf("member of multiple compute committees")
+				if executorCommittee != nil {
+					return fmt.Errorf("member of multiple executor committees")
 				}
 
-				computeCommittee = ci
-				computeCommitteeID = cID
+				executorCommittee = ci
+				executorCommitteeID = cID
 			}
 
 			for _, n := range nodes {
-				computeCommitteesByPeer[n.P2P.ID] = true
+				executorCommitteesByPeer[n.P2P.ID] = true
 			}
 		case scheduler.KindTransactionScheduler:
 			txnSchedulerCommittee = ci
@@ -354,8 +354,8 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			storageCommittee = ci
 		}
 	}
-	if len(computeCommittees) == 0 {
-		return fmt.Errorf("no compute committees")
+	if len(executorCommittees) == 0 {
+		return fmt.Errorf("no executor committees")
 	}
 	if txnSchedulerCommittee == nil {
 		return fmt.Errorf("no transaction scheduler committee")
@@ -381,10 +381,10 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		roundCtx,
 		cancel,
 		height,
-		computeCommittee,
-		computeCommitteeID,
-		computeCommittees,
-		computeCommitteesByPeer,
+		executorCommittee,
+		executorCommitteeID,
+		executorCommittees,
+		executorCommitteesByPeer,
 		txnSchedulerCommittee,
 		txnSchedulerLeaderPeerID,
 		mergeCommittee,
@@ -392,15 +392,15 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		runtime,
 	}
 
-	// Compute committee may be nil in case we are not a member of any committee.
-	var computeRole scheduler.Role
-	if computeCommittee != nil {
-		computeRole = computeCommittee.Role
+	// Executor committee may be nil in case we are not a member of any committee.
+	var executorRole scheduler.Role
+	if executorCommittee != nil {
+		executorRole = executorCommittee.Role
 	}
 
 	g.logger.Info("epoch transition complete",
 		"group_version", height,
-		"compute_role", computeRole,
+		"executor_role", executorRole,
 		"txn_scheduler_role", txnSchedulerCommittee.Role,
 		"merge_role", mergeCommittee.Role,
 	)
@@ -423,17 +423,17 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 		txnSchedulerRole:      g.activeEpoch.txnSchedulerCommittee.Role,
 		mergeRole:             g.activeEpoch.mergeCommittee.Role,
 		runtime:               g.activeEpoch.runtime,
-		computeCommittees:     g.activeEpoch.computeCommittees,
+		executorCommittees:    g.activeEpoch.executorCommittees,
 		txnSchedulerCommittee: g.activeEpoch.txnSchedulerCommittee,
 		mergeCommittee:        g.activeEpoch.mergeCommittee,
 		storageCommittee:      g.activeEpoch.storageCommittee,
 	}
 
-	// Compute committee may be nil in case we are not a member of any committee.
-	cc := g.activeEpoch.computeCommittee
-	if cc != nil {
-		s.computeRole = cc.Role
-		s.computeCommitteeID = g.activeEpoch.computeCommitteeID
+	// Executor committee may be nil in case we are not a member of any committee.
+	xc := g.activeEpoch.executorCommittee
+	if xc != nil {
+		s.executorRole = xc.Role
+		s.executorCommitteeID = g.activeEpoch.executorCommitteeID
 	}
 
 	return s
@@ -452,15 +452,15 @@ func (g *Group) IsPeerAuthorized(peerID signature.PublicKey) bool {
 	// Assume the peer is not authorized.
 	var authorized bool
 
-	// If we are in the compute committee, we accept messages from the transaction
+	// If we are in the executor committee, we accept messages from the transaction
 	// scheduler committee leader.
-	if g.activeEpoch.computeCommittee != nil && g.activeEpoch.txnSchedulerLeaderPeerID.IsValid() {
+	if g.activeEpoch.executorCommittee != nil && g.activeEpoch.txnSchedulerLeaderPeerID.IsValid() {
 		authorized = authorized || peerID.Equal(g.activeEpoch.txnSchedulerLeaderPeerID)
 	}
 
-	// If we are in the merge committee, we accept messages from any compute committee member.
+	// If we are in the merge committee, we accept messages from any executor committee member.
 	if g.activeEpoch.mergeCommittee.Role != scheduler.Invalid {
-		authorized = authorized || g.activeEpoch.computeCommitteesByPeer[peerID]
+		authorized = authorized || g.activeEpoch.executorCommitteesByPeer[peerID]
 	}
 
 	return authorized
@@ -539,7 +539,7 @@ func (g *Group) publishLocked(
 	return nil
 }
 
-// PublishScheduledBatch publishes a batch to all members in the compute committee.
+// PublishScheduledBatch publishes a batch to all members in the executor committee.
 // Returns the transaction scheduler's signature for this batch.
 func (g *Group) PublishScheduledBatch(
 	spanCtx opentracing.SpanContext,
@@ -555,9 +555,9 @@ func (g *Group) PublishScheduledBatch(
 		return nil, fmt.Errorf("group: not leader of txn scheduler committee")
 	}
 
-	cc := g.activeEpoch.computeCommittees[committeeID]
-	if cc == nil {
-		return nil, fmt.Errorf("group: invalid compute committee")
+	xc := g.activeEpoch.executorCommittees[committeeID]
+	if xc == nil {
+		return nil, fmt.Errorf("group: invalid executor committee")
 	}
 
 	dispatchMsg := &commitment.TxnSchedulerBatchDispatch{
@@ -574,28 +574,28 @@ func (g *Group) PublishScheduledBatch(
 
 	return &signedDispatchMsg.Signature, g.publishLocked(
 		spanCtx,
-		cc,
+		xc,
 		&p2p.Message{
 			SignedTxnSchedulerBatchDispatch: signedDispatchMsg,
 		},
 	)
 }
 
-// PublishComputeFinished publishes a compute commitment to all members in the merge
+// PublishExecuteFinished publishes an execute commitment to all members in the merge
 // committee.
-func (g *Group) PublishComputeFinished(spanCtx opentracing.SpanContext, c *commitment.ComputeCommitment) error {
+func (g *Group) PublishExecuteFinished(spanCtx opentracing.SpanContext, c *commitment.ExecutorCommitment) error {
 	g.RLock()
 	defer g.RUnlock()
 
-	if g.activeEpoch == nil || g.activeEpoch.computeCommittee == nil {
-		return fmt.Errorf("group: not member of compute committee")
+	if g.activeEpoch == nil || g.activeEpoch.executorCommittee == nil {
+		return fmt.Errorf("group: not member of executor committee")
 	}
 
 	return g.publishLocked(
 		spanCtx,
 		g.activeEpoch.mergeCommittee,
 		&p2p.Message{
-			ComputeWorkerFinished: &p2p.ComputeWorkerFinished{
+			ExecutorWorkerFinished: &p2p.ExecutorWorkerFinished{
 				Commitment: *c,
 			},
 		},

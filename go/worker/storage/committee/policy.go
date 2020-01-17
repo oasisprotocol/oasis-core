@@ -8,7 +8,7 @@ import (
 // Define storage access policies for all the relevant committees and node
 // groups.
 var (
-	computeCommitteePolicy = &committee.AccessPolicy{
+	executorCommitteePolicy = &committee.AccessPolicy{
 		Actions: []accessctl.Action{
 			"Apply",
 			"ApplyBatch",

@@ -51,7 +51,7 @@ type RuntimeCfg struct { // nolint: maligned
 	GenesisState string
 	GenesisRound uint64
 
-	Compute      registry.ComputeParameters
+	Executor     registry.ExecutorParameters
 	Merge        registry.MergeParameters
 	TxnScheduler registry.TxnSchedulerParameters
 	Storage      registry.StorageParameters
@@ -95,7 +95,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		ID:           cfg.ID,
 		Kind:         cfg.Kind,
 		TEEHardware:  cfg.TEEHardware,
-		Compute:      cfg.Compute,
+		Executor:     cfg.Executor,
 		Merge:        cfg.Merge,
 		TxnScheduler: cfg.TxnScheduler,
 		Storage:      cfg.Storage,
@@ -117,10 +117,10 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	}
 	if cfg.Kind == registry.KindCompute {
 		args = append(args, []string{
-			"--" + cmdRegRt.CfgComputeGroupSize, strconv.FormatUint(cfg.Compute.GroupSize, 10),
-			"--" + cmdRegRt.CfgComputeGroupBackupSize, strconv.FormatUint(cfg.Compute.GroupBackupSize, 10),
-			"--" + cmdRegRt.CfgComputeAllowedStragglers, strconv.FormatUint(cfg.Compute.AllowedStragglers, 10),
-			"--" + cmdRegRt.CfgComputeRoundTimeout, cfg.Compute.RoundTimeout.String(),
+			"--" + cmdRegRt.CfgExecutorGroupSize, strconv.FormatUint(cfg.Executor.GroupSize, 10),
+			"--" + cmdRegRt.CfgExecutorGroupBackupSize, strconv.FormatUint(cfg.Executor.GroupBackupSize, 10),
+			"--" + cmdRegRt.CfgExecutorAllowedStragglers, strconv.FormatUint(cfg.Executor.AllowedStragglers, 10),
+			"--" + cmdRegRt.CfgExecutorRoundTimeout, cfg.Executor.RoundTimeout.String(),
 			"--" + cmdRegRt.CfgMergeGroupSize, strconv.FormatUint(cfg.Merge.GroupSize, 10),
 			"--" + cmdRegRt.CfgMergeGroupBackupSize, strconv.FormatUint(cfg.Merge.GroupBackupSize, 10),
 			"--" + cmdRegRt.CfgMergeAllowedStragglers, strconv.FormatUint(cfg.Merge.AllowedStragglers, 10),

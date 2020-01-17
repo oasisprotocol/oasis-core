@@ -39,7 +39,7 @@ type runtimeState struct {
 	rt           *registryTests.TestRuntime
 	genesisBlock *block.Block
 
-	computeCommittee  *testCommittee
+	executorCommittee *testCommittee
 	mergeCommittee    *testCommittee
 	storageCommittee  *testCommittee
 	txnSchedCommittee *testCommittee
@@ -195,7 +195,7 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 		nodes[node.Node.ID] = node
 	}
 
-	s.computeCommittee, s.mergeCommittee, s.storageCommittee, s.txnSchedCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
+	s.executorCommittee, s.mergeCommittee, s.storageCommittee, s.txnSchedCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
 
 	// Wait to receive an epoch transition block.
 	for {
@@ -228,7 +228,7 @@ func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusA
 func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
 	require := require.New(t)
 
-	rt, computeCommittee, mergeCommittee := s.rt, s.computeCommittee, s.mergeCommittee
+	rt, executorCommittee, mergeCommittee := s.rt, s.executorCommittee, s.mergeCommittee
 
 	dataDir, err := ioutil.TempDir("", "oasis-storage-test_")
 	require.NoError(err, "TempDir")
@@ -293,13 +293,13 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 		},
 	)
 
-	// Generate all the compute commitments.
+	// Generate all the executor commitments.
 	var toCommit []*registryTests.TestNode
-	var computeCommits []commitment.ComputeCommitment
-	toCommit = append(toCommit, computeCommittee.workers...)
+	var executorCommits []commitment.ExecutorCommitment
+	toCommit = append(toCommit, executorCommittee.workers...)
 	for _, node := range toCommit {
 		commitBody := commitment.ComputeBody{
-			CommitteeID: computeCommittee.committee.EncodedMembersHash(),
+			CommitteeID: executorCommittee.committee.EncodedMembersHash(),
 			Header: commitment.ComputeResultsHeader{
 				PreviousHash: parent.Header.PreviousHash,
 				IORoot:       parent.Header.IORoot,
@@ -324,10 +324,10 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 		commitBody.TxnSchedSig = signedDispatch.Signature
 
 		// `err` shadows outside.
-		commit, err := commitment.SignComputeCommitment(node.Signer, &commitBody) // nolint: vetshadow
+		commit, err := commitment.SignExecutorCommitment(node.Signer, &commitBody) // nolint: vetshadow
 		require.NoError(err, "SignSigned")
 
-		computeCommits = append(computeCommits, *commit)
+		executorCommits = append(executorCommits, *commit)
 	}
 
 	// Generate all the merge commitments.
@@ -336,8 +336,8 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	toCommit = append(toCommit, mergeCommittee.workers...)
 	for _, node := range toCommit {
 		commitBody := commitment.MergeBody{
-			ComputeCommits: computeCommits,
-			Header:         parent.Header,
+			ExecutorCommits: executorCommits,
+			Header:          parent.Header,
 		}
 		// `err` shadows outside.
 		commit, err := commitment.SignMergeCommitment(node.Signer, &commitBody) // nolint: vetshadow
@@ -399,7 +399,7 @@ func mustGetCommittee(
 	sched scheduler.Backend,
 	nodes map[signature.PublicKey]*registryTests.TestNode,
 ) (
-	computeCommittee *testCommittee,
+	executorCommittee *testCommittee,
 	mergeCommittee *testCommittee,
 	storageCommittee *testCommittee,
 	txnSchedCommittee *testCommittee,
@@ -440,7 +440,7 @@ func mustGetCommittee(
 			case scheduler.KindTransactionScheduler:
 				groupSize = int(rt.Runtime.TxnScheduler.GroupSize)
 				groupBackupSize = 0
-			case scheduler.KindCompute:
+			case scheduler.KindExecutor:
 				fallthrough
 			case scheduler.KindMerge:
 				groupSize = int(rt.Runtime.Merge.GroupSize)
@@ -461,15 +461,15 @@ func mustGetCommittee(
 			switch committee.Kind {
 			case scheduler.KindTransactionScheduler:
 				txnSchedCommittee = &ret
-			case scheduler.KindCompute:
-				computeCommittee = &ret
+			case scheduler.KindExecutor:
+				executorCommittee = &ret
 			case scheduler.KindMerge:
 				mergeCommittee = &ret
 			case scheduler.KindStorage:
 				storageCommittee = &ret
 			}
 
-			if computeCommittee == nil || mergeCommittee == nil || storageCommittee == nil || txnSchedCommittee == nil {
+			if executorCommittee == nil || mergeCommittee == nil || storageCommittee == nil || txnSchedCommittee == nil {
 				continue
 			}
 

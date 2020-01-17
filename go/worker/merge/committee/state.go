@@ -115,7 +115,7 @@ func (s StateWaitingForResults) String() string {
 
 // StateWaitingForEvent is the waiting for event state.
 type StateWaitingForEvent struct {
-	commitments []commitment.ComputeCommitment
+	commitments []commitment.ExecutorCommitment
 	results     []*commitment.ComputeResultsHeader
 }
 

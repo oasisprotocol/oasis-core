@@ -8,7 +8,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/compute"
+	"github.com/oasislabs/oasis-core/go/worker/executor"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/committee"
@@ -23,7 +23,7 @@ type Worker struct {
 
 	commonWorker *workerCommon.Worker
 	registration *registration.Worker
-	compute      *compute.Worker
+	executor     *executor.Worker
 
 	runtimes map[common.Namespace]*committee.Node
 
@@ -143,7 +143,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	)
 
 	// Get other nodes from this runtime.
-	computeNode := w.compute.GetRuntime(id)
+	executorNode := w.executor.GetRuntime(id)
 
 	// Create worker host for the given runtime.
 	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleComputeWorker, id)
@@ -152,7 +152,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	}
 
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(commonNode, computeNode, workerHostFactory, w.checkTxEnabled)
+	node, err := committee.NewNode(commonNode, executorNode, workerHostFactory, w.checkTxEnabled)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 func newWorker(
 	enabled bool,
 	commonWorker *workerCommon.Worker,
-	compute *compute.Worker,
+	executor *executor.Worker,
 	registration *registration.Worker,
 	checkTxEnabled bool,
 ) (*Worker, error) {
@@ -181,7 +181,7 @@ func newWorker(
 		checkTxEnabled: checkTxEnabled,
 		commonWorker:   commonWorker,
 		registration:   registration,
-		compute:        compute,
+		executor:       executor,
 		runtimes:       make(map[common.Namespace]*committee.Node),
 		ctx:            ctx,
 		quitCh:         make(chan struct{}),

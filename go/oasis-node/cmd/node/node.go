@@ -59,7 +59,7 @@ import (
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
-	"github.com/oasislabs/oasis-core/go/worker/computeenable"
+	"github.com/oasislabs/oasis-core/go/worker/executor"
 	workerKeymanager "github.com/oasislabs/oasis-core/go/worker/keymanager"
 	"github.com/oasislabs/oasis-core/go/worker/merge"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
@@ -125,7 +125,7 @@ type Node struct {
 	RuntimeClient   runtimeClientAPI.RuntimeClient
 
 	CommonWorker               *workerCommon.Worker
-	ComputeWorker              *compute.Worker
+	ExecutorWorker             *executor.Worker
 	StorageWorker              *workerStorage.Worker
 	TransactionSchedulerWorker *txnscheduler.Worker
 	MergeWorker                *merge.Worker
@@ -204,14 +204,14 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		return err
 	}
 
-	// Initialize the P2P worker if the compute worker is enabled. Since the P2P
+	// Initialize the P2P worker if the compute workers are enabled. Since the P2P
 	// layer does not have a separate Start method and starts listening
 	// immediately when created, make sure that we don't start it if it is not
 	// needed.
 	//
-	// Currently, only compute, txn scheduler and merge workers need P2P
+	// Currently, only executor, txn scheduler and merge workers need P2P
 	// transport.
-	if computeenable.Enabled() {
+	if compute.Enabled() {
 		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
 		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 			p2p.DebugForceAllowUnroutableAddresses()
@@ -226,7 +226,7 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(
 		dataDir,
-		computeenable.Enabled() || workerStorage.Enabled() || workerKeymanager.Enabled(),
+		compute.Enabled() || workerStorage.Enabled() || workerKeymanager.Enabled(),
 		n.Identity,
 		n.RootHash,
 		n.Registry,
@@ -311,8 +311,8 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.Register(n.MergeWorker)
 
-	// Initialize the compute worker.
-	n.ComputeWorker, err = compute.New(
+	// Initialize the executor worker.
+	n.ExecutorWorker, err = executor.New(
 		dataDir,
 		n.CommonWorker,
 		n.MergeWorker,
@@ -321,7 +321,7 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 	if err != nil {
 		return err
 	}
-	n.svcMgr.Register(n.ComputeWorker)
+	n.svcMgr.Register(n.ExecutorWorker)
 
 	// Initialize the sentry worker.
 	n.SentryWorker, err = workerSentry.New(
@@ -337,7 +337,7 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 	// Initialize the transaction scheduler.
 	n.TransactionSchedulerWorker, err = txnscheduler.New(
 		n.CommonWorker,
-		n.ComputeWorker,
+		n.ExecutorWorker,
 		n.RegistrationWorker,
 	)
 	if err != nil {
@@ -354,8 +354,8 @@ func (n *Node) startWorkers(logger *logging.Logger) error {
 		return err
 	}
 
-	// Start the compute worker.
-	if err := n.ComputeWorker.Start(); err != nil {
+	// Start the executor worker.
+	if err := n.ExecutorWorker.Start(); err != nil {
 		return err
 	}
 
@@ -791,7 +791,7 @@ func init() {
 		ias.Flags,
 		workerKeymanager.Flags,
 		runtimeRegistry.Flags,
-		computeenable.Flags,
+		compute.Flags,
 		p2p.Flags,
 		registration.Flags,
 		txnscheduler.Flags,

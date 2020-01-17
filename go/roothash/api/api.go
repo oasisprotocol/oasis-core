@@ -21,11 +21,11 @@ const (
 	// ModuleName is a unique module name for the roothash module.
 	ModuleName = "roothash"
 
-	// LogEventComputeDiscrepancyDetected is a log event value that signals
-	// a compute discrepancy has been detected.
-	LogEventComputeDiscrepancyDetected = "roothash/compute_discrepancy_detected"
+	// LogEventExecutionDiscrepancyDetected is a log event value that signals
+	// an execution discrepancy has been detected.
+	LogEventExecutionDiscrepancyDetected = "roothash/execution_discrepancy_detected"
 	// LogEventMergeDiscrepancyDetected is a log event value that signals
-	// a compute discrepancy has been detected.
+	// a merge discrepancy has been detected.
 	LogEventMergeDiscrepancyDetected = "roothash/merge_discrepancy_detected"
 	// LogEventTimerFired is a log event value that signals a timer has fired.
 	LogEventTimerFired = "roothash/timer_fired"
@@ -51,14 +51,14 @@ var (
 	// ErrRuntimeSuspended is the error returned when the passed runtime is suspended.
 	ErrRuntimeSuspended = errors.New(ModuleName, 5, "roothash: runtime is suspended")
 
-	// MethodComputeCommit is the method name for compute commit submission.
-	MethodComputeCommit = transaction.NewMethodName(ModuleName, "ComputeCommit", ComputeCommit{})
+	// MethodExecutorCommit is the method name for executor commit submission.
+	MethodExecutorCommit = transaction.NewMethodName(ModuleName, "ExecutorCommit", ExecutorCommit{})
 	// MethodMergeCommit is the method name for merge commit submission.
 	MethodMergeCommit = transaction.NewMethodName(ModuleName, "MergeCommit", MergeCommit{})
 
 	// Methods is a list of all methods supported by the roothash backend.
 	Methods = []transaction.MethodName{
-		MethodComputeCommit,
+		MethodExecutorCommit,
 		MethodMergeCommit,
 	}
 )
@@ -95,15 +95,15 @@ type Backend interface {
 	Cleanup()
 }
 
-// ComputeCommit is the argument set for the ComputeCommit method.
-type ComputeCommit struct {
-	ID      common.Namespace               `json:"id"`
-	Commits []commitment.ComputeCommitment `json:"commits"`
+// ExecutorCommit is the argument set for the ExecutorCommit method.
+type ExecutorCommit struct {
+	ID      common.Namespace                `json:"id"`
+	Commits []commitment.ExecutorCommitment `json:"commits"`
 }
 
-// NewComputeCommitTx creates a new compute commit transaction.
-func NewComputeCommitTx(nonce uint64, fee *transaction.Fee, runtimeID common.Namespace, commits []commitment.ComputeCommitment) *transaction.Transaction {
-	return transaction.NewTransaction(nonce, fee, MethodComputeCommit, &ComputeCommit{
+// NewExecutorCommitTx creates a new executor commit transaction.
+func NewExecutorCommitTx(nonce uint64, fee *transaction.Fee, runtimeID common.Namespace, commits []commitment.ExecutorCommitment) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodExecutorCommit, &ExecutorCommit{
 		ID:      runtimeID,
 		Commits: commits,
 	})
@@ -115,7 +115,7 @@ type MergeCommit struct {
 	Commits []commitment.MergeCommitment `json:"commits"`
 }
 
-// NewMergeCommitTx creates a new compute commit transaction.
+// NewMergeCommitTx creates a new executor commit transaction.
 func NewMergeCommitTx(nonce uint64, fee *transaction.Fee, runtimeID common.Namespace, commits []commitment.MergeCommitment) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodMergeCommit, &MergeCommit{
 		ID:      runtimeID,
@@ -133,9 +133,9 @@ type AnnotatedBlock struct {
 	Block *block.Block `json:"block"`
 }
 
-// ComputeDiscrepancyDetectedEvent is a compute discrepancy detected event.
-type ComputeDiscrepancyDetectedEvent struct {
-	// CommitteeID is the identifier of the compute committee where a
+// ExecutionDiscrepancyDetectedEvent is an execute discrepancy detected event.
+type ExecutionDiscrepancyDetectedEvent struct {
+	// CommitteeID is the identifier of the executor committee where a
 	// discrepancy has been detected.
 	CommitteeID hash.Hash `json:"cid"`
 	// Timeout signals whether the discrepancy was due to a timeout.
@@ -148,8 +148,8 @@ type MergeDiscrepancyDetectedEvent struct {
 
 // Event is a protocol event.
 type Event struct {
-	ComputeDiscrepancyDetected *ComputeDiscrepancyDetectedEvent
-	MergeDiscrepancyDetected   *MergeDiscrepancyDetectedEvent
+	ExecutionDiscrepancyDetected *ExecutionDiscrepancyDetectedEvent
+	MergeDiscrepancyDetected     *MergeDiscrepancyDetectedEvent
 }
 
 // MetricsMonitorable is the interface exposed by backends capable of

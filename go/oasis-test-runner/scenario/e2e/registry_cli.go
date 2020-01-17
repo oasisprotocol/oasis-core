@@ -543,7 +543,7 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 	// Create runtime descriptor instance.
 	testRuntime := registry.Runtime{
 		Kind: registry.KindCompute,
-		Compute: registry.ComputeParameters{
+		Executor: registry.ExecutorParameters{
 			GroupSize:         1,
 			GroupBackupSize:   2,
 			AllowedStragglers: 3,

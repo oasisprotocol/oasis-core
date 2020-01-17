@@ -67,7 +67,7 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Entity:     0,
 			Keymanager: 0,
 			Binary:     runtimeBinary,
-			Compute: registry.ComputeParameters{
+			Executor: registry.ExecutorParameters{
 				GroupSize:       2,
 				GroupBackupSize: 1,
 				RoundTimeout:    10 * time.Second,

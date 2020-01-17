@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	// ComputeSignatureContext is the signature context used to sign compute
+	// ExecutorSignatureContext is the signature context used to sign executor
 	// worker commitments.
-	ComputeSignatureContext = signature.NewContext("oasis-core/roothash: compute commitment", signature.WithChainSeparation())
+	ExecutorSignatureContext = signature.NewContext("oasis-core/roothash: executor commitment", signature.WithChainSeparation())
 
 	// ComputeResultsHeaderSignatureContext is the signature context used to
 	// sign compute results headers with RAK.
@@ -27,7 +27,7 @@ var (
 // header is a compressed representation (e.g., hashes instead of full content) of
 // the actual results.
 //
-// These headers are signed by RAK inside the runtime and included in compute
+// These headers are signed by RAK inside the runtime and included in executor
 // commitments.
 //
 // Keep the roothash RAK validation in sync with changes to this structure.
@@ -133,65 +133,65 @@ func (m *ComputeBody) VerifyStorageReceipt(ns common.Namespace, round uint64, re
 	return nil
 }
 
-// ComputeCommitment is a roothash commitment from a compute worker.
+// ExecutorCommitment is a roothash commitment from an executor worker.
 //
 // The signed content is ComputeBody.
-type ComputeCommitment struct {
+type ExecutorCommitment struct {
 	signature.Signed
 }
 
-// OpenComputeCommitment is a compute commitment that has been verified and
+// OpenExecutorCommitment is an executor commitment that has been verified and
 // deserialized.
 //
 // The open commitment still contains the original signed commitment.
-type OpenComputeCommitment struct {
-	ComputeCommitment
+type OpenExecutorCommitment struct {
+	ExecutorCommitment
 
 	Body *ComputeBody `json:"body"`
 }
 
 // MostlyEqual returns true if the commitment is mostly equal to another
 // specified commitment as per discrepancy detection criteria.
-func (c OpenComputeCommitment) MostlyEqual(other OpenCommitment) bool {
+func (c OpenExecutorCommitment) MostlyEqual(other OpenCommitment) bool {
 	h := c.Body.Header.EncodedHash()
-	otherHash := other.(OpenComputeCommitment).Body.Header.EncodedHash()
+	otherHash := other.(OpenExecutorCommitment).Body.Header.EncodedHash()
 	return h.Equal(&otherHash)
 }
 
 // ToVote returns a hash that represents a vote for this commitment as
 // per discrepancy resolution criteria.
-func (c OpenComputeCommitment) ToVote() hash.Hash {
+func (c OpenExecutorCommitment) ToVote() hash.Hash {
 	return c.Body.Header.EncodedHash()
 }
 
 // ToDDResult returns a commitment-specific result after discrepancy
 // detection.
-func (c OpenComputeCommitment) ToDDResult() interface{} {
+func (c OpenExecutorCommitment) ToDDResult() interface{} {
 	return c.Body.Header
 }
 
-// Open validates the compute commitment signature, and de-serializes the message.
+// Open validates the executor commitment signature, and de-serializes the message.
 // This does not validate the RAK signature.
-func (c *ComputeCommitment) Open() (*OpenComputeCommitment, error) {
+func (c *ExecutorCommitment) Open() (*OpenExecutorCommitment, error) {
 	var body ComputeBody
-	if err := c.Signed.Open(ComputeSignatureContext, &body); err != nil {
+	if err := c.Signed.Open(ExecutorSignatureContext, &body); err != nil {
 		return nil, errors.New("roothash/commitment: commitment has invalid signature")
 	}
 
-	return &OpenComputeCommitment{
-		ComputeCommitment: *c,
-		Body:              &body,
+	return &OpenExecutorCommitment{
+		ExecutorCommitment: *c,
+		Body:               &body,
 	}, nil
 }
 
-// SignComputeCommitment serializes the message and signs the commitment.
-func SignComputeCommitment(signer signature.Signer, body *ComputeBody) (*ComputeCommitment, error) {
-	signed, err := signature.SignSigned(signer, ComputeSignatureContext, body)
+// SignExecutorCommitment serializes the message and signs the commitment.
+func SignExecutorCommitment(signer signature.Signer, body *ComputeBody) (*ExecutorCommitment, error) {
+	signed, err := signature.SignSigned(signer, ExecutorSignatureContext, body)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ComputeCommitment{
+	return &ExecutorCommitment{
 		Signed: *signed,
 	}, nil
 }

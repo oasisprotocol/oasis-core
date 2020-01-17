@@ -5,8 +5,7 @@ import (
 	"github.com/spf13/viper"
 
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
-	"github.com/oasislabs/oasis-core/go/worker/compute"
-	"github.com/oasislabs/oasis-core/go/worker/computeenable"
+	"github.com/oasislabs/oasis-core/go/worker/executor"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm"
 )
@@ -27,10 +26,10 @@ func CheckTxEnabled() bool {
 // New creates a new worker.
 func New(
 	commonWorker *workerCommon.Worker,
-	compute *compute.Worker,
+	executor *executor.Worker,
 	registration *registration.Worker,
 ) (*Worker, error) {
-	return newWorker(computeenable.Enabled(), commonWorker, compute, registration, CheckTxEnabled())
+	return newWorker(executor.Enabled(), commonWorker, executor, registration, CheckTxEnabled())
 }
 
 func init() {

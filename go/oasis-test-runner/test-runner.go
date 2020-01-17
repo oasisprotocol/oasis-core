@@ -21,10 +21,10 @@ func main() {
 	// Basic test.
 	_ = cmd.Register(e2e.Basic)
 	_ = cmd.Register(e2e.BasicEncryption)
-	// Byzantine compute node.
-	_ = cmd.Register(e2e.ByzantineComputeHonest)
-	_ = cmd.Register(e2e.ByzantineComputeWrong)
-	_ = cmd.Register(e2e.ByzantineComputeStraggler)
+	// Byzantine executor node.
+	_ = cmd.Register(e2e.ByzantineExecutorHonest)
+	_ = cmd.Register(e2e.ByzantineExecutorWrong)
+	_ = cmd.Register(e2e.ByzantineExecutorStraggler)
 	// Byzantine merge node.
 	_ = cmd.Register(e2e.ByzantineMergeHonest)
 	_ = cmd.Register(e2e.ByzantineMergeWrong)

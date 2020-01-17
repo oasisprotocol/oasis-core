@@ -984,7 +984,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	epoch, err := consensus.EpochTime().GetEpoch(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
-	numCompute := int(runtimes[0].Runtime.Compute.GroupSize + runtimes[0].Runtime.Compute.GroupBackupSize)
+	numCompute := int(runtimes[0].Runtime.Executor.GroupSize + runtimes[0].Runtime.Executor.GroupBackupSize)
 	numStorage := int(runtimes[0].Runtime.Storage.GroupSize)
 	nodes, err := entity.NewTestNodes(numCompute, numStorage, rts, epoch+testRuntimeNodeExpiration)
 	require.NoError(err, "NewTestNodes")
@@ -1004,7 +1004,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	}
 
 	for _, v := range runtimes {
-		numNodes := v.Runtime.Compute.GroupSize + v.Runtime.Compute.GroupBackupSize + v.Runtime.Storage.GroupSize
+		numNodes := v.Runtime.Executor.GroupSize + v.Runtime.Executor.GroupBackupSize + v.Runtime.Storage.GroupSize
 		require.EqualValues(len(nodes), numNodes, "runtime wants the expected number of nodes")
 		v.entity = entity
 		v.nodes = nodes
@@ -1079,7 +1079,7 @@ func NewTestRuntime(seed []byte, entity *TestEntity, isKeyManager bool) (*TestRu
 
 	rt.Runtime = &api.Runtime{
 		ID: publicKeyToNamespace(rt.Signer.Public(), isKeyManager),
-		Compute: api.ComputeParameters{
+		Executor: api.ExecutorParameters{
 			GroupSize:         3,
 			GroupBackupSize:   5,
 			AllowedStragglers: 1,

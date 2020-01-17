@@ -28,7 +28,7 @@ var (
 	ErrDiscrepancyDetected    = errors.New(moduleName, 8, "roothash/commitment: discrepancy detected")
 	ErrStillWaiting           = errors.New(moduleName, 9, "roothash/commitment: still waiting for commits")
 	ErrInsufficientVotes      = errors.New(moduleName, 10, "roothash/commitment: insufficient votes to finalize discrepancy resolution round")
-	ErrBadComputeCommits      = errors.New(moduleName, 11, "roothash/commitment: bad compute commitments")
+	ErrBadExecutorCommits     = errors.New(moduleName, 11, "roothash/commitment: bad executor commitments")
 	ErrInvalidCommitteeID     = errors.New(moduleName, 12, "roothash/commitment: invalid committee ID")
 	ErrTxnSchedSigInvalid     = errors.New(moduleName, 13, "roothash/commitment: txn scheduler signature invalid")
 	ErrInvalidMessages        = errors.New(moduleName, 14, "roothash/commitment: invalid messages")
@@ -51,7 +51,7 @@ type NodeInfo struct {
 	Runtime       *node.Runtime `json:"runtime"`
 }
 
-// Pool is a serializable pool of commiments that can be used to perform
+// Pool is a serializable pool of commitments that can be used to perform
 // discrepancy detection.
 //
 // The pool is not safe for concurrent use.
@@ -63,9 +63,9 @@ type Pool struct {
 	Committee *scheduler.Committee `json:"committee"`
 	// NodeInfo contains node information about committee members.
 	NodeInfo map[signature.PublicKey]NodeInfo `json:"node_info"`
-	// ComputeCommitments are the commitments in the pool iff Committee.Kind
-	// is scheduler.KindCompute.
-	ComputeCommitments map[signature.PublicKey]OpenComputeCommitment `json:"compute_commitments,omitempty"`
+	// ExecuteCommitments are the commitments in the pool iff Committee.Kind
+	// is scheduler.KindExecutor.
+	ExecuteCommitments map[signature.PublicKey]OpenExecutorCommitment `json:"execute_commitments,omitempty"`
 	// MergeCommitments are the commitments in the pool iff Committee.Kind
 	// is scheduler.KindMerge.
 	MergeCommitments map[signature.PublicKey]OpenMergeCommitment `json:"merge_commitments,omitempty"`
@@ -86,8 +86,8 @@ func (p *Pool) GetCommitteeID() hash.Hash {
 // ResetCommitments resets the commitments in the pool and clears the discrepancy
 // flag.
 func (p *Pool) ResetCommitments() {
-	if p.ComputeCommitments == nil || len(p.ComputeCommitments) > 0 {
-		p.ComputeCommitments = make(map[signature.PublicKey]OpenComputeCommitment)
+	if p.ExecuteCommitments == nil || len(p.ExecuteCommitments) > 0 {
+		p.ExecuteCommitments = make(map[signature.PublicKey]OpenExecutorCommitment)
 	}
 	if p.MergeCommitments == nil || len(p.MergeCommitments) > 0 {
 		p.MergeCommitments = make(map[signature.PublicKey]OpenMergeCommitment)
@@ -107,8 +107,8 @@ func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
 	)
 
 	switch p.Committee.Kind {
-	case scheduler.KindCompute:
-		com, ok = p.ComputeCommitments[id]
+	case scheduler.KindExecutor:
+		com, ok = p.ExecuteCommitments[id]
 	case scheduler.KindMerge:
 		com, ok = p.MergeCommitments[id]
 	default:
@@ -117,11 +117,11 @@ func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
 	return com, ok
 }
 
-func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, openCom *OpenComputeCommitment) error {
+func (p *Pool) addOpenExecutorCommitment(blk *block.Block, sv SignatureVerifier, openCom *OpenExecutorCommitment) error {
 	if p.Committee == nil || p.NodeInfo == nil {
 		return ErrNoCommittee
 	}
-	if p.Committee.Kind != scheduler.KindCompute {
+	if p.Committee.Kind != scheduler.KindExecutor {
 		return ErrInvalidCommitteeKind
 	}
 
@@ -138,7 +138,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 	// TODO: Check for signs of double signing (#1804).
 
 	// Ensure the node did not already submit a commitment.
-	if _, ok := p.ComputeCommitments[id]; ok {
+	if _, ok := p.ExecuteCommitments[id]; ok {
 		return ErrAlreadyCommitted
 	}
 
@@ -166,7 +166,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 	// Verify that this is for the correct committee.
 	cID := p.GetCommitteeID()
 	if !cID.Equal(&body.CommitteeID) {
-		logger.Debug("compute commitment has invalid committee ID",
+		logger.Debug("executor commitment has invalid committee ID",
 			"expected_committee_id", cID,
 			"committee_id", body.CommitteeID,
 			"node_id", id,
@@ -176,7 +176,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 
 	// Check if the block is based on the previous block.
 	if !header.IsParentOf(&blk.Header) {
-		logger.Debug("compute commitment is not based on correct block",
+		logger.Debug("executor commitment is not based on correct block",
 			"committee_id", cID,
 			"node_id", id,
 			"expected_previous_hash", blk.Header.EncodedHash(),
@@ -188,7 +188,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 	// Verify that the txn scheduler signature for current commitment is valid.
 	currentTxnSchedSig := body.TxnSchedSig
 	if err := sv.VerifyCommitteeSignatures(scheduler.KindTransactionScheduler, []signature.Signature{body.TxnSchedSig}); err != nil {
-		logger.Debug("compute commitment has bad transaction scheduler signers",
+		logger.Debug("executor commitment has bad transaction scheduler signers",
 			"committee_id", cID,
 			"node_id", id,
 			"err", err,
@@ -201,7 +201,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 
 	// Check if the header refers to merkle roots in storage.
 	if err := sv.VerifyCommitteeSignatures(scheduler.KindStorage, body.StorageSignatures); err != nil {
-		logger.Debug("compute commitment has bad storage receipt signers",
+		logger.Debug("executor commitment has bad storage receipt signers",
 			"committee_id", cID,
 			"node_id", id,
 			"err", err,
@@ -209,7 +209,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 		return err
 	}
 	if err := body.VerifyStorageReceiptSignatures(blk.Header.Namespace, blk.Header.Round+1); err != nil {
-		logger.Debug("compute commitment has bad storage receipt signatures",
+		logger.Debug("executor commitment has bad storage receipt signatures",
 			"committee_id", cID,
 			"node_id", id,
 			"err", err,
@@ -219,7 +219,7 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 
 	// Go through existing commitments and check if the txn scheduler signed
 	// different batches for the same committee.
-	for _, com := range p.ComputeCommitments {
+	for _, com := range p.ExecuteCommitments {
 		cb := com.Body
 		if cID.Equal(&cb.CommitteeID) {
 			existingTxnSchedSig := cb.TxnSchedSig
@@ -234,23 +234,23 @@ func (p *Pool) addOpenComputeCommitment(blk *block.Block, sv SignatureVerifier, 
 		}
 	}
 
-	if p.ComputeCommitments == nil {
-		p.ComputeCommitments = make(map[signature.PublicKey]OpenComputeCommitment)
+	if p.ExecuteCommitments == nil {
+		p.ExecuteCommitments = make(map[signature.PublicKey]OpenExecutorCommitment)
 	}
-	p.ComputeCommitments[id] = *openCom
+	p.ExecuteCommitments[id] = *openCom
 
 	return nil
 }
 
-// AddComputeCommitment verifies and adds a new compute commitment to the pool.
-func (p *Pool) AddComputeCommitment(blk *block.Block, sv SignatureVerifier, commitment *ComputeCommitment) error {
+// AddExecutorCommitment verifies and adds a new executor commitment to the pool.
+func (p *Pool) AddExecutorCommitment(blk *block.Block, sv SignatureVerifier, commitment *ExecutorCommitment) error {
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
 		return err
 	}
 
-	return p.addOpenComputeCommitment(blk, sv, openCom)
+	return p.addOpenExecutorCommitment(blk, sv, openCom)
 }
 
 // CheckEnoughCommitments checks if there are enough commitments in the pool to be
@@ -284,8 +284,8 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 	// are allowed.
 	if didTimeout {
 		switch p.Committee.Kind {
-		case scheduler.KindCompute:
-			required -= int(p.Runtime.Compute.AllowedStragglers)
+		case scheduler.KindExecutor:
+			required -= int(p.Runtime.Executor.AllowedStragglers)
 		case scheduler.KindMerge:
 			required -= int(p.Runtime.Merge.AllowedStragglers)
 		default:
@@ -464,7 +464,7 @@ func (p *Pool) TryFinalize(
 
 // AddMergeCommitment verifies and adds a new merge commitment to the pool.
 //
-// Any compute commitments are added to the provided pool.
+// Any executor commitments are added to the provided pool.
 func (p *Pool) AddMergeCommitment(
 	blk *block.Block,
 	sv SignatureVerifier,
@@ -511,16 +511,16 @@ func (p *Pool) AddMergeCommitment(
 		return ErrNotBasedOnCorrectBlock
 	}
 
-	// Check compute commitments -- all commitments must be valid and there
+	// Check executor commitments -- all commitments must be valid and there
 	// must be no discrepancy as the merge committee nodes are supposed to
 	// check this.
-	if err = ccPool.addComputeCommitments(blk, sv, body.ComputeCommits); err != nil {
+	if err = ccPool.addExecutorCommitments(blk, sv, body.ExecutorCommits); err != nil {
 		return err
 	}
 
-	// There must be enough compute commits for all committees.
+	// There must be enough executor commits for all committees.
 	if err = ccPool.CheckEnoughCommitments(); err != nil {
-		return ErrBadComputeCommits
+		return ErrBadExecutorCommits
 	}
 
 	for _, sp := range ccPool.Committees {
@@ -538,19 +538,19 @@ func (p *Pool) AddMergeCommitment(
 				}
 				fallthrough
 			default:
-				logger.Debug("discrepancy detection failed for compute committee",
+				logger.Debug("discrepancy detection failed for executor committee",
 					"err", err,
 				)
-				return ErrBadComputeCommits
+				return ErrBadExecutorCommits
 			}
 		} else {
 			// If there was a discrepancy before it must be resolved now.
 			_, err = sp.ResolveDiscrepancy()
 			if err != nil {
-				logger.Debug("discrepancy resolution failed for compute committee",
+				logger.Debug("discrepancy resolution failed for executor committee",
 					"err", err,
 				)
-				return ErrBadComputeCommits
+				return ErrBadExecutorCommits
 			}
 		}
 	}
@@ -589,10 +589,10 @@ func (p *Pool) GetCommitteeNode(id signature.PublicKey) (*scheduler.CommitteeNod
 	return p.Committee.Members[ni.CommitteeNode], nil
 }
 
-// GetComputeCommitments returns a list of compute commitments in the pool.
-func (p *Pool) GetComputeCommitments() (result []ComputeCommitment) {
-	for _, c := range p.ComputeCommitments {
-		result = append(result, c.ComputeCommitment)
+// GetExecutorCommitments returns a list of executor commitments in the pool.
+func (p *Pool) GetExecutorCommitments() (result []ExecutorCommitment) {
+	for _, c := range p.ExecuteCommitments {
+		result = append(result, c.ExecutorCommitment)
 	}
 	return
 }
@@ -608,8 +608,8 @@ type MultiPool struct {
 	Committees map[hash.Hash]*Pool `json:"committees"`
 }
 
-// AddComputeCommitment verifies and adds a new compute commitment to the pool.
-func (m *MultiPool) AddComputeCommitment(blk *block.Block, sv SignatureVerifier, commitment *ComputeCommitment) (*Pool, error) {
+// AddExecutorCommitment verifies and adds a new executor commitment to the pool.
+func (m *MultiPool) AddExecutorCommitment(blk *block.Block, sv SignatureVerifier, commitment *ExecutorCommitment) (*Pool, error) {
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
@@ -621,14 +621,14 @@ func (m *MultiPool) AddComputeCommitment(blk *block.Block, sv SignatureVerifier,
 		return nil, ErrInvalidCommitteeID
 	}
 
-	return p, p.addOpenComputeCommitment(blk, sv, openCom)
+	return p, p.addOpenExecutorCommitment(blk, sv, openCom)
 }
 
-// addComputeCommitments verifies and adds multiple compute commitments to the pool.
+// addExecutorCommitments verifies and adds multiple executor commitments to the pool.
 // All valid commitments will be added, redundant commitments will be ignored.
 //
 // Note that any signatures being invalid will result in no changes to the pool.
-func (m *MultiPool) addComputeCommitments(blk *block.Block, sv SignatureVerifier, commitments []ComputeCommitment) error {
+func (m *MultiPool) addExecutorCommitments(blk *block.Block, sv SignatureVerifier, commitments []ExecutorCommitment) error {
 	// Batch verify all of the signatures at once.
 	msgs := make([][]byte, 0, len(commitments))
 	sigs := make([]signature.Signature, 0, len(commitments))
@@ -638,7 +638,7 @@ func (m *MultiPool) addComputeCommitments(blk *block.Block, sv SignatureVerifier
 		sigs = append(sigs, v.Signature)
 	}
 
-	if !signature.VerifyBatch(ComputeSignatureContext, msgs, sigs) {
+	if !signature.VerifyBatch(ExecutorSignatureContext, msgs, sigs) {
 		return signature.ErrVerifyFailed
 	}
 
@@ -652,9 +652,9 @@ func (m *MultiPool) addComputeCommitments(blk *block.Block, sv SignatureVerifier
 			continue
 		}
 
-		openCom := &OpenComputeCommitment{
-			ComputeCommitment: v,
-			Body:              &body,
+		openCom := &OpenExecutorCommitment{
+			ExecutorCommitment: v,
+			Body:               &body,
 		}
 
 		p := m.Committees[openCom.Body.CommitteeID]
@@ -663,7 +663,7 @@ func (m *MultiPool) addComputeCommitments(blk *block.Block, sv SignatureVerifier
 			continue
 		}
 
-		err := p.addOpenComputeCommitment(blk, sv, openCom)
+		err := p.addOpenExecutorCommitment(blk, sv, openCom)
 		switch err {
 		case nil, ErrAlreadyCommitted:
 		default:
@@ -671,7 +671,7 @@ func (m *MultiPool) addComputeCommitments(blk *block.Block, sv SignatureVerifier
 		}
 	}
 	if hadError {
-		return ErrBadComputeCommits
+		return ErrBadExecutorCommits
 	}
 
 	return nil
@@ -691,11 +691,11 @@ func (m *MultiPool) CheckEnoughCommitments() error {
 	return nil
 }
 
-// GetComputeCommitments returns a list of compute commitments in the pool.
-func (m *MultiPool) GetComputeCommitments() (result []ComputeCommitment) {
+// GetExecutorCommitments returns a list of executor commitments in the pool.
+func (m *MultiPool) GetExecutorCommitments() (result []ExecutorCommitment) {
 	for _, p := range m.Committees {
-		for _, c := range p.ComputeCommitments {
-			result = append(result, c.ComputeCommitment)
+		for _, c := range p.ExecuteCommitments {
+			result = append(result, c.ExecutorCommitment)
 		}
 	}
 	return

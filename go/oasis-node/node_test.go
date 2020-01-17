@@ -41,9 +41,9 @@ import (
 	storageClientTests "github.com/oasislabs/oasis-core/go/storage/client/tests"
 	storageTests "github.com/oasislabs/oasis-core/go/storage/tests"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
-	computeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/committee"
-	computeWorkerTests "github.com/oasislabs/oasis-core/go/worker/compute/tests"
-	"github.com/oasislabs/oasis-core/go/worker/computeenable"
+	"github.com/oasislabs/oasis-core/go/worker/compute"
+	executorCommittee "github.com/oasislabs/oasis-core/go/worker/executor/committee"
+	executorWorkerTests "github.com/oasislabs/oasis-core/go/worker/executor/tests"
 	storageWorker "github.com/oasislabs/oasis-core/go/worker/storage"
 	storageWorkerTests "github.com/oasislabs/oasis-core/go/worker/storage/tests"
 	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
@@ -66,7 +66,7 @@ var (
 		{cmdCommonFlags.CfgConsensusValidator, true},
 		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
 		{storage.CfgBackend, "badger"},
-		{computeenable.CfgWorkerEnabled, true},
+		{compute.CfgWorkerEnabled, true},
 		{workerCommon.CfgRuntimeBackend, "mock"},
 		{workerCommon.CfgRuntimeLoader, "mock-runtime"},
 		{workerCommon.CfgClientPort, workerClientPort},
@@ -79,7 +79,7 @@ var (
 
 	testRuntime = &registry.Runtime{
 		// ID: default value,
-		Compute: registry.ComputeParameters{
+		Executor: registry.ExecutorParameters{
 			GroupSize:       1,
 			GroupBackupSize: 0,
 			RoundTimeout:    20 * time.Second,
@@ -108,7 +108,7 @@ type testNode struct {
 	*node.Node
 
 	runtimeID                 common.Namespace
-	computeCommitteeNode      *computeCommittee.Node
+	executorCommitteeNode     *executorCommittee.Node
 	txnschedulerCommitteeNode *txnschedulerCommittee.Node
 
 	entity       *entity.Entity
@@ -213,7 +213,7 @@ func TestNode(t *testing.T) {
 		// including the worker tests.
 		{"RegisterTestEntityRuntime", testRegisterEntityRuntime},
 
-		{"ComputeWorker", testComputeWorker},
+		{"ExecutorWorker", testExecutorWorker},
 		{"TransactionSchedulerWorker", testTransactionSchedulerWorker},
 
 		// StorageWorker test case
@@ -270,10 +270,10 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, node.entitySigner, tx)
 	require.NoError(err, "register test entity")
 
-	// Get the runtime and the corresponding compute committee node instance.
-	computeRT := node.ComputeWorker.GetRuntime(testRuntime.ID)
-	require.NotNil(t, computeRT)
-	node.computeCommitteeNode = computeRT
+	// Get the runtime and the corresponding executor committee node instance.
+	executorRT := node.ExecutorWorker.GetRuntime(testRuntime.ID)
+	require.NotNil(t, executorRT)
+	node.executorCommitteeNode = executorRT
 
 	// Get the runtime and the corresponding transaction scheduler committee node instance.
 	txnschedulerRT := node.TransactionSchedulerWorker.GetRuntime(testRuntime.ID)
@@ -403,11 +403,11 @@ func testRootHash(t *testing.T, node *testNode) {
 	roothashTests.RootHashImplementationTests(t, node.RootHash, node.Consensus, node.Identity)
 }
 
-func testComputeWorker(t *testing.T, node *testNode) {
+func testExecutorWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Epochtime).(epochtime.SetableBackend)
 
-	require.NotNil(t, node.computeCommitteeNode)
-	computeWorkerTests.WorkerImplementationTests(t, node.ComputeWorker, node.runtimeID, node.computeCommitteeNode, timeSource)
+	require.NotNil(t, node.executorCommitteeNode)
+	executorWorkerTests.WorkerImplementationTests(t, node.ExecutorWorker, node.runtimeID, node.executorCommitteeNode, timeSource)
 }
 
 func testStorageWorker(t *testing.T, node *testNode) {

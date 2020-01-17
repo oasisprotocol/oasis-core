@@ -1,18 +1,25 @@
 package compute
 
 import (
-	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
-	"github.com/oasislabs/oasis-core/go/worker/computeenable"
-	"github.com/oasislabs/oasis-core/go/worker/merge"
-	"github.com/oasislabs/oasis-core/go/worker/registration"
+	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
-// New creates a new compute worker.
-func New(
-	dataDir string,
-	commonWorker *workerCommon.Worker,
-	mergeWorker *merge.Worker,
-	registration *registration.Worker,
-) (*Worker, error) {
-	return newWorker(dataDir, computeenable.Enabled(), commonWorker, mergeWorker, registration)
+const (
+	// CfgWorkerEnabled enables the compute worker, tx scheduler worker, and merge worker.
+	CfgWorkerEnabled = "worker.compute.enabled"
+)
+
+// Flags has the configuration flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
+
+// Enabled reads our enabled flag from viper.
+func Enabled() bool {
+	return viper.GetBool(CfgWorkerEnabled)
+}
+
+func init() {
+	Flags.Bool(CfgWorkerEnabled, false, "Enable compute worker processes")
+
+	_ = viper.BindPFlags(Flags)
 }

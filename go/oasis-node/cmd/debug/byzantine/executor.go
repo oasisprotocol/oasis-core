@@ -35,7 +35,7 @@ type computeBatchContext struct {
 	newIORoot     hash.Hash
 
 	storageReceipts []*storage.Receipt
-	commit          *commitment.ComputeCommitment
+	commit          *commitment.ExecutorCommitment
 }
 
 func newComputeBatchContext() *computeBatchContext {
@@ -182,9 +182,9 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 		computeBody.RakSig = rakSig.Signature
 	}
 	var err error
-	cbc.commit, err = commitment.SignComputeCommitment(id.NodeSigner, computeBody)
+	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, computeBody)
 	if err != nil {
-		return errors.Wrap(err, "commitment sign compute commitment")
+		return errors.Wrap(err, "commitment sign executor commitment")
 	}
 
 	return nil
@@ -195,7 +195,7 @@ func (cbc *computeBatchContext) publishToCommittee(ht *honestTendermint, height 
 		RuntimeID:    runtimeID,
 		GroupVersion: groupVersion,
 		SpanContext:  nil,
-		ComputeWorkerFinished: &p2p.ComputeWorkerFinished{
+		ExecutorWorkerFinished: &p2p.ExecutorWorkerFinished{
 			Commitment: *cbc.commit,
 		},
 	}); err != nil {
