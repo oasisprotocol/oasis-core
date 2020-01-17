@@ -80,7 +80,7 @@ func (app *rootHashApplication) getRuntimeState(
 
 	// If the round was finalized, transition.
 	if rtState.Round.CurrentBlock.Header.Round != rtState.CurrentBlock.Header.Round {
-		app.logger.Debug("round was finalized, transitioning round",
+		ctx.Logger().Debug("round was finalized, transitioning round",
 			"round", rtState.CurrentBlock.Header.Round,
 		)
 
@@ -102,7 +102,7 @@ func (app *rootHashApplication) executorCommit(
 	// Charge gas for this transaction.
 	params, err := state.ConsensusParameters()
 	if err != nil {
-		app.logger.Error("ComputeCommit: failed to fetch consensus parameters",
+		ctx.Logger().Error("ComputeCommit: failed to fetch consensus parameters",
 			"err", err,
 		)
 		return err
@@ -121,7 +121,7 @@ func (app *rootHashApplication) executorCommit(
 	for _, commit := range cc.Commits {
 		var pool *commitment.Pool
 		if pool, err = rtState.Round.AddExecutorCommitment(&commit, sv); err != nil {
-			app.logger.Error("failed to add compute commitment to round",
+			ctx.Logger().Error("failed to add compute commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,
 			)
@@ -151,7 +151,7 @@ func (app *rootHashApplication) mergeCommit(
 	// Charge gas for this transaction.
 	params, err := state.ConsensusParameters()
 	if err != nil {
-		app.logger.Error("MergeCommit: failed to fetch consensus parameters",
+		ctx.Logger().Error("MergeCommit: failed to fetch consensus parameters",
 			"err", err,
 		)
 		return err
@@ -169,7 +169,7 @@ func (app *rootHashApplication) mergeCommit(
 	// Add commitments.
 	for _, commit := range mc.Commits {
 		if err = rtState.Round.AddMergeCommitment(&commit, sv); err != nil {
-			app.logger.Error("failed to add merge commitment to round",
+			ctx.Logger().Error("failed to add merge commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,
 			)
@@ -179,7 +179,7 @@ func (app *rootHashApplication) mergeCommit(
 
 	// Try to finalize round.
 	if err = app.tryFinalizeBlock(ctx, rtState, false); err != nil {
-		app.logger.Error("failed to finalize block",
+		ctx.Logger().Error("failed to finalize block",
 			"err", err,
 		)
 		return err

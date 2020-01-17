@@ -21,7 +21,7 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 	st := doc.KeyManager
 
 	b, _ := json.Marshal(st)
-	app.logger.Debug("InitChain: Genesis state",
+	ctx.Logger().Debug("InitChain: Genesis state",
 		"state", string(b),
 	)
 
@@ -31,9 +31,9 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 	regSt := doc.Registry
 	rtMap := make(map[common.Namespace]*registry.Runtime)
 	for _, v := range regSt.Runtimes {
-		rt, err := registry.VerifyRegisterRuntimeArgs(&regSt.Parameters, app.logger, v, true)
+		rt, err := registry.VerifyRegisterRuntimeArgs(&regSt.Parameters, ctx.Logger(), v, true)
 		if err != nil {
-			app.logger.Error("InitChain: Invalid runtime",
+			ctx.Logger().Error("InitChain: Invalid runtime",
 				"err", err,
 			)
 			continue
@@ -49,19 +49,19 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 	for _, v := range st.Statuses {
 		rt := rtMap[v.ID]
 		if rt == nil {
-			app.logger.Error("InitChain: State for unknown key manager runtime",
+			ctx.Logger().Error("InitChain: State for unknown key manager runtime",
 				"id", v.ID,
 			)
 			continue
 		}
 
-		app.logger.Debug("InitChain: Registering genesis key manager",
+		ctx.Logger().Debug("InitChain: Registering genesis key manager",
 			"id", v.ID,
 		)
 
 		// Make sure the Nodes field is empty when applying genesis state.
 		if v.Nodes != nil {
-			app.logger.Error("InitChain: Genesis key manager has nodes",
+			ctx.Logger().Error("InitChain: Genesis key manager has nodes",
 				"id", v.ID,
 			)
 			return errors.New("tendermint/keymanager: genesis key manager has nodes")

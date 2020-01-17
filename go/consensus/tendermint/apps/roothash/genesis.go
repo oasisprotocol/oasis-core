@@ -32,7 +32,7 @@ func (app *rootHashApplication) InitChain(ctx *abci.Context, request types.Reque
 	regState := registryState.NewMutableState(ctx.State())
 	runtimes, _ := regState.Runtimes()
 	for _, v := range runtimes {
-		app.logger.Info("InitChain: allocating per-runtime state",
+		ctx.Logger().Info("InitChain: allocating per-runtime state",
 			"runtime", v.ID,
 		)
 		app.onNewRuntime(ctx, v, &st)

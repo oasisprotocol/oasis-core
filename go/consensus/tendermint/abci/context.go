@@ -10,6 +10,7 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 )
 
@@ -68,6 +69,8 @@ type Context struct {
 	state       *iavl.MutableTree
 	blockHeight int64
 	blockCtx    *BlockContext
+
+	logger *logging.Logger
 }
 
 // NewMockContext creates a new mock context for use in tests.
@@ -76,6 +79,7 @@ func NewMockContext(mode ContextMode, now time.Time) *Context {
 		mode:          mode,
 		currentTime:   now,
 		gasAccountant: NewNopGasAccountant(),
+		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
 	}
 }
 
@@ -90,6 +94,7 @@ func NewContext(mode ContextMode, now time.Time, appState *ApplicationState) *Co
 		gasAccountant: NewNopGasAccountant(),
 		appState:      appState,
 		blockHeight:   appState.blockHeight,
+		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
 	}
 
 	switch mode {
@@ -136,6 +141,11 @@ func (c *Context) Close() {
 	c.appState = nil
 	c.state = nil
 	c.blockCtx = nil
+}
+
+// Logger returns the logger associated with this context.
+func (c *Context) Logger() *logging.Logger {
+	return c.logger
 }
 
 // Ctx returns a context.Context that is associated with this ABCI context.

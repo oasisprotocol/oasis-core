@@ -29,7 +29,7 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 	// the debonding period after expiration.
 	node, err := regState.NodeByConsensusAddress(addr)
 	if err != nil {
-		app.logger.Warn("failed to get validator node",
+		ctx.Logger().Warn("failed to get validator node",
 			"err", err,
 			"address", hex.EncodeToString(addr),
 		)
@@ -38,7 +38,7 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 
 	nodeStatus, err := regState.NodeStatus(node.ID)
 	if err != nil {
-		app.logger.Warn("failed to get validator node status",
+		ctx.Logger().Warn("failed to get validator node status",
 			"err", err,
 			"node_id", node.ID,
 		)
@@ -47,7 +47,7 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 
 	// Do not slash a frozen validator.
 	if nodeStatus.IsFrozen() {
-		app.logger.Debug("not slashing frozen validator",
+		ctx.Logger().Debug("not slashing frozen validator",
 			"node_id", node.ID,
 			"entity_id", node.EntityID,
 			"freeze_end_time", nodeStatus.FreezeEndTime,
@@ -58,7 +58,7 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 	// Retrieve the slash procedure for double signing.
 	st, err := stakeState.Slashing()
 	if err != nil {
-		app.logger.Error("failed to get slashing table entry for double signing",
+		ctx.Logger().Error("failed to get slashing table entry for double signing",
 			"err", err,
 		)
 		return err
@@ -81,7 +81,7 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 	// Slash validator.
 	_, err = stakeState.SlashEscrow(ctx, node.EntityID, &penalty.Amount)
 	if err != nil {
-		app.logger.Error("failed to slash validator entity",
+		ctx.Logger().Error("failed to slash validator entity",
 			"err", err,
 			"node_id", node.ID,
 			"entity_id", node.EntityID,
@@ -90,7 +90,7 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 	}
 
 	if err = regState.SetNodeStatus(node.ID, nodeStatus); err != nil {
-		app.logger.Error("failed to set validator node status",
+		ctx.Logger().Error("failed to set validator node status",
 			"err", err,
 			"node_id", node.ID,
 			"entity_id", node.EntityID,
@@ -98,7 +98,7 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 		return err
 	}
 
-	app.logger.Warn("slashed validator for double signing",
+	ctx.Logger().Warn("slashed validator for double signing",
 		"node_id", node.ID,
 		"entity_id", node.EntityID,
 	)

@@ -22,7 +22,7 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	st := doc.Registry
 
 	b, _ := json.Marshal(st)
-	app.logger.Debug("InitChain: Genesis state",
+	ctx.Logger().Debug("InitChain: Genesis state",
 		"state", string(b),
 	)
 
@@ -30,23 +30,23 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	state.SetConsensusParameters(&st.Parameters)
 
 	if st.Parameters.KeyManagerOperator.IsValid() {
-		app.logger.Debug("InitChain: Registering key manager operator",
+		ctx.Logger().Debug("InitChain: Registering key manager operator",
 			"id", st.Parameters.KeyManagerOperator,
 		)
 	} else {
 		// This is informational for now since there are configurations
 		// that do not have a key manager.
-		app.logger.Warn("InitChain: Invalid key manager operator, key maanger will not work",
+		ctx.Logger().Warn("InitChain: Invalid key manager operator, key maanger will not work",
 			"id", st.Parameters.KeyManagerOperator,
 		)
 	}
 
 	for _, v := range st.Entities {
-		app.logger.Debug("InitChain: Registering genesis entity",
+		ctx.Logger().Debug("InitChain: Registering genesis entity",
 			"entity", v.Signature.PublicKey,
 		)
 		if err := app.registerEntity(ctx, state, v); err != nil {
-			app.logger.Error("InitChain: failed to register entity",
+			ctx.Logger().Error("InitChain: failed to register entity",
 				"err", err,
 				"entity", v,
 			)
@@ -56,18 +56,18 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	// Register runtimes. First key manager and then compute runtime(s).
 	for _, k := range []registry.RuntimeKind{registry.KindKeyManager, registry.KindCompute} {
 		for _, v := range st.Runtimes {
-			rt, err := registry.VerifyRegisterRuntimeArgs(&st.Parameters, app.logger, v, ctx.IsInitChain())
+			rt, err := registry.VerifyRegisterRuntimeArgs(&st.Parameters, ctx.Logger(), v, ctx.IsInitChain())
 			if err != nil {
 				return err
 			}
 			if rt.Kind != k {
 				continue
 			}
-			app.logger.Debug("InitChain: Registering genesis runtime",
+			ctx.Logger().Debug("InitChain: Registering genesis runtime",
 				"runtime_owner", v.Signature.PublicKey,
 			)
 			if err := app.registerRuntime(ctx, state, v); err != nil {
-				app.logger.Error("InitChain: failed to register runtime",
+				ctx.Logger().Error("InitChain: failed to register runtime",
 					"err", err,
 					"runtime", v,
 				)
@@ -76,11 +76,11 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 		}
 	}
 	for _, v := range st.SuspendedRuntimes {
-		app.logger.Debug("InitChain: Registering genesis suspended runtime",
+		ctx.Logger().Debug("InitChain: Registering genesis suspended runtime",
 			"runtime_owner", v.Signature.PublicKey,
 		)
 		if err := app.registerRuntime(ctx, state, v); err != nil {
-			app.logger.Error("InitChain: failed to register runtime",
+			ctx.Logger().Error("InitChain: failed to register runtime",
 				"err", err,
 				"runtime", v,
 			)
@@ -95,11 +95,11 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 		}
 	}
 	for _, v := range st.Nodes {
-		app.logger.Debug("InitChain: Registering genesis node",
+		ctx.Logger().Debug("InitChain: Registering genesis node",
 			"node_owner", v.Signature.PublicKey,
 		)
 		if err := app.registerNode(ctx, state, v); err != nil {
-			app.logger.Error("InitChain: failed to register node",
+			ctx.Logger().Error("InitChain: failed to register node",
 				"err", err,
 				"node", v,
 			)
@@ -119,7 +119,7 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	sort.SliceStable(ns, func(i, j int) bool { return bytes.Compare(ns[i].id[:], ns[j].id[:]) < 0 })
 	for _, s := range ns {
 		if err := state.SetNodeStatus(s.id, s.status); err != nil {
-			app.logger.Error("InitChain: failed to set node status",
+			ctx.Logger().Error("InitChain: failed to set node status",
 				"err", err,
 			)
 			return errors.Wrap(err, "registry: genesis node status set failure")

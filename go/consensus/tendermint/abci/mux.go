@@ -577,17 +577,15 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 }
 
 func (mux *abciMux) decodeTx(ctx *Context, rawTx []byte) (*transaction.Transaction, *transaction.SignedTransaction, error) {
-	logger := mux.logger.With("mode", ctx.Mode())
-
 	if mux.state.haltMode {
-		logger.Debug("executeTx: in halt, rejecting all transactions")
+		ctx.Logger().Debug("executeTx: in halt, rejecting all transactions")
 		return nil, nil, fmt.Errorf("halt mode, rejecting all transactions")
 	}
 
 	if mux.maxTxSize > 0 && uint64(len(rawTx)) > mux.maxTxSize {
 		// This deliberately avoids logging the rawTx since spamming the
 		// logs is also bad.
-		logger.Error("received oversized transaction",
+		ctx.Logger().Error("received oversized transaction",
 			"tx_size", len(rawTx),
 		)
 		return nil, nil, errOversizedTx
@@ -596,20 +594,20 @@ func (mux *abciMux) decodeTx(ctx *Context, rawTx []byte) (*transaction.Transacti
 	// Unmarshal envelope and verify transaction.
 	var sigTx transaction.SignedTransaction
 	if err := cbor.Unmarshal(rawTx, &sigTx); err != nil {
-		logger.Error("failed to unmarshal signed transaction",
+		ctx.Logger().Error("failed to unmarshal signed transaction",
 			"tx", base64.StdEncoding.EncodeToString(rawTx),
 		)
 		return nil, nil, err
 	}
 	var tx transaction.Transaction
 	if err := sigTx.Open(&tx); err != nil {
-		logger.Error("failed to verify transaction signature",
+		ctx.Logger().Error("failed to verify transaction signature",
 			"tx", base64.StdEncoding.EncodeToString(rawTx),
 		)
 		return nil, nil, err
 	}
 	if err := tx.SanityCheck(); err != nil {
-		logger.Error("bad transaction",
+		ctx.Logger().Error("bad transaction",
 			"tx", base64.StdEncoding.EncodeToString(rawTx),
 		)
 		return nil, nil, err
@@ -619,12 +617,10 @@ func (mux *abciMux) decodeTx(ctx *Context, rawTx []byte) (*transaction.Transacti
 }
 
 func (mux *abciMux) processTx(ctx *Context, tx *transaction.Transaction) error {
-	logger := mux.logger.With("mode", ctx.Mode())
-
 	// Pass the transaction through the fee handler if configured.
 	if txAuthHandler := mux.state.txAuthHandler; txAuthHandler != nil {
 		if err := txAuthHandler.AuthenticateTx(ctx, tx); err != nil {
-			logger.Debug("failed to authenticate transaction",
+			ctx.Logger().Debug("failed to authenticate transaction",
 				"tx", tx,
 				"tx_signer", ctx.TxSigner(),
 				"method", tx.Method,
@@ -637,14 +633,14 @@ func (mux *abciMux) processTx(ctx *Context, tx *transaction.Transaction) error {
 	// Route to correct handler.
 	app := mux.appsByMethod[tx.Method]
 	if app == nil {
-		logger.Error("unknown method",
+		ctx.Logger().Error("unknown method",
 			"tx", tx,
 			"method", tx.Method,
 		)
 		return fmt.Errorf("mux: unknown method: %s", tx.Method)
 	}
 
-	logger.Debug("dispatching",
+	ctx.Logger().Debug("dispatching",
 		"app", app.Name(),
 		"tx", tx,
 	)

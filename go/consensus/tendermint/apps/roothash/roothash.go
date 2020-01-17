@@ -44,8 +44,7 @@ type timerContext struct {
 }
 
 type rootHashApplication struct {
-	logger *logging.Logger
-	state  *abci.ApplicationState
+	state *abci.ApplicationState
 
 	beacon beacon.Backend
 }
@@ -102,7 +101,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 
 	for _, rt := range runtimes {
 		if !rt.IsCompute() {
-			app.logger.Debug("skipping non-compute runtime",
+			ctx.Logger().Debug("skipping non-compute runtime",
 				"runtime", rt.ID,
 			)
 			continue
@@ -133,7 +132,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 
 		// If the committee has actually changed, force a new round.
 		if !rtState.Suspended && (rtState.Round == nil || !rtState.Round.CommitteeID.Equal(&committeeID)) {
-			app.logger.Debug("updating committee for runtime",
+			ctx.Logger().Debug("updating committee for runtime",
 				"runtime_id", rt.ID,
 			)
 
@@ -141,7 +140,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 			blk := rtState.CurrentBlock
 			blockNr := blk.Header.Round
 
-			app.logger.Debug("new committee, transitioning round",
+			ctx.Logger().Debug("new committee, transitioning round",
 				"runtime_id", rt.ID,
 				"committee_id", committeeID,
 				"round", blockNr,
@@ -169,7 +168,7 @@ func (app *rootHashApplication) suspendUnpaidRuntime(
 	rtState *roothashState.RuntimeState,
 	regState *registryState.MutableState,
 ) error {
-	app.logger.Warn("maintenance fees not paid for runtime, suspending",
+	ctx.Logger().Warn("maintenance fees not paid for runtime, suspending",
 		"runtime_id", rtState.Runtime.ID,
 	)
 
@@ -227,7 +226,7 @@ func (app *rootHashApplication) prepareNewCommittees(
 	var executorCommittees []*scheduler.Committee
 	xc1, err := schedState.Committee(scheduler.KindExecutor, rtID)
 	if err != nil {
-		app.logger.Error("checkCommittees: failed to get executor committee from scheduler",
+		ctx.Logger().Error("checkCommittees: failed to get executor committee from scheduler",
 			"err", err,
 			"runtime", rtID,
 		)
@@ -241,7 +240,7 @@ func (app *rootHashApplication) prepareNewCommittees(
 		Committees: make(map[hash.Hash]*commitment.Pool),
 	}
 	if len(executorCommittees) == 0 {
-		app.logger.Warn("checkCommittees: no executor committees",
+		ctx.Logger().Warn("checkCommittees: no executor committees",
 			"runtime", rtID,
 		)
 		empty = true
@@ -264,7 +263,7 @@ func (app *rootHashApplication) prepareNewCommittees(
 			if nodeRuntime == nil {
 				// We currently prevent this case throughout the rest of the system.
 				// Still, it's prudent to check.
-				app.logger.Warn("checkCommittees: committee member not registered with this runtime",
+				ctx.Logger().Warn("checkCommittees: committee member not registered with this runtime",
 					"node", n.PublicKey,
 				)
 				continue
@@ -288,14 +287,14 @@ func (app *rootHashApplication) prepareNewCommittees(
 	committeeIDParts = append(committeeIDParts, []byte("merge committee follows"))
 	mergeCommittee, err := schedState.Committee(scheduler.KindMerge, rtID)
 	if err != nil {
-		app.logger.Error("checkCommittees: failed to get merge committee from scheduler",
+		ctx.Logger().Error("checkCommittees: failed to get merge committee from scheduler",
 			"err", err,
 			"runtime", rtID,
 		)
 		return
 	}
 	if mergeCommittee == nil {
-		app.logger.Warn("checkCommittees: no merge committee",
+		ctx.Logger().Warn("checkCommittees: no merge committee",
 			"runtime", rtID,
 		)
 		empty = true
@@ -375,7 +374,7 @@ func (app *rootHashApplication) ForeignExecuteTx(ctx *abci.Context, other abci.A
 						return errors.Wrap(err, "roothash: failed to deserialize new runtime")
 					}
 
-					app.logger.Debug("ForeignDeliverTx: new runtime",
+					ctx.Logger().Debug("ForeignDeliverTx: new runtime",
 						"runtime", rt.ID,
 					)
 
@@ -393,7 +392,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 	state := roothashState.NewMutableState(ctx.State())
 
 	if !runtime.IsCompute() {
-		app.logger.Warn("onNewRuntime: ignoring non-compute runtime",
+		ctx.Logger().Warn("onNewRuntime: ignoring non-compute runtime",
 			"runtime", runtime,
 		)
 		return
@@ -401,7 +400,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 
 	// Check if state already exists for the given runtime.
 	if _, err := state.RuntimeState(runtime.ID); err != roothash.ErrInvalidRuntime {
-		app.logger.Warn("onNewRuntime: state for runtime already exists",
+		ctx.Logger().Warn("onNewRuntime: state for runtime already exists",
 			"runtime", runtime,
 		)
 		return
@@ -432,7 +431,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *abci.Context, runtime *registr
 		Timer:        *abci.NewTimer(ctx, app, timerKindRound, runtime.ID[:], cbor.Marshal(timerCtx)),
 	})
 
-	app.logger.Debug("onNewRuntime: created genesis state for runtime",
+	ctx.Logger().Debug("onNewRuntime: created genesis state for runtime",
 		"runtime", runtime,
 	)
 
@@ -458,14 +457,14 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		return err
 	}
 
-	app.logger.Warn("FireTimer: timer fired",
+	ctx.Logger().Warn("FireTimer: timer fired",
 		logging.LogEvent, roothash.LogEventTimerFired,
 	)
 
 	state := roothashState.NewMutableState(ctx.State())
 	rtState, err := state.RuntimeState(tCtx.ID)
 	if err != nil {
-		app.logger.Error("FireTimer: failed to get state associated with timer",
+		ctx.Logger().Error("FireTimer: failed to get state associated with timer",
 			"err", err,
 		)
 		return err
@@ -474,7 +473,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 	latestBlock := rtState.CurrentBlock
 	if latestBlock.Header.Round != tCtx.Round {
 		// Note: This should NEVER happen.
-		app.logger.Error("FireTimer: spurious timeout detected",
+		ctx.Logger().Error("FireTimer: spurious timeout detected",
 			"runtime", tCtx.ID,
 			"timer_round", tCtx.Round,
 			"current_round", latestBlock.Header.Round,
@@ -485,7 +484,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 		return errors.New("tendermint/roothash: spurious timeout")
 	}
 
-	app.logger.Warn("FireTimer: round timeout expired, forcing finalization",
+	ctx.Logger().Warn("FireTimer: round timeout expired, forcing finalization",
 		"runtime", tCtx.ID,
 		"timer_round", tCtx.Round,
 	)
@@ -494,7 +493,7 @@ func (app *rootHashApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) 
 
 	if rtState.Round.MergePool.IsTimeout(ctx.Now()) {
 		if err := app.tryFinalizeBlock(ctx, rtState, true); err != nil {
-			app.logger.Error("failed to finalize block",
+			ctx.Logger().Error("failed to finalize block",
 				"err", err,
 			)
 			panic(err)
@@ -520,11 +519,11 @@ func (app *rootHashApplication) updateTimer(
 	nextTimeout := rtState.Round.GetNextTimeout()
 	if nextTimeout.IsZero() {
 		// Disarm timer.
-		app.logger.Debug("disarming round timeout")
+		ctx.Logger().Debug("disarming round timeout")
 		rtState.Timer.Stop(ctx)
 	} else {
 		// (Re-)arm timer.
-		app.logger.Debug("(re-)arming round timeout")
+		ctx.Logger().Debug("(re-)arming round timeout")
 
 		timerCtx := &timerContext{
 			ID:    rtState.Runtime.ID,
@@ -548,7 +547,7 @@ func (app *rootHashApplication) tryFinalizeExecute(
 	defer app.updateTimer(ctx, rtState, blockNr)
 
 	if rtState.Round.Finalized {
-		app.logger.Error("attempted to finalize execute when block already finalized",
+		ctx.Logger().Error("attempted to finalize execute when block already finalized",
 			"round", blockNr,
 			"committee_id", committeeID,
 		)
@@ -563,7 +562,7 @@ func (app *rootHashApplication) tryFinalizeExecute(
 
 		// TODO: Check if we need to punish the merge committee.
 
-		app.logger.Warn("no execution discrepancy, but only merge committee can make progress",
+		ctx.Logger().Warn("no execution discrepancy, but only merge committee can make progress",
 			"round", blockNr,
 			"committee_id", committeeID,
 		)
@@ -578,7 +577,7 @@ func (app *rootHashApplication) tryFinalizeExecute(
 		return
 	case commitment.ErrDiscrepancyDetected:
 		// Discrepancy has been detected.
-		app.logger.Warn("execution discrepancy detected",
+		ctx.Logger().Warn("execution discrepancy detected",
 			"round", blockNr,
 			"committee_id", committeeID,
 			logging.LogEvent, roothash.LogEventExecutionDiscrepancyDetected,
@@ -600,7 +599,7 @@ func (app *rootHashApplication) tryFinalizeExecute(
 	// to abort everything even if only one committee failed to finalize as
 	// there is otherwise no way to make progress as merge committees will
 	// refuse to merge if there are discrepancies.
-	app.logger.Error("round failed",
+	ctx.Logger().Error("round failed",
 		"round", blockNr,
 		"err", err,
 		logging.LogEvent, roothash.LogEventRoundFailed,
@@ -621,7 +620,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 	defer app.updateTimer(ctx, rtState, blockNr)
 
 	if rtState.Round.Finalized {
-		app.logger.Error("attempted to finalize merge when block already finalized",
+		ctx.Logger().Error("attempted to finalize merge when block already finalized",
 			"round", blockNr,
 		)
 		return nil
@@ -631,7 +630,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 	switch err {
 	case nil:
 		// Round has been finalized.
-		app.logger.Debug("finalized round",
+		ctx.Logger().Debug("finalized round",
 			"round", blockNr,
 		)
 
@@ -647,14 +646,14 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		return blk
 	case commitment.ErrStillWaiting:
 		// Need more commits.
-		app.logger.Debug("insufficient commitments for finality, waiting",
+		ctx.Logger().Debug("insufficient commitments for finality, waiting",
 			"round", blockNr,
 		)
 
 		return nil
 	case commitment.ErrDiscrepancyDetected:
 		// Discrepancy has been detected.
-		app.logger.Warn("merge discrepancy detected",
+		ctx.Logger().Warn("merge discrepancy detected",
 			"round", blockNr,
 			logging.LogEvent, roothash.LogEventMergeDiscrepancyDetected,
 		)
@@ -669,7 +668,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 	}
 
 	// Something else went wrong, emit empty error block.
-	app.logger.Error("round failed",
+	ctx.Logger().Error("round failed",
 		"round", blockNr,
 		"err", err,
 		logging.LogEvent, roothash.LogEventRoundFailed,
@@ -690,7 +689,7 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *abci.Context, rtS
 		unsat := errors.New("tendermint/roothash: message is invalid")
 
 		if unsat != nil {
-			app.logger.Error("handler not satisfied with message",
+			ctx.Logger().Error("handler not satisfied with message",
 				"err", unsat,
 				"message", message,
 				logging.LogEvent, roothash.LogEventMessageUnsat,
@@ -739,7 +738,6 @@ func (app *rootHashApplication) tryFinalizeBlock(
 // New constructs a new roothash application instance.
 func New(beacon beacon.Backend) abci.Application {
 	return &rootHashApplication{
-		logger: logging.GetLogger("tendermint/roothash"),
 		beacon: beacon,
 	}
 }

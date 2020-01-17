@@ -28,14 +28,14 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 	state.SetConsensusParameters(&doc.Scheduler.Parameters)
 
 	if doc.Scheduler.Parameters.DebugStaticValidators {
-		app.logger.Warn("static validators are configured")
+		ctx.Logger().Warn("static validators are configured")
 
 		var staticValidators []signature.PublicKey
 		for _, v := range req.Validators {
 			tmPk := v.GetPubKey()
 
 			if t := tmPk.GetType(); t != types.PubKeyEd25519 {
-				app.logger.Error("invalid static validator public key type",
+				ctx.Logger().Error("invalid static validator public key type",
 					"public_key", hex.EncodeToString(tmPk.GetData()),
 					"type", t,
 				)
@@ -44,7 +44,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 
 			var id signature.PublicKey
 			if err = id.UnmarshalBinary(tmPk.GetData()); err != nil {
-				app.logger.Error("invalid static validator public key",
+				ctx.Logger().Error("invalid static validator public key",
 					"err", err,
 					"public_key", hex.EncodeToString(tmPk.GetData()),
 				)
@@ -71,7 +71,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 	}
 	if doc.Scheduler.Parameters.MaxValidatorsPerEntity > 1 {
 		// This should only ever be true for test deployments.
-		app.logger.Warn("maximum number of validators is non-standard, fairness not guaranteed",
+		ctx.Logger().Warn("maximum number of validators is non-standard, fairness not guaranteed",
 			"max_valiators_per_entity", doc.Scheduler.Parameters.MaxValidatorsPerEntity,
 		)
 	}
@@ -96,7 +96,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 		tmPk := v.GetPubKey()
 
 		if t := tmPk.GetType(); t != types.PubKeyEd25519 {
-			app.logger.Error("invalid genesis validator public key type",
+			ctx.Logger().Error("invalid genesis validator public key type",
 				"public_key", hex.EncodeToString(tmPk.GetData()),
 				"type", t,
 			)
@@ -105,7 +105,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 
 		var id signature.PublicKey
 		if err = id.UnmarshalBinary(tmPk.GetData()); err != nil {
-			app.logger.Error("invalid genesis validator public key",
+			ctx.Logger().Error("invalid genesis validator public key",
 				"err", err,
 				"public_key", hex.EncodeToString(tmPk.GetData()),
 			)
@@ -113,7 +113,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 		}
 
 		if power := v.GetPower(); power != consensus.VotingPower {
-			app.logger.Error("invalid voting power",
+			ctx.Logger().Error("invalid voting power",
 				"id", id,
 				"power", power,
 			)
@@ -122,12 +122,12 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 
 		n := registeredValidators[id]
 		if n == nil {
-			app.logger.Error("genesis validator not in registry",
+			ctx.Logger().Error("genesis validator not in registry",
 				"id", id,
 			)
 			return fmt.Errorf("scheduler: genesis validator not in registry")
 		}
-		app.logger.Debug("adding validator to current validator set",
+		ctx.Logger().Debug("adding validator to current validator set",
 			"id", id,
 		)
 		currentValidators = append(currentValidators, n.Consensus.ID)

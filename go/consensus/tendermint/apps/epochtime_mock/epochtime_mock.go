@@ -7,7 +7,6 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
@@ -18,8 +17,7 @@ import (
 var _ abci.Application = (*epochTimeMockApplication)(nil)
 
 type epochTimeMockApplication struct {
-	logger *logging.Logger
-	state  *abci.ApplicationState
+	state *abci.ApplicationState
 }
 
 func (app *epochTimeMockApplication) Name() string {
@@ -67,14 +65,14 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types
 
 	height := ctx.BlockHeight()
 	if future.Height != height {
-		app.logger.Error("BeginBlock: height mismatch in defered set",
+		ctx.Logger().Error("BeginBlock: height mismatch in defered set",
 			"height", height,
 			"expected_height", future.Height,
 		)
 		return fmt.Errorf("epochtime_mock: height mismatch in defered set")
 	}
 
-	app.logger.Info("setting epoch",
+	ctx.Logger().Info("setting epoch",
 		"epoch", future.Epoch,
 		"current_height", height,
 	)
@@ -120,7 +118,7 @@ func (app *epochTimeMockApplication) setEpoch(
 ) error {
 	height := ctx.BlockHeight()
 
-	app.logger.Info("scheduling epoch transition",
+	ctx.Logger().Info("scheduling epoch transition",
 		"epoch", epoch,
 		"current_height", height,
 		"next_height", height+1,
@@ -132,7 +130,5 @@ func (app *epochTimeMockApplication) setEpoch(
 
 // New constructs a new mock epochtime application instance.
 func New() abci.Application {
-	return &epochTimeMockApplication{
-		logger: logging.GetLogger("tendermint/epochtime_mock"),
-	}
+	return &epochTimeMockApplication{}
 }

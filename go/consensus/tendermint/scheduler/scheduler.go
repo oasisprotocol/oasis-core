@@ -172,11 +172,8 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 // New constracts a new tendermint-based scheduler Backend instance.
 func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
 	// Initialze and register the tendermint service component.
-	a, err := app.New()
-	if err != nil {
-		return nil, err
-	}
-	if err = service.RegisterApplication(a); err != nil {
+	a := app.New()
+	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 

@@ -22,7 +22,7 @@ func (app *beaconApplication) InitChain(ctx *abci.Context, req types.RequestInit
 	state.SetConsensusParameters(&doc.Beacon.Parameters)
 
 	if doc.Beacon.Parameters.DebugDeterministic {
-		app.logger.Warn("Determistic beacon entropy is NOT FOR PRODUCTION USE")
+		ctx.Logger().Warn("Determistic beacon entropy is NOT FOR PRODUCTION USE")
 	}
 	return nil
 }
