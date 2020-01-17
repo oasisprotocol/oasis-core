@@ -46,6 +46,7 @@ func (sentry *Sentry) startNode() error {
 		workerSentryControlPort(sentry.controlPort).
 		tendermintCoreListenAddress(sentry.consensusPort).
 		appendNetwork(sentry.net).
+		appendSeedNodes(sentry.net).
 		addValidatorsAsSentryUpstreams(validators)
 
 	if sentry.cmd, _, err = sentry.net.startOasisNode(sentry.dir, nil, args, sentry.Name, false, false); err != nil {

@@ -23,6 +23,7 @@ func (client *Client) startNode() error {
 		tendermintCoreListenAddress(client.consensusPort).
 		storageBackend(storageClient.BackendName).
 		appendNetwork(client.net).
+		appendSeedNodes(client.net).
 		runtimeTagIndexerBackend("bleve")
 	for _, v := range client.net.runtimes {
 		if v.kind != registry.KindCompute {

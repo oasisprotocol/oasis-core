@@ -318,8 +318,7 @@ func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {
 }
 
 func (args *argBuilder) appendNetwork(net *Network) *argBuilder {
-	args = args.grpcLogDebug().
-		appendSeedNodes(net)
+	args = args.grpcLogDebug()
 	return args
 }
 
