@@ -47,8 +47,9 @@ func main() {
 	_ = cmd.Register(e2e.StakeCLI)
 	// Node shutdown test.
 	_ = cmd.Register(e2e.NodeShutdown)
-	// Gas fees test.
-	_ = cmd.Register(e2e.GasFees)
+	// Gas fees tests.
+	_ = cmd.Register(e2e.GasFeesStaking)
+	_ = cmd.Register(e2e.GasFeesRuntimes)
 	// Identity CLI test.
 	_ = cmd.Register(e2e.IdentityCLI)
 	// Runtime prune test.

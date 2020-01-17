@@ -123,7 +123,8 @@ type ValidatorFixture struct {
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
-	MinGasPrice uint64 `json:"min_gas_price"`
+	MinGasPrice        uint64 `json:"min_gas_price"`
+	SubmissionGasPrice uint64 `json:"submission_gas_price"`
 
 	Sentries []int `json:"sentries,omitempty"`
 }
@@ -143,6 +144,7 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 		NodeCfg: NodeCfg{
 			Restartable:                f.Restartable,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
+			SubmissionGasPrice:         f.SubmissionGasPrice,
 		},
 		Entity:      entity,
 		MinGasPrice: f.MinGasPrice,
@@ -216,6 +218,8 @@ type KeymanagerFixture struct {
 
 	Restartable bool `json:"restartable"`
 
+	SubmissionGasPrice uint64 `json:"submission_gas_price"`
+
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 }
 
@@ -234,6 +238,7 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 		NodeCfg: NodeCfg{
 			Restartable:                f.Restartable,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
+			SubmissionGasPrice:         f.SubmissionGasPrice,
 		},
 		Runtime: runtime,
 		Entity:  entity,
@@ -246,6 +251,8 @@ type StorageWorkerFixture struct { // nolint: maligned
 	Entity  int    `json:"entity"`
 
 	Restartable bool `json:"restartable"`
+
+	SubmissionGasPrice uint64 `json:"submission_gas_price"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
@@ -263,6 +270,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 		NodeCfg: NodeCfg{
 			Restartable:                f.Restartable,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
+			SubmissionGasPrice:         f.SubmissionGasPrice,
 		},
 		Backend:       f.Backend,
 		Entity:        entity,
@@ -278,6 +286,8 @@ type ComputeWorkerFixture struct {
 
 	Restartable bool `json:"restartable"`
 
+	SubmissionGasPrice uint64 `json:"submission_gas_price"`
+
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 }
 
@@ -292,6 +302,7 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 		NodeCfg: NodeCfg{
 			Restartable:                f.Restartable,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
+			SubmissionGasPrice:         f.SubmissionGasPrice,
 		},
 		Entity:         entity,
 		RuntimeBackend: f.RuntimeBackend,
@@ -332,6 +343,8 @@ type ByzantineFixture struct {
 
 	ActivationEpoch epochtime.EpochTime `json:"activation_epoch"`
 
+	SubmissionGasPrice uint64 `json:"submission_gas_price"`
+
 	EnableDefaultLogWatcherHandlerFactories bool                        `json:"enable_default_log_fac"`
 	LogWatcherHandlerFactories              []log.WatcherHandlerFactory `json:"-"`
 }
@@ -347,6 +360,7 @@ func (f *ByzantineFixture) Create(net *Network) (*Byzantine, error) {
 		NodeCfg: NodeCfg{
 			DisableDefaultLogWatcherHandlerFactories: !f.EnableDefaultLogWatcherHandlerFactories,
 			LogWatcherHandlerFactories:               f.LogWatcherHandlerFactories,
+			SubmissionGasPrice:                       f.SubmissionGasPrice,
 		},
 		Script:          f.Script,
 		IdentitySeed:    f.IdentitySeed,

@@ -188,6 +188,14 @@ const (
 	GasOpMergeCommit transaction.Op = "merge_commit"
 )
 
+// XXX: Define reasonable default gas costs.
+
+// DefaultGasCosts are the "default" gas costs for operations.
+var DefaultGasCosts = transaction.Costs{
+	GasOpComputeCommit: 1000,
+	GasOpMergeCommit:   1000,
+}
+
 // SanityCheckBlocks examines the blocks table.
 func SanityCheckBlocks(blocks map[common.Namespace]*block.Block) error {
 	for _, blk := range blocks {
