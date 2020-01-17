@@ -164,7 +164,11 @@ func (s *stats) addRegistryData(ctx context.Context, registry registryAPI.Backen
 		for _, nodeID := range ent.Nodes {
 			node, ok := nodesMap[nodeID]
 			if !ok {
-				return fmt.Errorf("entity's node missing: %s", nodeID)
+				// Skip entity nodes that are not registered.
+				logger.Debug("skipping not registered entity node",
+					"node_id", nodeID,
+				)
+				continue
 			}
 
 			// Add missing nodes.
@@ -245,6 +249,10 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 		// XXX: In tendermint master (not yet released) the signatures are
 		// obtained in LastCommit.Signatures.
 		for _, sig := range tmBlockMeta.LastCommit.Precommits {
+			if sig == nil {
+				logger.Debug("skipping nil-votes")
+				continue
+			}
 			nodeTmAddr := sig.ValidatorAddress.String()
 
 			// Check if node is already being tracked.
