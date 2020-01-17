@@ -5,6 +5,7 @@ import (
 	tendermint "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
 )
 
 // LogAssertEvent returns a handler which checks whether a specific log event was
@@ -65,4 +66,16 @@ func LogAssertNoMergeDiscrepancyDetected() log.WatcherHandlerFactory {
 // exchange disabled event was detected based on JSON log output.
 func LogAssertPeerExchangeDisabled() log.WatcherHandlerFactory {
 	return LogAssertEvent(tendermint.LogEventPeerExchangeDisabled, "peer exchange not disabled")
+}
+
+// LogAssertUpgradeStartup returns a handler which checks whether a startup migration
+// handler was run based on JSON log output.
+func LogAssertUpgradeStartup() log.WatcherHandlerFactory {
+	return LogAssertEvent(upgrade.LogEventStartupUpgrade, "expected startup upgrade did not run")
+}
+
+// LogAssertUpgradeConsensus returns a handler which checks whether a consensus migration
+// handler was run based on JSON log output.
+func LogAssertUpgradeConsensus() log.WatcherHandlerFactory {
+	return LogAssertEvent(upgrade.LogEventConsensusUpgrade, "expected consensus upgrade did not run")
 }

@@ -243,6 +243,16 @@ func (sc *basicImpl) cleanTendermintStorage(childEnv *env.Env) error {
 	return nil
 }
 
+func (sc *basicImpl) finishWithoutChild() error {
+	var err error
+	select {
+	case err = <-sc.net.Errors():
+		return err
+	default:
+		return sc.net.CheckLogWatchers()
+	}
+}
+
 func (sc *basicImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan error) error {
 	var err error
 	select {

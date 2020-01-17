@@ -115,6 +115,7 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 		activationEpoch: cfg.ActivationEpoch,
 	}
 	worker.doStartNode = worker.startNode
+	copy(worker.NodeID[:], publicKey[:])
 
 	net.byzantine = append(net.byzantine, worker)
 	net.nextNodePort += 2

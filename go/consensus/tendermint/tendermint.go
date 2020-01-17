@@ -64,6 +64,7 @@ import (
 	roothashAPI "github.com/oasislabs/oasis-core/go/roothash/api"
 	schedulerAPI "github.com/oasislabs/oasis-core/go/scheduler/api"
 	stakingAPI "github.com/oasislabs/oasis-core/go/staking/api"
+	upgradeAPI "github.com/oasislabs/oasis-core/go/upgrade/api"
 )
 
 const (
@@ -172,6 +173,7 @@ type tendermintService struct {
 
 	ctx           context.Context
 	svcMgr        *cmbackground.ServiceManager
+	upgrader      upgradeAPI.Backend
 	mux           *abci.ApplicationServer
 	node          *tmnode.Node
 	client        tmcli.Client
@@ -888,7 +890,7 @@ func (t *tendermintService) lazyInit() error {
 		MinGasPrice:     viper.GetUint64(CfgConsensusMinGasPrice),
 		OwnTxSigner:     t.nodeSigner.Public(),
 	}
-	t.mux, err = abci.NewApplicationServer(t.ctx, appConfig)
+	t.mux, err = abci.NewApplicationServer(t.ctx, t.upgrader, appConfig)
 	if err != nil {
 		return err
 	}
@@ -1169,7 +1171,7 @@ func (t *tendermintService) worker() {
 }
 
 // New creates a new Tendermint service.
-func New(ctx context.Context, dataDir string, identity *identity.Identity, genesisProvider genesisAPI.Provider) (service.TendermintService, error) {
+func New(ctx context.Context, dataDir string, identity *identity.Identity, upgrader upgradeAPI.Backend, genesisProvider genesisAPI.Provider) (service.TendermintService, error) {
 	// Retrive the genesis document early so that it is possible to
 	// use it while initializing other things.
 	genesisDoc, err := genesisProvider.GetGenesisDocument()
@@ -1188,6 +1190,7 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 	t := &tendermintService{
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("tendermint/servicemanager")),
+		upgrader:              upgrader,
 		blockNotifier:         pubsub.NewBroker(false),
 		consensusSigner:       identity.ConsensusSigner,
 		nodeSigner:            identity.NodeSigner,

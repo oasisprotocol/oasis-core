@@ -158,6 +158,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		p2pPort:        net.nextNodePort + 2,
 	}
 	worker.doStartNode = worker.startNode
+	copy(worker.NodeID[:], publicKey[:])
 
 	net.computeWorkers = append(net.computeWorkers, worker)
 	net.nextNodePort += 3

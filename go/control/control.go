@@ -5,12 +5,14 @@ import (
 	"context"
 
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	"github.com/oasislabs/oasis-core/go/control/api"
+	control "github.com/oasislabs/oasis-core/go/control/api"
+	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
 )
 
 type nodeController struct {
-	node      api.Shutdownable
+	node      control.Shutdownable
 	consensus consensus.Backend
+	upgrader  upgrade.Backend
 }
 
 func (c *nodeController) RequestShutdown(ctx context.Context, wait bool) error {
@@ -49,10 +51,19 @@ func (c *nodeController) IsSynced(ctx context.Context) (bool, error) {
 	}
 }
 
+func (c *nodeController) UpgradeBinary(ctx context.Context, descriptor *upgrade.Descriptor) error {
+	return c.upgrader.SubmitDescriptor(ctx, descriptor)
+}
+
+func (c *nodeController) CancelUpgrade(ctx context.Context) error {
+	return c.upgrader.CancelUpgrade(ctx)
+}
+
 // New creates a new oasis-node controller.
-func New(node api.Shutdownable, consensus consensus.Backend) api.NodeController {
+func New(node control.Shutdownable, consensus consensus.Backend, upgrader upgrade.Backend) control.NodeController {
 	return &nodeController{
 		node:      node,
 		consensus: consensus,
+		upgrader:  upgrader,
 	}
 }
