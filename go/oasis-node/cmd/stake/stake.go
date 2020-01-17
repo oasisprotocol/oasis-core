@@ -150,15 +150,17 @@ func doList(cmd *cobra.Command, args []string) {
 		return err
 	})
 
-	for _, v := range ids {
-		if !cmdFlags.Verbose() {
-			fmt.Printf("%v\n", v)
-			continue
+	if cmdFlags.Verbose() {
+		accts := make(map[signature.PublicKey]*api.Account)
+		for _, v := range ids {
+			accts[v] = getAccountInfo(ctx, cmd, v, client)
 		}
-
-		ai := getAccountInfo(ctx, cmd, v, client)
-		b, _ := json.Marshal(ai)
+		b, _ := json.Marshal(accts)
 		fmt.Printf("%v\n", string(b))
+	} else {
+		for _, v := range ids {
+			fmt.Printf("%v\n", v)
+		}
 	}
 }
 
