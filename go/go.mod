@@ -14,7 +14,7 @@ require (
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/btcsuite/btcd v0.0.0-20190614013741-962a206e94e9 // indirect
-	github.com/cenkalti/backoff v2.1.1+incompatible
+	github.com/cenkalti/backoff/v4 v4.0.0
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/couchbase/vellum v0.0.0-20190610201045-ec7b775d247f // indirect
 	github.com/cznic/b v0.0.0-20181122101859-a26611c4d92d // indirect
