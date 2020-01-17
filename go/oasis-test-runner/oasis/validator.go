@@ -86,7 +86,6 @@ func (val *Validator) startNode() error {
 
 	if len(val.sentries) > 0 {
 		args = args.addSentries(val.sentries).
-			addSentriesAsPersistentPeers(val.sentries).
 			tendermintDisablePeerExchange()
 	}
 

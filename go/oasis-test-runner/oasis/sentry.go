@@ -46,7 +46,7 @@ func (sentry *Sentry) startNode() error {
 		workerSentryControlPort(sentry.controlPort).
 		tendermintCoreListenAddress(sentry.consensusPort).
 		appendNetwork(sentry.net).
-		addValidatorsAsPrivatePeers(validators)
+		addValidatorsAsSentryUpstreams(validators)
 
 	if sentry.cmd, _, err = sentry.net.startOasisNode(sentry.dir, nil, args, sentry.Name, false, false); err != nil {
 		return fmt.Errorf("oasis/sentry: failed to launch node %s: %w", sentry.Name, err)
