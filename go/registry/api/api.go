@@ -939,7 +939,7 @@ func VerifyRegisterRuntimeArgs(
 
 	// Ensure there is at least one member of the compute group.
 	if rt.Executor.GroupSize == 0 {
-		logger.Error("RegisterRuntime: compute group size too small",
+		logger.Error("RegisterRuntime: executor group size too small",
 			"runtime", rt,
 		)
 		return nil, ErrInvalidArgument
