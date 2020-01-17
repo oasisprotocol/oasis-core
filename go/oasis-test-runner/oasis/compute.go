@@ -10,7 +10,14 @@ import (
 	workerHost "github.com/oasislabs/oasis-core/go/worker/common/host"
 )
 
-const computeIdentitySeedTemplate = "ekiden node worker %d"
+const (
+	computeIdentitySeedTemplate = "ekiden node worker %d"
+
+	ByzantineDefaultIdentitySeed = "ekiden byzantine node worker" // slot 0
+	ByzantineSlot1IdentitySeed   = "ekiden byzantine node worker, luck=1"
+	ByzantineSlot2IdentitySeed   = "ekiden byzantine node worker, luck=11"
+	ByzantineSlot3IdentitySeed   = "ekiden byzantine node worker, luck=6"
+)
 
 // Compute is an Oasis compute node.
 type Compute struct { // nolint: maligned
@@ -80,8 +87,6 @@ func (worker *Compute) startNode() error {
 		workerComputeEnabled().
 		workerRuntimeBackend(worker.runtimeBackend).
 		workerRuntimeLoader(worker.net.cfg.RuntimeLoaderBinary).
-		workerMergeEnabled().
-		workerTxnschedulerEnabled().
 		workerTxnschedulerCheckTxEnabled().
 		appendNetwork(worker.net).
 		appendEntity(worker.entity)

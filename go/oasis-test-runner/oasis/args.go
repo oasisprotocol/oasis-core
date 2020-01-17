@@ -22,9 +22,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
-	"github.com/oasislabs/oasis-core/go/worker/compute"
+	"github.com/oasislabs/oasis-core/go/worker/computeenable"
 	"github.com/oasislabs/oasis-core/go/worker/keymanager"
-	"github.com/oasislabs/oasis-core/go/worker/merge"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasislabs/oasis-core/go/worker/sentry"
 	workerStorage "github.com/oasislabs/oasis-core/go/worker/storage"
@@ -208,7 +207,7 @@ func (args *argBuilder) workerRuntimeBinary(id common.Namespace, fn string) *arg
 }
 
 func (args *argBuilder) workerComputeEnabled() *argBuilder {
-	args.vec = append(args.vec, "--"+compute.CfgWorkerEnabled)
+	args.vec = append(args.vec, "--"+computeenable.CfgWorkerEnabled)
 	return args
 }
 
@@ -250,11 +249,6 @@ func (args *argBuilder) workerKeymanagerMayGenerate() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerMergeEnabled() *argBuilder {
-	args.vec = append(args.vec, "--"+merge.CfgWorkerEnabled)
-	return args
-}
-
 func (args *argBuilder) workerSentryEnabled() *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + workerSentry.CfgEnabled,
@@ -278,11 +272,6 @@ func (args *argBuilder) workerStorageDebugIgnoreApplies(ignore bool) *argBuilder
 	if ignore {
 		args.vec = append(args.vec, "--"+workerStorage.CfgWorkerDebugIgnoreApply)
 	}
-	return args
-}
-
-func (args *argBuilder) workerTxnschedulerEnabled() *argBuilder {
-	args.vec = append(args.vec, "--"+txnscheduler.CfgWorkerEnabled)
 	return args
 }
 

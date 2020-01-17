@@ -146,7 +146,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	computeNode := w.compute.GetRuntime(id)
 
 	// Create worker host for the given runtime.
-	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleTransactionScheduler, id)
+	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleComputeWorker, id)
 	if err != nil {
 		return err
 	}
@@ -210,24 +210,6 @@ func newWorker(
 			if err = w.registerRuntime(rt); err != nil {
 				return nil, err
 			}
-		}
-
-		// Register transaction scheduler worker role.
-		if err = w.registration.RegisterRole(node.RoleTransactionScheduler, func(n *node.Node) error {
-			if w.checkTxEnabled {
-				// Wait until all the runtimes are initialized.
-				for _, rt := range w.runtimes {
-					select {
-					case <-rt.Initialized():
-					case <-w.ctx.Done():
-						return w.ctx.Err()
-					}
-				}
-			}
-
-			return nil
-		}); err != nil {
-			return nil, err
 		}
 	}
 

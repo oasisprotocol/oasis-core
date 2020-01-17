@@ -5,7 +5,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/merge/committee"
@@ -177,12 +176,6 @@ func newWorker(enabled bool, commonWorker *workerCommon.Worker, registrationWork
 			if err := w.registerRuntime(rt); err != nil {
 				return nil, err
 			}
-		}
-
-		// Register merge worker role.
-		if err := w.registrationWorker.RegisterRole(node.RoleMergeWorker,
-			func(n *node.Node) error { return nil }); err != nil {
-			return nil, err
 		}
 	}
 

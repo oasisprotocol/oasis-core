@@ -72,14 +72,10 @@ const (
 	RoleComputeWorker RolesMask = 1 << 0
 	// RoleStorageWorker is Oasis storage worker role.
 	RoleStorageWorker RolesMask = 1 << 1
-	// RoleTransactionScheduler is Oasis transaction scheduler role.
-	RoleTransactionScheduler RolesMask = 1 << 2
 	// RoleKeyManager is the Oasis key manager role.
-	RoleKeyManager RolesMask = 1 << 3
-	// RoleMergeWorker is the Oasis merge worker role.
-	RoleMergeWorker RolesMask = 1 << 4
+	RoleKeyManager RolesMask = 1 << 2
 	// RoleValidator is the Oasis validator role.
-	RoleValidator RolesMask = 1 << 5
+	RoleValidator RolesMask = 1 << 3
 
 	// RoleReserved are all the bits of the Oasis node roles bitmask
 	// that are reserved and must not be used.
@@ -104,14 +100,8 @@ func (m RolesMask) String() string {
 	if m&RoleStorageWorker != 0 {
 		ret = append(ret, "storage")
 	}
-	if m&RoleTransactionScheduler != 0 {
-		ret = append(ret, "txn_scheduler")
-	}
 	if m&RoleKeyManager != 0 {
 		ret = append(ret, "key_manager")
-	}
-	if m&RoleMergeWorker != 0 {
-		ret = append(ret, "merge")
 	}
 	if m&RoleValidator != 0 {
 		ret = append(ret, "validator")

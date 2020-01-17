@@ -140,9 +140,19 @@ func doComputeHonest(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
 	}
+	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindTransactionScheduler, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindTransactionScheduler, err))
+	}
+	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
+	}
 	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindMerge, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindMerge, err))
+	}
+	if err = schedulerCheckNotScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled merge failed: %+v", err))
 	}
 
 	logger.Debug("compute honest: connecting to storage committee")
@@ -262,9 +272,19 @@ func doComputeWrong(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
 	}
+	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindTransactionScheduler, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindTransactionScheduler, err))
+	}
+	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
+	}
 	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindMerge, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindMerge, err))
+	}
+	if err = schedulerCheckNotScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled merge failed: %+v", err))
 	}
 
 	logger.Debug("compute honest: connecting to storage committee")
@@ -379,6 +399,20 @@ func doComputeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("compute straggler: compute schedule ok")
+	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindTransactionScheduler, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindTransactionScheduler, err))
+	}
+	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
+	}
+	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindMerge, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindMerge, err))
+	}
+	if err = schedulerCheckNotScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled merge failed: %+v", err))
+	}
 
 	cbc := newComputeBatchContext()
 
@@ -424,7 +458,7 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -440,9 +474,23 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("merge honest: merge schedule ok")
+	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
+	}
+	if err = schedulerCheckNotScheduled(computeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled compute failed: %+v", err))
+	}
 	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
+	}
+	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindTransactionScheduler, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindTransactionScheduler, err))
+	}
+	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
 	}
 
 	logger.Debug("merge honest: connecting to storage committee")
@@ -518,7 +566,7 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -534,9 +582,23 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("merge wrong: merge schedule ok")
+	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
+	}
+	if err = schedulerCheckNotScheduled(computeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled compute failed: %+v", err))
+	}
 	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
+	}
+	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindTransactionScheduler, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindTransactionScheduler, err))
+	}
+	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
 	}
 
 	logger.Debug("merge wrong: connecting to storage committee")
@@ -636,7 +698,7 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleMergeWorker); err != nil {
+	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleComputeWorker); err != nil {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
@@ -652,6 +714,20 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("merge straggler: merge schedule ok")
+	computeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindCompute, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindCompute, err))
+	}
+	if err = schedulerCheckNotScheduled(computeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled compute failed: %+v", err))
+	}
+	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindTransactionScheduler, defaultRuntimeID)
+	if err != nil {
+		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindTransactionScheduler, err))
+	}
+	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
+		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
+	}
 
 	mbc := newMergeBatchContext()
 

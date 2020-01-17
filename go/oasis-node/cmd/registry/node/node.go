@@ -39,16 +39,14 @@ const (
 	CfgSelfSigned       = "node.is_self_signed"
 	CfgNodeRuntimeID    = "node.runtime.id"
 
-	optRoleComputeWorker        = "compute-worker"
-	optRoleStorageWorker        = "storage-worker"
-	optRoleTransactionScheduler = "transaction-scheduler"
-	optRoleKeyManager           = "key-manager"
-	optRoleMergeWorker          = "merge-worker"
-	optRoleValidator            = "validator"
+	optRoleComputeWorker = "compute-worker"
+	optRoleStorageWorker = "storage-worker"
+	optRoleKeyManager    = "key-manager"
+	optRoleValidator     = "validator"
 
 	NodeGenesisFilename = "node_genesis.json"
 
-	maskCommitteeMember = node.RoleComputeWorker | node.RoleStorageWorker | node.RoleTransactionScheduler | node.RoleKeyManager | node.RoleMergeWorker
+	maskCommitteeMember = node.RoleComputeWorker | node.RoleStorageWorker | node.RoleKeyManager
 )
 
 var (
@@ -276,12 +274,8 @@ func argsToRolesMask() (node.RolesMask, error) {
 			rolesMask |= node.RoleComputeWorker
 		case optRoleStorageWorker:
 			rolesMask |= node.RoleStorageWorker
-		case optRoleTransactionScheduler:
-			rolesMask |= node.RoleTransactionScheduler
 		case optRoleKeyManager:
 			rolesMask |= node.RoleKeyManager
-		case optRoleMergeWorker:
-			rolesMask |= node.RoleMergeWorker
 		case optRoleValidator:
 			rolesMask |= node.RoleValidator
 		default:
