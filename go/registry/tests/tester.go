@@ -31,6 +31,8 @@ const (
 	testRuntimeNodeExpiration epochtime.EpochTime = 100
 )
 
+var entityNodeSeed = []byte("testRegistryEntityNodes")
+
 // RegistryImplementationTests exercises the basic functionality of a
 // registry backend.
 //
@@ -41,12 +43,12 @@ func RegistryImplementationTests(t *testing.T, backend api.Backend, consensus co
 
 	// We need a runtime ID as otherwise the registry will not allow us to
 	// register nodes for roles which require runtimes.
-	var runtimeID common.Namespace
+	var runtimeID, runtimeEWID common.Namespace
 	t.Run("Runtime", func(t *testing.T) {
-		runtimeID = testRegistryRuntime(t, backend, consensus)
+		runtimeID, runtimeEWID = testRegistryRuntime(t, backend, consensus)
 	})
 
-	testRegistryEntityNodes(t, backend, consensus, runtimeID)
+	testRegistryEntityNodes(t, backend, consensus, runtimeID, runtimeEWID)
 }
 
 func testRegistryEntityNodes( // nolint: gocyclo
@@ -54,9 +56,10 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	backend api.Backend,
 	consensus consensusAPI.Backend,
 	runtimeID common.Namespace,
+	runtimeEWID common.Namespace,
 ) {
 	// Generate the entities used for the test cases.
-	entities, err := NewTestEntities([]byte("testRegistryEntityNodes"), 3)
+	entities, err := NewTestEntities(entityNodeSeed, 3)
 	require.NoError(t, err, "NewTestEntities")
 
 	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
@@ -120,15 +123,20 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	// Node tests, because there needs to be entities.
 	var numNodes int
 	nodes := make([][]*TestNode, 0, len(entities))
-	for i, v := range entities {
+	for i, te := range entities {
 		// Stagger the expirations so that it's possible to test it.
 		var entityNodes []*TestNode
-		entityNodes, err = v.NewTestNodes(i+1, 1, nodeRuntimes, epoch+epochtime.EpochTime(i)+1)
+		entityNodes, err = te.NewTestNodes(i+1, 1, nil, nodeRuntimes, epoch+epochtime.EpochTime(i)+1)
 		require.NoError(t, err, "NewTestNodes")
 
 		nodes = append(nodes, entityNodes)
 		numNodes += len(entityNodes)
 	}
+	nodeRuntimesEW := []*node.Runtime{&node.Runtime{ID: runtimeEWID}}
+	whitelistedNodes, err := entities[1].NewTestNodes(1, 1, []byte("whitelistedNodes"), nodeRuntimesEW, epoch+2)
+	require.NoError(t, err, "NewTestNodes whitelisted")
+	nonWhitelistedNodes, err := entities[0].NewTestNodes(1, 1, []byte("nonWhitelistedNodes"), nodeRuntimesEW, epoch+2)
+	require.NoError(t, err, "NewTestNodes non-whitelisted")
 
 	nodeCh, nodeSub, err := backend.WatchNodes(context.Background())
 	require.NoError(t, err, "WatchNodes")
@@ -137,107 +145,125 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	t.Run("NodeRegistration", func(t *testing.T) {
 		require := require.New(t)
 
-		for _, vec := range nodes {
-			for _, v := range vec {
-				if v.Node.Roles&node.RoleComputeWorker != 0 {
-					err = v.Register(consensus, v.SignedInvalidRegistration1)
+		for _, tns := range nodes {
+			for _, tn := range tns {
+				if tn.Node.Roles&node.RoleComputeWorker != 0 {
+					err = tn.Register(consensus, tn.SignedInvalidRegistration1)
 					require.Error(err, "register committee node without P2P addresses")
 					require.Equal(err, api.ErrInvalidArgument)
 				}
 
-				err = v.Register(consensus, v.SignedInvalidRegistration2)
+				err = tn.Register(consensus, tn.SignedInvalidRegistration2)
 				require.Error(err, "register committee node without committee addresses")
 				require.Equal(err, api.ErrInvalidArgument)
 
-				err = v.Register(consensus, v.SignedInvalidRegistration3)
+				err = tn.Register(consensus, tn.SignedInvalidRegistration3)
 				require.Error(err, "register committee node without committee certificate")
 				require.Equal(err, api.ErrInvalidArgument)
 
-				err = v.Register(consensus, v.SignedInvalidRegistration4)
+				err = tn.Register(consensus, tn.SignedInvalidRegistration4)
 				require.Error(err, "register node without roles")
 				require.Equal(err, api.ErrInvalidArgument)
 
-				err = v.Register(consensus, v.SignedInvalidRegistration5)
+				err = tn.Register(consensus, tn.SignedInvalidRegistration5)
 				require.Error(err, "register node with reserved roles")
 				require.Equal(err, api.ErrInvalidArgument)
 
-				if v.Node.Roles&node.RoleComputeWorker != 0 {
-					err = v.Register(consensus, v.SignedInvalidRegistration6)
+				if tn.Node.Roles&node.RoleComputeWorker != 0 {
+					err = tn.Register(consensus, tn.SignedInvalidRegistration6)
 					require.Error(err, "register node without a valid p2p id")
 					require.Equal(err, api.ErrInvalidArgument)
 				}
 
-				if v.Node.Roles&node.RoleComputeWorker != 0 {
-					err = v.Register(consensus, v.SignedInvalidRegistration7)
+				if tn.Node.Roles&node.RoleComputeWorker != 0 {
+					err = tn.Register(consensus, tn.SignedInvalidRegistration7)
 					require.Error(err, "register node without runtimes")
 					require.Equal(err, api.ErrInvalidArgument)
 				}
 
-				err = v.Register(consensus, v.SignedInvalidRegistration8)
+				err = tn.Register(consensus, tn.SignedInvalidRegistration8)
 				require.Error(err, "register node with invalid runtimes")
 				require.Equal(err, api.ErrInvalidArgument)
 
-				err = v.Register(consensus, v.SignedInvalidRegistration9)
+				err = tn.Register(consensus, tn.SignedInvalidRegistration9)
 				require.Error(err, "register node with invalid consensus address")
 				require.Equal(err, api.ErrInvalidArgument)
 
-				err = v.Register(consensus, v.SignedInvalidRegistration10)
+				err = tn.Register(consensus, tn.SignedInvalidRegistration10)
 				require.Error(err, "register node with same consensus and p2p IDs")
 				require.Equal(err, api.ErrInvalidArgument)
 
-				err = v.Register(consensus, v.SignedRegistration)
+				err = tn.Register(consensus, tn.SignedRegistration)
 				require.NoError(err, "RegisterNode")
 
 				select {
 				case ev := <-nodeCh:
-					require.EqualValues(v.Node, ev.Node, "registered node")
+					require.EqualValues(tn.Node, ev.Node, "registered node")
 					require.True(ev.IsRegistration, "event is registration")
 				case <-time.After(recvTimeout):
 					t.Fatalf("failed to receive node registration event")
 				}
 
 				var nod *node.Node
-				nod, err = backend.GetNode(context.Background(), &api.IDQuery{ID: v.Node.ID, Height: consensusAPI.HeightLatest})
+				nod, err = backend.GetNode(context.Background(), &api.IDQuery{ID: tn.Node.ID, Height: consensusAPI.HeightLatest})
 				require.NoError(err, "GetNode")
-				require.EqualValues(v.Node, nod, "retrieved node")
+				require.EqualValues(tn.Node, nod, "retrieved node")
 
-				err = v.Register(consensus, v.SignedInvalidRegistration11)
+				err = tn.Register(consensus, tn.SignedInvalidRegistration11)
 				require.Error(err, "register node with duplicate p2p id")
 				require.Equal(err, api.ErrInvalidArgument)
 
-				err = v.Register(consensus, v.SignedInvalidRegistration12)
+				err = tn.Register(consensus, tn.SignedInvalidRegistration12)
 				require.Error(err, "register node with duplicate consensus id")
 				require.Equal(err, api.ErrInvalidArgument)
 
-				err = v.Register(consensus, v.SignedInvalidRegistration13)
+				err = tn.Register(consensus, tn.SignedInvalidRegistration13)
 				require.Error(err, "register node with duplicate certificate")
 				require.Equal(err, api.ErrInvalidArgument)
 
-				err = v.Register(consensus, v.SignedValidReRegistration)
+				err = tn.Register(consensus, tn.SignedValidReRegistration)
 				require.NoError(err, "Re-registering a node with different address should work")
 
-				err = v.Register(consensus, v.SignedInvalidReRegistration)
+				err = tn.Register(consensus, tn.SignedInvalidReRegistration)
 				require.Error(err, "Re-registering a node with different runtimes should fail")
 				require.Equal(err, api.ErrInvalidArgument)
 
 				select {
 				case ev := <-nodeCh:
-					require.EqualValues(v.UpdatedNode, ev.Node, "updated node")
+					require.EqualValues(tn.UpdatedNode, ev.Node, "updated node")
 					require.True(ev.IsRegistration, "event is registration")
 				case <-time.After(recvTimeout):
 					t.Fatalf("failed to receive node registration event")
 				}
 			}
 		}
+
+		for _, tn := range whitelistedNodes {
+			require.NoError(tn.Register(consensus, tn.SignedRegistration), "register node from whitelisted entity")
+
+			select {
+			case ev := <-nodeCh:
+				require.EqualValues(tn.Node, ev.Node, "registered node, whitelisted")
+				require.True(ev.IsRegistration, "event is registration, whitelisted")
+			case <-time.After(recvTimeout):
+				t.Fatalf("failed to receive node registration event, whitelisted")
+			}
+		}
+		for _, tn := range nonWhitelistedNodes {
+			require.Error(tn.Register(consensus, tn.SignedRegistration), "register node from non whitelisted entity")
+		}
 	})
 
 	getExpectedNodeList := func() []*node.Node {
 		// Derive the expected node list.
-		l := make([]*node.Node, 0, numNodes)
-		for _, vec := range nodes {
-			for _, v := range vec {
-				l = append(l, v.UpdatedNode)
+		l := make([]*node.Node, 0, numNodes+len(whitelistedNodes))
+		for _, tns := range nodes {
+			for _, tn := range tns {
+				l = append(l, tn.UpdatedNode)
 			}
+		}
+		for _, tn := range whitelistedNodes {
+			l = append(l, tn.Node)
 		}
 		api.SortNodeList(l)
 
@@ -407,7 +433,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		deregisteredNodes := make(map[signature.PublicKey]*node.Node)
 
-		for i := 0; i < numNodes; i++ {
+		for i := 0; i < numNodes+len(whitelistedNodes); i++ {
 			select {
 			case ev := <-nodeCh:
 				require.False(ev.IsRegistration, "event is deregistration")
@@ -416,14 +442,19 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				t.Fatalf("failed to receive node deregistration event")
 			}
 		}
-		require.Len(deregisteredNodes, numNodes, "deregistration events")
+		require.Len(deregisteredNodes, numNodes+len(whitelistedNodes), "deregistration events")
 
-		for _, vec := range nodes {
-			for _, v := range vec {
-				n, ok := deregisteredNodes[v.Node.ID]
+		for _, tns := range nodes {
+			for _, tn := range tns {
+				n, ok := deregisteredNodes[tn.Node.ID]
 				require.True(ok, "got deregister event for node")
-				require.EqualValues(v.UpdatedNode, n, "deregistered node")
+				require.EqualValues(tn.UpdatedNode, n, "deregistered node")
 			}
+		}
+		for _, tn := range whitelistedNodes {
+			n, ok := deregisteredNodes[tn.Node.ID]
+			require.True(ok, "got deregister event for node, whitelisted")
+			require.EqualValues(tn.Node, n, "deregistered node, whitelisted")
 		}
 	})
 
@@ -432,7 +463,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	EnsureRegistryEmpty(t, backend)
 }
 
-func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) common.Namespace {
+func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) (common.Namespace, common.Namespace) {
 	require := require.New(t)
 
 	existingRuntimes, err := backend.GetRuntimes(context.Background(), consensusAPI.HeightLatest)
@@ -453,6 +484,29 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 
 	rt.MustRegister(t, backend, consensus)
 
+	// Runtime using entity whitelist node admission policy.
+	rtEW, err := NewTestRuntime([]byte("testRegistryRuntimeEntityWhitelist"), entity, false)
+	require.NoError(err, "NewTestRuntime entity whitelist")
+	nodeEntities, err := NewTestEntities(entityNodeSeed, 3)
+	require.NoError(err, "NewTestEntities with entity node seed")
+	rtEW.Runtime.AdmissionPolicy = api.RuntimeAdmissionPolicy{
+		EntityWhitelist: &api.EntityWhitelistRuntimeAdmissionPolicy{
+			Entities: map[signature.PublicKey]bool{
+				nodeEntities[1].Entity.ID: true,
+			},
+		},
+	}
+	rtMap[rtEW.Runtime.ID] = rtEW.Runtime
+
+	rtEW.MustRegister(t, backend, consensus)
+
+	// Runtime with unset node admission policy.
+	rtUnsetAdmissionPolicy, err := NewTestRuntime([]byte("testRegistryRuntimeUnsetAdmissionPolicy"), entity, false)
+	require.NoError(err, "NewTestRuntime unset admission policy")
+	rtUnsetAdmissionPolicy.Runtime.AdmissionPolicy = api.RuntimeAdmissionPolicy{}
+
+	rtUnsetAdmissionPolicy.MustNotRegister(t, backend, consensus)
+
 	// Register key manager runtime.
 	km, err := NewTestRuntime([]byte("testRegistryKM"), entity, true)
 	km.Runtime.Kind = api.KindKeyManager
@@ -472,7 +526,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	// NOTE: There can be two runtimes registered here instead of one because the worker
 	//       tests that run before this register their own runtime and this runtime
 	//       cannot be deregistered.
-	require.Len(registeredRuntimes, len(existingRuntimes)+3, "registry has three new runtimes")
+	require.Len(registeredRuntimes, len(existingRuntimes)+4, "registry has four new runtimes")
 	for _, regRuntime := range registeredRuntimes {
 		if rtMap[regRuntime.ID] != nil {
 			require.EqualValues(rtMap[regRuntime.ID], regRuntime, "expected runtime is registered")
@@ -511,7 +565,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 
 	// No way to de-register the runtime, so it will be left there.
 
-	return rt.Runtime.ID
+	return rt.Runtime.ID, rtEW.Runtime.ID
 }
 
 // EnsureRegistryEmpty enforces that the registry has no entities or nodes
@@ -598,13 +652,13 @@ func randomCert() []byte {
 
 // NewTestNodes returns the specified number of TestNodes, generated
 // deterministically using the entity's public key as the seed.
-func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, runtimes []*node.Runtime, expiration epochtime.EpochTime) ([]*TestNode, error) {
+func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, runtimes []*node.Runtime, expiration epochtime.EpochTime) ([]*TestNode, error) {
 	if nCompute <= 0 || nStorage <= 0 || nCompute > 254 || nStorage > 254 {
 		return nil, errors.New("registry/tests: test node count out of bounds")
 	}
 	n := nCompute + nStorage
 
-	rng, err := drbg.New(crypto.SHA512, hashForDrbg(ent.Entity.ID[:]), nil, []byte("TestNodes"))
+	rng, err := drbg.New(crypto.SHA512, hashForDrbg(ent.Entity.ID[:]), idNonce, []byte("TestNodes"))
 	if err != nil {
 		return nil, err
 	}
@@ -977,7 +1031,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 
 	numCompute := int(runtimes[0].Runtime.Executor.GroupSize + runtimes[0].Runtime.Executor.GroupBackupSize)
 	numStorage := int(runtimes[0].Runtime.Storage.GroupSize)
-	nodes, err := entity.NewTestNodes(numCompute, numStorage, rts, epoch+testRuntimeNodeExpiration)
+	nodes, err := entity.NewTestNodes(numCompute, numStorage, nil, rts, epoch+testRuntimeNodeExpiration)
 	require.NoError(err, "NewTestNodes")
 
 	ret := make([]*node.Node, 0, numCompute+numStorage)
