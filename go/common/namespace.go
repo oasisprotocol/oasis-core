@@ -15,7 +15,7 @@ const (
 	// NamespaceSize is the size of a chain namespace identifier in bytes.
 	NamespaceSize = 32
 
-	// NamespaceIDSize is the size of the identifier compponet of a namespace.
+	// NamespaceIDSize is the size of the identifier component of a namespace.
 	NamespaceIDSize = NamespaceSize - 8
 
 	NamespaceTest       NamespaceFlag = 1 << 63
