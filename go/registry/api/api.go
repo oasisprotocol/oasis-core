@@ -320,10 +320,11 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 		)
 		return nil, ErrInvalidSignature
 	}
-	if sigEnt.Signed.Signature.SanityCheck(ent.ID) != nil {
+	if err := sigEnt.Signed.Signature.SanityCheck(ent.ID); err != nil {
 		logger.Error("RegisterEntity: invalid argument(s)",
 			"signed_entity", sigEnt,
 			"entity", ent,
+			"err", err,
 		)
 		return nil, ErrInvalidArgument
 	}
