@@ -43,8 +43,8 @@ github.com/btcsuite/goleveldb v0.0.0-20160330041536-7834afc9e8cd/go.mod h1:F+uVa
 github.com/btcsuite/snappy-go v0.0.0-20151229074030-0bdef8d06723/go.mod h1:8woku9dyThutzjeg+3xrA5iCpBRH8XEEg3lh6TiUghc=
 github.com/btcsuite/websocket v0.0.0-20150119174127-31079b680792/go.mod h1:ghJtEyQwv5/p4Mg4C0fgbePVuGr935/5ddU9Z3TmDRY=
 github.com/btcsuite/winsvc v1.0.0/go.mod h1:jsenWakMcC0zFBFurPLEAyrnc/teJEM1O46fmI40EZs=
-github.com/cenkalti/backoff v2.1.1+incompatible h1:tKJnvO2kl0zmb/jA5UKAt4VoEVw1qxKWjE/Bpp46npY=
-github.com/cenkalti/backoff v2.1.1+incompatible/go.mod h1:90ReRw6GdpyfrHakVjL/QHaoyV4aDUVVkXQJJJ3NXXM=
+github.com/cenkalti/backoff/v4 v4.0.0 h1:6VeaLF9aI+MAUQ95106HwWzYZgJJpZ4stumjj6RFYAU=
+github.com/cenkalti/backoff/v4 v4.0.0/go.mod h1:eEew/i+1Q6OrCDZh3WiXYv3+nJwBASZ8Bog/87DQnVg=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/cespare/xxhash v1.1.0 h1:a6HrQnmkObjyL+Gs60czilIUGqrzKutQD6XZog3p+ko=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
@@ -352,8 +352,12 @@ github.com/oasislabs/ed25519 v0.0.0-20191122104632-9d9ffc15f526 h1:xKlK+m6tNFucK
 github.com/oasislabs/ed25519 v0.0.0-20191122104632-9d9ffc15f526/go.mod h1:xIpCyrK2ouGA4QBGbiNbkoONrvJ00u9P3QOkXSOAC0c=
 github.com/oasislabs/iavl v0.12.0-ekiden3 h1:8544fXJb57urhAEpTlIwDBdTJukgpPS/FCS/yj14I8E=
 github.com/oasislabs/iavl v0.12.0-ekiden3/go.mod h1:B/tMpl5cg7n42n3xYQTCckJzQezoI75jedkc8FOiOF0=
+github.com/oasislabs/safeopen v0.0.0-20200117113835-6aa648f43ff8 h1:KC7dcrx0WEeyAWGAG+vdJjmIW36PUfw1x/LUnHjLm2E=
+github.com/oasislabs/safeopen v0.0.0-20200117113835-6aa648f43ff8/go.mod h1:ABsG2IHM7bpTRIH3EvQ8CZQEBkzuhLxXFxaYApYMB9Y=
 github.com/oasislabs/tendermint v0.32.8-oasis1 h1:y+RZsI7D6jFqV/OufXA0meDOgn6eJLsXa5a0iyRLIRU=
 github.com/oasislabs/tendermint v0.32.8-oasis1/go.mod h1:SJjyKg9RLf9FUvqo9sJSpcT/COwormN9U05vR70It/A=
+github.com/oasislabs/tendermint v0.32.8-oasis2 h1:PSEUtAp8Rfe/0T7endF6Iqg4p9+pPkSDSx0E83bD2LM=
+github.com/oasislabs/tendermint v0.32.8-oasis2/go.mod h1:uxexUd6P+G+Zg1yACNBycfcaV1dPI985r79I+IXP38w=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.7.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=

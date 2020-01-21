@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -27,8 +28,13 @@ const (
 	// keys.
 	CfgDebugAllowTestKeys = "debug.allow_test_keys"
 
+	// CfgDebugRlimit is the command flag to set RLIMIT_NOFILE on launch.
+	CfgDebugRlimit = "debug.rlimit"
+
 	cfgConfigFile = "config"
 	CfgDataDir    = "datadir"
+
+	badDefaultRlimit = 1024
 )
 
 var (
@@ -37,6 +43,7 @@ var (
 	rootLog = logging.GetLogger("oasis-node")
 
 	debugAllowTestKeysFlag = flag.NewFlagSet("", flag.ContinueOnError)
+	debugRlimitFlag        = flag.NewFlagSet("", flag.ContinueOnError)
 
 	// RootFlags has the flags that are common across all commands.
 	RootFlags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -90,6 +97,7 @@ func Init() error {
 		initDataDir,
 		initLogging,
 		initPublicKeyBlacklist,
+		initRlimit,
 	}
 
 	for _, fn := range initFns {
@@ -111,9 +119,13 @@ func Logger() *logging.Logger {
 func init() {
 	initLoggingFlags()
 
-	debugAllowTestKeysFlag.Bool(CfgDebugAllowTestKeys, false, "Allow test keys (UNSAFE)")
+	debugAllowTestKeysFlag.Bool(CfgDebugAllowTestKeys, false, "allow test keys (UNSAFE)")
 	_ = debugAllowTestKeysFlag.MarkHidden(CfgDebugAllowTestKeys)
 	_ = viper.BindPFlags(debugAllowTestKeysFlag)
+
+	debugRlimitFlag.Uint64(CfgDebugRlimit, 0, "set RLIMIT_NOFILE")
+	_ = debugRlimitFlag.MarkHidden(CfgDebugRlimit)
+	_ = viper.BindPFlags(debugRlimitFlag)
 
 	RootFlags.StringVar(&cfgFile, cfgConfigFile, "", "config file")
 	RootFlags.String(CfgDataDir, "", "data directory")
@@ -121,6 +133,7 @@ func init() {
 
 	RootFlags.AddFlagSet(loggingFlags)
 	RootFlags.AddFlagSet(debugAllowTestKeysFlag)
+	RootFlags.AddFlagSet(debugRlimitFlag)
 	RootFlags.AddFlagSet(flags.DebugDontBlameOasisFlag)
 }
 
@@ -182,6 +195,33 @@ func initPublicKeyBlacklist() error {
 	signature.BuildPublicKeyBlacklist(allowTestKeys)
 	ias.BuildMrSignerBlacklist(allowTestKeys)
 	return nil
+}
+
+func initRlimit() error {
+	var rlim syscall.Rlimit
+	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rlim); err != nil {
+		// Log, but don't return the error, this is only used for testing
+		// and to warn the user if it's set too low.
+		rootLog.Warn("failed to query RLIMIT_NOFILE",
+			"err", err,
+		)
+		return nil
+	}
+
+	if rlim.Cur <= badDefaultRlimit {
+		rootLog.Warn("the node user has a very low RLIMIT_NOFILE, consider increasing",
+			"cur", rlim.Cur,
+			"max", rlim.Max,
+		)
+	}
+
+	desiredLimit := viper.GetUint64(CfgDebugRlimit)
+	if !flags.DebugDontBlameOasis() || desiredLimit == 0 {
+		return nil
+	}
+
+	rlim.Cur = desiredLimit
+	return syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rlim)
 }
 
 // GetOutputWriter will create a file if the config string is set,

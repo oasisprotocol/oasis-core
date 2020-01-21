@@ -2,7 +2,7 @@ module github.com/oasislabs/oasis-core/go
 
 replace (
 	github.com/tendermint/iavl => github.com/oasislabs/iavl v0.12.0-ekiden3
-	github.com/tendermint/tendermint => github.com/oasislabs/tendermint v0.32.8-oasis1
+	github.com/tendermint/tendermint => github.com/oasislabs/tendermint v0.32.8-oasis2
 	golang.org/x/crypto/curve25519 => github.com/oasislabs/ed25519/extra/x25519 v0.0.0-20191022155220-a426dcc8ad5f
 	golang.org/x/crypto/ed25519 => github.com/oasislabs/ed25519 v0.0.0-20191109133925-b197a691e30d
 )
@@ -14,7 +14,7 @@ require (
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/btcsuite/btcd v0.0.0-20190614013741-962a206e94e9 // indirect
-	github.com/cenkalti/backoff v2.1.1+incompatible
+	github.com/cenkalti/backoff/v4 v4.0.0
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/couchbase/vellum v0.0.0-20190610201045-ec7b775d247f // indirect
 	github.com/cznic/b v0.0.0-20181122101859-a26611c4d92d // indirect
