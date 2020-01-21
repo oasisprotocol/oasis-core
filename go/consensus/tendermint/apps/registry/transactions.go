@@ -156,6 +156,15 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		)
 		return err
 	}
+
+	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	if err != nil {
+		ctx.Logger().Error("RegisterNode: failed to get epoch",
+			"err", err,
+		)
+		return err
+	}
+
 	newNode, paidRuntimes, err := registry.VerifyRegisterNodeArgs(
 		params,
 		ctx.Logger(),
@@ -163,6 +172,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		untrustedEntity,
 		ctx.Now(),
 		ctx.IsInitChain(),
+		epoch,
 		state,
 		state,
 	)
@@ -229,10 +239,6 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	// Ensure node is not expired. Even though the expiration in the current epoch is technically
 	// not yet expired, we treat it as expired as it doesn't make sense to have a new node that will
 	// immediately expire.
-	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
-	if err != nil {
-		return err
-	}
 	if newNode.Expiration <= uint64(epoch) {
 		ctx.Logger().Error("RegisterNode: node descriptor is expired",
 			"new_node", newNode,
