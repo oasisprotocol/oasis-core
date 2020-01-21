@@ -13,19 +13,24 @@ import (
 type Sentry struct {
 	Node
 
-	validatorIndices []int
+	validatorIndices  []int
+	storageIndices    []int
+	keymanagerIndices []int
 
 	publicKey     signature.PublicKey
 	tmAddress     string
 	consensusPort uint16
 	controlPort   uint16
+	sentryPort    uint16
 }
 
 // SentryCfg is the Oasis sentry node configuration.
 type SentryCfg struct {
 	NodeCfg
 
-	ValidatorIndices []int
+	ValidatorIndices  []int
+	StorageIndices    []int
+	KeymanagerIndices []int
 }
 
 // TLSCertPath returns the path to the node's TLS certificate.
@@ -39,15 +44,43 @@ func (sentry *Sentry) startNode() error {
 		return err
 	}
 
+	storageWorkers, err := resolveStorageWorkers(sentry.net, sentry.storageIndices)
+	if err != nil {
+		return err
+	}
+
+	keymanagerWorkers, err := resolveKeymanagerWorkers(sentry.net, sentry.keymanagerIndices)
+	if err != nil {
+		return err
+	}
+
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		workerSentryEnabled().
+		disableRegistrationWorker().
 		workerSentryControlPort(sentry.controlPort).
 		tendermintCoreListenAddress(sentry.consensusPort).
 		appendNetwork(sentry.net).
-		appendSeedNodes(sentry.net).
-		addValidatorsAsSentryUpstreams(validators)
+		appendSeedNodes(sentry.net)
+
+	if len(validators) > 0 {
+		args = args.addValidatorsAsSentryUpstreams(validators)
+	}
+
+	if len(storageWorkers) > 0 || len(keymanagerWorkers) > 0 {
+		args = args.workerGrpcSentryEnabled().
+			workerSentryGrpcClientAddress([]string{fmt.Sprintf("127.0.0.1:%d", sentry.sentryPort)}).
+			workerSentryGrpcClientPort(sentry.sentryPort)
+	}
+
+	if len(storageWorkers) > 0 {
+		args = args.addSentryStorageWorkers(storageWorkers)
+	}
+
+	if len(keymanagerWorkers) > 0 {
+		args = args.addSentryKeymanagerWorkers(keymanagerWorkers)
+	}
 
 	if sentry.cmd, _, err = sentry.net.startOasisNode(sentry.dir, nil, args, sentry.Name, false, false); err != nil {
 		return fmt.Errorf("oasis/sentry: failed to launch node %s: %w", sentry.Name, err)
@@ -91,16 +124,19 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
-		validatorIndices: cfg.ValidatorIndices,
-		publicKey:        sentryPublicKey,
-		tmAddress:        crypto.PublicKeyToTendermint(&sentryPublicKey).Address().String(),
-		consensusPort:    net.nextNodePort,
-		controlPort:      net.nextNodePort + 1,
+		validatorIndices:  cfg.ValidatorIndices,
+		storageIndices:    cfg.StorageIndices,
+		keymanagerIndices: cfg.KeymanagerIndices,
+		publicKey:         sentryPublicKey,
+		tmAddress:         crypto.PublicKeyToTendermint(&sentryPublicKey).Address().String(),
+		consensusPort:     net.nextNodePort,
+		controlPort:       net.nextNodePort + 1,
+		sentryPort:        net.nextNodePort + 2,
 	}
 	sentry.doStartNode = sentry.startNode
 
 	net.sentries = append(net.sentries, sentry)
-	net.nextNodePort += 2
+	net.nextNodePort += 3
 
 	if err := net.AddLogWatcher(&sentry.Node); err != nil {
 		net.logger.Error("failed to add log watcher",

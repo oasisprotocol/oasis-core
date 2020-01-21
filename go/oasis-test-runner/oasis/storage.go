@@ -16,6 +16,8 @@ const storageIdentitySeedTemplate = "ekiden node storage %d"
 type Storage struct { // nolint: maligned
 	Node
 
+	sentryIndices []int
+
 	backend       string
 	entity        *Entity
 	ignoreApplies bool
@@ -29,6 +31,7 @@ type Storage struct { // nolint: maligned
 type StorageCfg struct { // nolint: maligned
 	NodeCfg
 
+	SentryIndices []int
 	Backend       string
 	Entity        *Entity
 	IgnoreApplies bool
@@ -75,6 +78,13 @@ func (worker *Storage) Start() error {
 }
 
 func (worker *Storage) startNode() error {
+	var err error
+
+	sentries, err := resolveSentries(worker.net, worker.sentryIndices)
+	if err != nil {
+		return err
+	}
+
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
@@ -95,7 +105,14 @@ func (worker *Storage) startNode() error {
 		args = args.runtimeSupported(v.id)
 	}
 
-	var err error
+	// Sentry configuration.
+	if len(sentries) > 0 {
+		args = args.addSentries(sentries).
+			tendermintDisablePeerExchange()
+	} else {
+		args = args.appendSeedNodes(worker.net)
+	}
+
 	if worker.cmd, worker.exitCh, err = worker.net.startOasisNode(
 		worker.dir,
 		nil,
@@ -144,6 +161,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		},
 		backend:       cfg.Backend,
 		entity:        cfg.Entity,
+		sentryIndices: cfg.SentryIndices,
 		ignoreApplies: cfg.IgnoreApplies,
 		consensusPort: net.nextNodePort,
 		clientPort:    net.nextNodePort + 1,

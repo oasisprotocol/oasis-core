@@ -91,11 +91,9 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	numNodes := len(sc.net.Validators())
-	// TODO: Once dynamic key manager registration is supported, this shouldn't be needed.
-	if sc.net.Keymanager() != nil {
-		numNodes++
-	}
+	// TODO: Once dynamic key manager registration is supported, waiting for keymanagers
+	// shouldn't be needed.
+	numNodes := len(sc.net.Validators()) + len(sc.net.Keymanagers())
 	sc.logger.Info("waiting for (some) nodes to register",
 		"num_nodes", numNodes,
 	)

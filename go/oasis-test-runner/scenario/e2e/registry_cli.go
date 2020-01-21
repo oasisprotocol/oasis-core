@@ -315,7 +315,8 @@ func (r *registryCLIImpl) listNodes(childEnv *env.Env) ([]signature.PublicKey, e
 }
 
 // newTestNode returns a test node instance given the entityID.
-func (r *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node, []string, []string, error) {
+func (r *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node, []string, []string, []string, error) {
+	// Addresses.
 	testAddresses := []node.Address{
 		{TCPAddr: net.TCPAddr{
 			IP:   net.IPv4(127, 0, 0, 1),
@@ -332,37 +333,48 @@ func (r *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node,
 	for _, a := range testAddresses {
 		testAddressesStr = append(testAddressesStr, a.String())
 	}
-	testCAddresses := []node.ConsensusAddress{
+
+	// Consensus addresses.
+	testConsensusAddresses := []node.ConsensusAddress{
 		{
-			ID: signature.PublicKey{},
-			Address: node.Address{TCPAddr: net.TCPAddr{
-				IP:   net.IPv4(127, 0, 0, 1),
-				Port: 12345,
-				Zone: "",
-			}},
+			ID:      signature.PublicKey{},
+			Address: testAddresses[0],
 		},
 		{
-			ID: signature.PublicKey{},
-			Address: node.Address{TCPAddr: net.TCPAddr{
-				IP:   net.IPv4(127, 0, 0, 2),
-				Port: 54321,
-				Zone: "",
-			}},
+			ID:      signature.PublicKey{},
+			Address: testAddresses[1],
 		},
 	}
-	_ = testCAddresses[0].ID.UnmarshalHex("1100000000000000000000000000000000000000000000000000000000000000")
-	_ = testCAddresses[1].ID.UnmarshalHex("1200000000000000000000000000000000000000000000000000000000000000")
-	testCAddressesStr := []string{}
-	for _, a := range testCAddresses {
-		testCAddressesStr = append(testCAddressesStr, a.String())
+	_ = testConsensusAddresses[0].ID.UnmarshalHex("1100000000000000000000000000000000000000000000000000000000000000")
+	_ = testConsensusAddresses[1].ID.UnmarshalHex("1200000000000000000000000000000000000000000000000000000000000000")
+	testConsensusAddressesStr := []string{}
+	for _, a := range testConsensusAddresses {
+		testConsensusAddressesStr = append(testConsensusAddressesStr, a.String())
 	}
+
+	// Committee addresses.
+	testCommitteeAddresses := []node.CommitteeAddress{
+		{
+			Certificate: []byte{}, // Certificate is generated afterwards.
+			Address:     testAddresses[0],
+		},
+		{
+			Certificate: []byte{}, // Certificate is generated afterwards.
+			Address:     testAddresses[1],
+		},
+	}
+	testCommitteeAddressesStr := []string{}
+	for _, a := range testCommitteeAddresses {
+		testCommitteeAddressesStr = append(testCommitteeAddressesStr, a.String())
+	}
+
 	testNode := node.Node{
 		ID:         signature.PublicKey{}, // ID is generated afterwards.
 		EntityID:   entityID,
 		Expiration: 42,
 		Committee: node.CommitteeInfo{
 			Certificate: []byte{}, // Certificate is generated afterwards.
-			Addresses:   testAddresses,
+			Addresses:   testCommitteeAddresses,
 		},
 		P2P: node.P2PInfo{
 			ID:        signature.PublicKey{}, // ID is generated afterwards.
@@ -370,7 +382,7 @@ func (r *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node,
 		},
 		Consensus: node.ConsensusInfo{
 			ID:        signature.PublicKey{}, // ID is generated afterwards.
-			Addresses: testCAddresses,
+			Addresses: testConsensusAddresses,
 		},
 		Runtimes: []*node.Runtime{
 			{
@@ -381,7 +393,7 @@ func (r *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node,
 	}
 	_ = testNode.Runtimes[0].ID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
 
-	return &testNode, testAddressesStr, testCAddressesStr, nil
+	return &testNode, testAddressesStr, testConsensusAddressesStr, testCommitteeAddressesStr, nil
 }
 
 // initNode very "thoroughly" initializes new node and returns its instance.
@@ -389,7 +401,7 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 	r.logger.Info("initializing new entity")
 
 	// testNode will be our fixture for testing the CLI.
-	testNode, testAddressesStr, testCAddressesStr, err := r.newTestNode(ent.ID)
+	testNode, testAddressesStr, testConsensusAddressesStr, testCommitteeAddressesStr, err := r.newTestNode(ent.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -398,8 +410,8 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 	runInitNode := func() (*node.Node, error) {
 		args := []string{
 			"registry", "node", "init",
-			"--" + cmdRegNode.CfgCommitteeAddress, strings.Join(testAddressesStr, ","),
-			"--" + cmdRegNode.CfgConsensusAddress, strings.Join(testCAddressesStr, ","),
+			"--" + cmdRegNode.CfgCommitteeAddress, strings.Join(testCommitteeAddressesStr, ","),
+			"--" + cmdRegNode.CfgConsensusAddress, strings.Join(testConsensusAddressesStr, ","),
 			"--" + cmdRegNode.CfgEntityID, testNode.EntityID.String(),
 			"--" + cmdRegNode.CfgExpiration, strconv.FormatUint(testNode.Expiration, 10),
 			"--" + cmdRegNode.CfgSelfSigned, "1",
@@ -458,6 +470,9 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 	testNode.Committee.Certificate = n.Committee.Certificate
 	testNode.P2P.ID = n.P2P.ID
 	testNode.Consensus.ID = n.Consensus.ID
+	for idx := range testNode.Committee.Addresses {
+		testNode.Committee.Addresses[idx].Certificate = n.Committee.Certificate
+	}
 
 	// Export both original and imported node to JSON and compare them.
 	nStr, _ := json.Marshal(n)

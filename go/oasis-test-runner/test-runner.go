@@ -33,6 +33,7 @@ func main() {
 	_ = cmd.Register(e2e.StorageSync)
 	// Sentry test.
 	_ = cmd.Register(e2e.Sentry)
+	_ = cmd.Register(e2e.SentryEncryption)
 	// Keymanager restart test.
 	_ = cmd.Register(e2e.KeymanagerRestart)
 	// Dump/restore test.

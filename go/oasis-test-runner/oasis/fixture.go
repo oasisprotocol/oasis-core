@@ -220,6 +220,8 @@ type KeymanagerFixture struct {
 
 	SubmissionGasPrice uint64 `json:"submission_gas_price"`
 
+	Sentries []int `json:"sentries,omitempty"`
+
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 }
 
@@ -240,8 +242,9 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			SubmissionGasPrice:         f.SubmissionGasPrice,
 		},
-		Runtime: runtime,
-		Entity:  entity,
+		Runtime:       runtime,
+		Entity:        entity,
+		SentryIndices: f.Sentries,
 	})
 }
 
@@ -255,6 +258,8 @@ type StorageWorkerFixture struct { // nolint: maligned
 	SubmissionGasPrice uint64 `json:"submission_gas_price"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
+
+	Sentries []int `json:"sentries,omitempty"`
 
 	IgnoreApplies bool `json:"ignore_applies,omitempty"`
 }
@@ -274,6 +279,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 		},
 		Backend:       f.Backend,
 		Entity:        entity,
+		SentryIndices: f.Sentries,
 		IgnoreApplies: f.IgnoreApplies,
 	})
 }
@@ -313,7 +319,9 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 type SentryFixture struct {
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
-	Validators []int `json:"validators"`
+	Validators        []int `json:"validators"`
+	StorageWorkers    []int `json:"storage_workers"`
+	KeymanagerWorkers []int `json:"keymanager_workers"`
 }
 
 // Create instantiates the client node described by the fixture.
@@ -322,7 +330,9 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 		NodeCfg: NodeCfg{
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 		},
-		ValidatorIndices: f.Validators,
+		ValidatorIndices:  f.Validators,
+		StorageIndices:    f.StorageWorkers,
+		KeymanagerIndices: f.KeymanagerWorkers,
 	})
 }
 
@@ -387,6 +397,30 @@ func resolveValidators(net *Network, indices []int) ([]*Validator, error) {
 		validators = append(validators, allValidators[index])
 	}
 	return validators, nil
+}
+
+func resolveStorageWorkers(net *Network, indices []int) ([]*Storage, error) {
+	allStorageWorkers := net.StorageWorkers()
+	var storageWorkers []*Storage
+	for _, index := range indices {
+		if index < 0 || index >= len(allStorageWorkers) {
+			return nil, fmt.Errorf("invalid storage index: %d", index)
+		}
+		storageWorkers = append(storageWorkers, allStorageWorkers[index])
+	}
+	return storageWorkers, nil
+}
+
+func resolveKeymanagerWorkers(net *Network, indices []int) ([]*Keymanager, error) {
+	allKeymanagerWorkers := net.Keymanagers()
+	var keymanagerWorkers []*Keymanager
+	for _, index := range indices {
+		if index < 0 || index >= len(allKeymanagerWorkers) {
+			return nil, fmt.Errorf("invalid keymanager index: %d", index)
+		}
+		keymanagerWorkers = append(keymanagerWorkers, allKeymanagerWorkers[index])
+	}
+	return keymanagerWorkers, nil
 }
 
 func resolveRuntime(net *Network, index int) (*Runtime, error) {
