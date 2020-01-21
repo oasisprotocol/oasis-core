@@ -14,7 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/persistent"
@@ -25,6 +25,7 @@ import (
 	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/client"
 	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
@@ -150,12 +151,14 @@ type Node struct {
 
 	localStorage   storageApi.LocalBackend
 	storageClient  storageApi.ClientBackend
-	grpcPolicy     *grpc.DynamicRuntimePolicyChecker
+	grpcPolicy     *policy.DynamicRuntimePolicyChecker
 	undefinedRound uint64
 
 	fetchPool *workerpool.Pool
 
 	stateStore *persistent.ServiceStore
+
+	workerCommonCfg workerCommon.Config
 
 	syncedLock  sync.RWMutex
 	syncedState watcherState
@@ -173,10 +176,11 @@ type Node struct {
 
 func NewNode(
 	commonNode *committee.Node,
-	grpcPolicy *grpc.DynamicRuntimePolicyChecker,
+	grpcPolicy *policy.DynamicRuntimePolicyChecker,
 	fetchPool *workerpool.Pool,
 	store *persistent.ServiceStore,
 	roleProvider registration.RoleProvider,
+	workerCommonCfg workerCommon.Config,
 ) (*Node, error) {
 	localStorage, ok := commonNode.Storage.(storageApi.LocalBackend)
 	if !ok {
@@ -189,6 +193,8 @@ func NewNode(
 		roleProvider: roleProvider,
 
 		logger: logging.GetLogger("worker/storage/committee").With("runtime_id", commonNode.Runtime.ID()),
+
+		workerCommonCfg: workerCommonCfg,
 
 		localStorage: localStorage,
 		grpcPolicy:   grpcPolicy,
@@ -279,6 +285,13 @@ func (n *Node) HandlePeerMessage(context.Context, *p2p.Message) (bool, error) {
 func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
 	// Create new storage gRPC access policy for the current runtime.
 	policy := accessctl.NewPolicy()
+
+	// Add policy for configured sentry nodes.
+	sentryCerts := n.workerCommonCfg.SentryCertificates
+	for _, cert := range sentryCerts {
+		sentryNodesPolicy.AddCertPolicy(&policy, cert)
+	}
+
 	for _, xc := range snapshot.GetExecutorCommittees() {
 		if xc != nil {
 			executorCommitteePolicy.AddRulesForCommittee(&policy, xc)

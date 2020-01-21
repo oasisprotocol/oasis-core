@@ -26,12 +26,15 @@ import (
 
 // DialOptionForNode creates a grpc.DialOption for communicating under the node's certificate.
 func DialOptionForNode(ourCerts []tls.Certificate, node *node.Node) (grpc.DialOption, error) {
-	nodeCert, err := node.Committee.ParseCertificate()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to parse node's certificate")
-	}
 	certPool := x509.NewCertPool()
-	certPool.AddCert(nodeCert)
+	for _, addr := range node.Committee.Addresses {
+		nodeCert, err := addr.ParseCertificate()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse node's address certificate")
+		}
+		certPool.AddCert(nodeCert)
+	}
+
 	creds := credentials.NewTLS(&tls.Config{
 		Certificates: ourCerts,
 		RootCAs:      certPool,
@@ -194,12 +197,6 @@ func (w *watcherState) updateStorageNodeConnections() {
 	for _, node := range nodeList {
 		// But prevent connecting to self.
 		if w.identity != nil && node.ID.Equal(w.identity.NodeSigner.Public()) {
-			continue
-		}
-
-		if node.Committee.Certificate == nil {
-			w.logger.Warn("storage committee member registered without certificate, ignoring node",
-				"member", node)
 			continue
 		}
 

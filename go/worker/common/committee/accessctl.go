@@ -1,6 +1,8 @@
 package committee
 
 import (
+	"crypto/x509"
+
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
 	"github.com/oasislabs/oasis-core/go/common/node"
 )
@@ -18,6 +20,15 @@ func (ap AccessPolicy) AddRulesForCommittee(policy *accessctl.Policy, committee 
 		for _, action := range ap.Actions {
 			policy.Allow(subject, action)
 		}
+	}
+}
+
+// AddCertPolicy augments the given policy by allowing actions in the current AccessPolicy
+// to given certificate.
+func (ap AccessPolicy) AddCertPolicy(policy *accessctl.Policy, cert *x509.Certificate) {
+	subject := accessctl.SubjectFromX509Certificate(cert)
+	for _, action := range ap.Actions {
+		policy.Allow(subject, action)
 	}
 }
 

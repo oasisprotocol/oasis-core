@@ -34,6 +34,8 @@ import (
 const (
 	workerRegistrationDBBucketName = "worker/registration"
 
+	// CfgRegistrationWorkerEnabled enables registration worker.
+	CfgRegistrationWorkerEnabled = "worker.registration.enabled"
 	// CfgRegistrationEntity configures the registration worker entity.
 	CfgRegistrationEntity = "worker.registration.entity"
 	// CfgRegistrationPrivateKey configures the registration worker private key.
@@ -109,6 +111,8 @@ func (rp *roleProvider) SetUnavailable() {
 // Worker is a service handling worker node registration.
 type Worker struct { // nolint: maligned
 	sync.RWMutex
+
+	enabled bool
 
 	workerCommonCfg *workerCommon.Config
 
@@ -379,6 +383,97 @@ func (w *Worker) newRoleProvider(role node.RolesMask, runtimeID *common.Namespac
 	return rp, nil
 }
 
+func (w *Worker) gatherConsensusAddresses(sentryAddrs []node.ConsensusAddress) ([]node.ConsensusAddress, error) {
+	var consensusAddrs []node.ConsensusAddress
+	var err error
+
+	switch len(w.workerCommonCfg.SentryAddresses) > 0 {
+	// If sentry nodes are used, use sentry addresses.
+	case true:
+		consensusAddrs = sentryAddrs
+	// Otherwise gather consensus addresses.
+	case false:
+		consensusAddrs, err = w.consensus.GetAddresses()
+		if err != nil {
+			return nil, fmt.Errorf("worker/registration: failed to get validator's consensus address(es): %w", err)
+		}
+	}
+
+	// Filter out any potentially invalid addresses.
+	var validatedAddrs []node.ConsensusAddress
+	for _, addr := range consensusAddrs {
+		if !addr.ID.IsValid() {
+			w.logger.Error("worker/registration: skipping validator address due to invalid ID",
+				"addr", addr,
+			)
+			continue
+		}
+		if err = registry.VerifyAddress(addr.Address, allowUnroutableAddresses); err != nil {
+			w.logger.Error("worker/registration: skipping validator address due to invalid address",
+				"addr", addr,
+				"err", err,
+			)
+			continue
+		}
+		validatedAddrs = append(validatedAddrs, addr)
+	}
+
+	if len(validatedAddrs) == 0 {
+		return nil, fmt.Errorf("worker/registration: node has no valid consensus addresses")
+	}
+
+	return validatedAddrs, nil
+}
+
+func (w *Worker) gatherCommitteeAddresses(sentryAddrs []node.CommitteeAddress) ([]node.CommitteeAddress, error) {
+	var committeeAddresses []node.CommitteeAddress
+
+	switch len(w.workerCommonCfg.SentryAddresses) > 0 {
+	// If sentry nodes are used, use sentry addresses.
+	case true:
+		committeeAddresses = sentryAddrs
+	// Otherwise gather committee addresses.
+	case false:
+		addrs, err := w.workerCommonCfg.GetNodeAddresses()
+		if err != nil {
+			return nil, fmt.Errorf("worker/registration: failed to register node: unable to get node addresses: %w", err)
+		}
+		for _, addr := range addrs {
+			committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
+				Certificate: w.identity.TLSCertificate.Certificate[0],
+				Address:     addr,
+			})
+		}
+	}
+
+	// Filter out any potentially invalid addresses.
+	var validatedAddrs []node.CommitteeAddress
+	for _, addr := range committeeAddresses {
+		if _, err := addr.ParseCertificate(); err != nil {
+			w.logger.Error("worker/registration: skipping node address due to invalid certificate",
+				"addr", addr,
+				"err", err,
+			)
+			continue
+		}
+
+		if err := registry.VerifyAddress(addr.Address, allowUnroutableAddresses); err != nil {
+			w.logger.Error("worker/registration: skipping node address due to invalid address",
+				"addr", addr,
+				"err", err,
+			)
+			continue
+		}
+		validatedAddrs = append(validatedAddrs, addr)
+	}
+
+	if len(validatedAddrs) == 0 {
+		return nil, fmt.Errorf("worker/registration: node has no valid committee addresses")
+	}
+
+	return validatedAddrs, nil
+}
+
 func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) error {
 	w.logger.Info("performing node (re-)registration",
 		"epoch", epoch,
@@ -413,17 +508,28 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		return fmt.Errorf("registration: no runtimes provided while runtimes are required")
 	}
 
-	// Add committee addresses if required.
-	if nodeDesc.HasRoles(registry.CommitteeAddressRequiredRoles) {
-		addresses, err := w.workerCommonCfg.GetNodeAddresses()
-		if err != nil {
-			w.logger.Error("failed to register node: unable to get committee addresses",
-				"err", err,
-			)
-			return err
-		}
+	var sentryConsensusAddrs []node.ConsensusAddress
+	var sentryCommitteeAddrs []node.CommitteeAddress
+	if len(w.workerCommonCfg.SentryAddresses) > 0 {
+		sentryConsensusAddrs, sentryCommitteeAddrs = w.querySentries()
+	}
 
-		nodeDesc.Committee.Addresses = addresses
+	// Add Consensus Addresses if required.
+	if nodeDesc.HasRoles(registry.ConsensusAddressRequiredRoles) {
+		addrs, err := w.gatherConsensusAddresses(sentryConsensusAddrs)
+		if err != nil {
+			return fmt.Errorf("error gathering consensus addresses: %w", err)
+		}
+		nodeDesc.Consensus.Addresses = addrs
+	}
+
+	// Add Committee Addresses if required.
+	if nodeDesc.HasRoles(registry.CommitteeAddressRequiredRoles) {
+		addrs, err := w.gatherCommitteeAddresses(sentryCommitteeAddrs)
+		if err != nil {
+			return fmt.Errorf("error gathering committee addresses: %w", err)
+		}
+		nodeDesc.Committee.Addresses = addrs
 	}
 
 	// Add P2P Addresses if required.
@@ -451,76 +557,52 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 	return nil
 }
 
-func (w *Worker) consensusValidatorHook(n *node.Node) error {
-	var addrs []node.ConsensusAddress
+func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.CommitteeAddress) {
+	var consensusAddrs []node.ConsensusAddress
+	var committeeAddrs []node.CommitteeAddress
 	var err error
+
 	sentryAddrs := w.sentryAddresses
 	sentryCerts := w.sentryCerts
-	if len(sentryAddrs) > 0 {
-		// Query sentry nodes for their consensus address(es).
-		for i, sentryAddr := range sentryAddrs {
-			var client *sentryClient.Client
-			client, err = sentryClient.New(&sentryAddr, sentryCerts[i], w.identity)
-			if err != nil {
-				w.logger.Warn("failed to create client to a sentry node",
-					"err", err,
-					"sentry_address", sentryAddr,
-				)
-				continue
-			}
-			defer client.Close()
-			var consensusAddrs []node.ConsensusAddress
-			consensusAddrs, err = client.GetConsensusAddresses(w.ctx)
-			if err != nil {
-				w.logger.Warn("failed to obtain consensus address(es) from sentry node",
-					"err", err,
-					"sentry_address", sentryAddr,
-				)
-				continue
-			}
-			addrs = append(addrs, consensusAddrs...)
-		}
-		if len(addrs) == 0 {
-			errMsg := "failed to obtain any consensus address from the configured sentry nodes"
-			w.logger.Error(errMsg,
-				"sentry_addresses", sentryAddrs,
-			)
-			return fmt.Errorf(errMsg)
-		}
-	} else {
-		// Use validator's consensus address(es).
-		addrs, err = w.consensus.GetAddresses()
+	for i, sentryAddr := range sentryAddrs {
+		var client *sentryClient.Client
+		client, err = sentryClient.New(&sentryAddr, sentryCerts[i], w.identity)
 		if err != nil {
-			return fmt.Errorf("worker/registration: failed to get validator's consensus address(es): %w", err)
-		}
-	}
-
-	var validatedAddrs []node.ConsensusAddress
-	for _, addr := range addrs {
-		if !addr.ID.IsValid() {
-			w.logger.Error("worker/registration: skipping validator address due to invalid ID",
-				"addr", addr,
-			)
-			continue
-		}
-		if err := registry.VerifyAddress(addr.Address, allowUnroutableAddresses); err != nil {
-			w.logger.Error("worker/registration: skipping validator address due to invalid address",
-				"addr", addr,
+			w.logger.Warn("failed to create client to a sentry node",
 				"err", err,
+				"sentry_address", sentryAddr,
 			)
 			continue
 		}
-		validatedAddrs = append(validatedAddrs, addr)
+		defer client.Close()
+
+		// Query sentry node for addresses.
+		sentryAddresses, err := client.GetAddresses(w.ctx)
+		if err != nil {
+			w.logger.Warn("failed to obtain addressesfrom sentry node",
+				"err", err,
+				"sentry_address", sentryAddr,
+			)
+		}
+
+		consensusAddrs = append(consensusAddrs, sentryAddresses.Consensus...)
+		committeeAddrs = append(committeeAddrs, sentryAddresses.Committee...)
 	}
 
-	if len(validatedAddrs) == 0 {
-		return fmt.Errorf("worker/registration: node has no consensus addresses")
+	if len(consensusAddrs) == 0 {
+		errMsg := "failed to obtain any consensus address from the configured sentry nodes"
+		w.logger.Error(errMsg,
+			"sentry_addresses", sentryAddrs,
+		)
+	}
+	if len(committeeAddrs) == 0 {
+		errMsg := "failed to obtain any committee address from the configured sentry nodes"
+		w.logger.Error(errMsg,
+			"sentry_addresses", sentryAddrs,
+		)
 	}
 
-	// n.Consensus.ID is set for all nodes, no need to set it here.
-	n.Consensus.Addresses = validatedAddrs
-
-	return nil
+	return consensusAddrs, committeeAddrs
 }
 
 // RequestDeregistration requests that the node not register itself in the next epoch.
@@ -665,6 +747,7 @@ func New(
 	}
 
 	w := &Worker{
+		enabled:            viper.GetBool(CfgRegistrationWorkerEnabled),
 		workerCommonCfg:    workerCommonCfg,
 		store:              serviceStore,
 		storedDeregister:   storedDeregister,
@@ -695,7 +778,7 @@ func New(
 		}
 
 		// The consensus validator is available immediately.
-		rp.SetAvailable(w.consensusValidatorHook)
+		rp.SetAvailable(func(*node.Node) error { return nil })
 	}
 
 	return w, nil
@@ -708,6 +791,10 @@ func (w *Worker) Name() string {
 
 // Start starts the registration service.
 func (w *Worker) Start() error {
+	if !w.enabled {
+		w.logger.Info("not starting registration worker as it's disabled")
+		return nil
+	}
 	w.logger.Info("starting node registration service")
 
 	// HACK: This can be ok in certain configurations.
@@ -744,6 +831,7 @@ func (w *Worker) Cleanup() {
 }
 
 func init() {
+	Flags.Bool(CfgRegistrationWorkerEnabled, true, "Enable registration worker")
 	Flags.String(CfgRegistrationEntity, "", "Entity to use as the node owner in registrations")
 	Flags.String(CfgRegistrationPrivateKey, "", "Private key to use to sign node registrations")
 	Flags.Bool(CfgRegistrationForceRegister, false, "Override a previously saved deregistration request")

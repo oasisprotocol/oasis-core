@@ -62,12 +62,14 @@ func (t *txnschedulerClientState) updateConnection(node *node.Node) error {
 	}
 
 	// Setup resolver.
-	nodeCert, err := node.Committee.ParseCertificate()
-	if err != nil {
-		return errors.Wrap(err, "client/watcher: failed to parse txnscheduler leader certificate")
-	}
 	certPool := x509.NewCertPool()
-	certPool.AddCert(nodeCert)
+	for _, addr := range node.Committee.Addresses {
+		nodeCert, err := addr.ParseCertificate()
+		if err != nil {
+			return errors.Wrap(err, "client/watcher: failed to parse txnscheduler leader certificate")
+		}
+		certPool.AddCert(nodeCert)
+	}
 
 	creds := credentials.NewClientTLSFromCert(certPool, identity.CommonName)
 

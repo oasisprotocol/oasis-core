@@ -9,12 +9,11 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	ias "github.com/oasislabs/oasis-core/go/ias/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
-	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
@@ -74,7 +73,7 @@ func New(
 		initCh:       make(chan struct{}),
 		commonWorker: commonWorker,
 		backend:      backend,
-		grpcPolicy:   grpc.NewDynamicRuntimePolicyChecker(),
+		grpcPolicy:   policy.NewDynamicRuntimePolicyChecker(api.Service.ServiceName, commonWorker.GrpcPolicyWatcher),
 		enabled:      Enabled(),
 		mayGenerate:  viper.GetBool(CfgMayGenerate),
 	}
@@ -120,8 +119,8 @@ func New(
 			MessageHandler: newHostHandler(w, localStorage),
 		}
 
-		// Register the EnclaveRPC transport gRPC service.
-		enclaverpc.RegisterService(w.commonWorker.Grpc.Server(), w)
+		// Register the Keymanager EnclaveRPC transport gRPC service.
+		api.Service.RegisterService(w.commonWorker.Grpc.Server(), w)
 	}
 
 	return w, nil

@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 
+	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/service"
 )
@@ -302,6 +303,7 @@ type ServerConfig struct { // nolint: maligned
 	// InstallWrapper specifies whether intercepting facilities should be enabled on this server,
 	// to enable intercepting RPC calls with a wrapper.
 	InstallWrapper bool
+	AuthFunc       auth.AuthenticationFunction
 	// CustomOptions is an array of extra options for the grpc server.
 	CustomOptions []grpc.ServerOption
 }
@@ -440,17 +442,23 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	svc := *service.NewBaseBackgroundService(name)
 	logAdapter := newGrpcLogAdapter(svc.Logger)
 
+	if config.AuthFunc == nil {
+		// Default to NoAuth.
+		config.AuthFunc = auth.NoAuth
+	}
 	var sOpts []grpc.ServerOption
 	var wrapper *grpcWrapper
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		logAdapter.unaryLogger,
 		grpc_opentracing.UnaryServerInterceptor(),
 		serverUnaryErrorMapper,
+		auth.UnaryServerInterceptor(config.AuthFunc),
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		logAdapter.streamLogger,
 		grpc_opentracing.StreamServerInterceptor(),
 		serverStreamErrorMapper,
+		auth.StreamServerInterceptor(config.AuthFunc),
 	}
 	if config.InstallWrapper {
 		wrapper = newWrapper()

@@ -48,7 +48,6 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client"
 	runtimeClientAPI "github.com/oasislabs/oasis-core/go/runtime/client/api"
-	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/sentry"
@@ -172,7 +171,8 @@ func (n *Node) RegistrationStopped() {
 
 func (n *Node) initBackends() error {
 	var err error
-	if n.Sentry, err = sentry.New(n.Consensus); err != nil {
+
+	if n.Sentry, err = sentry.New(n.Consensus, n.Identity); err != nil {
 		return err
 	}
 
@@ -704,7 +704,7 @@ func newNode(testNode bool) (*Node, error) {
 	}
 	node.svcMgr.RegisterCleanupOnly(node.RuntimeClient, "client service")
 	runtimeClientAPI.RegisterService(node.grpcInternal.Server(), node.RuntimeClient)
-	enclaverpc.RegisterService(node.grpcInternal.Server(), node.RuntimeClient)
+	keymanagerAPI.Service.RegisterService(node.grpcInternal.Server(), node.RuntimeClient)
 
 	// Start metric server.
 	if err = metrics.Start(); err != nil {

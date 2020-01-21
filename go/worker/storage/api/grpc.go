@@ -12,10 +12,10 @@ var (
 	// serviceName is the gRPC service name.
 	serviceName = cmnGrpc.NewServiceName("StorageWorker")
 
-	// methodGetLastSyncedRound is the name of the GetLastSyncedRound method.
-	methodGetLastSyncedRound = serviceName.NewMethodName("GetLastSyncedRound")
-	// methodForceFinalize is the name of the ForceFinalize method.
-	methodForceFinalize = serviceName.NewMethodName("ForceFinalize")
+	// methodGetLastSyncedRound is the GetLastSyncedRound method.
+	methodGetLastSyncedRound = serviceName.NewMethod("GetLastSyncedRound", &GetLastSyncedRoundRequest{})
+	// methodForceFinalize is the ForceFinalize method.
+	methodForceFinalize = serviceName.NewMethod("ForceFinalize", &ForceFinalizeRequest{})
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -23,11 +23,11 @@ var (
 		HandlerType: (*StorageWorker)(nil),
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: methodGetLastSyncedRound.Short(),
+				MethodName: methodGetLastSyncedRound.ShortName(),
 				Handler:    handlerGetLastSyncedRound,
 			},
 			{
-				MethodName: methodForceFinalize.Short(),
+				MethodName: methodForceFinalize.ShortName(),
 				Handler:    handlerForceFinalize,
 			},
 		},
@@ -50,7 +50,7 @@ func handlerGetLastSyncedRound( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetLastSyncedRound.Full(),
+		FullMethod: methodGetLastSyncedRound.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StorageWorker).GetLastSyncedRound(ctx, req.(*GetLastSyncedRoundRequest))
@@ -73,7 +73,7 @@ func handlerForceFinalize( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodForceFinalize.Full(),
+		FullMethod: methodForceFinalize.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return nil, srv.(StorageWorker).ForceFinalize(ctx, req.(*ForceFinalizeRequest))
@@ -92,14 +92,14 @@ type storageWorkerClient struct {
 
 func (c *storageWorkerClient) GetLastSyncedRound(ctx context.Context, req *GetLastSyncedRoundRequest) (*GetLastSyncedRoundResponse, error) {
 	var rsp GetLastSyncedRoundResponse
-	if err := c.conn.Invoke(ctx, methodGetLastSyncedRound.Full(), req, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetLastSyncedRound.FullName(), req, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
 }
 
 func (c *storageWorkerClient) ForceFinalize(ctx context.Context, req *ForceFinalizeRequest) error {
-	return c.conn.Invoke(ctx, methodForceFinalize.Full(), req, nil)
+	return c.conn.Invoke(ctx, methodForceFinalize.FullName(), req, nil)
 }
 
 // NewStorageWorkerClient creates a new gRPC transaction scheduler
