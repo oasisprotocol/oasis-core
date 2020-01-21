@@ -15,33 +15,33 @@ var (
 	// serviceName is the gRPC service name.
 	serviceName = cmnGrpc.NewServiceName("Registry")
 
-	// methodGetEntity is the name of the GetEntity method.
-	methodGetEntity = serviceName.NewMethodName("GetEntity")
-	// methodGetEntities is the name of the GetEntities method.
-	methodGetEntities = serviceName.NewMethodName("GetEntities")
-	// methodGetNode is the name of the GetNode method.
-	methodGetNode = serviceName.NewMethodName("GetNode")
-	// methodGetNodeStatus is the name of the GetNodeStatus method.
-	methodGetNodeStatus = serviceName.NewMethodName("GetNodeStatus")
-	// methodGetNodes is the name of the GetNodes method.
-	methodGetNodes = serviceName.NewMethodName("GetNodes")
-	// methodGetRuntime is the name of the GetRuntime method.
-	methodGetRuntime = serviceName.NewMethodName("GetRuntime")
-	// methodGetRuntimes is the name of the GetRuntimes method.
-	methodGetRuntimes = serviceName.NewMethodName("GetRuntimes")
-	// methodGetNodeList is the name of the GetNodeList method.
-	methodGetNodeList = serviceName.NewMethodName("GetNodeList")
-	// methodStateToGenesis is the name of the StateToGenesis method.
-	methodStateToGenesis = serviceName.NewMethodName("StateToGenesis")
+	// methodGetEntity is the GetEntity method.
+	methodGetEntity = serviceName.NewMethod("GetEntity", IDQuery{})
+	// methodGetEntities is the GetEntities method.
+	methodGetEntities = serviceName.NewMethod("GetEntities", int64(0))
+	// methodGetNode is the GetNode method.
+	methodGetNode = serviceName.NewMethod("GetNode", IDQuery{})
+	// methodGetNodeStatus is the GetNodeStatus method.
+	methodGetNodeStatus = serviceName.NewMethod("GetNodeStatus", IDQuery{})
+	// methodGetNodes is the GetNodes method.
+	methodGetNodes = serviceName.NewMethod("GetNodes", int64(0))
+	// methodGetRuntime is the GetRuntime method.
+	methodGetRuntime = serviceName.NewMethod("GetRuntime", NamespaceQuery{})
+	// methodGetRuntimes is the GetRuntimes method.
+	methodGetRuntimes = serviceName.NewMethod("GetRuntimes", int64(0))
+	// methodGetNodeList is the GetNodeList method.
+	methodGetNodeList = serviceName.NewMethod("GetNodeList", int64(0))
+	// methodStateToGenesis is the StateToGenesis method.
+	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 
-	// methodWatchEntities is the name of the WatchEntities method.
-	methodWatchEntities = serviceName.NewMethodName("WatchEntities")
-	// methodWatchNodes is the name of the WatchNodes method.
-	methodWatchNodes = serviceName.NewMethodName("WatchNodes")
-	// methodWatchNodeList is the name of the WatchNodeList method.
-	methodWatchNodeList = serviceName.NewMethodName("WatchNodeList")
-	// methodWatchRuntimes is the name of the WatchRuntimes method.
-	methodWatchRuntimes = serviceName.NewMethodName("WatchRuntimes")
+	// methodWatchEntities is the WatchEntities method.
+	methodWatchEntities = serviceName.NewMethod("WatchEntities", nil)
+	// methodWatchNodes is the WatchNodes method.
+	methodWatchNodes = serviceName.NewMethod("WatchNodes", nil)
+	// methodWatchNodeList is the WatchNodeList method.
+	methodWatchNodeList = serviceName.NewMethod("WatchNodeList", nil)
+	// methodWatchRuntimes is the WatchRuntimes method.
+	methodWatchRuntimes = serviceName.NewMethod("WatchRuntimes", nil)
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -49,60 +49,60 @@ var (
 		HandlerType: (*Backend)(nil),
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: methodGetEntity.Short(),
+				MethodName: methodGetEntity.ShortName(),
 				Handler:    handlerGetEntity,
 			},
 			{
-				MethodName: methodGetEntities.Short(),
+				MethodName: methodGetEntities.ShortName(),
 				Handler:    handlerGetEntities,
 			},
 			{
-				MethodName: methodGetNode.Short(),
+				MethodName: methodGetNode.ShortName(),
 				Handler:    handlerGetNode,
 			},
 			{
-				MethodName: methodGetNodeStatus.Short(),
+				MethodName: methodGetNodeStatus.ShortName(),
 				Handler:    handlerGetNodeStatus,
 			},
 			{
-				MethodName: methodGetNodes.Short(),
+				MethodName: methodGetNodes.ShortName(),
 				Handler:    handlerGetNodes,
 			},
 			{
-				MethodName: methodGetRuntime.Short(),
+				MethodName: methodGetRuntime.ShortName(),
 				Handler:    handlerGetRuntime,
 			},
 			{
-				MethodName: methodGetRuntimes.Short(),
+				MethodName: methodGetRuntimes.ShortName(),
 				Handler:    handlerGetRuntimes,
 			},
 			{
-				MethodName: methodGetNodeList.Short(),
+				MethodName: methodGetNodeList.ShortName(),
 				Handler:    handlerGetNodeList,
 			},
 			{
-				MethodName: methodStateToGenesis.Short(),
+				MethodName: methodStateToGenesis.ShortName(),
 				Handler:    handlerStateToGenesis,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
-				StreamName:    methodWatchEntities.Short(),
+				StreamName:    methodWatchEntities.ShortName(),
 				Handler:       handlerWatchEntities,
 				ServerStreams: true,
 			},
 			{
-				StreamName:    methodWatchNodes.Short(),
+				StreamName:    methodWatchNodes.ShortName(),
 				Handler:       handlerWatchNodes,
 				ServerStreams: true,
 			},
 			{
-				StreamName:    methodWatchNodeList.Short(),
+				StreamName:    methodWatchNodeList.ShortName(),
 				Handler:       handlerWatchNodeList,
 				ServerStreams: true,
 			},
 			{
-				StreamName:    methodWatchRuntimes.Short(),
+				StreamName:    methodWatchRuntimes.ShortName(),
 				Handler:       handlerWatchRuntimes,
 				ServerStreams: true,
 			},
@@ -125,7 +125,7 @@ func handlerGetEntity( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetEntity.Full(),
+		FullMethod: methodGetEntity.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetEntity(ctx, req.(*IDQuery))
@@ -148,7 +148,7 @@ func handlerGetEntities( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetEntities.Full(),
+		FullMethod: methodGetEntities.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetEntities(ctx, req.(int64))
@@ -171,7 +171,7 @@ func handlerGetNode( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetNode.Full(),
+		FullMethod: methodGetNode.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetNode(ctx, req.(*IDQuery))
@@ -194,7 +194,7 @@ func handlerGetNodeStatus( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetNodeStatus.Full(),
+		FullMethod: methodGetNodeStatus.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetNodeStatus(ctx, req.(*IDQuery))
@@ -217,7 +217,7 @@ func handlerGetNodes( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetNodes.Full(),
+		FullMethod: methodGetNodes.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetNodes(ctx, req.(int64))
@@ -240,7 +240,7 @@ func handlerGetRuntime( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetRuntime.Full(),
+		FullMethod: methodGetRuntime.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetRuntime(ctx, req.(*NamespaceQuery))
@@ -263,7 +263,7 @@ func handlerGetRuntimes( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetRuntimes.Full(),
+		FullMethod: methodGetRuntimes.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetRuntimes(ctx, req.(int64))
@@ -286,7 +286,7 @@ func handlerGetNodeList( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetNodeList.Full(),
+		FullMethod: methodGetNodeList.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetNodeList(ctx, req.(int64))
@@ -309,7 +309,7 @@ func handlerStateToGenesis( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodStateToGenesis.Full(),
+		FullMethod: methodStateToGenesis.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
@@ -440,7 +440,7 @@ type registryClient struct {
 
 func (c *registryClient) GetEntity(ctx context.Context, query *IDQuery) (*entity.Entity, error) {
 	var rsp entity.Entity
-	if err := c.conn.Invoke(ctx, methodGetEntity.Full(), query, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetEntity.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -448,7 +448,7 @@ func (c *registryClient) GetEntity(ctx context.Context, query *IDQuery) (*entity
 
 func (c *registryClient) GetEntities(ctx context.Context, height int64) ([]*entity.Entity, error) {
 	var rsp []*entity.Entity
-	if err := c.conn.Invoke(ctx, methodGetEntities.Full(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetEntities.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -457,7 +457,7 @@ func (c *registryClient) GetEntities(ctx context.Context, height int64) ([]*enti
 func (c *registryClient) WatchEntities(ctx context.Context) (<-chan *EntityEvent, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchEntities.Full())
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchEntities.FullName())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -491,7 +491,7 @@ func (c *registryClient) WatchEntities(ctx context.Context) (<-chan *EntityEvent
 
 func (c *registryClient) GetNode(ctx context.Context, query *IDQuery) (*node.Node, error) {
 	var rsp node.Node
-	if err := c.conn.Invoke(ctx, methodGetNode.Full(), query, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetNode.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -499,7 +499,7 @@ func (c *registryClient) GetNode(ctx context.Context, query *IDQuery) (*node.Nod
 
 func (c *registryClient) GetNodeStatus(ctx context.Context, query *IDQuery) (*NodeStatus, error) {
 	var rsp NodeStatus
-	if err := c.conn.Invoke(ctx, methodGetNodeStatus.Full(), query, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetNodeStatus.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -507,7 +507,7 @@ func (c *registryClient) GetNodeStatus(ctx context.Context, query *IDQuery) (*No
 
 func (c *registryClient) GetNodes(ctx context.Context, height int64) ([]*node.Node, error) {
 	var rsp []*node.Node
-	if err := c.conn.Invoke(ctx, methodGetNodes.Full(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetNodes.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -516,7 +516,7 @@ func (c *registryClient) GetNodes(ctx context.Context, height int64) ([]*node.No
 func (c *registryClient) WatchNodes(ctx context.Context) (<-chan *NodeEvent, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], methodWatchNodes.Full())
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], methodWatchNodes.FullName())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -551,7 +551,7 @@ func (c *registryClient) WatchNodes(ctx context.Context) (<-chan *NodeEvent, pub
 func (c *registryClient) WatchNodeList(ctx context.Context) (<-chan *NodeList, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[2], methodWatchNodeList.Full())
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[2], methodWatchNodeList.FullName())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -585,7 +585,7 @@ func (c *registryClient) WatchNodeList(ctx context.Context) (<-chan *NodeList, p
 
 func (c *registryClient) GetRuntime(ctx context.Context, query *NamespaceQuery) (*Runtime, error) {
 	var rsp Runtime
-	if err := c.conn.Invoke(ctx, methodGetRuntime.Full(), query, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetRuntime.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -593,7 +593,7 @@ func (c *registryClient) GetRuntime(ctx context.Context, query *NamespaceQuery) 
 
 func (c *registryClient) GetRuntimes(ctx context.Context, height int64) ([]*Runtime, error) {
 	var rsp []*Runtime
-	if err := c.conn.Invoke(ctx, methodGetRuntimes.Full(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetRuntimes.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -601,7 +601,7 @@ func (c *registryClient) GetRuntimes(ctx context.Context, height int64) ([]*Runt
 
 func (c *registryClient) GetNodeList(ctx context.Context, height int64) (*NodeList, error) {
 	var rsp NodeList
-	if err := c.conn.Invoke(ctx, methodGetNodeList.Full(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetNodeList.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -610,7 +610,7 @@ func (c *registryClient) GetNodeList(ctx context.Context, height int64) (*NodeLi
 func (c *registryClient) WatchRuntimes(ctx context.Context) (<-chan *Runtime, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[3], methodWatchRuntimes.Full())
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[3], methodWatchRuntimes.FullName())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -644,7 +644,7 @@ func (c *registryClient) WatchRuntimes(ctx context.Context) (<-chan *Runtime, pu
 
 func (c *registryClient) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
 	var rsp Genesis
-	if err := c.conn.Invoke(ctx, methodStateToGenesis.Full(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

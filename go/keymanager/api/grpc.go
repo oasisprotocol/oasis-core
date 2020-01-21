@@ -32,14 +32,6 @@ var (
 	Service = enclaverpc.NewService(ModuleName, requestSkipPolicyCheck)
 )
 
-// Frame is the Go analog of the Rust RPC Frame defined in
-// client/src/rpc/client.rs.
-type Frame struct {
-	Session            []byte `json:"session,omitempty"`
-	UntrustedPlaintext string `json:"untrusted_plaintext,omitempty"`
-	Payload            []byte `json:"payload,omitempty"`
-}
-
 func payloadSkipPolicyCheck(data []byte) (bool, error) {
 	// Unpack the payload, get method from Frame.
 	var f Frame

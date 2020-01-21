@@ -3,80 +3,148 @@ package api
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
 var (
-	// serviceName is the gRPC service name.
-	serviceName = cmnGrpc.NewServiceName("Storage")
+	errInvalidRequestType = fmt.Errorf("invalid request type")
 
-	// methodSyncGet is the name of the SyncGet method.
-	methodSyncGet = serviceName.NewMethodName("SyncGet")
-	// methodSyncGetPrefixes is the name of the SyncGetPrefixes method.
-	methodSyncGetPrefixes = serviceName.NewMethodName("SyncGetPrefixes")
-	// methodSyncIterate is the name of the SyncIterate method.
-	methodSyncIterate = serviceName.NewMethodName("SyncIterate")
-	// methodApply is the name of the Apply method.
-	methodApply = serviceName.NewMethodName("Apply")
-	// methodApplyBatch is the name of the ApplyBatch method.
-	methodApplyBatch = serviceName.NewMethodName("ApplyBatch")
-	// methodMerge is the name of the Merge method.
-	methodMerge = serviceName.NewMethodName("Merge")
-	// methodMergeBatch is the name of the MergeBatch method.
-	methodMergeBatch = serviceName.NewMethodName("MergeBatch")
+	// ServiceName is the gRPC service name.
+	ServiceName = cmnGrpc.NewServiceName("Storage")
 
-	// methodGetDiff is the name of the GetDiff method.
-	methodGetDiff = serviceName.NewMethodName("GetDiff")
-	// methodGetCheckpoint is the name of the GetCheckpoint method.
-	methodGetCheckpoint = serviceName.NewMethodName("GetCheckpoint")
+	// MethodSyncGet is the SyncGet method.
+	MethodSyncGet = ServiceName.NewMethod("SyncGet", GetRequest{})
+	// MethodSyncGetPrefixes is the SyncGetPrefixes method.
+	MethodSyncGetPrefixes = ServiceName.NewMethod("SyncGetPrefixes", GetPrefixesRequest{})
+	// MethodSyncIterate is the SyncIterate method.
+	MethodSyncIterate = ServiceName.NewMethod("SyncIterate", IterateRequest{})
+	// MethodApply is the Apply method.
+	MethodApply = ServiceName.NewMethod("Apply", ApplyRequest{}).
+			WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+			r, ok := req.(*ApplyRequest)
+			if !ok {
+				return common.Namespace{}, errInvalidRequestType
+			}
+			return r.Namespace, nil
+		}).
+		WithAccessControl(func(req interface{}) bool {
+			return true
+		})
+
+	// MethodApplyBatch is the ApplyBatch method.
+	MethodApplyBatch = ServiceName.NewMethod("ApplyBatch", ApplyBatchRequest{}).
+				WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+			r, ok := req.(*ApplyBatchRequest)
+			if !ok {
+				return common.Namespace{}, errInvalidRequestType
+			}
+			return r.Namespace, nil
+		}).
+		WithAccessControl(func(req interface{}) bool {
+			return true
+		})
+
+	// MethodMerge is the Merge method.
+	MethodMerge = ServiceName.NewMethod("Merge", MergeRequest{}).
+			WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+			r, ok := req.(*MergeRequest)
+			if !ok {
+				return common.Namespace{}, errInvalidRequestType
+			}
+			return r.Namespace, nil
+		}).
+		WithAccessControl(func(req interface{}) bool {
+			return true
+		})
+
+	// MethodMergeBatch is the MergeBatch method.
+	MethodMergeBatch = ServiceName.NewMethod("MergeBatch", MergeBatchRequest{}).
+				WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+			r, ok := req.(*MergeBatchRequest)
+			if !ok {
+				return common.Namespace{}, errInvalidRequestType
+			}
+			return r.Namespace, nil
+		}).
+		WithAccessControl(func(req interface{}) bool {
+			return true
+		})
+
+	// MethodGetDiff is the GetDiff method.
+	MethodGetDiff = ServiceName.NewMethod("GetDiff", GetDiffRequest{}).
+			WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+			r, ok := req.(*GetDiffRequest)
+			if !ok {
+				return common.Namespace{}, errInvalidRequestType
+			}
+			return r.StartRoot.Namespace, nil
+		}).
+		WithAccessControl(func(req interface{}) bool {
+			return true
+		})
+
+	// MethodGetCheckpoint is the GetCheckpoint method.
+	MethodGetCheckpoint = ServiceName.NewMethod("GetCheckpoint", GetCheckpointRequest{}).
+				WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+			r, ok := req.(*GetCheckpointRequest)
+			if !ok {
+				return common.Namespace{}, errInvalidRequestType
+			}
+			return r.Root.Namespace, nil
+		}).
+		WithAccessControl(func(req interface{}) bool {
+			return true
+		})
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
-		ServiceName: string(serviceName),
+		ServiceName: string(ServiceName),
 		HandlerType: (*Backend)(nil),
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: methodSyncGet.Short(),
+				MethodName: MethodSyncGet.ShortName(),
 				Handler:    handlerSyncGet,
 			},
 			{
-				MethodName: methodSyncGetPrefixes.Short(),
+				MethodName: MethodSyncGetPrefixes.ShortName(),
 				Handler:    handlerSyncGetPrefixes,
 			},
 			{
-				MethodName: methodSyncIterate.Short(),
+				MethodName: MethodSyncIterate.ShortName(),
 				Handler:    handlerSyncIterate,
 			},
 			{
-				MethodName: methodApply.Short(),
+				MethodName: MethodApply.ShortName(),
 				Handler:    handlerApply,
 			},
 			{
-				MethodName: methodApplyBatch.Short(),
+				MethodName: MethodApplyBatch.ShortName(),
 				Handler:    handlerApplyBatch,
 			},
 			{
-				MethodName: methodMerge.Short(),
+				MethodName: MethodMerge.ShortName(),
 				Handler:    handlerMerge,
 			},
 			{
-				MethodName: methodMergeBatch.Short(),
+				MethodName: MethodMergeBatch.ShortName(),
 				Handler:    handlerMergeBatch,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
-				StreamName:    methodGetDiff.Short(),
+				StreamName:    MethodGetDiff.ShortName(),
 				Handler:       handlerGetDiff,
 				ServerStreams: true,
 			},
 			{
-				StreamName:    methodGetCheckpoint.Short(),
+				StreamName:    MethodGetCheckpoint.ShortName(),
 				Handler:       handlerGetCheckpoint,
 				ServerStreams: true,
 			},
@@ -99,7 +167,7 @@ func handlerSyncGet( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodSyncGet.Full(),
+		FullMethod: MethodSyncGet.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).SyncGet(ctx, req.(*GetRequest))
@@ -122,7 +190,7 @@ func handlerSyncGetPrefixes( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodSyncGetPrefixes.Full(),
+		FullMethod: MethodSyncGetPrefixes.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).SyncGetPrefixes(ctx, req.(*GetPrefixesRequest))
@@ -145,7 +213,7 @@ func handlerSyncIterate( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodSyncIterate.Full(),
+		FullMethod: MethodSyncIterate.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).SyncIterate(ctx, req.(*IterateRequest))
@@ -168,7 +236,7 @@ func handlerApply( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodApply.Full(),
+		FullMethod: MethodApply.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).Apply(ctx, req.(*ApplyRequest))
@@ -191,7 +259,7 @@ func handlerApplyBatch( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodApplyBatch.Full(),
+		FullMethod: MethodApplyBatch.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).ApplyBatch(ctx, req.(*ApplyBatchRequest))
@@ -214,7 +282,7 @@ func handlerMerge( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodMerge.Full(),
+		FullMethod: MethodMerge.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).Merge(ctx, req.(*MergeRequest))
@@ -237,7 +305,7 @@ func handlerMergeBatch( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodMergeBatch.Full(),
+		FullMethod: MethodMergeBatch.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).MergeBatch(ctx, req.(*MergeBatchRequest))
@@ -348,7 +416,7 @@ type storageClient struct {
 
 func (c *storageClient) SyncGet(ctx context.Context, request *GetRequest) (*ProofResponse, error) {
 	var rsp ProofResponse
-	if err := c.conn.Invoke(ctx, methodSyncGet.Full(), request, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, MethodSyncGet.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -356,7 +424,7 @@ func (c *storageClient) SyncGet(ctx context.Context, request *GetRequest) (*Proo
 
 func (c *storageClient) SyncGetPrefixes(ctx context.Context, request *GetPrefixesRequest) (*ProofResponse, error) {
 	var rsp ProofResponse
-	if err := c.conn.Invoke(ctx, methodSyncGetPrefixes.Full(), request, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, MethodSyncGetPrefixes.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -364,7 +432,7 @@ func (c *storageClient) SyncGetPrefixes(ctx context.Context, request *GetPrefixe
 
 func (c *storageClient) SyncIterate(ctx context.Context, request *IterateRequest) (*ProofResponse, error) {
 	var rsp ProofResponse
-	if err := c.conn.Invoke(ctx, methodSyncIterate.Full(), request, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, MethodSyncIterate.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -372,7 +440,7 @@ func (c *storageClient) SyncIterate(ctx context.Context, request *IterateRequest
 
 func (c *storageClient) Apply(ctx context.Context, request *ApplyRequest) ([]*Receipt, error) {
 	var rsp []*Receipt
-	if err := c.conn.Invoke(ctx, methodApply.Full(), request, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, MethodApply.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -380,7 +448,7 @@ func (c *storageClient) Apply(ctx context.Context, request *ApplyRequest) ([]*Re
 
 func (c *storageClient) ApplyBatch(ctx context.Context, request *ApplyBatchRequest) ([]*Receipt, error) {
 	var rsp []*Receipt
-	if err := c.conn.Invoke(ctx, methodApplyBatch.Full(), request, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, MethodApplyBatch.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -388,7 +456,7 @@ func (c *storageClient) ApplyBatch(ctx context.Context, request *ApplyBatchReque
 
 func (c *storageClient) Merge(ctx context.Context, request *MergeRequest) ([]*Receipt, error) {
 	var rsp []*Receipt
-	if err := c.conn.Invoke(ctx, methodMerge.Full(), request, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, MethodMerge.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -396,7 +464,7 @@ func (c *storageClient) Merge(ctx context.Context, request *MergeRequest) ([]*Re
 
 func (c *storageClient) MergeBatch(ctx context.Context, request *MergeBatchRequest) ([]*Receipt, error) {
 	var rsp []*Receipt
-	if err := c.conn.Invoke(ctx, methodMergeBatch.Full(), request, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, MethodMergeBatch.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -435,7 +503,7 @@ func receiveWriteLogIterator(ctx context.Context, stream grpc.ClientStream) Writ
 }
 
 func (c *storageClient) GetDiff(ctx context.Context, request *GetDiffRequest) (WriteLogIterator, error) {
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodGetDiff.Full())
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], MethodGetDiff.FullName())
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +518,7 @@ func (c *storageClient) GetDiff(ctx context.Context, request *GetDiffRequest) (W
 }
 
 func (c *storageClient) GetCheckpoint(ctx context.Context, request *GetCheckpointRequest) (WriteLogIterator, error) {
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], methodGetCheckpoint.Full())
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], MethodGetCheckpoint.FullName())
 	if err != nil {
 		return nil, err
 	}

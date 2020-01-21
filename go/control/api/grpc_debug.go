@@ -13,10 +13,10 @@ var (
 	// debugServiceName is the gRPC service name.
 	debugServiceName = cmnGrpc.NewServiceName("DebugController")
 
-	// methodSetEpoch is the name of the SetEpoch method.
-	methodSetEpoch = debugServiceName.NewMethodName("SetEpoch")
-	// methodWaitNodesRegistered is the name of the WaitNodesRegistered method.
-	methodWaitNodesRegistered = debugServiceName.NewMethodName("WaitNodesRegistered")
+	// methodSetEpoch is the SetEpoch method.
+	methodSetEpoch = debugServiceName.NewMethod("SetEpoch", epochtime.EpochTime(0))
+	// methodWaitNodesRegistered is the WaitNodesRegistered method.
+	methodWaitNodesRegistered = debugServiceName.NewMethod("WaitNodesRegistered", int(0))
 
 	// debugServiceDesc is the gRPC service descriptor.
 	debugServiceDesc = grpc.ServiceDesc{
@@ -24,11 +24,11 @@ var (
 		HandlerType: (*DebugController)(nil),
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: methodSetEpoch.Short(),
+				MethodName: methodSetEpoch.ShortName(),
 				Handler:    handlerSetEpoch,
 			},
 			{
-				MethodName: methodWaitNodesRegistered.Short(),
+				MethodName: methodWaitNodesRegistered.ShortName(),
 				Handler:    handlerWaitNodesRegistered,
 			},
 		},
@@ -51,7 +51,7 @@ func handlerSetEpoch( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodSetEpoch.Full(),
+		FullMethod: methodSetEpoch.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return nil, srv.(DebugController).SetEpoch(ctx, req.(epochtime.EpochTime))
@@ -74,7 +74,7 @@ func handlerWaitNodesRegistered( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodWaitNodesRegistered.Full(),
+		FullMethod: methodWaitNodesRegistered.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return nil, srv.(DebugController).WaitNodesRegistered(ctx, req.(int))
@@ -92,11 +92,11 @@ type debugControllerClient struct {
 }
 
 func (c *debugControllerClient) SetEpoch(ctx context.Context, epoch epochtime.EpochTime) error {
-	return c.conn.Invoke(ctx, methodSetEpoch.Full(), epoch, nil)
+	return c.conn.Invoke(ctx, methodSetEpoch.FullName(), epoch, nil)
 }
 
 func (c *debugControllerClient) WaitNodesRegistered(ctx context.Context, count int) error {
-	return c.conn.Invoke(ctx, methodWaitNodesRegistered.Full(), count, nil)
+	return c.conn.Invoke(ctx, methodWaitNodesRegistered.FullName(), count, nil)
 }
 
 // NewDebugControllerClient creates a new gRPC debug controller client service.

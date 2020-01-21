@@ -13,12 +13,12 @@ var (
 	// serviceName is the gRPC service name.
 	serviceName = cmnGrpc.NewServiceName("IAS")
 
-	// methodVerifyEvidence is the name of the VerifyEvidence method.
-	methodVerifyEvidence = serviceName.NewMethodName("VerifyEvidence")
-	// methodGetSPIDInfo is the name of the GetSPIDInfo method.
-	methodGetSPIDInfo = serviceName.NewMethodName("GetSPIDInfo")
-	// methodGetSigRL is the name of the GetSigRL method.
-	methodGetSigRL = serviceName.NewMethodName("GetSigRL")
+	// methodVerifyEvidence is the VerifyEvidence method.
+	methodVerifyEvidence = serviceName.NewMethod("VerifyEvidence", Evidence{})
+	// methodGetSPIDInfo is the GetSPIDInfo method.
+	methodGetSPIDInfo = serviceName.NewMethod("GetSPIDInfo", nil)
+	// methodGetSigRL is the GetSigRL method.
+	methodGetSigRL = serviceName.NewMethod("GetSigRL", uint32(0))
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -26,15 +26,15 @@ var (
 		HandlerType: (*Endpoint)(nil),
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: methodVerifyEvidence.Short(),
+				MethodName: methodVerifyEvidence.ShortName(),
 				Handler:    handlerVerifyEvidence,
 			},
 			{
-				MethodName: methodGetSPIDInfo.Short(),
+				MethodName: methodGetSPIDInfo.ShortName(),
 				Handler:    handlerGetSPIDInfo,
 			},
 			{
-				MethodName: methodGetSigRL.Short(),
+				MethodName: methodGetSigRL.ShortName(),
 				Handler:    handlerGetSigRL,
 			},
 		},
@@ -57,7 +57,7 @@ func handlerVerifyEvidence( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodVerifyEvidence.Full(),
+		FullMethod: methodVerifyEvidence.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Endpoint).VerifyEvidence(ctx, req.(*Evidence))
@@ -76,7 +76,7 @@ func handlerGetSPIDInfo( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetSPIDInfo.Full(),
+		FullMethod: methodGetSPIDInfo.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Endpoint).GetSPIDInfo(ctx)
@@ -99,7 +99,7 @@ func handlerGetSigRL( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetSigRL.Full(),
+		FullMethod: methodGetSigRL.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Endpoint).GetSigRL(ctx, req.(uint32))
@@ -118,7 +118,7 @@ type endpointClient struct {
 
 func (c *endpointClient) VerifyEvidence(ctx context.Context, evidence *Evidence) (*ias.AVRBundle, error) {
 	var rsp ias.AVRBundle
-	if err := c.conn.Invoke(ctx, methodVerifyEvidence.Full(), evidence, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodVerifyEvidence.FullName(), evidence, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -126,7 +126,7 @@ func (c *endpointClient) VerifyEvidence(ctx context.Context, evidence *Evidence)
 
 func (c *endpointClient) GetSPIDInfo(ctx context.Context) (*SPIDInfo, error) {
 	var rsp SPIDInfo
-	if err := c.conn.Invoke(ctx, methodGetSPIDInfo.Full(), nil, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetSPIDInfo.FullName(), nil, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -134,7 +134,7 @@ func (c *endpointClient) GetSPIDInfo(ctx context.Context) (*SPIDInfo, error) {
 
 func (c *endpointClient) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, error) {
 	var rsp []byte
-	if err := c.conn.Invoke(ctx, methodGetSigRL.Full(), epidGID, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetSigRL.FullName(), epidGID, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil

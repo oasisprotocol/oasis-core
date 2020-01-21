@@ -15,27 +15,27 @@ var (
 	// serviceName is the gRPC service name.
 	serviceName = cmnGrpc.NewServiceName("Staking")
 
-	// methodTotalSupply is the name of the TotalSupply method.
-	methodTotalSupply = serviceName.NewMethodName("TotalSupply")
-	// methodCommonPool is the name of the CommonPool method.
-	methodCommonPool = serviceName.NewMethodName("CommonPool")
-	// methodThreshold is the name of the Threshold method.
-	methodThreshold = serviceName.NewMethodName("Threshold")
-	// methodAccounts is the name of the Accounts method.
-	methodAccounts = serviceName.NewMethodName("Accounts")
-	// methodAccountInfo is the name of the AccountInfo method.
-	methodAccountInfo = serviceName.NewMethodName("AccountInfo")
-	// methodDebondingDelegations is the name of the DebondingDelegations method.
-	methodDebondingDelegations = serviceName.NewMethodName("DebondingDelegations")
-	// methodStateToGenesis is the name of the StateToGenesis method.
-	methodStateToGenesis = serviceName.NewMethodName("StateToGenesis")
+	// methodTotalSupply is the TotalSupply method.
+	methodTotalSupply = serviceName.NewMethod("TotalSupply", int64(0))
+	// methodCommonPool is the CommonPool method.
+	methodCommonPool = serviceName.NewMethod("CommonPool", int64(0))
+	// methodThreshold is the Threshold method.
+	methodThreshold = serviceName.NewMethod("Threshold", ThresholdQuery{})
+	// methodAccounts is the Accounts method.
+	methodAccounts = serviceName.NewMethod("Accounts", int64(0))
+	// methodAccountInfo is the AccountInfo method.
+	methodAccountInfo = serviceName.NewMethod("AccountInfo", OwnerQuery{})
+	// methodDebondingDelegations is the DebondingDelegations method.
+	methodDebondingDelegations = serviceName.NewMethod("DebondingDelegations", OwnerQuery{})
+	// methodStateToGenesis is the StateToGenesis method.
+	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 
-	// methodWatchTransfers is the name of the WatchTransfers method.
-	methodWatchTransfers = serviceName.NewMethodName("WatchTransfers")
-	// methodWatchBurns is the name of the WatchBurns method.
-	methodWatchBurns = serviceName.NewMethodName("WatchBurns")
-	// methodWatchEscrows is the name of the WatchEscrows method.
-	methodWatchEscrows = serviceName.NewMethodName("WatchEscrows")
+	// methodWatchTransfers is the WatchTransfers method.
+	methodWatchTransfers = serviceName.NewMethod("WatchTransfers", nil)
+	// methodWatchBurns is the WatchBurns method.
+	methodWatchBurns = serviceName.NewMethod("WatchBurns", nil)
+	// methodWatchEscrows is the WatchEscrows method.
+	methodWatchEscrows = serviceName.NewMethod("WatchEscrows", nil)
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -43,47 +43,47 @@ var (
 		HandlerType: (*Backend)(nil),
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: methodTotalSupply.Short(),
+				MethodName: methodTotalSupply.ShortName(),
 				Handler:    handlerTotalSupply,
 			},
 			{
-				MethodName: methodCommonPool.Short(),
+				MethodName: methodCommonPool.ShortName(),
 				Handler:    handlerCommonPool,
 			},
 			{
-				MethodName: methodThreshold.Short(),
+				MethodName: methodThreshold.ShortName(),
 				Handler:    handlerThreshold,
 			},
 			{
-				MethodName: methodAccounts.Short(),
+				MethodName: methodAccounts.ShortName(),
 				Handler:    handlerAccounts,
 			},
 			{
-				MethodName: methodAccountInfo.Short(),
+				MethodName: methodAccountInfo.ShortName(),
 				Handler:    handlerAccountInfo,
 			},
 			{
-				MethodName: methodDebondingDelegations.Short(),
+				MethodName: methodDebondingDelegations.ShortName(),
 				Handler:    handlerDebondingDelegations,
 			},
 			{
-				MethodName: methodStateToGenesis.Short(),
+				MethodName: methodStateToGenesis.ShortName(),
 				Handler:    handlerStateToGenesis,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
-				StreamName:    methodWatchTransfers.Short(),
+				StreamName:    methodWatchTransfers.ShortName(),
 				Handler:       handlerWatchTransfers,
 				ServerStreams: true,
 			},
 			{
-				StreamName:    methodWatchBurns.Short(),
+				StreamName:    methodWatchBurns.ShortName(),
 				Handler:       handlerWatchBurns,
 				ServerStreams: true,
 			},
 			{
-				StreamName:    methodWatchEscrows.Short(),
+				StreamName:    methodWatchEscrows.ShortName(),
 				Handler:       handlerWatchEscrows,
 				ServerStreams: true,
 			},
@@ -106,7 +106,7 @@ func handlerTotalSupply( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodTotalSupply.Full(),
+		FullMethod: methodTotalSupply.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).TotalSupply(ctx, req.(int64))
@@ -129,7 +129,7 @@ func handlerCommonPool( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodCommonPool.Full(),
+		FullMethod: methodCommonPool.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).CommonPool(ctx, req.(int64))
@@ -152,7 +152,7 @@ func handlerThreshold( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodThreshold.Full(),
+		FullMethod: methodThreshold.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).Threshold(ctx, req.(*ThresholdQuery))
@@ -175,7 +175,7 @@ func handlerAccounts( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodAccounts.Full(),
+		FullMethod: methodAccounts.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).Accounts(ctx, req.(int64))
@@ -198,7 +198,7 @@ func handlerAccountInfo( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodAccountInfo.Full(),
+		FullMethod: methodAccountInfo.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).AccountInfo(ctx, req.(*OwnerQuery))
@@ -221,7 +221,7 @@ func handlerDebondingDelegations( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodDebondingDelegations.Full(),
+		FullMethod: methodDebondingDelegations.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).DebondingDelegations(ctx, req.(*OwnerQuery))
@@ -244,7 +244,7 @@ func handlerStateToGenesis( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodStateToGenesis.Full(),
+		FullMethod: methodStateToGenesis.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
@@ -347,7 +347,7 @@ type stakingClient struct {
 
 func (c *stakingClient) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
-	if err := c.conn.Invoke(ctx, methodTotalSupply.Full(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodTotalSupply.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -355,7 +355,7 @@ func (c *stakingClient) TotalSupply(ctx context.Context, height int64) (*quantit
 
 func (c *stakingClient) CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
-	if err := c.conn.Invoke(ctx, methodCommonPool.Full(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodCommonPool.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -363,7 +363,7 @@ func (c *stakingClient) CommonPool(ctx context.Context, height int64) (*quantity
 
 func (c *stakingClient) Threshold(ctx context.Context, query *ThresholdQuery) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
-	if err := c.conn.Invoke(ctx, methodThreshold.Full(), query, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodThreshold.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -371,7 +371,7 @@ func (c *stakingClient) Threshold(ctx context.Context, query *ThresholdQuery) (*
 
 func (c *stakingClient) Accounts(ctx context.Context, height int64) ([]signature.PublicKey, error) {
 	var rsp []signature.PublicKey
-	if err := c.conn.Invoke(ctx, methodAccounts.Full(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodAccounts.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -379,7 +379,7 @@ func (c *stakingClient) Accounts(ctx context.Context, height int64) ([]signature
 
 func (c *stakingClient) AccountInfo(ctx context.Context, query *OwnerQuery) (*Account, error) {
 	var rsp Account
-	if err := c.conn.Invoke(ctx, methodAccountInfo.Full(), query, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodAccountInfo.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -387,7 +387,7 @@ func (c *stakingClient) AccountInfo(ctx context.Context, query *OwnerQuery) (*Ac
 
 func (c *stakingClient) DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[signature.PublicKey][]*DebondingDelegation, error) {
 	var rsp map[signature.PublicKey][]*DebondingDelegation
-	if err := c.conn.Invoke(ctx, methodDebondingDelegations.Full(), query, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodDebondingDelegations.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -395,7 +395,7 @@ func (c *stakingClient) DebondingDelegations(ctx context.Context, query *OwnerQu
 
 func (c *stakingClient) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
 	var rsp Genesis
-	if err := c.conn.Invoke(ctx, methodStateToGenesis.Full(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -404,7 +404,7 @@ func (c *stakingClient) StateToGenesis(ctx context.Context, height int64) (*Gene
 func (c *stakingClient) WatchTransfers(ctx context.Context) (<-chan *TransferEvent, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchTransfers.Full())
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchTransfers.FullName())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -439,7 +439,7 @@ func (c *stakingClient) WatchTransfers(ctx context.Context) (<-chan *TransferEve
 func (c *stakingClient) WatchBurns(ctx context.Context) (<-chan *BurnEvent, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], methodWatchBurns.Full())
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], methodWatchBurns.FullName())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -474,7 +474,7 @@ func (c *stakingClient) WatchBurns(ctx context.Context) (<-chan *BurnEvent, pubs
 func (c *stakingClient) WatchEscrows(ctx context.Context) (<-chan *EscrowEvent, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[2], methodWatchEscrows.Full())
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[2], methodWatchEscrows.FullName())
 	if err != nil {
 		return nil, nil, err
 	}

@@ -13,15 +13,15 @@ var (
 	// serviceName is the gRPC service name.
 	serviceName = cmnGrpc.NewServiceName("Scheduler")
 
-	// methodGetValidators is the name of the GetValidators method.
-	methodGetValidators = serviceName.NewMethodName("GetValidators")
-	// methodGetCommittees is the name of the GetCommittees method.
-	methodGetCommittees = serviceName.NewMethodName("GetCommittees")
-	// methodStateToGenesis is the name of the StateToGenesis method.
-	methodStateToGenesis = serviceName.NewMethodName("StateToGenesis")
+	// methodGetValidators is the GetValidators method.
+	methodGetValidators = serviceName.NewMethod("GetValidators", int64(0))
+	// methodGetCommittees is the GetCommittees method.
+	methodGetCommittees = serviceName.NewMethod("GetCommittees", GetCommitteesRequest{})
+	// methodStateToGenesis is the StateToGenesis method.
+	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 
-	// methodWatchCommittees is the name of the WatchCommittees method.
-	methodWatchCommittees = serviceName.NewMethodName("WatchCommittees")
+	// methodWatchCommittees is the WatchCommittees method.
+	methodWatchCommittees = serviceName.NewMethod("WatchCommittees", nil)
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -29,21 +29,21 @@ var (
 		HandlerType: (*Backend)(nil),
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: methodGetValidators.Short(),
+				MethodName: methodGetValidators.ShortName(),
 				Handler:    handlerGetValidators,
 			},
 			{
-				MethodName: methodGetCommittees.Short(),
+				MethodName: methodGetCommittees.ShortName(),
 				Handler:    handlerGetCommittees,
 			},
 			{
-				MethodName: methodStateToGenesis.Short(),
+				MethodName: methodStateToGenesis.ShortName(),
 				Handler:    handlerStateToGenesis,
 			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
-				StreamName:    methodWatchCommittees.Short(),
+				StreamName:    methodWatchCommittees.ShortName(),
 				Handler:       handlerWatchCommittees,
 				ServerStreams: true,
 			},
@@ -66,7 +66,7 @@ func handlerGetValidators( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetValidators.Full(),
+		FullMethod: methodGetValidators.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetValidators(ctx, req.(int64))
@@ -89,7 +89,7 @@ func handlerGetCommittees( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetCommittees.Full(),
+		FullMethod: methodGetCommittees.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetCommittees(ctx, req.(*GetCommitteesRequest))
@@ -112,7 +112,7 @@ func handlerStateToGenesis( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodStateToGenesis.Full(),
+		FullMethod: methodStateToGenesis.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
@@ -159,7 +159,7 @@ type schedulerClient struct {
 
 func (c *schedulerClient) GetValidators(ctx context.Context, height int64) ([]*Validator, error) {
 	var rsp []*Validator
-	if err := c.conn.Invoke(ctx, methodGetValidators.Full(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetValidators.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -167,7 +167,7 @@ func (c *schedulerClient) GetValidators(ctx context.Context, height int64) ([]*V
 
 func (c *schedulerClient) GetCommittees(ctx context.Context, request *GetCommitteesRequest) ([]*Committee, error) {
 	var rsp []*Committee
-	if err := c.conn.Invoke(ctx, methodGetCommittees.Full(), request, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetCommittees.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -175,7 +175,7 @@ func (c *schedulerClient) GetCommittees(ctx context.Context, request *GetCommitt
 
 func (c *schedulerClient) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
 	var rsp Genesis
-	if err := c.conn.Invoke(ctx, methodStateToGenesis.Full(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
@@ -184,7 +184,7 @@ func (c *schedulerClient) StateToGenesis(ctx context.Context, height int64) (*Ge
 func (c *schedulerClient) WatchCommittees(ctx context.Context) (<-chan *Committee, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchCommittees.Full())
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchCommittees.FullName())
 	if err != nil {
 		return nil, nil, err
 	}
