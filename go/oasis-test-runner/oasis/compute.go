@@ -89,6 +89,7 @@ func (worker *Compute) startNode() error {
 		workerRuntimeLoader(worker.net.cfg.RuntimeLoaderBinary).
 		workerTxnschedulerCheckTxEnabled().
 		appendNetwork(worker.net).
+		appendSeedNodes(worker.net).
 		appendEntity(worker.entity)
 	for _, v := range worker.net.runtimes {
 		if v.kind != registry.KindCompute {

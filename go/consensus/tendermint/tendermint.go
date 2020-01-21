@@ -76,8 +76,9 @@ const (
 	cfgABCIPruneStrategy = "tendermint.abci.prune.strategy"
 	cfgABCIPruneNumKept  = "tendermint.abci.prune.num_kept"
 
-	// CfgP2PPrivatePeerID configures tendermint's private peer ID(s).
-	CfgP2PPrivatePeerID = "tendermint.private_peer_id"
+	// CfgSentryUpstreamAddress defines nodes for which we act as a sentry for.
+	CfgSentryUpstreamAddress = "tendermint.sentry.upstream_address"
+
 	// CfgP2PPersistentPeer configures tendermint's persistent peer(s).
 	CfgP2PPersistentPeer = "tendermint.persistent_peer"
 	// CfgP2PDisablePeerExchange disables tendermint's peer-exchange (Pex) reactor.
@@ -898,16 +899,12 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.TxIndex.Indexer = "null"
 	tenderConfig.P2P.ListenAddress = viper.GetString(CfgCoreListenAddress)
 	tenderConfig.P2P.ExternalAddress = viper.GetString(cfgCoreExternalAddress)
-	// Convert persistent peer IDs to lowercase (like other IDs) since
-	// Tendermint stores them in a map and uses a case sensitive string
-	// comparison to check ID equality.
-	tenderConfig.P2P.PrivatePeerIDs = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PPrivatePeerID), ","))
+	tenderConfig.P2P.PexReactor = !viper.GetBool(CfgP2PDisablePeerExchange)
 	// Persistent peers need to be lowecase as p2p/transport.go:MultiplexTransport.upgrade()
 	// uses a case sensitive string comparision to validate public keys.
 	// Since persistent peers is expected to be in comma-delimited ID@host:port format,
 	// lowercasing the whole string is ok.
 	tenderConfig.P2P.PersistentPeers = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PPersistentPeer), ","))
-	tenderConfig.P2P.PexReactor = !viper.GetBool(CfgP2PDisablePeerExchange)
 	tenderConfig.P2P.SeedMode = viper.GetBool(CfgP2PSeedMode)
 	// Seed Ids need to be Lowecase as p2p/transport.go:MultiplexTransport.upgrade()
 	// uses a case sensitive string comparision to validate public keys.
@@ -917,6 +914,31 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.P2P.AddrBookStrict = !(viper.GetBool(CfgDebugP2PAddrBookLenient) && cmflags.DebugDontBlameOasis())
 	tenderConfig.P2P.AllowDuplicateIP = viper.GetBool(CfgDebugP2PAllowDuplicateIP) && cmflags.DebugDontBlameOasis()
 	tenderConfig.RPC.ListenAddress = ""
+
+	sentryUpstreamAddrs := viper.GetStringSlice(CfgSentryUpstreamAddress)
+	if len(sentryUpstreamAddrs) > 0 {
+		t.Logger.Info("Acting as a tendermint sentry", "addrs", sentryUpstreamAddrs)
+
+		// Append sentry addresses to persistent peers.
+		tenderConfig.P2P.PersistentPeers = tenderConfig.P2P.PersistentPeers + "," +
+			strings.ToLower(strings.Join(sentryUpstreamAddrs, ","))
+
+		var sentryUpstreamIDs []string
+		for _, addr := range sentryUpstreamAddrs {
+			parts := strings.Split(addr, "@")
+			if len(parts) != 2 {
+				return fmt.Errorf("malformed sentry upstream address: %s", addr)
+			}
+			sentryUpstreamIDs = append(sentryUpstreamIDs, parts[0])
+		}
+
+		// Convert persistent peer IDs to lowercase (like other IDs) since
+		// Tendermint stores them in a map and uses a case sensitive string
+		// comparison to check ID equality.
+		tenderConfig.P2P.PrivatePeerIDs = strings.ToLower(strings.Join(sentryUpstreamIDs, ","))
+
+		// XXX: tendermint v0.33 adds: `unconditional_peer_ids` which should also be set here.
+	}
 
 	if !tenderConfig.P2P.PexReactor {
 		t.Logger.Info("pex reactor disabled",
@@ -1299,7 +1321,7 @@ func init() {
 	Flags.String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
 	Flags.String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 	Flags.Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
-	Flags.StringSlice(CfgP2PPrivatePeerID, []string{}, "Tendermint private peer(s) (i.e. they will not be gossiped to other peers) of the form ID")
+	Flags.StringSlice(CfgSentryUpstreamAddress, []string{}, "Tendermint nodes for which we act as sentry of the form ID@ip:port")
 	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form ID@ip:port")
 	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")
 	Flags.Bool(CfgP2PSeedMode, false, "run the tendermint node in seed mode")

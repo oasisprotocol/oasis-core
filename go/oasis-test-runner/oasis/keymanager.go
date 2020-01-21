@@ -184,6 +184,7 @@ func (km *Keymanager) startNode() error {
 		workerKeymanagerRuntimeID(km.runtime.id).
 		workerKeymanagerMayGenerate().
 		appendNetwork(km.net).
+		appendSeedNodes(km.net).
 		appendEntity(km.entity)
 	if km.runtime.teeHardware != node.TEEHardwareInvalid {
 		args = args.workerKeymanagerTEEHardware(km.runtime.teeHardware)

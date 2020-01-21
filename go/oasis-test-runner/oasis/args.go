@@ -82,19 +82,10 @@ func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) tendermintPersistentPeer(peers []string) *argBuilder {
-	for _, peer := range peers {
+func (args *argBuilder) tendermintSentryUpstreamAddress(addrs []string) *argBuilder {
+	for _, addr := range addrs {
 		args.vec = append(args.vec, []string{
-			"--" + tendermint.CfgP2PPersistentPeer, peer,
-		}...)
-	}
-	return args
-}
-
-func (args *argBuilder) tendermintPrivatePeerID(peerIDs []string) *argBuilder {
-	for _, peerID := range peerIDs {
-		args.vec = append(args.vec, []string{
-			"--" + tendermint.CfgP2PPrivatePeerID, peerID,
+			"--" + tendermint.CfgSentryUpstreamAddress, addr,
 		}...)
 	}
 	return args
@@ -160,19 +151,19 @@ func (args *argBuilder) workerClientPort(port uint16) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerCommonSentryAddresses(addrs []string) *argBuilder {
+func (args *argBuilder) workerRegistrySentryAddresses(addrs []string) *argBuilder {
 	for _, addr := range addrs {
 		args.vec = append(args.vec, []string{
-			"--" + workerCommon.CfgSentryAddresses, addr,
+			"--" + registration.CfgSentryAddress, addr,
 		}...)
 	}
 	return args
 }
 
-func (args *argBuilder) workerCommonSentryCertFiles(certFiles []string) *argBuilder {
+func (args *argBuilder) workerRegistrySentryCertFiles(certFiles []string) *argBuilder {
 	for _, certFile := range certFiles {
 		args.vec = append(args.vec, []string{
-			"--" + workerCommon.CfgSentryCertFiles, certFile,
+			"--" + registration.CfgSentryCert, certFile,
 		}...)
 	}
 	return args
@@ -303,26 +294,17 @@ func (args *argBuilder) addSentries(sentries []*Sentry) *argBuilder {
 		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", sentry.controlPort))
 		certFiles = append(certFiles, sentry.TLSCertPath())
 	}
-	args = args.workerCommonSentryAddresses(addrs)
-	args = args.workerCommonSentryCertFiles(certFiles)
+	args = args.workerRegistrySentryAddresses(addrs)
+	args = args.workerRegistrySentryCertFiles(certFiles)
 	return args
 }
 
-func (args *argBuilder) addSentriesAsPersistentPeers(sentries []*Sentry) *argBuilder {
-	var peers []string
-	for _, sentry := range sentries {
-		peers = append(peers, fmt.Sprintf("%s@127.0.0.1:%d", sentry.tmAddress, sentry.consensusPort))
-	}
-	args = args.tendermintPersistentPeer(peers)
-	return args
-}
-
-func (args *argBuilder) addValidatorsAsPrivatePeers(validators []*Validator) *argBuilder {
-	var peerIDs []string
+func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) *argBuilder {
+	var addrs []string
 	for _, val := range validators {
-		peerIDs = append(peerIDs, val.tmAddress)
+		addrs = append(addrs, fmt.Sprintf("%s@127.0.0.1:%d", val.tmAddress, val.consensusPort))
 	}
-	args = args.tendermintPrivatePeerID(peerIDs)
+	args = args.tendermintSentryUpstreamAddress(addrs)
 	return args
 }
 
@@ -336,8 +318,7 @@ func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {
 }
 
 func (args *argBuilder) appendNetwork(net *Network) *argBuilder {
-	args = args.grpcLogDebug().
-		appendSeedNodes(net)
+	args = args.grpcLogDebug()
 	return args
 }
 

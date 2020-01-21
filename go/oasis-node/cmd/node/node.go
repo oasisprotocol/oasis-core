@@ -325,7 +325,6 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 
 	// Initialize the sentry worker.
 	n.SentryWorker, err = workerSentry.New(
-		&workerCommonCfg,
 		n.Sentry,
 		n.Identity,
 	)

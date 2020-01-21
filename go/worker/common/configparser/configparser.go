@@ -1,11 +1,14 @@
 package configparser
 
 import (
+	tlsPkg "crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"strconv"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/node"
 )
 
@@ -37,6 +40,31 @@ func ParseAddressList(addresses []string) ([]node.Address, error) {
 	}
 
 	return output, nil
+}
+
+// ParseCertificateFiles parses certificate files.
+func ParseCertificateFiles(certFiles []string) ([]*x509.Certificate, error) {
+	certs := make([]*x509.Certificate, 0, len(certFiles))
+	var err error
+
+	for _, certFile := range certFiles {
+		var tlsCert *tlsPkg.Certificate
+		tlsCert, err = tls.LoadCertificate(certFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load certificate file %v: %w", certFile, err)
+		}
+		if len(tlsCert.Certificate) != 1 {
+			return nil, fmt.Errorf("certificate file %v should contain exactly 1 certificate in the chain", certFile)
+		}
+		var x509Cert *x509.Certificate
+		x509Cert, err = x509.ParseCertificate(tlsCert.Certificate[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse certificate file %v: %w", certFile, err)
+		}
+		certs = append(certs, x509Cert)
+	}
+
+	return certs, nil
 }
 
 // GetRuntimes parses hex strings to PublicKeys
