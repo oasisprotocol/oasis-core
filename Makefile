@@ -102,7 +102,7 @@ clean: $(clean-targets)
 # Fetch all the latest changes (including tags) from the canonical upstream git
 # repository.
 fetch-git:
-	@$(ECHO_STDERR) "Fetching the latests changes (including tags) from $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote..."
+	@$(ECHO_STDERR) "Fetching the latest changes (including tags) from $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote..."
 	@git fetch $(OASIS_CORE_GIT_ORIGIN_REMOTE) --tags
 
 # Assemble Change log.
