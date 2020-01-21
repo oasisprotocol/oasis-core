@@ -10,6 +10,126 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.2 (2020-01-21)
+
+### Removals and Breaking changes
+
+- go node: Unite compute, merge, and transaction scheduler roles.
+  ([#2107](https://github.com/oasislabs/oasis-core/issues/2107))
+
+  We're removing the separation among registering nodes for the compute, merge,
+  and transaction scheduler roles.
+  You now have to register for and enable all or none of these roles, under a
+  new, broadened, and confusing--you're welcome--term "compute".
+
+- Simplify tendermint sentry node setup.
+  ([#2362](https://github.com/oasislabs/oasis-core/issues/2362))
+
+  Breaking configuration changes:
+  - `worker.sentry.address` renamed to: `worker.registration.sentry.address`
+  - `worker.sentry.cert_file` renamed to: `worker.registration.sentry.cert_file`
+  - `tendermint.private_peer_id` removed
+  - added `tendermint.sentry.upstream_address` which should be set on sentry node
+  and it will set `tendermint.private_peer_id` and `tendermint.peristent_peer` for
+  the configured addresses
+
+- Charge gas for runtime transactions and suspend runtimes which do not pay
+  periodic maintenance fees.
+  ([#2504](https://github.com/oasislabs/oasis-core/issues/2504))
+
+  This introduces gas fees for submitting roothash commitments from runtime
+  nodes. Since periodic maintenance work must be performed on each epoch
+  transition (e.g., electing runtime committees), fees for that maintenance are
+  paid by any nodes that register to perform work for a specific runtime. Fees
+  are pre-paid for the number of epochs a node registers for.
+
+  If the maintenance fees are not paid, the runtime gets suspended (so periodic
+  work is not needed) and must be resumed by registering nodes.
+
+- go: Rename compute -> executor.
+  ([#2525](https://github.com/oasislabs/oasis-core/issues/2525))
+
+  It was proposed that we rename the "compute" phase (of the txnscheduler,
+  _compute_, merge workflow) to "executor".
+
+  Things that remain as "compute":
+  - the registry node role
+  - the registry runtime kind
+  - the staking threshold kind
+  - things actually referring to processing inputs to outputs
+  - one of the drbg contexts
+
+  So among things that are renamed are fields of the on-chain state and command
+  line flags.
+
+- `RuntimeID` is not hardcoded anymore in the enclave, but is passed when
+  dispatching the runtime. This enables the same runtime binary to be registered
+  and executed multiple times with different `RuntimeID`.
+  ([#2529](https://github.com/oasislabs/oasis-core/issues/2529))
+
+### Features
+
+- Consensus simulation mode and fee estimator
+  ([#2521](https://github.com/oasislabs/oasis-core/issues/2521))
+
+  This change allows the compute nodes to participate in networks which require
+  gas fees for various operations in the network. Gas is automatically estimated
+  by simulating transactions while gas price is currently "discovered" manually
+  via node configuration.
+
+  The following configuration flags are added:
+
+  - `consensus.tendermint.submission.gas_price` should specify the gas price
+    that the node will be using in all submitted transactions.
+  - `consensus.tendermint.submission.max_fee` can optionally specify the maximum
+    gas fee that the node will use in submitted transactions. If the computed
+    fee would ever go over this limit, the transaction will not be submitted and
+    an error will be returned instead.
+
+- Optimize registry runtime lookups during node registration.
+  ([#2538](https://github.com/oasislabs/oasis-core/issues/2538))
+
+  A performance optimization to avoid loading a list of all registered runtimes
+  into memory in cases when only a specific runtime is actually needed.
+
+### Bug Fixes
+
+- Don't allow duplicate P2P connections from the same IP by default.
+  ([#2558](https://github.com/oasislabs/oasis-core/issues/2558))
+
+- go/extra/stats: handle nil-votes and non-registered nodes
+  ([#2566](https://github.com/oasislabs/oasis-core/issues/2566))
+
+- go/oasis-node: Include account ID in `stake list -v` subcommand.
+  ([#2567](https://github.com/oasislabs/oasis-core/issues/2567))
+
+  Changes `stake list -v` subcommand to return a map of IDs to accounts.
+
+- Use a newer version of the oasis-core tendermint fork
+  ([#2569](https://github.com/oasislabs/oasis-core/issues/2569))
+
+  The updated fork has additional changes to tendermint to hopefully
+  prevent the node from crashing if the file descriptors available to the
+  process get exhausted due to hitting the rlimit.
+
+  While no forward progress can be made while the node is re-opening the
+  WAL, the node will now flush incoming connections that are in the process
+  of handshaking, and retry re-opening the WAL instead of crashing with
+  a panic.
+
+### Documentation improvements
+
+- Document versioning scheme used for Oasis Core and its Protocols
+  ([#2457](https://github.com/oasislabs/oasis-core/issues/2457))
+
+  See [Versioning Scheme](./docs/versioning.md).
+
+- Document Oasis Core's release process
+  ([#2565](https://github.com/oasislabs/oasis-core/issues/2565))
+
+  See [Release process](./docs/release-process.md).
+
+
 ## 20.1 (2020-01-14)
 
 ### Features
