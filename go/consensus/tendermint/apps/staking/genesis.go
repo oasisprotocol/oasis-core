@@ -17,7 +17,7 @@ import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-func (app *stakingApplication) initParameters(state *stakingState.MutableState, st *staking.Genesis) error {
+func (app *stakingApplication) initParameters(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis) error {
 	if err := st.Parameters.SanityCheck(); err != nil {
 		return fmt.Errorf("staking/tendermint: sanity check failed: %w", err)
 	}
@@ -26,12 +26,12 @@ func (app *stakingApplication) initParameters(state *stakingState.MutableState, 
 	return nil
 }
 
-func (app *stakingApplication) initCommonPool(st *staking.Genesis, totalSupply *quantity.Quantity) error {
+func (app *stakingApplication) initCommonPool(ctx *abci.Context, st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	if !st.CommonPool.IsValid() {
 		return errors.New("staking/tendermint: invalid genesis state CommonPool")
 	}
 	if err := totalSupply.Add(&st.CommonPool); err != nil {
-		app.logger.Error("InitChain: failed to add common pool",
+		ctx.Logger().Error("InitChain: failed to add common pool",
 			"err", err,
 		)
 		return errors.Wrap(err, "staking/tendermint: failed to add common pool")
@@ -40,7 +40,7 @@ func (app *stakingApplication) initCommonPool(st *staking.Genesis, totalSupply *
 	return nil
 }
 
-func (app *stakingApplication) initLedger(state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) error {
+func (app *stakingApplication) initLedger(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	type ledgerUpdate struct {
 		id      signature.PublicKey
 		account *staking.Account
@@ -51,21 +51,21 @@ func (app *stakingApplication) initLedger(state *stakingState.MutableState, st *
 		id := k
 
 		if !v.General.Balance.IsValid() {
-			app.logger.Error("InitChain: invalid genesis general balance",
+			ctx.Logger().Error("InitChain: invalid genesis general balance",
 				"id", id,
 				"general_balance", v.General.Balance,
 			)
 			return errors.New("staking/tendermint: invalid genesis general balance")
 		}
 		if !v.Escrow.Active.Balance.IsValid() {
-			app.logger.Error("InitChain: invalid genesis active escrow balance",
+			ctx.Logger().Error("InitChain: invalid genesis active escrow balance",
 				"id", id,
 				"escrow_balance", v.Escrow.Active.Balance,
 			)
 			return errors.New("staking/tendermint: invalid genesis active escrow balance")
 		}
 		if !v.Escrow.Debonding.Balance.IsValid() {
-			app.logger.Error("InitChain: invalid genesis debonding escrow balance",
+			ctx.Logger().Error("InitChain: invalid genesis debonding escrow balance",
 				"id", id,
 				"debonding_balance", v.Escrow.Debonding.Balance,
 			)
@@ -74,19 +74,19 @@ func (app *stakingApplication) initLedger(state *stakingState.MutableState, st *
 
 		ups = append(ups, ledgerUpdate{id, v})
 		if err := totalSupply.Add(&v.General.Balance); err != nil {
-			app.logger.Error("InitChain: failed to add general balance",
+			ctx.Logger().Error("InitChain: failed to add general balance",
 				"err", err,
 			)
 			return errors.Wrap(err, "staking/tendermint: failed to add general balance")
 		}
 		if err := totalSupply.Add(&v.Escrow.Active.Balance); err != nil {
-			app.logger.Error("InitChain: failed to add active escrow balance",
+			ctx.Logger().Error("InitChain: failed to add active escrow balance",
 				"err", err,
 			)
 			return errors.Wrap(err, "staking/tendermint: failed to add active escrow balance")
 		}
 		if err := totalSupply.Add(&v.Escrow.Debonding.Balance); err != nil {
-			app.logger.Error("InitChain: failed to add debonding escrow balance",
+			ctx.Logger().Error("InitChain: failed to add debonding escrow balance",
 				"err", err,
 			)
 			return errors.Wrap(err, "staking/tendermint: failed to add debonding escrow balance")
@@ -100,9 +100,9 @@ func (app *stakingApplication) initLedger(state *stakingState.MutableState, st *
 	return nil
 }
 
-func (app *stakingApplication) initTotalSupply(state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) {
+func (app *stakingApplication) initTotalSupply(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) {
 	if totalSupply.Cmp(&st.TotalSupply) != 0 {
-		app.logger.Error("InitChain: total supply mismatch",
+		ctx.Logger().Error("InitChain: total supply mismatch",
 			"expected", st.TotalSupply,
 			"actual", totalSupply,
 		)
@@ -112,7 +112,7 @@ func (app *stakingApplication) initTotalSupply(state *stakingState.MutableState,
 	state.SetTotalSupply(totalSupply)
 }
 
-func (app *stakingApplication) initDelegations(state *stakingState.MutableState, st *staking.Genesis) error {
+func (app *stakingApplication) initDelegations(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis) error {
 	type delegationUpdate struct {
 		escrowID    signature.PublicKey
 		delegatorID signature.PublicKey
@@ -123,7 +123,7 @@ func (app *stakingApplication) initDelegations(state *stakingState.MutableState,
 		delegationShares := quantity.NewQuantity()
 		for delegatorID, delegation := range delegations {
 			if err := delegationShares.Add(&delegation.Shares); err != nil {
-				app.logger.Error("InitChain: failed to add delegation shares",
+				ctx.Logger().Error("InitChain: failed to add delegation shares",
 					"err", err,
 				)
 				return errors.Wrap(err, "staking/tendermint: failed to add delegation shares")
@@ -133,7 +133,7 @@ func (app *stakingApplication) initDelegations(state *stakingState.MutableState,
 
 		acc := state.Account(escrowID)
 		if acc.Escrow.Active.TotalShares.Cmp(delegationShares) != 0 {
-			app.logger.Error("InitChain: total shares mismatch",
+			ctx.Logger().Error("InitChain: total shares mismatch",
 				"escrow_id", escrowID,
 				"expected", acc.Escrow.Active.TotalShares,
 				"actual", delegationShares,
@@ -154,7 +154,7 @@ func (app *stakingApplication) initDelegations(state *stakingState.MutableState,
 	return nil
 }
 
-func (app *stakingApplication) initDebondingDelegations(state *stakingState.MutableState, st *staking.Genesis) error {
+func (app *stakingApplication) initDebondingDelegations(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis) error {
 	type debondingDelegationUpdate struct {
 		escrowID    signature.PublicKey
 		delegatorID signature.PublicKey
@@ -167,7 +167,7 @@ func (app *stakingApplication) initDebondingDelegations(state *stakingState.Muta
 		for delegatorID, delegations := range delegators {
 			for idx, delegation := range delegations {
 				if err := debondingShares.Add(&delegation.Shares); err != nil {
-					app.logger.Error("InitChain: failed to add debonding delegation shares",
+					ctx.Logger().Error("InitChain: failed to add debonding delegation shares",
 						"err", err,
 					)
 					return errors.Wrap(err, "staking/tendermint: failed to add debonding delegation shares")
@@ -179,7 +179,7 @@ func (app *stakingApplication) initDebondingDelegations(state *stakingState.Muta
 
 		acc := state.Account(escrowID)
 		if acc.Escrow.Debonding.TotalShares.Cmp(debondingShares) != 0 {
-			app.logger.Error("InitChain: debonding shares mismatch",
+			ctx.Logger().Error("InitChain: debonding shares mismatch",
 				"escrow_id", escrowID,
 				"expected", acc.Escrow.Debonding.TotalShares,
 				"actual", debondingShares,
@@ -212,29 +212,29 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		totalSupply quantity.Quantity
 	)
 
-	if err := app.initParameters(state, st); err != nil {
+	if err := app.initParameters(ctx, state, st); err != nil {
 		return err
 	}
 
-	if err := app.initCommonPool(st, &totalSupply); err != nil {
+	if err := app.initCommonPool(ctx, st, &totalSupply); err != nil {
 		return err
 	}
 
-	if err := app.initLedger(state, st, &totalSupply); err != nil {
+	if err := app.initLedger(ctx, state, st, &totalSupply); err != nil {
 		return err
 	}
 
-	app.initTotalSupply(state, st, &totalSupply)
+	app.initTotalSupply(ctx, state, st, &totalSupply)
 
-	if err := app.initDelegations(state, st); err != nil {
+	if err := app.initDelegations(ctx, state, st); err != nil {
 		return err
 	}
 
-	if err := app.initDebondingDelegations(state, st); err != nil {
+	if err := app.initDebondingDelegations(ctx, state, st); err != nil {
 		return err
 	}
 
-	app.logger.Debug("InitChain: allocations complete",
+	ctx.Logger().Debug("InitChain: allocations complete",
 		"common_pool", st.CommonPool,
 		"total_supply", totalSupply,
 	)

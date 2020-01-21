@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
-	"time"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
@@ -16,7 +15,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
@@ -97,8 +95,7 @@ func newStakeAccumulator(ctx *abci.Context, unsafeBypass bool) (*stakeAccumulato
 }
 
 type schedulerApplication struct {
-	logger *logging.Logger
-	state  *abci.ApplicationState
+	state *abci.ApplicationState
 
 	baseEpoch epochtime.EpochTime
 }
@@ -142,7 +139,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		// The 0th epoch will not have suitable entropy for elections, nor
 		// will it have useful node registrations.
 		if epoch == app.baseEpoch {
-			app.logger.Info("system in bootstrap period, skipping election",
+			ctx.Logger().Info("system in bootstrap period, skipping election",
 				"epoch", epoch,
 			)
 			return nil
@@ -188,7 +185,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		state := schedulerState.NewMutableState(ctx.State())
 		params, err := state.ConsensusParameters()
 		if err != nil {
-			app.logger.Error("failed to fetch consensus parameters",
+			ctx.Logger().Error("failed to fetch consensus parameters",
 				"err", err,
 			)
 			return err
@@ -236,7 +233,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		for _, rt := range runtimes {
 			runtimeIDs = append(runtimeIDs, rt.ID.String())
 		}
-		app.logger.Debug("finished electing committees",
+		ctx.Logger().Debug("finished electing committees",
 			"epoch", epoch,
 			"kinds", kindNames,
 			"runtimes", runtimeIDs,
@@ -303,7 +300,7 @@ func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEn
 		case false:
 			// Existing validator is not part of the new set, reduce it's
 			// voting power to 0, to indicate removal.
-			app.logger.Debug("removing existing validator from validator set",
+			ctx.Logger().Debug("removing existing validator from validator set",
 				"id", v,
 			)
 			updates = append(updates, api.PublicKeyToValidatorUpdate(v, 0))
@@ -317,12 +314,12 @@ func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEn
 	for _, v := range pendingValidators {
 		if pendingMap[v] {
 			// This is a validator that is not part of the current set.
-			app.logger.Debug("adding new validator to validator set",
+			ctx.Logger().Debug("adding new validator to validator set",
 				"id", v,
 			)
 			updates = append(updates, api.PublicKeyToValidatorUpdate(v, consensus.VotingPower))
 		} else {
-			app.logger.Debug("keeping existing validator in the validator set",
+			ctx.Logger().Debug("keeping existing validator in the validator set",
 				"id", v,
 			)
 		}
@@ -340,7 +337,7 @@ func (app *schedulerApplication) FireTimer(ctx *abci.Context, t *abci.Timer) err
 	return errors.New("tendermint/scheduler: unexpected timer")
 }
 
-func (app *schedulerApplication) isSuitableExecutorWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
+func (app *schedulerApplication) isSuitableExecutorWorker(ctx *abci.Context, n *node.Node, rt *registry.Runtime) bool {
 	if !n.HasRoles(node.RoleComputeWorker) {
 		return false
 	}
@@ -361,11 +358,11 @@ func (app *schedulerApplication) isSuitableExecutorWorker(n *node.Node, rt *regi
 			if nrt.Capabilities.TEE.Hardware != rt.TEEHardware {
 				return false
 			}
-			if err := nrt.Capabilities.TEE.Verify(ts); err != nil {
-				app.logger.Warn("failed to verify node TEE attestaion",
+			if err := nrt.Capabilities.TEE.Verify(ctx.Now()); err != nil {
+				ctx.Logger().Warn("failed to verify node TEE attestaion",
 					"err", err,
 					"node", n,
-					"time_stamp", ts,
+					"time_stamp", ctx.Now(),
 					"runtime", rt.ID,
 				)
 				return false
@@ -376,7 +373,7 @@ func (app *schedulerApplication) isSuitableExecutorWorker(n *node.Node, rt *regi
 	return false
 }
 
-func (app *schedulerApplication) isSuitableStorageWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
+func (app *schedulerApplication) isSuitableStorageWorker(ctx *abci.Context, n *node.Node, rt *registry.Runtime) bool {
 	if !n.HasRoles(node.RoleStorageWorker) {
 		return false
 	}
@@ -389,7 +386,7 @@ func (app *schedulerApplication) isSuitableStorageWorker(n *node.Node, rt *regis
 	return false
 }
 
-func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
+func (app *schedulerApplication) isSuitableTransactionScheduler(ctx *abci.Context, n *node.Node, rt *registry.Runtime) bool {
 	if !n.HasRoles(node.RoleComputeWorker) {
 		return false
 	}
@@ -402,7 +399,7 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(n *node.Node, rt
 	return false
 }
 
-func (app *schedulerApplication) isSuitableMergeWorker(n *node.Node, rt *registry.Runtime, ts time.Time) bool {
+func (app *schedulerApplication) isSuitableMergeWorker(ctx *abci.Context, n *node.Node, rt *registry.Runtime) bool {
 	if !n.HasRoles(node.RoleComputeWorker) {
 		return false
 	}
@@ -428,7 +425,7 @@ func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes i
 // Operates on consensus connection.
 // Return error if node should crash.
 // For non-fatal problems, save a problem condition to the state and return successfully.
-func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.PublicKey]bool, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
+func (app *schedulerApplication) electCommittee(ctx *abci.Context, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.PublicKey]bool, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
 	if !rt.IsCompute() && kind != scheduler.KindExecutor {
 		return nil
@@ -441,7 +438,7 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 
 		rngCtx       []byte
 		threshold    staking.ThresholdKind
-		isSuitableFn func(*node.Node, *registry.Runtime, time.Time) bool
+		isSuitableFn func(*abci.Context, *node.Node, *registry.Runtime) bool
 
 		workerSize, backupSize int
 	)
@@ -478,7 +475,7 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 		if err := entityStake.checkThreshold(n.EntityID, threshold, false); err != nil {
 			continue
 		}
-		if isSuitableFn(n, rt, request.Header.Time) {
+		if isSuitableFn(ctx, n, rt) {
 			nodeList = append(nodeList, n)
 			if entitiesEligibleForReward != nil {
 				entitiesEligibleForReward[n.EntityID] = true
@@ -488,7 +485,7 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 
 	// Ensure that it is theoretically possible to elect a valid committee.
 	if workerSize == 0 {
-		app.logger.Error("empty committee not allowed",
+		ctx.Logger().Error("empty committee not allowed",
 			"kind", kind,
 			"runtime_id", rt.ID,
 		)
@@ -498,7 +495,7 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 
 	nrNodes, wantedNodes := len(nodeList), workerSize+backupSize
 	if wantedNodes > nrNodes {
-		app.logger.Error("committee size exceeds available nodes (pre-stake)",
+		ctx.Logger().Error("committee size exceeds available nodes (pre-stake)",
 			"kind", kind,
 			"runtime_id", rt.ID,
 			"worker_size", workerSize,
@@ -540,7 +537,7 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 	}
 
 	if len(members) != wantedNodes {
-		app.logger.Error("insufficent nodes with adequate stake to elect",
+		ctx.Logger().Error("insufficent nodes with adequate stake to elect",
 			"kind", kind,
 			"runtime_id", rt.ID,
 			"worker_size", workerSize,
@@ -563,7 +560,7 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, request types
 // Operates on consensus connection.
 func (app *schedulerApplication) electAllCommittees(ctx *abci.Context, request types.RequestBeginBlock, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.PublicKey]bool, runtimes []*registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	for _, runtime := range runtimes {
-		if err := app.electCommittee(ctx, request, epoch, beacon, entityStake, entitiesEligibleForReward, runtime, nodes, kind); err != nil {
+		if err := app.electCommittee(ctx, epoch, beacon, entityStake, entitiesEligibleForReward, runtime, nodes, kind); err != nil {
 			return err
 		}
 	}
@@ -704,8 +701,6 @@ func publicKeyMapToSortedSlice(m map[signature.PublicKey]bool) []signature.Publi
 }
 
 // New constructs a new scheduler application instance.
-func New() (abci.Application, error) {
-	return &schedulerApplication{
-		logger: logging.GetLogger("tendermint/scheduler"),
-	}, nil
+func New() abci.Application {
+	return &schedulerApplication{}
 }

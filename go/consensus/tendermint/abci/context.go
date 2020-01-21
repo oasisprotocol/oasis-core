@@ -3,36 +3,60 @@ package abci
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 )
 
 type contextKey struct{}
 
-// ContextType is a context type.
-type ContextType uint
+// ContextMode is a context mode.
+type ContextMode uint
 
 const (
 	// ContextInitChain is InitChain context.
-	ContextInitChain ContextType = iota
+	ContextInitChain ContextMode = iota
 	// ContextCheckTx is CheckTx context.
 	ContextCheckTx
 	// ContextDeliverTx is DeliverTx context.
 	ContextDeliverTx
+	// ContextSimulateTx is SimulateTx context.
+	ContextSimulateTx
 	// ContextBeginBlock is BeginBlock context.
 	ContextBeginBlock
 	// ContextEndBlock is EndBlock context.
 	ContextEndBlock
 )
 
+// String returns a string representation of the context mode.
+func (m ContextMode) String() string {
+	switch m {
+	case ContextInitChain:
+		return "init chain"
+	case ContextCheckTx:
+		return "check tx"
+	case ContextDeliverTx:
+		return "deliver tx"
+	case ContextSimulateTx:
+		return "simulate tx"
+	case ContextBeginBlock:
+		return "begin block"
+	case ContextEndBlock:
+		return "end block"
+	default:
+		return "[invalid]"
+	}
+}
+
 // Context is the context of processing a transaction/block.
 type Context struct {
-	outputType  ContextType
+	mode        ContextMode
 	currentTime time.Time
 
 	data          interface{}
@@ -41,17 +65,61 @@ type Context struct {
 
 	txSigner signature.PublicKey
 
-	state *ApplicationState
+	appState    *ApplicationState
+	state       *iavl.MutableTree
+	blockHeight int64
+	blockCtx    *BlockContext
+
+	logger *logging.Logger
+}
+
+// NewMockContext creates a new mock context for use in tests.
+func NewMockContext(mode ContextMode, now time.Time) *Context {
+	return &Context{
+		mode:          mode,
+		currentTime:   now,
+		gasAccountant: NewNopGasAccountant(),
+		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
+	}
 }
 
 // NewContext creates a new Context of the given type.
-func NewContext(outputType ContextType, now time.Time, state *ApplicationState) *Context {
-	return &Context{
-		outputType:    outputType,
+func NewContext(mode ContextMode, now time.Time, appState *ApplicationState) *Context {
+	appState.blockLock.RLock()
+	defer appState.blockLock.RUnlock()
+
+	c := &Context{
+		mode:          mode,
 		currentTime:   now,
 		gasAccountant: NewNopGasAccountant(),
-		state:         state,
+		appState:      appState,
+		blockHeight:   appState.blockHeight,
+		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
 	}
+
+	switch mode {
+	case ContextInitChain:
+		c.state = appState.deliverTxTree
+	case ContextCheckTx:
+		c.state = appState.checkTxTree
+	case ContextDeliverTx, ContextBeginBlock, ContextEndBlock:
+		c.state = appState.deliverTxTree
+		c.blockCtx = appState.blockCtx
+	case ContextSimulateTx:
+		// Since simulation is running in parallel to any changes to the database, we make sure
+		// to create a separate in-memory tree at the given block height.
+		c.state = iavl.NewMutableTree(appState.db, 128)
+		// NOTE: This requires a specific implementation of `LoadVersion` which doesn't rely
+		//       on cached metadata. Such an implementation is provided in our fork of IAVL.
+		if _, err := c.state.LoadVersion(c.blockHeight); err != nil {
+			panic(fmt.Errorf("context: failed to load state at height %d: %w", c.blockHeight, err))
+		}
+		c.currentTime = appState.blockTime
+	default:
+		panic(fmt.Errorf("context: invalid mode: %s (%d)", mode, mode))
+	}
+
+	return c
 }
 
 // FromCtx extracts an ABCI context from a context.Context if one has been
@@ -61,14 +129,33 @@ func FromCtx(ctx context.Context) *Context {
 	return abciCtx
 }
 
-// Ctx returns a context.Context that is associated with this ABCI context.
-func (c *Context) Ctx() context.Context {
-	return context.WithValue(c.state.ctx, contextKey{}, c)
+// Close releases all resources associated with this context.
+//
+// After calling this method, the context should no longer be used.
+func (c *Context) Close() {
+	if c.IsSimulation() {
+		c.state.Rollback()
+	}
+
+	c.events = nil
+	c.appState = nil
+	c.state = nil
+	c.blockCtx = nil
 }
 
-// Type returns the type of this output.
-func (c *Context) Type() ContextType {
-	return c.outputType
+// Logger returns the logger associated with this context.
+func (c *Context) Logger() *logging.Logger {
+	return c.logger
+}
+
+// Ctx returns a context.Context that is associated with this ABCI context.
+func (c *Context) Ctx() context.Context {
+	return context.WithValue(c.appState.ctx, contextKey{}, c)
+}
+
+// Mode returns the context mode.
+func (c *Context) Mode() ContextMode {
+	return c.mode
 }
 
 // Data returns the data to be serialized with this output.
@@ -81,10 +168,12 @@ func (c *Context) Data() interface{} {
 // In case the method is called on a non-transaction context, this method
 // will panic.
 func (c *Context) TxSigner() signature.PublicKey {
-	if c.outputType != ContextCheckTx && c.outputType != ContextDeliverTx {
+	switch c.mode {
+	case ContextCheckTx, ContextDeliverTx, ContextSimulateTx:
+		return c.txSigner
+	default:
 		panic("context: only available in transaction context")
 	}
-	return c.txSigner
 }
 
 // SetTxSigner sets the authenticated transaction signer.
@@ -94,20 +183,27 @@ func (c *Context) TxSigner() signature.PublicKey {
 // In case the method is called on a non-transaction context, this method
 // will panic.
 func (c *Context) SetTxSigner(txSigner signature.PublicKey) {
-	if c.outputType != ContextCheckTx && c.outputType != ContextDeliverTx {
+	switch c.mode {
+	case ContextCheckTx, ContextDeliverTx, ContextSimulateTx:
+		c.txSigner = txSigner
+	default:
 		panic("context: only available in transaction context")
 	}
-	c.txSigner = txSigner
 }
 
-// IsInitChain returns true if this output is part of a InitChain.
+// IsInitChain returns true if this ia an init chain context.
 func (c *Context) IsInitChain() bool {
-	return c.outputType == ContextInitChain
+	return c.mode == ContextInitChain
 }
 
-// IsCheckOnly returns true if this output is part of a CheckTx.
+// IsCheckOnly returns true if this is a CheckTx context.
 func (c *Context) IsCheckOnly() bool {
-	return c.outputType == ContextCheckTx
+	return c.mode == ContextCheckTx
+}
+
+// IsSimulation returns true if this is a simulation-only context.
+func (c *Context) IsSimulation() bool {
+	return c.mode == ContextSimulateTx
 }
 
 // EmitData emits data to be serialized as transaction output.
@@ -166,20 +262,22 @@ func (c *Context) Now() time.Time {
 
 // State returns the mutable state tree.
 func (c *Context) State() *iavl.MutableTree {
-	if c.IsCheckOnly() {
-		return c.state.CheckTxTree()
-	}
-	return c.state.DeliverTxTree()
+	return c.state
 }
 
 // AppState returns the application state.
+//
+// Accessing application state in simulation mode is not allowed and will result in a panic.
 func (c *Context) AppState() *ApplicationState {
-	return c.state
+	if c.IsSimulation() {
+		panic("context: application state is not available in simulation mode")
+	}
+	return c.appState
 }
 
 // BlockHeight returns the current block height.
 func (c *Context) BlockHeight() int64 {
-	return c.state.BlockHeight()
+	return c.blockHeight
 }
 
 // BlockContext returns the current block context.
@@ -187,10 +285,7 @@ func (c *Context) BlockHeight() int64 {
 // In case there is no current block (e.g., because the current context is not
 // an execution context), this will return nil.
 func (c *Context) BlockContext() *BlockContext {
-	if c.IsInitChain() || c.IsCheckOnly() {
-		return nil
-	}
-	return c.state.BlockContext()
+	return c.blockCtx
 }
 
 // NewStateCheckpoint creates a new state checkpoint.

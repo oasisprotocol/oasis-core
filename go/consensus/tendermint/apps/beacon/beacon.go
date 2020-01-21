@@ -9,7 +9,6 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/crypto/sha3"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
@@ -28,8 +27,7 @@ var (
 )
 
 type beaconApplication struct {
-	logger *logging.Logger
-	state  *abci.ApplicationState
+	state *abci.ApplicationState
 }
 
 func (app *beaconApplication) Name() string {
@@ -88,7 +86,7 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 	state := beaconState.NewMutableState(ctx.State())
 	params, err := state.ConsensusParameters()
 	if err != nil {
-		app.logger.Error("failed to fetch consensus parameters",
+		ctx.Logger().Error("failed to fetch consensus parameters",
 			"err", err,
 		)
 		return err
@@ -102,7 +100,7 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 		if height <= 1 {
 			// No meaningful previous commit, use the block hash.  This isn't
 			// fantastic, but it's only for one epoch.
-			app.logger.Debug("onBeaconEpochChange: using block hash as entropy")
+			ctx.Logger().Debug("onBeaconEpochChange: using block hash as entropy")
 			entropy = req.Hash
 		} else {
 			// Use the previous commit hash as the entropy input, under the theory
@@ -113,7 +111,7 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 			// TODO: This still isn't ideal, and an entirely different beacon
 			// entropy source should be written, be it based around SCRAPE,
 			// a VDF, naive commit-reveal, or even just calling an SGX enclave.
-			app.logger.Debug("onBeaconEpochChange: using commit hash as entropy")
+			ctx.Logger().Debug("onBeaconEpochChange: using commit hash as entropy")
 			entropy = req.Header.GetLastCommitHash()
 		}
 		if len(entropy) == 0 {
@@ -132,7 +130,7 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 
 	b := GetBeacon(epoch, entropyCtx, entropy)
 
-	app.logger.Debug("onBeaconEpochChange: generated beacon",
+	ctx.Logger().Debug("onBeaconEpochChange: generated beacon",
 		"epoch", epoch,
 		"beacon", hex.EncodeToString(b),
 		"block_hash", hex.EncodeToString(entropy),
@@ -146,7 +144,7 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) erro
 	state := beaconState.NewMutableState(ctx.State())
 
 	if err := state.SetBeacon(beacon); err != nil {
-		app.logger.Error("onNewBeacon: failed to set beacon",
+		ctx.Logger().Error("onNewBeacon: failed to set beacon",
 			"err", err,
 		)
 		return errors.Wrap(err, "tendermint/beacon: failed to set beacon")
@@ -159,11 +157,7 @@ func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) erro
 
 // New constructs a new beacon application instance.
 func New() abci.Application {
-	app := &beaconApplication{
-		logger: logging.GetLogger("tendermint/beacon"),
-	}
-
-	return app
+	return &beaconApplication{}
 }
 
 func GetBeacon(beaconEpoch epochtime.EpochTime, entropyCtx []byte, entropy []byte) []byte {

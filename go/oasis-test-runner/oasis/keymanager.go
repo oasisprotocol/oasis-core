@@ -13,6 +13,8 @@ import (
 const (
 	kmStatusFile = "keymanager_status.json"
 	kmPolicyFile = "keymanager_policy.cbor"
+
+	keymanagerIdentitySeedTemplate = "ekiden node keymanager %d"
 )
 
 // Keymanager is an Oasis key manager.
@@ -177,6 +179,7 @@ func (km *Keymanager) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(km.consensusPort).
+		tendermintSubmissionGasPrice(km.submissionGasPrice).
 		workerClientPort(km.workerClientPort).
 		workerKeymangerEnabled().
 		workerKeymanagerRuntimeBinary(km.runtime.binary).
@@ -216,7 +219,9 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
-	publicKey, err := provisionNodeIdentity(kmDir)
+	// TODO: Use proper key manager index when multiple key managers are supported.
+	seed := fmt.Sprintf(keymanagerIdentitySeedTemplate, 0)
+	publicKey, err := net.provisionNodeIdentity(kmDir, seed)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/keymanager: failed to provision node identity")
 	}
@@ -232,6 +237,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 			restartable:                              cfg.Restartable,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
+			submissionGasPrice:                       cfg.SubmissionGasPrice,
 		},
 		runtime:          cfg.Runtime,
 		entity:           cfg.Entity,

@@ -20,7 +20,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
 	"github.com/oasislabs/oasis-core/go/registry/api"
@@ -288,14 +287,6 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, entity.Signer, tx)
 		require.Error(err, "UnfreezeNode (with invalid node)")
 		require.Equal(err, api.ErrNoSuchNode)
-
-		// Try to unfreeze with an invalid nonce (should fail).
-		tx = api.NewUnfreezeNodeTx(123, nil, &api.UnfreezeNode{
-			NodeID: node.Node.ID,
-		})
-		err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, entity.Signer, tx)
-		require.Error(err, "UnfreezeNode (with invalid nonce)")
-		require.Equal(err, transaction.ErrInvalidNonce)
 
 		// Try to unfreeze a node using the node signing key (should fail
 		// as unfreeze must be signed by entity signing key).

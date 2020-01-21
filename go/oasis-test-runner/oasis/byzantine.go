@@ -39,6 +39,7 @@ func (worker *Byzantine) startNode() error {
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
 		tendermintDebugAddrBookLenient().
+		tendermintSubmissionGasPrice(worker.submissionGasPrice).
 		workerP2pPort(worker.p2pPort).
 		appendSeedNodes(worker.net).
 		appendEntity(worker.entity).
@@ -88,12 +89,9 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 	if cfg.IdentitySeed == "" {
 		return nil, errors.New("oasis/byzantine: empty identity seed")
 	}
-	if err = net.generateDeterministicNodeIdentity(byzantineDir, cfg.IdentitySeed); err != nil {
-		return nil, errors.Wrap(err, "oasis/byzantine: failed to generate deterministic identity")
-	}
 
 	// Pre-provision the node identity so that we can update the entity.
-	publicKey, err := provisionNodeIdentity(byzantineDir)
+	publicKey, err := net.provisionNodeIdentity(byzantineDir, cfg.IdentitySeed)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/byzantine: failed to provision node identity")
 	}
@@ -108,6 +106,7 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 			dir:                                      byzantineDir,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
+			submissionGasPrice:                       cfg.SubmissionGasPrice,
 		},
 		script:          cfg.Script,
 		entity:          cfg.Entity,

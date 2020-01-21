@@ -1118,6 +1118,18 @@ const (
 	GasOpRuntimeEpochMaintenance transaction.Op = "runtime_epoch_maintenance"
 )
 
+// XXX: Define reasonable default gas costs.
+
+// DefaultGasCosts are the "default" gas costs for operations.
+var DefaultGasCosts = transaction.Costs{
+	GasOpRegisterEntity:          1000,
+	GasOpDeregisterEntity:        1000,
+	GasOpRegisterNode:            1000,
+	GasOpUnfreezeNode:            1000,
+	GasOpRegisterRuntime:         1000,
+	GasOpRuntimeEpochMaintenance: 1000,
+}
+
 // SanityCheckEntities examines the entities table.
 // Returns lookup of entity ID to the entity record for use in other checks.
 func SanityCheckEntities(entities []*entity.SignedEntity) (map[signature.PublicKey]*entity.Entity, error) {

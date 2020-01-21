@@ -3,14 +3,12 @@ package keymanager
 import (
 	"bytes"
 	"encoding/hex"
-	"time"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/crypto/sha3"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -26,8 +24,7 @@ import (
 var emptyHashSha3 = sha3.Sum256(nil)
 
 type keymanagerApplication struct {
-	logger *logging.Logger
-	state  *abci.ApplicationState
+	state *abci.ApplicationState
 }
 
 func (app *keymanagerApplication) Name() string {
@@ -101,7 +98,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 		oldStatus, err := state.Status(rt.ID)
 		if err != nil {
 			// This is fatal, as it suggests state corruption.
-			app.logger.Error("failed to query key manager status",
+			ctx.Logger().Error("failed to query key manager status",
 				"id", rt.ID,
 				"err", err,
 			)
@@ -115,9 +112,9 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 			}
 		}
 
-		newStatus := app.generateStatus(rt, oldStatus, nodes, ctx.Now())
+		newStatus := app.generateStatus(ctx, rt, oldStatus, nodes)
 		if forceEmit || !bytes.Equal(cbor.Marshal(oldStatus), cbor.Marshal(newStatus)) {
-			app.logger.Debug("status updated",
+			ctx.Logger().Debug("status updated",
 				"id", newStatus.ID,
 				"is_initialized", newStatus.IsInitialized,
 				"is_secure", newStatus.IsSecure,
@@ -142,7 +139,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 	return nil
 }
 
-func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStatus *api.Status, nodes []*node.Node, ts time.Time) *api.Status {
+func (app *keymanagerApplication) generateStatus(ctx *abci.Context, kmrt *registry.Runtime, oldStatus *api.Status, nodes []*node.Node) *api.Status {
 	status := &api.Status{
 		ID:            kmrt.ID,
 		IsInitialized: oldStatus.IsInitialized,
@@ -180,16 +177,16 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 			teeOk = kmrt.TEEHardware == nodeRt.Capabilities.TEE.Hardware
 		}
 		if !teeOk {
-			app.logger.Error("TEE hardware mismatch",
+			ctx.Logger().Error("TEE hardware mismatch",
 				"id", kmrt.ID,
 				"node_id", n.ID,
 			)
 			continue
 		}
 
-		initResponse, err := api.VerifyExtraInfo(app.logger, kmrt, nodeRt, ts)
+		initResponse, err := api.VerifyExtraInfo(ctx.Logger(), kmrt, nodeRt, ctx.Now())
 		if err != nil {
-			app.logger.Error("failed to validate ExtraInfo",
+			ctx.Logger().Error("failed to validate ExtraInfo",
 				"err", err,
 				"id", kmrt.ID,
 				"node_id", n.ID,
@@ -204,7 +201,7 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 		case api.ChecksumSize:
 			copy(nodePolicyHash[:], initResponse.PolicyChecksum)
 		default:
-			app.logger.Error("failed to parse policy checksum",
+			ctx.Logger().Error("failed to parse policy checksum",
 				"err", err,
 				"id", kmrt.ID,
 				"node_id", n.ID,
@@ -212,7 +209,7 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 			continue
 		}
 		if policyHash != nodePolicyHash {
-			app.logger.Error("Policy checksum mismatch for runtime",
+			ctx.Logger().Error("Policy checksum mismatch for runtime",
 				"id", kmrt.ID,
 				"node_id", n.ID,
 			)
@@ -223,14 +220,14 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 			// Already initialized.  Check to see if it should be added to
 			// the node list.
 			if initResponse.IsSecure != status.IsSecure {
-				app.logger.Error("Security status mismatch for runtime",
+				ctx.Logger().Error("Security status mismatch for runtime",
 					"id", kmrt.ID,
 					"node_id", n.ID,
 				)
 				continue
 			}
 			if !bytes.Equal(initResponse.Checksum, status.Checksum) {
-				app.logger.Error("Checksum mismatch for runtime",
+				ctx.Logger().Error("Checksum mismatch for runtime",
 					"id", kmrt.ID,
 					"node_id", n.ID,
 				)
@@ -243,7 +240,7 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 			// Allow false -> true transitions, but not the reverse, so that
 			// it is possible to set the security status in the genesis block.
 			if initResponse.IsSecure != status.IsSecure && !initResponse.IsSecure {
-				app.logger.Error("Security status mismatch for runtime",
+				ctx.Logger().Error("Security status mismatch for runtime",
 					"id", kmrt.ID,
 					"node_id", n.ID,
 				)
@@ -260,8 +257,7 @@ func (app *keymanagerApplication) generateStatus(kmrt *registry.Runtime, oldStat
 	return status
 }
 
+// New constructs a new keymanager application instance.
 func New() abci.Application {
-	return &keymanagerApplication{
-		logger: logging.GetLogger("tendermint/keymanager"),
-	}
+	return &keymanagerApplication{}
 }

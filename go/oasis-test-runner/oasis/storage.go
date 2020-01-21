@@ -10,6 +10,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/database"
 )
 
+const storageIdentitySeedTemplate = "ekiden node storage %d"
+
 // Storage is an Oasis storage node.
 type Storage struct { // nolint: maligned
 	Node
@@ -77,6 +79,7 @@ func (worker *Storage) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
+		tendermintSubmissionGasPrice(worker.submissionGasPrice).
 		storageBackend(worker.backend).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
@@ -121,7 +124,8 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
-	publicKey, err := provisionNodeIdentity(storageDir)
+	seed := fmt.Sprintf(storageIdentitySeedTemplate, len(net.storageWorkers))
+	publicKey, err := net.provisionNodeIdentity(storageDir, seed)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/storage: failed to provision node identity")
 	}
@@ -136,6 +140,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 			dir:                                      storageDir,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
+			submissionGasPrice:                       cfg.SubmissionGasPrice,
 		},
 		backend:       cfg.Backend,
 		entity:        cfg.Entity,

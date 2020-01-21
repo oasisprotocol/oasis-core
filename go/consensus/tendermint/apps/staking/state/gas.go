@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
@@ -34,6 +35,14 @@ func AuthenticateAndPayFees(
 	fee *transaction.Fee,
 ) error {
 	state := NewMutableState(ctx.State())
+
+	if ctx.IsSimulation() {
+		// If this is a simulation, the caller can use any amount of gas (as we usually want to
+		// estimate the amount of gas needed).
+		ctx.SetGasAccountant(abci.NewGasAccountant(transaction.Gas(math.MaxUint64)))
+
+		return nil
+	}
 
 	// Fetch account and make sure the nonce is correct.
 	account := state.Account(id)

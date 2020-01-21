@@ -9,7 +9,6 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -22,8 +21,6 @@ import (
 var _ abci.Application = (*stakingApplication)(nil)
 
 type stakingApplication struct {
-	logger *logging.Logger
-
 	state *abci.ApplicationState
 }
 
@@ -77,7 +74,7 @@ func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.Reque
 				return err
 			}
 		default:
-			app.logger.Warn("ignoring unknown evidence type",
+			ctx.Logger().Warn("ignoring unknown evidence type",
 				"evidence_type", evidence.Type,
 			)
 		}
@@ -163,7 +160,7 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 
 		var tokens quantity.Quantity
 		if err := escrow.Escrow.Debonding.Withdraw(&tokens, &deb.Shares, shareAmount); err != nil {
-			app.logger.Error("failed to redeem debonding shares",
+			ctx.Logger().Error("failed to redeem debonding shares",
 				"err", err,
 				"escrow_id", e.EscrowID,
 				"delegator_id", e.DelegatorID,
@@ -174,7 +171,7 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 		tokenAmount := tokens.Clone()
 
 		if err := quantity.Move(&delegator.General.Balance, &tokens, tokenAmount); err != nil {
-			app.logger.Error("failed to move debonded tokens",
+			ctx.Logger().Error("failed to move debonded tokens",
 				"err", err,
 				"escrow_id", e.EscrowID,
 				"delegator_id", e.DelegatorID,
@@ -191,7 +188,7 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 			state.SetAccount(e.EscrowID, escrow)
 		}
 
-		app.logger.Debug("released tokens",
+		ctx.Logger().Debug("released tokens",
 			"escrow_id", e.EscrowID,
 			"delegator_id", e.DelegatorID,
 			"amount", tokenAmount,
@@ -207,7 +204,7 @@ func (app *stakingApplication) onEpochChange(ctx *abci.Context, epoch epochtime.
 
 	// Add signing rewards.
 	if err := app.rewardEpochSigning(ctx, epoch); err != nil {
-		app.logger.Error("failed to add signing rewards",
+		ctx.Logger().Error("failed to add signing rewards",
 			"err", err,
 		)
 		return errors.Wrap(err, "staking/tendermint: failed to add signing rewards")
@@ -222,7 +219,5 @@ func (app *stakingApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) e
 
 // New constructs a new staking application instance.
 func New() abci.Application {
-	return &stakingApplication{
-		logger: logging.GetLogger("tendermint/staking"),
-	}
+	return &stakingApplication{}
 }

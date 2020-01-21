@@ -8,7 +8,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -23,8 +22,7 @@ import (
 var _ abci.Application = (*registryApplication)(nil)
 
 type registryApplication struct {
-	logger *logging.Logger
-	state  *abci.ApplicationState
+	state *abci.ApplicationState
 }
 
 func (app *registryApplication) Name() string {
@@ -97,7 +95,7 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Tra
 
 		params, err := state.ConsensusParameters()
 		if err != nil {
-			app.logger.Error("RegisterRuntime: failed to fetch consensus parameters",
+			ctx.Logger().Error("RegisterRuntime: failed to fetch consensus parameters",
 				"err", err,
 			)
 			return err
@@ -130,7 +128,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 
 	nodes, err := state.Nodes()
 	if err != nil {
-		app.logger.Error("onRegistryEpochChanged: failed to get nodes",
+		ctx.Logger().Error("onRegistryEpochChanged: failed to get nodes",
 			"err", err,
 		)
 		return fmt.Errorf("registry: onRegistryEpochChanged: failed to get nodes: %w", err)
@@ -138,7 +136,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 
 	debondingInterval, err := stakeState.DebondingInterval()
 	if err != nil {
-		app.logger.Error("onRegistryEpochChanged: failed to get debonding interval",
+		ctx.Logger().Error("onRegistryEpochChanged: failed to get debonding interval",
 			"err", err,
 		)
 		return fmt.Errorf("registry: onRegistryEpochChanged: failed to get debonding interval: %w", err)
@@ -173,7 +171,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 
 		// If node has been expired for the debonding interval, finally remove it.
 		if epochtime.EpochTime(node.Expiration)+debondingInterval < registryEpoch {
-			app.logger.Debug("removing expired node",
+			ctx.Logger().Debug("removing expired node",
 				"node_id", node.ID,
 			)
 			state.RemoveNode(node)
@@ -198,7 +196,5 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 
 // New constructs a new registry application instance.
 func New() abci.Application {
-	return &registryApplication{
-		logger: logging.GetLogger("tendermint/registry"),
-	}
+	return &registryApplication{}
 }

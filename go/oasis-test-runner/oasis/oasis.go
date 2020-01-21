@@ -63,6 +63,8 @@ type Node struct { // nolint: maligned
 
 	disableDefaultLogWatcherHandlerFactories bool
 	logWatcherHandlerFactories               []log.WatcherHandlerFactory
+
+	submissionGasPrice uint64
 }
 
 // Exit returns a channel that will close once the node shuts down.
@@ -117,6 +119,8 @@ type NodeCfg struct {
 
 	DisableDefaultLogWatcherHandlerFactories bool
 	LogWatcherHandlerFactories               []log.WatcherHandlerFactory
+
+	SubmissionGasPrice uint64
 }
 
 // CmdAttrs is the SysProcAttr that will ensure graceful cleanup.
@@ -689,6 +693,21 @@ func (net *Network) BasePath() string {
 	return net.baseDir.String()
 }
 
+func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string) (signature.PublicKey, error) {
+	if net.cfg.DeterministicIdentities {
+		if err := net.generateDeterministicNodeIdentity(dataDir, seed); err != nil {
+			return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to generate deterministic identity")
+		}
+	}
+
+	signerFactory := fileSigner.NewFactory(dataDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	nodeIdentity, err := identity.LoadOrGenerate(dataDir.String(), signerFactory)
+	if err != nil {
+		return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to provision node identity")
+	}
+	return nodeIdentity.NodeSigner.Public(), nil
+}
+
 // New creates a new test Oasis network.
 func New(env *env.Env, cfg *NetworkCfg) (*Network, error) {
 	baseDir, err := env.NewSubDir("network")
@@ -753,13 +772,4 @@ func nodeTLSCertPath(dir *env.Dir) string {
 
 func nodeExportsPath(dir *env.Dir) string {
 	return filepath.Join(dir.String(), exportsDir)
-}
-
-func provisionNodeIdentity(dataDir *env.Dir) (signature.PublicKey, error) {
-	signerFactory := fileSigner.NewFactory(dataDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
-	nodeIdentity, err := identity.LoadOrGenerate(dataDir.String(), signerFactory)
-	if err != nil {
-		return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to provision node identity")
-	}
-	return nodeIdentity.NodeSigner.Public(), nil
 }

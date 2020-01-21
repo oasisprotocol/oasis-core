@@ -25,7 +25,7 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, signingEntities [
 		return fmt.Errorf("staking: failed to query last block fees: %w", err)
 	}
 
-	app.logger.Debug("disbursing fees",
+	ctx.Logger().Debug("disbursing fees",
 		"total_amount", totalFees,
 	)
 	if totalFees.IsZero() {
@@ -65,7 +65,7 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, signingEntities [
 		// Perform the transfer.
 		acct := stakeState.Account(d.id)
 		if err := quantity.Move(&acct.General.Balance, totalFees, disburseAmount); err != nil {
-			app.logger.Error("failed to disburse fees",
+			ctx.Logger().Error("failed to disburse fees",
 				"err", err,
 				"to", d.id,
 				"amount", disburseAmount,
@@ -81,7 +81,7 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, signingEntities [
 			return fmt.Errorf("staking: failed to query common pool: %w", err)
 		}
 		if err := quantity.Move(commonPool, totalFees, totalFees); err != nil {
-			app.logger.Error("failed to move remainder to common pool",
+			ctx.Logger().Error("failed to move remainder to common pool",
 				"err", err,
 				"amount", totalFees,
 			)

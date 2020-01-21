@@ -97,6 +97,10 @@ const (
 
 	// CfgConsensusMinGasPrice configures the minimum gas price for this validator.
 	CfgConsensusMinGasPrice = "consensus.tendermint.min_gas_price"
+	// CfgConsensusSubmissionGasPrice configures the gas price used when submitting transactions.
+	CfgConsensusSubmissionGasPrice = "consensus.tendermint.submission.gas_price"
+	// CfgConsensusSubmissionMaxFee configures the maximum fee that can be set.
+	CfgConsensusSubmissionMaxFee = "consensus.tendermint.submission.max_fee"
 
 	// StateDir is the name of the directory located inside the node's data
 	// directory which contains the tendermint state.
@@ -529,6 +533,10 @@ func (t *tendermintService) SubmitEvidence(ctx context.Context, evidence consens
 	}
 
 	return nil
+}
+
+func (t *tendermintService) EstimateGas(ctx context.Context, caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error) {
+	return t.mux.EstimateGas(caller, tx)
 }
 
 func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
@@ -1186,7 +1194,11 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, genes
 	}
 
 	// Create the submission manager.
-	t.submissionMgr = consensusAPI.NewSubmissionManager(t)
+	pd, err := consensusAPI.NewStaticPriceDiscovery(viper.GetUint64(CfgConsensusSubmissionGasPrice))
+	if err != nil {
+		return nil, fmt.Errorf("tendermint: failed to create submission manager: %w", err)
+	}
+	t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd, viper.GetUint64(CfgConsensusSubmissionMaxFee))
 
 	return t, t.initialize()
 }
@@ -1330,6 +1342,8 @@ func init() {
 	Flags.Bool(CfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
 	Flags.Bool(CfgDebugP2PAllowDuplicateIP, false, "Allow multiple connections from the same IP")
 	Flags.Uint64(CfgConsensusMinGasPrice, 0, "minimum gas price")
+	Flags.Uint64(CfgConsensusSubmissionGasPrice, 0, "gas price used when submitting consensus transactions")
+	Flags.Uint64(CfgConsensusSubmissionMaxFee, 0, "maximum transaction fee when submitting consensus transactions")
 
 	_ = Flags.MarkHidden(cfgLogDebug)
 	_ = Flags.MarkHidden(CfgDebugP2PAddrBookLenient)

@@ -247,6 +247,9 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			DebugAllowRuntimeRegistration: viper.GetBool(CfgRegistryDebugAllowRuntimeRegistration),
 			DebugAllowTestRuntimes:        viper.GetBool(CfgRegistryDebugAllowTestRuntimes),
 			DebugBypassStake:              viper.GetBool(cfgRegistryDebugBypassStake),
+
+			// TODO: Make these configurable.
+			GasCosts: registry.DefaultGasCosts,
 		},
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
 		Runtimes: make([]*registry.SignedRuntime, 0, len(runtimes)),
@@ -409,6 +412,11 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Logger) error {
 	rootSt := roothash.Genesis{
 		RuntimeStates: make(map[common.Namespace]*registry.RuntimeGenesis),
+
+		Parameters: roothash.ConsensusParameters{
+			// TODO: Make these configurable.
+			GasCosts: roothash.DefaultGasCosts,
+		},
 	}
 
 	for _, v := range exports {

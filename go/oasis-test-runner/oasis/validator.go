@@ -13,6 +13,8 @@ import (
 	cmdRegNode "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/node"
 )
 
+const validatorIdentitySeedTemplate = "ekiden node validator %d"
+
 // Validator is an Oasis validator.
 type Validator struct {
 	Node
@@ -80,6 +82,7 @@ func (val *Validator) startNode() error {
 		consensusValidator().
 		tendermintCoreListenAddress(val.consensusPort).
 		tendermintMinGasPrice(val.minGasPrice).
+		tendermintSubmissionGasPrice(val.submissionGasPrice).
 		storageBackend("client").
 		appendNetwork(val.net).
 		appendEntity(val.entity)
@@ -131,6 +134,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			restartable:                              cfg.Restartable,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
+			submissionGasPrice:                       cfg.SubmissionGasPrice,
 		},
 		entity:        cfg.Entity,
 		minGasPrice:   cfg.MinGasPrice,
@@ -158,6 +162,18 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		consensusAddrs = append(consensusAddrs, &consensusAddr)
 	}
 
+	// Load node's identity, so that we can pass the validator's Tendermint
+	// address to sentry node(s) to configure it as a private peer.
+	seed := fmt.Sprintf(validatorIdentitySeedTemplate, len(net.validators))
+	valPublicKey, err := net.provisionNodeIdentity(valDir, seed)
+	if err != nil {
+		return nil, errors.Wrap(err, "oasis/validator: failed to provision node identity")
+	}
+	val.tmAddress = crypto.PublicKeyToTendermint(&valPublicKey).Address().String()
+	if err = cfg.Entity.addNode(valPublicKey); err != nil {
+		return nil, err
+	}
+
 	args := []string{
 		"registry", "node", "init",
 		"--" + cmdCommon.CfgDataDir, val.dir.String(),
@@ -181,17 +197,6 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			"validator_name", valName,
 		)
 		return nil, errors.Wrap(err, "oasis/validator: failed to provision validator")
-	}
-
-	// Load node's identity, so that we can pass the validator's Tendermint
-	// address to sentry node(s) to configure it as a private peer.
-	valPublicKey, err := provisionNodeIdentity(valDir)
-	if err != nil {
-		return nil, errors.Wrap(err, "oasis/validator: failed to provision node identity")
-	}
-	val.tmAddress = crypto.PublicKeyToTendermint(&valPublicKey).Address().String()
-	if err = cfg.Entity.addNode(valPublicKey); err != nil {
-		return nil, err
 	}
 
 	net.validators = append(net.validators, val)

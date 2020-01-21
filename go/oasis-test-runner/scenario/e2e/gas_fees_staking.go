@@ -23,9 +23,9 @@ import (
 )
 
 var (
-	// GasFees is the gas fees scenario.
-	GasFees scenario.Scenario = &gasFeesImpl{
-		logger: logging.GetLogger("scenario/e2e/gas_fees"),
+	// GasFeesStaking is the staking gas fees scenario.
+	GasFeesStaking scenario.Scenario = &gasFeesImpl{
+		logger: logging.GetLogger("scenario/e2e/gas-fees/staking"),
 	}
 
 	// srcSigner is the signer for public key defined in the staking genesis
@@ -41,7 +41,7 @@ type gasFeesImpl struct {
 }
 
 func (sc *gasFeesImpl) Name() string {
-	return "gas-fees"
+	return "gas-fees/staking"
 }
 
 func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {

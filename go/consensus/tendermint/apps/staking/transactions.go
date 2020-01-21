@@ -46,7 +46,7 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 		// Handle transfer to self as just a balance check.
 		if from.General.Balance.Cmp(&xfer.Tokens) < 0 {
 			err := staking.ErrInsufficientBalance
-			app.logger.Error("Transfer: self-transfer greater than balance",
+			ctx.Logger().Error("Transfer: self-transfer greater than balance",
 				"err", err,
 				"from", fromID,
 				"to", xfer.To,
@@ -59,7 +59,7 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 		// quantity.Move is implemented.
 		to := state.Account(xfer.To)
 		if err := quantity.Move(&to.General.Balance, &from.General.Balance, &xfer.Tokens); err != nil {
-			app.logger.Error("Transfer: failed to move balance",
+			ctx.Logger().Error("Transfer: failed to move balance",
 				"err", err,
 				"from", fromID,
 				"to", xfer.To,
@@ -73,7 +73,7 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 
 	state.SetAccount(fromID, from)
 
-	app.logger.Debug("Transfer: executed transfer",
+	ctx.Logger().Debug("Transfer: executed transfer",
 		"from", fromID,
 		"to", xfer.To,
 		"amount", xfer.Tokens,
@@ -107,7 +107,7 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.Mutab
 	from := state.Account(id)
 
 	if err := from.General.Balance.Sub(&burn.Tokens); err != nil {
-		app.logger.Error("Burn: failed to burn tokens",
+		ctx.Logger().Error("Burn: failed to burn tokens",
 			"err", err,
 			"from", id, "amount", burn.Tokens,
 		)
@@ -121,7 +121,7 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.Mutab
 	state.SetAccount(id, from)
 	state.SetTotalSupply(totalSupply)
 
-	app.logger.Debug("Burn: burnt tokens",
+	ctx.Logger().Debug("Burn: burnt tokens",
 		"from", id,
 		"amount", burn.Tokens,
 	)
@@ -175,7 +175,7 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 	delegation := state.Delegation(id, escrow.Account)
 
 	if err := to.Escrow.Active.Deposit(&delegation.Shares, &from.General.Balance, &escrow.Tokens); err != nil {
-		app.logger.Error("AddEscrow: failed to escrow tokens",
+		ctx.Logger().Error("AddEscrow: failed to escrow tokens",
 			"err", err,
 			"from", id,
 			"to", escrow.Account,
@@ -192,7 +192,7 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 	// Commit delegation descriptor.
 	state.SetDelegation(id, escrow.Account, delegation)
 
-	app.logger.Debug("AddEscrow: escrowed tokens",
+	ctx.Logger().Debug("AddEscrow: escrowed tokens",
 		"from", id,
 		"to", escrow.Account,
 		"amount", escrow.Tokens,
@@ -250,7 +250,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	// Fetch debonding interval and current epoch.
 	debondingInterval, err := state.DebondingInterval()
 	if err != nil {
-		app.logger.Error("ReclaimEscrow: failed to query debonding interval",
+		ctx.Logger().Error("ReclaimEscrow: failed to query debonding interval",
 			"err", err,
 		)
 		return err
@@ -267,7 +267,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	var tokens quantity.Quantity
 
 	if err := from.Escrow.Active.Withdraw(&tokens, &delegation.Shares, &reclaim.Shares); err != nil {
-		app.logger.Error("ReclaimEscrow: failed to redeem escrow shares",
+		ctx.Logger().Error("ReclaimEscrow: failed to redeem escrow shares",
 			"err", err,
 			"to", id,
 			"from", reclaim.Account,
@@ -278,7 +278,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	tokenAmount := tokens.Clone()
 
 	if err := from.Escrow.Debonding.Deposit(&deb.Shares, &tokens, tokenAmount); err != nil {
-		app.logger.Error("ReclaimEscrow: failed to debond shares",
+		ctx.Logger().Error("ReclaimEscrow: failed to debond shares",
 			"err", err,
 			"to", id,
 			"from", reclaim.Account,
@@ -288,7 +288,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	}
 
 	if !tokens.IsZero() {
-		app.logger.Error("ReclaimEscrow: inconsistency in transferring tokens from active escrow to debonding",
+		ctx.Logger().Error("ReclaimEscrow: inconsistency in transferring tokens from active escrow to debonding",
 			"remaining", tokens,
 		)
 		return staking.ErrInvalidArgument
@@ -334,7 +334,7 @@ func (app *stakingApplication) amendCommissionSchedule(
 	from := state.Account(id)
 
 	if err = from.Escrow.CommissionSchedule.AmendAndPruneAndValidate(&amendCommissionSchedule.Amendment, &params.CommissionScheduleRules, epoch); err != nil {
-		app.logger.Error("AmendCommissionSchedule: amendment not acceptable",
+		ctx.Logger().Error("AmendCommissionSchedule: amendment not acceptable",
 			"err", err,
 			"from", id,
 		)

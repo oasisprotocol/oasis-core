@@ -75,6 +75,13 @@ func (args *argBuilder) tendermintMinGasPrice(price uint64) *argBuilder {
 	return args
 }
 
+func (args *argBuilder) tendermintSubmissionGasPrice(price uint64) *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + tendermint.CfgConsensusSubmissionGasPrice, strconv.Itoa(int(price)),
+	}...)
+	return args
+}
+
 func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + tendermint.CfgCoreListenAddress, "tcp://0.0.0.0:" + strconv.Itoa(int(port)),

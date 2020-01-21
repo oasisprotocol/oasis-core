@@ -79,6 +79,14 @@ func (q *Quantity) FromInt64(n int64) error {
 	return q.FromBigInt(big.NewInt(n))
 }
 
+// FromUint64 converts from an uint64 to a Quantity.
+func (q *Quantity) FromUint64(n uint64) error {
+	var tmp big.Int
+	tmp.SetUint64(n)
+
+	return q.FromBigInt(&tmp)
+}
+
 // FromBigInt converts from a big.Int to a Quantity.
 func (q *Quantity) FromBigInt(n *big.Int) error {
 	if n == nil || !isValid(n) {

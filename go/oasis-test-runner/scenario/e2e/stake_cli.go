@@ -41,7 +41,7 @@ const (
 	feeAmount = 10
 
 	// Transaction fee gas.
-	feeGas = 10
+	feeGas = 10000
 
 	// Source address in the genesis block.
 	srcAddress = "4ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"

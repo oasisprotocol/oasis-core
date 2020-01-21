@@ -19,7 +19,7 @@ func (app *registryApplication) registerEntity(
 	state *registryState.MutableState,
 	sigEnt *entity.SignedEntity,
 ) error {
-	ent, err := registry.VerifyRegisterEntityArgs(app.logger, sigEnt, ctx.IsInitChain())
+	ent, err := registry.VerifyRegisterEntityArgs(ctx.Logger(), sigEnt, ctx.IsInitChain())
 	if err != nil {
 		return err
 	}
@@ -31,7 +31,7 @@ func (app *registryApplication) registerEntity(
 	// Charge gas for this transaction.
 	params, err := state.ConsensusParameters()
 	if err != nil {
-		app.logger.Error("RegisterEntity: failed to fetch consensus parameters",
+		ctx.Logger().Error("RegisterEntity: failed to fetch consensus parameters",
 			"err", err,
 		)
 		return err
@@ -45,7 +45,7 @@ func (app *registryApplication) registerEntity(
 
 	if !params.DebugBypassStake {
 		if err = stakingState.EnsureSufficientStake(ctx, ent.ID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
-			app.logger.Error("RegisterEntity: Insufficent stake",
+			ctx.Logger().Error("RegisterEntity: Insufficent stake",
 				"err", err,
 				"id", ent.ID,
 			)
@@ -62,7 +62,7 @@ func (app *registryApplication) registerEntity(
 
 	state.SetEntity(ent, sigEnt)
 
-	app.logger.Debug("RegisterEntity: registered",
+	ctx.Logger().Debug("RegisterEntity: registered",
 		"entity", ent,
 	)
 
@@ -79,7 +79,7 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 	// Charge gas for this transaction.
 	params, err := state.ConsensusParameters()
 	if err != nil {
-		app.logger.Error("DeregisterEntity: failed to fetch consensus parameters",
+		ctx.Logger().Error("DeregisterEntity: failed to fetch consensus parameters",
 			"err", err,
 		)
 		return err
@@ -93,13 +93,13 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 	// Prevent entity deregistration if there are any registered nodes.
 	hasNodes, err := state.HasEntityNodes(id)
 	if err != nil {
-		app.logger.Error("DeregisterEntity: failed to check for nodes",
+		ctx.Logger().Error("DeregisterEntity: failed to check for nodes",
 			"err", err,
 		)
 		return err
 	}
 	if hasNodes {
-		app.logger.Error("DeregisterEntity: entity still has nodes",
+		ctx.Logger().Error("DeregisterEntity: entity still has nodes",
 			"entity_id", id,
 		)
 		return registry.ErrEntityHasNodes
@@ -110,7 +110,7 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 		return err
 	}
 
-	app.logger.Debug("DeregisterEntity: complete",
+	ctx.Logger().Debug("DeregisterEntity: complete",
 		"entity_id", id,
 	)
 
@@ -134,7 +134,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	// Peek into the to-be-verified node to pull out the owning entity ID.
 	var untrustedNode node.Node
 	if err := cbor.Unmarshal(sigNode.Blob, &untrustedNode); err != nil {
-		app.logger.Error("RegisterNode: failed to extract entity",
+		ctx.Logger().Error("RegisterNode: failed to extract entity",
 			"err", err,
 			"signed_node", sigNode,
 		)
@@ -142,7 +142,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	}
 	untrustedEntity, err := state.Entity(untrustedNode.EntityID)
 	if err != nil {
-		app.logger.Error("RegisterNode: failed to query owning entity",
+		ctx.Logger().Error("RegisterNode: failed to query owning entity",
 			"err", err,
 			"signed_node", sigNode,
 		)
@@ -151,14 +151,14 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 	params, err := state.ConsensusParameters()
 	if err != nil {
-		app.logger.Error("RegisterNode: failed to fetch consensus parameters",
+		ctx.Logger().Error("RegisterNode: failed to fetch consensus parameters",
 			"err", err,
 		)
 		return err
 	}
 	newNode, paidRuntimes, err := registry.VerifyRegisterNodeArgs(
 		params,
-		app.logger,
+		ctx.Logger(),
 		sigNode,
 		untrustedEntity,
 		ctx.Now(),
@@ -192,14 +192,14 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	)
 	if !params.DebugBypassStake {
 		if stakeCache, err = stakingState.NewStakeCache(ctx); err != nil {
-			app.logger.Error("RegisterNode: failed to instantiate stake cache",
+			ctx.Logger().Error("RegisterNode: failed to instantiate stake cache",
 				"err", err,
 			)
 			return err
 		}
 
 		if err = stakeCache.EnsureSufficientStake(newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
-			app.logger.Error("RegisterNode: insufficent stake, entity no longer valid",
+			ctx.Logger().Error("RegisterNode: insufficent stake, entity no longer valid",
 				"err", err,
 				"id", newNode.EntityID,
 			)
@@ -207,7 +207,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 
 		if numEntityNodes, err = state.NumEntityNodes(newNode.EntityID); err != nil {
-			app.logger.Error("RegisterNode: failed to query existing nodes for entity",
+			ctx.Logger().Error("RegisterNode: failed to query existing nodes for entity",
 				"err", err,
 				"entity", newNode.EntityID,
 			)
@@ -232,7 +232,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	isExpiredNode := err == nil && existingNode.IsExpired(uint64(epoch))
 	if !isNewNode && err != nil {
 		// Something went horribly wrong, and we failed to query the node.
-		app.logger.Error("RegisterNode: failed to query node",
+		ctx.Logger().Error("RegisterNode: failed to query node",
 			"err", err,
 			"new_node", newNode,
 			"existing_node", existingNode,
@@ -274,7 +274,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		// Check that the entity has enough stake for this node registration.
 		if !params.DebugBypassStake {
 			if err = stakeCache.EnsureNodeRegistrationStake(newNode.EntityID, numEntityNodes+1); err != nil {
-				app.logger.Error("RegisterNode: insufficient stake for new node",
+				ctx.Logger().Error("RegisterNode: insufficient stake for new node",
 					"err", err,
 					"entity", newNode.EntityID,
 				)
@@ -284,7 +284,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 		// Node doesn't exist (or is expired). Create node.
 		if err = state.SetNode(newNode, sigNode); err != nil {
-			app.logger.Error("RegisterNode: failed to create node",
+			ctx.Logger().Error("RegisterNode: failed to create node",
 				"err", err,
 				"node", newNode,
 				"entity", newNode.EntityID,
@@ -296,7 +296,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		if existingNode != nil {
 			// Node exists but is expired, fetch existing status.
 			if status, err = state.NodeStatus(newNode.ID); err != nil {
-				app.logger.Error("RegisterNode: failed to get node status",
+				ctx.Logger().Error("RegisterNode: failed to get node status",
 					"err", err,
 				)
 				return registry.ErrInvalidArgument
@@ -310,7 +310,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 
 		if err = state.SetNodeStatus(newNode.ID, status); err != nil {
-			app.logger.Error("RegisterNode: failed to set node status",
+			ctx.Logger().Error("RegisterNode: failed to set node status",
 				"err", err,
 			)
 			return registry.ErrInvalidArgument
@@ -320,7 +320,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		// registrations.
 		if !params.DebugBypassStake {
 			if err = stakeCache.EnsureNodeRegistrationStake(newNode.EntityID, numEntityNodes); err != nil {
-				app.logger.Error("RegisterNode: insufficient stake for existing nodes",
+				ctx.Logger().Error("RegisterNode: insufficient stake for existing nodes",
 					"err", err,
 					"entity", newNode.EntityID,
 				)
@@ -329,8 +329,8 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 
 		// The node already exists, validate and update the node's entry.
-		if err = registry.VerifyNodeUpdate(app.logger, existingNode, newNode); err != nil {
-			app.logger.Error("RegisterNode: failed to verify node update",
+		if err = registry.VerifyNodeUpdate(ctx.Logger(), existingNode, newNode); err != nil {
+			ctx.Logger().Error("RegisterNode: failed to verify node update",
 				"err", err,
 				"new_node", newNode,
 				"existing_node", existingNode,
@@ -339,7 +339,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			return err
 		}
 		if err = state.SetNode(newNode, sigNode); err != nil {
-			app.logger.Error("RegisterNode: failed to update node",
+			ctx.Logger().Error("RegisterNode: failed to update node",
 				"err", err,
 				"node", newNode,
 				"entity", newNode.EntityID,
@@ -354,7 +354,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		err := state.ResumeRuntime(rt.ID)
 		switch err {
 		case nil:
-			app.logger.Debug("RegisterNode: resumed runtime",
+			ctx.Logger().Debug("RegisterNode: resumed runtime",
 				"runtime_id", rt.ID,
 			)
 
@@ -362,7 +362,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		case registry.ErrNoSuchRuntime:
 			// Runtime was not suspended.
 		default:
-			app.logger.Error("RegisterNode: failed to resume suspended runtime",
+			ctx.Logger().Error("RegisterNode: failed to resume suspended runtime",
 				"err", err,
 				"runtime_id", rt.ID,
 			)
@@ -372,7 +372,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 	ok = true
 
-	app.logger.Debug("RegisterNode: registered",
+	ctx.Logger().Debug("RegisterNode: registered",
 		"node", newNode,
 		"roles", newNode.Roles,
 	)
@@ -394,7 +394,7 @@ func (app *registryApplication) unfreezeNode(
 	// Charge gas for this transaction.
 	params, err := state.ConsensusParameters()
 	if err != nil {
-		app.logger.Error("UnfreezeNode: failed to fetch consensus parameters",
+		ctx.Logger().Error("UnfreezeNode: failed to fetch consensus parameters",
 			"err", err,
 		)
 		return err
@@ -406,7 +406,7 @@ func (app *registryApplication) unfreezeNode(
 	// Fetch node descriptor.
 	node, err := state.Node(unfreeze.NodeID)
 	if err != nil {
-		app.logger.Error("UnfreezeNode: failed to fetch node",
+		ctx.Logger().Error("UnfreezeNode: failed to fetch node",
 			"err", err,
 			"node_id", unfreeze.NodeID,
 		)
@@ -420,7 +420,7 @@ func (app *registryApplication) unfreezeNode(
 	// Fetch node status.
 	status, err := state.NodeStatus(unfreeze.NodeID)
 	if err != nil {
-		app.logger.Error("UnfreezeNode: failed to fetch node status",
+		ctx.Logger().Error("UnfreezeNode: failed to fetch node status",
 			"err", err,
 			"node_id", unfreeze.NodeID,
 			"entity_id", node.EntityID,
@@ -443,7 +443,7 @@ func (app *registryApplication) unfreezeNode(
 		return err
 	}
 
-	app.logger.Debug("UnfreezeNode: unfrozen",
+	ctx.Logger().Debug("UnfreezeNode: unfrozen",
 		"node_id", node.ID,
 	)
 
@@ -459,19 +459,19 @@ func (app *registryApplication) registerRuntime(
 ) error {
 	params, err := state.ConsensusParameters()
 	if err != nil {
-		app.logger.Error("RegisterRuntime: failed to fetch consensus parameters",
+		ctx.Logger().Error("RegisterRuntime: failed to fetch consensus parameters",
 			"err", err,
 		)
 		return err
 	}
 
-	rt, err := registry.VerifyRegisterRuntimeArgs(params, app.logger, sigRt, ctx.IsInitChain())
+	rt, err := registry.VerifyRegisterRuntimeArgs(params, ctx.Logger(), sigRt, ctx.IsInitChain())
 	if err != nil {
 		return err
 	}
 
 	if rt.Kind == registry.KindCompute {
-		if err = registry.VerifyRegisterComputeRuntimeArgs(app.logger, rt, state); err != nil {
+		if err = registry.VerifyRegisterComputeRuntimeArgs(ctx.Logger(), rt, state); err != nil {
 			return err
 		}
 	}
@@ -526,14 +526,14 @@ func (app *registryApplication) registerRuntime(
 	}
 	// If there is an existing runtime, verify update.
 	if existingRt != nil {
-		err = registry.VerifyRuntimeUpdate(app.logger, existingRt, sigRt, rt)
+		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, sigRt, rt)
 		if err != nil {
 			return err
 		}
 	}
 
 	if err = state.SetRuntime(rt, sigRt, suspended); err != nil {
-		app.logger.Error("RegisterRuntime: failed to create runtime",
+		ctx.Logger().Error("RegisterRuntime: failed to create runtime",
 			"err", err,
 			"runtime", rt,
 			"entity", sigRt.Signature.PublicKey,
@@ -542,7 +542,7 @@ func (app *registryApplication) registerRuntime(
 	}
 
 	if !suspended {
-		app.logger.Debug("RegisterRuntime: registered",
+		ctx.Logger().Debug("RegisterRuntime: registered",
 			"runtime", rt,
 		)
 

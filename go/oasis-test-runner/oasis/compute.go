@@ -81,6 +81,7 @@ func (worker *Compute) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
+		tendermintSubmissionGasPrice(worker.submissionGasPrice).
 		storageBackend(storageClient.BackendName).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
@@ -126,15 +127,9 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		return nil, errors.Wrap(err, "oasis/compute: failed to create compute subdir")
 	}
 
-	if net.cfg.DeterministicIdentities {
-		seed := fmt.Sprintf(computeIdentitySeedTemplate, len(net.computeWorkers))
-		if err = net.generateDeterministicNodeIdentity(computeDir, seed); err != nil {
-			return nil, errors.Wrap(err, "oasis/compute: failed to generate deterministic identity")
-		}
-	}
-
 	// Pre-provision the node identity so that we can update the entity.
-	publicKey, err := provisionNodeIdentity(computeDir)
+	seed := fmt.Sprintf(computeIdentitySeedTemplate, len(net.computeWorkers))
+	publicKey, err := net.provisionNodeIdentity(computeDir, seed)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/compute: failed to provision node identity")
 	}
@@ -154,6 +149,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 			restartable:                              cfg.Restartable,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
+			submissionGasPrice:                       cfg.SubmissionGasPrice,
 		},
 		entity:         cfg.Entity,
 		runtimeBackend: cfg.RuntimeBackend,
