@@ -66,12 +66,7 @@ fn main() {
             true,
         );
 
-        // HACK: There is no nice way of passing in the runtime ID at compile
-        // time yet.
-        let runtime_id =
-            RuntimeId::from_str("c000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff")
-                .unwrap();
-
+        let runtime_id = protocol.get_runtime_id();
         let km_proto = protocol.clone(); // Shut up the borrow checker.
         rpc.set_context_initializer(move |ctx: &mut RpcContext| {
             ctx.runtime = Box::new(context::Context {
