@@ -10,6 +10,16 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.1.2 (2020-01-21)
+
+### Bug Fixes
+
+- go/oasis-node: Include account ID in `stake list -v` subcommand.
+  ([#2567](https://github.com/oasislabs/oasis-core/issues/2567))
+
+  Changes `stake list -v` subcommand to return a map of IDs to accounts.
+
+
 ## 20.1.1 (2020-01-16)
 
 ### Bug Fixes
