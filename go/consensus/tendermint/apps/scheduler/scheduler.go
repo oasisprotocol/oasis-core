@@ -213,10 +213,10 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		}
 
 		kinds := []scheduler.CommitteeKind{
-			scheduler.KindExecutor,
+			scheduler.KindComputeExecutor,
+			scheduler.KindComputeTxnScheduler,
+			scheduler.KindComputeMerge,
 			scheduler.KindStorage,
-			scheduler.KindTransactionScheduler,
-			scheduler.KindMerge,
 		}
 		for _, kind := range kinds {
 			if err = app.electAllCommittees(ctx, request, epoch, beacon, entityStake, entitiesEligibleForReward, runtimes, nodes, kind); err != nil {
@@ -427,7 +427,7 @@ func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes i
 // For non-fatal problems, save a problem condition to the state and return successfully.
 func (app *schedulerApplication) electCommittee(ctx *abci.Context, epoch epochtime.EpochTime, beacon []byte, entityStake *stakeAccumulator, entitiesEligibleForReward map[signature.PublicKey]bool, rt *registry.Runtime, nodes []*node.Node, kind scheduler.CommitteeKind) error {
 	// Only generic compute runtimes need to elect all the committees.
-	if !rt.IsCompute() && kind != scheduler.KindExecutor {
+	if !rt.IsCompute() && kind != scheduler.KindComputeExecutor {
 		return nil
 	}
 
@@ -444,19 +444,19 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, epoch epochti
 	)
 
 	switch kind {
-	case scheduler.KindExecutor:
+	case scheduler.KindComputeExecutor:
 		rngCtx = RNGContextExecutor
 		threshold = staking.KindCompute
 		isSuitableFn = app.isSuitableExecutorWorker
 		workerSize = int(rt.Executor.GroupSize)
 		backupSize = int(rt.Executor.GroupBackupSize)
-	case scheduler.KindMerge:
+	case scheduler.KindComputeMerge:
 		rngCtx = RNGContextMerge
 		threshold = staking.KindCompute
 		isSuitableFn = app.isSuitableMergeWorker
 		workerSize = int(rt.Merge.GroupSize)
 		backupSize = int(rt.Merge.GroupBackupSize)
-	case scheduler.KindTransactionScheduler:
+	case scheduler.KindComputeTxnScheduler:
 		rngCtx = RNGContextTransactionScheduler
 		threshold = staking.KindCompute
 		isSuitableFn = app.isSuitableTransactionScheduler
@@ -470,9 +470,14 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, epoch epochti
 		return fmt.Errorf("tendermint/scheduler: invalid committee type: %v", kind)
 	}
 
+	needsLeader, err := kind.NeedsLeader()
+	if err != nil {
+		return fmt.Errorf("tendermint/scheduler: error while calling needsLeader() on kind %v: %w", kind, err)
+	}
+
 	for _, n := range nodes {
 		// Check, but do not accumulate stake till the election happens.
-		if err := entityStake.checkThreshold(n.EntityID, threshold, false); err != nil {
+		if err = entityStake.checkThreshold(n.EntityID, threshold, false); err != nil {
 			continue
 		}
 		if isSuitableFn(ctx, n, rt) {
@@ -522,7 +527,7 @@ func (app *schedulerApplication) electCommittee(ctx *abci.Context, epoch epochti
 		}
 
 		role := scheduler.Worker
-		if i == 0 && kind.NeedsLeader() {
+		if i == 0 && needsLeader {
 			role = scheduler.Leader
 		} else if i >= workerSize {
 			role = scheduler.BackupWorker

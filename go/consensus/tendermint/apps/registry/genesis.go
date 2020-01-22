@@ -36,7 +36,7 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	} else {
 		// This is informational for now since there are configurations
 		// that do not have a key manager.
-		ctx.Logger().Warn("InitChain: Invalid key manager operator, key maanger will not work",
+		ctx.Logger().Warn("InitChain: Invalid key manager operator, key manager will not work",
 			"id", st.Parameters.KeyManagerOperator,
 		)
 	}

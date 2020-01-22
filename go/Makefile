@@ -62,7 +62,7 @@ test:
 # Test without caching.
 force-test:
 	@$(ECHO) "$(CYAN)*** Running Go unit tests in force mode...$(OFF)"
-	$(MAKE) test GO_TEST_FLAGS=-count=1
+	@$(MAKE) test GO_TEST_FLAGS=-count=1
 
 # Test oasis-node with coverage.
 integrationrunner:

@@ -19,9 +19,9 @@ import (
 )
 
 var (
-	// ErrInvalidRuntimeKind is the error returned when the parsed runtime
-	// kind is malformed.
-	ErrInvalidRuntimeKind = errors.New("runtime: invalid runtime kind")
+	// ErrUnsupportedRuntimeKind is the error returned when the parsed runtime
+	// kind is malformed or unknown.
+	ErrUnsupportedRuntimeKind = errors.New("runtime: unsupported runtime kind")
 	// ErrMalformedStoreID is the error returned when a storage service
 	// ID is malformed.
 	ErrMalformedStoreID = errors.New("runtime: Malformed store ID")
@@ -33,12 +33,16 @@ var (
 type RuntimeKind uint32
 
 const (
-	// KindCompute is a generic executor runtime.
-	KindCompute RuntimeKind = 0
+	// KindInvalid is an invalid runtime and should never be explicitly set.
+	KindInvalid RuntimeKind = 0
+
+	// KindCompute is a generic compute runtime.
+	KindCompute RuntimeKind = 1
 
 	// KindKeyManager is a key manager runtime.
-	KindKeyManager RuntimeKind = 1
+	KindKeyManager RuntimeKind = 2
 
+	kindInvalid    = "invalid"
 	kindCompute    = "compute"
 	kindKeyManager = "keymanager"
 
@@ -49,6 +53,8 @@ const (
 // String returns a string representation of a runtime kind.
 func (k RuntimeKind) String() string {
 	switch k {
+	case KindInvalid:
+		return kindInvalid
 	case KindCompute:
 		return kindCompute
 	case KindKeyManager:
@@ -66,7 +72,7 @@ func (k *RuntimeKind) FromString(str string) error {
 	case kindKeyManager:
 		*k = KindKeyManager
 	default:
-		return ErrInvalidRuntimeKind
+		return ErrUnsupportedRuntimeKind
 	}
 
 	return nil

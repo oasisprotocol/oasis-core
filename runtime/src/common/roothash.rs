@@ -5,6 +5,7 @@
 //! This **MUST** be kept in sync with go/roothash/api/block.
 //!
 use serde_derive::{Deserialize, Serialize};
+use serde_repr::*;
 
 use super::{
     cbor,
@@ -29,6 +30,25 @@ pub struct AnnotatedBlock {
 
 impl_bytes!(Namespace, 32, "Chain namespace.");
 
+/// Header type.
+///
+/// NOTE: This should be kept in sync with go/roothash/api/block/header.go.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum HeaderType {
+    Invalid = 0,
+    Normal = 1,
+    RoundFailed = 2,
+    EpochTransition = 3,
+    Suspended = 4,
+}
+
+impl Default for HeaderType {
+    fn default() -> Self {
+        HeaderType::Invalid
+    }
+}
+
 /// Roothash message.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Message {}
@@ -45,7 +65,7 @@ pub struct Header {
     /// Timestamp (POSIX time).
     pub timestamp: u64,
     /// Header type.
-    pub header_type: u8,
+    pub header_type: HeaderType,
     /// Previous block hash.
     pub previous_hash: Hash,
     /// I/O merkle root.
@@ -103,7 +123,7 @@ mod tests {
             namespace: Namespace::from(Hash::empty_hash().as_ref()),
             round: 1000,
             timestamp: 1560257841,
-            header_type: 1,
+            header_type: HeaderType::RoundFailed,
             previous_hash: empty.encoded_hash(),
             io_root: Hash::empty_hash(),
             state_root: Hash::empty_hash(),
@@ -112,7 +132,7 @@ mod tests {
         };
         assert_eq!(
             populated.encoded_hash(),
-            Hash::from("e42c423b85e6ac261712f65b50ddbdef4758ed214c316c1f61ee76db28d1d8a5")
+            Hash::from("c39e8aefea5a1f794fb57f294a4ea8599381cd8739e67a8a9acb7763b54a630a")
         );
     }
 }
