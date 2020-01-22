@@ -12,7 +12,7 @@ import (
 type Endpoint interface {
 	// VerifyEvidence takes the provided quote, (optional) PSE manifest, and
 	// (optional) nonce, and returns the corresponding AVR, signature, and
-	// ceritficate chain respectively.
+	// certificate chain respectively.
 	VerifyEvidence(ctx context.Context, evidence *Evidence) (*ias.AVRBundle, error)
 
 	// GetSPID returns the SPID and associated info used by the endpoint.
