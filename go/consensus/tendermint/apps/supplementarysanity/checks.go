@@ -56,7 +56,11 @@ func checkRegistry(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	if err != nil {
 		return fmt.Errorf("SignedNodes: %w", err)
 	}
-	err = registry.SanityCheckNodes(nodes, seenEntities, seenRuntimes)
+	params, err := st.ConsensusParameters()
+	if err != nil {
+		return fmt.Errorf("ConsensusParameters: %w", err)
+	}
+	err = registry.SanityCheckNodes(nodes, seenEntities, seenRuntimes, false, now, params.MaxNodeExpiration)
 	if err != nil {
 		return fmt.Errorf("SanityCheckNodes: %w", err)
 	}

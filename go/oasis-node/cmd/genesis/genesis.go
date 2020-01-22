@@ -52,6 +52,7 @@ const (
 	cfgHaltEpoch          = "halt.epoch"
 
 	// Registry config flags.
+	CfgRegistryMaxNodeExpiration             = "registry.max_node_expiration"
 	cfgRegistryDebugAllowUnroutableAddresses = "registry.debug.allow_unroutable_addresses"
 	CfgRegistryDebugAllowRuntimeRegistration = "registry.debug.allow_runtime_registration"
 	CfgRegistryDebugAllowTestRuntimes        = "registry.debug.allow_test_runtimes"
@@ -247,9 +248,8 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			DebugAllowRuntimeRegistration: viper.GetBool(CfgRegistryDebugAllowRuntimeRegistration),
 			DebugAllowTestRuntimes:        viper.GetBool(CfgRegistryDebugAllowTestRuntimes),
 			DebugBypassStake:              viper.GetBool(cfgRegistryDebugBypassStake),
-
-			// TODO: Make these configurable.
-			GasCosts: registry.DefaultGasCosts,
+			GasCosts:                      registry.DefaultGasCosts, // TODO: Make these configurable.
+			MaxNodeExpiration:             viper.GetUint64(CfgRegistryMaxNodeExpiration),
 		},
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
 		Runtimes: make([]*registry.SignedRuntime, 0, len(runtimes)),
@@ -689,6 +689,7 @@ func init() {
 	initGenesisFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "genesis halt epoch height")
 
 	// Registry config flags.
+	initGenesisFlags.Uint64(CfgRegistryMaxNodeExpiration, 5, "maximum node registration lifespan in epochs")
 	initGenesisFlags.Bool(cfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
 	initGenesisFlags.Bool(CfgRegistryDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
 	initGenesisFlags.Bool(CfgRegistryDebugAllowTestRuntimes, false, "enable test runtime registration")
