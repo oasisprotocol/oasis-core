@@ -101,35 +101,12 @@ GO_TEST_HELPER_URKEL_PATH := storage/mkvs/urkel/interop/urkel-test-helpers
 
 # Instruct GoReleaser to create a "snapshot" release by default.
 GORELEASER_ARGS ?= release --snapshot --rm-dist
-
-# If running inside GitHub Actions, create a real release.
-ifeq ($(GITHUB_ACTIONS), true)
-
-# Auxiliary variable that defines a new line for later substitution.
-define newline
-
-
-endef
-
-# GitHub release' text in Markdown format.
-define RELEASE_TEXT =
-For a list of changes in this release, see the [Change Log].
-
-*NOTE: If you are upgrading from an earlier release, please **carefully review**
-the [Change Log] for **Removals and Breaking changes**.*
-
-If you would like to become a node operator for the Oasis Network, see the
-[Operator Docs](https://docs.oasis.dev/operators/overview.html).
-
-[Change Log]: https://github.com/oasislabs/oasis-core/blob/v$(VERSION)/CHANGELOG.md
-
-endef
-
-# Temporary file with GitHub release's text.
+# If the appropriate environment variable is set, create a real release.
+ifeq ($(OASIS_CORE_REAL_RELEASE), true)
+# Create temporary file with GitHub release's text.
 _RELEASE_NOTES_FILE := $(shell mktemp /tmp/oasis-core.XXXXX)
 _ := $(shell printf "$(subst ",\",$(subst $(newline),\n,$(RELEASE_TEXT)))" > $(_RELEASE_NOTES_FILE))
 GORELEASER_ARGS = release --release-notes $(_RELEASE_NOTES_FILE)
-
 endif
 
 # Helper that ensures $(NEXT_VERSION) variable is not empty.
@@ -168,4 +145,24 @@ define ENSURE_NEXT_VERSION_IN_CHANGELOG =
 		$(ECHO_STDERR) "$(RED)Error: Could not locate Change Log section for release $(NEXT_VERSION) on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
 		exit 1; \
 	fi
+endef
+
+# Auxiliary variable that defines a new line for later substitution.
+define newline
+
+
+endef
+
+# GitHub release' text in Markdown format.
+define RELEASE_TEXT =
+For a list of changes in this release, see the [Change Log].
+
+*NOTE: If you are upgrading from an earlier release, please **carefully review**
+the [Change Log] for **Removals and Breaking changes**.*
+
+If you would like to become a node operator for the Oasis Network, see the
+[Operator Docs](https://docs.oasis.dev/operators/overview.html).
+
+[Change Log]: https://github.com/oasislabs/oasis-core/blob/v$(VERSION)/CHANGELOG.md
+
 endef
