@@ -69,12 +69,14 @@ func AuthenticateAndPayFees(
 			return transaction.ErrInsufficientFeeBalance
 		}
 
-		// Check fee against minimum gas price if in CheckTx.
+		// Check fee against minimum gas price if in CheckTx. Always accept own transactions.
 		// NOTE: This is non-deterministic as it is derived from the local validator
 		//       configuration, but as long as it is only done in CheckTx, this is ok.
-		callerGasPrice := fee.GasPrice()
-		if fee.Gas > 0 && callerGasPrice.Cmp(ctx.AppState().MinGasPrice()) < 0 {
-			return transaction.ErrGasPriceTooLow
+		if !ctx.AppState().OwnTxSigner().Equal(id) {
+			callerGasPrice := fee.GasPrice()
+			if fee.Gas > 0 && callerGasPrice.Cmp(ctx.AppState().MinGasPrice()) < 0 {
+				return transaction.ErrGasPriceTooLow
+			}
 		}
 
 		return nil

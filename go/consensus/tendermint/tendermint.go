@@ -878,6 +878,7 @@ func (t *tendermintService) lazyInit() error {
 		Pruning:         pruneCfg,
 		HaltEpochHeight: t.genesis.HaltEpoch,
 		MinGasPrice:     viper.GetUint64(CfgConsensusMinGasPrice),
+		OwnTxSigner:     t.nodeSigner.Public(),
 	}
 	t.mux, err = abci.NewApplicationServer(t.ctx, appConfig)
 	if err != nil {
