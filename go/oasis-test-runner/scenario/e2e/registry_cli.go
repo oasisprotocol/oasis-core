@@ -555,15 +555,18 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 			AllowedStragglers: 7,
 			RoundTimeout:      8 * time.Second,
 		},
-		Storage: registry.StorageParameters{
-			GroupSize: 9,
-		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			GroupSize:         10,
 			Algorithm:         "batching",
 			BatchFlushTimeout: 11 * time.Second,
 			MaxBatchSize:      12,
 			MaxBatchSizeBytes: 13,
+		},
+		Storage: registry.StorageParameters{
+			GroupSize: 9,
+		},
+		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 		},
 	}
 	// Runtime ID 0x0 is for simple-keyvalue, 0xf... is for the keymanager. Let's use 0x1.
