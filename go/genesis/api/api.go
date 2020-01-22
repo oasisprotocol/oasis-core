@@ -110,7 +110,7 @@ func (d *Document) SanityCheck() error {
 	if err = d.EpochTime.SanityCheck(); err != nil {
 		return err
 	}
-	if err = d.Registry.SanityCheck(); err != nil {
+	if err = d.Registry.SanityCheck(d.EpochTime.Base); err != nil {
 		return err
 	}
 	if err = d.RootHash.SanityCheck(); err != nil {

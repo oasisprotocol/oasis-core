@@ -223,7 +223,20 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		return err
 	}
 	if newNode.Expiration <= uint64(epoch) {
+		ctx.Logger().Error("RegisterNode: node descriptor is expired",
+			"new_node", newNode,
+			"epoch", epoch,
+		)
 		return registry.ErrNodeExpired
+	}
+	additionalEpochs := newNode.Expiration - uint64(epoch)
+	if params.MaxNodeExpiration > 0 && additionalEpochs > params.MaxNodeExpiration {
+		// Enforce the limit on maximum node descriptor lifespan.
+		ctx.Logger().Error("RegisterNode: node descriptor lifespan too long",
+			"new_node", newNode,
+			"additional_epochs", additionalEpochs,
+		)
+		return registry.ErrInvalidArgument
 	}
 
 	// Check if node exists.
@@ -243,7 +256,6 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 	// For each runtime the node registers for, require it to pay a maintenance fee for
 	// each epoch the node is registered in.
-	additionalEpochs := newNode.Expiration - uint64(epoch)
 	if !isNewNode && !isExpiredNode {
 		// Remaining epochs are credited so the node doesn't end up paying twice.
 		// NOTE: This assumes that changing runtimes is not allowed as otherwise we

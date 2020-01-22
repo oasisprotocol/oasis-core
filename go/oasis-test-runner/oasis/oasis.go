@@ -663,6 +663,13 @@ func (net *Network) makeGenesis() error {
 	if net.cfg.RegistryDebugAllowRuntimeRegistration {
 		args = append(args, "--"+genesis.CfgRegistryDebugAllowRuntimeRegistration)
 	}
+	if len(net.byzantine) > 0 {
+		// If the byzantine node is in use, disable max node expiration
+		// enforcement, because it wants to register for 1000 epochs.
+		args = append(args, []string{
+			"--" + genesis.CfgRegistryMaxNodeExpiration, "0",
+		}...)
+	}
 
 	w, err := net.baseDir.NewLogWriter("genesis_provision.log")
 	if err != nil {

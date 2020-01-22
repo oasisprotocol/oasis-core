@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
@@ -1092,7 +1093,7 @@ type ConsensusParameters struct {
 
 	// DebugAllowTestRuntimes is true iff test runtimes should be allowed to
 	// be registered.
-	DebugAllowTestRuntimes bool `json:"debug_allow_test_runtimes"`
+	DebugAllowTestRuntimes bool `json:"debug_allow_test_runtimes,omitempty"`
 
 	// DebugBypassStake is true iff the registry should bypass all of the staking
 	// related checks and operations.
@@ -1100,6 +1101,10 @@ type ConsensusParameters struct {
 
 	// GasCosts are the registry transaction gas costs.
 	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
+
+	// MaxNodeExpiration is the maximum number of epochs relative to the epoch
+	// at registration time that a single node registration is valid for.
+	MaxNodeExpiration uint64 `json:"max_node_expiration,omitempty"`
 }
 
 const (
@@ -1271,7 +1276,7 @@ func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[common.Namespace]*Runti
 // SanityCheckNodes examines the nodes table.
 // Pass lookups of entities and runtimes from SanityCheckEntities
 // and SanityCheckRuntimes for cross referencing purposes.
-func SanityCheckNodes(nodes []*node.SignedNode, seenEntities map[signature.PublicKey]*entity.Entity, seenRuntimes map[common.Namespace]*Runtime) error { // nolint: gocyclo
+func SanityCheckNodes(nodes []*node.SignedNode, seenEntities map[signature.PublicKey]*entity.Entity, seenRuntimes map[common.Namespace]*Runtime, isGenesis bool, epoch epochtime.EpochTime, maxExpiration uint64) error { // nolint: gocyclo
 	for _, sn := range nodes {
 		var n node.Node
 		if err := sn.Open(RegisterGenesisNodeSignatureContext, &n); err != nil {
@@ -1321,6 +1326,16 @@ func SanityCheckNodes(nodes []*node.SignedNode, seenEntities map[signature.Publi
 		// existing deployments have cleared up registry.
 		// https://github.com/oasislabs/oasis-core/issues/2428
 
+		// Checking the expiration only makes sense if this routine is
+		// validating the genesis document, since node descriptors being
+		// expired is presumably ok at runtime(?).
+		if isGenesis && n.Expiration <= uint64(epoch) {
+			return fmt.Errorf("registry: sanity check failed: node ID %s is expired", n.ID.String())
+		}
+		if maxExpiration > 0 && n.Expiration > uint64(epoch)+maxExpiration {
+			return fmt.Errorf("registry: sanity check failed: node ID %s has expiration too far in the future", n.ID.String())
+		}
+
 		for _, rt := range n.Runtimes {
 			seenRT := seenRuntimes[rt.ID]
 			if seenRT == nil {
@@ -1356,10 +1371,14 @@ func SanityCheckNodes(nodes []*node.SignedNode, seenEntities map[signature.Publi
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck() error {
-	unsafeFlags := g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugAllowRuntimeRegistration || g.Parameters.DebugBypassStake
-	if unsafeFlags && !flags.DebugDontBlameOasis() {
-		return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
+func (g *Genesis) SanityCheck(baseEpoch epochtime.EpochTime) error {
+	if !flags.DebugDontBlameOasis() {
+		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugAllowRuntimeRegistration || g.Parameters.DebugBypassStake {
+			return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
+		}
+		if g.Parameters.MaxNodeExpiration == 0 {
+			return fmt.Errorf("registry: sanity check failed: maximum node expiration not specified")
+		}
 	}
 
 	// This could check KeyManagerOperator, but some configurations don't
@@ -1380,5 +1399,5 @@ func (g *Genesis) SanityCheck() error {
 	}
 
 	// Check nodes.
-	return SanityCheckNodes(g.Nodes, seenEntities, seenRuntimes)
+	return SanityCheckNodes(g.Nodes, seenEntities, seenRuntimes, true, baseEpoch, g.Parameters.MaxNodeExpiration)
 }
