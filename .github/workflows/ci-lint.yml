@@ -1,4 +1,5 @@
-name: Continuous integration
+# NOTE: This name appears in GitHub's Checks API and in workflow's status badge.
+name: ci-lint
 
 # Trigger the workflow when:
 on:
@@ -17,6 +18,8 @@ on:
 jobs:
 
   lint:
+    # NOTE: This name appears in GitHub's Checks API.
+    name: lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
