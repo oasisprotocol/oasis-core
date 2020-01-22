@@ -13,9 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
@@ -246,40 +244,12 @@ func (app *rootHashApplication) prepareNewCommittees(
 		empty = true
 	}
 	for _, executorCommittee := range executorCommittees {
-		executorNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
-		for idx, n := range executorCommittee.Members {
-			var nodeRuntime *node.Runtime
-			node, err1 := regState.Node(n.PublicKey)
-			if err1 != nil {
-				return hash.Hash{}, nil, nil, false, errors.Wrap(err1, "checkCommittees: failed to query node")
-			}
-			for _, r := range node.Runtimes {
-				if !r.ID.Equal(&rtID) {
-					continue
-				}
-				nodeRuntime = r
-				break
-			}
-			if nodeRuntime == nil {
-				// We currently prevent this case throughout the rest of the system.
-				// Still, it's prudent to check.
-				ctx.Logger().Warn("checkCommittees: committee member not registered with this runtime",
-					"node", n.PublicKey,
-				)
-				continue
-			}
-			executorNodeInfo[n.PublicKey] = commitment.NodeInfo{
-				CommitteeNode: idx,
-				Runtime:       nodeRuntime,
-			}
-		}
 		executorCommitteeID := executorCommittee.EncodedMembersHash()
 		committeeIDParts = append(committeeIDParts, executorCommitteeID[:])
 
 		executorPool.Committees[executorCommitteeID] = &commitment.Pool{
 			Runtime:   rtState.Runtime,
 			Committee: executorCommittee,
-			NodeInfo:  executorNodeInfo,
 		}
 	}
 
@@ -299,16 +269,9 @@ func (app *rootHashApplication) prepareNewCommittees(
 		)
 		empty = true
 	} else {
-		mergeNodeInfo := make(map[signature.PublicKey]commitment.NodeInfo)
-		for idx, n := range mergeCommittee.Members {
-			mergeNodeInfo[n.PublicKey] = commitment.NodeInfo{
-				CommitteeNode: idx,
-			}
-		}
 		mergePool = &commitment.Pool{
 			Runtime:   rtState.Runtime,
 			Committee: mergeCommittee,
-			NodeInfo:  mergeNodeInfo,
 		}
 		mergeCommitteeID := mergeCommittee.EncodedMembersHash()
 		committeeIDParts = append(committeeIDParts, mergeCommitteeID[:])

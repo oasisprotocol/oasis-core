@@ -3,16 +3,22 @@ package byzantine
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/resolver"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
-	storageclient "github.com/oasislabs/oasis-core/go/storage/client"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
 )
 
@@ -25,12 +31,47 @@ type honestNodeStorage struct {
 	initCh            chan struct{}
 }
 
+func dialOptionForNode(ourCerts []tls.Certificate, node *node.Node) (grpc.DialOption, error) {
+	certPool := x509.NewCertPool()
+	for _, addr := range node.Committee.Addresses {
+		nodeCert, err := addr.ParseCertificate()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse node's address certificate")
+		}
+		certPool.AddCert(nodeCert)
+	}
+
+	creds := credentials.NewTLS(&tls.Config{
+		Certificates: ourCerts,
+		RootCAs:      certPool,
+		ServerName:   identity.CommonName,
+	})
+	return grpc.WithTransportCredentials(creds), nil
+}
+
+func dialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, func(), error) {
+	manualResolver, address, cleanupCb := manual.NewManualResolver()
+
+	conn, err := cmnGrpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name)) //nolint: staticcheck
+	if err != nil {
+		cleanupCb()
+		return nil, nil, errors.Wrap(err, "failed dialing node")
+	}
+	var resolverState resolver.State
+	for _, addr := range node.Committee.Addresses {
+		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
+	}
+	manualResolver.UpdateState(resolverState)
+
+	return conn, cleanupCb, nil
+}
+
 func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeStorage, error) {
-	opts, err := storageclient.DialOptionForNode([]tls.Certificate{*id.TLSCertificate}, node)
+	opts, err := dialOptionForNode([]tls.Certificate{*id.TLSCertificate}, node)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage client DialOptionForNode")
 	}
-	conn, resolverCleanupCb, err := storageclient.DialNode(node, opts)
+	conn, resolverCleanupCb, err := dialNode(node, opts)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage client DialNode")
 	}

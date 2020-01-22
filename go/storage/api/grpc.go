@@ -536,7 +536,9 @@ func (c *storageClient) Cleanup() {
 }
 
 func (c *storageClient) Initialized() <-chan struct{} {
-	return nil
+	ch := make(chan struct{})
+	close(ch)
+	return ch
 }
 
 // NewStorageClient creates a new gRPC storage client service.

@@ -4,6 +4,7 @@
 package node
 
 import (
+	"bytes"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -126,15 +127,23 @@ func (n *Node) IsExpired(epoch uint64) bool {
 	return n.Expiration < epoch
 }
 
-// AddOrUpdateRuntime searches for an existing supported runtime descriptor in Runtimes and returns
-// it. In case a runtime descriptor for the given runtime doesn't exist yet, a new one is created
-// appended to the list of supported runtimes and returned.
-func (n *Node) AddOrUpdateRuntime(id common.Namespace) *Runtime {
+// GetRuntime searches for an existing supported runtime descriptor in Runtimes and returns it.
+func (n *Node) GetRuntime(id common.Namespace) *Runtime {
 	for _, rt := range n.Runtimes {
 		if !rt.ID.Equal(&id) {
 			continue
 		}
 
+		return rt
+	}
+	return nil
+}
+
+// AddOrUpdateRuntime searches for an existing supported runtime descriptor in Runtimes and returns
+// it. In case a runtime descriptor for the given runtime doesn't exist yet, a new one is created
+// appended to the list of supported runtimes and returned.
+func (n *Node) AddOrUpdateRuntime(id common.Namespace) *Runtime {
+	if rt := n.GetRuntime(id); rt != nil {
 		return rt
 	}
 
@@ -167,6 +176,25 @@ type CommitteeInfo struct {
 
 	// Addresses is the list of committee addresses at which the node can be reached.
 	Addresses []CommitteeAddress `json:"addresses"`
+}
+
+// Equal compares vs another CommitteeInfo for equality.
+func (c *CommitteeInfo) Equal(other *CommitteeInfo) bool {
+	// XXX: Why is this top-level certificate even needed?
+	if !bytes.Equal(c.Certificate, other.Certificate) {
+		return false
+	}
+
+	if len(c.Addresses) != len(other.Addresses) {
+		return false
+	}
+	for i, ca := range c.Addresses {
+		if !ca.Equal(&other.Addresses[i]) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // ParseCertificate returns the parsed x509 certificate.

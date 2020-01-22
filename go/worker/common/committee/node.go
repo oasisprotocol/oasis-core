@@ -15,6 +15,7 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/runtime/committee"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
@@ -72,6 +73,8 @@ type NodeHooks interface {
 	HandleNewBlockLocked(*block.Block)
 	// Guarded by CrossNode.
 	HandleNewEventLocked(*roothash.Event)
+	// Guarded by CrossNode.
+	HandleNodeUpdateLocked(*committee.NodeUpdate, *EpochSnapshot)
 }
 
 // Node is a committee node.
@@ -222,7 +225,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 			n.handleEpochTransitionLocked(height)
 		} else {
 			// Normal block.
-			n.Group.RoundTransition(n.ctx)
+			n.Group.RoundTransition()
 		}
 	case block.RoundFailed:
 		if firstBlockReceived {
@@ -231,7 +234,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		} else {
 			// Round has failed.
 			n.logger.Warn("round has failed")
-			n.Group.RoundTransition(n.ctx)
+			n.Group.RoundTransition()
 
 			failedRoundCount.With(n.getMetricLabels()).Inc()
 		}
@@ -259,6 +262,15 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 
 	for _, hooks := range n.hooks {
 		hooks.HandleNewEventLocked(ev)
+	}
+}
+
+// Guarded by n.CrossNode.
+func (n *Node) handleNodeUpdateLocked(update *committee.NodeUpdate) {
+	epoch := n.Group.GetEpochSnapshot()
+
+	for _, hooks := range n.hooks {
+		hooks.HandleNodeUpdateLocked(update, epoch)
 	}
 }
 
@@ -314,6 +326,16 @@ func (n *Node) worker() {
 	}
 	defer eventsSub.Close()
 
+	// Start watching node updates for the current committee.
+	nodeUps, nodeUpsSub, err := n.Group.Nodes().WatchNodeUpdates()
+	if err != nil {
+		n.logger.Error("failed to subscribe to node updates",
+			"err", err,
+		)
+		return
+	}
+	defer nodeUpsSub.Close()
+
 	// We are initialized.
 	close(n.initCh)
 
@@ -335,6 +357,14 @@ func (n *Node) worker() {
 				n.CrossNode.Lock()
 				defer n.CrossNode.Unlock()
 				n.handleNewEventLocked(ev)
+			}()
+		case up := <-nodeUps:
+			// Received a node update.
+			// TODO: Debounce/batch node updates.
+			func() {
+				n.CrossNode.Lock()
+				defer n.CrossNode.Unlock()
+				n.handleNodeUpdateLocked(up)
 			}()
 		}
 	}
@@ -375,7 +405,7 @@ func NewNode(
 		logger:           logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
 	}
 
-	group, err := NewGroup(identity, runtime.ID(), n, registry, roothash, scheduler, p2p)
+	group, err := NewGroup(ctx, identity, runtime.ID(), n, registry, roothash, scheduler, p2p)
 	if err != nil {
 		return nil, err
 	}

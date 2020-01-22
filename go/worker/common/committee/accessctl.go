@@ -4,8 +4,12 @@ import (
 	"crypto/x509"
 
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/runtime/committee"
 )
+
+var logger = logging.GetLogger("worker/common/committee/accessctl")
 
 // AccessPolicy defines a list of actions that are allowed by the policy.
 type AccessPolicy struct {
@@ -14,8 +18,17 @@ type AccessPolicy struct {
 
 // AddRulesForCommittee augments the given policy by allowing actions in the current AccessPolicy
 // for the nodes in the given committee.
-func (ap AccessPolicy) AddRulesForCommittee(policy *accessctl.Policy, committee *CommitteeInfo) {
-	for _, node := range committee.Nodes {
+func (ap AccessPolicy) AddRulesForCommittee(policy *accessctl.Policy, committee *CommitteeInfo, nodes committee.NodeDescriptorLookup) {
+	for id := range committee.PublicKeys {
+		node := nodes.Lookup(id)
+		if node == nil {
+			// This should never happen as nodes cannot disappear mid-epoch.
+			logger.Warn("ignoring node that disappeared mid-epoch",
+				"node", id,
+			)
+			continue
+		}
+
 		subject := accessctl.SubjectFromDER(node.Committee.Certificate)
 		for _, action := range ap.Actions {
 			policy.Allow(subject, action)

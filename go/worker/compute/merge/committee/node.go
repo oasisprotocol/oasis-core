@@ -20,6 +20,7 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
+	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
@@ -208,36 +209,9 @@ func (n *Node) newStateWaitingForResultsLocked(epoch *committee.EpochSnapshot) S
 	}
 
 	for cID, ci := range epoch.GetExecutorCommittees() {
-		nodeInfo := make(map[signature.PublicKey]commitment.NodeInfo, len(ci.Nodes))
-		for idx, nd := range ci.Nodes {
-			var nodeRuntime *node.Runtime
-			for _, r := range nd.Runtimes {
-				nrtID := n.commonNode.Runtime.ID()
-				if !r.ID.Equal(&nrtID) {
-					continue
-				}
-				nodeRuntime = r
-				break
-			}
-			if nodeRuntime == nil {
-				// We currently prevent this case throughout the rest of the system.
-				// Still, it's prudent to check.
-				n.logger.Warn("committee member not registered with this runtime",
-					"node", nd.ID,
-				)
-				continue
-			}
-
-			nodeInfo[nd.ID] = commitment.NodeInfo{
-				CommitteeNode: idx,
-				Runtime:       nodeRuntime,
-			}
-		}
-
 		pool.Committees[cID] = &commitment.Pool{
 			Runtime:   epoch.GetRuntime(),
 			Committee: ci.Committee,
-			NodeInfo:  nodeInfo,
 		}
 	}
 
@@ -320,8 +294,7 @@ func (n *Node) handleResultsLocked(ctx context.Context, commit *commitment.Execu
 	)
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
-
-	sp, err := state.pool.AddExecutorCommitment(n.commonNode.CurrentBlock, epoch, commit)
+	sp, err := state.pool.AddExecutorCommitment(n.commonNode.CurrentBlock, epoch, epoch, commit)
 	if err != nil {
 		return err
 	}
@@ -703,6 +676,12 @@ func (n *Node) handleExecutorDiscrepancyLocked(ev *roothash.ExecutionDiscrepancy
 		}
 	default:
 	}
+}
+
+// HandleNodeUpdateLocked implements NodeHooks.
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) HandleNodeUpdateLocked(update *runtimeCommittee.NodeUpdate, snapshot *committee.EpochSnapshot) {
+	// Nothing to do here.
 }
 
 func (n *Node) worker() {

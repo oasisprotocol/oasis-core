@@ -18,6 +18,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/runtime/committee"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 )
 
@@ -44,18 +45,17 @@ type storageClientBackend struct {
 
 	logger *logging.Logger
 
-	debugRuntimeID *common.Namespace
-
-	runtimeWatcher storageWatcher
-
-	haltCtx  context.Context
-	cancelFn context.CancelFunc
+	committeeClient committee.Client
 }
 
 // GetConnectedNodes returns registry node information about all connected
 // storage nodes.
 func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
-	return b.runtimeWatcher.getConnectedNodes()
+	var nodes []*node.Node
+	for _, conn := range b.committeeClient.GetConnectionsWithMeta() {
+		nodes = append(nodes, conn.Node)
+	}
+	return nodes
 }
 
 type grpcResponse struct {
@@ -65,16 +65,6 @@ type grpcResponse struct {
 	node *node.Node
 }
 
-func (b *storageClientBackend) getRequestRuntime(ns common.Namespace) common.Namespace {
-	// In debug mode always connect to the debug watcher.
-	if b.debugRuntimeID != nil {
-		return *b.debugRuntimeID
-	}
-
-	// Otherwise, use the request namespace.
-	return ns
-}
-
 func (b *storageClientBackend) writeWithClient(
 	ctx context.Context,
 	ns common.Namespace,
@@ -82,12 +72,11 @@ func (b *storageClientBackend) writeWithClient(
 	fn func(context.Context, api.Backend, *node.Node) (interface{}, error),
 	expectedNewRoots []hash.Hash,
 ) ([]*api.Receipt, error) {
-	runtimeID := b.getRequestRuntime(ns)
-	clientStates := b.runtimeWatcher.getClientStates()
-	n := len(clientStates)
+	conns := b.committeeClient.GetConnectionsWithMeta()
+	n := len(conns)
 	if n == 0 {
 		b.logger.Error("writeWithClient: no connected nodes for runtime",
-			"runtime_id", runtimeID,
+			"runtime_id", ns,
 		)
 		return nil, ErrStorageNotAvailable
 	}
@@ -95,17 +84,15 @@ func (b *storageClientBackend) writeWithClient(
 	// Use a buffered channel to allow all "write" goroutines to return as soon
 	// as they are finished.
 	ch := make(chan *grpcResponse, n)
-	for _, clientState := range clientStates {
-		client, node := clientState.client, clientState.node
-
-		go func() {
+	for _, conn := range conns {
+		go func(conn *committee.ClientConnWithMeta) {
 			var (
 				resp       interface{}
 				numRetries int
 			)
 			op := func() error {
 				var rerr error
-				resp, rerr = fn(ctx, client, node)
+				resp, rerr = fn(ctx, api.NewStorageClient(conn.ClientConn), conn.Node)
 				if status.Code(rerr) == codes.PermissionDenied && numRetries < maxRetries {
 					// Writes can fail around an epoch transition due to policy errors,
 					// make sure to retry in this case (up to maxRetries).
@@ -121,9 +108,9 @@ func (b *storageClientBackend) writeWithClient(
 			ch <- &grpcResponse{
 				resp: resp,
 				err:  rerr,
-				node: node,
+				node: conn.Node,
 			}
-		}()
+		}(conn)
 	}
 
 	// Accumulate the responses.
@@ -288,12 +275,11 @@ func (b *storageClientBackend) readWithClient(
 	ns common.Namespace,
 	fn func(context.Context, api.Backend) (interface{}, error),
 ) (interface{}, error) {
-	runtimeID := b.getRequestRuntime(ns)
-	clientStates := b.runtimeWatcher.getClientStates()
-	n := len(clientStates)
+	conns := b.committeeClient.GetConnectionsWithMeta()
+	n := len(conns)
 	if n == 0 {
 		b.logger.Error("readWithClient: no connected nodes for runtime",
-			"runtime_id", runtimeID,
+			"runtime_id", ns,
 		)
 		return nil, ErrStorageNotAvailable
 	}
@@ -308,17 +294,17 @@ func (b *storageClientBackend) readWithClient(
 		resp interface{}
 	)
 	for _, randIndex := range rng.Perm(n) {
-		state := clientStates[randIndex]
+		conn := conns[randIndex]
 
-		resp, err = fn(ctx, state.client)
+		resp, err = fn(ctx, api.NewStorageClient(conn.ClientConn))
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 		if err != nil {
 			b.logger.Error("failed to get response from a storage node",
-				"node", state.node,
+				"node", conn.Node,
 				"err", err,
-				"runtime_id", runtimeID,
+				"runtime_id", ns,
 			)
 			continue
 		}
@@ -398,10 +384,8 @@ func (b *storageClientBackend) GetCheckpoint(ctx context.Context, request *api.G
 }
 
 func (b *storageClientBackend) Cleanup() {
-	b.cancelFn()
-	b.runtimeWatcher.cleanup()
 }
 
 func (b *storageClientBackend) Initialized() <-chan struct{} {
-	return b.runtimeWatcher.initialized()
+	return b.committeeClient.Initialized()
 }

@@ -19,6 +19,7 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
+	"github.com/oasislabs/oasis-core/go/runtime/committee"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
@@ -35,11 +36,12 @@ type MessageHandler interface {
 type CommitteeInfo struct { // nolint: golint
 	Role       scheduler.Role
 	Committee  *scheduler.Committee
-	Nodes      []*node.Node
 	PublicKeys map[signature.PublicKey]bool
 }
 
 type epoch struct {
+	epochCtx       context.Context
+	cancelEpochCtx context.CancelFunc
 	roundCtx       context.Context
 	cancelRoundCtx context.CancelFunc
 
@@ -53,14 +55,13 @@ type epoch struct {
 	executorCommitteeID hash.Hash
 	// executorCommittees are all executor committees.
 	executorCommittees map[hash.Hash]*CommitteeInfo
-	// executorCommitteesByPeer is a set of P2P public keys of executor committee
-	// members.
-	executorCommitteesByPeer map[signature.PublicKey]bool
+	// executorCommitteeMemberSet is a set of node public keys of executor committee members.
+	executorCommitteeMemberSet map[signature.PublicKey]bool
 
 	// txnSchedulerCommitee is the txn scheduler committee we are a member of.
 	txnSchedulerCommittee *CommitteeInfo
-	// txnSchedulerLeaderPeerID is the P2P public key of txn scheduler leader.
-	txnSchedulerLeaderPeerID signature.PublicKey
+	// txnSchedulerLeader is the node public key of txn scheduler leader.
+	txnSchedulerLeader signature.PublicKey
 
 	// mergeCommittee is the merge committee we are a member of.
 	mergeCommittee *CommitteeInfo
@@ -87,6 +88,8 @@ type EpochSnapshot struct {
 	txnSchedulerCommittee *CommitteeInfo
 	mergeCommittee        *CommitteeInfo
 	storageCommittee      *CommitteeInfo
+
+	nodes committee.NodeDescriptorLookup
 }
 
 // NewMockEpochSnapshot returns a mock epoch snapshot to be used in tests.
@@ -183,6 +186,22 @@ func (e *EpochSnapshot) GetStorageCommittee() *CommitteeInfo {
 	return e.storageCommittee
 }
 
+// Nodes returns a node descriptor lookup interface.
+func (e *EpochSnapshot) Nodes() committee.NodeDescriptorLookup {
+	return e.nodes
+}
+
+// Node looks up a node descriptor.
+//
+// Implements commitment.NodeLookup.
+func (e *EpochSnapshot) Node(id signature.PublicKey) (*node.Node, error) {
+	n := e.nodes.Lookup(id)
+	if n == nil {
+		return nil, registry.ErrNoSuchNode
+	}
+	return n, nil
+}
+
 // VerifyCommitteeSignatures verifies that the given signatures come from
 // the current committee members of the given kind.
 //
@@ -206,8 +225,7 @@ func (e *EpochSnapshot) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, 
 	return nil
 }
 
-// Group encapsulates communication with a group of nodes in the
-// executor committee.
+// Group encapsulates communication with a group of nodes in the compute committees.
 type Group struct {
 	sync.RWMutex
 
@@ -223,12 +241,14 @@ type Group struct {
 	activeEpoch *epoch
 	// p2p may be nil.
 	p2p *p2p.P2P
+	// nodes is a node descriptor watcher for all nodes that are part of any of our committees.
+	nodes committee.NodeDescriptorWatcher
 
 	logger *logging.Logger
 }
 
 // RoundTransition processes a round transition that just happened.
-func (g *Group) RoundTransition(ctx context.Context) {
+func (g *Group) RoundTransition() {
 	g.Lock()
 	defer g.Unlock()
 
@@ -238,7 +258,7 @@ func (g *Group) RoundTransition(ctx context.Context) {
 
 	(g.activeEpoch.cancelRoundCtx)()
 
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(g.activeEpoch.epochCtx)
 	g.activeEpoch.roundCtx = ctx
 	g.activeEpoch.cancelRoundCtx = cancel
 }
@@ -255,7 +275,7 @@ func (g *Group) Suspend(ctx context.Context) {
 	}
 
 	// Cancel context for the previous epoch.
-	(g.activeEpoch.cancelRoundCtx)()
+	(g.activeEpoch.cancelEpochCtx)()
 	// Invalidate current epoch.
 	g.activeEpoch = nil
 }
@@ -267,62 +287,61 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 	// Cancel context for the previous epoch.
 	if g.activeEpoch != nil {
-		(g.activeEpoch.cancelRoundCtx)()
+		(g.activeEpoch.cancelEpochCtx)()
 	}
 
 	// Invalidate current epoch. In case we cannot process this transition,
 	// this should cause the node to transition into NotReady and stay there
 	// until the next epoch transition.
 	g.activeEpoch = nil
+	// Reset watched nodes.
+	g.nodes.Reset()
+	defer func() {
+		// Make sure there are no unneeded watched nodes in case this method fails.
+		if g.activeEpoch == nil {
+			g.nodes.Reset()
+		}
+	}()
 
 	// Request committees from scheduler.
-	var committees []*scheduler.Committee
-	var err error
-	committees, err = g.scheduler.GetCommittees(ctx, &scheduler.GetCommitteesRequest{
+	committees, err := g.scheduler.GetCommittees(ctx, &scheduler.GetCommitteesRequest{
 		RuntimeID: g.runtimeID,
 		Height:    height,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("group: failed to get committees: %w", err)
 	}
-
-	publicIdentity := g.identity.NodeSigner.Public()
 
 	// Find the current committees.
 	executorCommittees := make(map[hash.Hash]*CommitteeInfo)
-	executorCommitteesByPeer := make(map[signature.PublicKey]bool)
+	executorCommitteeMemberSet := make(map[signature.PublicKey]bool)
 	var executorCommittee, txnSchedulerCommittee, mergeCommittee, storageCommittee *CommitteeInfo
 	var executorCommitteeID hash.Hash
-	var txnSchedulerLeaderPeerID signature.PublicKey
+	var txnSchedulerLeader signature.PublicKey
+	publicIdentity := g.identity.NodeSigner.Public()
 	for _, cm := range committees {
-		var nodes []*node.Node
 		var role scheduler.Role
+		var leader signature.PublicKey
 		publicKeys := make(map[signature.PublicKey]bool)
-		leader := -1
-		for idx, member := range cm.Members {
+		for _, member := range cm.Members {
 			publicKeys[member.PublicKey] = true
 			if member.PublicKey.Equal(publicIdentity) {
 				role = member.Role
 			}
 
-			// Fetch peer node information from the registry.
-			var n *node.Node
-			n, err = g.registry.GetNode(ctx, &registry.IDQuery{ID: member.PublicKey, Height: height})
-			if err != nil {
+			// Start watching the member's node descriptor.
+			if _, err = g.nodes.WatchNode(ctx, member.PublicKey); err != nil {
 				return fmt.Errorf("group: failed to fetch node info: %w", err)
 			}
 
-			nodes = append(nodes, n)
-
 			if member.Role == scheduler.Leader {
-				leader = idx
+				leader = member.PublicKey
 			}
 		}
 
 		ci := &CommitteeInfo{
 			Role:       role,
 			Committee:  cm,
-			Nodes:      nodes,
 			PublicKeys: publicKeys,
 		}
 
@@ -340,13 +359,13 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 				executorCommitteeID = cID
 			}
 
-			for _, n := range nodes {
-				executorCommitteesByPeer[n.P2P.ID] = true
+			for _, m := range cm.Members {
+				executorCommitteeMemberSet[m.PublicKey] = true
 			}
 		case scheduler.KindComputeTxnScheduler:
 			txnSchedulerCommittee = ci
-			if leader != -1 {
-				txnSchedulerLeaderPeerID = nodes[leader].P2P.ID
+			if leader.IsValid() {
+				txnSchedulerLeader = leader
 			}
 		case scheduler.KindComputeMerge:
 			mergeCommittee = ci
@@ -373,23 +392,26 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		return err
 	}
 
-	// Create round context.
-	roundCtx, cancel := context.WithCancel(ctx)
+	// Create a new epoch and round contexts.
+	epochCtx, cancelEpochCtx := context.WithCancel(ctx)
+	roundCtx, cancelRoundCtx := context.WithCancel(epochCtx)
 
 	// Update the current epoch.
 	g.activeEpoch = &epoch{
-		roundCtx,
-		cancel,
-		height,
-		executorCommittee,
-		executorCommitteeID,
-		executorCommittees,
-		executorCommitteesByPeer,
-		txnSchedulerCommittee,
-		txnSchedulerLeaderPeerID,
-		mergeCommittee,
-		storageCommittee,
-		runtime,
+		epochCtx:                   epochCtx,
+		cancelEpochCtx:             cancelEpochCtx,
+		roundCtx:                   roundCtx,
+		cancelRoundCtx:             cancelRoundCtx,
+		groupVersion:               height,
+		executorCommittee:          executorCommittee,
+		executorCommitteeID:        executorCommitteeID,
+		executorCommittees:         executorCommittees,
+		executorCommitteeMemberSet: executorCommitteeMemberSet,
+		txnSchedulerCommittee:      txnSchedulerCommittee,
+		txnSchedulerLeader:         txnSchedulerLeader,
+		mergeCommittee:             mergeCommittee,
+		storageCommittee:           storageCommittee,
+		runtime:                    runtime,
 	}
 
 	// Executor committee may be nil in case we are not a member of any committee.
@@ -406,6 +428,11 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	)
 
 	return nil
+}
+
+// Nodes returns a node descriptor lookup interface that watches all nodes in our committees.
+func (g *Group) Nodes() committee.NodeDescriptorLookup {
+	return g.nodes
 }
 
 // GetEpochSnapshot returns a snapshot of the currently active epoch.
@@ -427,6 +454,7 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 		txnSchedulerCommittee: g.activeEpoch.txnSchedulerCommittee,
 		mergeCommittee:        g.activeEpoch.mergeCommittee,
 		storageCommittee:      g.activeEpoch.storageCommittee,
+		nodes:                 g.nodes,
 	}
 
 	// Executor committee may be nil in case we are not a member of any committee.
@@ -454,13 +482,19 @@ func (g *Group) IsPeerAuthorized(peerID signature.PublicKey) bool {
 
 	// If we are in the executor committee, we accept messages from the transaction
 	// scheduler committee leader.
-	if g.activeEpoch.executorCommittee != nil && g.activeEpoch.txnSchedulerLeaderPeerID.IsValid() {
-		authorized = authorized || peerID.Equal(g.activeEpoch.txnSchedulerLeaderPeerID)
+	if g.activeEpoch.executorCommittee != nil && g.activeEpoch.txnSchedulerLeader.IsValid() {
+		n := g.nodes.LookupByPeerID(peerID)
+		if n != nil {
+			authorized = authorized || g.activeEpoch.txnSchedulerLeader.Equal(n.ID)
+		}
 	}
 
 	// If we are in the merge committee, we accept messages from any executor committee member.
 	if g.activeEpoch.mergeCommittee.Role != scheduler.Invalid {
-		authorized = authorized || g.activeEpoch.executorCommitteesByPeer[peerID]
+		n := g.nodes.LookupByPeerID(peerID)
+		if n != nil {
+			authorized = authorized || g.activeEpoch.executorCommitteeMemberSet[n.ID]
+		}
 	}
 
 	return authorized
@@ -524,16 +558,26 @@ func (g *Group) publishLocked(
 
 	// Publish batch to given committee.
 	publicIdentity := g.identity.NodeSigner.Public()
-	for index, member := range ci.Committee.Members {
-		g.logger.Debug("publishing to committee members",
-			"node", ci.Nodes[index],
-		)
-		if member.PublicKey.Equal(publicIdentity) {
+	for id := range ci.PublicKeys {
+		if id.Equal(publicIdentity) {
 			// Do not publish to self.
 			continue
 		}
 
-		g.p2p.Publish(pubCtx, ci.Nodes[index], msg)
+		n := g.nodes.Lookup(id)
+		if n == nil {
+			// This should never happen as nodes cannot disappear mid-epoch.
+			g.logger.Warn("ignoring node that disappeared mid-epoch",
+				"node", id,
+			)
+			continue
+		}
+
+		g.logger.Debug("publishing to committee member",
+			"node", n,
+		)
+
+		g.p2p.Publish(pubCtx, n, msg)
 	}
 
 	return nil
@@ -604,6 +648,7 @@ func (g *Group) PublishExecuteFinished(spanCtx opentracing.SpanContext, c *commi
 
 // NewGroup creates a new group.
 func NewGroup(
+	ctx context.Context,
 	identity *identity.Identity,
 	runtimeID common.Namespace,
 	handler MessageHandler,
@@ -612,6 +657,11 @@ func NewGroup(
 	scheduler scheduler.Backend,
 	p2p *p2p.P2P,
 ) (*Group, error) {
+	nodes, err := committee.NewNodeDescriptorWatcher(ctx, registry)
+	if err != nil {
+		return nil, fmt.Errorf("group: failed to create node watcher: %w", err)
+	}
+
 	g := &Group{
 		identity:  identity,
 		runtimeID: runtimeID,
@@ -620,6 +670,7 @@ func NewGroup(
 		roothash:  roothash,
 		handler:   handler,
 		p2p:       p2p,
+		nodes:     nodes,
 		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtimeID),
 	}
 
