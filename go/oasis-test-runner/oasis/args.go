@@ -159,13 +159,6 @@ func (args *argBuilder) workerClientPort(port uint16) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) disableRegistrationWorker() *argBuilder {
-	args.vec = append(args.vec, []string{
-		"--" + registration.CfgRegistrationWorkerEnabled + "=false",
-	}...)
-	return args
-}
-
 func (args *argBuilder) workerCommonSentryAddresses(addrs []string) *argBuilder {
 	for _, addr := range addrs {
 		args.vec = append(args.vec, []string{

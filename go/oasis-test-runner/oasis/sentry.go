@@ -58,7 +58,6 @@ func (sentry *Sentry) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		workerSentryEnabled().
-		disableRegistrationWorker().
 		workerSentryControlPort(sentry.controlPort).
 		tendermintCoreListenAddress(sentry.consensusPort).
 		appendNetwork(sentry.net).

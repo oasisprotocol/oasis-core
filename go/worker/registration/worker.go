@@ -33,8 +33,6 @@ import (
 const (
 	workerRegistrationDBBucketName = "worker/registration"
 
-	// CfgRegistrationWorkerEnabled enables registration worker.
-	CfgRegistrationWorkerEnabled = "worker.registration.enabled"
 	// CfgRegistrationEntity configures the registration worker entity.
 	CfgRegistrationEntity = "worker.registration.entity"
 	// CfgRegistrationPrivateKey configures the registration worker private key.
@@ -104,8 +102,6 @@ func (rp *roleProvider) SetUnavailable() {
 // Worker is a service handling worker node registration.
 type Worker struct { // nolint: maligned
 	sync.RWMutex
-
-	enabled bool
 
 	workerCommonCfg *workerCommon.Config
 
@@ -724,7 +720,6 @@ func New(
 	}
 
 	w := &Worker{
-		enabled:            viper.GetBool(CfgRegistrationWorkerEnabled),
 		workerCommonCfg:    workerCommonCfg,
 		store:              serviceStore,
 		storedDeregister:   storedDeregister,
@@ -768,10 +763,6 @@ func (w *Worker) Name() string {
 
 // Start starts the registration service.
 func (w *Worker) Start() error {
-	if !w.enabled {
-		w.logger.Info("not starting registration worker as it's disabled")
-		return nil
-	}
 	w.logger.Info("starting node registration service")
 
 	// HACK: This can be ok in certain configurations.
@@ -808,7 +799,6 @@ func (w *Worker) Cleanup() {
 }
 
 func init() {
-	Flags.Bool(CfgRegistrationWorkerEnabled, true, "Enable registration worker")
 	Flags.String(CfgRegistrationEntity, "", "Entity to use as the node owner in registrations")
 	Flags.String(CfgRegistrationPrivateKey, "", "Private key to use to sign node registrations")
 	Flags.Bool(CfgRegistrationForceRegister, false, "Override a previously saved deregistration request")
