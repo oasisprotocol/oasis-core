@@ -320,10 +320,11 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 		)
 		return nil, ErrInvalidSignature
 	}
-	if sigEnt.Signed.Signature.SanityCheck(ent.ID) != nil {
+	if err := sigEnt.Signed.Signature.SanityCheck(ent.ID); err != nil {
 		logger.Error("RegisterEntity: invalid argument(s)",
 			"signed_entity", sigEnt,
 			"entity", ent,
+			"err", err,
 		)
 		return nil, ErrInvalidArgument
 	}
@@ -851,6 +852,16 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) e
 	return nil
 }
 
+func exactlyOneTrue(conds ...bool) bool {
+	total := 0
+	for _, c := range conds {
+		if c {
+			total++
+		}
+	}
+	return total == 1
+}
+
 // VerifyRegisterRuntimeArgs verifies arguments for RegisterRuntime.
 func VerifyRegisterRuntimeArgs(
 	params *ConsensusParameters,
@@ -939,7 +950,7 @@ func VerifyRegisterRuntimeArgs(
 
 	// Ensure there is at least one member of the compute group.
 	if rt.Executor.GroupSize == 0 {
-		logger.Error("RegisterRuntime: compute group size too small",
+		logger.Error("RegisterRuntime: executor group size too small",
 			"runtime", rt,
 		)
 		return nil, ErrInvalidArgument
@@ -957,6 +968,14 @@ func VerifyRegisterRuntimeArgs(
 	if rt.TEEHardware >= node.TEEHardwareReserved {
 		logger.Error("RegisterRuntime: invalid TEE hardware specified",
 			"runtime", rt,
+		)
+		return nil, ErrInvalidArgument
+	}
+
+	// Ensure there's a valid admission policy.
+	if !exactlyOneTrue(rt.AdmissionPolicy.AnyNode != nil, rt.AdmissionPolicy.EntityWhitelist != nil) {
+		logger.Error("RegisterRuntime: invalid admission policy. exactly one policy should be non-nil",
+			"admission_policy", rt.AdmissionPolicy,
 		)
 		return nil, ErrInvalidArgument
 	}

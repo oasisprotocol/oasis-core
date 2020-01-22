@@ -185,6 +185,17 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		return registry.ErrIncorrectTxSigner
 	}
 
+	// Check runtime's whitelist.
+	for _, rt := range paidRuntimes {
+		if rt.AdmissionPolicy.EntityWhitelist != nil && !rt.AdmissionPolicy.EntityWhitelist.Entities[newNode.EntityID] {
+			ctx.Logger().Error("RegisterNode: node's entity not in a runtime's whitelist",
+				"entity", newNode.EntityID,
+				"runtime", rt.ID,
+			)
+			return registry.ErrForbidden
+		}
+	}
+
 	// Re-check that the entity has at sufficient stake to still be an entity.
 	var (
 		stakeCache     *stakingState.StakeCache
@@ -199,7 +210,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 
 		if err = stakeCache.EnsureSufficientStake(newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
-			ctx.Logger().Error("RegisterNode: insufficent stake, entity no longer valid",
+			ctx.Logger().Error("RegisterNode: insufficient stake, entity no longer valid",
 				"err", err,
 				"id", newNode.EntityID,
 			)

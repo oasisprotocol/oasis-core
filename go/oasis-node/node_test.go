@@ -98,6 +98,9 @@ var (
 			BatchFlushTimeout: 20 * time.Second,
 		},
 		Storage: registry.StorageParameters{GroupSize: 1},
+		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+		},
 	}
 
 	testRuntimeID common.Namespace

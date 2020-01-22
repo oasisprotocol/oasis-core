@@ -135,6 +135,20 @@ type StorageParameters struct {
 	GroupSize uint64 `json:"group_size"`
 }
 
+// AnyNodeRuntimeAdmissionPolicy allows any node to register.
+type AnyNodeRuntimeAdmissionPolicy struct{}
+
+// EntityWhitelistRuntimeAdmissionPolicy allows only whitelisted entities' nodes to register.
+type EntityWhitelistRuntimeAdmissionPolicy struct {
+	Entities map[signature.PublicKey]bool `json:"entities"`
+}
+
+// RuntimeAdmissionPolicy is a specification of which nodes are allowed to register for a runtime.
+type RuntimeAdmissionPolicy struct {
+	AnyNode         *AnyNodeRuntimeAdmissionPolicy         `json:"any_node,omitempty"`
+	EntityWhitelist *EntityWhitelistRuntimeAdmissionPolicy `json:"entity_whitelist,omitempty"`
+}
+
 // Runtime represents a runtime.
 type Runtime struct {
 	// ID is a globally unique long term identifier of the runtime.
@@ -166,6 +180,10 @@ type Runtime struct {
 
 	// Storage stores parameters of the storage committee.
 	Storage StorageParameters `json:"storage,omitempty"`
+
+	// AdmissionPolicy sets which nodes are allowed to register for this runtime.
+	// This policy applies to all roles.
+	AdmissionPolicy RuntimeAdmissionPolicy `json:"admission_policy"`
 }
 
 // String returns a string representation of itself.
