@@ -23,11 +23,11 @@ import (
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler"
 	"github.com/oasislabs/oasis-core/go/worker/keymanager"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasislabs/oasis-core/go/worker/sentry"
 	workerStorage "github.com/oasislabs/oasis-core/go/worker/storage"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
 )
 
 type argBuilder struct {

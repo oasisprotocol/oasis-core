@@ -3,7 +3,7 @@ package executor
 import (
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
-	"github.com/oasislabs/oasis-core/go/worker/merge"
+	"github.com/oasislabs/oasis-core/go/worker/compute/merge"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 

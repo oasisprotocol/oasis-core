@@ -11,7 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm/api"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/algorithm/api"
 )
 
 const (

@@ -30,7 +30,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/common/host"
 	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
-	mergeCommittee "github.com/oasislabs/oasis-core/go/worker/merge/committee"
+	mergeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/merge/committee"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 

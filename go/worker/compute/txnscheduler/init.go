@@ -5,9 +5,9 @@ import (
 	"github.com/spf13/viper"
 
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
-	"github.com/oasislabs/oasis-core/go/worker/executor"
+	"github.com/oasislabs/oasis-core/go/worker/compute/executor"
+	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/algorithm"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
-	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/txnscheduler/algorithm"
 )
 
 const (

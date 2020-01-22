@@ -3,7 +3,7 @@ package txnscheduler
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/api"
 )
 
 var _ api.TransactionScheduler = (*Worker)(nil)

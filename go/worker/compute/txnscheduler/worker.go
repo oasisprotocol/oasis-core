@@ -9,10 +9,10 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/executor"
+	"github.com/oasislabs/oasis-core/go/worker/compute/executor"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/api"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/committee"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/api"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler/committee"
 )
 
 // Worker is a transaction scheduler handling many runtimes.

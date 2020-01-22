@@ -59,13 +59,13 @@ import (
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
-	"github.com/oasislabs/oasis-core/go/worker/executor"
+	"github.com/oasislabs/oasis-core/go/worker/compute/executor"
+	"github.com/oasislabs/oasis-core/go/worker/compute/merge"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler"
 	workerKeymanager "github.com/oasislabs/oasis-core/go/worker/keymanager"
-	"github.com/oasislabs/oasis-core/go/worker/merge"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasislabs/oasis-core/go/worker/sentry"
 	workerStorage "github.com/oasislabs/oasis-core/go/worker/storage"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
 )
 
 var (

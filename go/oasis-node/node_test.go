@@ -42,13 +42,13 @@ import (
 	storageTests "github.com/oasislabs/oasis-core/go/storage/tests"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
-	executorCommittee "github.com/oasislabs/oasis-core/go/worker/executor/committee"
-	executorWorkerTests "github.com/oasislabs/oasis-core/go/worker/executor/tests"
+	executorCommittee "github.com/oasislabs/oasis-core/go/worker/compute/executor/committee"
+	executorWorkerTests "github.com/oasislabs/oasis-core/go/worker/compute/executor/tests"
+	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler"
+	txnschedulerCommittee "github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/committee"
+	txnschedulerWorkerTests "github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/tests"
 	storageWorker "github.com/oasislabs/oasis-core/go/worker/storage"
 	storageWorkerTests "github.com/oasislabs/oasis-core/go/worker/storage/tests"
-	"github.com/oasislabs/oasis-core/go/worker/txnscheduler"
-	txnschedulerCommittee "github.com/oasislabs/oasis-core/go/worker/txnscheduler/committee"
-	txnschedulerWorkerTests "github.com/oasislabs/oasis-core/go/worker/txnscheduler/tests"
 )
 
 const (

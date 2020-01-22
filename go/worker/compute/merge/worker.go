@@ -9,7 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/merge/committee"
+	"github.com/oasislabs/oasis-core/go/worker/compute/merge/committee"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 
