@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	commonGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
@@ -18,6 +21,7 @@ import (
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
@@ -35,6 +39,9 @@ import (
 
 type argBuilder struct {
 	vec []string
+
+	// dontBlameOasis is true, if CfgDebugDontBlameOasis is passed.
+	dontBlameOasis bool
 }
 
 func (args *argBuilder) internalSocketAddress(path string) *argBuilder {
@@ -43,7 +50,10 @@ func (args *argBuilder) internalSocketAddress(path string) *argBuilder {
 }
 
 func (args *argBuilder) debugDontBlameOasis() *argBuilder {
-	args.vec = append(args.vec, "--"+flags.CfgDebugDontBlameOasis)
+	if !args.dontBlameOasis {
+		args.vec = append(args.vec, "--"+flags.CfgDebugDontBlameOasis)
+		args.dontBlameOasis = true
+	}
 	return args
 }
 
@@ -68,6 +78,11 @@ func (args *argBuilder) grpcWait() *argBuilder {
 
 func (args *argBuilder) grpcLogDebug() *argBuilder {
 	args.vec = append(args.vec, "--"+commonGrpc.CfgLogDebug)
+	return args
+}
+
+func (args *argBuilder) grpcDebugGrpcSocketPath(path string) *argBuilder {
+	args.vec = append(args.vec, "--"+grpc.CfgDebugGrpcInternalSocketPath, path)
 	return args
 }
 
@@ -423,6 +438,27 @@ func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {
 			"--" + tendermint.CfgP2PSeed, fmt.Sprintf("%s@127.0.0.1:%d", seed.tmAddress, seed.consensusPort),
 		}...)
 	}
+	return args
+}
+
+func (args *argBuilder) appendNodeMetrics(node *Node) *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + metrics.CfgMetricsMode, metrics.MetricsModePush,
+		"--" + metrics.CfgMetricsAddr, viper.GetString(metrics.CfgMetricsAddr),
+		"--" + metrics.CfgMetricsInterval, viper.GetString(metrics.CfgMetricsInterval),
+		"--" + metrics.CfgMetricsJobName, node.Name,
+	}...)
+
+	// Append labels.
+	args.vec = append(args.vec, "--"+metrics.CfgMetricsLabels)
+	ti := node.net.env.TestInfo()
+	labels := metrics.GetDefaultPushLabels(ti)
+	var l []string
+	for k, v := range labels {
+		l = append(l, k+"="+v)
+	}
+	args.vec = append(args.vec, strings.Join(l, ","))
+
 	return args
 }
 

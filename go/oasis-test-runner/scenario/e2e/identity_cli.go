@@ -3,12 +3,9 @@ package e2e
 import (
 	"fmt"
 
-	"github.com/spf13/viper"
-
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
@@ -19,19 +16,21 @@ import (
 var (
 	// IdentityCLI is the identity CLI scenario.
 	IdentityCLI scenario.Scenario = &identityCLIImpl{
-		logger: logging.GetLogger("scenario/e2e/identity-cli"),
+		e2eImpl: *newE2eImpl("identity-cli"),
 	}
 )
 
 type identityCLIImpl struct {
-	nodeBinary string
-	dataDir    string
+	e2eImpl
 
-	logger *logging.Logger
+	dataDir string
 }
 
-func (ident *identityCLIImpl) Name() string {
-	return "identity-cli"
+func (ident *identityCLIImpl) Clone() scenario.Scenario {
+	return &identityCLIImpl{
+		e2eImpl: ident.e2eImpl.Clone(),
+		dataDir: ident.dataDir,
+	}
 }
 
 func (ident *identityCLIImpl) PreInit(childEnv *env.Env) error {
@@ -39,8 +38,6 @@ func (ident *identityCLIImpl) PreInit(childEnv *env.Env) error {
 }
 
 func (ident *identityCLIImpl) Init(childEnv *env.Env, net *oasis.Network) error {
-	ident.nodeBinary = viper.GetString(cfgNodeBinary)
-
 	dataDir, err := childEnv.NewSubDir("test-identity")
 	if err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: init failed to create subdir: %w", err)

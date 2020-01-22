@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,53 +17,56 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common/service"
+	"github.com/oasislabs/oasis-core/go/common/version"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 )
 
 const (
-	cfgMetricsMode              = "metrics.mode"
-	cfgMetricsAddr              = "metrics.address"
-	cfgMetricsPushJobName       = "metrics.push.job_name"
-	cfgMetricsPushInstanceLabel = "metrics.push.instance_label"
-	cfgMetricsPushInterval      = "metrics.push.interval"
+	CfgMetricsMode     = "metrics.mode"
+	CfgMetricsAddr     = "metrics.address"
+	CfgMetricsLabels   = "metrics.labels"
+	CfgMetricsJobName  = "metrics.job_name"
+	CfgMetricsInterval = "metrics.interval"
 
-	metricsModeNone = "none"
-	metricsModePull = "pull"
-	metricsModePush = "push"
+	MetricUp = "oasis_up"
+
+	MetricsJobTestRunner = "oasis-test-runner"
+
+	MetricsLabelGitBranch       = "git_branch"
+	MetricsLabelInstance        = "instance"
+	MetricsLabelRun             = "run"
+	MetricsLabelSoftwareVersion = "software_version"
+	MetricsLabelTest            = "test"
+
+	MetricsModeNone = "none"
+	MetricsModePull = "pull"
+	MetricsModePush = "push"
 )
 
 // Flags has the flags used by the metrics service.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
+var (
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
-// ServiceConfig contains the configuration parameters for metrics.
-type ServiceConfig struct {
-	// Mode is the service mode ("none", "pull", "push").
-	Mode string
-	// Address is the address of the push server.
-	Address string
-	// JobName is the name of the job for which metrics are collected.
-	JobName string
-	// InstanceLabel is the instance label of the job being collected for.
-	InstanceLabel string
-	// Interval defined the push interval for metrics collection.
-	Interval time.Duration
-}
-
-// GetServiceConfig gets the metrics configuration parameter struct.
-func GetServiceConfig() *ServiceConfig {
-	return &ServiceConfig{
-		Mode:          viper.GetString(cfgMetricsMode),
-		Address:       viper.GetString(cfgMetricsAddr),
-		JobName:       viper.GetString(cfgMetricsPushJobName),
-		InstanceLabel: viper.GetString(cfgMetricsPushInstanceLabel),
-		Interval:      viper.GetDuration(cfgMetricsPushInterval),
-	}
-}
+	UpGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: MetricUp,
+			Help: "Is oasis-test-runner or oasis-node active",
+		},
+	)
+)
 
 type stubService struct {
 	service.BaseBackgroundService
+
+	rsvc *resourceService
 }
 
 func (s *stubService) Start() error {
+	if err := s.rsvc.Start(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -75,6 +79,7 @@ func newStubService() (service.BackgroundService, error) {
 
 	return &stubService{
 		BaseBackgroundService: svc,
+		rsvc:                  newResourceService(viper.GetDuration(CfgMetricsInterval)),
 	}, nil
 }
 
@@ -86,9 +91,15 @@ type pullService struct {
 
 	ctx   context.Context
 	errCh chan error
+
+	rsvc *resourceService
 }
 
 func (s *pullService) Start() error {
+	if err := s.rsvc.Start(); err != nil {
+		return err
+	}
+
 	go func() {
 		if err := s.s.Serve(s.ln); err != nil {
 			s.BaseBackgroundService.Stop()
@@ -122,12 +133,12 @@ func (s *pullService) Cleanup() {
 }
 
 func newPullService(ctx context.Context) (service.BackgroundService, error) {
-	addr := viper.GetString(cfgMetricsAddr)
+	addr := viper.GetString(CfgMetricsAddr)
 
 	svc := *service.NewBaseBackgroundService("metrics")
 
 	svc.Logger.Debug("Metrics Server Params",
-		"mode", metricsModePull,
+		"mode", MetricsModePull,
 		"addr", addr,
 	)
 
@@ -142,6 +153,7 @@ func newPullService(ctx context.Context) (service.BackgroundService, error) {
 		ln:                    ln,
 		s:                     &http.Server{Handler: promhttp.Handler()},
 		errCh:                 make(chan error),
+		rsvc:                  newResourceService(viper.GetDuration(CfgMetricsInterval)),
 	}, nil
 }
 
@@ -150,9 +162,15 @@ type pushService struct {
 
 	pusher   *push.Pusher
 	interval time.Duration
+
+	rsvc *resourceService
 }
 
 func (s *pushService) Start() error {
+	if err := s.rsvc.Start(); err != nil {
+		return err
+	}
+
 	s.pusher = s.pusher.Gatherer(prometheus.DefaultGatherer)
 
 	go s.worker()
@@ -166,7 +184,7 @@ func (s *pushService) worker() {
 	for {
 		select {
 		case <-s.Quit():
-			break
+			return
 		case <-t.C:
 		}
 
@@ -179,56 +197,92 @@ func (s *pushService) worker() {
 }
 
 func newPushService() (service.BackgroundService, error) {
-	addr := viper.GetString(cfgMetricsAddr)
-	jobName := viper.GetString(cfgMetricsPushJobName)
-	instanceLabel := viper.GetString(cfgMetricsPushInstanceLabel)
-	interval := viper.GetDuration(cfgMetricsPushInterval)
+	addr := viper.GetString(CfgMetricsAddr)
+	jobName := viper.GetString(CfgMetricsJobName)
+	labels := flags.GetStringMapString(CfgMetricsLabels)
+	interval := viper.GetDuration(CfgMetricsInterval)
 
 	if jobName == "" {
-		return nil, fmt.Errorf("metrics: metrics.push.job_name required for push mode")
+		return nil, fmt.Errorf("metrics: %s required for push mode", CfgMetricsJobName)
 	}
-	if instanceLabel == "" {
-		return nil, fmt.Errorf("metrics: metrics.push.instance_label required for push mode")
+	if labels["instance"] == "" {
+		return nil, fmt.Errorf("metrics: at least 'instance' key should be set for %s. Provided labels: %v", CfgMetricsLabels, labels)
 	}
 
 	svc := *service.NewBaseBackgroundService("metrics")
 
 	svc.Logger.Debug("Metrics Server Params",
-		"mode", metricsModePush,
+		"mode", MetricsModePush,
 		"addr", addr,
 		"job_name", jobName,
-		"instance_label", instanceLabel,
+		"labels", labels,
 		"push_interval", interval,
 	)
 
+	pusher := push.New(addr, jobName)
+	for k, v := range labels {
+		pusher = pusher.Grouping(k, v)
+	}
+
 	return &pushService{
 		BaseBackgroundService: svc,
-		pusher:                push.New(addr, jobName).Grouping("instance", instanceLabel),
+		pusher:                pusher,
 		interval:              interval,
+		rsvc:                  newResourceService(viper.GetDuration(CfgMetricsInterval)),
 	}, nil
 }
 
 // New constructs a new metrics service.
 func New(ctx context.Context) (service.BackgroundService, error) {
-	mode := viper.GetString(cfgMetricsMode)
+	mode := viper.GetString(CfgMetricsMode)
 	switch strings.ToLower(mode) {
-	case metricsModeNone:
+	case MetricsModeNone:
 		return newStubService()
-	case metricsModePull:
+	case MetricsModePull:
 		return newPullService(ctx)
-	case metricsModePush:
+	case MetricsModePush:
 		return newPushService()
 	default:
 		return nil, fmt.Errorf("metrics: unsupported mode: '%v'", mode)
 	}
 }
 
+// EscapeLabelCharacters replaces invalid prometheus label name characters with "_".
+func EscapeLabelCharacters(l string) string {
+	return strings.Replace(l, ".", "_", -1)
+}
+
+// GetDefaultPushLabels generates standard Prometheus push labels based on test current test instance info.
+func GetDefaultPushLabels(ti *env.TestInstanceInfo) map[string]string {
+	labels := map[string]string{
+		MetricsLabelInstance:        ti.Instance,
+		MetricsLabelRun:             strconv.Itoa(ti.Run),
+		MetricsLabelTest:            ti.Test,
+		MetricsLabelSoftwareVersion: version.SoftwareVersion,
+	}
+	if version.GitBranch != "" {
+		labels[MetricsLabelGitBranch] = version.GitBranch
+	}
+	// Populate it with test-provided parameters.
+	if ti.ParameterSet != nil {
+		ti.ParameterSet.VisitAll(func(f *flag.Flag) {
+			labels[EscapeLabelCharacters(f.Name)] = f.Value.String()
+		})
+		// Override any labels passed to oasis-test-runner via CLI.
+		for k, v := range flags.GetStringMapString(CfgMetricsLabels) {
+			labels[k] = v
+		}
+	}
+
+	return labels
+}
+
 func init() {
-	Flags.String(cfgMetricsMode, metricsModeNone, "metrics (prometheus) mode")
-	Flags.String(cfgMetricsAddr, "127.0.0.1:3000", "metrics pull/push address")
-	Flags.String(cfgMetricsPushJobName, "", "metrics push job name")
-	Flags.String(cfgMetricsPushInstanceLabel, "", "metrics push instance label")
-	Flags.Duration(cfgMetricsPushInterval, 5*time.Second, "metrics push interval")
+	Flags.String(CfgMetricsMode, MetricsModeNone, "metrics mode: none, pull, push")
+	Flags.String(CfgMetricsAddr, "127.0.0.1:3000", "metrics pull/push address")
+	Flags.String(CfgMetricsJobName, "", "metrics push job name")
+	Flags.StringToString(CfgMetricsLabels, map[string]string{}, "metrics push instance label")
+	Flags.Duration(CfgMetricsInterval, 5*time.Second, "metrics push interval")
 
 	_ = viper.BindPFlags(Flags)
 }

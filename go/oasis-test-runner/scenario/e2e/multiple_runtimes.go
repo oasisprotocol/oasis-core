@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	flag "github.com/spf13/pflag"
+
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -14,37 +16,61 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
-const (
-	// numComputeRuntimes is the number of runtimes, all with common runtimeBinary registered.
-	numComputeRuntimes = 2
-
-	// numComputeRuntimeTxns is the number of insert test transactions sent to each runtime.
-	numComputeRuntimeTxns = 2
-
-	// numComputeWorkers is the number of compute workers.
-	numComputeWorkers = 1
-)
-
 var (
 	// MultipleRuntimes is a scenario which tests running multiple runtimes on one node.
 	MultipleRuntimes scenario.Scenario = &multipleRuntimesImpl{
-		basicImpl: *newBasicImpl("multiple-runtimes", "simple-keyvalue-client", nil),
-		logger:    logging.GetLogger("scenario/e2e/multiple_runtimes"),
+		runtimeImpl: *newRuntimeImpl("multiple-runtimes", "simple-keyvalue-client", nil),
+		logger:      logging.GetLogger("scenario/e2e/multiple_runtimes"),
+
+		numComputeRuntimes:    2,
+		numComputeRuntimeTxns: 2,
+		numComputeWorkers:     2,
+		executorGroupSize:     2,
 	}
 )
 
 type multipleRuntimesImpl struct {
-	basicImpl
+	runtimeImpl
 
 	logger *logging.Logger
+
+	// numComputeRuntimes is the number of runtimes, all with common runtimeBinary registered.
+	numComputeRuntimes int
+
+	// numComputeRuntimeTxns is the number of insert test transactions sent to each runtime.
+	numComputeRuntimeTxns int
+
+	// numComputeWorkers is the number of compute workers.
+	numComputeWorkers int
+
+	// executorGroupSize is the number of executor nodes.
+	executorGroupSize int
 }
 
-func (mr *multipleRuntimesImpl) Name() string {
-	return "multiple-runtimes"
+func (mr *multipleRuntimesImpl) Clone() scenario.Scenario {
+	return &multipleRuntimesImpl{
+		runtimeImpl: *mr.runtimeImpl.Clone().(*runtimeImpl),
+		logger:      mr.logger,
+
+		numComputeRuntimes:    mr.numComputeRuntimes,
+		numComputeRuntimeTxns: mr.numComputeRuntimeTxns,
+		numComputeWorkers:     mr.numComputeWorkers,
+		executorGroupSize:     mr.executorGroupSize,
+	}
+}
+
+func (mr *multipleRuntimesImpl) Parameters() *flag.FlagSet {
+	fs := mr.runtimeImpl.Parameters()
+	fs.IntVar(&mr.numComputeRuntimes, "num_compute_runtimes", mr.numComputeRuntimes, "number of compute runtimes per worker")
+	fs.IntVar(&mr.numComputeRuntimeTxns, "num_compute_runtime_txns", mr.numComputeRuntimeTxns, "number of transactions to perform")
+	fs.IntVar(&mr.numComputeWorkers, "num_compute_workers", mr.numComputeWorkers, "number of workers to initiate")
+	fs.IntVar(&mr.executorGroupSize, "executor_group_size", mr.executorGroupSize, "number of executor workers in committee")
+
+	return fs
 }
 
 func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := mr.basicImpl.Fixture()
+	f, err := mr.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +96,7 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.EpochtimeMock = true
 
 	// Add some more consecutive runtime IDs with the same binary.
-	for i := 1; i <= numComputeRuntimes; i++ {
+	for i := 1; i <= mr.numComputeRuntimes; i++ {
 		// Increase LSB by 1.
 		id[len(id)-1]++
 
@@ -81,7 +107,7 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Keymanager: 0,
 			Binary:     runtimeBinary,
 			Executor: registry.ExecutorParameters{
-				GroupSize:       1,
+				GroupSize:       uint64(mr.executorGroupSize),
 				GroupBackupSize: 0,
 				RoundTimeout:    10 * time.Second,
 			},
@@ -114,7 +140,7 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Use numComputeWorkers compute worker fixtures.
 	f.ComputeWorkers = []oasis.ComputeWorkerFixture{}
-	for i := 0; i < numComputeWorkers; i++ {
+	for i := 0; i < mr.numComputeWorkers; i++ {
 		f.ComputeWorkers = append(f.ComputeWorkers, oasis.ComputeWorkerFixture{Entity: 1})
 	}
 
@@ -138,13 +164,13 @@ func (mr *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 	for _, r := range mr.net.Runtimes() {
 		rt := r.ToRuntimeDescriptor()
 		if rt.Kind == registry.KindCompute {
-			for i := 0; i < numComputeRuntimeTxns; i++ {
+			for i := 0; i < mr.numComputeRuntimeTxns; i++ {
 				mr.logger.Info("submitting transaction to runtime",
 					"seq", i,
 					"runtime_id", rt.ID,
 				)
 
-				if err := mr.submitRuntimeTx(ctx, rt.ID, "hello", fmt.Sprintf("world %d from %s", i, rt.ID)); err != nil {
+				if err := mr.submitRuntimeTx(ctx, rt.ID, "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID)); err != nil {
 					return err
 				}
 

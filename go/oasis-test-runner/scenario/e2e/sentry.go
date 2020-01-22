@@ -19,17 +19,23 @@ var (
 )
 
 type sentryImpl struct {
-	basicImpl
+	runtimeImpl
 }
 
 func newSentryImpl(name, clientBinary string, clientArgs []string) scenario.Scenario {
 	return &sentryImpl{
-		basicImpl: *newBasicImpl(name, clientBinary, clientArgs),
+		runtimeImpl: *newRuntimeImpl(name, clientBinary, clientArgs),
+	}
+}
+
+func (s *sentryImpl) Clone() scenario.Scenario {
+	return &sentryImpl{
+		runtimeImpl: *s.runtimeImpl.Clone().(*runtimeImpl),
 	}
 }
 
 func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := s.basicImpl.Fixture()
+	f, err := s.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}

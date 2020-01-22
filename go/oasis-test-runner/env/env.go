@@ -3,11 +3,16 @@ package env
 
 import (
 	"container/list"
+	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
+
+	flag "github.com/spf13/pflag"
 )
 
 // ErrEarlyTerm is the error passed over the error channel when a
@@ -16,6 +21,36 @@ var ErrEarlyTerm = errors.New("env: sub-process exited early")
 
 // CleanupFn is the cleanup hook function prototype.
 type CleanupFn func()
+
+// ParameterFlagSet is a wrapper for flag.FlagSet to produce nicer JSON output.
+type ParameterFlagSet struct {
+	flag.FlagSet
+}
+
+// TestInstanceInfo contains information of the current test run.
+type TestInstanceInfo struct {
+	// Test is the name of the test.
+	Test string `json:"test"`
+
+	// Instance is the instance name of the test. e.g. oasis-test-runner123456
+	Instance string `json:"instance"`
+
+	// ParameterSet is the parameter set the test was run with.
+	ParameterSet *ParameterFlagSet `json:"parameter_set"`
+
+	// Run is the number of run.
+	Run int `json:"run"`
+}
+
+// MarshalJSON outputs ParameterFlagSet as an ordinary JSON map.
+func (pfs *ParameterFlagSet) MarshalJSON() ([]byte, error) {
+	ps := make(map[string]string)
+	pfs.VisitAll(func(f *flag.Flag) {
+		ps[f.Name] = f.Value.String()
+	})
+
+	return json.Marshal(ps)
+}
 
 // Env is a (nested) test environment.
 type Env struct {
@@ -26,6 +61,7 @@ type Env struct {
 	children   *list.List
 
 	dir         *Dir
+	testInfo    *TestInstanceInfo
 	cleanupFns  []CleanupFn
 	cleanupCmds []*cmdMonitor
 	cleanupLock sync.Mutex
@@ -51,6 +87,11 @@ func (env *Env) CurrentDir() *Dir {
 // NewSubDir creates a new subdirectory under the test environment.
 func (env *Env) NewSubDir(subDirName string) (*Dir, error) {
 	return env.dir.NewSubDir(subDirName)
+}
+
+// TestInfo returns the test instance information.
+func (env *Env) TestInfo() *TestInstanceInfo {
+	return env.testInfo
 }
 
 // AddOnCleanup adds a cleanup routine to be called durring the environment's
@@ -130,7 +171,7 @@ func (env *Env) Cleanup() {
 }
 
 // NewChild returns a new child test environment.
-func (env *Env) NewChild(childName string) (*Env, error) {
+func (env *Env) NewChild(childName string, testInfo *TestInstanceInfo) (*Env, error) {
 	var parentDir *Dir
 	if env.parent != nil {
 		parentDir = env.parent.dir
@@ -148,10 +189,24 @@ func (env *Env) NewChild(childName string) (*Env, error) {
 		parent:   env,
 		children: list.New(),
 		dir:      subDir,
+		testInfo: testInfo,
 	}
 	child.parentElem = env.children.PushBack(child)
 
 	return child, nil
+}
+
+// WriteTestInfo dumps test instance parameter set to test_info.json file for debugging afterwards.
+func (env *Env) WriteTestInfo() error {
+	b, err := json.Marshal(env.testInfo)
+	if err != nil {
+		return err
+	}
+	if err = ioutil.WriteFile(filepath.Join(env.Dir(), "test_info.json"), b, 0644); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // New creates a new root test environment.

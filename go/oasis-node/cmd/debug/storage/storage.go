@@ -46,7 +46,7 @@ var (
 			}
 			for _, arg := range args {
 				if err := ValidateRuntimeIDStr(arg); err != nil {
-					return fmt.Errorf("malformed runtime id '%v': %v", arg, err)
+					return fmt.Errorf("malformed runtime id '%v': %w", arg, err)
 				}
 			}
 
@@ -65,7 +65,7 @@ var (
 			}
 			for _, arg := range args {
 				if err := ValidateRuntimeIDStr(arg); err != nil {
-					return fmt.Errorf("malformed runtime id '%v': %v", arg, err)
+					return fmt.Errorf("malformed runtime id '%v': %w", arg, err)
 				}
 			}
 

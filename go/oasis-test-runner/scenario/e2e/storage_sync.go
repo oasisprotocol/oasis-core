@@ -20,17 +20,23 @@ var (
 )
 
 type storageSyncImpl struct {
-	basicImpl
+	runtimeImpl
 }
 
 func newStorageSyncImpl() scenario.Scenario {
 	return &storageSyncImpl{
-		basicImpl: *newBasicImpl("storage-sync", "simple-keyvalue-client", nil),
+		runtimeImpl: *newRuntimeImpl("storage-sync", "simple-keyvalue-client", nil),
+	}
+}
+
+func (sc *storageSyncImpl) Clone() scenario.Scenario {
+	return &storageSyncImpl{
+		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
 	}
 }
 
 func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.basicImpl.Fixture()
+	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +57,7 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
-	clientErrCh, cmd, err := sc.basicImpl.start(childEnv)
+	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
 		return err
 	}
@@ -64,14 +70,14 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 	// Check if the storage node that ignored applies has synced.
 	sc.logger.Info("checking if roots have been synced")
 
-	storageNode := sc.basicImpl.net.StorageWorkers()[2]
+	storageNode := sc.runtimeImpl.net.StorageWorkers()[2]
 	args := []string{
 		"debug", "storage", "check-roots",
 		"--log.level", "debug",
 		"--address", "unix:" + storageNode.SocketPath(),
-		sc.basicImpl.net.Runtimes()[1].ID().String(),
+		sc.runtimeImpl.net.Runtimes()[1].ID().String(),
 	}
-	if err = cli.RunSubCommand(childEnv, sc.logger, "storage-check-roots", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err = cli.RunSubCommand(childEnv, sc.logger, "storage-check-roots", sc.runtimeImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("root check failed after sync: %w", err)
 	}
 

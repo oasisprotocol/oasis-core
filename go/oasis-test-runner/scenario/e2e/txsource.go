@@ -37,7 +37,7 @@ const (
 
 // TxSourceMultiShort uses multiple workloads for a short time.
 var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
-	basicImpl: *newBasicImpl("txsource-multi-short", "", nil),
+	runtimeImpl: *newRuntimeImpl("txsource-multi-short", "", nil),
 	workloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
@@ -57,7 +57,7 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 
 // TxSourceMulti uses multiple workloads.
 var TxSourceMulti scenario.Scenario = &txSourceImpl{
-	basicImpl: *newBasicImpl("txsource-multi", "", nil),
+	runtimeImpl: *newRuntimeImpl("txsource-multi", "", nil),
 	workloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
@@ -81,7 +81,7 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 }
 
 type txSourceImpl struct { // nolint: maligned
-	basicImpl
+	runtimeImpl
 
 	workloads             []string
 	timeLimit             time.Duration
@@ -136,7 +136,7 @@ func (sc *txSourceImpl) generateConsensusFixture(f *oasis.ConsensusFixture) {
 }
 
 func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.basicImpl.Fixture()
+	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -340,6 +340,17 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 	}()
 
 	return nil
+}
+
+func (sc *txSourceImpl) Clone() scenario.Scenario {
+	return &txSourceImpl{
+		runtimeImpl:           *sc.runtimeImpl.Clone().(*runtimeImpl),
+		workloads:             sc.workloads,
+		timeLimit:             sc.timeLimit,
+		nodeRestartInterval:   sc.nodeRestartInterval,
+		livenessCheckInterval: sc.livenessCheckInterval,
+		rng:                   sc.rng,
+	}
 }
 
 func (sc *txSourceImpl) Run(childEnv *env.Env) error {

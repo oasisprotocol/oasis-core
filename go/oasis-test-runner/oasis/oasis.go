@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -25,6 +27,8 @@ import (
 	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
 	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/genesis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
@@ -40,8 +44,6 @@ const (
 	defaultConsensusTimeoutCommit      = 250 * time.Millisecond
 	defaultEpochtimeTendermintInterval = 30
 	defaultHaltEpoch                   = math.MaxUint64
-
-	internalSocketFile = "internal.sock"
 
 	logNodeFile    = "node.log"
 	logConsoleFile = "console.log"
@@ -71,7 +73,8 @@ type Node struct { // nolint: maligned
 	disableDefaultLogWatcherHandlerFactories bool
 	logWatcherHandlerFactories               []log.WatcherHandlerFactory
 
-	consensus ConsensusFixture
+	consensus            ConsensusFixture
+	customGrpcSocketPath string
 }
 
 // Exit returns a channel that will close once the node shuts down.
@@ -80,8 +83,13 @@ func (n *Node) Exit() chan error {
 	return n.exitCh
 }
 
-// SocketPath returns the path to the node's gRPC socket.
+// SocketPath returns the path of the node's gRPC unix socket.
 func (n *Node) SocketPath() string {
+	// Return custom (shorter?) socket path, if set.
+	if n.customGrpcSocketPath != "" {
+		return n.customGrpcSocketPath
+	}
+
 	return internalSocketPath(n.dir)
 }
 
@@ -245,6 +253,12 @@ type NetworkCfg struct { // nolint: maligned
 	// A set of log watcher handler factories used by default on all nodes
 	// created in this test network.
 	DefaultLogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
+
+	// UseCustomGrpcSocketPath specifies whether nodes should use internal.sock in datadir or externally-provided.
+	//
+	// WARNING: Using arbitrary unix socket paths poses security risk! This flag should only be used for debugging and
+	// end-to-end tests!
+	UseCustomGrpcSocketPath bool `json:"-"`
 }
 
 // Config returns the network configuration.
@@ -597,6 +611,19 @@ func (net *Network) generateDeterministicNodeIdentity(dir *env.Dir, rawSeed stri
 	return nil
 }
 
+// genTempSocketPath returns unique filename for internal socket in test base dir.
+//
+// This function is used to obtain shorter socket path than the one in datadir since that one might be too long for unix
+// socket path.
+func (net *Network) genTempSocketPath() string {
+	f, err := ioutil.TempFile(env.GetRootDir().String(), "internal-*.sock")
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	return f.Name()
+}
+
 func (net *Network) startOasisNode(
 	node *Node,
 	subCmd []string,
@@ -617,6 +644,14 @@ func (net *Network) startOasisNode(
 			appendIASProxy(net.iasProxy).
 			tendermintDebugAddrBookLenient().
 			tendermintDebugAllowDuplicateIP()
+	}
+	if net.cfg.UseCustomGrpcSocketPath {
+		node.customGrpcSocketPath = net.genTempSocketPath()
+		extraArgs = extraArgs.debugDontBlameOasis()
+		extraArgs = extraArgs.grpcDebugGrpcSocketPath(node.customGrpcSocketPath)
+	}
+	if viper.IsSet(metrics.CfgMetricsAddr) {
+		extraArgs = extraArgs.appendNodeMetrics(node)
 	}
 	args := append([]string{}, subCmd...)
 	args = append(args, baseArgs...)
@@ -803,7 +838,7 @@ func nodeLogPath(dir *env.Dir) string {
 }
 
 func internalSocketPath(dir *env.Dir) string {
-	return filepath.Join(dir.String(), internalSocketFile)
+	return filepath.Join(dir.String(), grpc.LocalSocketFilename)
 }
 
 func nodeIdentityKeyPath(dir *env.Dir) string {

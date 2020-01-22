@@ -17,22 +17,24 @@ var (
 )
 
 type nodeShutdownImpl struct {
-	basicImpl
+	runtimeImpl
 }
 
 func newNodeShutdownImpl() scenario.Scenario {
 	sc := &nodeShutdownImpl{
-		basicImpl: *newBasicImpl("node-shutdown", "", nil),
+		runtimeImpl: *newRuntimeImpl("node-shutdown", "", nil),
 	}
 	return sc
 }
 
-func (sc *nodeShutdownImpl) Name() string {
-	return "node-shutdown"
+func (sc *nodeShutdownImpl) Clone() scenario.Scenario {
+	return &nodeShutdownImpl{
+		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+	}
 }
 
 func (sc *nodeShutdownImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.basicImpl.Fixture()
+	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +52,7 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 	}
 
 	sc.logger.Info("requesting node shutdown")
-	computeWorker := sc.basicImpl.net.ComputeWorkers()[0]
+	computeWorker := sc.runtimeImpl.net.ComputeWorkers()[0]
 
 	// Wait for the node to be ready since we didn't wait for any clients.
 	nodeCtrl, err := oasis.NewController(computeWorker.SocketPath())
@@ -66,7 +68,7 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 		"--log.level", "debug",
 		"--address", "unix:" + computeWorker.SocketPath(),
 	}
-	if err = cli.RunSubCommand(childEnv, sc.logger, "control-shutdown", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if err = cli.RunSubCommand(childEnv, sc.logger, "control-shutdown", sc.runtimeImpl.net.Config().NodeBinary, args); err != nil {
 		return errors.Wrap(err, "scenario/e2e/node_shutdown: send request failed")
 	}
 

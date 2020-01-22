@@ -11,7 +11,7 @@ import (
 var (
 	// GasFeesRuntimes is the runtime gas fees scenario.
 	GasFeesRuntimes scenario.Scenario = &gasFeesRuntimesImpl{
-		basicImpl: *newBasicImpl("gas-fees/runtimes", "", nil),
+		runtimeImpl: *newRuntimeImpl("gas-fees/runtimes", "", nil),
 	}
 )
 
@@ -19,11 +19,17 @@ var (
 const gasPrice = 1
 
 type gasFeesRuntimesImpl struct {
-	basicImpl
+	runtimeImpl
+}
+
+func (sc *gasFeesRuntimesImpl) Clone() scenario.Scenario {
+	return &gasFeesRuntimesImpl{
+		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+	}
 }
 
 func (sc *gasFeesRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.basicImpl.Fixture()
+	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}

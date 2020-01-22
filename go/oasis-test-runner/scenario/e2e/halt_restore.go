@@ -27,12 +27,12 @@ var (
 const haltEpoch = 3
 
 type haltRestoreImpl struct {
-	basicImpl
+	runtimeImpl
 }
 
 func newHaltRestoreImpl() scenario.Scenario {
 	return &haltRestoreImpl{
-		basicImpl: *newBasicImpl(
+		runtimeImpl: *newRuntimeImpl(
 			"halt-restore",
 			"test-long-term-client",
 			[]string{"--mode", "part1"},
@@ -40,8 +40,14 @@ func newHaltRestoreImpl() scenario.Scenario {
 	}
 }
 
+func (sc *haltRestoreImpl) Clone() scenario.Scenario {
+	return &haltRestoreImpl{
+		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+	}
+}
+
 func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.basicImpl.Fixture()
+	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -114,14 +120,14 @@ func (sc *haltRestoreImpl) getExportedGenesisFiles() ([]string, error) {
 }
 
 func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
-	clientErrCh, cmd, err := sc.basicImpl.start(childEnv)
+	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
 		return err
 	}
 
 	// Wait for the client to exit.
 	select {
-	case err = <-sc.basicImpl.net.Errors():
+	case err = <-sc.runtimeImpl.net.Errors():
 		_ = cmd.Process.Kill()
 	case err = <-clientErrCh:
 	}
@@ -157,7 +163,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 
 	// Stop the network.
 	sc.logger.Info("stopping the network")
-	sc.basicImpl.net.Stop()
+	sc.runtimeImpl.net.Stop()
 	if err = sc.cleanTendermintStorage(childEnv); err != nil {
 		return fmt.Errorf("scenario/e2e/halt_restore: failed to clean tendemint storage: %w", err)
 	}
@@ -201,10 +207,10 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	// Make sure to not overwrite the entity.
 	fixture.Entities[1].Restore = true
 
-	if sc.basicImpl.net, err = fixture.Create(childEnv); err != nil {
+	if sc.runtimeImpl.net, err = fixture.Create(childEnv); err != nil {
 		return err
 	}
 
-	sc.basicImpl.clientArgs = []string{"--mode", "part2"}
-	return sc.basicImpl.Run(childEnv)
+	sc.runtimeImpl.clientArgs = []string{"--mode", "part2"}
+	return sc.runtimeImpl.Run(childEnv)
 }

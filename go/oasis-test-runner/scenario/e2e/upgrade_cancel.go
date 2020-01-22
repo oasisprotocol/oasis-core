@@ -6,8 +6,6 @@ import (
 	"io/ioutil"
 	"path"
 
-	"github.com/spf13/viper"
-
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
@@ -33,7 +31,7 @@ var (
 )
 
 type nodeUpgradeCancelImpl struct {
-	basicImpl
+	runtimeImpl
 
 	ctx          context.Context
 	currentEpoch epoch.EpochTime
@@ -49,19 +47,22 @@ func (sc *nodeUpgradeCancelImpl) nextEpoch() error {
 
 func newNodeUpgradeCancelImpl() scenario.Scenario {
 	sc := &nodeUpgradeCancelImpl{
-		basicImpl: *newBasicImpl("node-upgrade-cancel", "", nil),
-		ctx:       context.Background(),
+		runtimeImpl: *newRuntimeImpl("node-upgrade-cancel", "", nil),
+		ctx:         context.Background(),
 	}
 	return sc
 }
 
-func (sc *nodeUpgradeCancelImpl) Name() string {
-	return "node-upgrade-cancel"
+func (sc *nodeUpgradeCancelImpl) Clone() scenario.Scenario {
+	return &nodeUpgradeCancelImpl{
+		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		ctx:         context.Background(),
+	}
 }
 
 func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
 	var tee node.TEEHardware
-	err := tee.FromString(viper.GetString(cfgTEEHardware))
+	err := tee.FromString(sc.TEEHardware)
 	if err != nil {
 		return nil, err
 	}
@@ -76,10 +77,10 @@ func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
 			MrSigner: mrSigner,
 		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:                        viper.GetString(cfgNodeBinary),
-			RuntimeLoaderBinary:               viper.GetString(cfgRuntimeLoader),
+			NodeBinary:                        sc.nodeBinary,
+			RuntimeLoaderBinary:               sc.runtimeLoader,
 			EpochtimeMock:                     true,
-			DefaultLogWatcherHandlerFactories: DefaultBasicLogWatcherHandlerFactories,
+			DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},

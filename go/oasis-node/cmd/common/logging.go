@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 const (
@@ -31,7 +32,7 @@ func initLogging() error {
 			return errDefault
 		}
 
-		for k, v := range viper.GetStringMapString(cfgLogLevel) {
+		for k, v := range flags.GetStringMapString(cfgLogLevel) {
 			if k == "default" {
 				continue
 			}

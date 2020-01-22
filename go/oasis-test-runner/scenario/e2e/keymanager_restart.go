@@ -14,12 +14,12 @@ var (
 )
 
 type kmRestartImpl struct {
-	basicImpl
+	runtimeImpl
 }
 
 func newKmRestartImpl() scenario.Scenario {
 	return &kmRestartImpl{
-		basicImpl: *newBasicImpl(
+		runtimeImpl: *newRuntimeImpl(
 			"keymanager-restart",
 			"simple-keyvalue-enc-client",
 			[]string{"--key", "key1"},
@@ -27,15 +27,21 @@ func newKmRestartImpl() scenario.Scenario {
 	}
 }
 
+func (sc *kmRestartImpl) Clone() scenario.Scenario {
+	return &kmRestartImpl{
+		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+	}
+}
+
 func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
-	clientErrCh, cmd, err := sc.basicImpl.start(childEnv)
+	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
 		return err
 	}
 
 	// Wait for the client to exit.
 	select {
-	case err = <-sc.basicImpl.net.Errors():
+	case err = <-sc.runtimeImpl.net.Errors():
 		_ = cmd.Process.Kill()
 	case err = <-clientErrCh:
 	}
@@ -44,7 +50,7 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 	}
 
 	// XXX: currently assumes single keymanager.
-	km := sc.basicImpl.net.Keymanagers()[0]
+	km := sc.runtimeImpl.net.Keymanagers()[0]
 
 	// Restart the key manager.
 	sc.logger.Info("restarting the key manager")
@@ -65,7 +71,8 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 	// Run the second client on a different key so that it will require
 	// a second trip to the keymanager.
 	sc.logger.Info("starting a second client to check if key manager works")
-	cmd, err = startClient(childEnv, sc.basicImpl.net, resolveClientBinary(sc.basicImpl.clientBinary), []string{"--key", "key2"})
+	sc.runtimeImpl.clientArgs = []string{"--key", "key2"}
+	cmd, err = sc.startClient(childEnv)
 	if err != nil {
 		return err
 	}

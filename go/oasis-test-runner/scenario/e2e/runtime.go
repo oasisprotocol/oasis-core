@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/spf13/viper"
+	flag "github.com/spf13/pflag"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
@@ -28,52 +28,91 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/database"
 )
 
-var (
-	// Basic is the basic network + client test case.
-	Basic scenario.Scenario = newBasicImpl("basic", "simple-keyvalue-client", nil)
-	// BasicEncryption is the basic network + client with encryption test case.
-	BasicEncryption scenario.Scenario = newBasicImpl("basic-encryption", "simple-keyvalue-enc-client", nil)
+const (
+	cfgClientBinaryDir  = "client.binary_dir"
+	cfgRuntimeBinaryDir = "runtime.binary_dir"
+	cfgRuntimeLoader    = "runtime.loader"
+	cfgTEEHardware      = "tee_hardware"
+)
 
-	// DefaultBasicLogWatcherHandlerFactories is a list of default log watcher
+var (
+	// RuntimeParamsDummy is a dummy instance of runtimeImpl used to register runtime-wise parameters.
+	RuntimeParamsDummy *runtimeImpl = &runtimeImpl{e2eImpl: *newE2eImpl("runtime")}
+
+	// Runtime is the basic network + client test case with runtime support.
+	Runtime scenario.Scenario = newRuntimeImpl("runtime", "simple-keyvalue-client", nil)
+	// RuntimeEncryption is the basic network + client with encryption test case.
+	RuntimeEncryption scenario.Scenario = newRuntimeImpl("runtime-encryption", "simple-keyvalue-enc-client", nil)
+
+	// DefaultRuntimeLogWatcherHandlerFactories is a list of default log watcher
 	// handler factories for the basic scenario.
-	DefaultBasicLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
+	DefaultRuntimeLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertNoExecutionDiscrepancyDetected(),
 		oasis.LogAssertNoMergeDiscrepancyDetected(),
 	}
+
+	runtimeID    common.Namespace
+	keymanagerID common.Namespace
+	_            = runtimeID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
+	_            = keymanagerID.UnmarshalHex("c000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff")
 )
 
-func newBasicImpl(name, clientBinary string, clientArgs []string) *basicImpl {
-	return &basicImpl{
-		name:         name,
-		clientBinary: clientBinary,
-		clientArgs:   clientArgs,
-		logger:       logging.GetLogger("scenario/e2e/" + name),
-	}
-}
+// runtimeImpl is a base class for tests involving oasis-node with runtime.
+type runtimeImpl struct {
+	e2eImpl
 
-type basicImpl struct {
-	net *oasis.Network
-
-	name         string
 	clientBinary string
 	clientArgs   []string
 
-	logger *logging.Logger
+	clientBinaryDir  string
+	runtimeBinaryDir string
+	runtimeLoader    string
+	TEEHardware      string
 }
 
-func (sc *basicImpl) Name() string {
-	return sc.name
+func newRuntimeImpl(name, clientBinary string, clientArgs []string) *runtimeImpl {
+	return &runtimeImpl{
+		e2eImpl:          *newE2eImpl("runtime/" + name),
+		clientBinary:     clientBinary,
+		clientArgs:       clientArgs,
+		clientBinaryDir:  "",
+		runtimeBinaryDir: "",
+		runtimeLoader:    "oasis-core-runtime-loader",
+		TEEHardware:      "",
+	}
 }
 
-func (sc *basicImpl) PreInit(childEnv *env.Env) error {
+func (sc *runtimeImpl) Clone() scenario.Scenario {
+	return &runtimeImpl{
+		e2eImpl:          sc.e2eImpl.Clone(),
+		clientBinary:     sc.clientBinary,
+		clientArgs:       sc.clientArgs,
+		clientBinaryDir:  sc.clientBinaryDir,
+		runtimeBinaryDir: sc.runtimeBinaryDir,
+		runtimeLoader:    sc.runtimeLoader,
+		TEEHardware:      sc.TEEHardware,
+	}
+}
+
+func (sc *runtimeImpl) Parameters() *flag.FlagSet {
+	f := sc.e2eImpl.Parameters()
+	f.StringVar(&sc.clientBinaryDir, cfgClientBinaryDir, sc.clientBinaryDir, "path to the client binaries directory")
+	f.StringVar(&sc.runtimeBinaryDir, cfgRuntimeBinaryDir, sc.runtimeBinaryDir, "path to the runtime binaries directory")
+	f.StringVar(&sc.runtimeLoader, cfgRuntimeLoader, sc.runtimeLoader, "path to the runtime loader")
+	f.StringVar(&sc.TEEHardware, cfgTEEHardware, sc.TEEHardware, "TEE hardware to use")
+
+	return f
+}
+
+func (sc *runtimeImpl) PreInit(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
+func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	var tee node.TEEHardware
-	err := tee.FromString(viper.GetString(cfgTEEHardware))
+	err := tee.FromString(sc.TEEHardware)
 	if err != nil {
 		return nil, err
 	}
@@ -81,11 +120,11 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if tee == node.TEEHardwareIntelSGX {
 		mrSigner = &ias.FortanixTestMrSigner
 	}
-	keyManagerBinary, err := resolveDefaultKeyManagerBinary()
+	keyManagerBinary, err := sc.resolveDefaultKeyManagerBinary()
 	if err != nil {
 		return nil, err
 	}
-	runtimeBinary, err := resolveRuntimeBinary("simple-keyvalue")
+	runtimeBinary, err := sc.resolveRuntimeBinary("simple-keyvalue")
 	if err != nil {
 		return nil, err
 	}
@@ -96,9 +135,9 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 			MrSigner: mrSigner,
 		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:                        viper.GetString(cfgNodeBinary),
-			RuntimeLoaderBinary:               viper.GetString(cfgRuntimeLoader),
-			DefaultLogWatcherHandlerFactories: DefaultBasicLogWatcherHandlerFactories,
+			NodeBinary:                        sc.nodeBinary,
+			RuntimeLoaderBinary:               sc.runtimeLoader,
+			DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
 			ConsensusGasCostsTxByte:           1,
 		},
 		Entities: []oasis.EntityCfg{
@@ -177,18 +216,13 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}, nil
 }
 
-func (sc *basicImpl) Init(childEnv *env.Env, net *oasis.Network) error {
-	sc.net = net
-	return nil
-}
-
-func (sc *basicImpl) start(childEnv *env.Env) (<-chan error, *exec.Cmd, error) {
+func (sc *runtimeImpl) start(childEnv *env.Env) (<-chan error, *exec.Cmd, error) {
 	var err error
 	if err = sc.net.Start(); err != nil {
 		return nil, nil, err
 	}
 
-	cmd, err := startClient(childEnv, sc.net, resolveClientBinary(sc.clientBinary), sc.clientArgs)
+	cmd, err := sc.startClient(childEnv)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -200,7 +234,73 @@ func (sc *basicImpl) start(childEnv *env.Env) (<-chan error, *exec.Cmd, error) {
 	return clientErrCh, cmd, nil
 }
 
-func (sc *basicImpl) cleanTendermintStorage(childEnv *env.Env) error {
+func (sc *runtimeImpl) resolveClientBinary(clientBinary string) string {
+	return filepath.Join(sc.clientBinaryDir, clientBinary)
+}
+
+func (sc *runtimeImpl) resolveRuntimeBinary(runtimeBinary string) (string, error) {
+	var tee node.TEEHardware
+	err := tee.FromString(sc.TEEHardware)
+	if err != nil {
+		return "", err
+	}
+
+	var runtimeExt string
+	switch tee {
+	case node.TEEHardwareInvalid:
+		runtimeExt = ""
+	case node.TEEHardwareIntelSGX:
+		runtimeExt = ".sgxs"
+	}
+
+	return filepath.Join(sc.runtimeBinaryDir, runtimeBinary+runtimeExt), nil
+}
+
+func (sc *runtimeImpl) resolveDefaultKeyManagerBinary() (string, error) {
+	return sc.resolveRuntimeBinary("simple-keymanager")
+}
+
+func (sc *runtimeImpl) startClient(env *env.Env) (*exec.Cmd, error) {
+	clients := sc.net.Clients()
+	if len(clients) == 0 {
+		return nil, fmt.Errorf("scenario/e2e: network has no client nodes")
+	}
+
+	d, err := env.NewSubDir("client")
+	if err != nil {
+		return nil, err
+	}
+
+	w, err := d.NewLogWriter("client.log")
+	if err != nil {
+		return nil, err
+	}
+
+	args := []string{
+		"--node-address", "unix:" + clients[0].SocketPath(),
+		"--runtime-id", runtimeID.String(),
+	}
+	args = append(args, sc.clientArgs...)
+
+	binary := sc.resolveClientBinary(sc.clientBinary)
+	cmd := exec.Command(binary, args...)
+	cmd.SysProcAttr = oasis.CmdAttrs
+	cmd.Stdout = w
+	cmd.Stderr = w
+
+	logger.Info("launching client",
+		"binary", binary,
+		"args", strings.Join(args, " "),
+	)
+
+	if err = cmd.Start(); err != nil {
+		return nil, fmt.Errorf("scenario/e2e: failed to start client: %w", err)
+	}
+
+	return cmd, nil
+}
+
+func (sc *runtimeImpl) cleanTendermintStorage(childEnv *env.Env) error {
 	doClean := func(dataDir string, cleanArgs []string) error {
 		args := append([]string{
 			"unsafe-reset",
@@ -249,7 +349,7 @@ func (sc *basicImpl) cleanTendermintStorage(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *basicImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkFixture) error {
+func (sc *runtimeImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkFixture) error {
 	// Dump-restore network.
 	sc.logger.Info("dumping network state",
 		"child", childEnv,
@@ -310,7 +410,7 @@ func (sc *basicImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.Networ
 	return nil
 }
 
-func (sc *basicImpl) finishWithoutChild() error {
+func (sc *runtimeImpl) finishWithoutChild() error {
 	var err error
 	select {
 	case err = <-sc.net.Errors():
@@ -320,7 +420,7 @@ func (sc *basicImpl) finishWithoutChild() error {
 	}
 }
 
-func (sc *basicImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan error) error {
+func (sc *runtimeImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan error) error {
 	var err error
 	select {
 	case err = <-sc.net.Errors():
@@ -338,7 +438,7 @@ func (sc *basicImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan e
 	return nil
 }
 
-func (sc *basicImpl) Run(childEnv *env.Env) error {
+func (sc *runtimeImpl) Run(childEnv *env.Env) error {
 	clientErrCh, cmd, err := sc.start(childEnv)
 	if err != nil {
 		return err
@@ -347,7 +447,7 @@ func (sc *basicImpl) Run(childEnv *env.Env) error {
 	return sc.wait(childEnv, cmd, clientErrCh)
 }
 
-func (sc *basicImpl) submitRuntimeTx(ctx context.Context, id common.Namespace, key, value string) error {
+func (sc *runtimeImpl) submitRuntimeTx(ctx context.Context, id common.Namespace, key, value string) error {
 	c := sc.net.ClientController().RuntimeClient
 
 	// Submit a transaction and check the result.
@@ -377,7 +477,7 @@ func (sc *basicImpl) submitRuntimeTx(ctx context.Context, id common.Namespace, k
 	return nil
 }
 
-func (sc *basicImpl) waitNodesSynced() error {
+func (sc *runtimeImpl) waitNodesSynced() error {
 	ctx := context.Background()
 
 	checkSynced := func(n *oasis.Node) error {
@@ -420,7 +520,7 @@ func (sc *basicImpl) waitNodesSynced() error {
 	return nil
 }
 
-func (sc *basicImpl) initialEpochTransitions() error {
+func (sc *runtimeImpl) initialEpochTransitions() error {
 	ctx := context.Background()
 
 	if len(sc.net.Keymanagers()) > 0 {

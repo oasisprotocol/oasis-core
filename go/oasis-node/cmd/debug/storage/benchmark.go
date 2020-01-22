@@ -255,7 +255,8 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		[]byte("Excepting thee, of all these hosts of hostile chiefs arrayed,"),
 		[]byte("There shines not one shall leave alive the battlefield!"),
 	}
-	expectedNewRoot := [...]byte{82, 3, 202, 16, 125, 182, 175, 25, 51, 188, 131, 181, 118, 76, 249, 15, 53, 89, 59, 224, 95, 75, 239, 182, 157, 30, 80, 48, 237, 108, 90, 22}
+	var expectedNewRoot hash.Hash
+	_ = expectedNewRoot.UnmarshalHex("131859d5048d5b11677ffed800b0329962960efae70b4def7023c380c2f075ee")
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 
