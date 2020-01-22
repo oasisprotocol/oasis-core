@@ -1,6 +1,8 @@
 package common
 
 import (
+	"crypto/x509"
+	"fmt"
 	"time"
 
 	flag "github.com/spf13/pflag"
@@ -17,7 +19,14 @@ var (
 	// CfgClientPort configures the worker client port.
 	CfgClientPort = "worker.client.port"
 
-	CfgClientAddresses = "worker.client.addresses"
+	cfgClientAddresses = "worker.client.addresses"
+
+	// CfgSentryAddresses configures addresses of sentry nodes the worker
+	// should connect to.
+	CfgSentryAddresses = "worker.sentry.address"
+	// CfgSentryCertFiles configures paths to certificates of the sentry nodes
+	// the worker should connect to.
+	CfgSentryCertFiles = "worker.sentry.cert_file"
 
 	// CfgRuntimeBackend configures the runtime backend.
 	CfgRuntimeBackend = "worker.runtime.backend"
@@ -34,8 +43,10 @@ var (
 
 // Config contains common worker config.
 type Config struct { // nolint: maligned
-	ClientPort      uint16
-	ClientAddresses []node.Address
+	ClientPort         uint16
+	ClientAddresses    []node.Address
+	SentryAddresses    []node.Address
+	SentryCertificates []*x509.Certificate
 
 	// RuntimeHost contains configuration for a worker that hosts
 	// runtimes. It may be nil if the worker is not configured to
@@ -88,7 +99,17 @@ func (c *Config) GetNodeAddresses() ([]node.Address, error) {
 // NewConfig creates a new worker config.
 func NewConfig() (*Config, error) {
 	// Parse register address overrides.
-	clientAddresses, err := configparser.ParseAddressList(viper.GetStringSlice(CfgClientAddresses))
+	clientAddresses, err := configparser.ParseAddressList(viper.GetStringSlice(cfgClientAddresses))
+	if err != nil {
+		return nil, err
+	}
+
+	sentryAddresses, err := configparser.ParseAddressList(viper.GetStringSlice(CfgSentryAddresses))
+	if err != nil {
+		return nil, err
+	}
+
+	sentryCerts, err := configparser.ParseCertificateFiles(viper.GetStringSlice(CfgSentryCertFiles))
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +117,8 @@ func NewConfig() (*Config, error) {
 	cfg := Config{
 		ClientPort:           uint16(viper.GetInt(CfgClientPort)),
 		ClientAddresses:      clientAddresses,
+		SentryAddresses:      sentryAddresses,
+		SentryCertificates:   sentryCerts,
 		StorageCommitTimeout: viper.GetDuration(cfgStorageCommitTimeout),
 		logger:               logging.GetLogger("worker/config"),
 	}
@@ -126,7 +149,9 @@ func NewConfig() (*Config, error) {
 
 func init() {
 	Flags.Uint16(CfgClientPort, 9100, "Port to use for incoming gRPC client connections")
-	Flags.StringSlice(CfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
+	Flags.StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
+	Flags.StringSlice(CfgSentryAddresses, []string{}, fmt.Sprintf("Address(es) of sentry node(s) to connect to (each address should have a corresponding certificate file set in %s)", CfgSentryCertFiles))
+	Flags.StringSlice(CfgSentryCertFiles, []string{}, fmt.Sprintf("Certificate file(s) of sentry node(s) to connect to (each certificate file should have a corresponding address set in %s)", CfgSentryAddresses))
 
 	Flags.String(CfgRuntimeBackend, "sandboxed", "Runtime worker host backend")
 	Flags.String(CfgRuntimeLoader, "", "Path to runtime loader binary")

@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
@@ -26,6 +27,7 @@ type Keymanager struct { // nolint: maligned
 	runtime *Runtime
 	entity  *Entity
 
+	tmAddress        string
 	consensusPort    uint16
 	workerClientPort uint16
 }
@@ -261,6 +263,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		runtime:          cfg.Runtime,
 		entity:           cfg.Entity,
 		sentryIndices:    cfg.SentryIndices,
+		tmAddress:        crypto.PublicKeyToTendermint(&publicKey).Address().String(),
 		consensusPort:    net.nextNodePort,
 		workerClientPort: net.nextNodePort + 1,
 	}

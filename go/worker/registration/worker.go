@@ -27,7 +27,6 @@ import (
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	sentryClient "github.com/oasislabs/oasis-core/go/sentry/client"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
-	"github.com/oasislabs/oasis-core/go/worker/common/configparser"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
 
@@ -43,12 +42,6 @@ const (
 	// CfgRegistrationForceRegister overrides a previously saved deregistration
 	// request.
 	CfgRegistrationForceRegister = "worker.registration.force_register"
-	// CfgSentryAddress are the sentry addresses to query at
-	// registration time.
-	CfgSentryAddress = "worker.registration.sentry.address"
-	// CfgSentryCert configures paths to certificates of the sentry
-	// nodes the worker should connect to.
-	CfgSentryCert = "worker.registration.sentry.cert_file"
 )
 
 var (
@@ -383,14 +376,14 @@ func (w *Worker) newRoleProvider(role node.RolesMask, runtimeID *common.Namespac
 	return rp, nil
 }
 
-func (w *Worker) gatherConsensusAddresses(sentryAddrs []node.ConsensusAddress) ([]node.ConsensusAddress, error) {
+func (w *Worker) gatherConsensusAddresses(sentryConsensusAddrs []node.ConsensusAddress) ([]node.ConsensusAddress, error) {
 	var consensusAddrs []node.ConsensusAddress
 	var err error
 
-	switch len(w.workerCommonCfg.SentryAddresses) > 0 {
+	switch len(w.sentryAddresses) > 0 {
 	// If sentry nodes are used, use sentry addresses.
 	case true:
-		consensusAddrs = sentryAddrs
+		consensusAddrs = sentryConsensusAddrs
 	// Otherwise gather consensus addresses.
 	case false:
 		consensusAddrs, err = w.consensus.GetAddresses()
@@ -425,13 +418,13 @@ func (w *Worker) gatherConsensusAddresses(sentryAddrs []node.ConsensusAddress) (
 	return validatedAddrs, nil
 }
 
-func (w *Worker) gatherCommitteeAddresses(sentryAddrs []node.CommitteeAddress) ([]node.CommitteeAddress, error) {
+func (w *Worker) gatherCommitteeAddresses(sentryCommitteeAddrs []node.CommitteeAddress) ([]node.CommitteeAddress, error) {
 	var committeeAddresses []node.CommitteeAddress
 
-	switch len(w.workerCommonCfg.SentryAddresses) > 0 {
+	switch len(w.sentryAddresses) > 0 {
 	// If sentry nodes are used, use sentry addresses.
 	case true:
-		committeeAddresses = sentryAddrs
+		committeeAddresses = sentryCommitteeAddrs
 	// Otherwise gather committee addresses.
 	case false:
 		addrs, err := w.workerCommonCfg.GetNodeAddresses()
@@ -510,7 +503,7 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 
 	var sentryConsensusAddrs []node.ConsensusAddress
 	var sentryCommitteeAddrs []node.CommitteeAddress
-	if len(w.workerCommonCfg.SentryAddresses) > 0 {
+	if len(w.sentryAddresses) > 0 {
 		sentryConsensusAddrs, sentryCommitteeAddrs = w.querySentries()
 	}
 
@@ -730,22 +723,6 @@ func New(
 		}
 	}
 
-	// Parse sentry nodes' addresses.
-	sentryAddresses, err := configparser.ParseAddressList(viper.GetStringSlice(CfgSentryAddress))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse sentry address list: %w", err)
-	}
-	// Get sentry nodes' certificates.
-	sentryCerts, err := configparser.ParseCertificateFiles(viper.GetStringSlice(CfgSentryCert))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse sentry certificate files: %w", err)
-	}
-	// Check if number of sentry addresses corresponds to the number of sentry
-	// certificate files.
-	if len(sentryAddresses) != len(sentryCerts) {
-		return nil, fmt.Errorf("worker/registration: configuration error: each sentry node address should have a corresponding certificate file")
-	}
-
 	w := &Worker{
 		enabled:            viper.GetBool(CfgRegistrationWorkerEnabled),
 		workerCommonCfg:    workerCommonCfg,
@@ -753,8 +730,8 @@ func New(
 		storedDeregister:   storedDeregister,
 		delegate:           delegate,
 		entityID:           entityID,
-		sentryAddresses:    sentryAddresses,
-		sentryCerts:        sentryCerts,
+		sentryAddresses:    workerCommonCfg.SentryAddresses,
+		sentryCerts:        workerCommonCfg.SentryCertificates,
 		registrationSigner: registrationSigner,
 		runtimeRegistry:    runtimeRegistry,
 		epochtime:          epochtime,
@@ -835,8 +812,6 @@ func init() {
 	Flags.String(CfgRegistrationEntity, "", "Entity to use as the node owner in registrations")
 	Flags.String(CfgRegistrationPrivateKey, "", "Private key to use to sign node registrations")
 	Flags.Bool(CfgRegistrationForceRegister, false, "Override a previously saved deregistration request")
-	Flags.StringSlice(CfgSentryAddress, []string{}, fmt.Sprintf("Address(es) of sentry node(s) to connect to (each address should have a corresponding certificate file set in %s)", CfgSentryCert))
-	Flags.StringSlice(CfgSentryCert, []string{}, fmt.Sprintf("Certificate file(s) of sentry node(s) to connect to (each certificate file should have a corresponding address set in %s)", CfgSentryAddress))
 
 	_ = viper.BindPFlags(Flags)
 }

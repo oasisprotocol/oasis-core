@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	"github.com/oasislabs/oasis-core/go/common/grpc/proxy"
@@ -54,27 +53,23 @@ func GetNodeAddresses() ([]node.Address, error) {
 
 func initConnection(ident *identity.Identity) (*upstreamConn, error) {
 	var err error
-	var tlsCert *tlsPkg.Certificate
 
 	addr := viper.GetString(CfgUpstreamAddress)
 	certFile := viper.GetString(CfgUpstreamCert)
 
-	// Parse certificate.
-	tlsCert, err = tls.LoadCertificate(certFile)
+	upstreamAddrs, err := configparser.ParseAddressList([]string{addr})
 	if err != nil {
-		return nil, fmt.Errorf("failed to load upstream certificate file %v: %w", certFile, err)
+		return nil, fmt.Errorf("failed to parse address: %s: %w", addr, err)
 	}
-	if len(tlsCert.Certificate) != 1 {
-		return nil, fmt.Errorf("upstream certificate file %v should contain exactly 1 certificate in the chain", certFile)
-	}
-	var backendCert *x509.Certificate
-	backendCert, err = x509.ParseCertificate(tlsCert.Certificate[0])
+	upstreamCerts, err := configparser.ParseCertificateFiles([]string{certFile})
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse certificate file %v: %w", certFile, err)
+		return nil, fmt.Errorf("failed to parse certificate file %s: %w", certFile, err)
 	}
 
 	certPool := x509.NewCertPool()
-	certPool.AddCert(backendCert)
+	for _, cert := range upstreamCerts {
+		certPool.AddCert(cert)
+	}
 	creds := credentials.NewTLS(&tlsPkg.Config{
 		Certificates: []tlsPkg.Certificate{*ident.TLSCertificate},
 		RootCAs:      certPool,
@@ -94,7 +89,9 @@ func initConnection(ident *identity.Identity) (*upstreamConn, error) {
 		return nil, fmt.Errorf("error dialing node: %w", err)
 	}
 	var resolverState resolver.State
-	resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr})
+	for _, addr := range upstreamAddrs {
+		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
+	}
 	manualResolver.UpdateState(resolverState)
 
 	return &upstreamConn{

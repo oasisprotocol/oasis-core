@@ -166,19 +166,19 @@ func (args *argBuilder) disableRegistrationWorker() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerRegistrySentryAddresses(addrs []string) *argBuilder {
+func (args *argBuilder) workerCommonSentryAddresses(addrs []string) *argBuilder {
 	for _, addr := range addrs {
 		args.vec = append(args.vec, []string{
-			"--" + registration.CfgSentryAddress, addr,
+			"--" + workerCommon.CfgSentryAddresses, addr,
 		}...)
 	}
 	return args
 }
 
-func (args *argBuilder) workerRegistrySentryCertFiles(certFiles []string) *argBuilder {
+func (args *argBuilder) workerCommonSentryCertFiles(certFiles []string) *argBuilder {
 	for _, certFile := range certFiles {
 		args.vec = append(args.vec, []string{
-			"--" + registration.CfgSentryCert, certFile,
+			"--" + workerCommon.CfgSentryCertFiles, certFile,
 		}...)
 	}
 	return args
@@ -348,7 +348,7 @@ func (args *argBuilder) addSentries(sentries []*Sentry) *argBuilder {
 		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", sentry.controlPort))
 		certFiles = append(certFiles, sentry.TLSCertPath())
 	}
-	return args.workerRegistrySentryAddresses(addrs).workerRegistrySentryCertFiles(certFiles)
+	return args.workerCommonSentryAddresses(addrs).workerCommonSentryCertFiles(certFiles)
 }
 
 func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) *argBuilder {
@@ -356,7 +356,7 @@ func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) 
 	for _, val := range validators {
 		addrs = append(addrs, fmt.Sprintf("%s@127.0.0.1:%d", val.tmAddress, val.consensusPort))
 	}
-	args = args.tendermintSentryUpstreamAddress(addrs)
+	return args.tendermintSentryUpstreamAddress(addrs)
 }
 
 func (args *argBuilder) addSentryStorageWorkers(storageWorkers []*Storage) *argBuilder {
@@ -364,7 +364,7 @@ func (args *argBuilder) addSentryStorageWorkers(storageWorkers []*Storage) *argB
 	for _, storageWorker := range storageWorkers {
 		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", storageWorker.clientPort))
 		certFiles = append(certFiles, storageWorker.TLSCertPath())
-		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", storageWorkers.tmAddress, storageWorkers.consensusPort))
+		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", storageWorker.tmAddress, storageWorker.consensusPort))
 	}
 	return args.grpcSentryUpstreamAddresses(addrs).grpcSentryUpstreamCertFiles(certFiles).tendermintSentryUpstreamAddress(tmAddrs)
 }

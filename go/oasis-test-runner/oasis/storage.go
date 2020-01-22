@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/storage/database"
 )
@@ -22,6 +23,7 @@ type Storage struct { // nolint: maligned
 	entity        *Entity
 	ignoreApplies bool
 
+	tmAddress     string
 	consensusPort uint16
 	clientPort    uint16
 	p2pPort       uint16
@@ -163,6 +165,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		entity:        cfg.Entity,
 		sentryIndices: cfg.SentryIndices,
 		ignoreApplies: cfg.IgnoreApplies,
+		tmAddress:     crypto.PublicKeyToTendermint(&publicKey).Address().String(),
 		consensusPort: net.nextNodePort,
 		clientPort:    net.nextNodePort + 1,
 		p2pPort:       net.nextNodePort + 2,
