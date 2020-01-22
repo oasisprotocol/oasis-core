@@ -274,15 +274,17 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 			continue
 		}
 
-		cert, err := n.Committee.ParseCertificate()
-		if err != nil {
-			c.logger.Error("failed to parse key manager certificate",
-				"id", n.ID,
-				"err", err,
-			)
-			continue
+		for _, addr := range n.Committee.Addresses {
+			nodeCert, err := addr.ParseCertificate()
+			if err != nil {
+				c.logger.Error("failed to parse key manager certificate",
+					"id", n.ID,
+					"err", err,
+				)
+				continue
+			}
+			certPool.AddCert(nodeCert)
 		}
-		certPool.AddCert(cert)
 
 		for _, addr := range n.Committee.Addresses {
 			resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
@@ -326,7 +328,7 @@ func (c *Client) updateState(status *api.Status, nodeList []*node.Node) {
 	c.state[status.ID] = &clientState{
 		status:            status,
 		conn:              conn,
-		client:            enclaverpc.NewTransportClient(conn),
+		client:            enclaverpc.NewTransportClient(api.Service, conn),
 		resolverCleanupFn: cleanupFn,
 	}
 

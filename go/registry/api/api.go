@@ -722,6 +722,18 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 				return err
 			}
 		}
+	case []node.CommitteeAddress:
+		if len(addrs) == 0 && addressRequired {
+			return ErrInvalidArgument
+		}
+		for _, v := range addrs {
+			if _, err := v.ParseCertificate(); err != nil {
+				return ErrInvalidArgument
+			}
+			if err := VerifyAddress(v.Address, params.DebugAllowUnroutableAddresses); err != nil {
+				return err
+			}
+		}
 	case []node.Address:
 		if len(addrs) == 0 && addressRequired {
 			return ErrInvalidArgument

@@ -12,10 +12,10 @@ var (
 	// serviceName is the gRPC service name.
 	serviceName = cmnGrpc.NewServiceName("TransactionScheduler")
 
-	// methodSubmitTx is the name of the SubmitTx method.
-	methodSubmitTx = serviceName.NewMethodName("SubmitTx")
-	// methodIsTransactionQueued is the name of the IsTransactionQueued method.
-	methodIsTransactionQueued = serviceName.NewMethodName("IsTransactionQueued")
+	// methodSubmitTx is the SubmitTx method.
+	methodSubmitTx = serviceName.NewMethod("SubmitTx", &SubmitTxRequest{})
+	// methodIsTransactionQueued is the IsTransactionQueued method.
+	methodIsTransactionQueued = serviceName.NewMethod("IsTransactionQueued", &IsTransactionQueuedRequest{})
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -23,11 +23,11 @@ var (
 		HandlerType: (*TransactionScheduler)(nil),
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: methodSubmitTx.Short(),
+				MethodName: methodSubmitTx.ShortName(),
 				Handler:    handlerSubmitTx,
 			},
 			{
-				MethodName: methodIsTransactionQueued.Short(),
+				MethodName: methodIsTransactionQueued.ShortName(),
 				Handler:    handlerIsTransactionQueued,
 			},
 		},
@@ -50,7 +50,7 @@ func handlerSubmitTx( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodSubmitTx.Full(),
+		FullMethod: methodSubmitTx.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TransactionScheduler).SubmitTx(ctx, req.(*SubmitTxRequest))
@@ -73,7 +73,7 @@ func handlerIsTransactionQueued( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodIsTransactionQueued.Full(),
+		FullMethod: methodIsTransactionQueued.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TransactionScheduler).IsTransactionQueued(ctx, req.(*IsTransactionQueuedRequest))
@@ -93,7 +93,7 @@ type transactionSchedulerClient struct {
 
 func (c *transactionSchedulerClient) SubmitTx(ctx context.Context, req *SubmitTxRequest) (*SubmitTxResponse, error) {
 	rsp := new(SubmitTxResponse)
-	if err := c.conn.Invoke(ctx, methodSubmitTx.Full(), req, rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodSubmitTx.FullName(), req, rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -101,7 +101,7 @@ func (c *transactionSchedulerClient) SubmitTx(ctx context.Context, req *SubmitTx
 
 func (c *transactionSchedulerClient) IsTransactionQueued(ctx context.Context, req *IsTransactionQueuedRequest) (*IsTransactionQueuedResponse, error) {
 	rsp := new(IsTransactionQueuedResponse)
-	if err := c.conn.Invoke(ctx, methodIsTransactionQueued.Full(), req, rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodIsTransactionQueued.FullName(), req, rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil

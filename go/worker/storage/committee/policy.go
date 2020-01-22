@@ -2,6 +2,7 @@ package committee
 
 import (
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
+	"github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 )
 
@@ -10,20 +11,20 @@ import (
 var (
 	executorCommitteePolicy = &committee.AccessPolicy{
 		Actions: []accessctl.Action{
-			"Apply",
-			"ApplyBatch",
+			accessctl.Action(api.MethodApply.FullName()),
+			accessctl.Action(api.MethodApplyBatch.FullName()),
 		},
 	}
 	txnSchedulerCommitteePolicy = &committee.AccessPolicy{
 		Actions: []accessctl.Action{
-			"Apply",
-			"ApplyBatch",
+			accessctl.Action(api.MethodApply.FullName()),
+			accessctl.Action(api.MethodApplyBatch.FullName()),
 		},
 	}
 	mergeCommitteePolicy = &committee.AccessPolicy{
 		Actions: []accessctl.Action{
-			"Merge",
-			"MergeBatch",
+			accessctl.Action(api.MethodMerge.FullName()),
+			accessctl.Action(api.MethodMergeBatch.FullName()),
 		},
 	}
 	// NOTE: GetDiff/GetCheckpoint need to be accessible to all storage nodes,
@@ -31,8 +32,17 @@ var (
 	// sync-up.
 	storageNodesPolicy = &committee.AccessPolicy{
 		Actions: []accessctl.Action{
-			"GetDiff",
-			"GetCheckpoint",
+			accessctl.Action(api.MethodGetDiff.FullName()),
+			accessctl.Action(api.MethodGetCheckpoint.FullName()),
+		},
+	}
+	sentryNodesPolicy = &committee.AccessPolicy{
+		Actions: []accessctl.Action{
+			accessctl.Action(api.MethodGetDiff.FullName()),
+			accessctl.Action(api.MethodApply.FullName()),
+			accessctl.Action(api.MethodApplyBatch.FullName()),
+			accessctl.Action(api.MethodMerge.FullName()),
+			accessctl.Action(api.MethodMergeBatch.FullName()),
 		},
 	}
 )

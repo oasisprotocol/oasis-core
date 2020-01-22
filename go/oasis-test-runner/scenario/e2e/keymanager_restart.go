@@ -54,7 +54,8 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	km := sc.basicImpl.net.Keymanager()
+	// XXX: currently assumes single keymanager.
+	km := sc.basicImpl.net.Keymanagers()[0]
 
 	// Restart the key manager.
 	sc.logger.Info("restarting the key manager")

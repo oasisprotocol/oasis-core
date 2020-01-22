@@ -16,7 +16,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 
-func registryRegisterNode(svc service.TendermintService, id *identity.Identity, dataDir string, committeeAddresses []node.Address, p2pAddresses []node.Address, runtimeID common.Namespace, capabilities *node.Capabilities, roles node.RolesMask) error {
+func registryRegisterNode(svc service.TendermintService, id *identity.Identity, dataDir string, addresses []node.Address, p2pAddresses []node.Address, runtimeID common.Namespace, capabilities *node.Capabilities, roles node.RolesMask) error {
 	entityID, registrationSigner, err := registration.GetRegistrationSigner(logging.GetLogger("cmd/byzantine/registration"), dataDir, id)
 	if err != nil {
 		return errors.Wrap(err, "registration GetRegistrationSigner")
@@ -32,6 +32,14 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 				ID: runtimeID,
 			},
 		}
+	}
+
+	var committeeAddresses []node.CommitteeAddress
+	for _, addr := range addresses {
+		committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
+			Certificate: id.TLSCertificate.Certificate[0],
+			Address:     addr,
+		})
 	}
 
 	nodeDesc := &node.Node{

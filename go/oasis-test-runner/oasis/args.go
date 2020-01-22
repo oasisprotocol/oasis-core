@@ -27,6 +27,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/keymanager"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasislabs/oasis-core/go/worker/sentry"
+	workerGrpcSentry "github.com/oasislabs/oasis-core/go/worker/sentry/grpc"
 	workerStorage "github.com/oasislabs/oasis-core/go/worker/storage"
 )
 
@@ -158,21 +159,37 @@ func (args *argBuilder) workerClientPort(port uint16) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerRegistrySentryAddresses(addrs []string) *argBuilder {
+func (args *argBuilder) workerCommonSentryAddresses(addrs []string) *argBuilder {
 	for _, addr := range addrs {
 		args.vec = append(args.vec, []string{
-			"--" + registration.CfgSentryAddress, addr,
+			"--" + workerCommon.CfgSentryAddresses, addr,
 		}...)
 	}
 	return args
 }
 
-func (args *argBuilder) workerRegistrySentryCertFiles(certFiles []string) *argBuilder {
+func (args *argBuilder) workerCommonSentryCertFiles(certFiles []string) *argBuilder {
 	for _, certFile := range certFiles {
 		args.vec = append(args.vec, []string{
-			"--" + registration.CfgSentryCert, certFile,
+			"--" + workerCommon.CfgSentryCertFiles, certFile,
 		}...)
 	}
+	return args
+}
+
+func (args *argBuilder) workerSentryGrpcClientAddress(addrs []string) *argBuilder {
+	for _, addr := range addrs {
+		args.vec = append(args.vec, []string{
+			"--" + workerGrpcSentry.CfgClientAddresses, addr,
+		}...)
+	}
+	return args
+}
+
+func (args *argBuilder) workerSentryGrpcClientPort(port uint16) *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + workerGrpcSentry.CfgClientPort, strconv.Itoa(int(port)),
+	}...)
 	return args
 }
 
@@ -254,6 +271,29 @@ func (args *argBuilder) workerSentryEnabled() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) workerGrpcSentryEnabled() *argBuilder {
+	args.vec = append(args.vec, "--"+workerGrpcSentry.CfgEnabled)
+	return args
+}
+
+func (args *argBuilder) grpcSentryUpstreamAddresses(addrs []string) *argBuilder {
+	for _, addr := range addrs {
+		args.vec = append(args.vec, []string{
+			"--" + workerGrpcSentry.CfgUpstreamAddress, addr,
+		}...)
+	}
+	return args
+}
+
+func (args *argBuilder) grpcSentryUpstreamCertFiles(certFiles []string) *argBuilder {
+	for _, certFile := range certFiles {
+		args.vec = append(args.vec, []string{
+			"--" + workerGrpcSentry.CfgUpstreamCert, certFile,
+		}...)
+	}
+	return args
+}
+
 func (args *argBuilder) workerSentryControlPort(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + workerSentry.CfgControlPort, strconv.Itoa(int(port)),
@@ -301,9 +341,7 @@ func (args *argBuilder) addSentries(sentries []*Sentry) *argBuilder {
 		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", sentry.controlPort))
 		certFiles = append(certFiles, sentry.TLSCertPath())
 	}
-	args = args.workerRegistrySentryAddresses(addrs)
-	args = args.workerRegistrySentryCertFiles(certFiles)
-	return args
+	return args.workerCommonSentryAddresses(addrs).workerCommonSentryCertFiles(certFiles)
 }
 
 func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) *argBuilder {
@@ -311,8 +349,27 @@ func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) 
 	for _, val := range validators {
 		addrs = append(addrs, fmt.Sprintf("%s@127.0.0.1:%d", val.tmAddress, val.consensusPort))
 	}
-	args = args.tendermintSentryUpstreamAddress(addrs)
-	return args
+	return args.tendermintSentryUpstreamAddress(addrs)
+}
+
+func (args *argBuilder) addSentryStorageWorkers(storageWorkers []*Storage) *argBuilder {
+	var addrs, certFiles, tmAddrs []string
+	for _, storageWorker := range storageWorkers {
+		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", storageWorker.clientPort))
+		certFiles = append(certFiles, storageWorker.TLSCertPath())
+		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", storageWorker.tmAddress, storageWorker.consensusPort))
+	}
+	return args.grpcSentryUpstreamAddresses(addrs).grpcSentryUpstreamCertFiles(certFiles).tendermintSentryUpstreamAddress(tmAddrs)
+}
+
+func (args *argBuilder) addSentryKeymanagerWorkers(keymanagerWorkers []*Keymanager) *argBuilder {
+	var addrs, certFiles, tmAddrs []string
+	for _, keymanager := range keymanagerWorkers {
+		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", keymanager.workerClientPort))
+		certFiles = append(certFiles, keymanager.TLSCertPath())
+		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", keymanager.tmAddress, keymanager.consensusPort))
+	}
+	return args.grpcSentryUpstreamAddresses(addrs).grpcSentryUpstreamCertFiles(certFiles).tendermintSentryUpstreamAddress(tmAddrs)
 }
 
 func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {

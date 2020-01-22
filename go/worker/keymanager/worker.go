@@ -15,7 +15,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -34,10 +34,6 @@ import (
 
 const (
 	rpcCallTimeout = 5 * time.Second
-
-	// Make sure this always matches the appropriate method in
-	// `keymanager-runtime/src/methods.rs`.
-	getPublicKeyRequestMethod = "get_public_key"
 )
 
 var (
@@ -75,7 +71,7 @@ type Worker struct { // nolint: maligned
 	enclaveStatus *api.SignedInitResponse
 	backend       api.Backend
 
-	grpcPolicy *grpc.DynamicRuntimePolicyChecker
+	grpcPolicy *policy.DynamicRuntimePolicyChecker
 
 	enabled     bool
 	mayGenerate bool
@@ -128,37 +124,6 @@ func (w *Worker) getWorkerHost() host.Host {
 	defer w.RUnlock()
 
 	return w.workerHost
-}
-
-// This is the Go analog of the Rust RPC Frame from runtime/src/rpc/types.go.
-type Frame struct {
-	Session            []byte `json:"session,omitempty"`
-	UntrustedPlaintext string `json:"untrusted_plaintext,omitempty"`
-	Payload            []byte `json:"payload,omitempty"`
-}
-
-func (w *Worker) mustAllowAccess(ctx context.Context, data []byte) bool {
-	// Unpack the payload, get method from frame.
-	var frame Frame
-	if err := cbor.Unmarshal(data, &frame); err != nil {
-		w.logger.Error("worker/keymanager: unable to unpack frame", "err", err)
-		return false
-	}
-
-	if frame.UntrustedPlaintext == "" {
-		// Anyone can connect.
-		return true
-	}
-
-	if frame.UntrustedPlaintext == getPublicKeyRequestMethod {
-		// Anyone can get public keys.
-		// Note that this is also checked in the enclave, so if the node lied
-		// about what method it's using, we will know.
-		return true
-	}
-
-	// Defer to access control to check the policy.
-	return false
 }
 
 func (w *Worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
@@ -574,6 +539,12 @@ func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committee
 		if xc != nil {
 			executorCommitteePolicy.AddRulesForCommittee(&policy, xc)
 		}
+	}
+
+	// Apply rules for configured sentry nodes.
+	sentryCerts := crw.w.commonWorker.GetConfig().SentryCertificates
+	for _, cert := range sentryCerts {
+		sentryNodesPolicy.AddCertPolicy(&policy, cert)
 	}
 
 	// Fetch current KM node public keys, get their nodes, apply rules.

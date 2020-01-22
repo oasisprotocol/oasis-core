@@ -58,7 +58,7 @@ func New(
 			tlsConfig, err := cmnGrpc.NewClientTLSConfigFromFile(certFile, identity.CommonName)
 			if err != nil {
 				logger.Error("failed creating client tls config from file",
-					"file", viper.GetString(certFile),
+					"file", certFile,
 					"error", err,
 				)
 				return nil, err

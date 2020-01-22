@@ -159,19 +159,19 @@ type Runtime struct {
 	ExtraInfo []byte `json:"extra_info"`
 }
 
-// CommitteInfo contains information for connecting to this node as a
+// CommitteeInfo contains information for connecting to this node as a
 // committee member.
 type CommitteeInfo struct {
 	// Certificate is the certificate for establishing TLS connections.
 	Certificate []byte `json:"certificate"`
 
-	// Addresses is the list of addresses at which the node can be reached.
-	Addresses []Address `json:"addresses"`
+	// Addresses is the list of committee addresses at which the node can be reached.
+	Addresses []CommitteeAddress `json:"addresses"`
 }
 
 // ParseCertificate returns the parsed x509 certificate.
-func (info *CommitteeInfo) ParseCertificate() (*x509.Certificate, error) {
-	return x509.ParseCertificate(info.Certificate)
+func (c *CommitteeInfo) ParseCertificate() (*x509.Certificate, error) {
+	return x509.ParseCertificate(c.Certificate)
 }
 
 // P2PInfo contains information for connecting to this node via P2P transport.

@@ -4,9 +4,16 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/accessctl"
+	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
+	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	"github.com/oasislabs/oasis-core/go/storage/api"
+)
+
+var (
+	_ api.Backend     = (*storageService)(nil)
+	_ auth.ServerAuth = (*storageService)(nil)
+
+	errDebugRejectUpdates = errors.New("storage: (debug) rejecting update operations")
 )
 
 // storageService is the service exposed to external clients via gRPC.
@@ -17,14 +24,8 @@ type storageService struct {
 	debugRejectUpdates bool
 }
 
-func (s *storageService) checkUpdateAllowed(ctx context.Context, method string, ns common.Namespace) error {
-	if s.debugRejectUpdates {
-		return errors.New("storage: rejecting update operations")
-	}
-	if err := s.w.grpcPolicy.CheckAccessAllowed(ctx, accessctl.Action(method), ns); err != nil {
-		return err
-	}
-	return nil
+func (s *storageService) AuthFunc(ctx context.Context, fullMethodName string, req interface{}) error {
+	return policy.GRPCAuthenticationFunction(s.w.grpcPolicy)(ctx, fullMethodName, req)
 }
 
 func (s *storageService) ensureInitialized(ctx context.Context) error {
@@ -58,49 +59,50 @@ func (s *storageService) SyncIterate(ctx context.Context, request *api.IterateRe
 }
 
 func (s *storageService) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {
-	if err := s.checkUpdateAllowed(ctx, "Apply", request.Namespace); err != nil {
-		return nil, err
-	}
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
+	if s.debugRejectUpdates {
+		return nil, errDebugRejectUpdates
+	}
+
 	return s.storage.Apply(ctx, request)
 }
 
 func (s *storageService) ApplyBatch(ctx context.Context, request *api.ApplyBatchRequest) ([]*api.Receipt, error) {
-	if err := s.checkUpdateAllowed(ctx, "ApplyBatch", request.Namespace); err != nil {
-		return nil, err
-	}
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
+	if s.debugRejectUpdates {
+		return nil, errDebugRejectUpdates
+	}
+
 	return s.storage.ApplyBatch(ctx, request)
 }
 
 func (s *storageService) Merge(ctx context.Context, request *api.MergeRequest) ([]*api.Receipt, error) {
-	if err := s.checkUpdateAllowed(ctx, "Merge", request.Namespace); err != nil {
-		return nil, err
-	}
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
+	if s.debugRejectUpdates {
+		return nil, errDebugRejectUpdates
+	}
+
 	return s.storage.Merge(ctx, request)
 }
 
 func (s *storageService) MergeBatch(ctx context.Context, request *api.MergeBatchRequest) ([]*api.Receipt, error) {
-	if err := s.checkUpdateAllowed(ctx, "MergeBatch", request.Namespace); err != nil {
-		return nil, err
-	}
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
+	if s.debugRejectUpdates {
+		return nil, errDebugRejectUpdates
+	}
+
 	return s.storage.MergeBatch(ctx, request)
 }
 
 func (s *storageService) GetDiff(ctx context.Context, request *api.GetDiffRequest) (api.WriteLogIterator, error) {
-	if err := s.w.grpcPolicy.CheckAccessAllowed(ctx, accessctl.Action("GetDiff"), request.StartRoot.Namespace); err != nil {
-		return nil, err
-	}
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
@@ -108,9 +110,6 @@ func (s *storageService) GetDiff(ctx context.Context, request *api.GetDiffReques
 }
 
 func (s *storageService) GetCheckpoint(ctx context.Context, request *api.GetCheckpointRequest) (api.WriteLogIterator, error) {
-	if err := s.w.grpcPolicy.CheckAccessAllowed(ctx, accessctl.Action("GetCheckpoint"), request.Root.Namespace); err != nil {
-		return nil, err
-	}
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}

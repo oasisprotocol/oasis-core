@@ -5,6 +5,8 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
+	policyAPI "github.com/oasislabs/oasis-core/go/common/grpc/policy/api"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
@@ -25,18 +27,19 @@ type Worker struct {
 	enabled bool
 	cfg     Config
 
-	Identity         *identity.Identity
-	Roothash         roothash.Backend
-	Registry         registry.Backend
-	Scheduler        scheduler.Backend
-	Consensus        consensus.Backend
-	Grpc             *grpc.Server
-	P2P              *p2p.P2P
-	IAS              ias.Endpoint
-	KeyManager       keymanagerApi.Backend
-	KeyManagerClient *keymanagerClient.Client
-	RuntimeRegistry  runtimeRegistry.Registry
-	GenesisDoc       *genesis.Document
+	Identity          *identity.Identity
+	Roothash          roothash.Backend
+	Registry          registry.Backend
+	Scheduler         scheduler.Backend
+	Consensus         consensus.Backend
+	Grpc              *grpc.Server
+	GrpcPolicyWatcher policyAPI.PolicyWatcher
+	P2P               *p2p.P2P
+	IAS               ias.Endpoint
+	KeyManager        keymanagerApi.Backend
+	KeyManagerClient  *keymanagerClient.Client
+	RuntimeRegistry   runtimeRegistry.Registry
+	GenesisDoc        *genesis.Document
 
 	runtimes map[common.Namespace]*committee.Node
 
@@ -222,6 +225,7 @@ func newWorker(
 	scheduler scheduler.Backend,
 	consensus consensus.Backend,
 	grpc *grpc.Server,
+	grpcPolicyWatcher policyAPI.PolicyWatcher,
 	p2p *p2p.P2P,
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
@@ -231,24 +235,25 @@ func newWorker(
 	genesisDoc *genesis.Document,
 ) (*Worker, error) {
 	w := &Worker{
-		enabled:          enabled,
-		cfg:              cfg,
-		Identity:         identity,
-		Roothash:         roothash,
-		Registry:         registryInst,
-		Scheduler:        scheduler,
-		Consensus:        consensus,
-		Grpc:             grpc,
-		P2P:              p2p,
-		IAS:              ias,
-		KeyManager:       keyManager,
-		KeyManagerClient: keyManagerClient,
-		RuntimeRegistry:  runtimeRegistry,
-		GenesisDoc:       genesisDoc,
-		runtimes:         make(map[common.Namespace]*committee.Node),
-		quitCh:           make(chan struct{}),
-		initCh:           make(chan struct{}),
-		logger:           logging.GetLogger("worker/common"),
+		enabled:           enabled,
+		cfg:               cfg,
+		Identity:          identity,
+		Roothash:          roothash,
+		Registry:          registryInst,
+		Scheduler:         scheduler,
+		Consensus:         consensus,
+		Grpc:              grpc,
+		GrpcPolicyWatcher: grpcPolicyWatcher,
+		P2P:               p2p,
+		IAS:               ias,
+		KeyManager:        keyManager,
+		KeyManagerClient:  keyManagerClient,
+		RuntimeRegistry:   runtimeRegistry,
+		GenesisDoc:        genesisDoc,
+		runtimes:          make(map[common.Namespace]*committee.Node),
+		quitCh:            make(chan struct{}),
+		initCh:            make(chan struct{}),
+		logger:            logging.GetLogger("worker/common"),
 	}
 
 	if enabled {
@@ -279,7 +284,7 @@ func New(
 	runtimeRegistry runtimeRegistry.Registry,
 	genesisDoc *genesis.Document,
 ) (*Worker, error) {
-	cfg, err := newConfig()
+	cfg, err := NewConfig()
 	if err != nil {
 		return nil, fmt.Errorf("worker/common: failed to initialize config: %w", err)
 	}
@@ -295,6 +300,9 @@ func New(
 		return nil, err
 	}
 
+	grpcPolicyWatcher := policy.NewPolicyWatcher()
+	policyAPI.RegisterService(grpc.Server(), grpcPolicyWatcher)
+
 	return newWorker(
 		dataDir,
 		enabled,
@@ -304,6 +312,7 @@ func New(
 		scheduler,
 		consensus,
 		grpc,
+		grpcPolicyWatcher,
 		p2p,
 		ias,
 		keyManager,

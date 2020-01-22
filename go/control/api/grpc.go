@@ -12,12 +12,12 @@ var (
 	// serviceName is the gRPC service name.
 	serviceName = cmnGrpc.NewServiceName("NodeController")
 
-	// methodRequestShutdown is the name of the RequestShutdown method.
-	methodRequestShutdown = serviceName.NewMethodName("RequestShutdown")
-	// methodWaitSync is the name of the WaitSync method.
-	methodWaitSync = serviceName.NewMethodName("WaitSync")
-	// methodIsSynced is the name of the IsSynced method.
-	methodIsSynced = serviceName.NewMethodName("IsSynced")
+	// methodRequestShutdown is the RequestShutdown method.
+	methodRequestShutdown = serviceName.NewMethod("RequestShutdown", false)
+	// methodWaitSync is the WaitSync method.
+	methodWaitSync = serviceName.NewMethod("WaitSync", nil)
+	// methodIsSynced is the IsSynced method.
+	methodIsSynced = serviceName.NewMethod("IsSynced", nil)
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -25,15 +25,15 @@ var (
 		HandlerType: (*NodeController)(nil),
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: methodRequestShutdown.Short(),
+				MethodName: methodRequestShutdown.ShortName(),
 				Handler:    handlerRequestShutdown,
 			},
 			{
-				MethodName: methodWaitSync.Short(),
+				MethodName: methodWaitSync.ShortName(),
 				Handler:    handlerWaitSync,
 			},
 			{
-				MethodName: methodIsSynced.Short(),
+				MethodName: methodIsSynced.ShortName(),
 				Handler:    handlerIsSynced,
 			},
 		},
@@ -56,7 +56,7 @@ func handlerRequestShutdown( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodRequestShutdown.Full(),
+		FullMethod: methodRequestShutdown.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return nil, srv.(NodeController).RequestShutdown(ctx, req.(bool))
@@ -75,7 +75,7 @@ func handlerWaitSync( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodWaitSync.Full(),
+		FullMethod: methodWaitSync.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return nil, srv.(NodeController).WaitSync(ctx)
@@ -94,7 +94,7 @@ func handlerIsSynced( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodIsSynced.Full(),
+		FullMethod: methodIsSynced.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeController).IsSynced(ctx)
@@ -112,16 +112,16 @@ type nodeControllerClient struct {
 }
 
 func (c *nodeControllerClient) RequestShutdown(ctx context.Context, wait bool) error {
-	return c.conn.Invoke(ctx, methodRequestShutdown.Full(), wait, nil)
+	return c.conn.Invoke(ctx, methodRequestShutdown.FullName(), wait, nil)
 }
 
 func (c *nodeControllerClient) WaitSync(ctx context.Context) error {
-	return c.conn.Invoke(ctx, methodWaitSync.Full(), nil, nil)
+	return c.conn.Invoke(ctx, methodWaitSync.FullName(), nil, nil)
 }
 
 func (c *nodeControllerClient) IsSynced(ctx context.Context) (bool, error) {
 	var rsp bool
-	if err := c.conn.Invoke(ctx, methodIsSynced.Full(), nil, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodIsSynced.FullName(), nil, &rsp); err != nil {
 		return false, err
 	}
 	return rsp, nil

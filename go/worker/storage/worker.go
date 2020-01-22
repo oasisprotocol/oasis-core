@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/persistent"
@@ -62,7 +63,7 @@ type Worker struct {
 	watchState *persistent.ServiceStore
 	fetchPool  *workerpool.Pool
 
-	grpcPolicy *grpc.DynamicRuntimePolicyChecker
+	grpcPolicy *policy.DynamicRuntimePolicyChecker
 }
 
 // New constructs a new storage worker.
@@ -114,7 +115,7 @@ func New(
 		})
 
 		// Attach storage interface to gRPC server.
-		s.grpcPolicy = grpc.NewDynamicRuntimePolicyChecker()
+		s.grpcPolicy = policy.NewDynamicRuntimePolicyChecker(api.ServiceName, s.commonWorker.GrpcPolicyWatcher)
 		api.RegisterService(s.commonWorker.Grpc.Server(), &storageService{
 			w:                  s,
 			storage:            s.commonWorker.RuntimeRegistry.StorageRouter(),
@@ -146,7 +147,7 @@ func (s *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
 
-	node, err := committee.NewNode(commonNode, s.grpcPolicy, s.fetchPool, s.watchState, rp)
+	node, err := committee.NewNode(commonNode, s.grpcPolicy, s.fetchPool, s.watchState, rp, s.commonWorker.GetConfig())
 	if err != nil {
 		return err
 	}

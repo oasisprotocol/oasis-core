@@ -199,16 +199,22 @@ func doInit(cmd *cobra.Command, args []string) {
 	}
 
 	for _, v := range viper.GetStringSlice(CfgCommitteeAddress) {
-		var addr node.Address
-		if err = addr.UnmarshalText([]byte(v)); err != nil {
-			logger.Error("failed to parse node committee address",
-				"err", err,
-				"addr", v,
-			)
-			os.Exit(1)
+
+		var committeeAddr node.CommitteeAddress
+		if committeeAddrErr := committeeAddr.UnmarshalText([]byte(v)); committeeAddrErr != nil {
+			if addrErr := committeeAddr.Address.UnmarshalText([]byte(v)); addrErr != nil {
+				logger.Error("failed to parse node's committee address",
+					"addrErr", addrErr,
+					"committeeAddrErr", committeeAddrErr,
+					"addr", v,
+				)
+				os.Exit(1)
+			}
+			committeeAddr.Certificate = n.Committee.Certificate
 		}
-		n.Committee.Addresses = append(n.Committee.Addresses, addr)
+		n.Committee.Addresses = append(n.Committee.Addresses, committeeAddr)
 	}
+
 	for _, v := range viper.GetStringSlice(CfgP2PAddress) {
 		var addr node.Address
 		if err = addr.UnmarshalText([]byte(v)); err != nil {
@@ -234,10 +240,11 @@ func doInit(cmd *cobra.Command, args []string) {
 
 		for _, v := range consensusAddrs {
 			var consensusAddr node.ConsensusAddress
-			if err = consensusAddr.UnmarshalText([]byte(v)); err != nil {
-				if err = consensusAddr.Address.UnmarshalText([]byte(v)); err != nil {
+			if consensusErr := consensusAddr.UnmarshalText([]byte(v)); consensusErr != nil {
+				if addrErr := consensusAddr.Address.UnmarshalText([]byte(v)); addrErr != nil {
 					logger.Error("failed to parse node's consensus address",
-						"err", err,
+						"addrErr", addrErr,
+						"consensusErr", consensusErr,
 						"addr", v,
 					)
 					os.Exit(1)
@@ -346,7 +353,7 @@ func Register(parentCmd *cobra.Command) {
 func init() {
 	flags.String(CfgEntityID, "", "Entity ID that controls this node")
 	flags.Uint64(CfgExpiration, 0, "Epoch that the node registration should expire")
-	flags.StringSlice(CfgCommitteeAddress, nil, "Address(es) the node can be reached as a committee member")
+	flags.StringSlice(CfgCommitteeAddress, nil, "Address(es) the node can be reached as a committee member of the form [Certificate@]ip:port (where Certificate@ part is optional and represents base64 encoded node certificate for TLS)")
 	flags.StringSlice(CfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
 	flags.StringSlice(CfgConsensusAddress, nil, "Address(es) the node can be reached as a consensus member of the form [ID@]ip:port (where the ID@ part is optional and ID represents the node's public key)")
 	flags.StringSlice(CfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-scheduler\", \"key-manager\", \"merge-worker\", and \"validator\"")

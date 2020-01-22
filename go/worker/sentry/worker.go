@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/sentry/api"
+	workerGrpcSentry "github.com/oasislabs/oasis-core/go/worker/sentry/grpc"
 )
 
 const (
@@ -31,6 +32,8 @@ func Enabled() bool {
 // enabling them to hide their real address(es).
 type Worker struct {
 	enabled bool
+
+	grpcWorker *workerGrpcSentry.Worker
 
 	backend api.Backend
 
@@ -63,6 +66,11 @@ func (w *Worker) Start() error {
 		return err
 	}
 
+	// Start the sentry gRPC worker.
+	if err := w.grpcWorker.Start(); err != nil {
+		return err
+	}
+
 	close(w.initCh)
 
 	return nil
@@ -75,6 +83,7 @@ func (w *Worker) Stop() {
 		return
 	}
 
+	w.grpcWorker.Stop()
 	w.grpcServer.Stop()
 	close(w.quitCh)
 }
@@ -95,6 +104,7 @@ func (w *Worker) Cleanup() {
 		return
 	}
 
+	w.grpcWorker.Cleanup()
 	w.grpcServer.Cleanup()
 }
 
@@ -122,12 +132,26 @@ func New(backend api.Backend, identity *identity.Identity) (*Worker, error) {
 		api.RegisterService(w.grpcServer.Server(), backend)
 	}
 
+	// Initialize the sentry grpc worker.
+	sentryGrpcWorker, err := workerGrpcSentry.New(identity)
+	if err != nil {
+		return nil, fmt.Errorf("worker/sentry: failed to create a new sentry grpc worker: %w", err)
+	}
+	w.grpcWorker = sentryGrpcWorker
+
+	// Stop in case of grpc/worker quitting.
+	go func() {
+		<-w.grpcWorker.Quit()
+		w.Stop()
+	}()
+
 	return w, nil
 }
 
 func init() {
 	Flags.Bool(CfgEnabled, false, "Enable Sentry worker (NOTE: This should only be enabled on Sentry nodes.)")
 	Flags.Uint16(CfgControlPort, 9009, "Sentry worker's gRPC server port (NOTE: This should only be enabled on Sentry nodes.)")
+	Flags.AddFlagSet(workerGrpcSentry.Flags)
 
 	_ = viper.BindPFlags(Flags)
 }

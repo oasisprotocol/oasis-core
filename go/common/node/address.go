@@ -1,7 +1,9 @@
 package node
 
 import (
+	"crypto/x509"
 	"encoding"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -17,6 +19,9 @@ var (
 	// ErrConsensusAddressNoID is the error returned when a consensus address
 	// doesn't have the ID@ part.
 	ErrConsensusAddressNoID = errors.New("node: consensus address doesn't have ID@ part")
+	// ErrCommitteeAddressNoCertificate is the error returned when a committee address
+	// doesn't have the Certificate@ part.
+	ErrCommitteeAddressNoCertificate = errors.New("node: certificate address missing Certificate@ part")
 
 	unroutableNetworks []net.IPNet
 
@@ -84,8 +89,10 @@ func (a Address) String() string {
 // NOTE: The consensus address ID could be different from the consensus ID
 // to allow using a sentry node's ID and address instead of the validator's.
 type ConsensusAddress struct {
-	ID      signature.PublicKey `json:"id"`
-	Address Address             `json:"address"`
+	// ID is public key identifying the node.
+	ID signature.PublicKey `json:"id"`
+	// Address is the address at which the node can be reached.
+	Address Address `json:"address"`
 }
 
 // MarshalText implements the encoding.TextMarshaler interface.
@@ -116,6 +123,54 @@ func (ca *ConsensusAddress) UnmarshalText(text []byte) error {
 // String returns a string representation of a consensus address.
 func (ca *ConsensusAddress) String() string {
 	return fmt.Sprintf("%s@%s", ca.ID, ca.Address)
+}
+
+// CommitteeAddress represents an Oasis committee address that includes a
+// server certificate and a TCP address.
+// NOTE: The address certificate can be different from the actual node
+// certificate to allow using a sentry node's addresses.
+type CommitteeAddress struct {
+	// Certificate is the certificate for establishing TLS connections.
+	Certificate []byte `json:"certificate"`
+	// Address is the address at which the node can be reached
+	Address Address `json:"address"`
+}
+
+// ParseCertificate returns the parsed x509 certificate.
+func (ca *CommitteeAddress) ParseCertificate() (*x509.Certificate, error) {
+	return x509.ParseCertificate(ca.Certificate)
+}
+
+// MarshalText implements the encoding.TextMarshaler interface.
+func (ca *CommitteeAddress) MarshalText() ([]byte, error) {
+	certificateStr := base64.StdEncoding.EncodeToString(ca.Certificate[:])
+	addrStr, err := ca.Address.MarshalText()
+	if err != nil {
+		return nil, fmt.Errorf("node: error marshalling committee address' TCP address: %w", err)
+	}
+	return []byte(fmt.Sprintf("%s@%s", certificateStr, addrStr)), nil
+}
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+func (ca *CommitteeAddress) UnmarshalText(text []byte) error {
+	spl := strings.Split(string(text), "@")
+	if len(spl) != 2 {
+		return ErrCommitteeAddressNoCertificate
+	}
+	cert, err := base64.StdEncoding.DecodeString(spl[0])
+	if err != nil {
+		return fmt.Errorf("node: unable to parse committee address' Certificate: %w", err)
+	}
+	ca.Certificate = cert
+	if err := ca.Address.UnmarshalText([]byte(spl[1])); err != nil {
+		return fmt.Errorf("node: unable to parse committee address' TCP address: %w", err)
+	}
+	return nil
+}
+
+// String returns a string representation of a committee address.
+func (ca *CommitteeAddress) String() string {
+	return ca.Address.String()
 }
 
 func init() {

@@ -222,8 +222,10 @@ func (sc *basicImpl) cleanTendermintStorage(childEnv *env.Env) error {
 			return err
 		}
 	}
-	if err := doClean(sc.net.Keymanager().DataDir(), []string{"--" + cmdNode.CfgPreserveLocalStorage}); err != nil {
-		return err
+	for _, kw := range sc.net.Keymanagers() {
+		if err := doClean(kw.DataDir(), []string{"--" + cmdNode.CfgPreserveLocalStorage}); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -331,10 +333,11 @@ func (sc *basicImpl) waitNodesSynced() error {
 
 func (sc *basicImpl) initialEpochTransitions() error {
 	ctx := context.Background()
-	if sc.net.Keymanager() != nil {
+
+	if len(sc.net.Keymanagers()) > 0 {
 		// First wait for validator and key manager nodes to register. Then perform an epoch
 		// transition which will cause the compute and storage nodes to register.
-		numNodes := len(sc.net.Validators()) + 1
+		numNodes := len(sc.net.Validators()) + len(sc.net.Keymanagers())
 		sc.logger.Info("waiting for (some) nodes to register",
 			"num_nodes", numNodes,
 		)

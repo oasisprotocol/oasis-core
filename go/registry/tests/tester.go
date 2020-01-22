@@ -693,10 +693,15 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		}
 		nod.Node.P2P.ID = randomPK(rng)
 		nod.Node.P2P.Addresses = append(nod.Node.P2P.Addresses, addr)
-		nod.Node.Committee.Addresses = append(nod.Node.Committee.Addresses, addr)
 		nod.Node.Consensus.ID = randomPK(rng)
 		// Generate dummy TLS certificate.
 		nod.Node.Committee.Certificate = randomCert()
+		nod.Node.Committee.Addresses = []node.CommitteeAddress{
+			node.CommitteeAddress{
+				Certificate: nod.Node.Committee.Certificate,
+				Address:     addr,
+			},
+		}
 
 		nod.SignedRegistration, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, nod.Node)
 		if err != nil {
@@ -846,10 +851,10 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 				Port: 452,
 			},
 		}
-		nod.UpdatedNode.P2P.ID = randomPK(rng)
+		nod.UpdatedNode.P2P.ID = nod.Node.P2P.ID
 		nod.UpdatedNode.P2P.Addresses = append(nod.UpdatedNode.P2P.Addresses, addr)
-		nod.UpdatedNode.Committee.Addresses = append(nod.UpdatedNode.Committee.Addresses, addr)
-		nod.UpdatedNode.Committee.Certificate = randomCert()
+		nod.UpdatedNode.Committee.Certificate = nod.Node.Committee.Certificate
+		nod.UpdatedNode.Committee.Addresses = nod.Node.Committee.Addresses
 		nod.UpdatedNode.Consensus.ID = nod.Node.Consensus.ID // This should remain the same or we'll get "node update not allowed".
 		nod.SignedValidReRegistration, err = node.SignNode(ent.Signer, api.RegisterNodeSignatureContext, nod.UpdatedNode)
 		if err != nil {

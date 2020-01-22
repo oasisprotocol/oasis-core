@@ -66,7 +66,9 @@ func (sc *haltRestoreImpl) getExportedGenesisFiles() ([]string, error) {
 	for _, n := range sc.net.StorageWorkers() {
 		nodes = append(nodes, n)
 	}
-	nodes = append(nodes, sc.net.Keymanager())
+	for _, n := range sc.net.Keymanagers() {
+		nodes = append(nodes, n)
+	}
 
 	// Gather all genesis files.
 	var files []string

@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
@@ -21,9 +22,12 @@ const (
 type Keymanager struct { // nolint: maligned
 	Node
 
+	sentryIndices []int
+
 	runtime *Runtime
 	entity  *Entity
 
+	tmAddress        string
 	consensusPort    uint16
 	workerClientPort uint16
 }
@@ -31,6 +35,8 @@ type Keymanager struct { // nolint: maligned
 // KeymanagerCfg is the Oasis key manager provisioning configuration.
 type KeymanagerCfg struct {
 	NodeCfg
+
+	SentryIndices []int
 
 	Runtime *Runtime
 	Entity  *Entity
@@ -175,6 +181,13 @@ func (km *Keymanager) toGenesisArgs() []string {
 }
 
 func (km *Keymanager) startNode() error {
+	var err error
+
+	sentries, err := resolveSentries(km.net, km.sentryIndices)
+	if err != nil {
+		return err
+	}
+
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
@@ -189,11 +202,19 @@ func (km *Keymanager) startNode() error {
 		appendNetwork(km.net).
 		appendSeedNodes(km.net).
 		appendEntity(km.entity)
+
 	if km.runtime.teeHardware != node.TEEHardwareInvalid {
 		args = args.workerKeymanagerTEEHardware(km.runtime.teeHardware)
 	}
 
-	var err error
+	// Sentry configuration.
+	if len(sentries) > 0 {
+		args = args.addSentries(sentries).
+			tendermintDisablePeerExchange()
+	} else {
+		args = args.appendSeedNodes(km.net)
+	}
+
 	if km.cmd, km.exitCh, err = km.net.startOasisNode(km.dir, nil, args, km.Name, false, km.restartable); err != nil {
 		return fmt.Errorf("oasis/keymanager: failed to launch node %s: %w", km.Name, err)
 	}
@@ -204,7 +225,7 @@ func (km *Keymanager) startNode() error {
 // NewKeymanger provisions a new keymanager and adds it to the network.
 func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	// XXX: Technically there can be more than one keymanager.
-	if net.keymanager != nil {
+	if len(net.keymanagers) == 1 {
 		return nil, errors.New("oasis/keymanager: already provisioned")
 	}
 
@@ -241,12 +262,14 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		},
 		runtime:          cfg.Runtime,
 		entity:           cfg.Entity,
+		sentryIndices:    cfg.SentryIndices,
+		tmAddress:        crypto.PublicKeyToTendermint(&publicKey).Address().String(),
 		consensusPort:    net.nextNodePort,
 		workerClientPort: net.nextNodePort + 1,
 	}
 	km.doStartNode = km.startNode
 
-	net.keymanager = km
+	net.keymanagers = append(net.keymanagers, km)
 	net.nextNodePort += 2
 
 	if err := net.AddLogWatcher(&km.Node); err != nil {

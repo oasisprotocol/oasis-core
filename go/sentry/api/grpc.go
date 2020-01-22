@@ -6,15 +6,14 @@ import (
 	"google.golang.org/grpc"
 
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/node"
 )
 
 var (
 	// serviceName is the gRPC service name.
 	serviceName = cmnGrpc.NewServiceName("Sentry")
 
-	// methodGetConsensusAddresses is the name of the GetConsensusAddresses method.
-	methodGetConsensusAddresses = serviceName.NewMethodName("GetConsensusAddresses")
+	// methodGetAddresses is the GetAddresses method.
+	methodGetAddresses = serviceName.NewMethod("GetAddresses", nil)
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -22,29 +21,29 @@ var (
 		HandlerType: (*Backend)(nil),
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: methodGetConsensusAddresses.Short(),
-				Handler:    handlerGetConsensusAddresses,
+				MethodName: methodGetAddresses.ShortName(),
+				Handler:    handlerGetAddresses,
 			},
 		},
 		Streams: []grpc.StreamDesc{},
 	}
 )
 
-func handlerGetConsensusAddresses( // nolint: golint
+func handlerGetAddresses( // nolint: golint
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
-		return srv.(Backend).GetConsensusAddresses(ctx)
+		return srv.(Backend).GetAddresses(ctx)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetConsensusAddresses.Full(),
+		FullMethod: methodGetAddresses.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetConsensusAddresses(ctx)
+		return srv.(Backend).GetAddresses(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -58,12 +57,12 @@ type sentryClient struct {
 	conn *grpc.ClientConn
 }
 
-func (c *sentryClient) GetConsensusAddresses(ctx context.Context) ([]node.ConsensusAddress, error) {
-	var rsp []node.ConsensusAddress
-	if err := c.conn.Invoke(ctx, methodGetConsensusAddresses.Full(), nil, &rsp); err != nil {
+func (c *sentryClient) GetAddresses(ctx context.Context) (*SentryAddresses, error) {
+	var rsp SentryAddresses
+	if err := c.conn.Invoke(ctx, methodGetAddresses.FullName(), nil, &rsp); err != nil {
 		return nil, err
 	}
-	return rsp, nil
+	return &rsp, nil
 }
 
 // NewSentryClient creates a new gRPC sentry client service.
