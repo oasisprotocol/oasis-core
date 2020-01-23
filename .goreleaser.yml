@@ -12,9 +12,7 @@ env:
   - GO111MODULE=on
 
 builds:
-  - env:
-      - CGO_ENABLED=1
-    id: oasis-node
+  - id: oasis-node
     main: ./oasis-node/main.go
     binary: oasis-node
     dir: go/
