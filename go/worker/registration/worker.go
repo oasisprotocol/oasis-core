@@ -128,7 +128,7 @@ type Worker struct { // nolint: maligned
 	stopCh       chan struct{} // closed internally to trigger stop
 	quitCh       chan struct{} // closed after stopped
 	initialRegCh chan struct{} // closed after initial registration
-	stopReqCh    chan struct{} // closed internally to trigger clean registration lapse
+	stopRegCh    chan struct{} // closed internally to trigger clean registration lapse
 
 	logger    *logging.Logger
 	consensus consensus.Backend
@@ -202,7 +202,7 @@ Loop:
 		select {
 		case <-w.stopCh:
 			return
-		case <-w.stopReqCh:
+		case <-w.stopRegCh:
 			w.logger.Info("node deregistration and eventual shutdown requested")
 			return
 		case epoch = <-ch:
@@ -282,7 +282,7 @@ func (w *Worker) doNodeRegistration() {
 	// Loop broken; shutdown requested.
 	publicKey := w.identity.NodeSigner.Public()
 
-	initialRegCh, sub, err := w.registry.WatchNodes(w.ctx)
+	regCh, sub, err := w.registry.WatchNodes(w.ctx)
 	if err != nil {
 		w.logger.Error("failed to watch nodes",
 			"err", err,
@@ -307,7 +307,7 @@ func (w *Worker) doNodeRegistration() {
 	w.logger.Info("waiting for node to deregister")
 	for {
 		select {
-		case ev := <-initialRegCh:
+		case ev := <-regCh:
 			if !ev.IsRegistration && ev.Node.ID.Equal(publicKey) {
 				w.registrationStopped()
 				return
@@ -624,7 +624,7 @@ func (w *Worker) RequestDeregistration() error {
 		atomic.StoreUint32(&w.deregRequested, 0)
 		return err
 	}
-	close(w.stopReqCh)
+	close(w.stopRegCh)
 	return nil
 }
 
@@ -761,7 +761,7 @@ func New(
 		stopCh:             make(chan struct{}),
 		quitCh:             make(chan struct{}),
 		initialRegCh:       make(chan struct{}),
-		stopReqCh:          make(chan struct{}),
+		stopRegCh:          make(chan struct{}),
 		ctx:                context.Background(),
 		logger:             logger,
 		consensus:          consensus,
