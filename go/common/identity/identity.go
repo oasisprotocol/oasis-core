@@ -2,12 +2,13 @@
 package identity
 
 import (
-	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/tls"
 	"path/filepath"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
 )
 
@@ -37,8 +38,8 @@ type Identity struct {
 	P2PSigner signature.Signer
 	// ConsensusSigner is a node consensus key signer.
 	ConsensusSigner signature.Signer
-	// TLSKey is a private key used for TLS connections.
-	TLSKey *ecdsa.PrivateKey
+	// TLSSigner is a node TLS certificate signer.
+	TLSSigner signature.Signer
 	// TLSCertificate is a certificate that can be used for TLS.
 	TLSCertificate *tls.Certificate
 }
@@ -107,7 +108,7 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 		NodeSigner:      signers[0],
 		P2PSigner:       signers[1],
 		ConsensusSigner: signers[2],
-		TLSKey:          cert.PrivateKey.(*ecdsa.PrivateKey),
+		TLSSigner:       memory.NewFromRuntime(cert.PrivateKey.(ed25519.PrivateKey)),
 		TLSCertificate:  cert,
 	}, nil
 }

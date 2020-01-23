@@ -2,8 +2,7 @@
 package tls
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -18,7 +17,7 @@ import (
 )
 
 const (
-	keyPEMType  = "EC PRIVATE KEY"
+	keyPEMType  = "PRIVATE KEY"
 	certPEMType = "CERTIFICATE"
 )
 
@@ -56,7 +55,7 @@ func LoadOrGenerate(certPath, keyPath, commonName string) (*tls.Certificate, err
 
 // Generate generates a new TLS certificate.
 func Generate(commonName string) (*tls.Certificate, error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, errors.Wrap(err, "tls: failed to generate keypair")
 	}
@@ -72,14 +71,14 @@ func Generate(commonName string) (*tls.Certificate, error) {
 	template.NotBefore = time.Now().Add(-1 * time.Hour)
 	template.NotAfter = time.Now().AddDate(1, 0, 0)
 
-	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, key.Public(), key)
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, pubKey, privKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "tls: failed to create certificate")
 	}
 
 	return &tls.Certificate{
 		Certificate: [][]byte{certDER},
-		PrivateKey:  key,
+		PrivateKey:  privKey,
 	}, nil
 }
 
@@ -93,7 +92,7 @@ func Load(certPath, keyPath string) (*tls.Certificate, error) {
 	if blk == nil || blk.Type != keyPEMType {
 		return nil, errors.New("tls: failed to parse private key PEM")
 	}
-	key, err := x509.ParseECPrivateKey(blk.Bytes)
+	key, err := x509.ParsePKCS8PrivateKey(blk.Bytes)
 	if err != nil {
 		return nil, errors.Wrap(err, "tls: failed to parse private key")
 	}
@@ -125,7 +124,7 @@ func LoadCertificate(certPath string) (*tls.Certificate, error) {
 
 // Save saves a TLS certificate and private key.
 func Save(certPath, keyPath string, cert *tls.Certificate) error {
-	der, err := x509.MarshalECPrivateKey(cert.PrivateKey.(*ecdsa.PrivateKey))
+	der, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
 	if err != nil {
 		return errors.Wrap(err, "tls: failed to serialize private key")
 	}
