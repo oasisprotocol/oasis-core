@@ -83,6 +83,24 @@ func (r *RegistryHelpers) GenerateRegisterRuntimeTx(
 	if runtime.KeyManager != nil {
 		args = append(args, "--"+cmdRegRt.CfgKeyManager, runtime.KeyManager.String())
 	}
+
+	if runtime.AdmissionPolicy.AnyNode != nil {
+		args = append(args,
+			"--"+cmdRegRt.CfgAdmissionPolicy, cmdRegRt.AdmissionPolicyNameAnyNode,
+		)
+	} else if runtime.AdmissionPolicy.EntityWhitelist != nil {
+		args = append(args,
+			"--"+cmdRegRt.CfgAdmissionPolicy, cmdRegRt.AdmissionPolicyNameEntityWhitelist,
+		)
+		for e := range runtime.AdmissionPolicy.EntityWhitelist.Entities {
+			args = append(args,
+				"--"+cmdRegRt.CfgAdmissionPolicyEntityWhitelist, e.String(),
+			)
+		}
+	} else {
+		return fmt.Errorf("invalid admission policy")
+	}
+
 	if err := r.runSubCommand("registry-runtime-gen_register", args); err != nil {
 		return fmt.Errorf("failed to generate register runtime tx: %w", err)
 	}

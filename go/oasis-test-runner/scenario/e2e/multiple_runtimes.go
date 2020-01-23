@@ -85,6 +85,9 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 				BatchFlushTimeout: 1 * time.Second,
 			},
 			Storage: registry.StorageParameters{GroupSize: 2},
+			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+			},
 		}
 
 		fixtures.Runtimes = append(fixtures.Runtimes, newRtFixture)

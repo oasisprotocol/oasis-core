@@ -56,6 +56,8 @@ type RuntimeCfg struct { // nolint: maligned
 	TxnScheduler registry.TxnSchedulerParameters
 	Storage      registry.StorageParameters
 
+	AdmissionPolicy registry.RuntimeAdmissionPolicy
+
 	Pruner RuntimePrunerCfg
 
 	ExcludeFromGenesis bool
@@ -92,13 +94,14 @@ func (rt *Runtime) ToRuntimeDescriptor() registry.Runtime {
 // NewRuntime provisions a new runtime and adds it to the network.
 func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	descriptor := registry.Runtime{
-		ID:           cfg.ID,
-		Kind:         cfg.Kind,
-		TEEHardware:  cfg.TEEHardware,
-		Executor:     cfg.Executor,
-		Merge:        cfg.Merge,
-		TxnScheduler: cfg.TxnScheduler,
-		Storage:      cfg.Storage,
+		ID:              cfg.ID,
+		Kind:            cfg.Kind,
+		TEEHardware:     cfg.TEEHardware,
+		Executor:        cfg.Executor,
+		Merge:           cfg.Merge,
+		TxnScheduler:    cfg.TxnScheduler,
+		Storage:         cfg.Storage,
+		AdmissionPolicy: cfg.AdmissionPolicy,
 	}
 
 	rtDir, err := net.baseDir.NewSubDir("runtime-" + cfg.ID.String())
@@ -167,6 +170,22 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 
 		descriptor.KeyManager = new(common.Namespace)
 		*descriptor.KeyManager = cfg.Keymanager.id
+	}
+	if cfg.AdmissionPolicy.AnyNode != nil {
+		args = append(args,
+			"--"+cmdRegRt.CfgAdmissionPolicy, cmdRegRt.AdmissionPolicyNameAnyNode,
+		)
+	} else if cfg.AdmissionPolicy.EntityWhitelist != nil {
+		args = append(args,
+			"--"+cmdRegRt.CfgAdmissionPolicy, cmdRegRt.AdmissionPolicyNameEntityWhitelist,
+		)
+		for e := range cfg.AdmissionPolicy.EntityWhitelist.Entities {
+			args = append(args,
+				"--"+cmdRegRt.CfgAdmissionPolicyEntityWhitelist, e.String(),
+			)
+		}
+	} else {
+		return nil, errors.New("invalid admission policy")
 	}
 	args = append(args, cfg.Entity.toGenesisArgs()...)
 

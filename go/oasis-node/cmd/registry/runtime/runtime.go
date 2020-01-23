@@ -69,8 +69,10 @@ const (
 	CfgTxnSchedulerMaxBatchSizeBytes = "runtime.txn_scheduler.batching.max_batch_size_bytes"
 
 	// Admission policy flags.
-	CfgAdmissionPolicy                = "runtime.admission_policy"
-	CfgAdmissionPolicyEntityWhitelist = "runtime.admission_policy_entity_whitelist"
+	CfgAdmissionPolicy                 = "runtime.admission_policy"
+	CfgAdmissionPolicyEntityWhitelist  = "runtime.admission_policy_entity_whitelist"
+	AdmissionPolicyNameAnyNode         = "any-node"
+	AdmissionPolicyNameEntityWhitelist = "entity-whitelist"
 
 	runtimeGenesisFilename = "runtime_genesis.json"
 )
@@ -384,9 +386,9 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		rt.Version.TEE = cbor.Marshal(vi)
 	}
 	switch sap := viper.GetString(CfgAdmissionPolicy); sap {
-	case "any-node":
+	case AdmissionPolicyNameAnyNode:
 		rt.AdmissionPolicy.AnyNode = &registry.AnyNodeRuntimeAdmissionPolicy{}
-	case "entity-whitelist":
+	case AdmissionPolicyNameEntityWhitelist:
 		entities := make(map[signature.PublicKey]bool)
 		for _, se := range viper.GetStringSlice(CfgAdmissionPolicyEntityWhitelist) {
 			var e signature.PublicKey
