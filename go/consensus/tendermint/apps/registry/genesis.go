@@ -95,8 +95,10 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 		}
 	}
 	for _, v := range st.Nodes {
+		// The node signer isn't guaranteed to be the owner, and in most cases
+		// will just be the node self signing.
 		ctx.Logger().Debug("InitChain: Registering genesis node",
-			"node_owner", v.Signature.PublicKey,
+			"node_signer", v.Signatures[0].PublicKey,
 		)
 		if err := app.registerNode(ctx, state, v); err != nil {
 			ctx.Logger().Error("InitChain: failed to register node",
@@ -149,7 +151,7 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 	}
 
 	// We only want to keep the nodes that are validators.
-	validatorNodes := make([]*node.SignedNode, 0)
+	validatorNodes := make([]*node.MultiSignedNode, 0)
 	for _, sn := range signedNodes {
 		var n node.Node
 		if err = cbor.Unmarshal(sn.Blob, &n); err != nil {

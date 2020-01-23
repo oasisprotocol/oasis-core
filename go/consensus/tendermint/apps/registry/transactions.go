@@ -125,7 +125,7 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 func (app *registryApplication) registerNode( // nolint: gocyclo
 	ctx *abci.Context,
 	state *registryState.MutableState,
-	sigNode *node.SignedNode,
+	sigNode *node.MultiSignedNode,
 ) error {
 	if ctx.IsCheckOnly() {
 		return nil
@@ -182,17 +182,25 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 	// Charge gas for node registration if signed by entity. For node-signed
 	// registrations, the gas charges are pre-paid by the entity.
-	if sigNode.Signature.PublicKey.Equal(newNode.EntityID) {
+	isEntitySigned := sigNode.MultiSigned.IsSignedBy(newNode.EntityID)
+	if isEntitySigned {
 		if err = ctx.Gas().UseGas(1, registry.GasOpRegisterNode, params.GasCosts); err != nil {
 			return err
 		}
 	}
 
-	// Make sure the signer of the transaction matches the signer of the node.
+	// Make sure the signer of the transaction is the node identity key
+	// or the entity (iff the registration is entity signed).
 	// NOTE: If this is invoked during InitChain then there is no actual transaction
 	//       and thus no transaction signer so we must skip this check.
-	if !ctx.IsInitChain() && !sigNode.Signature.PublicKey.Equal(ctx.TxSigner()) {
-		return registry.ErrIncorrectTxSigner
+	if !ctx.IsInitChain() {
+		expectedTxSigner := newNode.ID
+		if isEntitySigned {
+			expectedTxSigner = newNode.EntityID
+		}
+		if !ctx.TxSigner().Equal(expectedTxSigner) {
+			return registry.ErrIncorrectTxSigner
+		}
 	}
 
 	// Check runtime's whitelist.

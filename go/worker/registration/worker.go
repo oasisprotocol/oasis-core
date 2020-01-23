@@ -480,7 +480,7 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 			ID: w.identity.P2PSigner.Public(),
 		},
 		Consensus: node.ConsensusInfo{
-			ID: w.consensus.ConsensusKey(),
+			ID: w.identity.ConsensusSigner.Public(),
 		},
 	}
 
@@ -526,7 +526,20 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		nodeDesc.P2P.Addresses = w.p2p.Addresses()
 	}
 
-	signedNode, err := node.SignNode(w.registrationSigner, registry.RegisterNodeSignatureContext, &nodeDesc)
+	nodeSigners := []signature.Signer{
+		w.registrationSigner,
+		w.identity.P2PSigner,
+		w.identity.ConsensusSigner,
+		w.identity.TLSSigner,
+	}
+	if !w.identity.NodeSigner.Public().Equal(w.registrationSigner.Public()) {
+		// In the case where the registration signer is the entity signer
+		// then we prepend the node signer so that the descriptor is always
+		// signed by the node itself.
+		nodeSigners = append([]signature.Signer{w.identity.NodeSigner}, nodeSigners...)
+	}
+
+	sigNode, err := node.MultiSignNode(nodeSigners, registry.RegisterNodeSignatureContext, &nodeDesc)
 	if err != nil {
 		w.logger.Error("failed to register node: unable to sign node descriptor",
 			"err", err,
@@ -534,7 +547,7 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		return err
 	}
 
-	tx := registry.NewRegisterNodeTx(0, nil, signedNode)
+	tx := registry.NewRegisterNodeTx(0, nil, sigNode)
 	if err := consensus.SignAndSubmitTx(w.ctx, w.consensus, w.registrationSigner, tx); err != nil {
 		w.logger.Error("failed to register node",
 			"err", err,

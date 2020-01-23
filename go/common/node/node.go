@@ -31,7 +31,7 @@ var (
 
 	teeHashContext = []byte("oasis-core/node: TEE RAK binding")
 
-	_ prettyprint.PrettyPrinter = (*SignedNode)(nil)
+	_ prettyprint.PrettyPrinter = (*MultiSignedNode)(nil)
 )
 
 // Node represents public connectivity information about an Oasis node.
@@ -309,37 +309,37 @@ func (n *Node) String() string {
 	return "<Node id=" + n.ID.String() + ">"
 }
 
-// SignedNode is a signed blob containing a CBOR-serialized Node.
-type SignedNode struct {
-	signature.Signed
+// MultiSignedNode is a multi-signed blob containing a CBOR-serialized Node.
+type MultiSignedNode struct {
+	signature.MultiSigned
 }
 
-// Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedNode) Open(context signature.Context, node *Node) error { // nolint: interfacer
-	return s.Signed.Open(context, node)
+// Open first verifies the blob signatures and then unmarshals the blob.
+func (s *MultiSignedNode) Open(context signature.Context, node *Node) error {
+	return s.MultiSigned.Open(context, node)
 }
 
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
-func (s SignedNode) PrettyPrint(prefix string, w io.Writer) {
+func (s MultiSignedNode) PrettyPrint(prefix string, w io.Writer) {
 	var n Node
-	if err := cbor.Unmarshal(s.Signed.Blob, &n); err != nil {
+	if err := cbor.Unmarshal(s.MultiSigned.Blob, &n); err != nil {
 		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, err)
 		return
 	}
 
-	pp := signature.NewPrettySigned(s.Signed, n)
+	pp := signature.NewPrettyMultiSigned(s.MultiSigned, n)
 	pp.PrettyPrint(prefix, w)
 }
 
-// SignNode serializes the Node and signs the result.
-func SignNode(signer signature.Signer, context signature.Context, node *Node) (*SignedNode, error) {
-	signed, err := signature.SignSigned(signer, context, node)
+// MultiSignNode serializes the Node and multi-signs the result.
+func MultiSignNode(signers []signature.Signer, context signature.Context, node *Node) (*MultiSignedNode, error) {
+	multiSigned, err := signature.SignMultiSigned(signers, context, node)
 	if err != nil {
 		return nil, err
 	}
 
-	return &SignedNode{
-		Signed: *signed,
+	return &MultiSignedNode{
+		MultiSigned: *multiSigned,
 	}, nil
 }

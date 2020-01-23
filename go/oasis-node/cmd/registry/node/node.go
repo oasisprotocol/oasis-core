@@ -103,8 +103,8 @@ func doInit(cmd *cobra.Command, args []string) {
 		entityDir string
 		entityID  signature.PublicKey
 
-		entity *entity.Entity
-		signer signature.Signer
+		entity       *entity.Entity
+		entitySigner signature.Signer
 
 		isSelfSigned bool
 	)
@@ -127,7 +127,7 @@ func doInit(cmd *cobra.Command, args []string) {
 			)
 			os.Exit(1)
 		}
-		entity, signer, err = cmdCommon.LoadEntity(cmdFlags.Signer(), entityDir)
+		entity, entitySigner, err = cmdCommon.LoadEntity(cmdFlags.Signer(), entityDir)
 		if err != nil {
 			logger.Error("failed to load entity",
 				"err", err,
@@ -140,7 +140,7 @@ func doInit(cmd *cobra.Command, args []string) {
 		if viper.GetBool(CfgSelfSigned) {
 			isSelfSigned = true
 		}
-		defer signer.Reset()
+		defer entitySigner.Reset()
 	}
 
 	// Provision the node identity.
@@ -151,17 +151,6 @@ func doInit(cmd *cobra.Command, args []string) {
 			"err", err,
 		)
 		os.Exit(1)
-	}
-
-	if isSelfSigned {
-		signer, err = nodeSignerFactory.Load(signature.SignerNode)
-		if err != nil {
-			// Should never happen.
-			logger.Error("failed to load the node signing key",
-				"err", err,
-			)
-			os.Exit(1)
-		}
 	}
 
 	n := &node.Node{
@@ -256,7 +245,17 @@ func doInit(cmd *cobra.Command, args []string) {
 	}
 
 	// Sign and write out the genesis node registration.
-	signed, err := node.SignNode(signer, registry.RegisterGenesisNodeSignatureContext, n)
+	signers := []signature.Signer{nodeIdentity.NodeSigner}
+	if !isSelfSigned {
+		signers = append(signers, entitySigner)
+	}
+	signers = append(signers, []signature.Signer{
+		nodeIdentity.P2PSigner,
+		nodeIdentity.ConsensusSigner,
+		nodeIdentity.TLSSigner,
+	}...)
+
+	signed, err := node.MultiSignNode(signers, registry.RegisterGenesisNodeSignatureContext, n)
 	if err != nil {
 		logger.Error("failed to sign node genesis registration",
 			"err", err,

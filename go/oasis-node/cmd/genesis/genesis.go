@@ -253,7 +253,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 		},
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
 		Runtimes: make([]*registry.SignedRuntime, 0, len(runtimes)),
-		Nodes:    make([]*node.SignedNode, 0, len(nodes)),
+		Nodes:    make([]*node.MultiSignedNode, 0, len(nodes)),
 	}
 
 	entMap := make(map[signature.PublicKey]bool)
@@ -390,7 +390,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			return err
 		}
 
-		var n node.SignedNode
+		var n node.MultiSignedNode
 		if err = json.Unmarshal(b, &n); err != nil {
 			l.Error("failed to parse genesis node registration",
 				"err", err,
