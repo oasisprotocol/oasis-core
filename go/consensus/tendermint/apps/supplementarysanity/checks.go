@@ -36,17 +36,25 @@ func checkRegistry(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	if err != nil {
 		return fmt.Errorf("SignedEntities: %w", err)
 	}
-	seenEntities, err := registry.SanityCheckEntities(entities)
+	seenEntities, err := registry.SanityCheckEntities(logger, entities)
 	if err != nil {
 		return fmt.Errorf("SanityCheckEntities: %w", err)
 	}
 
 	// Check runtimes.
-	runtimes, err := st.AllSignedRuntimes()
+	runtimes, err := st.SignedRuntimes()
 	if err != nil {
 		return fmt.Errorf("AllSignedRuntimes: %w", err)
 	}
-	seenRuntimes, err := registry.SanityCheckRuntimes(runtimes)
+	suspendedRuntimes, err := st.SuspendedRuntimes()
+	if err != nil {
+		return fmt.Errorf("SuspendedRuntimes: %w", err)
+	}
+	params, err := st.ConsensusParameters()
+	if err != nil {
+		return fmt.Errorf("ConsensusParameters: %w", err)
+	}
+	runtimeLookup, err := registry.SanityCheckRuntimes(logger, params, runtimes, suspendedRuntimes, false)
 	if err != nil {
 		return fmt.Errorf("SanityCheckRuntimes: %w", err)
 	}
@@ -56,11 +64,7 @@ func checkRegistry(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	if err != nil {
 		return fmt.Errorf("SignedNodes: %w", err)
 	}
-	params, err := st.ConsensusParameters()
-	if err != nil {
-		return fmt.Errorf("ConsensusParameters: %w", err)
-	}
-	err = registry.SanityCheckNodes(nodes, seenEntities, seenRuntimes, false, now, params.MaxNodeExpiration)
+	err = registry.SanityCheckNodes(logger, params, nodes, seenEntities, runtimeLookup, false, now)
 	if err != nil {
 		return fmt.Errorf("SanityCheckNodes: %w", err)
 	}

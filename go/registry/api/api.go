@@ -20,7 +20,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 // ModuleName is a unique module name for the registry module.
@@ -336,14 +335,14 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 			logger.Error("RegisterEntity: malformed node id",
 				"entity", ent,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: malformed node id", ErrInvalidArgument)
 		}
 
 		if nodesMap[v] {
 			logger.Error("RegisterEntity: duplicate entries in node list",
 				"entity", ent,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: duplicate nodes", ErrInvalidArgument)
 		}
 		nodesMap[v] = true
 	}
@@ -361,6 +360,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	entity *entity.Entity,
 	now time.Time,
 	isGenesis bool,
+	epoch epochtime.EpochTime,
 	runtimeLookup RuntimeLookup,
 	nodeLookup NodeLookup,
 ) (*node.Node, []*Runtime, error) {
@@ -412,7 +412,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"entity", entity,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: registration has no valid signer", ErrInvalidArgument)
 	}
 
 	// Validate that the node is signed by the correct signer.
@@ -422,7 +422,28 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"entity", entity,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: registration not signed by expected signer", ErrInvalidArgument)
+	}
+
+	// Checking the expiration only makes sense if this routine is
+	// validating the genesis document, since node descriptors being
+	// expired is presumably ok at runtime(?).
+	if isGenesis && n.Expiration <= uint64(epoch) {
+		logger.Error("RegisterNode: expired node in genesis",
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: expired node in genesis", ErrInvalidArgument)
+	}
+
+	// Ensure valid expiration.
+	maxExpiration := uint64(epoch) + params.MaxNodeExpiration
+	if params.MaxNodeExpiration > 0 && n.Expiration > maxExpiration {
+		logger.Error("RegisterNode: node expiration greater than max allowed expiration",
+			"node", n,
+			"node_expiration", n.Expiration,
+			"max_expiration", maxExpiration,
+		)
+		return nil, nil, fmt.Errorf("%w: expiration period greater than allowed", ErrInvalidArgument)
 	}
 
 	// Make sure that a node has at least one valid role.
@@ -431,12 +452,12 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		logger.Error("RegisterNode: no roles specified",
 			"node", n,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: no roles specified", ErrInvalidArgument)
 	case n.HasRoles(node.RoleReserved):
 		logger.Error("RegisterNode: invalid role specified",
 			"node", n,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: invalid role specified", ErrInvalidArgument)
 	}
 
 	// TODO: Key manager nodes maybe should be restricted to only being a
@@ -449,7 +470,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			logger.Error("RegisterNode: no runtimes in registration",
 				"node", n,
 			)
-			return nil, nil, ErrInvalidArgument
+			return nil, nil, fmt.Errorf("%w: missing runtimes", ErrInvalidArgument)
 		}
 	default:
 		rtMap := make(map[common.Namespace]bool)
@@ -459,7 +480,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 				logger.Error("RegisterNode: duplicate runtime IDs",
 					"runtime_id", rt.ID,
 				)
-				return nil, nil, ErrInvalidArgument
+				return nil, nil, fmt.Errorf("%w: duplicate runtime IDs", ErrInvalidArgument)
 			}
 			rtMap[rt.ID] = true
 
@@ -470,7 +491,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 					"err", err,
 					"runtime_id", rt.ID,
 				)
-				return nil, nil, ErrInvalidArgument
+				return nil, nil, fmt.Errorf("%w: invalid runtime", ErrInvalidArgument)
 			}
 
 			// If the node indicates TEE support for any of it's runtimes,
@@ -485,24 +506,19 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 
 	// Validate ConsensusInfo.
 	if !n.Consensus.ID.IsValid() {
-		logger.Error("RegisterNode: invalid consensus id",
+		logger.Error("RegisterNode: invalid consensus ID",
 			"node", n,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: invalid consensus ID", ErrInvalidArgument)
 	}
 	consensusAddressRequired := n.HasRoles(ConsensusAddressRequiredRoles)
-	if !isGenesis {
-		// XXX: Re-enable consensus address checks at genesis after
-		// existing deployments have cleaned up registries.
-		// https://github.com/oasislabs/oasis-core/issues/2428
-		if err := verifyAddresses(params, consensusAddressRequired, n.Consensus.Addresses); err != nil {
-			addrs, _ := json.Marshal(n.Consensus.Addresses)
-			logger.Error("RegisterNode: missing/invalid consensus addresses",
-				"node", n,
-				"consensus_addrs", addrs,
-			)
-			return nil, nil, err
-		}
+	if err := verifyAddresses(params, consensusAddressRequired, n.Consensus.Addresses); err != nil {
+		addrs, _ := json.Marshal(n.Consensus.Addresses)
+		logger.Error("RegisterNode: missing/invalid consensus addresses",
+			"node", n,
+			"consensus_addrs", addrs,
+		)
+		return nil, nil, err
 	}
 
 	// If node is a key manager, ensure that it is owned by the key manager
@@ -512,7 +528,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			logger.Error("RegisterNode: key manager not owned by key manager operator",
 				"node", n,
 			)
-			return nil, nil, ErrInvalidArgument
+			return nil, nil, fmt.Errorf("%w: keymanager entity not operator", ErrInvalidArgument)
 		}
 	}
 
@@ -523,7 +539,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"err", err,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: invalid committee TLS certificate", ErrInvalidArgument)
 	}
 	committeeAddressRequired := n.HasRoles(CommitteeAddressRequiredRoles)
 	if err := verifyAddresses(params, committeeAddressRequired, n.Committee.Addresses); err != nil {
@@ -537,10 +553,10 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 
 	// Validate P2PInfo.
 	if !n.P2P.ID.IsValid() {
-		logger.Error("RegisterNode: invalid P2P id",
+		logger.Error("RegisterNode: invalid P2P ID",
 			"node", n,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: invalid P2P ID", ErrInvalidArgument)
 	}
 	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
 	if err := verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
@@ -562,7 +578,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		logger.Error("RegisterNode: node consensus and P2P IDs must differ",
 			"node", n,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: P2P and Consensus IDs not unique", ErrInvalidArgument)
 	}
 
 	existingNode, err := nodeLookup.NodeByConsensusOrP2PKey(n.Consensus.ID)
@@ -578,23 +594,23 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: duplicate node consensus ID", ErrInvalidArgument)
 	}
 
 	existingNode, err = nodeLookup.NodeByConsensusOrP2PKey(n.P2P.ID)
 	if err != nil && err != ErrNoSuchNode {
-		logger.Error("RegisterNode: failed to get node by p2p ID",
+		logger.Error("RegisterNode: failed to get node by P2P ID",
 			"err", err,
 			"p2p_id", n.P2P.ID.String(),
 		)
 		return nil, nil, ErrInvalidArgument
 	}
 	if existingNode != nil && existingNode.ID != n.ID {
-		logger.Error("RegisterNode: duplicate node p2p ID",
+		logger.Error("RegisterNode: duplicate node P2P ID",
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: duplicate node P2P ID", ErrInvalidArgument)
 	}
 
 	existingNode, err = nodeLookup.NodeByCertificate(n.Committee.Certificate)
@@ -609,7 +625,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: duplicate node committee certificate", ErrInvalidArgument)
 	}
 
 	return &n, runtimes, nil
@@ -697,11 +713,11 @@ func VerifyAddress(addr node.Address, allowUnroutable bool) error {
 	if !allowUnroutable {
 		// Use the runtime to reject clearly invalid addresses.
 		if !addr.IP.IsGlobalUnicast() {
-			return ErrInvalidArgument
+			return fmt.Errorf("%w: address not global unicast", ErrInvalidArgument)
 		}
 
 		if !addr.IsRoutable() {
-			return ErrInvalidArgument
+			return fmt.Errorf("%w: address not routable", ErrInvalidArgument)
 		}
 	}
 
@@ -712,11 +728,11 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 	switch addrs := addresses.(type) {
 	case []node.ConsensusAddress:
 		if len(addrs) == 0 && addressRequired {
-			return ErrInvalidArgument
+			return fmt.Errorf("%w: missing consensus address", ErrInvalidArgument)
 		}
 		for _, v := range addrs {
 			if !v.ID.IsValid() {
-				return ErrInvalidArgument
+				return fmt.Errorf("%w: consensus address ID invalid", ErrInvalidArgument)
 			}
 			if err := VerifyAddress(v.Address, params.DebugAllowUnroutableAddresses); err != nil {
 				return err
@@ -724,11 +740,11 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 		}
 	case []node.CommitteeAddress:
 		if len(addrs) == 0 && addressRequired {
-			return ErrInvalidArgument
+			return fmt.Errorf("%w: missing committee address", ErrInvalidArgument)
 		}
 		for _, v := range addrs {
 			if _, err := v.ParseCertificate(); err != nil {
-				return ErrInvalidArgument
+				return fmt.Errorf("%w: committee address certificate invalid", ErrInvalidArgument)
 			}
 			if err := VerifyAddress(v.Address, params.DebugAllowUnroutableAddresses); err != nil {
 				return err
@@ -736,7 +752,7 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 		}
 	case []node.Address:
 		if len(addrs) == 0 && addressRequired {
-			return ErrInvalidArgument
+			return fmt.Errorf("%w: missing node address", ErrInvalidArgument)
 		}
 		for _, v := range addrs {
 			if err := VerifyAddress(v, params.DebugAllowUnroutableAddresses); err != nil {
@@ -913,7 +929,7 @@ func VerifyRegisterRuntimeArgs(
 			logger.Error("RegisterRuntime: transaction scheduler group too small",
 				"runtime", rt,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: transaction scheduler group to small", ErrInvalidArgument)
 		}
 
 		// Ensure there is at least one member of the storage group.
@@ -921,7 +937,7 @@ func VerifyRegisterRuntimeArgs(
 			logger.Error("RegisterRuntime: storage group too small",
 				"runtime", rt,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: storage group too small", ErrInvalidArgument)
 		}
 
 		if rt.ID.IsKeyManager() {
@@ -929,7 +945,7 @@ func VerifyRegisterRuntimeArgs(
 				"kind", rt.Kind,
 				"id", rt.ID,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: runtime ID flag missmatch", ErrInvalidArgument)
 		}
 	case KindKeyManager:
 		if rt.KeyManager != nil {
@@ -940,7 +956,7 @@ func VerifyRegisterRuntimeArgs(
 				"kind", rt.Kind,
 				"id", rt.ID,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: runtime ID flag mismatch", ErrInvalidArgument)
 		}
 	default:
 		return nil, ErrInvalidArgument
@@ -949,7 +965,7 @@ func VerifyRegisterRuntimeArgs(
 		logger.Error("RegisterRuntime: test runtime registration not allowed",
 			"id", rt.ID,
 		)
-		return nil, ErrInvalidArgument
+		return nil, fmt.Errorf("%w: test runtime not allowed", ErrInvalidArgument)
 	}
 
 	if !isGenesis && !rt.Genesis.StateRoot.IsEmpty() {
@@ -965,7 +981,7 @@ func VerifyRegisterRuntimeArgs(
 		logger.Error("RegisterRuntime: executor group size too small",
 			"runtime", rt,
 		)
-		return nil, ErrInvalidArgument
+		return nil, fmt.Errorf("%w: executor group too small", ErrInvalidArgument)
 	}
 
 	// Ensure there is at least one member of the merge group.
@@ -973,7 +989,7 @@ func VerifyRegisterRuntimeArgs(
 		logger.Error("RegisterRuntime: merge group size too small",
 			"runtime", rt,
 		)
-		return nil, ErrInvalidArgument
+		return nil, fmt.Errorf("%w: merge group too small", ErrInvalidArgument)
 	}
 
 	// Ensure a valid TEE hardware is specified.
@@ -981,7 +997,7 @@ func VerifyRegisterRuntimeArgs(
 		logger.Error("RegisterRuntime: invalid TEE hardware specified",
 			"runtime", rt,
 		)
-		return nil, ErrInvalidArgument
+		return nil, fmt.Errorf("%w: invalid TEE hardware", ErrInvalidArgument)
 	}
 
 	// Ensure there's a valid admission policy.
@@ -989,7 +1005,7 @@ func VerifyRegisterRuntimeArgs(
 		logger.Error("RegisterRuntime: invalid admission policy. exactly one policy should be non-nil",
 			"admission_policy", rt.AdmissionPolicy,
 		)
-		return nil, ErrInvalidArgument
+		return nil, fmt.Errorf("%w: invalid admission policy", ErrInvalidArgument)
 	}
 
 	return &rt, nil
@@ -1164,271 +1180,4 @@ var DefaultGasCosts = transaction.Costs{
 	GasOpUnfreezeNode:            1000,
 	GasOpRegisterRuntime:         1000,
 	GasOpRuntimeEpochMaintenance: 1000,
-}
-
-// SanityCheckEntities examines the entities table.
-// Returns lookup of entity ID to the entity record for use in other checks.
-func SanityCheckEntities(entities []*entity.SignedEntity) (map[signature.PublicKey]*entity.Entity, error) {
-	seenEntities := make(map[signature.PublicKey]*entity.Entity)
-	for _, sent := range entities {
-		var ent entity.Entity
-		if err := sent.Open(RegisterGenesisEntitySignatureContext, &ent); err != nil {
-			return nil, fmt.Errorf("unable to open signed entity")
-		}
-
-		if !ent.ID.IsValid() {
-			return nil, fmt.Errorf("entity ID %s is invalid", ent.ID.String())
-		}
-
-		for _, pk := range ent.Nodes {
-			if !pk.IsValid() {
-				return nil, fmt.Errorf("entity ID %s has node with invalid ID %s", ent.ID.String(), pk.String())
-			}
-		}
-
-		seenEntities[ent.ID] = &ent
-	}
-
-	return seenEntities, nil
-}
-
-// SanityCheckRuntimes examines the runtimes table.
-// Returns lookup of runtime ID to the runtime record for use in other checks.
-func SanityCheckRuntimes(runtimes []*SignedRuntime) (map[common.Namespace]*Runtime, error) {
-	seenRuntimes := make(map[common.Namespace]*Runtime)
-	for _, srt := range runtimes {
-		var rt Runtime
-		if err := srt.Open(RegisterGenesisRuntimeSignatureContext, &rt); err != nil {
-			return nil, fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
-		}
-
-		switch rt.Kind {
-		case KindCompute:
-			if rt.ID.IsKeyManager() {
-				return nil, fmt.Errorf("registry: sanity check failed: compute runtime ID %s has a key manager runtime ID", rt.ID.String())
-			}
-		case KindKeyManager:
-			if !rt.ID.IsKeyManager() {
-				return nil, fmt.Errorf("registry: sanity check failed: key manager runtime ID %s does not have a key manager runtime ID", rt.ID.String())
-			}
-		default:
-			return nil, fmt.Errorf("registry: sanity check failed: runtime ID %s is of invalid kind", rt.ID.String())
-		}
-
-		if seenRuntimes[rt.ID] != nil {
-			return nil, fmt.Errorf("registry: sanity check failed: duplicate runtime ID %s", rt.ID.String())
-		}
-
-		// Check compute runtime parameters.
-		if rt.Kind == KindCompute {
-			// Check runtime's Executor committee parameters.
-			if rt.Executor.GroupSize < 1 {
-				return nil, fmt.Errorf("registry: sanity check failed: executor group size must be >= 1 node")
-			}
-
-			if rt.Executor.RoundTimeout < 1*time.Second {
-				return nil, fmt.Errorf("registry: sanity check failed: executor round timeout must be >= 1 second")
-			}
-
-			if rt.Executor.RoundTimeout.Truncate(time.Second) != rt.Executor.RoundTimeout {
-				return nil, fmt.Errorf("registry: sanity check failed: granularity of executor round timeout must be a second")
-			}
-
-			// Check runtime's Merge committee parameters.
-			if rt.Merge.GroupSize < 1 {
-				return nil, fmt.Errorf("registry: sanity check failed: merge group size must be >= 1 node")
-			}
-
-			if rt.Merge.RoundTimeout < 1*time.Second {
-				return nil, fmt.Errorf("registry: sanity check failed: merge round timeout must be >= 1 second")
-			}
-
-			if rt.Merge.RoundTimeout.Truncate(time.Second) != rt.Merge.RoundTimeout {
-				return nil, fmt.Errorf("registry: sanity check failed: granularity of merge round timeout must be a second")
-			}
-
-			// Check runtime's Transaction scheduler committee parameters.
-			if rt.TxnScheduler.Algorithm != TxnSchedulerAlgorithmBatching {
-				return nil, fmt.Errorf("registry: sanity check failed: invalid txn scheduler algorithm")
-			}
-
-			if rt.TxnScheduler.BatchFlushTimeout < 1*time.Second {
-				return nil, fmt.Errorf("registry: sanity check failed: batch flush timeout must be >= 1 second")
-			}
-
-			if rt.TxnScheduler.BatchFlushTimeout.Truncate(time.Second) != rt.TxnScheduler.BatchFlushTimeout {
-				return nil, fmt.Errorf("registry: sanity check failed: granularity of txn scheduler batch flush timeout must be a second")
-			}
-
-			if rt.TxnScheduler.MaxBatchSize < 1 {
-				return nil, fmt.Errorf("registry: sanity check failed: max batch size must be >= 1")
-			}
-
-			if rt.TxnScheduler.MaxBatchSizeBytes < 1 {
-				return nil, fmt.Errorf("registry: sanity check failed: max batch size in bytes must be >= 1")
-			}
-
-			// Check that the given key manager runtime is a valid key manager runtime.
-			if rt.KeyManager != nil {
-				krt := seenRuntimes[*rt.KeyManager]
-				if krt == nil {
-					// Not seen yet, traverse the entire runtime list (the KM runtimes
-					// aren't guaranteed to be sorted before the other runtimes).
-					var found bool
-					for _, skrt := range runtimes {
-						var kmrt Runtime
-						if err := skrt.Open(RegisterGenesisRuntimeSignatureContext, &kmrt); err != nil {
-							return nil, fmt.Errorf("registry: sanity check failed: unable to open signed runtime")
-						}
-						if kmrt.ID.Equal(rt.KeyManager) {
-							found = true
-							krt = &kmrt
-							break
-						}
-					}
-
-					if !found {
-						return nil, fmt.Errorf("registry: sanity check failed: compute runtime ID %s has an unknown key manager runtime ID", rt.ID.String())
-					}
-				}
-
-				if krt.Kind != KindKeyManager {
-					return nil, fmt.Errorf("registry: sanity check failed: compute runtime ID %s specifies a key manager runtime that isn't a key manager runtime", rt.ID.String())
-				}
-			}
-		}
-
-		seenRuntimes[rt.ID] = &rt
-	}
-
-	return seenRuntimes, nil
-}
-
-// SanityCheckNodes examines the nodes table.
-// Pass lookups of entities and runtimes from SanityCheckEntities
-// and SanityCheckRuntimes for cross referencing purposes.
-func SanityCheckNodes(nodes []*node.SignedNode, seenEntities map[signature.PublicKey]*entity.Entity, seenRuntimes map[common.Namespace]*Runtime, isGenesis bool, epoch epochtime.EpochTime, maxExpiration uint64) error { // nolint: gocyclo
-	for _, sn := range nodes {
-		var n node.Node
-		if err := sn.Open(RegisterGenesisNodeSignatureContext, &n); err != nil {
-			return fmt.Errorf("registry: sanity check failed: unable to open signed node")
-		}
-
-		if !n.ID.IsValid() {
-			return fmt.Errorf("registry: sanity check failed: node ID %s is invalid", n.ID.String())
-		}
-
-		if !n.EntityID.IsValid() {
-			return fmt.Errorf("registry: sanity check failed: node ID %s has invalid entity ID", n.ID.String())
-		}
-
-		if seenEntities[n.EntityID] == nil {
-			return fmt.Errorf("registry: sanity check failed: node ID %s has unknown controlling entity", n.ID.String())
-		}
-
-		if n.HasRoles(node.RoleReserved) {
-			return fmt.Errorf("registry: sanity check failed: node ID %s has reserved roles mask bits set", n.ID.String())
-		}
-
-		if n.HasRoles(node.RoleComputeWorker) && len(n.Runtimes) == 0 {
-			return fmt.Errorf("registry: sanity check failed: compute worker node must have runtime(s)")
-		}
-
-		if n.HasRoles(node.RoleStorageWorker) && len(n.Runtimes) == 0 {
-			return fmt.Errorf("registry: sanity check failed: storage worker node must have runtime(s)")
-		}
-
-		if n.HasRoles(node.RoleKeyManager) && len(n.Runtimes) == 0 {
-			return fmt.Errorf("registry: sanity check failed: key manager node must have runtime(s)")
-		}
-
-		if n.HasRoles(node.RoleValidator) && !n.HasRoles(node.RoleComputeWorker) && !n.HasRoles(node.RoleStorageWorker) && !n.HasRoles(node.RoleKeyManager) && len(n.Runtimes) > 0 {
-			return fmt.Errorf("registry: sanity check failed: validator node shouldn't have any runtimes")
-		}
-
-		if _, err := n.Committee.ParseCertificate(); err != nil {
-			return fmt.Errorf("registry: sanity check failed: node ID %s has an invalid committee certificate", n.ID.String())
-		}
-
-		if !n.Consensus.ID.IsValid() {
-			return fmt.Errorf("registry: sanity check failed: node ID %s has an invalid consensus ID", n.ID.String())
-		}
-		// XXX: Validate P2P.ID and Consensus/Committee/P2P addresses after
-		// existing deployments have cleared up registry.
-		// https://github.com/oasislabs/oasis-core/issues/2428
-
-		// Checking the expiration only makes sense if this routine is
-		// validating the genesis document, since node descriptors being
-		// expired is presumably ok at runtime(?).
-		if isGenesis && n.Expiration <= uint64(epoch) {
-			return fmt.Errorf("registry: sanity check failed: node ID %s is expired", n.ID.String())
-		}
-		if maxExpiration > 0 && n.Expiration > uint64(epoch)+maxExpiration {
-			return fmt.Errorf("registry: sanity check failed: node ID %s has expiration too far in the future", n.ID.String())
-		}
-
-		for _, rt := range n.Runtimes {
-			seenRT := seenRuntimes[rt.ID]
-			if seenRT == nil {
-				return fmt.Errorf("registry: sanity check failed: node ID %s has an unknown runtime ID", n.ID.String())
-			}
-
-			if (n.HasRoles(node.RoleKeyManager) && !n.HasRoles(node.RoleComputeWorker)) && seenRT.Kind != KindKeyManager {
-				return fmt.Errorf("registry: sanity check failed: key manager node ID %s has specified a non-KM runtime %s", n.ID.String(), rt.ID.String())
-			}
-
-			if (n.HasRoles(node.RoleComputeWorker) && !n.HasRoles(node.RoleKeyManager)) && seenRT.Kind != KindCompute {
-				return fmt.Errorf("registry: sanity check failed: compute node ID %s has specified a non-compute runtime %s", n.ID.String(), rt.ID.String())
-			}
-		}
-
-		// If the entity doesn't allow entity-signed nodes, make sure that
-		// this node also appears in the entity's node list.
-		if !seenEntities[n.EntityID].AllowEntitySignedNodes {
-			var found bool
-			for _, enPK := range seenEntities[n.EntityID].Nodes {
-				if enPK.Equal(n.ID) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return fmt.Errorf("registry: sanity check failed: node ID %s was not found among nodes listed by its controlling entity", n.ID.String())
-			}
-		}
-	}
-
-	return nil
-}
-
-// SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck(baseEpoch epochtime.EpochTime) error {
-	if !flags.DebugDontBlameOasis() {
-		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugAllowRuntimeRegistration || g.Parameters.DebugBypassStake {
-			return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
-		}
-		if g.Parameters.MaxNodeExpiration == 0 {
-			return fmt.Errorf("registry: sanity check failed: maximum node expiration not specified")
-		}
-	}
-
-	// This could check KeyManagerOperator, but some configurations don't
-	// use a key manager, so the parameter is optional.
-
-	// Check entities.
-	seenEntities, err := SanityCheckEntities(g.Entities)
-	if err != nil {
-		return err
-	}
-
-	// Check runtimes.
-	runtimes := append([]*SignedRuntime{}, g.Runtimes...)
-	runtimes = append(runtimes, g.SuspendedRuntimes...)
-	seenRuntimes, err := SanityCheckRuntimes(runtimes)
-	if err != nil {
-		return err
-	}
-
-	// Check nodes.
-	return SanityCheckNodes(g.Nodes, seenEntities, seenRuntimes, true, baseEpoch, g.Parameters.MaxNodeExpiration)
 }

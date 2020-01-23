@@ -25,7 +25,7 @@ var (
 	_ encoding.BinaryUnmarshaler = (*Hash)(nil)
 )
 
-// Hash is a cryptograhic hash over arbitrary binary data.
+// Hash is a cryptographic hash over arbitrary binary data.
 type Hash [Size]byte
 
 // MarshalBinary encodes a hash into binary form.
