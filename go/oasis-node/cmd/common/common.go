@@ -47,11 +47,23 @@ var (
 
 	// RootFlags has the flags that are common across all commands.
 	RootFlags = flag.NewFlagSet("", flag.ContinueOnError)
+
+	isNodeCmd bool
 )
 
 // DataDir retuns the data directory iff one is set.
 func DataDir() string {
 	return viper.GetString(CfgDataDir)
+}
+
+// IsNodeCmd returns true iff the current command is the ekiden node.
+func IsNodeCmd() bool {
+	return isNodeCmd
+}
+
+// SetIsNodeCmd sets the IsNodeCmd flag.
+func SetIsNodeCmd(v bool) {
+	isNodeCmd = v
 }
 
 // DataDirOrPwd returns the data directory iff one is set, pwd otherwise.
@@ -198,6 +210,11 @@ func initPublicKeyBlacklist() error {
 }
 
 func initRlimit() error {
+	// Suppress this for tooling, as it likely does not matter.
+	if !IsNodeCmd() {
+		return nil
+	}
+
 	var rlim syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rlim); err != nil {
 		// Log, but don't return the error, this is only used for testing

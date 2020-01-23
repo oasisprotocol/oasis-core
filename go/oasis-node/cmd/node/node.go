@@ -78,6 +78,8 @@ const exportsSubDir = "exports"
 
 // Run runs the Oasis node.
 func Run(cmd *cobra.Command, args []string) {
+	cmdCommon.SetIsNodeCmd(true)
+
 	node, err := NewNode()
 	if err != nil {
 		os.Exit(1)
