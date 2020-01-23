@@ -335,14 +335,14 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 			logger.Error("RegisterEntity: malformed node id",
 				"entity", ent,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: malformed node id", ErrInvalidArgument)
 		}
 
 		if nodesMap[v] {
 			logger.Error("RegisterEntity: duplicate entries in node list",
 				"entity", ent,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: duplicate nodes", ErrInvalidArgument)
 		}
 		nodesMap[v] = true
 	}
@@ -412,7 +412,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"entity", entity,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: registration has no valid signer", ErrInvalidArgument)
 	}
 
 	// Validate that the node is signed by the correct signer.
@@ -422,7 +422,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"entity", entity,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: registration not signed by expected signer", ErrInvalidArgument)
 	}
 
 	// Checking the expiration only makes sense if this routine is
@@ -432,7 +432,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		logger.Error("RegisterNode: expired node in genesis",
 			"node", n,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: expired node in genesis", ErrInvalidArgument)
 	}
 
 	// Ensure valid expiration.
@@ -443,7 +443,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node_expiration", n.Expiration,
 			"max_expiration", maxExpiration,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: expiration period greater than allowed", ErrInvalidArgument)
 	}
 
 	// Make sure that a node has at least one valid role.
@@ -452,12 +452,12 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		logger.Error("RegisterNode: no roles specified",
 			"node", n,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: no roles specified", ErrInvalidArgument)
 	case n.HasRoles(node.RoleReserved):
 		logger.Error("RegisterNode: invalid role specified",
 			"node", n,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: invalid role specified", ErrInvalidArgument)
 	}
 
 	// TODO: Key manager nodes maybe should be restricted to only being a
@@ -470,7 +470,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			logger.Error("RegisterNode: no runtimes in registration",
 				"node", n,
 			)
-			return nil, nil, ErrInvalidArgument
+			return nil, nil, fmt.Errorf("%w: missing runtimes", ErrInvalidArgument)
 		}
 	default:
 		rtMap := make(map[common.Namespace]bool)
@@ -480,7 +480,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 				logger.Error("RegisterNode: duplicate runtime IDs",
 					"runtime_id", rt.ID,
 				)
-				return nil, nil, ErrInvalidArgument
+				return nil, nil, fmt.Errorf("%w: duplicate runtime IDs", ErrInvalidArgument)
 			}
 			rtMap[rt.ID] = true
 
@@ -491,7 +491,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 					"err", err,
 					"runtime_id", rt.ID,
 				)
-				return nil, nil, ErrInvalidArgument
+				return nil, nil, fmt.Errorf("%w: invalid runtime", ErrInvalidArgument)
 			}
 
 			// If the node indicates TEE support for any of it's runtimes,
@@ -506,10 +506,10 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 
 	// Validate ConsensusInfo.
 	if !n.Consensus.ID.IsValid() {
-		logger.Error("RegisterNode: invalid consensus id",
+		logger.Error("RegisterNode: invalid consensus ID",
 			"node", n,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: invalid consensus ID", ErrInvalidArgument)
 	}
 	consensusAddressRequired := n.HasRoles(ConsensusAddressRequiredRoles)
 	if err := verifyAddresses(params, consensusAddressRequired, n.Consensus.Addresses); err != nil {
@@ -528,7 +528,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			logger.Error("RegisterNode: key manager not owned by key manager operator",
 				"node", n,
 			)
-			return nil, nil, ErrInvalidArgument
+			return nil, nil, fmt.Errorf("%w: keymanager entity not operator", ErrInvalidArgument)
 		}
 	}
 
@@ -539,7 +539,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 			"err", err,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: invalid committee TLS certificate", ErrInvalidArgument)
 	}
 	committeeAddressRequired := n.HasRoles(CommitteeAddressRequiredRoles)
 	if err := verifyAddresses(params, committeeAddressRequired, n.Committee.Addresses); err != nil {
@@ -553,10 +553,10 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 
 	// Validate P2PInfo.
 	if !n.P2P.ID.IsValid() {
-		logger.Error("RegisterNode: invalid P2P id",
+		logger.Error("RegisterNode: invalid P2P ID",
 			"node", n,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: invalid P2P ID", ErrInvalidArgument)
 	}
 	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
 	if err := verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
@@ -578,7 +578,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		logger.Error("RegisterNode: node consensus and P2P IDs must differ",
 			"node", n,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: P2P and Consensus IDs not unique", ErrInvalidArgument)
 	}
 
 	existingNode, err := nodeLookup.NodeByConsensusOrP2PKey(n.Consensus.ID)
@@ -594,23 +594,23 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: duplicate node consensus ID", ErrInvalidArgument)
 	}
 
 	existingNode, err = nodeLookup.NodeByConsensusOrP2PKey(n.P2P.ID)
 	if err != nil && err != ErrNoSuchNode {
-		logger.Error("RegisterNode: failed to get node by p2p ID",
+		logger.Error("RegisterNode: failed to get node by P2P ID",
 			"err", err,
 			"p2p_id", n.P2P.ID.String(),
 		)
 		return nil, nil, ErrInvalidArgument
 	}
 	if existingNode != nil && existingNode.ID != n.ID {
-		logger.Error("RegisterNode: duplicate node p2p ID",
+		logger.Error("RegisterNode: duplicate node P2P ID",
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: duplicate node P2P ID", ErrInvalidArgument)
 	}
 
 	existingNode, err = nodeLookup.NodeByCertificate(n.Committee.Certificate)
@@ -625,7 +625,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("%w: duplicate node committee certificate", ErrInvalidArgument)
 	}
 
 	return &n, runtimes, nil
@@ -713,11 +713,11 @@ func VerifyAddress(addr node.Address, allowUnroutable bool) error {
 	if !allowUnroutable {
 		// Use the runtime to reject clearly invalid addresses.
 		if !addr.IP.IsGlobalUnicast() {
-			return ErrInvalidArgument
+			return fmt.Errorf("%w: address not global unicast", ErrInvalidArgument)
 		}
 
 		if !addr.IsRoutable() {
-			return ErrInvalidArgument
+			return fmt.Errorf("%w: address not routable", ErrInvalidArgument)
 		}
 	}
 
@@ -728,11 +728,11 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 	switch addrs := addresses.(type) {
 	case []node.ConsensusAddress:
 		if len(addrs) == 0 && addressRequired {
-			return ErrInvalidArgument
+			return fmt.Errorf("%w: missing consensus address", ErrInvalidArgument)
 		}
 		for _, v := range addrs {
 			if !v.ID.IsValid() {
-				return ErrInvalidArgument
+				return fmt.Errorf("%w: consensus address ID invalid", ErrInvalidArgument)
 			}
 			if err := VerifyAddress(v.Address, params.DebugAllowUnroutableAddresses); err != nil {
 				return err
@@ -740,11 +740,11 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 		}
 	case []node.CommitteeAddress:
 		if len(addrs) == 0 && addressRequired {
-			return ErrInvalidArgument
+			return fmt.Errorf("%w: missing committee address", ErrInvalidArgument)
 		}
 		for _, v := range addrs {
 			if _, err := v.ParseCertificate(); err != nil {
-				return ErrInvalidArgument
+				return fmt.Errorf("%w: committee address certificate invalid", ErrInvalidArgument)
 			}
 			if err := VerifyAddress(v.Address, params.DebugAllowUnroutableAddresses); err != nil {
 				return err
@@ -752,7 +752,7 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 		}
 	case []node.Address:
 		if len(addrs) == 0 && addressRequired {
-			return ErrInvalidArgument
+			return fmt.Errorf("%w: missing node address", ErrInvalidArgument)
 		}
 		for _, v := range addrs {
 			if err := VerifyAddress(v, params.DebugAllowUnroutableAddresses); err != nil {
@@ -929,7 +929,7 @@ func VerifyRegisterRuntimeArgs(
 			logger.Error("RegisterRuntime: transaction scheduler group too small",
 				"runtime", rt,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: transaction scheduler group to small", ErrInvalidArgument)
 		}
 
 		// Ensure there is at least one member of the storage group.
@@ -937,7 +937,7 @@ func VerifyRegisterRuntimeArgs(
 			logger.Error("RegisterRuntime: storage group too small",
 				"runtime", rt,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: storage group too small", ErrInvalidArgument)
 		}
 
 		if rt.ID.IsKeyManager() {
@@ -945,7 +945,7 @@ func VerifyRegisterRuntimeArgs(
 				"kind", rt.Kind,
 				"id", rt.ID,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: runtime ID flag missmatch", ErrInvalidArgument)
 		}
 	case KindKeyManager:
 		if rt.KeyManager != nil {
@@ -956,7 +956,7 @@ func VerifyRegisterRuntimeArgs(
 				"kind", rt.Kind,
 				"id", rt.ID,
 			)
-			return nil, ErrInvalidArgument
+			return nil, fmt.Errorf("%w: runtime ID flag mismatch", ErrInvalidArgument)
 		}
 	default:
 		return nil, ErrInvalidArgument
@@ -965,7 +965,7 @@ func VerifyRegisterRuntimeArgs(
 		logger.Error("RegisterRuntime: test runtime registration not allowed",
 			"id", rt.ID,
 		)
-		return nil, ErrInvalidArgument
+		return nil, fmt.Errorf("%w: test runtime not allowed", ErrInvalidArgument)
 	}
 
 	if !isGenesis && !rt.Genesis.StateRoot.IsEmpty() {
@@ -981,7 +981,7 @@ func VerifyRegisterRuntimeArgs(
 		logger.Error("RegisterRuntime: executor group size too small",
 			"runtime", rt,
 		)
-		return nil, ErrInvalidArgument
+		return nil, fmt.Errorf("%w: executor group too small", ErrInvalidArgument)
 	}
 
 	// Ensure there is at least one member of the merge group.
@@ -989,7 +989,7 @@ func VerifyRegisterRuntimeArgs(
 		logger.Error("RegisterRuntime: merge group size too small",
 			"runtime", rt,
 		)
-		return nil, ErrInvalidArgument
+		return nil, fmt.Errorf("%w: merge group too small", ErrInvalidArgument)
 	}
 
 	// Ensure a valid TEE hardware is specified.
@@ -997,7 +997,7 @@ func VerifyRegisterRuntimeArgs(
 		logger.Error("RegisterRuntime: invalid TEE hardware specified",
 			"runtime", rt,
 		)
-		return nil, ErrInvalidArgument
+		return nil, fmt.Errorf("%w: invalid TEE hardware", ErrInvalidArgument)
 	}
 
 	// Ensure there's a valid admission policy.
@@ -1005,7 +1005,7 @@ func VerifyRegisterRuntimeArgs(
 		logger.Error("RegisterRuntime: invalid admission policy. exactly one policy should be non-nil",
 			"admission_policy", rt.AdmissionPolicy,
 		)
-		return nil, ErrInvalidArgument
+		return nil, fmt.Errorf("%w: invalid admission policy", ErrInvalidArgument)
 	}
 
 	return &rt, nil
