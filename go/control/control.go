@@ -14,7 +14,10 @@ type nodeController struct {
 }
 
 func (c *nodeController) RequestShutdown(ctx context.Context, wait bool) error {
-	ch := c.node.RequestShutdown()
+	ch, err := c.node.RequestShutdown()
+	if err != nil {
+		return err
+	}
 	if wait {
 		select {
 		case <-ch:

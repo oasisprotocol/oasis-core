@@ -155,13 +155,15 @@ func (n *Node) Wait() {
 	n.svcMgr.Wait()
 }
 
-func (n *Node) RequestShutdown() <-chan struct{} {
+func (n *Node) RequestShutdown() (<-chan struct{}, error) {
+	if err := n.RegistrationWorker.RequestDeregistration(); err != nil {
+		return nil, err
+	}
 	// This returns only the registration worker's event channel,
 	// otherwise the caller (usually the control grpc server) will only
 	// get notified once everything is already torn down - perhaps
 	// including the server.
-	n.RegistrationWorker.RequestDeregistration()
-	return n.RegistrationWorker.Quit()
+	return n.RegistrationWorker.Quit(), nil
 }
 
 func (n *Node) RegistrationStopped() {

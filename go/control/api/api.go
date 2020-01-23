@@ -28,7 +28,7 @@ type NodeController interface {
 // Shutdownable is an interface the node presents for shutting itself down.
 type Shutdownable interface {
 	// RequestShutdown is the method called by the control server to trigger node shutdown.
-	RequestShutdown() <-chan struct{}
+	RequestShutdown() (<-chan struct{}, error)
 }
 
 // DebugModuleName is the module name for the debug controller service.

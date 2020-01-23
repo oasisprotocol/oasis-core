@@ -107,6 +107,7 @@ type Worker struct { // nolint: maligned
 
 	store            *persistent.ServiceStore
 	storedDeregister bool
+	deregRequested   uint32
 	delegate         Delegate
 
 	entityID           signature.PublicKey
@@ -608,15 +609,23 @@ func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.CommitteeAddre
 }
 
 // RequestDeregistration requests that the node not register itself in the next epoch.
-func (w *Worker) RequestDeregistration() {
+func (w *Worker) RequestDeregistration() error {
+	if !atomic.CompareAndSwapUint32(&w.deregRequested, 0, 1) {
+		// Deregistration already requested, don't do anything.
+		return nil
+	}
 	storedDeregister := true
 	err := w.store.PutCBOR(deregistrationRequestStoreKey, &storedDeregister)
 	if err != nil {
 		w.logger.Error("can't persist deregistration request",
 			"err", err,
 		)
+		// Let them request it again in this case.
+		atomic.StoreUint32(&w.deregRequested, 0)
+		return err
 	}
 	close(w.stopReqCh)
+	return nil
 }
 
 // GetRegistrationSigner loads the signing credentials as configured by this package's flags.
