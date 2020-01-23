@@ -65,6 +65,9 @@ type ApplicationConfig struct {
 	Pruning         PruneConfig
 	HaltEpochHeight epochtime.EpochTime
 	MinGasPrice     uint64
+
+	// OwnTxSigner is the transaction signer identity of the local node.
+	OwnTxSigner signature.PublicKey
 }
 
 // TransactionAuthHandler is the interface for ABCI applications that handle
@@ -947,6 +950,7 @@ type ApplicationState struct {
 	haltEpochHeight epochtime.EpochTime
 
 	minGasPrice quantity.Quantity
+	ownTxSigner signature.PublicKey
 
 	metricsCloseCh  chan struct{}
 	metricsClosedCh chan struct{}
@@ -1074,6 +1078,11 @@ func (s *ApplicationState) Genesis() *genesis.Document {
 // MinGasPrice returns the configured minimum gas price.
 func (s *ApplicationState) MinGasPrice() *quantity.Quantity {
 	return &s.minGasPrice
+}
+
+// OwnTxSigner returns the transaction signer identity of the local node.
+func (s *ApplicationState) OwnTxSigner() signature.PublicKey {
+	return s.ownTxSigner
 }
 
 func (s *ApplicationState) doCommit(now time.Time) error {
@@ -1216,6 +1225,7 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*Applicat
 		blockHeight:     blockHeight,
 		haltEpochHeight: cfg.HaltEpochHeight,
 		minGasPrice:     minGasPrice,
+		ownTxSigner:     cfg.OwnTxSigner,
 		metricsCloseCh:  make(chan struct{}),
 		metricsClosedCh: make(chan struct{}),
 	}
