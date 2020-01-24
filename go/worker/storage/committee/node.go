@@ -590,25 +590,26 @@ mainLoop:
 			blk := inBlk.(*block.Block)
 			n.logger.Debug("incoming block",
 				"round", blk.Header.Round,
-				"last_synced", cachedLastRound,
+				"last_synced", lastFullyAppliedRound,
+				"last_finalized", cachedLastRound,
 			)
 
-			if _, ok := hashCache[cachedLastRound]; !ok && cachedLastRound == n.undefinedRound {
+			if _, ok := hashCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == n.undefinedRound {
 				dummy := blockSummary{
 					Namespace: blk.Header.Namespace,
-					Round:     cachedLastRound + 1,
+					Round:     lastFullyAppliedRound + 1,
 				}
 				dummy.IORoot.Empty()
-				dummy.IORoot.Round = cachedLastRound + 1
+				dummy.IORoot.Round = lastFullyAppliedRound + 1
 				dummy.StateRoot.Empty()
-				dummy.StateRoot.Round = cachedLastRound + 1
-				hashCache[cachedLastRound] = &dummy
+				dummy.StateRoot.Round = lastFullyAppliedRound + 1
+				hashCache[lastFullyAppliedRound] = &dummy
 			}
 			// Determine if we need to fetch any old block summaries. In case the first
 			// round is an undefined round, we need to start with the following round
 			// since the undefined round may be unsigned -1 and in this case the loop
 			// would not do any iterations.
-			startSummaryRound := cachedLastRound
+			startSummaryRound := lastFullyAppliedRound
 			if startSummaryRound == n.undefinedRound {
 				startSummaryRound++
 			}
@@ -632,7 +633,7 @@ mainLoop:
 				hashCache[blk.Header.Round] = summaryFromBlock(blk)
 			}
 
-			for i := cachedLastRound + 1; i <= blk.Header.Round; i++ {
+			for i := lastFullyAppliedRound + 1; i <= blk.Header.Round; i++ {
 				syncing, ok := syncingRounds[i]
 				if ok && syncing.outstanding == maskAll {
 					continue
