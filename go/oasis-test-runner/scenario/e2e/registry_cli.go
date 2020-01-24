@@ -556,6 +556,10 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 	}
 
 	// Create runtime descriptor instance.
+	testEntity, _, err := entity.TestEntity()
+	if err != nil {
+		return fmt.Errorf("TestEntity: %w", err)
+	}
 	testRuntime := registry.Runtime{
 		Kind: registry.KindCompute,
 		Executor: registry.ExecutorParameters{
@@ -581,7 +585,11 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 			GroupSize: 9,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
-			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
+				Entities: map[signature.PublicKey]bool{
+					testEntity.ID: true,
+				},
+			},
 		},
 	}
 	// Runtime ID 0x0 is for simple-keyvalue, 0xf... is for the keymanager. Let's use 0x1.
