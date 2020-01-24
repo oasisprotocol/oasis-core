@@ -12,5 +12,6 @@ type = [
   { name = "Features", directory = "feature", showcontent = true },
   { name = "Bug Fixes", directory = "bugfix", showcontent = true },
   { name = "Documentation improvements", directory = "doc", showcontent = true },
+  { name = "Internal changes", directory = "internal", showcontent = true },
   { name = "Trivial changes", directory = "trivial", showcontent = false },
 ]
