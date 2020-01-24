@@ -1,5 +1,6 @@
 //! Client for service defined in go/storage/api.
 use grpcio::{CallOption, Channel, Client, Result};
+use serde_cbor::value::Value;
 use serde_derive::{Deserialize, Serialize};
 
 use oasis_core_runtime::{
@@ -17,6 +18,16 @@ pub struct ApplyRequest {
     pub writelog: WriteLog,
 }
 
+// XXX: This should be an actual receipt once somebody needs it from Rust.
+/// A storage receipt.
+type Receipt = Value;
+
+grpc_method!(
+    METHOD_APPLY,
+    "/oasis-core.Storage/Apply",
+    ApplyRequest,
+    Receipt
+);
 grpc_method!(
     METHOD_SYNC_GET,
     "/oasis-core.Storage/SyncGet",
@@ -48,6 +59,11 @@ impl StorageClient {
         StorageClient {
             client: Client::new(channel),
         }
+    }
+
+    // Apply applies the write log against the storage.
+    pub fn apply(&self, request: &ApplyRequest, opt: CallOption) -> Result<Receipt> {
+        self.client.unary_call(&METHOD_APPLY, &request, opt)
     }
 
     /// Fetch a single key and return the corresponding proof.
