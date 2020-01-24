@@ -9,6 +9,7 @@ oasis-core-runtime = { path = "../runtime" }
 serde = "1.0.71"
 serde_bytes = "~0.10"
 serde_derive = "1.0"
+serde_cbor = "0.10.2"
 failure = "0.1.5"
 futures = "0.1.25"
 tokio-executor = "0.1.6"
