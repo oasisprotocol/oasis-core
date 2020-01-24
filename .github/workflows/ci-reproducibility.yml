@@ -1,0 +1,106 @@
+# NOTE: This name appears in GitHub's Checks API and in workflow's status badge.
+name: ci-reproducibility
+
+# Trigger the workflow when:
+on:
+  # A push occurs to one of the matched branches.
+  push:
+    branches:
+      - master
+      - stable/*
+  # Or when a pull request event occurs for a pull request against one of the
+  # matched branches.
+  pull_request:
+    branches:
+      - master
+      - stable/*
+
+jobs:
+
+  build-code:
+    # NOTE: This name appears in GitHub's Checks API.
+    name: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_number: [1, 2]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          # NOTE: We make a git checkout to a unique directory for each build to
+          # catch reproducibility issues with code in different local paths.
+          path: build${{ matrix.build_number }}
+      - name: Set up Go 1.13
+        uses: actions/setup-go@v1.1.2
+        with:
+          go-version: "1.13.x"
+      - name: Install oasis-node build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install make libseccomp-dev
+      - name: Install GoReleaser
+        run: |
+          cd $(mktemp --directory /tmp/goreleaser.XXXXX)
+          ${CURL_CMD} ${GORELEASER_URL_PREFIX}/v${GORELEASER_VERSION}/${GORELEASER_TARBALL} \
+            --output ${GORELEASER_TARBALL}
+          ${CURL_CMD} ${GORELEASER_URL_PREFIX}/v${GORELEASER_VERSION}/goreleaser_checksums.txt \
+            --output CHECKSUMS
+          sha256sum --check --ignore-missing CHECKSUMS
+          tar -xf ${GORELEASER_TARBALL}
+          sudo mv goreleaser /usr/local/bin
+        env:
+          GORELEASER_URL_PREFIX: https://github.com/oasislabs/goreleaser/releases/download/
+          GORELEASER_VERSION: 0.123.3-oasis1
+          GORELEASER_TARBALL: goreleaser_Linux_x86_64.tar.gz
+          CURL_CMD: curl --proto =https --tlsv1.2 -sSL
+      - name: Build oasis-node with Make
+        run: |
+          cd build${{ matrix.build_number }}/go
+          make oasis-node
+      - name: Build oasis-node with GoReleaser
+        run: |
+          cd build${{ matrix.build_number }}
+          make release
+      - name: Get checksums of oasis-node builds
+        run: |
+          cd build${{ matrix.build_number }}
+          sha256sum ${OASIS_NODE_MAKE_PATH} ${OASIS_NODE_GORELEASER_PATH} > ../oasis-node-SHA256SUMs
+        env:
+          OASIS_NODE_MAKE_PATH: go/oasis-node/oasis-node
+          OASIS_NODE_GORELEASER_PATH: dist/oasis-node_linux_amd64/oasis-node
+      - name: Upload checksums
+        uses: actions/upload-artifact@v1
+        with:
+          name: oasis-node-SHA256SUMs-build${{ matrix.build_number }}
+          path: oasis-node-SHA256SUMs
+
+  compare-checksums:
+    # NOTE: This name appears in GitHub's Checks API.
+    name: checksums
+    # NOTE: Requiring a matrix job waits for all the matrix jobs to be complete.
+    needs: build-code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download checksums for build 1
+        uses: actions/download-artifact@v1
+        with:
+          name: oasis-node-SHA256SUMs-build1
+      - name: Download checksum for build 2
+        uses: actions/download-artifact@v1
+        with:
+          name: oasis-node-SHA256SUMs-build2
+      - name: Check if checksums are the same
+        shell: bash
+        run: |
+          for i in 1 2; do
+            echo "Checksums for build $i are: "
+            cat oasis-node-SHA256SUMs-build$i/oasis-node-SHA256SUMs
+            echo
+          done
+          if ! DIFF=$(diff --unified=0 oasis-node-SHA256SUMs-build{1,2}/oasis-node-SHA256SUMs); then
+            echo "Error: Checksums for builds 1 and 2 differ: "
+            echo -e "$DIFF"
+            exit 1
+          fi
+

@@ -12,15 +12,18 @@ env:
   - GO111MODULE=on
 
 builds:
-  - env:
-      - CGO_ENABLED=1
-    id: oasis-node
+  - id: oasis-node
     main: ./oasis-node/main.go
     binary: oasis-node
     dir: go/
     flags:
       - -trimpath
     ldflags:
+      # NOTE: At the moment, GoReleaser produces different binaries when
+      # releases are built from different git paths, unless -buildid= is added
+      # to ldflags.
+      # For more details, see: https://github.com/oasislabs/goreleaser/issues/1.
+      - -buildid=
       - -X github.com/oasislabs/oasis-core/go/common/version.SoftwareVersion={{.Env.VERSION}}
     goos:
       - linux
