@@ -1,7 +1,8 @@
-// Package memory provides a memory backed Signer, for use in testing.
+// Package memory provides a memory backed Signer, primarily for use in testing.
 package memory
 
 import (
+	goEd25519 "crypto/ed25519"
 	"crypto/sha512"
 	"io"
 
@@ -93,6 +94,13 @@ func (s *Signer) UnsafeBytes() []byte {
 func NewSigner(entropy io.Reader) (signature.Signer, error) {
 	var factory Factory
 	return factory.Generate(signature.SignerUnknown, entropy)
+}
+
+// NewFromRuntime creates a new signer from a runtime private key.
+func NewFromRuntime(rtPrivKey goEd25519.PrivateKey) signature.Signer {
+	return &Signer{
+		privateKey: ed25519.NewKeyFromSeed(rtPrivKey.Seed()),
+	}
 }
 
 // NewTestSigner generates a new signer deterministically from
