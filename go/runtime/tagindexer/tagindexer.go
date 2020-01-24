@@ -122,6 +122,13 @@ func (s *Service) worker() {
 }
 
 func (s *Service) Start() error {
+	if _, ok := s.backend.(*nopBackend); ok {
+		// In case this is a nopBackend (which doesn't index anything) avoid the overhead of having
+		// a tag indexer service follow blocks and index them.
+		s.Logger.Info("not starting tag indexer as it is disabled")
+		return nil
+	}
+
 	go s.worker()
 	return nil
 }
@@ -129,6 +136,11 @@ func (s *Service) Start() error {
 func (s *Service) Stop() {
 	s.cancelCtx()
 	close(s.stopCh)
+
+	if _, ok := s.backend.(*nopBackend); ok {
+		// Since we didn't start a worker for the nopBackend, propagate stop immediately.
+		s.BaseBackgroundService.Stop()
+	}
 }
 
 // New creates a new tag indexer service.
