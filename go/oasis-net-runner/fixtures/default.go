@@ -71,6 +71,9 @@ func NewDefaultFixture() (*oasis.NetworkFixture, error) {
 				Entity:     0,
 				Keymanager: -1,
 				Binary:     viper.GetString(cfgKeymanagerBinary),
+				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+				},
 			},
 			// Compute runtime.
 			oasis.RuntimeFixture{
@@ -96,7 +99,10 @@ func NewDefaultFixture() (*oasis.NetworkFixture, error) {
 					MaxBatchSizeBytes: 1000,
 					BatchFlushTimeout: 20 * time.Second,
 				},
-				Storage:      registry.StorageParameters{GroupSize: 1},
+				Storage: registry.StorageParameters{GroupSize: 1},
+				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+				},
 				GenesisState: viper.GetString(cfgRuntimeGenesisState),
 				GenesisRound: 0,
 			},

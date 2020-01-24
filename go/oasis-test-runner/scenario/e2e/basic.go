@@ -106,7 +106,10 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 				Kind:       registry.KindKeyManager,
 				Entity:     0,
 				Keymanager: -1,
-				Binary:     keyManagerBinary,
+				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+				},
+				Binary: keyManagerBinary,
 			},
 			// Compute runtime.
 			oasis.RuntimeFixture{
@@ -133,6 +136,9 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 					BatchFlushTimeout: 1 * time.Second,
 				},
 				Storage: registry.StorageParameters{GroupSize: 2},
+				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+				},
 			},
 		},
 		Validators: []oasis.ValidatorFixture{

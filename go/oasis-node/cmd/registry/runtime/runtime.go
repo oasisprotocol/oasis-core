@@ -17,6 +17,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
@@ -66,6 +67,12 @@ const (
 	CfgTxnSchedulerBatchFlushTimeout = "runtime.txn_scheduler.flush_timeout"
 	CfgTxnSchedulerMaxBatchSize      = "runtime.txn_scheduler.batching.max_batch_size"
 	CfgTxnSchedulerMaxBatchSizeBytes = "runtime.txn_scheduler.batching.max_batch_size_bytes"
+
+	// Admission policy flags.
+	CfgAdmissionPolicy                 = "runtime.admission_policy"
+	CfgAdmissionPolicyEntityWhitelist  = "runtime.admission_policy_entity_whitelist"
+	AdmissionPolicyNameAnyNode         = "any-node"
+	AdmissionPolicyNameEntityWhitelist = "entity-whitelist"
 
 	runtimeGenesisFilename = "runtime_genesis.json"
 )
@@ -308,7 +315,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		tree := urkel.New(nil, nil)
 		ctx := context.Background()
 		for _, logEntry := range log {
-			err := tree.Insert(ctx, logEntry.Key, logEntry.Value)
+			err = tree.Insert(ctx, logEntry.Key, logEntry.Value)
 			if err != nil {
 				logger.Error("failed to apply runtime genesis storage state",
 					"err", err,
@@ -320,7 +327,8 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 
 		var ns common.Namespace
 		copy(ns[:], id[:])
-		_, newRoot, err := tree.Commit(ctx, ns, 0)
+		var newRoot hash.Hash
+		_, newRoot, err = tree.Commit(ctx, ns, 0)
 		if err != nil {
 			logger.Error("failed to apply runtime genesis storage state",
 				"err", err,
@@ -362,15 +370,12 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 			MaxBatchSizeBytes: uint64(viper.GetSizeInBytes(CfgTxnSchedulerMaxBatchSizeBytes)),
 		},
 		Storage: registry.StorageParameters{GroupSize: uint64(viper.GetInt64(CfgStorageGroupSize))},
-		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
-			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
-		},
 	}
 	if teeHardware == node.TEEHardwareIntelSGX {
 		var vi registry.VersionInfoIntelSGX
 		for _, v := range viper.GetStringSlice(CfgVersionEnclave) {
 			var enclaveID sgx.EnclaveIdentity
-			if err := enclaveID.UnmarshalHex(v); err != nil {
+			if err = enclaveID.UnmarshalHex(v); err != nil {
 				logger.Error("failed to parse SGX enclave identity",
 					"err", err,
 				)
@@ -379,6 +384,31 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 			vi.Enclaves = append(vi.Enclaves, enclaveID)
 		}
 		rt.Version.TEE = cbor.Marshal(vi)
+	}
+	switch sap := viper.GetString(CfgAdmissionPolicy); sap {
+	case AdmissionPolicyNameAnyNode:
+		rt.AdmissionPolicy.AnyNode = &registry.AnyNodeRuntimeAdmissionPolicy{}
+	case AdmissionPolicyNameEntityWhitelist:
+		entities := make(map[signature.PublicKey]bool)
+		for _, se := range viper.GetStringSlice(CfgAdmissionPolicyEntityWhitelist) {
+			var e signature.PublicKey
+			if err = e.UnmarshalHex(se); err != nil {
+				logger.Error("failed to parse entity ID",
+					"err", err,
+					CfgAdmissionPolicyEntityWhitelist, se,
+				)
+				return nil, nil, fmt.Errorf("entity whitelist runtime admission policy parse entity ID: %w", err)
+			}
+			entities[e] = true
+		}
+		rt.AdmissionPolicy.EntityWhitelist = &registry.EntityWhitelistRuntimeAdmissionPolicy{
+			Entities: entities,
+		}
+	default:
+		logger.Error("invalid runtime admission policy",
+			CfgAdmissionPolicy, sap,
+		)
+		return nil, nil, fmt.Errorf("invalid runtime admission policy")
 	}
 
 	return rt, signer, nil
@@ -478,6 +508,10 @@ func init() {
 
 	// Init Storage committee flags.
 	runtimeFlags.Uint64(CfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
+
+	// Init Admission policy flags.
+	runtimeFlags.String(CfgAdmissionPolicy, "", "What type of node admission policy to have")
+	runtimeFlags.StringSlice(CfgAdmissionPolicyEntityWhitelist, nil, "For entity whitelist node admission policies, the IDs (hex) of the entities in the whitelist")
 
 	_ = viper.BindPFlags(runtimeFlags)
 	runtimeFlags.AddFlagSet(cmdFlags.SignerFlags)

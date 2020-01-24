@@ -168,6 +168,8 @@ type RuntimeFixture struct { // nolint: maligned
 	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
 	Storage      registry.StorageParameters      `json:"storage"`
 
+	AdmissionPolicy registry.RuntimeAdmissionPolicy `json:"admission_policy"`
+
 	Pruner RuntimePrunerCfg `json:"pruner,omitempty"`
 
 	ExcludeFromGenesis bool `json:"exclude_from_genesis,omitempty"`
@@ -203,6 +205,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		Merge:              f.Merge,
 		TxnScheduler:       f.TxnScheduler,
 		Storage:            f.Storage,
+		AdmissionPolicy:    f.AdmissionPolicy,
 		Binary:             f.Binary,
 		GenesisState:       f.GenesisState,
 		GenesisRound:       f.GenesisRound,
