@@ -72,6 +72,7 @@ where:
   - `feature`: a new feature,
   - `bugfix`: a bug fix,
   - `doc`: a documentation-related change,
+  - `internal`: an internal change of interest to developers and maintainers,
   - `trivial`: a trivial change that is _not_ included in the Change Log.
 
 - `.<COUNTER>` part is optional and can be used when a single issue or pull
