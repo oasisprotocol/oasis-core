@@ -35,8 +35,8 @@ const (
 
 	// CfgRegistrationEntity configures the registration worker entity.
 	CfgRegistrationEntity = "worker.registration.entity"
-	// CfgRegistrationPrivateKey configures the registration worker private key.
-	CfgRegistrationPrivateKey = "worker.registration.private_key"
+	// CfgDebugRegistrationPrivateKey configures the registration worker private key.
+	CfgDebugRegistrationPrivateKey = "worker.registration.debug.private_key"
 	// CfgRegistrationForceRegister overrides a previously saved deregistration
 	// request.
 	CfgRegistrationForceRegister = "worker.registration.force_register"
@@ -658,6 +658,10 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 		}
 	}
 
+	if !flags.DebugDontBlameOasis() {
+		return defaultPk, nil, fmt.Errorf("worker/registration: entity signed nodes disallowed by node config")
+	}
+
 	// At this point, the entity allows entity-signed registrations,
 	// and the node is not in the entity's list of allowed
 	// node-signed nodes.
@@ -668,7 +672,7 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 	// given a entity ID.
 
 	// The entity allows self-signed nodes, try to load the entity private key.
-	f = viper.GetString(CfgRegistrationPrivateKey)
+	f = viper.GetString(CfgDebugRegistrationPrivateKey)
 	if f == "" {
 		// If the private key is not provided, try using a node-signed
 		// registration, the local copy of the entity descriptor may
@@ -812,9 +816,10 @@ func (w *Worker) Cleanup() {
 }
 
 func init() {
-	Flags.String(CfgRegistrationEntity, "", "Entity to use as the node owner in registrations")
-	Flags.String(CfgRegistrationPrivateKey, "", "Private key to use to sign node registrations")
-	Flags.Bool(CfgRegistrationForceRegister, false, "Override a previously saved deregistration request")
+	Flags.String(CfgRegistrationEntity, "", "entity to use as the node owner in registrations")
+	Flags.String(CfgDebugRegistrationPrivateKey, "", "private key to use to sign node registrations")
+	Flags.Bool(CfgRegistrationForceRegister, false, "override a previously saved deregistration request")
+	_ = Flags.MarkHidden(CfgDebugRegistrationPrivateKey)
 
 	_ = viper.BindPFlags(Flags)
 }

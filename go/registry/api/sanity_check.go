@@ -19,7 +19,7 @@ func (g *Genesis) SanityCheck(baseEpoch epochtime.EpochTime) error {
 	logger := logging.GetLogger("genesis/sanity-check")
 
 	if !flags.DebugDontBlameOasis() {
-		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugAllowRuntimeRegistration || g.Parameters.DebugBypassStake {
+		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugAllowRuntimeRegistration || g.Parameters.DebugBypassStake || g.Parameters.DebugAllowEntitySignedNodeRegistration {
 			return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
 		}
 		if g.Parameters.MaxNodeExpiration == 0 {

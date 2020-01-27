@@ -411,7 +411,6 @@ func (args *argBuilder) appendEntity(ent *Entity) *argBuilder {
 		dir := ent.dir.String()
 		args.vec = append(args.vec, []string{
 			"--" + registration.CfgRegistrationEntity, filepath.Join(dir, "entity.json"),
-			"--" + registration.CfgRegistrationPrivateKey, filepath.Join(dir, "entity.pem"),
 		}...)
 	} else if ent.isDebugTestEntity {
 		args.vec = append(args.vec, "--"+flags.CfgDebugTestEntity)
