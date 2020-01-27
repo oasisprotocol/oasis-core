@@ -52,11 +52,12 @@ const (
 	cfgHaltEpoch          = "halt.epoch"
 
 	// Registry config flags.
-	CfgRegistryMaxNodeExpiration             = "registry.max_node_expiration"
-	cfgRegistryDebugAllowUnroutableAddresses = "registry.debug.allow_unroutable_addresses"
-	CfgRegistryDebugAllowRuntimeRegistration = "registry.debug.allow_runtime_registration"
-	CfgRegistryDebugAllowTestRuntimes        = "registry.debug.allow_test_runtimes"
-	cfgRegistryDebugBypassStake              = "registry.debug.bypass_stake" // nolint: gosec
+	CfgRegistryMaxNodeExpiration                      = "registry.max_node_expiration"
+	cfgRegistryDebugAllowUnroutableAddresses          = "registry.debug.allow_unroutable_addresses"
+	CfgRegistryDebugAllowRuntimeRegistration          = "registry.debug.allow_runtime_registration"
+	CfgRegistryDebugAllowTestRuntimes                 = "registry.debug.allow_test_runtimes"
+	cfgRegistryDebugAllowEntitySignedNodeRegistration = "registry.debug.allow_entity_signed_registration"
+	cfgRegistryDebugBypassStake                       = "registry.debug.bypass_stake" // nolint: gosec
 
 	// Scheduler config flags.
 	cfgSchedulerMinValidators          = "scheduler.min_validators"
@@ -244,12 +245,13 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []string, l *logging.Logger) error {
 	regSt := registry.Genesis{
 		Parameters: registry.ConsensusParameters{
-			DebugAllowUnroutableAddresses: viper.GetBool(cfgRegistryDebugAllowUnroutableAddresses),
-			DebugAllowRuntimeRegistration: viper.GetBool(CfgRegistryDebugAllowRuntimeRegistration),
-			DebugAllowTestRuntimes:        viper.GetBool(CfgRegistryDebugAllowTestRuntimes),
-			DebugBypassStake:              viper.GetBool(cfgRegistryDebugBypassStake),
-			GasCosts:                      registry.DefaultGasCosts, // TODO: Make these configurable.
-			MaxNodeExpiration:             viper.GetUint64(CfgRegistryMaxNodeExpiration),
+			DebugAllowUnroutableAddresses:          viper.GetBool(cfgRegistryDebugAllowUnroutableAddresses),
+			DebugAllowRuntimeRegistration:          viper.GetBool(CfgRegistryDebugAllowRuntimeRegistration),
+			DebugAllowTestRuntimes:                 viper.GetBool(CfgRegistryDebugAllowTestRuntimes),
+			DebugAllowEntitySignedNodeRegistration: viper.GetBool(cfgRegistryDebugAllowEntitySignedNodeRegistration),
+			DebugBypassStake:                       viper.GetBool(cfgRegistryDebugBypassStake),
+			GasCosts:                               registry.DefaultGasCosts, // TODO: Make these configurable.
+			MaxNodeExpiration:                      viper.GetUint64(CfgRegistryMaxNodeExpiration),
 		},
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
 		Runtimes: make([]*registry.SignedRuntime, 0, len(runtimes)),
@@ -693,10 +695,12 @@ func init() {
 	initGenesisFlags.Bool(cfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
 	initGenesisFlags.Bool(CfgRegistryDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
 	initGenesisFlags.Bool(CfgRegistryDebugAllowTestRuntimes, false, "enable test runtime registration")
+	initGenesisFlags.Bool(cfgRegistryDebugAllowEntitySignedNodeRegistration, false, "allow entity signed node registration (UNSAFE)")
 	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowUnroutableAddresses)
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowRuntimeRegistration)
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowTestRuntimes)
+	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowEntitySignedNodeRegistration)
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugBypassStake)
 
 	// Scheduler config flags.

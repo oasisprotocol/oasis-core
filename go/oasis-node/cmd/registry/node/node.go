@@ -140,6 +140,10 @@ func doInit(cmd *cobra.Command, args []string) {
 		if viper.GetBool(CfgSelfSigned) {
 			isSelfSigned = true
 		}
+		if !cmdFlags.DebugDontBlameOasis() && !isSelfSigned {
+			logger.Error("entity signed node descriptors are prohibited")
+			os.Exit(1)
+		}
 		defer entitySigner.Reset()
 	}
 
@@ -356,7 +360,7 @@ func init() {
 	flags.StringSlice(CfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
 	flags.StringSlice(CfgConsensusAddress, nil, "Address(es) the node can be reached as a consensus member of the form [ID@]ip:port (where the ID@ part is optional and ID represents the node's public key)")
 	flags.StringSlice(CfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-scheduler\", \"key-manager\", \"merge-worker\", and \"validator\"")
-	flags.Bool(CfgSelfSigned, false, "Node registration should be self-signed")
+	flags.Bool(CfgSelfSigned, true, "Node registration should be self-signed")
 	flags.StringSlice(CfgNodeRuntimeID, nil, "Hex Encoded Runtime ID(s) of the node.")
 
 	_ = viper.BindPFlags(flags)

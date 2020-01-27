@@ -29,17 +29,15 @@ type Entity struct {
 	entity       *entity.Entity
 	entitySigner signature.Signer
 
-	isDebugTestEntity      bool
-	allowEntitySignedNodes bool
+	isDebugTestEntity bool
 
 	nodes []signature.PublicKey
 }
 
 // EntityCfg is the Oasis entity provisioning configuration.
 type EntityCfg struct {
-	IsDebugTestEntity      bool
-	AllowEntitySignedNodes bool
-	Restore                bool
+	IsDebugTestEntity bool
+	Restore           bool
 }
 
 // Inner returns the actual Oasis entity and it's signer.
@@ -114,9 +112,6 @@ func (ent *Entity) update() error {
 }
 
 func (ent *Entity) addNode(id signature.PublicKey) error {
-	if ent.allowEntitySignedNodes {
-		return nil
-	}
 	ent.nodes = append(ent.nodes, id)
 	return ent.update()
 }
@@ -146,9 +141,6 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 				"--" + flags.CfgSigner, fileSigner.SignerName,
 				"--" + flags.CfgSignerDir, entityDir.String(),
 			}
-			if cfg.AllowEntitySignedNodes {
-				args = append(args, "--entity.debug.allow_entity_signed_nodes")
-			}
 
 			var w io.WriteCloser
 			w, err = entityDir.NewLogWriter("provision.log")
@@ -167,9 +159,8 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 		}
 
 		ent = &Entity{
-			net:                    net,
-			dir:                    entityDir,
-			allowEntitySignedNodes: cfg.AllowEntitySignedNodes,
+			net: net,
+			dir: entityDir,
 		}
 		signerFactory := fileSigner.NewFactory(entityDir.String(), signature.SignerEntity)
 		ent.entity, ent.entitySigner, err = entity.Load(entityDir.String(), signerFactory)
