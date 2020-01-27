@@ -3,6 +3,7 @@
 [![Build status](https://badge.buildkite.com/15a8faccee0d5b5ab1af7e75eb6f9daf2d493c543fbc67dce5.svg?branch=master)](https://buildkite.com/oasislabs/oasis-core-ci)
 [![CI lint status](https://github.com/oasislabs/oasis-core/workflows/ci-lint/badge.svg)](https://github.com/oasislabs/oasis-core/actions?query=workflow:ci-lint)
 [![CI reproducibility status](https://github.com/oasislabs/oasis-core/workflows/ci-reproducibility/badge.svg)](https://github.com/oasislabs/oasis-core/actions?query=workflow:ci-reproducibility)
+[![Release status](https://github.com/oasislabs/oasis-core/workflows/release/badge.svg)](https://github.com/oasislabs/oasis-core/actions?query=workflow:release)
 [![Coverage Status](https://coveralls.io/repos/github/oasislabs/oasis-core/badge.svg?t=HsLWgi)](https://coveralls.io/github/oasislabs/oasis-core) Rust
 [![codecov](https://codecov.io/gh/oasislabs/oasis-core/branch/master/graph/badge.svg?token=DqjRsufMqf)](https://codecov.io/gh/oasislabs/oasis-core) Go
 [![GoDoc](https://godoc.org/github.com/oasislabs/oasis-core?status.svg)](https://godoc.org/github.com/oasislabs/oasis-core)
