@@ -244,24 +244,23 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 	}
 
-	// Ensure node is not expired. Even though the expiration in the current epoch is technically
-	// not yet expired, we treat it as expired as it doesn't make sense to have a new node that will
+	// Ensure node is not expired. Even though the expiration in the
+	// current epoch is technically not yet expired, we treat it as
+	// expired as it doesn't make sense to have a new node that will
 	// immediately expire.
-	if newNode.Expiration <= uint64(epoch) {
+	//
+	// Yes, this is duplicated.  Blame the sanity checker.
+	if !ctx.IsInitChain() && newNode.Expiration <= uint64(epoch) {
 		ctx.Logger().Error("RegisterNode: node descriptor is expired",
 			"new_node", newNode,
 			"epoch", epoch,
 		)
 		return registry.ErrNodeExpired
 	}
-	additionalEpochs := newNode.Expiration - uint64(epoch)
-	if params.MaxNodeExpiration > 0 && additionalEpochs > params.MaxNodeExpiration {
-		// Enforce the limit on maximum node descriptor lifespan.
-		ctx.Logger().Error("RegisterNode: node descriptor lifespan too long",
-			"new_node", newNode,
-			"additional_epochs", additionalEpochs,
-		)
-		return registry.ErrInvalidArgument
+
+	var additionalEpochs uint64
+	if newNode.Expiration > uint64(epoch) {
+		additionalEpochs = newNode.Expiration - uint64(epoch)
 	}
 
 	// Check if node exists.

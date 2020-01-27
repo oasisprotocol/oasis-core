@@ -426,15 +426,9 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		expectedSigners = append(expectedSigners, entity.ID)
 	}
 
-	// Checking the expiration only makes sense if this routine is
-	// validating the genesis document, since node descriptors being
-	// expired is presumably ok at runtime(?).
-	if isGenesis && n.Expiration <= uint64(epoch) {
-		logger.Error("RegisterNode: expired node in genesis",
-			"node", n,
-		)
-		return nil, nil, fmt.Errorf("%w: expired node in genesis", ErrInvalidArgument)
-	}
+	// Expired registrations are allowed here because this routine is abused
+	// by the invariant checker, and expired registrations are persisted in
+	// the consensus state.
 
 	// Ensure valid expiration.
 	maxExpiration := uint64(epoch) + params.MaxNodeExpiration
