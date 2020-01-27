@@ -63,7 +63,16 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 	if capabilities != nil {
 		nodeDesc.Runtimes[0].Capabilities = *capabilities
 	}
-	signedNode, err := node.SignNode(registrationSigner, registry.RegisterGenesisNodeSignatureContext, nodeDesc)
+	signedNode, err := node.MultiSignNode(
+		[]signature.Signer{
+			registrationSigner,
+			id.P2PSigner,
+			id.ConsensusSigner,
+			id.TLSSigner,
+		},
+		registry.RegisterGenesisNodeSignatureContext,
+		nodeDesc,
+	)
 	if err != nil {
 		return errors.Wrap(err, "node SignNode")
 	}

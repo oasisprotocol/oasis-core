@@ -96,7 +96,7 @@ func SanityCheckRuntimes(logger *logging.Logger,
 func SanityCheckNodes(
 	logger *logging.Logger,
 	params *ConsensusParameters,
-	nodes []*node.SignedNode,
+	nodes []*node.MultiSignedNode,
 	seenEntities map[signature.PublicKey]*entity.Entity,
 	runtimesLookup RuntimeLookup,
 	isGenesis bool,

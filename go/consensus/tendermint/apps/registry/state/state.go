@@ -164,7 +164,7 @@ func (s *ImmutableState) Node(id signature.PublicKey) (*node.Node, error) {
 		return nil, registry.ErrNoSuchNode
 	}
 
-	var signedNode node.SignedNode
+	var signedNode node.MultiSignedNode
 	if err = cbor.Unmarshal(signedNodeRaw, &signedNode); err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func (s *ImmutableState) Nodes() ([]*node.Node, error) {
 				return true
 			}
 
-			var signedNode node.SignedNode
+			var signedNode node.MultiSignedNode
 			if err := cbor.Unmarshal(value, &signedNode); err != nil {
 				panic("tendermint/registry: corrupted state: " + err.Error())
 			}
@@ -217,8 +217,8 @@ func (s *ImmutableState) Nodes() ([]*node.Node, error) {
 	return nodes, nil
 }
 
-func (s *ImmutableState) SignedNodes() ([]*node.SignedNode, error) {
-	var nodes []*node.SignedNode
+func (s *ImmutableState) SignedNodes() ([]*node.MultiSignedNode, error) {
+	var nodes []*node.MultiSignedNode
 	s.Snapshot.IterateRange(
 		signedNodeKeyFmt.Encode(),
 		nil,
@@ -228,7 +228,7 @@ func (s *ImmutableState) SignedNodes() ([]*node.SignedNode, error) {
 				return true
 			}
 
-			var signedNode node.SignedNode
+			var signedNode node.MultiSignedNode
 			if err := cbor.Unmarshal(value, &signedNode); err != nil {
 				panic("tendermint/registry: corrupted state: " + err.Error())
 			}
@@ -551,7 +551,7 @@ func (s *MutableState) RemoveEntity(id signature.PublicKey) (*entity.Entity, err
 	return nil, registry.ErrNoSuchEntity
 }
 
-func (s *MutableState) SetNode(node *node.Node, signedNode *node.SignedNode) error {
+func (s *MutableState) SetNode(node *node.Node, signedNode *node.MultiSignedNode) error {
 	// Ensure that the entity exists.
 	ent, err := s.getSignedEntityRaw(node.EntityID)
 	if ent == nil || err != nil {

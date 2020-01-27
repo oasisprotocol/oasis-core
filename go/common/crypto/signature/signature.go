@@ -58,6 +58,7 @@ var (
 	_ encoding.BinaryMarshaler   = RawSignature{}
 	_ encoding.BinaryUnmarshaler = (*RawSignature)(nil)
 	_ prettyprint.PrettyPrinter  = (*PrettySigned)(nil)
+	_ prettyprint.PrettyPrinter  = (*PrettyMultiSigned)(nil)
 
 	testPublicKeys        sync.Map
 	blacklistedPublicKeys sync.Map
@@ -433,6 +434,110 @@ func NewPrettySigned(s Signed, b interface{}) *PrettySigned {
 	return &PrettySigned{
 		Body:      b,
 		Signature: s.Signature,
+	}
+}
+
+// MultiSigned is a blob signed by multiple public keys.
+type MultiSigned struct {
+	// Blob is the signed blob.
+	Blob []byte `json:"untrusted_raw_value"`
+
+	// Signatures are the signatures over the blob.
+	Signatures []Signature `json:"signatures"`
+}
+
+// Open first verifies the blob signatures, and then unmarshals the blob.
+func (s *MultiSigned) Open(context Context, dst interface{}) error {
+	if !VerifyManyToOne(context, s.Blob, s.Signatures) {
+		return ErrVerifyFailed
+	}
+
+	return cbor.Unmarshal(s.Blob, dst)
+}
+
+// IsSignedBy returns true iff the MultiSigned includes a signature for
+// the provided public key.
+//
+// Note: This does not verify the signature.
+func (s *MultiSigned) IsSignedBy(pk PublicKey) bool {
+	for _, v := range s.Signatures {
+		if v.PublicKey.Equal(pk) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// IsOnlySignedBy returns true iff the MultiSigned is signed by all of
+// the provided public keys, and none other.
+//
+// Note: This does not verify the signature, and including the same key
+// more than once in pks will always return false.
+func (s *MultiSigned) IsOnlySignedBy(pks []PublicKey) bool {
+	m := make(map[PublicKey]bool)
+	for _, v := range s.Signatures {
+		m[v.PublicKey] = true
+	}
+
+	// The one consumer of this expects all of the signing keys to be
+	// distinct, so trivially enforce that invariant here.
+	if len(m) != len(pks) {
+		return false
+	}
+
+	for _, v := range pks {
+		if !m[v] {
+			return false
+		}
+	}
+
+	return true
+}
+
+// SignMultiSigned generates a MultiSigned with the Signers over the context
+// and CBOR-serialized message.
+func SignMultiSigned(signers []Signer, context Context, src interface{}) (*MultiSigned, error) {
+	ms := &MultiSigned{
+		Blob: cbor.Marshal(src),
+	}
+
+	for _, v := range signers {
+		sig, err := Sign(v, context, ms.Blob)
+		if err != nil {
+			return nil, err
+		}
+		ms.Signatures = append(ms.Signatures, *sig)
+	}
+
+	return ms, nil
+}
+
+// PrettyMultiSigned is used for pretty-printing multi-signed messages
+// so that the actual content is displayed instead of the binary blob.
+//
+// It should only be used for pretty printing.
+type PrettyMultiSigned struct {
+	Body       interface{} `json:"untrusted_raw_value"`
+	Signatures []Signature `json:"signatures"`
+}
+
+// PrettyPrint writes a pretty-printed representation of the type to the
+// given writer.
+func (p PrettyMultiSigned) PrettyPrint(prefix string, w io.Writer) {
+	data, err := json.MarshalIndent(p, prefix, "  ")
+	if err != nil {
+		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)
+	}
+	fmt.Fprintf(w, "%s%s\n", prefix, data)
+}
+
+// NewPrettyMultiSigned creates a new PrettySigned instance that can be
+// used for pretty printing multi-signed values.
+func NewPrettyMultiSigned(s MultiSigned, b interface{}) *PrettyMultiSigned {
+	return &PrettyMultiSigned{
+		Body:       b,
+		Signatures: s.Signatures,
 	}
 }
 

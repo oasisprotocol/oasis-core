@@ -433,7 +433,7 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 			return nil, fmt.Errorf("scenario/e2e/registry: failed to open node genesis file: %w", err)
 		}
 
-		var signedNode node.SignedNode
+		var signedNode node.MultiSignedNode
 		if err = json.Unmarshal(b, &signedNode); err != nil {
 			return nil, fmt.Errorf("scenario/e2e/registry: failed to unmarshal signed node: %w", err)
 		}

@@ -181,11 +181,15 @@ func doUpdate(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 
-		var signedNode node.SignedNode
+		var signedNode node.MultiSignedNode
 		if err = json.Unmarshal(b, &signedNode); err != nil {
 			logger.Error("failed to parse signed node descriptor",
 				"err", err,
 			)
+			os.Exit(1)
+		}
+		if len(signedNode.Signatures) == 0 {
+			logger.Error("node genesis descriptor is missing signatures")
 			os.Exit(1)
 		}
 
@@ -204,9 +208,9 @@ func doUpdate(cmd *cobra.Command, args []string) {
 			)
 			os.Exit(1)
 		}
-		if !signedNode.Signature.PublicKey.Equal(n.ID) {
+		if !signedNode.Signatures[0].PublicKey.Equal(n.ID) {
 			logger.Error("node genesis descriptor is not self signed",
-				"signer", signedNode.Signature.PublicKey,
+				"signer", signedNode.Signatures[0].PublicKey,
 			)
 			os.Exit(1)
 		}

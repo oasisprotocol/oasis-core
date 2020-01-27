@@ -4,6 +4,7 @@ package api
 import (
 	"bytes"
 	"context"
+	goEd25519 "crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -130,7 +131,7 @@ var (
 	// MethodDeregisterEntity is the method name for entity deregistrations.
 	MethodDeregisterEntity = transaction.NewMethodName(ModuleName, "DeregisterEntity", nil)
 	// MethodRegisterNode is the method name for node registrations.
-	MethodRegisterNode = transaction.NewMethodName(ModuleName, "RegisterNode", node.SignedNode{})
+	MethodRegisterNode = transaction.NewMethodName(ModuleName, "RegisterNode", node.MultiSignedNode{})
 	// MethodUnfreezeNode is the method name for unfreezing nodes.
 	MethodUnfreezeNode = transaction.NewMethodName(ModuleName, "UnfreezeNode", UnfreezeNode{})
 	// MethodRegisterRuntime is the method name for registering runtimes.
@@ -239,7 +240,7 @@ func NewDeregisterEntityTx(nonce uint64, fee *transaction.Fee) *transaction.Tran
 }
 
 // NewRegisterNodeTx creates a new register node transaction.
-func NewRegisterNodeTx(nonce uint64, fee *transaction.Fee, sigNode *node.SignedNode) *transaction.Transaction {
+func NewRegisterNodeTx(nonce uint64, fee *transaction.Fee, sigNode *node.MultiSignedNode) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodRegisterNode, sigNode)
 }
 
@@ -356,7 +357,7 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 func VerifyRegisterNodeArgs( // nolint: gocyclo
 	params *ConsensusParameters,
 	logger *logging.Logger,
-	sigNode *node.SignedNode,
+	sigNode *node.MultiSignedNode,
 	entity *entity.Entity,
 	now time.Time,
 	isGenesis bool,
@@ -402,38 +403,32 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		}
 	}
 
-	var expectedSigner signature.PublicKey
-	if inEntityNodeList {
-		expectedSigner = n.ID
-	} else if entity.AllowEntitySignedNodes {
-		expectedSigner = entity.ID
-	} else {
-		logger.Error("RegisterNode: node registration has no valid signer",
-			"node", n,
-			"entity", entity,
-		)
-		return nil, nil, fmt.Errorf("%w: registration has no valid signer", ErrInvalidArgument)
-	}
-
-	// Validate that the node is signed by the correct signer.
-	if sigNode.Signed.Signature.SanityCheck(expectedSigner) != nil {
-		logger.Error("RegisterNode: not signed by expected signer",
+	// Descriptors will always be signed by the node identity key.
+	var expectedSigners []signature.PublicKey
+	if !sigNode.MultiSigned.IsSignedBy(n.ID) {
+		logger.Error("RegisterNode: registration not signed by node identity",
 			"signed_node", sigNode,
 			"node", n,
-			"entity", entity,
 		)
-		return nil, nil, fmt.Errorf("%w: registration not signed by expected signer", ErrInvalidArgument)
+		return nil, nil, fmt.Errorf("%w: registration not signed by node identity", ErrInvalidArgument)
+	}
+	expectedSigners = append(expectedSigners, n.ID)
+	if !inEntityNodeList && entity.AllowEntitySignedNodes {
+		// If we are using entity signing, descriptors will also be signed
+		// by the entity signing key.
+		if !sigNode.MultiSigned.IsSignedBy(entity.ID) {
+			logger.Error("RegisterNode: registration not signed by entity",
+				"signed_node", sigNode,
+				"node", n,
+			)
+			return nil, nil, fmt.Errorf("%w: registration not signed by entity", ErrInvalidArgument)
+		}
+		expectedSigners = append(expectedSigners, entity.ID)
 	}
 
-	// Checking the expiration only makes sense if this routine is
-	// validating the genesis document, since node descriptors being
-	// expired is presumably ok at runtime(?).
-	if isGenesis && n.Expiration <= uint64(epoch) {
-		logger.Error("RegisterNode: expired node in genesis",
-			"node", n,
-		)
-		return nil, nil, fmt.Errorf("%w: expired node in genesis", ErrInvalidArgument)
-	}
+	// Expired registrations are allowed here because this routine is abused
+	// by the invariant checker, and expired registrations are persisted in
+	// the consensus state.
 
 	// Ensure valid expiration.
 	maxExpiration := uint64(epoch) + params.MaxNodeExpiration
@@ -511,6 +506,14 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, fmt.Errorf("%w: invalid consensus ID", ErrInvalidArgument)
 	}
+	if !sigNode.MultiSigned.IsSignedBy(n.Consensus.ID) {
+		logger.Error("RegisterNode: not signed by consensus ID",
+			"signed_node", sigNode,
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: registration not signed by consensus ID", ErrInvalidArgument)
+	}
+	expectedSigners = append(expectedSigners, n.Consensus.ID)
 	consensusAddressRequired := n.HasRoles(ConsensusAddressRequiredRoles)
 	if err := verifyAddresses(params, consensusAddressRequired, n.Consensus.Addresses); err != nil {
 		addrs, _ := json.Marshal(n.Consensus.Addresses)
@@ -550,6 +553,18 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, err
 	}
+	certPub, err := verifyNodeCertificate(logger, &n)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !sigNode.MultiSigned.IsSignedBy(certPub) {
+		logger.Error("RegisterNode: not signed by TLS certificate key",
+			"signed_node", sigNode,
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: registration not signed by TLS certificate key", ErrInvalidArgument)
+	}
+	expectedSigners = append(expectedSigners, certPub)
 
 	// Validate P2PInfo.
 	if !n.P2P.ID.IsValid() {
@@ -558,8 +573,16 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, fmt.Errorf("%w: invalid P2P ID", ErrInvalidArgument)
 	}
+	if !sigNode.MultiSigned.IsSignedBy(n.P2P.ID) {
+		logger.Error("RegisterNode: not signed by P2P ID",
+			"signed_node", sigNode,
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: registration not signed by P2P ID", ErrInvalidArgument)
+	}
+	expectedSigners = append(expectedSigners, n.P2P.ID)
 	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
-	if err := verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
+	if err = verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
 		addrs, _ := json.Marshal(n.P2P.Addresses)
 		logger.Error("RegisterNode: missing/invald P2P addresses",
 			"node", n,
@@ -628,7 +651,48 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, fmt.Errorf("%w: duplicate node committee certificate", ErrInvalidArgument)
 	}
 
+	// Ensure that only the expected signatures are present, and nothing more.
+	if !sigNode.MultiSigned.IsOnlySignedBy(expectedSigners) {
+		logger.Error("RegisterNode: unexpected number of signatures",
+			"signed_node", sigNode,
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: unexpected number of signatures", ErrInvalidArgument)
+	}
+
 	return &n, runtimes, nil
+}
+
+func verifyNodeCertificate(logger *logging.Logger, node *node.Node) (signature.PublicKey, error) {
+	var certPub signature.PublicKey
+
+	cert, err := node.Committee.ParseCertificate()
+	if err != nil {
+		logger.Error("RegisterNode: failed to parse committee certificate",
+			"err", err,
+			"node", node,
+		)
+		return certPub, fmt.Errorf("%w: failed to parse committee certificate", ErrInvalidArgument)
+	}
+
+	edPub, ok := cert.PublicKey.(goEd25519.PublicKey)
+	if !ok {
+		logger.Error("RegisterNode: incorrect committee certifiate signing algorithm",
+			"node", node,
+		)
+		return certPub, fmt.Errorf("%w: incorrect committee certificate signing algorithm", ErrInvalidArgument)
+	}
+
+	if err = certPub.UnmarshalBinary(edPub); err != nil {
+		// This should NEVER happen.
+		logger.Error("RegisterNode: malformed committee certificate signing key",
+			"err", err,
+			"node", node,
+		)
+		return certPub, fmt.Errorf("%w: malformed committee certificate signing key", ErrInvalidArgument)
+	}
+
+	return certPub, nil
 }
 
 // VerifyNodeRuntimeEnclaveIDs verifies TEE-specific attributes of the node's runtime.
@@ -1118,7 +1182,7 @@ type Genesis struct {
 	SuspendedRuntimes []*SignedRuntime `json:"suspended_runtimes,omitempty"`
 
 	// Nodes is the initial list of nodes.
-	Nodes []*node.SignedNode `json:"nodes,omitempty"`
+	Nodes []*node.MultiSignedNode `json:"nodes,omitempty"`
 
 	// NodeStatuses is a set of node statuses.
 	NodeStatuses map[signature.PublicKey]*NodeStatus `json:"node_statuses,omitempty"`

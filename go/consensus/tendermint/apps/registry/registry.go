@@ -74,7 +74,7 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Tra
 	case registry.MethodDeregisterEntity:
 		return app.deregisterEntity(ctx, state)
 	case registry.MethodRegisterNode:
-		var sigNode node.SignedNode
+		var sigNode node.MultiSignedNode
 		if err := cbor.Unmarshal(tx.Body, &sigNode); err != nil {
 			return err
 		}
