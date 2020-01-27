@@ -1,6 +1,9 @@
-name: Release manager
+# NOTE: This name appears in GitHub's Checks API and in workflow's status badge.
+name: release
 
+# Trigger the workflow when:
 on:
+  # A push occurs to one of the matched tags.
   push:
     tags:
       # Pattern that roughly matches Oasis Core's version tags.
@@ -14,15 +17,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
       - name: Set up Go 1.13
         uses: actions/setup-go@v1.1.2
         with:
           go-version: "1.13.x"
-      - name: Install Oasis Core prerequisites
+      - name: Install oasis-node prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev
+          sudo apt-get install make libseccomp-dev
       - name: Install GoReleaser
         run: |
           cd $(mktemp --directory /tmp/goreleaser.XXXXX)
