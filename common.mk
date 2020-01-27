@@ -99,16 +99,6 @@ GO_BUILD_CMD := env -u GOPATH $(OASIS_GO) build $(GOFLAGS)
 # Path to the Urkel interoperability test helpers binary in go/.
 GO_TEST_HELPER_URKEL_PATH := storage/mkvs/urkel/interop/urkel-test-helpers
 
-# Instruct GoReleaser to create a "snapshot" release by default.
-GORELEASER_ARGS ?= release --snapshot --rm-dist
-# If the appropriate environment variable is set, create a real release.
-ifeq ($(OASIS_CORE_REAL_RELEASE), true)
-# Create temporary file with GitHub release's text.
-_RELEASE_NOTES_FILE := $(shell mktemp /tmp/oasis-core.XXXXX)
-_ := $(shell printf "$(subst ",\",$(subst $(newline),\n,$(RELEASE_TEXT)))" > $(_RELEASE_NOTES_FILE))
-GORELEASER_ARGS = release --release-notes $(_RELEASE_NOTES_FILE)
-endif
-
 # Helper that ensures $(NEXT_VERSION) variable is not empty.
 define ENSURE_NEXT_VERSION =
 	if [[ -z "$(NEXT_VERSION)" ]]; then \
@@ -166,3 +156,13 @@ If you would like to become a node operator for the Oasis Network, see the
 [Change Log]: https://github.com/oasislabs/oasis-core/blob/v$(VERSION)/CHANGELOG.md
 
 endef
+
+# Instruct GoReleaser to create a "snapshot" release by default.
+GORELEASER_ARGS ?= release --snapshot --rm-dist
+# If the appropriate environment variable is set, create a real release.
+ifeq ($(OASIS_CORE_REAL_RELEASE), true)
+# Create temporary file with GitHub release's text.
+_RELEASE_NOTES_FILE := $(shell mktemp /tmp/oasis-core.XXXXX)
+_ := $(shell printf "$(subst ",\",$(subst $(newline),\n,$(RELEASE_TEXT)))" > $(_RELEASE_NOTES_FILE))
+GORELEASER_ARGS = release --release-notes $(_RELEASE_NOTES_FILE)
+endif
