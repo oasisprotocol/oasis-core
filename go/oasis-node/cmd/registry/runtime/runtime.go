@@ -19,8 +19,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
-	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
@@ -236,7 +234,14 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	_, signer, err := loadEntity(cmdFlags.Signer())
+	entityDir, err := cmdFlags.SignerDirOrPwd()
+	if err != nil {
+		logger.Error("failed to retrieve signer dir",
+			"err", err,
+		)
+		return nil, nil, fmt.Errorf("failed to retrive signer dir")
+	}
+	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Signer(), entityDir)
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
@@ -432,16 +437,6 @@ func signForRegistration(rt *registry.Runtime, signer signature.Signer, isGenesi
 	}
 
 	return signed, err
-}
-
-func loadEntity(dataDir string) (*entity.Entity, signature.Signer, error) {
-	if cmdFlags.DebugTestEntity() {
-		return entity.TestEntity()
-	}
-
-	// TODO/hsm: Configure factory dynamically.
-	entitySignerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
-	return entity.Load(dataDir, entitySignerFactory)
 }
 
 // Register registers the runtime sub-command and all of it's children.
