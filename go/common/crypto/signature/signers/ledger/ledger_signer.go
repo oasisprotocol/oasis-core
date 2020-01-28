@@ -13,9 +13,8 @@ const (
 	// SignerName is the name used to identify the Ledger backed signer.
 	SignerName = "ledger"
 
-	// SignerPathCoinType is set to 118, the number owned by Cosmos via SLIP-0044 registration.
-	// TODO: Update this number after SLIP-0044 registration is complete.
-	SignerPathCoinType uint32 = 118
+	// SignerPathCoinType is set to 474, the number associated with Oasis ROSE.
+	SignerPathCoinType uint32 = 474
 	// SignerPathAccount is the account index used to sign transactions.
 	SignerPathAccount uint32 = 0
 	// SignerPathChange indicates an external chain.
