@@ -24,9 +24,7 @@ type disbursement struct {
 // disburseFees disburses fees.
 //
 // In case of errors the state may be inconsistent.
-func (app *stakingApplication) disburseFees(ctx *abci.Context, proposerEntity *signature.PublicKey, signingEntities []signature.PublicKey) error {
-	stakeState := stakingState.NewMutableState(ctx.State())
-
+func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, signingEntities []signature.PublicKey) error {
 	totalFees, err := stakeState.LastBlockFees()
 	if err != nil {
 		return fmt.Errorf("staking: failed to query last block fees: %w", err)

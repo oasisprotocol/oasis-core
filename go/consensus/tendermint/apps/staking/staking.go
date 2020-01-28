@@ -2,7 +2,6 @@
 package staking
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/pkg/errors"
@@ -10,7 +9,6 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -56,29 +54,26 @@ func (app *stakingApplication) OnCleanup() {
 
 func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
 	regState := registryState.NewMutableState(ctx.State())
+	stakeState := stakingState.NewMutableState(ctx.State())
 
 	// Look up the proposer's entity.
-	var proposingEntity *signature.PublicKey
-	proposerNode, err := regState.NodeByConsensusAddress(request.Header.ProposerAddress)
-	if err != nil {
-		ctx.Logger().Warn("failed to get proposer node",
-			"err", err,
-			"address", hex.EncodeToString(request.Header.ProposerAddress),
-		)
-	} else {
-		proposingEntity = &proposerNode.EntityID
-	}
+	proposingEntity := app.resolveEntityIDFromProposer(regState, request, ctx)
 
 	// Go through all signers of the previous block and resolve entities.
 	signingEntities := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
 
 	// Disburse fees from previous block.
-	if err := app.disburseFees(ctx, proposingEntity, signingEntities); err != nil {
+	if err := app.disburseFees(ctx, stakeState, proposingEntity, signingEntities); err != nil {
 		return fmt.Errorf("staking: failed to disburse fees: %w", err)
 	}
 
+	// Add rewards for proposer.
+	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity); err != nil {
+		return fmt.Errorf("staking: block proposing reward: %w", err)
+	}
+
 	// Track signing for rewards.
-	if err := app.updateEpochSigning(ctx, signingEntities); err != nil {
+	if err := app.updateEpochSigning(ctx, stakeState, signingEntities); err != nil {
 		return fmt.Errorf("staking: failed to update epoch signing info: %w", err)
 	}
 
