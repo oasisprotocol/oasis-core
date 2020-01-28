@@ -32,7 +32,9 @@ impl_bytes!(Namespace, 32, "Chain namespace.");
 
 /// Header type.
 ///
-/// NOTE: This should be kept in sync with go/roothash/api/block/header.go.
+/// # Note
+///
+/// This should be kept in sync with go/roothash/api/block/header.go.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum HeaderType {

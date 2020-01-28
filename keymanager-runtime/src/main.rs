@@ -11,7 +11,7 @@ extern crate tiny_keccak;
 extern crate x25519_dalek;
 extern crate zeroize;
 
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 mod context;
 mod kdf;
@@ -22,7 +22,7 @@ use failure::Fallible;
 
 use oasis_core_keymanager_api::*;
 use oasis_core_runtime::{
-    common::{runtime::RuntimeId, version::Version},
+    common::version::Version,
     rak::RAK,
     register_runtime_rpc_methods,
     rpc::{

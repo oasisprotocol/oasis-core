@@ -409,8 +409,8 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 	return nil
 }
 
-// AppendRootHashState appends the roothash genesis state given a vector
-// of exported roothash blocks.
+// AppendRootHashState appends the roothash genesis state given files with
+// exported runtime states.
 func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Logger) error {
 	rootSt := roothash.Genesis{
 		RuntimeStates: make(map[common.Namespace]*registry.RuntimeGenesis),
@@ -441,6 +441,7 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 		}
 
 		for id, rtg := range rtStates {
+			// Each runtime state must be described exactly once!
 			if _, ok := rootSt.RuntimeStates[id]; ok {
 				l.Error("duplicate genesis roothash runtime state",
 					"runtime_id", id,
@@ -683,7 +684,7 @@ func init() {
 
 	initGenesisFlags.StringSlice(cfgRuntime, nil, "path to runtime registration file")
 	initGenesisFlags.StringSlice(cfgNode, nil, "path to node registration file")
-	initGenesisFlags.StringSlice(cfgRootHash, nil, "path to roothash genesis blocks file")
+	initGenesisFlags.StringSlice(cfgRootHash, nil, "path to roothash genesis runtime states file")
 	initGenesisFlags.String(cfgStaking, "", "path to staking genesis file")
 	initGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
 	initGenesisFlags.String(cfgKeyManagerOperator, "", "path to key manager operator entity registration file")
