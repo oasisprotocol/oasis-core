@@ -341,7 +341,7 @@ func extractMessageResponsePayload(raw []byte) ([]byte, error) {
 	return cbor.Marshal(msg.Response.Body.Success), nil
 }
 
-func (w *Worker) worker() {
+func (w *Worker) worker() { // nolint: gocyclo
 	defer close(w.quitCh)
 
 	// Wait for consensus sync.
@@ -472,7 +472,13 @@ func (w *Worker) worker() {
 				"runtime_id", rt.ID,
 			)
 
-			runtimeUnmg := w.commonWorker.RuntimeRegistry.NewUnmanagedRuntime(rt.ID)
+			runtimeUnmg, err := w.commonWorker.RuntimeRegistry.NewUnmanagedRuntime(w.ctx, rt.ID)
+			if err != nil {
+				w.logger.Error("unable to create new unmanaged runtime",
+					"err", err,
+				)
+				continue
+			}
 			node, err := w.commonWorker.NewUnmanagedCommitteeNode(runtimeUnmg, false)
 			if err != nil {
 				w.logger.Error("unable to create new committee node",

@@ -35,7 +35,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/ias"
 	iasAPI "github.com/oasislabs/oasis-core/go/ias/api"
 	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
-	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/background"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -108,19 +107,17 @@ type Node struct {
 
 	Consensus consensusAPI.Backend
 
-	Genesis   genesisAPI.Provider
-	Identity  *identity.Identity
-	Beacon    beacon.Backend
-	Epochtime epochtime.Backend
-	Registry  registryAPI.Backend
-	RootHash  roothash.Backend
-	Scheduler scheduler.Backend
-	Sentry    sentryAPI.Backend
-	Staking   stakingAPI.Backend
-	IAS       iasAPI.Endpoint
-
-	KeyManager       keymanagerAPI.Backend
-	KeyManagerClient *keymanagerClient.Client
+	Genesis    genesisAPI.Provider
+	Identity   *identity.Identity
+	Beacon     beacon.Backend
+	Epochtime  epochtime.Backend
+	Registry   registryAPI.Backend
+	RootHash   roothash.Backend
+	Scheduler  scheduler.Backend
+	Sentry     sentryAPI.Backend
+	Staking    stakingAPI.Backend
+	IAS        iasAPI.Endpoint
+	KeyManager keymanagerAPI.Backend
 
 	RuntimeRegistry runtimeRegistry.Registry
 	RuntimeClient   runtimeClientAPI.RuntimeClient
@@ -237,7 +234,6 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		n.P2P,
 		n.IAS,
 		n.KeyManager,
-		n.KeyManagerClient,
 		n.RuntimeRegistry,
 		genesisDoc,
 	)
@@ -681,15 +677,6 @@ func newNode(testNode bool) (*Node, error) {
 	node.svcMgr.RegisterCleanupOnly(node.RuntimeRegistry, "runtime registry")
 	storageAPI.RegisterService(node.grpcInternal.Server(), node.RuntimeRegistry.StorageRouter())
 
-	// Initialize the key manager client service.
-	node.KeyManagerClient, err = keymanagerClient.New(node.KeyManager, node.Registry, node.Identity)
-	if err != nil {
-		logger.Error("failed to initialize key manager client",
-			"err", err,
-		)
-		return nil, err
-	}
-
 	// Initialize the runtime client.
 	node.RuntimeClient, err = runtimeClient.New(
 		node.svcMgr.Ctx,
@@ -698,7 +685,6 @@ func newNode(testNode bool) (*Node, error) {
 		node.Scheduler,
 		node.Registry,
 		node.svcTmnt,
-		node.KeyManagerClient,
 		node.RuntimeRegistry,
 	)
 	if err != nil {

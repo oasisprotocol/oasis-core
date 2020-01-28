@@ -2,15 +2,18 @@ package committee
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"math/rand"
 	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
@@ -19,6 +22,76 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 )
+
+// NodeSelectionFeedback is feedback to the node selection policy.
+type NodeSelectionFeedback struct {
+	// ID is the node identifier.
+	ID signature.PublicKey
+
+	// Bad being non-nil signals that the currently selected node is bad and contains the reason
+	// that lead to the decision.
+	Bad error
+}
+
+// NodeSelectionPolicy is a node selection policy.
+type NodeSelectionPolicy interface {
+	// UpdateNodes updates the set of available nodes.
+	UpdateNodes([]signature.PublicKey)
+
+	// UpdatePolicy submits feedback to the policy which can cause the policy to update its current
+	// node selection.
+	UpdatePolicy(feedback NodeSelectionFeedback)
+
+	// Pick picks a node from the set of available nodes accoording to the policy.
+	Pick() signature.PublicKey
+}
+
+type roundRobinNodeSelectionPolicy struct {
+	sync.Mutex
+
+	nodes []signature.PublicKey
+	index int
+}
+
+func (rr *roundRobinNodeSelectionPolicy) UpdateNodes(nodes []signature.PublicKey) {
+	// Randomly shuffle the nodes to avoid all nodes using the same order.
+	rng := rand.New(mathrand.New(cryptorand.Reader))
+	rng.Shuffle(len(nodes), func(i, j int) {
+		nodes[i], nodes[j] = nodes[j], nodes[i]
+	})
+
+	rr.Lock()
+	rr.nodes = nodes
+	rr.index = 0
+	rr.Unlock()
+}
+
+func (rr *roundRobinNodeSelectionPolicy) Pick() signature.PublicKey {
+	rr.Lock()
+	defer rr.Unlock()
+
+	if len(rr.nodes) == 0 {
+		return signature.PublicKey{}
+	}
+	return rr.nodes[rr.index]
+}
+
+func (rr *roundRobinNodeSelectionPolicy) UpdatePolicy(feedback NodeSelectionFeedback) {
+	rr.Lock()
+	defer rr.Unlock()
+
+	if len(rr.nodes) == 0 {
+		return
+	}
+
+	// The round-robin policy ignores any feedback.
+	rr.index = (rr.index + 1) % len(rr.nodes)
+}
+
+// NewRoundRobinNodeSelectionPolicy creates a new round-robin node selection policy.
+func NewRoundRobinNodeSelectionPolicy() NodeSelectionPolicy {
+	return &roundRobinNodeSelectionPolicy{}
+}
 
 // ClientConnWithMeta is a gRPC client connection together with node metadata.
 type ClientConnWithMeta struct {
@@ -37,12 +110,14 @@ type Client interface {
 	// metadata for each connection.
 	GetConnectionsWithMeta() []*ClientConnWithMeta
 
-	// GetConnection returns a connection.
+	// GetConnection returns a connection based on the configured node selection policy.
 	//
 	// If no connections are available this method will return nil.
-	//
-	// TODO: Implement proper load-balancing policies.
 	GetConnection() *grpc.ClientConn
+
+	// UpdateNodeSelectionPolicy submits feedback to the policy which can cause the policy to update
+	// its current node selection.
+	UpdateNodeSelectionPolicy(feedback NodeSelectionFeedback)
 
 	// EnsureVersion waits for the committee client to be fully synced to the given version.
 	EnsureVersion(ctx context.Context, version int64) error
@@ -66,7 +141,8 @@ type committeeClient struct {
 	notifier *pubsub.Broker
 	initCh   chan struct{}
 
-	clientIdentity *identity.Identity
+	clientIdentity      *identity.Identity
+	nodeSelectionPolicy NodeSelectionPolicy
 
 	logger *logging.Logger
 }
@@ -100,10 +176,16 @@ func (cc *committeeClient) GetConnection() *grpc.ClientConn {
 	cc.RLock()
 	defer cc.RUnlock()
 
-	for _, c := range cc.conns {
-		return c.conn
+	if len(cc.conns) == 0 {
+		return nil
 	}
-	return nil
+
+	id := cc.nodeSelectionPolicy.Pick()
+	return cc.conns[id].conn
+}
+
+func (cc *committeeClient) UpdateNodeSelectionPolicy(feedback NodeSelectionFeedback) {
+	cc.nodeSelectionPolicy.UpdatePolicy(feedback)
 }
 
 func (cc *committeeClient) EnsureVersion(ctx context.Context, version int64) error {
@@ -252,6 +334,12 @@ func (cc *committeeClient) worker(ctx context.Context, ch <-chan *NodeUpdate, su
 					}
 				case u.Freeze != nil:
 					// Committee has been frozen.
+					var nodes []signature.PublicKey
+					for id := range cc.conns {
+						nodes = append(nodes, id)
+					}
+					cc.nodeSelectionPolicy.UpdateNodes(nodes)
+
 					cc.version = u.Freeze.Version
 					cc.notifier.Broadcast(u.Freeze.Version)
 
@@ -292,6 +380,15 @@ func WithClientAuthentication(identity *identity.Identity) ClientOption {
 	}
 }
 
+// WithNodeSelectionPolicy is an option for configuring the node selection policy.
+//
+// If not configured it defaults to the round-robin policy.
+func WithNodeSelectionPolicy(policy NodeSelectionPolicy) ClientOption {
+	return func(cc *committeeClient) {
+		cc.nodeSelectionPolicy = policy
+	}
+}
+
 // NewClient creates a new committee client.
 func NewClient(ctx context.Context, nw NodeDescriptorLookup, options ...ClientOption) (Client, error) {
 	ch, sub, err := nw.WatchNodeUpdates()
@@ -300,11 +397,12 @@ func NewClient(ctx context.Context, nw NodeDescriptorLookup, options ...ClientOp
 	}
 
 	cc := &committeeClient{
-		nw:       nw,
-		conns:    make(map[signature.PublicKey]*clientConnState),
-		notifier: pubsub.NewBroker(false),
-		initCh:   make(chan struct{}),
-		logger:   logging.GetLogger("runtime/committee/client"),
+		nw:                  nw,
+		conns:               make(map[signature.PublicKey]*clientConnState),
+		notifier:            pubsub.NewBroker(false),
+		initCh:              make(chan struct{}),
+		nodeSelectionPolicy: NewRoundRobinNodeSelectionPolicy(),
+		logger:              logging.GetLogger("runtime/committee/client"),
 	}
 
 	for _, o := range options {

@@ -296,11 +296,21 @@ func (n *Node) worker() {
 	if rt.KeyManager != nil {
 		n.logger.Info("runtime indicates a key manager is required, waiting for it to be ready")
 
-		if err = n.KeyManagerClient.WaitReady(n.ctx, rt.ID); err != nil {
+		n.KeyManagerClient, err = keymanagerClient.New(n.ctx, n.Runtime, n.KeyManager, n.Registry, n.Identity)
+		if err != nil {
+			n.logger.Error("failed to create key manager client",
+				"err", err,
+			)
+			return
+		}
+
+		select {
+		case <-n.ctx.Done():
 			n.logger.Error("failed to wait for key manager",
 				"err", err,
 			)
 			return
+		case <-n.KeyManagerClient.Initialized():
 		}
 
 		n.logger.Info("runtime has a key manager available")
@@ -374,7 +384,6 @@ func NewNode(
 	runtime runtimeRegistry.Runtime,
 	identity *identity.Identity,
 	keymanager keymanagerApi.Backend,
-	keymanagerClient *keymanagerClient.Client,
 	roothash roothash.Backend,
 	registry registry.Backend,
 	scheduler scheduler.Backend,
@@ -388,21 +397,20 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		Runtime:          runtime,
-		Identity:         identity,
-		KeyManager:       keymanager,
-		KeyManagerClient: keymanagerClient,
-		Storage:          runtime.Storage(),
-		Roothash:         roothash,
-		Registry:         registry,
-		Scheduler:        scheduler,
-		Consensus:        consensus,
-		ctx:              ctx,
-		cancelCtx:        cancel,
-		stopCh:           make(chan struct{}),
-		quitCh:           make(chan struct{}),
-		initCh:           make(chan struct{}),
-		logger:           logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
+		Runtime:    runtime,
+		Identity:   identity,
+		KeyManager: keymanager,
+		Storage:    runtime.Storage(),
+		Roothash:   roothash,
+		Registry:   registry,
+		Scheduler:  scheduler,
+		Consensus:  consensus,
+		ctx:        ctx,
+		cancelCtx:  cancel,
+		stopCh:     make(chan struct{}),
+		quitCh:     make(chan struct{}),
+		initCh:     make(chan struct{}),
+		logger:     logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
 	}
 
 	group, err := NewGroup(ctx, identity, runtime.ID(), n, registry, roothash, scheduler, p2p)

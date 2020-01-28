@@ -13,7 +13,6 @@ import (
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	ias "github.com/oasislabs/oasis-core/go/ias/api"
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
-	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
@@ -37,7 +36,6 @@ type Worker struct {
 	P2P               *p2p.P2P
 	IAS               ias.Endpoint
 	KeyManager        keymanagerApi.Backend
-	KeyManagerClient  *keymanagerClient.Client
 	RuntimeRegistry   runtimeRegistry.Registry
 	GenesisDoc        *genesis.Document
 
@@ -188,7 +186,6 @@ func (w *Worker) NewUnmanagedCommitteeNode(runtime runtimeRegistry.Runtime, enab
 		runtime,
 		w.Identity,
 		w.KeyManager,
-		w.KeyManagerClient,
 		w.Roothash,
 		w.Registry,
 		w.Scheduler,
@@ -229,7 +226,6 @@ func newWorker(
 	p2p *p2p.P2P,
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
-	keyManagerClient *keymanagerClient.Client,
 	runtimeRegistry runtimeRegistry.Registry,
 	cfg Config,
 	genesisDoc *genesis.Document,
@@ -247,7 +243,6 @@ func newWorker(
 		P2P:               p2p,
 		IAS:               ias,
 		KeyManager:        keyManager,
-		KeyManagerClient:  keyManagerClient,
 		RuntimeRegistry:   runtimeRegistry,
 		GenesisDoc:        genesisDoc,
 		runtimes:          make(map[common.Namespace]*committee.Node),
@@ -280,7 +275,6 @@ func New(
 	p2p *p2p.P2P,
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
-	keyManagerClient *keymanagerClient.Client,
 	runtimeRegistry runtimeRegistry.Registry,
 	genesisDoc *genesis.Document,
 ) (*Worker, error) {
@@ -316,7 +310,6 @@ func New(
 		p2p,
 		ias,
 		keyManager,
-		keyManagerClient,
 		runtimeRegistry,
 		*cfg,
 		genesisDoc,
