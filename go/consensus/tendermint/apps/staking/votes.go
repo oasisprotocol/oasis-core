@@ -10,9 +10,7 @@ import (
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 )
 
-func (app *stakingApplication) resolveEntityIDsFromVotes(ctx *abci.Context, lastCommitInfo types.LastCommitInfo) []signature.PublicKey {
-	regState := registryState.NewMutableState(ctx.State())
-
+func (app *stakingApplication) resolveEntityIDsFromVotes(ctx *abci.Context, regState *registryState.MutableState, lastCommitInfo types.LastCommitInfo) []signature.PublicKey {
 	var entityIDs []signature.PublicKey
 	for _, a := range lastCommitInfo.Votes {
 		if !a.SignedLastBlock {
