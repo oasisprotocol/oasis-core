@@ -24,6 +24,7 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/host"
@@ -340,7 +341,7 @@ func extractMessageResponsePayload(raw []byte) ([]byte, error) {
 	return cbor.Marshal(msg.Response.Body.Success), nil
 }
 
-func (w *Worker) worker() {
+func (w *Worker) worker() { // nolint: gocyclo
 	defer close(w.quitCh)
 
 	// Wait for consensus sync.
@@ -471,7 +472,13 @@ func (w *Worker) worker() {
 				"runtime_id", rt.ID,
 			)
 
-			runtimeUnmg := w.commonWorker.RuntimeRegistry.NewUnmanagedRuntime(rt.ID)
+			runtimeUnmg, err := w.commonWorker.RuntimeRegistry.NewUnmanagedRuntime(w.ctx, rt.ID)
+			if err != nil {
+				w.logger.Error("unable to create new unmanaged runtime",
+					"err", err,
+				)
+				continue
+			}
 			node, err := w.commonWorker.NewUnmanagedCommitteeNode(runtimeUnmg, false)
 			if err != nil {
 				w.logger.Error("unable to create new committee node",
@@ -529,15 +536,14 @@ func (crw *clientRuntimeWatcher) HandlePeerMessage(context.Context, *p2p.Message
 	panic("keymanager/worker: must never be called")
 }
 
-// Guarded by CrossNode.
-func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committeeCommon.EpochSnapshot) {
+func (crw *clientRuntimeWatcher) updateExternalServicePolicyLocked(snapshot *committeeCommon.EpochSnapshot) {
 	// Update key manager access control policy on epoch transitions.
 	policy := accessctl.NewPolicy()
 
 	// Apply rules to current executor committee members.
 	for _, xc := range snapshot.GetExecutorCommittees() {
 		if xc != nil {
-			executorCommitteePolicy.AddRulesForCommittee(&policy, xc)
+			executorCommitteePolicy.AddRulesForCommittee(&policy, xc, snapshot.Nodes())
 		}
 	}
 
@@ -574,6 +580,11 @@ func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committee
 }
 
 // Guarded by CrossNode.
+func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committeeCommon.EpochSnapshot) {
+	crw.updateExternalServicePolicyLocked(snapshot)
+}
+
+// Guarded by CrossNode.
 func (crw *clientRuntimeWatcher) HandleNewBlockEarlyLocked(*block.Block) {
 	// Nothing to do here.
 }
@@ -586,4 +597,9 @@ func (crw *clientRuntimeWatcher) HandleNewBlockLocked(*block.Block) {
 // Guarded by CrossNode.
 func (crw *clientRuntimeWatcher) HandleNewEventLocked(*roothash.Event) {
 	// Nothing to do here.
+}
+
+// Guarded by CrossNode.
+func (crw *clientRuntimeWatcher) HandleNodeUpdateLocked(update *runtimeCommittee.NodeUpdate, snapshot *committeeCommon.EpochSnapshot) {
+	crw.updateExternalServicePolicyLocked(snapshot)
 }

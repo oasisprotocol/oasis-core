@@ -48,7 +48,6 @@ type clientCommon struct {
 	scheduler       scheduler.Backend
 	registry        registry.Backend
 	consensus       consensus.Backend
-	keyManager      *keymanager.Client
 	runtimeRegistry runtimeRegistry.Registry
 
 	ctx context.Context
@@ -70,7 +69,8 @@ type runtimeClient struct {
 
 	common *clientCommon
 
-	watchers map[common.Namespace]*blockWatcher
+	watchers  map[common.Namespace]*blockWatcher
+	kmClients map[common.Namespace]*keymanager.Client
 
 	logger *logging.Logger
 }
@@ -437,7 +437,26 @@ func (c *runtimeClient) CallEnclave(ctx context.Context, request *enclaverpc.Cal
 	switch request.Endpoint {
 	case keymanagerAPI.EnclaveRPCEndpoint:
 		// Key manager.
-		return c.common.keyManager.CallRemote(ctx, request.RuntimeID, request.Payload)
+		rt, err := c.common.runtimeRegistry.GetRuntime(request.RuntimeID)
+		if err != nil {
+			return nil, err
+		}
+
+		var km *keymanager.Client
+		c.Lock()
+		if km = c.kmClients[rt.ID()]; km == nil {
+			km, err = keymanager.New(c.common.ctx, rt, c.common.consensus.KeyManager(), c.common.consensus.Registry(), nil)
+			if err != nil {
+				c.Unlock()
+				c.logger.Error("failed to create key manager client instance",
+					"err", err,
+				)
+				return nil, api.ErrInternal
+			}
+		}
+		c.Unlock()
+
+		return km.CallRemote(ctx, request.Payload)
 	default:
 		c.logger.Warn("failed to route EnclaveRPC call",
 			"endpoint", request.Endpoint,
@@ -465,7 +484,6 @@ func New(
 	scheduler scheduler.Backend,
 	registry registry.Backend,
 	consensus consensus.Backend,
-	keyManager *keymanager.Client,
 	runtimeRegistry runtimeRegistry.Registry,
 ) (api.RuntimeClient, error) {
 	c := &runtimeClient{
@@ -475,7 +493,6 @@ func New(
 			scheduler:       scheduler,
 			registry:        registry,
 			consensus:       consensus,
-			keyManager:      keyManager,
 			runtimeRegistry: runtimeRegistry,
 			ctx:             ctx,
 		},

@@ -15,6 +15,7 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/runtime/committee"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
@@ -72,6 +73,8 @@ type NodeHooks interface {
 	HandleNewBlockLocked(*block.Block)
 	// Guarded by CrossNode.
 	HandleNewEventLocked(*roothash.Event)
+	// Guarded by CrossNode.
+	HandleNodeUpdateLocked(*committee.NodeUpdate, *EpochSnapshot)
 }
 
 // Node is a committee node.
@@ -222,7 +225,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 			n.handleEpochTransitionLocked(height)
 		} else {
 			// Normal block.
-			n.Group.RoundTransition(n.ctx)
+			n.Group.RoundTransition()
 		}
 	case block.RoundFailed:
 		if firstBlockReceived {
@@ -231,7 +234,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		} else {
 			// Round has failed.
 			n.logger.Warn("round has failed")
-			n.Group.RoundTransition(n.ctx)
+			n.Group.RoundTransition()
 
 			failedRoundCount.With(n.getMetricLabels()).Inc()
 		}
@@ -262,6 +265,15 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 	}
 }
 
+// Guarded by n.CrossNode.
+func (n *Node) handleNodeUpdateLocked(update *committee.NodeUpdate) {
+	epoch := n.Group.GetEpochSnapshot()
+
+	for _, hooks := range n.hooks {
+		hooks.HandleNodeUpdateLocked(update, epoch)
+	}
+}
+
 func (n *Node) worker() {
 	n.logger.Info("starting committee node")
 
@@ -284,11 +296,21 @@ func (n *Node) worker() {
 	if rt.KeyManager != nil {
 		n.logger.Info("runtime indicates a key manager is required, waiting for it to be ready")
 
-		if err = n.KeyManagerClient.WaitReady(n.ctx, rt.ID); err != nil {
+		n.KeyManagerClient, err = keymanagerClient.New(n.ctx, n.Runtime, n.KeyManager, n.Registry, n.Identity)
+		if err != nil {
+			n.logger.Error("failed to create key manager client",
+				"err", err,
+			)
+			return
+		}
+
+		select {
+		case <-n.ctx.Done():
 			n.logger.Error("failed to wait for key manager",
 				"err", err,
 			)
 			return
+		case <-n.KeyManagerClient.Initialized():
 		}
 
 		n.logger.Info("runtime has a key manager available")
@@ -314,6 +336,16 @@ func (n *Node) worker() {
 	}
 	defer eventsSub.Close()
 
+	// Start watching node updates for the current committee.
+	nodeUps, nodeUpsSub, err := n.Group.Nodes().WatchNodeUpdates()
+	if err != nil {
+		n.logger.Error("failed to subscribe to node updates",
+			"err", err,
+		)
+		return
+	}
+	defer nodeUpsSub.Close()
+
 	// We are initialized.
 	close(n.initCh)
 
@@ -336,6 +368,14 @@ func (n *Node) worker() {
 				defer n.CrossNode.Unlock()
 				n.handleNewEventLocked(ev)
 			}()
+		case up := <-nodeUps:
+			// Received a node update.
+			// TODO: Debounce/batch node updates.
+			func() {
+				n.CrossNode.Lock()
+				defer n.CrossNode.Unlock()
+				n.handleNodeUpdateLocked(up)
+			}()
 		}
 	}
 }
@@ -344,7 +384,6 @@ func NewNode(
 	runtime runtimeRegistry.Runtime,
 	identity *identity.Identity,
 	keymanager keymanagerApi.Backend,
-	keymanagerClient *keymanagerClient.Client,
 	roothash roothash.Backend,
 	registry registry.Backend,
 	scheduler scheduler.Backend,
@@ -358,24 +397,23 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		Runtime:          runtime,
-		Identity:         identity,
-		KeyManager:       keymanager,
-		KeyManagerClient: keymanagerClient,
-		Storage:          runtime.Storage(),
-		Roothash:         roothash,
-		Registry:         registry,
-		Scheduler:        scheduler,
-		Consensus:        consensus,
-		ctx:              ctx,
-		cancelCtx:        cancel,
-		stopCh:           make(chan struct{}),
-		quitCh:           make(chan struct{}),
-		initCh:           make(chan struct{}),
-		logger:           logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
+		Runtime:    runtime,
+		Identity:   identity,
+		KeyManager: keymanager,
+		Storage:    runtime.Storage(),
+		Roothash:   roothash,
+		Registry:   registry,
+		Scheduler:  scheduler,
+		Consensus:  consensus,
+		ctx:        ctx,
+		cancelCtx:  cancel,
+		stopCh:     make(chan struct{}),
+		quitCh:     make(chan struct{}),
+		initCh:     make(chan struct{}),
+		logger:     logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
 	}
 
-	group, err := NewGroup(identity, runtime.ID(), n, registry, roothash, scheduler, p2p)
+	group, err := NewGroup(ctx, identity, runtime.ID(), n, registry, roothash, scheduler, p2p)
 	if err != nil {
 		return nil, err
 	}

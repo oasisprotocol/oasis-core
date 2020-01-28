@@ -14,8 +14,8 @@ import (
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/host"
@@ -32,7 +32,7 @@ var (
 )
 
 type runtimeHostHandler struct {
-	runtime *registry.Runtime
+	runtime runtimeRegistry.Runtime
 
 	storage          storage.Backend
 	keyManager       keymanagerApi.Backend
@@ -43,10 +43,14 @@ type runtimeHostHandler struct {
 func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
 	// Key manager.
 	if body.HostKeyManagerPolicyRequest != nil {
-		if h.runtime.KeyManager == nil {
+		rt, err := h.runtime.RegistryDescriptor(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("runtime host: failed to obtain runtime descriptor: %w", err)
+		}
+		if rt.KeyManager == nil {
 			return nil, errors.New("runtime has no key manager")
 		}
-		status, err := h.keyManager.GetStatus(ctx, *h.runtime.KeyManager, consensus.HeightLatest)
+		status, err := h.keyManager.GetStatus(ctx, *rt.KeyManager, consensus.HeightLatest)
 		if err != nil {
 			return nil, err
 		}
@@ -64,7 +68,10 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 		switch body.HostRPCCallRequest.Endpoint {
 		case keymanagerApi.EnclaveRPCEndpoint:
 			// Call into the remote key manager.
-			res, err := h.keyManagerClient.CallRemote(ctx, h.runtime.ID, body.HostRPCCallRequest.Request)
+			if h.keyManagerClient == nil {
+				return nil, errEndpointNotSupported
+			}
+			res, err := h.keyManagerClient.CallRemote(ctx, body.HostRPCCallRequest.Request)
 			if err != nil {
 				return nil, err
 			}
@@ -119,7 +126,7 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 
 // NewRuntimeHostHandler creates a worker host handler for runtime execution.
 func NewRuntimeHostHandler(
-	runtime *registry.Runtime,
+	runtime runtimeRegistry.Runtime,
 	storage storage.Backend,
 	keyManager keymanagerApi.Backend,
 	keyManagerClient *keymanagerClient.Client,
@@ -219,9 +226,11 @@ func (n *RuntimeHostNode) InitializeRuntimeWorkerHost(ctx context.Context) (host
 	}
 
 	cfg := host.Config{
+		// This assumes that TEE hardware cannot change once the runtime is registered which is
+		// currently the case in our system.
 		TEEHardware: rt.TEEHardware,
 		MessageHandler: NewRuntimeHostHandler(
-			rt,
+			n.commonNode.Runtime,
 			n.commonNode.Runtime.Storage(),
 			n.commonNode.KeyManager,
 			n.commonNode.KeyManagerClient,

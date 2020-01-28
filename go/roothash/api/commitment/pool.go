@@ -44,11 +44,10 @@ type SignatureVerifier interface {
 	VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error
 }
 
-// NodeInfo contains information about a node that is member of a committee.
-type NodeInfo struct {
-	// CommitteeNode is an index into the Committee.Members structure.
-	CommitteeNode int           `json:"committee_node"`
-	Runtime       *node.Runtime `json:"runtime"`
+// NodeLookup is an interface for looking up registry node descriptors.
+type NodeLookup interface {
+	// Node looks up a node descriptor.
+	Node(id signature.PublicKey) (*node.Node, error)
 }
 
 // Pool is a serializable pool of commitments that can be used to perform
@@ -61,8 +60,6 @@ type Pool struct {
 	Runtime *registry.Runtime `json:"runtime"`
 	// Committee is the committee this pool is collecting the commitments for.
 	Committee *scheduler.Committee `json:"committee"`
-	// NodeInfo contains node information about committee members.
-	NodeInfo map[signature.PublicKey]NodeInfo `json:"node_info"`
 	// ExecuteCommitments are the commitments in the pool iff Committee.Kind
 	// is scheduler.KindComputeExecutor.
 	ExecuteCommitments map[signature.PublicKey]OpenExecutorCommitment `json:"execute_commitments,omitempty"`
@@ -75,6 +72,25 @@ type Pool struct {
 	// be scheduled to be executed. Zero timestamp means that no timeout is
 	// to be scheduled.
 	NextTimeout time.Time `json:"next_timeout"`
+
+	// MemberSet is a cached committee member set. If not provided it will be automatically
+	// constructed based on the passed Committee.
+	MemberSet map[signature.PublicKey]bool `json:"member_set,omitempty"`
+}
+
+func (p *Pool) isMember(id signature.PublicKey) bool {
+	if p.Committee == nil {
+		return false
+	}
+
+	if len(p.MemberSet) != len(p.Committee.Members) {
+		p.MemberSet = make(map[signature.PublicKey]bool, len(p.Committee.Members))
+		for _, m := range p.Committee.Members {
+			p.MemberSet[m.PublicKey] = true
+		}
+	}
+
+	return p.MemberSet[id]
 }
 
 // GetCommitteeID returns the identifier of the committee this pool is collecting
@@ -117,8 +133,8 @@ func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
 	return com, ok
 }
 
-func (p *Pool) addOpenExecutorCommitment(blk *block.Block, sv SignatureVerifier, openCom *OpenExecutorCommitment) error {
-	if p.Committee == nil || p.NodeInfo == nil {
+func (p *Pool) addOpenExecutorCommitment(blk *block.Block, sv SignatureVerifier, nl NodeLookup, openCom *OpenExecutorCommitment) error {
+	if p.Committee == nil {
 		return ErrNoCommittee
 	}
 	if p.Committee.Kind != scheduler.KindComputeExecutor {
@@ -131,7 +147,7 @@ func (p *Pool) addOpenExecutorCommitment(blk *block.Block, sv SignatureVerifier,
 	// roles based on current discrepancy state to allow commitments arriving in any
 	// order (e.g., a backup worker can submit a commitment even before there is a
 	// discrepancy).
-	if _, ok := p.NodeInfo[id]; !ok {
+	if !p.isMember(id) {
 		return ErrNotInCommittee
 	}
 
@@ -157,7 +173,28 @@ func (p *Pool) addOpenExecutorCommitment(blk *block.Block, sv SignatureVerifier,
 
 	// Verify RAK-attestation.
 	if p.Runtime.TEEHardware != node.TEEHardwareInvalid {
-		rak := p.NodeInfo[id].Runtime.Capabilities.TEE.RAK
+		n, err := nl.Node(id)
+		if err != nil {
+			// This should never happen as nodes cannot disappear mid-epoch.
+			logger.Warn("unable to fetch node descriptor to verify RAK-attestation",
+				"err", err,
+				"node_id", id,
+			)
+			return ErrNotInCommittee
+		}
+
+		rt := n.GetRuntime(p.Runtime.ID)
+		if rt == nil {
+			// We currently prevent this case throughout the rest of the system.
+			// Still, it's prudent to check.
+			logger.Warn("committee member not registered with this runtime",
+				"runtime_id", p.Runtime.ID,
+				"node_id", id,
+			)
+			return ErrNotInCommittee
+		}
+
+		rak := rt.Capabilities.TEE.RAK
 		if !rak.Verify(ComputeResultsHeaderSignatureContext, cbor.Marshal(header), body.RakSig[:]) {
 			return ErrRakSigInvalid
 		}
@@ -243,14 +280,14 @@ func (p *Pool) addOpenExecutorCommitment(blk *block.Block, sv SignatureVerifier,
 }
 
 // AddExecutorCommitment verifies and adds a new executor commitment to the pool.
-func (p *Pool) AddExecutorCommitment(blk *block.Block, sv SignatureVerifier, commitment *ExecutorCommitment) error {
+func (p *Pool) AddExecutorCommitment(blk *block.Block, sv SignatureVerifier, nl NodeLookup, commitment *ExecutorCommitment) error {
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
 		return err
 	}
 
-	return p.addOpenExecutorCommitment(blk, sv, openCom)
+	return p.addOpenExecutorCommitment(blk, sv, nl, openCom)
 }
 
 // CheckEnoughCommitments checks if there are enough commitments in the pool to be
@@ -468,10 +505,11 @@ func (p *Pool) TryFinalize(
 func (p *Pool) AddMergeCommitment(
 	blk *block.Block,
 	sv SignatureVerifier,
+	nl NodeLookup,
 	commitment *MergeCommitment,
 	ccPool *MultiPool,
 ) error {
-	if p.Committee == nil || p.NodeInfo == nil {
+	if p.Committee == nil {
 		return ErrNoCommittee
 	}
 	if p.Committee.Kind != scheduler.KindComputeMerge {
@@ -484,7 +522,7 @@ func (p *Pool) AddMergeCommitment(
 	// roles based on current discrepancy state to allow commitments arriving in any
 	// order (e.g., a backup worker can submit a commitment even before there is a
 	// discrepancy).
-	if _, ok := p.NodeInfo[id]; !ok {
+	if !p.isMember(id) {
 		return ErrNotInCommittee
 	}
 
@@ -514,7 +552,7 @@ func (p *Pool) AddMergeCommitment(
 	// Check executor commitments -- all commitments must be valid and there
 	// must be no discrepancy as the merge committee nodes are supposed to
 	// check this.
-	if err = ccPool.addExecutorCommitments(blk, sv, body.ExecutorCommits); err != nil {
+	if err = ccPool.addExecutorCommitments(blk, sv, nl, body.ExecutorCommits); err != nil {
 		return err
 	}
 
@@ -579,16 +617,6 @@ func (p *Pool) AddMergeCommitment(
 	return nil
 }
 
-// GetCommitteeNode returns a committee node given its public key.
-func (p *Pool) GetCommitteeNode(id signature.PublicKey) (*scheduler.CommitteeNode, error) {
-	ni, ok := p.NodeInfo[id]
-	if !ok {
-		return nil, ErrNotInCommittee
-	}
-
-	return p.Committee.Members[ni.CommitteeNode], nil
-}
-
 // GetExecutorCommitments returns a list of executor commitments in the pool.
 func (p *Pool) GetExecutorCommitments() (result []ExecutorCommitment) {
 	for _, c := range p.ExecuteCommitments {
@@ -609,7 +637,7 @@ type MultiPool struct {
 }
 
 // AddExecutorCommitment verifies and adds a new executor commitment to the pool.
-func (m *MultiPool) AddExecutorCommitment(blk *block.Block, sv SignatureVerifier, commitment *ExecutorCommitment) (*Pool, error) {
+func (m *MultiPool) AddExecutorCommitment(blk *block.Block, sv SignatureVerifier, nl NodeLookup, commitment *ExecutorCommitment) (*Pool, error) {
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
@@ -621,14 +649,14 @@ func (m *MultiPool) AddExecutorCommitment(blk *block.Block, sv SignatureVerifier
 		return nil, ErrInvalidCommitteeID
 	}
 
-	return p, p.addOpenExecutorCommitment(blk, sv, openCom)
+	return p, p.addOpenExecutorCommitment(blk, sv, nl, openCom)
 }
 
 // addExecutorCommitments verifies and adds multiple executor commitments to the pool.
 // All valid commitments will be added, redundant commitments will be ignored.
 //
 // Note that any signatures being invalid will result in no changes to the pool.
-func (m *MultiPool) addExecutorCommitments(blk *block.Block, sv SignatureVerifier, commitments []ExecutorCommitment) error {
+func (m *MultiPool) addExecutorCommitments(blk *block.Block, sv SignatureVerifier, nl NodeLookup, commitments []ExecutorCommitment) error {
 	// Batch verify all of the signatures at once.
 	msgs := make([][]byte, 0, len(commitments))
 	sigs := make([]signature.Signature, 0, len(commitments))
@@ -663,7 +691,7 @@ func (m *MultiPool) addExecutorCommitments(blk *block.Block, sv SignatureVerifie
 			continue
 		}
 
-		err := p.addOpenExecutorCommitment(blk, sv, openCom)
+		err := p.addOpenExecutorCommitment(blk, sv, nl, openCom)
 		switch err {
 		case nil, ErrAlreadyCommitted:
 		default:

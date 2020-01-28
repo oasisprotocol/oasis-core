@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/tracing"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	commonWorker "github.com/oasislabs/oasis-core/go/worker/common"
@@ -311,6 +312,7 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 // HandleNewBlockEarlyLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleNewBlockEarlyLocked(blk *block.Block) {
+	// Nothing to do here.
 }
 
 // HandleNewBlockLocked implements NodeHooks.
@@ -328,6 +330,13 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 // HandleNewEventLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
+	// Nothing to do here.
+}
+
+// HandleNodeUpdateLocked implements NodeHooks.
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) HandleNodeUpdateLocked(update *runtimeCommittee.NodeUpdate, snapshot *committee.EpochSnapshot) {
+	// Nothing to do here.
 }
 
 // Dispatch dispatches a batch to the executor committee.

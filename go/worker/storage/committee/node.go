@@ -22,6 +22,7 @@ import (
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	roothashApi "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
 	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/client"
 	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
@@ -276,13 +277,7 @@ func (n *Node) Initialized() <-chan struct{} {
 
 // NodeHooks implementation.
 
-func (n *Node) HandlePeerMessage(context.Context, *p2p.Message) (bool, error) {
-	// Nothing to do here.
-	return false, nil
-}
-
-// Guarded by CrossNode.
-func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
+func (n *Node) updateExternalServicePolicyLocked(snapshot *committee.EpochSnapshot) {
 	// Create new storage gRPC access policy for the current runtime.
 	policy := accessctl.NewPolicy()
 
@@ -294,14 +289,14 @@ func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
 
 	for _, xc := range snapshot.GetExecutorCommittees() {
 		if xc != nil {
-			executorCommitteePolicy.AddRulesForCommittee(&policy, xc)
+			executorCommitteePolicy.AddRulesForCommittee(&policy, xc, snapshot.Nodes())
 		}
 	}
 	if tsc := snapshot.GetTransactionSchedulerCommittee(); tsc != nil {
-		txnSchedulerCommitteePolicy.AddRulesForCommittee(&policy, tsc)
+		txnSchedulerCommitteePolicy.AddRulesForCommittee(&policy, tsc, snapshot.Nodes())
 	}
 	if mc := snapshot.GetMergeCommittee(); mc != nil {
-		mergeCommitteePolicy.AddRulesForCommittee(&policy, mc)
+		mergeCommitteePolicy.AddRulesForCommittee(&policy, mc, snapshot.Nodes())
 	}
 	// TODO: Query registry only for storage nodes after
 	// https://github.com/oasislabs/oasis-core/issues/1923 is implemented.
@@ -314,6 +309,16 @@ func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
 	// Update storage gRPC access policy for the current runtime.
 	n.grpcPolicy.SetAccessPolicy(policy, n.commonNode.Runtime.ID())
 	n.logger.Debug("set new storage gRPC access policy", "policy", policy)
+}
+
+func (n *Node) HandlePeerMessage(context.Context, *p2p.Message) (bool, error) {
+	// Nothing to do here.
+	return false, nil
+}
+
+// Guarded by CrossNode.
+func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
+	n.updateExternalServicePolicyLocked(snapshot)
 }
 
 // Guarded by CrossNode.
@@ -332,6 +337,11 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 // Guarded by CrossNode.
 func (n *Node) HandleNewEventLocked(*roothashApi.Event) {
 	// Nothing to do here.
+}
+
+// Guarded by CrossNode.
+func (n *Node) HandleNodeUpdateLocked(update *runtimeCommittee.NodeUpdate, snapshot *committee.EpochSnapshot) {
+	n.updateExternalServicePolicyLocked(snapshot)
 }
 
 // Watcher implementation.
@@ -580,25 +590,26 @@ mainLoop:
 			blk := inBlk.(*block.Block)
 			n.logger.Debug("incoming block",
 				"round", blk.Header.Round,
-				"last_synced", cachedLastRound,
+				"last_synced", lastFullyAppliedRound,
+				"last_finalized", cachedLastRound,
 			)
 
-			if _, ok := hashCache[cachedLastRound]; !ok && cachedLastRound == n.undefinedRound {
+			if _, ok := hashCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == n.undefinedRound {
 				dummy := blockSummary{
 					Namespace: blk.Header.Namespace,
-					Round:     cachedLastRound + 1,
+					Round:     lastFullyAppliedRound + 1,
 				}
 				dummy.IORoot.Empty()
-				dummy.IORoot.Round = cachedLastRound + 1
+				dummy.IORoot.Round = lastFullyAppliedRound + 1
 				dummy.StateRoot.Empty()
-				dummy.StateRoot.Round = cachedLastRound + 1
-				hashCache[cachedLastRound] = &dummy
+				dummy.StateRoot.Round = lastFullyAppliedRound + 1
+				hashCache[lastFullyAppliedRound] = &dummy
 			}
 			// Determine if we need to fetch any old block summaries. In case the first
 			// round is an undefined round, we need to start with the following round
 			// since the undefined round may be unsigned -1 and in this case the loop
 			// would not do any iterations.
-			startSummaryRound := cachedLastRound
+			startSummaryRound := lastFullyAppliedRound
 			if startSummaryRound == n.undefinedRound {
 				startSummaryRound++
 			}
@@ -622,7 +633,7 @@ mainLoop:
 				hashCache[blk.Header.Round] = summaryFromBlock(blk)
 			}
 
-			for i := cachedLastRound + 1; i <= blk.Header.Round; i++ {
+			for i := lastFullyAppliedRound + 1; i <= blk.Header.Round; i++ {
 				syncing, ok := syncingRounds[i]
 				if ok && syncing.outstanding == maskAll {
 					continue

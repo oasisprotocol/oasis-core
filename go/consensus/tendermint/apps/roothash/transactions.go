@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -59,17 +60,17 @@ func (app *rootHashApplication) getRuntimeState(
 	ctx *abci.Context,
 	state *roothashState.MutableState,
 	id common.Namespace,
-) (*roothashState.RuntimeState, commitment.SignatureVerifier, error) {
+) (*roothashState.RuntimeState, commitment.SignatureVerifier, commitment.NodeLookup, error) {
 	// Fetch current runtime state.
 	rtState, err := state.RuntimeState(id)
 	if err != nil {
-		return nil, nil, fmt.Errorf("roothash: failed to fetch runtime state: %w", err)
+		return nil, nil, nil, fmt.Errorf("roothash: failed to fetch runtime state: %w", err)
 	}
 	if rtState.Suspended {
-		return nil, nil, roothash.ErrRuntimeSuspended
+		return nil, nil, nil, roothash.ErrRuntimeSuspended
 	}
 	if rtState.Round == nil {
-		return nil, nil, roothash.ErrNoRound
+		return nil, nil, nil, roothash.ErrNoRound
 	}
 
 	// Create signature verifier.
@@ -77,6 +78,9 @@ func (app *rootHashApplication) getRuntimeState(
 		runtimeID: id,
 		scheduler: schedulerState.NewMutableState(ctx.State()),
 	}
+
+	// Create node lookup.
+	nl := registryState.NewMutableState(ctx.State())
 
 	// If the round was finalized, transition.
 	if rtState.Round.CurrentBlock.Header.Round != rtState.CurrentBlock.Header.Round {
@@ -87,7 +91,7 @@ func (app *rootHashApplication) getRuntimeState(
 		rtState.Round.Transition(rtState.CurrentBlock)
 	}
 
-	return rtState, sv, nil
+	return rtState, sv, nl, nil
 }
 
 func (app *rootHashApplication) executorCommit(
@@ -111,7 +115,7 @@ func (app *rootHashApplication) executorCommit(
 		return err
 	}
 
-	rtState, sv, err := app.getRuntimeState(ctx, state, cc.ID)
+	rtState, sv, nl, err := app.getRuntimeState(ctx, state, cc.ID)
 	if err != nil {
 		return err
 	}
@@ -120,7 +124,7 @@ func (app *rootHashApplication) executorCommit(
 	pools := make(map[*commitment.Pool]bool)
 	for _, commit := range cc.Commits {
 		var pool *commitment.Pool
-		if pool, err = rtState.Round.AddExecutorCommitment(&commit, sv); err != nil {
+		if pool, err = rtState.Round.AddExecutorCommitment(&commit, sv, nl); err != nil {
 			ctx.Logger().Error("failed to add compute commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,
@@ -160,7 +164,7 @@ func (app *rootHashApplication) mergeCommit(
 		return err
 	}
 
-	rtState, sv, err := app.getRuntimeState(ctx, state, mc.ID)
+	rtState, sv, nl, err := app.getRuntimeState(ctx, state, mc.ID)
 	if err != nil {
 		return err
 	}
@@ -168,7 +172,7 @@ func (app *rootHashApplication) mergeCommit(
 
 	// Add commitments.
 	for _, commit := range mc.Commits {
-		if err = rtState.Round.AddMergeCommitment(&commit, sv); err != nil {
+		if err = rtState.Round.AddMergeCommitment(&commit, sv, nl); err != nil {
 			ctx.Logger().Error("failed to add merge commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,

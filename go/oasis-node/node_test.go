@@ -440,31 +440,15 @@ func testClient(t *testing.T, node *testNode) {
 func testStorageClientWithNode(t *testing.T, node *testNode) {
 	ctx := context.Background()
 
-	// Client storage implementation tests.
-	config := []struct {
-		key   string
-		value interface{}
-	}{
-		{storageClient.CfgDebugClientAddress, "localhost:" + workerClientPort},
-		{storageClient.CfgDebugClientCert, node.dataDir + "/tls_identity_cert.pem"},
-	}
-	for _, kv := range config {
-		viper.Set(kv.key, kv.value)
-	}
-	debugClient, err := storageClient.New(ctx, testRuntimeID, node.Identity, nil, nil)
-	require.NoError(t, err, "NewDebugStorageClient")
+	client, err := storageClient.NewStatic(ctx, testRuntimeID, node.Identity, node.Registry, node.Identity.NodeSigner.Public())
+	require.NoError(t, err, "NewStatic")
 
 	// Determine the current round. This is required so that we can commit into
 	// storage at the next (non-finalized) round.
 	blk, err := node.RootHash.GetLatestBlock(ctx, testRuntimeID, consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetLatestBlock")
 
-	storageTests.StorageImplementationTests(t, debugClient, testRuntimeID, blk.Header.Round+1)
-
-	// Reset configuration flags.
-	for _, kv := range config {
-		viper.Set(kv.key, "")
-	}
+	storageTests.StorageImplementationTests(t, client, testRuntimeID, blk.Header.Round+1)
 }
 
 func testStorageClientWithoutNode(t *testing.T, node *testNode) {

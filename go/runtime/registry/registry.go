@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/runtime/history"
@@ -41,7 +42,7 @@ type Registry interface {
 
 	// NewUnmanagedRuntime creates a new runtime that is not managed by this
 	// registry.
-	NewUnmanagedRuntime(runtimeID common.Namespace) Runtime
+	NewUnmanagedRuntime(ctx context.Context, runtimeID common.Namespace) (Runtime, error)
 
 	// StorageRouter returns a storage backend which routes requests to the
 	// correct per-runtime storage backend based on the namespace contained
@@ -61,6 +62,9 @@ type Runtime interface {
 	// then returns its registry descriptor.
 	RegistryDescriptor(ctx context.Context) (*registry.Runtime, error)
 
+	// WatchRegistryDescriptor subscribes to registry descriptor updates.
+	WatchRegistryDescriptor() (<-chan *registry.Runtime, pubsub.ClosableSubscription, error)
+
 	// History returns the history for this runtime.
 	History() history.History
 
@@ -75,6 +79,8 @@ type Runtime interface {
 }
 
 type runtime struct {
+	sync.RWMutex
+
 	id         common.Namespace
 	descriptor *registry.Runtime
 
@@ -84,6 +90,12 @@ type runtime struct {
 
 	history    history.History
 	tagIndexer *tagindexer.Service
+
+	cancelCtx          context.CancelFunc
+	descriptorCh       chan struct{}
+	descriptorNotifier *pubsub.Broker
+
+	logger *logging.Logger
 }
 
 func (r *runtime) ID() common.Namespace {
@@ -91,27 +103,25 @@ func (r *runtime) ID() common.Namespace {
 }
 
 func (r *runtime) RegistryDescriptor(ctx context.Context) (*registry.Runtime, error) {
-	if r.descriptor != nil {
-		return r.descriptor, nil
+	// Wait for the descriptor to be ready.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-r.descriptorCh:
 	}
 
-	ch, sub, err := r.consensus.Registry().WatchRuntimes(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer sub.Close()
+	r.RLock()
+	d := r.descriptor
+	r.RUnlock()
+	return d, nil
+}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case rt := <-ch:
-			if rt.ID.Equal(&r.id) {
-				r.descriptor = rt
-				return rt, nil
-			}
-		}
-	}
+func (r *runtime) WatchRegistryDescriptor() (<-chan *registry.Runtime, pubsub.ClosableSubscription, error) {
+	sub := r.descriptorNotifier.Subscribe()
+	ch := make(chan *registry.Runtime)
+	sub.Unwrap(ch)
+
+	return ch, sub, nil
 }
 
 func (r *runtime) History() history.History {
@@ -128,6 +138,51 @@ func (r *runtime) Storage() storageAPI.Backend {
 
 func (r *runtime) LocalStorage() localstorage.LocalStorage {
 	return r.localStorage
+}
+
+func (r *runtime) stop() {
+	// Stop watching runtime updates.
+	r.cancelCtx()
+	// Close local storage backend.
+	r.localStorage.Stop()
+	// Close storage backend.
+	r.storage.Cleanup()
+	// Close tag indexer service.
+	r.tagIndexer.Stop()
+	<-r.tagIndexer.Quit()
+	// Close history keeper.
+	r.history.Close()
+}
+
+func (r *runtime) watchUpdates(ctx context.Context, ch <-chan *registry.Runtime, sub pubsub.ClosableSubscription) {
+	defer sub.Close()
+
+	var initialized bool
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case rt := <-ch:
+			if !rt.ID.Equal(&r.id) {
+				continue
+			}
+
+			r.logger.Debug("updated runtime descriptor",
+				"runtime", rt,
+			)
+
+			r.Lock()
+			r.descriptor = rt
+			r.Unlock()
+
+			if !initialized {
+				close(r.descriptorCh)
+				initialized = true
+			}
+
+			r.descriptorNotifier.Broadcast(rt)
+		}
+	}
 }
 
 type runtimeRegistry struct {
@@ -164,12 +219,8 @@ func (r *runtimeRegistry) Runtimes() []Runtime {
 	return rts
 }
 
-func (r *runtimeRegistry) NewUnmanagedRuntime(runtimeID common.Namespace) Runtime {
-	return &runtime{
-		id:        runtimeID,
-		history:   history.NewNop(runtimeID),
-		consensus: r.consensus,
-	}
+func (r *runtimeRegistry) NewUnmanagedRuntime(ctx context.Context, runtimeID common.Namespace) (Runtime, error) {
+	return newRuntime(ctx, runtimeID, r.consensus, r.logger)
 }
 
 func (r *runtimeRegistry) StorageRouter() storageAPI.Backend {
@@ -181,15 +232,7 @@ func (r *runtimeRegistry) Cleanup() {
 	defer r.Unlock()
 
 	for _, rt := range r.runtimes {
-		// Close local storage backend.
-		rt.localStorage.Stop()
-		// Close storage backend.
-		rt.storage.Cleanup()
-		// Close tag indexer service.
-		rt.tagIndexer.Stop()
-		<-rt.tagIndexer.Quit()
-		// Close history keeper.
-		rt.history.Close()
+		rt.stop()
 	}
 }
 
@@ -240,21 +283,44 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 		return fmt.Errorf("runtime/registry: failed to start tag indexer for runtime %s: %w", id, err)
 	}
 
-	r.runtimes[id] = &runtime{
-		id:           id,
-		consensus:    r.consensus,
-		storage:      storageBackend,
-		localStorage: localStorage,
-		history:      history,
-		tagIndexer:   tagIndexer,
-	}
-
 	// Start tracking this runtime.
 	if err = r.consensus.RootHash().TrackRuntime(ctx, history); err != nil {
 		return fmt.Errorf("runtime/registry: cannot track runtime %s: %w", id, err)
 	}
 
+	rt, err := newRuntime(ctx, id, r.consensus, r.logger)
+	if err != nil {
+		return err
+	}
+
+	rt.storage = storageBackend
+	rt.localStorage = localStorage
+	rt.history = history
+	rt.tagIndexer = tagIndexer
+	r.runtimes[id] = rt
+
 	return nil
+}
+
+func newRuntime(ctx context.Context, id common.Namespace, consensus consensus.Backend, logger *logging.Logger) (*runtime, error) {
+	// Start watching this runtime's descriptor.
+	ch, sub, err := consensus.Registry().WatchRuntimes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("runtime/registry: failed to watch updates for runtime %s: %w", id, err)
+	}
+	watchCtx, cancel := context.WithCancel(ctx)
+
+	rt := &runtime{
+		id:                 id,
+		consensus:          consensus,
+		cancelCtx:          cancel,
+		descriptorCh:       make(chan struct{}),
+		descriptorNotifier: pubsub.NewBroker(true),
+		logger:             logger.With("runtime_id", id),
+	}
+	go rt.watchUpdates(watchCtx, ch, sub)
+
+	return rt, nil
 }
 
 // New creates a new runtime registry.

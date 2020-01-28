@@ -2,43 +2,41 @@ package client
 
 import (
 	"context"
-	"crypto/tls"
-
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/runtime/committee"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 )
 
-const (
-	// BackendName is the name of this implementation.
-	BackendName = "client"
+// BackendName is the name of this implementation.
+const BackendName = "client"
 
-	// CfgDebugClientAddress is the address to connect to with the
-	// storage client.
-	CfgDebugClientAddress = "storage.debug.client.address"
+func newClient(
+	ctx context.Context,
+	namespace common.Namespace,
+	ident *identity.Identity,
+	nodes committee.NodeDescriptorLookup,
+) (api.Backend, error) {
+	committeeClient, err := committee.NewClient(ctx, nodes, committee.WithClientAuthentication(ident))
+	if err != nil {
+		return nil, fmt.Errorf("storage/client: failed to create committee client: %w", err)
+	}
 
-	// CfgDebugClientCert is the path to the certificate file for grpc.
-	CfgDebugClientCert = "storage.debug.client.certificate"
-)
+	b := &storageClientBackend{
+		ctx:             ctx,
+		logger:          logging.GetLogger("storage/client"),
+		committeeClient: committeeClient,
+	}
+	return b, nil
+}
 
-// In debug mode, we connect to the provided node and save it to the fake runtime.
-const debugModeFakeRuntimeSeed = "oasis storage client debug runtime"
-
-// Flags has the configuration flags.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
-
-// New creates a new storage client.
+// New creates a new storage client that automatically follows a given runtime's storage committee.
 func New(
 	ctx context.Context,
 	namespace common.Namespace,
@@ -46,73 +44,46 @@ func New(
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
 ) (api.Backend, error) {
-	logger := logging.GetLogger("storage/client")
-
-	if addr := viper.GetString(CfgDebugClientAddress); addr != "" && cmdFlags.DebugDontBlameOasis() {
-		logger.Warn("Storage client in debug mode, connecting to provided client",
-			"address", CfgDebugClientAddress,
-		)
-
-		var opts grpc.DialOption
-		if certFile := viper.GetString(CfgDebugClientCert); certFile != "" {
-			tlsConfig, err := cmnGrpc.NewClientTLSConfigFromFile(certFile, identity.CommonName)
-			if err != nil {
-				logger.Error("failed creating client tls config from file",
-					"file", certFile,
-					"error", err,
-				)
-				return nil, err
-			}
-			// Set client certificate.
-			tlsConfig.Certificates = []tls.Certificate{*ident.TLSCertificate}
-			opts = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
-		} else {
-			opts = grpc.WithInsecure()
-		}
-
-		conn, err := cmnGrpc.Dial(addr, opts)
-		if err != nil {
-			logger.Error("unable to dial debug client",
-				"error", err,
-			)
-			return nil, err
-		}
-		client := api.NewStorageClient(conn)
-
-		testRuntimeSigner := memorySigner.NewTestSigner(debugModeFakeRuntimeSeed)
-		testPublicKey := testRuntimeSigner.Public()
-		var debugRuntimeID common.Namespace
-		_ = debugRuntimeID.UnmarshalBinary(testPublicKey[:])
-		b := &storageClientBackend{
-			ctx:            ctx,
-			logger:         logger,
-			debugRuntimeID: &debugRuntimeID,
-		}
-		state := &clientState{
-			client: client,
-			conn:   conn,
-		}
-		b.runtimeWatcher = newDebugWatcher(state)
-		return b, nil
+	committeeWatcher, err := committee.NewWatcher(
+		ctx,
+		schedulerBackend,
+		registryBackend,
+		namespace,
+		scheduler.KindStorage,
+		committee.WithAutomaticEpochTransitions(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("storage/client: failed to create committee watcher: %w", err)
 	}
 
-	b := &storageClientBackend{
-		ctx:            ctx,
-		logger:         logger,
-		runtimeWatcher: newWatcher(ctx, namespace, ident, schedulerBackend, registryBackend),
-	}
-
-	b.haltCtx, b.cancelFn = context.WithCancel(ctx)
-
-	return b, nil
+	return newClient(ctx, namespace, ident, committeeWatcher.Nodes())
 }
 
-func init() {
-	Flags.String(CfgDebugClientAddress, "", "Address of node to connect to with the storage client")
-	Flags.String(CfgDebugClientCert, "", "Path to tls certificate for grpc")
+// NewStatic creates a new storage client that only follows a specific storage node. This is mostly
+// useful for tests.
+func NewStatic(
+	ctx context.Context,
+	namespace common.Namespace,
+	ident *identity.Identity,
+	registryBackend registry.Backend,
+	nodeID signature.PublicKey,
+) (api.Backend, error) {
+	nw, err := committee.NewNodeDescriptorWatcher(ctx, registryBackend)
+	if err != nil {
+		return nil, fmt.Errorf("storage/client: failed to create node descriptor watcher: %w", err)
+	}
 
-	_ = Flags.MarkHidden(CfgDebugClientAddress)
-	_ = Flags.MarkHidden(CfgDebugClientCert)
+	client, err := newClient(ctx, namespace, ident, nw)
+	if err != nil {
+		return nil, err
+	}
 
-	_ = viper.BindPFlags(Flags)
+	nw.Reset()
+	_, err = nw.WatchNode(ctx, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("storage/client: failed to watch node %s: %w", nodeID, err)
+	}
+	nw.Freeze(0)
+
+	return client, nil
 }

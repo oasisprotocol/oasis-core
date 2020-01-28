@@ -18,7 +18,6 @@ import (
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	"github.com/oasislabs/oasis-core/go/storage"
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
-	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 	storageWorkerAPI "github.com/oasislabs/oasis-core/go/worker/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/storage/committee"
@@ -135,18 +134,11 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 	conn, _ := cmdControl.DoConnect(cmd)
 	client := runtimeClient.NewRuntimeClient(conn)
 	storageWorkerClient := storageWorkerAPI.NewStorageWorkerClient(conn)
+	storageClient := storageAPI.NewStorageClient(conn)
 	defer conn.Close()
 
-	storageClient, err := storageClient.New(ctx, common.Namespace{}, nil, nil, nil)
-	if err != nil {
-		logger.Error("error while connecting to storage client",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-
 	var id common.Namespace
-	if err = id.UnmarshalHex(args[0]); err != nil {
+	if err := id.UnmarshalHex(args[0]); err != nil {
 		logger.Error("failed to decode runtime id",
 			"err", err,
 		)
@@ -280,11 +272,9 @@ func doForceFinalize(cmd *cobra.Command, args []string) {
 
 // Register registers the storage sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
-	storageCheckRootsCmd.Flags().AddFlagSet(storageClient.Flags)
 	storageCheckRootsCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 	storageCheckRootsCmd.PersistentFlags().AddFlagSet(cmdFlags.DebugDontBlameOasisFlag)
 
-	storageForceFinalizeCmd.Flags().AddFlagSet(storageClient.Flags)
 	storageForceFinalizeCmd.Flags().Uint64Var(&finalizeRound, "round", committee.RoundLatest, "the round to force finalize; default latest")
 	storageForceFinalizeCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 	storageForceFinalizeCmd.PersistentFlags().AddFlagSet(cmdFlags.DebugDontBlameOasisFlag)

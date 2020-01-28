@@ -22,6 +22,7 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
+	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
@@ -786,6 +787,12 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 	// Backup worker, start processing a batch.
 	n.logger.Info("backup worker activating and processing batch")
 	n.startProcessingBatchLocked(state.ioRoot, state.batch, state.batchSpanCtx, state.txnSchedSig, state.inputStorageSigs)
+}
+
+// HandleNodeUpdateLocked implements NodeHooks.
+// Guarded by n.commonNode.CrossNode.
+func (n *Node) HandleNodeUpdateLocked(update *runtimeCommittee.NodeUpdate, snapshot *committee.EpochSnapshot) {
+	// Nothing to do here.
 }
 
 // Guarded by n.commonNode.CrossNode.

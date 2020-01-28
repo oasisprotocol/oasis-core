@@ -24,6 +24,8 @@ const (
 var (
 	// ErrNotFound is an error returned when the item is not found.
 	ErrNotFound = errors.New(ModuleName, 1, "client: not found")
+	// ErrInternal is an error returned when an unspecified internal error occurs.
+	ErrInternal = errors.New(ModuleName, 2, "client: internal error")
 )
 
 // RuntimeClient is the runtime client interface.

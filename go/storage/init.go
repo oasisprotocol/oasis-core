@@ -94,6 +94,4 @@ func init() {
 	_ = Flags.MarkHidden(cfgCrashEnabled)
 
 	_ = viper.BindPFlags(Flags)
-
-	Flags.AddFlagSet(client.Flags)
 }

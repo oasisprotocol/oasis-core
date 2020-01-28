@@ -1,6 +1,7 @@
 package node
 
 import (
+	"bytes"
 	"crypto/x509"
 	"encoding"
 	"encoding/base64"
@@ -34,6 +35,20 @@ var (
 // Address represents a TCP address for the purpose of node descriptors.
 type Address struct {
 	net.TCPAddr
+}
+
+// Equal compares vs another address for equality.
+func (a *Address) Equal(other *Address) bool {
+	if !a.IP.Equal(other.IP) {
+		return false
+	}
+	if a.Port != other.Port {
+		return false
+	}
+	if a.Zone != other.Zone {
+		return false
+	}
+	return true
 }
 
 // MarshalText implements the encoding.TextMarshaler interface.
@@ -134,6 +149,17 @@ type CommitteeAddress struct {
 	Certificate []byte `json:"certificate"`
 	// Address is the address at which the node can be reached
 	Address Address `json:"address"`
+}
+
+// Equal compares vs another CommitteeInfo for equality.
+func (ca *CommitteeAddress) Equal(other *CommitteeAddress) bool {
+	if !bytes.Equal(ca.Certificate, other.Certificate) {
+		return false
+	}
+	if !ca.Address.Equal(&other.Address) {
+		return false
+	}
+	return true
 }
 
 // ParseCertificate returns the parsed x509 certificate.
