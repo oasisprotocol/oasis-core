@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
@@ -110,9 +111,18 @@ type SignedTransaction struct {
 	signature.Signed
 }
 
+// Hash returns the cryptographic hash of the encoded transaction.
+func (s *SignedTransaction) Hash() hash.Hash {
+	var hash hash.Hash
+	hash.From(s)
+	return hash
+}
+
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
 func (s SignedTransaction) PrettyPrint(prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sHash: %s\n", prefix, s.Hash())
+
 	fmt.Fprintf(w, "%sSigner: %s\n", prefix, s.Signature.PublicKey)
 	fmt.Fprintf(w, "%s        (signature: %s)\n", prefix, s.Signature.Signature)
 
