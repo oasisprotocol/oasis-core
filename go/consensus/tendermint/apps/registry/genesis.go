@@ -151,6 +151,9 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 	}
 
 	// We only want to keep the nodes that are validators.
+	//
+	// BUG: If the debonding period will apply to other nodes,
+	// then we need to basically persist everything.
 	validatorNodes := make([]*node.MultiSignedNode, 0)
 	for _, sn := range signedNodes {
 		var n node.Node
@@ -160,6 +163,13 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 
 		if n.HasRoles(node.RoleValidator) {
 			validatorNodes = append(validatorNodes, sn)
+		}
+
+		// We want to discard nodes that haven't bothered to re-register
+		// with the new multi-signed descriptor format.
+		if len(sn.MultiSigned.Signatures) < 2 {
+			// Too bad we can't log here.  Oh well.
+			continue
 		}
 	}
 
