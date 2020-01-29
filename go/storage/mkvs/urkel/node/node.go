@@ -622,7 +622,8 @@ func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
 	valueSize := int(binary.LittleEndian.Uint32(data[pos : pos+ValueLengthSize]))
 	pos += ValueLengthSize
 
-	value := data[pos : pos+valueSize]
+	value := make([]byte, valueSize)
+	copy(value, data[pos:pos+valueSize])
 	pos += valueSize
 
 	n.Clean = true
