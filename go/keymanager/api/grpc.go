@@ -32,9 +32,9 @@ var (
 	Service = enclaverpc.NewService(ModuleName, requestSkipPolicyCheck)
 )
 
-func payloadSkipPolicyCheck(data []byte) (bool, error) {
+func payloadSkipPolicyCheck(data cbor.RawMessage) (bool, error) {
 	// Unpack the payload, get method from Frame.
-	var f Frame
+	var f enclaverpc.Frame
 	if err := cbor.Unmarshal(data, &f); err != nil {
 		return false, fmt.Errorf("unable to unpack Frame: %w", err)
 	}

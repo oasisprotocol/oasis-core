@@ -183,14 +183,6 @@ func (g *Genesis) SanityCheck() error {
 	return nil
 }
 
-// Frame is the Go analog of the Rust RPC Frame defined in
-// client/src/rpc/client.rs.
-type Frame struct {
-	Session            []byte `json:"session,omitempty"`
-	UntrustedPlaintext string `json:"untrusted_plaintext,omitempty"`
-	Payload            []byte `json:"payload,omitempty"`
-}
-
 func init() {
 	// Old `INSECURE_SIGNING_KEY_PKCS8`.
 	var oldTestKey signature.PublicKey
