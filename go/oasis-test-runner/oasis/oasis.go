@@ -22,7 +22,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
-	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests/helpers"
+	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/genesis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"

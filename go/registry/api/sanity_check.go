@@ -68,7 +68,7 @@ func SanityCheckRuntimes(logger *logging.Logger,
 	suspendedRuntimes []*SignedRuntime,
 	isGenesis bool,
 ) (RuntimeLookup, error) {
-
+	// First go through all runtimes and perform general sanity checks.
 	seenRuntimes := []*Runtime{}
 	for _, srt := range runtimes {
 		rt, err := VerifyRegisterRuntimeArgs(params, logger, srt, isGenesis)
@@ -87,7 +87,23 @@ func SanityCheckRuntimes(logger *logging.Logger,
 		seenSuspendedRuntimes = append(seenSuspendedRuntimes, rt)
 	}
 
-	return newSanityCheckRuntimeLookup(seenRuntimes, seenSuspendedRuntimes), nil
+	// Then build a runtime lookup table and re-check compute runtimes as those need to reference
+	// correct key manager runtimes when a key manager is configured.
+	lookup, err := newSanityCheckRuntimeLookup(seenRuntimes, seenSuspendedRuntimes)
+	if err != nil {
+		return nil, fmt.Errorf("runtime sanity check failed: %w", err)
+	}
+	for _, runtimes := range [][]*Runtime{seenRuntimes, seenSuspendedRuntimes} {
+		for _, rt := range runtimes {
+			if rt.Kind != KindCompute {
+				continue
+			}
+			if err := VerifyRegisterComputeRuntimeArgs(logger, rt, lookup); err != nil {
+				return nil, fmt.Errorf("compute runtime sanity check failed: %w", err)
+			}
+		}
+	}
+	return lookup, nil
 }
 
 // SanityCheckNodes examines the nodes table.
@@ -154,16 +170,22 @@ type sanityCheckRuntimeLookup struct {
 	suspendedRuntimes map[common.Namespace]*Runtime
 }
 
-func newSanityCheckRuntimeLookup(runtimes []*Runtime, suspendedRuntimes []*Runtime) RuntimeLookup {
+func newSanityCheckRuntimeLookup(runtimes []*Runtime, suspendedRuntimes []*Runtime) (RuntimeLookup, error) {
 	rtsMap := make(map[common.Namespace]*Runtime)
 	sRtsMap := make(map[common.Namespace]*Runtime)
 	for _, rt := range runtimes {
+		if rtsMap[rt.ID] != nil {
+			return nil, fmt.Errorf("duplicate runtime: %s", rt.ID)
+		}
 		rtsMap[rt.ID] = rt
 	}
 	for _, srt := range suspendedRuntimes {
+		if rtsMap[srt.ID] != nil || sRtsMap[srt.ID] != nil {
+			return nil, fmt.Errorf("duplicate (suspended) runtime: %s", srt.ID)
+		}
 		sRtsMap[srt.ID] = srt
 	}
-	return &sanityCheckRuntimeLookup{rtsMap, sRtsMap}
+	return &sanityCheckRuntimeLookup{rtsMap, sRtsMap}, nil
 }
 
 func (r *sanityCheckRuntimeLookup) Runtime(id common.Namespace) (*Runtime, error) {

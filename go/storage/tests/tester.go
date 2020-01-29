@@ -12,7 +12,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests/helpers"
+	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"

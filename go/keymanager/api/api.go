@@ -144,7 +144,10 @@ type Genesis struct {
 // SanityCheckStatuses examines the statuses table.
 func SanityCheckStatuses(statuses []*Status) error {
 	for _, status := range statuses {
-		// TODO: Verify key manager runtime ID.
+		// Verify key manager runtime ID.
+		if !status.ID.IsKeyManager() {
+			return fmt.Errorf("keymanager: sanity check failed: key manager runtime ID %s is invalid", status.ID)
+		}
 
 		// Verify currently active key manager node IDs.
 		for _, node := range status.Nodes {
