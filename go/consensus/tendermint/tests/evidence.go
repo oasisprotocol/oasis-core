@@ -12,7 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	tmcrypto "github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
-	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests/helpers"
+	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests"
 )
 
 // MakeDoubleSignEvidence creates consensus evidence of double signing.

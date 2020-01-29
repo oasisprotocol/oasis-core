@@ -31,7 +31,7 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
-	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests/helpers"
+	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/ias"
 	iasAPI "github.com/oasislabs/oasis-core/go/ias/api"
 	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"

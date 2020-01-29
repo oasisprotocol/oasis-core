@@ -151,6 +151,13 @@ var (
 		node.RoleStorageWorker |
 		node.RoleKeyManager
 
+	// ComputeRuntimeAllowedRoles are the Node roles that allow compute runtimes.
+	ComputeRuntimeAllowedRoles = node.RoleComputeWorker |
+		node.RoleStorageWorker
+
+	// KeyManagerRuntimeAllowedRoles are the Node roles that allow key manager runtimes.
+	KeyManagerRuntimeAllowedRoles = node.RoleKeyManager
+
 	// ConsensusAddressRequiredRoles are the Node roles that require Consensus Address.
 	ConsensusAddressRequiredRoles = node.RoleValidator
 
@@ -503,6 +510,14 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			// validate the attestation evidence.
 			if err := VerifyNodeRuntimeEnclaveIDs(logger, rt, regRt, now); err != nil {
 				return nil, nil, err
+			}
+
+			// Enforce what kinds of runtimes are allowed.
+			if regRt.Kind == KindKeyManager && !n.HasRoles(KeyManagerRuntimeAllowedRoles) {
+				return nil, nil, fmt.Errorf("%w: key manager runtime not allowed", ErrInvalidArgument)
+			}
+			if regRt.Kind == KindCompute && !n.HasRoles(ComputeRuntimeAllowedRoles) {
+				return nil, nil, fmt.Errorf("%w: compute runtime not allowed", ErrInvalidArgument)
 			}
 
 			runtimes = append(runtimes, regRt)
@@ -998,6 +1013,22 @@ func VerifyRegisterRuntimeArgs(
 			return nil, ErrInvalidArgument
 		}
 
+		// Ensure there is at least one member of the compute group.
+		if rt.Executor.GroupSize == 0 {
+			logger.Error("RegisterRuntime: executor group size too small",
+				"runtime", rt,
+			)
+			return nil, fmt.Errorf("%w: executor group too small", ErrInvalidArgument)
+		}
+
+		// Ensure there is at least one member of the merge group.
+		if rt.Merge.GroupSize == 0 {
+			logger.Error("RegisterRuntime: merge group size too small",
+				"runtime", rt,
+			)
+			return nil, fmt.Errorf("%w: merge group too small", ErrInvalidArgument)
+		}
+
 		// Ensure there is at least one member of the transaction scheduler group.
 		if rt.TxnScheduler.GroupSize == 0 {
 			logger.Error("RegisterRuntime: transaction scheduler group too small",
@@ -1048,22 +1079,6 @@ func VerifyRegisterRuntimeArgs(
 	}
 	if err := rt.Genesis.SanityCheck(isGenesis); err != nil {
 		return nil, err
-	}
-
-	// Ensure there is at least one member of the compute group.
-	if rt.Executor.GroupSize == 0 {
-		logger.Error("RegisterRuntime: executor group size too small",
-			"runtime", rt,
-		)
-		return nil, fmt.Errorf("%w: executor group too small", ErrInvalidArgument)
-	}
-
-	// Ensure there is at least one member of the merge group.
-	if rt.Merge.GroupSize == 0 {
-		logger.Error("RegisterRuntime: merge group size too small",
-			"runtime", rt,
-		)
-		return nil, fmt.Errorf("%w: merge group too small", ErrInvalidArgument)
 	}
 
 	// Ensure a valid TEE hardware is specified.

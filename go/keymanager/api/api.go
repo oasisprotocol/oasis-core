@@ -144,7 +144,10 @@ type Genesis struct {
 // SanityCheckStatuses examines the statuses table.
 func SanityCheckStatuses(statuses []*Status) error {
 	for _, status := range statuses {
-		// TODO: Verify key manager runtime ID.
+		// Verify key manager runtime ID.
+		if !status.ID.IsKeyManager() {
+			return fmt.Errorf("keymanager: sanity check failed: key manager runtime ID %s is invalid", status.ID)
+		}
 
 		// Verify currently active key manager node IDs.
 		for _, node := range status.Nodes {
@@ -178,14 +181,6 @@ func (g *Genesis) SanityCheck() error {
 	}
 
 	return nil
-}
-
-// Frame is the Go analog of the Rust RPC Frame defined in
-// client/src/rpc/client.rs.
-type Frame struct {
-	Session            []byte `json:"session,omitempty"`
-	UntrustedPlaintext string `json:"untrusted_plaintext,omitempty"`
-	Payload            []byte `json:"payload,omitempty"`
 }
 
 func init() {

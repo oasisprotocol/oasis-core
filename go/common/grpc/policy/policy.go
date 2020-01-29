@@ -100,7 +100,14 @@ func (c *DynamicRuntimePolicyChecker) SetAccessPolicy(policy accessctl.Policy, r
 	c.accessPolicies[runtimeID] = policy
 
 	if c.watcher != nil {
-		c.watcher.PolicyUpdated(c.service, c.accessPolicies)
+		// Create a snapshot of the access policies map. While each policy is immutable, the set of
+		// all policies can be mutated by the dynamic runtime policy checker.
+		policies := make(map[common.Namespace]accessctl.Policy, len(c.accessPolicies))
+		for k, v := range c.accessPolicies {
+			policies[k] = v
+		}
+
+		c.watcher.PolicyUpdated(c.service, policies)
 	}
 }
 

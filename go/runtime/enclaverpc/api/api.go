@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 )
 
 // Transport is the EnclaveRPC transport interface.
@@ -18,5 +19,15 @@ type CallEnclaveRequest struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 	Endpoint  string           `json:"endpoint"`
 
-	Payload []byte `json:"payload"`
+	// Payload is a CBOR-serialized Frame.
+	Payload cbor.RawMessage `json:"payload"`
+}
+
+// Frame is an EnclaveRPC frame.
+//
+// It is the Go analog of the Rust RPC frame defined in client/src/rpc/client.rs.
+type Frame struct {
+	Session            []byte `json:"session,omitempty"`
+	UntrustedPlaintext string `json:"untrusted_plaintext,omitempty"`
+	Payload            []byte `json:"payload,omitempty"`
 }
