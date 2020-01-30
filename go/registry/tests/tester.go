@@ -1233,7 +1233,13 @@ func NewTestRuntime(seed []byte, entity *TestEntity, isKeyManager bool) (*TestRu
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1000,
 		},
-		Storage: api.StorageParameters{GroupSize: 3},
+		Storage: api.StorageParameters{
+			GroupSize:               3,
+			MaxApplyWriteLogEntries: 100_000,
+			MaxApplyOps:             2,
+			MaxMergeRoots:           8,
+			MaxMergeOps:             2,
+		},
 		AdmissionPolicy: api.RuntimeAdmissionPolicy{
 			AnyNode: &api.AnyNodeRuntimeAdmissionPolicy{},
 		},

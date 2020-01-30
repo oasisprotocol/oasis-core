@@ -40,6 +40,8 @@ var (
 	// ErrNoMergeRoots is the error returned when no other roots are passed
 	// to the Merge operation.
 	ErrNoMergeRoots = errors.New(ModuleName, 5, "storage: no roots to merge")
+	// ErrLimitReached means that a configured limit has been reached.
+	ErrLimitReached = errors.New(ModuleName, 6, "storage: limit reached")
 
 	// The following errors are reimports from NodeDB.
 

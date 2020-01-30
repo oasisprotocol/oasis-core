@@ -582,7 +582,11 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 			MaxBatchSizeBytes: 13,
 		},
 		Storage: registry.StorageParameters{
-			GroupSize: 9,
+			GroupSize:               9,
+			MaxApplyWriteLogEntries: 10,
+			MaxApplyOps:             11,
+			MaxMergeRoots:           12,
+			MaxMergeOps:             13,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{

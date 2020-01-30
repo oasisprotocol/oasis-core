@@ -133,6 +133,19 @@ type TxnSchedulerParameters struct {
 type StorageParameters struct {
 	// GroupSize is the size of the storage group.
 	GroupSize uint64 `json:"group_size"`
+
+	// MaxApplyWriteLogEntries is the maximum number of write log entries when performing an Apply
+	// operation.
+	MaxApplyWriteLogEntries uint64 `json:"max_apply_write_log_entries"`
+
+	// MaxApplyOps is the maximum number of apply operations in a batch.
+	MaxApplyOps uint64 `json:"max_apply_ops"`
+
+	// MaxMergeRoots is the maximum number of merge roots.
+	MaxMergeRoots uint64 `json:"max_merge_roots"`
+
+	// MaxApplyOps configures the maximum number of merge operations in a batch.
+	MaxMergeOps uint64 `json:"max_merge_ops"`
 }
 
 // AnyNodeRuntimeAdmissionPolicy allows any node to register.

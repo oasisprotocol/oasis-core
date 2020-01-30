@@ -302,6 +302,7 @@ func (s *Worker) initGenesis(gen *genesis.Document) error {
 func init() {
 	Flags.Bool(CfgWorkerEnabled, false, "Enable storage worker")
 	Flags.Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
+
 	Flags.Bool(CfgWorkerDebugIgnoreApply, false, "Ignore Apply operations (for debugging purposes)")
 	_ = Flags.MarkHidden(CfgWorkerDebugIgnoreApply)
 

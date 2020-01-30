@@ -134,6 +134,10 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 			"--" + cmdRegRt.CfgTxnSchedulerAlgorithm, cfg.TxnScheduler.Algorithm,
 			"--" + cmdRegRt.CfgTxnSchedulerBatchFlushTimeout, cfg.TxnScheduler.BatchFlushTimeout.String(),
 			"--" + cmdRegRt.CfgStorageGroupSize, strconv.FormatUint(cfg.Storage.GroupSize, 10),
+			"--" + cmdRegRt.CfgStorageMaxApplyWriteLogEntries, strconv.FormatUint(cfg.Storage.MaxApplyWriteLogEntries, 10),
+			"--" + cmdRegRt.CfgStorageMaxApplyOps, strconv.FormatUint(cfg.Storage.MaxApplyOps, 10),
+			"--" + cmdRegRt.CfgStorageMaxMergeRoots, strconv.FormatUint(cfg.Storage.MaxMergeRoots, 10),
+			"--" + cmdRegRt.CfgStorageMaxMergeOps, strconv.FormatUint(cfg.Storage.MaxMergeOps, 10),
 		}...)
 
 		if cfg.GenesisState != "" {

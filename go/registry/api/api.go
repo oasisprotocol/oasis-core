@@ -1073,6 +1073,30 @@ func VerifyRegisterRuntimeArgs(
 			)
 			return nil, fmt.Errorf("%w: storage group too small", ErrInvalidArgument)
 		}
+		if rt.Storage.MaxApplyWriteLogEntries < 10 {
+			logger.Error("RegisterRuntime: storage MaxApplyWriteLogEntries parameter too small",
+				"runtime", rt,
+			)
+			return nil, fmt.Errorf("%w: storage MaxApplyWriteLogEntries parameter too small", ErrInvalidArgument)
+		}
+		if rt.Storage.MaxApplyOps < 2 {
+			logger.Error("RegisterRuntime: storage MaxApplyOps parameter too small",
+				"runtime", rt,
+			)
+			return nil, fmt.Errorf("%w: storage MaxApplyOps parameter too small", ErrInvalidArgument)
+		}
+		if rt.Storage.MaxMergeRoots == 0 {
+			logger.Error("RegisterRuntime: storage MaxMergeRoots parameter too small",
+				"runtime", rt,
+			)
+			return nil, fmt.Errorf("%w: storage MaxMergeRoots parameter too small", ErrInvalidArgument)
+		}
+		if rt.Storage.MaxMergeOps < 2 {
+			logger.Error("RegisterRuntime: storage MaxMergeOps parameter too small",
+				"runtime", rt,
+			)
+			return nil, fmt.Errorf("%w: storage MaxMergeOps parameter too small", ErrInvalidArgument)
+		}
 
 		if rt.ID.IsKeyManager() {
 			logger.Error("RegisterRuntime: runtime ID flag mismatch",
