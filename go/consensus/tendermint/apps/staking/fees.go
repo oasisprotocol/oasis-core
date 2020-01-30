@@ -46,7 +46,7 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *staki
 			// For now we just disburse equally.
 			weight: weightVote,
 		}
-		if proposerEntity != nil && entityID == *proposerEntity {
+		if proposerEntity != nil && proposerEntity.Equal(entityID) {
 			d.weight += weightPropose
 		}
 		rewardAccounts = append(rewardAccounts, d)
