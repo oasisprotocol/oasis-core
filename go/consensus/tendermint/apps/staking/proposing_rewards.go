@@ -29,7 +29,11 @@ func (app *stakingApplication) resolveEntityIDFromProposer(regState *registrySta
 
 func (app *stakingApplication) rewardBlockProposing(ctx *abci.Context, stakeState *stakingState.MutableState, proposingEntity *signature.PublicKey) error {
 	if proposingEntity != nil {
-		epoch, err := app.state.GetEpoch(ctx.Ctx(), app.state.BlockHeight()+1)
+		blockHeight := app.state.BlockHeight()
+		if blockHeight == 0 {
+			return nil
+		}
+		epoch, err := app.state.GetEpoch(ctx.Ctx(), blockHeight+1)
 		if err != nil {
 			return fmt.Errorf("app state getting epoch: %w", err)
 		}
