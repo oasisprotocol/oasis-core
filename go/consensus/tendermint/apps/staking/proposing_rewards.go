@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
@@ -29,13 +30,13 @@ func (app *stakingApplication) resolveEntityIDFromProposer(regState *registrySta
 
 func (app *stakingApplication) rewardBlockProposing(ctx *abci.Context, stakeState *stakingState.MutableState, proposingEntity *signature.PublicKey) error {
 	if proposingEntity != nil {
-		blockHeight := app.state.BlockHeight()
-		if blockHeight == 0 {
-			return nil
-		}
-		epoch, err := app.state.GetEpoch(ctx.Ctx(), blockHeight+1)
+		epoch, err := app.state.GetCurrentEpoch(ctx.Ctx())
 		if err != nil {
-			return fmt.Errorf("app state getting epoch: %w", err)
+			return fmt.Errorf("app state getting current epoch: %w", err)
+		}
+		if epoch == epochtime.EpochInvalid {
+			ctx.Logger().Info("rewardBlockProposing: this block does not belong to an epoch. no block proposing reward")
+			return nil
 		}
 		if err = stakeState.AddRewards(epoch, staking.RewardFactorBlockProposed, []signature.PublicKey{*proposingEntity}); err != nil {
 			return fmt.Errorf("adding rewards: %w", err)

@@ -61,8 +61,12 @@ type ApplicationState interface {
 	// GetBaseEpoch returns the base epoch.
 	GetBaseEpoch() (epochtime.EpochTime, error)
 
-	// GetEpoch returns current epoch at block height.
+	// GetEpoch returns epoch at block height.
 	GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error)
+
+	// GetCurrentEpoch returns the epoch at the current block height,
+	// applying all the weird legacy off-by-one rules we have.
+	GetCurrentEpoch(ctx context.Context) (epochtime.EpochTime, error)
 
 	// EpochChanged returns true iff the current epoch has changed since the
 	// last block.  As a matter of convenience, the current epoch is returned.
@@ -193,9 +197,29 @@ func (s *applicationState) GetBaseEpoch() (epochtime.EpochTime, error) {
 	return s.timeSource.GetBaseEpoch(s.ctx)
 }
 
-// GetEpoch returns current epoch at block height.
+// GetEpoch returns epoch at block height.
 func (s *applicationState) GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error) {
 	return s.timeSource.GetEpoch(ctx, blockHeight)
+}
+
+// GetCurrentEpoch returns the epoch at the current block height,
+// applying all the weird legacy off-by-one rules we have.
+func (s *applicationState) GetCurrentEpoch(ctx context.Context) (epochtime.EpochTime, error) {
+	blockHeight := s.BlockHeight()
+	if blockHeight == 0 {
+		return epochtime.EpochInvalid, nil
+	} else if blockHeight == 1 {
+		currentEpoch, err := s.timeSource.GetEpoch(ctx, blockHeight)
+		if err != nil {
+			return epochtime.EpochInvalid, fmt.Errorf("application state time source get epoch for height %d: %w", blockHeight, err)
+		}
+		return currentEpoch, nil
+	}
+	currentEpoch, err := s.timeSource.GetEpoch(ctx, blockHeight+1)
+	if err != nil {
+		return epochtime.EpochInvalid, fmt.Errorf("application state time source get epoch for height %d: %w", blockHeight+1, err)
+	}
+	return currentEpoch, nil
 }
 
 // EpochChanged returns true iff the current epoch has changed since the
@@ -515,6 +539,10 @@ func (ms *mockApplicationState) GetBaseEpoch() (epochtime.EpochTime, error) {
 }
 
 func (ms *mockApplicationState) GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error) {
+	return ms.cfg.CurrentEpoch, nil
+}
+
+func (ms *mockApplicationState) GetCurrentEpoch(ctx context.Context) (epochtime.EpochTime, error) {
 	return ms.cfg.CurrentEpoch, nil
 }
 
