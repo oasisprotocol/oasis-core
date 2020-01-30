@@ -3,7 +3,6 @@ package fixgenesis
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
@@ -13,11 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/genesis"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
@@ -54,7 +49,7 @@ type oldDocument struct {
 	// EpochTime is the timekeeping genesis state.
 	EpochTime epochtime.Genesis `json:"epochtime"`
 	// Registry is the registry genesis state.
-	Registry oldRegistry `json:"registry"`
+	Registry registry.Genesis `json:"registry"`
 	// RootHash is the roothash genesis state.
 	RootHash roothash.Genesis `json:"roothash"`
 	// Staking is the staking genesis state.
@@ -73,25 +68,6 @@ type oldDocument struct {
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by the protocol.
 	ExtraData map[string][]byte `json:"extra_data"`
-}
-
-type oldRegistry struct {
-	// Parameters are the registry consensus parameters.
-	Parameters registry.ConsensusParameters `json:"params"`
-	// Entities is the initial list of entities.
-	Entities []*entity.SignedEntity `json:"entities,omitempty"`
-	// Runtimes is the initial list of runtimes.
-	Runtimes []*registry.SignedRuntime `json:"runtimes,omitempty"`
-	// SuspendedRuntimes is the list of suspended runtimes.
-	SuspendedRuntimes []*registry.SignedRuntime `json:"suspended_runtimes,omitempty"`
-	// Nodes is the initial list of nodes.
-	Nodes []*oldSignedNode `json:"nodes,omitempty"`
-	// NodeStatuses is a set of node statuses.
-	NodeStatuses map[signature.PublicKey]*registry.NodeStatus `json:"node_statuses,omitempty"`
-}
-
-type oldSignedNode struct {
-	signature.Signed
 }
 
 func doFixGenesis(cmd *cobra.Command, args []string) {
@@ -168,6 +144,7 @@ func updateGenesisDoc(oldDoc *oldDocument) (*genesis.Document, error) {
 		Time:       oldDoc.Time,
 		ChainID:    oldDoc.ChainID,
 		EpochTime:  oldDoc.EpochTime,
+		Registry:   oldDoc.Registry,
 		RootHash:   oldDoc.RootHash,
 		Staking:    oldDoc.Staking,
 		KeyManager: oldDoc.KeyManager,
@@ -178,38 +155,7 @@ func updateGenesisDoc(oldDoc *oldDocument) (*genesis.Document, error) {
 		ExtraData:  oldDoc.ExtraData,
 	}
 
-	// This currently is entirely registry genesis state changes.
-	oldReg, newReg := &oldDoc.Registry, &newDoc.Registry
-
-	// First copy the registry things that have not changed.
-	newReg.Parameters = oldReg.Parameters
-	newReg.Entities = oldReg.Entities
-	newReg.Runtimes = oldReg.Runtimes
-	newReg.SuspendedRuntimes = oldReg.SuspendedRuntimes
-	newReg.NodeStatuses = oldReg.NodeStatuses
-
-	// The node descriptor signature envelope format in the registry has
-	// changed.  Convert to the new envelope.
-	//
-	// Note: Actually using the genesis document requires that some
-	// signature checks be disabled.
-	for _, osn := range oldReg.Nodes {
-		var nsn node.MultiSignedNode
-		nsn.MultiSigned.Signatures = []signature.Signature{osn.Signed.Signature}
-
-		// Since the last public release, the node role flags have
-		// changed.  Rewrite all of the descriptors, since we only will
-		// have validators, and signature validation at genesis is
-		// disabled.
-		var n node.Node
-		if err := cbor.Unmarshal(osn.Signed.Blob, &n); err != nil {
-			return nil, fmt.Errorf("updateGenesisDoc: failed to unmarshal node: %w", err)
-		}
-		n.Roles = node.RoleValidator
-		nsn.MultiSigned.Blob = cbor.Marshal(&n)
-
-		newReg.Nodes = append(newReg.Nodes, &nsn)
-	}
+	// There is currently nothing to fix.
 
 	return newDoc, nil
 }

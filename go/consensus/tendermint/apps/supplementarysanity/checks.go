@@ -59,23 +59,15 @@ func checkRegistry(state *iavl.MutableTree, now epochtime.EpochTime) error {
 		return fmt.Errorf("SanityCheckRuntimes: %w", err)
 	}
 
-	// We can't run this check till everyone transitions to the new
-	// descriptor format, since there's currently no way to distinguish
-	// between nodes registered at genesis (old signature format) and
-	// nodes registered at runtime (MUST be new signature format).
-
-	/*
-		// Check nodes.
-		nodes, err := st.SignedNodes()
-		if err != nil {
-			return fmt.Errorf("SignedNodes: %w", err)
-		}
-		err = registry.SanityCheckNodes(logger, params, nodes, seenEntities, runtimeLookup, false, now)
-		if err != nil {
-			return fmt.Errorf("SanityCheckNodes: %w", err)
-		}
-	*/
-	_, _ = seenEntities, runtimeLookup
+	// Check nodes.
+	nodes, err := st.SignedNodes()
+	if err != nil {
+		return fmt.Errorf("SignedNodes: %w", err)
+	}
+	err = registry.SanityCheckNodes(logger, params, nodes, seenEntities, runtimeLookup, false, now)
+	if err != nil {
+		return fmt.Errorf("SanityCheckNodes: %w", err)
+	}
 
 	return nil
 }
