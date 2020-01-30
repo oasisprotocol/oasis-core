@@ -29,18 +29,20 @@ func (app *stakingApplication) resolveEntityIDFromProposer(regState *registrySta
 }
 
 func (app *stakingApplication) rewardBlockProposing(ctx *abci.Context, stakeState *stakingState.MutableState, proposingEntity *signature.PublicKey) error {
-	if proposingEntity != nil {
-		epoch, err := app.state.GetCurrentEpoch(ctx.Ctx())
-		if err != nil {
-			return fmt.Errorf("app state getting current epoch: %w", err)
-		}
-		if epoch == epochtime.EpochInvalid {
-			ctx.Logger().Info("rewardBlockProposing: this block does not belong to an epoch. no block proposing reward")
-			return nil
-		}
-		if err = stakeState.AddRewards(epoch, staking.RewardFactorBlockProposed, []signature.PublicKey{*proposingEntity}); err != nil {
-			return fmt.Errorf("adding rewards: %w", err)
-		}
+	if proposingEntity == nil {
+		return nil
+	}
+
+	epoch, err := app.state.GetCurrentEpoch(ctx.Ctx())
+	if err != nil {
+		return fmt.Errorf("app state getting current epoch: %w", err)
+	}
+	if epoch == epochtime.EpochInvalid {
+		ctx.Logger().Info("rewardBlockProposing: this block does not belong to an epoch. no block proposing reward")
+		return nil
+	}
+	if err = stakeState.AddRewards(epoch, staking.RewardFactorBlockProposed, []signature.PublicKey{*proposingEntity}); err != nil {
+		return fmt.Errorf("adding rewards: %w", err)
 	}
 	return nil
 }
