@@ -3,6 +3,7 @@ package fixgenesis
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -195,10 +197,16 @@ func updateGenesisDoc(oldDoc *oldDocument) (*genesis.Document, error) {
 		var nsn node.MultiSignedNode
 		nsn.MultiSigned.Signatures = []signature.Signature{osn.Signed.Signature}
 
-		// TODO: Someone that understands the issue can also fix the node
-		// role flags here.
-
-		nsn.MultiSigned.Blob = osn.Signed.Blob
+		// Since the last public release, the node role flags have
+		// changed.  Rewrite all of the descriptors, since we only will
+		// have validators, and signature validation at genesis is
+		// disabled.
+		var n node.Node
+		if err := cbor.Unmarshal(osn.Signed.Blob, &n); err != nil {
+			return nil, fmt.Errorf("updateGenesisDoc: failed to unmarshal node: %w", err)
+		}
+		n.Roles = node.RoleValidator
+		nsn.MultiSigned.Blob = cbor.Marshal(&n)
 
 		newReg.Nodes = append(newReg.Nodes, &nsn)
 	}
