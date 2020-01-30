@@ -200,7 +200,11 @@ func TestGenesisSanityCheck(t *testing.T) {
 			MaxBatchSizeBytes: 1,
 		},
 		Storage: registry.StorageParameters{
-			GroupSize: 1,
+			GroupSize:               1,
+			MaxApplyWriteLogEntries: 100_000,
+			MaxApplyOps:             2,
+			MaxMergeRoots:           8,
+			MaxMergeOps:             2,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},

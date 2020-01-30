@@ -99,7 +99,13 @@ func NewDefaultFixture() (*oasis.NetworkFixture, error) {
 					MaxBatchSizeBytes: 1000,
 					BatchFlushTimeout: 20 * time.Second,
 				},
-				Storage: registry.StorageParameters{GroupSize: 1},
+				Storage: registry.StorageParameters{
+					GroupSize:               1,
+					MaxApplyWriteLogEntries: 100_000,
+					MaxApplyOps:             2,
+					MaxMergeRoots:           8,
+					MaxMergeOps:             2,
+				},
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},

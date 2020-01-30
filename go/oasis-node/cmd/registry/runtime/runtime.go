@@ -57,7 +57,11 @@ const (
 	CfgMergeRoundTimeout      = "runtime.merge.round_timeout"
 
 	// Storage committee flags.
-	CfgStorageGroupSize = "runtime.storage.group_size"
+	CfgStorageGroupSize               = "runtime.storage.group_size"
+	CfgStorageMaxApplyWriteLogEntries = "runtime.storage.max_apply_write_log_entries"
+	CfgStorageMaxApplyOps             = "runtime.storage.max_apply_ops"
+	CfgStorageMaxMergeRoots           = "runtime.storage.max_merge_roots"
+	CfgStorageMaxMergeOps             = "runtime.storage.max_merge_ops"
 
 	// Transaction scheduler flags.
 	CfgTxnSchedulerGroupSize         = "runtime.txn_scheduler.group_size"
@@ -356,25 +360,31 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		},
 		KeyManager: kmID,
 		Executor: registry.ExecutorParameters{
-			GroupSize:         uint64(viper.GetInt64(CfgExecutorGroupSize)),
-			GroupBackupSize:   uint64(viper.GetInt64(CfgExecutorGroupBackupSize)),
-			AllowedStragglers: uint64(viper.GetInt64(CfgExecutorAllowedStragglers)),
+			GroupSize:         viper.GetUint64(CfgExecutorGroupSize),
+			GroupBackupSize:   viper.GetUint64(CfgExecutorGroupBackupSize),
+			AllowedStragglers: viper.GetUint64(CfgExecutorAllowedStragglers),
 			RoundTimeout:      viper.GetDuration(CfgExecutorRoundTimeout),
 		},
 		Merge: registry.MergeParameters{
-			GroupSize:         uint64(viper.GetInt64(CfgMergeGroupSize)),
-			GroupBackupSize:   uint64(viper.GetInt64(CfgMergeGroupBackupSize)),
-			AllowedStragglers: uint64(viper.GetInt64(CfgMergeAllowedStragglers)),
+			GroupSize:         viper.GetUint64(CfgMergeGroupSize),
+			GroupBackupSize:   viper.GetUint64(CfgMergeGroupBackupSize),
+			AllowedStragglers: viper.GetUint64(CfgMergeAllowedStragglers),
 			RoundTimeout:      viper.GetDuration(CfgMergeRoundTimeout),
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
-			GroupSize:         uint64(viper.GetInt64(CfgTxnSchedulerGroupSize)),
+			GroupSize:         viper.GetUint64(CfgTxnSchedulerGroupSize),
 			Algorithm:         viper.GetString(CfgTxnSchedulerAlgorithm),
 			BatchFlushTimeout: viper.GetDuration(CfgTxnSchedulerBatchFlushTimeout),
 			MaxBatchSize:      viper.GetUint64(CfgTxnSchedulerMaxBatchSize),
 			MaxBatchSizeBytes: uint64(viper.GetSizeInBytes(CfgTxnSchedulerMaxBatchSizeBytes)),
 		},
-		Storage: registry.StorageParameters{GroupSize: uint64(viper.GetInt64(CfgStorageGroupSize))},
+		Storage: registry.StorageParameters{
+			GroupSize:               viper.GetUint64(CfgStorageGroupSize),
+			MaxApplyWriteLogEntries: viper.GetUint64(CfgStorageMaxApplyWriteLogEntries),
+			MaxApplyOps:             viper.GetUint64(CfgStorageMaxApplyOps),
+			MaxMergeRoots:           viper.GetUint64(CfgStorageMaxMergeRoots),
+			MaxMergeOps:             viper.GetUint64(CfgStorageMaxMergeOps),
+		},
 	}
 	if teeHardware == node.TEEHardwareIntelSGX {
 		var vi registry.VersionInfoIntelSGX
@@ -503,6 +513,10 @@ func init() {
 
 	// Init Storage committee flags.
 	runtimeFlags.Uint64(CfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
+	runtimeFlags.Uint64(CfgStorageMaxApplyWriteLogEntries, 100_000, "Maximum number of write log entries")
+	runtimeFlags.Uint64(CfgStorageMaxApplyOps, 2, "Maximum number of apply operations in a batch")
+	runtimeFlags.Uint64(CfgStorageMaxMergeRoots, 8, "Maximum number of merge roots")
+	runtimeFlags.Uint64(CfgStorageMaxMergeOps, 2, "Maximum number of merge operations in a batch")
 
 	// Init Admission policy flags.
 	runtimeFlags.String(CfgAdmissionPolicy, "", "What type of node admission policy to have")
