@@ -33,11 +33,6 @@ const (
 	Leader Role = 3
 )
 
-// RewardFactorEpochElectionAny is the factor for a reward
-// distributed per epoch to entities that have any node considered
-// in any election.
-var RewardFactorEpochElectionAny *quantity.Quantity
-
 // String returns a string representation of a Role.
 func (r Role) String() string {
 	switch r {
@@ -222,6 +217,11 @@ type ConsensusParameters struct {
 	// DebugStaticValidators is true iff the scheduler should use
 	// a static validator set instead of electing anything.
 	DebugStaticValidators bool `json:"debug_static_validators"`
+
+	// RewardFactorEpochElectionAny is the factor for a reward
+	// distributed per epoch to entities that have any node considered
+	// in any election.
+	RewardFactorEpochElectionAny quantity.Quantity `json:"reward_factor_epoch_election_any"`
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
@@ -232,8 +232,4 @@ func (g *Genesis) SanityCheck() error {
 	}
 
 	return nil
-}
-
-func init() {
-	RewardFactorEpochElectionAny = quantity.NewQuantity()
 }
