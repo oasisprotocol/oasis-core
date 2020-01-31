@@ -22,6 +22,15 @@ func (p *ConsensusParameters) SanityCheck() error {
 		}
 	}
 
+	// Fee weights.
+	if p.FeeWeightVote < 0 {
+		return fmt.Errorf("FeeWeightVote %d < 0 would cause negative distributions", p.FeeWeightVote)
+	}
+	feeVoteAndPropose := p.FeeWeightVote + p.FeeWeightPropose
+	if feeVoteAndPropose <= 0 {
+		return fmt.Errorf("FeeWeightVote %d + FeeWeightPropose %d = %d <= 0 could be degenerate", p.FeeWeightVote, p.FeeWeightPropose, feeVoteAndPropose)
+	}
+
 	return nil
 }
 
