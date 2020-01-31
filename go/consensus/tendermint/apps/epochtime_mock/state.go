@@ -54,7 +54,7 @@ func (s *immutableState) getFutureEpoch() (*mockEpochTimeState, error) {
 	return &state, nil
 }
 
-func newImmutableState(state *abci.ApplicationState, version int64) (*immutableState, error) {
+func newImmutableState(state abci.ApplicationState, version int64) (*immutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
 		return nil, err

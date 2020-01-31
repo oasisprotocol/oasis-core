@@ -95,7 +95,7 @@ func newStakeAccumulator(ctx *abci.Context, unsafeBypass bool) (*stakeAccumulato
 }
 
 type schedulerApplication struct {
-	state *abci.ApplicationState
+	state abci.ApplicationState
 
 	baseEpoch epochtime.EpochTime
 }
@@ -120,7 +120,7 @@ func (app *schedulerApplication) Dependencies() []string {
 	return []string{beaconapp.AppName, registryapp.AppName, stakingapp.AppName}
 }
 
-func (app *schedulerApplication) OnRegister(state *abci.ApplicationState) {
+func (app *schedulerApplication) OnRegister(state abci.ApplicationState) {
 	app.state = state
 }
 

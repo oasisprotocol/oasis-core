@@ -21,7 +21,7 @@ import (
 var _ abci.Application = (*stakingApplication)(nil)
 
 type stakingApplication struct {
-	state *abci.ApplicationState
+	state abci.ApplicationState
 }
 
 func (app *stakingApplication) Name() string {
@@ -44,7 +44,7 @@ func (app *stakingApplication) Dependencies() []string {
 	return nil
 }
 
-func (app *stakingApplication) OnRegister(state *abci.ApplicationState) {
+func (app *stakingApplication) OnRegister(state abci.ApplicationState) {
 	app.state = state
 }
 

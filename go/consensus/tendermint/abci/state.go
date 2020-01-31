@@ -20,7 +20,7 @@ type ImmutableState struct {
 }
 
 // NewImmutableState creates a new immutable state wrapper.
-func NewImmutableState(state *ApplicationState, version int64) (*ImmutableState, error) {
+func NewImmutableState(state ApplicationState, version int64) (*ImmutableState, error) {
 	if state == nil {
 		return nil, ErrNoState
 	}

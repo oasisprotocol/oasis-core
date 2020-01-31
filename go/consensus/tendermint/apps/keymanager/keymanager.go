@@ -24,7 +24,7 @@ import (
 var emptyHashSha3 = sha3.Sum256(nil)
 
 type keymanagerApplication struct {
-	state *abci.ApplicationState
+	state abci.ApplicationState
 }
 
 func (app *keymanagerApplication) Name() string {
@@ -47,7 +47,7 @@ func (app *keymanagerApplication) Dependencies() []string {
 	return []string{registryapp.AppName}
 }
 
-func (app *keymanagerApplication) OnRegister(state *abci.ApplicationState) {
+func (app *keymanagerApplication) OnRegister(state abci.ApplicationState) {
 	app.state = state
 }
 

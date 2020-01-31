@@ -116,7 +116,7 @@ type Application interface {
 
 	// OnRegister is the function that is called when the Application
 	// is registered with the multiplexer instance.
-	OnRegister(state *ApplicationState)
+	OnRegister(state ApplicationState)
 
 	// OnCleanup is the function that is called when the ApplicationServer
 	// has been halted.
@@ -291,7 +291,7 @@ type abciMux struct {
 	types.BaseApplication
 
 	logger *logging.Logger
-	state  *ApplicationState
+	state  *applicationState
 
 	appsByName     map[string]Application
 	appsByMethod   map[transaction.MethodName]Application
@@ -434,7 +434,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	// Call InitChain() on all applications.
 	mux.logger.Debug("InitChain: initializing applications")
 
-	ctx := NewContext(ContextInitChain, mux.currentTime, mux.state)
+	ctx := mux.state.NewContext(ContextInitChain, mux.currentTime)
 	defer ctx.Close()
 
 	for _, app := range mux.appsByLexOrder {
@@ -461,36 +461,6 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	return resp
 }
 
-func (s *ApplicationState) inHaltEpoch(ctx *Context) bool {
-	blockHeight := s.BlockHeight()
-
-	currentEpoch, err := s.GetEpoch(ctx.Ctx(), blockHeight+1)
-	if err != nil {
-		s.logger.Error("inHaltEpoch: failed to get epoch",
-			"err", err,
-			"block_height", blockHeight+1,
-		)
-		return false
-	}
-	s.haltMode = currentEpoch == s.haltEpochHeight
-	return s.haltMode
-}
-
-func (s *ApplicationState) afterHaltEpoch(ctx *Context) bool {
-	blockHeight := s.BlockHeight()
-
-	currentEpoch, err := s.GetEpoch(ctx.Ctx(), blockHeight+1)
-	if err != nil {
-		s.logger.Error("afterHaltEpoch: failed to get epoch",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return false
-	}
-
-	return currentEpoch > s.haltEpochHeight
-}
-
 func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
 	blockHeight := mux.state.BlockHeight()
 	mux.logger.Debug("BeginBlock",
@@ -513,7 +483,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		mux.state.blockCtx.Set(GasAccountantKey{}, NewNopGasAccountant())
 	}
 	// Create BeginBlock context.
-	ctx := NewContext(ContextBeginBlock, mux.currentTime, mux.state)
+	ctx := mux.state.NewContext(ContextBeginBlock, mux.currentTime)
 	defer ctx.Close()
 
 	switch mux.state.haltMode {
@@ -684,7 +654,7 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 	// be called in parallel to the consensus layer and to other invocations.
 	//
 	// For simulation mode, time will be filled in by NewContext from last block time.
-	ctx := NewContext(ContextSimulateTx, time.Time{}, mux.state)
+	ctx := mux.state.NewContext(ContextSimulateTx, time.Time{})
 	defer ctx.Close()
 
 	ctx.SetTxSigner(caller)
@@ -697,7 +667,7 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 }
 
 func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
-	ctx := NewContext(ContextCheckTx, mux.currentTime, mux.state)
+	ctx := mux.state.NewContext(ContextCheckTx, mux.currentTime)
 	defer ctx.Close()
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
@@ -743,7 +713,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 }
 
 func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
-	ctx := NewContext(ContextDeliverTx, mux.currentTime, mux.state)
+	ctx := mux.state.NewContext(ContextDeliverTx, mux.currentTime)
 	defer ctx.Close()
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
@@ -778,7 +748,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 		return types.ResponseEndBlock{}
 	}
 
-	ctx := NewContext(ContextEndBlock, mux.currentTime, mux.state)
+	ctx := mux.state.NewContext(ContextEndBlock, mux.currentTime)
 	defer ctx.Close()
 
 	// Fire all application timers first.
@@ -925,9 +895,55 @@ func newABCIMux(ctx context.Context, cfg *ApplicationConfig) (*abciMux, error) {
 	return mux, nil
 }
 
-// ApplicationState is the overall past, present and future state
-// of all multiplexed applications.
-type ApplicationState struct {
+// ApplicationState is the overall past, present and future state of all multiplexed applications.
+type ApplicationState interface {
+	// BlockHeight returns the last committed block height.
+	BlockHeight() int64
+
+	// BlockHash returns the last committed block hash.
+	BlockHash() []byte
+
+	// BlockContext returns the current block context which can be used
+	// to store intermediate per-block results.
+	//
+	// This method must only be called from BeginBlock/DeliverTx/EndBlock
+	// and calls from anywhere else will cause races.
+	BlockContext() *BlockContext
+
+	// DeliverTxTree returns the versioned tree to be used by queries
+	// to view comitted data, and transactions to build the next version.
+	DeliverTxTree() *iavl.MutableTree
+
+	// CheckTxTree returns the state tree to be used for modifications
+	// inside CheckTx (mempool connection) calls.
+	//
+	// This state is never persisted.
+	CheckTxTree() *iavl.MutableTree
+
+	// GetBaseEpoch returns the base epoch.
+	GetBaseEpoch() (epochtime.EpochTime, error)
+
+	// GetEpoch returns current epoch at block height.
+	GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error)
+
+	// EpochChanged returns true iff the current epoch has changed since the
+	// last block.  As a matter of convenience, the current epoch is returned.
+	EpochChanged(ctx *Context) (bool, epochtime.EpochTime)
+
+	// Genesis returns the ABCI genesis state.
+	Genesis() *genesis.Document
+
+	// MinGasPrice returns the configured minimum gas price.
+	MinGasPrice() *quantity.Quantity
+
+	// OwnTxSigner returns the transaction signer identity of the local node.
+	OwnTxSigner() signature.PublicKey
+
+	// NewContext creates a new application processing context.
+	NewContext(mode ContextMode, now time.Time) *Context
+}
+
+type applicationState struct {
 	logger *logging.Logger
 
 	ctx           context.Context
@@ -956,8 +972,47 @@ type ApplicationState struct {
 	metricsClosedCh chan struct{}
 }
 
+func (s *applicationState) NewContext(mode ContextMode, now time.Time) *Context {
+	s.blockLock.RLock()
+	defer s.blockLock.RUnlock()
+
+	c := &Context{
+		mode:          mode,
+		currentTime:   now,
+		gasAccountant: NewNopGasAccountant(),
+		appState:      s,
+		blockHeight:   s.blockHeight,
+		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
+	}
+	c.ctx = context.WithValue(s.ctx, contextKey{}, c)
+
+	switch mode {
+	case ContextInitChain:
+		c.state = s.deliverTxTree
+	case ContextCheckTx:
+		c.state = s.checkTxTree
+	case ContextDeliverTx, ContextBeginBlock, ContextEndBlock:
+		c.state = s.deliverTxTree
+		c.blockCtx = s.blockCtx
+	case ContextSimulateTx:
+		// Since simulation is running in parallel to any changes to the database, we make sure
+		// to create a separate in-memory tree at the given block height.
+		c.state = iavl.NewMutableTree(s.db, 128)
+		// NOTE: This requires a specific implementation of `LoadVersion` which doesn't rely
+		//       on cached metadata. Such an implementation is provided in our fork of IAVL.
+		if _, err := c.state.LoadVersion(c.blockHeight); err != nil {
+			panic(fmt.Errorf("context: failed to load state at height %d: %w", c.blockHeight, err))
+		}
+		c.currentTime = s.blockTime
+	default:
+		panic(fmt.Errorf("context: invalid mode: %s (%d)", mode, mode))
+	}
+
+	return c
+}
+
 // BlockHeight returns the last committed block height.
-func (s *ApplicationState) BlockHeight() int64 {
+func (s *applicationState) BlockHeight() int64 {
 	s.blockLock.RLock()
 	defer s.blockLock.RUnlock()
 
@@ -965,7 +1020,7 @@ func (s *ApplicationState) BlockHeight() int64 {
 }
 
 // BlockHash returns the last committed block hash.
-func (s *ApplicationState) BlockHash() []byte {
+func (s *applicationState) BlockHash() []byte {
 	s.blockLock.RLock()
 	defer s.blockLock.RUnlock()
 
@@ -977,13 +1032,13 @@ func (s *ApplicationState) BlockHash() []byte {
 //
 // This method must only be called from BeginBlock/DeliverTx/EndBlock
 // and calls from anywhere else will cause races.
-func (s *ApplicationState) BlockContext() *BlockContext {
+func (s *applicationState) BlockContext() *BlockContext {
 	return s.blockCtx
 }
 
 // DeliverTxTree returns the versioned tree to be used by queries
 // to view comitted data, and transactions to build the next version.
-func (s *ApplicationState) DeliverTxTree() *iavl.MutableTree {
+func (s *applicationState) DeliverTxTree() *iavl.MutableTree {
 	return s.deliverTxTree
 }
 
@@ -991,23 +1046,23 @@ func (s *ApplicationState) DeliverTxTree() *iavl.MutableTree {
 // inside CheckTx (mempool connection) calls.
 //
 // This state is never persisted.
-func (s *ApplicationState) CheckTxTree() *iavl.MutableTree {
+func (s *applicationState) CheckTxTree() *iavl.MutableTree {
 	return s.checkTxTree
 }
 
 // GetBaseEpoch returns the base epoch.
-func (s *ApplicationState) GetBaseEpoch() (epochtime.EpochTime, error) {
+func (s *applicationState) GetBaseEpoch() (epochtime.EpochTime, error) {
 	return s.timeSource.GetBaseEpoch(s.ctx)
 }
 
 // GetEpoch returns current epoch at block height.
-func (s *ApplicationState) GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error) {
+func (s *applicationState) GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error) {
 	return s.timeSource.GetEpoch(ctx, blockHeight)
 }
 
 // EpochChanged returns true iff the current epoch has changed since the
 // last block.  As a matter of convenience, the current epoch is returned.
-func (s *ApplicationState) EpochChanged(ctx *Context) (bool, epochtime.EpochTime) {
+func (s *applicationState) EpochChanged(ctx *Context) (bool, epochtime.EpochTime) {
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
 		return false, epochtime.EpochInvalid
@@ -1052,7 +1107,7 @@ func (s *ApplicationState) EpochChanged(ctx *Context) (bool, epochtime.EpochTime
 }
 
 // Genesis returns the ABCI genesis state.
-func (s *ApplicationState) Genesis() *genesis.Document {
+func (s *applicationState) Genesis() *genesis.Document {
 	_, b := s.checkTxTree.Get([]byte(stateKeyGenesisRequest))
 
 	var req types.RequestInitChain
@@ -1076,16 +1131,46 @@ func (s *ApplicationState) Genesis() *genesis.Document {
 }
 
 // MinGasPrice returns the configured minimum gas price.
-func (s *ApplicationState) MinGasPrice() *quantity.Quantity {
+func (s *applicationState) MinGasPrice() *quantity.Quantity {
 	return &s.minGasPrice
 }
 
 // OwnTxSigner returns the transaction signer identity of the local node.
-func (s *ApplicationState) OwnTxSigner() signature.PublicKey {
+func (s *applicationState) OwnTxSigner() signature.PublicKey {
 	return s.ownTxSigner
 }
 
-func (s *ApplicationState) doCommit(now time.Time) error {
+func (s *applicationState) inHaltEpoch(ctx *Context) bool {
+	blockHeight := s.BlockHeight()
+
+	currentEpoch, err := s.GetEpoch(ctx.Ctx(), blockHeight+1)
+	if err != nil {
+		s.logger.Error("inHaltEpoch: failed to get epoch",
+			"err", err,
+			"block_height", blockHeight+1,
+		)
+		return false
+	}
+	s.haltMode = currentEpoch == s.haltEpochHeight
+	return s.haltMode
+}
+
+func (s *applicationState) afterHaltEpoch(ctx *Context) bool {
+	blockHeight := s.BlockHeight()
+
+	currentEpoch, err := s.GetEpoch(ctx.Ctx(), blockHeight+1)
+	if err != nil {
+		s.logger.Error("afterHaltEpoch: failed to get epoch",
+			"err", err,
+			"block_height", blockHeight,
+		)
+		return false
+	}
+
+	return currentEpoch > s.haltEpochHeight
+}
+
+func (s *applicationState) doCommit(now time.Time) error {
 	// Save the new version of the persistent tree.
 	blockHash, blockHeight, err := s.deliverTxTree.SaveVersion()
 	if err == nil {
@@ -1117,7 +1202,7 @@ func (s *ApplicationState) doCommit(now time.Time) error {
 	return err
 }
 
-func (s *ApplicationState) doCleanup() {
+func (s *applicationState) doCleanup() {
 	if s.db != nil {
 		// Don't close the DB out from under the metrics worker.
 		close(s.metricsCloseCh)
@@ -1128,7 +1213,7 @@ func (s *ApplicationState) doCleanup() {
 	}
 }
 
-func (s *ApplicationState) updateMetrics() error {
+func (s *applicationState) updateMetrics() error {
 	var dbSize int64
 
 	switch m := s.db.(type) {
@@ -1149,7 +1234,7 @@ func (s *ApplicationState) updateMetrics() error {
 	return nil
 }
 
-func (s *ApplicationState) metricsWorker() {
+func (s *applicationState) metricsWorker() {
 	defer close(s.metricsClosedCh)
 
 	// Update the metrics once on initialization.
@@ -1175,7 +1260,7 @@ func (s *ApplicationState) metricsWorker() {
 	}
 }
 
-func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*ApplicationState, error) {
+func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicationState, error) {
 	db, err := db.New(filepath.Join(cfg.DataDir, "abci-mux-state"), false)
 	if err != nil {
 		return nil, err
@@ -1214,7 +1299,7 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*Applicat
 		return nil, fmt.Errorf("state: invalid minimum gas price: %w", err)
 	}
 
-	s := &ApplicationState{
+	s := &applicationState{
 		logger:          logging.GetLogger("abci-mux/state"),
 		ctx:             ctx,
 		db:              db,

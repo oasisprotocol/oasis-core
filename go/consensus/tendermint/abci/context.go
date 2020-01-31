@@ -3,7 +3,6 @@ package abci
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/tendermint/iavl"
@@ -58,6 +57,8 @@ func (m ContextMode) String() string {
 
 // Context is the context of processing a transaction/block.
 type Context struct {
+	ctx context.Context
+
 	mode        ContextMode
 	currentTime time.Time
 
@@ -67,7 +68,7 @@ type Context struct {
 
 	txSigner signature.PublicKey
 
-	appState    *ApplicationState
+	appState    ApplicationState
 	state       *iavl.MutableTree
 	blockHeight int64
 	blockCtx    *BlockContext
@@ -78,50 +79,12 @@ type Context struct {
 // NewMockContext creates a new mock context for use in tests.
 func NewMockContext(mode ContextMode, now time.Time) *Context {
 	return &Context{
+		ctx:           context.Background(),
 		mode:          mode,
 		currentTime:   now,
 		gasAccountant: NewNopGasAccountant(),
 		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
 	}
-}
-
-// NewContext creates a new Context of the given type.
-func NewContext(mode ContextMode, now time.Time, appState *ApplicationState) *Context {
-	appState.blockLock.RLock()
-	defer appState.blockLock.RUnlock()
-
-	c := &Context{
-		mode:          mode,
-		currentTime:   now,
-		gasAccountant: NewNopGasAccountant(),
-		appState:      appState,
-		blockHeight:   appState.blockHeight,
-		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
-	}
-
-	switch mode {
-	case ContextInitChain:
-		c.state = appState.deliverTxTree
-	case ContextCheckTx:
-		c.state = appState.checkTxTree
-	case ContextDeliverTx, ContextBeginBlock, ContextEndBlock:
-		c.state = appState.deliverTxTree
-		c.blockCtx = appState.blockCtx
-	case ContextSimulateTx:
-		// Since simulation is running in parallel to any changes to the database, we make sure
-		// to create a separate in-memory tree at the given block height.
-		c.state = iavl.NewMutableTree(appState.db, 128)
-		// NOTE: This requires a specific implementation of `LoadVersion` which doesn't rely
-		//       on cached metadata. Such an implementation is provided in our fork of IAVL.
-		if _, err := c.state.LoadVersion(c.blockHeight); err != nil {
-			panic(fmt.Errorf("context: failed to load state at height %d: %w", c.blockHeight, err))
-		}
-		c.currentTime = appState.blockTime
-	default:
-		panic(fmt.Errorf("context: invalid mode: %s (%d)", mode, mode))
-	}
-
-	return c
 }
 
 // FromCtx extracts an ABCI context from a context.Context if one has been
@@ -152,7 +115,7 @@ func (c *Context) Logger() *logging.Logger {
 
 // Ctx returns a context.Context that is associated with this ABCI context.
 func (c *Context) Ctx() context.Context {
-	return context.WithValue(c.appState.ctx, contextKey{}, c)
+	return c.ctx
 }
 
 // Mode returns the context mode.
@@ -270,7 +233,7 @@ func (c *Context) State() *iavl.MutableTree {
 // AppState returns the application state.
 //
 // Accessing application state in simulation mode is not allowed and will result in a panic.
-func (c *Context) AppState() *ApplicationState {
+func (c *Context) AppState() ApplicationState {
 	if c.IsSimulation() {
 		panic("context: application state is not available in simulation mode")
 	}
