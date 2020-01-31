@@ -3,6 +3,7 @@ package staking
 import (
 	"context"
 	"encoding/hex"
+	"math"
 	"time"
 
 	tmcrypto "github.com/tendermint/tendermint/crypto"
@@ -11,10 +12,11 @@ import (
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-func (app *stakingApplication) onEvidenceDoubleSign(
+func onEvidenceDoubleSign(
 	ctx *abci.Context,
 	addr tmcrypto.Address,
 	height int64,
@@ -70,12 +72,17 @@ func (app *stakingApplication) onEvidenceDoubleSign(
 	// validator from being scheduled in the next epoch.
 	if penalty.FreezeInterval > 0 {
 		var epoch epochtime.EpochTime
-		epoch, err = app.state.GetEpoch(context.Background(), ctx.BlockHeight()+1)
+		epoch, err = ctx.AppState().GetEpoch(context.Background(), ctx.BlockHeight()+1)
 		if err != nil {
 			return err
 		}
 
-		nodeStatus.FreezeEndTime = epoch + penalty.FreezeInterval
+		// Check for overflow.
+		if math.MaxUint64-penalty.FreezeInterval < epoch {
+			nodeStatus.FreezeEndTime = registry.FreezeForever
+		} else {
+			nodeStatus.FreezeEndTime = epoch + penalty.FreezeInterval
+		}
 	}
 
 	// Slash validator.
