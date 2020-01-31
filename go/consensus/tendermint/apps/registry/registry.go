@@ -3,6 +3,7 @@ package registry
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/tendermint/tendermint/abci/types"
 
@@ -170,6 +171,10 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 		}
 
 		// If node has been expired for the debonding interval, finally remove it.
+		if math.MaxUint64-node.Expiration < uint64(debondingInterval) {
+			// Overflow, the node will never be removed.
+			continue
+		}
 		if epochtime.EpochTime(node.Expiration)+debondingInterval < registryEpoch {
 			ctx.Logger().Debug("removing expired node",
 				"node_id", node.ID,
