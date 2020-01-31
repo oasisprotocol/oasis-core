@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
@@ -113,7 +114,11 @@ func doInfo(cmd *cobra.Command, args []string) {
 		api.KindCompute,
 		api.KindStorage,
 	}
-	thresholds := make(map[api.ThresholdKind]*quantity.Quantity)
+	type threshold struct {
+		value *quantity.Quantity
+		valid bool
+	}
+	thresholds := make(map[api.ThresholdKind]*threshold)
 	doWithRetries(cmd, "query staking threshold(s)", func() error {
 		for _, k := range thresholdsToQuery {
 			if thresholds[k] != nil {
@@ -122,14 +127,25 @@ func doInfo(cmd *cobra.Command, args []string) {
 
 			q, err := client.Threshold(ctx, &api.ThresholdQuery{Kind: k, Height: consensus.HeightLatest})
 			if err != nil {
+				if errors.Is(err, api.ErrInvalidThreshold) {
+					logger.Warn(fmt.Sprintf("invalid staking threshold kind: %s", k))
+					thresholds[k] = &threshold{}
+					continue
+				}
 				return err
 			}
-			thresholds[k] = q
+			thresholds[k] = &threshold{
+				value: q,
+				valid: true,
+			}
 		}
 		return nil
 	})
 	for _, k := range thresholdsToQuery {
-		fmt.Printf("Staking threshold (%s): %v\n", k, thresholds[k])
+		thres := thresholds[k]
+		if thres.valid {
+			fmt.Printf("Staking threshold (%s): %v\n", k, thres.value)
+		}
 	}
 }
 

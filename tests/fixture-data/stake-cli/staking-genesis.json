@@ -5,6 +5,10 @@
       "rate_bound_lead": 30,
       "max_rate_steps": 4,
       "max_bound_steps": 12
+    },
+    "thresholds": {
+      "0": "0",
+      "1": "0"
     }
   }
 }
