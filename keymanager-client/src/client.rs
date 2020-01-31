@@ -94,6 +94,9 @@ impl RemoteClient {
         keys_cache_sizes: usize,
     ) -> Self {
         #[cfg(target_env = "sgx")]
+        init_trusted_policy_signers();
+
+        #[cfg(target_env = "sgx")]
         let enclaves: Option<HashSet<EnclaveIdentity>> = match protocol
             .make_request(Context::background(), Body::HostKeyManagerPolicyRequest {})
         {

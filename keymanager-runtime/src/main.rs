@@ -1,22 +1,12 @@
 extern crate failure;
-extern crate io_context;
 extern crate lazy_static;
-extern crate lru;
 extern crate oasis_core_keymanager_api;
-extern crate oasis_core_keymanager_client;
+extern crate oasis_core_keymanager_lib;
 extern crate oasis_core_runtime;
-extern crate rand;
-extern crate sp800_185;
-extern crate tiny_keccak;
-extern crate x25519_dalek;
-extern crate zeroize;
 
 use std::sync::Arc;
 
-mod context;
-mod kdf;
 mod methods;
-mod policy;
 
 use failure::Fallible;
 
@@ -32,7 +22,7 @@ use oasis_core_runtime::{
     version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 
-use self::{kdf::Kdf, policy::Policy};
+use oasis_core_keymanager_lib::{context, kdf::Kdf, policy::Policy};
 
 /// Initialize the Kdf.
 fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Fallible<SignedInitResponse> {
@@ -47,6 +37,9 @@ fn main() {
                 _rpc_demux: &mut RpcDemux,
                 rpc: &mut RpcDispatcher,
                 _txn: &mut TxnDispatcher| {
+        // Initialize the set of trusted policy signers.
+        init_trusted_policy_signers();
+
         // Register RPC methods exposed via EnclaveRPC to remote clients.
         {
             use crate::methods::*;

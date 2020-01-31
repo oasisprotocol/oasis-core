@@ -12,14 +12,6 @@ threads = 2
 [dependencies]
 oasis-core-runtime = { path = "../runtime" }
 oasis-core-keymanager-api = { path = "./api" }
-oasis-core-keymanager-client = { path = "../keymanager-client" }
+oasis-core-keymanager-lib = { path = "../keymanager-lib" }
 failure = "0.1.5"
 lazy_static = "1.3.0"
-lru = "0.1.15"
-io-context = "0.2.0"
-rand = "0.6.5"
-sgx-isa = { version = "0.3.0", features = ["sgxstd"] }
-sp800-185 = "0.2.0"
-tiny-keccak = "1.4.2"
-x25519-dalek = "0.5.1"
-zeroize = "0.6"
