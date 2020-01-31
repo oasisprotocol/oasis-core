@@ -77,6 +77,11 @@ func Load(baseDir string, signerFactory signature.SignerFactory) (*Entity, signa
 		return nil, nil, err
 	}
 
+	if !ent.ID.Equal(signer.Public()) {
+		signer.Reset()
+		return nil, nil, fmt.Errorf("public key mismatch (signer: %s, entity: %s)", signer.Public(), ent.ID)
+	}
+
 	return ent, signer, nil
 }
 

@@ -278,3 +278,19 @@ func LoadEntity(signerBackend string, entityDir string) (*entity.Entity, signatu
 
 	return entity.Load(entityDir, factory)
 }
+
+// ExportEntity creates an empty entity from the public key of the signer
+// generated with the specified backend, and writes it to a file in entityDir.
+func ExportEntity(signerBackend string, entityDir string) error {
+	factory, err := SignerFactory(signerBackend, entityDir)
+	if err != nil {
+		return err
+	}
+	signer, err := factory.Load(signature.SignerEntity)
+	if err != nil {
+		return err
+	}
+	var entity entity.Entity
+	entity.ID = signer.Public()
+	return entity.Save(entityDir)
+}
