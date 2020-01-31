@@ -419,6 +419,11 @@ type ConsensusParameters struct {
 	DisableTransfers       bool                         `json:"disable_transfers,omitempty"`
 	DisableDelegation      bool                         `json:"disable_delegation,omitempty"`
 	UndisableTransfersFrom map[signature.PublicKey]bool `json:"undisable_transfers_from,omitempty"`
+
+	// The proportion of fees disbursed to entities of the nodes that voted for a block.
+	FeeWeightVote int64 `json:"fee_weight_vote,omitempty"`
+	// The proportion of fees disbursed to the entity of the node that proposed a block.
+	FeeWeightPropose int64 `json:"fee_weight_propose,omitempty"`
 }
 
 const (
