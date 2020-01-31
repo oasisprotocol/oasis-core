@@ -18,6 +18,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/db"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -27,6 +28,9 @@ import (
 var (
 	// ErrNoState is the error returned when state is nil.
 	ErrNoState = errors.New("tendermint: no state available (app not registered?)")
+
+	_ ApplicationState = (*applicationState)(nil)
+	_ ApplicationState = (*mockApplicationState)(nil)
 )
 
 // ApplicationState is the overall past, present and future state of all multiplexed applications.
@@ -460,6 +464,109 @@ func parseGenesisAppState(req types.RequestInitChain) (*genesis.Document, error)
 	}
 
 	return &st, nil
+}
+
+// MockApplicationStateConfig is the configuration for the mock application state.
+type MockApplicationStateConfig struct {
+	BlockHeight int64
+	BlockHash   []byte
+
+	BaseEpoch    epochtime.EpochTime
+	CurrentEpoch epochtime.EpochTime
+	EpochChanged bool
+
+	MaxBlockGas transaction.Gas
+	MinGasPrice *quantity.Quantity
+
+	OwnTxSigner signature.PublicKey
+
+	Genesis *genesis.Document
+}
+
+type mockApplicationState struct {
+	cfg MockApplicationStateConfig
+
+	blockCtx *BlockContext
+	tree     *iavl.MutableTree
+}
+
+func (ms *mockApplicationState) BlockHeight() int64 {
+	return ms.cfg.BlockHeight
+}
+
+func (ms *mockApplicationState) BlockHash() []byte {
+	return ms.cfg.BlockHash
+}
+
+func (ms *mockApplicationState) BlockContext() *BlockContext {
+	return ms.blockCtx
+}
+
+func (ms *mockApplicationState) DeliverTxTree() *iavl.MutableTree {
+	return ms.tree
+}
+
+func (ms *mockApplicationState) CheckTxTree() *iavl.MutableTree {
+	return ms.tree
+}
+
+func (ms *mockApplicationState) GetBaseEpoch() (epochtime.EpochTime, error) {
+	return ms.cfg.BaseEpoch, nil
+}
+
+func (ms *mockApplicationState) GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error) {
+	return ms.cfg.CurrentEpoch, nil
+}
+
+func (ms *mockApplicationState) EpochChanged(ctx *Context) (bool, epochtime.EpochTime) {
+	return ms.cfg.EpochChanged, ms.cfg.CurrentEpoch
+}
+
+func (ms *mockApplicationState) Genesis() *genesis.Document {
+	return ms.cfg.Genesis
+}
+
+func (ms *mockApplicationState) MinGasPrice() *quantity.Quantity {
+	return ms.cfg.MinGasPrice
+}
+
+func (ms *mockApplicationState) OwnTxSigner() signature.PublicKey {
+	return ms.cfg.OwnTxSigner
+}
+
+func (ms *mockApplicationState) NewContext(mode ContextMode, now time.Time) *Context {
+	c := &Context{
+		mode:          mode,
+		currentTime:   now,
+		gasAccountant: NewNopGasAccountant(),
+		state:         ms.tree,
+		appState:      ms,
+		blockHeight:   ms.cfg.BlockHeight,
+		blockCtx:      ms.blockCtx,
+		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
+	}
+	c.ctx = context.WithValue(context.Background(), contextKey{}, c)
+
+	return c
+}
+
+// NewMockApplicationState creates a new mock application state for testing.
+func NewMockApplicationState(cfg MockApplicationStateConfig) ApplicationState {
+	db := dbm.NewMemDB()
+	tree := iavl.NewMutableTree(db, 128)
+
+	blockCtx := NewBlockContext()
+	if cfg.MaxBlockGas > 0 {
+		blockCtx.Set(GasAccountantKey{}, NewGasAccountant(cfg.MaxBlockGas))
+	} else {
+		blockCtx.Set(GasAccountantKey{}, NewNopGasAccountant())
+	}
+
+	return &mockApplicationState{
+		cfg:      cfg,
+		blockCtx: blockCtx,
+		tree:     tree,
+	}
 }
 
 // ImmutableState is an immutable state wrapper.
