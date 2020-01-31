@@ -29,7 +29,11 @@ var (
 					FreezeInterval: 1,
 				},
 			},
-			MinDelegationAmount: QtyFromInt(10),
+			MinDelegationAmount:     QtyFromInt(10),
+			FeeWeightVote:           1,
+			FeeWeightPropose:        0,
+			RewardFactorEpochSigned: QtyFromInt(1),
+			// Zero RewardFactorBlockProposed is normal.
 		},
 		TotalSupply: DebugStateTestTotalSupply,
 		Ledger: map[signature.PublicKey]*api.Account{
