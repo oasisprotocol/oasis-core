@@ -13,15 +13,23 @@ func TestConsensusParameters(t *testing.T) {
 
 	// Default consensus parameters.
 	var emptyParams ConsensusParameters
-	require.NoError(emptyParams.SanityCheck(), "default consensus parameters should be valid")
+	require.Error(emptyParams.SanityCheck(), "default consensus parameters should be invalid")
 
 	// Valid thresholds.
 	validThresholds := ConsensusParameters{
 		Thresholds: map[ThresholdKind]quantity.Quantity{
 			KindEntity: *quantity.NewQuantity(),
 		},
+		FeeWeightVote: 1,
 	}
 	require.NoError(validThresholds.SanityCheck(), "consensus parameters with valid thresholds should be valid")
 
 	// NOTE: There is currently no way to construct invalid thresholds.
+
+	// Degenerate fee weights.
+	degenerateFeeWeights := ConsensusParameters{
+		FeeWeightVote:    25,
+		FeeWeightPropose: -25,
+	}
+	require.Error(degenerateFeeWeights.SanityCheck(), "consensus parameters with degenerate fee weights should be invalid")
 }
