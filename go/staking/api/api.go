@@ -44,6 +44,10 @@ var (
 	// policy.
 	ErrForbidden = errors.New(ModuleName, 5, "staking: forbidden by policy")
 
+	// ErrInvalidThreshold is the error returned when an invalid threshold kind
+	// is specified in a query.
+	ErrInvalidThreshold = errors.New(ModuleName, 6, "staking: invalid threshold")
+
 	// MethodTransfer is the method name for transfers.
 	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", Transfer{})
 	// MethodBurn is the method name for burns.

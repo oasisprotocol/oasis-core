@@ -2,7 +2,6 @@ package staking
 
 import (
 	"context"
-	"errors"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
@@ -11,10 +10,6 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
-
-// ErrInvalidThreshold is the error returned when an invalid threshold kind
-// is specified in a query.
-var ErrInvalidThreshold = errors.New("staking: invalid threshold")
 
 // Query is the staking query interface.
 type Query interface {
@@ -79,7 +74,7 @@ func (sq *stakingQuerier) Threshold(ctx context.Context, kind staking.ThresholdK
 
 	threshold, ok := thresholds[kind]
 	if !ok {
-		return nil, ErrInvalidThreshold
+		return nil, staking.ErrInvalidThreshold
 	}
 	return &threshold, nil
 }
