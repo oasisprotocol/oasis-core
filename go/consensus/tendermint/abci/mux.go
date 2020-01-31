@@ -9,15 +9,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
-	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -25,12 +22,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/version"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/db"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 )
@@ -116,7 +110,7 @@ type Application interface {
 
 	// OnRegister is the function that is called when the Application
 	// is registered with the multiplexer instance.
-	OnRegister(state *ApplicationState)
+	OnRegister(state ApplicationState)
 
 	// OnCleanup is the function that is called when the ApplicationServer
 	// has been halted.
@@ -291,7 +285,7 @@ type abciMux struct {
 	types.BaseApplication
 
 	logger *logging.Logger
-	state  *ApplicationState
+	state  *applicationState
 
 	appsByName     map[string]Application
 	appsByMethod   map[transaction.MethodName]Application
@@ -434,7 +428,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	// Call InitChain() on all applications.
 	mux.logger.Debug("InitChain: initializing applications")
 
-	ctx := NewContext(ContextInitChain, mux.currentTime, mux.state)
+	ctx := mux.state.NewContext(ContextInitChain, mux.currentTime)
 	defer ctx.Close()
 
 	for _, app := range mux.appsByLexOrder {
@@ -461,36 +455,6 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	return resp
 }
 
-func (s *ApplicationState) inHaltEpoch(ctx *Context) bool {
-	blockHeight := s.BlockHeight()
-
-	currentEpoch, err := s.GetEpoch(ctx.Ctx(), blockHeight+1)
-	if err != nil {
-		s.logger.Error("inHaltEpoch: failed to get epoch",
-			"err", err,
-			"block_height", blockHeight+1,
-		)
-		return false
-	}
-	s.haltMode = currentEpoch == s.haltEpochHeight
-	return s.haltMode
-}
-
-func (s *ApplicationState) afterHaltEpoch(ctx *Context) bool {
-	blockHeight := s.BlockHeight()
-
-	currentEpoch, err := s.GetEpoch(ctx.Ctx(), blockHeight+1)
-	if err != nil {
-		s.logger.Error("afterHaltEpoch: failed to get epoch",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return false
-	}
-
-	return currentEpoch > s.haltEpochHeight
-}
-
 func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
 	blockHeight := mux.state.BlockHeight()
 	mux.logger.Debug("BeginBlock",
@@ -513,7 +477,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		mux.state.blockCtx.Set(GasAccountantKey{}, NewNopGasAccountant())
 	}
 	// Create BeginBlock context.
-	ctx := NewContext(ContextBeginBlock, mux.currentTime, mux.state)
+	ctx := mux.state.NewContext(ContextBeginBlock, mux.currentTime)
 	defer ctx.Close()
 
 	switch mux.state.haltMode {
@@ -684,7 +648,7 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 	// be called in parallel to the consensus layer and to other invocations.
 	//
 	// For simulation mode, time will be filled in by NewContext from last block time.
-	ctx := NewContext(ContextSimulateTx, time.Time{}, mux.state)
+	ctx := mux.state.NewContext(ContextSimulateTx, time.Time{})
 	defer ctx.Close()
 
 	ctx.SetTxSigner(caller)
@@ -697,7 +661,7 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 }
 
 func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
-	ctx := NewContext(ContextCheckTx, mux.currentTime, mux.state)
+	ctx := mux.state.NewContext(ContextCheckTx, mux.currentTime)
 	defer ctx.Close()
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
@@ -743,7 +707,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 }
 
 func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
-	ctx := NewContext(ContextDeliverTx, mux.currentTime, mux.state)
+	ctx := mux.state.NewContext(ContextDeliverTx, mux.currentTime)
 	defer ctx.Close()
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
@@ -778,7 +742,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 		return types.ResponseEndBlock{}
 	}
 
-	ctx := NewContext(ContextEndBlock, mux.currentTime, mux.state)
+	ctx := mux.state.NewContext(ContextEndBlock, mux.currentTime)
 	defer ctx.Close()
 
 	// Fire all application timers first.
@@ -923,322 +887,4 @@ func newABCIMux(ctx context.Context, cfg *ApplicationConfig) (*abciMux, error) {
 	)
 
 	return mux, nil
-}
-
-// ApplicationState is the overall past, present and future state
-// of all multiplexed applications.
-type ApplicationState struct {
-	logger *logging.Logger
-
-	ctx           context.Context
-	db            dbm.DB
-	deliverTxTree *iavl.MutableTree
-	checkTxTree   *iavl.MutableTree
-	statePruner   StatePruner
-
-	blockLock   sync.RWMutex
-	blockHash   []byte
-	blockHeight int64
-	blockTime   time.Time
-	blockCtx    *BlockContext
-
-	txAuthHandler TransactionAuthHandler
-
-	timeSource epochtime.Backend
-
-	haltMode        bool
-	haltEpochHeight epochtime.EpochTime
-
-	minGasPrice quantity.Quantity
-	ownTxSigner signature.PublicKey
-
-	metricsCloseCh  chan struct{}
-	metricsClosedCh chan struct{}
-}
-
-// BlockHeight returns the last committed block height.
-func (s *ApplicationState) BlockHeight() int64 {
-	s.blockLock.RLock()
-	defer s.blockLock.RUnlock()
-
-	return s.blockHeight
-}
-
-// BlockHash returns the last committed block hash.
-func (s *ApplicationState) BlockHash() []byte {
-	s.blockLock.RLock()
-	defer s.blockLock.RUnlock()
-
-	return append([]byte{}, s.blockHash...)
-}
-
-// BlockContext returns the current block context which can be used
-// to store intermediate per-block results.
-//
-// This method must only be called from BeginBlock/DeliverTx/EndBlock
-// and calls from anywhere else will cause races.
-func (s *ApplicationState) BlockContext() *BlockContext {
-	return s.blockCtx
-}
-
-// DeliverTxTree returns the versioned tree to be used by queries
-// to view comitted data, and transactions to build the next version.
-func (s *ApplicationState) DeliverTxTree() *iavl.MutableTree {
-	return s.deliverTxTree
-}
-
-// CheckTxTree returns the state tree to be used for modifications
-// inside CheckTx (mempool connection) calls.
-//
-// This state is never persisted.
-func (s *ApplicationState) CheckTxTree() *iavl.MutableTree {
-	return s.checkTxTree
-}
-
-// GetBaseEpoch returns the base epoch.
-func (s *ApplicationState) GetBaseEpoch() (epochtime.EpochTime, error) {
-	return s.timeSource.GetBaseEpoch(s.ctx)
-}
-
-// GetEpoch returns current epoch at block height.
-func (s *ApplicationState) GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error) {
-	return s.timeSource.GetEpoch(ctx, blockHeight)
-}
-
-// EpochChanged returns true iff the current epoch has changed since the
-// last block.  As a matter of convenience, the current epoch is returned.
-func (s *ApplicationState) EpochChanged(ctx *Context) (bool, epochtime.EpochTime) {
-	blockHeight := s.BlockHeight()
-	if blockHeight == 0 {
-		return false, epochtime.EpochInvalid
-	} else if blockHeight == 1 {
-		// There is no block before the first block. For historic reasons, this is defined as not
-		// having had a transition.
-		currentEpoch, err := s.timeSource.GetEpoch(ctx.Ctx(), blockHeight)
-		if err != nil {
-			s.logger.Error("EpochChanged: failed to get current epoch",
-				"err", err,
-			)
-			return false, epochtime.EpochInvalid
-		}
-		return false, currentEpoch
-	}
-
-	previousEpoch, err := s.timeSource.GetEpoch(ctx.Ctx(), blockHeight)
-	if err != nil {
-		s.logger.Error("EpochChanged: failed to get previous epoch",
-			"err", err,
-		)
-		return false, epochtime.EpochInvalid
-	}
-	currentEpoch, err := s.timeSource.GetEpoch(ctx.Ctx(), blockHeight+1)
-	if err != nil {
-		s.logger.Error("EpochChanged: failed to get current epoch",
-			"err", err,
-		)
-		return false, epochtime.EpochInvalid
-	}
-
-	if previousEpoch == currentEpoch {
-		return false, currentEpoch
-	}
-
-	s.logger.Debug("EpochChanged: epoch transition detected",
-		"prev_epoch", previousEpoch,
-		"epoch", currentEpoch,
-	)
-
-	return true, currentEpoch
-}
-
-// Genesis returns the ABCI genesis state.
-func (s *ApplicationState) Genesis() *genesis.Document {
-	_, b := s.checkTxTree.Get([]byte(stateKeyGenesisRequest))
-
-	var req types.RequestInitChain
-	if err := req.Unmarshal(b); err != nil {
-		s.logger.Error("Genesis: corrupted defered genesis state",
-			"err", err,
-		)
-		panic("Genesis: invalid defered genesis application state")
-	}
-
-	st, err := parseGenesisAppState(req)
-	if err != nil {
-		s.logger.Error("failed to unmarshal genesis application state",
-			"err", err,
-			"state", req.AppStateBytes,
-		)
-		panic("Genesis: invalid genesis application state")
-	}
-
-	return st
-}
-
-// MinGasPrice returns the configured minimum gas price.
-func (s *ApplicationState) MinGasPrice() *quantity.Quantity {
-	return &s.minGasPrice
-}
-
-// OwnTxSigner returns the transaction signer identity of the local node.
-func (s *ApplicationState) OwnTxSigner() signature.PublicKey {
-	return s.ownTxSigner
-}
-
-func (s *ApplicationState) doCommit(now time.Time) error {
-	// Save the new version of the persistent tree.
-	blockHash, blockHeight, err := s.deliverTxTree.SaveVersion()
-	if err == nil {
-		s.blockLock.Lock()
-		s.blockHash = blockHash
-		s.blockHeight = blockHeight
-		s.blockTime = now
-		s.blockLock.Unlock()
-
-		// Reset CheckTx state to latest version. This is safe because
-		// Tendermint holds a lock on the mempool for commit.
-		//
-		// WARNING: deliverTxTree and checkTxTree do not share internal
-		// state beyond the backing database.  The `LoadVersion`
-		// implementation MUST be written in a way to avoid relying on
-		// cached metadata.
-		//
-		// This makes the upstream `LazyLoadVersion` and `LoadVersion`
-		// unsuitable for our use case.
-		_, cerr := s.checkTxTree.LoadVersion(blockHeight)
-		if cerr != nil {
-			panic(cerr)
-		}
-
-		// Prune the iavl state according to the specified strategy.
-		s.statePruner.Prune(s.blockHeight)
-	}
-
-	return err
-}
-
-func (s *ApplicationState) doCleanup() {
-	if s.db != nil {
-		// Don't close the DB out from under the metrics worker.
-		close(s.metricsCloseCh)
-		<-s.metricsClosedCh
-
-		s.db.Close()
-		s.db = nil
-	}
-}
-
-func (s *ApplicationState) updateMetrics() error {
-	var dbSize int64
-
-	switch m := s.db.(type) {
-	case api.SizeableDB:
-		var err error
-		if dbSize, err = m.Size(); err != nil {
-			s.logger.Error("Size",
-				"err", err,
-			)
-			return err
-		}
-	default:
-		return fmt.Errorf("state: unsupported DB for metrics")
-	}
-
-	abciSize.Set(float64(dbSize) / 1024768.0)
-
-	return nil
-}
-
-func (s *ApplicationState) metricsWorker() {
-	defer close(s.metricsClosedCh)
-
-	// Update the metrics once on initialization.
-	if err := s.updateMetrics(); err != nil {
-		// If this fails, don't bother trying again, it's most likely
-		// an unsupported DB backend.
-		s.logger.Warn("metrics not available",
-			"err", err,
-		)
-		return
-	}
-
-	t := time.NewTicker(metricsUpdateInterval)
-	defer t.Stop()
-
-	for {
-		select {
-		case <-s.metricsCloseCh:
-			return
-		case <-t.C:
-			_ = s.updateMetrics()
-		}
-	}
-}
-
-func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*ApplicationState, error) {
-	db, err := db.New(filepath.Join(cfg.DataDir, "abci-mux-state"), false)
-	if err != nil {
-		return nil, err
-	}
-
-	// Figure out the latest version/hash if any, and use that
-	// as the block height/hash.
-	deliverTxTree := iavl.NewMutableTree(db, 128)
-	blockHeight, err := deliverTxTree.Load()
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-	blockHash := deliverTxTree.Hash()
-
-	checkTxTree := iavl.NewMutableTree(db, 128)
-	checkTxBlockHeight, err := checkTxTree.Load()
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	if blockHeight != checkTxBlockHeight || !bytes.Equal(blockHash, checkTxTree.Hash()) {
-		db.Close()
-		return nil, fmt.Errorf("state: inconsistent trees")
-	}
-
-	statePruner, err := newStatePruner(&cfg.Pruning, deliverTxTree, blockHeight)
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	var minGasPrice quantity.Quantity
-	if err = minGasPrice.FromInt64(int64(cfg.MinGasPrice)); err != nil {
-		return nil, fmt.Errorf("state: invalid minimum gas price: %w", err)
-	}
-
-	s := &ApplicationState{
-		logger:          logging.GetLogger("abci-mux/state"),
-		ctx:             ctx,
-		db:              db,
-		deliverTxTree:   deliverTxTree,
-		checkTxTree:     checkTxTree,
-		statePruner:     statePruner,
-		blockHash:       blockHash,
-		blockHeight:     blockHeight,
-		haltEpochHeight: cfg.HaltEpochHeight,
-		minGasPrice:     minGasPrice,
-		ownTxSigner:     cfg.OwnTxSigner,
-		metricsCloseCh:  make(chan struct{}),
-		metricsClosedCh: make(chan struct{}),
-	}
-	go s.metricsWorker()
-
-	return s, nil
-}
-
-func parseGenesisAppState(req types.RequestInitChain) (*genesis.Document, error) {
-	var st genesis.Document
-	if err := json.Unmarshal(req.AppStateBytes, &st); err != nil {
-		return nil, err
-	}
-
-	return &st, nil
 }

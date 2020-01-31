@@ -715,6 +715,23 @@ dependencies = [
  "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "oasis-core-keymanager-api-common 0.3.0-alpha",
+ "oasis-core-runtime 0.3.0-alpha",
+ "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_bytes 0.10.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
+ "x25519-dalek 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "oasis-core-keymanager-api-common"
+version = "0.3.0-alpha"
+dependencies = [
+ "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-runtime 0.3.0-alpha",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -739,14 +756,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "oasis-core-keymanager-runtime"
+name = "oasis-core-keymanager-lib"
 version = "0.3.0-alpha"
 dependencies = [
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lru 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
- "oasis-core-keymanager-api 0.3.0-alpha",
+ "oasis-core-keymanager-api-common 0.3.0-alpha",
  "oasis-core-keymanager-client 0.3.0-alpha",
  "oasis-core-runtime 0.3.0-alpha",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -755,6 +772,17 @@ dependencies = [
  "tiny-keccak 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "x25519-dalek 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "zeroize 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "oasis-core-keymanager-runtime"
+version = "0.3.0-alpha"
+dependencies = [
+ "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "oasis-core-keymanager-api 0.3.0-alpha",
+ "oasis-core-keymanager-lib 0.3.0-alpha",
+ "oasis-core-runtime 0.3.0-alpha",
 ]
 
 [[package]]

@@ -24,7 +24,7 @@ import (
 var emptyHashSha3 = sha3.Sum256(nil)
 
 type keymanagerApplication struct {
-	state *abci.ApplicationState
+	state abci.ApplicationState
 }
 
 func (app *keymanagerApplication) Name() string {
@@ -47,7 +47,7 @@ func (app *keymanagerApplication) Dependencies() []string {
 	return []string{registryapp.AppName}
 }
 
-func (app *keymanagerApplication) OnRegister(state *abci.ApplicationState) {
+func (app *keymanagerApplication) OnRegister(state abci.ApplicationState) {
 	app.state = state
 }
 
@@ -96,20 +96,21 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 
 		var forceEmit bool
 		oldStatus, err := state.Status(rt.ID)
-		if err != nil {
+		switch err {
+		case nil:
+		case api.ErrNoSuchStatus:
+			// This must be a new key manager runtime.
+			forceEmit = true
+			oldStatus = &api.Status{
+				ID: rt.ID,
+			}
+		default:
 			// This is fatal, as it suggests state corruption.
 			ctx.Logger().Error("failed to query key manager status",
 				"id", rt.ID,
 				"err", err,
 			)
 			return errors.Wrap(err, "failed to query key manager status")
-		}
-		if oldStatus == nil {
-			// This must be a new key manager runtime.
-			forceEmit = true
-			oldStatus = &api.Status{
-				ID: rt.ID,
-			}
 		}
 
 		newStatus := app.generateStatus(ctx, rt, oldStatus, nodes)

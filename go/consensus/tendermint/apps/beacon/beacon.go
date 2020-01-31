@@ -27,7 +27,7 @@ var (
 )
 
 type beaconApplication struct {
-	state *abci.ApplicationState
+	state abci.ApplicationState
 }
 
 func (app *beaconApplication) Name() string {
@@ -50,7 +50,7 @@ func (app *beaconApplication) Dependencies() []string {
 	return nil
 }
 
-func (app *beaconApplication) OnRegister(state *abci.ApplicationState) {
+func (app *beaconApplication) OnRegister(state abci.ApplicationState) {
 	app.state = state
 }
 

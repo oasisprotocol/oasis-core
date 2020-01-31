@@ -1,4 +1,4 @@
-///! Key Derivation Function
+///! Key Derivation Function.
 use std::sync::{Arc, RwLock};
 
 use failure::Fallible;
@@ -11,7 +11,7 @@ use sp800_185::{CShake, KMac};
 use x25519_dalek;
 use zeroize::Zeroize;
 
-use oasis_core_keymanager_api::{
+use oasis_core_keymanager_api_common::{
     ContractKey, InitRequest, InitResponse, KeyManagerError, MasterSecret, PrivateKey, PublicKey,
     ReplicateResponse, RequestIds, SignedInitResponse, SignedPublicKey, StateKey,
     INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,

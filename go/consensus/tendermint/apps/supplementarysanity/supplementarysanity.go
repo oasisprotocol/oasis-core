@@ -26,7 +26,7 @@ var (
 // It's okay for it to have this additional local state, because it won't affect anything that needs to be agreed upon
 // in consensus.
 type supplementarySanityApplication struct {
-	state           *abci.ApplicationState
+	state           abci.ApplicationState
 	interval        int64
 	currentInterval int64
 	checkHeight     int64
@@ -56,7 +56,7 @@ func (app *supplementarySanityApplication) QueryFactory() interface{} {
 	return nil
 }
 
-func (app *supplementarySanityApplication) OnRegister(state *abci.ApplicationState) {
+func (app *supplementarySanityApplication) OnRegister(state abci.ApplicationState) {
 	app.state = state
 }
 

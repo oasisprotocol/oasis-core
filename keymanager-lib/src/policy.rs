@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 use sgx_isa::Keypolicy;
 use tiny_keccak::sha3_256;
 
-use oasis_core_keymanager_api::*;
+use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     common::{
         cbor,

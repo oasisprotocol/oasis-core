@@ -60,6 +60,11 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("scenario net Start: %w", err)
 	}
 
+	// Wait for all nodes to be synced before we proceed.
+	if err := sc.waitNodesSynced(); err != nil {
+		return err
+	}
+
 	logFmt := logging.FmtJSON
 	logLevel := logging.LevelDebug
 	cmd, err := startClient(childEnv, sc.net, "scripts/txsource-wrapper.sh", append([]string{

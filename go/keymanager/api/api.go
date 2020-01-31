@@ -29,9 +29,9 @@ const (
 )
 
 var (
-	// ErrNoSuchKeyManager is the error returned when a key manager does not
+	// ErrNoSuchStatus is the error returned when a key manager status does not
 	// exist.
-	ErrNoSuchKeyManager = errors.New(ModuleName, 1, "keymanager: no such key manager")
+	ErrNoSuchStatus = errors.New(ModuleName, 1, "keymanager: no such status")
 
 	// TestPublicKey is the insecure hardcoded key manager public key, used
 	// in insecure builds when a RAK is unavailable.
