@@ -70,7 +70,7 @@ func (st *ImmutableState) Status(id common.Namespace) (*api.Status, error) {
 	return &status, nil
 }
 
-func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
+func NewImmutableState(state abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
 		return nil, err

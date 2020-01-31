@@ -144,7 +144,7 @@ func (s *ImmutableState) ConsensusParameters() (*api.ConsensusParameters, error)
 	return &params, err
 }
 
-func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
+func NewImmutableState(state abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
 		return nil, err

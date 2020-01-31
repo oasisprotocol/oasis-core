@@ -17,7 +17,7 @@ import (
 var _ abci.Application = (*epochTimeMockApplication)(nil)
 
 type epochTimeMockApplication struct {
-	state *abci.ApplicationState
+	state abci.ApplicationState
 }
 
 func (app *epochTimeMockApplication) Name() string {
@@ -40,7 +40,7 @@ func (app *epochTimeMockApplication) Dependencies() []string {
 	return nil
 }
 
-func (app *epochTimeMockApplication) OnRegister(state *abci.ApplicationState) {
+func (app *epochTimeMockApplication) OnRegister(state abci.ApplicationState) {
 	app.state = state
 }
 

@@ -22,7 +22,7 @@ import (
 var _ abci.Application = (*registryApplication)(nil)
 
 type registryApplication struct {
-	state *abci.ApplicationState
+	state abci.ApplicationState
 }
 
 func (app *registryApplication) Name() string {
@@ -45,7 +45,7 @@ func (app *registryApplication) Dependencies() []string {
 	return []string{stakingapp.AppName}
 }
 
-func (app *registryApplication) OnRegister(state *abci.ApplicationState) {
+func (app *registryApplication) OnRegister(state abci.ApplicationState) {
 	app.state = state
 }
 

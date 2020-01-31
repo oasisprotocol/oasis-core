@@ -42,7 +42,7 @@ type timerContext struct {
 }
 
 type rootHashApplication struct {
-	state *abci.ApplicationState
+	state abci.ApplicationState
 
 	beacon beacon.Backend
 }
@@ -67,7 +67,7 @@ func (app *rootHashApplication) Dependencies() []string {
 	return []string{schedulerapp.AppName, stakingapp.AppName}
 }
 
-func (app *rootHashApplication) OnRegister(state *abci.ApplicationState) {
+func (app *rootHashApplication) OnRegister(state abci.ApplicationState) {
 	app.state = state
 }
 

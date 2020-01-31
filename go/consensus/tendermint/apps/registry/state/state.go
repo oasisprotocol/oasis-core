@@ -517,7 +517,7 @@ func (s *ImmutableState) NodeByCertificate(cert []byte) (*node.Node, error) {
 	return s.Node(id)
 }
 
-func NewImmutableState(state *abci.ApplicationState, version int64) (*ImmutableState, error) {
+func NewImmutableState(state abci.ApplicationState, version int64) (*ImmutableState, error) {
 	inner, err := abci.NewImmutableState(state, version)
 	if err != nil {
 		return nil, err
