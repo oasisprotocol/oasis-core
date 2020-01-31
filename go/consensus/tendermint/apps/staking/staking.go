@@ -70,7 +70,7 @@ func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.Reque
 	for _, evidence := range request.ByzantineValidators {
 		switch evidence.Type {
 		case tmtypes.ABCIEvidenceTypeDuplicateVote:
-			if err := app.onEvidenceDoubleSign(ctx, evidence.Validator.Address, evidence.Height, evidence.Time, evidence.Validator.Power); err != nil {
+			if err := onEvidenceDoubleSign(ctx, evidence.Validator.Address, evidence.Height, evidence.Time, evidence.Validator.Power); err != nil {
 				return err
 			}
 		default:
