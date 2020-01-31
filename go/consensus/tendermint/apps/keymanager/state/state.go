@@ -60,7 +60,7 @@ func (st *ImmutableState) getStatusesRaw() ([][]byte, error) {
 func (st *ImmutableState) Status(id common.Namespace) (*api.Status, error) {
 	_, raw := st.Snapshot.Get(statusKeyFmt.Encode(&id))
 	if raw == nil {
-		return nil, nil
+		return nil, api.ErrNoSuchStatus
 	}
 
 	var status api.Status
