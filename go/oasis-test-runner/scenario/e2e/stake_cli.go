@@ -349,14 +349,6 @@ func (s *stakeCLIImpl) getInfo(childEnv *env.Env) error {
 	if err != nil {
 		return fmt.Errorf("scenario/e2e/stake: failed to query common token info: %s error: %w", b.String(), err)
 	}
-	// Check that subcommand reported warnings for invalid staking threshold kinds.
-	subCmdOutput := b.String()
-	thresholdKinds := []string{"compute", "storage"}
-	for _, kind := range thresholdKinds {
-		if !strings.Contains(subCmdOutput, fmt.Sprintf("invalid staking threshold kind: %s", kind)) {
-			return fmt.Errorf("scenario/e2e/stake: querying common token info should warn about invalid staking threshold for kind: %s", kind)
-		}
-	}
 	return nil
 }
 
