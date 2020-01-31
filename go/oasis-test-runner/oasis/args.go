@@ -57,6 +57,13 @@ func (args *argBuilder) grpcServerPort(port uint16) *argBuilder {
 	return args
 }
 
+func (args *argBuilder) grpcWait() *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + grpc.CfgWait,
+	}...)
+	return args
+}
+
 func (args *argBuilder) grpcLogDebug() *argBuilder {
 	args.vec = append(args.vec, "--"+commonGrpc.CfgLogDebug)
 	return args

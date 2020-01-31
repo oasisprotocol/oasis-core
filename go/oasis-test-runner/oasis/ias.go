@@ -30,6 +30,7 @@ func (ias *iasProxy) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		grpcServerPort(ias.grpcPort).
+		grpcWait().
 		iasDebugMock().
 		iasSPID(mockSPID)
 	if ias.useRegistry {
