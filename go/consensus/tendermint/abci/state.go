@@ -64,8 +64,7 @@ type ApplicationState interface {
 	// GetEpoch returns epoch at block height.
 	GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error)
 
-	// GetCurrentEpoch returns the epoch at the current block height,
-	// applying all the weird legacy off-by-one rules we have.
+	// GetCurrentEpoch returns the epoch at the current block height.
 	GetCurrentEpoch(ctx context.Context) (epochtime.EpochTime, error)
 
 	// EpochChanged returns true iff the current epoch has changed since the
@@ -202,18 +201,11 @@ func (s *applicationState) GetEpoch(ctx context.Context, blockHeight int64) (epo
 	return s.timeSource.GetEpoch(ctx, blockHeight)
 }
 
-// GetCurrentEpoch returns the epoch at the current block height,
-// applying all the weird legacy off-by-one rules we have.
+// GetCurrentEpoch returns the epoch at the current block height.
 func (s *applicationState) GetCurrentEpoch(ctx context.Context) (epochtime.EpochTime, error) {
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
 		return epochtime.EpochInvalid, nil
-	} else if blockHeight == 1 {
-		currentEpoch, err := s.timeSource.GetEpoch(ctx, blockHeight)
-		if err != nil {
-			return epochtime.EpochInvalid, fmt.Errorf("application state time source get epoch for height %d: %w", blockHeight, err)
-		}
-		return currentEpoch, nil
 	}
 	currentEpoch, err := s.timeSource.GetEpoch(ctx, blockHeight+1)
 	if err != nil {
@@ -228,29 +220,25 @@ func (s *applicationState) EpochChanged(ctx *Context) (bool, epochtime.EpochTime
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
 		return false, epochtime.EpochInvalid
-	} else if blockHeight == 1 {
+	}
+
+	currentEpoch, err := s.timeSource.GetEpoch(ctx.Ctx(), blockHeight+1)
+	if err != nil {
+		s.logger.Error("EpochChanged: failed to get current epoch",
+			"err", err,
+		)
+		return false, epochtime.EpochInvalid
+	}
+
+	if blockHeight == 1 {
 		// There is no block before the first block. For historic reasons, this is defined as not
 		// having had a transition.
-		currentEpoch, err := s.timeSource.GetEpoch(ctx.Ctx(), blockHeight)
-		if err != nil {
-			s.logger.Error("EpochChanged: failed to get current epoch",
-				"err", err,
-			)
-			return false, epochtime.EpochInvalid
-		}
 		return false, currentEpoch
 	}
 
 	previousEpoch, err := s.timeSource.GetEpoch(ctx.Ctx(), blockHeight)
 	if err != nil {
 		s.logger.Error("EpochChanged: failed to get previous epoch",
-			"err", err,
-		)
-		return false, epochtime.EpochInvalid
-	}
-	currentEpoch, err := s.timeSource.GetEpoch(ctx.Ctx(), blockHeight+1)
-	if err != nil {
-		s.logger.Error("EpochChanged: failed to get current epoch",
 			"err", err,
 		)
 		return false, epochtime.EpochInvalid
