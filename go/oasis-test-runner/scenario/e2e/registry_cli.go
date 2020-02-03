@@ -284,7 +284,7 @@ func (r *registryCLIImpl) updateEntity(childEnv *env.Env, nodes []*node.Node, no
 	return r.loadEntity(entDir)
 }
 
-// listEntities lists currently registered entities.
+// listNodes lists currently registered nodes.
 func (r *registryCLIImpl) listNodes(childEnv *env.Env) ([]signature.PublicKey, error) {
 	r.logger.Info("listing all nodes")
 	args := []string{
@@ -298,17 +298,17 @@ func (r *registryCLIImpl) listNodes(childEnv *env.Env) ([]signature.PublicKey, e
 	nodesStr := strings.Split(b.String(), "\n")
 
 	var nodes []signature.PublicKey
-	for _, accStr := range nodesStr {
+	for _, nodeStr := range nodesStr {
 		// Ignore last newline.
-		if accStr == "" {
+		if nodeStr == "" {
 			continue
 		}
 
-		var acc signature.PublicKey
-		if err = acc.UnmarshalHex(accStr); err != nil {
+		var node signature.PublicKey
+		if err = node.UnmarshalHex(nodeStr); err != nil {
 			return nil, err
 		}
-		nodes = append(nodes, acc)
+		nodes = append(nodes, node)
 	}
 
 	return nodes, nil
@@ -398,7 +398,7 @@ func (r *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node,
 
 // initNode very "thoroughly" initializes new node and returns its instance.
 func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir string, dataDir string) (*node.Node, error) {
-	r.logger.Info("initializing new entity")
+	r.logger.Info("initializing new node")
 
 	// testNode will be our fixture for testing the CLI.
 	testNode, testAddressesStr, testConsensusAddressesStr, testCommitteeAddressesStr, err := r.newTestNode(ent.ID)
@@ -422,9 +422,10 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 			"--" + flags.CfgSignerDir, entDir,
 			"--" + cmdCommon.CfgDataDir, dataDir,
 		}
-		_, err = cli.RunSubCommandWithOutput(childEnv, r.logger, "init-node", r.basicImpl.net.Config().NodeBinary, args)
+		var out bytes.Buffer
+		out, err = cli.RunSubCommandWithOutput(childEnv, r.logger, "init-node", r.basicImpl.net.Config().NodeBinary, args)
 		if err != nil {
-			return nil, fmt.Errorf("scenario/e2e/registry: failed to init node: %w", err)
+			return nil, fmt.Errorf("scenario/e2e/registry: failed to init node: error: %w, output: %s", err, out.String())
 		}
 
 		// Check, if node genesis file was correctly written.
@@ -513,8 +514,8 @@ func (r *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPa
 		"--" + flags.CfgSignerDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
-	if err := cli.RunSubCommand(childEnv, r.logger, "gen_register", r.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("genRegisterEntityTx: failed to generate register entity tx: %w", err)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "gen_register", r.basicImpl.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("genRegisterEntityTx: failed to generate register entity tx: error: %w output: %s", err, out.String())
 	}
 
 	return nil
@@ -522,7 +523,7 @@ func (r *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPa
 
 // genDeregisterEntityTx calls registry entity gen_deregister.
 func (r *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, txPath string, entDir string) error {
-	r.logger.Info("generating register entity tx")
+	r.logger.Info("generating deregister entity tx")
 
 	args := []string{
 		"registry", "entity", "gen_deregister",
@@ -536,8 +537,8 @@ func (r *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, tx
 		"--" + flags.CfgSignerDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
-	if err := cli.RunSubCommand(childEnv, r.logger, "gen_deregister", r.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("genDeregisterEntityTx: failed to generate deregister entity tx: %w", err)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "gen_deregister", r.basicImpl.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("genDeregisterEntityTx: failed to generate deregister entity tx: error: %w output: %s", err, out.String())
 	}
 
 	return nil
