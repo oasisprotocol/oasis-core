@@ -31,9 +31,15 @@ func TestConsensusParameters(t *testing.T) {
 	// NOTE: There is currently no way to construct invalid thresholds.
 
 	// Degenerate fee weights.
-	degenerateFeeWeights := ConsensusParameters{
+	degenerateFeeWeights1 := ConsensusParameters{
+		Thresholds:    validThresholds,
+		FeeWeightVote: -1,
+	}
+	require.Error(degenerateFeeWeights1.SanityCheck(), "consensus parameters with degenerate fee weights 1 should be invalid")
+	degenerateFeeWeights2 := ConsensusParameters{
+		Thresholds:       validThresholds,
 		FeeWeightVote:    25,
 		FeeWeightPropose: -25,
 	}
-	require.Error(degenerateFeeWeights.SanityCheck(), "consensus parameters with degenerate fee weights should be invalid")
+	require.Error(degenerateFeeWeights2.SanityCheck(), "consensus parameters with degenerate fee weights 2 should be invalid")
 }
