@@ -16,13 +16,17 @@ func TestConsensusParameters(t *testing.T) {
 	require.Error(emptyParams.SanityCheck(), "default consensus parameters should be invalid")
 
 	// Valid thresholds.
-	validThresholds := ConsensusParameters{
-		Thresholds: map[ThresholdKind]quantity.Quantity{
-			KindEntity: *quantity.NewQuantity(),
-		},
+	validThresholds := map[ThresholdKind]quantity.Quantity{
+		KindEntity:    *quantity.NewQuantity(),
+		KindValidator: *quantity.NewQuantity(),
+		KindCompute:   *quantity.NewQuantity(),
+		KindStorage:   *quantity.NewQuantity(),
+	}
+	validThresholdsParams := ConsensusParameters{
+		Thresholds:    validThresholds,
 		FeeWeightVote: 1,
 	}
-	require.NoError(validThresholds.SanityCheck(), "consensus parameters with valid thresholds should be valid")
+	require.NoError(validThresholdsParams.SanityCheck(), "consensus parameters with valid thresholds should be valid")
 
 	// NOTE: There is currently no way to construct invalid thresholds.
 
