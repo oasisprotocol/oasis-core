@@ -9,6 +9,7 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	storage "github.com/oasislabs/oasis-core/go/storage/api"
 )
 
 // Controller is a network controller that connects to one of the
@@ -21,6 +22,7 @@ type Controller struct {
 	Staking       staking.Backend
 	Registry      registry.Backend
 	RuntimeClient runtimeClient.RuntimeClient
+	Storage       storage.Backend
 
 	conn *grpc.ClientConn
 }
@@ -49,6 +51,7 @@ func NewController(socketPath string) (*Controller, error) {
 		Staking:         staking.NewStakingClient(conn),
 		Registry:        registry.NewRegistryClient(conn),
 		RuntimeClient:   runtimeClient.NewRuntimeClient(conn),
+		Storage:         storage.NewStorageClient(conn),
 
 		conn: conn,
 	}, nil

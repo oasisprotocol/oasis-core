@@ -161,6 +161,8 @@ type Node struct {
 
 	workerCommonCfg workerCommon.Config
 
+	checkpointer *checkpointer
+
 	syncedLock  sync.RWMutex
 	syncedState watcherState
 
@@ -182,6 +184,7 @@ func NewNode(
 	store *persistent.ServiceStore,
 	roleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
+	checkpointerCfg CheckpointerConfig,
 ) (*Node, error) {
 	localStorage, ok := commonNode.Storage.(storageApi.LocalBackend)
 	if !ok {
@@ -216,7 +219,7 @@ func NewNode(
 	rtID := commonNode.Runtime.ID()
 	err := store.GetCBOR(rtID[:], &node.syncedState)
 	if err != nil && err != persistent.ErrNotFound {
-		return nil, err
+		return nil, fmt.Errorf("storage worker: failed to restore sync state: %w", err)
 	}
 
 	node.ctx, node.ctxCancel = context.WithCancel(context.Background())
@@ -228,9 +231,15 @@ func NewNode(
 	// Create a new storage client that will be used for remote sync.
 	scl, err := client.New(node.ctx, ns, node.commonNode.Identity, node.commonNode.Consensus.Scheduler(), node.commonNode.Consensus.Registry())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("storage worker: failed to create client: %w", err)
 	}
 	node.storageClient = scl.(storageApi.ClientBackend)
+
+	// Create a new checkpointer.
+	node.checkpointer, err = newCheckpointer(node.ctx, commonNode.Runtime, localStorage.Checkpointer(), checkpointerCfg)
+	if err != nil {
+		return nil, fmt.Errorf("storage worker: failed to create checkpointer: %w", err)
+	}
 
 	// Register prune handler.
 	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{
@@ -328,10 +337,8 @@ func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
 
 // Guarded by CrossNode.
 func (n *Node) HandleNewBlockLocked(blk *block.Block) {
-	select {
-	case n.blockCh.In() <- blk:
-	case <-n.ctx.Done():
-	}
+	// Notify the state syncer that there is a new block.
+	n.blockCh.In() <- blk
 }
 
 // Guarded by CrossNode.
@@ -710,6 +717,9 @@ mainLoop:
 				n.logger.Error("can't store watcher state to database", "err", err)
 			}
 
+			// Notify the checkpointer that there is a new round.
+			n.checkpointer.notifyNewBlock(finalized.Round)
+
 		case <-n.ctx.Done():
 			break mainLoop
 		}
@@ -737,6 +747,8 @@ func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
 				lastSycnedRound,
 			)
 		}
+
+		// TODO: Make sure we don't prune rounds that need to be checkpointed but haven't been yet.
 
 		p.logger.Debug("pruning storage for round", "round", round)
 

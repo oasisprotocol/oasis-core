@@ -5,12 +5,21 @@
 // to always have the same serialization.
 package cbor
 
-import "github.com/fxamacker/cbor"
+import (
+	"io"
+
+	"github.com/fxamacker/cbor"
+)
 
 // RawMessage is a raw encoded CBOR value. It implements Marshaler and
 // Unmarshaler interfaces and can be used to delay CBOR decoding or
 // precompute a CBOR encoding.
 type RawMessage = cbor.RawMessage
+
+var encOptions = cbor.EncOptions{
+	Canonical:   true,
+	TimeRFC3339: false, // Second granular unix timestamps
+}
 
 // FixSliceForSerde will convert `nil` to `[]byte` to work around serde
 // brain damage.
@@ -23,10 +32,7 @@ func FixSliceForSerde(b []byte) []byte {
 
 // Marshal serializes a given type into a CBOR byte vector.
 func Marshal(src interface{}) []byte {
-	b, err := cbor.Marshal(src, cbor.EncOptions{
-		Canonical:   true,
-		TimeRFC3339: false, // Second granular unix timestamps
-	})
+	b, err := cbor.Marshal(src, encOptions)
 	if err != nil {
 		panic("common/cbor: failed to marshal: " + err.Error())
 	}
@@ -48,4 +54,14 @@ func MustUnmarshal(data []byte, dst interface{}) {
 	if err := Unmarshal(data, dst); err != nil {
 		panic(err)
 	}
+}
+
+// NewEncoder creates a new CBOR encoder.
+func NewEncoder(w io.Writer) *cbor.Encoder {
+	return cbor.NewEncoder(w, encOptions)
+}
+
+// NewDecoder creates a new CBOR decoder.
+func NewDecoder(r io.Reader) *cbor.Decoder {
+	return cbor.NewDecoder(r)
 }

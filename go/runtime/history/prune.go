@@ -39,10 +39,6 @@ type Pruner interface {
 	// Prune purges unneeded history, given the latest round.
 	Prune(ctx context.Context, latestRound uint64) error
 
-	// NextCheckpoint returns the round which should be fetched as a
-	// checkpoint, given the latest round and last fetched checkpoint.
-	NextCheckpoint(latestRound, lastCheckpoint uint64) (uint64, error)
-
 	// RegisterHandler registers a prune handler.
 	RegisterHandler(handler PruneHandler)
 }
@@ -72,10 +68,6 @@ func (p *nonePruner) RegisterHandler(handler PruneHandler) {
 
 func (p *nonePruner) Prune(ctx context.Context, latestRound uint64) error {
 	return nil
-}
-
-func (p *nonePruner) NextCheckpoint(latestRound, lastCheckpoint uint64) (uint64, error) {
-	return 0, nil
 }
 
 // NewNonePruner creates a new pruner that never prunes anything.
@@ -158,13 +150,6 @@ func (p *keepLastPruner) Prune(ctx context.Context, latestRound uint64) error {
 
 		return nil
 	})
-}
-
-func (p *keepLastPruner) NextCheckpoint(latestRound, lastCheckpoint uint64) (uint64, error) {
-	if latestRound < p.numKept {
-		return 0, nil
-	}
-	return latestRound - p.numKept + 1, nil
 }
 
 // NewKeepLastPruner creates a pruner that keeps the last configured

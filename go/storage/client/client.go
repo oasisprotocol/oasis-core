@@ -6,6 +6,7 @@ import (
 	"context"
 	cryptorand "crypto/rand"
 	"errors"
+	"io"
 	"math/rand"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/runtime/committee"
 	"github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
 )
 
 var (
@@ -394,18 +396,29 @@ func (b *storageClientBackend) GetDiff(ctx context.Context, request *api.GetDiff
 	return rsp.(api.WriteLogIterator), nil
 }
 
-func (b *storageClientBackend) GetCheckpoint(ctx context.Context, request *api.GetCheckpointRequest) (api.WriteLogIterator, error) {
+func (b *storageClientBackend) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
 	rsp, err := b.readWithClient(
 		ctx,
-		request.Root.Namespace,
+		request.Namespace,
 		func(ctx context.Context, c api.Backend) (interface{}, error) {
-			return c.GetCheckpoint(ctx, request)
+			return c.GetCheckpoints(ctx, request)
 		},
 	)
 	if err != nil {
 		return nil, err
 	}
-	return rsp.(api.WriteLogIterator), nil
+	return rsp.([]*checkpoint.Metadata), nil
+}
+
+func (b *storageClientBackend) GetCheckpointChunk(ctx context.Context, chunk *checkpoint.ChunkMetadata, w io.Writer) error {
+	_, err := b.readWithClient(
+		ctx,
+		chunk.Root.Namespace,
+		func(ctx context.Context, c api.Backend) (interface{}, error) {
+			return nil, c.GetCheckpointChunk(ctx, chunk, w)
+		},
+	)
+	return err
 }
 
 func (b *storageClientBackend) Cleanup() {

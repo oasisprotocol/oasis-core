@@ -1038,36 +1038,9 @@ func VerifyRegisterRuntimeArgs(
 			return nil, fmt.Errorf("%w: transaction scheduler group to small", ErrInvalidArgument)
 		}
 
-		// Ensure there is at least one member of the storage group.
-		if rt.Storage.GroupSize == 0 {
-			logger.Error("RegisterRuntime: storage group too small",
-				"runtime", rt,
-			)
-			return nil, fmt.Errorf("%w: storage group too small", ErrInvalidArgument)
-		}
-		if rt.Storage.MaxApplyWriteLogEntries < 10 {
-			logger.Error("RegisterRuntime: storage MaxApplyWriteLogEntries parameter too small",
-				"runtime", rt,
-			)
-			return nil, fmt.Errorf("%w: storage MaxApplyWriteLogEntries parameter too small", ErrInvalidArgument)
-		}
-		if rt.Storage.MaxApplyOps < 2 {
-			logger.Error("RegisterRuntime: storage MaxApplyOps parameter too small",
-				"runtime", rt,
-			)
-			return nil, fmt.Errorf("%w: storage MaxApplyOps parameter too small", ErrInvalidArgument)
-		}
-		if rt.Storage.MaxMergeRoots == 0 {
-			logger.Error("RegisterRuntime: storage MaxMergeRoots parameter too small",
-				"runtime", rt,
-			)
-			return nil, fmt.Errorf("%w: storage MaxMergeRoots parameter too small", ErrInvalidArgument)
-		}
-		if rt.Storage.MaxMergeOps < 2 {
-			logger.Error("RegisterRuntime: storage MaxMergeOps parameter too small",
-				"runtime", rt,
-			)
-			return nil, fmt.Errorf("%w: storage MaxMergeOps parameter too small", ErrInvalidArgument)
+		// Ensure storage parameters have sensible values.
+		if err := VerifyRegisterRuntimeStorageArgs(&rt, logger); err != nil {
+			return nil, err
 		}
 
 		if rt.ID.IsKeyManager() {
@@ -1119,6 +1092,68 @@ func VerifyRegisterRuntimeArgs(
 	}
 
 	return &rt, nil
+}
+
+// VerifyRegisterRuntimeStorageArgs verifies the runtime's storage parameters
+func VerifyRegisterRuntimeStorageArgs(rt *Runtime, logger *logging.Logger) error {
+	params := rt.Storage
+
+	// Ensure there is at least one member of the storage group.
+	if params.GroupSize == 0 {
+		logger.Error("RegisterRuntime: storage group too small",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: storage group too small", ErrInvalidArgument)
+	}
+
+	// Ensure limit parameters have sensible values.
+	if params.MaxApplyWriteLogEntries < 10 {
+		logger.Error("RegisterRuntime: storage MaxApplyWriteLogEntries parameter too small",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: storage MaxApplyWriteLogEntries parameter too small", ErrInvalidArgument)
+	}
+	if params.MaxApplyOps < 2 {
+		logger.Error("RegisterRuntime: storage MaxApplyOps parameter too small",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: storage MaxApplyOps parameter too small", ErrInvalidArgument)
+	}
+	if params.MaxMergeRoots == 0 {
+		logger.Error("RegisterRuntime: storage MaxMergeRoots parameter too small",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: storage MaxMergeRoots parameter too small", ErrInvalidArgument)
+	}
+	if params.MaxMergeOps < 2 {
+		logger.Error("RegisterRuntime: storage MaxMergeOps parameter too small",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: storage MaxMergeOps parameter too small", ErrInvalidArgument)
+	}
+
+	// Verify storage checkpointing configuration if enabled.
+	if params.CheckpointInterval > 0 {
+		if params.CheckpointInterval < 10 {
+			logger.Error("RegisterRuntime: storage CheckpointInterval parameter too small",
+				"runtime", rt,
+			)
+			return fmt.Errorf("%w: storage CheckpointInterval parameter too small", ErrInvalidArgument)
+		}
+		if params.CheckpointNumKept == 0 {
+			logger.Error("RegisterRuntime: storage CheckpointNumKept parameter too small",
+				"runtime", rt,
+			)
+			return fmt.Errorf("%w: storage CheckpointNumKept parameter too small", ErrInvalidArgument)
+		}
+		if params.CheckpointChunkSize < 1024*1024 {
+			logger.Error("RegisterRuntime: storage CheckpointChunkSize parameter too small",
+				"runtime", rt,
+			)
+			return fmt.Errorf("%w: storage CheckpointChunkSize parameter too small", ErrInvalidArgument)
+		}
+	}
+	return nil
 }
 
 // VerifyRegisterComputeRuntimeArgs verifies compute runtime-specific arguments for RegisterRuntime.

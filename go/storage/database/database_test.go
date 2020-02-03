@@ -51,6 +51,7 @@ func doTestImpl(t *testing.T, backend string) {
 	impl, err := New(&cfg)
 	require.NoError(err, "New()")
 	defer impl.Cleanup()
+	localBackend := impl.(api.LocalBackend)
 
-	tests.StorageImplementationTests(t, impl, testNs, 0)
+	tests.StorageImplementationTests(t, localBackend, impl, testNs, 0)
 }

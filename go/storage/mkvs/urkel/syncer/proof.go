@@ -35,6 +35,7 @@ type proofNode struct {
 type ProofBuilder struct {
 	root     hash.Hash
 	included map[hash.Hash]*proofNode
+	size     uint64
 }
 
 // NewProofBuilder creates a new Merkle proof builder for the given root.
@@ -54,6 +55,12 @@ func (b *ProofBuilder) Include(n node.Node) {
 	}
 	if !n.IsClean() {
 		panic("proof: attempted to add a dirty node")
+	}
+
+	// If node is already included, skip it.
+	nh := n.GetHash()
+	if _, ok := b.included[nh]; ok {
+		return
 	}
 
 	// Node is available, serialize it.
@@ -83,7 +90,8 @@ func (b *ProofBuilder) Include(n node.Node) {
 		}
 	}
 
-	b.included[n.GetHash()] = &pn
+	b.included[nh] = &pn
+	b.size += 1 + uint64(len(pn.serialized))
 }
 
 // HasRoot returns true if the root node has already been included.
@@ -94,6 +102,11 @@ func (b *ProofBuilder) HasRoot() bool {
 // GetRoot returns the root hash for this proof.
 func (b *ProofBuilder) GetRoot() hash.Hash {
 	return b.root
+}
+
+// Size returns the current size of this proof.
+func (b *ProofBuilder) Size() uint64 {
+	return b.size
 }
 
 // Build tries to build the proof.

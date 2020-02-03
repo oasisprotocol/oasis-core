@@ -4,6 +4,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"io"
 	"sort"
 	"strconv"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
@@ -82,20 +84,20 @@ func foldWriteLogIterator(t *testing.T, w api.WriteLogIterator) api.WriteLog {
 
 // StorageImplementationTests exercises the basic functionality of a storage
 // backend.
-func StorageImplementationTests(t *testing.T, backend api.Backend, namespace common.Namespace, round uint64) {
+func StorageImplementationTests(t *testing.T, localBackend api.LocalBackend, backend api.Backend, namespace common.Namespace, round uint64) {
 	genesisTestHelpers.SetTestChainContext()
 
 	<-backend.Initialized()
 
 	t.Run("Basic", func(t *testing.T) {
-		testBasic(t, backend, namespace, round)
+		testBasic(t, localBackend, backend, namespace, round)
 	})
 	t.Run("Merge", func(t *testing.T) {
 		testMerge(t, backend, namespace, round)
 	})
 }
 
-func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, round uint64) {
+func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend, namespace common.Namespace, round uint64) {
 	ctx := context.Background()
 
 	var rootHash hash.Hash
@@ -237,47 +239,29 @@ func testBasic(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
 	}
 
-	// Test GetCheckpoint.
-	logsIter, err := backend.GetCheckpoint(ctx, &api.GetCheckpointRequest{Root: newRoot})
-	require.NoError(t, err, "GetCheckpoint()")
-	logs := foldWriteLogIterator(t, logsIter)
-	// Applying the writeLog should return same root.
-	logsRootHash := CalculateExpectedNewRoot(t, logs, namespace, round)
-	require.EqualValues(t, logsRootHash, receiptBody.Roots[0])
+	// Test checkpoints.
+	t.Run("Checkpoints", func(t *testing.T) {
+		// Create a new checkpoint with the local backend.
+		cp, err := localBackend.Checkpointer().CreateCheckpoint(ctx, newRoot, 16*1024)
+		require.NoError(t, err, "CreateCheckpoint")
 
-	// Single node tree.
-	root.Empty()
-	wl3 := prepareWriteLog([][]byte{testValues[0]})
-	expectedNewRoot3 := CalculateExpectedNewRoot(t, wl3, namespace, round)
+		cps, err := backend.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1, Namespace: namespace})
+		require.NoError(t, err, "GetCheckpoints")
+		require.Len(t, cps, 1, "GetCheckpoints should return one checkpoint")
+		require.Equal(t, cp, cps[0], "GetCheckpoints should return correct checkpoint metadata")
+		require.Len(t, cps[0].Chunks, 1, "checkpoint should have a single chunk")
 
-	receipts, err = backend.Apply(ctx, &api.ApplyRequest{
-		Namespace: namespace,
-		SrcRound:  round,
-		SrcRoot:   rootHash,
-		DstRound:  round,
-		DstRoot:   expectedNewRoot3,
-		WriteLog:  wl3,
+		var buf bytes.Buffer
+		chunk, err := cps[0].GetChunkMetadata(0)
+		require.NoError(t, err, "GetChunkMetadata")
+		err = backend.GetCheckpointChunk(ctx, chunk, &buf)
+		require.NoError(t, err, "GetCheckpointChunk")
+
+		hb := hash.NewBuilder()
+		_, err = io.Copy(hb, &buf)
+		require.NoError(t, err, "Copy")
+		require.Equal(t, cp.Chunks[0], hb.Build(), "GetCheckpointChunk must return correct chunk")
 	})
-	require.NoError(t, err, "Apply() should not return an error")
-	require.NotNil(t, receipts, "Apply() should return receipts")
-
-	for i, receipt := range receipts {
-		err = receipt.Open(&receiptBody)
-		require.NoError(t, err, "receipt.Open() should not return an error")
-		require.Equal(t, uint16(1), receiptBody.Version, "mkvs receipt version should be 1")
-		require.Equal(t, 1, len(receiptBody.Roots), "mkvs receipt should contain 1 root")
-		require.EqualValues(t, expectedNewRoot3, receiptBody.Roots[0], "mkvs receipt root should equal the expected new root")
-		if i == 0 {
-			newRoot.Hash = receiptBody.Roots[0]
-		}
-	}
-
-	logsIter, err = backend.GetCheckpoint(ctx, &api.GetCheckpointRequest{Root: newRoot})
-	require.NoError(t, err, "GetCheckpoint()")
-	logs = foldWriteLogIterator(t, logsIter)
-	// Applying the writeLog should return same root.
-	logsRootHash = CalculateExpectedNewRoot(t, logs, namespace, round)
-	require.EqualValues(t, logsRootHash, newRoot.Hash)
 }
 
 func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, round uint64) {

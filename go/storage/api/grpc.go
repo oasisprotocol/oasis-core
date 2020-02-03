@@ -10,6 +10,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
@@ -90,14 +91,27 @@ var (
 			return true
 		})
 
-	// MethodGetCheckpoint is the GetCheckpoint method.
-	MethodGetCheckpoint = ServiceName.NewMethod("GetCheckpoint", GetCheckpointRequest{}).
+	// MethodGetCheckpoints is the GetCheckpoints method.
+	MethodGetCheckpoints = ServiceName.NewMethod("GetCheckpoints", checkpoint.GetCheckpointsRequest{}).
 				WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
-			r, ok := req.(*GetCheckpointRequest)
+			r, ok := req.(*checkpoint.GetCheckpointsRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
 			}
-			return r.Root.Namespace, nil
+			return r.Namespace, nil
+		}).
+		WithAccessControl(func(req interface{}) bool {
+			return true
+		})
+
+	// MethodGetCheckpointChunk is the GetCheckpointChunk method.
+	MethodGetCheckpointChunk = ServiceName.NewMethod("GetCheckpointChunk", checkpoint.ChunkMetadata{}).
+					WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+			cm, ok := req.(*checkpoint.ChunkMetadata)
+			if !ok {
+				return common.Namespace{}, errInvalidRequestType
+			}
+			return cm.Root.Namespace, nil
 		}).
 		WithAccessControl(func(req interface{}) bool {
 			return true
@@ -136,6 +150,10 @@ var (
 				MethodName: MethodMergeBatch.ShortName(),
 				Handler:    handlerMergeBatch,
 			},
+			{
+				MethodName: MethodGetCheckpoints.ShortName(),
+				Handler:    handlerGetCheckpoints,
+			},
 		},
 		Streams: []grpc.StreamDesc{
 			{
@@ -144,8 +162,8 @@ var (
 				ServerStreams: true,
 			},
 			{
-				StreamName:    MethodGetCheckpoint.ShortName(),
-				Handler:       handlerGetCheckpoint,
+				StreamName:    MethodGetCheckpointChunk.ShortName(),
+				Handler:       handlerGetCheckpointChunk,
 				ServerStreams: true,
 			},
 		},
@@ -313,6 +331,29 @@ func handlerMergeBatch( // nolint: golint
 	return interceptor(ctx, &req, info, handler)
 }
 
+func handlerGetCheckpoints( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var req checkpoint.GetCheckpointsRequest
+	if err := dec(&req); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetCheckpoints(ctx, &req)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MethodGetCheckpoints.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetCheckpoints(ctx, req.(*checkpoint.GetCheckpointsRequest))
+	}
+	return interceptor(ctx, &req, info, handler)
+}
+
 func sendWriteLogIterator(it WriteLogIterator, opts *SyncOptions, stream grpc.ServerStream) error {
 	var totalSent uint64
 	skipping := true
@@ -390,19 +431,13 @@ func handlerGetDiff(srv interface{}, stream grpc.ServerStream) error {
 	return sendWriteLogIterator(it, &req.Options, stream)
 }
 
-func handlerGetCheckpoint(srv interface{}, stream grpc.ServerStream) error {
-	var req GetCheckpointRequest
-	if err := stream.RecvMsg(&req); err != nil {
+func handlerGetCheckpointChunk(srv interface{}, stream grpc.ServerStream) error {
+	var md checkpoint.ChunkMetadata
+	if err := stream.RecvMsg(&md); err != nil {
 		return err
 	}
 
-	ctx := stream.Context()
-	it, err := srv.(Backend).GetCheckpoint(ctx, &req)
-	if err != nil {
-		return err
-	}
-
-	return sendWriteLogIterator(it, &req.Options, stream)
+	return srv.(Backend).GetCheckpointChunk(stream.Context(), &md, cmnGrpc.NewStreamWriter(stream))
 }
 
 // RegisterService registers a new sentry service with the given gRPC server.
@@ -470,6 +505,14 @@ func (c *storageClient) MergeBatch(ctx context.Context, request *MergeBatchReque
 	return rsp, nil
 }
 
+func (c *storageClient) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
+	var rsp []*checkpoint.Metadata
+	if err := c.conn.Invoke(ctx, MethodGetCheckpoints.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
 func receiveWriteLogIterator(ctx context.Context, stream grpc.ClientStream) WriteLogIterator {
 	pipe := writelog.NewPipeIterator(ctx)
 
@@ -517,19 +560,32 @@ func (c *storageClient) GetDiff(ctx context.Context, request *GetDiffRequest) (W
 	return receiveWriteLogIterator(ctx, stream), nil
 }
 
-func (c *storageClient) GetCheckpoint(ctx context.Context, request *GetCheckpointRequest) (WriteLogIterator, error) {
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], MethodGetCheckpoint.FullName())
+func (c *storageClient) GetCheckpointChunk(ctx context.Context, chunk *checkpoint.ChunkMetadata, w io.Writer) error {
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], MethodGetCheckpointChunk.FullName())
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if err = stream.SendMsg(request); err != nil {
-		return nil, err
+	if err = stream.SendMsg(chunk); err != nil {
+		return err
 	}
 	if err = stream.CloseSend(); err != nil {
-		return nil, err
+		return err
 	}
 
-	return receiveWriteLogIterator(ctx, stream), nil
+	for {
+		var part []byte
+		switch stream.RecvMsg(&part) {
+		case nil:
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
+
+		if _, err = w.Write(part); err != nil {
+			return err
+		}
+	}
 }
 
 func (c *storageClient) Cleanup() {

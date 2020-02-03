@@ -27,13 +27,14 @@ var (
 			accessctl.Action(api.MethodMergeBatch.FullName()),
 		},
 	}
-	// NOTE: GetDiff/GetCheckpoint need to be accessible to all storage nodes,
+	// NOTE: GetDiff/GetCheckpoint* need to be accessible to all storage nodes,
 	// not just the ones in the current storage committee so that new nodes can
 	// sync-up.
 	storageNodesPolicy = &committee.AccessPolicy{
 		Actions: []accessctl.Action{
 			accessctl.Action(api.MethodGetDiff.FullName()),
-			accessctl.Action(api.MethodGetCheckpoint.FullName()),
+			accessctl.Action(api.MethodGetCheckpoints.FullName()),
+			accessctl.Action(api.MethodGetCheckpointChunk.FullName()),
 		},
 	}
 	sentryNodesPolicy = &committee.AccessPolicy{

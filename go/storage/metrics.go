@@ -11,6 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
 )
 
 var (
@@ -235,6 +236,14 @@ func (w *metricsWrapper) Prune(ctx context.Context, namespace common.Namespace, 
 	storageCalls.With(labelPrune).Inc()
 	storagePrunedCount.Add(float64(pruned))
 	return pruned, err
+}
+
+func (w *metricsWrapper) Checkpointer() checkpoint.CreateRestorer {
+	localBackend, ok := w.Backend.(api.LocalBackend)
+	if !ok {
+		return nil
+	}
+	return localBackend.Checkpointer()
 }
 
 func newMetricsWrapper(base api.Backend) api.Backend {

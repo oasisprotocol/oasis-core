@@ -2,6 +2,7 @@ package oasis
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -264,7 +265,8 @@ type StorageWorkerFixture struct { // nolint: maligned
 
 	Sentries []int `json:"sentries,omitempty"`
 
-	IgnoreApplies bool `json:"ignore_applies,omitempty"`
+	CheckpointCheckInterval time.Duration `json:"checkpoint_check_interval,omitempty"`
+	IgnoreApplies           bool          `json:"ignore_applies,omitempty"`
 }
 
 // Create instantiates the storage worker described by the fixture.
@@ -280,10 +282,11 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			SubmissionGasPrice:         f.SubmissionGasPrice,
 		},
-		Backend:       f.Backend,
-		Entity:        entity,
-		SentryIndices: f.Sentries,
-		IgnoreApplies: f.IgnoreApplies,
+		Backend:                 f.Backend,
+		Entity:                  entity,
+		SentryIndices:           f.Sentries,
+		CheckpointCheckInterval: f.CheckpointCheckInterval,
+		IgnoreApplies:           f.IgnoreApplies,
 	})
 }
 
