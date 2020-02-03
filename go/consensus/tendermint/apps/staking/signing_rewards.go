@@ -9,9 +9,7 @@ import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-func (app *stakingApplication) updateEpochSigning(ctx *abci.Context, signingEntities []signature.PublicKey) error {
-	stakeState := stakingState.NewMutableState(ctx.State())
-
+func (app *stakingApplication) updateEpochSigning(ctx *abci.Context, stakeState *stakingState.MutableState, signingEntities []signature.PublicKey) error {
 	epochSigning, err := stakeState.EpochSigning()
 	if err != nil {
 		return fmt.Errorf("loading epoch signing info: %w", err)

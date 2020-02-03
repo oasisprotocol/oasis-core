@@ -9,6 +9,13 @@ import (
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 )
 
+const (
+	// The proportion of fees disbursed to entities of the nodes that voted for a block.
+	weightVote = 1
+	// The proportion of fees disbursed to the entity of the node that proposed a block.
+	weightPropose = 1
+)
+
 type disbursement struct {
 	id     signature.PublicKey
 	weight int64
@@ -17,9 +24,7 @@ type disbursement struct {
 // disburseFees disburses fees.
 //
 // In case of errors the state may be inconsistent.
-func (app *stakingApplication) disburseFees(ctx *abci.Context, signingEntities []signature.PublicKey) error {
-	stakeState := stakingState.NewMutableState(ctx.State())
-
+func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, signingEntities []signature.PublicKey) error {
 	totalFees, err := stakeState.LastBlockFees()
 	if err != nil {
 		return fmt.Errorf("staking: failed to query last block fees: %w", err)
@@ -39,7 +44,10 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, signingEntities [
 		d := disbursement{
 			id: entityID,
 			// For now we just disburse equally.
-			weight: 1,
+			weight: weightVote,
+		}
+		if proposerEntity != nil && proposerEntity.Equal(entityID) {
+			d.weight += weightPropose
 		}
 		rewardAccounts = append(rewardAccounts, d)
 		totalWeight += d.weight

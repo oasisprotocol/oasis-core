@@ -25,6 +25,9 @@ var (
 	// RewardFactorEpochSigned is the factor for a reward distributed per epoch to
 	// entities that have signed at least a threshold fraction of the blocks.
 	RewardFactorEpochSigned *quantity.Quantity
+	// RewardFactorBlockProposed is the factor for a reward distributed per block
+	// to the entity that proposed the block.
+	RewardFactorBlockProposed *quantity.Quantity
 
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New(ModuleName, 1, "staking: invalid argument")
@@ -434,6 +437,10 @@ const (
 func init() {
 	RewardFactorEpochSigned = quantity.NewQuantity()
 	if err := RewardFactorEpochSigned.FromInt64(1); err != nil {
+		panic(err)
+	}
+	RewardFactorBlockProposed = quantity.NewQuantity()
+	if err := RewardFactorBlockProposed.FromInt64(1); err != nil {
 		panic(err)
 	}
 }
