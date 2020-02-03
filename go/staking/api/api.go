@@ -22,13 +22,6 @@ const (
 )
 
 var (
-	// RewardFactorEpochSigned is the factor for a reward distributed per epoch to
-	// entities that have signed at least a threshold fraction of the blocks.
-	RewardFactorEpochSigned *quantity.Quantity
-	// RewardFactorBlockProposed is the factor for a reward distributed per block
-	// to the entity that proposed the block.
-	RewardFactorBlockProposed *quantity.Quantity
-
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New(ModuleName, 1, "staking: invalid argument")
 
@@ -419,6 +412,18 @@ type ConsensusParameters struct {
 	DisableTransfers       bool                         `json:"disable_transfers,omitempty"`
 	DisableDelegation      bool                         `json:"disable_delegation,omitempty"`
 	UndisableTransfersFrom map[signature.PublicKey]bool `json:"undisable_transfers_from,omitempty"`
+
+	// The proportion of fees disbursed to entities of the nodes that voted for a block.
+	FeeWeightVote int64 `json:"fee_weight_vote,omitempty"`
+	// The proportion of fees disbursed to the entity of the node that proposed a block.
+	FeeWeightPropose int64 `json:"fee_weight_propose,omitempty"`
+
+	// RewardFactorEpochSigned is the factor for a reward distributed per epoch to
+	// entities that have signed at least a threshold fraction of the blocks.
+	RewardFactorEpochSigned quantity.Quantity `json:"reward_factor_epoch_signed,omitempty"`
+	// RewardFactorBlockProposed is the factor for a reward distributed per block
+	// to the entity that proposed the block.
+	RewardFactorBlockProposed quantity.Quantity `json:"reward_factor_block_proposed,omitempty"`
 }
 
 const (
@@ -433,14 +438,3 @@ const (
 	// GasOpAmendCommissionSchedule is the gas operation identifier for amend commission schedule.
 	GasOpAmendCommissionSchedule transaction.Op = "amend_commission_schedule"
 )
-
-func init() {
-	RewardFactorEpochSigned = quantity.NewQuantity()
-	if err := RewardFactorEpochSigned.FromInt64(1); err != nil {
-		panic(err)
-	}
-	RewardFactorBlockProposed = quantity.NewQuantity()
-	if err := RewardFactorBlockProposed.FromInt64(1); err != nil {
-		panic(err)
-	}
-}

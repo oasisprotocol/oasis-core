@@ -242,7 +242,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		if entitiesEligibleForReward != nil {
 			accounts := publicKeyMapToSortedSlice(entitiesEligibleForReward)
 			stakingSt := stakingState.NewMutableState(ctx.State())
-			if err = stakingSt.AddRewards(epoch, scheduler.RewardFactorEpochElectionAny, accounts); err != nil {
+			if err = stakingSt.AddRewards(epoch, &params.RewardFactorEpochElectionAny, accounts); err != nil {
 				return errors.Wrap(err, "adding rewards")
 			}
 		}

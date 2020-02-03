@@ -1,4 +1,7 @@
 {
+  "params": {
+    "fee_weight_vote": 1
+  },
   "total_supply": "90000000",
   "ledger": {
     "LQu4ZtFg8OJ0MC4M4QMeUR7Is6Xt4A/CW+PK/7TPiH0=": {"general": {"balance": "10000000"}},

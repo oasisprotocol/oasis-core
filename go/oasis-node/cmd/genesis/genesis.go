@@ -494,6 +494,9 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) error {
 	stakingSt := staking.Genesis{
 		Ledger: make(map[signature.PublicKey]*staking.Account),
+		Parameters: staking.ConsensusParameters{
+			FeeWeightVote: 1,
+		},
 	}
 
 	if state != "" {

@@ -59,6 +59,7 @@ var testDoc = &genesis.Document{
 			MaxValidatorsPerEntity: 100,
 			DebugBypassStake:       true,
 			DebugStaticValidators:  true,
+			// Zero RewardFactorEpochElectionAny is normal.
 		},
 	},
 	Consensus: consensus.Genesis{
@@ -130,7 +131,7 @@ func TestGenesisChainContext(t *testing.T) {
 	//       on each run.
 	stableDoc.Staking = staking.Genesis{}
 
-	require.Equal(t, "7670bb121628f48b2b87ef61ac79671684b0255f86323a4583d3bed5500bb31b", stableDoc.ChainContext())
+	require.Equal(t, "c396c9a2af84b3e0026790280bf15cf23ca82fdb14b989bc924ed97cce6a0ffd", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {

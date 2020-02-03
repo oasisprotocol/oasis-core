@@ -12,12 +12,23 @@ import (
 // SanityCheck performs a sanity check on the consensus parameters.
 func (p *ConsensusParameters) SanityCheck() error {
 	// Thresholds.
-	if p.Thresholds != nil {
-		for k, v := range p.Thresholds {
-			if !v.IsValid() {
-				return fmt.Errorf("invalid value for threshold: %s", k)
-			}
+	for kind := KindEntity; kind <= KindMax; kind++ {
+		val, ok := p.Thresholds[kind]
+		if !ok {
+			return fmt.Errorf("threshold for kind '%s' not defined", kind)
 		}
+		if !val.IsValid() {
+			return fmt.Errorf("threshold '%s' has invalid value", kind)
+		}
+	}
+
+	// Fee weights.
+	if p.FeeWeightVote < 0 {
+		return fmt.Errorf("FeeWeightVote %d < 0 would cause negative distributions", p.FeeWeightVote)
+	}
+	feeVoteAndPropose := p.FeeWeightVote + p.FeeWeightPropose
+	if feeVoteAndPropose <= 0 {
+		return fmt.Errorf("FeeWeightVote %d + FeeWeightPropose %d = %d <= 0 could be degenerate", p.FeeWeightVote, p.FeeWeightPropose, feeVoteAndPropose)
 	}
 
 	return nil
@@ -143,14 +154,8 @@ func SanityCheckAccountShares(acct *Account, delegations map[signature.PublicKey
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocyclo
-	for kind := KindEntity; kind <= KindMax; kind++ {
-		val, ok := g.Parameters.Thresholds[kind]
-		if !ok {
-			return fmt.Errorf("staking: sanity check failed: threshold for kind '%s' not defined", kind)
-		}
-		if !val.IsValid() {
-			return fmt.Errorf("staking: sanity check failed: threshold '%s' has invalid value", kind)
-		}
+	if err := g.Parameters.SanityCheck(); err != nil {
+		return fmt.Errorf("staking: sanity check failed: %w", err)
 	}
 
 	if !g.TotalSupply.IsValid() {

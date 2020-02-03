@@ -6,7 +6,8 @@
       "burn": 10,
       "add_escrow": 10,
       "reclaim_escrow": 10
-    }
+    },
+    "fee_weight_vote": 1
   },
   "total_supply": "1000",
   "ledger": {

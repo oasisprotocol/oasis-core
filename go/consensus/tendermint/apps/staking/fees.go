@@ -9,13 +9,6 @@ import (
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 )
 
-const (
-	// The proportion of fees disbursed to entities of the nodes that voted for a block.
-	weightVote = 1
-	// The proportion of fees disbursed to the entity of the node that proposed a block.
-	weightPropose = 1
-)
-
 type disbursement struct {
 	id     signature.PublicKey
 	weight int64
@@ -38,19 +31,27 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *staki
 		return nil
 	}
 
+	consensusParameters, err := stakeState.ConsensusParameters()
+	if err != nil {
+		return fmt.Errorf("staking: failed to load consensus parameters: %w", err)
+	}
+
 	var rewardAccounts []disbursement
 	var totalWeight int64
 	for _, entityID := range signingEntities {
 		d := disbursement{
 			id: entityID,
 			// For now we just disburse equally.
-			weight: weightVote,
+			weight: consensusParameters.FeeWeightVote,
 		}
 		if proposerEntity != nil && proposerEntity.Equal(entityID) {
-			d.weight += weightPropose
+			d.weight += consensusParameters.FeeWeightPropose
 		}
 		rewardAccounts = append(rewardAccounts, d)
 		totalWeight += d.weight
+	}
+	if totalWeight == 0 {
+		return fmt.Errorf("staking: fee distribution weights add up to zero")
 	}
 
 	// Calculate the amount of fees to disburse.
