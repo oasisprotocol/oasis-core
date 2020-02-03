@@ -93,6 +93,11 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 
 	cli := cli.New(childEnv, s.net, s.logger)
 
+	// General token info.
+	if err := s.getInfo(childEnv); err != nil {
+		return err
+	}
+
 	// Account list.
 	accounts, err := s.listAccounts(childEnv)
 	if err != nil {
@@ -330,6 +335,28 @@ func (s *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, cli *cli.H
 
 	// todo: check that it was applied
 
+	return nil
+}
+
+func (s *stakeCLIImpl) getInfo(childEnv *env.Env) error {
+	s.logger.Info("querying common token info")
+	args := []string{
+		"stake", "info",
+		"--" + grpc.CfgAddress, "unix:" + s.basicImpl.net.Validators()[0].SocketPath(),
+	}
+
+	b, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.basicImpl.net.Config().NodeBinary, args)
+	if err != nil {
+		return fmt.Errorf("scenario/e2e/stake: failed to query common token info: %s error: %w", b.String(), err)
+	}
+	// Check that subcommand reported warnings for invalid staking threshold kinds.
+	subCmdOutput := b.String()
+	thresholdKinds := []string{"compute", "storage"}
+	for _, kind := range thresholdKinds {
+		if !strings.Contains(subCmdOutput, fmt.Sprintf("invalid staking threshold kind: %s", kind)) {
+			return fmt.Errorf("scenario/e2e/stake: querying common token info should warn about invalid staking threshold for kind: %s", kind)
+		}
+	}
 	return nil
 }
 
