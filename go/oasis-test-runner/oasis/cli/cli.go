@@ -23,6 +23,10 @@ func (b *helpersBase) runSubCommand(name string, args []string) error {
 	return RunSubCommand(b.env, b.logger, name, b.net.Config().NodeBinary, args)
 }
 
+func (b *helpersBase) runSubCommandWithOutput(name string, args []string) (bytes.Buffer, error) {
+	return RunSubCommandWithOutput(b.env, b.logger, name, b.net.Config().NodeBinary, args)
+}
+
 // Helpers are the oasis-node cli helpers.
 type Helpers struct {
 	Consensus *ConsensusHelpers

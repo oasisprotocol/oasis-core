@@ -95,7 +95,7 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	}
 
 	var id signature.PublicKey
-	if err := id.UnmarshalHex(viper.GetString(CfgAccountID)); err != nil {
+	if err := id.UnmarshalText([]byte(viper.GetString(CfgAccountID))); err != nil {
 		logger.Error("failed to parse account ID",
 			"err", err,
 		)
@@ -120,7 +120,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 	cmdConsensus.AssertTxFileOK()
 
 	var xfer staking.Transfer
-	if err := xfer.To.UnmarshalHex(viper.GetString(CfgTransferDestination)); err != nil {
+	if err := xfer.To.UnmarshalText([]byte(viper.GetString(CfgTransferDestination))); err != nil {
 		logger.Error("failed to parse transfer destination ID",
 			"err", err,
 		)
@@ -170,7 +170,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 	cmdConsensus.AssertTxFileOK()
 
 	var escrow staking.Escrow
-	if err := escrow.Account.UnmarshalHex(viper.GetString(CfgEscrowAccount)); err != nil {
+	if err := escrow.Account.UnmarshalText([]byte(viper.GetString(CfgEscrowAccount))); err != nil {
 		logger.Error("failed to parse escrow account",
 			"err", err,
 		)
@@ -198,7 +198,7 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 	cmdConsensus.AssertTxFileOK()
 
 	var reclaim staking.ReclaimEscrow
-	if err := reclaim.Account.UnmarshalHex(viper.GetString(CfgEscrowAccount)); err != nil {
+	if err := reclaim.Account.UnmarshalText([]byte(viper.GetString(CfgEscrowAccount))); err != nil {
 		logger.Error("failed to parse escrow account",
 			"err", err,
 		)

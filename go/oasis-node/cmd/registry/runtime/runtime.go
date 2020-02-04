@@ -407,7 +407,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		entities := make(map[signature.PublicKey]bool)
 		for _, se := range viper.GetStringSlice(CfgAdmissionPolicyEntityWhitelist) {
 			var e signature.PublicKey
-			if err = e.UnmarshalHex(se); err != nil {
+			if err = e.UnmarshalText([]byte(se)); err != nil {
 				logger.Error("failed to parse entity ID",
 					"err", err,
 					CfgAdmissionPolicyEntityWhitelist, se,

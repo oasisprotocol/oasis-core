@@ -105,8 +105,8 @@ func (r *RegistryHelpers) GenerateRegisterRuntimeTx(
 		return fmt.Errorf("invalid admission policy")
 	}
 
-	if err := r.runSubCommand("registry-runtime-gen_register", args); err != nil {
-		return fmt.Errorf("failed to generate register runtime tx: %w", err)
+	if out, err := r.runSubCommandWithOutput("registry-runtime-gen_register", args); err != nil {
+		return fmt.Errorf("failed to generate register runtime tx: error: %w output: %s", err, out.String())
 	}
 
 	return nil
