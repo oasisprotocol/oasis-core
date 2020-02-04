@@ -69,7 +69,7 @@ func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.Reque
 	}
 
 	// Add rewards for proposer.
-	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity); err != nil {
+	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity, numVoteInfo, len(signingEntities)); err != nil {
 		return fmt.Errorf("staking: block proposing reward: %w", err)
 	}
 

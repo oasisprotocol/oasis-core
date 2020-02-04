@@ -607,7 +607,7 @@ func (s *MutableState) TransferFromCommon(ctx *abci.Context, toID signature.Publ
 	return ret, nil
 }
 
-// AddRewards computes and transfers the staking rewards to active escrow accounts.
+// AddRewards computes and transfers a staking reward to active escrow accounts.
 // If an error occurs, the pool and affected accounts are left in an invalid state.
 // This may fail due to the common pool running out of tokens. In this case, the
 // returned error's cause will be `staking.ErrInsufficientBalance`, and it should
@@ -689,6 +689,101 @@ func (s *MutableState) AddRewards(time epochtime.EpochTime, factor *quantity.Qua
 
 		s.SetAccount(id, ent)
 	}
+
+	s.SetCommonPool(commonPool)
+
+	return nil
+}
+
+// AddRewardSingleAttenuated computes, scales, and transfers a staking reward to an active escrow account.
+func (s *MutableState) AddRewardSingleAttenuated(time epochtime.EpochTime, factor *quantity.Quantity, attenuationNumerator, attenuationDenominator int, account signature.PublicKey) error {
+	steps, err := s.RewardSchedule()
+	if err != nil {
+		return err
+	}
+	var activeStep *staking.RewardStep
+	for _, step := range steps {
+		if time < step.Until {
+			activeStep = &step
+			break
+		}
+	}
+	if activeStep == nil {
+		// We're past the end of the schedule.
+		return nil
+	}
+
+	var numQ, denQ quantity.Quantity
+	if err = numQ.FromInt64(int64(attenuationNumerator)); err != nil {
+		return errors.Wrapf(err, "importing attenuation numerator %d", attenuationNumerator)
+	}
+	if err = denQ.FromInt64(int64(attenuationDenominator)); err != nil {
+		return errors.Wrapf(err, "importing attenuation denominator %d", attenuationDenominator)
+	}
+
+	commonPool, err := s.CommonPool()
+	if err != nil {
+		return errors.Wrap(err, "loading common pool")
+	}
+
+	ent := s.Account(account)
+
+	q := ent.Escrow.Active.Balance.Clone()
+	// Multiply first.
+	if err := q.Mul(factor); err != nil {
+		return errors.Wrap(err, "multiplying by reward factor")
+	}
+	if err := q.Mul(&activeStep.Scale); err != nil {
+		return errors.Wrap(err, "multiplying by reward step scale")
+	}
+	if err := q.Mul(&numQ); err != nil {
+		return errors.Wrap(err, "multiplying by attenuation numerator")
+	}
+	if err := q.Quo(staking.RewardAmountDenominator); err != nil {
+		return errors.Wrap(err, "dividing by reward amount denominator")
+	}
+	if err := q.Quo(&denQ); err != nil {
+		return errors.Wrap(err, "dividing by attenuation denominator")
+	}
+
+	if q.IsZero() {
+		return nil
+	}
+
+	var com *quantity.Quantity
+	rate := ent.Escrow.CommissionSchedule.CurrentRate(time)
+	if rate != nil {
+		com = q.Clone()
+		// Multiply first.
+		if err := com.Mul(rate); err != nil {
+			return errors.Wrap(err, "multiplying by commission rate")
+		}
+		if err := com.Quo(staking.CommissionRateDenominator); err != nil {
+			return errors.Wrap(err, "dividing by commission rate denominator")
+		}
+
+		if err := q.Sub(com); err != nil {
+			return errors.Wrap(err, "subtracting commission")
+		}
+	}
+
+	if !q.IsZero() {
+		if err := quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
+			return errors.Wrap(err, "transferring to active escrow balance from common pool")
+		}
+	}
+
+	if com != nil && !com.IsZero() {
+		delegation := s.Delegation(account, account)
+
+		if err := ent.Escrow.Active.Deposit(&delegation.Shares, commonPool, com); err != nil {
+			return errors.Wrap(err, "depositing commission")
+		}
+
+		s.SetDelegation(account, account, delegation)
+	}
+
+	s.SetAccount(account, ent)
 
 	s.SetCommonPool(commonPool)
 
