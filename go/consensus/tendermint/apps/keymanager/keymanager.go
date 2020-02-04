@@ -3,6 +3,7 @@ package keymanager
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
@@ -61,8 +62,18 @@ func (app *keymanagerApplication) BeginBlock(ctx *abci.Context, request types.Re
 }
 
 func (app *keymanagerApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
-	// TODO: Add policy support.
-	return errors.New("tendermint/keymanager: transactions not supported yet")
+	state := keymanagerState.NewMutableState(ctx.State())
+
+	switch tx.Method {
+	case api.MethodUpdatePolicy:
+		var sigPol api.SignedPolicySGX
+		if err := cbor.Unmarshal(tx.Body, &sigPol); err != nil {
+			return err
+		}
+		return app.updatePolicy(ctx, state, &sigPol)
+	default:
+		return fmt.Errorf("keymanager: invalid method: %s", tx.Method)
+	}
 }
 
 func (app *keymanagerApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
