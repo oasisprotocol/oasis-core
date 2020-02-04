@@ -407,7 +407,7 @@ type ConsensusParameters struct {
 	CommissionScheduleRules           CommissionScheduleRules             `json:"commission_schedule_rules,omitempty"`
 	Slashing                          map[SlashReason]Slash               `json:"slashing,omitempty"`
 	GasCosts                          transaction.Costs                   `json:"gas_costs,omitempty"`
-	MinDelegationAmount               quantity.Quantity                   `json:"min_delegation,omitempty"`
+	MinDelegationAmount               quantity.Quantity                   `json:"min_delegation"`
 
 	DisableTransfers       bool                         `json:"disable_transfers,omitempty"`
 	DisableDelegation      bool                         `json:"disable_delegation,omitempty"`
@@ -419,16 +419,16 @@ type ConsensusParameters struct {
 	// Portions corresponding to validators that don't sign the block go to the common pool.
 
 	// FeeSplitVote is the proportion of block fee portions that go to the validator that signs.
-	FeeSplitVote quantity.Quantity `json:"fee_split_vote,omitempty"`
+	FeeSplitVote quantity.Quantity `json:"fee_split_vote"`
 	// FeeSplitPropose is the proportion of block fee portions that go to the proposer.
-	FeeSplitPropose quantity.Quantity `json:"fee_split_propose,omitempty"`
+	FeeSplitPropose quantity.Quantity `json:"fee_split_propose"`
 
 	// RewardFactorEpochSigned is the factor for a reward distributed per epoch to
 	// entities that have signed at least a threshold fraction of the blocks.
-	RewardFactorEpochSigned quantity.Quantity `json:"reward_factor_epoch_signed,omitempty"`
+	RewardFactorEpochSigned quantity.Quantity `json:"reward_factor_epoch_signed"`
 	// RewardFactorBlockProposed is the factor for a reward distributed per block
 	// to the entity that proposed the block.
-	RewardFactorBlockProposed quantity.Quantity `json:"reward_factor_block_proposed,omitempty"`
+	RewardFactorBlockProposed quantity.Quantity `json:"reward_factor_block_proposed"`
 }
 
 const (
