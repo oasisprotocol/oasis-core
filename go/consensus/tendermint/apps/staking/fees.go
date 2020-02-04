@@ -9,15 +9,10 @@ import (
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 )
 
-type disbursement struct {
-	id     signature.PublicKey
-	weight int64
-}
-
 // disburseFees disburses fees.
 //
 // In case of errors the state may be inconsistent.
-func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, signingEntities []signature.PublicKey) error {
+func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, numEligibleVotes int, signingEntities []signature.PublicKey) error {
 	totalFees, err := stakeState.LastBlockFees()
 	if err != nil {
 		return fmt.Errorf("staking: failed to query last block fees: %w", err)
@@ -36,52 +31,75 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *staki
 		return fmt.Errorf("staking: failed to load consensus parameters: %w", err)
 	}
 
-	var rewardAccounts []disbursement
-	var totalWeight int64
-	for _, entityID := range signingEntities {
-		d := disbursement{
-			id: entityID,
-			// For now we just disburse equally.
-			weight: consensusParameters.FeeWeightVote,
-		}
-		if proposerEntity != nil && proposerEntity.Equal(entityID) {
-			d.weight += consensusParameters.FeeWeightPropose
-		}
-		rewardAccounts = append(rewardAccounts, d)
-		totalWeight += d.weight
+	denom := consensusParameters.FeeSplitVote.Clone()
+	if err = denom.Add(&consensusParameters.FeeSplitPropose); err != nil {
+		return fmt.Errorf("add fee splits: %w", err)
 	}
-	if totalWeight == 0 {
-		return fmt.Errorf("staking: fee distribution weights add up to zero")
+	var nEVQ quantity.Quantity
+	if err = nEVQ.FromInt64(int64(numEligibleVotes)); err != nil {
+		return fmt.Errorf("import numEligibleVotes %d: %w", numEligibleVotes, err)
+	}
+	if err = denom.Mul(&nEVQ); err != nil {
+		return fmt.Errorf("multiply denom: %w", err)
 	}
 
-	// Calculate the amount of fees to disburse.
-	var totalWeightQ quantity.Quantity
-	_ = totalWeightQ.FromInt64(totalWeight)
-
-	feeShare := totalFees.Clone()
-	if err := feeShare.Quo(&totalWeightQ); err != nil {
-		return err
+	perVIVote := totalFees.Clone()
+	if err = perVIVote.Mul(&consensusParameters.FeeSplitVote); err != nil {
+		return fmt.Errorf("multiply perVIVote: %w", err)
 	}
-	for _, d := range rewardAccounts {
-		var weightQ quantity.Quantity
-		_ = weightQ.FromInt64(d.weight)
+	if err = perVIVote.Quo(denom); err != nil {
+		return fmt.Errorf("divide perVIVote: %w", err)
+	}
+	perVIPropose := totalFees.Clone()
+	if err = perVIPropose.Mul(&consensusParameters.FeeSplitPropose); err != nil {
+		return fmt.Errorf("multiply perVIPropose: %w", err)
+	}
+	// The per-VoteInfo proposer share is first rounded (down), then multiplied by the number of shares.
+	// This keeps incentives from having nonuniform breakpoints at certain signature counts.
+	if err = perVIPropose.Quo(denom); err != nil {
+		return fmt.Errorf("divide perVIPropose: %w", err)
+	}
+	numSigningEntities := len(signingEntities)
+	var nSEQ quantity.Quantity
+	if err = nSEQ.FromInt64(int64(numSigningEntities)); err != nil {
+		return fmt.Errorf("import numSigningEntities %d: %w", numSigningEntities, err)
+	}
+	proposeTotal := perVIPropose.Clone()
+	if err = proposeTotal.Mul(&nSEQ); err != nil {
+		return fmt.Errorf("multiply proposeTotal: %w", err)
+	}
 
-		// Calculate how much to disburse to this account.
-		disburseAmount := feeShare.Clone()
-		if err := disburseAmount.Mul(&weightQ); err != nil {
-			return fmt.Errorf("staking: failed to disburse fees: %w", err)
+	// Pay proposer.
+	if !proposeTotal.IsZero() {
+		if proposerEntity != nil {
+			// Perform the transfer.
+			acct := stakeState.Account(*proposerEntity)
+			if err = quantity.Move(&acct.General.Balance, totalFees, proposeTotal); err != nil {
+				ctx.Logger().Error("failed to disburse fees (propose)",
+					"err", err,
+					"to", *proposerEntity,
+					"amount", proposeTotal,
+				)
+				return fmt.Errorf("staking: failed to disburse fees (propose): %w", err)
+			}
+			stakeState.SetAccount(*proposerEntity, acct)
 		}
-		// Perform the transfer.
-		acct := stakeState.Account(d.id)
-		if err := quantity.Move(&acct.General.Balance, totalFees, disburseAmount); err != nil {
-			ctx.Logger().Error("failed to disburse fees",
-				"err", err,
-				"to", d.id,
-				"amount", disburseAmount,
-			)
-			return fmt.Errorf("staking: failed to disburse fees: %w", err)
+	}
+	// Pay voters.
+	if !perVIVote.IsZero() {
+		for _, voterEntity := range signingEntities {
+			// Perform the transfer.
+			acct := stakeState.Account(voterEntity)
+			if err = quantity.Move(&acct.General.Balance, totalFees, perVIVote); err != nil {
+				ctx.Logger().Error("failed to disburse fees (vote)",
+					"err", err,
+					"to", voterEntity,
+					"amount", perVIVote,
+				)
+				return fmt.Errorf("staking: failed to disburse fees (vote): %w", err)
+			}
+			stakeState.SetAccount(voterEntity, acct)
 		}
-		stakeState.SetAccount(d.id, acct)
 	}
 	// Any remainder goes to the common pool.
 	if !totalFees.IsZero() {

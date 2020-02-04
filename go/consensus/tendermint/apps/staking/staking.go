@@ -60,10 +60,11 @@ func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.Reque
 	proposingEntity := app.resolveEntityIDFromProposer(regState, request, ctx)
 
 	// Go through all signers of the previous block and resolve entities.
+	numVoteInfo := len(request.GetLastCommitInfo().Votes)
 	signingEntities := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
 
 	// Disburse fees from previous block.
-	if err := app.disburseFees(ctx, stakeState, proposingEntity, signingEntities); err != nil {
+	if err := app.disburseFees(ctx, stakeState, proposingEntity, numVoteInfo, signingEntities); err != nil {
 		return fmt.Errorf("staking: failed to disburse fees: %w", err)
 	}
 
