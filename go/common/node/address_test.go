@@ -44,28 +44,28 @@ func TestConsensusAddress(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			id:               "deadbeefdeadbeefdeadbeeddeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+			id:               "AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBBBA=",
 			addr:             "127.0.0.1:8000",
-			consensusAddrStr: "deadbeefdeadbeefdeadbeeddeadbeefdeadbeefdeadbeefdeadbeefdeadbeef@127.0.0.1:8000",
+			consensusAddrStr: "AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBBBA=@127.0.0.1:8000",
 		},
 		{
-			id:               "bd51dedea0e92070d90386a85a802df6b9bc69e46f10a130caf72e3a1cd64af6",
+			id:               "D2hqhJcmZnBmhw9TodOdoFPAjmRkpRatANCNHxIDHgA=",
 			addr:             "35.100.2.11:8000",
-			consensusAddrStr: "bd51dedea0e92070d90386a85a802df6b9bc69e46f10a130caf72e3a1cd64af6@35.100.2.11:8000",
+			consensusAddrStr: "D2hqhJcmZnBmhw9TodOdoFPAjmRkpRatANCNHxIDHgA=@35.100.2.11:8000",
 		},
 	}
 
 	for _, testCase := range testCases {
 		// Construct a ConsensusAddress object and check if text marshalling works.
 		var consensusAddr ConsensusAddress
-		require.NoError(t, consensusAddr.ID.UnmarshalHex(testCase.id), "error unmarshalling consensus address' id")
-		require.NoError(t, consensusAddr.Address.UnmarshalText([]byte(testCase.addr)), "error unmarshalling consensus address' TCP address")
+		require.NoError(t, consensusAddr.ID.UnmarshalText([]byte(testCase.id)), "error unmarshaling consensus address' id")
+		require.NoError(t, consensusAddr.Address.UnmarshalText([]byte(testCase.addr)), "error unmarshaling consensus address' TCP address")
 		consensusAddrBytes, err := consensusAddr.MarshalText()
 		require.NoError(t, err, "error marshalling consensus address")
 		require.Equal(t, testCase.consensusAddrStr, string(consensusAddrBytes), "marshalled consensus address does not match")
 		// Unmarshal a text ConsensusAddress object and compare it to the constructed object.
 		var consensusAddrUnmarshalled ConsensusAddress
-		require.NoError(t, consensusAddrUnmarshalled.UnmarshalText([]byte(testCase.consensusAddrStr)), "error unmarshalling consensus address")
+		require.NoError(t, consensusAddrUnmarshalled.UnmarshalText([]byte(testCase.consensusAddrStr)), "error unmarshaling consensus address")
 		require.Equal(t, consensusAddr, consensusAddrUnmarshalled)
 	}
 }
@@ -84,7 +84,7 @@ func TestCommitteeAddress(t *testing.T) {
 	for _, testCase := range testCases {
 		// Construct a CommitteeAddress object and check if text marshalling works.
 		var committeeAddress CommitteeAddress
-		require.NoError(t, committeeAddress.UnmarshalText([]byte(testCase.committeeAddress)), "error unmarshalling committee address")
+		require.NoError(t, committeeAddress.UnmarshalText([]byte(testCase.committeeAddress)), "error unmarshaling committee address")
 		committeeAddrBytes, err := committeeAddress.MarshalText()
 		require.NoError(t, err, "error marshalling commmittee address")
 		require.Equal(t, testCase.committeeAddress, string(committeeAddrBytes), "marshalled committee address does not match")

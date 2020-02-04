@@ -162,7 +162,7 @@ func doUpdate(cmd *cobra.Command, args []string) {
 	ent.Nodes = nil
 	for _, v := range viper.GetStringSlice(CfgNodeID) {
 		var nodeID signature.PublicKey
-		if err = nodeID.UnmarshalHex(v); err != nil {
+		if err = nodeID.UnmarshalText([]byte(v)); err != nil {
 			logger.Error("failed to parse node ID",
 				"err", err,
 				"node_id", v,

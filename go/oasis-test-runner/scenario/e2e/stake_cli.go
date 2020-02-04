@@ -372,7 +372,7 @@ func (s *stakeCLIImpl) listAccounts(childEnv *env.Env) ([]signature.PublicKey, e
 		}
 
 		var acc signature.PublicKey
-		if err = acc.UnmarshalHex(accStr); err != nil {
+		if err = acc.UnmarshalText([]byte(accStr)); err != nil {
 			return nil, err
 		}
 		accounts = append(accounts, acc)

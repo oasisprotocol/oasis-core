@@ -223,7 +223,7 @@ func (r *registryCLIImpl) listEntities(childEnv *env.Env) ([]signature.PublicKey
 		}
 
 		var ent signature.PublicKey
-		if err = ent.UnmarshalHex(entStr); err != nil {
+		if err = ent.UnmarshalText([]byte(entStr)); err != nil {
 			return nil, err
 		}
 		entities = append(entities, ent)
@@ -305,7 +305,7 @@ func (r *registryCLIImpl) listNodes(childEnv *env.Env) ([]signature.PublicKey, e
 		}
 
 		var node signature.PublicKey
-		if err = node.UnmarshalHex(nodeStr); err != nil {
+		if err = node.UnmarshalText([]byte(nodeStr)); err != nil {
 			return nil, err
 		}
 		nodes = append(nodes, node)

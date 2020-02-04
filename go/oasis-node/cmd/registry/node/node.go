@@ -110,7 +110,7 @@ func doInit(cmd *cobra.Command, args []string) {
 	)
 
 	if idStr := viper.GetString(CfgEntityID); idStr != "" {
-		if err = entityID.UnmarshalHex(idStr); err != nil {
+		if err = entityID.UnmarshalText([]byte(idStr)); err != nil {
 			logger.Error("malformed entity ID",
 				"err", err,
 			)

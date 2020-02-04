@@ -218,7 +218,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		panic(err)
 	}
 	var testConsensusAddress node.ConsensusAddress
-	_ = testConsensusAddress.UnmarshalText([]byte("f29bb9979109fc2512b2ae8ed14531c459cdeb2cb73077440115b6c955a359f1@127.0.0.1:1234"))
+	_ = testConsensusAddress.UnmarshalText([]byte("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBBBA=@127.0.0.1:1234"))
 	var testAddress node.Address
 	_ = testAddress.UnmarshalText([]byte("127.0.0.1:1234"))
 	testNode := &node.Node{

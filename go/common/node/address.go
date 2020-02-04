@@ -126,7 +126,7 @@ func (ca *ConsensusAddress) UnmarshalText(text []byte) error {
 	if len(spl) != 2 {
 		return ErrConsensusAddressNoID
 	}
-	if err := ca.ID.UnmarshalHex(spl[0]); err != nil {
+	if err := ca.ID.UnmarshalText([]byte(spl[0])); err != nil {
 		return fmt.Errorf("node: unable to parse consensus address' ID: %w", err)
 	}
 	if err := ca.Address.UnmarshalText([]byte(spl[1])); err != nil {
