@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/control"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/fixgenesis"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/storage"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/tendermint"
@@ -23,6 +24,7 @@ func Register(parentCmd *cobra.Command) {
 	byzantine.Register(debugCmd)
 	txsource.Register(debugCmd)
 	fixgenesis.Register(debugCmd)
+	control.Register(debugCmd)
 
 	parentCmd.AddCommand(debugCmd)
 }
