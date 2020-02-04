@@ -266,7 +266,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 	}
 	switch kind {
 	case registry.KindCompute:
-		if viper.IsSet(CfgKeyManager) {
+		if viper.GetString(CfgKeyManager) != "" {
 			var tmpKmID common.Namespace
 			if err = tmpKmID.UnmarshalHex(viper.GetString(CfgKeyManager)); err != nil {
 				logger.Error("failed to parse key manager ID",
