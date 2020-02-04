@@ -345,9 +345,9 @@ func (s *stakeCLIImpl) getInfo(childEnv *env.Env) error {
 		"--" + grpc.CfgAddress, "unix:" + s.basicImpl.net.Validators()[0].SocketPath(),
 	}
 
-	b, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
-		return fmt.Errorf("scenario/e2e/stake: failed to query common token info: %s error: %w", b.String(), err)
+		return fmt.Errorf("scenario/e2e/stake: failed to query common token info: error: %w output: %s", err, out.String())
 	}
 	return nil
 }
@@ -358,11 +358,11 @@ func (s *stakeCLIImpl) listAccounts(childEnv *env.Env) ([]signature.PublicKey, e
 		"stake", "list",
 		"--" + grpc.CfgAddress, "unix:" + s.basicImpl.net.Validators()[0].SocketPath(),
 	}
-	b, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "list", s.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "list", s.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
-		return nil, fmt.Errorf("scenario/e2e/stake: failed to list accounts: %s error: %w", b.String(), err)
+		return nil, fmt.Errorf("scenario/e2e/stake: failed to list accounts: error: %w output: %s", err, out.String())
 	}
-	accountsStr := strings.Split(b.String(), "\n")
+	accountsStr := strings.Split(out.String(), "\n")
 
 	var accounts []signature.PublicKey
 	for _, accStr := range accountsStr {
@@ -389,13 +389,13 @@ func (s *stakeCLIImpl) getAccountInfo(childEnv *env.Env, src signature.PublicKey
 		"--" + grpc.CfgAddress, "unix:" + s.basicImpl.net.Validators()[0].SocketPath(),
 	}
 
-	b, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
-		return nil, fmt.Errorf("scenario/e2e/stake: failed to check account info: %w", err)
+		return nil, fmt.Errorf("scenario/e2e/stake: failed to check account info: error: %w output: %s", err, out.String())
 	}
 
 	var acct api.Account
-	if err = json.Unmarshal(b.Bytes(), &acct); err != nil {
+	if err = json.Unmarshal(out.Bytes(), &acct); err != nil {
 		return nil, err
 	}
 
@@ -446,8 +446,8 @@ func (s *stakeCLIImpl) showTx(childEnv *env.Env, txPath string) error {
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
-	if err := cli.RunSubCommand(childEnv, s.logger, "show_tx", s.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("showTx: failed to show tx: %w", err)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "show_tx", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("showTx: failed to show tx: error: %w, output: %s", err, out.String())
 	}
 	return nil
 }
@@ -468,8 +468,8 @@ func (s *stakeCLIImpl) genTransferTx(childEnv *env.Env, amount int, nonce int, d
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
-	if err := cli.RunSubCommand(childEnv, s.logger, "gen_transfer", s.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("genTransferTx: failed to generate transfer tx: %w", err)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_transfer", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("genTransferTx: failed to generate transfer tx: error: %w output: %s", err, out.String())
 	}
 	return nil
 }
@@ -489,8 +489,8 @@ func (s *stakeCLIImpl) genBurnTx(childEnv *env.Env, amount int, nonce int, txPat
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
-	if err := cli.RunSubCommand(childEnv, s.logger, "gen_burn", s.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("genBurnTx: failed to generate burn tx: %w", err)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_burn", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("genBurnTx: failed to generate burn tx: error: %w output: %s", err, out.String())
 	}
 	return nil
 }
@@ -511,8 +511,8 @@ func (s *stakeCLIImpl) genEscrowTx(childEnv *env.Env, amount int, nonce int, esc
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
-	if err := cli.RunSubCommand(childEnv, s.logger, "gen_escrow", s.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("genEscrowTx: failed to generate escrow tx: %w", err)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_escrow", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("genEscrowTx: failed to generate escrow tx: error: %w output: %s", err, out.String())
 	}
 	return nil
 }
@@ -533,8 +533,8 @@ func (s *stakeCLIImpl) genReclaimEscrowTx(childEnv *env.Env, amount int, nonce i
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgGenesisFile, s.basicImpl.net.GenesisPath(),
 	}
-	if err := cli.RunSubCommand(childEnv, s.logger, "gen_reclaim_escrow", s.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("genReclaimEscrowTx: failed to generate reclaim escrow tx: %w", err)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_reclaim_escrow", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("genReclaimEscrowTx: failed to generate reclaim escrow tx: error: %w output: %s", err, out.String())
 	}
 	return nil
 }
@@ -559,8 +559,8 @@ func (s *stakeCLIImpl) genAmendCommissionScheduleTx(childEnv *env.Env, nonce int
 	for _, step := range cs.Bounds {
 		args = append(args, "--"+stake.CfgCommissionScheduleBounds, fmt.Sprintf("%d/%d/%d", step.Start, step.RateMin.ToBigInt(), step.RateMax.ToBigInt()))
 	}
-	if err := cli.RunSubCommand(childEnv, s.logger, "gen_amend_commission_schedule", s.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("genAmendCommissionScheduleTx: failed to generate amend commission schedule tx: %w", err)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_amend_commission_schedule", s.basicImpl.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("genAmendCommissionScheduleTx: failed to generate amend commission schedule tx: error: %w output: %s", err, out.String())
 	}
 	return nil
 }
