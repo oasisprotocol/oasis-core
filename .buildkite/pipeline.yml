@@ -271,5 +271,7 @@ steps:
     artifact_paths:
       - merged-coverage.txt
     soft_fail: true
+    agents:
+      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin
