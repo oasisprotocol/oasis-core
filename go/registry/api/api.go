@@ -1126,10 +1126,6 @@ func VerifyRegisterRuntimeArgs(
 		return nil, fmt.Errorf("%w: test runtime not allowed", ErrInvalidArgument)
 	}
 
-	if !isGenesis && !rt.Genesis.StateRoot.IsEmpty() {
-		// TODO: Verify storage receipt for the state root, reject such registrations for now. See oasis-core#1686.
-		return nil, ErrInvalidArgument
-	}
 	if err := rt.Genesis.SanityCheck(isGenesis); err != nil {
 		return nil, err
 	}
