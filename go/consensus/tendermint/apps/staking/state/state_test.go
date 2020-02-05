@@ -149,6 +149,16 @@ func TestRewardAndSlash(t *testing.T) {
 	commonPool, err = s.CommonPool()
 	require.NoError(t, err, "load common pool")
 	require.Equal(t, mustInitQuantityP(t, 9840), commonPool, "slash - common pool")
+
+	// Epoch 10 is during the first step.
+	require.NoError(t, s.AddRewardSingleAttenuated(10, mustInitQuantityP(t, 10), 5, 10, escrowID), "add attenuated rewards epoch 30")
+
+	// 5% gain.
+	escrowAccount = s.Account(escrowID)
+	require.Equal(t, mustInitQuantity(t, 283), escrowAccount.Escrow.Active.Balance, "attenuated reward - escrow active escrow")
+	commonPool, err = s.CommonPool()
+	require.NoError(t, err, "load common pool")
+	require.Equal(t, mustInitQuantityP(t, 9827), commonPool, "reward attenuated - common pool")
 }
 
 func TestEpochSigning(t *testing.T) {
