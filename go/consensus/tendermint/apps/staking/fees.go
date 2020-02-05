@@ -28,11 +28,19 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *staki
 		return nil
 	}
 
+	// (Replicated in staking `ConsensusParameters` struct. Keep both explanations in sync.)
+	// A block's fees are split into $n$ portions, one corresponding to each validator.
+	// For each validator $V$ that signs the block, $V$'s corresponding portion is disbursed between $V$ and the
+	// proposer $P$. The ratio of this split are controlled by `FeeSplitVote` and `FeeSplitPropose`.
+	// Portions corresponding to validators that don't sign the block go to the common pool.
+
 	consensusParameters, err := stakeState.ConsensusParameters()
 	if err != nil {
 		return fmt.Errorf("staking: failed to load consensus parameters: %w", err)
 	}
 
+	// Calculate denom := (FeeSplitVote + FeeSplitPropose) * numEligibleVotes.
+	// This will be used to calculate each portion's vote fee and propose fee.
 	denom := consensusParameters.FeeSplitVote.Clone()
 	if err = denom.Add(&consensusParameters.FeeSplitPropose); err != nil {
 		return fmt.Errorf("add fee splits: %w", err)
@@ -45,6 +53,8 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *staki
 		return fmt.Errorf("multiply denom: %w", err)
 	}
 
+	// Calculate each portion's vote fee and propose fee.
+	// Portion vote fee. perVIVote := (totalFees * FeeSplitVote) / denom.
 	perVIVote := totalFees.Clone()
 	if err = perVIVote.Mul(&consensusParameters.FeeSplitVote); err != nil {
 		return fmt.Errorf("multiply perVIVote: %w", err)
@@ -52,6 +62,7 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *staki
 	if err = perVIVote.Quo(denom); err != nil {
 		return fmt.Errorf("divide perVIVote: %w", err)
 	}
+	// Portion propose fee. perVIPropose := (totalFees * FeeSplitPropose) / denom.
 	perVIPropose := totalFees.Clone()
 	if err = perVIPropose.Mul(&consensusParameters.FeeSplitPropose); err != nil {
 		return fmt.Errorf("multiply perVIPropose: %w", err)
@@ -66,6 +77,7 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *staki
 	if err = nSEQ.FromInt64(int64(numSigningEntities)); err != nil {
 		return fmt.Errorf("import numSigningEntities %d: %w", numSigningEntities, err)
 	}
+	// Overall propose fee. proposeTotal := perVIPropose * numSigningEntities.
 	proposeTotal := perVIPropose.Clone()
 	if err = proposeTotal.Mul(&nSEQ); err != nil {
 		return fmt.Errorf("multiply proposeTotal: %w", err)

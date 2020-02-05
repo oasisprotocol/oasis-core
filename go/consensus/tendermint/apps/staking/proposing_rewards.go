@@ -45,6 +45,7 @@ func (app *stakingApplication) rewardBlockProposing(ctx *abci.Context, stakeStat
 		ctx.Logger().Info("rewardBlockProposing: this block does not belong to an epoch. no block proposing reward")
 		return nil
 	}
+	// Reward the proposer based on the `(number of included votes) / (size of the validator set)` ratio.
 	if err = stakeState.AddRewardSingleAttenuated(epoch, &params.RewardFactorBlockProposed, numSigningEntities, numVoteInfo, *proposingEntity); err != nil {
 		return fmt.Errorf("adding rewards: %w", err)
 	}

@@ -413,6 +413,7 @@ type ConsensusParameters struct {
 	DisableDelegation      bool                         `json:"disable_delegation,omitempty"`
 	UndisableTransfersFrom map[signature.PublicKey]bool `json:"undisable_transfers_from,omitempty"`
 
+	// (Replicated in staking app `disburseFees` method. Keep both explanations in sync.)
 	// A block's fees are split into $n$ portions, one corresponding to each validator.
 	// For each validator $V$ that signs the block, $V$'s corresponding portion is disbursed between $V$ and the
 	// proposer $P$. The ratio of this split are controlled by `FeeSplitVote` and `FeeSplitPropose`.
