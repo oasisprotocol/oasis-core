@@ -20,6 +20,8 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *staki
 
 	ctx.Logger().Debug("disbursing fees",
 		"total_amount", totalFees,
+		"numEligibleVotes", numEligibleVotes,
+		"numSigningEntities", len(signingEntities),
 	)
 	if totalFees.IsZero() {
 		// Nothing to disburse.
