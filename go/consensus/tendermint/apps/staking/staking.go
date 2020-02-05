@@ -60,16 +60,18 @@ func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.Reque
 	proposingEntity := app.resolveEntityIDFromProposer(regState, request, ctx)
 
 	// Go through all signers of the previous block and resolve entities.
-	numVoteInfo := len(request.GetLastCommitInfo().Votes)
+	// numEligibleValidators is how many total validators are in the validator set, while
+	// signingEntities is from the validators which actually signed.
+	numEligibleValidators := len(request.GetLastCommitInfo().Votes)
 	signingEntities := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
 
 	// Disburse fees from previous block.
-	if err := app.disburseFees(ctx, stakeState, proposingEntity, numVoteInfo, signingEntities); err != nil {
+	if err := app.disburseFees(ctx, stakeState, proposingEntity, numEligibleValidators, signingEntities); err != nil {
 		return fmt.Errorf("staking: failed to disburse fees: %w", err)
 	}
 
 	// Add rewards for proposer.
-	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity, numVoteInfo, len(signingEntities)); err != nil {
+	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity, numEligibleValidators, len(signingEntities)); err != nil {
 		return fmt.Errorf("staking: block proposing reward: %w", err)
 	}
 

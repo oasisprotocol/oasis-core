@@ -12,7 +12,7 @@ import (
 // disburseFees disburses fees.
 //
 // In case of errors the state may be inconsistent.
-func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, numEligibleVotes int, signingEntities []signature.PublicKey) error {
+func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, numEligibleValidators int, signingEntities []signature.PublicKey) error {
 	totalFees, err := stakeState.LastBlockFees()
 	if err != nil {
 		return fmt.Errorf("staking: failed to query last block fees: %w", err)
@@ -20,7 +20,7 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *staki
 
 	ctx.Logger().Debug("disbursing fees",
 		"total_amount", totalFees,
-		"numEligibleVotes", numEligibleVotes,
+		"numEligibleValidators", numEligibleValidators,
 		"numSigningEntities", len(signingEntities),
 	)
 	if totalFees.IsZero() {
@@ -39,15 +39,15 @@ func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *staki
 		return fmt.Errorf("staking: failed to load consensus parameters: %w", err)
 	}
 
-	// Calculate denom := (FeeSplitVote + FeeSplitPropose) * numEligibleVotes.
+	// Calculate denom := (FeeSplitVote + FeeSplitPropose) * numEligibleValidators.
 	// This will be used to calculate each portion's vote fee and propose fee.
 	denom := consensusParameters.FeeSplitVote.Clone()
 	if err = denom.Add(&consensusParameters.FeeSplitPropose); err != nil {
 		return fmt.Errorf("add fee splits: %w", err)
 	}
 	var nEVQ quantity.Quantity
-	if err = nEVQ.FromInt64(int64(numEligibleVotes)); err != nil {
-		return fmt.Errorf("import numEligibleVotes %d: %w", numEligibleVotes, err)
+	if err = nEVQ.FromInt64(int64(numEligibleValidators)); err != nil {
+		return fmt.Errorf("import numEligibleValidators %d: %w", numEligibleValidators, err)
 	}
 	if err = denom.Mul(&nEVQ); err != nil {
 		return fmt.Errorf("multiply denom: %w", err)
