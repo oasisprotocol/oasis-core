@@ -80,13 +80,21 @@ const (
 	CfgSentryUpstreamAddress = "tendermint.sentry.upstream_address"
 
 	// CfgP2PPersistentPeer configures tendermint's persistent peer(s).
-	CfgP2PPersistentPeer = "tendermint.persistent_peer"
+	CfgP2PPersistentPeer = "tendermint.p2p.persistent_peer"
 	// CfgP2PDisablePeerExchange disables tendermint's peer-exchange (Pex) reactor.
-	CfgP2PDisablePeerExchange = "tendermint.disable_peer_exchange"
+	CfgP2PDisablePeerExchange = "tendermint.p2p.disable_peer_exchange"
 	// CfgP2PSeeds configures tendermint's seed node(s).
-	CfgP2PSeed = "tendermint.seed"
+	CfgP2PSeed = "tendermint.p2p.seed"
 	// CfgP2PSeedMode enables the tendermint seed mode.
-	CfgP2PSeedMode = "tendermint.seed_mode"
+	CfgP2PSeedMode = "tendermint.p2p.seed_mode"
+	// CfgP2PMaxNumInboundPeers configures the max number of inbound peers.
+	CfgP2PMaxNumInboundPeers = "tendermint.p2p.max_num_inbound_peers"
+	// CfgP2PMaxNumOutboundPeers configures the max number of outbound peers, excluding persistent peers.
+	CfgP2PMaxNumOutboundPeers = "tendermint.p2p.max_num_outbound_peers"
+	// CfgP2PSendRate is the rate at which packets can be sent, in bytes/second.
+	CfgP2PSendRate = "tendermint.p2p.send_rate"
+	// CfgP2PRecvRate is the rate at which packets can be received, in bytes/second.
+	CfgP2PRecvRate = "tendermint.p2p.recv_rate"
 
 	cfgLogDebug = "tendermint.log.debug"
 
@@ -909,13 +917,17 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.P2P.ListenAddress = viper.GetString(CfgCoreListenAddress)
 	tenderConfig.P2P.ExternalAddress = viper.GetString(cfgCoreExternalAddress)
 	tenderConfig.P2P.PexReactor = !viper.GetBool(CfgP2PDisablePeerExchange)
-	// Persistent peers need to be lowecase as p2p/transport.go:MultiplexTransport.upgrade()
+	tenderConfig.P2P.MaxNumInboundPeers = viper.GetInt(CfgP2PMaxNumInboundPeers)
+	tenderConfig.P2P.MaxNumOutboundPeers = viper.GetInt(CfgP2PMaxNumOutboundPeers)
+	tenderConfig.P2P.SendRate = viper.GetInt64(CfgP2PSendRate)
+	tenderConfig.P2P.RecvRate = viper.GetInt64(CfgP2PRecvRate)
+	// Persistent peers need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
 	// uses a case sensitive string comparision to validate public keys.
 	// Since persistent peers is expected to be in comma-delimited ID@host:port format,
 	// lowercasing the whole string is ok.
 	tenderConfig.P2P.PersistentPeers = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PPersistentPeer), ","))
 	tenderConfig.P2P.SeedMode = viper.GetBool(CfgP2PSeedMode)
-	// Seed Ids need to be Lowecase as p2p/transport.go:MultiplexTransport.upgrade()
+	// Seed Ids need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
 	// uses a case sensitive string comparision to validate public keys.
 	// Since Seeds is expected to be in comma-delimited ID@host:port format,
 	// lowercasing the whole string is ok.
@@ -1338,6 +1350,10 @@ func init() {
 	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form ID@ip:port")
 	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")
 	Flags.Bool(CfgP2PSeedMode, false, "run the tendermint node in seed mode")
+	Flags.Int(CfgP2PMaxNumInboundPeers, 40, "Max number of inbound peers")
+	Flags.Int(CfgP2PMaxNumOutboundPeers, 20, "Max number of outbound peers (excluding persistent peers)")
+	Flags.Int64(CfgP2PSendRate, 5120000, "Rate at which packets can be sent (bytes/sec)")
+	Flags.Int64(CfgP2PRecvRate, 5120000, "Rate at which packets can be received (bytes/sec)")
 	Flags.StringSlice(CfgP2PSeed, []string{}, "Tendermint seed node(s) of the form ID@host:port")
 	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 	Flags.Bool(CfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
