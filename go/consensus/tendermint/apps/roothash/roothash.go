@@ -122,7 +122,21 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 
 		// If there are no committees for this runtime, suspend the runtime as this
 		// means that there is noone to pay the maintenance fees.
-		if empty && !params.DebugDoNotSuspendRuntimes {
+		//
+		// Also suspend the runtime in case the registering entity no longer has enough stake to
+		// cover the entity and runtime deposits (this check is skipped if the runtime would be
+		// suspended anyway due to nobody being there to pay maintenance fees).
+		sufficientStake := true
+		if !empty && !params.DebugBypassStake {
+			if err = registryState.EnsureSufficientRuntimeStake(ctx, rt); err != nil {
+				ctx.Logger().Warn("insufficient stake for runtime operation",
+					"err", err,
+					"entity_id", rt.EntityID,
+				)
+				sufficientStake = false
+			}
+		}
+		if (empty || !sufficientStake) && !params.DebugDoNotSuspendRuntimes {
 			if err := app.suspendUnpaidRuntime(ctx, rtState, regState); err != nil {
 				return err
 			}
@@ -166,7 +180,7 @@ func (app *rootHashApplication) suspendUnpaidRuntime(
 	rtState *roothashState.RuntimeState,
 	regState *registryState.MutableState,
 ) error {
-	ctx.Logger().Warn("maintenance fees not paid for runtime, suspending",
+	ctx.Logger().Warn("maintenance fees not paid for runtime or owner debonded, suspending",
 		"runtime_id", rtState.Runtime.ID,
 	)
 

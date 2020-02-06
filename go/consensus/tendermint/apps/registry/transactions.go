@@ -401,6 +401,12 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	// If a runtime was previously suspended and this node now paid maintenance
 	// fees for it, resume the runtime.
 	for _, rt := range paidRuntimes {
+		// Only resume a runtime if the entity has enough stake to avoid having the runtime be
+		// suspended again on the next epoch transition.
+		if err = registryState.EnsureSufficientRuntimeStake(ctx, rt); err != nil {
+			continue
+		}
+
 		err := state.ResumeRuntime(rt.ID)
 		switch err {
 		case nil:
@@ -547,6 +553,18 @@ func (app *registryApplication) registerRuntime(
 	//       and thus no transaction signer so we must skip this check.
 	if !ctx.IsInitChain() && !sigRt.Signature.PublicKey.Equal(ctx.TxSigner()) {
 		return registry.ErrIncorrectTxSigner
+	}
+
+	if !params.DebugBypassStake {
+		// Make sure that the entity has enough stake for at least being an entity and having a
+		// runtime (separate thresholds for compute and key manager runtimes).
+		if err = registryState.EnsureSufficientRuntimeStake(ctx, rt); err != nil {
+			ctx.Logger().Error("RegisterRuntime: Insufficent stake",
+				"err", err,
+				"entity_id", rt.EntityID,
+			)
+			return err
+		}
 	}
 
 	// If TEE is required, check if runtime provided at least one enclave ID.

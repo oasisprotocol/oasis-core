@@ -1135,7 +1135,7 @@ func VerifyRegisterRuntimeArgs(
 func VerifyRegisterComputeRuntimeArgs(logger *logging.Logger, rt *Runtime, runtimeLookup RuntimeLookup) error {
 	// Check runtime's key manager, if key manager ID is set.
 	if rt.KeyManager != nil {
-		km, err := runtimeLookup.Runtime(*rt.KeyManager)
+		km, err := runtimeLookup.AnyRuntime(*rt.KeyManager)
 		if err != nil {
 			logger.Error("RegisterRuntime: error when fetching the runtime's key manager from registry",
 				"runtime", rt.ID,

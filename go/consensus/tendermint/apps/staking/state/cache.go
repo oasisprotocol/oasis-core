@@ -103,7 +103,12 @@ func NewStakeCache(ctx *abci.Context) (*StakeCache, error) {
 	}
 
 	lowestNonZeroThreshold := quantity.NewQuantity()
-	for _, v := range thresholds {
+	for _, th := range []staking.ThresholdKind{
+		staking.KindValidator,
+		staking.KindCompute,
+		staking.KindStorage,
+	} {
+		v := thresholds[th]
 		if lowestNonZeroThreshold.IsZero() {
 			lowestNonZeroThreshold = v.Clone()
 		} else if !v.IsZero() && lowestNonZeroThreshold.Cmp(&v) == 1 {

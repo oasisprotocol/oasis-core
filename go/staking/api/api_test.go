@@ -17,10 +17,12 @@ func TestConsensusParameters(t *testing.T) {
 
 	// Valid thresholds.
 	validThresholds := map[ThresholdKind]quantity.Quantity{
-		KindEntity:    *quantity.NewQuantity(),
-		KindValidator: *quantity.NewQuantity(),
-		KindCompute:   *quantity.NewQuantity(),
-		KindStorage:   *quantity.NewQuantity(),
+		KindEntity:            *quantity.NewQuantity(),
+		KindValidator:         *quantity.NewQuantity(),
+		KindCompute:           *quantity.NewQuantity(),
+		KindStorage:           *quantity.NewQuantity(),
+		KindRuntimeCompute:    *quantity.NewQuantity(),
+		KindRuntimeKeyManager: *quantity.NewQuantity(),
 	}
 	validThresholdsParams := ConsensusParameters{
 		Thresholds:   validThresholds,

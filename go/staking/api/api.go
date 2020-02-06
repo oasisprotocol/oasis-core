@@ -325,12 +325,14 @@ func (p *SharePool) Withdraw(tokenDst, shareSrc, shareAmount *quantity.Quantity)
 type ThresholdKind int
 
 const (
-	KindEntity    ThresholdKind = 0
-	KindValidator ThresholdKind = 1
-	KindCompute   ThresholdKind = 2
-	KindStorage   ThresholdKind = 3
+	KindEntity            ThresholdKind = 0
+	KindValidator         ThresholdKind = 1
+	KindCompute           ThresholdKind = 2
+	KindStorage           ThresholdKind = 3
+	KindRuntimeCompute    ThresholdKind = 4
+	KindRuntimeKeyManager ThresholdKind = 5
 
-	KindMax = KindStorage
+	KindMax = KindRuntimeKeyManager
 )
 
 // String returns the string representation of a ThresholdKind.
@@ -344,6 +346,10 @@ func (k ThresholdKind) String() string {
 		return "compute"
 	case KindStorage:
 		return "storage"
+	case KindRuntimeCompute:
+		return "compute runtime"
+	case KindRuntimeKeyManager:
+		return "key manager runtime"
 	default:
 		return "[unknown threshold kind]"
 	}

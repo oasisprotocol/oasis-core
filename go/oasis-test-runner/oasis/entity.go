@@ -61,6 +61,11 @@ func (ent *Entity) DescriptorPath() string {
 	return filepath.Join(ent.dir.String(), "entity.json")
 }
 
+// Signer returns the entity signer.
+func (ent *Entity) Signer() signature.Signer {
+	return ent.entitySigner
+}
+
 func (ent *Entity) toGenesisArgs() []string {
 	if ent.dir != nil {
 		return []string{"--signer", fileSigner.SignerName, "--signer.dir", ent.dir.String()}

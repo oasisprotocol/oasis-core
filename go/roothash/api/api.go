@@ -179,6 +179,10 @@ type ConsensusParameters struct {
 	// DebugDoNotSuspendRuntimes is true iff runtimes should not be suspended
 	// for lack of paying maintenance fees.
 	DebugDoNotSuspendRuntimes bool `json:"debug_do_not_suspend_runtimes,omitempty"`
+
+	// DebugBypassStake is true iff the roothash should bypass all of the staking
+	// related checks and operations.
+	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
 }
 
 const (
@@ -210,7 +214,7 @@ func SanityCheckBlocks(blocks map[common.Namespace]*block.Block) error {
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {
-	unsafeFlags := g.Parameters.DebugDoNotSuspendRuntimes
+	unsafeFlags := g.Parameters.DebugDoNotSuspendRuntimes || g.Parameters.DebugBypassStake
 	if unsafeFlags && !flags.DebugDontBlameOasis() {
 		return fmt.Errorf("roothash: sanity check failed: one or more unsafe debug flags set")
 	}

@@ -350,6 +350,13 @@ WaitLoop:
 		t.Fatalf("Failed to receive entity deregistration event")
 	}
 
+	// Deregistering the test entity should fail as it has runtimes.
+	_, testEntitySigner, _ := entity.TestEntity()
+	tx = registry.NewDeregisterEntityTx(0, nil)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, testEntitySigner, tx)
+	require.Error(t, err, "deregister should fail when an entity has runtimes")
+	require.Equal(t, err, registry.ErrEntityHasRuntimes)
+
 	registryTests.EnsureRegistryEmpty(t, node.Node.Registry)
 }
 
