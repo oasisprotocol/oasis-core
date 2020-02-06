@@ -52,9 +52,6 @@ func (r *registryCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// We will mock epochs for reclaiming the escrow.
 	f.Network.EpochtimeMock = true
 
-	// Allow runtime registration.
-	f.Network.RegistryDebugAllowRuntimeRegistration = true
-
 	return f, nil
 }
 

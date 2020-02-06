@@ -176,7 +176,6 @@ func (km *Keymanager) provisionGenesis() error {
 func (km *Keymanager) toGenesisArgs() []string {
 	return []string{
 		"--keymanager", filepath.Join(km.dir.String(), kmStatusFile),
-		"--keymanager.operator", filepath.Join(km.entity.dir.String(), "entity_genesis.json"),
 	}
 }
 

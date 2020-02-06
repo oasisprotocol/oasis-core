@@ -195,9 +195,6 @@ type NetworkCfg struct { // nolint: maligned
 	// StakingGenesis is the name of a file with a staking genesis document to use if GenesisFile isn't set.
 	StakingGenesis string `json:"staking_genesis"`
 
-	// RegistryDebugAllowRuntimeRegistration enables runtime registration.
-	RegistryDebugAllowRuntimeRegistration bool `json:"registry_debug_allow_runtime_registration"`
-
 	// A set of log watcher handler factories used by default on all nodes
 	// created in this test network.
 	DefaultLogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
@@ -654,9 +651,6 @@ func (net *Network) makeGenesis() error {
 	}
 	if net.cfg.StakingGenesis != "" {
 		args = append(args, "--staking", net.cfg.StakingGenesis)
-	}
-	if net.cfg.RegistryDebugAllowRuntimeRegistration {
-		args = append(args, "--"+genesis.CfgRegistryDebugAllowRuntimeRegistration)
 	}
 	if len(net.byzantine) > 0 {
 		// If the byzantine node is in use, disable max node expiration

@@ -19,16 +19,13 @@ func (g *Genesis) SanityCheck(baseEpoch epochtime.EpochTime) error {
 	logger := logging.GetLogger("genesis/sanity-check")
 
 	if !flags.DebugDontBlameOasis() {
-		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugAllowRuntimeRegistration || g.Parameters.DebugBypassStake || g.Parameters.DebugAllowEntitySignedNodeRegistration {
+		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugBypassStake || g.Parameters.DebugAllowEntitySignedNodeRegistration {
 			return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
 		}
 		if g.Parameters.MaxNodeExpiration == 0 {
 			return fmt.Errorf("registry: sanity check failed: maximum node expiration not specified")
 		}
 	}
-
-	// This could check KeyManagerOperator, but some configurations don't
-	// use a key manager, so the parameter is optional.
 
 	// Check entities.
 	seenEntities, err := SanityCheckEntities(logger, g.Entities)
