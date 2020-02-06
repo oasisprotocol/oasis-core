@@ -10,6 +10,344 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.3 (2020-02-06)
+
+### Removals and Breaking changes
+
+- Add gRPC Sentry Nodes support
+  ([#1829](https://github.com/oasislabs/oasis-core/issues/1829))
+
+  This adds gRPC proxying and policy enforcement support to existing sentry
+  nodes, which enables protecting upstream nodes' gRPC endpoints.
+
+  Added/changed flags:
+
+  - `worker.sentry.grpc.enabled`: enables the gRPC proxy (requires
+    `worker.sentry.enabled` flag)
+  - `worker.sentry.grpc.client.port`: port on which gRPC proxy is accessible
+  - `worker.sentry.grpc.client.address`: addresses on which gRPC proxy is
+    accessible (needed so protected nodes can query sentries for its addresses)
+  - `worker.sentry.grpc.upstream.address`: address of the protected node
+  - `worker.sentry.grpc.upstream.cert`: public certificate of the upstream grpc
+    endpoint
+  - `worker.registration.sentry.address` renamed back to `worker.sentry.address`
+  - `worker.registration.sentry.cert_file` renamed back to
+    `worker.sentry.cert_file`
+
+- go/common/crypto/tls: Use ed25519 instead of P-256
+  ([#2058](https://github.com/oasislabs/oasis-core/issues/2058))
+
+  This change is breaking as the old certificates are no longer supported,
+  and they must be regenerated.  Note that this uses the slower runtime
+  library ed25519 implementation instead of ours due to runtime library
+  limitations.
+
+- All marshalable enumerations in the code were checked and the default
+  `Invalid = 0` value was added, if it didn't exist before
+  ([#2546](https://github.com/oasislabs/oasis-core/issues/2546))
+
+  This makes the code less error prone and more secure, because it requires
+  the enum field to be explicitly set, if some meaningful behavior is expected
+  from the corresponding object.
+
+- go/registry: Add `ConsensusParams.MaxNodeExpiration`
+  ([#2580](https://github.com/oasislabs/oasis-core/issues/2580))
+
+  Node expirations being unbound is likely a bad idea.  This adds a
+  consensus parameter that limits the maximum lifespan of a node
+  registration, to a pre-defined number of epochs (default 5).
+
+  Additionally the genesis document sanity checker is now capable of
+  detecting if genesis node descriptors have invalid expirations.
+
+  Note: Existing deployments will need to alter the state dump to
+  configure the maximum node expiration manually before a restore
+  will succeed.
+
+- go/common/crypto/signature: Use base64-encoded IDs/public keys
+  ([#2588](https://github.com/oasislabs/oasis-core/issues/2588))
+
+  Change `String()` method to return base64-encoded representation of a public
+  key instead of the hex-encoded representation to unify CLI experience when
+  passing/printing IDs/public keys.
+
+- go/registry: Disallow entity signed node registrations
+  ([#2594](https://github.com/oasislabs/oasis-core/issues/2594))
+
+  This feature is mostly useful for testing and should not be used in
+  production, basically ever.  Additionally, when provisioning node
+  descriptors, `--node.is_self_signed` is now the default.
+
+  Note: Breaking if anyone happens to use said feature, but enabling said
+  feature is already feature-gated, so this is unlikely.
+
+- go/registry: Ensure that node descriptors are signed by all public keys
+  ([#2599](https://github.com/oasislabs/oasis-core/issues/2599))
+
+  To ensure that nodes demonstrate proof that they posses the private keys
+  for all public keys contained in their descriptor, node descriptors now
+  must be signed by the node, consensus, p2p and TLS certificate key.
+
+  Note: Node descriptors generated prior to this change are now invalid and
+  will be rejected.
+
+- Rewards and fees consensus parameters
+  ([#2624](https://github.com/oasislabs/oasis-core/issues/2624))
+
+  Previously things like reward "factors" and fee distribution "weights" were
+  hardcoded. But we have pretty good support for managing consensus parameters,
+  so we ought to move them there.
+
+- Special rewards for block proposer
+  ([#2625](https://github.com/oasislabs/oasis-core/issues/2625))
+
+  - a larger portion of the fees
+  - an additional reward
+
+- go/consensus/tendermint: mux offset block height consistently
+  ([#2634](https://github.com/oasislabs/oasis-core/issues/2634))
+
+  We've been using `blockHeight+1` for getting the epoch time except for on
+  blockHeight=1.
+  The hypothesis in this change is that we don't need that special case.
+
+- Tendermint P2P configuration parameters
+  ([#2646](https://github.com/oasislabs/oasis-core/issues/2646))
+
+  This allows configuring P2P parameters:
+  - `MaxNumInboundPeers`,
+  - `MaxNumOutboundPeers`,
+  - `SendRate` and
+  - `RecvRate`
+
+  through their respective CLI flags:
+  - `tendermint.p2p.max_num_inbound_peers`,
+  - `tendermint.p2p.max_num_outbound_peers`,
+  - `tendermint.p2p.send_rate`, and
+  - `tendermint.p2p.recv_rate`.
+
+  It also increases the default value of `MaxNumOutboundPeers` from 10 to 20 and
+  moves all P2P parameters under the `tendermint.p2p.*` namespace.
+
+- Add `oasis-node identity tendermint show-{node,consensus}-address` subcommands
+  ([#2649](https://github.com/oasislabs/oasis-core/issues/2649))
+
+  The `show-node-address` subcommmand returns node's public key converted to
+  Tendermint's address format.
+  It replaces the `oasis-node debug tendermint show-node-id` subcommand.
+
+  The `show-consensus-address` subcommand returns node's consensus key converted
+  to Tendermint's address format.
+
+### Features
+
+- Refresh node descriptors mid-epoch
+  ([#1794](https://github.com/oasislabs/oasis-core/issues/1794))
+
+  Previously node descriptors were only refreshed on an epoch transition which
+  meant that any later updates were ignored until the next epoch.
+  This caused stale RAKs to stay in effect when runtime restarts happened,
+  causing attestation verification to fail.
+
+  Enabling mid-epoch refresh makes nodes stay up to date with committee member
+  node descriptor updates.
+
+- go/worker/storage: Add configurable limits for storage operations
+  ([#1914](https://github.com/oasislabs/oasis-core/issues/1914))
+
+- Flexible key manager policy signers
+  ([#2444](https://github.com/oasislabs/oasis-core/issues/2444))
+
+  The key manager runtime has been split into multiple crates to make its code
+  reusable. It is now possible for others to write their own key managers that
+  use a different set of trusted policy signers.
+
+- Add `oasis-node registry node is-registered` subcommand
+  ([#2508](https://github.com/oasislabs/oasis-core/issues/2508))
+
+  It checks whether the node is registered.
+
+- Runtime node admission policies
+  ([#2513](https://github.com/oasislabs/oasis-core/issues/2513))
+
+  With this, each runtime can define its node admission policy.
+
+  Currently only two policies should be supported:
+  - Entity whitelist (only nodes belonging to whitelisted entities can register
+    to host a runtime).
+  - Anyone with enough stake (currently the only supported policy).
+
+  The second one (anyone with enough stake) can introduce liveness issues as
+  long as there is no slashing for compute node liveness (see
+  [#2078](https://github.com/oasislabs/oasis-core/issues/2078)).
+
+- go/keymanager: Support policy updates
+  ([#2516](https://github.com/oasislabs/oasis-core/issues/2516))
+
+  This change adds the ability for the key manager runtime owner to update
+  the key manger policy document at runtime by submitting an appropriate
+  transaction.
+
+  Note: Depending on the nature of the update it may take additional epoch
+  transitions for the key manager to be available to clients.
+
+- Tooling for runtimes' node admission policy
+  ([#2563](https://github.com/oasislabs/oasis-core/issues/2563))
+
+  We added a policy type where you can whitelist the entities that can operate
+  compute nodes.
+  This adds the tooling around it so things like the registry runtime genesis
+  init tool can set them up.
+
+- Export signer public key to entity
+  ([#2609](https://github.com/oasislabs/oasis-core/issues/2609))
+
+  We added a command to export entities from existing signers, and a check to
+  ensure that the entity and signer public keys match.
+
+  This makes it so that a dummy entity cannot be used for signers backed by
+  Ledger.
+
+- go/registry: Handle the old and busted node descriptor envelope
+  ([#2614](https://github.com/oasislabs/oasis-core/issues/2614))
+
+  The old node descriptor envelope has one signature. The new envelope has
+  multiple signatures, to ensure that the node has access to the private
+  component of all public keys listed in the descriptor.
+
+  The correct thing to do, from a security standpoint is to use a new set
+  of genesis node descriptors. Instead, this change facilitates the transition
+  in what is probably the worst possible way by:
+
+  - Disabling signature verification entirely for node descriptors listed
+    in the genesis document (Technically this can be avoided, but there
+    are other changes to the node descriptor that require no verification
+    to be done if backward compatibility is desired).
+
+  - Providing a conversion tool that fixes up the envelopes to the new
+    format.
+
+  - Omitting descriptors that are obviously converted from state dumps.
+
+  Note: Node descriptors that are using the now deprecated option to use
+  the entity key for signing are not supported at all, and backward
+  compatibility will NOT be maintained.
+
+- go/oasis-node/cmd/debug/fixgenesis: Support migrating Node.Roles
+  ([#2620](https://github.com/oasislabs/oasis-core/issues/2620))
+
+  The `node.RolesMask` bit definitions have changed since the last major
+  release deployed to the wild, so support migrating things by rewriting
+  the node descriptor.
+
+  Note: This assumes that signature validation in InitChain is disabled.
+
+### Bug Fixes
+
+- go/registry: deduplicate registry sanity checks and re-enable address checks
+  ([#2428](https://github.com/oasislabs/oasis-core/issues/2428))
+
+  Existing deployments had invalid P2P/Committee IDs and addresses as old code
+  did not validate all the fields at node registration time. All ID and address
+  validation checks are now enabled.
+
+  Additionally, separate code paths were used for sanity checking of the genesis
+  and for actual validation at registration time, which lead to some unexpected
+  cases where invalid genesis documents were passing the validation. This code
+  (at least for registry application) is now unified.
+
+- Make oasis-node binaries made with GoReleaser via GitHub Actions reproducible
+  again
+  ([#2571](https://github.com/oasislabs/oasis-core/issues/2571))
+
+  Add `-buildid=` back to `ldflags` to make builds reproducible again.
+
+  As noted in [60641ce](
+  https://github.com/oasislabs/oasis-core/commit/60641ce41a9c2402f1b539375e1dd4e0eb45272d),
+  this should be no longer necessary with Go 1.13.4+, but there appears to be a
+  [specific issue with GoReleaser's build handling](
+  https://github.com/oasislabs/goreleaser/issues/1).
+
+- go/worker/storage: Fix sync deadlock
+  ([#2584](https://github.com/oasislabs/oasis-core/issues/2584))
+
+- go/consensus/tendermint: Always accept own transactions
+  ([#2586](https://github.com/oasislabs/oasis-core/issues/2586))
+
+  A validator node should always accept own transactions (signed by the node's
+  identity key) regardless of the configured gas price.
+
+- go/registry: Allow expired registrations at genesis
+  ([#2598](https://github.com/oasislabs/oasis-core/issues/2598))
+
+  The dump/restore process requires this to be permitted as expired
+  registrations are persisted through an entity's debonding period.
+
+- go/oasis-node/cmd/registry/runtime: Fix loading entities in registry runtime
+  subcommands
+  ([#2606](https://github.com/oasislabs/oasis-core/issues/2606))
+
+- go/storage: Fix invalid memory access crash in Urkel tree
+  ([#2611](https://github.com/oasislabs/oasis-core/issues/2611))
+
+- go/consensus/tendermint/apps/staking: Fix epochtime overflow
+  ([#2627](https://github.com/oasislabs/oasis-core/issues/2627))
+
+- go/tendermint/keymanager: Error in Status() if keymanager doesn't exist
+  ([#2628](https://github.com/oasislabs/oasis-core/issues/2628))
+
+  This fixes panics in the key-manager client if keymanager for the specific
+  runtime doesn't exist.
+
+- go/oasis-node/cmd/stake: Make info subcommand tolerate invalid thresholds
+  ([#2632](https://github.com/oasislabs/oasis-core/issues/2632))
+
+  Change the subcommand to print valid staking threshold kinds and warn about
+  invalid ones.
+
+- go/staking/api: Check if thresholds for all kinds are defined in genesis
+  ([#2633](https://github.com/oasislabs/oasis-core/issues/2633))
+
+- go/cmd/registry/runtime: Fix provisioning a runtime without keymanager
+  ([#2639](https://github.com/oasislabs/oasis-core/issues/2639))
+
+- registry/api/sanitycheck: Move genesis stateroot check into registration
+  ([#2643](https://github.com/oasislabs/oasis-core/issues/2643))
+
+  Runtime genesis check should only be done when registering, not during the
+  sanity checks.
+
+- Make `oasis control is-synced` subcommand more verbose
+  ([#2649](https://github.com/oasislabs/oasis-core/issues/2649))
+
+  Running `oasis-node control is-synced` will now print a message indicating
+  whether a node has completed initial syncing or not to stdout in addition to
+  returning an appropriate status code.
+
+### Internal changes
+
+- go/genesis: Fix genesis tests and registry sanity checks
+  ([#2589](https://github.com/oasislabs/oasis-core/issues/2589))
+
+- github: Add ci-reproducibility workflow
+  ([#2590](https://github.com/oasislabs/oasis-core/issues/2590))
+
+  The workflow spawns two build jobs that use the same build environment, except
+  for the path of the git checkout.
+  The `oasis-node` binary is built two times, once directly via Make's
+  `go build` invocation and the second time using the
+  [GoReleaser](https://goreleaser.com/) tool that is used to make the official
+  Oasis Core releases.
+  The last workflow job compares both checksums of both builds and errors if
+  they are not the same.
+
+- go/consensus/tendermint/abci: Add mock ApplicationState
+  ([#2629](https://github.com/oasislabs/oasis-core/issues/2629))
+
+  This makes it easier to write unit tests for functions that require ABCI
+  state.
+
+
 ## 20.2 (2020-01-21)
 
 ### Removals and Breaking changes
