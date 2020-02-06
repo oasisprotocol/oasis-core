@@ -28,7 +28,7 @@ func TestStorageDatabase(t *testing.T) {
 func doTestImpl(t *testing.T, backend string) {
 	require := require.New(t)
 
-	testNs := common.NewTestNamespaceFromSeed([]byte("database backend test ns"))
+	testNs := common.NewTestNamespaceFromSeed([]byte("database backend test ns"), 0)
 
 	var (
 		cfg = api.Config{

@@ -352,6 +352,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 
 	rt := &registry.Runtime{
 		ID:          id,
+		EntityID:    signer.Public(),
 		Genesis:     gen,
 		Kind:        kind,
 		TEEHardware: teeHardware,

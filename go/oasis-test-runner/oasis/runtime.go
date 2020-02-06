@@ -95,6 +95,7 @@ func (rt *Runtime) ToRuntimeDescriptor() registry.Runtime {
 func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	descriptor := registry.Runtime{
 		ID:              cfg.ID,
+		EntityID:        cfg.Entity.entity.ID,
 		Kind:            cfg.Kind,
 		TEEHardware:     cfg.TEEHardware,
 		Executor:        cfg.Executor,

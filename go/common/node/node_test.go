@@ -26,7 +26,7 @@ func TestNodeDescriptor(t *testing.T) {
 	require.False(n.IsExpired(42))
 	require.True(n.IsExpired(43))
 
-	ns1 := common.NewTestNamespaceFromSeed([]byte("node descriptor test"))
+	ns1 := common.NewTestNamespaceFromSeed([]byte("node descriptor test"), 0)
 	rt1 := n.AddOrUpdateRuntime(ns1)
 	require.Equal(rt1.ID, ns1, "created runtime id must be correct")
 	rt2 := n.AddOrUpdateRuntime(ns1)

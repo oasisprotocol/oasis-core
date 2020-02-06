@@ -100,10 +100,16 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		var registeredEntities []*entity.Entity
 		registeredEntities, err = backend.GetEntities(context.Background(), consensusAPI.HeightLatest)
 		require.NoError(err, "GetEntities")
-		require.Len(registeredEntities, len(entities), "entities after registration")
+		// NOTE: The test entity is alway present as it controls a runtime and cannot be removed.
+		testEntity, _, _ := entity.TestEntity()
+		require.Len(registeredEntities, len(entities)+1, "entities after registration")
 
 		seen := make(map[signature.PublicKey]bool)
 		for _, ent := range registeredEntities {
+			if ent.ID.Equal(testEntity.ID) {
+				continue
+			}
+
 			var isValid bool
 			for _, v := range entities {
 				if v.Entity.ID.Equal(ent.ID) {
@@ -426,12 +432,14 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	existingRuntimes, err := backend.GetRuntimes(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetRuntimes")
 
-	entities, err := NewTestEntities([]byte("testRegistryEntity"), 1)
-	require.NoError(err, "NewTestEntities()")
-
-	entity := entities[0]
-	err = entity.Register(consensus)
-	require.NoError(err, "RegisterEntity")
+	// We must use the test entity for runtime registrations as registering a runtime will prevent
+	// the entity from being deregistered and the other node tests already use the test entity for
+	// deregistration.
+	testEntity, testEntitySigner, _ := entity.TestEntity()
+	entity := &TestEntity{
+		Entity: testEntity,
+		Signer: testEntitySigner,
+	}
 
 	// Runtime without key manager set.
 	rtMap := make(map[common.Namespace]*api.Runtime)
@@ -505,22 +513,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	require.NoError(err, "GetRuntimes")
 	require.Len(registeredRuntimesAfterFailures, len(registeredRuntimes), "wrong runtimes not registered")
 
-	// Subscribe to entity deregistration event.
-	ch, sub, err := backend.WatchEntities(context.Background())
-	require.NoError(err, "WatchEntities")
-	defer sub.Close()
-
-	err = entity.Deregister(consensus)
-	require.NoError(err, "DeregisterEntity")
-
-	select {
-	case ev := <-ch:
-		require.False(ev.IsRegistration, "expected entity deregistration event")
-	case <-time.After(recvTimeout):
-		t.Fatalf("Failed to receive entity deregistration event")
-	}
-
-	// No way to de-register the runtime, so it will be left there.
+	// No way to de-register the runtime or the controlling entity, so it will be left there.
 
 	return rt.Runtime.ID, rtEW.Runtime.ID
 }
@@ -528,11 +521,14 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 // EnsureRegistryEmpty enforces that the registry has no entities or nodes
 // registered.
 //
-// Note: Runtimes are allowed, as there is no way to deregister them.
+// Note: Runtimes and their owning entities are allowed, as there is no way to deregister them.
 func EnsureRegistryEmpty(t *testing.T, backend api.Backend) {
 	registeredEntities, err := backend.GetEntities(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetEntities")
-	require.Len(t, registeredEntities, 0, "registered entities")
+	// Allow one runtime-controlling entity (the test entity).
+	testEntity, _, _ := entity.TestEntity()
+	require.Len(t, registeredEntities, 1, "registered entities")
+	require.Equal(t, testEntity.ID, registeredEntities[0].ID, "only the test entity can remain registered")
 
 	registeredNodes, err := backend.GetNodes(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetNodes")
@@ -1082,8 +1078,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	require.True(len(runtimes) > 0, "at least one runtime")
 	EnsureRegistryEmpty(t, backend)
 
-	// Create the one entity that has ownership of every single node
-	// that will be associated with every runtime.
+	// Create the one entity that has ownership of every single node.
 	entityCh, entitySub, err := backend.WatchEntities(context.Background())
 	require.NoError(err, "WatchEntities")
 	defer entitySub.Close()
@@ -1103,7 +1098,6 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 
 	var rts []*node.Runtime
 	for _, v := range runtimes {
-		v.Signer = entity.Signer
 		v.MustRegister(t, backend, consensus)
 		rts = append(rts, &node.Runtime{ID: v.Runtime.ID})
 	}
@@ -1200,20 +1194,24 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus cons
 
 // NewTestRuntime returns a pre-generated TestRuntime for use with various
 // tests, generated deterministically from the seed.
-func NewTestRuntime(seed []byte, entity *TestEntity, isKeyManager bool) (*TestRuntime, error) {
-	rng, err := drbg.New(crypto.SHA512, hashForDrbg(seed), nil, []byte("TestRuntime"))
-	if err != nil {
-		return nil, err
+func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRuntime, error) {
+	if ent == nil {
+		ent = new(TestEntity)
+		ent.Entity, ent.Signer, _ = entity.TestEntity()
 	}
+
+	flags := common.NamespaceTest
+	if isKeyManager {
+		flags = flags | common.NamespaceKeyManager
+	}
+	id := common.NewTestNamespaceFromSeed(seed, flags)
 
 	var rt TestRuntime
-	if rt.Signer, err = memorySigner.NewSigner(rng); err != nil {
-		return nil, err
-	}
-
+	rt.Signer = ent.Signer
 	rt.Runtime = &api.Runtime{
-		ID:   publicKeyToNamespace(rt.Signer.Public(), isKeyManager),
-		Kind: api.KindCompute,
+		ID:       id,
+		EntityID: ent.Entity.ID,
+		Kind:     api.KindCompute,
 		Executor: api.ExecutorParameters{
 			GroupSize:         3,
 			GroupBackupSize:   5,
@@ -1244,10 +1242,6 @@ func NewTestRuntime(seed []byte, entity *TestEntity, isKeyManager bool) (*TestRu
 			AnyNode: &api.AnyNodeRuntimeAdmissionPolicy{},
 		},
 	}
-	if entity != nil {
-		rt.Signer = entity.Signer
-	}
-
 	// TODO: Test with non-empty state root when enabled.
 	rt.Runtime.Genesis.StateRoot.Empty()
 

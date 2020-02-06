@@ -104,6 +104,20 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 		)
 		return registry.ErrEntityHasNodes
 	}
+	// Prevent entity deregistration if there are any registered runtimes.
+	hasRuntimes, err := state.HasEntityRuntimes(id)
+	if err != nil {
+		ctx.Logger().Error("DeregisterEntity: failed to check for runtimes",
+			"err", err,
+		)
+		return err
+	}
+	if hasRuntimes {
+		ctx.Logger().Error("DeregisterEntity: entity still has runtimes",
+			"entity_id", id,
+		)
+		return registry.ErrEntityHasRuntimes
+	}
 
 	removedEntity, err := state.RemoveEntity(id)
 	if err != nil {
@@ -551,12 +565,12 @@ func (app *registryApplication) registerRuntime(
 
 	// Make sure the runtime doesn't exist yet.
 	var suspended bool
-	existingRt, err := state.SignedRuntime(rt.ID)
+	existingRt, err := state.Runtime(rt.ID)
 	switch err {
 	case nil:
 	case registry.ErrNoSuchRuntime:
 		// Make sure the runtime isn't suspended.
-		existingRt, err = state.SignedSuspendedRuntime(rt.ID)
+		existingRt, err = state.SuspendedRuntime(rt.ID)
 		switch err {
 		case nil:
 			suspended = true
@@ -569,7 +583,7 @@ func (app *registryApplication) registerRuntime(
 	}
 	// If there is an existing runtime, verify update.
 	if existingRt != nil {
-		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, sigRt, rt)
+		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt)
 		if err != nil {
 			return err
 		}
@@ -579,7 +593,7 @@ func (app *registryApplication) registerRuntime(
 		ctx.Logger().Error("RegisterRuntime: failed to create runtime",
 			"err", err,
 			"runtime", rt,
-			"entity", sigRt.Signature.PublicKey,
+			"entity", rt.EntityID,
 		)
 		return registry.ErrBadEntityForRuntime
 	}

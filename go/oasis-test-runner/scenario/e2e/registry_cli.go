@@ -588,7 +588,8 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 		return fmt.Errorf("TestEntity: %w", err)
 	}
 	testRuntime := registry.Runtime{
-		Kind: registry.KindCompute,
+		EntityID: testEntity.ID,
+		Kind:     registry.KindCompute,
 		Executor: registry.ExecutorParameters{
 			GroupSize:         1,
 			GroupBackupSize:   2,

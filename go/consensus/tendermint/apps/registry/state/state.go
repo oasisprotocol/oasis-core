@@ -68,6 +68,11 @@ var (
 	//
 	// Value is CBOR-serialized signed runtime.
 	suspendedRuntimeKeyFmt = keyformat.New(0x19, &common.Namespace{})
+	// signedRuntimeByEntityKeyFmt is the key format used for signed runtime by entity
+	// index.
+	//
+	// Value is empty.
+	signedRuntimeByEntityKeyFmt = keyformat.New(0x1a, &signature.PublicKey{}, &common.Namespace{})
 )
 
 type ImmutableState struct {
@@ -472,6 +477,24 @@ func (s *ImmutableState) NumEntityNodes(id signature.PublicKey) (int, error) {
 	return n, nil
 }
 
+func (s *ImmutableState) HasEntityRuntimes(id signature.PublicKey) (bool, error) {
+	result := true
+	s.Snapshot.IterateRange(
+		signedRuntimeByEntityKeyFmt.Encode(&id),
+		nil,
+		true,
+		func(key, value []byte) bool {
+			var entityID signature.PublicKey
+			if !signedRuntimeByEntityKeyFmt.Decode(key, &entityID) || !entityID.Equal(id) {
+				result = false
+			}
+			// Stop immediately as we are only interested in one result.
+			return true
+		},
+	)
+	return result, nil
+}
+
 func (s *ImmutableState) ConsensusParameters() (*registry.ConsensusParameters, error) {
 	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
 	if raw == nil {
@@ -593,11 +616,12 @@ func (s *MutableState) RemoveNode(node *node.Node) {
 }
 
 func (s *MutableState) SetRuntime(rt *registry.Runtime, sigRt *registry.SignedRuntime, suspended bool) error {
-	entID := sigRt.Signature.PublicKey
-	ent, err := s.getSignedEntityRaw(entID)
+	ent, err := s.getSignedEntityRaw(rt.EntityID)
 	if ent == nil || err != nil {
 		return registry.ErrNoSuchEntity
 	}
+
+	s.tree.Set(signedRuntimeByEntityKeyFmt.Encode(&rt.EntityID, &rt.ID), []byte(""))
 
 	if suspended {
 		s.tree.Set(suspendedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(sigRt))

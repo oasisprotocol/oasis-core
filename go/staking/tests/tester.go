@@ -100,8 +100,9 @@ func testInitialEnv(t *testing.T, backend api.Backend, consensus consensusAPI.Ba
 	//   1 is the mock epochtime test signer
 	//   1 is the test node worker identity
 	//   1 is the test node entity signer
+	//   1 is the test entity signer
 	//
-	require.Len(accounts, 4, "Accounts - nr entries")
+	require.Len(accounts, 5, "Accounts - nr entries")
 	require.Contains(accounts, SrcID, "Accounts[0] == testID")
 
 	acc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})

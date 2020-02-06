@@ -126,6 +126,10 @@ var (
 	// ErrRuntimeUpdateNotAllowed is the error returned when trying to update an existing runtime.
 	ErrRuntimeUpdateNotAllowed = errors.New(ModuleName, 18, "registry: runtime update not allowed")
 
+	// ErrEntityHasRuntimes is the error returned when an entity cannot be deregistered as it still
+	// has runtimes.
+	ErrEntityHasRuntimes = errors.New(ModuleName, 19, "registry: entity still has runtimes")
+
 	// MethodRegisterEntity is the method name for entity registrations.
 	MethodRegisterEntity = transaction.NewMethodName(ModuleName, "RegisterEntity", entity.SignedEntity{})
 	// MethodDeregisterEntity is the method name for entity deregistrations.
@@ -1005,8 +1009,15 @@ func VerifyRegisterRuntimeArgs(
 		)
 		return nil, ErrInvalidSignature
 	}
+	if err := sigRt.Signed.Signature.SanityCheck(rt.EntityID); err != nil {
+		logger.Error("RegisterRuntime: invalid argument(s)",
+			"signed_runtime", sigRt,
+			"runtime", rt,
+			"err", err,
+		)
+		return nil, ErrInvalidArgument
+	}
 
-	// TODO: Who should sign the runtime? Current compute node assumes an entity (deployer).
 	switch rt.Kind {
 	case KindCompute:
 		if rt.KeyManager != nil && rt.ID.Equal(rt.KeyManager) {
@@ -1149,27 +1160,14 @@ func VerifyRegisterComputeRuntimeArgs(logger *logging.Logger, rt *Runtime, runti
 }
 
 // VerifyRuntimeUpdate verifies changes while updating the runtime.
-//
-// The function assumes that the signature on the current runtime is valid and thus does not perform
-// re-verification. In case the passed current runtime descriptor is corrupted, this method will
-// panic as this indicates state corruption.
-func VerifyRuntimeUpdate(logger *logging.Logger, currentSigRt, newSigRt *SignedRuntime, newRt *Runtime) error {
-	if !currentSigRt.Signature.PublicKey.Equal(newSigRt.Signature.PublicKey) {
+func VerifyRuntimeUpdate(logger *logging.Logger, currentRt, newRt *Runtime) error {
+	if !currentRt.EntityID.Equal(newRt.EntityID) {
 		logger.Error("RegisterRuntime: trying to change runtime owner",
-			"current_owner", currentSigRt.Signature.PublicKey,
-			"new_owner", newSigRt.Signature.PublicKey,
+			"current_owner", currentRt.EntityID,
+			"new_owner", newRt.EntityID,
 		)
 		return ErrRuntimeUpdateNotAllowed
 	}
-
-	var currentRt Runtime
-	if err := cbor.Unmarshal(currentSigRt.Blob, &currentRt); err != nil {
-		logger.Error("RegisterRuntime: corrupted current runtime descriptor",
-			"err", err,
-		)
-		panic("registry: current runtime state is corrupted")
-	}
-
 	if !currentRt.ID.Equal(&newRt.ID) {
 		logger.Error("RegisterRuntime: trying to update runtime ID",
 			"current_id", currentRt.ID.String(),

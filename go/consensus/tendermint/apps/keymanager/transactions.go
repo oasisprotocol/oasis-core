@@ -28,14 +28,7 @@ func (app *keymanagerApplication) updatePolicy(
 	}
 
 	// Ensure that the tx signer is the key manager owner.
-	//
-	// Note: The owner should be more explicit, but for now just use
-	// the signer of the runtime descriptor.
-	sigRt, err := regState.SignedRuntime(sigPol.Policy.ID)
-	if err != nil {
-		return err
-	}
-	if !sigRt.Signed.Signature.PublicKey.Equal(ctx.TxSigner()) {
+	if !rt.EntityID.Equal(ctx.TxSigner()) {
 		return fmt.Errorf("keymanager: invalid update signer: %s", sigPol.Policy.ID)
 	}
 

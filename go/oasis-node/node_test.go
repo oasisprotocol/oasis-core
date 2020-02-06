@@ -79,6 +79,7 @@ var (
 
 	testRuntime = &registry.Runtime{
 		// ID: default value,
+		// EntityID: test entity,
 		Kind: registry.KindCompute,
 		Executor: registry.ExecutorParameters{
 			GroupSize:       1,
@@ -271,13 +272,21 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	require.NoError(err, "sign node entity")
 	tx := registry.NewRegisterEntityTx(0, nil, signedEnt)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, node.entitySigner, tx)
+	require.NoError(err, "register node entity")
+
+	// Register the test entity.
+	testEntity, testEntitySigner, _ := entity.TestEntity()
+	signedEnt, err = entity.SignEntity(testEntitySigner, registry.RegisterEntitySignatureContext, testEntity)
+	require.NoError(err, "sign test entity")
+	tx = registry.NewRegisterEntityTx(0, nil, signedEnt)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, testEntitySigner, tx)
 	require.NoError(err, "register test entity")
 
 	// Register the test runtime.
-	signedRt, err := registry.SignRuntime(node.entitySigner, registry.RegisterRuntimeSignatureContext, testRuntime)
+	signedRt, err := registry.SignRuntime(testEntitySigner, registry.RegisterRuntimeSignatureContext, testRuntime)
 	require.NoError(err, "sign runtime descriptor")
 	tx = registry.NewRegisterRuntimeTx(0, nil, signedRt)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, node.entitySigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, testEntitySigner, tx)
 	require.NoError(err, "register test entity")
 
 	// Get the runtime and the corresponding executor committee node instance.
@@ -463,8 +472,11 @@ func testStorageClientWithoutNode(t *testing.T, node *testNode) {
 }
 
 func init() {
-	testRuntimeID = common.NewTestNamespaceFromSeed([]byte("oasis node test namespace"))
+	testEntity, _, _ := entity.TestEntity()
+
+	testRuntimeID = common.NewTestNamespaceFromSeed([]byte("oasis node test namespace"), 0)
 	testRuntime.ID = testRuntimeID
+	testRuntime.EntityID = testEntity.ID
 
 	testRuntime.Genesis.StateRoot.Empty()
 }
