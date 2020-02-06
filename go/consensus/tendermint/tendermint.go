@@ -1071,8 +1071,8 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 	var tmValidators []tmtypes.GenesisValidator
 	for _, v := range d.Registry.Nodes {
 		var openedNode node.Node
-		if err := v.Open(registryAPI.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
-			return nil, fmt.Errorf("tendermint: failed to verify validator: %w", err)
+		if err := cbor.Unmarshal(v.Blob, &openedNode); err != nil {
+			return nil, fmt.Errorf("tendermint: failed to unmarshal validator: %w", err)
 		}
 		// TODO: This should cross check that the entity is valid.
 		if !openedNode.HasRoles(node.RoleValidator) {
