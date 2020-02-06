@@ -1,6 +1,7 @@
 {
   "params": {
-    "fee_weight_vote": 1
+    "fee_split_vote": "1",
+    "fee_split_propose": "1"
   },
   "total_supply": "90000000",
   "ledger": {

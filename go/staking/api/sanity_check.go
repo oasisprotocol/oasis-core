@@ -22,13 +22,15 @@ func (p *ConsensusParameters) SanityCheck() error {
 		}
 	}
 
-	// Fee weights.
-	if p.FeeWeightVote < 0 {
-		return fmt.Errorf("FeeWeightVote %d < 0 would cause negative distributions", p.FeeWeightVote)
+	// Fee splits.
+	if !p.FeeSplitVote.IsValid() {
+		return fmt.Errorf("fee split vote has invalid value")
 	}
-	feeVoteAndPropose := p.FeeWeightVote + p.FeeWeightPropose
-	if feeVoteAndPropose <= 0 {
-		return fmt.Errorf("FeeWeightVote %d + FeeWeightPropose %d = %d <= 0 could be degenerate", p.FeeWeightVote, p.FeeWeightPropose, feeVoteAndPropose)
+	if !p.FeeSplitPropose.IsValid() {
+		return fmt.Errorf("fee split propose has invalid value")
+	}
+	if p.FeeSplitVote.IsZero() && p.FeeSplitPropose.IsZero() {
+		return fmt.Errorf("fee split proportions are both zero")
 	}
 
 	return nil

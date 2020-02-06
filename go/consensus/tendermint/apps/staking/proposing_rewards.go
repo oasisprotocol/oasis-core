@@ -27,7 +27,7 @@ func (app *stakingApplication) resolveEntityIDFromProposer(regState *registrySta
 	return proposingEntity
 }
 
-func (app *stakingApplication) rewardBlockProposing(ctx *abci.Context, stakeState *stakingState.MutableState, proposingEntity *signature.PublicKey) error {
+func (app *stakingApplication) rewardBlockProposing(ctx *abci.Context, stakeState *stakingState.MutableState, proposingEntity *signature.PublicKey, numEligibleValidators int, numSigningEntities int) error {
 	if proposingEntity == nil {
 		return nil
 	}
@@ -45,7 +45,8 @@ func (app *stakingApplication) rewardBlockProposing(ctx *abci.Context, stakeStat
 		ctx.Logger().Info("rewardBlockProposing: this block does not belong to an epoch. no block proposing reward")
 		return nil
 	}
-	if err = stakeState.AddRewards(epoch, &params.RewardFactorBlockProposed, []signature.PublicKey{*proposingEntity}); err != nil {
+	// Reward the proposer based on the `(number of included votes) / (size of the validator set)` ratio.
+	if err = stakeState.AddRewardSingleAttenuated(epoch, &params.RewardFactorBlockProposed, numSigningEntities, numEligibleValidators, *proposingEntity); err != nil {
 		return fmt.Errorf("adding rewards: %w", err)
 	}
 	return nil

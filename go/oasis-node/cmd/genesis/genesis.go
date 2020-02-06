@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"math/big"
@@ -494,9 +495,9 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) error {
 	stakingSt := staking.Genesis{
 		Ledger: make(map[signature.PublicKey]*staking.Account),
-		Parameters: staking.ConsensusParameters{
-			FeeWeightVote: 1,
-		},
+	}
+	if err := stakingSt.Parameters.FeeSplitVote.FromInt64(1); err != nil {
+		return fmt.Errorf("couldn't set default fee split: %w", err)
 	}
 
 	if state != "" {

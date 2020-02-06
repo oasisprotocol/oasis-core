@@ -30,8 +30,7 @@ var (
 				},
 			},
 			MinDelegationAmount:     QtyFromInt(10),
-			FeeWeightVote:           1,
-			FeeWeightPropose:        0,
+			FeeSplitVote:            QtyFromInt(1),
 			RewardFactorEpochSigned: QtyFromInt(1),
 			// Zero RewardFactorBlockProposed is normal.
 		},
