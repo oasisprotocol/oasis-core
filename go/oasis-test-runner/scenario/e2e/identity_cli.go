@@ -51,19 +51,49 @@ func (ident *identityCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (ident *identityCLIImpl) Run(childEnv *env.Env) error {
+	// Provision node's identity.
 	args := []string{
 		"identity", "init",
 		"--" + common.CfgDataDir, ident.dataDir,
 	}
 	if err := cli.RunSubCommand(childEnv, ident.logger, "identity-init", ident.nodeBinary, args); err != nil {
-		return fmt.Errorf("scenario/e2e/identity_cli: failed provision node identity: %w", err)
+		return fmt.Errorf("scenario/e2e/identity_cli: failed provision node's identity: %w", err)
 	}
 
-	// Load created identity.
+	if err := ident.loadIdentity(); err != nil {
+		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
+	}
+
+	if err := ident.tendermintShowAddress(childEnv, "node"); err != nil {
+		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
+	}
+	if err := ident.tendermintShowAddress(childEnv, "consensus"); err != nil {
+		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
+	}
+
+	return nil
+}
+
+func (ident *identityCLIImpl) loadIdentity() error {
+	ident.logger.Info("loading generated entity")
+
 	factory := fileSigner.NewFactory(ident.dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
 	if _, err := identity.Load(ident.dataDir, factory); err != nil {
-		return fmt.Errorf("scenario/e2e/identity_cli: failed to load node initialized identity: %w", err)
+		return fmt.Errorf("failed to load node's identity: %w", err)
 	}
+	return nil
+}
 
+func (ident *identityCLIImpl) tendermintShowAddress(childEnv *env.Env, addrName string) error {
+	subCmd := fmt.Sprintf("show-%s-address", addrName)
+	ident.logger.Info(fmt.Sprintf("running tendermint %s", subCmd))
+
+	args := []string{
+		"identity", "tendermint", subCmd,
+		"--" + common.CfgDataDir, ident.dataDir,
+	}
+	if out, err := cli.RunSubCommandWithOutput(childEnv, ident.logger, subCmd, ident.nodeBinary, args); err != nil {
+		return fmt.Errorf("failed to get %s's tendermint address: error: %w output: %s", addrName, err, out.String())
+	}
 	return nil
 }

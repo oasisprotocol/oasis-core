@@ -3,6 +3,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -77,8 +78,10 @@ func doIsSynced(cmd *cobra.Command, args []string) {
 		os.Exit(128)
 	}
 	if synced {
+		fmt.Println("node completed initial syncing")
 		os.Exit(0)
 	} else {
+		fmt.Println("node has not completed initial syncing")
 		os.Exit(1)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -98,7 +99,7 @@ func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers)
 	}
 	// Two entities should be registered in our genesis block.
 	if len(entities) != 2 {
-		return fmt.Errorf("scenario/e2e/registry: initial entity list wrong number of entities: %d, expected at least: %d. Entities: %s", len(entities), 2, entities)
+		return fmt.Errorf("initial entity list wrong number of entities: %d, expected at least: %d. Entities: %s", len(entities), 2, entities)
 	}
 
 	// List nodes.
@@ -108,7 +109,13 @@ func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers)
 	}
 	// Three nodes should be registered in our genesis block initially.
 	if len(nodes) != 3 {
-		return fmt.Errorf("scenario/e2e/registry: initial node list wrong number of nodes: %d, expected at least: %d. Nodes: %s", len(nodes), 3, nodes)
+		return fmt.Errorf("initial node list wrong number of nodes: %d, expected at least: %d. Nodes: %s", len(nodes), 3, nodes)
+	}
+	// Check that is-registered subcommand detects all validators as registered.
+	for _, val := range r.basicImpl.net.Validators() {
+		if err = r.isRegistered(childEnv, val.Name, val.DataDir()); err != nil {
+			return err
+		}
 	}
 
 	// Init new entity.
@@ -133,6 +140,10 @@ func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers)
 	if err != nil {
 		return err
 	}
+	err = r.isRegistered(childEnv, "node", nDir.String())
+	if err == nil || !strings.Contains(err.Error(), "node is not registered") {
+		return errors.New("is-registered should detect the new node is not registered")
+	}
 
 	// Update entity with a new node.
 	var entUp *entity.Entity
@@ -142,30 +153,30 @@ func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers)
 		return err
 	}
 	if entUp == nil {
-		return fmt.Errorf("scenario/e2e/registry/entity: got empty entity after updating")
+		return fmt.Errorf("got empty entity after updating")
 	}
 	// Check whether the entity was updated.
 	entBinary, _ := json.Marshal(ent)
 	entUpBinary, _ := json.Marshal(entUp)
 	if bytes.Equal(entBinary, entUpBinary) {
-		return fmt.Errorf("scenario/e2e/registry/entity: update entity failed. Entity not changed: %s", string(entBinary))
+		return fmt.Errorf("update entity failed. Entity not changed: %s", string(entBinary))
 	}
 	if len(entUp.Nodes) != 1 {
-		return fmt.Errorf("scenario/e2e/registry/entity: update entity failed. Wrong number of nodes: %d. Expected %d", len(entUp.Nodes), 1)
+		return fmt.Errorf("update entity failed. Wrong number of nodes: %d. Expected %d", len(entUp.Nodes), 1)
 	}
 	if !entUp.Nodes[0].Equal(n.ID) {
-		return fmt.Errorf("scenario/e2e/registry/entity: update entity failed. Wrong node ID: %s. Expected %s", entUp.Nodes[0].String(), n.ID.String())
+		return fmt.Errorf("update entity failed. Wrong node ID: %s. Expected %s", entUp.Nodes[0].String(), n.ID.String())
 	}
 
 	// Generate register entity transaction.
 	registerTxPath := filepath.Join(childEnv.Dir(), "registry_entity_register.json")
 	if err = r.genRegisterEntityTx(childEnv, 0, registerTxPath, entDir.String()); err != nil {
-		return fmt.Errorf("scenario/e2e/registry/entity: failed to generate entity register tx: %w", err)
+		return err
 	}
 
 	// Submit register entity transaction.
 	if err = cli.Consensus.SubmitTx(registerTxPath); err != nil {
-		return fmt.Errorf("scenario/e2e/registry/entity: failed to submit entity register tx: %w", err)
+		return fmt.Errorf("failed to submit entity register tx: %w", err)
 	}
 
 	// List entities.
@@ -175,18 +186,18 @@ func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers)
 	}
 	// Three entities should now be registered after registration.
 	if len(entities) != 3 {
-		return fmt.Errorf("scenario/e2e/registry: initial entity list wrong number of entities: %d, expected at least: %d. Entities: %s", len(entities), 3, entities)
+		return fmt.Errorf("initial entity list wrong number of entities: %d, expected at least: %d. Entities: %s", len(entities), 3, entities)
 	}
 
 	// Generate deregister entity transaction.
 	deregisterTxPath := filepath.Join(childEnv.Dir(), "registry_entity_deregister.json")
 	if err = r.genDeregisterEntityTx(childEnv, 1, deregisterTxPath, entDir.String()); err != nil {
-		return fmt.Errorf("scenario/e2e/registry/entity: failed to generate entity deregister tx: %w", err)
+		return err
 	}
 
 	// Submit deregister entity transaction.
 	if err = cli.Consensus.SubmitTx(deregisterTxPath); err != nil {
-		return fmt.Errorf("scenario/e2e/registry/entity: failed to submit entity deregister tx: %w", err)
+		return fmt.Errorf("failed to submit entity deregister tx: %w", err)
 	}
 
 	// List entities.
@@ -196,7 +207,7 @@ func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers)
 	}
 	// Only two entities should now be registered after deregistration.
 	if len(entities) != 2 {
-		return fmt.Errorf("scenario/e2e/registry: initial entity list wrong number of entities: %d, expected at least: %d. Entities: %s", len(entities), 2, entities)
+		return fmt.Errorf("initial entity list wrong number of entities: %d, expected at least: %d. Entities: %s", len(entities), 2, entities)
 	}
 
 	return nil
@@ -209,11 +220,11 @@ func (r *registryCLIImpl) listEntities(childEnv *env.Env) ([]signature.PublicKey
 		"registry", "entity", "list",
 		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
 	}
-	b, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "list", r.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "list", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
-		return nil, fmt.Errorf("scenario/e2e/registry/entity: failed to list entities: %s error: %w", b.String(), err)
+		return nil, fmt.Errorf("failed to list entities: error: %w output: %s", err, out.String())
 	}
-	entitiesStr := strings.Split(b.String(), "\n")
+	entitiesStr := strings.Split(out.String(), "\n")
 
 	var entities []signature.PublicKey
 	for _, entStr := range entitiesStr {
@@ -237,7 +248,7 @@ func (r *registryCLIImpl) loadEntity(entDir string) (*entity.Entity, error) {
 	entitySignerFactory := fileSigner.NewFactory(entDir, signature.SignerEntity)
 	ent, _, err := entity.Load(entDir, entitySignerFactory)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load entity: %s", err)
+		return nil, fmt.Errorf("failed to load entity: %w", err)
 	}
 
 	return ent, nil
@@ -252,9 +263,9 @@ func (r *registryCLIImpl) initEntity(childEnv *env.Env, entDir string) (*entity.
 		"--" + flags.CfgSigner, fileSigner.SignerName,
 		"--" + flags.CfgSignerDir, entDir,
 	}
-	_, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "entity-init", r.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "entity-init", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
-		return nil, fmt.Errorf("scenario/e2e/registry/entity: failed to init entity: %w", err)
+		return nil, fmt.Errorf("failed to init entity: error: %w output: %s", err, out.String())
 	}
 
 	return r.loadEntity(entDir)
@@ -276,9 +287,9 @@ func (r *registryCLIImpl) updateEntity(childEnv *env.Env, nodes []*node.Node, no
 		"--" + cmdRegEnt.CfgNodeID, strings.Join(nodeIDs, ","),
 		"--" + cmdRegEnt.CfgNodeDescriptor, strings.Join(nodeGenesisFiles, ","),
 	}
-	_, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "entity-update", r.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "entity-update", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
-		return nil, fmt.Errorf("scenario/e2e/registry/entity: failed to update entity: %w", err)
+		return nil, fmt.Errorf("failed to update entity: error: %w output: %s", err, out.String())
 	}
 
 	return r.loadEntity(entDir)
@@ -291,11 +302,11 @@ func (r *registryCLIImpl) listNodes(childEnv *env.Env) ([]signature.PublicKey, e
 		"registry", "node", "list",
 		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
 	}
-	b, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "node-list", r.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "node-list", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
-		return nil, fmt.Errorf("scenario/e2e/registry/entity: failed to list nodes: %s error: %w", b.String(), err)
+		return nil, fmt.Errorf("failed to list nodes: error: %w output: %s", err, out.String())
 	}
-	nodesStr := strings.Split(b.String(), "\n")
+	nodesStr := strings.Split(out.String(), "\n")
 
 	var nodes []signature.PublicKey
 	for _, nodeStr := range nodesStr {
@@ -312,6 +323,21 @@ func (r *registryCLIImpl) listNodes(childEnv *env.Env) ([]signature.PublicKey, e
 	}
 
 	return nodes, nil
+}
+
+// isRegistered checks if the given node is registered.
+func (r *registryCLIImpl) isRegistered(childEnv *env.Env, nodeName, nodeDataDir string) error {
+	r.logger.Info(fmt.Sprintf("checking if node %s is registered", nodeName))
+	args := []string{
+		"registry", "node", "is-registered",
+		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
+		"--" + cmdCommon.CfgDataDir, nodeDataDir,
+	}
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "is-registered", r.basicImpl.net.Config().NodeBinary, args)
+	if err != nil {
+		return fmt.Errorf("failed to check if node %s is registered: error: %w output: %s", nodeName, err, out.String())
+	}
+	return nil
 }
 
 // newTestNode returns a test node instance given the entityID.
@@ -425,23 +451,23 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 		var out bytes.Buffer
 		out, err = cli.RunSubCommandWithOutput(childEnv, r.logger, "init-node", r.basicImpl.net.Config().NodeBinary, args)
 		if err != nil {
-			return nil, fmt.Errorf("scenario/e2e/registry: failed to init node: error: %w, output: %s", err, out.String())
+			return nil, fmt.Errorf("failed to init node: error: %w, output: %s", err, out.String())
 		}
 
 		// Check, if node genesis file was correctly written.
 		var b []byte
 		if b, err = ioutil.ReadFile(filepath.Join(dataDir, cmdRegNode.NodeGenesisFilename)); err != nil {
-			return nil, fmt.Errorf("scenario/e2e/registry: failed to open node genesis file: %w", err)
+			return nil, fmt.Errorf("failed to open node genesis file: %w", err)
 		}
 
 		var signedNode node.MultiSignedNode
 		if err = json.Unmarshal(b, &signedNode); err != nil {
-			return nil, fmt.Errorf("scenario/e2e/registry: failed to unmarshal signed node: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal signed node: %w", err)
 		}
 
 		var n node.Node
 		if err = signedNode.Open(registry.RegisterGenesisNodeSignatureContext, &n); err != nil {
-			return nil, fmt.Errorf("scenario/e2e/registry: failed to validate signed node descriptor: %w", err)
+			return nil, fmt.Errorf("failed to validate signed node descriptor: %w", err)
 		}
 
 		return &n, nil
@@ -454,16 +480,16 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 
 	// Check the generated fields from imported node.
 	if !n.ID.IsValid() {
-		return nil, fmt.Errorf("scenario/e2e/registry: new node ID is not valid")
+		return nil, errors.New("new node ID is not valid")
 	}
 	if n.Committee.Certificate == nil || len(n.Committee.Certificate) == 0 {
-		return nil, fmt.Errorf("scenario/e2e/registry: new node committee certificate is not set")
+		return nil, errors.New("new node committee certificate is not set")
 	}
 	if !n.P2P.ID.IsValid() {
-		return nil, fmt.Errorf("scenario/e2e/registry: new node P2P ID is not valid")
+		return nil, errors.New("new node P2P ID is not valid")
 	}
 	if !n.Consensus.ID.IsValid() {
-		return nil, fmt.Errorf("scenario/e2e/registry: new node Consensus ID is not valid")
+		return nil, errors.New("new node Consensus ID is not valid")
 	}
 
 	// Replace our testNode fields with the generated one, so we can just marshal both nodes and compare the output afterwards.
@@ -479,12 +505,12 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 	nStr, _ := json.Marshal(n)
 	testNodeStr, _ := json.Marshal(testNode)
 	if !bytes.Equal(nStr, testNodeStr) {
-		return nil, fmt.Errorf("scenario/e2e/registry: test node mismatch! Original node: %s, imported node: %s", testNodeStr, nStr)
+		return nil, fmt.Errorf("test node mismatch! Original node: %s, imported node: %s", testNodeStr, nStr)
 	}
 
 	// Now run node init again, this time by reading existing dataDir and expect the same node identity and JSON output.
 	if err = os.Remove(filepath.Join(dataDir, cmdRegNode.NodeGenesisFilename)); err != nil {
-		return nil, fmt.Errorf("scenario/e2e/registry: error while removing test node genesis file: %w", err)
+		return nil, fmt.Errorf("error while removing test node genesis file: %w", err)
 	}
 	n, err = runInitNode()
 	if err != nil {
@@ -492,7 +518,7 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 	}
 	nStr, _ = json.Marshal(n)
 	if !bytes.Equal(nStr, testNodeStr) {
-		return nil, fmt.Errorf("scenario/e2e/registry: second run test node mismatch! Original node: %s, imported node: %s", testNodeStr, nStr)
+		return nil, fmt.Errorf("second run test node mismatch! Original node: %s, imported node: %s", testNodeStr, nStr)
 	}
 
 	return n, nil
@@ -515,7 +541,7 @@ func (r *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPa
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
 	if out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "gen_register", r.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("genRegisterEntityTx: failed to generate register entity tx: error: %w output: %s", err, out.String())
+		return fmt.Errorf("failed to generate register entity tx: error: %w output: %s", err, out.String())
 	}
 
 	return nil
@@ -538,7 +564,7 @@ func (r *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, tx
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
 	if out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "gen_deregister", r.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("genDeregisterEntityTx: failed to generate deregister entity tx: error: %w output: %s", err, out.String())
+		return fmt.Errorf("failed to generate deregister entity tx: error: %w output: %s", err, out.String())
 	}
 
 	return nil
@@ -553,7 +579,7 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 	}
 	// simple-client and keymanager runtime should be registered in our genesis block.
 	if len(runtimes) != 2 {
-		return fmt.Errorf("scenario/e2e/registry: initial runtime list wrong number of runtimes: %d, expected at least: %d. Runtimes: %v", len(runtimes), 2, runtimes)
+		return fmt.Errorf("initial runtime list wrong number of runtimes: %d, expected at least: %d. Runtimes: %v", len(runtimes), 2, runtimes)
 	}
 
 	// Create runtime descriptor instance.
@@ -612,12 +638,12 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 		return err
 	}
 	if err = cli.Registry.GenerateRegisterRuntimeTx(0, testRuntime, registerTxPath, genesisStatePath); err != nil {
-		return fmt.Errorf("scenario/e2e/registry/runtime: failed to generate runtime register tx: %w", err)
+		return fmt.Errorf("failed to generate runtime register tx: %w", err)
 	}
 
 	// Submit register runtime transaction.
 	if err = cli.Consensus.SubmitTx(registerTxPath); err != nil {
-		return fmt.Errorf("scenario/e2e/registry/runtime: failed to submit runtime register tx: %w", err)
+		return fmt.Errorf("failed to submit runtime register tx: %w", err)
 	}
 
 	// List runtimes.
@@ -627,7 +653,7 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 	}
 	// Our new runtime should also be registered now.
 	if len(runtimes) != 3 {
-		return fmt.Errorf("scenario/e2e/registry: initial runtime list wrong number of runtimes: %d, expected at least: %d. Runtimes: %v", len(runtimes), 3, runtimes)
+		return fmt.Errorf("initial runtime list wrong number of runtimes: %d, expected at least: %d. Runtimes: %v", len(runtimes), 3, runtimes)
 	}
 
 	// Compare runtime descriptors.
@@ -635,7 +661,7 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 	rtStr, _ := json.Marshal(rt)
 	testRuntimeStr, _ := json.Marshal(testRuntime)
 	if !bytes.Equal(rtStr, testRuntimeStr) {
-		return fmt.Errorf("scenario/e2e/registry: runtime %s does not match the test one. registry one: %s, test one: %s", testRuntime.ID.String(), rtStr, testRuntimeStr)
+		return fmt.Errorf("runtime %s does not match the test one. registry one: %s, test one: %s", testRuntime.ID.String(), rtStr, testRuntimeStr)
 	}
 
 	return nil
@@ -649,11 +675,11 @@ func (r *registryCLIImpl) listRuntimes(childEnv *env.Env) (map[common.Namespace]
 		"-v",
 		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
 	}
-	b, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "list", r.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "list", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
-		return nil, fmt.Errorf("scenario/e2e/registry/runtime: failed to list runtimes: %s error: %w", b.String(), err)
+		return nil, fmt.Errorf("failed to list runtimes: error: %w output: %s", err, out.String())
 	}
-	runtimesStr := strings.Split(b.String(), "\n")
+	runtimesStr := strings.Split(out.String(), "\n")
 
 	runtimes := map[common.Namespace]registry.Runtime{}
 	for _, rtStr := range runtimesStr {

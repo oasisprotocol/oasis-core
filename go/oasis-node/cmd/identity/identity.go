@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/identity/tendermint"
 )
 
 var (
@@ -56,6 +57,8 @@ func doNodeInit(cmd *cobra.Command, args []string) {
 
 // Register registers the client sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
+	tendermint.Register(identityCmd)
+
 	identityInitCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
 	identityCmd.AddCommand(identityInitCmd)
 
