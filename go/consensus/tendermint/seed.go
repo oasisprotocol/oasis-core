@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
 // SeedService is a Tendermint seed service.
@@ -162,8 +163,14 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, o
 	var addrs []*p2p.NetAddress
 	for _, v := range doc.Registry.Nodes {
 		var openedNode node.Node
-		if err := cbor.Unmarshal(v.Blob, &openedNode); err != nil {
-			return errors.Wrap(err, "tendermint/seed: failed to unmarshal validator")
+		if isOldNode(v) {
+			if err := cbor.Unmarshal(v.Blob, &openedNode); err != nil {
+				return errors.Wrap(err, "tendermint/seed: failed to unmarshal old-format validator")
+			}
+		} else {
+			if err := v.Open(registry.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
+				return errors.Wrap(err, "tendermint/seed: failed to verify validator")
+			}
 		}
 		// TODO: This should cross check that the entity is valid.
 		if !openedNode.HasRoles(node.RoleValidator) {
