@@ -69,6 +69,12 @@ var (
 		Run:   doList,
 	}
 
+	isRegisteredCmd = &cobra.Command{
+		Use:   "is-registered",
+		Short: "check whether the node is registered",
+		Run:   doIsRegistered,
+	}
+
 	logger = logging.GetLogger("cmd/registry/node")
 )
 
@@ -325,31 +331,68 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
+func doIsRegistered(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	dataDir, err := cmdCommon.DataDirOrPwd()
+	if err != nil {
+		logger.Error("failed to query data directory",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	// Load node's identity.
+	nodeSignerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	nodeIdentity, err := identity.Load(dataDir, nodeSignerFactory)
+	if err != nil {
+		logger.Error("failed to load node identity",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	conn, client := doConnect(cmd)
+	defer conn.Close()
+
+	nodes, err := client.GetNodes(context.Background(), consensus.HeightLatest)
+	if err != nil {
+		logger.Error("failed to query nodes",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	for _, node := range nodes {
+		if node.ID.Equal(nodeIdentity.NodeSigner.Public()) {
+			fmt.Println("node is registered")
+			os.Exit(0)
+		}
+	}
+	fmt.Println("node is not registered")
+	os.Exit(1)
+}
+
 // Register registers the node sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	for _, v := range []*cobra.Command{
-		initCmd,
-		listCmd,
-	} {
-		nodeCmd.AddCommand(v)
-	}
+	initCmd.Flags().AddFlagSet(flags)
+	initCmd.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
+	initCmd.Flags().AddFlagSet(cmdFlags.SignerFlags)
 
+	listCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
 	listCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
 
-	for _, v := range []*cobra.Command{
+	isRegisteredCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
+
+	for _, subCmd := range []*cobra.Command{
 		initCmd,
-	} {
-		v.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
-		v.Flags().AddFlagSet(cmdFlags.SignerFlags)
-		v.Flags().AddFlagSet(flags)
-	}
-
-	for _, v := range []*cobra.Command{
 		listCmd,
+		isRegisteredCmd,
 	} {
-		v.Flags().AddFlagSet(cmdGrpc.ClientFlags)
+		nodeCmd.AddCommand(subCmd)
 	}
-
 	parentCmd.AddCommand(nodeCmd)
 }
 

@@ -111,6 +111,12 @@ func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers)
 	if len(nodes) != 3 {
 		return fmt.Errorf("initial node list wrong number of nodes: %d, expected at least: %d. Nodes: %s", len(nodes), 3, nodes)
 	}
+	// Check that is-registered subcommand detects all validators as registered.
+	for _, val := range r.basicImpl.net.Validators() {
+		if err = r.isRegistered(childEnv, val.Name, val.DataDir()); err != nil {
+			return err
+		}
+	}
 
 	// Init new entity.
 	entDir, err := childEnv.NewSubDir("entity")
@@ -133,6 +139,10 @@ func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers)
 	n, err = r.initNode(childEnv, ent, entDir.String(), nDir.String())
 	if err != nil {
 		return err
+	}
+	err = r.isRegistered(childEnv, "node", nDir.String())
+	if err == nil || !strings.Contains(err.Error(), "node is not registered") {
+		return errors.New("is-registered should detect the new node is not registered")
 	}
 
 	// Update entity with a new node.
@@ -313,6 +323,21 @@ func (r *registryCLIImpl) listNodes(childEnv *env.Env) ([]signature.PublicKey, e
 	}
 
 	return nodes, nil
+}
+
+// isRegistered checks if the given node is registered.
+func (r *registryCLIImpl) isRegistered(childEnv *env.Env, nodeName, nodeDataDir string) error {
+	r.logger.Info(fmt.Sprintf("checking if node %s is registered", nodeName))
+	args := []string{
+		"registry", "node", "is-registered",
+		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
+		"--" + cmdCommon.CfgDataDir, nodeDataDir,
+	}
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "is-registered", r.basicImpl.net.Config().NodeBinary, args)
+	if err != nil {
+		return fmt.Errorf("failed to check if node %s is registered: error: %w output: %s", nodeName, err, out.String())
+	}
+	return nil
 }
 
 // newTestNode returns a test node instance given the entityID.
