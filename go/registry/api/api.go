@@ -601,11 +601,11 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, err
 	}
-	certPub, err := verifyNodeCertificate(logger, &n)
-	if err != nil {
-		return nil, nil, err
-	}
 	if !isOldNode {
+		certPub, err := verifyNodeCertificate(logger, &n)
+		if err != nil {
+			return nil, nil, err
+		}
 		if !sigNode.MultiSigned.IsSignedBy(certPub) {
 			logger.Error("RegisterNode: not signed by TLS certificate key",
 				"signed_node", sigNode,
@@ -634,7 +634,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		expectedSigners = append(expectedSigners, n.P2P.ID)
 	}
 	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
-	if err = verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
+	if err := verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
 		addrs, _ := json.Marshal(n.P2P.Addresses)
 		logger.Error("RegisterNode: missing/invald P2P addresses",
 			"node", n,
