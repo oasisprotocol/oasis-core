@@ -905,9 +905,11 @@ func (n *Node) worker() {
 		// Check if we are currently processing a batch. In this case, we also
 		// need to select over the result channel.
 		var processingDoneCh chan *protocol.ComputedBatch
+
 		func() {
 			n.commonNode.CrossNode.Lock()
 			defer n.commonNode.CrossNode.Unlock()
+
 			if stateProcessing, ok := n.state.(StateProcessingBatch); ok {
 				processingDoneCh = stateProcessing.done
 			}
@@ -943,6 +945,11 @@ func (n *Node) worker() {
 				func() {
 					n.commonNode.CrossNode.Lock()
 					defer n.commonNode.CrossNode.Unlock()
+
+					// To avoid stale events, check if the stored state is still valid.
+					if state, ok := n.state.(StateProcessingBatch); !ok || state.done != processingDoneCh {
+						return
+					}
 					n.abortBatchLocked(errWorkerAborted)
 				}()
 				break
@@ -953,6 +960,11 @@ func (n *Node) worker() {
 			func() {
 				n.commonNode.CrossNode.Lock()
 				defer n.commonNode.CrossNode.Unlock()
+
+				// To avoid stale events, check if the stored state is still valid.
+				if state, ok := n.state.(StateProcessingBatch); !ok || state.done != processingDoneCh {
+					return
+				}
 				n.proposeBatchLocked(batch)
 			}()
 		case <-n.reselect:

@@ -18,6 +18,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/tracing"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
@@ -204,11 +205,21 @@ func (n *Node) CheckTx(ctx context.Context, call []byte) error {
 }
 
 // QueueCall queues a call for processing by this node.
-func (n *Node) QueueCall(ctx context.Context, call []byte) error {
+func (n *Node) QueueCall(ctx context.Context, expectedEpochNumber epochtime.EpochTime, call []byte) error {
 	// Check if we are a leader. Note that we may be in the middle of a
 	// transition, but this shouldn't matter as the client will retry.
-	if !n.commonNode.Group.GetEpochSnapshot().IsTransactionSchedulerLeader() {
+	epochSnapshot := n.commonNode.Group.GetEpochSnapshot()
+	if !epochSnapshot.IsTransactionSchedulerLeader() {
 		return api.ErrNotLeader
+	}
+	// Check if expected client's epoch matches the current worker's one.
+	if epochSnapshot.GetEpochNumber() != expectedEpochNumber {
+		n.logger.Error("unable to QueueCall",
+			"err", api.ErrEpochNumberMismatch,
+			"current_epoch_number", epochSnapshot.GetEpochNumber(),
+			"expected_epoch_number", expectedEpochNumber,
+		)
+		return api.ErrEpochNumberMismatch
 	}
 
 	if n.checkTxEnabled {

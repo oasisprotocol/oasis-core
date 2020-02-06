@@ -226,7 +226,7 @@ func NewNode(
 	copy(ns[:], runtimeID[:])
 
 	// Create a new storage client that will be used for remote sync.
-	scl, err := client.New(node.ctx, ns, node.commonNode.Identity, node.commonNode.Scheduler, node.commonNode.Registry)
+	scl, err := client.New(node.ctx, ns, node.commonNode.Identity, node.commonNode.Consensus.Scheduler(), node.commonNode.Consensus.Registry())
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +300,7 @@ func (n *Node) updateExternalServicePolicyLocked(snapshot *committee.EpochSnapsh
 	}
 	// TODO: Query registry only for storage nodes after
 	// https://github.com/oasislabs/oasis-core/issues/1923 is implemented.
-	nodes, err := n.commonNode.Registry.GetNodes(context.Background(), snapshot.GetGroupVersion())
+	nodes, err := n.commonNode.Consensus.Registry().GetNodes(context.Background(), snapshot.GetGroupVersion())
 	if nodes != nil {
 		storageNodesPolicy.AddRulesForNodeRoles(&policy, nodes, node.RoleStorageWorker)
 	} else {
@@ -364,7 +364,7 @@ func (n *Node) ForceFinalize(ctx context.Context, round uint64) error {
 	var err error
 
 	if round == RoundLatest {
-		block, err = n.commonNode.Roothash.GetLatestBlock(ctx, n.commonNode.Runtime.ID(), consensus.HeightLatest)
+		block, err = n.commonNode.Consensus.RootHash().GetLatestBlock(ctx, n.commonNode.Runtime.ID(), consensus.HeightLatest)
 	} else {
 		block, err = n.commonNode.Runtime.History().GetBlock(ctx, round)
 	}
@@ -478,7 +478,7 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	n.logger.Info("starting committee node")
 
-	genesisBlock, err := n.commonNode.Roothash.GetGenesisBlock(n.ctx, n.commonNode.Runtime.ID(), consensus.HeightLatest)
+	genesisBlock, err := n.commonNode.Consensus.RootHash().GetGenesisBlock(n.ctx, n.commonNode.Runtime.ID(), consensus.HeightLatest)
 	if err != nil {
 		n.logger.Error("can't retrieve genesis block", "err", err)
 		return

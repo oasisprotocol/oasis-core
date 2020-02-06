@@ -3,12 +3,12 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -19,7 +19,6 @@ import (
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/client"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/runtime/client/api"
@@ -27,7 +26,6 @@ import (
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	"github.com/oasislabs/oasis-core/go/runtime/tagindexer"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	txnscheduler "github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/api"
 )
@@ -43,10 +41,7 @@ const (
 )
 
 type clientCommon struct {
-	roothash        roothash.Backend
 	storage         storage.Backend
-	scheduler       scheduler.Backend
-	registry        registry.Backend
 	consensus       consensus.Backend
 	runtimeRegistry runtimeRegistry.Registry
 
@@ -97,7 +92,10 @@ func (c *runtimeClient) doSubmitTxToLeader(
 		if submitCtx.ctx.Err() != nil {
 			return backoff.Permanent(submitCtx.ctx.Err())
 		}
-		if err == txnscheduler.ErrNotLeader || status.Code(err) == codes.Unavailable {
+		if errors.Is(err, txnscheduler.ErrNotLeader) || status.Code(err) == codes.Unavailable {
+			return err
+		}
+		if errors.Is(err, txnscheduler.ErrEpochNumberMismatch) {
 			return err
 		}
 		if err != nil {
@@ -115,11 +113,6 @@ func (c *runtimeClient) doSubmitTxToLeader(
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxRequest) ([]byte, error) {
-	req := &txnscheduler.SubmitTxRequest{
-		RuntimeID: request.RuntimeID,
-		Data:      request.Data,
-	}
-
 	var watcher *blockWatcher
 	var ok bool
 	var err error
@@ -200,6 +193,12 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 				cancelFunc: cancelFunc,
 				closeCh:    make(chan struct{}),
 			}
+
+			req := &txnscheduler.SubmitTxRequest{
+				RuntimeID:           request.RuntimeID,
+				Data:                request.Data,
+				ExpectedEpochNumber: resp.epochNumber,
+			}
 			go c.doSubmitTxToLeader(submitCtx, req, resp.newTxnschedulerClient, submitResultCh)
 			continue
 		} else if resp.err != nil {
@@ -212,13 +211,13 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
-	return c.common.roothash.WatchBlocks(runtimeID)
+	return c.common.consensus.RootHash().WatchBlocks(runtimeID)
 }
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) GetBlock(ctx context.Context, request *api.GetBlockRequest) (*block.Block, error) {
 	if request.Round == api.RoundLatest {
-		return c.common.roothash.GetLatestBlock(ctx, request.RuntimeID, consensus.HeightLatest)
+		return c.common.consensus.RootHash().GetLatestBlock(ctx, request.RuntimeID, consensus.HeightLatest)
 	}
 
 	rt, err := c.common.runtimeRegistry.GetRuntime(request.RuntimeID)
@@ -480,18 +479,12 @@ func (c *runtimeClient) Cleanup() {
 func New(
 	ctx context.Context,
 	dataDir string,
-	roothash roothash.Backend,
-	scheduler scheduler.Backend,
-	registry registry.Backend,
 	consensus consensus.Backend,
 	runtimeRegistry runtimeRegistry.Registry,
 ) (api.RuntimeClient, error) {
 	c := &runtimeClient{
 		common: &clientCommon{
-			roothash:        roothash,
 			storage:         runtimeRegistry.StorageRouter(),
-			scheduler:       scheduler,
-			registry:        registry,
 			consensus:       consensus,
 			runtimeRegistry: runtimeRegistry,
 			ctx:             ctx,

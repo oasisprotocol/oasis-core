@@ -18,10 +18,10 @@ const EpochInvalid EpochTime = 0xffffffffffffffff // ~50 quadrillion years away.
 
 // Backend is a timekeeping implementation.
 type Backend interface {
-	// GetBaseEPoch returns the base epoch.
+	// GetBaseEpoch returns the base epoch.
 	GetBaseEpoch(context.Context) (EpochTime, error)
 
-	// GetEpoch returns the epoch at the specified block height.
+	// GetEpoch returns the epoch number at the specified block height.
 	// Calling this method with height `0`, should return the
 	// epoch of latest known block.
 	GetEpoch(context.Context, int64) (EpochTime, error)

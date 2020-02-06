@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
@@ -14,11 +15,14 @@ import (
 )
 
 const (
-	// computeRuntimesCount is the number of runtimes with shared runtimeBinary registered.
-	computeRuntimesCount = 2
+	// numComputeRuntimes is the number of runtimes, all with common runtimeBinary registered.
+	numComputeRuntimes = 2
 
-	// computeRuntimeTxnCount is the number of insert transactions sent to each runtime.
-	computeRuntimeTxnCount = 3
+	// numComputeRuntimeTxns is the number of insert test transactions sent to each runtime.
+	numComputeRuntimeTxns = 2
+
+	// numComputeWorkers is the number of compute workers.
+	numComputeWorkers = 1
 )
 
 var (
@@ -40,24 +44,33 @@ func (mr *multipleRuntimesImpl) Name() string {
 }
 
 func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
-	fixtures, err := mr.basicImpl.Fixture()
+	f, err := mr.basicImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
 
-	// Take the RuntimeID and binary from the existing compute runtime.
+	// Remove existing compute runtimes from fixture, remember RuntimeID and
+	// binary from the first one.
 	var id common.Namespace
 	var runtimeBinary string
-	for _, rt := range fixtures.Runtimes {
+	var rts []oasis.RuntimeFixture
+	for _, rt := range f.Runtimes {
 		if rt.Kind == registry.KindCompute {
-			copy(id[:], rt.ID[:])
-			runtimeBinary = rt.Binary
-			break
+			if runtimeBinary == "" {
+				copy(id[:], rt.ID[:])
+				runtimeBinary = rt.Binary
+			}
+		} else {
+			rts = append(rts, rt)
 		}
 	}
+	f.Runtimes = rts
+
+	// Avoid unexpected blocks.
+	f.Network.EpochtimeMock = true
 
 	// Add some more consecutive runtime IDs with the same binary.
-	for i := 1; i <= computeRuntimesCount-1; i++ {
+	for i := 1; i <= numComputeRuntimes; i++ {
 		// Increase LSB by 1.
 		id[len(id)-1]++
 
@@ -68,13 +81,13 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Keymanager: 0,
 			Binary:     runtimeBinary,
 			Executor: registry.ExecutorParameters{
-				GroupSize:       2,
-				GroupBackupSize: 1,
+				GroupSize:       1,
+				GroupBackupSize: 0,
 				RoundTimeout:    10 * time.Second,
 			},
 			Merge: registry.MergeParameters{
-				GroupSize:       2,
-				GroupBackupSize: 1,
+				GroupSize:       1,
+				GroupBackupSize: 0,
 				RoundTimeout:    10 * time.Second,
 			},
 			TxnScheduler: registry.TxnSchedulerParameters{
@@ -85,7 +98,7 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 				BatchFlushTimeout: 1 * time.Second,
 			},
 			Storage: registry.StorageParameters{
-				GroupSize:               2,
+				GroupSize:               1,
 				MaxApplyWriteLogEntries: 100_000,
 				MaxApplyOps:             2,
 				MaxMergeRoots:           8,
@@ -96,10 +109,16 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		}
 
-		fixtures.Runtimes = append(fixtures.Runtimes, newRtFixture)
+		f.Runtimes = append(f.Runtimes, newRtFixture)
 	}
 
-	return fixtures, nil
+	// Use numComputeWorkers compute worker fixtures.
+	f.ComputeWorkers = []oasis.ComputeWorkerFixture{}
+	for i := 0; i < numComputeWorkers; i++ {
+		f.ComputeWorkers = append(f.ComputeWorkers, oasis.ComputeWorkerFixture{Entity: 1})
+	}
+
+	return f, nil
 }
 
 func (mr *multipleRuntimesImpl) Run(childEnv *env.Env) error {
@@ -107,25 +126,19 @@ func (mr *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// Wait for all nodes to be synced before we proceed.
-	if err := mr.waitNodesSynced(); err != nil {
-		return err
-	}
-
-	mr.logger.Info("waiting for (some) nodes to register",
-		"num_nodes", mr.net.NumRegisterNodes(),
-	)
-	if err := mr.net.Controller().WaitNodesRegistered(context.Background(), mr.net.NumRegisterNodes()); err != nil {
+	// Wait for the nodes.
+	if err := mr.initialEpochTransitions(); err != nil {
 		return err
 	}
 
 	ctx := context.Background()
 
 	// Submit transactions.
+	epoch := epochtime.EpochTime(3)
 	for _, r := range mr.net.Runtimes() {
 		rt := r.ToRuntimeDescriptor()
 		if rt.Kind == registry.KindCompute {
-			for i := 0; i < computeRuntimeTxnCount; i++ {
+			for i := 0; i < numComputeRuntimeTxns; i++ {
 				mr.logger.Info("submitting transaction to runtime",
 					"seq", i,
 					"runtime_id", rt.ID,
@@ -134,6 +147,15 @@ func (mr *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 				if err := mr.submitRuntimeTx(ctx, rt.ID, "hello", fmt.Sprintf("world %d from %s", i, rt.ID)); err != nil {
 					return err
 				}
+
+				mr.logger.Info("triggering epoch transition",
+					"epoch", epoch,
+				)
+				if err := mr.net.Controller().SetEpoch(context.Background(), epoch); err != nil {
+					return fmt.Errorf("failed to set epoch: %w", err)
+				}
+				mr.logger.Info("epoch transition done")
+				epoch++
 			}
 		}
 	}

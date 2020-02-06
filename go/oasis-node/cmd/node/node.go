@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 
-	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -44,7 +43,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/tracing"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client"
 	runtimeClientAPI "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
@@ -109,18 +107,11 @@ type Node struct {
 
 	Consensus consensusAPI.Backend
 
-	Upgrader   upgradeAPI.Backend
-	Genesis    genesisAPI.Provider
-	Identity   *identity.Identity
-	Beacon     beacon.Backend
-	Epochtime  epochtime.Backend
-	Registry   registryAPI.Backend
-	RootHash   roothash.Backend
-	Scheduler  scheduler.Backend
-	Sentry     sentryAPI.Backend
-	Staking    stakingAPI.Backend
-	IAS        iasAPI.Endpoint
-	KeyManager keymanagerAPI.Backend
+	Upgrader upgradeAPI.Backend
+	Genesis  genesisAPI.Provider
+	Identity *identity.Identity
+	Sentry   sentryAPI.Backend
+	IAS      iasAPI.Endpoint
 
 	RuntimeRegistry runtimeRegistry.Registry
 	RuntimeClient   runtimeClientAPI.RuntimeClient
@@ -191,9 +182,9 @@ func (n *Node) initBackends() error {
 
 	// Initialize and register the internal gRPC services.
 	grpcSrv := n.grpcInternal.Server()
-	scheduler.RegisterService(grpcSrv, n.Scheduler)
-	registryAPI.RegisterService(grpcSrv, n.Registry)
-	stakingAPI.RegisterService(grpcSrv, n.Staking)
+	scheduler.RegisterService(grpcSrv, n.Consensus.Scheduler())
+	registryAPI.RegisterService(grpcSrv, n.Consensus.Registry())
+	stakingAPI.RegisterService(grpcSrv, n.Consensus.Staking())
 	consensusAPI.RegisterService(grpcSrv, n.Consensus)
 
 	cmdCommon.Logger().Debug("backends initialized")
@@ -235,13 +226,10 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		dataDir,
 		compute.Enabled() || workerStorage.Enabled() || workerKeymanager.Enabled(),
 		n.Identity,
-		n.RootHash,
-		n.Registry,
-		n.Scheduler,
 		n.svcTmnt,
 		n.P2P,
 		n.IAS,
-		n.KeyManager,
+		n.Consensus.KeyManager(),
 		n.RuntimeRegistry,
 		genesisDoc,
 	)
@@ -259,8 +247,8 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 	// Initialize the registration worker.
 	n.RegistrationWorker, err = registration.New(
 		dataDir,
-		n.Epochtime,
-		n.Registry,
+		n.Consensus.EpochTime(),
+		n.Consensus.Registry(),
 		n.Identity,
 		n.svcTmnt,
 		n.P2P,
@@ -287,7 +275,7 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		n.CommonWorker,
 		n.IAS,
 		n.RegistrationWorker,
-		n.KeyManager,
+		n.Consensus.KeyManager(),
 	)
 	if err != nil {
 		return err
@@ -623,13 +611,6 @@ func newNode(testNode bool) (*Node, error) {
 		}
 		node.svcMgr.Register(node.svcTmnt)
 		node.Consensus = node.svcTmnt
-		node.Epochtime = node.Consensus.EpochTime()
-		node.Beacon = node.Consensus.Beacon()
-		node.KeyManager = node.Consensus.KeyManager()
-		node.Registry = node.Consensus.Registry()
-		node.Staking = node.Consensus.Staking()
-		node.Scheduler = node.Consensus.Scheduler()
-		node.RootHash = node.Consensus.RootHash()
 
 		// Initialize node backends.
 		if err = node.initBackends(); err != nil {
@@ -704,9 +685,6 @@ func newNode(testNode bool) (*Node, error) {
 	node.RuntimeClient, err = runtimeClient.New(
 		node.svcMgr.Ctx,
 		cmdCommon.DataDir(),
-		node.RootHash,
-		node.Scheduler,
-		node.Registry,
 		node.svcTmnt,
 		node.RuntimeRegistry,
 	)
@@ -746,7 +724,7 @@ func newNode(testNode bool) (*Node, error) {
 	controlAPI.RegisterService(node.grpcInternal.Server(), node.NodeController)
 	if flags.DebugDontBlameOasis() {
 		// Initialize and start the debug controller if we are in debug mode.
-		node.DebugController = control.NewDebug(node.Epochtime, node.Registry)
+		node.DebugController = control.NewDebug(node.Consensus)
 		controlAPI.RegisterDebugService(node.grpcInternal.Server(), node.DebugController)
 	}
 

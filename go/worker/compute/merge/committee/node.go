@@ -708,6 +708,7 @@ func (n *Node) worker() {
 		// Select over some channels based on current state.
 		var timerCh <-chan time.Time
 		var mergeDoneCh <-chan *commitment.MergeBody
+
 		func() {
 			n.commonNode.CrossNode.Lock()
 			defer n.commonNode.CrossNode.Unlock()
@@ -733,7 +734,7 @@ func (n *Node) worker() {
 				defer n.commonNode.CrossNode.Unlock()
 
 				state, ok := n.state.(StateWaitingForResults)
-				if !ok {
+				if !ok || state.timer.C != timerCh {
 					return
 				}
 
@@ -745,6 +746,10 @@ func (n *Node) worker() {
 			func() {
 				n.commonNode.CrossNode.Lock()
 				defer n.commonNode.CrossNode.Unlock()
+
+				if state, ok := n.state.(StateProcessingMerge); !ok || state.doneCh != mergeDoneCh {
+					return
+				}
 
 				if result == nil {
 					n.logger.Warn("merge aborted")

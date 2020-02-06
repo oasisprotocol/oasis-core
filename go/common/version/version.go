@@ -62,7 +62,7 @@ var (
 
 	// CommitteeProtocol versions the P2P protocol used by the
 	// committee members.
-	CommitteeProtocol = Version{Major: 0, Minor: 7, Patch: 0}
+	CommitteeProtocol = Version{Major: 0, Minor: 8, Patch: 0}
 
 	// ConsensusProtocol versions all data structures and processing used by
 	// the epochtime, beacon, registry, roothash, etc. modules that are
