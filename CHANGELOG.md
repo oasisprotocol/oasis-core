@@ -6,6 +6,8 @@ The format is inspired by [Keep a Changelog].
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.0.0/
 
+<!-- markdownlint-disable no-duplicate-heading -->
+
 <!-- NOTE: towncrier will not alter content above the TOWNCRIER line below. -->
 
 <!-- TOWNCRIER -->
@@ -262,8 +264,7 @@ The format is inspired by [Keep a Changelog].
 
   Add `-buildid=` back to `ldflags` to make builds reproducible again.
 
-  As noted in [60641ce](
-  https://github.com/oasislabs/oasis-core/commit/60641ce41a9c2402f1b539375e1dd4e0eb45272d),
+  As noted in [60641ce](https://github.com/oasislabs/oasis-core/commit/60641ce),
   this should be no longer necessary with Go 1.13.4+, but there appears to be a
   [specific issue with GoReleaser's build handling](
   https://github.com/oasislabs/goreleaser/issues/1).
@@ -347,12 +348,11 @@ The format is inspired by [Keep a Changelog].
   This makes it easier to write unit tests for functions that require ABCI
   state.
 
-
 ## 20.2 (2020-01-21)
 
 ### Removals and Breaking changes
 
-- go node: Unite compute, merge, and transaction scheduler roles.
+- go node: Unite compute, merge, and transaction scheduler roles
   ([#2107](https://github.com/oasislabs/oasis-core/issues/2107))
 
   We're removing the separation among registering nodes for the compute, merge,
@@ -367,12 +367,12 @@ The format is inspired by [Keep a Changelog].
   - `worker.sentry.address` renamed to: `worker.registration.sentry.address`
   - `worker.sentry.cert_file` renamed to: `worker.registration.sentry.cert_file`
   - `tendermint.private_peer_id` removed
-  - added `tendermint.sentry.upstream_address` which should be set on sentry node
-  and it will set `tendermint.private_peer_id` and `tendermint.peristent_peer` for
-  the configured addresses
+  - added `tendermint.sentry.upstream_address` which should be set on sentry
+    node and it will set `tendermint.private_peer_id` and
+    `tendermint.peristent_peer` for the configured addresses
 
 - Charge gas for runtime transactions and suspend runtimes which do not pay
-  periodic maintenance fees.
+  periodic maintenance fees
   ([#2504](https://github.com/oasislabs/oasis-core/issues/2504))
 
   This introduces gas fees for submitting roothash commitments from runtime
@@ -384,7 +384,7 @@ The format is inspired by [Keep a Changelog].
   If the maintenance fees are not paid, the runtime gets suspended (so periodic
   work is not needed) and must be resumed by registering nodes.
 
-- go: Rename compute -> executor.
+- go: Rename compute -> executor
   ([#2525](https://github.com/oasislabs/oasis-core/issues/2525))
 
   It was proposed that we rename the "compute" phase (of the txnscheduler,
@@ -400,10 +400,12 @@ The format is inspired by [Keep a Changelog].
   So among things that are renamed are fields of the on-chain state and command
   line flags.
 
-- `RuntimeID` is not hardcoded anymore in the enclave, but is passed when
-  dispatching the runtime. This enables the same runtime binary to be registered
-  and executed multiple times with different `RuntimeID`.
+- `RuntimeID` is not hard-coded in the enclave anymore
   ([#2529](https://github.com/oasislabs/oasis-core/issues/2529))
+
+  It is passed when dispatching the runtime. This enables the same runtime
+  binary to be registered and executed multiple times with different
+  `RuntimeID`.
 
 ### Features
 
@@ -424,7 +426,7 @@ The format is inspired by [Keep a Changelog].
     fee would ever go over this limit, the transaction will not be submitted and
     an error will be returned instead.
 
-- Optimize registry runtime lookups during node registration.
+- Optimize registry runtime lookups during node registration
   ([#2538](https://github.com/oasislabs/oasis-core/issues/2538))
 
   A performance optimization to avoid loading a list of all registered runtimes
@@ -432,13 +434,13 @@ The format is inspired by [Keep a Changelog].
 
 ### Bug Fixes
 
-- Don't allow duplicate P2P connections from the same IP by default.
+- Don't allow duplicate P2P connections from the same IP by default
   ([#2558](https://github.com/oasislabs/oasis-core/issues/2558))
 
 - go/extra/stats: handle nil-votes and non-registered nodes
   ([#2566](https://github.com/oasislabs/oasis-core/issues/2566))
 
-- go/oasis-node: Include account ID in `stake list -v` subcommand.
+- go/oasis-node: Include account ID in `stake list -v` subcommand
   ([#2567](https://github.com/oasislabs/oasis-core/issues/2567))
 
   Changes `stake list -v` subcommand to return a map of IDs to accounts.
@@ -467,7 +469,6 @@ The format is inspired by [Keep a Changelog].
 
   See [Release process](./docs/release-process.md).
 
-
 ## 20.1 (2020-01-14)
 
 ### Features
@@ -482,15 +483,15 @@ The format is inspired by [Keep a Changelog].
 
 ### Bug Fixes
 
-- go/runtime/client: Return empty sequences instead of nil.
+- go/runtime/client: Return empty sequences instead of nil
   ([#2542](https://github.com/oasislabs/oasis-core/issues/2542))
 
-  The runtime client endpoint should return empty sequences instead of `nil` as serde doesn't know how
-  to decode a `NULL` when the expected type is a sequence.
+  The runtime client endpoint should return empty sequences instead of `nil` as
+  serde doesn't know how to decode a `NULL` when the expected type is a
+  sequence.
 
 - Temporarily disable consensus address checks at genesis
   ([#2552](https://github.com/oasislabs/oasis-core/issues/2552))
-
 
 ## 20.0 (2020-01-10)
 
@@ -504,81 +505,84 @@ The format is inspired by [Keep a Changelog].
   forbid registering runtimes that have test runtime IDs unless the
   appropriate consensus flag is set.
 
-- Remove staking-related roothash messages.
+- Remove staking-related roothash messages
   ([#2377](https://github.com/oasislabs/oasis-core/issues/2377))
 
-  There is no longer a plan to support direct manipulation of the staking accounts
-  from the runtimes in order to isolate the runtimes from corrupting the
-  consensus layer.
+  There is no longer a plan to support direct manipulation of the staking
+  accounts from the runtimes in order to isolate the runtimes from corrupting
+  the consensus layer.
 
   To reduce complexity, the staking-related roothash messages were removed. The
   general roothash message mechanism stayed as-is since it may be useful in the
   future, but any commits with non-empty messages are rejected for now.
 
-- Refactoring of roothash genesis block for runtime.
+- Refactoring of roothash genesis block for runtime
   ([#2426](https://github.com/oasislabs/oasis-core/issues/2426))
 
   - `RuntimeGenesis.Round` field was added to the roothash block for the runtime
-  which can be set by `--runtime.genesis.round` flag.
-  - The `RuntimeGenesis.StorageReceipt` field was replaced by `StorageReceipts` list,
-  one for each storage node.
+    which can be set by `--runtime.genesis.round` flag.
+  - The `RuntimeGenesis.StorageReceipt` field was replaced by `StorageReceipts`
+    list, one for each storage node.
   - Support for `base64` encoding/decoding of `Bytes` was added in rust.
 
 - When registering a new runtime, require that the given key manager ID points
-  to a valid key manager in the registry.
+  to a valid key manager in the registry
   ([#2459](https://github.com/oasislabs/oasis-core/issues/2459))
 
-- Remove `oasis-node debug dummy` sub-commands.
+- Remove `oasis-node debug dummy` sub-commands
   ([#2492](https://github.com/oasislabs/oasis-core/issues/2492))
 
   These are only useful for testing, and our test harness has a internal Go API
   that removes the need to have this functionality exposed as a sub-command.
 
-- Make storage per-runtime.
+- Make storage per-runtime
   ([#2494](https://github.com/oasislabs/oasis-core/issues/2494))
 
-  Previously there was a single storage backend used by `oasis-node` which required that a single
-  database supported multiple namespaces for the case when multiple runtimes were being used in a
-  single node.
+  Previously there was a single storage backend used by `oasis-node` which
+  required that a single database supported multiple namespaces for the case
+  when multiple runtimes were being used in a single node.
 
-  This change simplifies the storage database backends by removing the need for backends to implement
-  multi-namespace support, reducing overhead and cleanly separating per-runtime state.
+  This change simplifies the storage database backends by removing the need for
+  backends to implement multi-namespace support, reducing overhead and cleanly
+  separating per-runtime state.
 
-  Due to this changing the internal database format, this breaks previous (compute node) deployments
-  with no way to do an automatic migration.
+  Due to this changing the internal database format, this breaks previous
+  (compute node) deployments with no way to do an automatic migration.
 
 ### Features
 
-- Add `oasis-node debug storage export` sub-command.
+- Add `oasis-node debug storage export` sub-command
   ([#1845](https://github.com/oasislabs/oasis-core/issues/1845))
 
-- Add fuzzing for consensus methods.
+- Add fuzzing for consensus methods
   ([#2245](https://github.com/oasislabs/oasis-core/issues/2245))
 
   Initial support for fuzzing was added, along with an implementation of
   it for some of the consensus methods. The implementation uses
   oasis-core's demultiplexing and method dispatch mechanisms.
 
-- Add storage backend fuzzing.
+- Add storage backend fuzzing
   ([#2246](https://github.com/oasislabs/oasis-core/issues/2246))
 
   Based on the work done for consensus fuzzing, support was added to run fuzzing
   jobs on the storage api backend.
 
 - Add `oasis-node unsafe-reset` sub-command which resets the node back to a
-  freshly provisioned state, preserving any key material if it exists.
+  freshly provisioned state, preserving any key material if it exists
   ([#2435](https://github.com/oasislabs/oasis-core/issues/2435))
 
-- Add txsource.
+- Add txsource
   ([#2478](https://github.com/oasislabs/oasis-core/issues/2478))
 
-  The so-called "txsource" utility introduced in this PR is a starting point for something like a client that sends
-  transactions for a long period of time, for the purpose of creating long-running tests.
+  The so-called "txsource" utility introduced in this PR is a starting point for
+  something like a client that sends transactions for a long period of time, for
+  the purpose of creating long-running tests.
 
-  With this change is a preliminary sample "workload"--a DRBG-backed schedule of transactions--which transfers staking
-  tokens around among a set of test accounts.
+  With this change is a preliminary sample "workload"--a DRBG-backed schedule of
+  transactions--which transfers staking tokens around among a set of test
+  accounts.
 
-- Add consensus block and transaction metadata accessors.
+- Add consensus block and transaction metadata accessors
   ([#2482](https://github.com/oasislabs/oasis-core/issues/2482))
 
   In order to enable people to build "network explorers", we exposed some
@@ -588,23 +592,26 @@ The format is inspired by [Keep a Changelog].
   - Access to raw consensus transactions within a block.
   - Stream of consensus blocks as they are finalized.
 
-- Make maximum in-memory cache size for runtime storage configurable.
+- Make maximum in-memory cache size for runtime storage configurable
   ([#2494](https://github.com/oasislabs/oasis-core/issues/2494))
 
-  Previously the value of 64mb was always used as the size of the in-memory storage cache. This adds a
-  new configuration parameter/command-line flag `--storage.max_cache_size` which configures the
-  maximum size of the in-memory runtime storage cache.
+  Previously the value of 64mb was always used as the size of the in-memory
+  storage cache. This adds a new configuration parameter/command-line flag
+  `--storage.max_cache_size` which configures the maximum size of the in-memory
+  runtime storage cache.
 
-- Undisable transfers for some senders.
+- Undisable transfers for some senders
   ([#2498](https://github.com/oasislabs/oasis-core/issues/2498))
 
-  Ostensibly for faucet purposes while we run the rest of the network with transfers disabled,
-  this lets us identify a whitelist of accounts from which we allow transfers when otherwise transfers are disabled.
+  Ostensibly for faucet purposes while we run the rest of the network with
+  transfers disabled, this lets us identify a whitelist of accounts from which
+  we allow transfers when otherwise transfers are disabled.
 
-  Configure this with a map of allowed senders' public keys -> `true` in the new `undisable_transfers_from` field in the
-  staking consensus parameters object along with `"disable_transfers": true`.
+  Configure this with a map of allowed senders' public keys -> `true` in the
+  new `undisable_transfers_from` field in the staking consensus parameters
+  object along with `"disable_transfers": true`.
 
-- Entity block signatures count tool.
+- Entity block signatures count tool
   ([#2500](https://github.com/oasislabs/oasis-core/issues/2500))
 
   The tool uses node consensus and registry API endpoints and computes the per
@@ -612,12 +619,11 @@ The format is inspired by [Keep a Changelog].
 
 ### Bug Fixes
 
-- Reduce Badger in-memory cache sizes.
+- Reduce Badger in-memory cache sizes
   ([#2484](https://github.com/oasislabs/oasis-core/issues/2484))
 
   The default is 1 GiB per badger instance and we use a few instances so this
   resulted in some nice memory usage.
-
 
 ## 19.0 (2019-12-18)
 

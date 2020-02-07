@@ -1,4 +1,4 @@
-## Stats
+# Stats
 
 Queries a node for network stats. Currently implemented per entity block
 signature counts.
@@ -6,7 +6,7 @@ signature counts.
 ## Usage
 
 ```
-stats/stats entity-signatures \
+$ stats/stats entity-signatures \
     --address unix:<node_dir>/internal.sock \
     --start-block 0 \
     --end-block 100 \

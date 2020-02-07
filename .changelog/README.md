@@ -1,14 +1,14 @@
 # Change Log fragments
 
 This directory collects Change Log fragments:
-short files that each contain a snippet of MarkDown formatted text that will be
-assembled using [towncrier] to form the [Change Log] section for the next
+short files that each contain a snippet of MarkDown formatted text that will
+be assembled using [towncrier] to form the [Change Log] section for the next
 release.
 
 ## Description
 
-A Change Log fragment should be a description of aspects of the change (if any)
-that are relevant to users.
+A Change Log fragment should be a description of aspects of the change (if
+any) that are relevant to users.
 
 _NOTE: This could be very different from the commit message and pull request
 description, which are a description of the change as relevant to the people
@@ -24,13 +24,13 @@ The description could use one of the following two formats:
   ```text
   Remove staking-related roothash messages.
 
-  There is no longer a plan to support direct manipulation of the staking accounts
-  from the runtimes in order to isolate the runtimes from corrupting the
-  consensus layer.
+  There is no longer a plan to support direct manipulation of the staking
+  accounts from the runtimes in order to isolate the runtimes from corrupting
+  the consensus layer.
 
-  To reduce complexity, the staking-related roothash messages were removed. The
-  general roothash message mechanism stayed as-is since it may be useful in the
-  future, but any commits with non-empty messages are rejected for now.
+  To reduce complexity, the staking-related roothash messages were removed.
+  The general roothash message mechanism stayed as-is since it may be useful
+  in the future, but any commits with non-empty messages are rejected for now.
   ```
 
 - Shorter multi-line change description.
@@ -42,8 +42,8 @@ The description could use one of the following two formats:
   freshly provisioned state, preserving any key material if it exists.
   ```
 
-_NOTE: Don't put links to issue(s)/pull request in your text as the [towncrier]
-tool will add them automatically._
+_NOTE: Don't put links to issue(s)/pull request in your text as the
+[towncrier] tool will add them automatically._
 
 ## File name
 
@@ -60,9 +60,9 @@ where:
 
   If your pull request closes an issue, use that number here.
 
-  If there is no issue for the change you've implemented, then after you submit
-  the pull request and get your pull request number, amend your commit(s) with an
-  appropriately named Change Log fragment.
+  If there is no issue for the change you've implemented, then after you
+  submit the pull request and get your pull request number, amend your
+  commit(s) with an appropriately named Change Log fragment.
 
 - `<TYPE>` is one of:
 
@@ -76,9 +76,9 @@ where:
   - `trivial`: a trivial change that is _not_ included in the Change Log.
 
 - `.<COUNTER>` part is optional and can be used when a single issue or pull
-  request needs multiple Change Log fragments. For example, when a pull request
-  contains multiple bug fixes and each bug fix deserves a separate Change Log
-  fragment describing what it fixes.
+  request needs multiple Change Log fragments. For example, when a pull
+  request contains multiple bug fixes and each bug fix deserves a separate
+  Change Log fragment describing what it fixes.
 
 Example file names:
 

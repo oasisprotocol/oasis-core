@@ -1,17 +1,38 @@
 # Oasis Core
 
-[![Build status](https://badge.buildkite.com/15a8faccee0d5b5ab1af7e75eb6f9daf2d493c543fbc67dce5.svg?branch=master)](https://buildkite.com/oasislabs/oasis-core-ci)
-[![CI lint status](https://github.com/oasislabs/oasis-core/workflows/ci-lint/badge.svg)](https://github.com/oasislabs/oasis-core/actions?query=workflow:ci-lint)
-[![CI reproducibility status](https://github.com/oasislabs/oasis-core/workflows/ci-reproducibility/badge.svg)](https://github.com/oasislabs/oasis-core/actions?query=workflow:ci-reproducibility)
-[![Release status](https://github.com/oasislabs/oasis-core/workflows/release/badge.svg)](https://github.com/oasislabs/oasis-core/actions?query=workflow:release)
-[![Coverage Status](https://coveralls.io/repos/github/oasislabs/oasis-core/badge.svg?t=HsLWgi)](https://coveralls.io/github/oasislabs/oasis-core) Rust
-[![codecov](https://codecov.io/gh/oasislabs/oasis-core/branch/master/graph/badge.svg?token=DqjRsufMqf)](https://codecov.io/gh/oasislabs/oasis-core) Go
-[![GoDoc](https://godoc.org/github.com/oasislabs/oasis-core?status.svg)](https://godoc.org/github.com/oasislabs/oasis-core)
+[![Build status][buildkite-badge]][buildkite-link]
+[![CI lint status][github-ci-lint-badge]][github-ci-lint-link]
+[![CI reproducibility status][github-ci-repr-badge]][github-ci-repr-link]
+[![Release status][github-release-badge]][github-release-link]
+[![GoDoc][godoc-badge]][godoc-link]
+
+<!-- NOTE: Markdown doesn't support tables without headers, so we need to
+work around that and make the second (non-header) row also bold. -->
+| Go            | [![Go coverage][codecov-badge]][codecov-link]       |
+|:-------------:|:---------------------------------------------------:|
+| **Rust**      | [![Rust coverage][coveralls-badge]][coveralls-link] |
+
+<!-- markdownlint-disable line-length -->
+[buildkite-badge]: https://badge.buildkite.com/15a8faccee0d5b5ab1af7e75eb6f9daf2d493c543fbc67dce5.svg?branch=master
+[buildkite-link]: https://buildkite.com/oasislabs/oasis-core-ci
+[github-ci-lint-badge]: https://github.com/oasislabs/oasis-core/workflows/ci-lint/badge.svg
+[github-ci-lint-link]: https://github.com/oasislabs/oasis-core/actions?query=workflow:ci-lint
+[github-ci-repr-badge]: https://github.com/oasislabs/oasis-core/workflows/ci-reproducibility/badge.svg
+[github-ci-repr-link]: https://github.com/oasislabs/oasis-core/actions?query=workflow:ci-reproducibility
+[github-release-badge]: https://github.com/oasislabs/oasis-core/workflows/release/badge.svg
+[github-release-link]: https://github.com/oasislabs/oasis-core/actions?query=workflow:release
+[codecov-badge]: https://codecov.io/gh/oasislabs/oasis-core/branch/master/graph/badge.svg
+[codecov-link]: https://codecov.io/gh/oasislabs/oasis-core
+[coveralls-badge]: https://coveralls.io/repos/github/oasislabs/oasis-core/badge.svg
+[coveralls-link]: https://coveralls.io/github/oasislabs/oasis-core
+[godoc-badge]: https://godoc.org/github.com/oasislabs/oasis-core?status.svg
+[godoc-link]: https://godoc.org/github.com/oasislabs/oasis-core
+<!-- markdownlint-enable line-length -->
 
 ## Note
 
-* **Oasis Core is in active development so all APIs, protocols and data structures
-  are subject to change.**
+* **Oasis Core is in active development so all APIs, protocols and data
+  structures are subject to change.**
 * **The code has not yet been fully audited. For security issues and other
   security-related topics, see [Security](#security).**
 
@@ -43,10 +64,16 @@ Prerequisites:
   * [libseccomp](https://github.com/seccomp/libseccomp) development package.
 
   On Fedora 29+, you can install all the above with:
+
+  <!-- markdownlint-disable line-length -->
   ```
   sudo dnf install bubblewrap gcc gcc-c++ protobuf-compiler make cmake openssl-devel libseccomp-devel
   ```
-  On Ubuntu 18.10+ (18.04 LTS provides overly-old `bubblewrap`), you can install all the above with:
+  <!-- markdownlint-enable line-length -->
+
+  On Ubuntu 18.10+ (18.04 LTS provides overly-old `bubblewrap`), you can install
+  all the above with:
+
   ```
   sudo apt install bubblewrap gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev
   ```
@@ -61,12 +88,15 @@ Prerequisites:
     https://tip.golang.org/doc/code.html#GOPATH),
   * [install the desired version of Go](
     https://golang.org/doc/install#extra_versions), e.g. 1.13, with:
+
     ```
     go get golang.org/dl/go1.13
     go1.13 download
     ```
-  * instruct the build system to use this particular version of Go by setting the
-    `OASIS_GO` environment variable in your `~/.bashrc`:
+
+  * instruct the build system to use this particular version of Go by setting
+    the `OASIS_GO` environment variable in your `~/.bashrc`:
+
     ```
     export OASIS_GO=go1.13
     ```
@@ -75,10 +105,13 @@ Prerequisites:
 
   Once you have [`rustup` installed](https://www.rust-lang.org/tools/install),
   install the nightly with:
+
   ```
   rustup install nightly
   ```
+
   Then make it the default version with:
+
   ```
   rustup default nightly
   ```
@@ -86,10 +119,13 @@ Prerequisites:
 * [Fortanix Rust SGX](https://edp.fortanix.com) target.
 
   Install it by running:
+
   ```
   rustup target add x86_64-fortanix-unknown-sgx
   ```
+
   Install its utilities by running:
+
   ```
   cargo install fortanix-sgx-tools sgxs-tools
   ```
@@ -97,12 +133,14 @@ Prerequisites:
 * (**OPTIONAL**) [protoc-gen-go](https://github.com/golang/protobuf).
 
   Download and install it with:
+
   ```
   ${OASIS_GO:-go} get github.com/golang/protobuf/protoc-gen-go
   ```
 
   _NOTE: If you didn't/can't add `$GOPATH/bin` to your `PATH`, you can install
   `protoc-gen-go` to `/usr/local/bin` (which is in `$PATH`) with:_
+
   ```
   sudo GOBIN=/usr/local/bin ${OASIS_GO:-go} install github.com/golang/protobuf/protoc-gen-go
   ```
@@ -116,18 +154,21 @@ where the code has been checked out.
 
 ### Using the development Docker image
 
-If for some reason you don't want or can't install the specified prerequisites on the
-host system, you can use our development Docker image. This requires that you have a
-[recent version of Docker installed](https://docs.docker.com/install/).
+If for some reason you don't want or can't install the specified prerequisites
+on the host system, you can use our development Docker image. This requires that
+you have a [recent version of Docker installed](
+https://docs.docker.com/install/).
 
-Oasis development environment with all the dependencies preinstalled is available
-in the `oasislabs/development:0.3.0` image. To run a container do something like the
-following in the top-level directory:
+Oasis development environment with all the dependencies preinstalled is
+available in the `oasislabs/development:0.3.0` image.
+To run a container, do the following in the top-level directory:
+
 ```bash
 make docker-shell
 ```
 
-if you are curious, this target will internally run the following command:
+If you are curious, this target will internally run the following command:
+
 ```
 docker run -t -i \
   --name oasis-core \
@@ -147,6 +188,7 @@ containers.
 
 To build everything required for running an Oasis node locally, simply execute
 in the top-level directory:
+
 ```
 export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
 export OASIS_UNSAFE_SKIP_KM_POLICY="1"
@@ -159,8 +201,10 @@ are supported on production SGX systems only and these features must be disabled
 in our environment.
 
 Next we specify how to run a simple network for development purposes. To start a
-simple Oasis network as defined by [the default network fixture](go/oasis-net-runner/fixtures/default.go)
-running the `simple-keyvalue` test runtime, do:
+simple Oasis network as defined by [the default network fixture](
+go/oasis-net-runner/fixtures/default.go) running the `simple-keyvalue` test
+runtime, do:
+
 ```
 ./go/oasis-net-runner/oasis-net-runner \
   --net.node.binary go/oasis-node/oasis-node \
@@ -169,12 +213,15 @@ running the `simple-keyvalue` test runtime, do:
   --net.keymanager.binary target/debug/oasis-core-keymanager-runtime
 ```
 
-Wait for the network to start, there should be messages about nodes being started
-and at the end the following message should appear:
+Wait for the network to start, there should be messages about nodes being
+started and at the end the following message should appear:
+
+<!-- markdownlint-disable line-length -->
 ```
 level=info module=oasis/net-runner caller=oasis.go:319 ts=2019-10-03T10:47:30.776566482Z msg="network started"
 level=info module=net-runner caller=root.go:145 ts=2019-10-03T10:47:30.77662061Z msg="client node socket available" path=/tmp/oasis-net-runner530668299/net-runner/network/client-0/internal.sock
 ```
+<!-- markdownlint-enable line-length -->
 
 The `simple-keyvalue` runtime implements a key-value hash map in the enclave
 and supports reading, writing, and fetching string values associated with the
@@ -184,8 +231,9 @@ example [here](tests/runtimes/simple-keyvalue).
 Finally, to test Oasis node, we will run a test client written specifically
 for the `simple-keyvalue` runtime. The client sends a few keys with associated
 values and fetches them back over RPC defined in the runtime's API. Execute the
-client as follows (substituting the socket path from your log output) in a different
-terminal:
+client as follows (substituting the socket path from your log output) in a
+different terminal:
+
 ```
 ./target/debug/simple-keyvalue-client \
   --runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
@@ -199,8 +247,9 @@ make any progress. For more information on writing your own client, see the
 
 ## SGX environment: Building and Running an Oasis node
 
-Compilation procedure under SGX environment is similiar to the non-SGX with
+Compilation procedure under SGX environment is similar to the non-SGX with
 slightly different environmental variables set:
+
 ```
 export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
 export OASIS_UNSAFE_KM_POLICY_KEYS="1"
@@ -216,6 +265,7 @@ policy of the node. TEE hardware flag denotes the trusted execution environment
 engine for running the Oasis node and the tests below.
 
 To run an Oasis node under SGX make sure:
+
 * Your hardware has SGX support.
 * You either explicitly enabled SGX in BIOS or made a
   `sgx_cap_enable_device()` system call, if SGX is in software controlled state.
@@ -223,6 +273,7 @@ To run an Oasis node under SGX make sure:
 * You have the AESM daemon running. The easiest way is to just run it in a
   Docker container by doing (this will keep the container running and it will
   be automatically started on boot):
+
   ```
   docker run \
     --detach \
@@ -238,6 +289,8 @@ configured correctly.
 
 Finally, to run an Oasis node under SGX follow the same steps as for non-SGX,
 except the `oasis-net-runner` invocation:
+
+<!-- markdownlint-disable line-length -->
 ```
 ./go/oasis-net-runner/oasis-net-runner \
   --net.node.binary go/oasis-node/oasis-node \
@@ -245,22 +298,26 @@ except the `oasis-net-runner` invocation:
   --net.runtime.loader target/debug/oasis-core-runtime-loader \
   --net.keymanager.binary target/x86_64-fortanix-unknown-sgx/debug/oasis-core-keymanager-runtime.sgxs
 ```
+<!-- markdownlint-enable line-length -->
 
 ## Running tests and benchmarks
 
 After you built everything, you can use the following commands to run tests.
 
 To run all unit tests:
+
 ```
 make test-unit
 ```
 
 To run end-to-end tests locally:
+
 ```
 make test-e2e
 ```
 
 To run all tests:
+
 ```
 make test
 ```
@@ -270,10 +327,15 @@ execute tests under SGX.
 
 ### Troubleshooting
 
-Check the console output for mentions of a path of the form `/tmp/oasis-test-runnerXXXXXXXXX` (where each `X` is a digit). That's the log directory. Start with coarsest-level debug output in `console.log` files:
+Check the console output for mentions of a path of the form
+`/tmp/oasis-test-runnerXXXXXXXXX` (where each `X` is a digit).
+That's the log directory. Start with coarsest-level debug output in
+`console.log` files:
+
 ```
 cat $(find /tmp/oasis-test-runnerXXXXXXXXX -name console.log) | less
 ```
+
 For even more output, check the other `*.log` files.
 
 ## Directories
@@ -283,7 +345,8 @@ For even more output, check the other `*.log` files.
 * `go`: Oasis node.
 * `keymanager-client`: Client crate for the key manager.
 * `keymanager-runtime`: (INSECURE) key manager implementation.
-* `runtime`: The runtime library that simplifies writing SGX and non-SGX runtimes.
+* `runtime`: The runtime library that simplifies writing SGX and non-SGX
+  runtimes.
 * `runtime-loader`: The SGX and non-SGX runtime loader process.
 * `scripts`: Bash scripts for development.
 * `tests`: Runtimes, clients and resources used for E2E tests.

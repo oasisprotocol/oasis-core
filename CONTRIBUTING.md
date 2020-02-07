@@ -3,8 +3,8 @@
 Oasis Labs is building the next generation blockchain technology for scalable,
 privacy-preserving, and distributed applications/services.
 
-Thank you for your interest in contributing to Oasis Core! There are many ways to
-contribute, and this document should not be considered encompassing.
+Thank you for your interest in contributing to Oasis Core! There are many ways
+to contribute, and this document should not be considered encompassing.
 
 If you have a general question on how to use and deploy our software, please
 read our [Operator Docs](https://docs.oasis.dev/) or join our
@@ -13,13 +13,16 @@ read our [Operator Docs](https://docs.oasis.dev/) or join our
 For concrete feature requests and/or bug reports, please file an issue in this
 repository as described below.
 
+<!-- markdownlint-disable heading-increment -->
 #### Table of Contents
+<!-- markdownlint-enable heading-increment -->
 
 [Feature Requests](#feature-requests)
 
 [Bug Reports](#bug-reports)
 
 [Development](#development)
+
 * [Building](#building)
 * [Contributing Code](#contributing-code)
 * [Contributing Documentation](#contributing-documentation)
@@ -36,8 +39,8 @@ most effective at receiving input and making progress.
 If the feature is **small** - a change to a single piece of functionality, or an
 addition that can be expressed clearly and succinctly in a few sentences, then
 the most appropriate place to propose it is as a [new Feature request](
-https://github.com/oasislabs/oasis-core/issues/new?template=feature_request.md) in
-this repository.
+https://github.com/oasislabs/oasis-core/issues/new?template=feature_request.md)
+in this repository.
 Such issues will typically receive `p:3` priority in their initial triage.
 
 If the feature is **more complicated**, involves protocol changes, or has
@@ -86,13 +89,18 @@ https://github.com/oasislabs/oasis-core/blob/master/README.md).
   there.
   * Good habit: regularly rebase to the `HEAD` of `master` branch of the main
     repository to make sure you prevent nasty conflicts:
+
     ```bash
     git rebase <main-repo>/master
     ```
-  * Push your branch to GitHub regularly so others can see what you are working on:
+
+  * Push your branch to GitHub regularly so others can see what you are working
+    on:
+
     ```bash
     git push -u <main-repo-or-your-fork> <branch-name>
     ```
+
     _Note that you are allowed to force push into your development branches._
 
 * **Use draft pull requests for work-in-progress:**
@@ -187,6 +195,7 @@ Go code should use the standard `gofmt` formatting style. Be sure to run
 
 `gofmt` also does not check import order/grouping, so please ensure that you
 use the following convention:
+
 ```golang
 package foo
 
@@ -211,6 +220,7 @@ code.
 
 Similar as above for Go, `rustfmt` does not check import order/grouping, so
 please ensure that you use the following convention:
+
 ```rust
 // External crates.
 extern crate foo;

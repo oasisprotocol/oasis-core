@@ -23,12 +23,14 @@ pip3 install https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz 
 You might want to install the packages to a [Python virtual environment] or
 via so-called [User install] (i.e. isolated to the current user).
 
+<!-- markdownlint-disable line-length -->
 [Python]: https://www.python.org/
 [Oasis Labs' towncrier fork]: https://github.com/oasislabs/towncrier
 [Punch]: https://github.com/lgiordani/punch
 [pip]: https://pip.pypa.io/en/stable/
 [Python virtual environment]: https://packaging.python.org/tutorials/installing-packages/#creating-virtual-environments
 [User install]: https://pip.pypa.io/en/stable/user_guide/#user-installs
+<!-- markdownlint-enable line-length -->
 
 ## Tooling
 
