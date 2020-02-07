@@ -179,7 +179,7 @@ func updateGenesisDoc(oldDoc *oldDocument) (*genesis.Document, error) {
 	}
 
 	// This currently is entirely registry genesis state changes.
-	oldReg, newReg := oldDoc.Registry, newDoc.Registry
+	oldReg, newReg := &oldDoc.Registry, &newDoc.Registry
 
 	// First copy the registry things that have not changed.
 	newReg.Parameters = oldReg.Parameters
