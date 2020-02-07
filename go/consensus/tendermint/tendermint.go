@@ -1029,12 +1029,6 @@ func (t *tendermintService) lazyInit() error {
 	return nil
 }
 
-func isOldNode(sigNode *node.MultiSignedNode) bool {
-	// Nodes signed before v20.3 are allowed in the genesis document,
-	// but they aren't validly signed by the current rules.
-	return len(sigNode.MultiSigned.Signatures) < 2
-}
-
 // genesisToTendermint converts the Oasis genesis block to Tendermint's format.
 func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 	// WARNING: The AppState MUST be encoded as JSON since its type is
@@ -1077,14 +1071,8 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 	var tmValidators []tmtypes.GenesisValidator
 	for _, v := range d.Registry.Nodes {
 		var openedNode node.Node
-		if isOldNode(v) {
-			if err := cbor.Unmarshal(v.Blob, &openedNode); err != nil {
-				return nil, fmt.Errorf("tendermint: failed to unmarshal old-format validator: %w", err)
-			}
-		} else {
-			if err := v.Open(registryAPI.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
-				return nil, fmt.Errorf("tendermint: failed to verify validator: %w", err)
-			}
+		if err := v.Open(registryAPI.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
+			return nil, fmt.Errorf("tendermint: failed to verify validator: %w", err)
 		}
 		// TODO: This should cross check that the entity is valid.
 		if !openedNode.HasRoles(node.RoleValidator) {

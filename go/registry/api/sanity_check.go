@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
@@ -14,12 +13,6 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
-
-func isOldNode(sigNode *node.MultiSignedNode, isGenesis bool) bool {
-	// Technically this will always have 1 signature after conversion,
-	// but every well-formed node will have more than 2 signatures.
-	return isGenesis && len(sigNode.MultiSigned.Signatures) < 2
-}
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck(baseEpoch epochtime.EpochTime) error {
@@ -132,18 +125,11 @@ func SanityCheckNodes(
 	}
 
 	for _, sn := range nodes {
-		isOldNode := isOldNode(sn, isGenesis)
 
 		// Open the node to get the referenced entity.
 		var n node.Node
-		if !isOldNode {
-			if err := sn.Open(RegisterGenesisNodeSignatureContext, &n); err != nil {
-				return fmt.Errorf("registry: sanity check failed: unable to open signed node")
-			}
-		} else {
-			if err := cbor.Unmarshal(sn.Blob, &n); err != nil {
-				return fmt.Errorf("registry: sanity check failed: unable to unmarshal old-format descriptor")
-			}
+		if err := sn.Open(RegisterGenesisNodeSignatureContext, &n); err != nil {
+			return fmt.Errorf("registry: sanity check failed: unable to open signed node")
 		}
 		if !n.ID.IsValid() {
 			return fmt.Errorf("registry: sanity check failed: node ID %s is invalid", n.ID.String())

@@ -385,32 +385,11 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		ctx = RegisterNodeSignatureContext
 	}
 
-	// Sigh.  Instead of having people regenerate some files for our test
-	// environment, instead we're allowing a transition by disabling some
-	// signature validation.
-	//
-	// Note: The entity signed case will fail to import, however as that
-	// functionality is gated behind DontBlameOasis, tough shit.
-	isOldNode := isOldNode(sigNode, isGenesis)
-
-	if !isOldNode {
-		if err := sigNode.Open(ctx, &n); err != nil {
-			logger.Error("RegisterNode: invalid signature",
-				"signed_node", sigNode,
-			)
-			return nil, nil, ErrInvalidSignature
-		}
-	} else {
-		if err := cbor.Unmarshal(sigNode.Blob, &n); err != nil {
-			logger.Error("RegisterNode: failed to unmarshal old-format descriptor",
-				"err", err,
-				"signed_node", sigNode,
-			)
-			return nil, nil, fmt.Errorf("%w: failed to unmarshal old-format descriptor", ErrInvalidArgument)
-		}
-		logger.Warn("RegisterNode: bypassing old genesis descriptor signature verification",
-			"node", n,
+	if err := sigNode.Open(ctx, &n); err != nil {
+		logger.Error("RegisterNode: invalid signature",
+			"signed_node", sigNode,
 		)
+		return nil, nil, ErrInvalidSignature
 	}
 
 	// This should never happen, unless there's a bug in the caller.
@@ -552,16 +531,14 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, fmt.Errorf("%w: invalid consensus ID", ErrInvalidArgument)
 	}
-	if !isOldNode {
-		if !sigNode.MultiSigned.IsSignedBy(n.Consensus.ID) {
-			logger.Error("RegisterNode: not signed by consensus ID",
-				"signed_node", sigNode,
-				"node", n,
-			)
-			return nil, nil, fmt.Errorf("%w: registration not signed by consensus ID", ErrInvalidArgument)
-		}
-		expectedSigners = append(expectedSigners, n.Consensus.ID)
+	if !sigNode.MultiSigned.IsSignedBy(n.Consensus.ID) {
+		logger.Error("RegisterNode: not signed by consensus ID",
+			"signed_node", sigNode,
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: registration not signed by consensus ID", ErrInvalidArgument)
 	}
+	expectedSigners = append(expectedSigners, n.Consensus.ID)
 	consensusAddressRequired := n.HasRoles(ConsensusAddressRequiredRoles)
 	if err := verifyAddresses(params, consensusAddressRequired, n.Consensus.Addresses); err != nil {
 		addrs, _ := json.Marshal(n.Consensus.Addresses)
@@ -601,20 +578,18 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, err
 	}
-	if !isOldNode {
-		certPub, err := verifyNodeCertificate(logger, &n)
-		if err != nil {
-			return nil, nil, err
-		}
-		if !sigNode.MultiSigned.IsSignedBy(certPub) {
-			logger.Error("RegisterNode: not signed by TLS certificate key",
-				"signed_node", sigNode,
-				"node", n,
-			)
-			return nil, nil, fmt.Errorf("%w: registration not signed by TLS certificate key", ErrInvalidArgument)
-		}
-		expectedSigners = append(expectedSigners, certPub)
+	certPub, err := verifyNodeCertificate(logger, &n)
+	if err != nil {
+		return nil, nil, err
 	}
+	if !sigNode.MultiSigned.IsSignedBy(certPub) {
+		logger.Error("RegisterNode: not signed by TLS certificate key",
+			"signed_node", sigNode,
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: registration not signed by TLS certificate key", ErrInvalidArgument)
+	}
+	expectedSigners = append(expectedSigners, certPub)
 
 	// Validate P2PInfo.
 	if !n.P2P.ID.IsValid() {
@@ -623,18 +598,16 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, fmt.Errorf("%w: invalid P2P ID", ErrInvalidArgument)
 	}
-	if !isOldNode {
-		if !sigNode.MultiSigned.IsSignedBy(n.P2P.ID) {
-			logger.Error("RegisterNode: not signed by P2P ID",
-				"signed_node", sigNode,
-				"node", n,
-			)
-			return nil, nil, fmt.Errorf("%w: registration not signed by P2P ID", ErrInvalidArgument)
-		}
-		expectedSigners = append(expectedSigners, n.P2P.ID)
+	if !sigNode.MultiSigned.IsSignedBy(n.P2P.ID) {
+		logger.Error("RegisterNode: not signed by P2P ID",
+			"signed_node", sigNode,
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: registration not signed by P2P ID", ErrInvalidArgument)
 	}
+	expectedSigners = append(expectedSigners, n.P2P.ID)
 	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
-	if err := verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
+	if err = verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
 		addrs, _ := json.Marshal(n.P2P.Addresses)
 		logger.Error("RegisterNode: missing/invald P2P addresses",
 			"node", n,
@@ -704,14 +677,12 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	}
 
 	// Ensure that only the expected signatures are present, and nothing more.
-	if !isOldNode {
-		if !sigNode.MultiSigned.IsOnlySignedBy(expectedSigners) {
-			logger.Error("RegisterNode: unexpected number of signatures",
-				"signed_node", sigNode,
-				"node", n,
-			)
-			return nil, nil, fmt.Errorf("%w: unexpected number of signatures", ErrInvalidArgument)
-		}
+	if !sigNode.MultiSigned.IsOnlySignedBy(expectedSigners) {
+		logger.Error("RegisterNode: unexpected number of signatures",
+			"signed_node", sigNode,
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: unexpected number of signatures", ErrInvalidArgument)
 	}
 
 	return &n, runtimes, nil
