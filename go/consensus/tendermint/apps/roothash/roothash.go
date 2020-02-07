@@ -23,6 +23,7 @@ import (
 	schedulerapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	stakingapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking"
+	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -97,6 +98,15 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 		return fmt.Errorf("failed to get consensus parameters: %w", err)
 	}
 
+	var stakeAcc *stakingState.StakeAccumulatorCache
+	if !params.DebugBypassStake {
+		stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create stake accumulator cache: %w", err)
+		}
+		defer stakeAcc.Discard()
+	}
+
 	for _, rt := range runtimes {
 		if !rt.IsCompute() {
 			ctx.Logger().Debug("skipping non-compute runtime",
@@ -128,7 +138,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 		// suspended anyway due to nobody being there to pay maintenance fees).
 		sufficientStake := true
 		if !empty && !params.DebugBypassStake {
-			if err = registryState.EnsureSufficientRuntimeStake(ctx, rt); err != nil {
+			if err = stakeAcc.CheckStakeClaims(rt.EntityID); err != nil {
 				ctx.Logger().Warn("insufficient stake for runtime operation",
 					"err", err,
 					"entity_id", rt.EntityID,
