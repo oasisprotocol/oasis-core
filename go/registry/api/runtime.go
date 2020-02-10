@@ -167,6 +167,10 @@ type Runtime struct {
 	// ID is a globally unique long term identifier of the runtime.
 	ID common.Namespace `json:"id"`
 
+	// EntityID is the public key identifying the Entity controlling
+	// the runtime.
+	EntityID signature.PublicKey `json:"entity_id"`
+
 	// Genesis is the runtime genesis information.
 	Genesis RuntimeGenesis `json:"genesis"`
 
@@ -200,7 +204,7 @@ type Runtime struct {
 }
 
 // String returns a string representation of itself.
-func (c *Runtime) String() string {
+func (c Runtime) String() string {
 	return "<Runtime id=" + c.ID.String() + ">"
 }
 

@@ -110,9 +110,12 @@ func doInfo(cmd *cobra.Command, args []string) {
 
 	thresholdsToQuery := []api.ThresholdKind{
 		api.KindEntity,
-		api.KindValidator,
-		api.KindCompute,
-		api.KindStorage,
+		api.KindNodeValidator,
+		api.KindNodeCompute,
+		api.KindNodeStorage,
+		api.KindNodeKeyManager,
+		api.KindRuntimeCompute,
+		api.KindRuntimeKeyManager,
 	}
 	type threshold struct {
 		value *quantity.Quantity

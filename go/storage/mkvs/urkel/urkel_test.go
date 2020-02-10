@@ -34,7 +34,7 @@ const (
 )
 
 var (
-	testNs = common.NewTestNamespaceFromSeed([]byte("oasis urkel test ns"))
+	testNs = common.NewTestNamespaceFromSeed([]byte("oasis urkel test ns"), 0)
 
 	_ syncer.ReadSyncer = (*dummySerialSyncer)(nil)
 )

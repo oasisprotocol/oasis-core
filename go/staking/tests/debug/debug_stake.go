@@ -18,10 +18,13 @@ var (
 		Parameters: api.ConsensusParameters{
 			DebondingInterval: 1,
 			Thresholds: map[api.ThresholdKind]quantity.Quantity{
-				api.KindEntity:    QtyFromInt(1),
-				api.KindValidator: QtyFromInt(2),
-				api.KindCompute:   QtyFromInt(3),
-				api.KindStorage:   QtyFromInt(4),
+				api.KindEntity:            QtyFromInt(1),
+				api.KindNodeValidator:     QtyFromInt(2),
+				api.KindNodeCompute:       QtyFromInt(3),
+				api.KindNodeStorage:       QtyFromInt(4),
+				api.KindNodeKeyManager:    QtyFromInt(5),
+				api.KindRuntimeCompute:    QtyFromInt(6),
+				api.KindRuntimeKeyManager: QtyFromInt(7),
 			},
 			Slashing: map[api.SlashReason]api.Slash{
 				api.SlashDoubleSigning: api.Slash{

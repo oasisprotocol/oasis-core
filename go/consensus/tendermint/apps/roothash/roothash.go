@@ -23,6 +23,7 @@ import (
 	schedulerapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	stakingapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking"
+	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
@@ -97,6 +98,15 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 		return fmt.Errorf("failed to get consensus parameters: %w", err)
 	}
 
+	var stakeAcc *stakingState.StakeAccumulatorCache
+	if !params.DebugBypassStake {
+		stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create stake accumulator cache: %w", err)
+		}
+		defer stakeAcc.Discard()
+	}
+
 	for _, rt := range runtimes {
 		if !rt.IsCompute() {
 			ctx.Logger().Debug("skipping non-compute runtime",
@@ -122,7 +132,21 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *abci.Context, epoch epoc
 
 		// If there are no committees for this runtime, suspend the runtime as this
 		// means that there is noone to pay the maintenance fees.
-		if empty && !params.DebugDoNotSuspendRuntimes {
+		//
+		// Also suspend the runtime in case the registering entity no longer has enough stake to
+		// cover the entity and runtime deposits (this check is skipped if the runtime would be
+		// suspended anyway due to nobody being there to pay maintenance fees).
+		sufficientStake := true
+		if !empty && !params.DebugBypassStake {
+			if err = stakeAcc.CheckStakeClaims(rt.EntityID); err != nil {
+				ctx.Logger().Warn("insufficient stake for runtime operation",
+					"err", err,
+					"entity_id", rt.EntityID,
+				)
+				sufficientStake = false
+			}
+		}
+		if (empty || !sufficientStake) && !params.DebugDoNotSuspendRuntimes {
 			if err := app.suspendUnpaidRuntime(ctx, rtState, regState); err != nil {
 				return err
 			}
@@ -166,7 +190,7 @@ func (app *rootHashApplication) suspendUnpaidRuntime(
 	rtState *roothashState.RuntimeState,
 	regState *registryState.MutableState,
 ) error {
-	ctx.Logger().Warn("maintenance fees not paid for runtime, suspending",
+	ctx.Logger().Warn("maintenance fees not paid for runtime or owner debonded, suspending",
 		"runtime_id", rtState.Runtime.ID,
 	)
 

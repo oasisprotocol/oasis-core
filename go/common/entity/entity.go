@@ -45,7 +45,7 @@ type Entity struct {
 }
 
 // String returns a string representation of itself.
-func (e *Entity) String() string {
+func (e Entity) String() string {
 	return "<Entity id=" + e.ID.String() + ">"
 }
 

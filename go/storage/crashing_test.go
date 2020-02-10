@@ -19,7 +19,7 @@ import (
 func TestCrashingBackendDoNotInterfere(t *testing.T) {
 	require := require.New(t)
 
-	testNs := common.NewTestNamespaceFromSeed([]byte("crashing backend test ns"))
+	testNs := common.NewTestNamespaceFromSeed([]byte("crashing backend test ns"), 0)
 
 	var (
 		cfg = api.Config{

@@ -17,6 +17,7 @@ import (
 	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	registryapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
+	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -95,6 +96,20 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 	nodes, _ := regState.Nodes()
 	registry.SortNodeList(nodes)
 
+	params, err := regState.ConsensusParameters()
+	if err != nil {
+		return fmt.Errorf("failed to get consensus parameters: %w", err)
+	}
+
+	var stakeAcc *stakingState.StakeAccumulatorCache
+	if !params.DebugBypassStake {
+		stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create stake accumulator cache: %w", err)
+		}
+		defer stakeAcc.Discard()
+	}
+
 	// Recalculate all the key manager statuses.
 	//
 	// Note: This assumes that once a runtime is registered, it never expires.
@@ -103,6 +118,24 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 	for _, rt := range runtimes {
 		if rt.Kind != registry.KindKeyManager {
 			continue
+		}
+
+		// Suspend the runtime in case the registering entity no longer has enough stake to cover
+		// the entity and runtime deposits.
+		if !params.DebugBypassStake {
+			if err = stakeAcc.CheckStakeClaims(rt.EntityID); err != nil {
+				ctx.Logger().Warn("insufficient stake for key manager runtime operation",
+					"err", err,
+					"entity_id", rt.EntityID,
+				)
+
+				// Suspend runtime.
+				if err := regState.SuspendRuntime(rt.ID); err != nil {
+					return err
+				}
+
+				continue
+			}
 		}
 
 		var forceEmit bool

@@ -143,6 +143,23 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 		return fmt.Errorf("registry: onRegistryEpochChanged: failed to get debonding interval: %w", err)
 	}
 
+	params, err := state.ConsensusParameters()
+	if err != nil {
+		ctx.Logger().Error("onRegistryEpochChanged: failed to fetch consensus parameters",
+			"err", err,
+		)
+		return fmt.Errorf("registry: onRegistryEpochChanged: failed to fetch consensus parameters: %w", err)
+	}
+
+	var stakeAcc *stakingState.StakeAccumulatorCache
+	if !params.DebugBypassStake {
+		stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create stake accumulator cache: %w", err)
+		}
+		defer stakeAcc.Commit()
+	}
+
 	// When a node expires, it is kept around for up to the debonding
 	// period and then removed. This is required so that expired nodes
 	// can still get slashed while inside the debonding interval as
@@ -180,6 +197,13 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 				"node_id", node.ID,
 			)
 			state.RemoveNode(node)
+
+			// Remove the stake claim for the given node.
+			if !params.DebugBypassStake {
+				if err = stakeAcc.RemoveStakeClaim(node.EntityID, stakeClaimForNode(node.ID)); err != nil {
+					return fmt.Errorf("registry: onRegistryEpochChanged: couldn't remove stake claim: %w", err)
+				}
+			}
 		}
 	}
 

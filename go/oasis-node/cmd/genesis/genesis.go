@@ -74,6 +74,10 @@ const (
 	cfgEpochTimeDebugMockBackend   = "epochtime.debug.mock_backend"
 	cfgEpochTimeTendermintInterval = "epochtime.tendermint.interval"
 
+	// Roothash config flags.
+	cfgRoothashDebugDoNotSuspendRuntimes = "roothash.debug.do_not_suspend_runtimes"
+	cfgRoothashDebugBypassStake          = "roothash.debug.bypass_stake" // nolint: gosec
+
 	// Tendermint config flags.
 	cfgConsensusTimeoutCommit      = "consensus.tendermint.timeout_commit"
 	cfgConsensusSkipTimeoutCommit  = "consensus.tendermint.skip_timeout_commit"
@@ -417,6 +421,8 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 		RuntimeStates: make(map[common.Namespace]*registry.RuntimeGenesis),
 
 		Parameters: roothash.ConsensusParameters{
+			DebugDoNotSuspendRuntimes: viper.GetBool(cfgRoothashDebugDoNotSuspendRuntimes),
+			DebugBypassStake:          viper.GetBool(cfgRoothashDebugBypassStake),
 			// TODO: Make these configurable.
 			GasCosts: roothash.DefaultGasCosts,
 		},
@@ -569,10 +575,13 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 			_ = sq.FromBigInt(big.NewInt(0))
 			stakingSt.Parameters.Thresholds =
 				map[staking.ThresholdKind]quantity.Quantity{
-					staking.KindEntity:    sq,
-					staking.KindValidator: sq,
-					staking.KindCompute:   sq,
-					staking.KindStorage:   sq,
+					staking.KindEntity:            sq,
+					staking.KindNodeValidator:     sq,
+					staking.KindNodeCompute:       sq,
+					staking.KindNodeStorage:       sq,
+					staking.KindNodeKeyManager:    sq,
+					staking.KindRuntimeCompute:    sq,
+					staking.KindRuntimeKeyManager: sq,
 				}
 		}
 	}
@@ -725,6 +734,12 @@ func init() {
 	initGenesisFlags.Bool(cfgEpochTimeDebugMockBackend, false, "use debug mock Epoch time backend")
 	initGenesisFlags.Int64(cfgEpochTimeTendermintInterval, 86400, "Epoch interval (in blocks)")
 	_ = initGenesisFlags.MarkHidden(cfgEpochTimeDebugMockBackend)
+
+	// Roothash config flags.
+	initGenesisFlags.Bool(cfgRoothashDebugDoNotSuspendRuntimes, false, "do not suspend runtimes (UNSAFE)")
+	initGenesisFlags.Bool(cfgRoothashDebugBypassStake, false, "bypass all roothash stake checks and operations (UNSAFE)")
+	_ = initGenesisFlags.MarkHidden(cfgRoothashDebugDoNotSuspendRuntimes)
+	_ = initGenesisFlags.MarkHidden(cfgRoothashDebugBypassStake)
 
 	// Tendermint config flags.
 	initGenesisFlags.Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")

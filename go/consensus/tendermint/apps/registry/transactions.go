@@ -3,7 +3,9 @@ package registry
 import (
 	"fmt"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -13,6 +15,20 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
+
+const (
+	claimRegisterEntity  = "registry.RegisterEntity"
+	claimRegisterNode    = "registry.RegisterNode.%s"
+	claimRegisterRuntime = "registry.RegisterRuntime.%s"
+)
+
+func stakeClaimForNode(id signature.PublicKey) staking.StakeClaim {
+	return staking.StakeClaim(fmt.Sprintf(claimRegisterNode, id))
+}
+
+func stakeClaimForRuntime(id common.Namespace) staking.StakeClaim {
+	return staking.StakeClaim(fmt.Sprintf(claimRegisterRuntime, id))
+}
 
 func (app *registryApplication) registerEntity(
 	ctx *abci.Context,
@@ -43,21 +59,21 @@ func (app *registryApplication) registerEntity(
 		return err
 	}
 
+	// Make sure the signer of the transaction matches the signer of the entity.
+	// NOTE: If this is invoked during InitChain then there is no actual transaction
+	//       and thus no transaction signer so we must skip this check.
+	if !ctx.IsInitChain() && !sigEnt.Signature.PublicKey.Equal(ctx.TxSigner()) {
+		return registry.ErrIncorrectTxSigner
+	}
+
 	if !params.DebugBypassStake {
-		if err = stakingState.EnsureSufficientStake(ctx, ent.ID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+		if err = stakingState.AddStakeClaim(ctx, ent.ID, claimRegisterEntity, []staking.ThresholdKind{staking.KindEntity}); err != nil {
 			ctx.Logger().Error("RegisterEntity: Insufficent stake",
 				"err", err,
 				"id", ent.ID,
 			)
 			return err
 		}
-	}
-
-	// Make sure the signer of the transaction matches the signer of the entity.
-	// NOTE: If this is invoked during InitChain then there is no actual transaction
-	//       and thus no transaction signer so we must skip this check.
-	if !ctx.IsInitChain() && !sigEnt.Signature.PublicKey.Equal(ctx.TxSigner()) {
-		return registry.ErrIncorrectTxSigner
 	}
 
 	state.SetEntity(ent, sigEnt)
@@ -104,10 +120,30 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 		)
 		return registry.ErrEntityHasNodes
 	}
+	// Prevent entity deregistration if there are any registered runtimes.
+	hasRuntimes, err := state.HasEntityRuntimes(id)
+	if err != nil {
+		ctx.Logger().Error("DeregisterEntity: failed to check for runtimes",
+			"err", err,
+		)
+		return err
+	}
+	if hasRuntimes {
+		ctx.Logger().Error("DeregisterEntity: entity still has runtimes",
+			"entity_id", id,
+		)
+		return registry.ErrEntityHasRuntimes
+	}
 
 	removedEntity, err := state.RemoveEntity(id)
 	if err != nil {
 		return err
+	}
+
+	if !params.DebugBypassStake {
+		if err = stakingState.RemoveStakeClaim(ctx, id, claimRegisterEntity); err != nil {
+			panic(fmt.Errorf("DeregisterEntity: failed to remove stake claim: %w", err))
+		}
 	}
 
 	ctx.Logger().Debug("DeregisterEntity: complete",
@@ -214,36 +250,6 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 	}
 
-	// Re-check that the entity has at sufficient stake to still be an entity.
-	var (
-		stakeCache     *stakingState.StakeCache
-		numEntityNodes int
-	)
-	if !params.DebugBypassStake {
-		if stakeCache, err = stakingState.NewStakeCache(ctx); err != nil {
-			ctx.Logger().Error("RegisterNode: failed to instantiate stake cache",
-				"err", err,
-			)
-			return err
-		}
-
-		if err = stakeCache.EnsureSufficientStake(newNode.EntityID, []staking.ThresholdKind{staking.KindEntity}); err != nil {
-			ctx.Logger().Error("RegisterNode: insufficient stake, entity no longer valid",
-				"err", err,
-				"id", newNode.EntityID,
-			)
-			return err
-		}
-
-		if numEntityNodes, err = state.NumEntityNodes(newNode.EntityID); err != nil {
-			ctx.Logger().Error("RegisterNode: failed to query existing nodes for entity",
-				"err", err,
-				"entity", newNode.EntityID,
-			)
-			return err
-		}
-	}
-
 	// Ensure node is not expired. Even though the expiration in the
 	// current epoch is technically not yet expired, we treat it as
 	// expired as it doesn't make sense to have a new node that will
@@ -306,18 +312,40 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		sc.Close()
 	}()
 
-	if isNewNode || isExpiredNode {
-		// Check that the entity has enough stake for this node registration.
-		if !params.DebugBypassStake {
-			if err = stakeCache.EnsureNodeRegistrationStake(newNode.EntityID, numEntityNodes+1); err != nil {
-				ctx.Logger().Error("RegisterNode: insufficient stake for new node",
-					"err", err,
-					"entity", newNode.EntityID,
-				)
-				return err
-			}
+	// Check that the entity has enough stake for this node registration.
+	var stakeAcc *stakingState.StakeAccumulatorCache
+	if !params.DebugBypassStake {
+		stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create stake accumulator cache: %w", err)
 		}
 
+		claim := stakeClaimForNode(newNode.ID)
+		var thresholds []staking.ThresholdKind
+		if newNode.HasRoles(node.RoleKeyManager) {
+			thresholds = append(thresholds, staking.KindNodeKeyManager)
+		}
+		if newNode.HasRoles(node.RoleComputeWorker) {
+			thresholds = append(thresholds, staking.KindNodeCompute)
+		}
+		if newNode.HasRoles(node.RoleStorageWorker) {
+			thresholds = append(thresholds, staking.KindNodeStorage)
+		}
+		if newNode.HasRoles(node.RoleValidator) {
+			thresholds = append(thresholds, staking.KindNodeValidator)
+		}
+
+		if err = stakeAcc.AddStakeClaim(newNode.EntityID, claim, thresholds); err != nil {
+			ctx.Logger().Error("RegisterNode: insufficient stake for new node",
+				"err", err,
+				"entity", newNode.EntityID,
+			)
+			return err
+		}
+		stakeAcc.Commit()
+	}
+
+	if isNewNode || isExpiredNode {
 		// Node doesn't exist (or is expired). Create node.
 		if err = state.SetNode(newNode, sigNode); err != nil {
 			ctx.Logger().Error("RegisterNode: failed to create node",
@@ -352,18 +380,6 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			return registry.ErrInvalidArgument
 		}
 	} else {
-		// Check that the entity has enough stake for the existing node
-		// registrations.
-		if !params.DebugBypassStake {
-			if err = stakeCache.EnsureNodeRegistrationStake(newNode.EntityID, numEntityNodes); err != nil {
-				ctx.Logger().Error("RegisterNode: insufficient stake for existing nodes",
-					"err", err,
-					"entity", newNode.EntityID,
-				)
-				return err
-			}
-		}
-
 		// The node already exists, validate and update the node's entry.
 		if err = registry.VerifyNodeUpdate(ctx.Logger(), existingNode, newNode); err != nil {
 			ctx.Logger().Error("RegisterNode: failed to verify node update",
@@ -387,6 +403,14 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	// If a runtime was previously suspended and this node now paid maintenance
 	// fees for it, resume the runtime.
 	for _, rt := range paidRuntimes {
+		// Only resume a runtime if the entity has enough stake to avoid having the runtime be
+		// suspended again on the next epoch transition.
+		if !params.DebugBypassStake {
+			if err = stakeAcc.CheckStakeClaims(rt.EntityID); err != nil {
+				continue
+			}
+		}
+
 		err := state.ResumeRuntime(rt.ID)
 		switch err {
 		case nil:
@@ -551,12 +575,12 @@ func (app *registryApplication) registerRuntime(
 
 	// Make sure the runtime doesn't exist yet.
 	var suspended bool
-	existingRt, err := state.SignedRuntime(rt.ID)
+	existingRt, err := state.Runtime(rt.ID)
 	switch err {
 	case nil:
 	case registry.ErrNoSuchRuntime:
 		// Make sure the runtime isn't suspended.
-		existingRt, err = state.SignedSuspendedRuntime(rt.ID)
+		existingRt, err = state.SuspendedRuntime(rt.ID)
 		switch err {
 		case nil:
 			suspended = true
@@ -569,8 +593,34 @@ func (app *registryApplication) registerRuntime(
 	}
 	// If there is an existing runtime, verify update.
 	if existingRt != nil {
-		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, sigRt, rt)
+		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt)
 		if err != nil {
+			return err
+		}
+	}
+
+	// Make sure that the entity has enough stake.
+	if !params.DebugBypassStake {
+		claim := stakeClaimForRuntime(rt.ID)
+		var thresholds []staking.ThresholdKind
+		switch rt.Kind {
+		case registry.KindCompute:
+			thresholds = append(thresholds, staking.KindRuntimeCompute)
+		case registry.KindKeyManager:
+			thresholds = append(thresholds, staking.KindRuntimeKeyManager)
+		default:
+			ctx.Logger().Error("RegisterRuntime: unknown runtime kind",
+				"runtime_id", rt.ID,
+				"kind", rt.Kind,
+			)
+			return fmt.Errorf("registry: unknown runtime kind (%d)", rt.Kind)
+		}
+
+		if err = stakingState.AddStakeClaim(ctx, rt.EntityID, claim, thresholds); err != nil {
+			ctx.Logger().Error("RegisterRuntime: Insufficent stake",
+				"err", err,
+				"entity_id", rt.EntityID,
+			)
 			return err
 		}
 	}
@@ -579,7 +629,7 @@ func (app *registryApplication) registerRuntime(
 		ctx.Logger().Error("RegisterRuntime: failed to create runtime",
 			"err", err,
 			"runtime", rt,
-			"entity", sigRt.Signature.PublicKey,
+			"entity", rt.EntityID,
 		)
 		return registry.ErrBadEntityForRuntime
 	}

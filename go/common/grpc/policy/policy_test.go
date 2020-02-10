@@ -22,7 +22,7 @@ import (
 	cmnTesting "github.com/oasislabs/oasis-core/go/common/grpc/testing"
 )
 
-var testNs = common.NewTestNamespaceFromSeed([]byte("oasis common grpc policy test ns"))
+var testNs = common.NewTestNamespaceFromSeed([]byte("oasis common grpc policy test ns"), 0)
 
 const recvTimeout = 5 * time.Second
 

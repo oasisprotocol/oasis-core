@@ -168,8 +168,9 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	kmRuntimeID := hex2ns("4000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff", false)
 	testKMRuntime := &registry.Runtime{
-		ID:   kmRuntimeID,
-		Kind: registry.KindKeyManager,
+		ID:       kmRuntimeID,
+		EntityID: testEntity.ID,
+		Kind:     registry.KindKeyManager,
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
 				Entities: map[signature.PublicKey]bool{
@@ -183,6 +184,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	testRuntimeID := hex2ns("0000000000000000000000000000000000000000000000000000000000000001", false)
 	testRuntime := &registry.Runtime{
 		ID:         testRuntimeID,
+		EntityID:   testEntity.ID,
 		Kind:       registry.KindCompute,
 		KeyManager: &testKMRuntime.ID,
 		Executor: registry.ExecutorParameters{

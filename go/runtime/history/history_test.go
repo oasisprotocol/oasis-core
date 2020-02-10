@@ -25,8 +25,8 @@ func TestHistory(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	runtimeID := common.NewTestNamespaceFromSeed([]byte("history test ns 1"))
-	runtimeID2 := common.NewTestNamespaceFromSeed([]byte("history test ns 2"))
+	runtimeID := common.NewTestNamespaceFromSeed([]byte("history test ns 1"), 0)
+	runtimeID2 := common.NewTestNamespaceFromSeed([]byte("history test ns 2"), 0)
 
 	history, err := New(dataDir, runtimeID, NewDefaultConfig())
 	require.NoError(err, "New")
@@ -137,7 +137,7 @@ func TestHistoryPrune(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	runtimeID := common.NewTestNamespaceFromSeed([]byte("history prune test ns"))
+	runtimeID := common.NewTestNamespaceFromSeed([]byte("history prune test ns"), 0)
 
 	history, err := New(dataDir, runtimeID, &Config{
 		Pruner:        NewKeepLastPruner(10),
@@ -206,7 +206,7 @@ func TestHistoryPruneError(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	runtimeID := common.NewTestNamespaceFromSeed([]byte("history prune error test ns"))
+	runtimeID := common.NewTestNamespaceFromSeed([]byte("history prune error test ns"), 0)
 
 	history, err := New(dataDir, runtimeID, &Config{
 		Pruner:        NewKeepLastPruner(10),

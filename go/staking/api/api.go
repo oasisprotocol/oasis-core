@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
@@ -325,12 +326,15 @@ func (p *SharePool) Withdraw(tokenDst, shareSrc, shareAmount *quantity.Quantity)
 type ThresholdKind int
 
 const (
-	KindEntity    ThresholdKind = 0
-	KindValidator ThresholdKind = 1
-	KindCompute   ThresholdKind = 2
-	KindStorage   ThresholdKind = 3
+	KindEntity            ThresholdKind = 0
+	KindNodeValidator     ThresholdKind = 1
+	KindNodeCompute       ThresholdKind = 2
+	KindNodeStorage       ThresholdKind = 3
+	KindNodeKeyManager    ThresholdKind = 4
+	KindRuntimeCompute    ThresholdKind = 5
+	KindRuntimeKeyManager ThresholdKind = 6
 
-	KindMax = KindStorage
+	KindMax = KindRuntimeKeyManager
 )
 
 // String returns the string representation of a ThresholdKind.
@@ -338,15 +342,74 @@ func (k ThresholdKind) String() string {
 	switch k {
 	case KindEntity:
 		return "entity"
-	case KindValidator:
-		return "validator"
-	case KindCompute:
-		return "compute"
-	case KindStorage:
-		return "storage"
+	case KindNodeValidator:
+		return "validator node"
+	case KindNodeCompute:
+		return "compute node"
+	case KindNodeStorage:
+		return "storage node"
+	case KindNodeKeyManager:
+		return "key manager node"
+	case KindRuntimeCompute:
+		return "compute runtime"
+	case KindRuntimeKeyManager:
+		return "key manager runtime"
 	default:
 		return "[unknown threshold kind]"
 	}
+}
+
+// StakeClaim is a unique stake claim identifier.
+type StakeClaim string
+
+// StakeAccumulator is a per-escrow-account stake accumulator.
+type StakeAccumulator struct {
+	// Claims are the stake claims that must be satisfied at any given point. Adding a new claim is
+	// only possible if all of the existing claims plus the new claim is satisfied.
+	Claims map[StakeClaim][]ThresholdKind `json:"claims,omitempty"`
+}
+
+// AddClaimUnchecked adds a new claim without checking its validity.
+func (sa *StakeAccumulator) AddClaimUnchecked(claim StakeClaim, thresholds []ThresholdKind) {
+	if sa.Claims == nil {
+		sa.Claims = make(map[StakeClaim][]ThresholdKind)
+	}
+
+	sa.Claims[claim] = thresholds
+}
+
+// RemoveClaim removes a given stake claim.
+//
+// It is an error if the stake claim does not exist.
+func (sa *StakeAccumulator) RemoveClaim(claim StakeClaim) error {
+	if sa.Claims == nil || sa.Claims[claim] == nil {
+		return fmt.Errorf("staking: claim does not exist: %s", claim)
+	}
+
+	delete(sa.Claims, claim)
+	return nil
+}
+
+// TotalClaims computes the total amount of stake claims in the accumulator.
+func (sa *StakeAccumulator) TotalClaims(thresholds map[ThresholdKind]quantity.Quantity, exclude *StakeClaim) (*quantity.Quantity, error) {
+	if sa == nil || sa.Claims == nil {
+		return quantity.NewQuantity(), nil
+	}
+
+	var total quantity.Quantity
+	for id, claim := range sa.Claims {
+		if exclude != nil && id == *exclude {
+			continue
+		}
+
+		for _, kind := range claim {
+			q := thresholds[kind]
+			if err := total.Add(&q); err != nil {
+				return nil, fmt.Errorf("staking: failed to accumulate threshold: %w", err)
+			}
+		}
+	}
+	return &total, nil
 }
 
 // GeneralAccount is a general-purpose account.
@@ -361,6 +424,54 @@ type EscrowAccount struct {
 	Active             SharePool          `json:"active"`
 	Debonding          SharePool          `json:"debonding"`
 	CommissionSchedule CommissionSchedule `json:"commission_schedule"`
+	StakeAccumulator   StakeAccumulator   `json:"stake_accumulator,omitempty"`
+}
+
+// CheckStakeClaims checks whether the escrow account balance satisfies all the stake claims.
+func (e *EscrowAccount) CheckStakeClaims(tm map[ThresholdKind]quantity.Quantity) error {
+	totalClaims, err := e.StakeAccumulator.TotalClaims(tm, nil)
+	if err != nil {
+		return err
+	}
+	if e.Active.Balance.Cmp(totalClaims) < 0 {
+		return ErrInsufficientStake
+	}
+	return nil
+}
+
+// AddStakeClaim attempts to add a stake claim to the given escrow account.
+//
+// In case there is insufficient stake to cover the claim or an error occurrs, no modifications are
+// made to the stake accumulator.
+func (e *EscrowAccount) AddStakeClaim(tm map[ThresholdKind]quantity.Quantity, claim StakeClaim, thresholds []ThresholdKind) error {
+	// Compute total amount of claims excluding the claim that we are just adding. This is needed
+	// in case the claim is being updated to avoid counting it twice.
+	totalClaims, err := e.StakeAccumulator.TotalClaims(tm, &claim)
+	if err != nil {
+		return err
+	}
+
+	for _, kind := range thresholds {
+		q := tm[kind]
+		if err := totalClaims.Add(&q); err != nil {
+			return fmt.Errorf("staking: failed to accumulate threshold: %w", err)
+		}
+	}
+
+	// Make sure there is sufficient stake to satisfy the claim.
+	if e.Active.Balance.Cmp(totalClaims) < 0 {
+		return ErrInsufficientStake
+	}
+
+	e.StakeAccumulator.AddClaimUnchecked(claim, thresholds)
+	return nil
+}
+
+// RemoveStakeClaim removes a given stake claim.
+//
+// It is an error if the stake claim does not exist.
+func (e *EscrowAccount) RemoveStakeClaim(claim StakeClaim) error {
+	return e.StakeAccumulator.RemoveClaim(claim)
 }
 
 // Account is an entry in the staking ledger.
