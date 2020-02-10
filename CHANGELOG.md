@@ -10,6 +10,17 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.3.1 (2020-02-10)
+
+### Bug Fixes
+
+- go: Disable additional signature verification for migration
+  ([#2652](https://github.com/oasislabs/oasis-core/issues/2652))
+
+  Some places were missed when signature verification was disabled for the
+  purpose of migration.
+
+
 ## 20.3 (2020-02-06)
 
 ### Removals and Breaking changes
