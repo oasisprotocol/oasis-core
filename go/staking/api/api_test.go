@@ -18,9 +18,10 @@ func TestConsensusParameters(t *testing.T) {
 	// Valid thresholds.
 	validThresholds := map[ThresholdKind]quantity.Quantity{
 		KindEntity:            *quantity.NewQuantity(),
-		KindValidator:         *quantity.NewQuantity(),
-		KindCompute:           *quantity.NewQuantity(),
-		KindStorage:           *quantity.NewQuantity(),
+		KindNodeValidator:     *quantity.NewQuantity(),
+		KindNodeCompute:       *quantity.NewQuantity(),
+		KindNodeStorage:       *quantity.NewQuantity(),
+		KindNodeKeyManager:    *quantity.NewQuantity(),
 		KindRuntimeCompute:    *quantity.NewQuantity(),
 		KindRuntimeKeyManager: *quantity.NewQuantity(),
 	}
@@ -46,9 +47,10 @@ func TestStakeAccumulator(t *testing.T) {
 
 	thresholds := map[ThresholdKind]quantity.Quantity{
 		KindEntity:            qtyFromInt(1_000),
-		KindValidator:         qtyFromInt(10_000),
-		KindCompute:           qtyFromInt(5_000),
-		KindStorage:           qtyFromInt(2_000),
+		KindNodeValidator:     qtyFromInt(10_000),
+		KindNodeCompute:       qtyFromInt(5_000),
+		KindNodeStorage:       qtyFromInt(2_000),
+		KindNodeKeyManager:    qtyFromInt(50_000),
 		KindRuntimeCompute:    qtyFromInt(100_000),
 		KindRuntimeKeyManager: qtyFromInt(1_000_000),
 	}
@@ -59,7 +61,7 @@ func TestStakeAccumulator(t *testing.T) {
 	require.NoError(err, "empty escrow account should check out")
 	err = acct.RemoveStakeClaim(StakeClaim("dummy claim"))
 	require.Error(err, "removing a non-existing claim should return an error")
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), []ThresholdKind{KindEntity, KindValidator})
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), []ThresholdKind{KindEntity, KindNodeValidator})
 	require.Error(err, "adding a stake claim with insufficient stake should fail")
 	require.Equal(err, ErrInsufficientStake)
 	require.EqualValues(EscrowAccount{}, acct, "account should be unchanged after failure")
@@ -69,7 +71,7 @@ func TestStakeAccumulator(t *testing.T) {
 	err = acct.CheckStakeClaims(thresholds)
 	require.NoError(err, "escrow account with no claims should check out")
 
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), []ThresholdKind{KindEntity, KindCompute})
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), []ThresholdKind{KindEntity, KindNodeCompute})
 	require.Error(err, "adding a stake claim with insufficient stake should fail")
 	require.Equal(err, ErrInsufficientStake)
 
@@ -79,33 +81,33 @@ func TestStakeAccumulator(t *testing.T) {
 	require.NoError(err, "escrow account should check out")
 
 	// Update an existing claim.
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), []ThresholdKind{KindEntity, KindCompute})
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), []ThresholdKind{KindEntity, KindNodeCompute})
 	require.Error(err, "updating a stake claim with insufficient stake should fail")
 	require.Equal(err, ErrInsufficientStake)
 
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), []ThresholdKind{KindEntity, KindStorage})
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), []ThresholdKind{KindEntity, KindNodeStorage})
 	require.NoError(err, "updating a stake claim with sufficient stake should work")
 
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), []ThresholdKind{KindEntity, KindStorage})
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), []ThresholdKind{KindEntity, KindNodeStorage})
 	require.NoError(err, "updating a stake claim with sufficient stake should work")
 	err = acct.CheckStakeClaims(thresholds)
 	require.NoError(err, "escrow account should check out")
 
 	// Add another claim.
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim2"), []ThresholdKind{KindStorage})
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim2"), []ThresholdKind{KindNodeStorage})
 	require.Error(err, "updating a stake claim with insufficient stake should fail")
 	require.Equal(err, ErrInsufficientStake)
 
 	acct.Active.Balance = qtyFromInt(13_000)
 
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim2"), []ThresholdKind{KindStorage})
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim2"), []ThresholdKind{KindNodeStorage})
 	require.NoError(err, "adding a stake claim with sufficient stake should work")
 	err = acct.CheckStakeClaims(thresholds)
 	require.NoError(err, "escrow account should check out")
 
 	require.Len(acct.StakeAccumulator.Claims, 2, "stake accumulator should contain two claims")
 
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim3"), []ThresholdKind{KindValidator})
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim3"), []ThresholdKind{KindNodeValidator})
 	require.Error(err, "adding a stake claim with insufficient stake should fail")
 	require.Equal(err, ErrInsufficientStake)
 
@@ -114,7 +116,7 @@ func TestStakeAccumulator(t *testing.T) {
 	require.NoError(err, "removing an existing claim should work")
 	require.Len(acct.StakeAccumulator.Claims, 1, "stake accumulator should contain one claim")
 
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim3"), []ThresholdKind{KindValidator})
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim3"), []ThresholdKind{KindNodeValidator})
 	require.NoError(err, "adding a stake claim sufficient stake should work")
 	require.Len(acct.StakeAccumulator.Claims, 2, "stake accumulator should contain two claims")
 	err = acct.CheckStakeClaims(thresholds)

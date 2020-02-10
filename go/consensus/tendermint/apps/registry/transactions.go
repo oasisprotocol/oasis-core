@@ -322,14 +322,17 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 		claim := stakeClaimForNode(newNode.ID)
 		var thresholds []staking.ThresholdKind
-		if newNode.HasRoles(node.RoleComputeWorker | node.RoleKeyManager) {
-			thresholds = append(thresholds, staking.KindCompute)
+		if newNode.HasRoles(node.RoleKeyManager) {
+			thresholds = append(thresholds, staking.KindNodeKeyManager)
+		}
+		if newNode.HasRoles(node.RoleComputeWorker) {
+			thresholds = append(thresholds, staking.KindNodeCompute)
 		}
 		if newNode.HasRoles(node.RoleStorageWorker) {
-			thresholds = append(thresholds, staking.KindStorage)
+			thresholds = append(thresholds, staking.KindNodeStorage)
 		}
 		if newNode.HasRoles(node.RoleValidator) {
-			thresholds = append(thresholds, staking.KindValidator)
+			thresholds = append(thresholds, staking.KindNodeValidator)
 		}
 
 		if err = stakeAcc.AddStakeClaim(newNode.EntityID, claim, thresholds); err != nil {

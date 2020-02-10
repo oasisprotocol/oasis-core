@@ -327,11 +327,12 @@ type ThresholdKind int
 
 const (
 	KindEntity            ThresholdKind = 0
-	KindValidator         ThresholdKind = 1
-	KindCompute           ThresholdKind = 2
-	KindStorage           ThresholdKind = 3
-	KindRuntimeCompute    ThresholdKind = 4
-	KindRuntimeKeyManager ThresholdKind = 5
+	KindNodeValidator     ThresholdKind = 1
+	KindNodeCompute       ThresholdKind = 2
+	KindNodeStorage       ThresholdKind = 3
+	KindNodeKeyManager    ThresholdKind = 4
+	KindRuntimeCompute    ThresholdKind = 5
+	KindRuntimeKeyManager ThresholdKind = 6
 
 	KindMax = KindRuntimeKeyManager
 )
@@ -341,12 +342,14 @@ func (k ThresholdKind) String() string {
 	switch k {
 	case KindEntity:
 		return "entity"
-	case KindValidator:
-		return "validator"
-	case KindCompute:
-		return "compute"
-	case KindStorage:
-		return "storage"
+	case KindNodeValidator:
+		return "validator node"
+	case KindNodeCompute:
+		return "compute node"
+	case KindNodeStorage:
+		return "storage node"
+	case KindNodeKeyManager:
+		return "key manager node"
 	case KindRuntimeCompute:
 		return "compute runtime"
 	case KindRuntimeKeyManager:

@@ -576,9 +576,10 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 			stakingSt.Parameters.Thresholds =
 				map[staking.ThresholdKind]quantity.Quantity{
 					staking.KindEntity:            sq,
-					staking.KindValidator:         sq,
-					staking.KindCompute:           sq,
-					staking.KindStorage:           sq,
+					staking.KindNodeValidator:     sq,
+					staking.KindNodeCompute:       sq,
+					staking.KindNodeStorage:       sq,
+					staking.KindNodeKeyManager:    sq,
 					staking.KindRuntimeCompute:    sq,
 					staking.KindRuntimeKeyManager: sq,
 				}

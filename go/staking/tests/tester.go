@@ -124,9 +124,10 @@ func testInitialEnv(t *testing.T, backend api.Backend, consensus consensusAPI.Ba
 	require.True(commonPool.IsZero(), "CommonPool - initial value")
 
 	for _, kind := range []api.ThresholdKind{
-		api.KindValidator,
-		api.KindCompute,
-		api.KindStorage,
+		api.KindNodeValidator,
+		api.KindNodeCompute,
+		api.KindNodeStorage,
+		api.KindNodeKeyManager,
 	} {
 		qty, err := backend.Threshold(context.Background(), &api.ThresholdQuery{Kind: kind, Height: consensusAPI.HeightLatest})
 		require.NoError(err, "Threshold")
