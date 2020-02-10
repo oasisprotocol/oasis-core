@@ -166,3 +166,6 @@ _RELEASE_NOTES_FILE := $(shell mktemp /tmp/oasis-core.XXXXX)
 _ := $(shell printf "$(subst ",\",$(subst $(newline),\n,$(RELEASE_TEXT)))" > $(_RELEASE_NOTES_FILE))
 GORELEASER_ARGS = release --release-notes $(_RELEASE_NOTES_FILE)
 endif
+
+# List of non-trivial Change Log fragments.
+CHANGELOG_FRAGMENTS_NON_TRIVIAL := $(filter-out $(wildcard .changelog/*trivial*.md),$(wildcard .changelog/[0-9]*.md))
