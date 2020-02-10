@@ -1,0 +1,22 @@
+# markdownlint configuration for Change Log fragments.
+
+# For more information, see:
+# https://github.com/DavidAnson/markdownlint#optionsconfig.
+
+# Extend project's main configuration.
+extends: ../.markdownlint.yml
+
+line-length:
+  # Line length checking is not strict by default.
+  strict: true
+  # Change Log fragments will be listed as bullets indented by 2 spaces so they
+  # should be 2 characters shorter than ordinary lines.
+  line_length: 78
+
+# Change Log fragments should not have a heading as the first line.
+first-line-heading: false
+
+ul-style:
+  # Enforce a uniform symbol for unordered lists across all Change Log
+  # fragments.
+  style: dash
