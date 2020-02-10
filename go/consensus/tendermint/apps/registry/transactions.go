@@ -512,7 +512,7 @@ func (app *registryApplication) unfreezeNode(
 	return nil
 }
 
-func (app *registryApplication) registerRuntime(
+func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	ctx *abci.Context,
 	state *registryState.MutableState,
 	sigRt *registry.SignedRuntime,
@@ -525,9 +525,17 @@ func (app *registryApplication) registerRuntime(
 		return err
 	}
 
+	if params.DisableRuntimeRegistration {
+		return registry.ErrForbidden
+	}
+
 	rt, err := registry.VerifyRegisterRuntimeArgs(params, ctx.Logger(), sigRt, ctx.IsInitChain())
 	if err != nil {
 		return err
+	}
+
+	if rt.Kind == registry.KindKeyManager && params.DisableKeyManagerRuntimeRegistration {
+		return registry.ErrForbidden
 	}
 
 	// Runtime with genesis stateroot only allowed in genesis.

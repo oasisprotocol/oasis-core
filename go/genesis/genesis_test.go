@@ -47,7 +47,6 @@ var testDoc = &genesis.Document{
 	Registry: registry.Genesis{
 		Parameters: registry.ConsensusParameters{
 			DebugAllowUnroutableAddresses:          true,
-			DebugAllowRuntimeRegistration:          true,
 			DebugBypassStake:                       true,
 			DebugAllowEntitySignedNodeRegistration: true,
 		},
@@ -131,7 +130,7 @@ func TestGenesisChainContext(t *testing.T) {
 	//       on each run.
 	stableDoc.Staking = staking.Genesis{}
 
-	require.Equal(t, "c0c1cdc46bc6eba60b4971ab9f25d1188d0829be01b33f13d6a1929d551cc900", stableDoc.ChainContext())
+	require.Equal(t, "ce29f2d2241e7eaaa9bd96d20aa075fe18cd8b178e4f9d05b7dacd8b538eabcc", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {
@@ -252,10 +251,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 	}
 	signedTestNode := signNodeOrDie(nodeSigners, testNode)
 	entitySignedTestNode := signNodeOrDie(append([]signature.Signer{signer}, nodeSigners...), testNode)
-
-	testDocCopy := *testDoc
-	testDoc := &testDocCopy
-	testDoc.Registry.Parameters.KeyManagerOperator = signer.Public()
 
 	// Test genesis document should pass sanity check.
 	require.NoError(testDoc.SanityCheck(), "test genesis document should be valid")

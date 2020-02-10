@@ -41,21 +41,20 @@ import (
 )
 
 const (
-	cfgEntity             = "entity"
-	cfgRuntime            = "runtime"
-	cfgNode               = "node"
-	cfgRootHash           = "roothash"
-	cfgKeyManager         = "keymanager"
-	cfgKeyManagerOperator = "keymanager.operator"
-	cfgStaking            = "staking"
-	cfgBlockHeight        = "height"
-	cfgChainID            = "chain.id"
-	cfgHaltEpoch          = "halt.epoch"
+	cfgEntity      = "entity"
+	cfgRuntime     = "runtime"
+	cfgNode        = "node"
+	cfgRootHash    = "roothash"
+	cfgKeyManager  = "keymanager"
+	cfgStaking     = "staking"
+	cfgBlockHeight = "height"
+	cfgChainID     = "chain.id"
+	cfgHaltEpoch   = "halt.epoch"
 
 	// Registry config flags.
 	CfgRegistryMaxNodeExpiration                      = "registry.max_node_expiration"
+	CfgRegistryDisableRuntimeRegistration             = "registry.disable_runtime_registration"
 	cfgRegistryDebugAllowUnroutableAddresses          = "registry.debug.allow_unroutable_addresses"
-	CfgRegistryDebugAllowRuntimeRegistration          = "registry.debug.allow_runtime_registration"
 	CfgRegistryDebugAllowTestRuntimes                 = "registry.debug.allow_test_runtimes"
 	cfgRegistryDebugAllowEntitySignedNodeRegistration = "registry.debug.allow_entity_signed_registration"
 	cfgRegistryDebugBypassStake                       = "registry.debug.bypass_stake" // nolint: gosec
@@ -251,12 +250,12 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 	regSt := registry.Genesis{
 		Parameters: registry.ConsensusParameters{
 			DebugAllowUnroutableAddresses:          viper.GetBool(cfgRegistryDebugAllowUnroutableAddresses),
-			DebugAllowRuntimeRegistration:          viper.GetBool(CfgRegistryDebugAllowRuntimeRegistration),
 			DebugAllowTestRuntimes:                 viper.GetBool(CfgRegistryDebugAllowTestRuntimes),
 			DebugAllowEntitySignedNodeRegistration: viper.GetBool(cfgRegistryDebugAllowEntitySignedNodeRegistration),
 			DebugBypassStake:                       viper.GetBool(cfgRegistryDebugBypassStake),
 			GasCosts:                               registry.DefaultGasCosts, // TODO: Make these configurable.
 			MaxNodeExpiration:                      viper.GetUint64(CfgRegistryMaxNodeExpiration),
+			DisableRuntimeRegistration:             viper.GetBool(CfgRegistryDisableRuntimeRegistration),
 		},
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
 		Runtimes: make([]*registry.SignedRuntime, 0, len(runtimes)),
@@ -336,33 +335,6 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			)
 			return err
 		}
-
-		regSt.Parameters.KeyManagerOperator = ent.ID
-	}
-
-	if s := viper.GetString(cfgKeyManagerOperator); s != "" {
-		_, ent, err := loadSignedEntity(s)
-		if err != nil {
-			l.Error("failed to load key manager operator entity",
-				"err", err,
-				"filename", s,
-			)
-			return err
-		}
-
-		if !entMap[ent.ID] {
-			l.Error("key manager operator is not a genesis entity",
-				"id", ent.ID,
-			)
-			return registry.ErrNoSuchEntity
-		}
-
-		regSt.Parameters.KeyManagerOperator = ent.ID
-	} else {
-		l.Warn("no key manager operator specified")
-
-		var zeroPk signature.PublicKey
-		regSt.Parameters.KeyManagerOperator = zeroPk
 	}
 
 	for _, v := range runtimes {
@@ -700,19 +672,17 @@ func init() {
 	initGenesisFlags.StringSlice(cfgRootHash, nil, "path to roothash genesis runtime states file")
 	initGenesisFlags.String(cfgStaking, "", "path to staking genesis file")
 	initGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
-	initGenesisFlags.String(cfgKeyManagerOperator, "", "path to key manager operator entity registration file")
 	initGenesisFlags.String(cfgChainID, "", "genesis chain id")
 	initGenesisFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "genesis halt epoch height")
 
 	// Registry config flags.
 	initGenesisFlags.Uint64(CfgRegistryMaxNodeExpiration, 5, "maximum node registration lifespan in epochs")
+	initGenesisFlags.Bool(CfgRegistryDisableRuntimeRegistration, false, "disable non-genesis runtime registration")
 	initGenesisFlags.Bool(cfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
-	initGenesisFlags.Bool(CfgRegistryDebugAllowRuntimeRegistration, false, "enable non-genesis runtime registration (UNSAFE)")
 	initGenesisFlags.Bool(CfgRegistryDebugAllowTestRuntimes, false, "enable test runtime registration")
 	initGenesisFlags.Bool(cfgRegistryDebugAllowEntitySignedNodeRegistration, false, "allow entity signed node registration (UNSAFE)")
 	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowUnroutableAddresses)
-	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowRuntimeRegistration)
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowTestRuntimes)
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowEntitySignedNodeRegistration)
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugBypassStake)

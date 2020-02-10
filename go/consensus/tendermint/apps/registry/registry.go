@@ -94,17 +94,6 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Tra
 			return err
 		}
 
-		params, err := state.ConsensusParameters()
-		if err != nil {
-			ctx.Logger().Error("RegisterRuntime: failed to fetch consensus parameters",
-				"err", err,
-			)
-			return err
-		}
-
-		if !params.DebugAllowRuntimeRegistration {
-			return registry.ErrForbidden
-		}
 		return app.registerRuntime(ctx, state, &sigRt)
 	default:
 		return registry.ErrInvalidArgument

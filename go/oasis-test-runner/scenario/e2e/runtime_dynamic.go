@@ -48,9 +48,6 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.IASUseRegistry = true
 	// Avoid unexpected blocks.
 	f.Network.EpochtimeMock = true
-	// We need runtime registration to be enabled.
-	// TODO: This should not be needed once this is the default (no longer debug).
-	f.Network.RegistryDebugAllowRuntimeRegistration = true
 	// Exclude all runtimes from genesis as we will register those dynamically.
 	for i, rt := range f.Runtimes {
 		// TODO: This should not be needed once dynamic keymanager policy document registration

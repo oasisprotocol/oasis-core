@@ -553,17 +553,6 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, err
 	}
 
-	// If node is a key manager, ensure that it is owned by the key manager
-	// operator.
-	if n.HasRoles(node.RoleKeyManager) {
-		if !n.EntityID.Equal(params.KeyManagerOperator) {
-			logger.Error("RegisterNode: key manager not owned by key manager operator",
-				"node", n,
-			)
-			return nil, nil, fmt.Errorf("%w: keymanager entity not operator", ErrInvalidArgument)
-		}
-	}
-
 	// Validate CommitteeInfo.
 	// Verify that certificate is well-formed.
 	if _, err := n.Committee.ParseCertificate(); err != nil {
@@ -1233,17 +1222,9 @@ type Genesis struct {
 
 // ConsensusParameters are the registry consensus parameters.
 type ConsensusParameters struct {
-	// KeyManagerOperator is the ID of the entity that is allowed to operate
-	// key manager nodes.
-	KeyManagerOperator signature.PublicKey `json:"km_operator"`
-
 	// DebugAllowUnroutableAddresses is true iff node registration should
 	// allow unroutable addreses.
 	DebugAllowUnroutableAddresses bool `json:"debug_allow_unroutable_addresses,omitempty"`
-
-	// DebugAllowRuntimeRegistration is true iff runtime registration should be
-	// allowed outside of the genesis block.
-	DebugAllowRuntimeRegistration bool `json:"debug_allow_runtime_registration,omitempty"`
 
 	// DebugAllowTestRuntimes is true iff test runtimes should be allowed to
 	// be registered.
@@ -1256,6 +1237,14 @@ type ConsensusParameters struct {
 	// DebugBypassStake is true iff the registry should bypass all of the staking
 	// related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
+
+	// DisableRuntimeRegistration is true iff runtime registration should be
+	// disabled outside of the genesis block.
+	DisableRuntimeRegistration bool `json:"disable_runtime_registration,omitempty"`
+
+	// DisableRuntimeRegistration is true iff key manager runtime registration should be
+	// disabled outside of the genesis block.
+	DisableKeyManagerRuntimeRegistration bool `json:"disable_km_runtime_registration,omitempty"`
 
 	// GasCosts are the registry transaction gas costs.
 	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
