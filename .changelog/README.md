@@ -1,7 +1,7 @@
 # Change Log fragments
 
 This directory collects Change Log fragments:
-short files that each contain a snippet of MarkDown formatted text that will
+short files that each contain a snippet of Markdown formatted text that will
 be assembled using [towncrier] to form the [Change Log] section for the next
 release.
 
@@ -14,36 +14,32 @@ _NOTE: This could be very different from the commit message and pull request
 description, which are a description of the change as relevant to the people
 working on the code itself._
 
-The description could use one of the following two formats:
+The description should follow the familiar [style of Git commit messages],
+i.e. a separate subject line giving the change's summary, followed by a more
+detailed explanation in the body.
 
-- One line change summary followed by an empty line and a more detailed
-  explanation in the body.
+In case of simpler descriptions, one can omit the description's body.
 
-  For example:
+_NOTE: Lines should be wrapped at 78 characters because Change Log fragments
+will be listed as bullets indented by 2 spaces so they should be 2 characters
+shorter than ordinary lines._
 
-  ```text
-  Remove staking-related roothash messages.
+An example:
 
-  There is no longer a plan to support direct manipulation of the staking
-  accounts from the runtimes in order to isolate the runtimes from corrupting
-  the consensus layer.
+```text
+Remove staking-related roothash messages
 
-  To reduce complexity, the staking-related roothash messages were removed.
-  The general roothash message mechanism stayed as-is since it may be useful
-  in the future, but any commits with non-empty messages are rejected for now.
-  ```
+There is no longer a plan to support direct manipulation of the staking
+accounts from the runtimes in order to isolate the runtimes from corrupting
+the consensus layer.
 
-- Shorter multi-line change description.
+To reduce complexity, the staking-related roothash messages were removed.
+The general roothash message mechanism stayed as-is since it may be useful in
+the future, but any commits with non-empty messages are rejected for now.
+```
 
-  For example:
-
-  ```text
-  Add `oasis-node unsafe-reset` sub-command which resets the node back to a
-  freshly provisioned state, preserving any key material if it exists.
-  ```
-
-_NOTE: Don't put links to issue(s)/pull request in your text as the
-[towncrier] tool will add them automatically._
+_NOTE: The [towncrier] tool will automatically augment each subject line with
+a link to an appropriate issue/pull request._
 
 ## File name
 
@@ -113,3 +109,4 @@ _NOTE: You can use any version for the preview, it doesn't really matter._
 [Change Log]: ../CHANGELOG.md
 [towncrier]: https://github.com/hawkowl/towncrier
 [Oasis Labs' towncrier fork]: https://github.com/oasislabs/towncrier
+[style of Git commit messages]: ../CONTRIBUTING.md#git-commit-messages
