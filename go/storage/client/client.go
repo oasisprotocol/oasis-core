@@ -5,11 +5,11 @@ package client
 import (
 	"context"
 	cryptorand "crypto/rand"
+	"errors"
 	"math/rand"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -93,11 +93,25 @@ func (b *storageClientBackend) writeWithClient(
 			op := func() error {
 				var rerr error
 				resp, rerr = fn(ctx, api.NewStorageClient(conn.ClientConn), conn.Node)
-				if status.Code(rerr) == codes.PermissionDenied && numRetries < maxRetries {
-					// Writes can fail around an epoch transition due to policy errors,
-					// make sure to retry in this case (up to maxRetries).
+				if numRetries < maxRetries {
 					numRetries++
-					return rerr
+
+					switch {
+					case status.Code(rerr) == codes.Unavailable:
+						// Storage node may be temporarily unavailable.
+						return rerr
+					case status.Code(rerr) == codes.PermissionDenied:
+						// Writes can fail around an epoch transition due to policy errors.
+						return rerr
+					case errors.Is(rerr, api.ErrPreviousRoundMismatch):
+						// Storage node may not have yet processed the epoch transition.
+						return rerr
+					case errors.Is(rerr, api.ErrRootNotFound):
+						// Storage node may not have yet processed the epoch transition.
+						return rerr
+					default:
+						// All other errors are permanent.
+					}
 				}
 				return backoff.Permanent(rerr)
 			}
@@ -284,33 +298,44 @@ func (b *storageClientBackend) readWithClient(
 		return nil, ErrStorageNotAvailable
 	}
 
-	// TODO: Use a more clever approach to choose the order in which to read
-	// from the connected nodes:
-	// https://github.com/oasislabs/oasis-core/issues/1815.
-	rng := rand.New(mathrand.New(cryptorand.Reader))
-
 	var (
-		err  error
-		resp interface{}
+		numRetries int
+		resp       interface{}
 	)
-	for _, randIndex := range rng.Perm(n) {
-		conn := conns[randIndex]
+	op := func() error {
+		// TODO: Use a more clever approach to choose the order in which to read
+		// from the connected nodes:
+		// https://github.com/oasislabs/oasis-core/issues/1815.
+		rng := rand.New(mathrand.New(cryptorand.Reader))
 
-		resp, err = fn(ctx, api.NewStorageClient(conn.ClientConn))
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+		var err error
+		for _, randIndex := range rng.Perm(n) {
+			conn := conns[randIndex]
+
+			resp, err = fn(ctx, api.NewStorageClient(conn.ClientConn))
+			if ctx.Err() != nil {
+				return backoff.Permanent(ctx.Err())
+			}
+			if err != nil {
+				b.logger.Error("failed to get response from a storage node",
+					"node", conn.Node,
+					"err", err,
+					"runtime_id", ns,
+				)
+				continue
+			}
+			return nil
 		}
-		if err != nil {
-			b.logger.Error("failed to get response from a storage node",
-				"node", conn.Node,
-				"err", err,
-				"runtime_id", ns,
-			)
-			continue
+		if numRetries < maxRetries {
+			numRetries++
+			return err
 		}
-		return resp, err
+		return backoff.Permanent(err)
 	}
-	return nil, err
+
+	sched := backoff.NewConstantBackOff(retryInterval)
+	err := backoff.Retry(op, backoff.WithContext(sched, ctx))
+	return resp, err
 }
 
 func (b *storageClientBackend) SyncGet(ctx context.Context, request *api.GetRequest) (*api.ProofResponse, error) {

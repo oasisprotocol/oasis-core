@@ -3,8 +3,8 @@ package database
 
 import (
 	"context"
-
-	"github.com/pkg/errors"
+	"errors"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -56,13 +56,13 @@ func New(cfg *api.Config) (api.Backend, error) {
 		err = errors.New("storage/database: unsupported backend")
 	}
 	if err != nil {
-		return nil, errors.Wrap(err, "storage/database: failed to create node database")
+		return nil, fmt.Errorf("storage/database: failed to create node database: %w", err)
 	}
 
 	rootCache, err := api.NewRootCache(ndb, nil, cfg.ApplyLockLRUSlots, cfg.InsecureSkipChecks)
 	if err != nil {
 		ndb.Close()
-		return nil, errors.Wrap(err, "storage/database: failed to create root cache")
+		return nil, fmt.Errorf("storage/database: failed to create root cache: %w", err)
 	}
 
 	// Satisfy the interface....
@@ -88,7 +88,7 @@ func (ba *databaseBackend) Apply(ctx context.Context, request *api.ApplyRequest)
 		request.WriteLog,
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "storage/database: failed to Apply")
+		return nil, fmt.Errorf("storage/database: failed to Apply: %w", err)
 	}
 
 	receipt, err := api.SignReceipt(ba.signer, request.Namespace, request.DstRound, []hash.Hash{*newRoot})
@@ -100,7 +100,7 @@ func (ba *databaseBackend) ApplyBatch(ctx context.Context, request *api.ApplyBat
 	for _, op := range request.Ops {
 		newRoot, err := ba.rootCache.Apply(ctx, request.Namespace, op.SrcRound, op.SrcRoot, request.DstRound, op.DstRoot, op.WriteLog)
 		if err != nil {
-			return nil, errors.Wrap(err, "storage/database: failed to Apply, op")
+			return nil, fmt.Errorf("storage/database: failed to Apply, op: %w", err)
 		}
 		newRoots = append(newRoots, *newRoot)
 	}
@@ -112,7 +112,7 @@ func (ba *databaseBackend) ApplyBatch(ctx context.Context, request *api.ApplyBat
 func (ba *databaseBackend) Merge(ctx context.Context, request *api.MergeRequest) ([]*api.Receipt, error) {
 	newRoot, err := ba.rootCache.Merge(ctx, request.Namespace, request.Round, request.Base, request.Others)
 	if err != nil {
-		return nil, errors.Wrap(err, "storage/database: failed to Merge")
+		return nil, fmt.Errorf("storage/database: failed to Merge: %w", err)
 	}
 
 	receipt, err := api.SignReceipt(ba.signer, request.Namespace, request.Round+1, []hash.Hash{*newRoot})
@@ -124,7 +124,7 @@ func (ba *databaseBackend) MergeBatch(ctx context.Context, request *api.MergeBat
 	for _, op := range request.Ops {
 		newRoot, err := ba.rootCache.Merge(ctx, request.Namespace, request.Round, op.Base, op.Others)
 		if err != nil {
-			return nil, errors.Wrap(err, "storage/database: failed to Merge, op")
+			return nil, fmt.Errorf("storage/database: failed to Merge, op: %w", err)
 		}
 		newRoots = append(newRoots, *newRoot)
 	}

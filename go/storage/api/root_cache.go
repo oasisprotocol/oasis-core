@@ -2,9 +2,8 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"sync"
-
-	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cache/lru"
@@ -73,18 +72,18 @@ func (rc *RootCache) Merge(
 	for _, rootHash := range others[1:] {
 		it, err := rc.localDB.GetWriteLog(ctx, baseRoot, Root{Namespace: ns, Round: round + 1, Hash: rootHash})
 		if err != nil {
-			return nil, errors.Wrap(err, "storage/rootcache: failed to read write log")
+			return nil, fmt.Errorf("storage/rootcache: failed to read write log: %w", err)
 		}
 
 		if err = tree.ApplyWriteLog(ctx, it); err != nil {
-			return nil, errors.Wrap(err, "storage/rootcache: failed to apply write log")
+			return nil, fmt.Errorf("storage/rootcache: failed to apply write log: %w", err)
 		}
 	}
 
 	var mergedRoot hash.Hash
 	var err error
 	if _, mergedRoot, err = tree.Commit(ctx, ns, round+1); err != nil {
-		return nil, errors.Wrap(err, "storage/rootcache: failed to commit write log")
+		return nil, fmt.Errorf("storage/rootcache: failed to commit write log: %w", err)
 	}
 
 	return &mergedRoot, nil
@@ -189,7 +188,7 @@ func NewRootCache(
 ) (*RootCache, error) {
 	applyLocks, err := lru.New(lru.Capacity(applyLockLRUSlots, false))
 	if err != nil {
-		return nil, errors.Wrap(err, "storage/rootcache: failed to create applyLocks")
+		return nil, fmt.Errorf("storage/rootcache: failed to create applyLocks: %w", err)
 	}
 
 	// When we implement a caching client again, we want to persist
