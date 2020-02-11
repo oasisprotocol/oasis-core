@@ -1331,6 +1331,7 @@ func StakeThresholdsForRuntime(rt *Runtime) (thresholds []staking.ThresholdKind)
 	case KindKeyManager:
 		thresholds = append(thresholds, staking.KindRuntimeKeyManager)
 	default:
+		panic(fmt.Errorf("registry: unknown runtime kind: %s", rt.Kind))
 	}
 	return
 }

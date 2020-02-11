@@ -176,6 +176,12 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocycl
 		if err != nil {
 			return err
 		}
+
+		// Make sure that the stake accumulator is empty as otherwise it could be inconsistent with
+		// what is registered in the genesis block.
+		if len(acct.Escrow.StakeAccumulator.Claims) > 0 {
+			return fmt.Errorf("staking: non-empty stake accumulator in genesis")
+		}
 	}
 	_ = total.Add(&g.CommonPool)
 	if total.Cmp(&g.TotalSupply) != 0 {
