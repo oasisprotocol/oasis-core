@@ -338,22 +338,22 @@ func (it *badgerDBIterator) Next() {
 		panic("Next with invalid iterator")
 	}
 
-	for {
-		it.iter.Next()
-		if !it.iter.Valid() {
-			break
-		}
-
-		item := it.iter.Item()
-		k := fromDBKeyNoCopy(item.KeyCopy(nil))
-		if dbm.IsKeyInDomain(k, it.start, it.end) {
-			it.current.item = item
-			it.current.key = k
-			it.current.value = nil // Copy done on access.
-			return
-		}
+	it.iter.Next()
+	if !it.iter.Valid() {
+		it.Close()
+		return
 	}
 
+	item := it.iter.Item()
+	k := fromDBKeyNoCopy(item.KeyCopy(nil))
+	if dbm.IsKeyInDomain(k, it.start, it.end) {
+		it.current.item = item
+		it.current.key = k
+		it.current.value = nil // Copy done on access.
+		return
+	}
+
+	// We've left the requested range.
 	it.Close()
 }
 
