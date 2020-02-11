@@ -6,6 +6,7 @@ import (
 	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -210,5 +211,91 @@ func checkConsensus(*iavl.MutableTree, epochtime.EpochTime) error {
 
 func checkHalt(*iavl.MutableTree, epochtime.EpochTime) error {
 	// nothing to check yet
+	return nil
+}
+
+func checkStakeClaims(state *iavl.MutableTree, now epochtime.EpochTime) error {
+	regSt := registryState.NewMutableState(state)
+	stakeSt := stakingState.NewMutableState(state)
+
+	params, err := regSt.ConsensusParameters()
+	if err != nil {
+		return fmt.Errorf("failed to get consensus parameters: %w", err)
+	}
+
+	// Skip checks if stake is being bypassed.
+	if params.DebugBypassStake {
+		return nil
+	}
+
+	// Claims in the stake accumulators should be consistent with general state.
+	claims := make(map[signature.PublicKey]map[staking.StakeClaim][]staking.ThresholdKind)
+	// Entity registrations.
+	entities, err := regSt.Entities()
+	if err != nil {
+		return fmt.Errorf("failed to get entities: %w", err)
+	}
+	for _, entity := range entities {
+		claims[entity.ID] = map[staking.StakeClaim][]staking.ThresholdKind{
+			registry.StakeClaimRegisterEntity: []staking.ThresholdKind{staking.KindEntity},
+		}
+	}
+	// Node registrations.
+	nodes, err := regSt.Nodes()
+	if err != nil {
+		return fmt.Errorf("failed to get node registrations: %w", err)
+	}
+	for _, node := range nodes {
+		claims[node.EntityID][registry.StakeClaimForNode(node.ID)] = registry.StakeThresholdsForNode(node)
+	}
+	// Runtime registrations.
+	runtimes, err := regSt.AllRuntimes()
+	if err != nil {
+		return fmt.Errorf("failed to get runtime registrations: %w", err)
+	}
+	for _, rt := range runtimes {
+		claims[rt.EntityID][registry.StakeClaimForRuntime(rt.ID)] = registry.StakeThresholdsForRuntime(rt)
+	}
+
+	// Compare with actual accumulator state.
+	for _, entity := range entities {
+		acct := stakeSt.Account(entity.ID)
+		expectedClaims := claims[entity.ID]
+		actualClaims := acct.Escrow.StakeAccumulator.Claims
+		if len(expectedClaims) != len(actualClaims) {
+			return fmt.Errorf("incorrect number of stake claims for account %s (expected: %d got: %d)",
+				entity.ID,
+				len(expectedClaims),
+				len(actualClaims),
+			)
+		}
+		for claim, expectedThresholds := range expectedClaims {
+			thresholds, ok := actualClaims[claim]
+			if !ok {
+				return fmt.Errorf("missing claim %s for account %s", claim, entity.ID)
+			}
+			if len(thresholds) != len(expectedThresholds) {
+				return fmt.Errorf("incorrect number of thresholds for claim %s for account %s (expected: %d got: %d)",
+					claim,
+					entity.ID,
+					len(expectedThresholds),
+					len(thresholds),
+				)
+			}
+			for i, expectedThreshold := range expectedThresholds {
+				threshold := thresholds[i]
+				if threshold != expectedThreshold {
+					return fmt.Errorf("incorrect threshold in position %d for claim %s for account %s (expected: %s got: %s)",
+						i,
+						claim,
+						entity.ID,
+						expectedThreshold,
+						threshold,
+					)
+				}
+			}
+		}
+	}
+
 	return nil
 }

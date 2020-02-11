@@ -3,9 +3,7 @@ package registry
 import (
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -15,20 +13,6 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
-
-const (
-	claimRegisterEntity  = "registry.RegisterEntity"
-	claimRegisterNode    = "registry.RegisterNode.%s"
-	claimRegisterRuntime = "registry.RegisterRuntime.%s"
-)
-
-func stakeClaimForNode(id signature.PublicKey) staking.StakeClaim {
-	return staking.StakeClaim(fmt.Sprintf(claimRegisterNode, id))
-}
-
-func stakeClaimForRuntime(id common.Namespace) staking.StakeClaim {
-	return staking.StakeClaim(fmt.Sprintf(claimRegisterRuntime, id))
-}
 
 func (app *registryApplication) registerEntity(
 	ctx *abci.Context,
@@ -67,7 +51,7 @@ func (app *registryApplication) registerEntity(
 	}
 
 	if !params.DebugBypassStake {
-		if err = stakingState.AddStakeClaim(ctx, ent.ID, claimRegisterEntity, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+		if err = stakingState.AddStakeClaim(ctx, ent.ID, registry.StakeClaimRegisterEntity, []staking.ThresholdKind{staking.KindEntity}); err != nil {
 			ctx.Logger().Error("RegisterEntity: Insufficent stake",
 				"err", err,
 				"id", ent.ID,
@@ -141,7 +125,7 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 	}
 
 	if !params.DebugBypassStake {
-		if err = stakingState.RemoveStakeClaim(ctx, id, claimRegisterEntity); err != nil {
+		if err = stakingState.RemoveStakeClaim(ctx, id, registry.StakeClaimRegisterEntity); err != nil {
 			panic(fmt.Errorf("DeregisterEntity: failed to remove stake claim: %w", err))
 		}
 	}
@@ -320,20 +304,8 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			return fmt.Errorf("failed to create stake accumulator cache: %w", err)
 		}
 
-		claim := stakeClaimForNode(newNode.ID)
-		var thresholds []staking.ThresholdKind
-		if newNode.HasRoles(node.RoleKeyManager) {
-			thresholds = append(thresholds, staking.KindNodeKeyManager)
-		}
-		if newNode.HasRoles(node.RoleComputeWorker) {
-			thresholds = append(thresholds, staking.KindNodeCompute)
-		}
-		if newNode.HasRoles(node.RoleStorageWorker) {
-			thresholds = append(thresholds, staking.KindNodeStorage)
-		}
-		if newNode.HasRoles(node.RoleValidator) {
-			thresholds = append(thresholds, staking.KindNodeValidator)
-		}
+		claim := registry.StakeClaimForNode(newNode.ID)
+		thresholds := registry.StakeThresholdsForNode(newNode)
 
 		if err = stakeAcc.AddStakeClaim(newNode.EntityID, claim, thresholds); err != nil {
 			ctx.Logger().Error("RegisterNode: insufficient stake for new node",
@@ -609,20 +581,8 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 
 	// Make sure that the entity has enough stake.
 	if !params.DebugBypassStake {
-		claim := stakeClaimForRuntime(rt.ID)
-		var thresholds []staking.ThresholdKind
-		switch rt.Kind {
-		case registry.KindCompute:
-			thresholds = append(thresholds, staking.KindRuntimeCompute)
-		case registry.KindKeyManager:
-			thresholds = append(thresholds, staking.KindRuntimeKeyManager)
-		default:
-			ctx.Logger().Error("RegisterRuntime: unknown runtime kind",
-				"runtime_id", rt.ID,
-				"kind", rt.Kind,
-			)
-			return fmt.Errorf("registry: unknown runtime kind (%d)", rt.Kind)
-		}
+		claim := registry.StakeClaimForRuntime(rt.ID)
+		thresholds := registry.StakeThresholdsForRuntime(rt)
 
 		if err = stakingState.AddStakeClaim(ctx, rt.EntityID, claim, thresholds); err != nil {
 			ctx.Logger().Error("RegisterRuntime: Insufficent stake",

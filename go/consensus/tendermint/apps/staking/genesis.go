@@ -72,6 +72,15 @@ func (app *stakingApplication) initLedger(ctx *abci.Context, state *stakingState
 			return errors.New("staking/tendermint: invalid genesis debonding escrow balance")
 		}
 
+		// Make sure that the stake accumulator is empty as otherwise it could be inconsistent with
+		// what is registered in the genesis block.
+		if len(v.Escrow.StakeAccumulator.Claims) > 0 {
+			ctx.Logger().Error("InitChain: non-empty stake accumulator",
+				"id", id,
+			)
+			return errors.New("staking/tendermint: non-empty stake accumulator in genesis")
+		}
+
 		ups = append(ups, ledgerUpdate{id, v})
 		if err := totalSupply.Add(&v.General.Balance); err != nil {
 			ctx.Logger().Error("InitChain: failed to add general balance",
@@ -261,6 +270,9 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 	ledger := make(map[signature.PublicKey]*staking.Account)
 	for _, acctID := range accounts {
 		acct := sq.state.Account(acctID)
+		// Make sure that export resets the stake accumulator state as that should be re-initialized
+		// during genesis (a genesis document with non-empty stake accumulator is invalid).
+		acct.Escrow.StakeAccumulator = staking.StakeAccumulator{}
 		ledger[acctID] = acct
 	}
 

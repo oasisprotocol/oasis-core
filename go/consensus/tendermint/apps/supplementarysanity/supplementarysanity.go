@@ -125,6 +125,7 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *abci.Context, reque
 		{"checkBeacon", checkBeacon},
 		{"checkConsensus", checkConsensus},
 		{"checkHalt", checkHalt},
+		{"checkStakeClaims", checkStakeClaims},
 	} {
 		if err := tt.checker(state, now); err != nil {
 			return errors.Wrap(err, tt.name)

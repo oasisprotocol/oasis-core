@@ -21,6 +21,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 // ModuleName is a unique module name for the registry module.
@@ -1284,4 +1285,53 @@ var DefaultGasCosts = transaction.Costs{
 	GasOpRegisterRuntime:         1000,
 	GasOpRuntimeEpochMaintenance: 1000,
 	GasOpUpdateKeyManager:        1000,
+}
+
+const (
+	// StakeClaimRegisterEntity is the stake claim identifier used for registering an entity.
+	StakeClaimRegisterEntity = "registry.RegisterEntity"
+	// StakeClaimRegisterNode is the stake claim template used for registering nodes.
+	StakeClaimRegisterNode = "registry.RegisterNode.%s"
+	// StakeClaimRegisterRuntime is the stake claim template used for registering runtimes.
+	StakeClaimRegisterRuntime = "registry.RegisterRuntime.%s"
+)
+
+// StakeClaimForNode generates a new stake claim identifier for a specific node registration.
+func StakeClaimForNode(id signature.PublicKey) staking.StakeClaim {
+	return staking.StakeClaim(fmt.Sprintf(StakeClaimRegisterNode, id))
+}
+
+// StakeClaimForRuntime generates a new stake claim for a specific runtime registration.
+func StakeClaimForRuntime(id common.Namespace) staking.StakeClaim {
+	return staking.StakeClaim(fmt.Sprintf(StakeClaimRegisterRuntime, id))
+}
+
+// StakeThresholdsForNode returns the staking thresholds for the given node.
+func StakeThresholdsForNode(n *node.Node) (thresholds []staking.ThresholdKind) {
+	if n.HasRoles(node.RoleKeyManager) {
+		thresholds = append(thresholds, staking.KindNodeKeyManager)
+	}
+	if n.HasRoles(node.RoleComputeWorker) {
+		thresholds = append(thresholds, staking.KindNodeCompute)
+	}
+	if n.HasRoles(node.RoleStorageWorker) {
+		thresholds = append(thresholds, staking.KindNodeStorage)
+	}
+	if n.HasRoles(node.RoleValidator) {
+		thresholds = append(thresholds, staking.KindNodeValidator)
+	}
+	return
+}
+
+// StakeThresholdsForRuntime returns the staking thresholds for the given runtime.
+func StakeThresholdsForRuntime(rt *Runtime) (thresholds []staking.ThresholdKind) {
+	switch rt.Kind {
+	case KindCompute:
+		thresholds = append(thresholds, staking.KindRuntimeCompute)
+	case KindKeyManager:
+		thresholds = append(thresholds, staking.KindRuntimeKeyManager)
+	default:
+		panic(fmt.Errorf("registry: unknown runtime kind: %s", rt.Kind))
+	}
+	return
 }
