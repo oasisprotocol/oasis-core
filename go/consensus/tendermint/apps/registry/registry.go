@@ -189,7 +189,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 
 			// Remove the stake claim for the given node.
 			if !params.DebugBypassStake {
-				if err = stakeAcc.RemoveStakeClaim(node.EntityID, stakeClaimForNode(node.ID)); err != nil {
+				if err = stakeAcc.RemoveStakeClaim(node.EntityID, registry.StakeClaimForNode(node.ID)); err != nil {
 					return fmt.Errorf("registry: onRegistryEpochChanged: couldn't remove stake claim: %w", err)
 				}
 			}
