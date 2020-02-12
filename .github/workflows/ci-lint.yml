@@ -26,9 +26,15 @@ jobs:
         uses: actions/checkout@v2
       - name: Set up Python 3
         uses: actions/setup-python@v1
+      - name: Set up Node.js 12
+        uses: actions/setup-node@v1
+        with:
+          node-version: "12.x"
       - name: Install prerequisites
         run: |
-          python -m pip install https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz
+          python -m pip install \
+            https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz \
+            gitlint
       - name: Check for presence of a Change Log fragment (only pull requests)
         run: |
           # Fetch the pull request' base branch so towncrier will be able to
@@ -39,3 +45,13 @@ jobs:
         env:
           BASE_BRANCH: ${{ github.base_ref }}
         if: github.event_name == 'pull_request'
+      - name: Lint Markdown files
+        run: |
+          make lint-md
+        # Always run this step so that all linting errors can be seen at once.
+        if: always()
+      - name: Lint Change Log fragments
+        run: |
+          make lint-changelog
+        # Always run this step so that all linting errors can be seen at once.
+        if: always()

@@ -1,0 +1,18 @@
+# markdownlint configuration.
+
+# For more information, see:
+# https://github.com/DavidAnson/markdownlint#optionsconfig.
+
+# Enable all rules.
+default: true
+
+line-length:
+  # Line length checking is not strict by default.
+  strict: true
+  line_length: 80
+  # Allow longer lines for code blocks.
+  code_block_line_length: 100
+
+# Do not always require language specifiers with fenced code blocks since they
+# are not part of the Markdown spec.
+fenced-code-language: false

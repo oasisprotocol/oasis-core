@@ -1,6 +1,7 @@
 # Big Integer Quantities
 
-Arbitrary-precision positive integer quantities are represented by the `quantity.Quantity` type.
+Arbitrary-precision positive integer quantities are represented by the
+`quantity.Quantity` type.
 
 ## Encoding
 

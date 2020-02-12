@@ -57,6 +57,28 @@ fmt-go:
 
 fmt: $(fmt-targets)
 
+# Lint code and documentation.
+lint-targets := lint-go lint-md lint-changelog
+
+lint-go:
+	@$(MAKE) -C go lint
+
+lint-md:
+	@npx markdownlint-cli '**/*.md' --ignore .changelog/
+
+# NOTE: Non-zero exit status is recorded but only set at the end so that all
+# markdownlint or gitlint errors can be seen at once.
+lint-changelog:
+	@exit_status=0; \
+	npx markdownlint-cli --config .changelog/.markdownlint.yml .changelog/ || exit_status=$$?; \
+	for fragment in $(CHANGELOG_FRAGMENTS_NON_TRIVIAL); do \
+		echo "Running gitlint on $$fragment..."; \
+		gitlint --msg-filename $$fragment || exit_status=$$?; \
+	done; \
+	exit $$exit_status
+
+lint: $(lint-targets)
+
 # Test.
 test-unit-targets := test-unit-rust test-unit-go
 test-targets := test-unit test-e2e
@@ -146,6 +168,7 @@ docker-shell:
 	$(build-targets) go build \
 	build-helpers-go build-helpers build-go-generate \
 	$(fmt-targets) fmt \
+	$(lint-targets) lint \
 	$(test-unit-targets) $(test-targets) test \
 	$(clean-targets) clean \
 	fetch-git changelog tag-next-release release docker-shell \
