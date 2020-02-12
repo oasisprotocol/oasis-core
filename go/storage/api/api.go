@@ -207,23 +207,23 @@ type Proof = syncer.Proof
 // ApplyOp is an apply operation within a batch of apply operations.
 type ApplyOp struct {
 	// SrcRound is the source root round.
-	SrcRound uint64
+	SrcRound uint64 `json:"src_round"`
 	// SrcRoot is the merkle root to apply the operations against. It may
 	// refer to a nil node (empty hash) in which case a new root will be
 	// created.
-	SrcRoot hash.Hash
+	SrcRoot hash.Hash `json:"src_root"`
 	// DstRoot is the expected merkle root after applying the write log.
-	DstRoot hash.Hash
+	DstRoot hash.Hash `json:"dst_root"`
 	// WriteLog is a write log of operations to apply.
-	WriteLog WriteLog
+	WriteLog WriteLog `json:"writelog"`
 }
 
 // MergeOps is a merge operation within a batch of merge operations.
 type MergeOp struct {
 	// Base is the base root for the merge.
-	Base hash.Hash
+	Base hash.Hash `json:"base"`
 	// Others is a list of roots derived from base that should be merged.
-	Others []hash.Hash
+	Others []hash.Hash `json:"others"`
 }
 
 // ApplyRequest is an Apply request.

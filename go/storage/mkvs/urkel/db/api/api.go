@@ -3,41 +3,44 @@ package api
 
 import (
 	"context"
-	"errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
+// ModuleName is the module name.
+const ModuleName = "storage/mkvs/db"
+
 var (
 	// ErrNodeNotFound indicates that a node with the specified hash couldn't be found
 	// in the database.
-	ErrNodeNotFound = errors.New("urkel: node not found in node db")
+	ErrNodeNotFound = errors.New(ModuleName, 1, "urkel: node not found in node db")
 	// ErrWriteLogNotFound indicates that a write log for the specified storage hashes
 	// couldn't be found.
-	ErrWriteLogNotFound = errors.New("urkel: write log not found in node db")
+	ErrWriteLogNotFound = errors.New(ModuleName, 2, "urkel: write log not found in node db")
 	// ErrNotFinalized indicates that the operation requires a round to be finalized
 	// but the round is not yet finalized.
-	ErrNotFinalized = errors.New("urkel: round is not yet finalized")
+	ErrNotFinalized = errors.New(ModuleName, 3, "urkel: round is not yet finalized")
 	// ErrAlreadyFinalized indicates that the given round has already been finalized.
-	ErrAlreadyFinalized = errors.New("urkel: round has already been finalized")
+	ErrAlreadyFinalized = errors.New(ModuleName, 4, "urkel: round has already been finalized")
 	// ErrRoundNotFound indicates that the given round cannot be found.
-	ErrRoundNotFound = errors.New("urkel: round not found")
+	ErrRoundNotFound = errors.New(ModuleName, 5, "urkel: round not found")
 	// ErrPreviousRoundMismatch indicates that the round given for the old root does
 	// not match the previous round.
-	ErrPreviousRoundMismatch = errors.New("urkel: previous round mismatch")
+	ErrPreviousRoundMismatch = errors.New(ModuleName, 6, "urkel: previous round mismatch")
 	// ErrRoundWentBackwards indicates that the new round is earlier than an already
 	// inserted round.
-	ErrRoundWentBackwards = errors.New("urkel: round went backwards")
+	ErrRoundWentBackwards = errors.New(ModuleName, 7, "urkel: round went backwards")
 	// ErrRootNotFound indicates that the given root cannot be found.
-	ErrRootNotFound = errors.New("urkel: root not found")
+	ErrRootNotFound = errors.New(ModuleName, 8, "urkel: root not found")
 	// ErrRootMustFollowOld indicates that the passed new root does not follow old root.
-	ErrRootMustFollowOld = errors.New("urkel: root must follow old root")
+	ErrRootMustFollowOld = errors.New(ModuleName, 9, "urkel: root must follow old root")
 	// ErrBadNamespace indicates that the passed namespace does not match what is
 	// actually contained within the database.
-	ErrBadNamespace = errors.New("urkel: bad namespace")
+	ErrBadNamespace = errors.New(ModuleName, 10, "urkel: bad namespace")
 )
 
 // Config is the node database backend configuration.
