@@ -201,12 +201,6 @@ func (s *Signer) Reset() {
 	}
 }
 
-// UnsafeBytes returns the byte representation of the private key.  This
-// MUST be removed for HSM support.
-func (s *Signer) UnsafeBytes() []byte {
-	return s.privateKey[:]
-}
-
 func (s *Signer) marshalPEM() ([]byte, error) {
 	return pem.Marshal(privateKeyPemType, s.privateKey[:])
 }

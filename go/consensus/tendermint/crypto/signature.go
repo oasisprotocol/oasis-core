@@ -2,6 +2,7 @@
 package crypto
 
 import (
+	"github.com/tendermint/tendermint/crypto"
 	tmed "github.com/tendermint/tendermint/crypto/ed25519"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -25,12 +26,34 @@ func PublicKeyFromTendermint(tk *tmed.PubKeyEd25519) signature.PublicKey {
 	return k
 }
 
-// UnsafeSignerToTendermint coverts a signature.UnsafeSigner to the
-// tendermint equivalent.
-func UnsafeSignerToTendermint(unsafeSigner signature.UnsafeSigner) tmed.PrivKeyEd25519 {
-	var tk tmed.PrivKeyEd25519
-	copy(tk[:], unsafeSigner.UnsafeBytes())
-	return tk
+// SignerToTendermint converts a signature.Signer to the tendermint
+// equivalent.
+func SignerToTendermint(signer signature.Signer) crypto.PrivKey {
+	return &tmSigner{
+		inner: signer,
+	}
+}
+
+type tmSigner struct {
+	inner signature.Signer
+}
+
+func (s *tmSigner) Bytes() []byte {
+	// I hope to god nothing actually calls this, basically ever.
+	panic("consensus/tendermint/crypto: Bytes() operation not supported")
+}
+
+func (s *tmSigner) Sign(msg []byte) ([]byte, error) {
+	return s.inner.ContextSign(tendermintSignatureContext, msg)
+}
+
+func (s *tmSigner) PubKey() crypto.PubKey {
+	pk := s.inner.Public()
+	return PublicKeyToTendermint(&pk)
+}
+
+func (s *tmSigner) Equals(other crypto.PrivKey) bool {
+	return s.PubKey().Equals(other.PubKey())
 }
 
 func init() {
