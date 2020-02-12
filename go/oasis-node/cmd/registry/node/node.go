@@ -162,7 +162,7 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		)
 		os.Exit(1)
 	}
-	nodeIdentity, err := identity.LoadOrGenerate(dataDir, nodeSignerFactory)
+	nodeIdentity, err := identity.LoadOrGenerate(dataDir, nodeSignerFactory, false)
 	if err != nil {
 		logger.Error("failed to load or generate node identity",
 			"err", err,
@@ -170,12 +170,18 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		os.Exit(1)
 	}
 
+	var nextCert []byte
+	if c := nodeIdentity.GetNextTLSCertificate(); c != nil {
+		nextCert = c.Certificate[0]
+	}
+
 	n := &node.Node{
 		ID:         nodeIdentity.NodeSigner.Public(),
 		EntityID:   entityID,
 		Expiration: viper.GetUint64(CfgExpiration),
 		Committee: node.CommitteeInfo{
-			Certificate: nodeIdentity.TLSCertificate.Certificate[0],
+			Certificate:     nodeIdentity.GetTLSCertificate().Certificate[0],
+			NextCertificate: nextCert,
 		},
 		P2P: node.P2PInfo{
 			ID: nodeIdentity.P2PSigner.Public(),
@@ -269,7 +275,7 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	signers = append(signers, []signature.Signer{
 		nodeIdentity.P2PSigner,
 		nodeIdentity.ConsensusSigner,
-		nodeIdentity.TLSSigner,
+		nodeIdentity.GetTLSSigner(),
 	}...)
 
 	signed, err := node.MultiSignNode(signers, registry.RegisterGenesisNodeSignatureContext, n)

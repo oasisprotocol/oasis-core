@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/service"
 )
@@ -298,8 +299,8 @@ type ServerConfig struct { // nolint: maligned
 	Port uint16
 	// Path is the path for the local server. Leave nil to create a TCP server.
 	Path string
-	// Certificate is the certificate used by the server. Should be nil for local servers.
-	Certificate *tls.Certificate
+	// Identity is the identity of the worker that's running the server.
+	Identity *identity.Identity
 	// InstallWrapper specifies whether intercepting facilities should be enabled on this server,
 	// to enable intercepting RPC calls with a wrapper.
 	InstallWrapper bool
@@ -473,11 +474,14 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		grpc.KeepaliveParams(serverKeepAliveParams),
 		grpc.CustomCodec(&CBORCodec{}),
 	}
-	if config.Certificate != nil {
+	if config.Identity != nil && config.Identity.GetTLSCertificate() != nil {
 		tlsConfig := &tls.Config{
-			Certificates: []tls.Certificate{*config.Certificate},
-			ClientAuth:   clientAuthType,
+			ClientAuth: clientAuthType,
+			GetCertificate: func(ch *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				return config.Identity.GetTLSCertificate(), nil
+			},
 		}
+
 		sOpts = append(sOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}
 	sOpts = append(sOpts, config.CustomOptions...)

@@ -40,7 +40,7 @@ func (b *backend) GetAddresses(ctx context.Context) (*api.SentryAddresses, error
 	var committeeAddresses []node.CommitteeAddress
 	for _, addr := range committeeAddrs {
 		committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
-			Certificate: b.identity.TLSCertificate.Certificate[0],
+			Certificate: b.identity.GetTLSCertificate().Certificate[0],
 			Address:     addr,
 		})
 	}

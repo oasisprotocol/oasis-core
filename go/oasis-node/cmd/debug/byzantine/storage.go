@@ -69,7 +69,7 @@ func dialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, func(), 
 }
 
 func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeStorage, error) {
-	opts, err := dialOptionForNode([]tls.Certificate{*id.TLSCertificate}, node)
+	opts, err := dialOptionForNode([]tls.Certificate{*id.GetTLSCertificate()}, node)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage client DialOptionForNode")
 	}

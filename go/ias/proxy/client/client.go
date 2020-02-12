@@ -119,9 +119,11 @@ func New(identity *identity.Identity, proxyAddr, tlsCertFile string) (api.Endpoi
 		certPool := x509.NewCertPool()
 		certPool.AddCert(parsedCert)
 		creds := credentials.NewTLS(&tls.Config{
-			Certificates: []tls.Certificate{*identity.TLSCertificate},
-			RootCAs:      certPool,
-			ServerName:   proxy.CommonName,
+			RootCAs:    certPool,
+			ServerName: proxy.CommonName,
+			GetClientCertificate: func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+				return identity.GetTLSCertificate(), nil
+			},
 		})
 
 		conn, err := cmnGrpc.Dial(

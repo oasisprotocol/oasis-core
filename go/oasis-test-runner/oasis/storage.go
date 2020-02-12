@@ -141,9 +141,15 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		return nil, errors.Wrap(err, "oasis/storage: failed to create storage subdir")
 	}
 
+	// If we're using sentry nodes, we need to have a static TLS certificate.
+	var persistTLS bool
+	if len(cfg.SentryIndices) > 0 {
+		persistTLS = true
+	}
+
 	// Pre-provision the node identity so that we can update the entity.
 	seed := fmt.Sprintf(storageIdentitySeedTemplate, len(net.storageWorkers))
-	publicKey, err := net.provisionNodeIdentity(storageDir, seed)
+	publicKey, err := net.provisionNodeIdentity(storageDir, seed, persistTLS)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/storage: failed to provision node identity")
 	}

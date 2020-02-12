@@ -40,6 +40,9 @@ const (
 	// CfgRegistrationForceRegister overrides a previously saved deregistration
 	// request.
 	CfgRegistrationForceRegister = "worker.registration.force_register"
+	// CfgRegistrationRotateCerts sets the number of epochs that a node's TLS
+	// certificate should be valid for.
+	CfgRegistrationRotateCerts = "worker.registration.rotate_certs"
 )
 
 var (
@@ -207,6 +210,38 @@ Loop:
 			return
 		case epoch = <-ch:
 			// Epoch updated, check if we can submit a registration.
+
+			// Check if we need to rotate the node's TLS certificate.
+			if !w.identity.DoNotRotateTLS {
+				// Per how many epochs should we do rotations?
+				rotateTLSCertsPer := epochtime.EpochTime(viper.GetUint64(CfgRegistrationRotateCerts))
+				if rotateTLSCertsPer != 0 && epoch%rotateTLSCertsPer == 0 {
+					baseEpoch, err := w.epochtime.GetBaseEpoch(w.ctx)
+					if err != nil {
+						w.logger.Error("failed to get base epoch, node TLS certificate rotation failed",
+							"new_epoch", epoch,
+							"err", err,
+						)
+					} else {
+						// Rotate node TLS certificates (but not on the
+						// first epoch).
+						// TODO: Make this time-based instead.
+						if epoch != baseEpoch {
+							err := w.identity.RotateCertificates()
+							if err != nil {
+								w.logger.Error("node TLS certificate rotation failed",
+									"new_epoch", epoch,
+									"err", err,
+								)
+							} else {
+								w.logger.Info("node TLS certificates have been rotated",
+									"new_epoch", epoch,
+								)
+							}
+						}
+					}
+				}
+			}
 		case <-w.registerCh:
 			// Notification that a role provider has been updated.
 		}
@@ -430,9 +465,17 @@ func (w *Worker) gatherCommitteeAddresses(sentryCommitteeAddrs []node.CommitteeA
 		}
 		for _, addr := range addrs {
 			committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
-				Certificate: w.identity.TLSCertificate.Certificate[0],
+				Certificate: w.identity.GetTLSCertificate().Certificate[0],
 				Address:     addr,
 			})
+			// Make sure to also include the certificate that will be valid
+			// in the next epoch, so that the node remains reachable.
+			if nextCert := w.identity.GetNextTLSCertificate(); nextCert != nil {
+				committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
+					Certificate: nextCert.Certificate[0],
+					Address:     addr,
+				})
+			}
 		}
 	}
 
@@ -469,13 +512,19 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		"epoch", epoch,
 	)
 
+	var nextCert []byte
+	if c := w.identity.GetNextTLSCertificate(); c != nil {
+		nextCert = c.Certificate[0]
+	}
+
 	identityPublic := w.identity.NodeSigner.Public()
 	nodeDesc := node.Node{
 		ID:         identityPublic,
 		EntityID:   w.entityID,
 		Expiration: uint64(epoch) + 2,
 		Committee: node.CommitteeInfo{
-			Certificate: w.identity.TLSCertificate.Certificate[0],
+			Certificate:     w.identity.GetTLSCertificate().Certificate[0],
+			NextCertificate: nextCert,
 		},
 		P2P: node.P2PInfo{
 			ID: w.identity.P2PSigner.Public(),
@@ -531,7 +580,7 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		w.registrationSigner,
 		w.identity.P2PSigner,
 		w.identity.ConsensusSigner,
-		w.identity.TLSSigner,
+		w.identity.GetTLSSigner(),
 	}
 	if !w.identity.NodeSigner.Public().Equal(w.registrationSigner.Public()) {
 		// In the case where the registration signer is the entity signer
@@ -748,6 +797,10 @@ func New(
 		}
 	}
 
+	if viper.GetUint64(CfgRegistrationRotateCerts) != 0 && identity.DoNotRotateTLS {
+		return nil, fmt.Errorf("node TLS certificate rotation must not be enabled if using pre-generated TLS certificates")
+	}
+
 	w := &Worker{
 		workerCommonCfg:    workerCommonCfg,
 		store:              serviceStore,
@@ -831,6 +884,7 @@ func init() {
 	Flags.String(CfgRegistrationEntity, "", "entity to use as the node owner in registrations")
 	Flags.String(CfgDebugRegistrationPrivateKey, "", "private key to use to sign node registrations")
 	Flags.Bool(CfgRegistrationForceRegister, false, "override a previously saved deregistration request")
+	Flags.Uint64(CfgRegistrationRotateCerts, 0, "rotate node TLS certificates every N epochs (0 to disable)")
 	_ = Flags.MarkHidden(CfgDebugRegistrationPrivateKey)
 
 	_ = viper.BindPFlags(Flags)

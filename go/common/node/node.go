@@ -174,14 +174,21 @@ type CommitteeInfo struct {
 	// Certificate is the certificate for establishing TLS connections.
 	Certificate []byte `json:"certificate"`
 
+	// NextCertificate is the certificate that will be used for establishing
+	// TLS connections after certificate rotation (if enabled).
+	NextCertificate []byte `json:"next_certificate,omitempty"`
+
 	// Addresses is the list of committee addresses at which the node can be reached.
 	Addresses []CommitteeAddress `json:"addresses"`
 }
 
 // Equal compares vs another CommitteeInfo for equality.
 func (c *CommitteeInfo) Equal(other *CommitteeInfo) bool {
-	// XXX: Why is this top-level certificate even needed?
 	if !bytes.Equal(c.Certificate, other.Certificate) {
+		return false
+	}
+
+	if !bytes.Equal(c.NextCertificate, other.NextCertificate) {
 		return false
 	}
 
@@ -200,6 +207,11 @@ func (c *CommitteeInfo) Equal(other *CommitteeInfo) bool {
 // ParseCertificate returns the parsed x509 certificate.
 func (c *CommitteeInfo) ParseCertificate() (*x509.Certificate, error) {
 	return x509.ParseCertificate(c.Certificate)
+}
+
+// ParseCertificate returns the parsed x509 next certificate.
+func (c *CommitteeInfo) ParseNextCertificate() (*x509.Certificate, error) {
+	return x509.ParseCertificate(c.NextCertificate)
 }
 
 // P2PInfo contains information for connecting to this node via P2P transport.

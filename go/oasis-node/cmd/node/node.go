@@ -526,7 +526,7 @@ func newNode(testNode bool) (*Node, error) { // nolint: gocyclo
 		)
 		return nil, err
 	}
-	node.Identity, err = identity.LoadOrGenerate(dataDir, signerFactory)
+	node.Identity, err = identity.LoadOrGenerate(dataDir, signerFactory, false)
 	if err != nil {
 		logger.Error("failed to load/generate identity",
 			"err", err,

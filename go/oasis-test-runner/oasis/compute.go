@@ -121,7 +121,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 
 	// Pre-provision the node identity so that we can update the entity.
 	seed := fmt.Sprintf(computeIdentitySeedTemplate, len(net.computeWorkers))
-	publicKey, err := net.provisionNodeIdentity(computeDir, seed)
+	publicKey, err := net.provisionNodeIdentity(computeDir, seed, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/compute: failed to provision node identity")
 	}

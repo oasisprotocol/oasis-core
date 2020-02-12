@@ -112,7 +112,7 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 		)
 		return nil, fmt.Errorf("oasis/sentry: failed to create sentry file signer: %w", err)
 	}
-	sentryIdentity, err := identity.LoadOrGenerate(sentryDir.String(), signerFactory)
+	sentryIdentity, err := identity.LoadOrGenerate(sentryDir.String(), signerFactory, true)
 	if err != nil {
 		net.logger.Error("failed to provision sentry identity",
 			"err", err,

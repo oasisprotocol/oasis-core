@@ -29,9 +29,19 @@ func (ap AccessPolicy) AddRulesForCommittee(policy *accessctl.Policy, committee 
 			continue
 		}
 
+		// Allow the node to perform actions from the given access policy.
 		subject := accessctl.SubjectFromDER(node.Committee.Certificate)
 		for _, action := range ap.Actions {
 			policy.Allow(subject, action)
+		}
+
+		// Make sure to also allow the node to perform actions after it has
+		// rotated its TLS certificates.
+		if node.Committee.NextCertificate != nil {
+			subject := accessctl.SubjectFromDER(node.Committee.NextCertificate)
+			for _, action := range ap.Actions {
+				policy.Allow(subject, action)
+			}
 		}
 	}
 }
@@ -58,7 +68,15 @@ func (ap AccessPolicy) AddRulesForNodeRoles(
 			for _, action := range ap.Actions {
 				policy.Allow(subject, action)
 			}
-		}
 
+			// Make sure to also allow the node to perform actions after is has
+			// rotated its TLS certificates.
+			if n.Committee.NextCertificate != nil {
+				subject := accessctl.SubjectFromDER(n.Committee.NextCertificate)
+				for _, action := range ap.Actions {
+					policy.Allow(subject, action)
+				}
+			}
+		}
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 )
@@ -50,9 +51,10 @@ func NewServerTCP(cert *tls.Certificate, installWrapper bool) (*cmnGrpc.Server, 
 	config := &cmnGrpc.ServerConfig{
 		Name:           "internal",
 		Port:           uint16(viper.GetInt(CfgServerPort)),
-		Certificate:    cert,
+		Identity:       &identity.Identity{},
 		InstallWrapper: installWrapper,
 	}
+	config.Identity.SetTLSCertificate(cert)
 	return cmnGrpc.NewServer(config)
 }
 

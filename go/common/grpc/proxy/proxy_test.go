@@ -17,6 +17,7 @@ import (
 	commonGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
 	cmnTesting "github.com/oasislabs/oasis-core/go/common/grpc/testing"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 )
 
 const (
@@ -58,9 +59,10 @@ func TestGRPCProxy(t *testing.T) {
 	serverConfig := &commonGrpc.ServerConfig{
 		Name:          host,
 		Port:          port,
-		Certificate:   serverTLSCert,
+		Identity:      &identity.Identity{},
 		CustomOptions: []grpc.ServerOption{grpc.CustomCodec(&commonGrpc.CBORCodec{})},
 	}
+	serverConfig.Identity.SetTLSCertificate(serverTLSCert)
 	grpcServer, err := commonGrpc.NewServer(serverConfig)
 	require.NoErrorf(err, "Failed to create a new gRPC server: %v", err)
 
@@ -84,14 +86,15 @@ func TestGRPCProxy(t *testing.T) {
 
 	// Create a proxy gRPC server.
 	proxyServerConfig := &commonGrpc.ServerConfig{
-		Name:        host,
-		Port:        port + 1,
-		Certificate: serverTLSCert,
+		Name:     host,
+		Port:     port + 1,
+		Identity: &identity.Identity{},
 		CustomOptions: []grpc.ServerOption{
 			// All unknown requests will be proxied to the grpc server above.
 			grpc.UnknownServiceHandler(Handler(conn)),
 		},
 	}
+	proxyServerConfig.Identity.SetTLSCertificate(serverTLSCert)
 	proxyGrpcServer, err := commonGrpc.NewServer(proxyServerConfig)
 	require.NoErrorf(err, "Failed to create a proxy gRPC server: %v", err)
 

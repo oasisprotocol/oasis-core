@@ -238,10 +238,16 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		return nil, errors.Wrap(err, "oasis/keymanager: failed to create keymanager subdir")
 	}
 
+	// If we're using sentry nodes, we need to have a static TLS certificate.
+	var persistTLS bool
+	if len(cfg.SentryIndices) > 0 {
+		persistTLS = true
+	}
+
 	// Pre-provision the node identity so that we can update the entity.
 	// TODO: Use proper key manager index when multiple key managers are supported.
 	seed := fmt.Sprintf(keymanagerIdentitySeedTemplate, 0)
-	publicKey, err := net.provisionNodeIdentity(kmDir, seed)
+	publicKey, err := net.provisionNodeIdentity(kmDir, seed, persistTLS)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/keymanager: failed to provision node identity")
 	}

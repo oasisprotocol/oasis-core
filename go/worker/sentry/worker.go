@@ -120,9 +120,9 @@ func New(backend api.Backend, identity *identity.Identity) (*Worker, error) {
 
 	if w.enabled {
 		grpcServer, err := grpc.NewServer(&grpc.ServerConfig{
-			Name:        "sentry",
-			Port:        uint16(viper.GetInt(CfgControlPort)),
-			Certificate: identity.TLSCertificate,
+			Name:     "sentry",
+			Port:     uint16(viper.GetInt(CfgControlPort)),
+			Identity: identity,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("worker/sentry: failed to create a new gRPC server: %w", err)

@@ -61,6 +61,7 @@ func initConnection(ident *identity.Identity) (*upstreamConn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse address: %s: %w", addr, err)
 	}
+
 	upstreamCerts, err := configparser.ParseCertificateFiles([]string{certFile})
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse certificate file %s: %w", certFile, err)
@@ -71,9 +72,11 @@ func initConnection(ident *identity.Identity) (*upstreamConn, error) {
 		certPool.AddCert(cert)
 	}
 	creds := credentials.NewTLS(&tlsPkg.Config{
-		Certificates: []tlsPkg.Certificate{*ident.TLSCertificate},
-		RootCAs:      certPool,
-		ServerName:   identity.CommonName,
+		RootCAs:    certPool,
+		ServerName: identity.CommonName,
+		GetClientCertificate: func(cri *tlsPkg.CertificateRequestInfo) (*tlsPkg.Certificate, error) {
+			return ident.GetTLSCertificate(), nil
+		},
 	})
 
 	// Dial node
@@ -131,10 +134,10 @@ func New(identity *identity.Identity) (*Worker, error) {
 
 		// Create externally-accessible proxy gRPC server.
 		serverConfig := &cmnGrpc.ServerConfig{
-			Name:        "sentry-grpc",
-			Port:        uint16(viper.GetInt(CfgClientPort)),
-			Certificate: identity.TLSCertificate,
-			AuthFunc:    g.authFunction(),
+			Name:     "sentry-grpc",
+			Port:     uint16(viper.GetInt(CfgClientPort)),
+			Identity: identity,
+			AuthFunc: g.authFunction(),
 			CustomOptions: []grpc.ServerOption{
 				// All unknown requests will be proxied to the upstream grpc server.
 				grpc.UnknownServiceHandler(proxy.Handler(upstreamConn.conn)),

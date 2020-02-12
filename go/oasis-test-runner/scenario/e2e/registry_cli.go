@@ -496,6 +496,7 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 	// Replace our testNode fields with the generated one, so we can just marshal both nodes and compare the output afterwards.
 	testNode.ID = n.ID
 	testNode.Committee.Certificate = n.Committee.Certificate
+	testNode.Committee.NextCertificate = n.Committee.NextCertificate
 	testNode.P2P.ID = n.P2P.ID
 	testNode.Consensus.ID = n.Consensus.ID
 	for idx := range testNode.Committee.Addresses {
@@ -517,6 +518,15 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 	if err != nil {
 		return nil, err
 	}
+
+	// TLS certificates are regenerated each time, so replace them with new ones.
+	testNode.Committee.Certificate = n.Committee.Certificate
+	testNode.Committee.NextCertificate = n.Committee.NextCertificate
+	for idx := range testNode.Committee.Addresses {
+		testNode.Committee.Addresses[idx].Certificate = n.Committee.Certificate
+	}
+	testNodeStr, _ = json.Marshal(testNode)
+
 	nStr, _ = json.Marshal(n)
 	if !bytes.Equal(nStr, testNodeStr) {
 		return nil, fmt.Errorf("second run test node mismatch! Original node: %s, imported node: %s", testNodeStr, nStr)
