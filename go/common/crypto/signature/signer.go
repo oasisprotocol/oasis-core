@@ -176,7 +176,8 @@ type Signer interface {
 	Reset()
 }
 
-// UnsafeSigner is a Signer that also supports access to the raw private key.
+// UnsafeSigner is a Signer that also supports access to the raw private key,
+// primarily for testing.
 type UnsafeSigner interface {
 	Signer
 
