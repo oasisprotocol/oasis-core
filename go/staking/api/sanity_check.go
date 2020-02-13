@@ -189,16 +189,24 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocycl
 	}
 
 	// All shares of all delegations for a given account must add up to account's Escrow.Active.TotalShares.
-	for acct, delegations := range g.Delegations {
-		err := SanityCheckDelegations(g.Ledger[acct], delegations)
+	for acctID, delegations := range g.Delegations {
+		acct := g.Ledger[acctID]
+		if acct == nil {
+			return fmt.Errorf("staking: sanity check failed: delegation specified for a nonexisting account with ID: %v", acctID)
+		}
+		err := SanityCheckDelegations(acct, delegations)
 		if err != nil {
 			return err
 		}
 	}
 
 	// All shares of all debonding delegations for a given account must add up to account's Escrow.Debonding.TotalShares.
-	for acct, delegations := range g.DebondingDelegations {
-		err := SanityCheckDebondingDelegations(g.Ledger[acct], delegations)
+	for acctID, delegations := range g.DebondingDelegations {
+		acct := g.Ledger[acctID]
+		if acct == nil {
+			return fmt.Errorf("staking: sanity check failed: debonding delegation specified for a nonexisting account with ID: %v", acctID)
+		}
+		err := SanityCheckDebondingDelegations(acct, delegations)
 		if err != nil {
 			return err
 		}
