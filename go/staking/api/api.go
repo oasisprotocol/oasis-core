@@ -414,8 +414,9 @@ func (sa *StakeAccumulator) TotalClaims(thresholds map[ThresholdKind]quantity.Qu
 
 // GeneralAccount is a general-purpose account.
 type GeneralAccount struct {
-	Balance quantity.Quantity `json:"balance"`
-	Nonce   uint64            `json:"nonce"`
+	Balance            quantity.Quantity   `json:"balance"`
+	Nonce              uint64              `json:"nonce"`
+	TransfersNotBefore epochtime.EpochTime `json:"transfers_not_before,omitempty"`
 }
 
 // EscrowAccount is an escrow account the balance of which is subject to
