@@ -32,6 +32,9 @@ var (
 	// DBProvider is a DBProvider to be used when initializing
 	// a tendermint node.
 	DBProvider node.DBProvider = badgerDBProvider
+
+	dbVersionStart = []byte{dbVersion}
+	dbVersionEnd   = []byte{dbVersion + 1}
 )
 
 func badgerDBProvider(ctx *node.DBContext) (dbm.DB, error) {
@@ -248,60 +251,42 @@ func (d *badgerDBImpl) newIterator(start, end []byte, isForward bool) dbm.Iterat
 	// TODO/perf:
 	//  * opts.Prefix is likely worth setting, but maybe the tendermint
 	//    semantics can't be implemented.
+	opts.Prefix = dbVersionStart
 
 	tx := d.db.NewTransaction(false)
 	it := &badgerDBIterator{
-		db:    d,
-		tx:    tx,
-		iter:  tx.NewIterator(opts),
-		start: start,
-		end:   end,
+		db:        d,
+		tx:        tx,
+		iter:      tx.NewIterator(opts),
+		start:     start,
+		end:       end,
+		isForward: isForward,
+	}
+
+	if start == nil {
+		it.dbStart = dbVersionStart
+	} else {
+		it.dbStart = toDBKey(start)
+	}
+	if end == nil {
+		it.dbEnd = dbVersionEnd
+	} else {
+		it.dbEnd = toDBKey(end)
 	}
 
 	// Seek to the first applicable key/value pair.
 	switch isForward {
 	case true:
-		if start == nil {
-			it.iter.Rewind()
-		} else {
-			it.iter.Seek(toDBKey(start))
-		}
+		it.iter.Seek(it.dbStart)
 	case false:
-		if end == nil {
-			it.iter.Rewind()
-		} else {
-			it.iter.Seek(toDBKey(end))
-			if it.iter.Valid() {
-				item := it.iter.Item()
-				if bytes.Compare(end, fromDBKeyNoCopy(item.Key())) <= 0 {
-					it.iter.Next()
-				}
-			} else {
-				it.iter.Rewind()
+		it.iter.Seek(it.dbEnd)
+		if it.iter.Valid() {
+			item := it.iter.Item()
+			if bytes.Equal(it.dbEnd, item.Key()) {
+				it.iter.Next()
 			}
 		}
 	}
-
-	// Well, iterator starts off empty.
-	if !it.iter.Valid() {
-		it.Close()
-		return it
-	}
-
-	// There is a k/v pair at the start.
-	it.isValid = true
-	item := it.iter.Item()
-	k := fromDBKeyNoCopy(item.KeyCopy(nil))
-	if dbm.IsKeyInDomain(k, start, end) {
-		// First key is in the domain.
-		it.current.item = item
-		it.current.key = k
-		return it
-	}
-
-	// First key isn't in the domain, seek till we are in the appropriate
-	// range.
-	it.Next()
 
 	return it
 }
@@ -311,13 +296,10 @@ type badgerDBIterator struct {
 	tx   *badger.Txn
 	iter *badger.Iterator
 
-	current struct {
-		item       *badger.Item
-		key, value []byte
-	}
-
 	start, end []byte
-	isValid    bool
+	// Version-prefixed fences for simple bounds checks.
+	dbStart, dbEnd []byte
+	isForward      bool
 }
 
 func (it *badgerDBIterator) Domain() ([]byte, []byte) {
@@ -325,12 +307,23 @@ func (it *badgerDBIterator) Domain() ([]byte, []byte) {
 }
 
 func (it *badgerDBIterator) Valid() bool {
-	// Might as well be sure.
 	if it.iter != nil && !it.iter.Valid() {
-		it.Close()
+		return false
 	}
 
-	return it.isValid
+	dbKey := it.iter.Item().Key()
+	switch it.isForward {
+	case true:
+		if bytes.Compare(it.dbEnd, dbKey) <= 0 {
+			return false
+		}
+	case false:
+		if bytes.Compare(dbKey, it.dbStart) < 0 {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (it *badgerDBIterator) Next() {
@@ -338,23 +331,7 @@ func (it *badgerDBIterator) Next() {
 		panic("Next with invalid iterator")
 	}
 
-	for {
-		it.iter.Next()
-		if !it.iter.Valid() {
-			break
-		}
-
-		item := it.iter.Item()
-		k := fromDBKeyNoCopy(item.KeyCopy(nil))
-		if dbm.IsKeyInDomain(k, it.start, it.end) {
-			it.current.item = item
-			it.current.key = k
-			it.current.value = nil // Copy done on access.
-			return
-		}
-	}
-
-	it.Close()
+	it.iter.Next()
 }
 
 func (it *badgerDBIterator) Key() []byte {
@@ -362,8 +339,8 @@ func (it *badgerDBIterator) Key() []byte {
 		panic("Key with invalid iterator")
 	}
 
-	// TODO/perf: Technically don't need a copy for safety.
-	return append([]byte{}, it.current.key...)
+	item := it.iter.Item()
+	return fromDBKeyNoCopy(item.KeyCopy(nil))
 }
 
 func (it *badgerDBIterator) Value() []byte {
@@ -371,21 +348,16 @@ func (it *badgerDBIterator) Value() []byte {
 		panic("Value with invalid iterator")
 	}
 
-	if it.current.value == nil {
-		if err := it.current.item.Value(func(val []byte) error {
-			it.current.value = append([]byte{}, val...)
-			return nil
-		}); err != nil {
-			it.db.logger.Error("failed to retrieve/decompress iterator value",
-				"err", err,
-				"key", string(it.current.key),
-			)
-			panic(err)
-		}
+	item := it.iter.Item()
+	value, err := item.ValueCopy(nil)
+	if err != nil {
+		it.db.logger.Error("failed to retrieve/decompress iterator value",
+			"err", err,
+			"key", string(fromDBKeyNoCopy(item.KeyCopy(nil))),
+		)
+		panic(err)
 	}
-
-	// TODO/perf: Technically don't need a copy for safety.
-	return append([]byte{}, it.current.value...)
+	return value
 }
 
 func (it *badgerDBIterator) Close() {
@@ -395,9 +367,7 @@ func (it *badgerDBIterator) Close() {
 
 		it.tx = nil
 		it.iter = nil
-		it.current.item = nil
 	}
-	it.isValid = false
 }
 
 type setDeleter interface {

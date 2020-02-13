@@ -158,6 +158,17 @@ func testIterator(t *testing.T, db dbm.DB) {
 	}
 	require.False(t, revSubIter.Valid(), "Rev[tail]: Valid(), skip")
 
+	// Traverse backward (subset, inexact end).
+	revSubIEIter := db.ReverseIterator([]byte("a"), []byte("ad"))
+	for i := subEnd - 1; i >= subStart; i-- { // End is exclusive (v0.27.0)
+		ent := entries[i]
+		require.True(t, revSubIEIter.Valid(), "RevSubIE[%d]: Valid(), skip", i)
+		require.EqualValues(t, ent.key, revSubIEIter.Key(), "RevSubIE[%d]: Key(), skip", i)
+		require.EqualValues(t, ent.value, revSubIEIter.Value(), "RevSubIE[%d]: Value(), skip", i)
+		revSubIEIter.Next()
+	}
+	require.False(t, revSubIEIter.Valid(), "RevSubIE[tail]: Valid(), skip")
+
 	// Deliberately leave revSubIter un-Close()ed, to test that the
 	// Next() call that invalidated the iterator cleans everything up.
 	//
