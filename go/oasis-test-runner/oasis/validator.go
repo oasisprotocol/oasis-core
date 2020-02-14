@@ -169,8 +169,9 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/validator: failed to provision node identity")
 	}
-	val.tmAddress = crypto.PublicKeyToTendermint(&valPublicKey).Address().String()
-	if err = cfg.Entity.addNode(valPublicKey); err != nil {
+	copy(val.NodeID[:], valPublicKey[:])
+	val.tmAddress = crypto.PublicKeyToTendermint(&val.NodeID).Address().String()
+	if err = cfg.Entity.addNode(val.NodeID); err != nil {
 		return nil, err
 	}
 

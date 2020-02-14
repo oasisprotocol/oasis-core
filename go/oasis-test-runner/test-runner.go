@@ -60,6 +60,9 @@ func main() {
 	// Transaction source test.
 	_ = cmd.Register(e2e.TxSourceTransferShort)
 	_ = cmd.RegisterNondefault(e2e.TxSourceTransfer)
+	// Node upgrade tests.
+	_ = cmd.Register(e2e.NodeUpgrade)
+	_ = cmd.Register(e2e.NodeUpgradeCancel)
 
 	// Execute the command, now that everything has been initialized.
 	cmd.Execute()

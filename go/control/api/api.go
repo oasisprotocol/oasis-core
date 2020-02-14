@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
 )
 
 // NodeController is a node controller interface.
@@ -23,12 +24,20 @@ type NodeController interface {
 	// IsSynced checks whether the node has finished syncing.
 	// TODO: These should be replaced with IsReady (see oasis-core#2130).
 	IsSynced(ctx context.Context) (bool, error)
+
+	// UpgradeBinary submits an upgrade descriptor to a running node.
+	// The node will wait for the appropriate epoch, then update its binaries
+	// and shut down.
+	UpgradeBinary(ctx context.Context, descriptor *upgrade.Descriptor) error
+
+	// CancelUpgrade cancels a pending upgrade, unless it is already in progress.
+	CancelUpgrade(ctx context.Context) error
 }
 
 // Shutdownable is an interface the node presents for shutting itself down.
 type Shutdownable interface {
 	// RequestShutdown is the method called by the control server to trigger node shutdown.
-	RequestShutdown() <-chan struct{}
+	RequestShutdown() (<-chan struct{}, error)
 }
 
 // DebugModuleName is the module name for the debug controller service.

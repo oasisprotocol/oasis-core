@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/file"
+	"github.com/oasislabs/oasis-core/go/upgrade"
 )
 
 type honestTendermint struct {
@@ -37,7 +38,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 	}
 	genesisDoc.SetChainContext()
 
-	ht.service, err = tendermint.New(context.Background(), dataDir, id, genesis)
+	ht.service, err = tendermint.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), genesis)
 	if err != nil {
 		return errors.Wrap(err, "tendermint New")
 	}

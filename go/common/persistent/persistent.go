@@ -105,6 +105,18 @@ func (ss *ServiceStore) PutCBOR(key []byte, value interface{}) error {
 	})
 }
 
+// Delete removes the specified key from the service store.
+func (ss *ServiceStore) Delete(key []byte) error {
+	return ss.store.db.Update(func(tx *badger.Txn) error {
+		switch err := tx.Delete(ss.dbKey(key)); err {
+		case badger.ErrKeyNotFound:
+			return ErrNotFound
+		default:
+			return err
+		}
+	})
+}
+
 func (ss *ServiceStore) dbKey(key []byte) []byte {
 	return bytes.Join([][]byte{ss.name, key}, []byte{'.'})
 }

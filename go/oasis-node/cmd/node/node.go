@@ -54,6 +54,8 @@ import (
 	stakingAPI "github.com/oasislabs/oasis-core/go/staking/api"
 	"github.com/oasislabs/oasis-core/go/storage"
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/upgrade"
+	upgradeAPI "github.com/oasislabs/oasis-core/go/upgrade/api"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
@@ -107,6 +109,7 @@ type Node struct {
 
 	Consensus consensusAPI.Backend
 
+	Upgrader   upgradeAPI.Backend
 	Genesis    genesisAPI.Provider
 	Identity   *identity.Identity
 	Beacon     beacon.Backend
@@ -136,6 +139,9 @@ type Node struct {
 // Cleanup cleans up after the node has terminated.
 func (n *Node) Cleanup() {
 	n.svcMgr.Cleanup()
+	if n.Upgrader != nil {
+		n.Upgrader.Close()
+	}
 	if n.commonStore != nil {
 		n.commonStore.Close()
 	}
@@ -155,13 +161,15 @@ func (n *Node) Wait() {
 	n.svcMgr.Wait()
 }
 
-func (n *Node) RequestShutdown() <-chan struct{} {
+func (n *Node) RequestShutdown() (<-chan struct{}, error) {
+	if err := n.RegistrationWorker.RequestDeregistration(); err != nil {
+		return nil, err
+	}
 	// This returns only the registration worker's event channel,
 	// otherwise the caller (usually the control grpc server) will only
 	// get notified once everything is already torn down - perhaps
 	// including the server.
-	n.RegistrationWorker.RequestDeregistration()
-	return n.RegistrationWorker.Quit()
+	return n.RegistrationWorker.Quit(), nil
 }
 
 func (n *Node) RegistrationStopped() {
@@ -507,6 +515,21 @@ func newNode(testNode bool) (*Node, error) {
 		return nil, err
 	}
 
+	// Initialize upgrader backend and check if we can even launch.
+	node.Upgrader, err = upgrade.New(node.commonStore, cmdCommon.DataDir())
+	if err != nil {
+		logger.Error("failed to initialize upgrade backend",
+			"err", err,
+		)
+		return nil, err
+	}
+	if err = node.Upgrader.StartupUpgrade(); err != nil {
+		logger.Error("error occurred during startup upgrade",
+			"err", err,
+		)
+		return nil, err
+	}
+
 	// Generate/Load the node identity.
 	// TODO/hsm: Configure factory dynamically.
 	signerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
@@ -591,7 +614,7 @@ func newNode(testNode bool) (*Node, error) {
 		node.svcMgr.Register(node.svcTmntSeed)
 	} else {
 		// Initialize Tendermint service.
-		node.svcTmnt, err = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Genesis)
+		node.svcTmnt, err = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Upgrader, node.Genesis)
 		if err != nil {
 			logger.Error("failed to initialize tendermint service",
 				"err", err,
@@ -719,7 +742,7 @@ func newNode(testNode bool) (*Node, error) {
 	}
 
 	// Initialize and start the node controller.
-	node.NodeController = control.New(node, node.Consensus)
+	node.NodeController = control.New(node, node.Consensus, node.Upgrader)
 	controlAPI.RegisterService(node.grpcInternal.Server(), node.NodeController)
 	if flags.DebugDontBlameOasis() {
 		// Initialize and start the debug controller if we are in debug mode.

@@ -171,6 +171,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		p2pPort:       net.nextNodePort + 2,
 	}
 	worker.doStartNode = worker.startNode
+	copy(worker.NodeID[:], publicKey[:])
 
 	net.storageWorkers = append(net.storageWorkers, worker)
 	net.nextNodePort += 3

@@ -50,7 +50,8 @@ const (
 
 // Node defines the common fields for all node types.
 type Node struct { // nolint: maligned
-	Name string
+	Name   string
+	NodeID signature.PublicKey
 
 	net *Network
 	dir *env.Dir
@@ -111,6 +112,17 @@ func (n *Node) Restart() error {
 		return err
 	}
 	return n.doStartNode()
+}
+
+// BinaryPath returns the path to the running node's process' image, or an empty string
+// if the node isn't running yet. This can be used as a replacement for NetworkCfg.NodeBinary
+// in cases where the test runner is actually using a wrapper to start the node.
+func (n Node) BinaryPath() string {
+	if n.cmd == nil || n.cmd.Process == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("/proc/%d/exe", n.cmd.Process.Pid)
 }
 
 // NodeCfg defines the common node configuration options.

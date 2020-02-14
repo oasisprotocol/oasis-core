@@ -27,6 +27,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
 )
 
 const (
@@ -264,12 +265,12 @@ func (a *ApplicationServer) EstimateGas(caller signature.PublicKey, tx *transact
 
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
-func NewApplicationServer(ctx context.Context, cfg *ApplicationConfig) (*ApplicationServer, error) {
+func NewApplicationServer(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationConfig) (*ApplicationServer, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(abciCollectors...)
 	})
 
-	mux, err := newABCIMux(ctx, cfg)
+	mux, err := newABCIMux(ctx, upgrader, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -284,8 +285,9 @@ type abciMux struct {
 	sync.RWMutex
 	types.BaseApplication
 
-	logger *logging.Logger
-	state  *applicationState
+	logger   *logging.Logger
+	upgrader upgrade.Backend
+	state    *applicationState
 
 	appsByName     map[string]Application
 	appsByMethod   map[transaction.MethodName]Application
@@ -457,6 +459,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 
 func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
 	blockHeight := mux.state.BlockHeight()
+
 	mux.logger.Debug("BeginBlock",
 		"req", req,
 		"block_height", blockHeight,
@@ -479,6 +482,21 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	// Create BeginBlock context.
 	ctx := mux.state.NewContext(ContextBeginBlock, mux.currentTime)
 	defer ctx.Close()
+
+	currentEpoch, err := mux.state.GetCurrentEpoch(ctx.Ctx())
+	if err != nil {
+		panic("mux: can't get current epoch in BeginBlock")
+	}
+
+	// Check if there are any upgrades pending or if we need to halt for an upgrade.
+	switch err = mux.upgrader.ConsensusUpgrade(ctx, currentEpoch, blockHeight); err {
+	case nil:
+		// Everything ok.
+	case upgrade.ErrStopForUpgrade:
+		panic("mux: reached upgrade epoch")
+	default:
+		panic(fmt.Sprintf("mux: error while trying to perform consensus upgrade: %v", err))
+	}
 
 	switch mux.state.haltMode {
 	case false:
@@ -867,7 +885,7 @@ func (mux *abciMux) checkDependencies() error {
 	return nil
 }
 
-func newABCIMux(ctx context.Context, cfg *ApplicationConfig) (*abciMux, error) {
+func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationConfig) (*abciMux, error) {
 	state, err := newApplicationState(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -875,6 +893,7 @@ func newABCIMux(ctx context.Context, cfg *ApplicationConfig) (*abciMux, error) {
 
 	mux := &abciMux{
 		logger:         logging.GetLogger("abci-mux"),
+		upgrader:       upgrader,
 		state:          state,
 		appsByName:     make(map[string]Application),
 		appsByMethod:   make(map[transaction.MethodName]Application),

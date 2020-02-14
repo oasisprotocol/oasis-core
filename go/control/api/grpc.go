@@ -6,6 +6,7 @@ import (
 	"google.golang.org/grpc"
 
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
+	upgradeApi "github.com/oasislabs/oasis-core/go/upgrade/api"
 )
 
 var (
@@ -18,6 +19,10 @@ var (
 	methodWaitSync = serviceName.NewMethod("WaitSync", nil)
 	// methodIsSynced is the IsSynced method.
 	methodIsSynced = serviceName.NewMethod("IsSynced", nil)
+	// methodUpgradeBinary is the UpgradeBinary method.
+	methodUpgradeBinary = serviceName.NewMethod("UpgradeBinary", upgradeApi.Descriptor{})
+	// methodCancelUpgrade is the CancelUpgrade method.
+	methodCancelUpgrade = serviceName.NewMethod("CancelUpgrade", nil)
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -35,6 +40,14 @@ var (
 			{
 				MethodName: methodIsSynced.ShortName(),
 				Handler:    handlerIsSynced,
+			},
+			{
+				MethodName: methodUpgradeBinary.ShortName(),
+				Handler:    handlerUpgradeBinary,
+			},
+			{
+				MethodName: methodCancelUpgrade.ShortName(),
+				Handler:    handlerCancelUpgrade,
 			},
 		},
 		Streams: []grpc.StreamDesc{},
@@ -102,6 +115,48 @@ func handlerIsSynced( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
+func handlerUpgradeBinary( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var descriptor upgradeApi.Descriptor
+	if err := dec(&descriptor); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return nil, srv.(NodeController).UpgradeBinary(ctx, &descriptor)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodUpgradeBinary.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, srv.(NodeController).UpgradeBinary(ctx, req.(*upgradeApi.Descriptor))
+	}
+	return interceptor(ctx, &descriptor, info, handler)
+}
+
+func handlerCancelUpgrade( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return nil, srv.(NodeController).CancelUpgrade(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodCancelUpgrade.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, srv.(NodeController).CancelUpgrade(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
+}
+
 // RegisterService registers a new node controller service with the given gRPC server.
 func RegisterService(server *grpc.Server, service NodeController) {
 	server.RegisterService(&serviceDesc, service)
@@ -125,6 +180,14 @@ func (c *nodeControllerClient) IsSynced(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return rsp, nil
+}
+
+func (c *nodeControllerClient) UpgradeBinary(ctx context.Context, descriptor *upgradeApi.Descriptor) error {
+	return c.conn.Invoke(ctx, methodUpgradeBinary.FullName(), descriptor, nil)
+}
+
+func (c *nodeControllerClient) CancelUpgrade(ctx context.Context) error {
+	return c.conn.Invoke(ctx, methodCancelUpgrade.FullName(), nil, nil)
 }
 
 // NewNodeControllerClient creates a new gRPC node controller client service.

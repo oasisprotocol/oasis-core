@@ -267,6 +267,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		workerClientPort: net.nextNodePort + 1,
 	}
 	km.doStartNode = km.startNode
+	copy(km.NodeID[:], publicKey[:])
 
 	net.keymanagers = append(net.keymanagers, km)
 	net.nextNodePort += 2
