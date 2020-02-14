@@ -21,6 +21,8 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
+var logger = logging.GetLogger("consensus/tendermint/seed")
+
 // SeedService is a Tendermint seed service.
 type SeedService struct {
 	addr      *p2p.NetAddress
@@ -169,7 +171,7 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, o
 		var tmvAddr *p2p.NetAddress
 		tmvAddr, err := api.NodeToP2PAddr(&openedNode)
 		if err != nil {
-			logging.GetLogger("seed").Error("tendermint/seed: failed to reformat genesis validator address",
+			logger.Error("failed to reformat genesis validator address",
 				"err", err,
 			)
 			continue
@@ -186,7 +188,7 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, o
 		addrBook.RemoveAddress(v)
 
 		if err := addrBook.AddAddress(v, ourAddr); err != nil {
-			logging.GetLogger("seed").Error("tendermint/seed: failed to add genesis validator to address book",
+			logger.Error("failed to add genesis validator to address book",
 				"err", err,
 			)
 		}
