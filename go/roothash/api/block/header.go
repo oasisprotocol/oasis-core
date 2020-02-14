@@ -105,6 +105,21 @@ func (h *Header) EncodedHash() hash.Hash {
 	return hh
 }
 
+// StorageRoots returns the storage roots contained in this header.
+func (h *Header) StorageRoots() (roots []storage.Root) {
+	for _, rootHash := range []hash.Hash{
+		h.IORoot,
+		h.StateRoot,
+	} {
+		roots = append(roots, storage.Root{
+			Namespace: h.Namespace,
+			Round:     h.Round,
+			Hash:      rootHash,
+		})
+	}
+	return
+}
+
 // RootsForStorageReceipt gets the merkle roots that must be part of
 // a storage receipt.
 func (h *Header) RootsForStorageReceipt() []hash.Hash {

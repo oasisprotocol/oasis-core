@@ -37,6 +37,7 @@ import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests"
 	"github.com/oasislabs/oasis-core/go/storage"
+	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	storageClientTests "github.com/oasislabs/oasis-core/go/storage/client/tests"
 	storageTests "github.com/oasislabs/oasis-core/go/storage/tests"
@@ -388,11 +389,13 @@ func testStorage(t *testing.T, node *testNode) {
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	storage, err := storage.New(context.Background(), dataDir, testRuntimeID, node.Identity, node.Consensus.Scheduler(), node.Consensus.Registry())
+	backend, err := storage.New(context.Background(), dataDir, testRuntimeID, node.Identity, node.Consensus.Scheduler(), node.Consensus.Registry())
 	require.NoError(t, err, "storage.New")
-	defer storage.Cleanup()
+	defer backend.Cleanup()
+	// We are always testing a local storage backend here.
+	localBackend := backend.(storageAPI.LocalBackend)
 
-	storageTests.StorageImplementationTests(t, storage, testRuntimeID, 0)
+	storageTests.StorageImplementationTests(t, localBackend, backend, testRuntimeID, 0)
 }
 
 func testRegistry(t *testing.T, node *testNode) {
@@ -462,6 +465,11 @@ func testClient(t *testing.T, node *testNode) {
 func testStorageClientWithNode(t *testing.T, node *testNode) {
 	ctx := context.Background()
 
+	// Get the local storage backend (the one that the client is connecting to).
+	rt, err := node.RuntimeRegistry.GetRuntime(testRuntimeID)
+	require.NoError(t, err, "GetRuntime")
+	localBackend := rt.Storage().(storageAPI.LocalBackend)
+
 	client, err := storageClient.NewStatic(ctx, testRuntimeID, node.Identity, node.Consensus.Registry(), node.Identity.NodeSigner.Public())
 	require.NoError(t, err, "NewStatic")
 
@@ -470,7 +478,7 @@ func testStorageClientWithNode(t *testing.T, node *testNode) {
 	blk, err := node.Consensus.RootHash().GetLatestBlock(ctx, testRuntimeID, consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetLatestBlock")
 
-	storageTests.StorageImplementationTests(t, client, testRuntimeID, blk.Header.Round+1)
+	storageTests.StorageImplementationTests(t, localBackend, client, testRuntimeID, blk.Header.Round+1)
 }
 
 func testStorageClientWithoutNode(t *testing.T, node *testNode) {

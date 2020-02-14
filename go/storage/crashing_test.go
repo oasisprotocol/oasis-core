@@ -40,6 +40,7 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 	realBackend, err := database.New(&cfg)
 	require.NoError(err, "database.New")
 	backend := newCrashingWrapper(realBackend)
+	localBackend := realBackend.(api.LocalBackend)
 
 	crash.Config(map[string]float64{
 		"storage.write.before": 0.0,
@@ -48,5 +49,5 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 		"storage.read.after":   0.0,
 	})
 
-	tests.StorageImplementationTests(t, backend, testNs, 0)
+	tests.StorageImplementationTests(t, localBackend, backend, testNs, 0)
 }

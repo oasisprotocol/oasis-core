@@ -9,6 +9,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
 	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
 	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
@@ -20,7 +21,7 @@ const (
 	ModuleName = "storage"
 
 	// WriteLogIteratorChunkSize defines the chunk size of write log entries
-	// for GetCheckpoint and GetDiff methods.
+	// for the GetDiff method.
 	WriteLogIteratorChunkSize = 10
 )
 
@@ -264,8 +265,7 @@ type SyncOptions struct {
 	Limit     uint64 `json:"limit"`
 }
 
-// SyncChunk is a chunk of write log entries sent during GetDiff and
-// GetCheckpoint operations.
+// SyncChunk is a chunk of write log entries sent during GetDiff operation.
 type SyncChunk struct {
 	Final    bool     `json:"final"`
 	WriteLog WriteLog `json:"writelog"`
@@ -278,15 +278,10 @@ type GetDiffRequest struct {
 	Options   SyncOptions `json:"options"`
 }
 
-// GetCheckpointRequest is a GetCheckpoint request.
-type GetCheckpointRequest struct {
-	Root    Root        `json:"root"`
-	Options SyncOptions `json:"options"`
-}
-
 // Backend is a storage backend implementation.
 type Backend interface {
 	syncer.ReadSyncer
+	checkpoint.ChunkProvider
 
 	// Apply applies a set of operations against the MKVS.  The root may refer
 	// to a nil node, in which case a new root will be created.
@@ -320,10 +315,6 @@ type Backend interface {
 	// to get from the first given root to the second one.
 	GetDiff(ctx context.Context, request *GetDiffRequest) (WriteLogIterator, error)
 
-	// GetCheckpoint returns an iterator of write log entries in the provided
-	// root.
-	GetCheckpoint(ctx context.Context, request *GetCheckpointRequest) (WriteLogIterator, error)
-
 	// Cleanup closes/cleans up the storage backend.
 	Cleanup()
 
@@ -348,6 +339,9 @@ type LocalBackend interface {
 	//
 	// Returns the number of pruned nodes.
 	Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error)
+
+	// Checkpointer returns the checkpoint creator/restorer for this storage backend.
+	Checkpointer() checkpoint.CreateRestorer
 }
 
 // ClientBackend is a storage client backend implementation.

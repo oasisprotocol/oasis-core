@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
 	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
 )
 
 var (
@@ -173,11 +175,18 @@ func (s *storageService) GetDiff(ctx context.Context, request *api.GetDiffReques
 	return s.storage.GetDiff(ctx, request)
 }
 
-func (s *storageService) GetCheckpoint(ctx context.Context, request *api.GetCheckpointRequest) (api.WriteLogIterator, error) {
+func (s *storageService) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
-	return s.storage.GetCheckpoint(ctx, request)
+	return s.storage.GetCheckpoints(ctx, request)
+}
+
+func (s *storageService) GetCheckpointChunk(ctx context.Context, chunk *checkpoint.ChunkMetadata, w io.Writer) error {
+	if err := s.ensureInitialized(ctx); err != nil {
+		return err
+	}
+	return s.storage.GetCheckpointChunk(ctx, chunk, w)
 }
 
 func (s *storageService) Cleanup() {

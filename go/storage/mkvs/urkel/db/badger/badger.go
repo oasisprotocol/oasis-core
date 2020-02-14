@@ -121,7 +121,6 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 		logger:    logging.GetLogger("urkel/db/badger"),
 		namespace: cfg.Namespace,
 	}
-	db.CheckpointableDB = api.NewCheckpointableDB(db)
 
 	opts := badger.DefaultOptions(cfg.DB)
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(db.logger))
@@ -146,8 +145,6 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 }
 
 type badgerNodeDB struct {
-	api.CheckpointableDB
-
 	logger *logging.Logger
 
 	namespace common.Namespace
@@ -748,7 +745,7 @@ func (d *badgerNodeDB) Prune(ctx context.Context, namespace common.Namespace, ro
 	return pruned, nil
 }
 
-func (d *badgerNodeDB) NewBatch(namespace common.Namespace, round uint64, oldRoot node.Root) api.Batch {
+func (d *badgerNodeDB) NewBatch(oldRoot node.Root, chunk bool) api.Batch {
 	// WARNING: There is a maximum batch size and maximum batch entry count.
 	// Both of these things are derived from the MaxTableSize option.
 	//
@@ -759,8 +756,8 @@ func (d *badgerNodeDB) NewBatch(namespace common.Namespace, round uint64, oldRoo
 	return &badgerBatch{
 		db:      d,
 		bat:     d.db.NewWriteBatch(),
-		round:   round,
 		oldRoot: oldRoot,
+		chunk:   chunk,
 	}
 }
 
@@ -825,8 +822,8 @@ type badgerBatch struct {
 	db  *badgerNodeDB
 	bat *badger.WriteBatch
 
-	round   uint64
 	oldRoot node.Root
+	chunk   bool
 
 	writeLog     writelog.WriteLog
 	annotations  writelog.Annotations
@@ -842,12 +839,20 @@ func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, depth node.Depth, 
 }
 
 func (ba *badgerBatch) PutWriteLog(writeLog writelog.WriteLog, annotations writelog.Annotations) error {
+	if ba.chunk {
+		return fmt.Errorf("urkel/db/badger: cannot put write log in chunk mode")
+	}
+
 	ba.writeLog = writeLog
 	ba.annotations = annotations
 	return nil
 }
 
 func (ba *badgerBatch) RemoveNodes(nodes []node.Node) error {
+	if ba.chunk {
+		return fmt.Errorf("urkel/db/badger: cannot remove nodes in chunk mode")
+	}
+
 	ba.removedNodes = nodes
 	return nil
 }
@@ -887,68 +892,80 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 		return errors.Wrap(err, "urkel/db/badger: set returned error")
 	}
 
-	// Update the root link for the old root.
-	if !ba.oldRoot.Hash.IsEmpty() {
-		if prevRound != ba.oldRoot.Round && ba.oldRoot.Round != root.Round {
-			return api.ErrPreviousRoundMismatch
-		}
-
-		key := rootLinkKeyFmt.Encode(ba.oldRoot.Round, &ba.oldRoot.Hash, &emptyHash)
-		_, err = tx.Get(key)
-		switch err {
-		case nil:
-		case badger.ErrKeyNotFound:
-			return api.ErrRootNotFound
-		default:
-			return err
-		}
-
-		key = rootLinkKeyFmt.Encode(ba.oldRoot.Round, &ba.oldRoot.Hash, &root.Hash)
-		if err = ba.bat.Set(key, []byte("")); err != nil {
+	if ba.chunk {
+		// Skip most of metadata updates if we are just importing chunks.
+		key := rootGcUpdatesKeyFmt.Encode(root.Round, &root.Hash)
+		if err = ba.bat.Set(key, cbor.Marshal(rootGcUpdates{})); err != nil {
 			return errors.Wrap(err, "urkel/db/badger: set returned error")
 		}
-	}
+		key = rootAddedNodesKeyFmt.Encode(root.Round, &root.Hash)
+		if err = ba.bat.Set(key, cbor.Marshal(rootAddedNodes{})); err != nil {
+			return errors.Wrap(err, "urkel/db/badger: set returned error")
+		}
+	} else {
+		// Update the root link for the old root.
+		if !ba.oldRoot.Hash.IsEmpty() {
+			if prevRound != ba.oldRoot.Round && ba.oldRoot.Round != root.Round {
+				return api.ErrPreviousRoundMismatch
+			}
 
-	// Mark removed nodes for garbage collection. Updates against the GC index
-	// are only applied in case this root is finalized.
-	var gcUpdates rootGcUpdates
-	for _, n := range ba.removedNodes {
-		// Node lives from the round it was created in up to the previous round.
-		//
-		// NOTE: The node will never be resurrected as the round number is part
-		//       of the node hash.
-		endRound := prevRound
-		if ba.oldRoot.Round == root.Round {
-			// If the previous root is in the same round, the node needs to end
-			// in the same round instead.
-			endRound = root.Round
+			key := rootLinkKeyFmt.Encode(ba.oldRoot.Round, &ba.oldRoot.Hash, &emptyHash)
+			_, err = tx.Get(key)
+			switch err {
+			case nil:
+			case badger.ErrKeyNotFound:
+				return api.ErrRootNotFound
+			default:
+				return err
+			}
+
+			key = rootLinkKeyFmt.Encode(ba.oldRoot.Round, &ba.oldRoot.Hash, &root.Hash)
+			if err = ba.bat.Set(key, []byte("")); err != nil {
+				return errors.Wrap(err, "urkel/db/badger: set returned error")
+			}
 		}
 
-		h := n.GetHash()
-		gcUpdates = append(gcUpdates, rootGcUpdate{
-			EndRound:   endRound,
-			StartRound: n.GetCreatedRound(),
-			Node:       h,
-		})
-	}
-	key := rootGcUpdatesKeyFmt.Encode(root.Round, &root.Hash)
-	if err = ba.bat.Set(key, cbor.Marshal(gcUpdates)); err != nil {
-		return errors.Wrap(err, "urkel/db/badger: set returned error")
-	}
+		// Mark removed nodes for garbage collection. Updates against the GC index
+		// are only applied in case this root is finalized.
+		var gcUpdates rootGcUpdates
+		for _, n := range ba.removedNodes {
+			// Node lives from the round it was created in up to the previous round.
+			//
+			// NOTE: The node will never be resurrected as the round number is part
+			//       of the node hash.
+			endRound := prevRound
+			if ba.oldRoot.Round == root.Round {
+				// If the previous root is in the same round, the node needs to end
+				// in the same round instead.
+				endRound = root.Round
+			}
 
-	// Store added nodes (only needed until the round is finalized).
-	key = rootAddedNodesKeyFmt.Encode(root.Round, &root.Hash)
-	if err = ba.bat.Set(key, cbor.Marshal(ba.addedNodes)); err != nil {
-		return errors.Wrap(err, "urkel/db/badger: set returned error")
-	}
+			h := n.GetHash()
+			gcUpdates = append(gcUpdates, rootGcUpdate{
+				EndRound:   endRound,
+				StartRound: n.GetCreatedRound(),
+				Node:       h,
+			})
+		}
+		key := rootGcUpdatesKeyFmt.Encode(root.Round, &root.Hash)
+		if err = ba.bat.Set(key, cbor.Marshal(gcUpdates)); err != nil {
+			return errors.Wrap(err, "urkel/db/badger: set returned error")
+		}
 
-	// Store write log.
-	if ba.writeLog != nil && ba.annotations != nil {
-		log := api.MakeHashedDBWriteLog(ba.writeLog, ba.annotations)
-		bytes := cbor.Marshal(log)
-		key := writeLogKeyFmt.Encode(root.Round, &root.Hash, &ba.oldRoot.Hash)
-		if err := ba.bat.Set(key, bytes); err != nil {
-			return errors.Wrap(err, "urkel/db/badger: set new write log returned error")
+		// Store added nodes (only needed until the round is finalized).
+		key = rootAddedNodesKeyFmt.Encode(root.Round, &root.Hash)
+		if err = ba.bat.Set(key, cbor.Marshal(ba.addedNodes)); err != nil {
+			return errors.Wrap(err, "urkel/db/badger: set returned error")
+		}
+
+		// Store write log.
+		if ba.writeLog != nil && ba.annotations != nil {
+			log := api.MakeHashedDBWriteLog(ba.writeLog, ba.annotations)
+			bytes := cbor.Marshal(log)
+			key := writeLogKeyFmt.Encode(root.Round, &root.Hash, &ba.oldRoot.Hash)
+			if err := ba.bat.Set(key, bytes); err != nil {
+				return errors.Wrap(err, "urkel/db/badger: set new write log returned error")
+			}
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	commonGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
@@ -316,6 +317,13 @@ func (args *argBuilder) workerStorageEnabled() *argBuilder {
 func (args *argBuilder) workerStorageDebugIgnoreApplies(ignore bool) *argBuilder {
 	if ignore {
 		args.vec = append(args.vec, "--"+workerStorage.CfgWorkerDebugIgnoreApply)
+	}
+	return args
+}
+
+func (args *argBuilder) workerStorageCheckpointCheckInterval(interval time.Duration) *argBuilder {
+	if interval > 0 {
+		args.vec = append(args.vec, "--"+workerStorage.CfgWorkerCheckpointCheckInterval, interval.String())
 	}
 	return args
 }

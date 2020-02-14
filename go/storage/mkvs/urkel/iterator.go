@@ -99,6 +99,8 @@ type Iterator interface {
 	// You must initialize the iterator with a WithProof option, otherwise
 	// calling this method will panic.
 	GetProof() (*syncer.Proof, error)
+	// GetProofBuilder returns the proof builder associated with this iterator.
+	GetProofBuilder() *syncer.ProofBuilder
 	// Close releases resources associated with the iterator.
 	//
 	// Not calling this method leads to memory leaks.
@@ -340,6 +342,10 @@ func (it *treeIterator) GetProof() (*syncer.Proof, error) {
 		panic("iterator: called GetProof on an iterator without WithProof option")
 	}
 	return it.proofBuilder.Build(it.ctx)
+}
+
+func (it *treeIterator) GetProofBuilder() *syncer.ProofBuilder {
+	return it.proofBuilder
 }
 
 func (it *treeIterator) Close() {

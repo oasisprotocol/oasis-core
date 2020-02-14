@@ -146,6 +146,15 @@ type StorageParameters struct {
 
 	// MaxApplyOps configures the maximum number of merge operations in a batch.
 	MaxMergeOps uint64 `json:"max_merge_ops"`
+
+	// CheckpointInterval is the expected runtime state checkpoint interval (in rounds).
+	CheckpointInterval uint64 `json:"checkpoint_interval"`
+
+	// CheckpointNumKept is the expected minimum number of checkpoints to keep.
+	CheckpointNumKept uint64 `json:"checkpoint_num_kept"`
+
+	// CheckpointChunkSize is the chunk size parameter for checkpoint creation.
+	CheckpointChunkSize uint64 `json:"checkpoint_chunk_size"`
 }
 
 // AnyNodeRuntimeAdmissionPolicy allows any node to register.

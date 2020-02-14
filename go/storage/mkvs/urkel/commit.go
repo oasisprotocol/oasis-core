@@ -52,7 +52,7 @@ func (t *Tree) commitWithHooks(
 		oldRoot.Round = round
 	}
 
-	batch := t.cache.db.NewBatch(namespace, round, oldRoot)
+	batch := t.cache.db.NewBatch(oldRoot, false)
 	defer batch.Reset()
 
 	subtree := batch.MaybeStartSubtree(nil, 0, t.cache.pendingRoot)

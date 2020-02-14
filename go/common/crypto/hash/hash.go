@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"hash"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 )
@@ -106,4 +107,28 @@ func (h *Hash) IsEmpty() bool {
 // String returns the string representation of a hash.
 func (h Hash) String() string {
 	return hex.EncodeToString(h[:])
+}
+
+// Builder is a hash builder that can be used to compute hashes iteratively.
+type Builder struct {
+	hasher hash.Hash
+}
+
+// Write adds more data to the running hash.
+// It never returns an error.
+func (b *Builder) Write(p []byte) (int, error) {
+	return b.hasher.Write(p)
+}
+
+// Build returns the current hash.
+// It does not change the underlying hash state.
+func (b *Builder) Build() (h Hash) {
+	sum := b.hasher.Sum([]byte{})
+	_ = h.UnmarshalBinary(sum[:])
+	return
+}
+
+// NewBuilder creates a new hash builder.
+func NewBuilder() *Builder {
+	return &Builder{hasher: sha512.New512_256()}
 }

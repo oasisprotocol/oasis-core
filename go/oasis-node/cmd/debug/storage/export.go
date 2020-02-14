@@ -22,6 +22,7 @@ import (
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	storageDatabase "github.com/oasislabs/oasis-core/go/storage/database"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
 )
 
 const cfgExportDir = "storage.export.dir"
@@ -98,26 +99,14 @@ func exportRuntime(dataDir, destDir string, id common.Namespace, rtg *registry.R
 	<-storageBackend.Initialized()
 	defer storageBackend.Cleanup()
 
-	// Get the checkpoint iterator.
 	root := storageAPI.Root{
 		Namespace: id,
 		Round:     rtg.Round,
 		Hash:      rtg.StateRoot,
 	}
-	it, err := storageBackend.GetCheckpoint(context.Background(),
-		&storageAPI.GetCheckpointRequest{
-			Root: root,
-		},
-	)
-	if err != nil {
-		logger.Error("failed getting checkpoint",
-			"err", err,
-			"namespace", root.Namespace,
-			"round", root.Round,
-			"root", root.Hash,
-		)
-		return err
-	}
+	tree := urkel.NewWithRoot(storageBackend, nil, root)
+	it := tree.NewIterator(context.Background(), urkel.IteratorPrefetch(10_000))
+	defer it.Close()
 
 	fn := fmt.Sprintf("storage-dump-%v-%d.json",
 		root.Namespace.String(),
@@ -127,7 +116,7 @@ func exportRuntime(dataDir, destDir string, id common.Namespace, rtg *registry.R
 	return exportIterator(fn, &root, it)
 }
 
-func exportIterator(fn string, root *storageAPI.Root, it storageAPI.WriteLogIterator) error {
+func exportIterator(fn string, root *storageAPI.Root, it urkel.Iterator) error {
 	// Create the dump file, and initialize a JSON stream encoder.
 	f, err := os.Create(fn)
 	if err != nil {
@@ -152,35 +141,18 @@ func exportIterator(fn string, root *storageAPI.Root, it storageAPI.WriteLogIter
 		return err
 	}
 
-	// Dump the write log.
-	for {
-		more, err := it.Next()
-		if err != nil {
-			logger.Error("failed to fetch next item from write log iterator",
-				"err", err,
-			)
-			return err
-		}
-
-		if !more {
-			return nil
-		}
-
-		val, err := it.Value()
-		if err != nil {
-			logger.Error("failed to get value from write log iterator",
-				"err", err,
-			)
-			return err
-		}
-
-		if err = enc.Encode([][]byte{val.Key, val.Value}); err != nil {
+	// Dump the tree.
+	for it.Rewind(); it.Valid(); it.Next() {
+		key, value := it.Key(), it.Value()
+		if err = enc.Encode([][]byte{key, value}); err != nil {
 			logger.Error("failed to encode write log entry",
 				"err", err,
 			)
 			return err
 		}
 	}
+
+	return nil
 }
 
 func newDirectStorageBackend(dataDir string, namespace common.Namespace) (storageAPI.Backend, error) {

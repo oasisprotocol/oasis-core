@@ -139,6 +139,9 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 			"--" + cmdRegRt.CfgStorageMaxApplyOps, strconv.FormatUint(cfg.Storage.MaxApplyOps, 10),
 			"--" + cmdRegRt.CfgStorageMaxMergeRoots, strconv.FormatUint(cfg.Storage.MaxMergeRoots, 10),
 			"--" + cmdRegRt.CfgStorageMaxMergeOps, strconv.FormatUint(cfg.Storage.MaxMergeOps, 10),
+			"--" + cmdRegRt.CfgStorageCheckpointInterval, strconv.FormatUint(cfg.Storage.CheckpointInterval, 10),
+			"--" + cmdRegRt.CfgStorageCheckpointNumKept, strconv.FormatUint(cfg.Storage.CheckpointNumKept, 10),
+			"--" + cmdRegRt.CfgStorageCheckpointChunkSize, strconv.FormatUint(cfg.Storage.CheckpointChunkSize, 10),
 		}...)
 
 		if cfg.GenesisState != "" {

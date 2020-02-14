@@ -3,6 +3,7 @@ package oasis
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -19,9 +20,11 @@ type Storage struct { // nolint: maligned
 
 	sentryIndices []int
 
-	backend       string
-	entity        *Entity
-	ignoreApplies bool
+	backend string
+	entity  *Entity
+
+	ignoreApplies           bool
+	checkpointCheckInterval time.Duration
 
 	tmAddress     string
 	consensusPort uint16
@@ -36,7 +39,9 @@ type StorageCfg struct { // nolint: maligned
 	SentryIndices []int
 	Backend       string
 	Entity        *Entity
-	IgnoreApplies bool
+
+	IgnoreApplies           bool
+	CheckpointCheckInterval time.Duration
 }
 
 // IdentityKeyPath returns the path to the node's identity key.
@@ -97,6 +102,7 @@ func (worker *Storage) startNode() error {
 		workerP2pPort(worker.p2pPort).
 		workerStorageEnabled().
 		workerStorageDebugIgnoreApplies(worker.ignoreApplies).
+		workerStorageCheckpointCheckInterval(worker.checkpointCheckInterval).
 		appendNetwork(worker.net).
 		appendSeedNodes(worker.net).
 		appendEntity(worker.entity)
@@ -161,14 +167,15 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			submissionGasPrice:                       cfg.SubmissionGasPrice,
 		},
-		backend:       cfg.Backend,
-		entity:        cfg.Entity,
-		sentryIndices: cfg.SentryIndices,
-		ignoreApplies: cfg.IgnoreApplies,
-		tmAddress:     crypto.PublicKeyToTendermint(&publicKey).Address().String(),
-		consensusPort: net.nextNodePort,
-		clientPort:    net.nextNodePort + 1,
-		p2pPort:       net.nextNodePort + 2,
+		backend:                 cfg.Backend,
+		entity:                  cfg.Entity,
+		sentryIndices:           cfg.SentryIndices,
+		ignoreApplies:           cfg.IgnoreApplies,
+		checkpointCheckInterval: cfg.CheckpointCheckInterval,
+		tmAddress:               crypto.PublicKeyToTendermint(&publicKey).Address().String(),
+		consensusPort:           net.nextNodePort,
+		clientPort:              net.nextNodePort + 1,
+		p2pPort:                 net.nextNodePort + 2,
 	}
 	worker.doStartNode = worker.startNode
 	copy(worker.NodeID[:], publicKey[:])

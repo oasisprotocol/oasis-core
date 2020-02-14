@@ -62,6 +62,9 @@ const (
 	CfgStorageMaxApplyOps             = "runtime.storage.max_apply_ops"
 	CfgStorageMaxMergeRoots           = "runtime.storage.max_merge_roots"
 	CfgStorageMaxMergeOps             = "runtime.storage.max_merge_ops"
+	CfgStorageCheckpointInterval      = "runtime.storage.checkpoint_interval"
+	CfgStorageCheckpointNumKept       = "runtime.storage.checkpoint_num_kept"
+	CfgStorageCheckpointChunkSize     = "runtime.storage.checkpoint_chunk_size"
 
 	// Transaction scheduler flags.
 	CfgTxnSchedulerGroupSize         = "runtime.txn_scheduler.group_size"
@@ -385,6 +388,9 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 			MaxApplyOps:             viper.GetUint64(CfgStorageMaxApplyOps),
 			MaxMergeRoots:           viper.GetUint64(CfgStorageMaxMergeRoots),
 			MaxMergeOps:             viper.GetUint64(CfgStorageMaxMergeOps),
+			CheckpointInterval:      viper.GetUint64(CfgStorageCheckpointInterval),
+			CheckpointNumKept:       viper.GetUint64(CfgStorageCheckpointNumKept),
+			CheckpointChunkSize:     viper.GetUint64(CfgStorageCheckpointChunkSize),
 		},
 	}
 	if teeHardware == node.TEEHardwareIntelSGX {
@@ -425,6 +431,11 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 			CfgAdmissionPolicy, sap,
 		)
 		return nil, nil, fmt.Errorf("invalid runtime admission policy")
+	}
+
+	// Validate storage configuration.
+	if err = registry.VerifyRegisterRuntimeStorageArgs(rt, logger); err != nil {
+		return nil, nil, fmt.Errorf("invalid runtime storage configuration: %w", err)
 	}
 
 	return rt, signer, nil
@@ -518,6 +529,9 @@ func init() {
 	runtimeFlags.Uint64(CfgStorageMaxApplyOps, 2, "Maximum number of apply operations in a batch")
 	runtimeFlags.Uint64(CfgStorageMaxMergeRoots, 8, "Maximum number of merge roots")
 	runtimeFlags.Uint64(CfgStorageMaxMergeOps, 2, "Maximum number of merge operations in a batch")
+	runtimeFlags.Uint64(CfgStorageCheckpointInterval, 0, "Storage checkpoint interval (in rounds)")
+	runtimeFlags.Uint64(CfgStorageCheckpointNumKept, 0, "Number of storage checkpoints to keep")
+	runtimeFlags.Uint64(CfgStorageCheckpointChunkSize, 0, "Storage checkpoint chunk size")
 
 	// Init Admission policy flags.
 	runtimeFlags.String(CfgAdmissionPolicy, "", "What type of node admission policy to have")

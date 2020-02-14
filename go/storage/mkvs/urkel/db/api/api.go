@@ -66,11 +66,13 @@ type NodeDB interface {
 	// GetWriteLog retrieves a write log between two storage instances from the database.
 	GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (writelog.Iterator, error)
 
-	// GetCheckpoint retrieves a write log of entries in root.
-	GetCheckpoint(ctx context.Context, root node.Root) (writelog.Iterator, error)
-
 	// NewBatch starts a new batch.
-	NewBatch(namespace common.Namespace, round uint64, oldRoot node.Root) Batch
+	//
+	// The chunk argument specifies whether the given batch is being used to import a chunk of an
+	// existing root. Chunks may contain unresolved pointers (e.g., pointers that point to hashes
+	// which are not present in the database). Committing a chunk batch will prevent the round from
+	// being finalized.
+	NewBatch(oldRoot node.Root, chunk bool) Batch
 
 	// HasRoot checks whether the given root exists.
 	HasRoot(root node.Root) bool
@@ -166,10 +168,6 @@ func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoo
 	return nil, ErrWriteLogNotFound
 }
 
-func (d *nopNodeDB) GetCheckpoint(ctx context.Context, root node.Root) (writelog.Iterator, error) {
-	return nil, ErrWriteLogNotFound
-}
-
 func (d *nopNodeDB) HasRoot(root node.Root) bool {
 	return false
 }
@@ -191,7 +189,7 @@ type nopBatch struct {
 	BaseBatch
 }
 
-func (d *nopNodeDB) NewBatch(namespace common.Namespace, round uint64, oldRoot node.Root) Batch {
+func (d *nopNodeDB) NewBatch(oldRoot node.Root, chunk bool) Batch {
 	return &nopBatch{}
 }
 
@@ -223,69 +221,4 @@ func (s *nopSubtree) VisitCleanNode(depth node.Depth, ptr *node.Pointer) error {
 
 func (s *nopSubtree) Commit() error {
 	return nil
-}
-
-// CheckpointableDB encapsulates functionality of getting a checkpoint.
-type CheckpointableDB struct {
-	db NodeDB
-}
-
-// NewCheckpointableDB creates a new instance of CheckpoitableDb.
-func NewCheckpointableDB(db NodeDB) CheckpointableDB {
-	return CheckpointableDB{db: db}
-}
-
-// GetCheckpoint returns an iterator of write log entries in the provided
-func (b *CheckpointableDB) GetCheckpoint(ctx context.Context, root node.Root) (writelog.Iterator, error) {
-	if !b.db.HasRoot(root) {
-		return nil, ErrNodeNotFound
-	}
-	ptr := &node.Pointer{
-		Clean: true,
-		Hash:  root.Hash,
-	}
-	pipe := writelog.NewPipeIterator(ctx)
-	go func() {
-		defer pipe.Close()
-
-		b.getNodeWriteLog(ctx, &pipe, root, ptr)
-	}()
-
-	return &pipe, nil
-}
-
-func (b *CheckpointableDB) getNodeWriteLog(ctx context.Context, pipe *writelog.PipeIterator, root node.Root, ptr *node.Pointer) {
-	select {
-	case <-ctx.Done():
-		return
-	default:
-	}
-
-	nod, err := b.db.GetNode(root, ptr)
-	if err != nil {
-		_ = pipe.PutError(err)
-		return
-	}
-	switch n := nod.(type) {
-	case *node.LeafNode:
-		entry := writelog.LogEntry{
-			Key:   n.Key[:],
-			Value: n.Value[:],
-		}
-		if err := pipe.Put(&entry); err != nil {
-			_ = pipe.PutError(err)
-		}
-	case *node.InternalNode:
-		if n.LeafNode != nil {
-			b.getNodeWriteLog(ctx, pipe, root, n.LeafNode)
-		}
-		if n.Left != nil {
-			b.getNodeWriteLog(ctx, pipe, root, n.Left)
-		}
-		if n.Right != nil {
-			b.getNodeWriteLog(ctx, pipe, root, n.Right)
-		}
-	default:
-		panic("urkel/db/CheckpoitableDB: invalid root node type")
-	}
 }

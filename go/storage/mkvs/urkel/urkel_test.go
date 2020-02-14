@@ -939,7 +939,7 @@ func testOnCommitHooks(t *testing.T, ndb db.NodeDB) {
 		Hash:      emptyRoot,
 	}
 
-	batch := ndb.NewBatch(testNs, 0, root)
+	batch := ndb.NewBatch(root, false)
 	defer batch.Reset()
 
 	var calls []int

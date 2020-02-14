@@ -5,11 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"path/filepath"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
 	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
 	badgerNodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
 )
@@ -20,6 +23,8 @@ const (
 
 	// DBFileBadgerDB is the default BadgerDB backing store filename.
 	DBFileBadgerDB = "mkvs_storage.badger.db"
+
+	checkpointDir = "checkpoints"
 )
 
 // DefaultFileName returns the default database filename for the specified
@@ -34,8 +39,9 @@ func DefaultFileName(backend string) string {
 }
 
 type databaseBackend struct {
-	nodedb    nodedb.NodeDB
-	rootCache *api.RootCache
+	nodedb       nodedb.NodeDB
+	checkpointer checkpoint.CreateRestorer
+	rootCache    *api.RootCache
 
 	signer signature.Signer
 	initCh chan struct{}
@@ -65,15 +71,28 @@ func New(cfg *api.Config) (api.Backend, error) {
 		return nil, fmt.Errorf("storage/database: failed to create root cache: %w", err)
 	}
 
-	// Satisfy the interface....
+	// Satisfy the interface.
 	initCh := make(chan struct{})
 	close(initCh)
 
+	// Create the checkpointer.
+	creator, err := checkpoint.NewFileCreator(filepath.Join(cfg.DB, checkpointDir), ndb)
+	if err != nil {
+		ndb.Close()
+		return nil, fmt.Errorf("storage/database: failed to create checkpoint creator: %w", err)
+	}
+	restorer, err := checkpoint.NewRestorer(ndb)
+	if err != nil {
+		ndb.Close()
+		return nil, fmt.Errorf("storage/database: failed to create checkpoint restorer: %w", err)
+	}
+
 	return &databaseBackend{
-		nodedb:    ndb,
-		rootCache: rootCache,
-		signer:    cfg.Signer,
-		initCh:    initCh,
+		nodedb:       ndb,
+		checkpointer: checkpoint.NewCreateRestorer(creator, restorer),
+		rootCache:    rootCache,
+		signer:       cfg.Signer,
+		initCh:       initCh,
 	}, nil
 }
 
@@ -175,8 +194,12 @@ func (ba *databaseBackend) GetDiff(ctx context.Context, request *api.GetDiffRequ
 	return ba.nodedb.GetWriteLog(ctx, request.StartRoot, request.EndRoot)
 }
 
-func (ba *databaseBackend) GetCheckpoint(ctx context.Context, request *api.GetCheckpointRequest) (api.WriteLogIterator, error) {
-	return ba.nodedb.GetCheckpoint(ctx, request.Root)
+func (ba *databaseBackend) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
+	return ba.checkpointer.GetCheckpoints(ctx, request)
+}
+
+func (ba *databaseBackend) GetCheckpointChunk(ctx context.Context, chunk *checkpoint.ChunkMetadata, w io.Writer) error {
+	return ba.checkpointer.GetCheckpointChunk(ctx, chunk, w)
 }
 
 func (ba *databaseBackend) HasRoot(root api.Root) bool {
@@ -189,4 +212,8 @@ func (ba *databaseBackend) Finalize(ctx context.Context, namespace common.Namesp
 
 func (ba *databaseBackend) Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error) {
 	return ba.nodedb.Prune(ctx, namespace, round)
+}
+
+func (ba *databaseBackend) Checkpointer() checkpoint.CreateRestorer {
+	return ba.checkpointer
 }

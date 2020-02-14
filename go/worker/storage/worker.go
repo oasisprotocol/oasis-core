@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"time"
 
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -30,6 +31,9 @@ const (
 	// CfgWorkerEnabled enables the storage worker.
 	CfgWorkerEnabled      = "worker.storage.enabled"
 	cfgWorkerFetcherCount = "worker.storage.fetcher_count"
+
+	// CfgWorkerCheckpointCheckInterval configures the checkpointer check interval.
+	CfgWorkerCheckpointCheckInterval = "worker.storage.checkpointer.check_interval"
 
 	// CfgWorkerDebugIgnoreApply is a debug option that makes the worker ignore
 	// all apply operations.
@@ -122,9 +126,13 @@ func New(
 			debugRejectUpdates: viper.GetBool(CfgWorkerDebugIgnoreApply) && flags.DebugDontBlameOasis(),
 		})
 
+		checkpointerCfg := committee.CheckpointerConfig{
+			CheckInterval: viper.GetDuration(CfgWorkerCheckpointCheckInterval),
+		}
+
 		// Start storage node for every runtime.
 		for _, rt := range s.commonWorker.GetRuntimes() {
-			if err := s.registerRuntime(rt); err != nil {
+			if err := s.registerRuntime(rt, checkpointerCfg); err != nil {
 				return nil, err
 			}
 		}
@@ -136,7 +144,7 @@ func New(
 	return s, nil
 }
 
-func (s *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
+func (s *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerCfg committee.CheckpointerConfig) error {
 	id := commonNode.Runtime.ID()
 	s.logger.Info("registering new runtime",
 		"runtime_id", id,
@@ -147,7 +155,7 @@ func (s *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
 
-	node, err := committee.NewNode(commonNode, s.grpcPolicy, s.fetchPool, s.watchState, rp, s.commonWorker.GetConfig())
+	node, err := committee.NewNode(commonNode, s.grpcPolicy, s.fetchPool, s.watchState, rp, s.commonWorker.GetConfig(), checkpointerCfg)
 	if err != nil {
 		return err
 	}
@@ -302,6 +310,7 @@ func (s *Worker) initGenesis(gen *genesis.Document) error {
 func init() {
 	Flags.Bool(CfgWorkerEnabled, false, "Enable storage worker")
 	Flags.Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
+	Flags.Duration(CfgWorkerCheckpointCheckInterval, 1*time.Minute, "Storage checkpointer check interval")
 
 	Flags.Bool(CfgWorkerDebugIgnoreApply, false, "Ignore Apply operations (for debugging purposes)")
 	_ = Flags.MarkHidden(CfgWorkerDebugIgnoreApply)

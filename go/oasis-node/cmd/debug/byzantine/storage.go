@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"io"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -19,6 +20,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
 )
 
@@ -119,8 +121,12 @@ func (hns *honestNodeStorage) GetDiff(ctx context.Context, request *storage.GetD
 	return hns.client.GetDiff(ctx, request)
 }
 
-func (hns *honestNodeStorage) GetCheckpoint(ctx context.Context, request *storage.GetCheckpointRequest) (storage.WriteLogIterator, error) {
-	return hns.client.GetCheckpoint(ctx, request)
+func (hns *honestNodeStorage) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
+	return hns.client.GetCheckpoints(ctx, request)
+}
+
+func (hns *honestNodeStorage) GetCheckpointChunk(ctx context.Context, chunk *checkpoint.ChunkMetadata, w io.Writer) error {
+	return hns.client.GetCheckpointChunk(ctx, chunk, w)
 }
 
 func (hns *honestNodeStorage) Cleanup() {
