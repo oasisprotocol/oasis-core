@@ -1,22 +1,28 @@
 package staking
 
 import (
+	"fmt"
+
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-func isTransferPermitted(params *staking.ConsensusParameters, fromID signature.PublicKey) (permitted bool) {
+func isTransferPermitted(params *staking.ConsensusParameters, fromID signature.PublicKey, from *staking.Account, epoch epochtime.EpochTime) (permitted bool) {
 	permitted = true
 	if params.DisableTransfers {
 		permitted = false
 		if params.UndisableTransfersFrom != nil && params.UndisableTransfersFrom[fromID] {
 			permitted = true
 		}
+	}
+	if epoch < from.General.TransfersNotBefore {
+		permitted = false
 	}
 	return
 }
@@ -31,16 +37,19 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 	if err != nil {
 		return err
 	}
-	if err := ctx.Gas().UseGas(1, staking.GasOpTransfer, params.GasCosts); err != nil {
+	if err = ctx.Gas().UseGas(1, staking.GasOpTransfer, params.GasCosts); err != nil {
 		return err
 	}
 
 	fromID := ctx.TxSigner()
-	if !isTransferPermitted(params, fromID) {
+	epoch, err := app.state.GetCurrentEpoch(ctx.Ctx())
+	if err != nil {
+		return fmt.Errorf("getting current epoch: %w", err)
+	}
+	from := state.Account(fromID)
+	if !isTransferPermitted(params, fromID, from, epoch) {
 		return staking.ErrForbidden
 	}
-
-	from := state.Account(fromID)
 
 	if fromID.Equal(xfer.To) {
 		// Handle transfer to self as just a balance check.
