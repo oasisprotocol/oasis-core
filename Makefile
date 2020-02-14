@@ -18,12 +18,15 @@ build-tools:
 	@# Suppress "binary already exists" error by redirecting stderr and stdout to /dev/null.
 	@cargo install --path tools >/dev/null 2>&1 || true
 
+# NOTE: We epxplictly set target-dir as a workaround to avoid recompilations in
+#       newer cargo nightly builds.
+#       See https://github.com/oasislabs/oasis-core/pull/2673 for details.
 build-runtimes:
 	@for e in $(RUNTIMES); do \
 		$(ECHO) "$(MAGENTA)*** Building runtime: $$e...$(OFF)"; \
 		(cd $$e && \
-			cargo build --target x86_64-fortanix-unknown-sgx && \
-			cargo build && \
+			cargo build --target-dir target/x86_64-fortanix-unknown-sgx --target x86_64-fortanix-unknown-sgx && \
+			cargo build --target-dir target/default && \
 			cargo elf2sgxs \
 		) || exit 1; \
 	done
