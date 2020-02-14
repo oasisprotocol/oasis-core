@@ -108,7 +108,9 @@ clean-targets := clean-runtimes clean-rust clean-go clean-version-files
 clean-runtimes:
 	@$(ECHO) "$(CYAN)*** Cleaning up runtimes...$(OFF)"
 	@for e in $(RUNTIMES); do \
-		(cd $$e && cargo clean) || exit 1; \
+		(cd $$e && \
+			CARGO_TARGET_DIR=target/default cargo clean && \
+			CARGO_TARGET_DIR=target/x86_64-fortanix-unknown-sgx cargo clean) || exit 1; \
 	done
 
 clean-rust:
