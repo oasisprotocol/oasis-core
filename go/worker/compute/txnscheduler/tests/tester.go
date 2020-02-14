@@ -95,7 +95,8 @@ func testQueueCall(
 
 	// Queue a test call.
 	testCall := []byte("hello world")
-	err = rtNode.QueueCall(context.Background(), testCall)
+	testEpochNumber := epochtime.EpochTime(2)
+	err = rtNode.QueueCall(context.Background(), testEpochNumber, testCall)
 	require.NoError(t, err, "QueueCall")
 
 	// Node should transition to WaitingForFinalize state.

@@ -307,14 +307,14 @@ func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
 	<-node.RegistrationWorker.Quit()
 
 	// Subscribe to node deregistration event.
-	nodeCh, sub, err := node.Node.Registry.WatchNodes(context.Background())
+	nodeCh, sub, err := node.Node.Consensus.Registry().WatchNodes(context.Background())
 	require.NoError(t, err, "WatchNodes")
 	defer sub.Close()
 
 	// Perform an epoch transition to expire the node as otherwise there is no way
 	// to deregister the entity.
-	require.Implements(t, (*epochtime.SetableBackend)(nil), node.Epochtime, "epoch time backend is mock")
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	require.Implements(t, (*epochtime.SetableBackend)(nil), node.Consensus.EpochTime(), "epoch time backend is mock")
+	timeSource := (node.Consensus.EpochTime()).(epochtime.SetableBackend)
 	_ = epochtimeTests.MustAdvanceEpoch(t, timeSource, 2+1+1) // 2 epochs for expiry, 1 for debonding, 1 for removal.
 
 WaitLoop:
@@ -335,7 +335,7 @@ WaitLoop:
 	}
 
 	// Subscribe to entity deregistration event.
-	entityCh, sub, err := node.Node.Registry.WatchEntities(context.Background())
+	entityCh, sub, err := node.Node.Consensus.Registry().WatchEntities(context.Background())
 	require.NoError(t, err, "WatchEntities")
 	defer sub.Close()
 
@@ -357,7 +357,7 @@ WaitLoop:
 	require.Error(t, err, "deregister should fail when an entity has runtimes")
 	require.Equal(t, err, registry.ErrEntityHasRuntimes)
 
-	registryTests.EnsureRegistryEmpty(t, node.Node.Registry)
+	registryTests.EnsureRegistryEmpty(t, node.Node.Consensus.Registry())
 }
 
 func testConsensus(t *testing.T, node *testNode) {
@@ -374,13 +374,13 @@ func testConsensusClient(t *testing.T, node *testNode) {
 }
 
 func testEpochTime(t *testing.T, node *testNode) {
-	epochtimeTests.EpochtimeSetableImplementationTest(t, node.Epochtime)
+	epochtimeTests.EpochtimeSetableImplementationTest(t, node.Consensus.EpochTime())
 }
 
 func testBeacon(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	timeSource := (node.Consensus.EpochTime()).(epochtime.SetableBackend)
 
-	beaconTests.BeaconImplementationTests(t, node.Beacon, timeSource)
+	beaconTests.BeaconImplementationTests(t, node.Consensus.Beacon(), timeSource)
 }
 
 func testStorage(t *testing.T, node *testNode) {
@@ -388,7 +388,7 @@ func testStorage(t *testing.T, node *testNode) {
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	storage, err := storage.New(context.Background(), dataDir, testRuntimeID, node.Identity, node.Scheduler, node.Registry)
+	storage, err := storage.New(context.Background(), dataDir, testRuntimeID, node.Identity, node.Consensus.Scheduler(), node.Consensus.Registry())
 	require.NoError(t, err, "storage.New")
 	defer storage.Cleanup()
 
@@ -396,11 +396,11 @@ func testStorage(t *testing.T, node *testNode) {
 }
 
 func testRegistry(t *testing.T, node *testNode) {
-	registryTests.RegistryImplementationTests(t, node.Registry, node.Consensus)
+	registryTests.RegistryImplementationTests(t, node.Consensus.Registry(), node.Consensus)
 }
 
 func testScheduler(t *testing.T, node *testNode) {
-	schedulerTests.SchedulerImplementationTests(t, "", node.Scheduler, node.Consensus)
+	schedulerTests.SchedulerImplementationTests(t, "", node.Consensus.Scheduler(), node.Consensus)
 }
 
 func testSchedulerClient(t *testing.T, node *testNode) {
@@ -413,7 +413,7 @@ func testSchedulerClient(t *testing.T, node *testNode) {
 }
 
 func testStaking(t *testing.T, node *testNode) {
-	stakingTests.StakingImplementationTests(t, node.Staking, node.Consensus, node.Identity, node.entity, node.entitySigner, testRuntimeID)
+	stakingTests.StakingImplementationTests(t, node.Consensus.Staking(), node.Consensus, node.Identity, node.entity, node.entitySigner, testRuntimeID)
 }
 
 func testStakingClient(t *testing.T, node *testNode) {
@@ -426,11 +426,11 @@ func testStakingClient(t *testing.T, node *testNode) {
 }
 
 func testRootHash(t *testing.T, node *testNode) {
-	roothashTests.RootHashImplementationTests(t, node.RootHash, node.Consensus, node.Identity)
+	roothashTests.RootHashImplementationTests(t, node.Consensus.RootHash(), node.Consensus, node.Identity)
 }
 
 func testExecutorWorker(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	timeSource := (node.Consensus.EpochTime()).(epochtime.SetableBackend)
 
 	require.NotNil(t, node.executorCommitteeNode)
 	executorWorkerTests.WorkerImplementationTests(t, node.ExecutorWorker, node.runtimeID, node.executorCommitteeNode, timeSource)
@@ -441,7 +441,7 @@ func testStorageWorker(t *testing.T, node *testNode) {
 }
 
 func testTransactionSchedulerWorker(t *testing.T, node *testNode) {
-	timeSource := (node.Epochtime).(epochtime.SetableBackend)
+	timeSource := (node.Consensus.EpochTime()).(epochtime.SetableBackend)
 
 	require.NotNil(t, node.txnschedulerCommitteeNode)
 	txnschedulerWorkerTests.WorkerImplementationTests(
@@ -450,7 +450,7 @@ func testTransactionSchedulerWorker(t *testing.T, node *testNode) {
 		node.runtimeID,
 		node.txnschedulerCommitteeNode,
 		timeSource,
-		node.RootHash,
+		node.Consensus.RootHash(),
 		node.RuntimeRegistry.StorageRouter(),
 	)
 }
@@ -462,12 +462,12 @@ func testClient(t *testing.T, node *testNode) {
 func testStorageClientWithNode(t *testing.T, node *testNode) {
 	ctx := context.Background()
 
-	client, err := storageClient.NewStatic(ctx, testRuntimeID, node.Identity, node.Registry, node.Identity.NodeSigner.Public())
+	client, err := storageClient.NewStatic(ctx, testRuntimeID, node.Identity, node.Consensus.Registry(), node.Identity.NodeSigner.Public())
 	require.NoError(t, err, "NewStatic")
 
 	// Determine the current round. This is required so that we can commit into
 	// storage at the next (non-finalized) round.
-	blk, err := node.RootHash.GetLatestBlock(ctx, testRuntimeID, consensusAPI.HeightLatest)
+	blk, err := node.Consensus.RootHash().GetLatestBlock(ctx, testRuntimeID, consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetLatestBlock")
 
 	storageTests.StorageImplementationTests(t, client, testRuntimeID, blk.Header.Round+1)

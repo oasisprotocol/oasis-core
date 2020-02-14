@@ -15,8 +15,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/tracing"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
+	"github.com/oasislabs/oasis-core/go/epochtime/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	"github.com/oasislabs/oasis-core/go/runtime/committee"
@@ -49,6 +50,9 @@ type epoch struct {
 	// committee election.
 	groupVersion int64
 
+	// epochNumber is the sequential number of the epoch.
+	epochNumber api.EpochTime
+
 	// executorCommittee is the executor committee we are a member of.
 	executorCommittee *CommitteeInfo
 	// executorCommitteeID is the identifier of our executor committee.
@@ -77,6 +81,8 @@ type EpochSnapshot struct {
 	groupVersion int64
 
 	executorCommitteeID hash.Hash
+
+	epochNumber api.EpochTime
 
 	executorRole     scheduler.Role
 	txnSchedulerRole scheduler.Role
@@ -127,6 +133,11 @@ func (e *EpochSnapshot) GetExecutorCommittees() map[hash.Hash]*CommitteeInfo {
 // NOTE: Will return an invalid all-zero ID if not a member.
 func (e *EpochSnapshot) GetExecutorCommitteeID() hash.Hash {
 	return e.executorCommitteeID
+}
+
+// GetEpochNumber returns the sequential number of the epoch.
+func (e *EpochSnapshot) GetEpochNumber() api.EpochTime {
+	return e.epochNumber
 }
 
 // IsExecutorMember checks if the current node is a member of the executor committee
@@ -232,9 +243,7 @@ type Group struct {
 	identity  *identity.Identity
 	runtimeID common.Namespace
 
-	scheduler scheduler.Backend
-	registry  registry.Backend
-	roothash  roothash.Backend
+	consensus consensus.Backend
 
 	handler MessageHandler
 
@@ -304,7 +313,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	}()
 
 	// Request committees from scheduler.
-	committees, err := g.scheduler.GetCommittees(ctx, &scheduler.GetCommitteesRequest{
+	committees, err := g.consensus.Scheduler().GetCommittees(ctx, &scheduler.GetCommitteesRequest{
 		RuntimeID: g.runtimeID,
 		Height:    height,
 	})
@@ -386,8 +395,14 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		return fmt.Errorf("no storage committee")
 	}
 
+	// Fetch the new epoch.
+	epochNumber, err := g.consensus.EpochTime().GetEpoch(ctx, height)
+	if err != nil {
+		return err
+	}
+
 	// Fetch current runtime descriptor.
-	runtime, err := g.registry.GetRuntime(ctx, &registry.NamespaceQuery{ID: g.runtimeID, Height: height})
+	runtime, err := g.consensus.Registry().GetRuntime(ctx, &registry.NamespaceQuery{ID: g.runtimeID, Height: height})
 	if err != nil {
 		return err
 	}
@@ -398,6 +413,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 	// Update the current epoch.
 	g.activeEpoch = &epoch{
+		epochNumber:                epochNumber,
 		epochCtx:                   epochCtx,
 		cancelEpochCtx:             cancelEpochCtx,
 		roundCtx:                   roundCtx,
@@ -445,6 +461,7 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 	}
 
 	s := &EpochSnapshot{
+		epochNumber:  g.activeEpoch.epochNumber,
 		groupVersion: g.activeEpoch.groupVersion,
 		// NOTE: Transaction scheduler and merge committees are always set.
 		txnSchedulerRole:      g.activeEpoch.txnSchedulerCommittee.Role,
@@ -652,12 +669,10 @@ func NewGroup(
 	identity *identity.Identity,
 	runtimeID common.Namespace,
 	handler MessageHandler,
-	registry registry.Backend,
-	roothash roothash.Backend,
-	scheduler scheduler.Backend,
+	consensus consensus.Backend,
 	p2p *p2p.P2P,
 ) (*Group, error) {
-	nodes, err := committee.NewNodeDescriptorWatcher(ctx, registry)
+	nodes, err := committee.NewNodeDescriptorWatcher(ctx, consensus.Registry())
 	if err != nil {
 		return nil, fmt.Errorf("group: failed to create node watcher: %w", err)
 	}
@@ -665,9 +680,7 @@ func NewGroup(
 	g := &Group{
 		identity:  identity,
 		runtimeID: runtimeID,
-		scheduler: scheduler,
-		registry:  registry,
-		roothash:  roothash,
+		consensus: consensus,
 		handler:   handler,
 		p2p:       p2p,
 		nodes:     nodes,

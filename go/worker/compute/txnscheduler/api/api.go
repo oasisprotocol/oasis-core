@@ -6,6 +6,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/errors"
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
 // ModuleName is the transaction scheduler module name.
@@ -26,6 +27,9 @@ var (
 
 	// ErrCheckTxFailed is the error returned when CheckTx fails.
 	ErrCheckTxFailed = errors.New(ModuleName, 4, "txnscheduler: CheckTx failed")
+
+	// ErrEpochNumberMismatch is the error returned when epoch of client and compute node mismatch.
+	ErrEpochNumberMismatch = errors.New(ModuleName, 5, "txnscheduler: epoch number mismatch")
 )
 
 // TransactionScheduler is the transaction scheduler API interface.
@@ -41,8 +45,9 @@ type TransactionScheduler interface {
 
 // SubmitTxRequest is a SubmitTx request.
 type SubmitTxRequest struct {
-	RuntimeID common.Namespace `json:"runtime_id"`
-	Data      []byte           `json:"data"`
+	RuntimeID           common.Namespace    `json:"runtime_id"`
+	ExpectedEpochNumber epochtime.EpochTime `json:"expected_epoch_number"`
+	Data                []byte              `json:"data"`
 }
 
 // SubmitTxResponse is a SubmitTx response.

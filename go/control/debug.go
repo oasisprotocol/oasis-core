@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 
 	"github.com/oasislabs/oasis-core/go/control/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -62,9 +63,9 @@ Loop:
 }
 
 // New creates a new oasis-node debug controller.
-func NewDebug(timeSource epochtime.Backend, registry registry.Backend) api.DebugController {
+func NewDebug(consensus consensus.Backend) api.DebugController {
 	return &debugController{
-		timeSource: timeSource,
-		registry:   registry,
+		timeSource: consensus.EpochTime(),
+		registry:   consensus.Registry(),
 	}
 }

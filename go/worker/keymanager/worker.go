@@ -360,7 +360,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 	// are using us as a key manager.
 	clientRuntimes := make(map[common.Namespace]*clientRuntimeWatcher)
 	clientRuntimesQuitCh := make(chan *clientRuntimeWatcher)
-	rtCh, rtSub, err := w.commonWorker.Registry.WatchRuntimes(w.ctx)
+	rtCh, rtSub, err := w.commonWorker.Consensus.Registry().WatchRuntimes(w.ctx)
 	if err != nil {
 		w.logger.Error("failed to watch runtimes",
 			"err", err,
@@ -564,7 +564,7 @@ func (crw *clientRuntimeWatcher) updateExternalServicePolicyLocked(snapshot *com
 		var kmNodes []*node.Node
 
 		for _, pk := range status.Nodes {
-			n, err := crw.node.Registry.GetNode(crw.w.ctx, &registry.IDQuery{ID: pk, Height: height})
+			n, err := crw.node.Consensus.Registry().GetNode(crw.w.ctx, &registry.IDQuery{ID: pk, Height: height})
 			if err != nil {
 				crw.w.logger.Error("worker/keymanager: unable to get KM node info", "err", err)
 			} else {

@@ -13,10 +13,7 @@ import (
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	ias "github.com/oasislabs/oasis-core/go/ias/api"
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
@@ -27,9 +24,6 @@ type Worker struct {
 	cfg     Config
 
 	Identity          *identity.Identity
-	Roothash          roothash.Backend
-	Registry          registry.Backend
-	Scheduler         scheduler.Backend
 	Consensus         consensus.Backend
 	Grpc              *grpc.Server
 	GrpcPolicyWatcher policyAPI.PolicyWatcher
@@ -186,9 +180,6 @@ func (w *Worker) NewUnmanagedCommitteeNode(runtime runtimeRegistry.Runtime, enab
 		runtime,
 		w.Identity,
 		w.KeyManager,
-		w.Roothash,
-		w.Registry,
-		w.Scheduler,
 		w.Consensus,
 		p2p,
 	)
@@ -217,9 +208,6 @@ func newWorker(
 	dataDir string,
 	enabled bool,
 	identity *identity.Identity,
-	roothash roothash.Backend,
-	registryInst registry.Backend,
-	scheduler scheduler.Backend,
 	consensus consensus.Backend,
 	grpc *grpc.Server,
 	grpcPolicyWatcher policyAPI.PolicyWatcher,
@@ -234,9 +222,6 @@ func newWorker(
 		enabled:           enabled,
 		cfg:               cfg,
 		Identity:          identity,
-		Roothash:          roothash,
-		Registry:          registryInst,
-		Scheduler:         scheduler,
 		Consensus:         consensus,
 		Grpc:              grpc,
 		GrpcPolicyWatcher: grpcPolicyWatcher,
@@ -268,9 +253,6 @@ func New(
 	dataDir string,
 	enabled bool,
 	identity *identity.Identity,
-	roothash roothash.Backend,
-	registry registry.Backend,
-	scheduler scheduler.Backend,
 	consensus consensus.Backend,
 	p2p *p2p.P2P,
 	ias ias.Endpoint,
@@ -301,9 +283,6 @@ func New(
 		dataDir,
 		enabled,
 		identity,
-		roothash,
-		registry,
-		scheduler,
 		consensus,
 		grpc,
 		grpcPolicyWatcher,

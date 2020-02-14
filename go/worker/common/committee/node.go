@@ -12,12 +12,10 @@ import (
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/runtime/committee"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
@@ -85,9 +83,6 @@ type Node struct {
 	KeyManager       keymanagerApi.Backend
 	KeyManagerClient *keymanagerClient.Client
 	Storage          storage.Backend
-	Roothash         roothash.Backend
-	Registry         registry.Backend
-	Scheduler        scheduler.Backend
 	Consensus        consensus.Backend
 
 	ctx       context.Context
@@ -296,7 +291,7 @@ func (n *Node) worker() {
 	if rt.KeyManager != nil {
 		n.logger.Info("runtime indicates a key manager is required, waiting for it to be ready")
 
-		n.KeyManagerClient, err = keymanagerClient.New(n.ctx, n.Runtime, n.KeyManager, n.Registry, n.Identity)
+		n.KeyManagerClient, err = keymanagerClient.New(n.ctx, n.Runtime, n.KeyManager, n.Consensus.Registry(), n.Identity)
 		if err != nil {
 			n.logger.Error("failed to create key manager client",
 				"err", err,
@@ -317,7 +312,7 @@ func (n *Node) worker() {
 	}
 
 	// Start watching roothash blocks.
-	blocks, blocksSub, err := n.Roothash.WatchBlocks(n.Runtime.ID())
+	blocks, blocksSub, err := n.Consensus.RootHash().WatchBlocks(n.Runtime.ID())
 	if err != nil {
 		n.logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
@@ -327,7 +322,7 @@ func (n *Node) worker() {
 	defer blocksSub.Close()
 
 	// Start watching roothash events.
-	events, eventsSub, err := n.Roothash.WatchEvents(n.Runtime.ID())
+	events, eventsSub, err := n.Consensus.RootHash().WatchEvents(n.Runtime.ID())
 	if err != nil {
 		n.logger.Error("failed to subscribe to roothash events",
 			"err", err,
@@ -384,9 +379,6 @@ func NewNode(
 	runtime runtimeRegistry.Runtime,
 	identity *identity.Identity,
 	keymanager keymanagerApi.Backend,
-	roothash roothash.Backend,
-	registry registry.Backend,
-	scheduler scheduler.Backend,
 	consensus consensus.Backend,
 	p2p *p2p.P2P,
 ) (*Node, error) {
@@ -401,9 +393,6 @@ func NewNode(
 		Identity:   identity,
 		KeyManager: keymanager,
 		Storage:    runtime.Storage(),
-		Roothash:   roothash,
-		Registry:   registry,
-		Scheduler:  scheduler,
 		Consensus:  consensus,
 		ctx:        ctx,
 		cancelCtx:  cancel,
@@ -413,7 +402,7 @@ func NewNode(
 		logger:     logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
 	}
 
-	group, err := NewGroup(ctx, identity, runtime.ID(), n, registry, roothash, scheduler, p2p)
+	group, err := NewGroup(ctx, identity, runtime.ID(), n, consensus, p2p)
 	if err != nil {
 		return nil, err
 	}

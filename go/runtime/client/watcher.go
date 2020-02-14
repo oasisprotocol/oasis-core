@@ -7,6 +7,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/service"
+	"github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/runtime/committee"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
@@ -34,6 +35,7 @@ type watchResult struct {
 	result                []byte
 	err                   error
 	newTxnschedulerClient txnscheduler.TransactionScheduler
+	epochNumber           api.EpochTime
 }
 
 type blockWatcher struct {
@@ -104,7 +106,7 @@ func (w *blockWatcher) watch() {
 	// block, otherwise just from epoch transition blocks.
 	gotFirstBlock := false
 	// Start watching roothash blocks.
-	blocks, blocksSub, err := w.common.roothash.WatchBlocks(w.id)
+	blocks, blocksSub, err := w.common.consensus.RootHash().WatchBlocks(w.id)
 	if err != nil {
 		w.Logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
@@ -112,6 +114,9 @@ func (w *blockWatcher) watch() {
 		return
 	}
 	defer blocksSub.Close()
+
+	// currentEpochNumber will contain the last processed epoch number when epoch transition is made.
+	var currentEpochNumber api.EpochTime
 
 	for {
 		var current *block.Block
@@ -129,6 +134,7 @@ func (w *blockWatcher) watch() {
 				client := txnscheduler.NewTransactionSchedulerClient(conn)
 				res := &watchResult{
 					newTxnschedulerClient: client,
+					epochNumber:           currentEpochNumber,
 				}
 				if newWatch.send(res) != nil {
 					delete(w.watched, *newWatch.id)
@@ -149,14 +155,27 @@ func (w *blockWatcher) watch() {
 
 		// Find a new committee leader.
 		if current.Header.HeaderType == block.EpochTransition || !gotFirstBlock {
-			if err := w.committeeWatcher.EpochTransition(w.common.ctx, height); err != nil {
+			var ce api.EpochTime
+			ce, err = w.common.consensus.EpochTime().GetEpoch(w.common.ctx, height)
+			if err != nil {
+				w.Logger.Error("error getting epoch number",
+					"err", err,
+					"block_height", height,
+				)
+				continue
+			}
+
+			// Update current epoch number, if obtained successfully.
+			currentEpochNumber = ce
+
+			if err = w.committeeWatcher.EpochTransition(w.common.ctx, height); err != nil {
 				w.Logger.Error("error getting new committee data, waiting for next epoch",
 					"err", err,
 				)
 				continue
 			}
 
-			if err := w.committeeClient.EnsureVersion(w.common.ctx, height); err != nil {
+			if err = w.committeeClient.EnsureVersion(w.common.ctx, height); err != nil {
 				w.Logger.Error("error waiting for committee update to complete",
 					"err", err)
 			}
@@ -168,6 +187,7 @@ func (w *blockWatcher) watch() {
 				for key, watch := range w.watched {
 					res := &watchResult{
 						newTxnschedulerClient: client,
+						epochNumber:           currentEpochNumber,
 					}
 					if watch.send(res) != nil {
 						delete(w.watched, key)
@@ -199,8 +219,8 @@ func (w *blockWatcher) Stop() {
 func newWatcher(common *clientCommon, id common.Namespace) (*blockWatcher, error) {
 	committeeWatcher, err := committee.NewWatcher(
 		common.ctx,
-		common.scheduler,
-		common.registry,
+		common.consensus.Scheduler(),
+		common.consensus.Registry(),
 		id,
 		scheduler.KindComputeTxnScheduler,
 		committee.WithFilter(func(cn *scheduler.CommitteeNode) bool {
