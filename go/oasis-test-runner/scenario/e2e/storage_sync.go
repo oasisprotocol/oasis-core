@@ -99,13 +99,31 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("failed to get checkpoints: %w", err)
 	}
 
-	blk, err := ctrl.RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{RuntimeID: runtimeID, Round: 20})
+	blk, err := ctrl.RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{
+		RuntimeID: runtimeID,
+		Round:     runtimeClient.RoundLatest,
+	})
 	if err != nil {
-		return fmt.Errorf("failed to get block for round 20: %w", err)
+		return fmt.Errorf("failed to get latest block: %w", err)
 	}
 
-	// There should be at least two checkpoints (for the two roots at round 20). There may be more
-	// in case garbage collection has not yet pruned the other checkpoints.
+	// Determine which checkpoints should be there.
+	rt := sc.net.Runtimes()[1].ToRuntimeDescriptor()
+	lastCheckpoint := (blk.Header.Round / rt.Storage.CheckpointInterval) * rt.Storage.CheckpointInterval
+	sc.logger.Info("determined last expected checkpoint round",
+		"round", lastCheckpoint,
+	)
+
+	blk, err = ctrl.RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{
+		RuntimeID: runtimeID,
+		Round:     lastCheckpoint,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get block %d: %w", lastCheckpoint, err)
+	}
+
+	// There should be at least two checkpoints. There may be more depending on the state of garbage
+	// collection process (which may be one checkpoint behind.)
 	if len(cps) < 2 {
 		return fmt.Errorf("incorrect number of checkpoints (expected: >=2 got: %d)", len(cps))
 	}
