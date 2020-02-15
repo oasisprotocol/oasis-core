@@ -11,8 +11,15 @@
 # https://buildkite.com/docs/pipelines/writing-build-scripts
 set -euxo pipefail
 
+. ./.buildkite/scripts/common.sh
+
 RED='\033[0;31m'
 OFF='\033[0m'
+
+if only_docs_changes; then
+  echo "Only docs changes. Skipping"
+  exit 0
+fi
 
 ####################
 # Build the Go parts

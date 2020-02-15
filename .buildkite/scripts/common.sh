@@ -39,6 +39,17 @@ cleanup() {
     CLEANING_UP=0
 }
 
+only_docs_changes() {
+    test -n "$BUILDKITE_PULL_REQUEST_BASE_BRANCH" && \
+        git diff --quiet "refs/remotes/origin/$BUILDKITE_PULL_REQUEST_BASE_BRANCH.." -- \
+            ':(exclude).changelog' \
+            ':(exclude)CHANGELOG.md' \
+            ':(exclude)CONTRIBUTING.md' \
+            ':(exclude)LICENSE' \
+            ':(exclude)README.md' \
+            ':(exclude)SECURITY.md'
+}
+
 # appends a command to a trap
 #
 # - 1st arg:  code to add
