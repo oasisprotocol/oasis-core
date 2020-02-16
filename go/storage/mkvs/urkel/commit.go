@@ -10,13 +10,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
-// CommitKnown checks that the computed root matches a known root and
-// if so, commits tree updates to the underlying database and returns
-// the write log.
-//
-// In case the computed root doesn't match the known root, the update
-// is NOT committed and ErrKnownRootMismatch is returned.
-func (t *Tree) CommitKnown(ctx context.Context, root node.Root) (writelog.WriteLog, error) {
+// Implements Tree.
+func (t *tree) CommitKnown(ctx context.Context, root node.Root) (writelog.WriteLog, error) {
 	writeLog, _, err := t.commitWithHooks(ctx, root.Namespace, root.Round, func(rootHash hash.Hash) error {
 		if !rootHash.Equal(&root.Hash) {
 			return ErrKnownRootMismatch
@@ -27,13 +22,12 @@ func (t *Tree) CommitKnown(ctx context.Context, root node.Root) (writelog.WriteL
 	return writeLog, err
 }
 
-// Commit commits tree updates to the underlying database and returns
-// the write log and new merkle root.
-func (t *Tree) Commit(ctx context.Context, namespace common.Namespace, round uint64) (writelog.WriteLog, hash.Hash, error) {
+// Implements Tree.
+func (t *tree) Commit(ctx context.Context, namespace common.Namespace, round uint64) (writelog.WriteLog, hash.Hash, error) {
 	return t.commitWithHooks(ctx, namespace, round, nil)
 }
 
-func (t *Tree) commitWithHooks(
+func (t *tree) commitWithHooks(
 	ctx context.Context,
 	namespace common.Namespace,
 	round uint64,

@@ -11,9 +11,8 @@ import (
 
 var errClosed = errors.New("iterator: use of closed iterator")
 
-// SyncIterate seeks to a given key and then fetches the specified
-// number of following items based on key iteration order.
-func (t *Tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) (*syncer.ProofResponse, error) {
+// Implements syncer.ReadSyncer.
+func (t *tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) (*syncer.ProofResponse, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -58,7 +57,7 @@ func (t *Tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) 
 	}, nil
 }
 
-func (t *Tree) newFetcherSyncIterate(key node.Key, prefetch uint16) readSyncFetcher {
+func (t *tree) newFetcherSyncIterate(key node.Key, prefetch uint16) readSyncFetcher {
 	return func(ctx context.Context, ptr *node.Pointer, rs syncer.ReadSyncer) (*syncer.Proof, error) {
 		rsp, err := rs.SyncIterate(ctx, &syncer.IterateRequest{
 			Tree: syncer.TreeID{
@@ -125,7 +124,7 @@ type pathAtom struct {
 
 type treeIterator struct {
 	ctx      context.Context
-	tree     *Tree
+	tree     *tree
 	prefetch uint16
 	err      error
 	pos      []pathAtom
@@ -155,8 +154,7 @@ func WithProof(root hash.Hash) IteratorOption {
 	}
 }
 
-// NewIterator creates a new iterator over the given tree.
-func NewIterator(ctx context.Context, tree *Tree, options ...IteratorOption) Iterator {
+func newTreeIterator(ctx context.Context, tree *tree, options ...IteratorOption) Iterator {
 	it := &treeIterator{
 		ctx:  ctx,
 		tree: tree,

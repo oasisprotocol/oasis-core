@@ -8,9 +8,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
 )
 
-// PrefetchPrefixes populates the in-memory tree with nodes for keys
-// starting with given prefixes.
-func (t *Tree) PrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit uint16) error {
+// Implements Tree.
+func (t *tree) PrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit uint16) error {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -25,7 +24,7 @@ func (t *Tree) PrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit ui
 	return t.doPrefetchPrefixes(ctx, prefixes, limit)
 }
 
-func (t *Tree) doPrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit uint16) error {
+func (t *tree) doPrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit uint16) error {
 	// TODO: Can we avoid fetching items that we already have?
 
 	return t.cache.remoteSync(
@@ -48,9 +47,8 @@ func (t *Tree) doPrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit 
 	)
 }
 
-// SyncGetPrefixes fetches all keys under the given prefixes and returns
-// the corresponding proofs.
-func (t *Tree) SyncGetPrefixes(ctx context.Context, request *syncer.GetPrefixesRequest) (*syncer.ProofResponse, error) {
+// Implements syncer.ReadSyncer.
+func (t *tree) SyncGetPrefixes(ctx context.Context, request *syncer.GetPrefixesRequest) (*syncer.ProofResponse, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 

@@ -154,7 +154,7 @@ func (t Transaction) asOutputArtifacts() outputArtifacts {
 // Tree is a Merkle tree containing transaction artifacts.
 type Tree struct {
 	ioRoot node.Root
-	tree   *urkel.Tree
+	tree   urkel.Tree
 }
 
 // NewTree creates a new transaction artifacts tree.

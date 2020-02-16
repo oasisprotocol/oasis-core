@@ -7,8 +7,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 )
 
-// RemoveExisting removes a key from the tree and returns the previous value.
-func (t *Tree) RemoveExisting(ctx context.Context, key []byte) ([]byte, error) {
+// Implements Tree.
+func (t *tree) RemoveExisting(ctx context.Context, key []byte) ([]byte, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -36,13 +36,13 @@ func (t *Tree) RemoveExisting(ctx context.Context, key []byte) ([]byte, error) {
 	return existing, nil
 }
 
-// Remove removes a key from the tree.
-func (t *Tree) Remove(ctx context.Context, key []byte) error {
+// Implements Tree.
+func (t *tree) Remove(ctx context.Context, key []byte) error {
 	_, err := t.RemoveExisting(ctx, key)
 	return err
 }
 
-func (t *Tree) doRemove(
+func (t *tree) doRemove(
 	ctx context.Context,
 	ptr *node.Pointer,
 	bitDepth node.Depth,

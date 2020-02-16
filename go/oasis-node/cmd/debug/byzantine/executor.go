@@ -27,7 +27,7 @@ type computeBatchContext struct {
 
 	ioTree    *transaction.Tree
 	txs       []*transaction.Transaction
-	stateTree *urkel.Tree
+	stateTree urkel.Tree
 
 	stateWriteLog writelog.WriteLog
 	newStateRoot  hash.Hash
