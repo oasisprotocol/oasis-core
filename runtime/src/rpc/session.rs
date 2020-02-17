@@ -1,5 +1,5 @@
 //! Secure channel session.
-use std::{collections::HashSet, io::Write, sync::Arc};
+use std::{collections::HashSet, io::Write, mem, sync::Arc};
 
 use failure::Fallible;
 use serde_derive::{Deserialize, Serialize};
@@ -39,17 +39,15 @@ pub struct SessionInfo {
     pub authenticated_avr: avr::AuthenticatedAVR,
 }
 
-#[derive(Eq, PartialEq)]
 enum State {
-    Handshake1,
-    Handshake2,
-    Transport,
+    Handshake1(snow::HandshakeState),
+    Handshake2(snow::HandshakeState),
+    Transport(snow::TransportState),
     Closed,
 }
 
 /// An encrypted and authenticated RPC session.
 pub struct Session {
-    session: Option<snow::Session>,
     local_static_pub: Vec<u8>,
     rak: Option<Arc<RAK>>,
     remote_enclaves: Option<HashSet<avr::EnclaveIdentity>>,
@@ -60,18 +58,17 @@ pub struct Session {
 
 impl Session {
     fn new(
-        session: snow::Session,
+        handshake_state: snow::HandshakeState,
         local_static_pub: Vec<u8>,
         rak: Option<Arc<RAK>>,
         remote_enclaves: Option<HashSet<avr::EnclaveIdentity>>,
     ) -> Self {
         Self {
-            session: Some(session),
             local_static_pub,
             rak,
             remote_enclaves,
             info: None,
-            state: State::Handshake1,
+            state: State::Handshake1(handshake_state),
             buf: vec![0u8; 65535],
         }
     }
@@ -86,69 +83,64 @@ impl Session {
         data: Vec<u8>,
         mut writer: W,
     ) -> Fallible<Option<Message>> {
-        // Try to get the active protocol session. In case the session is not
-        // there, this indicates that there was a protocol error while processing
-        // data which means the session is closed.
-        let mut session = self.session.take().ok_or(SessionError::Closed)?;
-
-        match self.state {
-            State::Handshake1 => {
-                if session.is_initiator() {
+        // Replace the state with a closed state. In case processing fails for whatever
+        // reason, this will cause the session to be torn down.
+        match mem::replace(&mut self.state, State::Closed) {
+            State::Handshake1(mut state) => {
+                if state.is_initiator() {
                     // Initiator only sends in this state.
                     if !data.is_empty() {
                         return Err(SessionError::InvalidInput.into());
                     }
 
                     // -> e
-                    let len = session.write_message(&[], &mut self.buf)?;
+                    let len = state.write_message(&[], &mut self.buf)?;
                     writer.write_all(&self.buf[..len])?;
                 } else {
                     // <- e
-                    session.read_message(&data, &mut self.buf)?;
+                    state.read_message(&data, &mut self.buf)?;
 
                     // -> e, ee, s, es
-                    let len = session.write_message(&self.get_rak_binding(), &mut self.buf)?;
+                    let len = state.write_message(&self.get_rak_binding(), &mut self.buf)?;
                     writer.write_all(&self.buf[..len])?;
                 }
 
-                self.state = State::Handshake2;
-                self.session = Some(session);
+                self.state = State::Handshake2(state);
             }
-            State::Handshake2 => {
-                if session.is_initiator() {
+            State::Handshake2(mut state) => {
+                if state.is_initiator() {
                     // <- e, ee, s, es
-                    let len = session.read_message(&data, &mut self.buf)?;
-                    let remote_static = session
+                    let len = state.read_message(&data, &mut self.buf)?;
+                    let remote_static = state
                         .get_remote_static()
                         .expect("dh exchange just happened");
                     self.info = self.verify_rak_binding(&self.buf[..len], remote_static)?;
 
                     // -> s, se
-                    let len = session.write_message(&self.get_rak_binding(), &mut self.buf)?;
+                    let len = state.write_message(&self.get_rak_binding(), &mut self.buf)?;
                     writer.write_all(&self.buf[..len])?;
                 } else {
                     // <- s, se
-                    let len = session.read_message(&data, &mut self.buf)?;
-                    let remote_static = session
+                    let len = state.read_message(&data, &mut self.buf)?;
+                    let remote_static = state
                         .get_remote_static()
                         .expect("dh exchange just happened");
                     self.info = self.verify_rak_binding(&self.buf[..len], remote_static)?;
                 }
 
                 // Move into transport mode.
-                self.session = Some(session.into_transport_mode()?);
-                self.state = State::Transport;
+                self.state = State::Transport(state.into_transport_mode()?);
             }
-            State::Transport => {
+            State::Transport(mut state) => {
                 // TODO: Restore session in case of errors.
-                let len = session.read_message(&data, &mut self.buf)?;
+                let len = state.read_message(&data, &mut self.buf)?;
                 let msg = cbor::from_slice(&self.buf[..len])?;
 
-                self.session = Some(session);
+                self.state = State::Transport(state);
                 return Ok(Some(msg));
             }
             State::Closed => {
-                return Err(SessionError::InvalidState.into());
+                return Err(SessionError::Closed.into());
             }
         }
 
@@ -160,17 +152,15 @@ impl Session {
     /// The `writer` will be used for protocol message output which should
     /// be transmitted to the remote session counterpart.
     pub fn write_message<W: Write>(&mut self, msg: Message, mut writer: W) -> Fallible<()> {
-        if self.state != State::Transport {
-            return Err(SessionError::InvalidState.into());
+        if let State::Transport(ref mut state) = self.state {
+            let msg = cbor::to_vec(&msg);
+            let len = state.write_message(&msg, &mut self.buf)?;
+            writer.write_all(&self.buf[..len])?;
+
+            Ok(())
+        } else {
+            Err(SessionError::InvalidState.into())
         }
-
-        let session = self.session.as_mut().ok_or(SessionError::Closed)?;
-
-        let msg = cbor::to_vec(&msg);
-        let len = session.write_message(&msg, &mut self.buf)?;
-        writer.write_all(&self.buf[..len])?;
-
-        Ok(())
     }
 
     /// Mark the session as closed.
@@ -252,7 +242,11 @@ impl Session {
     /// Return true if session handshake has completed and the session
     /// is in transport mode.
     pub fn is_connected(&self) -> bool {
-        self.state == State::Transport
+        if let State::Transport(_) = self.state {
+            true
+        } else {
+            false
+        }
     }
 }
 
