@@ -20,9 +20,7 @@ members = [
 
 [patch.crates-io]
 # TODO: Remove when merged upstream (briansmith/ring#738).
-ring = { git = "https://github.com/akash-fortanix/ring", branch = "sgx-target" }
-# TODO: Remove when merged upstream (rust-lang-deprecated/rustc-serialize#195).
-rustc-serialize = { git = "https://github.com/jethrogb/rustc-serialize", branch = "portability" }
+ring = { git = "https://github.com/oasislabs/ring-sgx", branch = "sgx-target" }
 
 [profile.release]
 panic = "abort"

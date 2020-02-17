@@ -13,7 +13,6 @@ use percent_encoding;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use sgx_isa::{AttributesFlags, Report};
-use untrusted;
 use webpki;
 
 use crate::common::time::{insecure_posix_time, update_insecure_posix_time};
@@ -346,19 +345,13 @@ fn validate_avr_signature(
     // Decode the certificate chain.
     let cert_chain = percent_encoding::percent_decode(cert_chain).decode_utf8()?;
     let cert_chain = pem_parse_many(&cert_chain, PEM_CERTIFICATE_LABEL);
-    let cert_chain: Vec<untrusted::Input> = cert_chain
-        .iter()
-        .map(|contents| untrusted::Input::from(&contents))
-        .collect();
     if cert_chain.len() == 0 {
         return Err(AVRError::NoCertificates.into());
     }
 
     // Decode the signature.
     let signature = base64::decode(signature)?;
-    let signature = untrusted::Input::from(&signature);
 
-    let message = untrusted::Input::from(&message);
     let time = webpki::Time::from_seconds_since_unix_epoch(unix_time);
 
     // Do all the actual validation.
@@ -370,16 +363,17 @@ fn validate_avr_signature(
 
 fn validate_decoded_avr_signature(
     anchors: &webpki::TLSServerTrustAnchors,
-    cert_ders: &Vec<untrusted::Input>,
-    message: untrusted::Input,
-    signature: untrusted::Input,
+    cert_ders: &Vec<Vec<u8>>,
+    message: &[u8],
+    signature: Vec<u8>,
     time: webpki::Time,
 ) -> Fallible<()> {
     assert!(cert_ders.len() >= 1);
     let (cert_der, inter_ders) = cert_ders.split_at(1);
-    let cert = webpki::EndEntityCert::from(cert_der[0])?;
+    let inter_ders: Vec<_> = inter_ders.iter().map(|der| &der[..]).collect();
+    let cert = webpki::EndEntityCert::from(&cert_der[0])?;
     cert.verify_is_valid_tls_server_cert(IAS_SIG_ALGS, &anchors, &inter_ders, time)?;
-    Ok(cert.verify_signature(IAS_SIG_ALGS[0], message, signature)?)
+    Ok(cert.verify_signature(IAS_SIG_ALGS[0], message, &signature)?)
 }
 
 fn pem_parse_many(input: &str, label: &str) -> Vec<Vec<u8>> {
