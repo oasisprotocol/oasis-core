@@ -16,17 +16,17 @@ source .buildkite/scripts/common.sh
 download_artifact oasis-node go/oasis-node 755
 download_artifact integrationrunner.test go/oasis-node/integrationrunner 755
 download_artifact oasis-test-runner go/oasis-test-runner 755
-download_artifact oasis-core-runtime-loader target/debug 755
+download_artifact oasis-core-runtime-loader target/default/debug 755
 
 # Key manager runtime.
-download_artifact oasis-core-keymanager-runtime.sgxs target/x86_64-fortanix-unknown-sgx/debug 755
-download_artifact oasis-core-keymanager-runtime target/debug 755
+download_artifact oasis-core-keymanager-runtime.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
+download_artifact oasis-core-keymanager-runtime target/default/debug 755
 
 # Test simple-keyvalue runtime and clients.
-download_artifact test-long-term-client target/debug 755
-download_artifact simple-keyvalue-client target/debug 755
-download_artifact simple-keyvalue-enc-client target/debug 755
-download_artifact simple-keyvalue-ops-client target/debug 755
+download_artifact test-long-term-client target/default/debug 755
+download_artifact simple-keyvalue-client target/default/debug 755
+download_artifact simple-keyvalue-enc-client target/default/debug 755
+download_artifact simple-keyvalue-ops-client target/default/debug 755
 
-download_artifact simple-keyvalue.sgxs target/x86_64-fortanix-unknown-sgx/debug 755
-download_artifact simple-keyvalue target/debug 755
+download_artifact simple-keyvalue.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
+download_artifact simple-keyvalue target/default/debug 755
