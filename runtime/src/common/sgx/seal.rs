@@ -12,7 +12,7 @@ use crate::common::{
 ///
 /// The `context` field is a domain separation tag.
 pub fn seal(key_policy: Keypolicy, context: &[u8], data: &[u8]) -> Vec<u8> {
-    let mut rng = OsRng::new().unwrap();
+    let mut rng = OsRng {};
 
     // Encrypt the raw policy.
     let mut nonce = [0u8; NONCE_SIZE];

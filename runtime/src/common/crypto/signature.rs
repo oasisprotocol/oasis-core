@@ -36,7 +36,7 @@ pub struct PrivateKey(pub ed25519_dalek::Keypair);
 impl PrivateKey {
     /// Generates a new private key pair.
     pub fn generate() -> Self {
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = OsRng {};
 
         PrivateKey(ed25519_dalek::Keypair::generate(&mut rng))
     }
