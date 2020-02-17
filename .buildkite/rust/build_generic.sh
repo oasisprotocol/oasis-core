@@ -35,5 +35,5 @@ source .buildkite/rust/common.sh
 # Run the build
 ###############
 pushd $src_dir
-  cargo build --locked $extra_args
+  CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/default" cargo build --locked $extra_args
 popd

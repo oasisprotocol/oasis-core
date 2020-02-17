@@ -46,10 +46,10 @@ fi
 ###############
 pushd $src_dir
     # Build non-SGX runtime. Checking KM policy requires SGX, disable it.
-    OASIS_UNSAFE_SKIP_KM_POLICY="1" cargo build --locked
+    CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/default" OASIS_UNSAFE_SKIP_KM_POLICY="1" cargo build --locked
 
     # Build SGX runtime.
     unset OASIS_UNSAFE_SKIP_KM_POLICY
-    cargo build --locked --target x86_64-fortanix-unknown-sgx
-    cargo elf2sgxs
+    CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/sgx" cargo build --locked --target x86_64-fortanix-unknown-sgx
+    CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/sgx" cargo elf2sgxs
 popd
