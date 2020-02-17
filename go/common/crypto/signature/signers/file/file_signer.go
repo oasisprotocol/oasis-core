@@ -47,16 +47,16 @@ var (
 
 // NewFactory creates a new factory with the specified roles, with the
 // specified dataDir.
-func NewFactory(config interface{}, roles ...signature.SignerRole) signature.SignerFactory {
+func NewFactory(config interface{}, roles ...signature.SignerRole) (signature.SignerFactory, error) {
 	dataDir, ok := config.(string)
 	if !ok {
-		panic("invalid file signer configuration provided")
+		return nil, errors.New("signature/signer/file: invalid file signer configuration provided")
 	}
 
 	return &Factory{
 		roles:   append([]signature.SignerRole{}, roles...),
 		dataDir: dataDir,
-	}
+	}, nil
 }
 
 // Factory is a PEM file backed SignerFactory.

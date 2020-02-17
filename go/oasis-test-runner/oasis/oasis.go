@@ -584,7 +584,10 @@ func (net *Network) generateDeterministicNodeIdentity(dir *env.Dir, rawSeed stri
 		return err
 	}
 
-	factory := fileSigner.NewFactory(dir.String(), signature.SignerNode)
+	factory, err := fileSigner.NewFactory(dir.String(), signature.SignerNode)
+	if err != nil {
+		return err
+	}
 	if _, err = factory.Generate(signature.SignerNode, rng); err != nil {
 		return err
 	}
@@ -744,7 +747,10 @@ func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string) (signat
 		}
 	}
 
-	signerFactory := fileSigner.NewFactory(dataDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	signerFactory, err := fileSigner.NewFactory(dataDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	if err != nil {
+		return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to create node file signer factory")
+	}
 	nodeIdentity, err := identity.LoadOrGenerate(dataDir.String(), signerFactory)
 	if err != nil {
 		return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to provision node identity")

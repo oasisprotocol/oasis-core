@@ -97,7 +97,7 @@ func doInit(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	dataDir, err := cmdSigner.DirOrPwd()
+	dataDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
 		logger.Error("failed to query data directory",
 			"err", err,
@@ -140,7 +140,7 @@ func doUpdate(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	dataDir, err := cmdSigner.DirOrPwd()
+	dataDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
 		logger.Error("failed to query data directory",
 			"err", err,
@@ -276,7 +276,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	entityDir, err := cmdSigner.DirOrPwd()
+	entityDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
 		logger.Error("failed to retrieve entity dir",
 			"err", err,
@@ -360,7 +360,7 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 		return nil, nil, fmt.Errorf("loadOrGenerateEntity: sanity check failed: one or more unsafe debug flags set")
 	}
 
-	entityDir, err := cmdSigner.DirOrPwd()
+	entityDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
 		logger.Error("failed to retrieve entity dir",
 			"err", err,
@@ -408,7 +408,8 @@ func Register(parentCmd *cobra.Command) {
 
 func init() {
 	entityFlags.Bool(cfgAllowEntitySignedNodes, false, "Entity signing key may be used for node registration (UNSAFE)")
-	entityFlags.AddFlagSet(cmdSigner.SignerFlags)
+	entityFlags.AddFlagSet(cmdSigner.Flags)
+	entityFlags.AddFlagSet(cmdSigner.CLIFlags)
 	_ = entityFlags.MarkHidden(cfgAllowEntitySignedNodes)
 	_ = viper.BindPFlags(entityFlags)
 

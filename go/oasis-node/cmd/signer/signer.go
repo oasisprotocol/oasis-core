@@ -31,7 +31,7 @@ func doExport(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
-	entityDir, err := cmdSigner.DirOrPwd()
+	entityDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
 		logger.Error("failed to retrieve signer dir",
 			"err", err,
@@ -53,7 +53,8 @@ func Register(parentCmd *cobra.Command) {
 		v(signerCmd)
 	}
 
-	exportCmd.Flags().AddFlagSet(cmdSigner.SignerFlags)
+	exportCmd.Flags().AddFlagSet(cmdSigner.Flags)
+	exportCmd.Flags().AddFlagSet(cmdSigner.CLIFlags)
 
 	signerCmd.AddCommand(exportCmd)
 	parentCmd.AddCommand(signerCmd)

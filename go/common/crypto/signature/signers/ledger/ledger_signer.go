@@ -49,16 +49,16 @@ type FactoryConfig struct {
 }
 
 // NewFactory creates a new factory with the specified roles.
-func NewFactory(config interface{}, roles ...signature.SignerRole) signature.SignerFactory {
+func NewFactory(config interface{}, roles ...signature.SignerRole) (signature.SignerFactory, error) {
 	ledgerConfig, ok := config.(*FactoryConfig)
 	if !ok {
-		panic("invalid Ledger signer configuration provided")
+		return nil, fmt.Errorf("invalid Ledger signer configuration provided")
 	}
 	return &Factory{
 		roles:   append([]signature.SignerRole{}, roles...),
 		address: ledgerConfig.Address,
 		index:   ledgerConfig.Index,
-	}
+	}, nil
 }
 
 // EnsureRole ensures that the SignatureFactory is configured for the given

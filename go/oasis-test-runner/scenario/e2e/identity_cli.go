@@ -77,8 +77,11 @@ func (ident *identityCLIImpl) Run(childEnv *env.Env) error {
 func (ident *identityCLIImpl) loadIdentity() error {
 	ident.logger.Info("loading generated entity")
 
-	factory := fileSigner.NewFactory(ident.dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
-	if _, err := identity.Load(ident.dataDir, factory); err != nil {
+	factory, err := fileSigner.NewFactory(ident.dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	if err != nil {
+		return fmt.Errorf("failed to create identity file signer: %w", err)
+	}
+	if _, err = identity.Load(ident.dataDir, factory); err != nil {
 		return fmt.Errorf("failed to load node's identity: %w", err)
 	}
 	return nil

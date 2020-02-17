@@ -244,7 +244,12 @@ func signPolicyFromFlags() (*signature.Signature, error) {
 	var signer signature.Signer
 	var err error
 	if viper.GetString(cfgPolicyKeyFile) != "" {
-		signer, err = fileSigner.NewFactory("", signature.SignerUnknown).(*fileSigner.Factory).ForceLoad(viper.GetString(cfgPolicyKeyFile))
+		var signerFactory signature.SignerFactory
+		signerFactory, err = fileSigner.NewFactory("", signature.SignerUnknown)
+		if err != nil {
+			return nil, err
+		}
+		signer, err = signerFactory.(*fileSigner.Factory).ForceLoad(viper.GetString(cfgPolicyKeyFile))
 		if err != nil {
 			return nil, err
 		}

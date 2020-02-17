@@ -105,6 +105,8 @@ steps:
       - buildkite-agent artifact upload oasis-test-runner
       - cd /workdir/go/oasis-net-runner
       - buildkite-agent artifact upload oasis-net-runner
+      - cd /workdir/go/oasis-remote-signer
+      - buildkite-agent artifact upload oasis-remote-signer
     plugins:
       <<: *docker_plugin
 

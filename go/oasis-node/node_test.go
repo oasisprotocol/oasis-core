@@ -155,7 +155,8 @@ func newTestNode(t *testing.T) *testNode {
 	dataDir, err := ioutil.TempDir("", "oasis-node-test_")
 	require.NoError(err, "create data dir")
 
-	signerFactory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
+	signerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerEntity)
+	require.NoError(err, "create file signer")
 	entity, entitySigner, err := entity.Generate(dataDir, signerFactory, nil)
 	require.NoError(err, "create test entity")
 

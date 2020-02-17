@@ -86,7 +86,7 @@ func GetTxNonceAndFee() (uint64, *transaction.Fee) {
 }
 
 func SignAndSaveTx(tx *transaction.Transaction) {
-	entityDir, err := cmdSigner.DirOrPwd()
+	entityDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
 		logger.Error("failed to retrieve signer dir",
 			"err", err,
@@ -135,6 +135,7 @@ func init() {
 	_ = viper.BindPFlags(TxFlags)
 	TxFlags.AddFlagSet(TxFileFlags)
 	TxFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
-	TxFlags.AddFlagSet(cmdSigner.SignerFlags)
+	TxFlags.AddFlagSet(cmdSigner.Flags)
+	TxFlags.AddFlagSet(cmdSigner.CLIFlags)
 	TxFlags.AddFlagSet(cmdFlags.GenesisFileFlags)
 }

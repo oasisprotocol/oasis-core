@@ -242,7 +242,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	entityDir, err := cmdSigner.DirOrPwd()
+	entityDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
 		logger.Error("failed to retrieve signer dir",
 			"err", err,
@@ -539,7 +539,8 @@ func init() {
 	runtimeFlags.StringSlice(CfgAdmissionPolicyEntityWhitelist, nil, "For entity whitelist node admission policies, the IDs (hex) of the entities in the whitelist")
 
 	_ = viper.BindPFlags(runtimeFlags)
-	runtimeFlags.AddFlagSet(cmdSigner.SignerFlags)
+	runtimeFlags.AddFlagSet(cmdSigner.Flags)
+	runtimeFlags.AddFlagSet(cmdSigner.CLIFlags)
 
 	registerFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	registerFlags.AddFlagSet(cmdConsensus.TxFlags)

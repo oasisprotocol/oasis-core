@@ -95,7 +95,7 @@ func (ent *Entity) update() error {
 	args := []string{
 		"registry", "entity", "update",
 		"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
-		"--" + cmdSigner.CfgSignerDir, ent.dir.String(),
+		"--" + cmdSigner.CfgCLISignerDir, ent.dir.String(),
 	}
 	for _, n := range ent.nodes {
 		args = append(args, "--entity.node.id", n.String())
@@ -145,7 +145,7 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 			args := []string{
 				"registry", "entity", "init",
 				"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
-				"--" + cmdSigner.CfgSignerDir, entityDir.String(),
+				"--" + cmdSigner.CfgCLISignerDir, entityDir.String(),
 			}
 
 			var w io.WriteCloser
@@ -168,7 +168,14 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 			net: net,
 			dir: entityDir,
 		}
-		signerFactory := fileSigner.NewFactory(entityDir.String(), signature.SignerEntity)
+		signerFactory, err := fileSigner.NewFactory(entityDir.String(), signature.SignerEntity)
+		if err != nil {
+			net.logger.Error("failed to create entity file signer factory",
+				"err", err,
+				"entity_name", entName,
+			)
+			return nil, errors.Wrap(err, "oasis/entity: failed to create entity file signer")
+		}
 		ent.entity, ent.entitySigner, err = entity.Load(entityDir.String(), signerFactory)
 		if err != nil {
 			net.logger.Error("failed to load newly provisoned entity",

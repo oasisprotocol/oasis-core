@@ -243,7 +243,10 @@ func (r *registryCLIImpl) listEntities(childEnv *env.Env) ([]signature.PublicKey
 
 // loadEntity loads entity and signer from given directory.
 func (r *registryCLIImpl) loadEntity(entDir string) (*entity.Entity, error) {
-	entitySignerFactory := fileSigner.NewFactory(entDir, signature.SignerEntity)
+	entitySignerFactory, err := fileSigner.NewFactory(entDir, signature.SignerEntity)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create entity file signer: %w", err)
+	}
 	ent, _, err := entity.Load(entDir, entitySignerFactory)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load entity: %w", err)
@@ -259,7 +262,7 @@ func (r *registryCLIImpl) initEntity(childEnv *env.Env, entDir string) (*entity.
 	args := []string{
 		"registry", "entity", "init",
 		"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
-		"--" + cmdSigner.CfgSignerDir, entDir,
+		"--" + cmdSigner.CfgCLISignerDir, entDir,
 	}
 	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "entity-init", r.basicImpl.net.Config().NodeBinary, args)
 	if err != nil {
@@ -281,7 +284,7 @@ func (r *registryCLIImpl) updateEntity(childEnv *env.Env, nodes []*node.Node, no
 	args := []string{
 		"registry", "entity", "update",
 		"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
-		"--" + cmdSigner.CfgSignerDir, entDir,
+		"--" + cmdSigner.CfgCLISignerDir, entDir,
 		"--" + cmdRegEnt.CfgNodeID, strings.Join(nodeIDs, ","),
 		"--" + cmdRegEnt.CfgNodeDescriptor, strings.Join(nodeGenesisFiles, ","),
 	}
@@ -443,7 +446,7 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 			"--" + cmdRegNode.CfgRole, testNode.Roles.String(),
 			"--" + cmdRegNode.CfgNodeRuntimeID, testNode.Runtimes[0].ID.String(),
 			"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
-			"--" + cmdSigner.CfgSignerDir, entDir,
+			"--" + cmdSigner.CfgCLISignerDir, entDir,
 			"--" + cmdCommon.CfgDataDir, dataDir,
 		}
 		var out bytes.Buffer
@@ -535,7 +538,7 @@ func (r *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPa
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + cmdCommon.CfgDebugAllowTestKeys,
 		"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
-		"--" + cmdSigner.CfgSignerDir, entDir,
+		"--" + cmdSigner.CfgCLISignerDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
 	if out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "gen_register", r.basicImpl.net.Config().NodeBinary, args); err != nil {
@@ -558,7 +561,7 @@ func (r *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, tx
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + cmdCommon.CfgDebugAllowTestKeys,
 		"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
-		"--" + cmdSigner.CfgSignerDir, entDir,
+		"--" + cmdSigner.CfgCLISignerDir, entDir,
 		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
 	}
 	if out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "gen_deregister", r.basicImpl.net.Config().NodeBinary, args); err != nil {

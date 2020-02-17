@@ -92,7 +92,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, registry.Backend) {
 	return conn, client
 }
 
-func doInit(cmd *cobra.Command, args []string) {
+func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -127,7 +127,7 @@ func doInit(cmd *cobra.Command, args []string) {
 
 		isSelfSigned = true
 	} else {
-		entityDir, err = cmdSigner.DirOrPwd()
+		entityDir, err = cmdSigner.CLIDirOrPwd()
 		if err != nil {
 			logger.Error("failed to retrieve entity dir",
 				"err", err,
@@ -155,7 +155,13 @@ func doInit(cmd *cobra.Command, args []string) {
 	}
 
 	// Provision the node identity.
-	nodeSignerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	nodeSignerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	if err != nil {
+		logger.Error("failed to create node identity signer factory",
+			"err", err,
+		)
+		os.Exit(1)
+	}
 	nodeIdentity, err := identity.LoadOrGenerate(dataDir, nodeSignerFactory)
 	if err != nil {
 		logger.Error("failed to load or generate node identity",
@@ -346,7 +352,13 @@ func doIsRegistered(cmd *cobra.Command, args []string) {
 	}
 
 	// Load node's identity.
-	nodeSignerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	nodeSignerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	if err != nil {
+		logger.Error("failed to create node identity signer factory",
+			"err", err,
+		)
+		os.Exit(1)
+	}
 	nodeIdentity, err := identity.Load(dataDir, nodeSignerFactory)
 	if err != nil {
 		logger.Error("failed to load node identity",
@@ -380,7 +392,8 @@ func doIsRegistered(cmd *cobra.Command, args []string) {
 func Register(parentCmd *cobra.Command) {
 	initCmd.Flags().AddFlagSet(flags)
 	initCmd.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
-	initCmd.Flags().AddFlagSet(cmdSigner.SignerFlags)
+	initCmd.Flags().AddFlagSet(cmdSigner.Flags)
+	initCmd.Flags().AddFlagSet(cmdSigner.CLIFlags)
 
 	listCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
 	listCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
