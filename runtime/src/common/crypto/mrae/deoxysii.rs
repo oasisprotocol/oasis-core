@@ -30,7 +30,7 @@ fn derive_symmetric_key(public: &[u8; 32], private: &[u8; 32]) -> [u8; KEY_SIZE]
 /// Generates a public/private key pair suitable for use with
 /// `derive_symmetric_key`, `box_seal`, and `box_open`.
 pub fn generate_key_pair() -> ([u8; 32], [u8; 32]) {
-    let mut rng = OsRng::new().unwrap();
+    let mut rng = OsRng {};
 
     let sk = x25519_dalek::StaticSecret::new(&mut rng);
     let pk = x25519_dalek::PublicKey::from(&sk);
@@ -115,7 +115,7 @@ mod tests {
 
     #[bench]
     fn bench_mrae_box_seal_4096(b: &mut Bencher) {
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = OsRng {};
 
         // Set up the keys.
         let (_a_pub, a_priv) = generate_key_pair(); // Alice
@@ -143,7 +143,7 @@ mod tests {
 
     #[bench]
     fn bench_mrae_box_open_4096(b: &mut Bencher) {
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = OsRng {};
 
         // Set up the keys.
         let (a_pub, a_priv) = generate_key_pair(); // Alice

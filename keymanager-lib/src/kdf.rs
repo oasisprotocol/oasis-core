@@ -408,7 +408,7 @@ impl Kdf {
     }
 
     fn save_master_secret(master_secret: &MasterSecret) {
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = OsRng {};
 
         // Encrypt the master secret.
         let mut nonce = [0u8; NONCE_SIZE];
@@ -425,7 +425,7 @@ impl Kdf {
     }
 
     fn generate_master_secret() -> MasterSecret {
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = OsRng {};
 
         // TODO: Support static keying for debugging.
         let mut master_secret = [0u8; 32];

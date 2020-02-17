@@ -113,7 +113,7 @@ pub struct ContractKey {
 impl ContractKey {
     /// Generate a new random key (for testing).
     pub fn generate_mock() -> Self {
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = OsRng {};
         let sk = x25519_dalek::StaticSecret::new(&mut rng);
         let pk = x25519_dalek::PublicKey::from(&sk);
 
