@@ -225,5 +225,5 @@ func PrepareSignerMessage(context Context, message []byte) ([]byte, error) {
 	_, _ = h.Write(message)
 	sum := h.Sum(nil)
 
-	return sum[:], nil
+	return sum, nil
 }

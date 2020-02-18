@@ -465,12 +465,12 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		unaryInterceptors = append(unaryInterceptors, wrapper.unaryInterceptor)
 		streamInterceptors = append(streamInterceptors, wrapper.streamInterceptor)
 	}
-	sOpts = append(sOpts, grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)))
-	sOpts = append(sOpts, grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(streamInterceptors...)))
-	sOpts = append(sOpts, grpc.MaxRecvMsgSize(maxRecvMsgSize))
-	sOpts = append(sOpts, grpc.MaxSendMsgSize(maxSendMsgSize))
-	sOpts = append(sOpts, grpc.KeepaliveParams(serverKeepAliveParams))
-	sOpts = append(sOpts, grpc.CustomCodec(&CBORCodec{}))
+	sOpts = append(sOpts, grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(streamInterceptors...))),
+		grpc.MaxRecvMsgSize(maxRecvMsgSize),
+		grpc.MaxSendMsgSize(maxSendMsgSize),
+		grpc.KeepaliveParams(serverKeepAliveParams),
+		grpc.CustomCodec(&CBORCodec{})
 	sOpts = append(sOpts, config.CustomOptions...)
 
 	if config.Certificate != nil {

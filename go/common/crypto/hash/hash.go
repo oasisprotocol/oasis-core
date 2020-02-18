@@ -83,7 +83,7 @@ func (h *Hash) FromBytes(data ...[]byte) {
 		_, _ = hasher.Write(d)
 	}
 	sum := hasher.Sum([]byte{})
-	_ = h.UnmarshalBinary(sum[:])
+	_ = h.UnmarshalBinary(sum)
 }
 
 // Equal compares vs another hash for equality.
@@ -124,7 +124,7 @@ func (b *Builder) Write(p []byte) (int, error) {
 // It does not change the underlying hash state.
 func (b *Builder) Build() (h Hash) {
 	sum := b.hasher.Sum([]byte{})
-	_ = h.UnmarshalBinary(sum[:])
+	_ = h.UnmarshalBinary(sum)
 	return
 }
 

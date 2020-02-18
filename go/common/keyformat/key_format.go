@@ -103,9 +103,9 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 				panic(fmt.Sprintf("key format: failed to marshal: %s", err))
 			}
 
-			copy(buf[:], data)
+			copy(buf, data)
 		case []byte:
-			copy(buf[:], t)
+			copy(buf, t)
 		default:
 			panic(fmt.Sprintf("unsupported type: %T", t))
 		}

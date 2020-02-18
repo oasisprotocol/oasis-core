@@ -202,7 +202,7 @@ func (s *Signer) Reset() {
 }
 
 func (s *Signer) marshalPEM() ([]byte, error) {
-	return pem.Marshal(privateKeyPemType, s.privateKey[:])
+	return pem.Marshal(privateKeyPemType, s.privateKey)
 }
 
 func (s *Signer) unmarshalPEM(data []byte) error {

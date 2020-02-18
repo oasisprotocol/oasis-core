@@ -169,7 +169,7 @@ func (ca *CommitteeAddress) ParseCertificate() (*x509.Certificate, error) {
 
 // MarshalText implements the encoding.TextMarshaler interface.
 func (ca *CommitteeAddress) MarshalText() ([]byte, error) {
-	certificateStr := base64.StdEncoding.EncodeToString(ca.Certificate[:])
+	certificateStr := base64.StdEncoding.EncodeToString(ca.Certificate)
 	addrStr, err := ca.Address.MarshalText()
 	if err != nil {
 		return nil, fmt.Errorf("node: error marshalling committee address' TCP address: %w", err)
