@@ -17,6 +17,7 @@ type tree struct {
 
 	// NOTE: This can be a map as updates are commutative.
 	pendingWriteLog map[string]*pendingEntry
+	withoutWriteLog bool
 	// pendingRemovedNodes are the nodes that have been removed from the
 	// in-memory tree and should be marked for garbage collection if this
 	// tree is committed to the node database.
@@ -58,6 +59,13 @@ func PersistEverythingFromSyncer(doit bool) Option {
 	}
 }
 
+// WithoutWriteLog disables building a write log when performing operations.
+func WithoutWriteLog() Option {
+	return func(t *tree) {
+		t.withoutWriteLog = true
+	}
+}
+
 // New creates a new empty Urkel tree backed by the given node database.
 func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) Tree {
 	if rs == nil {
@@ -70,6 +78,7 @@ func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) Tree {
 	t := &tree{
 		cache:           newCache(ndb, rs),
 		pendingWriteLog: make(map[string]*pendingEntry),
+		withoutWriteLog: false,
 	}
 
 	for _, v := range options {

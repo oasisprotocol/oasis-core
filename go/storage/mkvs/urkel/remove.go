@@ -25,11 +25,13 @@ func (t *tree) RemoveExisting(ctx context.Context, key []byte) ([]byte, error) {
 	}
 
 	// Update the pending write log.
-	entry := t.pendingWriteLog[node.ToMapKey(key)]
-	if entry == nil {
-		t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{key, nil, changed, nil}
-	} else {
-		entry.value = nil
+	if !t.withoutWriteLog {
+		entry := t.pendingWriteLog[node.ToMapKey(key)]
+		if entry == nil {
+			t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{key, nil, changed, nil}
+		} else {
+			entry.value = nil
+		}
 	}
 
 	t.cache.setPendingRoot(newRoot)

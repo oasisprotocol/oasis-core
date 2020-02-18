@@ -21,19 +21,13 @@ var (
 	ErrKnownRootMismatch = errors.New("urkel: known root mismatch")
 )
 
-// Tree is a MKVS tree interface.
-type Tree interface {
-	syncer.ReadSyncer
-
+// KeyValueTree is the key-value store tree interface.
+type KeyValueTree interface {
 	// Insert inserts a key/value pair into the tree.
 	Insert(ctx context.Context, key []byte, value []byte) error
 
 	// Get looks up an existing key.
 	Get(ctx context.Context, key []byte) ([]byte, error)
-
-	// PrefetchPrefixes populates the in-memory tree with nodes for keys
-	// starting with given prefixes.
-	PrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit uint16) error
 
 	// RemoveExisting removes a key from the tree and returns the previous value.
 	RemoveExisting(ctx context.Context, key []byte) ([]byte, error)
@@ -43,12 +37,10 @@ type Tree interface {
 
 	// NewIterator returns a new iterator over the tree.
 	NewIterator(ctx context.Context, options ...IteratorOption) Iterator
+}
 
-	// ApplyWriteLog applies the operations from a write log to the current tree.
-	//
-	// The caller is responsible for calling Commit.
-	ApplyWriteLog(ctx context.Context, wl writelog.Iterator) error
-
+// ClosableTree is a tree interface that can be closed.
+type ClosableTree interface {
 	// Close releases resources associated with this tree. After calling this
 	// method the tree MUST NOT be used anymore and all methods will return
 	// the ErrClosed error.
@@ -56,6 +48,31 @@ type Tree interface {
 	// Any pending write operations are discarded. If you need to persist them
 	// you need to call Commit before calling this method.
 	Close()
+}
+
+// OverlayTree is an overlay tree.
+type OverlayTree interface {
+	KeyValueTree
+	ClosableTree
+
+	// Commit commits any modifications to the underlying tree.
+	Commit(ctx context.Context) error
+}
+
+// Tree is a general MKVS tree interface.
+type Tree interface {
+	KeyValueTree
+	ClosableTree
+	syncer.ReadSyncer
+
+	// PrefetchPrefixes populates the in-memory tree with nodes for keys
+	// starting with given prefixes.
+	PrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit uint16) error
+
+	// ApplyWriteLog applies the operations from a write log to the current tree.
+	//
+	// The caller is responsible for calling Commit.
+	ApplyWriteLog(ctx context.Context, wl writelog.Iterator) error
 
 	// Size calculates the size of the tree in bytes.
 	Size() uint64

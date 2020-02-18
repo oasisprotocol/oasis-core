@@ -27,16 +27,18 @@ func (t *tree) Insert(ctx context.Context, key []byte, value []byte) error {
 	}
 
 	// Update the pending write log.
-	entry := t.pendingWriteLog[node.ToMapKey(key)]
-	if entry == nil {
-		t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{
-			key:          key,
-			value:        value,
-			existed:      result.existed,
-			insertedLeaf: result.insertedLeaf,
+	if !t.withoutWriteLog {
+		entry := t.pendingWriteLog[node.ToMapKey(key)]
+		if entry == nil {
+			t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{
+				key:          key,
+				value:        value,
+				existed:      result.existed,
+				insertedLeaf: result.insertedLeaf,
+			}
+		} else {
+			entry.value = value
 		}
-	} else {
-		entry.value = value
 	}
 
 	t.cache.setPendingRoot(result.newRoot)
