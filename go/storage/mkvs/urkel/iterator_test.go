@@ -2,6 +2,7 @@ package urkel
 
 import (
 	"context"
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -134,6 +135,54 @@ func TestIterator(t *testing.T) {
 		require.EqualValues(t, 0, statsIntermediate.SyncGetPrefixesCount, "SyncGetPrefixesCount")
 		require.EqualValues(t, 1, statsIntermediate.SyncIterateCount, "SyncIterateCount")
 	})
+}
+
+func TestIteratorCase1(t *testing.T) {
+	ctx := context.Background()
+	tree := New(nil, nil)
+	defer tree.Close()
+
+	items := writelog.WriteLog{
+		writelog.LogEntry{Key: []byte("key 5"), Value: []byte("fivey")},
+		writelog.LogEntry{Key: []byte("key 7"), Value: []byte("seven")},
+	}
+
+	tests := []testCase{
+		{seek: node.Key("key 3"), pos: 0},
+	}
+
+	err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(items))
+	require.NoError(t, err, "ApplyWriteLog")
+
+	it := tree.NewIterator(ctx)
+	defer it.Close()
+
+	testIterator(t, items, it, tests)
+}
+
+func TestIteratorCase2(t *testing.T) {
+	ctx := context.Background()
+	tree := New(nil, nil)
+	defer tree.Close()
+
+	for _, key := range []string{
+		"54dcb497eb46bc7cb1a1a29d143d5d41f1a684c97e12f2ae536eceb828c15fc34c02",
+		"54dd32a01981671e87f0ef72cd601a1323f6804ace91bd77cd719473ce40ff6c2b01",
+	} {
+		rawKey, err := hex.DecodeString(key)
+		require.NoError(t, err, "DecodeString")
+		err = tree.Insert(ctx, rawKey, []byte("value"))
+		require.NoError(t, err, "Insert")
+	}
+
+	it := tree.NewIterator(ctx)
+	defer it.Close()
+
+	missingKey, err := hex.DecodeString("54da85be3251772db943cba67341d402117c87ada2a9e8aad7171d40b6b4dc9fbc")
+	require.NoError(t, err, "DecodeString")
+	it.Seek(missingKey)
+	require.True(t, it.Valid(), "iterator should be valid")
+	require.EqualValues(t, []byte("value"), it.Value(), "value should be correct")
 }
 
 func TestIteratorEviction(t *testing.T) {

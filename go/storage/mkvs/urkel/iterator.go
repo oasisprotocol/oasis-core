@@ -244,7 +244,7 @@ func (it *treeIterator) Next() {
 	it.value = nil
 }
 
-func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node.Key, key node.Key, state visitState) error {
+func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node.Key, key node.Key, state visitState) error { // nolint: gocyclo
 	// Dereference the node, possibly making a remote request.
 	nd, err := it.tree.cache.derefNodePtr(it.ctx, ptr, it.tree.newFetcherSyncIterate(key, it.prefetch))
 	if err != nil {
@@ -266,9 +266,17 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node
 	case *node.InternalNode:
 		// Internal node.
 		bitLength := bitDepth + n.LabelBitLength
+		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
+
+		// Check if the key is longer than the current path but lexicographically smaller. In this
+		// case everything in this subtree will be larger so we need to take the first value.
+		var takeFirst bool
+		if bitLength > 0 && key.BitLength() >= bitLength && key.Compare(newPath) < 0 {
+			takeFirst = true
+		}
 
 		// Does lookup key end here? Look into LeafNode.
-		if (state == visitBefore && key.BitLength() <= bitLength) || state == visitAt {
+		if (state == visitBefore && (key.BitLength() <= bitLength || takeFirst)) || state == visitAt {
 			if state == visitBefore {
 				err := it.doNext(n.LeafNode, bitLength, path, key, visitBefore)
 				if err != nil {
@@ -281,17 +289,17 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node
 				}
 			}
 			// Key has not been found, continue with search for next key.
-			key = key.AppendBit(bitLength, false)
+			if key.BitLength() <= bitLength {
+				key = key.AppendBit(bitLength, false)
+			}
 		}
 
 		if state == visitBefore {
 			state = visitAt
 		}
 
-		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
-
 		// Continue recursively based on a bit value.
-		if (state == visitAt && !key.GetBit(bitLength)) || state == visitAtLeft {
+		if (state == visitAt && (!key.GetBit(bitLength) || takeFirst)) || state == visitAtLeft {
 			if state == visitAt {
 				err := it.doNext(n.Left, bitLength, newPath.AppendBit(bitLength, false), key, visitBefore)
 				if err != nil {
