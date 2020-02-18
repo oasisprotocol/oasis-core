@@ -7,22 +7,21 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 )
 
-// Remove removes a key from the tree.
-func (t *Tree) Remove(ctx context.Context, key []byte) error {
+// RemoveExisting removes a key from the tree and returns the previous value.
+func (t *Tree) RemoveExisting(ctx context.Context, key []byte) ([]byte, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
 	if t.cache.isClosed() {
-		return ErrClosed
+		return nil, ErrClosed
 	}
 
 	// Remember where the path from root to target node ends (will end).
 	t.cache.markPosition()
 
-	var changed bool
-	newRoot, changed, err := t.doRemove(ctx, t.cache.pendingRoot, 0, key, 0)
+	newRoot, changed, existing, err := t.doRemove(ctx, t.cache.pendingRoot, 0, key, 0)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Update the pending write log.
@@ -34,7 +33,13 @@ func (t *Tree) Remove(ctx context.Context, key []byte) error {
 	}
 
 	t.cache.setPendingRoot(newRoot)
-	return nil
+	return existing, nil
+}
+
+// Remove removes a key from the tree.
+func (t *Tree) Remove(ctx context.Context, key []byte) error {
+	_, err := t.RemoveExisting(ctx, key)
+	return err
 }
 
 func (t *Tree) doRemove(
@@ -43,36 +48,37 @@ func (t *Tree) doRemove(
 	bitDepth node.Depth,
 	key node.Key,
 	depth node.Depth,
-) (*node.Pointer, bool, error) {
+) (*node.Pointer, bool, []byte, error) {
 	if ctx.Err() != nil {
-		return nil, false, ctx.Err()
+		return nil, false, nil, ctx.Err()
 	}
 
 	// Dereference the node, possibly making a remote request.
 	nd, err := t.cache.derefNodePtr(ctx, ptr, t.newFetcherSyncGet(key, true))
 	if err != nil {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 
 	switch n := nd.(type) {
 	case nil:
 		// Remove from nil node.
-		return nil, false, nil
+		return nil, false, nil, nil
 	case *node.InternalNode:
 		// Remove from internal node and recursively collapse the branch, if
 		// needed.
 		bitLength := bitDepth + n.LabelBitLength
 
 		var changed bool
+		var existing []byte
 		if key.BitLength() == bitLength {
-			n.LeafNode, changed, err = t.doRemove(ctx, n.LeafNode, bitLength, key, depth)
+			n.LeafNode, changed, existing, err = t.doRemove(ctx, n.LeafNode, bitLength, key, depth)
 		} else if key.GetBit(bitLength) {
-			n.Right, changed, err = t.doRemove(ctx, n.Right, bitLength, key, depth+1)
+			n.Right, changed, existing, err = t.doRemove(ctx, n.Right, bitLength, key, depth+1)
 		} else {
-			n.Left, changed, err = t.doRemove(ctx, n.Left, bitLength, key, depth+1)
+			n.Left, changed, existing, err = t.doRemove(ctx, n.Left, bitLength, key, depth+1)
 		}
 		if err != nil {
-			return nil, false, err
+			return nil, false, existing, err
 		}
 
 		// Fetch and check the remaining children.
@@ -83,11 +89,11 @@ func (t *Tree) doRemove(
 		}
 		remainingLeft, err := t.cache.derefNodePtr(ctx, n.Left, t.newFetcherSyncGet(key, true))
 		if err != nil {
-			return nil, false, err
+			return nil, false, nil, err
 		}
 		remainingRight, err := t.cache.derefNodePtr(ctx, n.Right, t.newFetcherSyncGet(key, true))
 		if err != nil {
-			return nil, false, err
+			return nil, false, nil, err
 		}
 
 		// If exactly one child including LeafNode remains, collapse it.
@@ -96,7 +102,7 @@ func (t *Tree) doRemove(
 			n.LeafNode = nil
 			t.pendingRemovedNodes = append(t.pendingRemovedNodes, n)
 			t.cache.removeNode(ptr)
-			return ndLeaf, true, nil
+			return ndLeaf, true, existing, nil
 		} else if remainingLeaf == nil && (remainingLeft == nil || remainingRight == nil) {
 			var nodePtr *node.Pointer
 			var ndChild node.Node
@@ -127,7 +133,7 @@ func (t *Tree) doRemove(
 
 			t.pendingRemovedNodes = append(t.pendingRemovedNodes, n)
 			t.cache.removeNode(ptr)
-			return nodePtr, true, nil
+			return nodePtr, true, existing, nil
 		}
 
 		// Two or more children including LeafNode remain, just mark dirty bit.
@@ -143,16 +149,16 @@ func (t *Tree) doRemove(
 			t.cache.rollbackNode(ptr)
 		}
 
-		return ptr, changed, nil
+		return ptr, changed, existing, nil
 	case *node.LeafNode:
 		// Remove from leaf node.
 		if n.Key.Equal(key) {
 			t.pendingRemovedNodes = append(t.pendingRemovedNodes, n)
 			t.cache.removeNode(ptr)
-			return nil, true, nil
+			return nil, true, n.Value, nil
 		}
 
-		return ptr, false, nil
+		return ptr, false, nil, nil
 	default:
 		panic(fmt.Sprintf("urkel: unknown node type: %+v", n))
 	}
