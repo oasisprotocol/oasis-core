@@ -60,11 +60,6 @@ steps:
   ###########
   # Lint jobs
   ###########
-  - label: Lint Git commits
-    command: .buildkite/scripts/lint_git.sh
-    plugins:
-      <<: *docker_plugin
-
   - label: Lint Go node
     command:
       - .buildkite/go/lint.sh
