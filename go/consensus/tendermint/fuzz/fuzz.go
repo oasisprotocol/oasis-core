@@ -16,6 +16,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
 	registryApp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry"
 	stakingApp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking"
+	"github.com/oasislabs/oasis-core/go/upgrade"
 )
 
 var (
@@ -53,7 +54,7 @@ func Fuzz(data []byte) int {
 	}
 
 	// The muxer will start with the previous state, if it exists (the state database isn't cleared).
-	muxer, _ := abci.NewMockMux(ctx, appConfig)
+	muxer, _ := abci.NewMockMux(ctx, upgrade.NewDummyUpgradeManager(), appConfig)
 	defer muxer.MockClose()
 
 	for _, app := range FuzzableApps {

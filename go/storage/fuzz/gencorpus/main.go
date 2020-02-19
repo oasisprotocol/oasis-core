@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	commonFuzz "github.com/oasislabs/oasis-core/go/common/fuzz"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/storage"
@@ -19,7 +20,7 @@ const (
 )
 
 func main() {
-	storage, err := storage.New(context.Background(), "/tmp/oasis-node-fuzz-storage", &identity.Identity{}, nil, nil)
+	storage, err := storage.New(context.Background(), "/tmp/oasis-node-fuzz-storage", common.Namespace{}, &identity.Identity{}, nil, nil)
 	if err != nil {
 		panic(err)
 	}

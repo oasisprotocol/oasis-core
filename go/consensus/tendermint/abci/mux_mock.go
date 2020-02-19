@@ -4,6 +4,8 @@ package abci
 
 import (
 	"context"
+
+	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
 )
 
 // MockABCIMux exports some of the muxer's internal methods for testing use.
@@ -22,8 +24,8 @@ func (mux *MockABCIMux) MockClose() {
 }
 
 // NewMockMux creates a new ABCI mux suitable for testing.
-func NewMockMux(ctx context.Context, cfg *ApplicationConfig) (*MockABCIMux, error) {
-	mux, err := newABCIMux(ctx, cfg)
+func NewMockMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationConfig) (*MockABCIMux, error) {
+	mux, err := newABCIMux(ctx, upgrader, cfg)
 	if err != nil {
 		return nil, err
 	}
