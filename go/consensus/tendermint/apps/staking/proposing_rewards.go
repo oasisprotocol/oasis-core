@@ -41,7 +41,8 @@ func (app *stakingApplication) rewardBlockProposing(ctx *abci.Context, stakeStat
 	if err != nil {
 		return fmt.Errorf("app state getting current epoch: %w", err)
 	}
-	if epoch == epochtime.EpochInvalid {
+	invalidEpoch := epochtime.EpochInvalid // Workaround for incorrect go-fuzz instrumentation.
+	if epoch == invalidEpoch {
 		ctx.Logger().Info("rewardBlockProposing: this block does not belong to an epoch. no block proposing reward")
 		return nil
 	}

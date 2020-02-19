@@ -6,6 +6,7 @@ import (
 	"context"
 	"io/ioutil"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	commonFuzz "github.com/oasislabs/oasis-core/go/common/fuzz"
@@ -40,7 +41,7 @@ func init() {
 	}
 
 	// Create the storage backend service.
-	storageBackend, err = storage.New(context.Background(), localDB, identity, nil, nil)
+	storageBackend, err = storage.New(context.Background(), localDB, common.Namespace{}, identity, nil, nil)
 	if err != nil {
 		panic(err)
 	}
