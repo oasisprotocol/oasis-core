@@ -69,32 +69,27 @@ impl UrkelTree {
                 if let NodeBox::Internal(ref mut n) = *node_ref.borrow_mut() {
                     // Remove from internal node and recursively collapse the branch, if
                     // needed.
-                    let (new_child, c, o) = if key.bit_length() == bit_depth + n.label_bit_length {
+                    let bit_length = bit_depth + n.label_bit_length;
+
+                    if key.bit_length() < bit_length {
+                        // Lookup key is too short for the current n.Label, so it doesn't exist.
+                        return Ok((ptr.clone(), false, None));
+                    }
+
+                    let (new_child, c, o) = if key.bit_length() == bit_length {
                         self._remove(ctx, n.leaf_node.clone(), bit_depth, key, depth)?
-                    } else if key.get_bit(bit_depth + n.label_bit_length) {
-                        self._remove(
-                            ctx,
-                            n.right.clone(),
-                            bit_depth + n.label_bit_length,
-                            key,
-                            depth + 1,
-                        )?
+                    } else if key.get_bit(bit_length) {
+                        self._remove(ctx, n.right.clone(), bit_length, key, depth + 1)?
                     } else {
-                        self._remove(
-                            ctx,
-                            n.left.clone(),
-                            bit_depth + n.label_bit_length,
-                            key,
-                            depth + 1,
-                        )?
+                        self._remove(ctx, n.left.clone(), bit_length, key, depth + 1)?
                     };
 
                     changed = c;
                     old_val = o;
 
-                    if key.bit_length() == bit_depth + n.label_bit_length {
+                    if key.bit_length() == bit_length {
                         n.leaf_node = new_child;
-                    } else if key.get_bit(bit_depth + n.label_bit_length) {
+                    } else if key.get_bit(bit_length) {
                         n.right = new_child;
                     } else {
                         n.left = new_child;
