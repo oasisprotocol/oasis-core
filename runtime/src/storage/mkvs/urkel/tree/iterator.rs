@@ -208,9 +208,21 @@ impl<'tree> TreeIterator<'tree> {
                 if let NodeBox::Internal(ref n) = *node_ref.borrow() {
                     // Internal node.
                     let bit_length = bit_depth + n.label_bit_length;
+                    let new_path = path.merge(bit_depth, &n.label, n.label_bit_length);
+
+                    // Check if the key is longer than the current path but lexicographically smaller. In this
+                    // case everything in this subtree will be larger so we need to take the first value.
+                    // takeFirst bool
+                    let take_first =
+                        if bit_length > 0 && key.bit_length() >= bit_length && key < new_path {
+                            true
+                        } else {
+                            false
+                        };
 
                     // Does lookup key end here? Look into LeafNode.
-                    if (state == VisitState::Before && key.bit_length() <= bit_length)
+                    if (state == VisitState::Before
+                        && (key.bit_length() <= bit_length || take_first))
                         || state == VisitState::At
                     {
                         if state == VisitState::Before {
@@ -233,17 +245,17 @@ impl<'tree> TreeIterator<'tree> {
                             }
                         }
                         // Key has not been found, continue with search for next key.
-                        key = key.append_bit(bit_length, false);
+                        if key.bit_length() <= bit_length {
+                            key = key.append_bit(bit_length, false);
+                        }
                     }
 
                     if state == VisitState::Before {
                         state = VisitState::At;
                     }
 
-                    let new_path = path.merge(bit_depth, &n.label, n.label_bit_length);
-
                     // Continue recursively based on a bit value.
-                    if (state == VisitState::At && !key.get_bit(bit_length))
+                    if (state == VisitState::At && (!key.get_bit(bit_length) || take_first))
                         || state == VisitState::AtLeft
                     {
                         if state == VisitState::At {
@@ -339,6 +351,7 @@ impl UrkelTree {
 #[cfg(test)]
 mod test {
     use io_context::Context;
+    use rustc_hex::FromHex;
 
     use super::{tree_test::generate_key_value_pairs_ex, *};
     use crate::storage::mkvs::urkel::interop::{Driver, ProtocolServer};
@@ -461,6 +474,61 @@ mod test {
         assert_eq!(0, stats.sync_get_count, "sync_get_count");
         assert_eq!(0, stats.sync_get_prefixes_count, "sync_get_prefixes_count");
         assert_eq!(2, stats.sync_iterate_count, "sync_iterate_count");
+    }
+
+    #[test]
+    fn test_iterator_case1() {
+        let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
+
+        let items = vec![
+            (b"key 5".to_vec(), b"fivey".to_vec()),
+            (b"key 7".to_vec(), b"seven".to_vec()),
+        ];
+        for (key, value) in items.iter() {
+            tree.insert(Context::background(), key, value).unwrap();
+        }
+
+        let tests = vec![(b"key 3".to_vec(), 0)];
+
+        let it = tree.iter(Context::background());
+        test_iterator_with(&items, it, &tests);
+    }
+
+    #[test]
+    fn test_iterator_case2() {
+        let mut tree = UrkelTree::make().new(Box::new(NoopReadSyncer {}));
+
+        let items: Vec<(Vec<u8>, Vec<u8>)> = vec![
+            (
+                "54dcb497eb46bc7cb1a1a29d143d5d41f1a684c97e12f2ae536eceb828c15fc34c02"
+                    .from_hex()
+                    .unwrap(),
+                b"value".to_vec(),
+            ),
+            (
+                "54dcb497eb46bc7cb1a1a29d143d5d41f1a684c97e12f2ae536eceb828c15fc34c02"
+                    .from_hex()
+                    .unwrap(),
+                b"value".to_vec(),
+            ),
+        ];
+        for (key, value) in items.iter() {
+            tree.insert(Context::background(), key, value).unwrap();
+        }
+
+        let mut it = tree.iter(Context::background());
+        let missing_key: Vec<u8> =
+            "54da85be3251772db943cba67341d402117c87ada2a9e8aad7171d40b6b4dc9fbc"
+                .from_hex()
+                .unwrap();
+        it.seek(&missing_key);
+        assert!(it.is_valid(), "iterator should be valid");
+        let item = Iterator::next(&mut it);
+        assert_eq!(
+            Some((items[0].0.clone(), b"value".to_vec())),
+            item,
+            "value should be correct"
+        );
     }
 
     #[test]

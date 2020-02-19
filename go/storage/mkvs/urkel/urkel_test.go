@@ -311,7 +311,7 @@ func testEmptyKeys(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
-	testEmptyKeyInsert := func(t *testing.T, ctx context.Context, tree *Tree) {
+	testEmptyKeyInsert := func(t *testing.T, ctx context.Context, tree Tree) {
 		emptyKey := node.Key("")
 		emptyValue := []byte("empty value")
 
@@ -323,7 +323,7 @@ func testEmptyKeys(t *testing.T, ndb db.NodeDB) {
 		require.Equal(t, emptyValue, value, "empty value after insert")
 	}
 
-	testEmptyKeyRemove := func(t *testing.T, ctx context.Context, tree *Tree) {
+	testEmptyKeyRemove := func(t *testing.T, ctx context.Context, tree Tree) {
 		emptyKey := node.Key("")
 
 		err := tree.Remove(ctx, emptyKey)
@@ -334,7 +334,7 @@ func testEmptyKeys(t *testing.T, ndb db.NodeDB) {
 		require.Equal(t, []byte(nil), value, "empty value after remove")
 	}
 
-	testZerothDiscriminatorBitInsert := func(t *testing.T, ctx context.Context, tree *Tree) {
+	testZerothDiscriminatorBitInsert := func(t *testing.T, ctx context.Context, tree Tree) {
 		key1 := node.Key{0x7f, 0xab}
 		key2 := node.Key{0xff, 0xab}
 		value1 := []byte("value 1")
@@ -354,7 +354,7 @@ func testEmptyKeys(t *testing.T, ndb db.NodeDB) {
 		require.Equal(t, value2, value, "empty value after insert")
 	}
 
-	testZerothDiscriminatorBitRemove := func(t *testing.T, ctx context.Context, tree *Tree) {
+	testZerothDiscriminatorBitRemove := func(t *testing.T, ctx context.Context, tree Tree) {
 		key1 := node.Key{0x7f, 0xab}
 		key2 := node.Key{0xff, 0xab}
 
@@ -636,7 +636,7 @@ func testSyncerRootEmptyLabelNeedsDeref(t *testing.T, ndb db.NodeDB) {
 		Hash:      rootHash,
 	}
 
-	testGet := func(t *testing.T, tree *Tree) {
+	testGet := func(t *testing.T, tree Tree) {
 		value, err := tree.Get(ctx, []byte{0xFF})
 		require.NoError(t, err, "Get")
 		require.EqualValues(t, value, []byte("foo"))
@@ -645,13 +645,13 @@ func testSyncerRootEmptyLabelNeedsDeref(t *testing.T, ndb db.NodeDB) {
 		require.NoError(t, err, "Get")
 		require.EqualValues(t, value, []byte("bar"))
 	}
-	testRemove := func(t *testing.T, tree *Tree) {
+	testRemove := func(t *testing.T, tree Tree) {
 		err := tree.Remove(ctx, []byte{0xFF})
 		require.NoError(t, err, "Remove")
 		err = tree.Remove(ctx, []byte{0x00})
 		require.NoError(t, err, "Remove")
 	}
-	testInsert := func(t *testing.T, tree *Tree) {
+	testInsert := func(t *testing.T, tree Tree) {
 		err := tree.Insert(ctx, []byte{0xFF, 0xFF}, []byte("foo"))
 		require.NoError(t, err, "Insert")
 		err = tree.Insert(ctx, []byte{0x00, 0x00}, []byte("bar"))
@@ -809,7 +809,7 @@ func testSyncerPrefetchPrefixes(t *testing.T, ndb db.NodeDB) {
 
 func testValueEviction(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
-	tree := New(nil, ndb, Capacity(0, 512))
+	tree := New(nil, ndb, Capacity(0, 512)).(*tree)
 
 	keys, values := generateKeyValuePairs()
 	for i := 0; i < len(keys); i++ {
@@ -827,7 +827,7 @@ func testValueEviction(t *testing.T, ndb db.NodeDB) {
 
 func testNodeEviction(t *testing.T, ndb db.NodeDB) {
 	ctx := context.Background()
-	tree := New(nil, ndb, Capacity(128, 0))
+	tree := New(nil, ndb, Capacity(128, 0)).(*tree)
 
 	keys, values := generateKeyValuePairsEx("foo", 150)
 	for i := 0; i < len(keys); i++ {
@@ -1989,7 +1989,7 @@ func generateLongKeyValuePairs() ([][]byte, [][]byte) {
 	return keys, values
 }
 
-func generatePopulatedTree(t *testing.T, ndb db.NodeDB) ([][]byte, [][]byte, node.Root, *Tree) {
+func generatePopulatedTree(t *testing.T, ndb db.NodeDB) ([][]byte, [][]byte, node.Root, Tree) {
 	ctx := context.Background()
 	tree := New(nil, ndb, Capacity(0, 0))
 

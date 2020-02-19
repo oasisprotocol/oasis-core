@@ -11,9 +11,8 @@ import (
 
 var errClosed = errors.New("iterator: use of closed iterator")
 
-// SyncIterate seeks to a given key and then fetches the specified
-// number of following items based on key iteration order.
-func (t *Tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) (*syncer.ProofResponse, error) {
+// Implements syncer.ReadSyncer.
+func (t *tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) (*syncer.ProofResponse, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -58,7 +57,7 @@ func (t *Tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) 
 	}, nil
 }
 
-func (t *Tree) newFetcherSyncIterate(key node.Key, prefetch uint16) readSyncFetcher {
+func (t *tree) newFetcherSyncIterate(key node.Key, prefetch uint16) readSyncFetcher {
 	return func(ctx context.Context, ptr *node.Pointer, rs syncer.ReadSyncer) (*syncer.Proof, error) {
 		rsp, err := rs.SyncIterate(ctx, &syncer.IterateRequest{
 			Tree: syncer.TreeID{
@@ -125,7 +124,7 @@ type pathAtom struct {
 
 type treeIterator struct {
 	ctx      context.Context
-	tree     *Tree
+	tree     *tree
 	prefetch uint16
 	err      error
 	pos      []pathAtom
@@ -155,8 +154,7 @@ func WithProof(root hash.Hash) IteratorOption {
 	}
 }
 
-// NewIterator creates a new iterator over the given tree.
-func NewIterator(ctx context.Context, tree *Tree, options ...IteratorOption) Iterator {
+func newTreeIterator(ctx context.Context, tree *tree, options ...IteratorOption) Iterator {
 	it := &treeIterator{
 		ctx:  ctx,
 		tree: tree,
@@ -244,7 +242,7 @@ func (it *treeIterator) Next() {
 	it.value = nil
 }
 
-func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node.Key, key node.Key, state visitState) error {
+func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node.Key, key node.Key, state visitState) error { // nolint: gocyclo
 	// Dereference the node, possibly making a remote request.
 	nd, err := it.tree.cache.derefNodePtr(it.ctx, ptr, it.tree.newFetcherSyncIterate(key, it.prefetch))
 	if err != nil {
@@ -266,9 +264,17 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node
 	case *node.InternalNode:
 		// Internal node.
 		bitLength := bitDepth + n.LabelBitLength
+		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
+
+		// Check if the key is longer than the current path but lexicographically smaller. In this
+		// case everything in this subtree will be larger so we need to take the first value.
+		var takeFirst bool
+		if bitLength > 0 && key.BitLength() >= bitLength && key.Compare(newPath) < 0 {
+			takeFirst = true
+		}
 
 		// Does lookup key end here? Look into LeafNode.
-		if (state == visitBefore && key.BitLength() <= bitLength) || state == visitAt {
+		if (state == visitBefore && (key.BitLength() <= bitLength || takeFirst)) || state == visitAt {
 			if state == visitBefore {
 				err := it.doNext(n.LeafNode, bitLength, path, key, visitBefore)
 				if err != nil {
@@ -281,17 +287,17 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node
 				}
 			}
 			// Key has not been found, continue with search for next key.
-			key = key.AppendBit(bitLength, false)
+			if key.BitLength() <= bitLength {
+				key = key.AppendBit(bitLength, false)
+			}
 		}
 
 		if state == visitBefore {
 			state = visitAt
 		}
 
-		newPath := path.Merge(bitDepth, n.Label, n.LabelBitLength)
-
 		// Continue recursively based on a bit value.
-		if (state == visitAt && !key.GetBit(bitLength)) || state == visitAtLeft {
+		if (state == visitAt && (!key.GetBit(bitLength) || takeFirst)) || state == visitAtLeft {
 			if state == visitAt {
 				err := it.doNext(n.Left, bitLength, newPath.AppendBit(bitLength, false), key, visitBefore)
 				if err != nil {

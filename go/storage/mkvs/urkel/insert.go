@@ -8,8 +8,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 )
 
-// Insert inserts a key/value pair into the tree.
-func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
+// Implements Tree.
+func (t *tree) Insert(ctx context.Context, key []byte, value []byte) error {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -27,16 +27,18 @@ func (t *Tree) Insert(ctx context.Context, key []byte, value []byte) error {
 	}
 
 	// Update the pending write log.
-	entry := t.pendingWriteLog[node.ToMapKey(key)]
-	if entry == nil {
-		t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{
-			key:          key,
-			value:        value,
-			existed:      result.existed,
-			insertedLeaf: result.insertedLeaf,
+	if !t.withoutWriteLog {
+		entry := t.pendingWriteLog[node.ToMapKey(key)]
+		if entry == nil {
+			t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{
+				key:          key,
+				value:        value,
+				existed:      result.existed,
+				insertedLeaf: result.insertedLeaf,
+			}
+		} else {
+			entry.value = value
 		}
-	} else {
-		entry.value = value
 	}
 
 	t.cache.setPendingRoot(result.newRoot)
@@ -49,7 +51,7 @@ type insertResult struct {
 	existed      bool
 }
 
-func (t *Tree) doInsert(
+func (t *tree) doInsert(
 	ctx context.Context,
 	ptr *node.Pointer,
 	bitDepth node.Depth,

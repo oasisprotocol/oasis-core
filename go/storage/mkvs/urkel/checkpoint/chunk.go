@@ -18,7 +18,7 @@ import (
 
 func createChunk(
 	ctx context.Context,
-	tree *urkel.Tree,
+	tree urkel.Tree,
 	root node.Root,
 	offset node.Key,
 	chunkSize uint64,

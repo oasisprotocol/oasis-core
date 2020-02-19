@@ -29,7 +29,7 @@ type RootCache struct {
 
 // GetTree gets a tree entry from the cache by the root iff present, or creates
 // a new tree with the specified root in the node database.
-func (rc *RootCache) GetTree(ctx context.Context, root Root) (*urkel.Tree, error) {
+func (rc *RootCache) GetTree(ctx context.Context, root Root) (urkel.Tree, error) {
 	return urkel.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything), nil
 }
 

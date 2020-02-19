@@ -114,38 +114,44 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 		"round", lastCheckpoint,
 	)
 
-	blk, err = ctrl.RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{
-		RuntimeID: runtimeID,
-		Round:     lastCheckpoint,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to get block %d: %w", lastCheckpoint, err)
-	}
-
 	// There should be at least two checkpoints. There may be more depending on the state of garbage
 	// collection process (which may be one checkpoint behind.)
 	if len(cps) < 2 {
 		return fmt.Errorf("incorrect number of checkpoints (expected: >=2 got: %d)", len(cps))
 	}
+
 	var validCps int
-	for _, cp := range cps {
-		if cp.Root.Round != blk.Header.Round {
-			continue
+	for checkpoint := rt.Storage.CheckpointInterval; checkpoint <= lastCheckpoint; checkpoint += rt.Storage.CheckpointInterval {
+		blk, err = ctrl.RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{
+			RuntimeID: runtimeID,
+			Round:     checkpoint,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get block %d: %w", checkpoint, err)
 		}
-		var found bool
-		for _, root := range blk.Header.StorageRoots() {
-			if root.Equal(&cp.Root) {
-				found = true
-				break
+		for _, cp := range cps {
+			if cp.Root.Round != blk.Header.Round {
+				continue
 			}
+			var found bool
+			for _, root := range blk.Header.StorageRoots() {
+				if root.Equal(&cp.Root) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("checkpoint for unexpected root %s", cp.Root)
+			}
+			sc.logger.Info("found valid checkpoint",
+				"round", checkpoint,
+				"root_hash", cp.Root.Hash,
+			)
+			validCps++
 		}
-		if !found {
-			return fmt.Errorf("checkpoint for unexpected root %s", cp.Root)
-		}
-		validCps++
 	}
-	if validCps != 2 {
-		return fmt.Errorf("incorrect number of valid checkpoints (expected: 2 got: %d)", validCps)
+	if validCps < 2 {
+		return fmt.Errorf("incorrect number of valid checkpoints (expected: >=2 got: %d)", validCps)
 	}
 
 	return nil

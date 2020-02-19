@@ -22,7 +22,7 @@ func TestProof(t *testing.T) {
 	keys, values := generateKeyValuePairsEx("", 10)
 	var ns common.Namespace
 
-	tree := New(nil, nil)
+	tree := New(nil, nil).(*tree)
 	for i, key := range keys {
 		err := tree.Insert(ctx, key, values[i])
 		require.NoError(err, "Insert")

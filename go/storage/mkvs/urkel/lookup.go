@@ -8,8 +8,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
 )
 
-// Get looks up an existing key.
-func (t *Tree) Get(ctx context.Context, key []byte) ([]byte, error) {
+// Implements Tree.
+func (t *tree) Get(ctx context.Context, key []byte) ([]byte, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -23,8 +23,8 @@ func (t *Tree) Get(ctx context.Context, key []byte) ([]byte, error) {
 	return t.doGet(ctx, t.cache.pendingRoot, 0, key, doGetOptions{}, false)
 }
 
-// SyncGet fetches a single key and returns the corresponding proof.
-func (t *Tree) SyncGet(ctx context.Context, request *syncer.GetRequest) (*syncer.ProofResponse, error) {
+// Implements syncer.ReadSyncer.
+func (t *tree) SyncGet(ctx context.Context, request *syncer.GetRequest) (*syncer.ProofResponse, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
@@ -59,7 +59,7 @@ func (t *Tree) SyncGet(ctx context.Context, request *syncer.GetRequest) (*syncer
 	}, nil
 }
 
-func (t *Tree) newFetcherSyncGet(key node.Key, includeSiblings bool) readSyncFetcher {
+func (t *tree) newFetcherSyncGet(key node.Key, includeSiblings bool) readSyncFetcher {
 	return func(ctx context.Context, ptr *node.Pointer, rs syncer.ReadSyncer) (*syncer.Proof, error) {
 		rsp, err := rs.SyncGet(ctx, &syncer.GetRequest{
 			Tree: syncer.TreeID{
@@ -81,7 +81,7 @@ type doGetOptions struct {
 	includeSiblings bool
 }
 
-func (t *Tree) doGet(
+func (t *tree) doGet(
 	ctx context.Context,
 	ptr *node.Pointer,
 	bitDepth node.Depth,
