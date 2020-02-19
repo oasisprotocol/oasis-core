@@ -9,14 +9,15 @@
 
 {% for text, values in sections[section][category].items() %}
 {% set lines = text.splitlines() %}
+{% set referenced_issues = "(" + values | join(',\n   ') + ")" %}
 {% if lines | length > 2 and lines[1] == "" %}
 - {{ lines[0] }}
-  ({{ values | join(', ') }})
+  {{ referenced_issues }}
 
 {{ lines[2:] | join('\n') }}
 {% else %}
 - {{ text }}
-  ({{ values | join(', ') }})
+  {{ referenced_issues }}
 {% endif %}
 {% if not loop.last %}
 
