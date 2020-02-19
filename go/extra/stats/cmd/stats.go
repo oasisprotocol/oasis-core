@@ -45,6 +45,7 @@ var (
 type entityStats struct {
 	id             signature.PublicKey
 	nodeSignatures map[signature.PublicKey]int64
+	nodeProposals  map[signature.PublicKey]int64
 }
 
 // nodeIDs are node identifiers.
@@ -69,15 +70,19 @@ func (s stats) printEntitySignatures(topN int) {
 	type results struct {
 		entityID   signature.PublicKey
 		signatures int64
+		proposals  int64
 		nodes      int
 	}
 	res := []results{}
 
-	// Compute per entity signature counts.
+	// Compute per entity signature and proposal counts.
 	for eID, eStats := range s.entities {
 		entity := results{entityID: eID, nodes: len(eStats.nodeSignatures)}
 		for _, signs := range eStats.nodeSignatures {
 			entity.signatures += signs
+		}
+		for _, proposals := range eStats.nodeProposals {
+			entity.proposals += proposals
 		}
 		res = append(res, entity)
 	}
@@ -87,10 +92,10 @@ func (s stats) printEntitySignatures(topN int) {
 	})
 
 	// Print results.
-	fmt.Printf("|%-5s|%-64s|%-6s|%10s|\n", "Rank", "Entity ID", "Nodes", "Signatures")
-	fmt.Println(strings.Repeat("-", 5+64+6+10+5))
+	fmt.Printf("|%-5s|%-64s|%-6s|%10s|%10s|\n", "Rank", "Entity ID", "Nodes", "Signatures", "Proposals")
+	fmt.Println(strings.Repeat("-", 5+64+6+10+10+6))
 	for idx, r := range res {
-		fmt.Printf("|%-5d|%-64s|%6d|%10d|\n", idx+1, r.entityID, r.nodes, r.signatures)
+		fmt.Printf("|%-5d|%-64s|%6d|%10d|%10d|\n", idx+1, r.entityID, r.nodes, r.signatures, r.proposals)
 	}
 }
 
@@ -115,6 +120,23 @@ func (s stats) addNodeSignature(nodeAddr string) error {
 		return fmt.Errorf("missing entity node: %s", nodeAddr)
 	}
 	entity.nodeSignatures[node.nodeID]++
+	return nil
+}
+
+func (s stats) addNodeProposal(nodeAddr string) error {
+	node, ok := s.nodeAddressMap[nodeAddr]
+	if !ok {
+		return fmt.Errorf("missing node address map, address: %s", nodeAddr)
+	}
+	entity, ok := s.entities[node.entityID]
+	if !ok {
+		return fmt.Errorf("missing entity for node, address: %s", nodeAddr)
+	}
+	_, ok = entity.nodeProposals[node.nodeID]
+	if !ok {
+		return fmt.Errorf("missing entity node: %s", nodeAddr)
+	}
+	entity.nodeProposals[node.nodeID]++
 	return nil
 }
 
@@ -157,6 +179,7 @@ func (s *stats) addRegistryData(ctx context.Context, registry registryAPI.Backen
 			es = &entityStats{
 				id:             ent.ID,
 				nodeSignatures: make(map[signature.PublicKey]int64),
+				nodeProposals:  make(map[signature.PublicKey]int64),
 			}
 			s.entities[ent.ID] = es
 		}
@@ -174,6 +197,7 @@ func (s *stats) addRegistryData(ctx context.Context, registry registryAPI.Backen
 			// Add missing nodes.
 			if _, ok := es.nodeSignatures[nodeID]; !ok {
 				es.nodeSignatures[nodeID] = 0
+				es.nodeProposals[nodeID] = 0
 				cID := node.Consensus.ID
 				tmADdr := tmcrypto.PublicKeyToTendermint(&cID).Address().String()
 				s.nodeAddressMap[tmADdr] = nodeIDs{
@@ -186,6 +210,21 @@ func (s *stats) addRegistryData(ctx context.Context, registry registryAPI.Backen
 	}
 
 	return nil
+}
+
+func ensureNodeTracking(ctx context.Context, stats *stats, nodeTmAddr string, height int64, registry registryAPI.Backend) error {
+	// Check if node is already being tracked.
+	if stats.nodeExists(nodeTmAddr) {
+		return nil
+	}
+
+	logger.Debug("missing node tendermint address, querying registry",
+		"height", height,
+		"addr", nodeTmAddr,
+	)
+
+	// Query registry at current height.
+	return stats.addRegistryData(ctx, registry, height)
 }
 
 // getStats queries node for entity stats between 'start' and 'end' block heights.
@@ -255,22 +294,12 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 			}
 			nodeTmAddr := sig.ValidatorAddress.String()
 
-			// Check if node is already being tracked.
-			if !stats.nodeExists(nodeTmAddr) {
-				logger.Debug("missing node tendermint address, querying registry",
+			if err := ensureNodeTracking(ctx, stats, nodeTmAddr, height, registry); err != nil {
+				logger.Error("failed to query registry",
+					"err", err,
 					"height", height,
-					"addr", nodeTmAddr,
 				)
-
-				// Query registry at current height.
-				err := stats.addRegistryData(ctx, registry, height)
-				if err != nil {
-					logger.Error("failed to query registry",
-						"err", err,
-						"height", height,
-					)
-					os.Exit(1)
-				}
+				os.Exit(1)
 			}
 
 			// Add signatures.
@@ -280,6 +309,25 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 				)
 				os.Exit(1)
 			}
+		}
+
+		// Proposer.
+		nodeTmAddr := tmBlockMeta.Header.ProposerAddress.String()
+
+		if err := ensureNodeTracking(ctx, stats, nodeTmAddr, height, registry); err != nil {
+			logger.Error("failed to query registry",
+				"err", err,
+				"height", height,
+			)
+			os.Exit(1)
+		}
+
+		// Add proposal.
+		if err := stats.addNodeProposal(nodeTmAddr); err != nil {
+			logger.Error("failure adding proposal",
+				"err", err,
+			)
+			os.Exit(1)
 		}
 	}
 
