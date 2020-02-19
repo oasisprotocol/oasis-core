@@ -70,7 +70,11 @@ integrationrunner:
 	@$(GO) test $(GOFLAGS) -c -covermode=atomic -coverpkg=./... -o oasis-node/$@/$@.test ./oasis-node/$@
 
 # Fuzzing binaries.
-build-fuzz: consensus/tendermint/fuzz/fuzz-fuzz.zip storage/fuzz/fuzz-fuzz.zip
+fuzz-targets := consensus/tendermint/fuzz/fuzz-fuzz.zip \
+	storage/fuzz/fuzz-fuzz.zip \
+	storage/mkvs/urkel/fuzz/fuzz-fuzz.zip
+
+build-fuzz: $(fuzz-targets)
 %/fuzz-fuzz.zip: .FORCE
 	@echo "Building $@"
 	@cd "$$(dirname "$@")"; go-fuzz-build
@@ -93,6 +97,8 @@ fuzz-storage: storage/fuzz/ oasis-node/oasis-node
 	@mkdir -p /tmp/oasis-node-fuzz-storage/identity
 	@chmod 0700 /tmp/oasis-node-fuzz-storage/identity
 	@oasis-node/oasis-node identity init --datadir /tmp/oasis-node-fuzz-storage/identity
+	$(canned-fuzz-run)
+fuzz-storage-mkvs: storage/mkvs/urkel/fuzz/
 	$(canned-fuzz-run)
 
 # Clean.

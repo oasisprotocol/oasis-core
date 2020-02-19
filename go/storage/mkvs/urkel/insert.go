@@ -10,6 +10,10 @@ import (
 
 // Implements Tree.
 func (t *tree) Insert(ctx context.Context, key []byte, value []byte) error {
+	if value == nil {
+		value = []byte{}
+	}
+
 	t.cache.Lock()
 	defer t.cache.Unlock()
 
