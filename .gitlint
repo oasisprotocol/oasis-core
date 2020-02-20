@@ -8,11 +8,11 @@ ignore=body-is-missing
 [title-max-length]
 line-length=72
 
-[B1]
+[body-max-line-length]
 line-length=80
 
-[B5]
-min-length=0
+[body-min-length]
+min-length=20
 
 [title-must-not-contain-word]
 words=wip
