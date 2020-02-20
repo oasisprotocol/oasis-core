@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/identity"
@@ -114,6 +112,8 @@ recvLoop:
 
 	// Try getting path.
 	// TimeOut is expected, as test nodes do not actually start storage worker.
+	ctx, cancel = context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
 	r, err = client.SyncGet(ctx, &api.GetRequest{
 		Tree: api.TreeID{
 			Root:     root,
@@ -121,7 +121,6 @@ recvLoop:
 		},
 	})
 	require.Error(err, "storage client should error")
-	require.Equal(codes.Unavailable, status.Code(err), "storage client should timeout")
 	require.Nil(r, "result should be nil")
 
 	rt.Cleanup(t, consensus.Registry(), consensus)
