@@ -83,6 +83,27 @@ Example file names:
 - `3456.bugfix.1.md`,
 - `3456.bugfix.2.md`.
 
+## Multiple issues / pull requests for a single fragment
+
+Sometimes referencing multiple issues or pull requests in a Change Log
+fragment is desired.
+
+For example:
+
+- when a single Change Log fragment describes a change that resolves multiple
+  issues, or
+- when a sub-sequent issue / pull request augments a change that already has a
+  corresponding Change Log fragment.
+
+In this case, you need to augment (if necessary) the original Change Log
+fragment (e.g. `1234.feature.md`) and copy it to a new file which has the new
+issue or pull request number in its name (e.g. `1356.feature.md`).
+The [towncrier] tool will automatically detect a duplicate Change Log fragment
+and combine issue / pull request numbers in a single Change Log entry.
+
+_NOTE: You can repeat this process to refer to as many issues / pull requests
+as needed._
+
 ## Render Change Log preview
 
 To get a preview of how your change (and other changes queued up in this
