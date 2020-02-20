@@ -24,6 +24,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          # Check out pull request's HEAD commit instead of the merge commit to
+          # prevent gitlint from failing due to too long commit message titles,
+          # e.g. "Merge 3e621938d65caaa67f8e35d145335d889d470fc8 into 19a39b2f66cd7a165082d1486b2f1eb36ec2354a".
+          ref: ${{ github.event.pull_request.head.sha }}
+          # Fetch all history so gitlint can check the relevant commits.
+          fetch-depth: '0'
       - name: Set up Python 3
         uses: actions/setup-python@v1
       - name: Set up Node.js 12
@@ -45,6 +52,11 @@ jobs:
         env:
           BASE_BRANCH: ${{ github.base_ref }}
         if: github.event_name == 'pull_request'
+      - name: Lint git commits
+        run: |
+          make lint-git
+        # Always run this step so that all linting errors can be seen at once.
+        if: always()
       - name: Lint Markdown files
         run: |
           make lint-md
