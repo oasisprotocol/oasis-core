@@ -81,7 +81,7 @@ lint-changelog:
 	npx markdownlint-cli --config .changelog/.markdownlint.yml .changelog/ || exit_status=$$?; \
 	for fragment in $(CHANGELOG_FRAGMENTS_NON_TRIVIAL); do \
 		echo "Running gitlint on $$fragment..."; \
-		gitlint --msg-filename $$fragment || exit_status=$$?; \
+		gitlint --msg-filename $$fragment -c title-max-length.line-length=78 || exit_status=$$?; \
 	done; \
 	exit $$exit_status
 
