@@ -27,6 +27,9 @@ const (
 	cfgStartBlock = "start-block"
 	cfgEndBlock   = "end-block"
 	cfgTopN       = "top-n"
+
+	availabilityScorePerSignature = 1
+	availabilityScorePerProposal  = 50
 )
 
 var (
@@ -85,7 +88,7 @@ func (s stats) printEntitySignatures(topN int) {
 		for _, proposals := range eStats.nodeProposals {
 			entity.proposals += proposals
 		}
-		entity.availablityScore = entity.signatures + 50*entity.proposals
+		entity.availablityScore = availabilityScorePerSignature*entity.signatures + availabilityScorePerProposal*entity.proposals
 		res = append(res, entity)
 	}
 
