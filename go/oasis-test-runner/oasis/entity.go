@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 )
 
@@ -93,8 +94,8 @@ func (ent *Entity) update() error {
 
 	args := []string{
 		"registry", "entity", "update",
-		"--" + flags.CfgSigner, fileSigner.SignerName,
-		"--" + flags.CfgSignerDir, ent.dir.String(),
+		"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
+		"--" + cmdSigner.CfgSignerDir, ent.dir.String(),
 	}
 	for _, n := range ent.nodes {
 		args = append(args, "--entity.node.id", n.String())
@@ -143,8 +144,8 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 		if !cfg.Restore {
 			args := []string{
 				"registry", "entity", "init",
-				"--" + flags.CfgSigner, fileSigner.SignerName,
-				"--" + flags.CfgSignerDir, entityDir.String(),
+				"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
+				"--" + cmdSigner.CfgSignerDir, entityDir.String(),
 			}
 
 			var w io.WriteCloser

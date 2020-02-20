@@ -8,7 +8,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/signer/ledger"
 )
 
@@ -31,14 +31,14 @@ func doExport(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
-	entityDir, err := cmdFlags.SignerDirOrPwd()
+	entityDir, err := cmdSigner.DirOrPwd()
 	if err != nil {
 		logger.Error("failed to retrieve signer dir",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	if err := cmdCommon.ExportEntity(cmdFlags.Signer(), entityDir); err != nil {
+	if err := cmdCommon.ExportEntity(cmdSigner.Backend(), entityDir); err != nil {
 		logger.Error("failed to export entity",
 			"err", err,
 		)
@@ -53,7 +53,7 @@ func Register(parentCmd *cobra.Command) {
 		v(signerCmd)
 	}
 
-	exportCmd.Flags().AddFlagSet(cmdFlags.SignerFlags)
+	exportCmd.Flags().AddFlagSet(cmdSigner.SignerFlags)
 
 	signerCmd.AddCommand(exportCmd)
 	parentCmd.AddCommand(signerCmd)
