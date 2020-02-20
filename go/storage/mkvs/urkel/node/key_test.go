@@ -70,6 +70,16 @@ func TestKeyAppendSplitMerge(t *testing.T) {
 	newKey = p.Merge(21, s, 8)
 	// Merge doesn't obtain original key, because the split cleaned unused bits!
 	require.Equal(t, Key{0xff, 0xff, 0xff, 0xf8}, newKey)
+
+	// Special case with zero-length key.
+	key = Key{0x80}
+	newKey = key.Merge(0, Key{0xf0}, 4)
+	require.Equal(t, Key{0xf0}, newKey)
+
+	// Special case with extra bytes.
+	key = Key{0x41, 0x6b, 0x00}
+	newKey = key.Merge(16, Key{0x37}, 8)
+	require.Equal(t, Key{0x41, 0x6b, 0x37}, newKey)
 }
 
 func TestKeyCommonPrefixLen(t *testing.T) {

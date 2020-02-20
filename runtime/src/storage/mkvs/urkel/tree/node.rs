@@ -454,19 +454,24 @@ impl KeyTrait for Key {
     }
 
     fn merge(&self, key_len: Depth, k2: &Key, k2_len: Depth) -> Key {
+        let mut key_len_bytes = (key_len as usize) / 8;
+        if key_len % 8 != 0 {
+            key_len_bytes += 1;
+        }
+
         let mut new_key: Key = vec![0; (key_len + k2_len).to_bytes()];
-        new_key[..self.len()].clone_from_slice(self);
+        new_key[..key_len_bytes].clone_from_slice(&self[..key_len_bytes]);
 
         for i in 0..k2.len() as usize {
             // First set the right chunk of the previous byte
-            if key_len % 8 != 0 && self.len() > 0 {
-                new_key[self.len() + i - 1] |= k2[i] >> (key_len % 8);
+            if key_len % 8 != 0 && key_len_bytes > 0 {
+                new_key[key_len_bytes + i - 1] |= k2[i] >> (key_len % 8);
             }
             // ...and the next left chunk, if we haven't reached the end of newKey
             // yet.
-            if self.len() + i < new_key.len() {
+            if key_len_bytes + i < new_key.len() {
                 // another mod 8 to prevent bit shifting for 8 bits
-                new_key[self.len() + i] |= k2[i] << ((8 - key_len % 8) % 8);
+                new_key[key_len_bytes + i] |= k2[i] << ((8 - key_len % 8) % 8);
             }
         }
 
