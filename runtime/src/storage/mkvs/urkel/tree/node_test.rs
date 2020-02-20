@@ -224,6 +224,16 @@ fn test_key_append_split_merge() {
     let new_key = p.merge(21, &s, 8);
     // Merge doesn't obtain original key, because the split cleaned unused bits!
     assert_eq!(vec![0xff, 0xff, 0xff, 0xf8], new_key);
+
+    // Special case with zero-length key.
+    let key: Key = vec![0x80];
+    let new_key = key.merge(0, &vec![0xf0], 4);
+    assert_eq!(vec![0xf0], new_key);
+
+    // Special case with extra bytes.
+    let key: Key = vec![0x41, 0x6b, 0x00];
+    let new_key = key.merge(16, &vec![0x37], 8);
+    assert_eq!(vec![0x41, 0x6b, 0x37], new_key);
 }
 
 #[test]

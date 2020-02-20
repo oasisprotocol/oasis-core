@@ -137,19 +137,24 @@ func (k Key) Split(splitPoint Depth, keyLen Depth) (prefix Key, suffix Key) {
 // another key in bits.
 // This function is immutable and returns a new instance of Key.
 func (k Key) Merge(keyLen Depth, k2 Key, k2Len Depth) Key {
+	keyLenBytes := int(keyLen) / 8
+	if keyLen%8 != 0 {
+		keyLenBytes++
+	}
+
 	newKey := make(Key, (keyLen + k2Len).ToBytes())
-	copy(newKey[:], k[:])
+	copy(newKey[:], k[:keyLenBytes])
 
 	for i := 0; i < len(k2); i++ {
 		// First set the right chunk of the previous byte
-		if keyLen%8 != 0 && len(k) > 0 {
-			newKey[len(k)+i-1] |= k2[i] >> (keyLen % 8)
+		if keyLen%8 != 0 && keyLenBytes > 0 {
+			newKey[keyLenBytes+i-1] |= k2[i] >> (keyLen % 8)
 		}
 		// ...and the next left chunk, if we haven't reached the end of newKey
 		// yet.
-		if len(k)+i < len(newKey) {
+		if keyLenBytes+i < len(newKey) {
 			// another mod 8 to prevent bit shifting for 8 bits
-			newKey[len(k)+i] |= k2[i] << ((8 - keyLen%8) % 8)
+			newKey[keyLenBytes+i] |= k2[i] << ((8 - keyLen%8) % 8)
 		}
 	}
 

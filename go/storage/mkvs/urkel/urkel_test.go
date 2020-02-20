@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,6 +20,7 @@ import (
 	badgerDb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
+	mkvsTests "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/tests"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
@@ -1818,6 +1821,55 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, db.ErrBadNamespace, err)
 }
 
+func testSpecialCaseFromJSON(t *testing.T, ndb db.NodeDB, fixture string) {
+	data, err := ioutil.ReadFile(filepath.Join("testdata", fixture))
+	require.NoError(t, err, "failed to read the fixture file")
+
+	var ops mkvsTests.TestVector
+	err = json.Unmarshal(data, &ops)
+	require.NoError(t, err, "failed to unmarshal fixture")
+
+	ctx := context.Background()
+	tree := New(nil, ndb)
+
+	for _, o := range ops {
+		switch o.Op {
+		case mkvsTests.OpInsert:
+			err = tree.Insert(ctx, o.Key, o.Value)
+			require.NoError(t, err, "Insert")
+		case mkvsTests.OpRemove:
+			err = tree.Remove(ctx, o.Key)
+			require.NoError(t, err, "Remove")
+		case mkvsTests.OpGet:
+			var value []byte
+			value, err = tree.Get(ctx, o.Key)
+			require.NoError(t, err, "Get")
+			require.EqualValues(t, o.Value, value, "Get should return the correct value")
+		case mkvsTests.OpIteratorSeek:
+			it := tree.NewIterator(ctx)
+			it.Seek(o.Key)
+			require.NoError(t, it.Err(), "Seek")
+			require.EqualValues(t, o.ExpectedKey, it.Key(), "iterator should be at correct key")
+			require.EqualValues(t, o.Value, it.Value(), "iterator should be at correct value")
+			it.Close()
+		default:
+			require.Fail(t, "unknown operation: %s", o.Op)
+		}
+	}
+}
+
+func testSpecialCase1(t *testing.T, ndb db.NodeDB) {
+	testSpecialCaseFromJSON(t, ndb, "case-1.json")
+}
+
+func testSpecialCase2(t *testing.T, ndb db.NodeDB) {
+	testSpecialCaseFromJSON(t, ndb, "case-2.json")
+}
+
+func testSpecialCase3(t *testing.T, ndb db.NodeDB) {
+	testSpecialCaseFromJSON(t, ndb, "case-3.json")
+}
+
 func testBackend(
 	t *testing.T,
 	initBackend func(t *testing.T) (db.NodeDB, interface{}),
@@ -1855,6 +1907,9 @@ func testBackend(
 		{"PruneLoneRootsShared2", testPruneLoneRootsShared2},
 		{"PruneForkedRoots", testPruneForkedRoots},
 		{"PruneCheckpoints", testPruneCheckpoints},
+		{"SpecialCase1", testSpecialCase1},
+		{"SpecialCase2", testSpecialCase2},
+		{"SpecialCase3", testSpecialCase3},
 		{"Errors", testErrors},
 	}
 

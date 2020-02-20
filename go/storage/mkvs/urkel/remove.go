@@ -72,7 +72,10 @@ func (t *tree) doRemove(
 
 		var changed bool
 		var existing []byte
-		if key.BitLength() == bitLength {
+		if key.BitLength() < bitLength {
+			// Lookup key is too short for the current n.Label, so it doesn't exist.
+			return ptr, false, nil, nil
+		} else if key.BitLength() == bitLength {
 			n.LeafNode, changed, existing, err = t.doRemove(ctx, n.LeafNode, bitLength, key, depth)
 		} else if key.GetBit(bitLength) {
 			n.Right, changed, existing, err = t.doRemove(ctx, n.Right, bitLength, key, depth+1)
