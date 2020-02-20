@@ -253,7 +253,7 @@ func LoadEntity(signerBackend string, entityDir string) (*entity.Entity, signatu
 		return entity.TestEntity()
 	}
 
-	factory, err := cmdSigner.NewFactory(signerBackend, entityDir)
+	factory, err := cmdSigner.NewFactory(signerBackend, entityDir, signature.SignerEntity)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -264,7 +264,7 @@ func LoadEntity(signerBackend string, entityDir string) (*entity.Entity, signatu
 // ExportEntity creates an empty entity from the public key of the signer
 // generated with the specified backend, and writes it to a file in entityDir.
 func ExportEntity(signerBackend string, entityDir string) error {
-	factory, err := cmdSigner.NewFactory(signerBackend, entityDir)
+	factory, err := cmdSigner.NewFactory(signerBackend, entityDir, signature.SignerEntity)
 	if err != nil {
 		return err
 	}

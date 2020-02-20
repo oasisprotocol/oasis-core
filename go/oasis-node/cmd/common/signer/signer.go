@@ -54,16 +54,16 @@ func LedgerIndex() uint32 {
 }
 
 // NewFactory returns the appropriate SignerFactory based on flags.
-func NewFactory(signerBackend string, signerDir string) (signature.SignerFactory, error) {
+func NewFactory(signerBackend string, signerDir string, roles ...signature.SignerRole) (signature.SignerFactory, error) {
 	switch signerBackend {
 	case ledgerSigner.SignerName:
 		config := ledgerSigner.FactoryConfig{
 			Address: LedgerAddress(),
 			Index:   LedgerIndex(),
 		}
-		return ledgerSigner.NewFactory(&config, signature.SignerEntity), nil
+		return ledgerSigner.NewFactory(&config, roles...), nil
 	case fileSigner.SignerName:
-		return fileSigner.NewFactory(signerDir, signature.SignerEntity), nil
+		return fileSigner.NewFactory(signerDir, roles...), nil
 	default:
 		return nil, fmt.Errorf("unsupported signer backend: %s", signerBackend)
 	}

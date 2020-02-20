@@ -367,7 +367,7 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 		)
 		os.Exit(1)
 	}
-	entitySignerFactory, err := cmdSigner.NewFactory(cmdSigner.Backend(), entityDir)
+	entitySignerFactory, err := cmdSigner.NewFactory(cmdSigner.Backend(), entityDir, signature.SignerEntity)
 	if err != nil {
 		return nil, nil, err
 	}
