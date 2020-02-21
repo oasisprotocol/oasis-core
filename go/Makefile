@@ -73,7 +73,8 @@ integrationrunner:
 fuzz-targets := fuzz-consensus \
 	fuzz-storage \
 	fuzz-mkvs/Tree \
-	fuzz-mkvs/Proof
+	fuzz-mkvs/Proof \
+	fuzz-mkvs/Node
 
 define canned-fuzz-run
 @TARGETDIR=$(shell pwd)/$<; \
@@ -110,6 +111,8 @@ fuzz-storage: storage/fuzz/ oasis-node/oasis-node
 fuzz-mkvs/Tree: storage/mkvs/urkel/fuzz
 	$(canned-fuzz-run)
 fuzz-mkvs/Proof: storage/mkvs/urkel/fuzz
+	$(canned-fuzz-run)
+fuzz-mkvs/Node: storage/mkvs/urkel/fuzz
 	$(canned-fuzz-run)
 
 # Target that only builds all fuzzing infrastructure.

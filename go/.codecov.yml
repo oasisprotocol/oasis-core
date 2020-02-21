@@ -5,3 +5,6 @@ ignore:
   - "oasis-test-runner" # E2E test runner.
   - "oasis-net-runner" # Test local network runner.
   - "staking/gen_vectors" # Staking test vector generator.
+  - "storage/fuzz" # Fuzz tests.
+  - "storage/mkvs/urkel/fuzz" # Fuzz tests.
+  - "consensus/tendermint/fuzz" # Fuzz tests.
