@@ -50,8 +50,8 @@ Prerequisites:
 
 * Linux (if you are not on Linux, you will need to either set up a VM with the
   proper environment or, if Docker is available for your platform, use the
-  provided Docker image which does this for you, [see below](
-  #using-the-development-docker-image)).
+  provided Docker image which does this for you,
+  [see below](#using-the-development-docker-image)).
 
 * System packages:
   * [Bubblewrap](https://github.com/projectatomic/bubblewrap) (at least version
