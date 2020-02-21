@@ -1,6 +1,10 @@
-################
-# Build pipeline
-################
+##
+# Code pipeline
+##
+#
+# Main Buildkite pipeline for running code-related linters and tests.
+#
+
 docker_plugin_default_config: &docker_plugin_default_config
   image: "oasislabs/testing:0.3.0"
   always_pull: true
