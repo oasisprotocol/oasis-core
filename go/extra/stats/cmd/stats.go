@@ -27,6 +27,9 @@ const (
 	cfgStartBlock = "start-block"
 	cfgEndBlock   = "end-block"
 	cfgTopN       = "top-n"
+
+	availabilityScorePerSignature = 1
+	availabilityScorePerProposal  = 50
 )
 
 var (
@@ -68,10 +71,11 @@ type stats struct {
 // printEntitySignatures prints topN entities by block signature counts.
 func (s stats) printEntitySignatures(topN int) {
 	type results struct {
-		entityID   signature.PublicKey
-		signatures int64
-		proposals  int64
-		nodes      int
+		entityID         signature.PublicKey
+		signatures       int64
+		proposals        int64
+		nodes            int
+		availablityScore int64
 	}
 	res := []results{}
 
@@ -84,18 +88,19 @@ func (s stats) printEntitySignatures(topN int) {
 		for _, proposals := range eStats.nodeProposals {
 			entity.proposals += proposals
 		}
+		entity.availablityScore = availabilityScorePerSignature*entity.signatures + availabilityScorePerProposal*entity.proposals
 		res = append(res, entity)
 	}
 
 	sort.Slice(res, func(i, j int) bool {
-		return res[i].signatures > res[j].signatures
+		return res[i].availablityScore > res[j].availablityScore
 	})
 
 	// Print results.
-	fmt.Printf("|%-5s|%-64s|%-6s|%10s|%10s|\n", "Rank", "Entity ID", "Nodes", "Signatures", "Proposals")
-	fmt.Println(strings.Repeat("-", 5+64+6+10+10+6))
+	fmt.Printf("|%-5s|%-64s|%-6s|%10s|%10s|%18s|\n", "Rank", "Entity ID", "Nodes", "Signatures", "Proposals", "Availability score")
+	fmt.Println(strings.Repeat("-", 5+64+6+10+10+18+7))
 	for idx, r := range res {
-		fmt.Printf("|%-5d|%-64s|%6d|%10d|%10d|\n", idx+1, r.entityID, r.nodes, r.signatures, r.proposals)
+		fmt.Printf("|%-5d|%-64s|%6d|%10d|%10d|%18d|\n", idx+1, r.entityID, r.nodes, r.signatures, r.proposals, r.availablityScore)
 	}
 }
 
