@@ -69,37 +69,52 @@ integrationrunner:
 	@$(ECHO) "$(CYAN)*** Testing oasis-node with coverate...$(OFF)"
 	@$(GO) test $(GOFLAGS) -c -covermode=atomic -coverpkg=./... -o oasis-node/$@/$@.test ./oasis-node/$@
 
-# Fuzzing binaries.
-fuzz-targets := consensus/tendermint/fuzz/fuzz-fuzz.zip \
-	storage/fuzz/fuzz-fuzz.zip \
-	storage/mkvs/urkel/fuzz/fuzz-fuzz.zip
+# Fuzzing.
+fuzz-targets := fuzz-consensus \
+	fuzz-storage \
+	fuzz-mkvs/Tree \
+	fuzz-mkvs/Proof
 
-build-fuzz: $(fuzz-targets)
-%/fuzz-fuzz.zip: .FORCE
-	@echo "Building $@"
-	@cd "$$(dirname "$@")"; go-fuzz-build
-	@cd "$$(dirname "$@")/gencorpus"; env -u GOPATH $(OASIS_GO) build -tags gofuzz
-
-# Run fuzzing.
 define canned-fuzz-run
-set -x; cd "$<"; \
-if ! [ -d corpus ]; then \
-	mkdir corpus; \
-	pushd corpus; \
-	../gencorpus/gencorpus; \
-	popd; \
+@TARGETDIR=$(shell pwd)/$<; \
+WORKDIR=/tmp/oasis-node-$@; \
+if [ "$(FUZZ_NO_BUILD)" != "1" ]; then \
+	mkdir -p "$$WORKDIR"; \
+	pushd $$TARGETDIR >/dev/null; \
+		$(ECHO) "$(CYAN)*** Building fuzzer for $@...$(OFF)"; \
+		go-fuzz-build -o $$WORKDIR/fuzz.zip; \
+	popd >/dev/null; \
 fi; \
-go-fuzz -bin=./fuzz-fuzz.zip
+if [ "$(FUZZ_BUILD_ONLY)" != "1" ]; then \
+	mkdir -p "$$WORKDIR"; \
+	cd "$$WORKDIR"; \
+	$(ECHO) "$(CYAN)*** Running fuzzer for $@...$(OFF)"; \
+	if [ "$(@D)" == "." ]; then \
+		go-fuzz -bin=$$WORKDIR/fuzz.zip -workdir=$$WORKDIR; \
+	else \
+		go-fuzz -bin=$$WORKDIR/fuzz.zip -workdir=$$WORKDIR -func Fuzz$(@F); \
+	fi; \
+fi;
 endef
+
+# Fuzz consensus transactions.
 fuzz-consensus: consensus/tendermint/fuzz/
 	$(canned-fuzz-run)
+# Fuzz general storage interface.
 fuzz-storage: storage/fuzz/ oasis-node/oasis-node
 	@mkdir -p /tmp/oasis-node-fuzz-storage/identity
 	@chmod 0700 /tmp/oasis-node-fuzz-storage/identity
 	@oasis-node/oasis-node identity init --datadir /tmp/oasis-node-fuzz-storage/identity
 	$(canned-fuzz-run)
-fuzz-storage-mkvs: storage/mkvs/urkel/fuzz/
+# Fuzz MKVS data structures.
+fuzz-mkvs/Tree: storage/mkvs/urkel/fuzz
 	$(canned-fuzz-run)
+fuzz-mkvs/Proof: storage/mkvs/urkel/fuzz
+	$(canned-fuzz-run)
+
+# Target that only builds all fuzzing infrastructure.
+build-fuzz: FUZZ_BUILD_ONLY=1
+build-fuzz: $(fuzz-targets)
 
 # Clean.
 clean:
@@ -109,7 +124,7 @@ clean:
 # List of targets that are not actual files.
 .PHONY: \
 	generate $(go-binaries) build \
-	$(test-helpers) build-helpers $(test-vectors) gen-test-vectors \
+	$(test-helpers) build-helpers $(test-vectors) gen-test-vectors $(fuzz-targets) \
 	fmt lint test integrationrunner clean all
 
 .FORCE:
