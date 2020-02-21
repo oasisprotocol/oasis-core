@@ -1,6 +1,10 @@
-################
-# Build pipeline
-################
+##
+# Code pipeline
+##
+#
+# Main Buildkite pipeline for running code-related linters and tests.
+#
+
 docker_plugin_default_config: &docker_plugin_default_config
   image: "oasislabs/testing:0.3.0"
   always_pull: true
@@ -90,7 +94,6 @@ steps:
   # .buildkite/scripts/download_utils.sh.
   - label: Build Go node
     command:
-      - . .buildkite/scripts/skip_if_only_docs_changes.sh
       - .buildkite/go/build.sh
 
       # Upload the built artifacts.
@@ -109,7 +112,6 @@ steps:
   # .buildkite/scripts/download_utils.sh.
   - label: Build Rust runtime loader
     command:
-      - . .buildkite/scripts/skip_if_only_docs_changes.sh
       - .buildkite/rust/build_generic.sh /workdir -p oasis-core-runtime-loader
       - .buildkite/rust/build_generic.sh /workdir -p test-long-term-client
       - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-client
@@ -136,7 +138,6 @@ steps:
   # .buildkite/rust/test_runtime_and_gateway.sh and .buildkite/scripts/download_utils.sh.
   - label: Build key manager runtime
     command:
-      - . .buildkite/scripts/skip_if_only_docs_changes.sh
       - .buildkite/rust/build_runtime.sh keymanager-runtime
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
 
@@ -157,7 +158,6 @@ steps:
   ###########
   - label: Test Rust crates
     command:
-      - . .buildkite/scripts/skip_if_only_docs_changes.sh
       # Build storage interoperability test helpers first.
       - make build-helpers
       - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/urkel/interop/urkel-test-helpers)
@@ -177,7 +177,6 @@ steps:
   - label: Test fuzz builds
     branches: master
     command:
-      - . .buildkite/scripts/skip_if_only_docs_changes.sh
       # TODO: Consider making this a part of the development Docker image.
       - go get -u github.com/dvyukov/go-fuzz/go-fuzz github.com/dvyukov/go-fuzz/go-fuzz-build
       - make -C go build-fuzz
@@ -189,7 +188,6 @@ steps:
   #####################################
   - label: Test Go node
     command:
-      - . .buildkite/scripts/skip_if_only_docs_changes.sh
       - .buildkite/go/test_and_coverage.sh
     artifact_paths:
       - coverage-misc.txt
@@ -205,7 +203,6 @@ steps:
     parallelism: 6
     timeout_in_minutes: 9
     command:
-      - . .buildkite/scripts/skip_if_only_docs_changes.sh
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
@@ -226,7 +223,6 @@ steps:
     parallelism: 5
     timeout_in_minutes: 19
     command:
-      - . .buildkite/scripts/skip_if_only_docs_changes.sh
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
@@ -281,7 +277,6 @@ steps:
 
   - label: "Merge and upload coverage"
     command:
-      - . .buildkite/scripts/skip_if_only_docs_changes.sh
       - .buildkite/scripts/merge_coverage.sh
       - .buildkite/scripts/upload_coverage.sh
     artifact_paths:
