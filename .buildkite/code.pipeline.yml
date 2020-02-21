@@ -207,7 +207,7 @@ steps:
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
       - /tmp/e2e/**/*.log
-      - coverage-e2e-*.tar.gz
+      - coverage-merged-e2e-*.txt
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
@@ -227,7 +227,7 @@ steps:
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
       - /tmp/e2e/**/*.log
-      - coverage-e2e-sgx-*.tar.gz
+      - coverage-merged-e2e-sgx-*.txt
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
@@ -282,7 +282,5 @@ steps:
     artifact_paths:
       - merged-coverage.txt
     soft_fail: true
-    agents:
-      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin
