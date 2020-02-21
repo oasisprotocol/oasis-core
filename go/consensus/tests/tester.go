@@ -48,4 +48,8 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 			t.Fatalf("failed to receive consensus block")
 		}
 	}
+
+	epoch, err := backend.GetEpoch(ctx, consensus.HeightLatest)
+	require.NoError(err, "GetEpoch")
+	require.True(epoch > 0, "epoch height should be greater than zero")
 }

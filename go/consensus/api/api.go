@@ -57,6 +57,9 @@ type ClientBackend interface {
 	// in the future).
 	WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error
 
+	// GetEpoch returns the current epoch.
+	GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error)
+
 	// GetBlock returns a consensus block at a specific height.
 	GetBlock(ctx context.Context, height int64) (*Block, error)
 

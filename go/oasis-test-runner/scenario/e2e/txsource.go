@@ -37,6 +37,7 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	workloads: []string{
 		workload.NameTransfer,
 		workload.NameOversized,
+		workload.NameRegistration,
 	},
 	timeLimit:             timeLimitShort,
 	livenessCheckInterval: livenessCheckInterval,
@@ -48,6 +49,7 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	workloads: []string{
 		workload.NameTransfer,
 		workload.NameOversized,
+		workload.NameRegistration,
 	},
 	timeLimit:             timeLimitLong,
 	nodeRestartInterval:   nodeRestartIntervalLong,
@@ -201,6 +203,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 		"debug", "txsource",
 		"--address", "unix:" + sc.net.Clients()[0].SocketPath(),
 		"--" + common.CfgDebugAllowTestKeys,
+		"--" + common.CfgDataDir, sc.net.BasePath(),
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgDebugTestEntity,
 		"--log.format", logFmt.String(),

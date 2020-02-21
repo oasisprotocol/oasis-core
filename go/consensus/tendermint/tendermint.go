@@ -651,6 +651,10 @@ func (t *tendermintService) Scheduler() schedulerAPI.Backend {
 	return t.scheduler
 }
 
+func (t *tendermintService) GetEpoch(ctx context.Context, height int64) (epochtimeAPI.EpochTime, error) {
+	return t.epochtime.GetEpoch(ctx, height)
+}
+
 func (t *tendermintService) WaitEpoch(ctx context.Context, epoch epochtimeAPI.EpochTime) error {
 	ch, sub := t.epochtime.WatchEpochs()
 	defer sub.Close()

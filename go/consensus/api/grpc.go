@@ -20,6 +20,8 @@ var (
 	methodSubmitTx = serviceName.NewMethod("SubmitTx", transaction.SignedTransaction{})
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
+	// methodGetEpoch is the GetEpoch method.
+	methodGetEpoch = serviceName.NewMethod("GetEpoch", int64(0))
 	// methodWaitEpoch is the WaitEpoch method.
 	methodWaitEpoch = serviceName.NewMethod("WaitEpoch", epochtime.EpochTime(0))
 	// methodGetBlock is the GetBlock method.
@@ -42,6 +44,10 @@ var (
 			{
 				MethodName: methodStateToGenesis.ShortName(),
 				Handler:    handlerStateToGenesis,
+			},
+			{
+				MethodName: methodGetEpoch.ShortName(),
+				Handler:    handlerGetEpoch,
 			},
 			{
 				MethodName: methodWaitEpoch.ShortName(),
@@ -108,6 +114,29 @@ func handlerStateToGenesis( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetEpoch( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetEpoch(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetEpoch.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetEpoch(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -233,6 +262,14 @@ func (c *consensusClient) StateToGenesis(ctx context.Context, height int64) (*ge
 
 func (c *consensusClient) WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error {
 	return c.conn.Invoke(ctx, methodWaitEpoch.FullName(), epoch, nil)
+}
+
+func (c *consensusClient) GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error) {
+	var epoch epochtime.EpochTime
+	if err := c.conn.Invoke(ctx, methodGetEpoch.FullName(), height, &epoch); err != nil {
+		return epochtime.EpochTime(0), err
+	}
+	return epoch, nil
 }
 
 func (c *consensusClient) GetBlock(ctx context.Context, height int64) (*Block, error) {
