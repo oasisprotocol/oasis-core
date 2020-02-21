@@ -187,7 +187,7 @@ func (pv *ProofVerifier) VerifyProof(ctx context.Context, root hash.Hash, proof 
 	if !rootNodeHash.Equal(&root) {
 		return nil, fmt.Errorf("verifier: bad root (expected: %s got: %s)",
 			root,
-			rootNode.Hash,
+			rootNodeHash,
 		)
 	}
 	return rootNode, nil
@@ -204,6 +204,9 @@ func (pv *ProofVerifier) verifyProof(ctx context.Context, proof *Proof, idx int)
 	entry := proof.Entries[idx]
 	if entry == nil {
 		return idx + 1, nil, nil
+	}
+	if len(entry) == 0 {
+		return -1, nil, errors.New("verifier: malformed proof")
 	}
 
 	switch entry[0] {

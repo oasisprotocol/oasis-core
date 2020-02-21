@@ -103,6 +103,9 @@ impl ProofVerifier {
             Some(entry) => entry.as_ref(),
             None => return Ok((idx + 1, NodePointer::null_ptr())),
         };
+        if entry.is_empty() {
+            return Err(format_err!("verifier: malformed proof"));
+        }
 
         match entry[0] {
             PROOF_ENTRY_FULL => {
