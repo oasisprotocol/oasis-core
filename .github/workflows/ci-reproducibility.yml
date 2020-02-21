@@ -8,12 +8,9 @@ on:
     branches:
       - master
       - stable/*
-  # Or when a pull request event occurs for a pull request against one of the
-  # matched branches.
-  pull_request:
-    branches:
-      - master
-      - stable/*
+  # Or every day at 00:00 UTC.
+  schedule:
+    - cron: "0 0 * * *"
 
 jobs:
 
