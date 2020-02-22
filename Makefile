@@ -69,7 +69,7 @@ lint-go:
 lint-git: fetch-git
 	@COMMIT_SHA=`git rev-parse $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)` && \
 	echo "Running gitlint for commits from $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) ($${COMMIT_SHA:0:7})..."; \
-	gitlint --commits $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)...HEAD
+	gitlint --commits $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)..HEAD
 
 lint-md:
 	@npx markdownlint-cli '**/*.md' --ignore .changelog/
