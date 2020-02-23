@@ -99,15 +99,7 @@ func (worker *Compute) startNode() error {
 		args = args.appendComputeNodeRuntime(v)
 	}
 
-	var err error
-	if worker.cmd, worker.exitCh, err = worker.net.startOasisNode(
-		worker.dir,
-		nil,
-		args,
-		worker.Name,
-		false,
-		worker.restartable,
-	); err != nil {
+	if err := worker.net.startOasisNode(&worker.Node, nil, args); err != nil {
 		return fmt.Errorf("oasis/compute: failed to launch node %s: %w", worker.Name, err)
 	}
 
@@ -146,7 +138,8 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 			Name:                                     computeName,
 			net:                                      net,
 			dir:                                      computeDir,
-			restartable:                              cfg.Restartable,
+			termEarlyOk:                              cfg.AllowEarlyTermination,
+			termErrorOk:                              cfg.AllowErrorTermination,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			submissionGasPrice:                       cfg.SubmissionGasPrice,

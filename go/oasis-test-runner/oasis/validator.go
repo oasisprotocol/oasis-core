@@ -98,15 +98,7 @@ func (val *Validator) startNode() error {
 		args = args.supplementarysanityEnabled()
 	}
 
-	var err error
-	if val.cmd, val.exitCh, err = val.net.startOasisNode(
-		val.dir,
-		nil,
-		args,
-		val.Name,
-		false,
-		val.restartable,
-	); err != nil {
+	if err := val.net.startOasisNode(&val.Node, nil, args); err != nil {
 		return fmt.Errorf("oasis/validator: failed to launch node %s: %w", val.Name, err)
 	}
 
@@ -131,7 +123,8 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			Name:                                     valName,
 			net:                                      net,
 			dir:                                      valDir,
-			restartable:                              cfg.Restartable,
+			termEarlyOk:                              cfg.AllowEarlyTermination,
+			termErrorOk:                              cfg.AllowErrorTermination,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			submissionGasPrice:                       cfg.SubmissionGasPrice,

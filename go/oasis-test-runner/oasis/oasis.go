@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -50,6 +51,8 @@ const (
 
 // Node defines the common fields for all node types.
 type Node struct { // nolint: maligned
+	sync.Mutex
+
 	Name   string
 	NodeID signature.PublicKey
 
@@ -59,8 +62,10 @@ type Node struct { // nolint: maligned
 
 	exitCh chan error
 
-	restartable bool
+	termEarlyOk bool
+	termErrorOk bool
 	doStartNode func() error
+	isStopping  bool
 
 	disableDefaultLogWatcherHandlerFactories bool
 	logWatcherHandlerFactories               []log.WatcherHandlerFactory
@@ -94,10 +99,17 @@ func (n *Node) stopNode() error {
 		return nil
 	}
 
+	// Mark the node as stopping so that we don't abort the scenario when the node exits.
+	n.Lock()
+	n.isStopping = true
+	n.Unlock()
+
 	// Stop the node and wait for it to stop.
 	_ = n.cmd.Process.Kill()
 	_ = n.cmd.Wait()
+	<-n.Exit()
 	n.cmd = nil
+
 	return nil
 }
 
@@ -125,9 +137,27 @@ func (n Node) BinaryPath() string {
 	return fmt.Sprintf("/proc/%d/exe", n.cmd.Process.Pid)
 }
 
+func (n *Node) handleExit(cmdErr error) error {
+	n.Lock()
+	defer n.Unlock()
+
+	switch {
+	case n.termErrorOk || n.isStopping:
+		// Termination with any error code is allowed.
+		n.isStopping = false
+		return nil
+	case cmdErr == env.ErrEarlyTerm && n.termEarlyOk:
+		// Early (successful) termination is allowed.
+		return nil
+	default:
+		return cmdErr
+	}
+}
+
 // NodeCfg defines the common node configuration options.
 type NodeCfg struct {
-	Restartable bool
+	AllowEarlyTermination bool
+	AllowErrorTermination bool
 
 	DisableDefaultLogWatcherHandlerFactories bool
 	LogWatcherHandlerFactories               []log.WatcherHandlerFactory
@@ -560,18 +590,18 @@ func (net *Network) generateDeterministicNodeIdentity(dir *env.Dir, rawSeed stri
 }
 
 func (net *Network) startOasisNode(
-	dir *env.Dir,
+	node *Node,
 	subCmd []string,
 	extraArgs *argBuilder,
-	descr string,
-	termEarlyOk bool,
-	restartable bool,
-) (*exec.Cmd, chan error, error) {
+) error {
+	node.Lock()
+	defer node.Unlock()
+
 	baseArgs := []string{
-		"--" + common.CfgDataDir, dir.String(),
+		"--" + common.CfgDataDir, node.dir.String(),
 		"--log.level", "debug",
 		"--log.format", "json",
-		"--log.file", nodeLogPath(dir),
+		"--log.file", nodeLogPath(node.dir),
 		"--genesis.file", net.GenesisPath(),
 	}
 	if len(subCmd) == 0 {
@@ -584,9 +614,9 @@ func (net *Network) startOasisNode(
 	args = append(args, baseArgs...)
 	args = append(args, extraArgs.vec...)
 
-	w, err := dir.NewLogWriter(logConsoleFile)
+	w, err := node.dir.NewLogWriter(logConsoleFile)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 	net.env.AddOnCleanup(func() {
 		_ = w.Close()
@@ -603,12 +633,14 @@ func (net *Network) startOasisNode(
 	)
 
 	if err = cmd.Start(); err != nil {
-		return nil, nil, errors.Wrap(err, "oasis: failed to start node")
+		return fmt.Errorf("oasis: failed to start node: %w", err)
 	}
 
 	doneCh := net.env.AddTermOnCleanup(cmd)
 	exitCh := make(chan error, 1)
 	go func() {
+		defer close(exitCh)
+
 		cmdErr := <-doneCh
 		net.logger.Debug("node terminated",
 			"err", cmdErr,
@@ -617,14 +649,16 @@ func (net *Network) startOasisNode(
 		if cmdErr != nil {
 			exitCh <- cmdErr
 		}
-		close(exitCh)
 
-		if cmdErr != nil && !restartable && (cmdErr != env.ErrEarlyTerm || !termEarlyOk) {
-			net.errCh <- errors.Wrapf(cmdErr, "oasis: %s node terminated", descr)
+		if err := node.handleExit(cmdErr); err != nil {
+			net.errCh <- fmt.Errorf("oasis: %s node terminated: %w", node.Name, err)
 		}
 	}()
 
-	return cmd, exitCh, nil
+	node.cmd = cmd
+	node.exitCh = exitCh
+
+	return nil
 }
 
 func (net *Network) makeGenesis() error {

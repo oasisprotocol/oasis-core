@@ -25,8 +25,7 @@ func (seed *seedNode) startNode() error {
 		tendermintCoreListenAddress(seed.consensusPort).
 		tendermintSeedMode()
 
-	var err error
-	if seed.cmd, seed.exitCh, err = seed.net.startOasisNode(seed.dir, nil, args, seed.Name, false, false); err != nil {
+	if err := seed.net.startOasisNode(&seed.Node, nil, args); err != nil {
 		return fmt.Errorf("oasis/seed: failed to launch node %s: %w", seed.Name, err)
 	}
 

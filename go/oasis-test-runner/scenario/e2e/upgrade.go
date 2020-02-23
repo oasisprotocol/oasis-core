@@ -154,10 +154,10 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			oasis.EntityCfg{},
 		},
 		Validators: []oasis.ValidatorFixture{
-			oasis.ValidatorFixture{Entity: 1, Restartable: true},
-			oasis.ValidatorFixture{Entity: 1, Restartable: true},
-			oasis.ValidatorFixture{Entity: 1, Restartable: true},
-			oasis.ValidatorFixture{Entity: 1, Restartable: true},
+			oasis.ValidatorFixture{Entity: 1, AllowErrorTermination: true},
+			oasis.ValidatorFixture{Entity: 1, AllowErrorTermination: true},
+			oasis.ValidatorFixture{Entity: 1, AllowErrorTermination: true},
+			oasis.ValidatorFixture{Entity: 1, AllowErrorTermination: true},
 		},
 	}, nil
 }

@@ -33,15 +33,7 @@ func (client *Client) startNode() error {
 			appendRuntimePruner(&v.pruner)
 	}
 
-	var err error
-	if client.cmd, client.exitCh, err = client.net.startOasisNode(
-		client.dir,
-		nil,
-		args,
-		client.Name,
-		false,
-		false,
-	); err != nil {
+	if err := client.net.startOasisNode(&client.Node, nil, args); err != nil {
 		return fmt.Errorf("oasis/client: failed to launch node %s: %w", client.Name, err)
 	}
 

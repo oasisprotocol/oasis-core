@@ -121,14 +121,7 @@ func (worker *Storage) startNode() error {
 		args = args.appendSeedNodes(worker.net)
 	}
 
-	if worker.cmd, worker.exitCh, err = worker.net.startOasisNode(
-		worker.dir,
-		nil,
-		args,
-		worker.Name,
-		false,
-		false,
-	); err != nil {
+	if err = worker.net.startOasisNode(&worker.Node, nil, args); err != nil {
 		return fmt.Errorf("oasis/storage: failed to launch node %s: %w", worker.Name, err)
 	}
 

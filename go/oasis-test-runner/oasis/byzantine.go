@@ -52,15 +52,7 @@ func (worker *Byzantine) startNode() error {
 		}
 	}
 
-	var err error
-	if worker.cmd, worker.exitCh, err = worker.net.startOasisNode(
-		worker.dir,
-		[]string{"debug", "byzantine", worker.script},
-		args,
-		worker.Name,
-		true,
-		false,
-	); err != nil {
+	if err := worker.net.startOasisNode(&worker.Node, []string{"debug", "byzantine", worker.script}, args); err != nil {
 		return fmt.Errorf("oasis/byzantine: failed to launch node %s: %w", worker.Name, err)
 	}
 
@@ -104,6 +96,7 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 			Name:                                     byzantineName,
 			net:                                      net,
 			dir:                                      byzantineDir,
+			termEarlyOk:                              true,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			submissionGasPrice:                       cfg.SubmissionGasPrice,
