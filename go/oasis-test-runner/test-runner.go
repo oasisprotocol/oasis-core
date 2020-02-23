@@ -58,8 +58,8 @@ func main() {
 	// Runtime dynamic registration test.
 	_ = cmd.Register(e2e.RuntimeDynamic)
 	// Transaction source test.
-	_ = cmd.Register(e2e.TxSourceTransferShort)
-	_ = cmd.RegisterNondefault(e2e.TxSourceTransfer)
+	_ = cmd.Register(e2e.TxSourceMultiShort)
+	_ = cmd.RegisterNondefault(e2e.TxSourceMulti)
 	// Node upgrade tests.
 	_ = cmd.Register(e2e.NodeUpgrade)
 	_ = cmd.Register(e2e.NodeUpgradeCancel)
