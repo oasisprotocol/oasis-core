@@ -91,6 +91,13 @@ func (args *argBuilder) tendermintSubmissionGasPrice(price uint64) *argBuilder {
 	return args
 }
 
+func (args *argBuilder) tendermintDebugDisableCheckTx(disable bool) *argBuilder {
+	if disable {
+		args.vec = append(args.vec, "--"+tendermint.CfgConsensusDebugDisableCheckTx)
+	}
+	return args
+}
+
 func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + tendermint.CfgCoreListenAddress, "tcp://0.0.0.0:" + strconv.Itoa(int(port)),

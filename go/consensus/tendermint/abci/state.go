@@ -84,7 +84,7 @@ type ApplicationState interface {
 	NewContext(mode ContextMode, now time.Time) *Context
 }
 
-type applicationState struct {
+type applicationState struct { // nolint: maligned
 	logger *logging.Logger
 
 	ctx           context.Context
@@ -106,8 +106,9 @@ type applicationState struct {
 	haltMode        bool
 	haltEpochHeight epochtime.EpochTime
 
-	minGasPrice quantity.Quantity
-	ownTxSigner signature.PublicKey
+	minGasPrice    quantity.Quantity
+	ownTxSigner    signature.PublicKey
+	disableCheckTx bool
 
 	metricsCloseCh  chan struct{}
 	metricsClosedCh chan struct{}
@@ -461,6 +462,7 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 		haltEpochHeight: cfg.HaltEpochHeight,
 		minGasPrice:     minGasPrice,
 		ownTxSigner:     cfg.OwnTxSigner,
+		disableCheckTx:  cfg.DisableCheckTx,
 		metricsCloseCh:  make(chan struct{}),
 		metricsClosedCh: make(chan struct{}),
 	}

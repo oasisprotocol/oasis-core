@@ -58,6 +58,7 @@ type ApplicationConfig struct {
 	Pruning         PruneConfig
 	HaltEpochHeight epochtime.EpochTime
 	MinGasPrice     uint64
+	DisableCheckTx  bool
 
 	// OwnTxSigner is the transaction signer identity of the local node.
 	OwnTxSigner signature.PublicKey
@@ -677,6 +678,13 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 }
 
 func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
+	if mux.state.disableCheckTx {
+		// Blindly accept all transactions if configured to do so.
+		return types.ResponseCheckTx{
+			Code: types.CodeTypeOK,
+		}
+	}
+
 	ctx := mux.state.NewContext(ContextCheckTx, mux.currentTime)
 	defer ctx.Close()
 

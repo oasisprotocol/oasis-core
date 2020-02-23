@@ -352,11 +352,16 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 
 // ClientFixture is a client node fixture.
 type ClientFixture struct {
+	ConsensusDisableCheckTx bool `json:"consensus_disable_check_tx"`
 }
 
 // Create instantiates the client node described by the fixture.
 func (f *ClientFixture) Create(net *Network) (*Client, error) {
-	return net.NewClient()
+	return net.NewClient(&ClientCfg{
+		NodeCfg: NodeCfg{
+			ConsensusDisableCheckTx: f.ConsensusDisableCheckTx,
+		},
+	})
 }
 
 // ByzantineFixture is a byzantine node fixture.

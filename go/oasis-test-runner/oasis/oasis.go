@@ -70,7 +70,8 @@ type Node struct { // nolint: maligned
 	disableDefaultLogWatcherHandlerFactories bool
 	logWatcherHandlerFactories               []log.WatcherHandlerFactory
 
-	submissionGasPrice uint64
+	submissionGasPrice      uint64
+	consensusDisableCheckTx bool
 }
 
 // Exit returns a channel that will close once the node shuts down.
@@ -129,7 +130,7 @@ func (n *Node) Restart() error {
 // BinaryPath returns the path to the running node's process' image, or an empty string
 // if the node isn't running yet. This can be used as a replacement for NetworkCfg.NodeBinary
 // in cases where the test runner is actually using a wrapper to start the node.
-func (n Node) BinaryPath() string {
+func (n *Node) BinaryPath() string {
 	if n.cmd == nil || n.cmd.Process == nil {
 		return ""
 	}
@@ -155,14 +156,15 @@ func (n *Node) handleExit(cmdErr error) error {
 }
 
 // NodeCfg defines the common node configuration options.
-type NodeCfg struct {
+type NodeCfg struct { // nolint: maligned
 	AllowEarlyTermination bool
 	AllowErrorTermination bool
 
 	DisableDefaultLogWatcherHandlerFactories bool
 	LogWatcherHandlerFactories               []log.WatcherHandlerFactory
 
-	SubmissionGasPrice uint64
+	SubmissionGasPrice      uint64
+	ConsensusDisableCheckTx bool
 }
 
 // CmdAttrs is the SysProcAttr that will ensure graceful cleanup.
