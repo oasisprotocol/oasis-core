@@ -32,9 +32,14 @@ const (
 	VotingPower = 1
 )
 
-// ErrNoCommittedBlocks is the error returned when there are no committed
-// blocks and as such no state can be queried.
-var ErrNoCommittedBlocks = errors.New(moduleName, 1, "consensus: no committed blocks")
+var (
+	// ErrNoCommittedBlocks is the error returned when there are no committed
+	// blocks and as such no state can be queried.
+	ErrNoCommittedBlocks = errors.New(moduleName, 1, "consensus: no committed blocks")
+
+	// ErrOversizedTx is the error returned when the given transaction is too big to be processed.
+	ErrOversizedTx = errors.New(moduleName, 2, "consensus: oversized transaction")
+)
 
 // ClientBackend is a limited consensus interface used by clients that
 // connect to the local node.

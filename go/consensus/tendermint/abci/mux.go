@@ -50,8 +50,6 @@ var (
 	}
 
 	metricsOnce sync.Once
-
-	errOversizedTx = fmt.Errorf("mux: oversized transaction")
 )
 
 // ApplicationConfig is the configuration for the consensus application.
@@ -573,7 +571,7 @@ func (mux *abciMux) decodeTx(ctx *Context, rawTx []byte) (*transaction.Transacti
 		ctx.Logger().Error("received oversized transaction",
 			"tx_size", len(rawTx),
 		)
-		return nil, nil, errOversizedTx
+		return nil, nil, consensus.ErrOversizedTx
 	}
 
 	// Unmarshal envelope and verify transaction.
