@@ -102,7 +102,7 @@ endef
 fuzz-consensus: consensus/tendermint/fuzz/
 	$(canned-fuzz-run)
 # Fuzz general storage interface.
-fuzz-storage: storage/fuzz/ oasis-node/oasis-node
+fuzz-storage: storage/fuzz/ oasis-node
 	@mkdir -p /tmp/oasis-node-fuzz-storage/identity
 	@chmod 0700 /tmp/oasis-node-fuzz-storage/identity
 	@oasis-node/oasis-node identity init --datadir /tmp/oasis-node-fuzz-storage/identity

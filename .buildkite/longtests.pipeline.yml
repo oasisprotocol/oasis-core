@@ -40,9 +40,7 @@ steps:
     timeout_in_minutes: 55
     command:
       - make
-      - >-
-        ./.buildkite/scripts/test_e2e.sh
-        -t txsource-transfer
+      - ./.buildkite/scripts/test_e2e.sh -t txsource-multi
     env:
       TEST_BASE_DIR: /tmp
     agents:
