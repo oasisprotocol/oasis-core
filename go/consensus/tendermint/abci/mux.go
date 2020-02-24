@@ -444,8 +444,8 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	evBinary := cbor.Marshal(ctx.GetEvents())
 	mux.state.deliverTxTree.Set([]byte(stateKeyInitChainEvents), evBinary)
 
-	// Refresh consensus parameters.
-	if err = mux.state.refreshConsensusParameters(); err != nil {
+	// Initialize consensus parameters.
+	if err = mux.state.setConsensusParameters(&st.Consensus.Parameters); err != nil {
 		panic(fmt.Errorf("mux: failed to refresh consensus parameters: %w", err))
 	}
 

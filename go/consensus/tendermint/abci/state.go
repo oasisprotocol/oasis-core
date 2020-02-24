@@ -14,7 +14,9 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	dbm "github.com/tendermint/tm-db"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
@@ -32,6 +34,11 @@ var (
 
 	_ ApplicationState = (*applicationState)(nil)
 	_ ApplicationState = (*mockApplicationState)(nil)
+
+	// parametersKeyFmt is the key format used for consensus parameters.
+	//
+	// Value is CBOR-serialized consensusGenesis.Parameters.
+	parametersKeyFmt = keyformat.New(0xF1)
 )
 
 // ApplicationState is the overall past, present and future state of all multiplexed applications.
@@ -114,7 +121,8 @@ type applicationState struct { // nolint: maligned
 	ownTxSigner    signature.PublicKey
 	disableCheckTx bool
 
-	cachedConsensusParameters consensusGenesis.Parameters
+	cachedConsensusParametersLock sync.RWMutex
+	cachedConsensusParameters     consensusGenesis.Parameters
 
 	metricsCloseCh  chan struct{}
 	metricsClosedCh chan struct{}
@@ -298,7 +306,11 @@ func (s *applicationState) OwnTxSigner() signature.PublicKey {
 }
 
 func (s *applicationState) ConsensusParameters() (*consensusGenesis.Parameters, error) {
-	return &s.cachedConsensusParameters, nil
+	s.cachedConsensusParametersLock.RLock()
+	params := s.cachedConsensusParameters
+	s.cachedConsensusParametersLock.RUnlock()
+
+	return &params, nil
 }
 
 func (s *applicationState) inHaltEpoch(ctx *Context) bool {
@@ -374,11 +386,31 @@ func (s *applicationState) doCleanup() {
 	}
 }
 
+func (s *applicationState) setConsensusParameters(params *consensusGenesis.Parameters) error {
+	s.deliverTxTree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
+
+	s.cachedConsensusParametersLock.Lock()
+	s.cachedConsensusParameters = *params
+	s.cachedConsensusParametersLock.Unlock()
+
+	return nil
+}
+
 func (s *applicationState) refreshConsensusParameters() error {
-	// Currently we just grab the genesis document and load the parametrs from there.
-	// TODO: Move consensus parameters under its own key in ABCI state (oasis-core#2710).
-	genesisDoc := s.Genesis()
-	s.cachedConsensusParameters = genesisDoc.Consensus.Parameters
+	_, raw := s.deliverTxTree.Get(parametersKeyFmt.Encode())
+	if raw == nil {
+		return errors.New("state: expected consensus parameters to be present in app state")
+	}
+
+	var params consensusGenesis.Parameters
+	if err := cbor.Unmarshal(raw, &params); err != nil {
+		return fmt.Errorf("failed to unmarshal consensus parameters: %w", err)
+	}
+
+	s.cachedConsensusParametersLock.Lock()
+	s.cachedConsensusParameters = params
+	s.cachedConsensusParametersLock.Unlock()
+
 	return nil
 }
 
