@@ -24,6 +24,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasislabs/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -220,7 +221,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			EmptyBlockInterval: viper.GetDuration(cfgConsensusEmptyBlockInterval),
 			MaxTxSize:          uint64(viper.GetSizeInBytes(cfgConsensusMaxTxSizeBytes)),
 			MaxBlockSize:       uint64(viper.GetSizeInBytes(cfgConsensusMaxBlockSizeBytes)),
-			MaxBlockGas:        viper.GetUint64(cfgConsensusMaxBlockGas),
+			MaxBlockGas:        transaction.Gas(viper.GetUint64(cfgConsensusMaxBlockGas)),
 			MaxEvidenceAge:     viper.GetUint64(cfgConsensusMaxEvidenceAge),
 		},
 	}
