@@ -206,8 +206,8 @@ steps:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
-      - /tmp/e2e/**/*.log
       - coverage-merged-e2e-*.txt
+      - /tmp/e2e/**/*.log
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
@@ -226,8 +226,8 @@ steps:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
-      - /tmp/e2e/**/*.log
       - coverage-merged-e2e-sgx-*.txt
+      - /tmp/e2e/**/*.log
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
