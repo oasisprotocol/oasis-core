@@ -438,10 +438,16 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 	}
 	labelLen := n.LabelBitLength.ToBytes()
 	pos += DepthSize
+	if pos+labelLen > len(data) {
+		return 0, ErrMalformedNode
+	}
 
 	n.Label = make(Key, labelLen)
 	copy(n.Label, data[pos:pos+labelLen])
 	pos += labelLen
+	if pos >= len(data) {
+		return 0, ErrMalformedNode
+	}
 
 	if data[pos] == PrefixNilNode {
 		n.LeafNode = nil
@@ -618,9 +624,15 @@ func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
 		return 0, err
 	}
 	pos += keySize
+	if pos+ValueLengthSize > len(data) {
+		return 0, ErrMalformedNode
+	}
 
 	valueSize := int(binary.LittleEndian.Uint32(data[pos : pos+ValueLengthSize]))
 	pos += ValueLengthSize
+	if pos+valueSize > len(data) {
+		return 0, ErrMalformedNode
+	}
 
 	value := make([]byte, valueSize)
 	copy(value, data[pos:pos+valueSize])

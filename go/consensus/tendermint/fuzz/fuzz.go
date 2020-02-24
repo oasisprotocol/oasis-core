@@ -71,7 +71,7 @@ func Fuzz(data []byte) int {
 
 	methodName := FuzzableMethods[meth]
 
-	blob, _ := fuzz.NewFilledInstance(data, methodName.BodyType())
+	blob := fuzz.NewFilledInstance(data, methodName.BodyType())
 
 	tx := &transaction.Transaction{
 		Method: methodName,

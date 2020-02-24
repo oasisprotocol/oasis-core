@@ -110,9 +110,15 @@ impl Marshal for InternalNode {
 
         pos += self.label_bit_length.unmarshal_binary(&data[pos..])?;
         self.label = vec![0; self.label_bit_length.to_bytes()];
+        if pos + self.label_bit_length.to_bytes() > data.len() {
+            return Err(TreeError::MalformedNode.into());
+        }
         self.label
             .clone_from_slice(&data[pos..pos + self.label_bit_length.to_bytes()]);
         pos += self.label_bit_length.to_bytes();
+        if pos >= data.len() {
+            return Err(TreeError::MalformedNode.into());
+        }
 
         if data[pos] == NodeKind::None as u8 {
             self.leaf_node = NodePointer::null_ptr();
@@ -196,11 +202,18 @@ impl Marshal for LeafNode {
         self.key = Key::new();
         let key_len = self.key.unmarshal_binary(&data[pos..])?;
         pos += key_len;
+        if pos + VALUE_LENGTH_SIZE > data.len() {
+            return Err(TreeError::MalformedNode.into());
+        }
 
         self.value = Value::new();
         let mut value_len = 0u32;
         value_len.unmarshal_binary(&data[pos..(pos + VALUE_LENGTH_SIZE)])?;
         pos += VALUE_LENGTH_SIZE;
+        if pos + (value_len as usize) > data.len() {
+            return Err(TreeError::MalformedNode.into());
+        }
+
         self.value
             .extend_from_slice(&data[pos..(pos + value_len as usize)]);
         pos += value_len as usize;

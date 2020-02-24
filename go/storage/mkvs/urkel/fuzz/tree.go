@@ -15,11 +15,7 @@ import (
 	mkvsTests "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/tests"
 )
 
-var (
-	tree *TreeFuzz
-
-	fuzzer *commonFuzz.InterfaceFuzzer
-)
+var treeFuzzer *commonFuzz.InterfaceFuzzer
 
 // TreeFuzz is a wrapper around a mkvs.KeyValueTree for fuzzing purposes.
 type TreeFuzz struct {
@@ -177,23 +173,22 @@ func (t *TreeFuzz) fail(format string, a ...interface{}) {
 	panic(fmt.Sprintf(format, a...))
 }
 
-func NewTreeFuzz() *TreeFuzz {
-	return &TreeFuzz{
+func NewTreeFuzz() (*TreeFuzz, *commonFuzz.InterfaceFuzzer) {
+	tf := &TreeFuzz{
 		inner:     mkvs.New(nil, nil, mkvs.WithoutWriteLog()),
 		reference: make(map[string][]byte),
 	}
+	fz := commonFuzz.NewInterfaceFuzzer(tf)
+	return tf, fz
 }
 
 func init() {
-	// Create the in-memory tree.
-	tree = NewTreeFuzz()
-
-	// Create and prepare the fuzzer.
-	fuzzer = commonFuzz.NewInterfaceFuzzer(tree)
+	// Initialize stateful fuzzing state.
+	_, treeFuzzer = NewTreeFuzz()
 }
 
-func Fuzz(data []byte) int {
-	values, result := fuzzer.DispatchBlob(data)
+func FuzzTree(data []byte) int {
+	values, result := treeFuzzer.DispatchBlob(data)
 	if !result {
 		return -1
 	}

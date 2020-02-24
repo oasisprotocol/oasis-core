@@ -64,6 +64,7 @@ require (
 	github.com/tendermint/iavl v0.12.2
 	github.com/tendermint/tendermint v0.32.8
 	github.com/tendermint/tm-db v0.2.0
+	github.com/thepudds/fzgo v0.2.2
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
