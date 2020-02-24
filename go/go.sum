@@ -86,8 +86,6 @@ github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2/go.mod h1:SqUrOPUn
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
-github.com/dvyukov/go-fuzz v0.0.0-20191022152526-8cb203812681 h1:3WV5aRRj1ELP3RcLlBp/v0WJTuy47OQMkL9GIQq8QEE=
-github.com/dvyukov/go-fuzz v0.0.0-20191022152526-8cb203812681/go.mod h1:11Gm+ccJnvAhCNLlf5+cS9KjtbaD5I5zaZpFMsTHWTw=
 github.com/eapache/channels v1.1.0 h1:F1taHcn7/F0i8DYqKXJnyhJcVpp2kgFcNePxXtnyu4k=
 github.com/eapache/channels v1.1.0/go.mod h1:jMm2qB5Ubtg9zLd+inMZd2/NUvXgzmWXsDaLyQIGfH0=
 github.com/eapache/queue v1.1.0 h1:YOEu7KNc61ntiQlcEeUIoDTJ2o8mQznoNvUhiigpIqc=
@@ -145,6 +143,7 @@ github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db/go.mod h1:/XxbfmMg8l
 github.com/golang/snappy v0.0.1 h1:Qgr9rKW7uDUkrbSmQeiDsGa8SjGyCOGtuasMWwvp2P4=
 github.com/golang/snappy v0.0.1/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
 github.com/google/btree v1.0.0/go.mod h1:lNA+9X1NB3Zf8V7Ke586lFgjr2dZNuvo3lPJSGZ5JPQ=
+github.com/google/go-cmp v0.2.0 h1:+dTQ8DZQJz0Mb/HjFlkptS1FeQ4cWSnN941F8aEG4SQ=
 github.com/google/go-cmp v0.2.0/go.mod h1:oXzfMopK8JAjlY9xF4vHSVASa0yLyX7SntLO5aqRK0M=
 github.com/google/gofuzz v0.0.0-20170612174753-24818f796faf/go.mod h1:HP5RmnzzSNb993RKQDq4+1A4ia9nllfqcQFTQJedwGI=
 github.com/google/gofuzz v1.0.0 h1:A8PeW59pxE9IoFRqBp37U+mSNaQoZ46F1f0f863XSXw=
@@ -354,8 +353,6 @@ github.com/oasislabs/iavl v0.12.0-ekiden3 h1:8544fXJb57urhAEpTlIwDBdTJukgpPS/FCS
 github.com/oasislabs/iavl v0.12.0-ekiden3/go.mod h1:B/tMpl5cg7n42n3xYQTCckJzQezoI75jedkc8FOiOF0=
 github.com/oasislabs/safeopen v0.0.0-20200117113835-6aa648f43ff8 h1:KC7dcrx0WEeyAWGAG+vdJjmIW36PUfw1x/LUnHjLm2E=
 github.com/oasislabs/safeopen v0.0.0-20200117113835-6aa648f43ff8/go.mod h1:ABsG2IHM7bpTRIH3EvQ8CZQEBkzuhLxXFxaYApYMB9Y=
-github.com/oasislabs/tendermint v0.32.8-oasis1 h1:y+RZsI7D6jFqV/OufXA0meDOgn6eJLsXa5a0iyRLIRU=
-github.com/oasislabs/tendermint v0.32.8-oasis1/go.mod h1:SJjyKg9RLf9FUvqo9sJSpcT/COwormN9U05vR70It/A=
 github.com/oasislabs/tendermint v0.32.8-oasis2 h1:PSEUtAp8Rfe/0T7endF6Iqg4p9+pPkSDSx0E83bD2LM=
 github.com/oasislabs/tendermint v0.32.8-oasis2/go.mod h1:uxexUd6P+G+Zg1yACNBycfcaV1dPI985r79I+IXP38w=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
