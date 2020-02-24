@@ -37,8 +37,8 @@ func (sc *nodeShutdownImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
-	// Make sure one of the compute nodes can be restarted.
-	f.ComputeWorkers[0].Restartable = true
+	// Make sure one of the compute nodes can terminate early.
+	f.ComputeWorkers[0].AllowEarlyTermination = true
 	return f, nil
 }
 

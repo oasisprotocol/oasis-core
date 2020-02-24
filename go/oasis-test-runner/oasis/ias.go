@@ -39,15 +39,7 @@ func (ias *iasProxy) startNode() error {
 		args = args.iasUseGenesis()
 	}
 
-	var err error
-	if ias.cmd, ias.exitCh, err = ias.net.startOasisNode(
-		ias.dir,
-		[]string{"ias", "proxy"},
-		args,
-		ias.Name,
-		false,
-		false,
-	); err != nil {
+	if err := ias.net.startOasisNode(&ias.Node, []string{"ias", "proxy"}, args); err != nil {
 		return fmt.Errorf("oasis/ias: failed to launch node %s: %w", ias.Name, err)
 	}
 

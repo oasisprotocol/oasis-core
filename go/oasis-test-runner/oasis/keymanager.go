@@ -214,7 +214,7 @@ func (km *Keymanager) startNode() error {
 		args = args.appendSeedNodes(km.net)
 	}
 
-	if km.cmd, km.exitCh, err = km.net.startOasisNode(km.dir, nil, args, km.Name, false, km.restartable); err != nil {
+	if err = km.net.startOasisNode(&km.Node, nil, args); err != nil {
 		return fmt.Errorf("oasis/keymanager: failed to launch node %s: %w", km.Name, err)
 	}
 
@@ -254,7 +254,8 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 			Name:                                     kmName,
 			net:                                      net,
 			dir:                                      kmDir,
-			restartable:                              cfg.Restartable,
+			termEarlyOk:                              cfg.AllowEarlyTermination,
+			termErrorOk:                              cfg.AllowErrorTermination,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			submissionGasPrice:                       cfg.SubmissionGasPrice,

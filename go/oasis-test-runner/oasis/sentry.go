@@ -81,7 +81,7 @@ func (sentry *Sentry) startNode() error {
 		args = args.addSentryKeymanagerWorkers(keymanagerWorkers)
 	}
 
-	if sentry.cmd, _, err = sentry.net.startOasisNode(sentry.dir, nil, args, sentry.Name, false, false); err != nil {
+	if err = sentry.net.startOasisNode(&sentry.Node, nil, args); err != nil {
 		return fmt.Errorf("oasis/sentry: failed to launch node %s: %w", sentry.Name, err)
 	}
 

@@ -118,7 +118,8 @@ type TEEFixture struct {
 
 // ValidatorFixture is a validator fixture.
 type ValidatorFixture struct {
-	Restartable bool `json:"restartable"`
+	AllowEarlyTermination bool `json:"allow_early_termination"`
+	AllowErrorTermination bool `json:"allow_error_termination"`
 
 	Entity int `json:"entity"`
 
@@ -143,7 +144,8 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 
 	return net.NewValidator(&ValidatorCfg{
 		NodeCfg: NodeCfg{
-			Restartable:                f.Restartable,
+			AllowEarlyTermination:      f.AllowEarlyTermination,
+			AllowErrorTermination:      f.AllowErrorTermination,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			SubmissionGasPrice:         f.SubmissionGasPrice,
 		},
@@ -220,7 +222,8 @@ type KeymanagerFixture struct {
 	Runtime int `json:"runtime"`
 	Entity  int `json:"entity"`
 
-	Restartable bool `json:"restartable"`
+	AllowEarlyTermination bool `json:"allow_early_termination"`
+	AllowErrorTermination bool `json:"allow_error_termination"`
 
 	SubmissionGasPrice uint64 `json:"submission_gas_price"`
 
@@ -242,7 +245,8 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 
 	return net.NewKeymanager(&KeymanagerCfg{
 		NodeCfg: NodeCfg{
-			Restartable:                f.Restartable,
+			AllowEarlyTermination:      f.AllowEarlyTermination,
+			AllowErrorTermination:      f.AllowErrorTermination,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			SubmissionGasPrice:         f.SubmissionGasPrice,
 		},
@@ -257,7 +261,8 @@ type StorageWorkerFixture struct { // nolint: maligned
 	Backend string `json:"backend"`
 	Entity  int    `json:"entity"`
 
-	Restartable bool `json:"restartable"`
+	AllowEarlyTermination bool `json:"allow_early_termination"`
+	AllowErrorTermination bool `json:"allow_error_termination"`
 
 	SubmissionGasPrice uint64 `json:"submission_gas_price"`
 
@@ -278,7 +283,8 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 
 	return net.NewStorage(&StorageCfg{
 		NodeCfg: NodeCfg{
-			Restartable:                f.Restartable,
+			AllowEarlyTermination:      f.AllowEarlyTermination,
+			AllowErrorTermination:      f.AllowErrorTermination,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			SubmissionGasPrice:         f.SubmissionGasPrice,
 		},
@@ -296,7 +302,8 @@ type ComputeWorkerFixture struct {
 
 	RuntimeBackend string `json:"runtime_backend"`
 
-	Restartable bool `json:"restartable"`
+	AllowEarlyTermination bool `json:"allow_early_termination"`
+	AllowErrorTermination bool `json:"allow_error_termination"`
 
 	SubmissionGasPrice uint64 `json:"submission_gas_price"`
 
@@ -312,7 +319,8 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 
 	return net.NewCompute(&ComputeCfg{
 		NodeCfg: NodeCfg{
-			Restartable:                f.Restartable,
+			AllowEarlyTermination:      f.AllowEarlyTermination,
+			AllowErrorTermination:      f.AllowErrorTermination,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			SubmissionGasPrice:         f.SubmissionGasPrice,
 		},
@@ -344,11 +352,16 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 
 // ClientFixture is a client node fixture.
 type ClientFixture struct {
+	ConsensusDisableCheckTx bool `json:"consensus_disable_check_tx"`
 }
 
 // Create instantiates the client node described by the fixture.
 func (f *ClientFixture) Create(net *Network) (*Client, error) {
-	return net.NewClient()
+	return net.NewClient(&ClientCfg{
+		NodeCfg: NodeCfg{
+			ConsensusDisableCheckTx: f.ConsensusDisableCheckTx,
+		},
+	})
 }
 
 // ByzantineFixture is a byzantine node fixture.

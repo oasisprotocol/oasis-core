@@ -50,8 +50,6 @@ var (
 	}
 
 	metricsOnce sync.Once
-
-	errOversizedTx = fmt.Errorf("mux: oversized transaction")
 )
 
 // ApplicationConfig is the configuration for the consensus application.
@@ -60,6 +58,7 @@ type ApplicationConfig struct {
 	Pruning         PruneConfig
 	HaltEpochHeight epochtime.EpochTime
 	MinGasPrice     uint64
+	DisableCheckTx  bool
 
 	// OwnTxSigner is the transaction signer identity of the local node.
 	OwnTxSigner signature.PublicKey
@@ -296,8 +295,6 @@ type abciMux struct {
 
 	lastBeginBlock int64
 	currentTime    time.Time
-	maxTxSize      uint64
-	maxBlockGas    transaction.Gas
 
 	genesisHooks []func()
 	haltHooks    []func(context.Context, int64, epochtime.EpochTime)
@@ -370,13 +367,6 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 			"err", err,
 		)
 		panic("mux: invalid genesis application state")
-	}
-
-	if mux.maxTxSize = st.Consensus.Parameters.MaxTxSize; mux.maxTxSize == 0 {
-		mux.logger.Warn("maximum transaction size enforcement is disabled")
-	}
-	if mux.maxBlockGas = transaction.Gas(st.Consensus.Parameters.MaxBlockGas); mux.maxBlockGas == 0 {
-		mux.logger.Warn("maximum block gas enforcement is disabled")
 	}
 
 	b, _ := json.Marshal(st)
@@ -454,6 +444,11 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	evBinary := cbor.Marshal(ctx.GetEvents())
 	mux.state.deliverTxTree.Set([]byte(stateKeyInitChainEvents), evBinary)
 
+	// Refresh consensus parameters.
+	if err = mux.state.refreshConsensusParameters(); err != nil {
+		panic(fmt.Errorf("mux: failed to refresh consensus parameters: %w", err))
+	}
+
 	return resp
 }
 
@@ -472,10 +467,15 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	mux.lastBeginBlock = blockHeight
 	mux.currentTime = req.Header.Time
 
+	params, err := mux.state.ConsensusParameters()
+	if err != nil {
+		panic(fmt.Errorf("failed to fetch consensus parameters: %w", err))
+	}
+
 	// Create empty block context.
 	mux.state.blockCtx = NewBlockContext()
-	if mux.maxBlockGas > 0 {
-		mux.state.blockCtx.Set(GasAccountantKey{}, NewGasAccountant(mux.maxBlockGas))
+	if params.MaxBlockGas > 0 {
+		mux.state.blockCtx.Set(GasAccountantKey{}, NewGasAccountant(params.MaxBlockGas))
 	} else {
 		mux.state.blockCtx.Set(GasAccountantKey{}, NewNopGasAccountant())
 	}
@@ -567,13 +567,17 @@ func (mux *abciMux) decodeTx(ctx *Context, rawTx []byte) (*transaction.Transacti
 		return nil, nil, fmt.Errorf("halt mode, rejecting all transactions")
 	}
 
-	if mux.maxTxSize > 0 && uint64(len(rawTx)) > mux.maxTxSize {
+	params, err := mux.state.ConsensusParameters()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch consensus parameters: %w", err)
+	}
+	if params.MaxTxSize > 0 && uint64(len(rawTx)) > params.MaxTxSize {
 		// This deliberately avoids logging the rawTx since spamming the
 		// logs is also bad.
 		ctx.Logger().Error("received oversized transaction",
 			"tx_size", len(rawTx),
 		)
-		return nil, nil, errOversizedTx
+		return nil, nil, consensus.ErrOversizedTx
 	}
 
 	// Unmarshal envelope and verify transaction.
@@ -679,6 +683,13 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 }
 
 func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
+	if mux.state.disableCheckTx {
+		// Blindly accept all transactions if configured to do so.
+		return types.ResponseCheckTx{
+			Code: types.CodeTypeOK,
+		}
+	}
+
 	ctx := mux.state.NewContext(ContextCheckTx, mux.currentTime)
 	defer ctx.Close()
 

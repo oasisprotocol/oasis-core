@@ -110,6 +110,8 @@ const (
 	CfgConsensusSubmissionGasPrice = "consensus.tendermint.submission.gas_price"
 	// CfgConsensusSubmissionMaxFee configures the maximum fee that can be set.
 	CfgConsensusSubmissionMaxFee = "consensus.tendermint.submission.max_fee"
+	// CfgConsensusDebugDisableCheckTx disables CheckTx.
+	CfgConsensusDebugDisableCheckTx = "consensus.tendermint.debug.disable_check_tx"
 
 	// StateDir is the name of the directory located inside the node's data
 	// directory which contains the tendermint state.
@@ -889,6 +891,7 @@ func (t *tendermintService) lazyInit() error {
 		HaltEpochHeight: t.genesis.HaltEpoch,
 		MinGasPrice:     viper.GetUint64(CfgConsensusMinGasPrice),
 		OwnTxSigner:     t.nodeSigner.Public(),
+		DisableCheckTx:  viper.GetBool(CfgConsensusDebugDisableCheckTx) && cmflags.DebugDontBlameOasis(),
 	}
 	t.mux, err = abci.NewApplicationServer(t.ctx, t.upgrader, appConfig)
 	if err != nil {
@@ -1357,10 +1360,12 @@ func init() {
 	Flags.Uint64(CfgConsensusMinGasPrice, 0, "minimum gas price")
 	Flags.Uint64(CfgConsensusSubmissionGasPrice, 0, "gas price used when submitting consensus transactions")
 	Flags.Uint64(CfgConsensusSubmissionMaxFee, 0, "maximum transaction fee when submitting consensus transactions")
+	Flags.Bool(CfgConsensusDebugDisableCheckTx, false, "do not perform CheckTx on incoming transactions (UNSAFE)")
 
 	_ = Flags.MarkHidden(cfgLogDebug)
 	_ = Flags.MarkHidden(CfgDebugP2PAddrBookLenient)
 	_ = Flags.MarkHidden(CfgDebugP2PAllowDuplicateIP)
+	_ = Flags.MarkHidden(CfgConsensusDebugDisableCheckTx)
 
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(db.Flags)

@@ -16,10 +16,16 @@ type Client struct {
 	consensusPort uint16
 }
 
+// ClientCfg is the Oasis client node provisioning configuration.
+type ClientCfg struct {
+	NodeCfg
+}
+
 func (client *Client) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		tendermintDebugDisableCheckTx(client.consensusDisableCheckTx).
 		tendermintCoreListenAddress(client.consensusPort).
 		storageBackend(storageClient.BackendName).
 		appendNetwork(client.net).
@@ -33,15 +39,7 @@ func (client *Client) startNode() error {
 			appendRuntimePruner(&v.pruner)
 	}
 
-	var err error
-	if client.cmd, client.exitCh, err = client.net.startOasisNode(
-		client.dir,
-		nil,
-		args,
-		client.Name,
-		false,
-		false,
-	); err != nil {
+	if err := client.net.startOasisNode(&client.Node, nil, args); err != nil {
 		return fmt.Errorf("oasis/client: failed to launch node %s: %w", client.Name, err)
 	}
 
@@ -54,7 +52,7 @@ func (client *Client) Start() error {
 }
 
 // NewClient provisions a new client node and adds it to the network.
-func (net *Network) NewClient() (*Client, error) {
+func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 	clientName := fmt.Sprintf("client-%d", len(net.clients))
 
 	clientDir, err := net.baseDir.NewSubDir(clientName)
@@ -68,9 +66,10 @@ func (net *Network) NewClient() (*Client, error) {
 
 	client := &Client{
 		Node: Node{
-			Name: clientName,
-			net:  net,
-			dir:  clientDir,
+			Name:                    clientName,
+			net:                     net,
+			dir:                     clientDir,
+			consensusDisableCheckTx: cfg.ConsensusDisableCheckTx,
 		},
 		consensusPort: net.nextNodePort,
 	}

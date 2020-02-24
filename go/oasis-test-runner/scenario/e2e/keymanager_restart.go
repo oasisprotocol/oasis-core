@@ -27,17 +27,6 @@ func newKmRestartImpl() scenario.Scenario {
 	}
 }
 
-func (sc *kmRestartImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.basicImpl.Fixture()
-	if err != nil {
-		return nil, err
-	}
-
-	// Make sure the key manager node can be restarted.
-	f.Keymanagers[0].Restartable = true
-	return f, nil
-}
-
 func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 	clientErrCh, cmd, err := sc.basicImpl.start(childEnv)
 	if err != nil {

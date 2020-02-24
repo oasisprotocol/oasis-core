@@ -47,7 +47,7 @@ func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	f.Network.HaltEpoch = haltEpoch
 	for _, val := range f.Validators {
-		val.Restartable = true
+		val.AllowEarlyTermination = true
 	}
 	return f, nil
 }

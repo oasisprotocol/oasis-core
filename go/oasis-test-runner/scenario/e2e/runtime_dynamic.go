@@ -57,13 +57,6 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 		}
 		f.Runtimes[i].ExcludeFromGenesis = true
 	}
-	// All runtime nodes should be restartable as we are going to restart them.
-	for i := range f.StorageWorkers {
-		f.StorageWorkers[i].Restartable = true
-	}
-	for i := range f.ComputeWorkers {
-		f.ComputeWorkers[i].Restartable = true
-	}
 
 	return f, nil
 }

@@ -4,6 +4,8 @@ package genesis
 import (
 	"fmt"
 	"time"
+
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 )
 
 // Genesis contains various consensus config flags that should be part of the genesis state.
@@ -18,10 +20,10 @@ type Parameters struct {
 	SkipTimeoutCommit  bool          `json:"skip_timeout_commit"`
 	EmptyBlockInterval time.Duration `json:"empty_block_interval"`
 
-	MaxTxSize      uint64 `json:"max_tx_size"`
-	MaxBlockSize   uint64 `json:"max_block_size"`
-	MaxBlockGas    uint64 `json:"max_block_gas"`
-	MaxEvidenceAge uint64 `json:"max_evidence_age"`
+	MaxTxSize      uint64          `json:"max_tx_size"`
+	MaxBlockSize   uint64          `json:"max_block_size"`
+	MaxBlockGas    transaction.Gas `json:"max_block_gas"`
+	MaxEvidenceAge uint64          `json:"max_evidence_age"`
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
