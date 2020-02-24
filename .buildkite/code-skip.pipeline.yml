@@ -1,0 +1,10 @@
+##
+# Code-skip pipeline
+##
+#
+# Buildkite pipeline for skipping running code-related linters and tests.
+#
+
+steps:
+  - label: No code-related changes detected, skipping Code pipeline
+    command: exit 0

@@ -1,6 +1,10 @@
-################
-# Build pipeline
-################
+##
+# Code pipeline
+##
+#
+# Main Buildkite pipeline for running code-related linters and tests.
+#
+
 docker_plugin_default_config: &docker_plugin_default_config
   image: "oasislabs/testing:0.3.0"
   always_pull: true
@@ -9,8 +13,8 @@ docker_plugin_default_config: &docker_plugin_default_config
     - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
     - /var/lib/buildkite-agent/.codecov:/root/.codecov
     # Shared Rust incremental compile caches.
-    - /var/tmp/cargo_ic/debug:/var/tmp/artifacts/debug/incremental
-    - /var/tmp/cargo_ic/debug_sgx:/var/tmp/artifacts/x86_64-unknown-linux-sgx/debug/incremental
+    - /var/tmp/cargo_ic/debug:/var/tmp/artifacts/default/debug/incremental
+    - /var/tmp/cargo_ic/debug_sgx:/var/tmp/artifacts/sgx/x86_64-unknown-linux-sgx/debug/incremental
     # Shared Rust package checkouts directory.
     - /var/tmp/cargo_pkg/git:/root/.cargo/git
     - /var/tmp/cargo_pkg/registry:/root/.cargo/registry
@@ -120,7 +124,7 @@ steps:
       - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-ops-client
 
       # Upload the built artifacts.
-      - cd /var/tmp/artifacts/debug
+      - cd /var/tmp/artifacts/default/debug
       - buildkite-agent artifact upload oasis-core-runtime-loader
       # Clients for E2E tests.
       - buildkite-agent artifact upload test-long-term-client
@@ -143,10 +147,10 @@ steps:
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
 
       # Upload the built artifacts.
-      - cd /var/tmp/artifacts/x86_64-fortanix-unknown-sgx/debug
+      - cd /var/tmp/artifacts/sgx/x86_64-fortanix-unknown-sgx/debug
       - buildkite-agent artifact upload oasis-core-keymanager-runtime.sgxs
       - buildkite-agent artifact upload simple-keyvalue.sgxs
-      - cd /var/tmp/artifacts/debug
+      - cd /var/tmp/artifacts/default/debug
       - buildkite-agent artifact upload oasis-core-keymanager-runtime
       - buildkite-agent artifact upload simple-keyvalue
     agents:

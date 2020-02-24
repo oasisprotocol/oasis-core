@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	consensusGenesis "github.com/oasislabs/oasis-core/go/consensus/genesis"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/db"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -80,6 +81,9 @@ type ApplicationState interface {
 	// OwnTxSigner returns the transaction signer identity of the local node.
 	OwnTxSigner() signature.PublicKey
 
+	// ConsensusParameters returns the consensus parameters for the consensus backend itself.
+	ConsensusParameters() (*consensusGenesis.Parameters, error)
+
 	// NewContext creates a new application processing context.
 	NewContext(mode ContextMode, now time.Time) *Context
 }
@@ -108,6 +112,8 @@ type applicationState struct {
 
 	minGasPrice quantity.Quantity
 	ownTxSigner signature.PublicKey
+
+	cachedConsensusParameters consensusGenesis.Parameters
 
 	metricsCloseCh  chan struct{}
 	metricsClosedCh chan struct{}
@@ -290,6 +296,10 @@ func (s *applicationState) OwnTxSigner() signature.PublicKey {
 	return s.ownTxSigner
 }
 
+func (s *applicationState) ConsensusParameters() (*consensusGenesis.Parameters, error) {
+	return &s.cachedConsensusParameters, nil
+}
+
 func (s *applicationState) inHaltEpoch(ctx *Context) bool {
 	blockHeight := s.BlockHeight()
 
@@ -361,6 +371,14 @@ func (s *applicationState) doCleanup() {
 		s.db.Close()
 		s.db = nil
 	}
+}
+
+func (s *applicationState) refreshConsensusParameters() error {
+	// Currently we just grab the genesis document and load the parametrs from there.
+	// TODO: Move consensus parameters under its own key in ABCI state (oasis-core#2710).
+	genesisDoc := s.Genesis()
+	s.cachedConsensusParameters = genesisDoc.Consensus.Parameters
+	return nil
 }
 
 func (s *applicationState) updateMetrics() error {
@@ -464,6 +482,14 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 		metricsCloseCh:  make(chan struct{}),
 		metricsClosedCh: make(chan struct{}),
 	}
+
+	// Refresh consensus parameters when loading state if we are past genesis.
+	if blockHeight > 0 {
+		if err = s.refreshConsensusParameters(); err != nil {
+			return nil, fmt.Errorf("state: failed to refresh consensus parameters: %w", err)
+		}
+	}
+
 	go s.metricsWorker()
 
 	return s, nil
@@ -548,6 +574,10 @@ func (ms *mockApplicationState) MinGasPrice() *quantity.Quantity {
 
 func (ms *mockApplicationState) OwnTxSigner() signature.PublicKey {
 	return ms.cfg.OwnTxSigner
+}
+
+func (ms *mockApplicationState) ConsensusParameters() (*consensusGenesis.Parameters, error) {
+	return &ms.cfg.Genesis.Consensus.Parameters, nil
 }
 
 func (ms *mockApplicationState) NewContext(mode ContextMode, now time.Time) *Context {

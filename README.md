@@ -164,9 +164,9 @@ running the `simple-keyvalue` test runtime, do:
 ```
 ./go/oasis-net-runner/oasis-net-runner \
   --net.node.binary go/oasis-node/oasis-node \
-  --net.runtime.binary target/debug/simple-keyvalue \
-  --net.runtime.loader target/debug/oasis-core-runtime-loader \
-  --net.keymanager.binary target/debug/oasis-core-keymanager-runtime
+  --net.runtime.binary target/default/debug/simple-keyvalue \
+  --net.runtime.loader target/default/debug/oasis-core-runtime-loader \
+  --net.keymanager.binary target/default/debug/oasis-core-keymanager-runtime
 ```
 
 Wait for the network to start, there should be messages about nodes being started
@@ -241,9 +241,9 @@ except the `oasis-net-runner` invocation:
 ```
 ./go/oasis-net-runner/oasis-net-runner \
   --net.node.binary go/oasis-node/oasis-node \
-  --net.runtime.binary target/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs \
-  --net.runtime.loader target/debug/oasis-core-runtime-loader \
-  --net.keymanager.binary target/x86_64-fortanix-unknown-sgx/debug/oasis-core-keymanager-runtime.sgxs
+  --net.runtime.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs \
+  --net.runtime.loader target/default/debug/oasis-core-runtime-loader \
+  --net.keymanager.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/oasis-core-keymanager-runtime.sgxs
 ```
 
 ## Running tests and benchmarks

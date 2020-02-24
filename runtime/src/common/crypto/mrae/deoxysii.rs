@@ -2,10 +2,7 @@
 
 pub use super::deoxysii_rust::{DeoxysII, KEY_SIZE, NONCE_SIZE, TAG_SIZE};
 
-use super::{
-    ring::{digest, hmac},
-    x25519_dalek,
-};
+use super::{ring::hmac, x25519_dalek};
 
 use failure::Fallible;
 use rand::rngs::OsRng;
@@ -18,8 +15,8 @@ fn derive_symmetric_key(public: &[u8; 32], private: &[u8; 32]) -> [u8; KEY_SIZE]
 
     let pmk = private.diffie_hellman(&public);
 
-    let k = hmac::SigningKey::new(&digest::SHA256, b"MRAE_Box_Deoxys-II-256-128");
-    let mut ctx = hmac::SigningContext::with_key(&k);
+    let k = hmac::Key::new(hmac::HMAC_SHA256, b"MRAE_Box_Deoxys-II-256-128");
+    let mut ctx = hmac::Context::with_key(&k);
 
     ctx.update(pmk.as_bytes());
     drop(pmk);

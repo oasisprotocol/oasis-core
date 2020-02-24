@@ -18,9 +18,9 @@ WORKDIR=$PWD
 # Run test suite.
 #################
 # Determine correct runtime to use for SGX.
-runtime_target="."
+runtime_target="default"
 if [[ "${OASIS_TEE_HARDWARE:-""}" == "intel-sgx" ]]; then
-    runtime_target="x86_64-fortanix-unknown-sgx"
+    runtime_target="sgx/x86_64-fortanix-unknown-sgx"
 fi
 
 # We need a directory in the workdir so that Buildkite can fetch artifacts.
@@ -40,9 +40,9 @@ ${WORKDIR}/go/oasis-test-runner/oasis-test-runner \
     ${BUILDKITE:+--basedir ${TEST_BASE_DIR:-$PWD}/e2e} \
     --basedir.no_cleanup \
     --e2e.node.binary ${node_binary} \
-    --e2e.client.binary_dir ${WORKDIR}/target/debug \
+    --e2e.client.binary_dir ${WORKDIR}/target/default/debug \
     --e2e.runtime.binary_dir ${WORKDIR}/target/${runtime_target}/debug \
-    --e2e.runtime.loader ${WORKDIR}/target/debug/oasis-core-runtime-loader \
+    --e2e.runtime.loader ${WORKDIR}/target/default/debug/oasis-core-runtime-loader \
     --e2e.tee_hardware ${OASIS_TEE_HARDWARE:-""} \
     --log.level info \
     ${BUILDKITE_PARALLEL_JOB_COUNT:+--parallel.job_count ${BUILDKITE_PARALLEL_JOB_COUNT}} \
