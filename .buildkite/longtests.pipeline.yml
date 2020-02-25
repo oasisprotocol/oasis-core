@@ -45,5 +45,6 @@ steps:
       TEST_BASE_DIR: /tmp
     agents:
       buildkite_agent_size: large
+      buildkite_agent_class: stable
     plugins:
       <<: *docker_plugin
