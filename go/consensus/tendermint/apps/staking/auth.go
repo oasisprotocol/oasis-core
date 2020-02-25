@@ -2,6 +2,7 @@ package staking
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
@@ -27,5 +28,9 @@ func (app *stakingApplication) GetSignerNonce(ctx context.Context, id signature.
 
 // Implements abci.TransactionAuthHandler.
 func (app *stakingApplication) AuthenticateTx(ctx *abci.Context, tx *transaction.Transaction) error {
-	return stakingState.AuthenticateAndPayFees(ctx, ctx.TxSigner(), tx.Nonce, tx.Fee)
+	epoch, err := app.state.GetCurrentEpoch(ctx.Ctx())
+	if err != nil {
+		return fmt.Errorf("getting current epoch: %w", err)
+	}
+	return stakingState.AuthenticateAndPayFees(ctx, ctx.TxSigner(), tx.Nonce, tx.Fee, epoch)
 }

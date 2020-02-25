@@ -21,6 +21,8 @@ const moduleName = "consensus/transaction"
 var (
 	// ErrInvalidNonce is the error returned when a nonce is invalid.
 	ErrInvalidNonce = errors.New(moduleName, 1, "transaction: invalid nonce")
+	// ErrAccountNotBefore is the error returned when an account is not allowed yet.
+	ErrAccountNotBefore = errors.New(moduleName, 4, "transaction: account not allowed yet")
 
 	// SignatureContext is the context used for signing transactions.
 	SignatureContext = signature.NewContext("oasis-core/consensus: tx", signature.WithChainSeparation())

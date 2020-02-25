@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	"github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
 // feeAccumulatorKey is the block context key.
@@ -33,6 +34,7 @@ func AuthenticateAndPayFees(
 	id signature.PublicKey,
 	nonce uint64,
 	fee *transaction.Fee,
+	epoch api.EpochTime,
 ) error {
 	state := NewMutableState(ctx.State())
 
@@ -53,6 +55,16 @@ func AuthenticateAndPayFees(
 			"nonce", nonce,
 		)
 		return transaction.ErrInvalidNonce
+	}
+
+	// Make sure the account is enabled.
+	if epoch < account.General.NotBefore {
+		logger.Error("account not allowed yet",
+			"account_id", id,
+			"account_not_before", account.General.NotBefore,
+			"epoch", epoch,
+		)
+		return transaction.ErrAccountNotBefore
 	}
 
 	if fee == nil {
