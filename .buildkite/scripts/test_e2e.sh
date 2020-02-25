@@ -52,10 +52,10 @@ ${WORKDIR}/go/oasis-test-runner/oasis-test-runner \
 # Gather the coverage output.
 if [[ "${BUILDKITE:-""}" != "" ]]; then
     if [[ ${OASIS_E2E_COVERAGE:-""} != "" ]]; then
+        merged_file="coverage-merged-e2e-$BUILDKITE_PARALLEL_JOB.txt"
         if [[ "${OASIS_TEE_HARDWARE:-""}" == "intel-sgx" ]]; then
-            tar -zvcf coverage-e2e-sgx-${BUILDKITE_PARALLEL_JOB}.tar.gz coverage-e2e-*.txt
-        else
-            tar -zvcf coverage-e2e-${BUILDKITE_PARALLEL_JOB}.tar.gz coverage-e2e-*.txt
+            merged_file="coverage-merged-e2e-sgx-$BUILDKITE_PARALLEL_JOB.txt"
         fi
+        gocovmerge coverage-e2e-*.txt >"$merged_file"
     fi
 fi
