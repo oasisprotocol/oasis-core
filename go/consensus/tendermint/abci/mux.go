@@ -36,6 +36,9 @@ const (
 	stateKeyInitChainEvents = "OasisInitChainEvents"
 
 	metricsUpdateInterval = 10 * time.Second
+
+	// debugTxLifetime is the transaction mempool lifetime when CheckTx is disabled (debug only).
+	debugTxLifetime = 1 * time.Minute
 )
 
 var (
@@ -302,6 +305,9 @@ type abciMux struct {
 	// invalidatedTxs maps transaction hashes (hash.Hash) to a subscriber
 	// waiting for that transaction to become invalid.
 	invalidatedTxs sync.Map
+	// debugExpiringTxs maps transaction hashes to the time at which they were created. This is only
+	// used in case CheckTx is disabled (for debug purposes only).
+	debugExpiringTxs map[hash.Hash]time.Time
 }
 
 type invalidatedTxSubscription struct {
@@ -682,9 +688,46 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 	return ctx.Gas().GasUsed(), nil
 }
 
+func (mux *abciMux) notifyInvalidatedCheckTx(txHash hash.Hash, err error) {
+	if item, exists := mux.invalidatedTxs.Load(txHash); exists {
+		// Notify subscriber.
+		sub := item.(*invalidatedTxSubscription)
+		select {
+		case sub.resultCh <- err:
+		default:
+		}
+		close(sub.resultCh)
+
+		mux.invalidatedTxs.Delete(txHash)
+	}
+}
+
 func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	if mux.state.disableCheckTx {
-		// Blindly accept all transactions if configured to do so.
+		// Blindly accept all transactions if configured to do so. We still need to periodically
+		// remove old transactions as otherwise the mempool will fill up, so keep track of when
+		// transactions were added and invalidate them after the configured interval.
+		var txHash hash.Hash
+		txHash.FromBytes(req.Tx)
+
+		if req.Type == types.CheckTxType_Recheck {
+			// Check timestamp.
+			if ts, ok := mux.debugExpiringTxs[txHash]; ok && mux.currentTime.Sub(ts) > debugTxLifetime {
+				delete(mux.debugExpiringTxs, txHash)
+
+				err := fmt.Errorf("mux: transaction expired (debug only)")
+				mux.notifyInvalidatedCheckTx(txHash, err)
+
+				return types.ResponseCheckTx{
+					Codespace: errors.UnknownModule,
+					Code:      1,
+					Log:       err.Error(),
+				}
+			}
+		} else {
+			mux.debugExpiringTxs[txHash] = mux.currentTime
+		}
+
 		return types.ResponseCheckTx{
 			Code: types.CodeTypeOK,
 		}
@@ -706,17 +749,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 			var txHash hash.Hash
 			txHash.FromBytes(req.Tx)
 
-			if item, exists := mux.invalidatedTxs.Load(txHash); exists {
-				// Notify subscriber.
-				sub := item.(*invalidatedTxSubscription)
-				select {
-				case sub.resultCh <- err:
-				default:
-				}
-				close(sub.resultCh)
-
-				mux.invalidatedTxs.Delete(txHash)
-			}
+			mux.notifyInvalidatedCheckTx(txHash, err)
 		}
 
 		return types.ResponseCheckTx{
@@ -909,6 +942,11 @@ func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationC
 		appsByName:     make(map[string]Application),
 		appsByMethod:   make(map[transaction.MethodName]Application),
 		lastBeginBlock: -1,
+	}
+
+	// Create a map of expiring transactions if CheckTx is disabled (debug only).
+	if state.disableCheckTx {
+		mux.debugExpiringTxs = make(map[hash.Hash]time.Time)
 	}
 
 	mux.logger.Debug("ABCI multiplexer initialized",
