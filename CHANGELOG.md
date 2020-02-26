@@ -10,6 +10,26 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.3.2 (2020-02-26)
+
+### Bug Fixes
+
+- runtime: Bump ring to 0.16.11, snow to 0.6.2, Rust to 2020-02-16
+  ([#2666](https://github.com/oasislabs/oasis-core/issues/2666))
+
+- go/consensus/tendermint: Properly cache consensus parameters
+  ([#2708](https://github.com/oasislabs/oasis-core/issues/2708))
+
+### Internal changes
+
+- ci: Skip some steps for non-code changes
+  ([#2702](https://github.com/oasislabs/oasis-core/issues/2702))
+
+  When one makes a pull request that e.g. only adds documentation or
+  assembles the Change Log from fragments, all the *heavy* Buildkite
+  pipeline steps (e.g. Go/Rust building, Go tests, E2E tests) should be
+  skipped.
+
 ## 20.3.1 (2020-02-10)
 
 ### Bug Fixes
