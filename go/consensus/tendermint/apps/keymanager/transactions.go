@@ -24,7 +24,7 @@ func (app *keymanagerApplication) updatePolicy(
 		return err
 	}
 	if rt.Kind != registry.KindKeyManager {
-		return fmt.Errorf("keymanger: runtime is not a key manager: %s", sigPol.Policy.ID)
+		return fmt.Errorf("keymanager: runtime is not a key manager: %s", sigPol.Policy.ID)
 	}
 
 	// Ensure that the tx signer is the key manager owner.

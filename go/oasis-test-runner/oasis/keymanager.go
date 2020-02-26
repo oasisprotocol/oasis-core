@@ -193,7 +193,7 @@ func (km *Keymanager) startNode() error {
 		tendermintCoreListenAddress(km.consensusPort).
 		tendermintSubmissionGasPrice(km.submissionGasPrice).
 		workerClientPort(km.workerClientPort).
-		workerKeymangerEnabled().
+		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeBinary(km.runtime.binary).
 		workerKeymanagerRuntimeLoader(km.net.cfg.RuntimeLoaderBinary).
 		workerKeymanagerRuntimeID(km.runtime.id).
@@ -221,7 +221,7 @@ func (km *Keymanager) startNode() error {
 	return nil
 }
 
-// NewKeymanger provisions a new keymanager and adds it to the network.
+// NewKeymanager provisions a new keymanager and adds it to the network.
 func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	// XXX: Technically there can be more than one keymanager.
 	if len(net.keymanagers) == 1 {
