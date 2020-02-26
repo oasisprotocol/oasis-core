@@ -77,12 +77,14 @@ type Context struct {
 }
 
 // NewMockContext creates a new mock context for use in tests.
-func NewMockContext(mode ContextMode, now time.Time) *Context {
+func NewMockContext(mode ContextMode, now time.Time, state *iavl.MutableTree) *Context {
 	return &Context{
 		ctx:           context.Background(),
 		mode:          mode,
 		currentTime:   now,
 		gasAccountant: NewNopGasAccountant(),
+		state:         state,
+		blockCtx:      NewBlockContext(),
 		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
 	}
 }

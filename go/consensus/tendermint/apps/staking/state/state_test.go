@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
@@ -136,7 +137,7 @@ func TestRewardAndSlash(t *testing.T) {
 	escrowAccount = s.Account(escrowID)
 	require.Equal(t, mustInitQuantity(t, 300), escrowAccount.Escrow.Active.Balance, "reward late epoch - escrow active escrow")
 
-	slashedNonzero, err := s.SlashEscrow(abci.NewMockContext(abci.ContextDeliverTx, time.Now()), escrowID, mustInitQuantityP(t, 40))
+	slashedNonzero, err := s.SlashEscrow(abci.NewMockContext(abci.ContextDeliverTx, time.Now(), tree), escrowID, mustInitQuantityP(t, 40))
 	require.NoError(t, err, "slash escrow")
 	require.True(t, slashedNonzero, "slashed nonzero")
 
@@ -200,4 +201,35 @@ func TestEpochSigning(t *testing.T) {
 	require.NoError(t, err, "load cleared epoch signing info")
 	require.Zero(t, esClear.Total, "cleared epoch signing info total")
 	require.Empty(t, esClear.ByEntity, "cleared epoch signing info by entity")
+}
+
+func TestAuthenticateAndPayFees(t *testing.T) {
+	db := dbm.NewMemDB()
+	tree := iavl.NewMutableTree(db, 128)
+	s := NewMutableState(tree)
+
+	var plain, locked signature.PublicKey
+	require.NoError(t, plain.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000001"))
+	require.NoError(t, locked.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000002"))
+	s.SetAccount(plain, &staking.Account{})
+	s.SetAccount(locked, &staking.Account{
+		General: staking.GeneralAccount{
+			NotBefore: 1,
+		},
+	})
+	noFee := transaction.Fee{
+		Amount: mustInitQuantity(t, 0),
+		Gas:    1000,
+	}
+
+	ctx := abci.NewMockContext(abci.ContextDeliverTx, time.Time{}, tree)
+	ctx.BlockContext().Set(abci.GasAccountantKey{}, abci.NewNopGasAccountant())
+	err := AuthenticateAndPayFees(ctx, plain, 0, &noFee, 0)
+	require.NoError(t, err, "authentic")
+	err = AuthenticateAndPayFees(ctx, locked, 0, &noFee, 0)
+	require.Error(t, err, "locked account")
+	require.Equal(t, transaction.ErrAccountNotBefore, err)
+	// No nonce update on rejected transaction.
+	err = AuthenticateAndPayFees(ctx, locked, 0, &noFee, 1)
+	require.NoError(t, err, "locked account unlocked")
 }
