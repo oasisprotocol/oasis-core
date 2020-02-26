@@ -27,6 +27,9 @@ const (
 	// CfgAmount configures the amount of tokens.
 	CfgAmount = "stake.amount"
 
+	// CfgShares configures the amount of shares.
+	CfgShares = "stake.shares"
+
 	// CfgTransferDestination configures the transfer destination address.
 	CfgTransferDestination = "stake.transfer.destination"
 
@@ -43,7 +46,8 @@ const (
 var (
 	accountInfoFlags        = flag.NewFlagSet("", flag.ContinueOnError)
 	amountFlags             = flag.NewFlagSet("", flag.ContinueOnError)
-	escrowFlags             = flag.NewFlagSet("", flag.ContinueOnError)
+	sharesFlags             = flag.NewFlagSet("", flag.ContinueOnError)
+	commonEscrowFlags       = flag.NewFlagSet("", flag.ContinueOnError)
 	commissionScheduleFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	accountTransferFlags    = flag.NewFlagSet("", flag.ContinueOnError)
 
@@ -204,8 +208,8 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	if err := reclaim.Shares.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
-		logger.Error("failed to parse escrow reclaim amount",
+	if err := reclaim.Shares.UnmarshalText([]byte(viper.GetString(CfgShares))); err != nil {
+		logger.Error("failed to parse escrow reclaim shares",
 			"err", err,
 		)
 		os.Exit(1)
@@ -311,8 +315,10 @@ func registerAccountCmd() {
 	accountTransferCmd.Flags().AddFlagSet(accountTransferFlags)
 	accountBurnCmd.Flags().AddFlagSet(cmdConsensus.TxFlags)
 	accountBurnCmd.Flags().AddFlagSet(amountFlags)
-	accountEscrowCmd.Flags().AddFlagSet(escrowFlags)
-	accountReclaimEscrowCmd.Flags().AddFlagSet(escrowFlags)
+	accountEscrowCmd.Flags().AddFlagSet(commonEscrowFlags)
+	accountEscrowCmd.Flags().AddFlagSet(amountFlags)
+	accountReclaimEscrowCmd.Flags().AddFlagSet(commonEscrowFlags)
+	accountReclaimEscrowCmd.Flags().AddFlagSet(sharesFlags)
 	accountAmendCommissionScheduleCmd.Flags().AddFlagSet(commissionScheduleFlags)
 }
 
@@ -325,15 +331,17 @@ func init() {
 	amountFlags.String(CfgAmount, "0", "amount of tokens for the transaction")
 	_ = viper.BindPFlags(amountFlags)
 
+	sharesFlags.String(CfgShares, "0", "amount of shares for the transaction")
+	_ = viper.BindPFlags(sharesFlags)
+
 	accountTransferFlags.String(CfgTransferDestination, "", "transfer destination account ID")
 	_ = viper.BindPFlags(accountTransferFlags)
 	accountTransferFlags.AddFlagSet(cmdConsensus.TxFlags)
 	accountTransferFlags.AddFlagSet(amountFlags)
 
-	escrowFlags.String(CfgEscrowAccount, "", "ID of the escrow account")
-	_ = viper.BindPFlags(escrowFlags)
-	escrowFlags.AddFlagSet(cmdConsensus.TxFlags)
-	escrowFlags.AddFlagSet(amountFlags)
+	commonEscrowFlags.String(CfgEscrowAccount, "", "ID of the escrow account")
+	_ = viper.BindPFlags(commonEscrowFlags)
+	commonEscrowFlags.AddFlagSet(cmdConsensus.TxFlags)
 
 	commissionScheduleFlags.StringSlice(CfgCommissionScheduleRates, nil, fmt.Sprintf(
 		"commission rate step. Multiple of this flag is allowed. "+
