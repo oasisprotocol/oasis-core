@@ -16,7 +16,8 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.NoError(t, err, "create data dir")
 	defer os.RemoveAll(dataDir)
 
-	factory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	factory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	require.NoError(t, err, "NewFactory")
 
 	// Generate a new identity.
 	identity, err := LoadOrGenerate(dataDir, factory)

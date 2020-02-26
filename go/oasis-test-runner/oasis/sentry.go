@@ -104,7 +104,14 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 	// Pre-provision node's identity to pass the sentry node's consensus
 	// address to the validator so it can configure the sentry node's consensus
 	// address as its consensus address.
-	signerFactory := fileSigner.NewFactory(sentryDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	signerFactory, err := fileSigner.NewFactory(sentryDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	if err != nil {
+		net.logger.Error("failed to create sentry signer factory",
+			"err", err,
+			"sentry_name", sentryName,
+		)
+		return nil, fmt.Errorf("oasis/sentry: failed to create sentry file signer: %w", err)
+	}
 	sentryIdentity, err := identity.LoadOrGenerate(sentryDir.String(), signerFactory)
 	if err != nil {
 		net.logger.Error("failed to provision sentry identity",

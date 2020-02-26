@@ -12,10 +12,11 @@ set -euxo pipefail
 
 source .buildkite/scripts/common.sh
 
-# Oasis node, test runner and runtime loader.
+# Oasis node, test runner, remote signer and runtime loader.
 download_artifact oasis-node go/oasis-node 755
 download_artifact integrationrunner.test go/oasis-node/integrationrunner 755
 download_artifact oasis-test-runner go/oasis-test-runner 755
+download_artifact oasis-remote-signer go/oasis-remote-signer 755
 download_artifact oasis-core-runtime-loader target/default/debug 755
 
 # Key manager runtime.

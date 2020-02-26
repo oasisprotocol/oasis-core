@@ -36,10 +36,19 @@ var (
 	errUnregisteredContext = errors.New("signature: unregistered context")
 	errNoChainContext      = errors.New("signature: chain domain separation context not set")
 
-	registeredContexts sync.Map
+	registeredContexts        sync.Map
+	allowUnregisteredContexts bool
 
 	chainContextLock sync.RWMutex
 	chainContext     Context
+
+	// SignerRoles is the list of all supported signer roles.
+	SignerRoles = []SignerRole{
+		SignerEntity,
+		SignerNode,
+		SignerP2P,
+		SignerConsensus,
+	}
 )
 
 type contextOptions struct {
@@ -111,6 +120,19 @@ func UnsafeResetChainContext() {
 	chainContext = Context("")
 }
 
+// UnsafeAllowUnregisteredContexts bypasses the context registration check.
+//
+// This function is only for the benefit of implementing a remote signer.
+func UnsafeAllowUnregisteredContexts() {
+	allowUnregisteredContexts = true
+}
+
+// IsUnsafeUnregisteredContextsAllowed returns true iff context registration
+// checks are bypassed.
+func IsUnsafeUnregisteredContextsAllowed() bool {
+	return allowUnregisteredContexts
+}
+
 // SetChainContext configures the chain domain separation context that is
 // used with any contexts constructed using the WithChainSeparation option.
 func SetChainContext(rawContext string) {
@@ -137,10 +159,12 @@ const (
 	SignerNode
 	SignerP2P
 	SignerConsensus
+
+	// If you add to this, also add the new roles to SignerRoles.
 )
 
 // SignerFactoryCtor is an SignerFactory constructor.
-type SignerFactoryCtor func(interface{}, ...SignerRole) SignerFactory
+type SignerFactoryCtor func(interface{}, ...SignerRole) (SignerFactory, error)
 
 // SignerFactory is the opaque factory interface for Signers.
 type SignerFactory interface {
@@ -187,6 +211,17 @@ type UnsafeSigner interface {
 
 // PrepareSignerContext prepares a context for use during signing by a Signer.
 func PrepareSignerContext(context Context) ([]byte, error) {
+	// The remote signer implementation uses the raw context, and
+	// registration is dealt with client side.  Just check that the
+	// length is sensible, even though the client should be sending
+	// something sane.
+	if allowUnregisteredContexts {
+		if cLen := len(context); cLen == 0 || cLen > ed25519.ContextMaxSize {
+			return nil, errMalformedContext
+		}
+		return []byte(context), nil
+	}
+
 	// Ensure that the context is registered for use.
 	rawOpts, isRegistered := registeredContexts.Load(context)
 	if !isRegistered {

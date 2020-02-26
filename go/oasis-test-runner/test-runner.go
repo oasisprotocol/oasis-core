@@ -4,6 +4,7 @@ package main
 import (
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/cmd"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario/e2e"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario/remotesigner"
 )
 
 func main() {
@@ -63,6 +64,10 @@ func main() {
 	// Node upgrade tests.
 	_ = cmd.Register(e2e.NodeUpgrade)
 	_ = cmd.Register(e2e.NodeUpgradeCancel)
+
+	// Register the remote signer test cases.
+	rootCmd.Flags().AddFlagSet(remotesigner.Flags)
+	_ = cmd.Register(remotesigner.Basic)
 
 	// Execute the command, now that everything has been initialized.
 	cmd.Execute()

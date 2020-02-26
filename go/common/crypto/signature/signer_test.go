@@ -74,4 +74,14 @@ func TestContext(t *testing.T) {
 	msg3, err := PrepareSignerMessage(chainCtx, []byte("message"))
 	require.NoError(err, "PrepareSignerMessage should work")
 	require.NotEqual(msg2, msg3, "messages for different contexts should be different")
+
+	// The remote signer requires bypassing the context registration checks.
+	UnsafeAllowUnregisteredContexts()
+	defer func() {
+		allowUnregisteredContexts = false
+	}()
+	require.True(IsUnsafeUnregisteredContextsAllowed(), "context registration must be bypassed")
+
+	_, err = PrepareSignerMessage(unregCtx, []byte("message"))
+	require.NoError(err, "PrepareSignerMessage should work with unregisered context (bypassed)")
 }

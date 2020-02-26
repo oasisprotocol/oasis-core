@@ -15,6 +15,7 @@ import (
 	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
 )
 
 const (
@@ -85,14 +86,14 @@ func GetTxNonceAndFee() (uint64, *transaction.Fee) {
 }
 
 func SignAndSaveTx(tx *transaction.Transaction) {
-	entityDir, err := cmdFlags.SignerDirOrPwd()
+	entityDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
 		logger.Error("failed to retrieve signer dir",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Signer(), entityDir)
+	_, signer, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
 	if err != nil {
 		logger.Error("failed to load account entity",
 			"err", err,
@@ -134,6 +135,7 @@ func init() {
 	_ = viper.BindPFlags(TxFlags)
 	TxFlags.AddFlagSet(TxFileFlags)
 	TxFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
-	TxFlags.AddFlagSet(cmdFlags.SignerFlags)
+	TxFlags.AddFlagSet(cmdSigner.Flags)
+	TxFlags.AddFlagSet(cmdSigner.CLIFlags)
 	TxFlags.AddFlagSet(cmdFlags.GenesisFileFlags)
 }

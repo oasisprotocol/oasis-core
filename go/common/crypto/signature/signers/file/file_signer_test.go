@@ -22,7 +22,8 @@ func TestFileSigner(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	rolePEMFiles[signature.SignerUnknown] = "unit_test.pem"
-	factory := NewFactory(tmpDir, signature.SignerUnknown)
+	factory, err := NewFactory(tmpDir, signature.SignerUnknown)
+	require.NoError(err, "NewFactory()")
 
 	// Missing, no generate.
 	_, err = factory.Load(signature.SignerUnknown)

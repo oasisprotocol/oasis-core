@@ -10,7 +10,7 @@ all: build
 
 # Build.
 # List of Go binaries to build.
-go-binaries := oasis-node oasis-test-runner oasis-net-runner extra/stats
+go-binaries := oasis-node oasis-test-runner oasis-net-runner oasis-remote-signer extra/stats
 # List of test helpers to build.
 test-helpers := urkel
 # List of test vectors to generate.

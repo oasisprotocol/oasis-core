@@ -14,13 +14,11 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
-	ledgerSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/ledger"
-
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
 )
 
 const (
@@ -76,22 +74,6 @@ func DataDirOrPwd() (string, error) {
 		}
 	}
 	return dataDir, nil
-}
-
-// SignerFactory returns the appropriate SignerFactory based on flags.
-func SignerFactory(signerBackend string, signerDir string) (signature.SignerFactory, error) {
-	switch signerBackend {
-	case ledgerSigner.SignerName:
-		config := ledgerSigner.FactoryConfig{
-			Address: flags.SignerLedgerAddress(),
-			Index:   flags.SignerLedgerIndex(),
-		}
-		return ledgerSigner.NewFactory(&config, signature.SignerEntity), nil
-	case fileSigner.SignerName:
-		return fileSigner.NewFactory(signerDir, signature.SignerEntity), nil
-	default:
-		return nil, fmt.Errorf("unsupported signer backend: %s", signerBackend)
-	}
 }
 
 // EarlyLogAndExit logs the error and exits.
@@ -271,7 +253,7 @@ func LoadEntity(signerBackend string, entityDir string) (*entity.Entity, signatu
 		return entity.TestEntity()
 	}
 
-	factory, err := SignerFactory(signerBackend, entityDir)
+	factory, err := cmdSigner.NewFactory(signerBackend, entityDir, signature.SignerEntity)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -282,7 +264,7 @@ func LoadEntity(signerBackend string, entityDir string) (*entity.Entity, signatu
 // ExportEntity creates an empty entity from the public key of the signer
 // generated with the specified backend, and writes it to a file in entityDir.
 func ExportEntity(signerBackend string, entityDir string) error {
-	factory, err := SignerFactory(signerBackend, entityDir)
+	factory, err := cmdSigner.NewFactory(signerBackend, entityDir, signature.SignerEntity)
 	if err != nil {
 		return err
 	}

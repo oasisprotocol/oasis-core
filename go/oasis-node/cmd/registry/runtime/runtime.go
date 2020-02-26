@@ -28,6 +28,7 @@ import (
 	cmdConsensus "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
+	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
@@ -241,14 +242,14 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	entityDir, err := cmdFlags.SignerDirOrPwd()
+	entityDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
 		logger.Error("failed to retrieve signer dir",
 			"err", err,
 		)
 		return nil, nil, fmt.Errorf("failed to retrive signer dir")
 	}
-	_, signer, err := cmdCommon.LoadEntity(cmdFlags.Signer(), entityDir)
+	_, signer, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
@@ -538,7 +539,8 @@ func init() {
 	runtimeFlags.StringSlice(CfgAdmissionPolicyEntityWhitelist, nil, "For entity whitelist node admission policies, the IDs (hex) of the entities in the whitelist")
 
 	_ = viper.BindPFlags(runtimeFlags)
-	runtimeFlags.AddFlagSet(cmdFlags.SignerFlags)
+	runtimeFlags.AddFlagSet(cmdSigner.Flags)
+	runtimeFlags.AddFlagSet(cmdSigner.CLIFlags)
 
 	registerFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	registerFlags.AddFlagSet(cmdConsensus.TxFlags)

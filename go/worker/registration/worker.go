@@ -693,7 +693,10 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 
 	logger.Warn("using the entity signing key for node registration")
 
-	factory := fileSigner.NewFactory(dataDir, signature.SignerEntity)
+	factory, err := fileSigner.NewFactory(dataDir, signature.SignerEntity)
+	if err != nil {
+		return defaultPk, nil, errors.Wrap(err, "worker/registration: failed to create entity signer factory")
+	}
 	fileFactory := factory.(*fileSigner.Factory)
 	entitySigner, err := fileFactory.ForceLoad(f)
 	if err != nil {

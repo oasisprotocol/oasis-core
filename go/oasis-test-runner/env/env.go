@@ -43,6 +43,11 @@ func (env *Env) Dir() string {
 	return env.dir.String()
 }
 
+// CurrentDir returns the test environment's Dir.
+func (env *Env) CurrentDir() *Dir {
+	return env.dir
+}
+
 // NewSubDir creates a new subdirectory under the test environment.
 func (env *Env) NewSubDir(subDirName string) (*Dir, error) {
 	return env.dir.NewSubDir(subDirName)

@@ -303,7 +303,8 @@ type ServerConfig struct { // nolint: maligned
 	// InstallWrapper specifies whether intercepting facilities should be enabled on this server,
 	// to enable intercepting RPC calls with a wrapper.
 	InstallWrapper bool
-	AuthFunc       auth.AuthenticationFunction
+	// AuthFunc is the authentication function for access control.
+	AuthFunc auth.AuthenticationFunction
 	// CustomOptions is an array of extra options for the grpc server.
 	CustomOptions []grpc.ServerOption
 }
@@ -446,7 +447,6 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		// Default to NoAuth.
 		config.AuthFunc = auth.NoAuth
 	}
-	var sOpts []grpc.ServerOption
 	var wrapper *grpcWrapper
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		logAdapter.unaryLogger,
@@ -465,14 +465,14 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		unaryInterceptors = append(unaryInterceptors, wrapper.unaryInterceptor)
 		streamInterceptors = append(streamInterceptors, wrapper.streamInterceptor)
 	}
-	sOpts = append(sOpts, grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)))
-	sOpts = append(sOpts, grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(streamInterceptors...)))
-	sOpts = append(sOpts, grpc.MaxRecvMsgSize(maxRecvMsgSize))
-	sOpts = append(sOpts, grpc.MaxSendMsgSize(maxSendMsgSize))
-	sOpts = append(sOpts, grpc.KeepaliveParams(serverKeepAliveParams))
-	sOpts = append(sOpts, grpc.CustomCodec(&CBORCodec{}))
-	sOpts = append(sOpts, config.CustomOptions...)
-
+	sOpts := []grpc.ServerOption{
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(streamInterceptors...)),
+		grpc.MaxRecvMsgSize(maxRecvMsgSize),
+		grpc.MaxSendMsgSize(maxSendMsgSize),
+		grpc.KeepaliveParams(serverKeepAliveParams),
+		grpc.CustomCodec(&CBORCodec{}),
+	}
 	if config.Certificate != nil {
 		tlsConfig := &tls.Config{
 			Certificates: []tls.Certificate{*config.Certificate},
@@ -480,6 +480,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		}
 		sOpts = append(sOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}
+	sOpts = append(sOpts, config.CustomOptions...)
 
 	return &Server{
 		BaseBackgroundService: svc,
@@ -494,12 +495,13 @@ func NewServer(config *ServerConfig) (*Server, error) {
 
 // Dial creates a client connection to the given target.
 func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	opts = append(opts, grpc.WithDefaultCallOptions(
-		grpc.ForceCodec(&CBORCodec{}),
-	))
-	opts = append(opts, grpc.WithChainUnaryInterceptor(clientUnaryErrorMapper))
-	opts = append(opts, grpc.WithChainStreamInterceptor(clientStreamErrorMapper))
-	return grpc.Dial(target, opts...)
+	dialOpts := []grpc.DialOption{
+		grpc.WithDefaultCallOptions(grpc.ForceCodec(&CBORCodec{})),
+		grpc.WithChainUnaryInterceptor(clientUnaryErrorMapper),
+		grpc.WithChainStreamInterceptor(clientStreamErrorMapper),
+	}
+	dialOpts = append(dialOpts, opts...)
+	return grpc.Dial(target, dialOpts...)
 }
 
 func init() {

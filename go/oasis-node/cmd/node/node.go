@@ -15,7 +15,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -40,6 +39,7 @@ import (
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/pprof"
+	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/tracing"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
@@ -462,7 +462,7 @@ func NewTestNode() (*Node, error) {
 	return newNode(true)
 }
 
-func newNode(testNode bool) (*Node, error) {
+func newNode(testNode bool) (*Node, error) { // nolint: gocyclo
 	logger := cmdCommon.Logger()
 
 	node := &Node{
@@ -519,8 +519,13 @@ func newNode(testNode bool) (*Node, error) {
 	}
 
 	// Generate/Load the node identity.
-	// TODO/hsm: Configure factory dynamically.
-	signerFactory := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	signerFactory, err := cmdSigner.NewFactory(cmdSigner.Backend(), dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	if err != nil {
+		logger.Error("failed to initialize signer backend",
+			"err", err,
+		)
+		return nil, err
+	}
 	node.Identity, err = identity.LoadOrGenerate(dataDir, signerFactory)
 	if err != nil {
 		logger.Error("failed to load/generate identity",
