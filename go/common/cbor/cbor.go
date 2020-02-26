@@ -8,7 +8,7 @@ package cbor
 import (
 	"io"
 
-	"github.com/fxamacker/cbor"
+	"github.com/fxamacker/cbor/v2"
 )
 
 // RawMessage is a raw encoded CBOR value. It implements Marshaler and
@@ -16,9 +16,35 @@ import (
 // precompute a CBOR encoding.
 type RawMessage = cbor.RawMessage
 
-var encOptions = cbor.EncOptions{
-	Canonical:   true,
-	TimeRFC3339: false, // Second granular unix timestamps
+var (
+	encOptions = cbor.EncOptions{
+		Sort:          cbor.SortCanonical,
+		ShortestFloat: cbor.ShortestFloat16,
+		NaNConvert:    cbor.NaNConvert7e00,
+		InfConvert:    cbor.InfConvertFloat16,
+		IndefLength:   cbor.IndefLengthForbidden,
+		Time:          cbor.TimeUnix,
+		TagsMd:        cbor.TagsForbidden,
+	}
+
+	decOptions = cbor.DecOptions{
+		DupMapKey:   cbor.DupMapKeyEnforcedAPF,
+		IndefLength: cbor.IndefLengthForbidden,
+		TagsMd:      cbor.TagsForbidden,
+	}
+
+	encMode cbor.EncMode
+	decMode cbor.DecMode
+)
+
+func init() {
+	var err error
+	if encMode, err = encOptions.EncMode(); err != nil {
+		panic(err)
+	}
+	if decMode, err = decOptions.DecMode(); err != nil {
+		panic(err)
+	}
 }
 
 // FixSliceForSerde will convert `nil` to `[]byte` to work around serde
@@ -32,7 +58,7 @@ func FixSliceForSerde(b []byte) []byte {
 
 // Marshal serializes a given type into a CBOR byte vector.
 func Marshal(src interface{}) []byte {
-	b, err := cbor.Marshal(src, encOptions)
+	b, err := encMode.Marshal(src)
 	if err != nil {
 		panic("common/cbor: failed to marshal: " + err.Error())
 	}
@@ -45,7 +71,7 @@ func Unmarshal(data []byte, dst interface{}) error {
 		return nil
 	}
 
-	return cbor.Unmarshal(data, dst)
+	return decMode.Unmarshal(data, dst)
 }
 
 // MustUnmarshal deserializes a CBOR byte vector into a given type.
@@ -58,10 +84,10 @@ func MustUnmarshal(data []byte, dst interface{}) {
 
 // NewEncoder creates a new CBOR encoder.
 func NewEncoder(w io.Writer) *cbor.Encoder {
-	return cbor.NewEncoder(w, encOptions)
+	return encMode.NewEncoder(w)
 }
 
 // NewDecoder creates a new CBOR decoder.
 func NewDecoder(r io.Reader) *cbor.Decoder {
-	return cbor.NewDecoder(r)
+	return decMode.NewDecoder(r)
 }
