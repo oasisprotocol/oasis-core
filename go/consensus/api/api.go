@@ -50,6 +50,9 @@ type ClientBackend interface {
 	// StateToGenesis returns the genesis state at the specified block height.
 	StateToGenesis(ctx context.Context, height int64) (*genesis.Document, error)
 
+	// EstimateGas calculates the amount of gas required to execute the given transaction.
+	EstimateGas(ctx context.Context, req *EstimateGasRequest) (transaction.Gas, error)
+
 	// WaitEpoch waits for consensus to reach an epoch.
 	//
 	// Note that an epoch is considered reached even if any epoch greater than
@@ -88,9 +91,6 @@ type Block struct {
 // Backend is an interface that a consensus backend must provide.
 type Backend interface {
 	ClientBackend
-
-	// EstimateGas calculates the amount of gas required to execute the given transaction.
-	EstimateGas(ctx context.Context, caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error)
 
 	// Synced returns a channel that is closed once synchronization is
 	// complete.
@@ -201,4 +201,10 @@ func (ce ConsensusEvidence) Unwrap() interface{} {
 // NewConsensusEvidence creates new consensus backend-specific evidence.
 func NewConsensusEvidence(inner interface{}) ConsensusEvidence {
 	return ConsensusEvidence{inner: inner}
+}
+
+// EstimateGasRequest is a EstimateGas request.
+type EstimateGasRequest struct {
+	Caller      signature.PublicKey      `json:"caller"`
+	Transaction *transaction.Transaction `json:"transaction"`
 }

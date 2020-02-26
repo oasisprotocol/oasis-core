@@ -177,29 +177,6 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 		return fmt.Errorf("txsource/registry: failed to create node-identities dir: %w", err)
 	}
 
-	// Fetch fees.
-	// TODO: Don't dump everything, instead add a method to query just the parameters.
-	genesisDoc, err := cnsc.StateToGenesis(ctx, 1)
-	if err != nil {
-		return fmt.Errorf("failed to query state at genesis: %w", err)
-	}
-	// Entity registration fees.
-	entityRegisterFee := transaction.Fee{
-		// Entity registration fee.
-		Gas: genesisDoc.Registry.Parameters.GasCosts[registry.GasOpRegisterEntity] +
-			// Entity nodes fee.
-			(genesisDoc.Registry.Parameters.GasCosts[registry.GasOpRegisterNode] * registryNumNodesPerEntity) +
-			// Runtime registration fee.
-			genesisDoc.Registry.Parameters.GasCosts[registry.GasOpRegisterRuntime],
-	}
-	// Node registration fees.
-	nodeRegisterFee := transaction.Fee{
-		// Node registration fee.
-		Gas: genesisDoc.Registry.Parameters.GasCosts[registry.GasOpRegisterNode] +
-			// Runtime maintenance * epochs fee (NOTE: we register nodes for at most registryNodeMaxEpochUpdate epochs).
-			(genesisDoc.Registry.Parameters.GasCosts[registry.GasOpRuntimeEpochMaintenance] * registryNodeMaxEpochUpdate),
-	}
-
 	// Load all accounts.
 	type nodeAcc struct {
 		id            *identity.Identity
@@ -261,8 +238,17 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 			return fmt.Errorf("failed to sign entity: %w", err)
 		}
 
-		tx := registry.NewRegisterEntityTx(entityAccs[i].reckonedNonce, &entityRegisterFee, sigEntity)
+		// Estimate gas and submit transaction.
+		tx := registry.NewRegisterEntityTx(entityAccs[i].reckonedNonce, &transaction.Fee{}, sigEntity)
 		entityAccs[i].reckonedNonce++
+		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
+			Caller:      entityAccs[i].signer.Public(),
+			Transaction: tx,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to estimate gas: %w", err)
+		}
+		tx.Fee.Gas = gas
 
 		signedTx, err := transaction.Sign(entityAccs[i].signer, tx)
 		if err != nil {
@@ -282,7 +268,15 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 				return fmt.Errorf("failed to sign entity: %w", err)
 			}
 
-			tx := registry.NewRegisterRuntimeTx(entityAccs[i].reckonedNonce, &entityRegisterFee, sigRuntime)
+			tx := registry.NewRegisterRuntimeTx(entityAccs[i].reckonedNonce, &transaction.Fee{}, sigRuntime)
+			gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
+				Caller:      entityAccs[i].signer.Public(),
+				Transaction: tx,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to estimate gas: %w", err)
+			}
+			tx.Fee.Gas = gas
 			entityAccs[i].reckonedNonce++
 
 			signedTx, err := transaction.Sign(entityAccs[i].signer, tx)
@@ -316,7 +310,16 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 		}
 
 		// Register node.
-		tx := registry.NewRegisterNodeTx(selectedNode.reckonedNonce, &nodeRegisterFee, sigNode)
+		tx := registry.NewRegisterNodeTx(selectedNode.reckonedNonce, &transaction.Fee{}, sigNode)
+		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
+			Caller:      selectedNode.id.NodeSigner.Public(),
+			Transaction: tx,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to estimate gas: %w", err)
+		}
+		tx.Fee.Gas = gas
+
 		selectedNode.reckonedNonce++
 
 		signedTx, err := transaction.Sign(selectedNode.id.NodeSigner, tx)

@@ -547,8 +547,8 @@ func (t *tendermintService) SubmitEvidence(ctx context.Context, evidence consens
 	return nil
 }
 
-func (t *tendermintService) EstimateGas(ctx context.Context, caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error) {
-	return t.mux.EstimateGas(caller, tx)
+func (t *tendermintService) EstimateGas(ctx context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
+	return t.mux.EstimateGas(req.Caller, req.Transaction)
 }
 
 func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {

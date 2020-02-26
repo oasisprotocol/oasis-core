@@ -20,6 +20,8 @@ var (
 	methodSubmitTx = serviceName.NewMethod("SubmitTx", transaction.SignedTransaction{})
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
+	// methodEstimateGas is the EstimateGas method.
+	methodEstimateGas = serviceName.NewMethod("EstimateGas", &EstimateGasRequest{})
 	// methodGetEpoch is the GetEpoch method.
 	methodGetEpoch = serviceName.NewMethod("GetEpoch", int64(0))
 	// methodWaitEpoch is the WaitEpoch method.
@@ -44,6 +46,10 @@ var (
 			{
 				MethodName: methodStateToGenesis.ShortName(),
 				Handler:    handlerStateToGenesis,
+			},
+			{
+				MethodName: methodEstimateGas.ShortName(),
+				Handler:    handlerEstimateGas,
 			},
 			{
 				MethodName: methodGetEpoch.ShortName(),
@@ -116,6 +122,29 @@ func handlerStateToGenesis( // nolint: golint
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
+}
+
+func handlerEstimateGas( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(EstimateGasRequest)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).EstimateGas(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodEstimateGas.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).EstimateGas(ctx, req.(*EstimateGasRequest))
+	}
+	return interceptor(ctx, rq, info, handler)
 }
 
 func handlerGetEpoch( // nolint: golint
@@ -258,6 +287,14 @@ func (c *consensusClient) StateToGenesis(ctx context.Context, height int64) (*ge
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *consensusClient) EstimateGas(ctx context.Context, req *EstimateGasRequest) (transaction.Gas, error) {
+	var gas transaction.Gas
+	if err := c.conn.Invoke(ctx, methodEstimateGas.FullName(), req, &gas); err != nil {
+		return transaction.Gas(0), err
+	}
+	return gas, nil
 }
 
 func (c *consensusClient) WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error {

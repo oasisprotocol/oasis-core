@@ -8,7 +8,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
 )
 
 const (
@@ -52,4 +55,10 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	epoch, err := backend.GetEpoch(ctx, consensus.HeightLatest)
 	require.NoError(err, "GetEpoch")
 	require.True(epoch > 0, "epoch height should be greater than zero")
+
+	_, err = backend.EstimateGas(ctx, &consensus.EstimateGasRequest{
+		Caller:      memorySigner.NewTestSigner("estimate gas signer").Public(),
+		Transaction: transaction.NewTransaction(0, nil, epochtimemock.MethodSetEpoch, 0),
+	})
+	require.NoError(err, "EstimateGas")
 }
