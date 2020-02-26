@@ -61,7 +61,7 @@ type Status struct {
 	// IsInitialized is true iff the key manager is done initializing.
 	IsInitialized bool `json:"is_initialized"`
 
-	// IsSecure is true iff the key manger is secure.
+	// IsSecure is true iff the key manager is secure.
 	IsSecure bool `json:"is_secure"`
 
 	// Checksum is the key manager master secret verification checksum.
@@ -135,7 +135,7 @@ func VerifyExtraInfo(logger *logging.Logger, rt *registry.Runtime, nodeRt *node.
 		rak = nodeRt.Capabilities.TEE.RAK
 	}
 	if hw != rt.TEEHardware {
-		return nil, fmt.Errorf("keymanger: TEEHardware mismatch")
+		return nil, fmt.Errorf("keymanager: TEEHardware mismatch")
 	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeRt, rt, ts); err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func init() {
 	_ = oldTestKey.UnmarshalHex("9d41a874b80e39a40c9644e964f0e4f967100c91654bfd7666435fe906af060f")
 	signature.RegisterTestPublicKey(oldTestKey)
 
-	// Register all the seed derived SGX key manger test keys.
+	// Register all the seed derived SGX key manager test keys.
 	for idx, v := range []string{
 		"ekiden test key manager RAK seed", // DO NOT REORDER.
 		"ekiden key manager test multisig key 0",

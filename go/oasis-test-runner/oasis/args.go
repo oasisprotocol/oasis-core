@@ -241,7 +241,7 @@ func (args *argBuilder) workerComputeEnabled() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerKeymangerEnabled() *argBuilder {
+func (args *argBuilder) workerKeymanagerEnabled() *argBuilder {
 	args.vec = append(args.vec, "--"+keymanager.CfgEnabled)
 	return args
 }
