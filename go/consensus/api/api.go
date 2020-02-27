@@ -44,6 +44,8 @@ var (
 // ClientBackend is a limited consensus interface used by clients that
 // connect to the local node.
 type ClientBackend interface {
+	TransactionAuthHandler
+
 	// SubmitTx submits a signed consensus transaction.
 	SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error
 
@@ -117,9 +119,6 @@ type Backend interface {
 	// SubmitEvidence submits evidence of misbehavior.
 	SubmitEvidence(ctx context.Context, evidence Evidence) error
 
-	// TransactionAuthHandler returns the transaction authentication handler.
-	TransactionAuthHandler() TransactionAuthHandler
-
 	// SubmissionManager returns the transaction submission manager.
 	SubmissionManager() SubmissionManager
 
@@ -150,7 +149,7 @@ type Backend interface {
 type TransactionAuthHandler interface {
 	// GetSignerNonce returns the nonce that should be used by the given
 	// signer for transmitting the next transaction.
-	GetSignerNonce(ctx context.Context, id signature.PublicKey, height int64) (uint64, error)
+	GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error)
 }
 
 // EvidenceKind is kind of evindence of a node misbehaving.
@@ -207,4 +206,10 @@ func NewConsensusEvidence(inner interface{}) ConsensusEvidence {
 type EstimateGasRequest struct {
 	Caller      signature.PublicKey      `json:"caller"`
 	Transaction *transaction.Transaction `json:"transaction"`
+}
+
+// GetSignerNonceRequest is a GetSignerNonce request.
+type GetSignerNonceRequest struct {
+	ID     signature.PublicKey `json:"id"`
+	Height int64               `json:"height"`
 }

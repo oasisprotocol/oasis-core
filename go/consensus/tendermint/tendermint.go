@@ -683,6 +683,10 @@ func (t *tendermintService) GetBlock(ctx context.Context, height int64) (*consen
 	return api.NewBlock(blk), nil
 }
 
+func (t *tendermintService) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSignerNonceRequest) (uint64, error) {
+	return t.mux.TransactionAuthHandler().GetSignerNonce(ctx, req)
+}
+
 func (t *tendermintService) GetTransactions(ctx context.Context, height int64) ([][]byte, error) {
 	blk, err := t.GetTendermintBlock(ctx, height)
 	if err != nil {

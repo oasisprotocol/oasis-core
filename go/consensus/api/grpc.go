@@ -22,6 +22,8 @@ var (
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodEstimateGas is the EstimateGas method.
 	methodEstimateGas = serviceName.NewMethod("EstimateGas", &EstimateGasRequest{})
+	// methodGetSignerNonce is a GetSignerNonce method.
+	methodGetSignerNonce = serviceName.NewMethod("GetSignerNonce", &GetSignerNonceRequest{})
 	// methodGetEpoch is the GetEpoch method.
 	methodGetEpoch = serviceName.NewMethod("GetEpoch", int64(0))
 	// methodWaitEpoch is the WaitEpoch method.
@@ -50,6 +52,10 @@ var (
 			{
 				MethodName: methodEstimateGas.ShortName(),
 				Handler:    handlerEstimateGas,
+			},
+			{
+				MethodName: methodGetSignerNonce.ShortName(),
+				Handler:    handlerGetSignerNonce,
 			},
 			{
 				MethodName: methodGetEpoch.ShortName(),
@@ -143,6 +149,29 @@ func handlerEstimateGas( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).EstimateGas(ctx, req.(*EstimateGasRequest))
+	}
+	return interceptor(ctx, rq, info, handler)
+}
+
+func handlerGetSignerNonce( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(GetSignerNonceRequest)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetSignerNonce(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetSignerNonce.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetSignerNonce(ctx, req.(*GetSignerNonceRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -295,6 +324,14 @@ func (c *consensusClient) EstimateGas(ctx context.Context, req *EstimateGasReque
 		return transaction.Gas(0), err
 	}
 	return gas, nil
+}
+
+func (c *consensusClient) GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error) {
+	var nonce uint64
+	if err := c.conn.Invoke(ctx, methodGetSignerNonce.FullName(), req, &nonce); err != nil {
+		return nonce, err
+	}
+	return nonce, nil
 }
 
 func (c *consensusClient) WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error {

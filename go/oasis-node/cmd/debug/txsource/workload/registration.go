@@ -24,7 +24,6 @@ import (
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 const (
@@ -151,18 +150,6 @@ func signNode(identity *identity.Identity, nodeDesc *node.Node) (*node.MultiSign
 	return sigNode, nil
 }
 
-func getAccountNonce(ctx context.Context, conn *grpc.ClientConn, pubKey signature.PublicKey) (uint64, error) {
-	stakingClient := staking.NewStakingClient(conn)
-	account, err := stakingClient.AccountInfo(ctx, &staking.OwnerQuery{
-		Height: consensus.HeightLatest,
-		Owner:  pubKey,
-	})
-	if err != nil {
-		return 0, fmt.Errorf("stakingClient.AccountInfo %s: %w", pubKey, err)
-	}
-	return account.General.Nonce, nil
-}
-
 func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient) error {
 	ctx := context.Background()
 	var err error
@@ -201,9 +188,12 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 	// XXX: currently entities are only registered at start. Could also
 	// periodically register new entities.
 	for i := range entityAccs {
-		entityAccs[i].reckonedNonce, err = getAccountNonce(ctx, conn, entityAccs[i].signer.Public())
+		entityAccs[i].reckonedNonce, err = cnsc.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
+			ID:     entityAccs[i].signer.Public(),
+			Height: consensus.HeightLatest,
+		})
 		if err != nil {
-			return fmt.Errorf("getAccountNonce error: %w", err)
+			return fmt.Errorf("GetSignerNonce error: %w", err)
 		}
 
 		ent := &entity.Entity{
@@ -223,9 +213,12 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 			nodeDesc := getNodeDesc(rng, ident, entityAccs[i].signer.Public(), r.ns)
 
 			var nodeAccNonce uint64
-			nodeAccNonce, err = getAccountNonce(ctx, conn, ident.NodeSigner.Public())
+			nodeAccNonce, err = cnsc.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
+				ID:     ident.NodeSigner.Public(),
+				Height: consensus.HeightLatest,
+			})
 			if err != nil {
-				return fmt.Errorf("getAccountNonce error: %w", err)
+				return fmt.Errorf("GetSignerNonce error: %w", err)
 			}
 
 			entityAccs[i].nodeIdentities = append(entityAccs[i].nodeIdentities, &nodeAcc{ident, nodeDesc, nodeAccNonce})

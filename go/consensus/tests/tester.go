@@ -61,4 +61,11 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 		Transaction: transaction.NewTransaction(0, nil, epochtimemock.MethodSetEpoch, 0),
 	})
 	require.NoError(err, "EstimateGas")
+
+	nonce, err := backend.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
+		ID:     memorySigner.NewTestSigner("get signer nonce signer").Public(),
+		Height: consensus.HeightLatest,
+	})
+	require.NoError(err, "GetSignerNonce")
+	require.Equal(uint64(0), nonce, "Nonce should be zero")
 }
