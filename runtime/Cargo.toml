@@ -41,7 +41,7 @@ deoxysii = { git = "https://github.com/oasislabs/deoxysii-rust" }
 tiny-keccak = "1.4.2"
 sp800-185 = "0.2.0"
 zeroize = "0.6"
-intrusive-collections = "0.7"
+intrusive-collections = "0.8"
 sha2 = "0.8.1"
 hmac = "0.7.1"
 
