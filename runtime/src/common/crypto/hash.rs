@@ -1,5 +1,5 @@
 //! Hash type.
-use ring::digest;
+use sha2::{Digest, Sha512Trunc256};
 
 impl_bytes!(Hash, 32, "A 32-byte SHA-512/256 hash.");
 
@@ -7,20 +7,20 @@ impl Hash {
     /// Compute a digest of the passed slice of bytes.
     pub fn digest_bytes(data: &[u8]) -> Hash {
         let mut result = [0u8; 32];
-        result[..].copy_from_slice(digest::digest(&digest::SHA512_256, &data).as_ref());
+        result[..].copy_from_slice(Sha512Trunc256::digest(&data).as_ref());
 
         Hash(result)
     }
 
     /// Compute a digest of the passed slices of bytes.
     pub fn digest_bytes_list(data: &[&[u8]]) -> Hash {
-        let mut ctx = digest::Context::new(&digest::SHA512_256);
+        let mut ctx = Sha512Trunc256::new();
         for datum in data {
-            ctx.update(datum);
+            ctx.input(datum);
         }
 
         let mut result = [0u8; 32];
-        result[..].copy_from_slice(ctx.finish().as_ref());
+        result[..].copy_from_slice(ctx.result().as_ref());
 
         Hash(result)
     }

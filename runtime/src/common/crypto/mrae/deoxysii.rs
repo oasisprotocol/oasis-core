@@ -2,10 +2,16 @@
 
 pub use super::deoxysii_rust::{DeoxysII, KEY_SIZE, NONCE_SIZE, TAG_SIZE};
 
-use super::{ring::hmac, x25519_dalek};
+use super::{
+    hmac::{Hmac, Mac},
+    sha2::Sha512Trunc256,
+    x25519_dalek,
+};
 
 use failure::Fallible;
 use rand::rngs::OsRng;
+
+type Kdf = Hmac<Sha512Trunc256>;
 
 /// Derives a MRAE AEAD symmetric key suitable for use with the asymmetric
 /// box primitives from the provided X25519 public and private keys.
@@ -15,14 +21,13 @@ fn derive_symmetric_key(public: &[u8; 32], private: &[u8; 32]) -> [u8; KEY_SIZE]
 
     let pmk = private.diffie_hellman(&public);
 
-    let k = hmac::Key::new(hmac::HMAC_SHA256, b"MRAE_Box_Deoxys-II-256-128");
-    let mut ctx = hmac::Context::with_key(&k);
-
-    ctx.update(pmk.as_bytes());
+    let mut kdf = Kdf::new_varkey(b"MRAE_Box_Deoxys-II-256-128").expect("Hmac::new_varkey");
+    kdf.input(pmk.as_bytes());
     drop(pmk);
 
     let mut derived_key = [0u8; KEY_SIZE];
-    derived_key.copy_from_slice(&ctx.sign().as_ref()[..KEY_SIZE]);
+    let digest = kdf.result();
+    derived_key.copy_from_slice(&digest.code().as_ref()[..KEY_SIZE]);
 
     derived_key
 }

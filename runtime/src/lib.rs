@@ -36,7 +36,7 @@ extern crate intrusive_collections;
 extern crate io_context;
 extern crate pem_iterator;
 extern crate percent_encoding;
-extern crate ring;
+extern crate rand;
 extern crate rustc_hex;
 extern crate snow;
 #[cfg(test)]

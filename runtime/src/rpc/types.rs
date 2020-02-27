@@ -1,5 +1,5 @@
 //! RPC protocol types.
-use ring::rand::{SecureRandom, SystemRandom};
+use rand::{rngs::OsRng, Rng};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::common::cbor::Value;
@@ -14,10 +14,9 @@ impl_bytes!(
 impl SessionID {
     /// Generate a random session identifier.
     pub fn random() -> Self {
-        let rng = SystemRandom::new();
+        let mut rng = OsRng {};
         let mut session_id = [0u8; 32];
-        rng.fill(&mut session_id)
-            .expect("random session id generation must succeed");
+        rng.fill(&mut session_id);
 
         SessionID(session_id)
     }
