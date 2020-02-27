@@ -19,14 +19,14 @@ docker_plugin_default_config: &docker_plugin_default_config
     # Intel SGX Application Enclave Services Manager (AESM) daemon running on
     # the Buildkite host.
     - /var/run/aesmd/aesm.socket:/var/run/aesmd/aesm.socket
-    # Propapage the tmpfs mount.
-    - /tmp:/tmp
+    - /var/tmp/longtests:/var/tmp/longtests
   environment:
     - "LC_ALL=C.UTF-8"
     - "LANG=C.UTF-8"
     - "CARGO_TARGET_DIR=/var/tmp/artifacts"
     - "CARGO_INSTALL_ROOT=/root/.cargo"
     - "GOPROXY=https://proxy.golang.org/"
+    - "SLACK_WEBHOOK_URL"
   propagate-environment: true
   unconfined: true
 
@@ -37,13 +37,21 @@ docker_plugin: &docker_plugin
 steps:
   - label: Transaction source tests
     parallelism: 1
-    timeout_in_minutes: 55
-    command:
-      - make
-      - ./.buildkite/scripts/test_e2e.sh -t txsource-multi
+    # Tests are set to run 6 hours + some buffer time.
+    timeout_in_minutes: 380
+    command: .buildkite/scripts/daily_txsource.sh
     env:
-      TEST_BASE_DIR: /tmp
+      TEST_BASE_DIR: /var/tmp/longtests
     agents:
       buildkite_agent_size: large
+      buildkite_agent_class: stable
+    # NOTE: we actually don't want to retry, but this is the only way that we
+    # can execute the notify step only if tests failed.
+    retry:
+      automatic:
+        limit: 1
+      manual:
+        allowed: false
+        reason: "Create a new build to retry"
     plugins:
       <<: *docker_plugin

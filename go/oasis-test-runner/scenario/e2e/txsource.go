@@ -25,7 +25,7 @@ import (
 
 const (
 	timeLimitShort = time.Minute
-	timeLimitLong  = 43 * time.Minute
+	timeLimitLong  = 6 * time.Hour
 
 	nodeRestartIntervalLong = 2 * time.Minute
 	livenessCheckInterval   = 1 * time.Minute
