@@ -44,11 +44,16 @@ var (
 // ClientBackend is a limited consensus interface used by clients that
 // connect to the local node.
 type ClientBackend interface {
+	TransactionAuthHandler
+
 	// SubmitTx submits a signed consensus transaction.
 	SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error
 
 	// StateToGenesis returns the genesis state at the specified block height.
 	StateToGenesis(ctx context.Context, height int64) (*genesis.Document, error)
+
+	// EstimateGas calculates the amount of gas required to execute the given transaction.
+	EstimateGas(ctx context.Context, req *EstimateGasRequest) (transaction.Gas, error)
 
 	// WaitEpoch waits for consensus to reach an epoch.
 	//
@@ -56,6 +61,9 @@ type ClientBackend interface {
 	// the one specified is reached (e.g., that the current epoch is already
 	// in the future).
 	WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error
+
+	// GetEpoch returns the current epoch.
+	GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error)
 
 	// GetBlock returns a consensus block at a specific height.
 	GetBlock(ctx context.Context, height int64) (*Block, error)
@@ -86,9 +94,6 @@ type Block struct {
 type Backend interface {
 	ClientBackend
 
-	// EstimateGas calculates the amount of gas required to execute the given transaction.
-	EstimateGas(ctx context.Context, caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error)
-
 	// Synced returns a channel that is closed once synchronization is
 	// complete.
 	Synced() <-chan struct{}
@@ -113,9 +118,6 @@ type Backend interface {
 
 	// SubmitEvidence submits evidence of misbehavior.
 	SubmitEvidence(ctx context.Context, evidence Evidence) error
-
-	// TransactionAuthHandler returns the transaction authentication handler.
-	TransactionAuthHandler() TransactionAuthHandler
 
 	// SubmissionManager returns the transaction submission manager.
 	SubmissionManager() SubmissionManager
@@ -147,7 +149,7 @@ type Backend interface {
 type TransactionAuthHandler interface {
 	// GetSignerNonce returns the nonce that should be used by the given
 	// signer for transmitting the next transaction.
-	GetSignerNonce(ctx context.Context, id signature.PublicKey, height int64) (uint64, error)
+	GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error)
 }
 
 // EvidenceKind is kind of evindence of a node misbehaving.
@@ -198,4 +200,16 @@ func (ce ConsensusEvidence) Unwrap() interface{} {
 // NewConsensusEvidence creates new consensus backend-specific evidence.
 func NewConsensusEvidence(inner interface{}) ConsensusEvidence {
 	return ConsensusEvidence{inner: inner}
+}
+
+// EstimateGasRequest is a EstimateGas request.
+type EstimateGasRequest struct {
+	Caller      signature.PublicKey      `json:"caller"`
+	Transaction *transaction.Transaction `json:"transaction"`
+}
+
+// GetSignerNonceRequest is a GetSignerNonce request.
+type GetSignerNonceRequest struct {
+	ID     signature.PublicKey `json:"id"`
+	Height int64               `json:"height"`
 }

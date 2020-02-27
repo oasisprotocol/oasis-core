@@ -106,6 +106,7 @@ func doRun(cmd *cobra.Command, args []string) error {
 
 	logger.Debug("entering workload", "name", name)
 	if err = w.Run(ctx, rng, conn, cnsc, rtc); err != nil {
+		logger.Error("workload error", "err", err)
 		return fmt.Errorf("workload %s: %w", name, err)
 	}
 	logger.Debug("workload returned", "name", name)

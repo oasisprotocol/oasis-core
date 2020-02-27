@@ -63,7 +63,7 @@ type submissionManager struct {
 func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
 	// Update transaction nonce.
 	var err error
-	tx.Nonce, err = m.backend.TransactionAuthHandler().GetSignerNonce(ctx, signer.Public(), HeightLatest)
+	tx.Nonce, err = m.backend.GetSignerNonce(ctx, &GetSignerNonceRequest{ID: signer.Public(), Height: HeightLatest})
 	if err != nil {
 		if errors.Is(err, ErrNoCommittedBlocks) {
 			// No committed blocks available, retry submission.
@@ -77,7 +77,7 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 	if tx.Fee == nil {
 		// Estimate amount of gas needed to perform the update.
 		var gas transaction.Gas
-		gas, err = m.backend.EstimateGas(ctx, signer.Public(), tx)
+		gas, err = m.backend.EstimateGas(ctx, &EstimateGasRequest{Caller: signer.Public(), Transaction: tx})
 		if err != nil {
 			return fmt.Errorf("failed to estimate gas: %w", err)
 		}

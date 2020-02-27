@@ -547,8 +547,8 @@ func (t *tendermintService) SubmitEvidence(ctx context.Context, evidence consens
 	return nil
 }
 
-func (t *tendermintService) EstimateGas(ctx context.Context, caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error) {
-	return t.mux.EstimateGas(caller, tx)
+func (t *tendermintService) EstimateGas(ctx context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
+	return t.mux.EstimateGas(req.Caller, req.Transaction)
 }
 
 func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
@@ -651,6 +651,10 @@ func (t *tendermintService) Scheduler() schedulerAPI.Backend {
 	return t.scheduler
 }
 
+func (t *tendermintService) GetEpoch(ctx context.Context, height int64) (epochtimeAPI.EpochTime, error) {
+	return t.epochtime.GetEpoch(ctx, height)
+}
+
 func (t *tendermintService) WaitEpoch(ctx context.Context, epoch epochtimeAPI.EpochTime) error {
 	ch, sub := t.epochtime.WatchEpochs()
 	defer sub.Close()
@@ -677,6 +681,10 @@ func (t *tendermintService) GetBlock(ctx context.Context, height int64) (*consen
 	}
 
 	return api.NewBlock(blk), nil
+}
+
+func (t *tendermintService) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSignerNonceRequest) (uint64, error) {
+	return t.mux.TransactionAuthHandler().GetSignerNonce(ctx, req)
 }
 
 func (t *tendermintService) GetTransactions(ctx context.Context, height int64) ([][]byte, error) {

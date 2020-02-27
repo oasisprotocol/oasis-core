@@ -20,6 +20,12 @@ var (
 	methodSubmitTx = serviceName.NewMethod("SubmitTx", transaction.SignedTransaction{})
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
+	// methodEstimateGas is the EstimateGas method.
+	methodEstimateGas = serviceName.NewMethod("EstimateGas", &EstimateGasRequest{})
+	// methodGetSignerNonce is a GetSignerNonce method.
+	methodGetSignerNonce = serviceName.NewMethod("GetSignerNonce", &GetSignerNonceRequest{})
+	// methodGetEpoch is the GetEpoch method.
+	methodGetEpoch = serviceName.NewMethod("GetEpoch", int64(0))
 	// methodWaitEpoch is the WaitEpoch method.
 	methodWaitEpoch = serviceName.NewMethod("WaitEpoch", epochtime.EpochTime(0))
 	// methodGetBlock is the GetBlock method.
@@ -42,6 +48,18 @@ var (
 			{
 				MethodName: methodStateToGenesis.ShortName(),
 				Handler:    handlerStateToGenesis,
+			},
+			{
+				MethodName: methodEstimateGas.ShortName(),
+				Handler:    handlerEstimateGas,
+			},
+			{
+				MethodName: methodGetSignerNonce.ShortName(),
+				Handler:    handlerGetSignerNonce,
+			},
+			{
+				MethodName: methodGetEpoch.ShortName(),
+				Handler:    handlerGetEpoch,
 			},
 			{
 				MethodName: methodWaitEpoch.ShortName(),
@@ -108,6 +126,75 @@ func handlerStateToGenesis( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerEstimateGas( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(EstimateGasRequest)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).EstimateGas(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodEstimateGas.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).EstimateGas(ctx, req.(*EstimateGasRequest))
+	}
+	return interceptor(ctx, rq, info, handler)
+}
+
+func handlerGetSignerNonce( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(GetSignerNonceRequest)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetSignerNonce(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetSignerNonce.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetSignerNonce(ctx, req.(*GetSignerNonceRequest))
+	}
+	return interceptor(ctx, rq, info, handler)
+}
+
+func handlerGetEpoch( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetEpoch(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetEpoch.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetEpoch(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -231,8 +318,32 @@ func (c *consensusClient) StateToGenesis(ctx context.Context, height int64) (*ge
 	return &rsp, nil
 }
 
+func (c *consensusClient) EstimateGas(ctx context.Context, req *EstimateGasRequest) (transaction.Gas, error) {
+	var gas transaction.Gas
+	if err := c.conn.Invoke(ctx, methodEstimateGas.FullName(), req, &gas); err != nil {
+		return transaction.Gas(0), err
+	}
+	return gas, nil
+}
+
+func (c *consensusClient) GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error) {
+	var nonce uint64
+	if err := c.conn.Invoke(ctx, methodGetSignerNonce.FullName(), req, &nonce); err != nil {
+		return nonce, err
+	}
+	return nonce, nil
+}
+
 func (c *consensusClient) WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error {
 	return c.conn.Invoke(ctx, methodWaitEpoch.FullName(), epoch, nil)
+}
+
+func (c *consensusClient) GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error) {
+	var epoch epochtime.EpochTime
+	if err := c.conn.Invoke(ctx, methodGetEpoch.FullName(), height, &epoch); err != nil {
+		return epochtime.EpochTime(0), err
+	}
+	return epoch, nil
 }
 
 func (c *consensusClient) GetBlock(ctx context.Context, height int64) (*Block, error) {
