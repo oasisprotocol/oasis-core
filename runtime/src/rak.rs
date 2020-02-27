@@ -15,7 +15,7 @@ use crate::common::{
 #[cfg(target_env = "sgx")]
 use base64;
 #[cfg(target_env = "sgx")]
-use ring::rand::{SecureRandom, SystemRandom};
+use rand::{rngs::OsRng, Rng};
 #[cfg(target_env = "sgx")]
 use sgx_isa::Report;
 
@@ -101,12 +101,11 @@ impl RAK {
         // it's passed around as a JSON string, so this uses 24 bytes
         // of entropy, Base64 encoded.
         //
-        // XXX/yawning: Whiten the output, exposing raw SystemRandom output
+        // XXX/yawning: Whiten the output, exposing raw OsRng output
         // to outside the enclave makes me uneasy.
-        let rng = SystemRandom::new();
+        let mut rng = OsRng {};
         let mut nonce_bytes = [0u8; 24]; // 24 bytes is 32 chars in Base64.
-        rng.fill(&mut nonce_bytes)
-            .expect("random nonce generation must succeed");
+        rng.fill(&mut nonce_bytes);
 
         base64::encode(&nonce_bytes)
     }
