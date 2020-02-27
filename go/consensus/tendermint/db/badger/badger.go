@@ -66,6 +66,9 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	opts := badger.DefaultOptions(fn) // This may benefit from LSMOnlyOptions.
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(false)
+	// Allow value log truncation if required (this is needed to recover the
+	// value log file which can get corrupted in crashes).
+	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.Snappy)
 	// Reduce cache size to 64 MiB as the default is 1 GiB.
 	opts = opts.WithMaxCacheSize(64 * 1024 * 1024)
