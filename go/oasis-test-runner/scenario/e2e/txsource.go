@@ -203,7 +203,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 		"debug", "txsource",
 		"--address", "unix:" + sc.net.Clients()[0].SocketPath(),
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + common.CfgDataDir, sc.net.BasePath(),
+		"--" + common.CfgDataDir, d.String(),
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgDebugTestEntity,
 		"--log.format", logFmt.String(),
