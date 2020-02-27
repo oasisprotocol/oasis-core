@@ -58,6 +58,7 @@ Consensus protocol version: {{ .ConsensusProtocol }}
 Committee protocol version: {{ .CommitteeProtocol }}
 Tendermint core version: {{ .Tendermint }}
 ABCI library version: {{ .ABCI }}
+Go toolchain version: {{ .Toolchain }}
 {{ end -}}
 `)
 }

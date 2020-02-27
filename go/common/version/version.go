@@ -3,6 +3,7 @@ package version
 
 import (
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -77,6 +78,9 @@ var (
 
 	// ABCI is the version of the tendermint ABCI library.
 	ABCI = parseSemVerStr(version.ABCIVersion)
+
+	// Toolchain is the version of the Go compiler/standard library.
+	Toolchain = parseSemVerStr(strings.TrimPrefix(runtime.Version(), "go"))
 )
 
 // Versions contains all known protocol versions.
@@ -86,12 +90,14 @@ var Versions = struct {
 	ConsensusProtocol Version
 	Tendermint        Version
 	ABCI              Version
+	Toolchain         Version
 }{
 	RuntimeProtocol,
 	CommitteeProtocol,
 	ConsensusProtocol,
 	Tendermint,
 	ABCI,
+	Toolchain,
 }
 
 func parseSemVerStr(s string) Version {
