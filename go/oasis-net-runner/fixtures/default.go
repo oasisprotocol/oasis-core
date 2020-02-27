@@ -96,7 +96,7 @@ func NewDefaultFixture() (*oasis.NetworkFixture, error) {
 					Algorithm:         registry.TxnSchedulerAlgorithmBatching,
 					GroupSize:         2,
 					MaxBatchSize:      1,
-					MaxBatchSizeBytes: 1000,
+					MaxBatchSizeBytes: 16 * 1024 * 1024, // 16 MiB
 					BatchFlushTimeout: 20 * time.Second,
 				},
 				Storage: registry.StorageParameters{
