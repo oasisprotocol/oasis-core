@@ -30,4 +30,5 @@ var ByName = map[string]Workload{
 	NameTransfer:     transfer{},
 	NameOversized:    oversized{},
 	NameRegistration: &registration{},
+	NameParallel:     parallel{},
 }
