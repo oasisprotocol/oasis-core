@@ -53,6 +53,9 @@ func newDB(fn string, runtimeID common.Namespace) (*DB, error) {
 	opts := badger.DefaultOptions(fn)
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(true)
+	// Allow value log truncation if required (this is needed to recover the
+	// value log file which can get corrupted in crashes).
+	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.None)
 	// Reduce cache size to 10 MiB as the default is 1 GiB.
 	opts = opts.WithMaxCacheSize(10 * 1024 * 1024)

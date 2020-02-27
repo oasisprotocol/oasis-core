@@ -125,6 +125,9 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	opts := badger.DefaultOptions(cfg.DB)
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(db.logger))
 	opts = opts.WithSyncWrites(!cfg.DebugNoFsync)
+	// Allow value log truncation if required (this is needed to recover the
+	// value log file which can get corrupted in crashes).
+	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.None)
 	opts = opts.WithMaxCacheSize(cfg.MaxCacheSize)
 

@@ -111,6 +111,9 @@ func New(dataDir, fn string, runtimeID common.Namespace) (LocalStorage, error) {
 	opts := badger.DefaultOptions(filepath.Join(dataDir, fn))
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(s.logger))
 	opts = opts.WithSyncWrites(true)
+	// Allow value log truncation if required (this is needed to recover the
+	// value log file which can get corrupted in crashes).
+	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.None)
 	// Reduce cache size to 128 KiB as the default is 1 GiB.
 	opts = opts.WithMaxCacheSize(128 * 1024)

@@ -49,6 +49,9 @@ func NewCommonStore(dataDir string) (*CommonStore, error) {
 	opts := badger.DefaultOptions(filepath.Join(dataDir, dbName))
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(true)
+	// Allow value log truncation if required (this is needed to recover the
+	// value log file which can get corrupted in crashes).
+	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.None)
 	// Reduce cache size to 128 KiB as the default is 1 GiB.
 	opts = opts.WithMaxCacheSize(128 * 1024)
