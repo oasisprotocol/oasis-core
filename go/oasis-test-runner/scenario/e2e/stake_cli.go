@@ -37,6 +37,9 @@ const (
 	// Test escrow amount.
 	escrowAmount = 3000
 
+	// Test reclaim escrow shares.
+	reclaimEscrowShares = 1234
+
 	// Transaction fee amount.
 	feeAmount = 10
 
@@ -167,7 +170,7 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 	return nil
 }
 
-// testTransfer tests transfer of 1000 tokens from src to dst.
+// testTransfer tests transfer of transferAmount tokens from src to dst.
 func (s *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src signature.PublicKey, dst signature.PublicKey) error {
 	transferTxPath := filepath.Join(childEnv.Dir(), "stake_transfer.json")
 	if err := s.genTransferTx(childEnv, transferAmount, 0, dst, transferTxPath); err != nil {
@@ -204,7 +207,7 @@ func (s *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src sig
 	return nil
 }
 
-// testBurn tests burning of 2000 tokens owned by src.
+// testBurn tests burning of burnAmount tokens owned by src.
 func (s *stakeCLIImpl) testBurn(childEnv *env.Env, cli *cli.Helpers, src signature.PublicKey) error {
 	burnTxPath := filepath.Join(childEnv.Dir(), "stake_burn.json")
 	if err := s.genBurnTx(childEnv, burnAmount, 1, burnTxPath); err != nil {
@@ -232,7 +235,7 @@ func (s *stakeCLIImpl) testBurn(childEnv *env.Env, cli *cli.Helpers, src signatu
 	return nil
 }
 
-// testEscrow tests escrowing of 3000 tokens from src to dst.
+// testEscrow tests escrowing escrowAmount tokens from src to dst.
 func (s *stakeCLIImpl) testEscrow(childEnv *env.Env, cli *cli.Helpers, src signature.PublicKey, escrow signature.PublicKey) error {
 	escrowTxPath := filepath.Join(childEnv.Dir(), "stake_escrow.json")
 	if err := s.genEscrowTx(childEnv, escrowAmount, 2, escrow, escrowTxPath); err != nil {
@@ -263,10 +266,10 @@ func (s *stakeCLIImpl) testEscrow(childEnv *env.Env, cli *cli.Helpers, src signa
 	return nil
 }
 
-// testReclaimEscrow test reclaiming an escrow of 3000 tokens from escrow account.
+// testReclaimEscrow test reclaiming reclaimEscrowShares shares from an escrow account.
 func (s *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, cli *cli.Helpers, src signature.PublicKey, escrow signature.PublicKey) error {
 	reclaimEscrowTxPath := filepath.Join(childEnv.Dir(), "stake_reclaim_escrow.json")
-	if err := s.genReclaimEscrowTx(childEnv, escrowAmount, 3, escrow, reclaimEscrowTxPath); err != nil {
+	if err := s.genReclaimEscrowTx(childEnv, reclaimEscrowShares, 3, escrow, reclaimEscrowTxPath); err != nil {
 		return err
 	}
 	if err := s.showTx(childEnv, reclaimEscrowTxPath); err != nil {
@@ -282,10 +285,13 @@ func (s *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, cli *cli.Helpers, sr
 		return fmt.Errorf("failed to set epoch: %w", err)
 	}
 
-	if err := s.checkBalance(childEnv, src, initBalance-transferAmount-burnAmount-4*feeAmount); err != nil {
+	// Since we are the only ones who put tokens into the escrow account and there was no slashing,
+	// we can expect the reclaimed escrow amount to equal the number of reclaimed escrow shares.
+	var reclaimEscrowAmount int64 = reclaimEscrowShares
+	if err := s.checkBalance(childEnv, src, initBalance-transferAmount-burnAmount-escrowAmount+reclaimEscrowAmount-4*feeAmount); err != nil {
 		return err
 	}
-	if err := s.checkEscrowBalance(childEnv, escrow, 0); err != nil {
+	if err := s.checkEscrowBalance(childEnv, escrow, escrowAmount-reclaimEscrowAmount); err != nil {
 		return err
 	}
 	accounts, err := s.listAccounts(childEnv)
@@ -517,12 +523,12 @@ func (s *stakeCLIImpl) genEscrowTx(childEnv *env.Env, amount int, nonce int, esc
 	return nil
 }
 
-func (s *stakeCLIImpl) genReclaimEscrowTx(childEnv *env.Env, amount int, nonce int, escrow signature.PublicKey, txPath string) error {
+func (s *stakeCLIImpl) genReclaimEscrowTx(childEnv *env.Env, shares int, nonce int, escrow signature.PublicKey, txPath string) error {
 	s.logger.Info("generating stake reclaim escrow tx", stake.CfgEscrowAccount, escrow)
 
 	args := []string{
 		"stake", "account", "gen_reclaim_escrow",
-		"--" + stake.CfgAmount, strconv.Itoa(amount),
+		"--" + stake.CfgShares, strconv.Itoa(shares),
 		"--" + consensus.CfgTxNonce, strconv.Itoa(nonce),
 		"--" + consensus.CfgTxFile, txPath,
 		"--" + stake.CfgEscrowAccount, escrow.String(),

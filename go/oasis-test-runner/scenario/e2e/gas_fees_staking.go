@@ -250,11 +250,11 @@ func (sc *gasFeesImpl) testAddEscrow(ctx context.Context, signer signature.Signe
 }
 
 func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.Signer) (*quantity.Quantity, error) {
-	return sc.testStakingGas(ctx, signer, false, func(acct *staking.Account, fee transaction.Fee, amount int64) error {
+	return sc.testStakingGas(ctx, signer, false, func(acct *staking.Account, fee transaction.Fee, shares int64) error {
 		escrow := staking.ReclaimEscrow{
 			Account: escrowSigner.Public(),
 		}
-		_ = escrow.Shares.FromInt64(amount)
+		_ = escrow.Shares.FromInt64(shares)
 
 		tx := staking.NewReclaimEscrowTx(acct.General.Nonce, &fee, &escrow)
 		sigTx, err := transaction.Sign(signer, tx)
