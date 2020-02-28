@@ -13,4 +13,8 @@ else
         -X POST \
         --data "{\"text\": \"Daily transaction source tests failure\"}" \
         "$SLACK_WEBHOOK_URL"
+
+    # Exit with non-zero exit code, so that the buildkite build will be
+    # marked as failed.
+    exit 1
 fi

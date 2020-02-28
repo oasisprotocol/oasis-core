@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	// NameOversized is the name of the oversized workload.
 	NameOversized = "oversized"
 
 	oversizedTxGasAmount = 10000
@@ -27,7 +28,7 @@ var oversizedLogger = logging.GetLogger("cmd/txsource/workload/oversized")
 
 type oversized struct{}
 
-func (oversized) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient) error {
+func (oversized) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient, fundingAccount signature.Signer) error {
 	txSignerFactory := memorySigner.NewFactory()
 	txSigner, err := txSignerFactory.Generate(signature.SignerEntity, rng)
 	if err != nil {
@@ -47,6 +48,10 @@ func (oversized) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cl
 	fee := transaction.Fee{
 		Gas: oversizedTxGasAmount,
 	}
+	if err = fee.Amount.FromInt64(oversizedTxGasAmount * gasPrice); err != nil {
+		return fmt.Errorf("Fee amount error: %w", err)
+	}
+
 	for {
 		// Generate a big transfer transaction which is valid, but oversized.
 		type customTransfer struct {
@@ -61,6 +66,10 @@ func (oversized) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cl
 		}
 		if _, err = rng.Read(xfer.Data); err != nil {
 			return fmt.Errorf("failed to generate bogus transaction: %w", err)
+		}
+
+		if err = transferFunds(ctx, oversizedLogger, cnsc, fundingAccount, txSigner.Public(), int64(oversizedTxGasAmount*gasPrice)); err != nil {
+			return fmt.Errorf("workload/oversized: account funding failure: %w", err)
 		}
 
 		tx := transaction.NewTransaction(nonce, &fee, staking.MethodTransfer, &xfer)

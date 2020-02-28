@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	timeLimitShort = time.Minute
+	timeLimitShort = 3 * time.Minute
 	timeLimitLong  = 6 * time.Hour
 
 	nodeRestartIntervalLong = 2 * time.Minute
@@ -79,6 +79,12 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Disable CheckTx on the client node so we can submit invalid transactions.
 	f.Clients[0].ConsensusDisableCheckTx = true
 
+	// MinGasPrice
+	f.Validators = []oasis.ValidatorFixture{
+		oasis.ValidatorFixture{Entity: 1, MinGasPrice: 1},
+		oasis.ValidatorFixture{Entity: 1, MinGasPrice: 1},
+		oasis.ValidatorFixture{Entity: 1, MinGasPrice: 1},
+	}
 	return f, nil
 }
 

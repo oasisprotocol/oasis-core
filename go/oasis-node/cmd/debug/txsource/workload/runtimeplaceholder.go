@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
@@ -20,7 +21,7 @@ var (
 
 type runtimePlaceholder struct{}
 
-func (runtimePlaceholder) Run(_ context.Context, _ *rand.Rand, _ *grpc.ClientConn, _ consensus.ClientBackend, rtc runtimeClient.RuntimeClient) error {
+func (runtimePlaceholder) Run(_ context.Context, _ *rand.Rand, _ *grpc.ClientConn, _ consensus.ClientBackend, rtc runtimeClient.RuntimeClient, fundingAccount signature.Signer) error {
 	ctx := context.Background()
 	var tx *runtimeClient.SubmitTxRequest
 	// Placeholder for sending a runtime transaction from a workload.

@@ -19,29 +19,38 @@ import (
 )
 
 const (
+	// NameParallel is the name of the parallel workload.
 	NameParallel = "parallel"
 
 	parallelSendWaitTimeoutInterval = 30 * time.Second
 	parallelSendTimeoutInterval     = 60 * time.Second
 	parallelConcurency              = 200
 	parallelTxGasAmount             = 10
+	parallelTxTransferAmount        = 100
+	parallelTxFundInterval          = 10
 )
 
 var parallelLogger = logging.GetLogger("cmd/txsource/workload/parallel")
 
 type parallel struct{}
 
-func (parallel) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient) error {
+func (parallel) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient, fundingAccount signature.Signer) error {
 	ctx := context.Background()
+	var err error
 
 	accounts := make([]signature.Signer, parallelConcurency)
-	var err error
 	fac := memorySigner.NewFactory()
 	for i := range accounts {
-		// NOTE: no balances are needed for now
 		accounts[i], err = fac.Generate(signature.SignerEntity, rng)
 		if err != nil {
 			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err)
+		}
+
+		// Initial funding of accounts.
+		fundAmount := parallelTxTransferAmount + // self transfer amount
+			parallelTxFundInterval*parallelTxGasAmount*gasPrice // gas for `parallelTxFundInterval` transfers.
+		if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, accounts[i].Public(), int64(fundAmount)); err != nil {
+			return fmt.Errorf("account funding failure: %w", err)
 		}
 	}
 
@@ -51,13 +60,16 @@ func (parallel) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cli
 	fee := transaction.Fee{
 		Gas: parallelTxGasAmount,
 	}
+	if err = fee.Amount.FromInt64(parallelTxGasAmount); err != nil {
+		return fmt.Errorf("Fee amount error: %w", err)
+	}
 
-	for {
+	for i := uint64(1); ; i++ {
+
 		errCh := make(chan error, parallelConcurency)
 		var wg sync.WaitGroup
 		wg.Add(parallelConcurency)
-
-		for i := 0; i < parallelConcurency; i++ {
+		for c := 0; c < parallelConcurency; c++ {
 			go func(txSigner signature.Signer, nonce uint64) {
 				defer wg.Done()
 
@@ -65,9 +77,14 @@ func (parallel) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cli
 				transfer := staking.Transfer{
 					To: txSigner.Public(),
 				}
-				tx := staking.NewTransferTx(nonce, &fee, &transfer)
+				if err = transfer.Tokens.FromInt64(parallelTxTransferAmount); err != nil {
+					errCh <- fmt.Errorf("transfer tokens FromInt64 %d: %w", parallelTxTransferAmount, err)
+					return
+				}
 
-				signedTx, err := transaction.Sign(txSigner, tx)
+				tx := staking.NewTransferTx(nonce, &fee, &transfer)
+				var signedTx *transaction.SignedTransaction
+				signedTx, err = transaction.Sign(txSigner, tx)
 				if err != nil {
 					parallelLogger.Error("transaction.Sign error", "err", err)
 					errCh <- fmt.Errorf("transaction.Sign: %w", err)
@@ -83,7 +100,7 @@ func (parallel) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cli
 					return
 				}
 
-			}(accounts[i], nonce)
+			}(accounts[c], nonce)
 		}
 
 		// Wait for transactions.
@@ -99,7 +116,7 @@ func (parallel) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cli
 			parallelLogger.Error("transactions not completed within timeout")
 			return fmt.Errorf("workload parallel: transactions not completed within timeout")
 
-		case err := <-errCh:
+		case err = <-errCh:
 			parallelLogger.Error("error subimit transaction",
 				"err", err,
 			)
@@ -109,6 +126,16 @@ func (parallel) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cli
 			parallelLogger.Debug("all transfers successful",
 				"concurency", parallelConcurency,
 			)
+		}
+
+		if i%parallelTxFundInterval == 0 {
+			// Re-fund accounts for next `parallelTxFundInterval` transfers.
+			for i := range accounts {
+				fundAmount := parallelTxFundInterval * parallelTxGasAmount * gasPrice // gas for `parallelTxFundInterval` transfers.
+				if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, accounts[i].Public(), int64(fundAmount)); err != nil {
+					return fmt.Errorf("account funding failure: %w", err)
+				}
+			}
 		}
 
 		select {
