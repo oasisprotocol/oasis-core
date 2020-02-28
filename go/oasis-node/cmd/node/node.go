@@ -372,13 +372,13 @@ func (n *Node) startWorkers(logger *logging.Logger) error {
 		return err
 	}
 
-	// Start the sentry worker.
-	if err := n.SentryWorker.Start(); err != nil {
+	// Start the worker registration service.
+	if err := n.RegistrationWorker.Start(); err != nil {
 		return err
 	}
 
-	// Start the worker registration service.
-	if err := n.RegistrationWorker.Start(); err != nil {
+	// Start the sentry worker.
+	if err := n.SentryWorker.Start(); err != nil {
 		return err
 	}
 

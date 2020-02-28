@@ -139,10 +139,29 @@ func New(backend api.Backend, identity *identity.Identity) (*Worker, error) {
 	}
 	w.grpcWorker = sentryGrpcWorker
 
-	// Stop in case of grpc/worker quitting.
 	go func() {
-		<-w.grpcWorker.Quit()
-		w.Stop()
+		for { // nolint: S1000
+			// Stop in case of grpc/worker quitting.
+			select {
+			case <-w.grpcWorker.Quit():
+				if !w.grpcWorker.AmQuittingBecauseTLSCertsHaveRotated {
+					// Worker is actually quitting.
+					w.Stop()
+					return
+				}
+
+				// Upstream TLS certs have rotated, reconnect.
+				sgw, err := workerGrpcSentry.New(identity)
+				if err != nil {
+					w.logger.Error("worker/sentry: failed to re-init worker after upstream TLS certificate rotation",
+						"err", err,
+					)
+					w.Stop()
+					return
+				}
+				w.grpcWorker = sgw
+			}
+		}
 	}()
 
 	return w, nil

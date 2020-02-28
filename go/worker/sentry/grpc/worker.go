@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
 	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
@@ -18,12 +20,13 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/service"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
 var _ service.BackgroundService = (*Worker)(nil)
 
 // Worker is a gRPC sentry node worker proxying gRPC requests to upstream node.
-type Worker struct {
+type Worker struct { // nolint: maligned
 	sync.RWMutex
 
 	enabled bool
@@ -41,14 +44,28 @@ type Worker struct {
 	// Per service policy checkers.
 	grpcPolicyCheckers map[cmnGrpc.ServiceName]*policy.DynamicRuntimePolicyChecker
 
+	registryClient registry.Backend
+
 	*upstreamConn
 
 	grpc     *cmnGrpc.Server
 	identity *identity.Identity
+
+	// Set to true when quitting if the master worker shouldn't quit,
+	// but re-init due to changed TLS certificates on the upstream node.
+	AmQuittingBecauseTLSCertsHaveRotated bool
 }
 
 type upstreamConn struct {
-	conn              *grpc.ClientConn
+	// ID of the upstream node.
+	nodeID signature.PublicKey
+	// TLS certificates for the upstream node.
+	certs [][]byte
+	// Client connection to the upstream node.
+	conn *grpc.ClientConn
+	// Registry client connection.
+	registryClientConn *grpc.ClientConn
+	// Cleanup callback for the manual resolver.
 	resolverCleanupCb func()
 }
 
@@ -148,10 +165,38 @@ func (g *Worker) updatePolicies(p policyAPI.ServicePolicies) {
 	}
 }
 
+// Returns true if we need to restart.
+func (g *Worker) checkUpstreamNodeTLSCerts(nodeEvent *registry.NodeEvent) bool {
+	if !nodeEvent.IsRegistration {
+		return false
+	}
+
+	// Check if it's our upstream node.
+	if !nodeEvent.Node.ID.Equal(g.nodeID) {
+		return false
+	}
+
+	// XXX: Not sure if certificates are guaranteed to be sorted,
+	// so we do this slow lookup to be sure.
+	var numCertMatches uint
+	for _, cert1 := range g.certs {
+		for _, addr2 := range nodeEvent.Node.Committee.Addresses {
+			if bytes.Equal(cert1, addr2.Certificate) {
+				numCertMatches++
+			}
+		}
+	}
+
+	// If the number of matching certificates differs, they were rotated,
+	// so a reconnect is required.
+	return numCertMatches != uint(len(g.certs))
+}
+
 func (g *Worker) worker() {
 	defer close(g.quitCh)
 	defer (g.cancelCtx)()
 
+	// Initialize policy watcher.
 	g.policyWatcher = policyAPI.NewPolicyWatcherClient(g.conn)
 	ch, sub, err := g.policyWatcher.WatchPolicies(g.ctx)
 	if err != nil {
@@ -162,11 +207,34 @@ func (g *Worker) worker() {
 	}
 	defer sub.Close()
 
+	// Initialize registry watcher.
+	g.registryClient = registry.NewRegistryClient(g.registryClientConn)
+	regCh, regSub, regErr := g.registryClient.WatchNodes(g.ctx)
+	if regErr != nil {
+		g.logger.Error("failed to watch registry nodes",
+			"err", regErr,
+		)
+		return
+	}
+	defer regSub.Close()
+
+	// Initialization complete.
 	close(g.initCh)
 
-	// Watch Policies.
+	// Watch policies and registry.
 	for {
 		select {
+		case nodeEvent, ok := <-regCh:
+			if !ok {
+				g.logger.Error("WatchNodes stream closed")
+				return
+			}
+
+			if g.checkUpstreamNodeTLSCerts(nodeEvent) {
+				// Upstream node TLS certificates changed, restart is needed.
+				g.AmQuittingBecauseTLSCertsHaveRotated = true
+				return
+			}
 		case p, ok := <-ch:
 			if !ok {
 				g.logger.Error("WatchPolicies stream closed")

@@ -61,7 +61,8 @@ func (sentry *Sentry) startNode() error {
 		workerSentryControlPort(sentry.controlPort).
 		tendermintCoreListenAddress(sentry.consensusPort).
 		appendNetwork(sentry.net).
-		appendSeedNodes(sentry.net)
+		appendSeedNodes(sentry.net).
+		internalSocketAddress(sentry.net.validators[0].SocketPath())
 
 	if len(validators) > 0 {
 		args = args.addValidatorsAsSentryUpstreams(validators)

@@ -508,8 +508,10 @@ func (w *Worker) gatherCommitteeAddresses(sentryCommitteeAddrs []node.CommitteeA
 }
 
 func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) error {
+	identityPublic := w.identity.NodeSigner.Public()
 	w.logger.Info("performing node (re-)registration",
 		"epoch", epoch,
+		"node_id", identityPublic.String(),
 	)
 
 	var nextCert []byte
@@ -517,7 +519,6 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		nextCert = c.Certificate[0]
 	}
 
-	identityPublic := w.identity.NodeSigner.Public()
 	nodeDesc := node.Node{
 		ID:         identityPublic,
 		EntityID:   w.entityID,
@@ -631,7 +632,7 @@ func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.CommitteeAddre
 		// Query sentry node for addresses.
 		sentryAddresses, err := client.GetAddresses(w.ctx)
 		if err != nil {
-			w.logger.Warn("failed to obtain addressesfrom sentry node",
+			w.logger.Warn("failed to obtain addresses from sentry node",
 				"err", err,
 				"sentry_address", sentryAddr,
 			)
