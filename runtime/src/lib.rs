@@ -125,5 +125,5 @@ pub use self::{
     init::start_runtime,
     protocol::Protocol,
     rpc::{demux::Demux as RpcDemux, dispatcher::Dispatcher as RpcDispatcher},
-    transaction::dispatcher::Dispatcher as TxnDispatcher,
+    transaction::dispatcher::{Dispatcher as TxnDispatcher, MethodDispatcher as TxnMethDispatcher},
 };

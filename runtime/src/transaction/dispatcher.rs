@@ -161,11 +161,55 @@ impl Method {
     }
 }
 
+/// Runtime transaction dispatcher trait.
+///
+/// It defines the interface used by the runtime call dispatcher
+/// to process transactions.
+pub trait Dispatcher {
+    /// Dispatches a batch of runtime requests.
+    fn dispatch_batch(
+        &self,
+        batch: &TxnBatch,
+        ctx: Context,
+    ) -> (TxnBatch, Vec<Tags>, Vec<RoothashMessage>);
+    /// Invoke the finalizer (if any).
+    fn finalize(&self, new_storage_root: Hash);
+}
+
+/// No-op dispatcher.
+///
+/// This is mainly used by the runtime dispatcher as a fallback in case
+/// the runtime's initializer doesn't produce its own dispatcher object.
+pub struct NoopDispatcher {}
+
+impl NoopDispatcher {
+    pub fn new() -> NoopDispatcher {
+        NoopDispatcher {}
+    }
+}
+
+impl Dispatcher for NoopDispatcher {
+    fn dispatch_batch(
+        &self,
+        _batch: &TxnBatch,
+        ctx: Context,
+    ) -> (TxnBatch, Vec<Tags>, Vec<RoothashMessage>) {
+        let outputs = TxnBatch::new(Vec::new());
+        let (tags, roothash_messages) = ctx.close();
+        (outputs, tags, roothash_messages)
+    }
+
+    fn finalize(&self, _new_storage_root: Hash) {
+        // Nothing to do here.
+    }
+}
+
 /// Runtime method dispatcher.
 ///
-/// The dispatcher holds all registered runtime methods and provides an entry point
+/// The dispatcher is a concrete implementation of the Dispatcher trait.
+/// It holds all registered runtime methods and provides an entry point
 /// for their invocation.
-pub struct Dispatcher {
+pub struct MethodDispatcher {
     /// Registered runtime methods.
     methods: HashMap<String, Method>,
     /// Registered batch handler.
@@ -176,10 +220,10 @@ pub struct Dispatcher {
     finalizer: Option<Box<dyn Finalizer>>,
 }
 
-impl Dispatcher {
+impl MethodDispatcher {
     /// Create a new runtime method dispatcher instance.
-    pub fn new() -> Self {
-        Dispatcher {
+    pub fn new() -> MethodDispatcher {
+        MethodDispatcher {
             methods: HashMap::new(),
             batch_handler: None,
             ctx_initializer: None,
@@ -216,8 +260,34 @@ impl Dispatcher {
         self.finalizer = Some(Box::new(finalizer));
     }
 
-    /// Dispatches a batch of runtime requests.
-    pub fn dispatch_batch(
+    /// Dispatches a raw runtime invocation request.
+    fn dispatch(&self, call: &Vec<u8>, ctx: &mut Context) -> Vec<u8> {
+        let rsp = match self.dispatch_fallible(call, ctx) {
+            Ok(response) => TxnOutput::Success(response),
+            Err(error) => match error.downcast::<CheckOnlySuccess>() {
+                Ok(check_result) => TxnOutput::Success(cbor::to_value(check_result.0)),
+                Err(error) => TxnOutput::Error(format!("{}", error)),
+            },
+        };
+
+        cbor::to_vec(&rsp)
+    }
+
+    fn dispatch_fallible(&self, call: &Vec<u8>, ctx: &mut Context) -> Fallible<cbor::Value> {
+        let call: TxnCall = cbor::from_slice(call).context("unable to parse call")?;
+
+        match self.methods.get(&call.method) {
+            Some(dispatcher) => dispatcher.dispatch(call, ctx),
+            None => Err(DispatchError::MethodNotFound {
+                method: call.method,
+            }
+            .into()),
+        }
+    }
+}
+
+impl Dispatcher for MethodDispatcher {
+    fn dispatch_batch(
         &self,
         batch: &TxnBatch,
         mut ctx: Context,
@@ -251,33 +321,7 @@ impl Dispatcher {
         (outputs, tags, roothash_messages)
     }
 
-    /// Dispatches a raw runtime invocation request.
-    pub fn dispatch(&self, call: &Vec<u8>, ctx: &mut Context) -> Vec<u8> {
-        let rsp = match self.dispatch_fallible(call, ctx) {
-            Ok(response) => TxnOutput::Success(response),
-            Err(error) => match error.downcast::<CheckOnlySuccess>() {
-                Ok(check_result) => TxnOutput::Success(cbor::to_value(check_result.0)),
-                Err(error) => TxnOutput::Error(format!("{}", error)),
-            },
-        };
-
-        cbor::to_vec(&rsp)
-    }
-
-    fn dispatch_fallible(&self, call: &Vec<u8>, ctx: &mut Context) -> Fallible<cbor::Value> {
-        let call: TxnCall = cbor::from_slice(call).context("unable to parse call")?;
-
-        match self.methods.get(&call.method) {
-            Some(dispatcher) => dispatcher.dispatch(call, ctx),
-            None => Err(DispatchError::MethodNotFound {
-                method: call.method,
-            }
-            .into()),
-        }
-    }
-
-    /// Invoke the finalizer (if any).
-    pub fn finalize(&self, new_storage_root: Hash) {
+    fn finalize(&self, new_storage_root: Hash) {
         if let Some(ref finalizer) = self.finalizer {
             finalizer.finalize(new_storage_root);
         }
@@ -302,7 +346,7 @@ mod tests {
     }
 
     /// Register a dummy method.
-    fn register_dummy_method(dispatcher: &mut Dispatcher) {
+    fn register_dummy_method(dispatcher: &mut MethodDispatcher) {
         // Register dummy runtime method.
         dispatcher.add_method(Method::new(
             MethodDescriptor {
@@ -321,7 +365,7 @@ mod tests {
 
     #[test]
     fn test_dispatcher() {
-        let mut dispatcher = Dispatcher::new();
+        let mut dispatcher = MethodDispatcher::new();
         register_dummy_method(&mut dispatcher);
 
         // Prepare a dummy call.

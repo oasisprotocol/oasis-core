@@ -25,7 +25,7 @@ use oasis_core_runtime::{
     register_runtime_txn_methods, runtime_context,
     storage::{StorageContext, MKVS},
     transaction::{dispatcher::CheckOnlySuccess, Context as TxnContext},
-    version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
+    version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher, TxnMethDispatcher,
 };
 use simple_keyvalue_api::{with_api, KeyValue};
 
@@ -247,8 +247,9 @@ fn main() {
     let init = |protocol: &Arc<Protocol>,
                 rak: &Arc<RAK>,
                 _rpc_demux: &mut RpcDemux,
-                _rpc: &mut RpcDispatcher,
-                txn: &mut TxnDispatcher| {
+                _rpc: &mut RpcDispatcher|
+     -> Option<Box<dyn TxnDispatcher>> {
+        let mut txn = TxnMethDispatcher::new();
         with_api! { register_runtime_txn_methods!(txn, api); }
 
         // Create the key manager client.
@@ -266,8 +267,10 @@ fn main() {
                 km_client: km_client.clone(),
             })
         });
+
+        Some(Box::new(txn))
     };
 
     // Start the runtime.
-    oasis_core_runtime::start_runtime(Some(Box::new(init)), version_from_cargo!());
+    oasis_core_runtime::start_runtime(Box::new(init), version_from_cargo!());
 }
