@@ -111,7 +111,8 @@ directory) will look in the Change Log, install [Oasis Labs' towncrier fork]
 with:
 
 ```bash
-pip3 install https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz
+pip3 install --upgrade \
+  https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz
 ```
 
 _NOTE: [towncrier] requires Python 3.5+._
