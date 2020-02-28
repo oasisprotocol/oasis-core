@@ -149,10 +149,9 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	if err != nil {
 		return fmt.Errorf("Delegations: %w", err)
 	}
-	for acct, delegations := range delegationses {
-		err = staking.SanityCheckDelegations(st.Account(acct), delegations)
-		if err != nil {
-			return fmt.Errorf("SanityCheckDelegations %s: %w", acct, err)
+	for id, delegations := range delegationses {
+		if err = staking.SanityCheckDelegations(id, st.Account(id), delegations); err != nil {
+			return err
 		}
 	}
 
@@ -161,18 +160,16 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	if err != nil {
 		return fmt.Errorf("DebondingDelegations: %w", err)
 	}
-	for acct, debondingDelegations := range debondingDelegationses {
-		err := staking.SanityCheckDebondingDelegations(st.Account(acct), debondingDelegations)
-		if err != nil {
-			return fmt.Errorf("SanityCheckDebondingDelegations %s: %w", acct, err)
+	for id, debondingDelegations := range debondingDelegationses {
+		if err = staking.SanityCheckDebondingDelegations(id, st.Account(id), debondingDelegations); err != nil {
+			return err
 		}
 	}
 
 	// Check the above two invariants for each account as well.
 	for _, id := range accounts {
-		err := staking.SanityCheckAccountShares(st.Account(id), delegationses[id], debondingDelegationses[id])
-		if err != nil {
-			return fmt.Errorf("SanityCheckAccountShares %s: %w", id, err)
+		if err = staking.SanityCheckAccountShares(id, st.Account(id), delegationses[id], debondingDelegationses[id]); err != nil {
+			return err
 		}
 	}
 
