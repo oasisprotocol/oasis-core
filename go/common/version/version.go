@@ -101,18 +101,18 @@ var Versions = struct {
 }
 
 func parseSemVerStr(s string) Version {
-	split := strings.Split(s, ".")
-	if len(split) != 3 {
-		panic("version: failed to split SemVer")
-	}
+	split := strings.SplitN(s, ".", 4)
 
-	var semVers []uint16
-	for _, v := range split {
-		i, err := strconv.ParseUint(v, 10, 16)
+	var semVers []uint16 = []uint16{0, 0, 0}
+	for i, v := range split {
+		if i >= 3 {
+			break
+		}
+		ver, err := strconv.ParseUint(v, 10, 16)
 		if err != nil {
 			panic("version: failed to parse SemVer: " + err.Error())
 		}
-		semVers = append(semVers, uint16(i))
+		semVers[i] = uint16(ver)
 	}
 
 	return Version{Major: semVers[0], Minor: semVers[1], Patch: semVers[2]}
