@@ -1,0 +1,44 @@
+{
+  "params": {
+    "commission_schedule_rules": {
+      "rate_change_interval": 10,
+      "rate_bound_lead": 30,
+      "max_rate_steps": 4,
+      "max_bound_steps": 12
+    },
+    "thresholds": {
+      "0": "0",
+      "1": "0",
+      "2": "0",
+      "3": "0",
+      "4": "0",
+      "5": "0",
+      "6": "0"
+    }
+  },
+  "total_supply": "1000",
+  "ledger": {
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=": {
+      "escrow": {
+        "debonding": {
+          "balance": "1000",
+          "total_shares": "1000"
+        }
+      }
+    }
+  },
+  "debonding_delegations": {
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=": {
+      "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=": [
+        {
+          "shares": "500",
+          "debond_end": 1
+        },
+        {
+          "shares": "500",
+          "debond_end": 2
+        }
+      ]
+    }
+  }
+}
