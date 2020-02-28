@@ -54,14 +54,13 @@ Prerequisites:
   [see below](#using-the-development-docker-image)).
 
 * System packages:
-  * [Bubblewrap](https://github.com/projectatomic/bubblewrap) (at least version
-    0.3.3).
-  * [GCC](http://gcc.gnu.org/) (including C++ subpackage).
-  * [Protobuf](https://github.com/protocolbuffers/protobuf) compiler.
-  * [GNU Make](https://www.gnu.org/software/make/).
-  * [CMake](https://cmake.org/).
-  * [OpenSSL](https://www.openssl.org/) development package.
-  * [libseccomp](https://github.com/seccomp/libseccomp) development package.
+  * [Bubblewrap] (at least version 0.3.3).
+  * [GCC] (including C++ subpackage).
+  * [Protobuf] compiler.
+  * [GNU Make].
+  * [CMake].
+  * [OpenSSL] development package.
+  * [libseccomp] development package.
 
   On Fedora 29+, you can install all the above with:
 
@@ -78,7 +77,7 @@ Prerequisites:
   sudo apt install bubblewrap gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev
   ```
 
-* [Go](https://golang.org) (at least version 1.13.8).
+* [Go] (at least version 1.13.8).
 
   If your distribution provides a new-enough version of Go, just use that.
 
@@ -101,36 +100,83 @@ Prerequisites:
     export OASIS_GO=go1.13.8
     ```
 
-* [Rust](https://www.rust-lang.org) and the nightly toolchain.
+* [Rust].
 
-  Once you have [`rustup` installed](https://www.rust-lang.org/tools/install),
-  install the nightly with:
+  We follow [Rust upstream's recommendation][rust-upstream-rustup] on using
+  [rustup] to install and manage Rust versions.
+
+  _NOTE: rustup cannot be installed alongside a distribution packaged Rust
+  version. You will need to remove it (if it's present) before you can start
+  using rustup._
+
+  Install it by running:
+
+  ```
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  ```
+
+  _NOTE: If you want to avoid directly executing a shell script fetched the
+  internet, you can also [download `rustup-init` executable for your platform]
+  and run it manually._
+
+  This will run `rustup-init` which will download and install the latest stable
+  version of Rust on your system.
+
+* [Fortanix Rust EDP] utilities.
+
+  Make sure a _nightly_ version of the Rust toolchain is installed:
 
   ```
   rustup install nightly
   ```
 
-  Then make it the default version with:
+  Then install the Fortanix Rust EDP utilities by running:
 
   ```
-  rustup default nightly
+  cargo +nightly install fortanix-sgx-tools sgxs-tools
   ```
 
-* [Fortanix Rust SGX](https://edp.fortanix.com) target.
+  _NOTE: These utilities must be compiled with a nightly version of the Rust
+  toolchain since they use the `#![feature]` macro._
 
-  Install it by running:
+* Oasis Core's Rust toolchain version with Fortanix SGX target.
+
+  The version of the Rust toolchain we use in Oasis Core is specified in the
+  [rust-toolchain] file.
+
+  The rustup-installed versions of `cargo`, `rustc` and other tools will
+  [automatically detect this file and use the appropriate version of the Rust
+  toolchain][rust-toolchain-precedence] when invoked from the Oasis core git
+  checkout directory.
+
+  To install the appropriate version of the Rust toolchain, make sure you are
+  in an Oasis Core git checkout directory and run:
+
+  ```
+  rustup show
+  ```
+
+  This will automatically install the appropriate Rust toolchain (if not
+  present) and output something similar to:
+
+  ```
+  ...
+
+  active toolchain
+  ----------------
+
+  nightly-2020-02-16-x86_64-unknown-linux-gnu (overridden by '/oasis-core/rust-toolchain')
+  rustc 1.43.0-nightly (61d9231ff 2020-02-15)
+  ```
+
+  Then add the Fortanix SGX Rust target to this version of the Rust toolchain by
+  running:
 
   ```
   rustup target add x86_64-fortanix-unknown-sgx
   ```
 
-  Install its utilities by running:
-
-  ```
-  cargo install fortanix-sgx-tools sgxs-tools
-  ```
-
-* (**OPTIONAL**) [protoc-gen-go](https://github.com/golang/protobuf).
+* (**OPTIONAL**) [protoc-gen-go].
 
   Download and install it with:
 
@@ -151,6 +197,25 @@ Prerequisites:
 
 In the following instructions, the top-level directory is the directory
 where the code has been checked out.
+
+[Bubblewrap]: https://github.com/projectatomic/bubblewrap
+[GCC]: http://gcc.gnu.org/
+[Protobuf]: https://github.com/protocolbuffers/protobuf
+[GNU Make]: https://www.gnu.org/software/make/
+[CMake]: https://cmake.org/
+[OpenSSL]: https://www.openssl.org/
+[libseccomp]: https://github.com/seccomp/libseccomp
+[Go]: https://golang.org
+[rustup]: https://rustup.rs/
+[rust-upstream-rustup]: https://www.rust-lang.org/tools/install
+[download `rustup-init` executable for your platform]:
+  https://github.com/rust-lang/rustup#other-installation-methods
+[Rust]: https://www.rust-lang.org/
+[rust-toolchain]: rust-toolchain
+[rust-toolchain-precedence]:
+  https://github.com/rust-lang/rustup/blob/master/README.md#override-precedence
+[Fortanix Rust EDP]: https://edp.fortanix.com
+[protoc-gen-go]: https://github.com/golang/protobuf
 
 ### Using the development Docker image
 
