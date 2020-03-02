@@ -237,6 +237,33 @@ func (s *ImmutableState) Delegation(delegatorID, escrowID signature.PublicKey) *
 	return &del
 }
 
+func (s *ImmutableState) DelegationsFor(delegatorID signature.PublicKey) (map[signature.PublicKey]*staking.Delegation, error) {
+	delegations := make(map[signature.PublicKey]*staking.Delegation)
+	s.Snapshot.IterateRange(
+		delegationKeyFmt.Encode(),
+		nil,
+		true,
+		func(key, value []byte) bool {
+			var escrowID signature.PublicKey
+			var decDelegatorID signature.PublicKey
+			if !delegationKeyFmt.Decode(key, &escrowID, &decDelegatorID) || !decDelegatorID.Equal(delegatorID) {
+				return true
+			}
+
+			var del staking.Delegation
+			if err := cbor.Unmarshal(value, &del); err != nil {
+				panic("staking: corrupt delegation state: " + err.Error())
+			}
+
+			delegations[escrowID] = &del
+
+			return false
+		},
+	)
+
+	return delegations, nil
+}
+
 func (s *ImmutableState) DebondingDelegations() (map[signature.PublicKey]map[signature.PublicKey][]*staking.DebondingDelegation, error) {
 	delegations := make(map[signature.PublicKey]map[signature.PublicKey][]*staking.DebondingDelegation)
 	s.Snapshot.IterateRange(

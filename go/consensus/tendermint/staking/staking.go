@@ -80,6 +80,15 @@ func (tb *tendermintBackend) AccountInfo(ctx context.Context, query *api.OwnerQu
 	return q.AccountInfo(ctx, query.Owner)
 }
 
+func (tb *tendermintBackend) Delegations(ctx context.Context, query *api.OwnerQuery) (map[signature.PublicKey]*api.Delegation, error) {
+	q, err := tb.querier.QueryAt(ctx, query.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.Delegations(ctx, query.Owner)
+}
+
 func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, query *api.OwnerQuery) (map[signature.PublicKey][]*api.DebondingDelegation, error) {
 	q, err := tb.querier.QueryAt(ctx, query.Height)
 	if err != nil {

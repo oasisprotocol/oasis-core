@@ -25,6 +25,8 @@ var (
 	methodAccounts = serviceName.NewMethod("Accounts", int64(0))
 	// methodAccountInfo is the AccountInfo method.
 	methodAccountInfo = serviceName.NewMethod("AccountInfo", OwnerQuery{})
+	// methodDelegations is the Delegations method.
+	methodDelegations = serviceName.NewMethod("Delegations", OwnerQuery{})
 	// methodDebondingDelegations is the DebondingDelegations method.
 	methodDebondingDelegations = serviceName.NewMethod("DebondingDelegations", OwnerQuery{})
 	// methodStateToGenesis is the StateToGenesis method.
@@ -61,6 +63,10 @@ var (
 			{
 				MethodName: methodAccountInfo.ShortName(),
 				Handler:    handlerAccountInfo,
+			},
+			{
+				MethodName: methodDelegations.ShortName(),
+				Handler:    handlerDelegations,
 			},
 			{
 				MethodName: methodDebondingDelegations.ShortName(),
@@ -202,6 +208,29 @@ func handlerAccountInfo( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).AccountInfo(ctx, req.(*OwnerQuery))
+	}
+	return interceptor(ctx, &query, info, handler)
+}
+
+func handlerDelegations( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var query OwnerQuery
+	if err := dec(&query); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).Delegations(ctx, &query)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodDelegations.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).Delegations(ctx, req.(*OwnerQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
@@ -383,6 +412,14 @@ func (c *stakingClient) AccountInfo(ctx context.Context, query *OwnerQuery) (*Ac
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *stakingClient) Delegations(ctx context.Context, query *OwnerQuery) (map[signature.PublicKey]*Delegation, error) {
+	var rsp map[signature.PublicKey]*Delegation
+	if err := c.conn.Invoke(ctx, methodDelegations.FullName(), query, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
 }
 
 func (c *stakingClient) DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[signature.PublicKey][]*DebondingDelegation, error) {
