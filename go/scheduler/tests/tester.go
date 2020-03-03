@@ -148,7 +148,8 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	rt.Cleanup(t, consensus.Registry(), consensus)
 
 	// Since the integration tests run with validator elections disabled,
-	// just ensure that the GetValidators query returns the node's identity.
+	// the GetValidator query is special cased to return the node's consensus
+	// identity instead of node identities.
 	validators, err := backend.GetValidators(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetValidators")
 

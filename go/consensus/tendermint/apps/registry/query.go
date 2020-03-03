@@ -30,10 +30,13 @@ type QueryFactory struct {
 	app *registryApplication
 }
 
-// QueryAt returns the registry query interface for a specific height.
-func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	var state *registryState.ImmutableState
-	var err error
+// ImmutableStateAt creates a registry ImmutableState suitable for use
+// from external query instances.
+func ImmutableStateAt(ctx context.Context, appState abci.ApplicationState, height int64) (*registryState.ImmutableState, error) {
+	var (
+		state *registryState.ImmutableState
+		err   error
+	)
 	abciCtx := abci.FromCtx(ctx)
 
 	// If this request was made from InitChain, no blocks and states have been
@@ -41,7 +44,7 @@ func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error
 	if abciCtx != nil && abciCtx.IsInitChain() {
 		state = registryState.NewMutableState(abciCtx.State()).ImmutableState
 	} else {
-		state, err = registryState.NewImmutableState(sf.app.state, height)
+		state, err = registryState.NewImmutableState(appState, height)
 		if err != nil {
 			return nil, err
 		}
@@ -51,6 +54,16 @@ func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error
 	// context for querying state instead of the default one.
 	if abciCtx != nil && height == abciCtx.BlockHeight()+1 {
 		state.Snapshot = abciCtx.State().ImmutableTree
+	}
+
+	return state, nil
+}
+
+// QueryAt returns the registry query interface for a specific height.
+func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
+	state, err := ImmutableStateAt(ctx, sf.app.state, height)
+	if err != nil {
+		return nil, err
 	}
 
 	return &registryQuerier{sf.app, state, height}, nil
