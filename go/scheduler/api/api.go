@@ -150,7 +150,7 @@ func (c *Committee) EncodedMembersHash() hash.Hash {
 
 // Validator is a consensus validator.
 type Validator struct {
-	// ID is the validator consensus (NOT oasis) identifier.
+	// ID is the validator Oasis node identifier.
 	ID signature.PublicKey `json:"id"`
 
 	// VotingPower is the validator's consensus voting power.

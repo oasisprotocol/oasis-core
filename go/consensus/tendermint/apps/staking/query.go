@@ -19,6 +19,7 @@ type Query interface {
 	DebondingInterval(context.Context) (epochtime.EpochTime, error)
 	Accounts(context.Context) ([]signature.PublicKey, error)
 	AccountInfo(context.Context, signature.PublicKey) (*staking.Account, error)
+	Delegations(context.Context, signature.PublicKey) (map[signature.PublicKey]*staking.Delegation, error)
 	DebondingDelegations(context.Context, signature.PublicKey) (map[signature.PublicKey][]*staking.DebondingDelegation, error)
 	Genesis(context.Context) (*staking.Genesis, error)
 }
@@ -89,6 +90,10 @@ func (sq *stakingQuerier) Accounts(ctx context.Context) ([]signature.PublicKey, 
 
 func (sq *stakingQuerier) AccountInfo(ctx context.Context, id signature.PublicKey) (*staking.Account, error) {
 	return sq.state.Account(id), nil
+}
+
+func (sq *stakingQuerier) Delegations(ctx context.Context, id signature.PublicKey) (map[signature.PublicKey]*staking.Delegation, error) {
+	return sq.state.DelegationsFor(id)
 }
 
 func (sq *stakingQuerier) DebondingDelegations(ctx context.Context, id signature.PublicKey) (map[signature.PublicKey][]*staking.DebondingDelegation, error) {

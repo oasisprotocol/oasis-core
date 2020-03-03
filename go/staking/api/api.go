@@ -84,6 +84,10 @@ type Backend interface {
 	// AccountInfo returns the account descriptor for the given account.
 	AccountInfo(ctx context.Context, query *OwnerQuery) (*Account, error)
 
+	// Delegations returns the list of delegations for the given owner
+	// (delegator).
+	Delegations(ctx context.Context, query *OwnerQuery) (map[signature.PublicKey]*Delegation, error)
+
 	// DebondingDelegations returns the list of debonding delegations for
 	// the given owner (delegator).
 	DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[signature.PublicKey][]*DebondingDelegation, error)
