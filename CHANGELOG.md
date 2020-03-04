@@ -12,6 +12,352 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.4 (2020-03-04)
+
+### Removals and Breaking changes
+
+- go/registry: Enable non-genesis runtime registrations by default
+  ([#2406](https://github.com/oasislabs/oasis-core/issues/2406))
+
+- Optionally require a deposit for registering a runtime
+  ([#2638](https://github.com/oasislabs/oasis-core/issues/2638))
+
+- go/staking: Add stateful stake accumulator
+  ([#2642](https://github.com/oasislabs/oasis-core/issues/2642))
+
+  Previously there was no central place to account for all the parts that need
+  to claim some part of an entity's stake which required approximations all
+  around.
+
+  This is now changed and a stateful stake accumulator is added to each escrow
+  account. The stake accumulator is used to track stake claims from different
+  apps (currently only the registry).
+
+  This change also means that node registration will now always require the
+  correct amount of stake.
+
+- go/registry: Add explicit EntityID field to Runtime descriptors
+  ([#2642](https://github.com/oasislabs/oasis-core/issues/2642))
+
+- go/staking: More reward for more signatures
+  ([#2647](https://github.com/oasislabs/oasis-core/issues/2647))
+
+  We're adjusting fee distribution and the block proposing staking reward to
+  incentivize proposers to create blocks with more signatures.
+
+- Send and check expected epoch number during transaction execution
+  ([#2650](https://github.com/oasislabs/oasis-core/issues/2650))
+
+  Stress tests revealed some race conditions during transaction execution when
+  there is an epoch transition. Runtime client now sends `expectedEpochNumber`
+  parameter in `SubmitTx` call. The transaction scheduler checks whether the
+  expected epoch matches its local one. Additionally, if state transition occurs
+  during transaction execution, Executor and Merge committee correctly abort the
+  transaction.
+
+- go/staking: Add per-account lockup
+  ([#2672](https://github.com/oasislabs/oasis-core/issues/2672))
+
+  With this, we'll be able to set up special accounts in the genesis
+  document where they're not permitted to transfer staking tokens until
+  a the specified epoch time.
+  They can still delegate during that time.
+
+- Use `--stake.shares` flag when specifying shares to reclaim from an escrow
+  ([#2690](https://github.com/oasislabs/oasis-core/issues/2690))
+
+  Previously, the `oasis-node stake account gen_reclaim_escrow` subcommand
+  erroneously used the `--stake.amount` flag for specifying the amount of shares
+  to reclaim from an escrow.
+
+### Features
+
+- Implement node upgrade mechanism
+  ([#2607](https://github.com/oasislabs/oasis-core/issues/2607))
+
+  The node now accepts upgrade descriptors which describe the upgrade to carry
+  out.
+
+  The node can shut down at the appropriate epoch and then execute any required
+  migration handlers on the node itself and on the consensus layer.
+
+  Once a descriptor is submitted, the old node can be normally restarted and
+  used until the upgrade epoch is reached; the new binary can not be used at
+  all until the old binary has had a chance to reach the upgrade epoch.
+  Once that is reached, the old binary will refuse to start.
+
+- go/common/crypto/signature/signers/remote: Add experimental remote signer
+  ([#2686](https://github.com/oasislabs/oasis-core/issues/2686))
+
+  This adds an experimental remote signer, reference remote signer
+  implementation, and theoretically allows the node to be ran with a
+  non-file based signer backend.
+
+- go/extra/stats: Figure out how many blocks entities propose
+  ([#2693](https://github.com/oasislabs/oasis-core/issues/2693))
+
+  Cross reference which node proposed each block and report these
+  per-entity as well.
+
+- go/extra/stats: Availability ranking for next Quest phase
+  ([#2699](https://github.com/oasislabs/oasis-core/issues/2699))
+
+  A new availability score will take into account more than the number of
+  block signatures alone.
+
+  This introduces the mechanism to compute a score and print the
+  rankings based on that.
+  This also implements a provisional scoring formula.
+
+- go/oasis-node/txsource: Add registration workload
+  ([#2718](https://github.com/oasislabs/oasis-core/issues/2718))
+
+- go/oasis-node/txsource: Add parallel workload
+  ([#2724](https://github.com/oasislabs/oasis-core/issues/2724))
+
+- go/scheduler: Validators now returns validators by node ID
+  ([#2739](https://github.com/oasislabs/oasis-core/issues/2739))
+
+  The consensus ID isn't all that useful for most external callers, so
+  querying it should just return the validators by node ID instead.
+
+- go/staking: Add a `Delegations()` call, and expose it over gRPC
+  ([#2740](https://github.com/oasislabs/oasis-core/issues/2740))
+
+  This adds a `Delegations()` call in the spirit of `DebondingDelegations()`
+  that returns a map of delegations for a given delegator.
+
+- go/oasis-node/txsource: Use a special account for funding accounts
+  ([#2744](https://github.com/oasislabs/oasis-core/issues/2744))
+
+  Generate and fund a special account that is used for funding accounts during
+  the workload instead of hard-coding funding for fixed addresses.
+
+  Additionally, start using fees and non-zero gas prices in workloads.
+
+### Bug Fixes
+
+- go/storage/client: Retry storage ops on specific errors
+  ([#1865](https://github.com/oasislabs/oasis-core/issues/1865))
+
+- go/tendermint: Unfatalize seed populating nodes from genesis
+  ([#2554](https://github.com/oasislabs/oasis-core/issues/2554))
+
+  In some cases we'd prefer to include some nodes in the genesis document
+  even when they're registered with an invalid address.
+
+  This makes the seed node ignore those entries and carry on, while
+  keeping those entries available for the rest of the system.
+
+- go: Re-enable signature verification disabled for migration
+  ([#2615](https://github.com/oasislabs/oasis-core/issues/2615))
+
+  Now that the migration has hopefully been done, re-enable all of the
+  signature verification that was disabled for the sake of allowing for
+  migration.
+
+- go: Don't scan the whole keyspace in badger's tendermint DB implementation
+  ([#2664](https://github.com/oasislabs/oasis-core/issues/2664))
+
+  When we run off the end of a range iteration.
+
+- runtime: Bump ring to 0.16.11, snow to 0.6.2, Rust to 2020-02-16
+  ([#2666](https://github.com/oasislabs/oasis-core/issues/2666))
+
+- go/staking/api: Fix genesis sanity check for nonexisting accounts
+  ([#2671](https://github.com/oasislabs/oasis-core/issues/2671))
+
+  Detect when a (debonding) delegation is specified for a nonexisting account
+  and report an appropriate error.
+
+- go/storage/mkvs: Fix iterator bug
+  ([#2691](https://github.com/oasislabs/oasis-core/issues/2691))
+
+- go/storage/mkvs: Fix bug in `key.Merge` operation with extra bytes
+  ([#2698](https://github.com/oasislabs/oasis-core/issues/2698))
+
+- go/storage/mkvs: Fix removal crash when key is too short
+  ([#2698](https://github.com/oasislabs/oasis-core/issues/2698))
+
+- go/storage/mkvs: Fix node unmarshallers
+  ([#2703](https://github.com/oasislabs/oasis-core/issues/2703))
+
+- go/storage/mkvs: Fix proof verifier
+  ([#2703](https://github.com/oasislabs/oasis-core/issues/2703))
+
+- go/consensus/tendermint: Properly cache consensus parameters
+  ([#2708](https://github.com/oasislabs/oasis-core/issues/2708))
+
+- go/badger: Enable truncate to recover from corrupted value log file
+  ([#2732](https://github.com/oasislabs/oasis-core/issues/2732))
+
+  Apparently badger is not at all resilient to crashes unless the truncate
+  option is enabled.
+
+- go/oasis-net-runner/fixtures: Increase scheduler max batch size to 16 MiB
+  ([#2741](https://github.com/oasislabs/oasis-core/issues/2741))
+
+  This change facilitates RPCs to larger, more featureful runtimes.
+
+- go/common/version: Allow omission of trailing numbers in `parSemVerStr()`
+  ([#2742](https://github.com/oasislabs/oasis-core/issues/2742))
+
+  Go's [`runtime.Version()`](https://golang.org/pkg/runtime/#Version) function
+  can omit the patch number, so augment `parSemVerStr()` to handle that.
+
+### Internal changes
+
+- github: Bump GoReleaser to 0.127.0 and switch back to upstream
+  ([#2564](https://github.com/oasislabs/oasis-core/issues/2564))
+
+- github: Add new steps to ci-lint workflow
+  ([#2572](https://github.com/oasislabs/oasis-core/issues/2572),
+   [#2692](https://github.com/oasislabs/oasis-core/issues/2692),
+   [#2717](https://github.com/oasislabs/oasis-core/issues/2717))
+
+  Add _Lint git commits_, _Lint Markdown files_, _Lint Change Log fragments_ and
+  _Check go mod tidy_ steps to ci-lint GitHub Actions workflow.
+
+  Remove _Lint Git commits_ step from Buildkite's CI pipeline.
+
+- ci: Skip some steps for non-code changes
+  ([#2573](https://github.com/oasislabs/oasis-core/issues/2573),
+   [#2702](https://github.com/oasislabs/oasis-core/issues/2702))
+
+  When one makes a pull request that e.g. only adds documentation or
+  assembles the Change Log from fragments, all the *heavy* Buildkite
+  pipeline steps (e.g. Go/Rust building, Go tests, E2E tests) should be
+  skipped.
+
+- go/common/cbor: Bump fxamacker/cbor to v2.2
+  ([#2635](https://github.com/oasislabs/oasis-core/issues/2635))
+
+- go/storage/mkvs: Fuzz storage proof decoder
+  ([#2637](https://github.com/oasislabs/oasis-core/issues/2637))
+
+- ci: merge coverage files per job
+  ([#2644](https://github.com/oasislabs/oasis-core/issues/2644))
+
+- go/oasis-test-runner: Update multiple-runtimes E2E test
+  ([#2650](https://github.com/oasislabs/oasis-core/issues/2650))
+
+  Reduce all group sizes to 1 with no backups, use `EpochtimeMock` to avoid
+  unexpected blocks, add `numComputeWorkers` parameter.
+
+- Replace redundant fields with `Consensus` accessors
+  ([#2650](https://github.com/oasislabs/oasis-core/issues/2650))
+
+  `Backend` in `go/consensus/api` contains among others accessors for
+  `Beacon`, `EpochTime`, `Registry`, `RootHash`, `Scheduler`, and
+  `KeyManager`. Use those instead of direct references. The following
+  structs were affected:
+
+  - `Node` in `go/cmd/node`,
+  - `Node` in `go/common/committee`,
+  - `Worker` in `go/common`,
+  - `clientCommon` in `go/runtime/client`,
+  - `Group` in `go/worker/common/committee`.
+
+- go/storage: Refactor checkpointing interface
+  ([#2659](https://github.com/oasislabs/oasis-core/issues/2659))
+
+  Previously the way storage checkpoints were implemented had several
+  drawbacks, namely:
+
+  - Since the checkpoint only streamed key/value pairs this prevented
+    correct tree reconstruction as tree nodes also include a `Round` field
+    which specifies the round at which a given tree node was created.
+
+  - While old checkpoints were streamed in chunks and thus could be
+    resumed or streamed in parallel from multiple nodes, there was no
+    support for verifying the integrity of a single chunk.
+
+  This change introduces an explicit checkpointing mechanism with a simple
+  file-based backend reference implementation. The same mechanism could
+  also be used in the future with Tendermint's app state sync proposal.
+
+- changelog: Use Git commit message style for Change Log fragments
+  ([#2662](https://github.com/oasislabs/oasis-core/issues/2662))
+
+  For more details, see the description in [Change Log fragments](
+  .changelog/README.md).
+
+- Make: Add lint targets
+  ([#2662](https://github.com/oasislabs/oasis-core/issues/2662),
+   [#2692](https://github.com/oasislabs/oasis-core/issues/2692))
+
+  Add a general `lint` target that depends on the following lint targets:
+
+  - `lint-go`: Lint Go code,
+  - `lint-git`: Lint git commits,
+  - `lint-md`: Lint Markdown files (except Change Log fragments),
+  - `lint-changelog`: Lint Change Log fragments.
+
+- Add sanity checks for stake accumulator state integrity
+  ([#2665](https://github.com/oasislabs/oasis-core/issues/2665))
+
+- go/consensus/tendermint: Don't use `UnsafeSigner`
+  ([#2670](https://github.com/oasislabs/oasis-core/issues/2670))
+
+- rust: Update ed25519-dalek and associated dependencies
+  ([#2678](https://github.com/oasislabs/oasis-core/issues/2678))
+
+  This change updates ed25519-dalek, rand and x25519-dalek.
+
+- Bump minimum Go version to 1.13.8
+  ([#2689](https://github.com/oasislabs/oasis-core/issues/2689))
+
+- go/storage/mkvs: Add overlay tree to support rolling back state
+  ([#2691](https://github.com/oasislabs/oasis-core/issues/2691))
+
+- go/storage/mkvs: Make `Tree` an interface
+  ([#2691](https://github.com/oasislabs/oasis-core/issues/2691))
+
+- gitlint: Require body length of at least 20 characters (if body exists)
+  ([#2692](https://github.com/oasislabs/oasis-core/issues/2692))
+
+- Make build-fuzz work again, test it on CI
+  ([#2695](https://github.com/oasislabs/oasis-core/issues/2695))
+
+- changelog: Reference multiple issues/pull requests for a single entry
+  ([#2697](https://github.com/oasislabs/oasis-core/issues/2697))
+
+  For more details, see the description in [Change Log fragments](
+  .changelog/README.md#multiple-issues--pull-requests-for-a-single-fragment).
+
+- go/storage/mkvs: Add MKVS fuzzing
+  ([#2698](https://github.com/oasislabs/oasis-core/issues/2698))
+
+- github: Don't trigger ci-reproducibility workflow for pull requests
+  ([#2704](https://github.com/oasislabs/oasis-core/issues/2704))
+
+- go/oasis-test-runner: Improve txsource E2E test
+  ([#2709](https://github.com/oasislabs/oasis-core/issues/2709))
+
+  This adds the following general txsource scenario features:
+
+  - Support for multiple parallel workloads.
+  - Restart random nodes on specified interval.
+  - Ensure consensus liveness for the duration of the test.
+
+  It also adds an oversized txsource workload which submits oversized
+  transactions periodically.
+
+- go/consensus/tendermint: Expire txes when CheckTx is disabled
+  ([#2720](https://github.com/oasislabs/oasis-core/issues/2720))
+
+  When CheckTx is disabled (for debug purposes only, e.g. in E2E tests), we
+  still need to periodically remove old transactions as otherwise the mempool
+  will fill up. Keep track of transactions were added and invalidate them when
+  they expire.
+
+- runtime: Remove the non-webpki/snow related uses of ring
+  ([#2733](https://github.com/oasislabs/oasis-core/issues/2733))
+
+  As much as I like the concept of ring as a library, and the
+  implementation, the SGX support situation is ridiculous, and we should
+  minimize the use of the library for cases where alternatives exist.
+
 ## 20.3 (2020-02-06)
 
 ### Removals and Breaking changes
