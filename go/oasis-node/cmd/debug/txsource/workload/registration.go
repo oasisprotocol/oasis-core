@@ -27,6 +27,7 @@ import (
 )
 
 const (
+	// NameRegistration is the name of the registration workload.
 	NameRegistration = "registration"
 
 	registryNumEntities        = 10
@@ -150,7 +151,7 @@ func signNode(identity *identity.Identity, nodeDesc *node.Node) (*node.MultiSign
 	return sigNode, nil
 }
 
-func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient) error {
+func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient, fundingAccount signature.Signer) error { // nolint: gocyclo
 	ctx := context.Background()
 	var err error
 
@@ -242,6 +243,15 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 			return fmt.Errorf("failed to estimate gas: %w", err)
 		}
 		tx.Fee.Gas = gas
+		feeAmount := int64(gas) * gasPrice
+		if err = tx.Fee.Amount.FromInt64(feeAmount); err != nil {
+			return fmt.Errorf("fee amount from int64: %w", err)
+		}
+
+		// Fund entity account to cover registration fees.
+		if err = transferFunds(ctx, registryLogger, cnsc, fundingAccount, entityAccs[i].signer.Public(), feeAmount); err != nil {
+			return fmt.Errorf("account funding failure: %w", err)
+		}
 
 		signedTx, err := transaction.Sign(entityAccs[i].signer, tx)
 		if err != nil {
@@ -270,8 +280,17 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 				return fmt.Errorf("failed to estimate gas: %w", err)
 			}
 			tx.Fee.Gas = gas
-			entityAccs[i].reckonedNonce++
+			feeAmount := int64(gas) * gasPrice
+			if err = tx.Fee.Amount.FromInt64(feeAmount); err != nil {
+				return fmt.Errorf("fee amount from uint64: %w", err)
+			}
 
+			// Fund entity account to cover entity registration fees.
+			if err = transferFunds(ctx, registryLogger, cnsc, fundingAccount, entityAccs[i].signer.Public(), feeAmount); err != nil {
+				return fmt.Errorf("account funding failure: %w", err)
+			}
+
+			entityAccs[i].reckonedNonce++
 			signedTx, err := transaction.Sign(entityAccs[i].signer, tx)
 			if err != nil {
 				return fmt.Errorf("transaction.Sign: %w", err)
@@ -312,26 +331,34 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 			return fmt.Errorf("failed to estimate gas: %w", err)
 		}
 		tx.Fee.Gas = gas
+		feeAmount := gas * gasPrice
+		if err = tx.Fee.Amount.FromUint64(uint64(feeAmount)); err != nil {
+			return fmt.Errorf("fee amount from uint64: %w", err)
+		}
 
+		// Fund node account to cover registration fees.
+		if err = transferFunds(ctx, registryLogger, cnsc, fundingAccount, selectedNode.id.NodeSigner.Public(), int64(feeAmount)); err != nil {
+			return fmt.Errorf("account funding failure: %w", err)
+		}
 		selectedNode.reckonedNonce++
 
 		signedTx, err := transaction.Sign(selectedNode.id.NodeSigner, tx)
 		if err != nil {
 			return fmt.Errorf("transaction.Sign: %w", err)
 		}
-		transferLogger.Debug("submitting registration",
+		registryLogger.Debug("submitting registration",
 			"node", selectedNode.nodeDesc,
 		)
 		if err = cnsc.SubmitTx(ctx, signedTx); err != nil {
 			return fmt.Errorf("cnsc.SubmitTx: %w", err)
 		}
-		transferLogger.Debug("registered node",
+		registryLogger.Debug("registered node",
 			"node", selectedNode.nodeDesc,
 		)
 
 		select {
 		case <-gracefulExit.Done():
-			transferLogger.Debug("time's up")
+			registryLogger.Debug("time's up")
 			return nil
 		default:
 		}

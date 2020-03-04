@@ -18,25 +18,31 @@ import (
 )
 
 const (
-	NameTransfer        = "transfer"
-	TransferNumAccounts = 10
-	TransferAmount      = 1
+	// NameTransfer is the name of the transfer workload.
+	NameTransfer = "transfer"
+
+	transferNumAccounts  = 10
+	transferAmount       = 1
+	transferFundInterval = 10
+	transferGasCost      = 10
 )
 
 var transferLogger = logging.GetLogger("cmd/txsource/workload/transfer")
 
 type transfer struct{}
 
-func (transfer) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient) error {
+func (transfer) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient, fundingAccount signature.Signer) error {
+	var err error
+	ctx := context.Background()
+
+	fac := memorySigner.NewFactory()
 	// Load all the keys up front. Like, how annoyed would you be if down the line one of them turned out to be
 	// corrupted or something, ya know?
 	accounts := make([]struct {
 		signer          signature.Signer
 		reckonedNonce   uint64
 		reckonedBalance quantity.Quantity
-	}, TransferNumAccounts)
-	var err error
-	fac := memorySigner.NewFactory()
+	}, transferNumAccounts)
 	for i := range accounts {
 		accounts[i].signer, err = fac.Generate(signature.SignerEntity, rng)
 		if err != nil {
@@ -45,9 +51,13 @@ func (transfer) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cli
 	}
 
 	// Read all the account info up front.
-	ctx := context.Background()
 	stakingClient := staking.NewStakingClient(conn)
 	for i := range accounts {
+		fundAmount := transferAmount*transferFundInterval + // funds for `transferFundInterval` transfers
+			transferGasCost*gasPrice*transferFundInterval // gas costs for `transferFundInterval` transfers
+		if err = transferFunds(ctx, transferLogger, cnsc, fundingAccount, accounts[i].signer.Public(), int64(fundAmount)); err != nil {
+			return fmt.Errorf("workload/transfer: account funding failure: %w", err)
+		}
 		var account *staking.Account
 		account, err = stakingClient.AccountInfo(ctx, &staking.OwnerQuery{
 			Height: consensus.HeightLatest,
@@ -66,35 +76,39 @@ func (transfer) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cli
 	}
 
 	fee := transaction.Fee{
-		Gas: 10,
+		Gas: transferGasCost,
 	}
+	if err = fee.Amount.FromInt64(transferGasCost * gasPrice); err != nil {
+		return fmt.Errorf("Fee amount error: %w", err)
+	}
+
 	var minBalance quantity.Quantity
-	if err = minBalance.FromInt64(TransferAmount); err != nil {
-		return fmt.Errorf("min balance FromInt64 %d: %w", TransferAmount, err)
+	if err = minBalance.FromInt64(transferAmount); err != nil {
+		return fmt.Errorf("min balance FromInt64 %d: %w", transferAmount, err)
 	}
 	if err = minBalance.Add(&fee.Amount); err != nil {
 		return fmt.Errorf("min balance %v Add fee amount %v: %w", minBalance, fee.Amount, err)
 	}
 	for {
-		perm := rng.Perm(TransferNumAccounts)
+		perm := rng.Perm(transferNumAccounts)
 		fromPermIdx := 0
-		for ; fromPermIdx < TransferNumAccounts; fromPermIdx++ {
+		for ; fromPermIdx < transferNumAccounts; fromPermIdx++ {
 			if accounts[perm[fromPermIdx]].reckonedBalance.Cmp(&minBalance) >= 0 {
 				break
 			}
 		}
-		if fromPermIdx >= TransferNumAccounts {
+		if fromPermIdx >= transferNumAccounts {
 			return fmt.Errorf("all accounts %#v have gone broke", accounts)
 		}
-		toPermIdx := (fromPermIdx + 1) % TransferNumAccounts
+		toPermIdx := (fromPermIdx + 1) % transferNumAccounts
 		from := &accounts[perm[fromPermIdx]]
 		to := &accounts[perm[toPermIdx]]
 
 		transfer := staking.Transfer{
 			To: to.signer.Public(),
 		}
-		if err = transfer.Tokens.FromInt64(TransferAmount); err != nil {
-			return fmt.Errorf("transfer tokens FromInt64 %d: %w", TransferAmount, err)
+		if err = transfer.Tokens.FromInt64(transferAmount); err != nil {
+			return fmt.Errorf("transfer tokens FromInt64 %d: %w", transferAmount, err)
 		}
 		tx := staking.NewTransferTx(from.reckonedNonce, &fee, &transfer)
 		signedTx, err := transaction.Sign(from.signer, tx)
@@ -117,6 +131,21 @@ func (transfer) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.Cli
 		}
 		if err = to.reckonedBalance.Add(&transfer.Tokens); err != nil {
 			return fmt.Errorf("to reckoned balance %v Add transfer tokens %v: %w", to.reckonedBalance, transfer.Tokens, err)
+		}
+
+		if from.reckonedNonce%transferFundInterval == 0 {
+			// Re-fund account for next `transferFundInterval` transfers.
+			fundAmount := transferGasCost * gasPrice * transferFundInterval // gas costs for `transferFundInterval` transfers.
+			if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, from.signer.Public(), int64(fundAmount)); err != nil {
+				return fmt.Errorf("account funding failure: %w", err)
+			}
+			var fundAmountQ quantity.Quantity
+			if err = fundAmountQ.FromInt64(int64(fundAmount)); err != nil {
+				return fmt.Errorf("fundAmountQ FromInt64(%d): %w", fundAmount, err)
+			}
+			if err = from.reckonedBalance.Add(&fundAmountQ); err != nil {
+				return fmt.Errorf("to reckoned balance %v Add fund amount %v: %w", to.reckonedBalance, fundAmountQ, err)
+			}
 		}
 
 		select {
