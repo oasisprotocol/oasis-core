@@ -12,7 +12,10 @@ import (
 )
 
 var (
-	DebugStateTestTotalSupply = QtyFromInt(math.MaxInt64)
+	DebugStateTotalSupply            = QtyFromInt(math.MaxInt64)
+	DebugStateSrcGeneralBalance      = QtyFromInt(math.MaxInt64 - 100)
+	DebugStateSrcEscrowActiveBalance = QtyFromInt(100)
+	DebugStateSrcEscrowActiveShares  = QtyFromInt(1000)
 
 	DebugGenesisState = api.Genesis{
 		Parameters: api.ConsensusParameters{
@@ -37,11 +40,24 @@ var (
 			RewardFactorEpochSigned: QtyFromInt(1),
 			// Zero RewardFactorBlockProposed is normal.
 		},
-		TotalSupply: DebugStateTestTotalSupply,
+		TotalSupply: DebugStateTotalSupply,
 		Ledger: map[signature.PublicKey]*api.Account{
 			DebugStateSrcID: &api.Account{
 				General: api.GeneralAccount{
-					Balance: DebugStateTestTotalSupply,
+					Balance: DebugStateSrcGeneralBalance,
+				},
+				Escrow: api.EscrowAccount{
+					Active: api.SharePool{
+						Balance:     DebugStateSrcEscrowActiveBalance,
+						TotalShares: DebugStateSrcEscrowActiveShares,
+					},
+				},
+			},
+		},
+		Delegations: map[signature.PublicKey]map[signature.PublicKey]*api.Delegation{
+			DebugStateSrcID: map[signature.PublicKey]*api.Delegation{
+				DebugStateSrcID: &api.Delegation{
+					Shares: DebugStateSrcEscrowActiveShares,
 				},
 			},
 		},
