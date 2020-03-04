@@ -1,5 +1,6 @@
 {
   "params": {
+    "debonding_interval": 2,
     "gas_costs": {
       "transfer": 10,
       "burn": 10,

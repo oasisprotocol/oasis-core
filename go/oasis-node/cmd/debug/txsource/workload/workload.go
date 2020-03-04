@@ -126,4 +126,5 @@ var ByName = map[string]Workload{
 	NameOversized:    oversized{},
 	NameRegistration: &registration{},
 	NameParallel:     parallel{},
+	NameDelegation:   &delegation{},
 }
