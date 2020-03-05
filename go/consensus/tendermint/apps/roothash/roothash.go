@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
-	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -44,8 +43,6 @@ type timerContext struct {
 
 type rootHashApplication struct {
 	state abci.ApplicationState
-
-	beacon beacon.Backend
 }
 
 func (app *rootHashApplication) Name() string {
@@ -723,8 +720,6 @@ func (app *rootHashApplication) tryFinalizeBlock(
 }
 
 // New constructs a new roothash application instance.
-func New(beacon beacon.Backend) abci.Application {
-	return &rootHashApplication{
-		beacon: beacon,
-	}
+func New() abci.Application {
+	return &rootHashApplication{}
 }
