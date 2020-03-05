@@ -13,7 +13,6 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crash"
@@ -453,11 +452,10 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 func New(
 	ctx context.Context,
 	dataDir string,
-	beac beacon.Backend,
 	service service.TendermintService,
 ) (api.Backend, error) {
 	// Initialize and register the tendermint service component.
-	a := app.New(beac)
+	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
