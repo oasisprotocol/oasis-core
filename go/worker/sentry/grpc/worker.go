@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
 	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	policyAPI "github.com/oasislabs/oasis-core/go/common/grpc/policy/api"
+	grpcProxy "github.com/oasislabs/oasis-core/go/common/grpc/proxy"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/service"
@@ -47,6 +48,9 @@ type Worker struct { // nolint: maligned
 	registryClient registry.Backend
 
 	*upstreamConn
+
+	upstreamDialer      grpcProxy.Dialer
+	upstreamDialerMutex sync.Mutex
 
 	grpc     *cmnGrpc.Server
 	identity *identity.Identity
@@ -195,6 +199,16 @@ func (g *Worker) checkUpstreamNodeTLSCerts(nodeEvent *registry.NodeEvent) bool {
 func (g *Worker) worker() {
 	defer close(g.quitCh)
 	defer (g.cancelCtx)()
+
+	if g.upstreamConn == nil {
+		_, err := g.upstreamDialer(g.ctx)
+		if err != nil {
+			g.logger.Error("failed to establish upstream connection",
+				"err", err,
+			)
+			return
+		}
+	}
 
 	// Initialize policy watcher.
 	g.policyWatcher = policyAPI.NewPolicyWatcherClient(g.conn)

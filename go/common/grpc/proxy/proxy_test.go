@@ -74,15 +74,19 @@ func TestGRPCProxy(t *testing.T) {
 	err = grpcServer.Start()
 	require.NoErrorf(err, "Failed to start the gRPC server: %v", err)
 
-	// Connect to gRPC server.
 	clientTLSCreds := credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{*clientTLSCert},
 		RootCAs:      serverCertPool,
 		ServerName:   "oasis-node",
 	})
-	address := fmt.Sprintf("%s:%d", host, port)
-	conn := connectToGrpcServer(ctx, t, address, clientTLSCreds)
-	defer conn.Close()
+
+	// Create upstream dialer.
+	upstreamDialer := func(ctx context.Context) (*grpc.ClientConn, error) {
+		// Connect to gRPC server.
+		address := fmt.Sprintf("%s:%d", host, port)
+		conn := connectToGrpcServer(ctx, t, address, clientTLSCreds)
+		return conn, nil
+	}
 
 	// Create a proxy gRPC server.
 	proxyServerConfig := &commonGrpc.ServerConfig{
@@ -91,7 +95,7 @@ func TestGRPCProxy(t *testing.T) {
 		Identity: &identity.Identity{},
 		CustomOptions: []grpc.ServerOption{
 			// All unknown requests will be proxied to the grpc server above.
-			grpc.UnknownServiceHandler(Handler(conn)),
+			grpc.UnknownServiceHandler(Handler(upstreamDialer)),
 		},
 	}
 	proxyServerConfig.Identity.SetTLSCertificate(serverTLSCert)
@@ -102,12 +106,15 @@ func TestGRPCProxy(t *testing.T) {
 	require.NoErrorf(err, "Failed to start the proxy gRPC server: %v", err)
 
 	// Connect to the proxy grpc server.
-	address = fmt.Sprintf("%s:%d", host, port+1)
+	address := fmt.Sprintf("%s:%d", host, port+1)
 	proxyConn := connectToGrpcServer(ctx, t, address, clientTLSCreds)
 	defer proxyConn.Close()
 
 	// Create a new ping client.
-	client := cmnTesting.NewPingClient(conn)
+	upstreamAddress := fmt.Sprintf("%s:%d", host, port)
+	upstreamConn := connectToGrpcServer(ctx, t, upstreamAddress, clientTLSCreds)
+	defer upstreamConn.Close()
+	client := cmnTesting.NewPingClient(upstreamConn)
 	pingQuery := &cmnTesting.PingQuery{}
 	// Test Ping.
 	res, err := client.Ping(ctx, pingQuery)

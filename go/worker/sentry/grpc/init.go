@@ -258,11 +258,17 @@ func New(identity *identity.Identity) (*Worker, error) {
 	if g.enabled {
 		logger.Info("Initializing gRPC sentry worker")
 
-		upstreamConn, err := initConnection(g.ctx, logger, identity)
-		if err != nil {
-			return nil, fmt.Errorf("gRPC sentry worker initializing upstream connection failure: %w", err)
+		g.upstreamDialer = func(ctx context.Context) (*grpc.ClientConn, error) {
+			g.upstreamDialerMutex.Lock()
+			defer g.upstreamDialerMutex.Unlock()
+
+			upstreamConn, err := initConnection(g.ctx, logger, identity)
+			if err != nil {
+				return nil, fmt.Errorf("gRPC sentry worker initializing upstream connection failure: %w", err)
+			}
+			g.upstreamConn = upstreamConn
+			return upstreamConn.conn, nil
 		}
-		g.upstreamConn = upstreamConn
 
 		// Create externally-accessible proxy gRPC server.
 		serverConfig := &cmnGrpc.ServerConfig{
@@ -272,7 +278,7 @@ func New(identity *identity.Identity) (*Worker, error) {
 			AuthFunc: g.authFunction(),
 			CustomOptions: []grpc.ServerOption{
 				// All unknown requests will be proxied to the upstream grpc server.
-				grpc.UnknownServiceHandler(proxy.Handler(upstreamConn.conn)),
+				grpc.UnknownServiceHandler(proxy.Handler(g.upstreamDialer)),
 			},
 		}
 		grpcServer, err := cmnGrpc.NewServer(serverConfig)
