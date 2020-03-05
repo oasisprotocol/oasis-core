@@ -40,7 +40,9 @@ use crate::{
         StorageContext,
     },
     transaction::{
-        dispatcher::Dispatcher as TxnDispatcher, tree::Tree as TxnTree, types::TxnBatch,
+        dispatcher::{Dispatcher as TxnDispatcher, NoopDispatcher as TxnNoopDispatcher},
+        tree::Tree as TxnTree,
+        types::TxnBatch,
         Context as TxnContext,
     },
     types::{Body, ComputedBatch},
@@ -58,13 +60,17 @@ pub trait Initializer: Send + Sync {
         rak: &Arc<RAK>,
         rpc_demux: &mut RpcDemux,
         rpc_dispatcher: &mut RpcDispatcher,
-        txn_dispatcher: &mut TxnDispatcher,
-    );
+    ) -> Option<Box<dyn TxnDispatcher>>;
 }
 
 impl<F> Initializer for F
 where
-    F: Fn(&Arc<Protocol>, &Arc<RAK>, &mut RpcDemux, &mut RpcDispatcher, &mut TxnDispatcher)
+    F: Fn(
+            &Arc<Protocol>,
+            &Arc<RAK>,
+            &mut RpcDemux,
+            &mut RpcDispatcher,
+        ) -> Option<Box<dyn TxnDispatcher>>
         + Send
         + Sync,
 {
@@ -74,9 +80,8 @@ where
         rak: &Arc<RAK>,
         rpc_demux: &mut RpcDemux,
         rpc_dispatcher: &mut RpcDispatcher,
-        txn_dispatcher: &mut TxnDispatcher,
-    ) {
-        (*self)(protocol, rak, rpc_demux, rpc_dispatcher, txn_dispatcher)
+    ) -> Option<Box<dyn TxnDispatcher>> {
+        (*self)(protocol, rak, rpc_demux, rpc_dispatcher)
     }
 }
 
@@ -108,7 +113,7 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     /// Create a new runtime call dispatcher.
-    pub fn new(initializer: Option<Box<dyn Initializer>>, rak: Arc<RAK>) -> Arc<Self> {
+    pub fn new(initializer: Box<dyn Initializer>, rak: Arc<RAK>) -> Arc<Self> {
         let (tx, rx) = channel::bounded(BACKLOG_SIZE);
         let dispatcher = Arc::new(Dispatcher {
             logger: get_logger("runtime/dispatcher"),
@@ -140,7 +145,7 @@ impl Dispatcher {
         Ok(())
     }
 
-    fn run(&self, initializer: Option<Box<dyn Initializer>>, rx: channel::Receiver<QueueItem>) {
+    fn run(&self, initializer: Box<dyn Initializer>, rx: channel::Receiver<QueueItem>) {
         // Wait for the protocol instance to be available.
         let protocol = {
             let mut guard = self.protocol.lock().unwrap();
@@ -155,16 +160,13 @@ impl Dispatcher {
         info!(self.logger, "Starting the runtime dispatcher");
         let mut rpc_demux = RpcDemux::new(self.rak.clone());
         let mut rpc_dispatcher = RpcDispatcher::new();
-        let mut txn_dispatcher = TxnDispatcher::new();
-        if let Some(initializer) = initializer {
-            initializer.init(
-                &protocol,
-                &self.rak,
-                &mut rpc_demux,
-                &mut rpc_dispatcher,
-                &mut txn_dispatcher,
-            );
-        }
+        let mut txn_dispatcher: Box<dyn TxnDispatcher> = if let Some(txn) =
+            initializer.init(&protocol, &self.rak, &mut rpc_demux, &mut rpc_dispatcher)
+        {
+            txn
+        } else {
+            Box::new(TxnNoopDispatcher::new())
+        };
 
         // Create common MKVS to use as a cache as long as the root stays the same.
         let mut cache = Cache::new(&protocol, Default::default());
@@ -261,7 +263,7 @@ impl Dispatcher {
     fn dispatch_txn(
         &self,
         cache: &mut Cache,
-        txn_dispatcher: &mut TxnDispatcher,
+        txn_dispatcher: &mut Box<dyn TxnDispatcher>,
         protocol: &Arc<Protocol>,
         ctx: Context,
         id: u64,

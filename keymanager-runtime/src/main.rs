@@ -35,8 +35,8 @@ fn main() {
     let init = |protocol: &Arc<Protocol>,
                 _rak: &Arc<RAK>,
                 _rpc_demux: &mut RpcDemux,
-                rpc: &mut RpcDispatcher,
-                _txn: &mut TxnDispatcher| {
+                rpc: &mut RpcDispatcher|
+     -> Option<Box<dyn TxnDispatcher>> {
         // Initialize the set of trusted policy signers.
         init_trusted_policy_signers();
 
@@ -67,8 +67,10 @@ fn main() {
                 protocol: km_proto.clone(),
             })
         });
+
+        None
     };
 
     // Start the runtime.
-    oasis_core_runtime::start_runtime(Some(Box::new(init)), version_from_cargo!());
+    oasis_core_runtime::start_runtime(Box::new(init), version_from_cargo!());
 }
