@@ -52,7 +52,7 @@ func New(module string, code uint32, msg string) error {
 
 	key := errorKey(module, code)
 	if prev, isRegistered := registeredErrors.Load(key); isRegistered {
-		panic(fmt.Errorf("error: already registered: %s %s", key, prev))
+		panic(fmt.Errorf("error: already registered: %s (existing: %s)", key, prev))
 	}
 	registeredErrors.Store(key, e)
 
