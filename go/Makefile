@@ -79,6 +79,7 @@ integrationrunner:
 
 # Fuzzing.
 fuzz-targets := fuzz-consensus \
+	fuzz2 \
 	fuzz-storage \
 	fuzz-mkvs/Tree \
 	fuzz-mkvs/Proof \
@@ -108,6 +109,9 @@ endef
 
 # Fuzz consensus transactions.
 fuzz-consensus: consensus/tendermint/fuzz/
+	$(canned-fuzz-run)
+# fuzz2.
+fuzz2: consensus/tendermint/fuzz2/
 	$(canned-fuzz-run)
 # Fuzz general storage interface.
 fuzz-storage: storage/fuzz/ oasis-node
