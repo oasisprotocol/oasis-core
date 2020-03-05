@@ -21,6 +21,9 @@ members = [
 [patch.crates-io]
 # TODO: Remove when merged upstream (briansmith/ring#738).
 ring = { git = "https://github.com/oasislabs/ring-sgx", branch = "sgx-target" }
+# TODO: Remove after a new release with the fix in
+# https://github.com/rust-lang-nursery/failure/pull/343 is released.
+failure = { git = "https://github.com/grokse/failure", branch = "build_quote_103" }
 
 [profile.release]
 panic = "abort"

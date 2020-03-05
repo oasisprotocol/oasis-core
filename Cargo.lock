@@ -6,7 +6,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "failure_derive 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf 1.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -334,7 +334,7 @@ name = "deoxysii"
 version = "0.2.0"
 source = "git+https://github.com/oasislabs/deoxysii-rust#4687841cc6bd090e39a5f2908f34f49d64046200"
 dependencies = [
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "subtle 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "zeroize 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -363,7 +363,7 @@ name = "enclave-runner"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "failure_derive 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "fortanix-sgx-abi 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -378,10 +378,21 @@ dependencies = [
 [[package]]
 name = "failure"
 version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/grokse/failure?branch=build_quote_103#6aca1c8037fe25d0d2984193254166a75d318814"
 dependencies = [
  "backtrace 0.3.39 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure_derive 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure_derive 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
+]
+
+[[package]]
+name = "failure_derive"
+version = "0.1.6"
+source = "git+https://github.com/grokse/failure?branch=build_quote_103#6aca1c8037fe25d0d2984193254166a75d318814"
+dependencies = [
+ "proc-macro2 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "synstructure 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -743,7 +754,7 @@ dependencies = [
 name = "oasis-core-client"
 version = "0.3.0-alpha"
 dependencies = [
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -764,7 +775,7 @@ name = "oasis-core-keymanager-api"
 version = "0.3.0-alpha"
 dependencies = [
  "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-keymanager-api-common 0.3.0-alpha",
  "oasis-core-runtime 0.3.0-alpha",
@@ -781,7 +792,7 @@ name = "oasis-core-keymanager-api-common"
 version = "0.3.0-alpha"
 dependencies = [
  "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-runtime 0.3.0-alpha",
  "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -796,7 +807,7 @@ dependencies = [
 name = "oasis-core-keymanager-client"
 version = "0.3.0-alpha"
 dependencies = [
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -810,7 +821,7 @@ dependencies = [
 name = "oasis-core-keymanager-lib"
 version = "0.3.0-alpha"
 dependencies = [
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lru 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -829,7 +840,7 @@ dependencies = [
 name = "oasis-core-keymanager-runtime"
 version = "0.3.0-alpha"
 dependencies = [
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-keymanager-api 0.3.0-alpha",
  "oasis-core-keymanager-lib 0.3.0-alpha",
@@ -847,7 +858,7 @@ dependencies = [
  "crossbeam 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "deoxysii 0.2.0 (git+https://github.com/oasislabs/deoxysii-rust)",
  "ed25519-dalek 1.0.0-pre.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "grpcio 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "hmac 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -890,7 +901,7 @@ dependencies = [
  "aesm-client 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "enclave-runner 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "sgxs-loaders 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -900,7 +911,7 @@ version = "0.3.0-alpha"
 dependencies = [
  "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1353,7 +1364,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "failure_derive 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "foreign-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "openssl 0.10.25 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1368,7 +1379,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "failure_derive 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.64 (registry+https://github.com/rust-lang/crates.io-index)",
  "libloading 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1393,7 +1404,7 @@ dependencies = [
 name = "simple-keyvalue"
 version = "0.3.0-alpha"
 dependencies = [
- "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-client 0.3.0-alpha",
  "oasis-core-keymanager-api 0.3.0-alpha",
@@ -2136,7 +2147,8 @@ dependencies = [
 "checksum digest 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f3d0c8c8752312f9713efd397ff63acb9f85585afbf179282e720e7704954dd5"
 "checksum ed25519-dalek 1.0.0-pre.3 (registry+https://github.com/rust-lang/crates.io-index)" = "978710b352437433c97b2bff193f2fb1dfd58a093f863dd95e225a19baa599a2"
 "checksum enclave-runner 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "47a063bd924484ca6cb05e5bcdd679b8cc8f1e0682a7d892f704759040908f80"
-"checksum failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "f8273f13c977665c5db7eb2b99ae520952fe5ac831ae4cd09d80c4c7042b5ed9"
+"checksum failure 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)" = "<none>"
+"checksum failure_derive 0.1.6 (git+https://github.com/grokse/failure?branch=build_quote_103)" = "<none>"
 "checksum failure_derive 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "0bc225b78e0391e4b8683440bf2e63c2deeeb2ce5189eab46e2b68c6d3725d08"
 "checksum fake-simd 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
 "checksum fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "2fad85553e09a6f881f739c29f0b00b0f01357c743266d478b68951ce23285f3"
