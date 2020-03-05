@@ -31,7 +31,7 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 	if err != nil {
 		return err
 	}
-	if err := ctx.Gas().UseGas(1, staking.GasOpTransfer, params.GasCosts); err != nil {
+	if err = ctx.Gas().UseGas(1, staking.GasOpTransfer, params.GasCosts); err != nil {
 		return err
 	}
 
