@@ -64,6 +64,8 @@ func main() {
 	// Node upgrade tests.
 	_ = cmd.Register(e2e.NodeUpgrade)
 	_ = cmd.Register(e2e.NodeUpgradeCancel)
+	// Debonding entries from genesis test.
+	_ = cmd.Register(e2e.Debond)
 
 	// Register the remote signer test cases.
 	rootCmd.Flags().AddFlagSet(remotesigner.Flags)
