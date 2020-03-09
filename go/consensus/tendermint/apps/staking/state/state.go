@@ -246,8 +246,12 @@ func (s *ImmutableState) DelegationsFor(delegatorID signature.PublicKey) (map[si
 		func(key, value []byte) bool {
 			var escrowID signature.PublicKey
 			var decDelegatorID signature.PublicKey
-			if !delegationKeyFmt.Decode(key, &escrowID, &decDelegatorID) || !decDelegatorID.Equal(delegatorID) {
+			if !delegationKeyFmt.Decode(key, &escrowID, &decDelegatorID) {
 				return true
+			}
+			// TODO: add unit test for DelegationsFor.
+			if !decDelegatorID.Equal(delegatorID) {
+				return false
 			}
 
 			var del staking.Delegation
@@ -303,8 +307,12 @@ func (s *ImmutableState) DebondingDelegationsFor(delegatorID signature.PublicKey
 		func(key, value []byte) bool {
 			var escrowID signature.PublicKey
 			var decDelegatorID signature.PublicKey
-			if !debondingDelegationKeyFmt.Decode(key, &decDelegatorID, &escrowID) || !decDelegatorID.Equal(delegatorID) {
+			if !debondingDelegationKeyFmt.Decode(key, &decDelegatorID, &escrowID) {
 				return true
+			}
+			// TODO: add unit test for DebondingDelegationsFor.
+			if !decDelegatorID.Equal(delegatorID) {
+				return false
 			}
 
 			var deb staking.DebondingDelegation
