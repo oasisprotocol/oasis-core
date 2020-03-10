@@ -5,7 +5,6 @@ package fuzz2
 import (
 	"crypto/ed25519"
 	"crypto/tls"
-	"encoding/json"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -300,11 +299,10 @@ func TestFuzz(t *testing.T) {
 			},
 		},
 	}
-	docJSON, err := json.Marshal(doc)
-	require.NoError(t, err, "marhsal genesis document")
+	docCBOR := cbor.Marshal(doc)
 	msgs := messages{
 		InitReq: types.RequestInitChain{
-			AppStateBytes: docJSON,
+			AppStateBytes: docCBOR,
 		},
 		Blocks: []blockMessages{
 			{
