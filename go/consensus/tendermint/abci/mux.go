@@ -313,6 +313,8 @@ type abciMux struct {
 	// debugExpiringTxs maps transaction hashes to the time at which they were created. This is only
 	// used in case CheckTx is disabled (for debug purposes only).
 	debugExpiringTxs map[hash.Hash]time.Time
+
+	Failed bool
 }
 
 type invalidatedTxSubscription struct {
@@ -377,7 +379,8 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		mux.logger.Error("failed to unmarshal genesis application state",
 			"err", err,
 		)
-		panic("mux: invalid genesis application state")
+		mux.Failed = true
+		return types.ResponseInitChain{}
 	}
 
 	b, _ := json.Marshal(st)
@@ -428,7 +431,11 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	if err != nil {
 		// It's suspected this wouldn't happen normally, because ABCI is meant to go out
 		// through protobuf anyway, so the request ought to be representable.
-		panic(fmt.Sprintf("InitChain: marshalling RequestInitChain back to protobuf: %v", err))
+		mux.logger.Error("InitChain: marshalling RequestInitChain back to protobuf",
+			"err", err,
+		)
+		mux.Failed = true
+		return types.ResponseInitChain{}
 	}
 	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisRequest), b)
 	mux.state.checkTxTree.Set([]byte(stateKeyGenesisRequest), b)
@@ -449,7 +456,8 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 				"err", err,
 				"app", app.Name(),
 			)
-			panic("mux: InitChain: fatal error in application: '" + app.Name() + "': " + err.Error())
+			mux.Failed = true
+			return types.ResponseInitChain{}
 		}
 	}
 
@@ -462,7 +470,11 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 
 	// Refresh consensus parameters.
 	if err = mux.state.refreshConsensusParameters(); err != nil {
-		panic(fmt.Errorf("mux: failed to refresh consensus parameters: %w", err))
+		mux.logger.Error("failed to refresh consensus parameters",
+			"err", err,
+		)
+		mux.Failed = true
+		return types.ResponseInitChain{}
 	}
 
 	return resp
@@ -478,14 +490,20 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	// 99% sure this is a protocol violation.
 	if mux.lastBeginBlock == blockHeight {
-		panic("mux: redundant BeginBlock")
+		mux.logger.Error("redundant BeginBlock")
+		mux.Failed = true
+		return types.ResponseBeginBlock{}
 	}
 	mux.lastBeginBlock = blockHeight
 	mux.currentTime = req.Header.Time
 
 	params, err := mux.state.ConsensusParameters()
 	if err != nil {
-		panic(fmt.Errorf("failed to fetch consensus parameters: %w", err))
+		mux.logger.Error("failed to fetch consensus parameters",
+			"err", err,
+		)
+		mux.Failed = true
+		return types.ResponseBeginBlock{}
 	}
 
 	// Create empty block context.
@@ -501,7 +519,9 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	currentEpoch, err := mux.state.GetCurrentEpoch(ctx.Ctx())
 	if err != nil {
-		panic("mux: can't get current epoch in BeginBlock")
+		mux.logger.Error("can't get current epoch in BeginBlock")
+		mux.Failed = true
+		return types.ResponseBeginBlock{}
 	}
 
 	// Check if there are any upgrades pending or if we need to halt for an upgrade.
@@ -509,9 +529,15 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	case nil:
 		// Everything ok.
 	case upgrade.ErrStopForUpgrade:
-		panic("mux: reached upgrade epoch")
+		mux.logger.Error("reached upgrade epoch")
+		mux.Failed = true
+		return types.ResponseBeginBlock{}
 	default:
-		panic(fmt.Sprintf("mux: error while trying to perform consensus upgrade: %v", err))
+		mux.logger.Error("error while trying to perform consensus upgrade",
+			"err", err,
+		)
+		mux.Failed = true
+		return types.ResponseBeginBlock{}
 	}
 
 	switch mux.state.haltMode {
@@ -541,7 +567,8 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		// XXX: there is no way to stop tendermint consensus other than
 		// triggering a panic. Once possible, we should stop the consensus
 		// layer here and gracefully shutdown the node.
-		panic("tendermint: after halt epoch, halting")
+		mux.Failed = true
+		return types.ResponseBeginBlock{}
 	}
 
 	// Dispatch BeginBlock to all applications.
@@ -551,7 +578,8 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 				"err", err,
 				"app", app.Name(),
 			)
-			panic("mux: BeginBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
+			mux.Failed = true
+			return types.ResponseBeginBlock{}
 		}
 	}
 
@@ -824,7 +852,8 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 				"err", err,
 				"app", app.Name(),
 			)
-			panic("mux: EndBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
+			mux.Failed = true
+			return types.ResponseEndBlock{}
 		}
 	}
 
@@ -837,7 +866,8 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 				"err", err,
 				"app", app.Name(),
 			)
-			panic("mux: EndBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
+			mux.Failed = true
+			return types.ResponseEndBlock{}
 		}
 		if app.Blessed() {
 			resp = newResp
@@ -861,7 +891,8 @@ func (mux *abciMux) Commit() types.ResponseCommit {
 
 		// There appears to be no way to indicate to the caller that
 		// this failed.
-		panic(err)
+		mux.Failed = true
+		return types.ResponseCommit{}
 	}
 
 	mux.logger.Debug("Commit",
