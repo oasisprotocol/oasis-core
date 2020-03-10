@@ -249,7 +249,6 @@ func (s *ImmutableState) DelegationsFor(delegatorID signature.PublicKey) (map[si
 			if !delegationKeyFmt.Decode(key, &escrowID, &decDelegatorID) {
 				return true
 			}
-			// TODO: add unit test for DelegationsFor.
 			if !decDelegatorID.Equal(delegatorID) {
 				return false
 			}
@@ -310,7 +309,6 @@ func (s *ImmutableState) DebondingDelegationsFor(delegatorID signature.PublicKey
 			if !debondingDelegationKeyFmt.Decode(key, &decDelegatorID, &escrowID) {
 				return true
 			}
-			// TODO: add unit test for DebondingDelegationsFor.
 			if !decDelegatorID.Equal(delegatorID) {
 				return false
 			}
