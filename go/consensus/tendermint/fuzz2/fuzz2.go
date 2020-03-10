@@ -105,13 +105,28 @@ func Fuzz(data []byte) int {
 	}
 
 	mux.InitChain(msgs.InitReq)
+	if mux.Failed {
+		return 0
+	}
 	for _, block := range msgs.Blocks {
 		mux.BeginBlock(block.BeginReq)
+		if mux.Failed {
+			return 0
+		}
 		for _, tx := range block.TxReqs {
 			mux.DeliverTx(tx)
+			if mux.Failed {
+				return 0
+			}
 		}
 		mux.EndBlock(block.EndReq)
+		if mux.Failed {
+			return 0
+		}
 		mux.Commit()
+		if mux.Failed {
+			return 0
+		}
 	}
 
 	return 1
