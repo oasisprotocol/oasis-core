@@ -357,10 +357,10 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 		)
 
 		select {
+		case <-time.After(1 * time.Second):
 		case <-gracefulExit.Done():
 			registryLogger.Debug("time's up")
 			return nil
-		default:
 		}
 	}
 }
