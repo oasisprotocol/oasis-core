@@ -1,6 +1,6 @@
 package fm
 
-import "github.com/thepudds/fzgo/randparam"
+import randparam "github.com/oasislabs/oasis-core/go/common/fm/randparam16"
 
 func Unmarshal(data []byte, dst interface{}) error {
 	MustUnmarshal(data, dst)

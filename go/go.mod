@@ -29,6 +29,8 @@ require (
 	github.com/go-kit/kit v0.9.0
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.1
+	github.com/google/go-cmp v0.2.0
+	github.com/google/gofuzz v1.0.0
 	github.com/gopherjs/gopherjs v0.0.0-20190430165422-3e4dfb77656c // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.0
 	github.com/hpcloud/tail v1.0.0
