@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/version"
@@ -580,7 +581,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		_, evBinary := mux.state.deliverTxTree.Get([]byte(stateKeyInitChainEvents))
 		if evBinary != nil {
 			var events []types.Event
-			_ = cbor.Unmarshal(evBinary, &events)
+			_ = fm.Unmarshal(evBinary, &events)
 
 			response.Events = append(events, response.Events...)
 
@@ -612,7 +613,7 @@ func (mux *abciMux) decodeTx(ctx *Context, rawTx []byte) (*transaction.Transacti
 
 	// Unmarshal envelope and verify transaction.
 	var sigTx transaction.SignedTransaction
-	if err := cbor.Unmarshal(rawTx, &sigTx); err != nil {
+	if err := fm.Unmarshal(rawTx, &sigTx); err != nil {
 		ctx.Logger().Error("failed to unmarshal signed transaction",
 			"tx", base64.StdEncoding.EncodeToString(rawTx),
 		)

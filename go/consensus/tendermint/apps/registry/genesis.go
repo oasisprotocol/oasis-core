@@ -9,8 +9,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -75,7 +75,7 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 			return errors.Wrap(err, "registry: genesis suspended runtime registration failure")
 		}
 		var rt registry.Runtime
-		if err := cbor.Unmarshal(v.Blob, &rt); err != nil {
+		if err := fm.Unmarshal(v.Blob, &rt); err != nil {
 			return errors.Wrap(err, "registry: malformed genesis suspended runtime")
 		}
 		if err := state.SuspendRuntime(rt.ID); err != nil {
@@ -145,7 +145,7 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 	validatorNodes := make([]*node.MultiSignedNode, 0)
 	for _, sn := range signedNodes {
 		var n node.Node
-		if err = cbor.Unmarshal(sn.Blob, &n); err != nil {
+		if err = fm.Unmarshal(sn.Blob, &n); err != nil {
 			return nil, err
 		}
 

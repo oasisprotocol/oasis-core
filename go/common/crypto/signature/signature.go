@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/ed25519"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/common/pem"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 )
@@ -403,7 +404,7 @@ func (s *Signed) Open(context Context, dst interface{}) error {
 		return ErrVerifyFailed
 	}
 
-	return cbor.Unmarshal(s.Blob, dst)
+	return fm.Unmarshal(s.Blob, dst)
 }
 
 // PrettySigned is used for pretty-printing signed messages so that
@@ -449,7 +450,7 @@ func (s *MultiSigned) Open(context Context, dst interface{}) error {
 		return ErrVerifyFailed
 	}
 
-	return cbor.Unmarshal(s.Blob, dst)
+	return fm.Unmarshal(s.Blob, dst)
 }
 
 // IsSignedBy returns true iff the MultiSigned includes a signature for

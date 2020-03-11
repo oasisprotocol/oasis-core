@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 )
 
@@ -65,7 +66,7 @@ func (t Transaction) PrettyPrint(prefix string, w io.Writer) {
 
 	// Deserialize into correct type.
 	v := reflect.New(reflect.TypeOf(bodyType)).Interface()
-	if err := cbor.Unmarshal(t.Body, v); err != nil {
+	if err := fm.Unmarshal(t.Body, v); err != nil {
 		fmt.Fprintf(w, "%s  <error: %s>\n", prefix, err)
 		fmt.Fprintf(w, "%s  <malformed: %s>\n", prefix, base64.StdEncoding.EncodeToString(t.Body))
 		return
@@ -135,7 +136,7 @@ func (s SignedTransaction) PrettyPrint(prefix string, w io.Writer) {
 	// be useful to look into it regardless.
 	var tx Transaction
 	fmt.Fprintf(w, "%sContent:\n", prefix)
-	if err := cbor.Unmarshal(s.Blob, &tx); err != nil {
+	if err := fm.Unmarshal(s.Blob, &tx); err != nil {
 		fmt.Fprintf(w, "%s  <error: %s>\n", prefix, err)
 		fmt.Fprintf(w, "%s  <malformed: %s>\n", prefix, base64.StdEncoding.EncodeToString(s.Blob))
 		return

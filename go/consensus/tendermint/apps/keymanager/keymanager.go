@@ -10,6 +10,7 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -68,7 +69,7 @@ func (app *keymanagerApplication) ExecuteTx(ctx *abci.Context, tx *transaction.T
 	switch tx.Method {
 	case api.MethodUpdatePolicy:
 		var sigPol api.SignedPolicySGX
-		if err := cbor.Unmarshal(tx.Body, &sigPol); err != nil {
+		if err := fm.Unmarshal(tx.Body, &sigPol); err != nil {
 			return err
 		}
 		return app.updatePolicy(ctx, state, &sigPol)

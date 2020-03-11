@@ -5,6 +5,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
@@ -153,7 +154,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 	// Peek into the to-be-verified node to pull out the owning entity ID.
 	var untrustedNode node.Node
-	if err := cbor.Unmarshal(sigNode.Blob, &untrustedNode); err != nil {
+	if err := fm.Unmarshal(sigNode.Blob, &untrustedNode); err != nil {
 		ctx.Logger().Error("RegisterNode: failed to extract entity",
 			"err", err,
 			"signed_node", sigNode,
@@ -544,7 +545,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		switch rt.TEEHardware {
 		case node.TEEHardwareIntelSGX:
 			var vi registry.VersionInfoIntelSGX
-			if err = cbor.Unmarshal(rt.Version.TEE, &vi); err != nil {
+			if err = fm.Unmarshal(rt.Version.TEE, &vi); err != nil {
 				return err
 			}
 			if len(vi.Enclaves) == 0 {

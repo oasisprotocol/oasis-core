@@ -6,6 +6,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 )
 
@@ -50,7 +51,7 @@ func makeTestVector(kind string, tx *transaction.Transaction) TestVector {
 
 	bodyType := tx.Method.BodyType()
 	v := reflect.New(reflect.TypeOf(bodyType)).Interface()
-	if err = cbor.Unmarshal(tx.Body, v); err != nil {
+	if err = fm.Unmarshal(tx.Body, v); err != nil {
 		panic(err)
 	}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -321,14 +322,14 @@ func (app *rootHashApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Tra
 	switch tx.Method {
 	case roothash.MethodExecutorCommit:
 		var xc roothash.ExecutorCommit
-		if err := cbor.Unmarshal(tx.Body, &xc); err != nil {
+		if err := fm.Unmarshal(tx.Body, &xc); err != nil {
 			return err
 		}
 
 		return app.executorCommit(ctx, state, &xc)
 	case roothash.MethodMergeCommit:
 		var mc roothash.MergeCommit
-		if err := cbor.Unmarshal(tx.Body, &mc); err != nil {
+		if err := fm.Unmarshal(tx.Body, &mc); err != nil {
 			return err
 		}
 
@@ -354,7 +355,7 @@ func (app *rootHashApplication) ForeignExecuteTx(ctx *abci.Context, other abci.A
 			for _, pair := range ev.Attributes {
 				if bytes.Equal(pair.GetKey(), registryapp.KeyRuntimeRegistered) {
 					var rt registry.Runtime
-					if err := cbor.Unmarshal(pair.GetValue(), &rt); err != nil {
+					if err := fm.Unmarshal(pair.GetValue(), &rt); err != nil {
 						return errors.Wrap(err, "roothash: failed to deserialize new runtime")
 					}
 

@@ -7,6 +7,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -675,7 +676,7 @@ func (m *MultiPool) addExecutorCommitments(blk *block.Block, sv SignatureVerifie
 	var hadError bool
 	for _, v := range commitments {
 		var body ComputeBody
-		if err := cbor.Unmarshal(v.Blob, &body); err != nil {
+		if err := fm.Unmarshal(v.Blob, &body); err != nil {
 			hadError = true
 			continue
 		}

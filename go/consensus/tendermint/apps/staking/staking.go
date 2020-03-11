@@ -9,6 +9,7 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -104,35 +105,35 @@ func (app *stakingApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Tran
 	switch tx.Method {
 	case staking.MethodTransfer:
 		var xfer staking.Transfer
-		if err := cbor.Unmarshal(tx.Body, &xfer); err != nil {
+		if err := fm.Unmarshal(tx.Body, &xfer); err != nil {
 			return err
 		}
 
 		return app.transfer(ctx, state, &xfer)
 	case staking.MethodBurn:
 		var burn staking.Burn
-		if err := cbor.Unmarshal(tx.Body, &burn); err != nil {
+		if err := fm.Unmarshal(tx.Body, &burn); err != nil {
 			return err
 		}
 
 		return app.burn(ctx, state, &burn)
 	case staking.MethodAddEscrow:
 		var escrow staking.Escrow
-		if err := cbor.Unmarshal(tx.Body, &escrow); err != nil {
+		if err := fm.Unmarshal(tx.Body, &escrow); err != nil {
 			return err
 		}
 
 		return app.addEscrow(ctx, state, &escrow)
 	case staking.MethodReclaimEscrow:
 		var reclaim staking.ReclaimEscrow
-		if err := cbor.Unmarshal(tx.Body, &reclaim); err != nil {
+		if err := fm.Unmarshal(tx.Body, &reclaim); err != nil {
 			return err
 		}
 
 		return app.reclaimEscrow(ctx, state, &reclaim)
 	case staking.MethodAmendCommissionSchedule:
 		var amend staking.AmendCommissionSchedule
-		if err := cbor.Unmarshal(tx.Body, &amend); err != nil {
+		if err := fm.Unmarshal(tx.Body, &amend); err != nil {
 			return err
 		}
 

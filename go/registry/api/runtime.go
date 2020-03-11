@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
@@ -236,7 +236,7 @@ func (s *SignedRuntime) Open(context signature.Context, runtime *Runtime) error 
 // to the given writer.
 func (s SignedRuntime) PrettyPrint(prefix string, w io.Writer) {
 	var rt Runtime
-	if err := cbor.Unmarshal(s.Signed.Blob, &rt); err != nil {
+	if err := fm.Unmarshal(s.Signed.Blob, &rt); err != nil {
 		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, err)
 		return
 	}
