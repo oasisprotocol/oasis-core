@@ -191,9 +191,9 @@ func randBytes(ptr *[]byte, c gofuzz.Continue, fzgoSrc *randSource) {
 	// mainly in order to better work with go-fuzz sonar.
 	// see long comment above.
 	for {
-		if fzgoSrc.Remaining() == 0 {
+		if fzgoSrc.Remaining() < 2 {
 			if verbose {
-				fmt.Println("ran out of bytes, 0 remaining")
+				fmt.Printf("ran out of bytes, %d remaining\n", fzgoSrc.Remaining())
 			}
 			// return nil slice (which will be empty string for string)
 			*ptr = nil
@@ -201,22 +201,22 @@ func randBytes(ptr *[]byte, c gofuzz.Continue, fzgoSrc *randSource) {
 
 		}
 
-		// draw a size in [0, 255] from our input byte[] stream
-		sizeField := int(fzgoSrc.Byte())
+		// draw a size in [0, 65535] from our input byte[] stream
+		sizeField := int(fzgoSrc.Byte()) | int(fzgoSrc.Byte())<<8
 		if verbose {
 			fmt.Println("sizeField:", sizeField)
 		}
 
-		// skip over any zero bytes for our size field
+		// skip over any zero uint16s for our size field
 		// In other words, the encoding is 0-N 0x0 bytes prior to a useful length
 		// field we will use.
 		if sizeField == 0x0 {
 			continue
 		}
 
-		// 0xFF is our chosen value to represent a zero length string/[]byte.
+		// 0xFFFF is our chosen value to represent a zero length string/[]byte.
 		// (See long comment above for some rationale).
-		if sizeField == 0xFF {
+		if sizeField == 0xFFFF {
 			size = 0
 		} else {
 			size = sizeField
