@@ -8,7 +8,6 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/storage/api"
@@ -202,18 +201,10 @@ func (ba *databaseBackend) GetCheckpointChunk(ctx context.Context, chunk *checkp
 	return ba.checkpointer.GetCheckpointChunk(ctx, chunk, w)
 }
 
-func (ba *databaseBackend) HasRoot(root api.Root) bool {
-	return ba.nodedb.HasRoot(root)
-}
-
-func (ba *databaseBackend) Finalize(ctx context.Context, namespace common.Namespace, round uint64, roots []hash.Hash) error {
-	return ba.nodedb.Finalize(ctx, namespace, round, roots)
-}
-
-func (ba *databaseBackend) Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error) {
-	return ba.nodedb.Prune(ctx, namespace, round)
-}
-
 func (ba *databaseBackend) Checkpointer() checkpoint.CreateRestorer {
 	return ba.checkpointer
+}
+
+func (ba *databaseBackend) NodeDB() nodedb.NodeDB {
+	return ba.nodedb
 }

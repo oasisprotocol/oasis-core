@@ -25,6 +25,7 @@ import (
 	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
 	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/client"
+	urkelDB "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
 	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
@@ -243,9 +244,8 @@ func NewNode(
 
 	// Register prune handler.
 	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{
-		logger:    node.logger,
-		node:      node,
-		namespace: ns,
+		logger: node.logger,
+		node:   node,
 	})
 
 	return node, nil
@@ -379,7 +379,7 @@ func (n *Node) ForceFinalize(ctx context.Context, round uint64) error {
 	if err != nil {
 		return err
 	}
-	return n.localStorage.Finalize(ctx, block.Header.Namespace, round, []hash.Hash{
+	return n.localStorage.NodeDB().Finalize(ctx, round, []hash.Hash{
 		block.Header.IORoot,
 		block.Header.StateRoot,
 	})
@@ -397,7 +397,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot *urkelNode.Root, thisRoot *urkel
 		n.diffCh <- result
 	}()
 	// Check if the new root doesn't already exist.
-	if !n.localStorage.HasRoot(*thisRoot) {
+	if !n.localStorage.NodeDB().HasRoot(*thisRoot) {
 		result.fetched = true
 		if thisRoot.Hash.Equal(&prevRoot.Hash) {
 			// Even if HasRoot returns false the root can still exist if it is equal
@@ -441,7 +441,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot *urkelNode.Root, thisRoot *urkel
 }
 
 func (n *Node) finalize(summary *blockSummary) {
-	err := n.localStorage.Finalize(n.ctx, summary.Namespace, summary.Round, []hash.Hash{
+	err := n.localStorage.NodeDB().Finalize(n.ctx, summary.Round, []hash.Hash{
 		summary.IORoot.Hash,
 		summary.StateRoot.Hash,
 	})
@@ -732,9 +732,8 @@ mainLoop:
 }
 
 type pruneHandler struct {
-	logger    *logging.Logger
-	node      *Node
-	namespace common.Namespace
+	logger *logging.Logger
+	node   *Node
 }
 
 func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
@@ -753,7 +752,15 @@ func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
 		p.logger.Debug("pruning storage for round", "round", round)
 
 		// Prune given block.
-		if _, err := p.node.localStorage.Prune(ctx, p.namespace, round); err != nil {
+		err := p.node.localStorage.NodeDB().Prune(ctx, round)
+		switch err {
+		case nil:
+		case urkelDB.ErrNotEarliest:
+			p.logger.Debug("skipping non-earliest round",
+				"round", round,
+			)
+			continue
+		default:
 			p.logger.Error("failed to prune block",
 				"err", err,
 			)

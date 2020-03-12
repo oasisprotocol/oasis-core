@@ -7,8 +7,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
@@ -43,26 +41,12 @@ var (
 		},
 		[]string{"call"},
 	)
-	storagePrunedCount = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Name: "oasis_storage_pruned",
-			Help: "Number of pruned nodes.",
-		},
-	)
-	storageFinalizedCount = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Name: "oasis_storage_finalized",
-			Help: "Number of finalized rounds.",
-		},
-	)
 
 	storageCollectors = []prometheus.Collector{
 		storageFailures,
 		storageCalls,
 		storageLatency,
 		storageValueSize,
-		storagePrunedCount,
-		storageFinalizedCount,
 	}
 
 	labelApply           = prometheus.Labels{"call": "apply"}
@@ -72,9 +56,6 @@ var (
 	labelSyncGet         = prometheus.Labels{"call": "sync_get"}
 	labelSyncGetPrefixes = prometheus.Labels{"call": "sync_get_prefixes"}
 	labelSyncIterate     = prometheus.Labels{"call": "sync_iterate"}
-	labelHasRoot         = prometheus.Labels{"call": "has_root"}
-	labelFinalize        = prometheus.Labels{"call": "finalize"}
-	labelPrune           = prometheus.Labels{"call": "prune"}
 
 	_ api.LocalBackend  = (*metricsWrapper)(nil)
 	_ api.ClientBackend = (*metricsWrapper)(nil)
@@ -198,52 +179,20 @@ func (w *metricsWrapper) SyncIterate(ctx context.Context, request *api.IterateRe
 	return res, err
 }
 
-func (w *metricsWrapper) HasRoot(root api.Root) bool {
-	localBackend, ok := w.Backend.(api.LocalBackend)
-	if !ok {
-		return false
-	}
-	start := time.Now()
-	flag := localBackend.HasRoot(root)
-	storageLatency.With(labelHasRoot).Observe(time.Since(start).Seconds())
-	storageCalls.With(labelHasRoot).Inc()
-	return flag
-}
-
-func (w *metricsWrapper) Finalize(ctx context.Context, namespace common.Namespace, round uint64, roots []hash.Hash) error {
-	localBackend, ok := w.Backend.(api.LocalBackend)
-	if !ok {
-		return api.ErrUnsupported
-	}
-	start := time.Now()
-	err := localBackend.Finalize(ctx, namespace, round, roots)
-	storageLatency.With(labelFinalize).Observe(time.Since(start).Seconds())
-	storageCalls.With(labelFinalize).Inc()
-	if err == nil {
-		storageFinalizedCount.Inc()
-	}
-	return err
-}
-
-func (w *metricsWrapper) Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error) {
-	localBackend, ok := w.Backend.(api.LocalBackend)
-	if !ok {
-		return 0, api.ErrUnsupported
-	}
-	start := time.Now()
-	pruned, err := localBackend.Prune(ctx, namespace, round)
-	storageLatency.With(labelPrune).Observe(time.Since(start).Seconds())
-	storageCalls.With(labelPrune).Inc()
-	storagePrunedCount.Add(float64(pruned))
-	return pruned, err
-}
-
 func (w *metricsWrapper) Checkpointer() checkpoint.CreateRestorer {
 	localBackend, ok := w.Backend.(api.LocalBackend)
 	if !ok {
 		return nil
 	}
 	return localBackend.Checkpointer()
+}
+
+func (w *metricsWrapper) NodeDB() api.NodeDB {
+	localBackend, ok := w.Backend.(api.LocalBackend)
+	if !ok {
+		return nil
+	}
+	return localBackend.NodeDB()
 }
 
 func newMetricsWrapper(base api.Backend) api.Backend {

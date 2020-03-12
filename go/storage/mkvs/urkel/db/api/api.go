@@ -41,21 +41,26 @@ var (
 	// ErrBadNamespace indicates that the passed namespace does not match what is
 	// actually contained within the database.
 	ErrBadNamespace = errors.New(ModuleName, 10, "urkel: bad namespace")
+	// ErrNotEarliest indicates that the given round is not the earliest round.
+	ErrNotEarliest = errors.New(ModuleName, 11, "urkel: round is not the earliest round")
 )
 
 // Config is the node database backend configuration.
-type Config struct {
+type Config struct { // nolint: maligned
 	// DB is the path to the database.
 	DB string
 
-	// DebugNoFsync will disable fsync() where possible.
-	DebugNoFsync bool
+	// NoFsync will disable fsync() where possible.
+	NoFsync bool
 
 	// Namespace is the namespace contained within the database.
 	Namespace common.Namespace
 
 	// MaxCacheSize is the maximum in-memory cache size for the database.
 	MaxCacheSize int64
+
+	// DiscardWriteLogs will cause all write logs to be discarded.
+	DiscardWriteLogs bool
 }
 
 // NodeDB is the persistence layer used for persisting the in-memory tree.
@@ -66,13 +71,22 @@ type NodeDB interface {
 	// GetWriteLog retrieves a write log between two storage instances from the database.
 	GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (writelog.Iterator, error)
 
+	// GetLatestRound returns the most recent round in the node database.
+	GetLatestRound(ctx context.Context) (uint64, error)
+
+	// GetEarliestRound returns the earliest round in the node database.
+	GetEarliestRound(ctx context.Context) (uint64, error)
+
+	// GetRootsForRound returns a list of roots stored under the given round.
+	GetRootsForRound(ctx context.Context, round uint64) ([]hash.Hash, error)
+
 	// NewBatch starts a new batch.
 	//
 	// The chunk argument specifies whether the given batch is being used to import a chunk of an
 	// existing root. Chunks may contain unresolved pointers (e.g., pointers that point to hashes
 	// which are not present in the database). Committing a chunk batch will prevent the round from
 	// being finalized.
-	NewBatch(oldRoot node.Root, chunk bool) Batch
+	NewBatch(oldRoot node.Root, round uint64, chunk bool) Batch
 
 	// HasRoot checks whether the given root exists.
 	HasRoot(root node.Root) bool
@@ -80,12 +94,15 @@ type NodeDB interface {
 	// Finalize finalizes the specified round. The passed list of roots are the
 	// roots within the round that have been finalized. All non-finalized roots
 	// can be discarded.
-	Finalize(ctx context.Context, namespace common.Namespace, round uint64, roots []hash.Hash) error
+	Finalize(ctx context.Context, round uint64, roots []hash.Hash) error
 
-	// Prune removes all roots recorded under the given namespace and round.
+	// Prune removes all roots recorded under the given round.
 	//
-	// Returns the number of pruned nodes.
-	Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error)
+	// Only the earliest round can be pruned, passing any other round will result in an error.
+	Prune(ctx context.Context, round uint64) error
+
+	// Size returns the size of the database in bytes.
+	Size() (int64, error)
 
 	// Close closes the database.
 	Close()
@@ -168,19 +185,34 @@ func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoo
 	return nil, ErrWriteLogNotFound
 }
 
+func (d *nopNodeDB) GetLatestRound(ctx context.Context) (uint64, error) {
+	return 0, nil
+}
+
+func (d *nopNodeDB) GetEarliestRound(ctx context.Context) (uint64, error) {
+	return 0, nil
+}
+
+func (d *nopNodeDB) GetRootsForRound(ctx context.Context, round uint64) ([]hash.Hash, error) {
+	return nil, nil
+}
+
 func (d *nopNodeDB) HasRoot(root node.Root) bool {
 	return false
 }
 
-func (d *nopNodeDB) Finalize(ctx context.Context, namespace common.Namespace, round uint64, roots []hash.Hash) error {
+func (d *nopNodeDB) Finalize(ctx context.Context, round uint64, roots []hash.Hash) error {
 	return nil
 }
 
-func (d *nopNodeDB) Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error) {
+func (d *nopNodeDB) Prune(ctx context.Context, round uint64) error {
+	return nil
+}
+
+func (d *nopNodeDB) Size() (int64, error) {
 	return 0, nil
 }
 
-// Close is a no-op.
 func (d *nopNodeDB) Close() {
 }
 
@@ -189,7 +221,7 @@ type nopBatch struct {
 	BaseBatch
 }
 
-func (d *nopNodeDB) NewBatch(oldRoot node.Root, chunk bool) Batch {
+func (d *nopNodeDB) NewBatch(oldRoot node.Root, round uint64, chunk bool) Batch {
 	return &nopBatch{}
 }
 

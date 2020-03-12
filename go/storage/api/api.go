@@ -75,7 +75,7 @@ var (
 )
 
 // Config is the storage backend configuration.
-type Config struct {
+type Config struct { // nolint: maligned
 	// Backend is the database backend.
 	Backend string
 
@@ -96,14 +96,22 @@ type Config struct {
 
 	// MaxCacheSize is the maximum in-memory cache size for the database.
 	MaxCacheSize int64
+
+	// DiscardWriteLogs will cause all write logs to be discarded.
+	DiscardWriteLogs bool
+
+	// NoFsync will disable fsync() where possible.
+	NoFsync bool
 }
 
 // ToNodeDB converts from a Config to a node DB Config.
 func (cfg *Config) ToNodeDB() *nodedb.Config {
 	return &nodedb.Config{
-		DB:           cfg.DB,
-		Namespace:    cfg.Namespace,
-		MaxCacheSize: cfg.MaxCacheSize,
+		DB:               cfg.DB,
+		Namespace:        cfg.Namespace,
+		MaxCacheSize:     cfg.MaxCacheSize,
+		NoFsync:          cfg.NoFsync,
+		DiscardWriteLogs: cfg.DiscardWriteLogs,
 	}
 }
 
@@ -204,6 +212,9 @@ type ProofResponse = syncer.ProofResponse
 
 // Proof is a Merkle proof for a subtree.
 type Proof = syncer.Proof
+
+// NodeDB is a node database.
+type NodeDB = nodedb.NodeDB
 
 // ApplyOp is an apply operation within a batch of apply operations.
 type ApplyOp struct {
@@ -327,21 +338,11 @@ type Backend interface {
 type LocalBackend interface {
 	Backend
 
-	// HasRoot checks if the storage backend contains the specified storage root.
-	HasRoot(root Root) bool
-
-	// Finalize finalizes the specified round. The passed list of roots are the
-	// roots within the round that have been finalized. All non-finalized roots
-	// can be discarded.
-	Finalize(ctx context.Context, namespace common.Namespace, round uint64, roots []hash.Hash) error
-
-	// Prune removes all roots recorded under the given namespace and round.
-	//
-	// Returns the number of pruned nodes.
-	Prune(ctx context.Context, namespace common.Namespace, round uint64) (int, error)
-
 	// Checkpointer returns the checkpoint creator/restorer for this storage backend.
 	Checkpointer() checkpoint.CreateRestorer
+
+	// NodeDB returns the underlying node database.
+	NodeDB() nodedb.NodeDB
 }
 
 // ClientBackend is a storage client backend implementation.

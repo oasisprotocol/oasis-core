@@ -122,7 +122,7 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	}
 	emptyRoot.Hash.Empty()
 
-	batch := ndb.NewBatch(emptyRoot, true)
+	batch := ndb.NewBatch(emptyRoot, chunk.Root.Round, true)
 	defer batch.Reset()
 
 	subtree := batch.MaybeStartSubtree(nil, 0, ptr)

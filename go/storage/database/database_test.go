@@ -36,6 +36,7 @@ func doTestImpl(t *testing.T, backend string) {
 			ApplyLockLRUSlots: 100,
 			Namespace:         testNs,
 			MaxCacheSize:      16 * 1024 * 1024,
+			NoFsync:           true,
 		}
 		err error
 	)
