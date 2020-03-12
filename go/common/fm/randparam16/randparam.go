@@ -207,22 +207,6 @@ func randBytes(ptr *[]byte, c gofuzz.Continue, fzgoSrc *randSource) {
 			fmt.Println("sizeField:", sizeField)
 		}
 
-		// If we don't have enough data, we want to
-		// *not* use the size field or the data after sizeField,
-		// in order to work better with sonar.
-		if sizeField > fzgoSrc.Remaining() {
-			if verbose {
-				fmt.Printf("%d bytes requested via size field, %d remaining, drain rest\n",
-					sizeField, fzgoSrc.Remaining())
-			}
-			// return nil slice (which will be empty string for string).
-			// however, before we return, we consume all of our remaining bytes.
-			fzgoSrc.Drain()
-
-			*ptr = nil
-			return
-		}
-
 		// skip over any zero bytes for our size field
 		// In other words, the encoding is 0-N 0x0 bytes prior to a useful length
 		// field we will use.
@@ -240,6 +224,22 @@ func randBytes(ptr *[]byte, c gofuzz.Continue, fzgoSrc *randSource) {
 
 		// found a usable, non-zero sizeField. let's move on to use it on the next bytes!
 		break
+	}
+
+	// If we don't have enough data, we want to
+	// *not* use the size field or the data after sizeField,
+	// in order to work better with sonar.
+	if size > fzgoSrc.Remaining() {
+		if verbose {
+			fmt.Printf("%d bytes requested via size field, %d remaining, drain rest\n",
+				size, fzgoSrc.Remaining())
+		}
+		// return nil slice (which will be empty string for string).
+		// however, before we return, we consume all of our remaining bytes.
+		fzgoSrc.Drain()
+
+		*ptr = nil
+		return
 	}
 
 	bs = make([]byte, size)
