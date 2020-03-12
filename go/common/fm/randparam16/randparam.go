@@ -9,7 +9,6 @@ package randparam
 
 import (
 	"fmt"
-	"math/rand"
 
 	gofuzz "github.com/google/gofuzz"
 )
@@ -46,7 +45,6 @@ var randFuncs = []interface{}{
 func NewFuzzer(data []byte) *Fuzzer {
 	// create our random data stream that fill use data []byte for results.
 	fzgoSrc := &randSource{data}
-	randSrc := rand.New(fzgoSrc)
 
 	// create some closures for custom fuzzing (so that we have direct access to fzgoSrc).
 	randFuncsWithFzgoSrc := []interface{}{
@@ -65,7 +63,7 @@ func NewFuzzer(data []byte) *Fuzzer {
 	funcs := append(randFuncs, randFuncsWithFzgoSrc...)
 
 	// create the google/gofuzz fuzzer
-	gofuzzFuzzer := gofuzz.New().RandSource(randSrc).Funcs(funcs...)
+	gofuzzFuzzer := gofuzz.New().RandSource(fzgoSrc).Funcs(funcs...)
 
 	// gofuzzFuzzer.NilChance(0).NumElements(2, 2)
 	// TODO: pick parameters for NilChance, NumElements, e.g.:
