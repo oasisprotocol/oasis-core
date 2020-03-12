@@ -603,10 +603,6 @@ func (t *tendermintService) Unsubscribe(subscriber string, query tmpubsub.Query)
 	return fmt.Errorf("tendermint: unsubscribe called with no backing service")
 }
 
-func (t *tendermintService) Pruner() abci.StatePruner {
-	return t.mux.Pruner()
-}
-
 func (t *tendermintService) RegisterApplication(app abci.Application) error {
 	return t.mux.Register(app)
 }
@@ -901,11 +897,11 @@ func (t *tendermintService) lazyInit() error {
 	if err = pruneCfg.Strategy.FromString(pruneStrat); err != nil {
 		return err
 	}
-	pruneNumKept := int64(viper.GetInt(cfgABCIPruneNumKept))
-	pruneCfg.NumKept = pruneNumKept
+	pruneCfg.NumKept = viper.GetUint64(cfgABCIPruneNumKept)
 
 	appConfig := &abci.ApplicationConfig{
-		DataDir:         t.dataDir,
+		DataDir:         filepath.Join(t.dataDir, StateDir),
+		StorageBackend:  db.GetBackendName(),
 		Pruning:         pruneCfg,
 		HaltEpochHeight: t.genesis.HaltEpoch,
 		MinGasPrice:     viper.GetUint64(CfgConsensusMinGasPrice),
@@ -1364,7 +1360,7 @@ func init() {
 	Flags.String(CfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
 	Flags.String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
 	Flags.String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
-	Flags.Int64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
+	Flags.Uint64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
 	Flags.StringSlice(CfgSentryUpstreamAddress, []string{}, "Tendermint nodes for which we act as sentry of the form ID@ip:port")
 	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form ID@ip:port")
 	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")

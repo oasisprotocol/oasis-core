@@ -6,6 +6,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 )
 
@@ -26,6 +27,6 @@ func (app *stakingApplication) GetSignerNonce(ctx context.Context, req *api.GetS
 }
 
 // Implements abci.TransactionAuthHandler.
-func (app *stakingApplication) AuthenticateTx(ctx *abci.Context, tx *transaction.Transaction) error {
+func (app *stakingApplication) AuthenticateTx(ctx *abciAPI.Context, tx *transaction.Transaction) error {
 	return stakingState.AuthenticateAndPayFees(ctx, ctx.TxSigner(), tx.Nonce, tx.Fee)
 }

@@ -55,9 +55,6 @@ type TendermintService interface {
 
 	// Unsubscribe unsubscribes from tendermint events.
 	Unsubscribe(subscriber string, query tmpubsub.Query) error
-
-	// Pruner returns the ABCI state pruner.
-	Pruner() abci.StatePruner
 }
 
 // GenesisProvider is a tendermint specific genesis document provider.

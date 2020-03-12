@@ -147,6 +147,10 @@ func (t *tendermintMockBackend) worker(ctx context.Context) {
 		t.currentBlock = height
 		t.notifier.Broadcast(t.epoch)
 		t.Unlock()
+	} else {
+		t.logger.Warn("unable to query initial epoch",
+			"err", err,
+		)
 	}
 
 	for {

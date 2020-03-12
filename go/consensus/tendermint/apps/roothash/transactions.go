@@ -7,7 +7,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
@@ -19,6 +19,7 @@ import (
 var _ commitment.SignatureVerifier = (*roothashSignatureVerifier)(nil)
 
 type roothashSignatureVerifier struct {
+	ctx       *abciAPI.Context
 	runtimeID common.Namespace
 	scheduler *schedulerState.MutableState
 }
@@ -32,7 +33,7 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 		return nil
 	}
 
-	committee, err := sv.scheduler.Committee(kind, sv.runtimeID)
+	committee, err := sv.scheduler.Committee(sv.ctx, kind, sv.runtimeID)
 	if err != nil {
 		return err
 	}
@@ -57,12 +58,12 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 // getRuntimeState fetches the current runtime state and performs common
 // processing and error handling.
 func (app *rootHashApplication) getRuntimeState(
-	ctx *abci.Context,
+	ctx *abciAPI.Context,
 	state *roothashState.MutableState,
 	id common.Namespace,
 ) (*roothashState.RuntimeState, commitment.SignatureVerifier, commitment.NodeLookup, error) {
 	// Fetch current runtime state.
-	rtState, err := state.RuntimeState(id)
+	rtState, err := state.RuntimeState(ctx, id)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("roothash: failed to fetch runtime state: %w", err)
 	}
@@ -75,6 +76,7 @@ func (app *rootHashApplication) getRuntimeState(
 
 	// Create signature verifier.
 	sv := &roothashSignatureVerifier{
+		ctx:       ctx,
 		runtimeID: id,
 		scheduler: schedulerState.NewMutableState(ctx.State()),
 	}
@@ -95,16 +97,16 @@ func (app *rootHashApplication) getRuntimeState(
 }
 
 func (app *rootHashApplication) executorCommit(
-	ctx *abci.Context,
+	ctx *abciAPI.Context,
 	state *roothashState.MutableState,
 	cc *roothash.ExecutorCommit,
-) error {
+) (err error) {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
 
 	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("ComputeCommit: failed to fetch consensus parameters",
 			"err", err,
@@ -119,12 +121,11 @@ func (app *rootHashApplication) executorCommit(
 	if err != nil {
 		return err
 	}
-	defer state.SetRuntimeState(rtState)
 
 	pools := make(map[*commitment.Pool]bool)
 	for _, commit := range cc.Commits {
 		var pool *commitment.Pool
-		if pool, err = rtState.Round.AddExecutorCommitment(&commit, sv, nl); err != nil {
+		if pool, err = rtState.Round.AddExecutorCommitment(ctx, &commit, sv, nl); err != nil {
 			ctx.Logger().Error("failed to add compute commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,
@@ -140,20 +141,25 @@ func (app *rootHashApplication) executorCommit(
 		app.tryFinalizeExecute(ctx, rtState, pool, false)
 	}
 
+	// Update runtime state.
+	if err = state.SetRuntimeState(ctx, rtState); err != nil {
+		return fmt.Errorf("failed to set runtime state: %w", err)
+	}
+
 	return nil
 }
 
 func (app *rootHashApplication) mergeCommit(
-	ctx *abci.Context,
+	ctx *abciAPI.Context,
 	state *roothashState.MutableState,
 	mc *roothash.MergeCommit,
-) error {
+) (err error) {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
 
 	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("MergeCommit: failed to fetch consensus parameters",
 			"err", err,
@@ -168,11 +174,10 @@ func (app *rootHashApplication) mergeCommit(
 	if err != nil {
 		return err
 	}
-	defer state.SetRuntimeState(rtState)
 
 	// Add commitments.
 	for _, commit := range mc.Commits {
-		if err = rtState.Round.AddMergeCommitment(&commit, sv, nl); err != nil {
+		if err = rtState.Round.AddMergeCommitment(ctx, &commit, sv, nl); err != nil {
 			ctx.Logger().Error("failed to add merge commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,
@@ -187,6 +192,11 @@ func (app *rootHashApplication) mergeCommit(
 			"err", err,
 		)
 		return err
+	}
+
+	// Update runtime state.
+	if err = state.SetRuntimeState(ctx, rtState); err != nil {
+		return fmt.Errorf("failed to set runtime state: %w", err)
 	}
 
 	return nil

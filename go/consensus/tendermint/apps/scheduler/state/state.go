@@ -1,17 +1,16 @@
 package state
 
 import (
-	"errors"
-
-	"github.com/tendermint/iavl"
+	"context"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/scheduler/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
 )
 
 var (
@@ -33,163 +32,193 @@ var (
 	//
 	// Value is CBOR-serialized api.ConsensusParameters.
 	parametersKeyFmt = keyformat.New(0x63)
-
-	logger = logging.GetLogger("tendermint/scheduler")
 )
 
+// ImmutableState is the immutable scheduler state wrapper.
 type ImmutableState struct {
-	*abci.ImmutableState
+	is *abciAPI.ImmutableState
 }
 
-func (s *ImmutableState) Committee(kind api.CommitteeKind, runtimeID common.Namespace) (*api.Committee, error) {
-	_, raw := s.Snapshot.Get(committeeKeyFmt.Encode(uint8(kind), &runtimeID))
+// Committee returns a specific elected committee.
+func (s *ImmutableState) Committee(ctx context.Context, kind api.CommitteeKind, runtimeID common.Namespace) (*api.Committee, error) {
+	raw, err := s.is.Get(ctx, committeeKeyFmt.Encode(uint8(kind), &runtimeID))
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if raw == nil {
 		return nil, nil
 	}
 
 	var committee *api.Committee
-	err := cbor.Unmarshal(raw, &committee)
-	return committee, err
+	if err = cbor.Unmarshal(raw, &committee); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return committee, nil
 }
 
-func (s *ImmutableState) AllCommittees() ([]*api.Committee, error) {
-	var committees []*api.Committee
-	s.Snapshot.IterateRange(
-		committeeKeyFmt.Encode(),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			if !committeeKeyFmt.Decode(key) {
-				return true
-			}
+// AllCommittees returns a list of all elected committees.
+func (s *ImmutableState) AllCommittees(ctx context.Context) ([]*api.Committee, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
 
-			var c *api.Committee
-			err := cbor.Unmarshal(value, &c)
-			if err != nil {
-				logger.Error("couldn't get committee from state entry",
-					"key", key,
-					"value", value,
-					"err", err,
-				)
-				return false
-			}
-			committees = append(committees, c)
-			return false
-		},
-	)
+	var committees []*api.Committee
+	for it.Seek(committeeKeyFmt.Encode()); it.Valid(); it.Next() {
+		var k uint8
+		var runtimeID common.Namespace
+		if !committeeKeyFmt.Decode(it.Key(), &k, &runtimeID) {
+			break
+		}
+
+		var c api.Committee
+		if err := cbor.Unmarshal(it.Value(), &c); err != nil {
+			err = fmt.Errorf("malformed committee %s (kind %d): %w", runtimeID, k, err)
+			return nil, abciAPI.UnavailableStateError(err)
+		}
+
+		committees = append(committees, &c)
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
 	return committees, nil
 }
 
-func (s *ImmutableState) KindsCommittees(kinds []api.CommitteeKind) ([]*api.Committee, error) {
+// KindsCommittees returns a list of all committees of specific kinds.
+func (s *ImmutableState) KindsCommittees(ctx context.Context, kinds []api.CommitteeKind) ([]*api.Committee, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
 	var committees []*api.Committee
 	for _, kind := range kinds {
-		s.Snapshot.IterateRange(
-			committeeKeyFmt.Encode(uint8(kind)),
-			nil,
-			true,
-			func(key, value []byte) bool {
-				var k uint8
-				if !committeeKeyFmt.Decode(key, &k) || k != uint8(kind) {
-					return true
-				}
+		for it.Seek(committeeKeyFmt.Encode(uint8(kind))); it.Valid(); it.Next() {
+			var k uint8
+			var runtimeID common.Namespace
+			if !committeeKeyFmt.Decode(it.Key(), &k, &runtimeID) || k != uint8(kind) {
+				break
+			}
 
-				var c *api.Committee
-				err := cbor.Unmarshal(value, &c)
-				if err != nil {
-					logger.Error("couldn't get committee from state entry",
-						"key", key,
-						"value", value,
-						"err", err,
-					)
-					return false
-				}
-				committees = append(committees, c)
-				return false
-			},
-		)
+			var c api.Committee
+			if err := cbor.Unmarshal(it.Value(), &c); err != nil {
+				err = fmt.Errorf("malformed committee %s (kind %d): %w", runtimeID, k, err)
+				return nil, abciAPI.UnavailableStateError(err)
+			}
+
+			committees = append(committees, &c)
+		}
+		if it.Err() != nil {
+			return nil, abciAPI.UnavailableStateError(it.Err())
+		}
 	}
 	return committees, nil
 }
 
-func (s *ImmutableState) CurrentValidators() ([]signature.PublicKey, error) {
-	_, raw := s.Snapshot.Get(validatorsCurrentKeyFmt.Encode())
+// CurrentValidators returns a list of current validators.
+func (s *ImmutableState) CurrentValidators(ctx context.Context) ([]signature.PublicKey, error) {
+	raw, err := s.is.Get(ctx, validatorsCurrentKeyFmt.Encode())
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if raw == nil {
 		return nil, nil
 	}
 
 	var validators []signature.PublicKey
-	err := cbor.Unmarshal(raw, &validators)
-	return validators, err
+	if err = cbor.Unmarshal(raw, &validators); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return validators, nil
 }
 
-func (s *ImmutableState) PendingValidators() ([]signature.PublicKey, error) {
-	_, raw := s.Snapshot.Get(validatorsPendingKeyFmt.Encode())
+// PendingValidators returns a list of pending validators.
+func (s *ImmutableState) PendingValidators(ctx context.Context) ([]signature.PublicKey, error) {
+	raw, err := s.is.Get(ctx, validatorsPendingKeyFmt.Encode())
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if raw == nil {
 		return nil, nil
 	}
 
 	var validators []signature.PublicKey
-	err := cbor.Unmarshal(raw, &validators)
-	return validators, err
+	if err = cbor.Unmarshal(raw, &validators); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return validators, nil
 }
 
-func (s *ImmutableState) ConsensusParameters() (*api.ConsensusParameters, error) {
-	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
+// ConsensusParameters returns scheduler consensus parameters.
+func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*api.ConsensusParameters, error) {
+	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if raw == nil {
-		return nil, errors.New("tendermint/scheduler: expected consensus parameters to be present in app state")
+		return nil, fmt.Errorf("tendermint/scheduler: expected consensus parameters to be present in app state")
 	}
 
 	var params api.ConsensusParameters
-	err := cbor.Unmarshal(raw, &params)
-	return &params, err
+	if err = cbor.Unmarshal(raw, &params); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return &params, nil
 }
 
-func NewImmutableState(state abci.ApplicationState, version int64) (*ImmutableState, error) {
-	inner, err := abci.NewImmutableState(state, version)
+func NewImmutableState(ctx context.Context, state abciAPI.ApplicationState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableState(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ImmutableState{inner}, nil
+	return &ImmutableState{is}, nil
 }
 
 // MutableState is a mutable scheduler state wrapper.
 type MutableState struct {
 	*ImmutableState
 
-	tree *iavl.MutableTree
+	ms mkvs.KeyValueTree
 }
 
-func (s *MutableState) PutCommittee(c *api.Committee) {
-	s.tree.Set(committeeKeyFmt.Encode(uint8(c.Kind), &c.RuntimeID), cbor.Marshal(c))
+// PutCommittee sets an elected committee for a specific runtime.
+func (s *MutableState) PutCommittee(ctx context.Context, c *api.Committee) error {
+	err := s.ms.Insert(ctx, committeeKeyFmt.Encode(uint8(c.Kind), &c.RuntimeID), cbor.Marshal(c))
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *MutableState) DropCommittee(kind api.CommitteeKind, runtimeID common.Namespace) {
-	s.tree.Remove(committeeKeyFmt.Encode(uint8(kind), &runtimeID))
+// DropCommittee removes an elected committee of a specific kind for a specific runtime.
+func (s *MutableState) DropCommittee(ctx context.Context, kind api.CommitteeKind, runtimeID common.Namespace) error {
+	err := s.ms.Remove(ctx, committeeKeyFmt.Encode(uint8(kind), &runtimeID))
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *MutableState) PutCurrentValidators(validators []signature.PublicKey) {
-	s.tree.Set(validatorsCurrentKeyFmt.Encode(), cbor.Marshal(validators))
+// PutCurrentValidators stores the current set of validators.
+func (s *MutableState) PutCurrentValidators(ctx context.Context, validators []signature.PublicKey) error {
+	err := s.ms.Insert(ctx, validatorsCurrentKeyFmt.Encode(), cbor.Marshal(validators))
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *MutableState) PutPendingValidators(validators []signature.PublicKey) {
+// PutPendingValidators stores the pending set of validators.
+func (s *MutableState) PutPendingValidators(ctx context.Context, validators []signature.PublicKey) error {
 	if validators == nil {
-		s.tree.Remove(validatorsPendingKeyFmt.Encode())
-		return
+		err := s.ms.Remove(ctx, validatorsPendingKeyFmt.Encode())
+		return abciAPI.UnavailableStateError(err)
 	}
-	s.tree.Set(validatorsPendingKeyFmt.Encode(), cbor.Marshal(validators))
+	err := s.ms.Insert(ctx, validatorsPendingKeyFmt.Encode(), cbor.Marshal(validators))
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *MutableState) SetConsensusParameters(params *api.ConsensusParameters) {
-	s.tree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
+// SetConsensusParameters sets the scheduler consensus parameters.
+func (s *MutableState) SetConsensusParameters(ctx context.Context, params *api.ConsensusParameters) error {
+	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
+	return abciAPI.UnavailableStateError(err)
 }
 
 // NewMutableState creates a new mutable scheduler state wrapper.
-func NewMutableState(tree *iavl.MutableTree) *MutableState {
-	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
-
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 	return &MutableState{
-		ImmutableState: &ImmutableState{inner},
-		tree:           tree,
+		ImmutableState: &ImmutableState{
+			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
+		},
+		ms: tree,
 	}
 }

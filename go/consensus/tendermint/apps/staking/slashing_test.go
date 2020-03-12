@@ -11,7 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	tmcrypto "github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
@@ -23,11 +23,11 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	require := require.New(t)
 
 	now := time.Unix(1580461674, 0)
-	appState := abci.NewMockApplicationState(abci.MockApplicationStateConfig{
+	appState := abciAPI.NewMockApplicationState(abciAPI.MockApplicationStateConfig{
 		// Use a non-zero current epoch so we test freeze overflow.
 		CurrentEpoch: 42,
 	})
-	ctx := appState.NewContext(abci.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
 	defer ctx.Close()
 
 	consensusSigner := memorySigner.NewTestSigner("consensus test signer")
@@ -45,7 +45,8 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	ent, entitySigner, _ := entity.TestEntity()
 	sigEntity, err := entity.SignEntity(entitySigner, registry.RegisterEntitySignatureContext, ent)
 	require.NoError(err, "SignEntity")
-	regState.SetEntity(ent, sigEntity)
+	err = regState.SetEntity(ctx, ent, sigEntity)
+	require.NoError(err, "SetEntity")
 	// Add node.
 	nodeSigner := memorySigner.NewTestSigner("node test signer")
 	nod := &node.Node{
@@ -57,7 +58,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	}
 	sigNode, err := node.MultiSignNode([]signature.Signer{nodeSigner}, registry.RegisterNodeSignatureContext, nod)
 	require.NoError(err, "MultiSignNode")
-	err = regState.SetNode(nod, sigNode)
+	err = regState.SetNode(ctx, nod, sigNode)
 	require.NoError(err, "SetNode")
 
 	// Should not fail if node status is not available.
@@ -65,7 +66,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	require.NoError(err, "should not fail when node status is not available")
 
 	// Add node status.
-	err = regState.SetNodeStatus(nod.ID, &registry.NodeStatus{})
+	err = regState.SetNodeStatus(ctx, nod.ID, &registry.NodeStatus{})
 	require.NoError(err, "SetNodeStatus")
 
 	// Should fail if unable to get the slashing procedure.
@@ -75,7 +76,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	// Add slashing procedure.
 	var slashAmount quantity.Quantity
 	_ = slashAmount.FromUint64(100)
-	stakeState.SetConsensusParameters(&staking.ConsensusParameters{
+	err = stakeState.SetConsensusParameters(ctx, &staking.ConsensusParameters{
 		Slashing: map[staking.SlashReason]staking.Slash{
 			staking.SlashDoubleSigning: staking.Slash{
 				Amount:         slashAmount,
@@ -83,6 +84,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 			},
 		},
 	})
+	require.NoError(err, "SetConsensusParameters")
 
 	// Should fail as the validator has no stake (which is an invariant violation as a validator
 	// needs to have some stake).
@@ -94,7 +96,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	_ = balance.FromUint64(200)
 	var totalShares quantity.Quantity
 	_ = totalShares.FromUint64(200)
-	stakeState.SetAccount(ent.ID, &staking.Account{
+	err = stakeState.SetAccount(ctx, ent.ID, &staking.Account{
 		Escrow: staking.EscrowAccount{
 			Active: staking.SharePool{
 				Balance:     balance,
@@ -102,18 +104,20 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 			},
 		},
 	})
+	require.NoError(err, "SetAccount")
 
 	// Should slash.
 	err = onEvidenceDoubleSign(ctx, validatorAddress, 1, now, 1)
 	require.NoError(err, "slashing should succeed")
 
 	// Entity stake should be slashed.
-	acct := stakeState.Account(ent.ID)
+	acct, err := stakeState.Account(ctx, ent.ID)
+	require.NoError(err, "Account")
 	_ = balance.Sub(&slashAmount)
 	require.EqualValues(balance, acct.Escrow.Active.Balance, "entity stake should be slashed")
 
 	// Node should be frozen.
-	status, err := regState.NodeStatus(nod.ID)
+	status, err := regState.NodeStatus(ctx, nod.ID)
 	require.NoError(err, "NodeStatus")
 	require.True(status.IsFrozen(), "node should be frozen after slashing")
 	require.EqualValues(registry.FreezeForever, status.FreezeEndTime, "node should be frozen forever")

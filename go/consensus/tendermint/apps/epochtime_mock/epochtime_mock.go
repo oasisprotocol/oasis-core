@@ -17,7 +17,7 @@ import (
 var _ abci.Application = (*epochTimeMockApplication)(nil)
 
 type epochTimeMockApplication struct {
-	state abci.ApplicationState
+	state api.ApplicationState
 }
 
 func (app *epochTimeMockApplication) Name() string {
@@ -40,28 +40,27 @@ func (app *epochTimeMockApplication) Dependencies() []string {
 	return nil
 }
 
-func (app *epochTimeMockApplication) OnRegister(state abci.ApplicationState) {
+func (app *epochTimeMockApplication) OnRegister(state api.ApplicationState) {
 	app.state = state
 }
 
 func (app *epochTimeMockApplication) OnCleanup() {
 }
 
-func (app *epochTimeMockApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
+func (app *epochTimeMockApplication) InitChain(ctx *api.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	return nil
 }
 
-func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
+func (app *epochTimeMockApplication) BeginBlock(ctx *api.Context, request types.RequestBeginBlock) (err error) {
 	state := newMutableState(ctx.State())
 
-	future, err := state.getFutureEpoch()
+	future, err := state.getFutureEpoch(ctx)
 	if err != nil {
 		return fmt.Errorf("BeginBlock: failed to get future epoch: %w", err)
 	}
 	if future == nil {
 		return nil
 	}
-	defer state.clearFutureEpoch()
 
 	height := ctx.BlockHeight()
 	if future.Height != height {
@@ -77,13 +76,19 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *abci.Context, request types
 		"current_height", height,
 	)
 
-	state.setEpoch(future.Epoch, height)
+	if err = state.setEpoch(ctx, future.Epoch, height); err != nil {
+		return fmt.Errorf("epochtime_mock: failed to set epoch: %w", err)
+	}
+	if err = state.clearFutureEpoch(ctx); err != nil {
+		return fmt.Errorf("epochtime_mock: failed to clear future epoch: %w", err)
+	}
+
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEpoch, cbor.Marshal(future.Epoch)))
 
 	return nil
 }
 
-func (app *epochTimeMockApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
+func (app *epochTimeMockApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	state := newMutableState(ctx.State())
 
 	switch tx.Method {
@@ -99,20 +104,20 @@ func (app *epochTimeMockApplication) ExecuteTx(ctx *abci.Context, tx *transactio
 	}
 }
 
-func (app *epochTimeMockApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *epochTimeMockApplication) ForeignExecuteTx(ctx *api.Context, other abci.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
-func (app *epochTimeMockApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *epochTimeMockApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *epochTimeMockApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) error {
+func (app *epochTimeMockApplication) FireTimer(ctx *api.Context, timer *abci.Timer) error {
 	return fmt.Errorf("tendermint/epochtime_mock: unexpected timer")
 }
 
 func (app *epochTimeMockApplication) setEpoch(
-	ctx *abci.Context,
+	ctx *api.Context,
 	state *mutableState,
 	epoch epochtime.EpochTime,
 ) error {
@@ -125,7 +130,7 @@ func (app *epochTimeMockApplication) setEpoch(
 		"is_check_only", ctx.IsCheckOnly(),
 	)
 
-	return state.setFutureEpoch(epoch, height+1)
+	return state.setFutureEpoch(ctx, epoch, height+1)
 }
 
 // New constructs a new mock epochtime application instance.

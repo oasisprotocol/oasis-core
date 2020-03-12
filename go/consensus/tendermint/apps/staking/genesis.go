@@ -1,32 +1,32 @@
 package staking
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-func (app *stakingApplication) initParameters(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis) error {
+func (app *stakingApplication) initParameters(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
 	if err := st.Parameters.SanityCheck(); err != nil {
 		return fmt.Errorf("staking/tendermint: sanity check failed: %w", err)
 	}
 
-	state.SetConsensusParameters(&st.Parameters)
+	if err := state.SetConsensusParameters(ctx, &st.Parameters); err != nil {
+		return fmt.Errorf("staking/tendermint: failed to set consensus parameters: %w", err)
+	}
 	return nil
 }
 
-func (app *stakingApplication) initCommonPool(ctx *abci.Context, st *staking.Genesis, totalSupply *quantity.Quantity) error {
+func (app *stakingApplication) initCommonPool(ctx *abciAPI.Context, st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	if !st.CommonPool.IsValid() {
 		return errors.New("staking/tendermint: invalid genesis state CommonPool")
 	}
@@ -40,7 +40,7 @@ func (app *stakingApplication) initCommonPool(ctx *abci.Context, st *staking.Gen
 	return nil
 }
 
-func (app *stakingApplication) initLastBlockFees(ctx *abci.Context, st *staking.Genesis, totalSupply *quantity.Quantity) error {
+func (app *stakingApplication) initLastBlockFees(ctx *abciAPI.Context, st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	if !st.LastBlockFees.IsValid() {
 		return errors.New("staking/tendermint: invalid genesis state LastBlockFees")
 	}
@@ -65,19 +65,16 @@ func (app *stakingApplication) initLastBlockFees(ctx *abci.Context, st *staking.
 	return nil
 }
 
-func (app *stakingApplication) initLedger(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) error {
-	type ledgerUpdate struct {
-		id      signature.PublicKey
-		account *staking.Account
-	}
-
-	var ups []ledgerUpdate
-	for k, v := range st.Ledger {
-		id := k
+func (app *stakingApplication) initLedger(
+	ctx *abciAPI.Context,
+	state *stakingState.MutableState,
+	st *staking.Genesis,
+	totalSupply *quantity.Quantity,
+) error {
+	for id, v := range st.Ledger {
 		if v == nil {
-			return fmt.Errorf("staking/tendermint: genesis ledger account %s is nil", k)
+			return fmt.Errorf("staking/tendermint: genesis ledger account %s is nil", id)
 		}
-
 		if !v.General.Balance.IsValid() {
 			ctx.Logger().Error("InitChain: invalid genesis general balance",
 				"id", id,
@@ -109,7 +106,6 @@ func (app *stakingApplication) initLedger(ctx *abci.Context, state *stakingState
 			return errors.New("staking/tendermint: non-empty stake accumulator in genesis")
 		}
 
-		ups = append(ups, ledgerUpdate{id, v})
 		if err := totalSupply.Add(&v.General.Balance); err != nil {
 			ctx.Logger().Error("InitChain: failed to add general balance",
 				"err", err,
@@ -128,16 +124,20 @@ func (app *stakingApplication) initLedger(ctx *abci.Context, state *stakingState
 			)
 			return errors.Wrap(err, "staking/tendermint: failed to add debonding escrow balance")
 		}
-	}
-	// Make sure that we apply ledger updates in a canonical order.
-	sort.SliceStable(ups, func(i, j int) bool { return bytes.Compare(ups[i].id[:], ups[j].id[:]) < 0 })
-	for _, u := range ups {
-		state.SetAccount(u.id, u.account)
+
+		if err := state.SetAccount(ctx, id, v); err != nil {
+			return fmt.Errorf("staking/tendermint: failed to set account: %w", err)
+		}
 	}
 	return nil
 }
 
-func (app *stakingApplication) initTotalSupply(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) error {
+func (app *stakingApplication) initTotalSupply(
+	ctx *abciAPI.Context,
+	state *stakingState.MutableState,
+	st *staking.Genesis,
+	totalSupply *quantity.Quantity,
+) error {
 	if totalSupply.Cmp(&st.TotalSupply) != 0 {
 		ctx.Logger().Error("InitChain: total supply mismatch",
 			"expected", st.TotalSupply,
@@ -146,19 +146,17 @@ func (app *stakingApplication) initTotalSupply(ctx *abci.Context, state *staking
 		return fmt.Errorf("staking: total supply mismatch (expected: %s actual: %s)", st.TotalSupply, totalSupply)
 	}
 
-	state.SetCommonPool(&st.CommonPool)
-	state.SetTotalSupply(totalSupply)
+	if err := state.SetCommonPool(ctx, &st.CommonPool); err != nil {
+		return fmt.Errorf("failed to set common pool: %w", err)
+	}
+	if err := state.SetTotalSupply(ctx, totalSupply); err != nil {
+		return fmt.Errorf("failed to set total supply: %w", err)
+	}
 
 	return nil
 }
 
-func (app *stakingApplication) initDelegations(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis) error {
-	type delegationUpdate struct {
-		escrowID    signature.PublicKey
-		delegatorID signature.PublicKey
-		delegation  *staking.Delegation
-	}
-	var dups []delegationUpdate
+func (app *stakingApplication) initDelegations(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
 	for escrowID, delegations := range st.Delegations {
 		delegationShares := quantity.NewQuantity()
 		for delegatorID, delegation := range delegations {
@@ -171,10 +169,15 @@ func (app *stakingApplication) initDelegations(ctx *abci.Context, state *staking
 				)
 				return errors.Wrap(err, "staking/tendermint: failed to add delegation shares")
 			}
-			dups = append(dups, delegationUpdate{escrowID, delegatorID, delegation})
+			if err := state.SetDelegation(ctx, delegatorID, escrowID, delegation); err != nil {
+				return fmt.Errorf("failed to set delegation: %w", err)
+			}
 		}
 
-		acc := state.Account(escrowID)
+		acc, err := state.Account(ctx, escrowID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch account: %w", err)
+		}
 		if acc.Escrow.Active.TotalShares.Cmp(delegationShares) != 0 {
 			ctx.Logger().Error("InitChain: total shares mismatch",
 				"escrow_id", escrowID,
@@ -184,27 +187,10 @@ func (app *stakingApplication) initDelegations(ctx *abci.Context, state *staking
 			return errors.New("staking/tendermint: total shares mismatch")
 		}
 	}
-	// Make sure that we apply delegation updates in a canonical order.
-	sort.SliceStable(dups, func(i, j int) bool {
-		if c := bytes.Compare(dups[i].escrowID[:], dups[j].escrowID[:]); c != 0 {
-			return c < 0
-		}
-		return bytes.Compare(dups[i].delegatorID[:], dups[j].delegatorID[:]) < 0
-	})
-	for _, u := range dups {
-		state.SetDelegation(u.delegatorID, u.escrowID, u.delegation)
-	}
 	return nil
 }
 
-func (app *stakingApplication) initDebondingDelegations(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis) error {
-	type debondingDelegationUpdate struct {
-		escrowID    signature.PublicKey
-		delegatorID signature.PublicKey
-		seq         uint64
-		delegation  *staking.DebondingDelegation
-	}
-	var deups []debondingDelegationUpdate
+func (app *stakingApplication) initDebondingDelegations(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
 	for escrowID, delegators := range st.DebondingDelegations {
 		debondingShares := quantity.NewQuantity()
 		for delegatorID, delegations := range delegators {
@@ -219,11 +205,16 @@ func (app *stakingApplication) initDebondingDelegations(ctx *abci.Context, state
 					return errors.Wrap(err, "staking/tendermint: failed to add debonding delegation shares")
 				}
 
-				deups = append(deups, debondingDelegationUpdate{escrowID, delegatorID, uint64(idx), delegation})
+				if err := state.SetDebondingDelegation(ctx, delegatorID, escrowID, uint64(idx), delegation); err != nil {
+					return fmt.Errorf("failed to set debonding delegation: %w", err)
+				}
 			}
 		}
 
-		acc := state.Account(escrowID)
+		acc, err := state.Account(ctx, escrowID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch account: %w", err)
+		}
 		if acc.Escrow.Debonding.TotalShares.Cmp(debondingShares) != 0 {
 			ctx.Logger().Error("InitChain: debonding shares mismatch",
 				"escrow_id", escrowID,
@@ -233,24 +224,11 @@ func (app *stakingApplication) initDebondingDelegations(ctx *abci.Context, state
 			return errors.New("staking/tendermint: debonding shares mismatch")
 		}
 	}
-	// Make sure that we apply delegation updates in a canonical order.
-	sort.SliceStable(deups, func(i, j int) bool {
-		if c := bytes.Compare(deups[i].escrowID[:], deups[j].escrowID[:]); c != 0 {
-			return c < 0
-		}
-		if c := bytes.Compare(deups[i].delegatorID[:], deups[j].delegatorID[:]); c != 0 {
-			return c < 0
-		}
-		return deups[i].seq < deups[j].seq
-	})
-	for _, u := range deups {
-		state.SetDebondingDelegation(u.delegatorID, u.escrowID, u.seq, u.delegation)
-	}
 	return nil
 }
 
 // InitChain initializes the chain from genesis.
-func (app *stakingApplication) InitChain(ctx *abci.Context, request types.RequestInitChain, doc *genesis.Document) error {
+func (app *stakingApplication) InitChain(ctx *abciAPI.Context, request types.RequestInitChain, doc *genesis.Document) error {
 	st := &doc.Staking
 
 	var (
@@ -296,44 +274,48 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 
 // Genesis exports current state in genesis format.
 func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error) {
-	totalSupply, err := sq.state.TotalSupply()
+	totalSupply, err := sq.state.TotalSupply(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	commonPool, err := sq.state.CommonPool()
+	commonPool, err := sq.state.CommonPool(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	lastBlockFees, err := sq.state.LastBlockFees()
+	lastBlockFees, err := sq.state.LastBlockFees(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	accounts, err := sq.state.Accounts()
+	accounts, err := sq.state.Accounts(ctx)
 	if err != nil {
 		return nil, err
 	}
 	ledger := make(map[signature.PublicKey]*staking.Account)
 	for _, acctID := range accounts {
-		acct := sq.state.Account(acctID)
+		var acct *staking.Account
+		acct, err = sq.state.Account(ctx, acctID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch account: %w", err)
+		}
 		// Make sure that export resets the stake accumulator state as that should be re-initialized
 		// during genesis (a genesis document with non-empty stake accumulator is invalid).
 		acct.Escrow.StakeAccumulator = staking.StakeAccumulator{}
 		ledger[acctID] = acct
 	}
 
-	delegations, err := sq.state.Delegations()
+	delegations, err := sq.state.Delegations(ctx)
 	if err != nil {
 		return nil, err
 	}
-	debondingDelegations, err := sq.state.DebondingDelegations()
+	debondingDelegations, err := sq.state.DebondingDelegations(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	params, err := sq.state.ConsensusParameters()
+	params, err := sq.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -39,6 +39,10 @@ var (
 
 	// ErrOversizedTx is the error returned when the given transaction is too big to be processed.
 	ErrOversizedTx = errors.New(moduleName, 2, "consensus: oversized transaction")
+
+	// ErrVersionNotFound is the error returned when the given version (height) cannot be found,
+	// possibly because it was pruned.
+	ErrVersionNotFound = errors.New(moduleName, 3, "consensus: version not found")
 )
 
 // ClientBackend is a limited consensus interface used by clients that

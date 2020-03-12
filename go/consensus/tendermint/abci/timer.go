@@ -2,10 +2,12 @@ package abci
 
 import (
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 )
 
 // deadlineDisarmed is a special deadline value for disarmed timers.
@@ -63,7 +65,7 @@ type Timer struct {
 }
 
 // NewTimer creates a new timer.
-func NewTimer(ctx *Context, app Application, kind uint8, id []byte, data []byte) *Timer {
+func NewTimer(ctx *api.Context, app Application, kind uint8, id []byte, data []byte) *Timer {
 	if data == nil {
 		data = []byte{}
 	}
@@ -105,11 +107,14 @@ func (t *Timer) CustomID() []byte {
 }
 
 // Data returns custom data associated with the timer.
-func (t *Timer) Data(ctx *Context) []byte {
+func (t *Timer) Data(ctx *api.Context) []byte {
 	t.refreshState()
 
 	if t.state.data == nil {
-		_, value := ctx.State().Get(t.ID)
+		value, err := ctx.State().Get(ctx, t.ID)
+		if err != nil {
+			panic(fmt.Errorf("timer: failed to fetch timer: %w", err))
+		}
 		if value == nil {
 			logger.Error("timer not found",
 				"id", hex.EncodeToString(t.ID),
@@ -126,7 +131,7 @@ func (t *Timer) Data(ctx *Context) []byte {
 //
 // The timer's custom data will be set to the new value iff it is non-nil,
 // otherwise it will be left unaltered.
-func (t *Timer) Reset(ctx *Context, duration time.Duration, data []byte) {
+func (t *Timer) Reset(ctx *api.Context, duration time.Duration, data []byte) {
 	if data == nil {
 		// Load previous data.
 		_ = t.Data(ctx)
@@ -144,14 +149,17 @@ func (t *Timer) Reset(ctx *Context, duration time.Duration, data []byte) {
 	}
 
 	// Create timer entry.
-	ctx.State().Set(t.state.getKey(), t.state.data)
+	err := ctx.State().Insert(ctx, t.state.getKey(), t.state.data)
+	if err != nil {
+		panic(fmt.Errorf("timer: failed to set timer: %w", err))
+	}
 	t.ID = t.state.getKey()
 }
 
 // Stop stops the timer.
 //
 // This removes any data associated with the timer.
-func (t *Timer) Stop(ctx *Context) {
+func (t *Timer) Stop(ctx *api.Context) {
 	// Remove previous timer entry (if any).
 	t.remove(ctx)
 
@@ -159,42 +167,47 @@ func (t *Timer) Stop(ctx *Context) {
 	t.ID = t.state.getKey()
 }
 
-func (t *Timer) remove(ctx *Context) {
+func (t *Timer) remove(ctx *api.Context) {
 	t.refreshState()
 
 	if t.state.deadline == deadlineDisarmed {
 		return
 	}
 
-	if _, removed := ctx.State().Remove(t.ID); !removed {
+	if existing, err := ctx.State().RemoveExisting(ctx, t.ID); existing == nil || err != nil {
 		logger.Error("timer not removed",
 			"id", hex.EncodeToString(t.ID),
 		)
-		panic("timer: not removed")
+		panic(fmt.Errorf("timer: not removed: %w", err))
 	}
 }
 
-func fireTimers(ctx *Context, app Application) (err error) {
+func fireTimers(ctx *api.Context, app Application) (err error) {
 	// Iterate through all timers which have already expired.
-	ctx.State().IterateRange(
-		timerKeyFmt.Encode(),
-		timerKeyFmt.Encode(uint64(ctx.Now().Unix())+1),
-		true,
-		func(key, value []byte) bool {
-			var ts timerState
-			ts.fromKeyValue(key, value)
+	it := ctx.State().NewIterator(ctx)
+	defer it.Close()
 
-			// Skip timers that are not for this application.
-			if app.ID() != ts.app {
-				return false
-			}
+	now := uint64(ctx.Now().Unix())
+	for it.Seek(timerKeyFmt.Encode()); it.Valid(); it.Next() {
+		var decDeadline uint64
+		if !timerKeyFmt.Decode(it.Key(), &decDeadline) || decDeadline > now {
+			break
+		}
 
-			if err = app.FireTimer(ctx, &Timer{ID: key, state: &ts}); err != nil {
-				return true
-			}
+		var ts timerState
+		ts.fromKeyValue(it.Key(), it.Value())
 
-			return false
-		},
-	)
+		// Skip timers that are not for this application.
+		if app.ID() != ts.app {
+			continue
+		}
+
+		if err = app.FireTimer(ctx, &Timer{ID: it.Key(), state: &ts}); err != nil {
+			return err
+		}
+	}
+	if it.Err() != nil {
+		return api.UnavailableStateError(it.Err())
+	}
 	return
 }

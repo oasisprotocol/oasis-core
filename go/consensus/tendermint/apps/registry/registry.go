@@ -23,7 +23,7 @@ import (
 var _ abci.Application = (*registryApplication)(nil)
 
 type registryApplication struct {
-	state abci.ApplicationState
+	state api.ApplicationState
 }
 
 func (app *registryApplication) Name() string {
@@ -46,14 +46,14 @@ func (app *registryApplication) Dependencies() []string {
 	return []string{stakingapp.AppName}
 }
 
-func (app *registryApplication) OnRegister(state abci.ApplicationState) {
+func (app *registryApplication) OnRegister(state api.ApplicationState) {
 	app.state = state
 }
 
 func (app *registryApplication) OnCleanup() {
 }
 
-func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
+func (app *registryApplication) BeginBlock(ctx *api.Context, request types.RequestBeginBlock) error {
 	// XXX: With PR#1889 this can be a differnet interval.
 	if changed, registryEpoch := app.state.EpochChanged(ctx); changed {
 		return app.onRegistryEpochChanged(ctx, registryEpoch)
@@ -61,7 +61,7 @@ func (app *registryApplication) BeginBlock(ctx *abci.Context, request types.Requ
 	return nil
 }
 
-func (app *registryApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
+func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	state := registryState.NewMutableState(ctx.State())
 
 	switch tx.Method {
@@ -100,23 +100,23 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Tra
 	}
 }
 
-func (app *registryApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *registryApplication) ForeignExecuteTx(ctx *api.Context, other abci.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
-func (app *registryApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *registryApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *registryApplication) FireTimer(*abci.Context, *abci.Timer) error {
+func (app *registryApplication) FireTimer(*api.Context, *abci.Timer) error {
 	return fmt.Errorf("tendermint/registry: unexpected timer")
 }
 
-func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, registryEpoch epochtime.EpochTime) error {
+func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registryEpoch epochtime.EpochTime) (err error) {
 	state := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 
-	nodes, err := state.Nodes()
+	nodes, err := state.Nodes(ctx)
 	if err != nil {
 		ctx.Logger().Error("onRegistryEpochChanged: failed to get nodes",
 			"err", err,
@@ -124,7 +124,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 		return fmt.Errorf("registry: onRegistryEpochChanged: failed to get nodes: %w", err)
 	}
 
-	debondingInterval, err := stakeState.DebondingInterval()
+	debondingInterval, err := stakeState.DebondingInterval(ctx)
 	if err != nil {
 		ctx.Logger().Error("onRegistryEpochChanged: failed to get debonding interval",
 			"err", err,
@@ -132,7 +132,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 		return fmt.Errorf("registry: onRegistryEpochChanged: failed to get debonding interval: %w", err)
 	}
 
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("onRegistryEpochChanged: failed to fetch consensus parameters",
 			"err", err,
@@ -146,7 +146,6 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 		if err != nil {
 			return fmt.Errorf("failed to create stake accumulator cache: %w", err)
 		}
-		defer stakeAcc.Commit()
 	}
 
 	// When a node expires, it is kept around for up to the debonding
@@ -163,7 +162,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 		// node expiration (this is required so that we don't emit expiration
 		// events every epoch).
 		var status *registry.NodeStatus
-		status, err = state.NodeStatus(node.ID)
+		status, err = state.NodeStatus(ctx, node.ID)
 		if err != nil {
 			return fmt.Errorf("registry: onRegistryEpochChanged: couldn't get node status: %w", err)
 		}
@@ -171,7 +170,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 		if !status.ExpirationProcessed {
 			expiredNodes = append(expiredNodes, node)
 			status.ExpirationProcessed = true
-			if err = state.SetNodeStatus(node.ID, status); err != nil {
+			if err = state.SetNodeStatus(ctx, node.ID, status); err != nil {
 				return fmt.Errorf("registry: onRegistryEpochChanged: couldn't set node status: %w", err)
 			}
 		}
@@ -185,7 +184,9 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 			ctx.Logger().Debug("removing expired node",
 				"node_id", node.ID,
 			)
-			state.RemoveNode(node)
+			if err = state.RemoveNode(ctx, node); err != nil {
+				return fmt.Errorf("registry: onRegistryEpochChanged: couldn't remove node: %w", err)
+			}
 
 			// Remove the stake claim for the given node.
 			if !params.DebugBypassStake {
@@ -193,6 +194,12 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *abci.Context, regist
 					return fmt.Errorf("registry: onRegistryEpochChanged: couldn't remove stake claim: %w", err)
 				}
 			}
+		}
+	}
+
+	if !params.DebugBypassStake {
+		if err = stakeAcc.Commit(); err != nil {
+			return fmt.Errorf("registry: onRegistryEpochChanged: failed to commit stake accumulator: %w", err)
 		}
 	}
 

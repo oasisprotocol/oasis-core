@@ -102,6 +102,9 @@ type Config struct { // nolint: maligned
 
 	// NoFsync will disable fsync() where possible.
 	NoFsync bool
+
+	// MemoryOnly will make the storage memory-only (if the backend supports it).
+	MemoryOnly bool
 }
 
 // ToNodeDB converts from a Config to a node DB Config.
@@ -111,6 +114,7 @@ func (cfg *Config) ToNodeDB() *nodedb.Config {
 		Namespace:        cfg.Namespace,
 		MaxCacheSize:     cfg.MaxCacheSize,
 		NoFsync:          cfg.NoFsync,
+		MemoryOnly:       cfg.MemoryOnly,
 		DiscardWriteLogs: cfg.DiscardWriteLogs,
 	}
 }

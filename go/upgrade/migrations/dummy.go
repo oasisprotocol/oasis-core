@@ -1,10 +1,12 @@
 package migrations
 
 import (
+	"fmt"
+
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -39,21 +41,23 @@ func (th *dummyMigrationHandler) StartupUpgrade(ctx *Context) error {
 }
 
 func (th *dummyMigrationHandler) ConsensusUpgrade(ctx *Context, privateCtx interface{}) error {
-	abciCtx := privateCtx.(*abci.Context)
+	abciCtx := privateCtx.(*abciAPI.Context)
 	regState := registryState.NewMutableState(abciCtx.State())
 	stakeState := stakingState.NewMutableState(abciCtx.State())
 
 	sigEntity, err := entity.SignEntity(entitySigner, registry.RegisterEntitySignatureContext, &TestEntity)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to sign entity: %w", err)
 	}
 
 	// Add a new entity to the registry. The test runner will check for its presence to verify
 	// the migration ran successfully.
-	regState.SetEntity(&TestEntity, sigEntity)
+	if err = regState.SetEntity(abciCtx, &TestEntity, sigEntity); err != nil {
+		return fmt.Errorf("failed to set entity: %w", err)
+	}
 
 	// Set this entity's staking properly.
-	stakeState.SetAccount(TestEntity.ID, &staking.Account{
+	err = stakeState.SetAccount(abciCtx, TestEntity.ID, &staking.Account{
 		Escrow: staking.EscrowAccount{
 			StakeAccumulator: staking.StakeAccumulator{
 				Claims: map[staking.StakeClaim][]staking.ThresholdKind{
@@ -64,6 +68,9 @@ func (th *dummyMigrationHandler) ConsensusUpgrade(ctx *Context, privateCtx inter
 			},
 		},
 	})
+	if err != nil {
+		return fmt.Errorf("failed to set account: %w", err)
+	}
 
 	return nil
 }

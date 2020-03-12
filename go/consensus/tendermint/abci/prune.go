@@ -1,13 +1,12 @@
 package abci
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
-	"github.com/tendermint/iavl"
-
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
 )
 
 const (
@@ -60,111 +59,99 @@ type PruneConfig struct {
 	Strategy PruneStrategy
 
 	// NumKept is the number of versions retained when applicable.
-	NumKept int64
+	NumKept uint64
 }
 
-// StatePruner is a concrete ABCI mux iAVL state pruner implementation.
+// StatePruner is a concrete ABCI mux state pruner implementation.
 type StatePruner interface {
-	// Prune purges unneeded versions from the ABCI mux iAVL tree,
+	// Prune purges unneeded versions from the ABCI mux node database,
 	// given the latest version, based on the underlying strategy.
-	Prune(latestVersion int64)
-
-	// Subscribe subscribes to prune events.
-	Subscribe() (<-chan int64, *pubsub.Subscription, error)
+	Prune(ctx context.Context, latestVersion uint64) error
 }
 
 type statePrunerInitializer interface {
-	Initialize(latestVersion int64) error
+	Initialize(latestVersion uint64) error
 }
 
 type nonePruner struct{}
 
-func (p *nonePruner) Prune(latestVersion int64) {
+func (p *nonePruner) Prune(ctx context.Context, latestVersion uint64) error {
 	// Nothing to prune.
-}
-
-func (p *nonePruner) Subscribe() (<-chan int64, *pubsub.Subscription, error) {
-	return nil, nil, nil
+	return nil
 }
 
 type genericPruner struct {
 	logger *logging.Logger
-	tree   *iavl.MutableTree
+	ndb    nodedb.NodeDB
 
-	eldestRetained int64
-	keepN          int64
-
-	notifier *pubsub.Broker
+	earliestVersion uint64
+	keepN           uint64
 }
 
-func (p *genericPruner) Initialize(latestVersion int64) error {
+func (p *genericPruner) Initialize(latestVersion uint64) error {
 	// Figure out the eldest version currently present in the tree.
-	if p.eldestRetained = p.tree.EldestVersion(); p.eldestRetained == -1 {
-		// The tree is empty, nothing to purge.
-		p.eldestRetained = 0
-		return nil
+	var err error
+	if p.earliestVersion, err = p.ndb.GetEarliestVersion(context.Background()); err != nil {
+		return fmt.Errorf("failed to get earliest version: %w", err)
 	}
 
-	return p.doPrune(latestVersion)
+	return p.doPrune(context.Background(), latestVersion)
 }
 
-func (p *genericPruner) Prune(latestVersion int64) {
-	if err := p.doPrune(latestVersion); err != nil {
+func (p *genericPruner) Prune(ctx context.Context, latestVersion uint64) error {
+	if err := p.doPrune(ctx, latestVersion); err != nil {
 		p.logger.Error("Prune",
 			"err", err,
 		)
-		panic(err)
+		return err
 	}
+	return nil
 }
 
-func (p *genericPruner) doPrune(latestVersion int64) error {
+func (p *genericPruner) doPrune(ctx context.Context, latestVersion uint64) error {
 	if latestVersion < p.keepN {
 		return nil
 	}
 
 	p.logger.Debug("Prune: Start",
 		"latest_version", latestVersion,
-		"start_version", p.eldestRetained,
+		"start_version", p.earliestVersion,
 	)
 
 	preserveFrom := latestVersion - p.keepN
-	for i := p.eldestRetained; i <= latestVersion; i++ {
-		if p.tree.VersionExists(i) {
-			if i >= preserveFrom {
-				p.eldestRetained = i
-				break
-			}
+	for i := p.earliestVersion; i <= latestVersion; i++ {
+		if i >= preserveFrom {
+			p.earliestVersion = i
+			break
+		}
 
-			p.logger.Debug("Prune: Delete",
-				"latest_version", latestVersion,
-				"pruned_version", i,
+		p.logger.Debug("Prune: Delete",
+			"latest_version", latestVersion,
+			"pruned_version", i,
+		)
+
+		err := p.ndb.Prune(ctx, i)
+		switch err {
+		case nil:
+		case nodedb.ErrNotEarliest:
+			p.logger.Debug("Prune: skipping non-earliest version",
+				"version", i,
 			)
-
-			if err := p.tree.DeleteVersion(i); err != nil {
-				return err
-			}
-
-			p.notifier.Broadcast(i)
+			continue
+		default:
+			return err
 		}
 	}
 
 	p.logger.Debug("Prune: Finish",
 		"latest_version", latestVersion,
-		"eldest_version", p.eldestRetained,
+		"eldest_version", p.earliestVersion,
 	)
 
 	return nil
 }
 
-func (p *genericPruner) Subscribe() (<-chan int64, *pubsub.Subscription, error) {
-	sub := p.notifier.Subscribe()
-	ch := make(chan int64)
-	sub.Unwrap(ch)
-
-	return ch, sub, nil
-}
-
-func newStatePruner(cfg *PruneConfig, tree *iavl.MutableTree, latestVersion int64) (StatePruner, error) {
+func newStatePruner(cfg *PruneConfig, ndb nodedb.NodeDB, latestVersion uint64) (StatePruner, error) {
 	// The roothash checkCommittees call requires at least 1 previous block
 	// for timekeeping purposes.
 	const minKept = 1
@@ -181,10 +168,9 @@ func newStatePruner(cfg *PruneConfig, tree *iavl.MutableTree, latestVersion int6
 		}
 
 		statePruner = &genericPruner{
-			logger:   logger,
-			tree:     tree,
-			keepN:    cfg.NumKept,
-			notifier: pubsub.NewBroker(false),
+			logger: logger,
+			ndb:    ndb,
+			keepN:  cfg.NumKept,
 		}
 	default:
 		return nil, fmt.Errorf("abci/pruner: unsupported pruning strategy: %v", cfg.Strategy)

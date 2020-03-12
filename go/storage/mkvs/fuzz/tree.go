@@ -13,7 +13,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	commonFuzz "github.com/oasislabs/oasis-core/go/common/fuzz"
-	mkvs "github.com/oasislabs/oasis-core/go/storage/mkvs"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
 	mkvsNode "github.com/oasislabs/oasis-core/go/storage/mkvs/node"
 	mkvsTests "github.com/oasislabs/oasis-core/go/storage/mkvs/tests"
 )

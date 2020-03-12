@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
@@ -24,27 +23,10 @@ type QueryFactory struct {
 
 // QueryAt returns the roothash query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	var state *roothashState.ImmutableState
-	var err error
-	abciCtx := abci.FromCtx(ctx)
-
-	// If this request was made from InitChain, no blocks and states have been
-	// submitted yet, so we use the existing state instead.
-	if abciCtx != nil && abciCtx.IsInitChain() {
-		state = roothashState.NewMutableState(abciCtx.State()).ImmutableState
-	} else {
-		state, err = roothashState.NewImmutableState(sf.app.state, height)
-		if err != nil {
-			return nil, err
-		}
+	state, err := roothashState.NewImmutableState(ctx, sf.app.state, height)
+	if err != nil {
+		return nil, err
 	}
-
-	// If this request was made from an ABCI app, make sure to use the associated
-	// context for querying state instead of the default one.
-	if abciCtx != nil && height == abciCtx.BlockHeight()+1 {
-		state.Snapshot = abciCtx.State().ImmutableTree
-	}
-
 	return &rootHashQuerier{state}, nil
 }
 
@@ -53,7 +35,7 @@ type rootHashQuerier struct {
 }
 
 func (rq *rootHashQuerier) LatestBlock(ctx context.Context, id common.Namespace) (*block.Block, error) {
-	runtime, err := rq.state.RuntimeState(id)
+	runtime, err := rq.state.RuntimeState(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +43,7 @@ func (rq *rootHashQuerier) LatestBlock(ctx context.Context, id common.Namespace)
 }
 
 func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id common.Namespace) (*block.Block, error) {
-	runtime, err := rq.state.RuntimeState(id)
+	runtime, err := rq.state.RuntimeState(ctx, id)
 	if err != nil {
 		return nil, err
 	}

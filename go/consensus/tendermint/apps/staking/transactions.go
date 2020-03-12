@@ -1,10 +1,11 @@
 package staking
 
 import (
+	"fmt"
+
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
@@ -21,15 +22,15 @@ func isTransferPermitted(params *staking.ConsensusParameters, fromID signature.P
 	return
 }
 
-func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.MutableState, xfer *staking.Transfer) error {
+func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.MutableState, xfer *staking.Transfer) error {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
 
 	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
 	}
 	if err = ctx.Gas().UseGas(1, staking.GasOpTransfer, params.GasCosts); err != nil {
 		return err
@@ -40,12 +41,15 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 		return staking.ErrForbidden
 	}
 
-	from := state.Account(fromID)
+	from, err := state.Account(ctx, fromID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch account: %w", err)
+	}
 
 	if fromID.Equal(xfer.To) {
 		// Handle transfer to self as just a balance check.
 		if from.General.Balance.Cmp(&xfer.Tokens) < 0 {
-			err := staking.ErrInsufficientBalance
+			err = staking.ErrInsufficientBalance
 			ctx.Logger().Error("Transfer: self-transfer greater than balance",
 				"err", err,
 				"from", fromID,
@@ -57,8 +61,12 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 	} else {
 		// Source and destination MUST be separate accounts with how
 		// quantity.Move is implemented.
-		to := state.Account(xfer.To)
-		if err := quantity.Move(&to.General.Balance, &from.General.Balance, &xfer.Tokens); err != nil {
+		var to *staking.Account
+		to, err = state.Account(ctx, xfer.To)
+		if err != nil {
+			return fmt.Errorf("failed to fetch account: %w", err)
+		}
+		if err = quantity.Move(&to.General.Balance, &from.General.Balance, &xfer.Tokens); err != nil {
 			ctx.Logger().Error("Transfer: failed to move balance",
 				"err", err,
 				"from", fromID,
@@ -68,10 +76,14 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 			return err
 		}
 
-		state.SetAccount(xfer.To, to)
+		if err = state.SetAccount(ctx, xfer.To, to); err != nil {
+			return fmt.Errorf("failed to set account: %w", err)
+		}
 	}
 
-	state.SetAccount(fromID, from)
+	if err = state.SetAccount(ctx, fromID, from); err != nil {
+		return fmt.Errorf("failed to fetch account: %w", err)
+	}
 
 	ctx.Logger().Debug("Transfer: executed transfer",
 		"from", fromID,
@@ -89,24 +101,27 @@ func (app *stakingApplication) transfer(ctx *abci.Context, state *stakingState.M
 	return nil
 }
 
-func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.MutableState, burn *staking.Burn) error {
+func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.MutableState, burn *staking.Burn) error {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
 
 	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
 	}
-	if err := ctx.Gas().UseGas(1, staking.GasOpBurn, params.GasCosts); err != nil {
+	if err = ctx.Gas().UseGas(1, staking.GasOpBurn, params.GasCosts); err != nil {
 		return err
 	}
 
 	id := ctx.TxSigner()
-	from := state.Account(id)
+	from, err := state.Account(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to fetch account: %w", err)
+	}
 
-	if err := from.General.Balance.Sub(&burn.Tokens); err != nil {
+	if err = from.General.Balance.Sub(&burn.Tokens); err != nil {
 		ctx.Logger().Error("Burn: failed to burn tokens",
 			"err", err,
 			"from", id, "amount", burn.Tokens,
@@ -114,12 +129,19 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.Mutab
 		return err
 	}
 
-	totalSupply, _ := state.TotalSupply()
+	totalSupply, err := state.TotalSupply(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch total supply: %w", err)
+	}
 
 	_ = totalSupply.Sub(&burn.Tokens)
 
-	state.SetAccount(id, from)
-	state.SetTotalSupply(totalSupply)
+	if err = state.SetAccount(ctx, id, from); err != nil {
+		return fmt.Errorf("failed to set account: %w", err)
+	}
+	if err = state.SetTotalSupply(ctx, totalSupply); err != nil {
+		return fmt.Errorf("failed to set total supply: %w", err)
+	}
 
 	ctx.Logger().Debug("Burn: burnt tokens",
 		"from", id,
@@ -135,17 +157,17 @@ func (app *stakingApplication) burn(ctx *abci.Context, state *stakingState.Mutab
 	return nil
 }
 
-func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.MutableState, escrow *staking.Escrow) error {
+func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.MutableState, escrow *staking.Escrow) error {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
 
 	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
 	}
-	if err := ctx.Gas().UseGas(1, staking.GasOpAddEscrow, params.GasCosts); err != nil {
+	if err = ctx.Gas().UseGas(1, staking.GasOpAddEscrow, params.GasCosts); err != nil {
 		return err
 	}
 
@@ -155,7 +177,10 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 	}
 
 	id := ctx.TxSigner()
-	from := state.Account(id)
+	from, err := state.Account(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to fetch account: %w", err)
+	}
 
 	// Fetch escrow account.
 	//
@@ -168,13 +193,19 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 		if params.DisableDelegation {
 			return staking.ErrForbidden
 		}
-		to = state.Account(escrow.Account)
+		to, err = state.Account(ctx, escrow.Account)
+		if err != nil {
+			return fmt.Errorf("failed to fetch account: %w", err)
+		}
 	}
 
 	// Fetch delegation.
-	delegation := state.Delegation(id, escrow.Account)
+	delegation, err := state.Delegation(ctx, id, escrow.Account)
+	if err != nil {
+		return fmt.Errorf("failed to fetch delegation: %w", err)
+	}
 
-	if err := to.Escrow.Active.Deposit(&delegation.Shares, &from.General.Balance, &escrow.Tokens); err != nil {
+	if err = to.Escrow.Active.Deposit(&delegation.Shares, &from.General.Balance, &escrow.Tokens); err != nil {
 		ctx.Logger().Error("AddEscrow: failed to escrow tokens",
 			"err", err,
 			"from", id,
@@ -185,12 +216,18 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 	}
 
 	// Commit accounts.
-	state.SetAccount(id, from)
+	if err = state.SetAccount(ctx, id, from); err != nil {
+		return fmt.Errorf("failed to set account: %w", err)
+	}
 	if !id.Equal(escrow.Account) {
-		state.SetAccount(escrow.Account, to)
+		if err = state.SetAccount(ctx, escrow.Account, to); err != nil {
+			return fmt.Errorf("failed to set account: %w", err)
+		}
 	}
 	// Commit delegation descriptor.
-	state.SetDelegation(id, escrow.Account, delegation)
+	if err = state.SetDelegation(ctx, id, escrow.Account, delegation); err != nil {
+		return fmt.Errorf("failed to set delegation: %w", err)
+	}
 
 	ctx.Logger().Debug("AddEscrow: escrowed tokens",
 		"from", id,
@@ -208,7 +245,7 @@ func (app *stakingApplication) addEscrow(ctx *abci.Context, state *stakingState.
 	return nil
 }
 
-func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingState.MutableState, reclaim *staking.ReclaimEscrow) error {
+func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingState.MutableState, reclaim *staking.ReclaimEscrow) error {
 	// No sense if there is nothing to reclaim.
 	if reclaim.Shares.IsZero() {
 		return staking.ErrInvalidArgument
@@ -219,16 +256,19 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	}
 
 	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
 	}
 	if err = ctx.Gas().UseGas(1, staking.GasOpReclaimEscrow, params.GasCosts); err != nil {
 		return err
 	}
 
 	id := ctx.TxSigner()
-	to := state.Account(id)
+	to, err := state.Account(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to fetch account: %w", err)
+	}
 
 	// Fetch escrow account.
 	//
@@ -241,21 +281,27 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 		if params.DisableDelegation {
 			return staking.ErrForbidden
 		}
-		from = state.Account(reclaim.Account)
+		from, err = state.Account(ctx, reclaim.Account)
+		if err != nil {
+			return fmt.Errorf("failed to fetch account: %w", err)
+		}
 	}
 
 	// Fetch delegation.
-	delegation := state.Delegation(id, reclaim.Account)
+	delegation, err := state.Delegation(ctx, id, reclaim.Account)
+	if err != nil {
+		return fmt.Errorf("failed to fetch delegation: %w", err)
+	}
 
 	// Fetch debonding interval and current epoch.
-	debondingInterval, err := state.DebondingInterval()
+	debondingInterval, err := state.DebondingInterval(ctx)
 	if err != nil {
 		ctx.Logger().Error("ReclaimEscrow: failed to query debonding interval",
 			"err", err,
 		)
 		return err
 	}
-	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}
@@ -266,7 +312,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 
 	var tokens quantity.Quantity
 
-	if err := from.Escrow.Active.Withdraw(&tokens, &delegation.Shares, &reclaim.Shares); err != nil {
+	if err = from.Escrow.Active.Withdraw(&tokens, &delegation.Shares, &reclaim.Shares); err != nil {
 		ctx.Logger().Error("ReclaimEscrow: failed to redeem escrow shares",
 			"err", err,
 			"to", id,
@@ -277,7 +323,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 	}
 	tokenAmount := tokens.Clone()
 
-	if err := from.Escrow.Debonding.Deposit(&deb.Shares, &tokens, tokenAmount); err != nil {
+	if err = from.Escrow.Debonding.Deposit(&deb.Shares, &tokens, tokenAmount); err != nil {
 		ctx.Logger().Error("ReclaimEscrow: failed to debond shares",
 			"err", err,
 			"to", id,
@@ -294,21 +340,28 @@ func (app *stakingApplication) reclaimEscrow(ctx *abci.Context, state *stakingSt
 		return staking.ErrInvalidArgument
 	}
 
-	// Include the nonce as the final disambiguator to prevent overwriting debonding
-	// delegations.
-	state.SetDebondingDelegation(id, reclaim.Account, to.General.Nonce, &deb)
+	// Include the nonce as the final disambiguator to prevent overwriting debonding delegations.
+	if err = state.SetDebondingDelegation(ctx, id, reclaim.Account, to.General.Nonce, &deb); err != nil {
+		return fmt.Errorf("failed to set debonding delegation: %w", err)
+	}
 
-	state.SetDelegation(id, reclaim.Account, delegation)
-	state.SetAccount(id, to)
+	if err = state.SetDelegation(ctx, id, reclaim.Account, delegation); err != nil {
+		return fmt.Errorf("failed to set delegation: %w", err)
+	}
+	if err = state.SetAccount(ctx, id, to); err != nil {
+		return fmt.Errorf("failed to set account: %w", err)
+	}
 	if !id.Equal(reclaim.Account) {
-		state.SetAccount(reclaim.Account, from)
+		if err = state.SetAccount(ctx, reclaim.Account, from); err != nil {
+			return fmt.Errorf("failed to set account: %w", err)
+		}
 	}
 
 	return nil
 }
 
 func (app *stakingApplication) amendCommissionSchedule(
-	ctx *abci.Context,
+	ctx *api.Context,
 	state *stakingState.MutableState,
 	amendCommissionSchedule *staking.AmendCommissionSchedule,
 ) error {
@@ -317,21 +370,24 @@ func (app *stakingApplication) amendCommissionSchedule(
 	}
 
 	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
 	}
 	if err = ctx.Gas().UseGas(1, staking.GasOpAmendCommissionSchedule, params.GasCosts); err != nil {
 		return err
 	}
 
-	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}
 
 	id := ctx.TxSigner()
-	from := state.Account(id)
+	from, err := state.Account(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to fetch account: %w", err)
+	}
 
 	if err = from.Escrow.CommissionSchedule.AmendAndPruneAndValidate(&amendCommissionSchedule.Amendment, &params.CommissionScheduleRules, epoch); err != nil {
 		ctx.Logger().Error("AmendCommissionSchedule: amendment not acceptable",
@@ -341,7 +397,9 @@ func (app *stakingApplication) amendCommissionSchedule(
 		return err
 	}
 
-	state.SetAccount(id, from)
+	if err = state.SetAccount(ctx, id, from); err != nil {
+		return fmt.Errorf("failed to set account: %w", err)
+	}
 
 	return nil
 }

@@ -27,7 +27,7 @@ var (
 )
 
 type beaconApplication struct {
-	state abci.ApplicationState
+	state api.ApplicationState
 }
 
 func (app *beaconApplication) Name() string {
@@ -50,41 +50,41 @@ func (app *beaconApplication) Dependencies() []string {
 	return nil
 }
 
-func (app *beaconApplication) OnRegister(state abci.ApplicationState) {
+func (app *beaconApplication) OnRegister(state api.ApplicationState) {
 	app.state = state
 }
 
 func (app *beaconApplication) OnCleanup() {
 }
 
-func (app *beaconApplication) BeginBlock(ctx *abci.Context, req types.RequestBeginBlock) error {
+func (app *beaconApplication) BeginBlock(ctx *api.Context, req types.RequestBeginBlock) error {
 	if changed, beaconEpoch := app.state.EpochChanged(ctx); changed {
 		return app.onBeaconEpochChange(ctx, beaconEpoch, req)
 	}
 	return nil
 }
 
-func (app *beaconApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
+func (app *beaconApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	return errUnexpectedTransaction
 }
 
-func (app *beaconApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *beaconApplication) ForeignExecuteTx(ctx *api.Context, other abci.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
-func (app *beaconApplication) EndBlock(ctx *abci.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *beaconApplication) EndBlock(ctx *api.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *beaconApplication) FireTimer(ctx *abci.Context, t *abci.Timer) error {
+func (app *beaconApplication) FireTimer(ctx *api.Context, t *abci.Timer) error {
 	return errUnexpectedTimer
 }
 
-func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
+func (app *beaconApplication) onBeaconEpochChange(ctx *api.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
 	var entropyCtx, entropy []byte
 
 	state := beaconState.NewMutableState(ctx.State())
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("failed to fetch consensus parameters",
 			"err", err,
@@ -140,10 +140,10 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *abci.Context, epoch epoch
 	return app.onNewBeacon(ctx, b)
 }
 
-func (app *beaconApplication) onNewBeacon(ctx *abci.Context, beacon []byte) error {
+func (app *beaconApplication) onNewBeacon(ctx *api.Context, beacon []byte) error {
 	state := beaconState.NewMutableState(ctx.State())
 
-	if err := state.SetBeacon(beacon); err != nil {
+	if err := state.SetBeacon(ctx, beacon); err != nil {
 		ctx.Logger().Error("onNewBeacon: failed to set beacon",
 			"err", err,
 		)

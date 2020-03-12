@@ -65,6 +65,11 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	opts = opts.WithCompression(options.Snappy)
 	opts = opts.WithMaxCacheSize(cfg.MaxCacheSize)
 
+	if cfg.MemoryOnly {
+		db.logger.Warn("using memory-only mode, data will not be persisted")
+		opts = opts.WithInMemory(true).WithDir("").WithValueDir("")
+	}
+
 	var err error
 	if db.db, err = badger.OpenManaged(opts); err != nil {
 		return nil, fmt.Errorf("mkvs/badger: failed to open database: %w", err)

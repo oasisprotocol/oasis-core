@@ -195,6 +195,7 @@ steps:
       - coverage-misc.txt
       - coverage-oasis-node.txt
       - coverage-mkvs.txt
+      - /tmp/oasis-node-test_*/test-node.log
     plugins:
       <<: *docker_plugin
 

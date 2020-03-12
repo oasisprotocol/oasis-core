@@ -1,13 +1,14 @@
 package epochtimemock
 
 import (
-	"github.com/pkg/errors"
-	"github.com/tendermint/iavl"
+	"context"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
 )
 
 var (
@@ -27,77 +28,86 @@ type mockEpochTimeState struct {
 }
 
 type immutableState struct {
-	*abci.ImmutableState
+	is *abciAPI.ImmutableState
 }
 
-func (s *immutableState) getEpoch() (api.EpochTime, int64, error) {
-	_, raw := s.Snapshot.Get(epochCurrentKeyFmt.Encode())
-	if raw == nil {
+func (s *immutableState) getEpoch(ctx context.Context) (api.EpochTime, int64, error) {
+	data, err := s.is.Get(ctx, epochCurrentKeyFmt.Encode())
+	if err != nil {
+		return api.EpochInvalid, 0, abciAPI.UnavailableStateError(err)
+	}
+	if data == nil {
 		return api.EpochTime(0), 0, nil
 	}
 
 	var state mockEpochTimeState
-	err := cbor.Unmarshal(raw, &state)
-	return state.Epoch, state.Height, err
+	if err = cbor.Unmarshal(data, &state); err != nil {
+		return api.EpochInvalid, 0, abciAPI.UnavailableStateError(err)
+	}
+	return state.Epoch, state.Height, nil
 }
 
-func (s *immutableState) getFutureEpoch() (*mockEpochTimeState, error) {
-	_, raw := s.Snapshot.Get(epochFutureKeyFmt.Encode())
-	if raw == nil {
+func (s *immutableState) getFutureEpoch(ctx context.Context) (*mockEpochTimeState, error) {
+	data, err := s.is.Get(ctx, epochFutureKeyFmt.Encode())
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	if data == nil {
 		return nil, nil
 	}
 
 	var state mockEpochTimeState
-	if err := cbor.Unmarshal(raw, &state); err != nil {
-		return nil, errors.Wrap(err, "epochtime_mock: failed to unmarshal future epoch")
+	if err := cbor.Unmarshal(data, &state); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &state, nil
 }
 
-func newImmutableState(state abci.ApplicationState, version int64) (*immutableState, error) {
-	inner, err := abci.NewImmutableState(state, version)
+func newImmutableState(ctx context.Context, state abciAPI.ApplicationState, version int64) (*immutableState, error) {
+	is, err := abciAPI.NewImmutableState(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
 
-	return &immutableState{inner}, nil
+	return &immutableState{is}, nil
 }
 
 type mutableState struct {
 	*immutableState
 
-	tree *iavl.MutableTree
+	ms mkvs.KeyValueTree
 }
 
-func (s *mutableState) setEpoch(epoch api.EpochTime, height int64) {
+func (s *mutableState) setEpoch(ctx context.Context, epoch api.EpochTime, height int64) error {
 	state := mockEpochTimeState{Epoch: epoch, Height: height}
-	s.tree.Set(epochCurrentKeyFmt.Encode(), cbor.Marshal(state))
+	err := s.ms.Insert(ctx, epochCurrentKeyFmt.Encode(), cbor.Marshal(state))
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *mutableState) setFutureEpoch(epoch api.EpochTime, height int64) error {
-	future, err := s.getFutureEpoch()
+func (s *mutableState) setFutureEpoch(ctx context.Context, epoch api.EpochTime, height int64) error {
+	future, err := s.getFutureEpoch(ctx)
 	if err != nil {
 		return err
 	}
 	if future != nil {
-		return errors.New("epochtime_mock: future epoch already pending")
+		return fmt.Errorf("epochtime_mock: future epoch already pending")
 	}
 
 	state := mockEpochTimeState{Epoch: epoch, Height: height}
-	s.tree.Set(epochFutureKeyFmt.Encode(), cbor.Marshal(state))
-
-	return nil
+	err = s.ms.Insert(ctx, epochFutureKeyFmt.Encode(), cbor.Marshal(state))
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *mutableState) clearFutureEpoch() {
-	s.tree.Remove(epochFutureKeyFmt.Encode())
+func (s *mutableState) clearFutureEpoch(ctx context.Context) error {
+	err := s.ms.Remove(ctx, epochFutureKeyFmt.Encode())
+	return abciAPI.UnavailableStateError(err)
 }
 
-func newMutableState(tree *iavl.MutableTree) *mutableState {
-	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
-
+func newMutableState(tree mkvs.KeyValueTree) *mutableState {
 	return &mutableState{
-		immutableState: &immutableState{inner},
-		tree:           tree,
+		immutableState: &immutableState{
+			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
+		},
+		ms: tree,
 	}
 }

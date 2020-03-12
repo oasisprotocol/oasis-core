@@ -1,6 +1,7 @@
 package state
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -34,6 +35,7 @@ func (r *Round) GetNextTimeout() (timeout time.Time) {
 }
 
 func (r *Round) AddExecutorCommitment(
+	ctx context.Context,
 	commitment *commitment.ExecutorCommitment,
 	sv commitment.SignatureVerifier,
 	nl commitment.NodeLookup,
@@ -41,10 +43,11 @@ func (r *Round) AddExecutorCommitment(
 	if r.Finalized {
 		return nil, errors.New("tendermint/roothash: round is already finalized, can't commit")
 	}
-	return r.ExecutorPool.AddExecutorCommitment(r.CurrentBlock, sv, nl, commitment)
+	return r.ExecutorPool.AddExecutorCommitment(ctx, r.CurrentBlock, sv, nl, commitment)
 }
 
 func (r *Round) AddMergeCommitment(
+	ctx context.Context,
 	commitment *commitment.MergeCommitment,
 	sv commitment.SignatureVerifier,
 	nl commitment.NodeLookup,
@@ -52,7 +55,7 @@ func (r *Round) AddMergeCommitment(
 	if r.Finalized {
 		return errors.New("tendermint/roothash: round is already finalized, can't commit")
 	}
-	return r.MergePool.AddMergeCommitment(r.CurrentBlock, sv, nl, commitment, r.ExecutorPool)
+	return r.MergePool.AddMergeCommitment(ctx, r.CurrentBlock, sv, nl, commitment, r.ExecutorPool)
 }
 
 func (r *Round) Transition(blk *block.Block) {

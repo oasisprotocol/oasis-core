@@ -1,6 +1,7 @@
 package commitment
 
 import (
+	"context"
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -47,7 +48,7 @@ type SignatureVerifier interface {
 // NodeLookup is an interface for looking up registry node descriptors.
 type NodeLookup interface {
 	// Node looks up a node descriptor.
-	Node(id signature.PublicKey) (*node.Node, error)
+	Node(ctx context.Context, id signature.PublicKey) (*node.Node, error)
 }
 
 // Pool is a serializable pool of commitments that can be used to perform
@@ -133,7 +134,13 @@ func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
 	return com, ok
 }
 
-func (p *Pool) addOpenExecutorCommitment(blk *block.Block, sv SignatureVerifier, nl NodeLookup, openCom *OpenExecutorCommitment) error {
+func (p *Pool) addOpenExecutorCommitment(
+	ctx context.Context,
+	blk *block.Block,
+	sv SignatureVerifier,
+	nl NodeLookup,
+	openCom *OpenExecutorCommitment,
+) error {
 	if p.Committee == nil {
 		return ErrNoCommittee
 	}
@@ -173,7 +180,7 @@ func (p *Pool) addOpenExecutorCommitment(blk *block.Block, sv SignatureVerifier,
 
 	// Verify RAK-attestation.
 	if p.Runtime.TEEHardware != node.TEEHardwareInvalid {
-		n, err := nl.Node(id)
+		n, err := nl.Node(ctx, id)
 		if err != nil {
 			// This should never happen as nodes cannot disappear mid-epoch.
 			logger.Warn("unable to fetch node descriptor to verify RAK-attestation",
@@ -280,14 +287,20 @@ func (p *Pool) addOpenExecutorCommitment(blk *block.Block, sv SignatureVerifier,
 }
 
 // AddExecutorCommitment verifies and adds a new executor commitment to the pool.
-func (p *Pool) AddExecutorCommitment(blk *block.Block, sv SignatureVerifier, nl NodeLookup, commitment *ExecutorCommitment) error {
+func (p *Pool) AddExecutorCommitment(
+	ctx context.Context,
+	blk *block.Block,
+	sv SignatureVerifier,
+	nl NodeLookup,
+	commitment *ExecutorCommitment,
+) error {
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
 		return err
 	}
 
-	return p.addOpenExecutorCommitment(blk, sv, nl, openCom)
+	return p.addOpenExecutorCommitment(ctx, blk, sv, nl, openCom)
 }
 
 // CheckEnoughCommitments checks if there are enough commitments in the pool to be
@@ -503,6 +516,7 @@ func (p *Pool) TryFinalize(
 //
 // Any executor commitments are added to the provided pool.
 func (p *Pool) AddMergeCommitment(
+	ctx context.Context,
 	blk *block.Block,
 	sv SignatureVerifier,
 	nl NodeLookup,
@@ -552,7 +566,7 @@ func (p *Pool) AddMergeCommitment(
 	// Check executor commitments -- all commitments must be valid and there
 	// must be no discrepancy as the merge committee nodes are supposed to
 	// check this.
-	if err = ccPool.addExecutorCommitments(blk, sv, nl, body.ExecutorCommits); err != nil {
+	if err = ccPool.addExecutorCommitments(ctx, blk, sv, nl, body.ExecutorCommits); err != nil {
 		return err
 	}
 
@@ -637,7 +651,13 @@ type MultiPool struct {
 }
 
 // AddExecutorCommitment verifies and adds a new executor commitment to the pool.
-func (m *MultiPool) AddExecutorCommitment(blk *block.Block, sv SignatureVerifier, nl NodeLookup, commitment *ExecutorCommitment) (*Pool, error) {
+func (m *MultiPool) AddExecutorCommitment(
+	ctx context.Context,
+	blk *block.Block,
+	sv SignatureVerifier,
+	nl NodeLookup,
+	commitment *ExecutorCommitment,
+) (*Pool, error) {
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
@@ -649,14 +669,20 @@ func (m *MultiPool) AddExecutorCommitment(blk *block.Block, sv SignatureVerifier
 		return nil, ErrInvalidCommitteeID
 	}
 
-	return p, p.addOpenExecutorCommitment(blk, sv, nl, openCom)
+	return p, p.addOpenExecutorCommitment(ctx, blk, sv, nl, openCom)
 }
 
 // addExecutorCommitments verifies and adds multiple executor commitments to the pool.
 // All valid commitments will be added, redundant commitments will be ignored.
 //
 // Note that any signatures being invalid will result in no changes to the pool.
-func (m *MultiPool) addExecutorCommitments(blk *block.Block, sv SignatureVerifier, nl NodeLookup, commitments []ExecutorCommitment) error {
+func (m *MultiPool) addExecutorCommitments(
+	ctx context.Context,
+	blk *block.Block,
+	sv SignatureVerifier,
+	nl NodeLookup,
+	commitments []ExecutorCommitment,
+) error {
 	// Batch verify all of the signatures at once.
 	msgs := make([][]byte, 0, len(commitments))
 	sigs := make([]signature.Signature, 0, len(commitments))
@@ -691,7 +717,7 @@ func (m *MultiPool) addExecutorCommitments(blk *block.Block, sv SignatureVerifie
 			continue
 		}
 
-		err := p.addOpenExecutorCommitment(blk, sv, nl, openCom)
+		err := p.addOpenExecutorCommitment(ctx, blk, sv, nl, openCom)
 		switch err {
 		case nil, ErrAlreadyCommitted:
 		default:

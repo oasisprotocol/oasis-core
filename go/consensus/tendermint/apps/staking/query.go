@@ -5,7 +5,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
@@ -33,27 +32,10 @@ type QueryFactory struct {
 
 // QueryAt returns the staking query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	var state *stakingState.ImmutableState
-	var err error
-	abciCtx := abci.FromCtx(ctx)
-
-	// If this request was made from InitChain, no blocks and states have been
-	// submitted yet, so we use the existing state instead.
-	if abciCtx != nil && abciCtx.IsInitChain() {
-		state = stakingState.NewMutableState(abciCtx.State()).ImmutableState
-	} else {
-		state, err = stakingState.NewImmutableState(sf.app.state, height)
-		if err != nil {
-			return nil, err
-		}
+	state, err := stakingState.NewImmutableState(ctx, sf.app.state, height)
+	if err != nil {
+		return nil, err
 	}
-
-	// If this request was made from an ABCI app, make sure to use the associated
-	// context for querying state instead of the default one.
-	if abciCtx != nil && height == abciCtx.BlockHeight()+1 {
-		state.Snapshot = abciCtx.State().ImmutableTree
-	}
-
 	return &stakingQuerier{state}, nil
 }
 
@@ -62,19 +44,19 @@ type stakingQuerier struct {
 }
 
 func (sq *stakingQuerier) TotalSupply(ctx context.Context) (*quantity.Quantity, error) {
-	return sq.state.TotalSupply()
+	return sq.state.TotalSupply(ctx)
 }
 
 func (sq *stakingQuerier) CommonPool(ctx context.Context) (*quantity.Quantity, error) {
-	return sq.state.CommonPool()
+	return sq.state.CommonPool(ctx)
 }
 
 func (sq *stakingQuerier) LastBlockFees(ctx context.Context) (*quantity.Quantity, error) {
-	return sq.state.LastBlockFees()
+	return sq.state.LastBlockFees(ctx)
 }
 
 func (sq *stakingQuerier) Threshold(ctx context.Context, kind staking.ThresholdKind) (*quantity.Quantity, error) {
-	thresholds, err := sq.state.Thresholds()
+	thresholds, err := sq.state.Thresholds(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -87,27 +69,27 @@ func (sq *stakingQuerier) Threshold(ctx context.Context, kind staking.ThresholdK
 }
 
 func (sq *stakingQuerier) DebondingInterval(ctx context.Context) (epochtime.EpochTime, error) {
-	return sq.state.DebondingInterval()
+	return sq.state.DebondingInterval(ctx)
 }
 
 func (sq *stakingQuerier) Accounts(ctx context.Context) ([]signature.PublicKey, error) {
-	return sq.state.Accounts()
+	return sq.state.Accounts(ctx)
 }
 
 func (sq *stakingQuerier) AccountInfo(ctx context.Context, id signature.PublicKey) (*staking.Account, error) {
-	return sq.state.Account(id), nil
+	return sq.state.Account(ctx, id)
 }
 
 func (sq *stakingQuerier) Delegations(ctx context.Context, id signature.PublicKey) (map[signature.PublicKey]*staking.Delegation, error) {
-	return sq.state.DelegationsFor(id)
+	return sq.state.DelegationsFor(ctx, id)
 }
 
 func (sq *stakingQuerier) DebondingDelegations(ctx context.Context, id signature.PublicKey) (map[signature.PublicKey][]*staking.DebondingDelegation, error) {
-	return sq.state.DebondingDelegationsFor(id)
+	return sq.state.DebondingDelegationsFor(ctx, id)
 }
 
 func (sq *stakingQuerier) ConsensusParameters(ctx context.Context) (*staking.ConsensusParameters, error) {
-	return sq.state.ConsensusParameters()
+	return sq.state.ConsensusParameters(ctx)
 }
 
 func (app *stakingApplication) QueryFactory() interface{} {
