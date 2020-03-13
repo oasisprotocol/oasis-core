@@ -5,10 +5,13 @@ import (
 	"crypto/x509"
 	"encoding"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
 	"strings"
+
+	fuzz "github.com/google/gofuzz"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 )
@@ -66,6 +69,15 @@ func (a *Address) UnmarshalText(text []byte) error {
 	a.TCPAddr = *tcpAddr
 
 	return nil
+}
+
+func (a *Address) Fuzz(c fuzz.Continue) {
+	a.IP = make([]byte, 16)
+	for i := 0; i < 16; i += 8 {
+		binary.LittleEndian.PutUint64(a.IP[i:], c.Uint64())
+	}
+	a.Port = int(c.Uint64())
+	// wow hope .Zone doesn't need fuzzing
 }
 
 // FromIP populates the address from a net.IP and port.

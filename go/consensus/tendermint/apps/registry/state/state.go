@@ -175,7 +175,7 @@ func (s *ImmutableState) Node(id signature.PublicKey) (*node.Node, error) {
 		return nil, err
 	}
 	var node node.Node
-	if err = cbor.Unmarshal(signedNode.Blob, &node); err != nil {
+	if err = fm.Unmarshal(signedNode.Blob, &node); err != nil {
 		return nil, err
 	}
 	return &node, nil
@@ -210,7 +210,7 @@ func (s *ImmutableState) Nodes() ([]*node.Node, error) {
 				panic("tendermint/registry: corrupted state: " + err.Error())
 			}
 			var node node.Node
-			if err := cbor.Unmarshal(signedNode.Blob, &node); err != nil {
+			if err := fm.Unmarshal(signedNode.Blob, &node); err != nil {
 				panic("tendermint/registry: corrupted state: " + err.Error())
 			}
 

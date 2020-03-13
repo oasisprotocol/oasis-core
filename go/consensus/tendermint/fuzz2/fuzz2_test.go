@@ -3,21 +3,28 @@
 package fuzz2
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/tls"
+	"encoding/binary"
+	"fmt"
+	"io"
 	"io/ioutil"
+	"math"
 	"os"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/fm"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -52,9 +59,278 @@ func mustGenerateCert(t *testing.T) (signature.PublicKey, *tls.Certificate) {
 	return memory.NewFromRuntime(cert.PrivateKey.(ed25519.PrivateKey)).Public(), cert
 }
 
-func fakeSigned(body interface{}, signer signature.PublicKey) signature.Signed {
+func marshalBytes(dst io.Writer, v []byte) {
+	if v == nil {
+		if err := binary.Write(dst, binary.LittleEndian, uint16(0xfffe)); err != nil {
+			panic(err)
+		}
+		return
+	}
+	l := len(v)
+	if l >= 0xffff {
+		panic(fmt.Sprintf("bytes len %d too long (max %d)", l, 0xffff-2))
+	}
+	if l == 0 {
+		if err := binary.Write(dst, binary.LittleEndian, uint16(0xffff)); err != nil {
+			panic(err)
+		}
+		return
+	}
+	if err := binary.Write(dst, binary.LittleEndian, uint16(l)); err != nil {
+		panic(err)
+	}
+	if err := binary.Write(dst, binary.LittleEndian, v); err != nil {
+		panic(err)
+	}
+}
+
+func marshalInner(dst io.Writer, v reflect.Value, indent int) {
+	if !v.CanInterface() {
+		fmt.Print("(unexported)")
+		return
+	}
+	switch v.Type() {
+	case reflect.TypeOf([]byte{}):
+		fmt.Printf("(bytes \"%x\")", v.Bytes())
+		marshalBytes(dst, v.Bytes())
+		return
+	case reflect.TypeOf(time.Time{}):
+		t := v.Interface().(time.Time)
+		fmt.Printf("(time \"%v\")", t)
+		sec := t.Unix()
+		if sec >= 1000*365*24*60*60 {
+			panic(fmt.Sprintf("time %v sec is too late (max %v)", t, time.Unix(1000*365*24*60*60-1, 0)))
+		}
+		if err := binary.Write(dst, binary.LittleEndian, sec); err != nil {
+			panic(err)
+		}
+		if err := binary.Write(dst, binary.LittleEndian, int64(t.Nanosecond())); err != nil {
+			panic(err)
+		}
+		return
+	case reflect.TypeOf(signature.PublicKey{}):
+		pk := v.Interface().(signature.PublicKey)
+		fmt.Printf("(public_key \"%x\")", pk[:])
+		if err := binary.Write(dst, binary.LittleEndian, pk); err != nil {
+			panic(err)
+		}
+		return
+	case reflect.TypeOf(signature.RawSignature{}):
+		s := v.Interface().(signature.RawSignature)
+		fmt.Printf("(raw_signature \"%x\")", s[:])
+		if err := binary.Write(dst, binary.LittleEndian, s); err != nil {
+			panic(err)
+		}
+		return
+	case reflect.TypeOf(quantity.Quantity{}):
+		q := v.Interface().(quantity.Quantity)
+		fmt.Printf("(quantity %v)", q)
+		inner := q.ToBigInt()
+		if !inner.IsUint64() {
+			panic(fmt.Sprintf("quantity %v is too large (max %d)", q, uint64(math.MaxUint64)))
+		}
+		if err := binary.Write(dst, binary.LittleEndian, inner.Uint64()); err != nil {
+			panic(err)
+		}
+		return
+	case reflect.TypeOf(node.Address{}):
+		addr := v.Interface().(node.Address)
+		fmt.Printf("(address \"%v\")", addr)
+		if len(addr.IP) != 16 {
+			panic(fmt.Sprintf("address IP %v must be length 16", addr.IP))
+		}
+		if err := binary.Write(dst, binary.LittleEndian, addr.IP); err != nil {
+			panic(err)
+		}
+		if err := binary.Write(dst, binary.LittleEndian, uint64(addr.Port)); err != nil {
+			panic(err)
+		}
+		if addr.Zone != "" {
+			panic(fmt.Sprintf("address zone %q not supported", addr.Zone))
+		}
+		return
+	case reflect.TypeOf(transaction.Op("")):
+		op := v.Interface().(transaction.Op)
+		fmt.Printf("(op \"%v\")", op)
+		if len(op) > 16 {
+			panic(fmt.Sprintf("op %q too long (max 16)", op))
+		}
+		var buf [16]byte
+		copy(buf[:], op)
+		if err := binary.Write(dst, binary.LittleEndian, buf[:]); err != nil {
+			panic(err)
+		}
+		return
+	case reflect.TypeOf(transaction.MethodName("")):
+		m := v.Interface().(transaction.MethodName)
+		fmt.Printf("(method_name \"%v\")", m)
+		if len(m) > 16 {
+			panic(fmt.Sprintf("method name %q too long (max 16)", m))
+		}
+		var buf [16]byte
+		copy(buf[:], m)
+		if err := binary.Write(dst, binary.LittleEndian, buf[:]); err != nil {
+			panic(err)
+		}
+		return
+	}
+	switch v.Kind() {
+	case reflect.Bool:
+		fmt.Printf("(bool %v)", v.Bool())
+		var src uint64
+		if v.Bool() {
+			src = 1
+		}
+		if err := binary.Write(dst, binary.LittleEndian, src); err != nil {
+			panic(err)
+		}
+	case reflect.Int:
+		fmt.Printf("(int %d)", v.Int())
+		if err := binary.Write(dst, binary.LittleEndian, v.Int()); err != nil {
+			panic(err)
+		}
+	case reflect.Int32:
+		fmt.Printf("(int32 %d)", v.Int())
+		if err := binary.Write(dst, binary.LittleEndian, v.Int()); err != nil {
+			panic(err)
+		}
+	case reflect.Int64:
+		fmt.Printf("(int64 %d)", v.Int())
+		if err := binary.Write(dst, binary.LittleEndian, v.Int()); err != nil {
+			panic(err)
+		}
+	case reflect.Uint8:
+		fmt.Printf("(uint8 %d)", v.Uint())
+		if err := binary.Write(dst, binary.LittleEndian, v.Uint()); err != nil {
+			panic(err)
+		}
+	case reflect.Uint32:
+		fmt.Printf("(uint32 %d)", v.Uint())
+		if err := binary.Write(dst, binary.LittleEndian, v.Uint()); err != nil {
+			panic(err)
+		}
+	case reflect.Uint64:
+		fmt.Printf("(uint64 %d)", v.Uint())
+		if err := binary.Write(dst, binary.LittleEndian, v.Uint()); err != nil {
+			panic(err)
+		}
+	case reflect.Array:
+		fmt.Printf("(array\n%s", strings.Repeat("\t", indent))
+		if err := binary.Write(dst, binary.LittleEndian, uint64(0x0DDD_DDDD_DDDD_DDDD)); err != nil {
+			panic(err)
+		}
+		for i := 0; i < v.Len(); i++ {
+			fmt.Print("\t(item ")
+			marshalInner(dst, v.Index(i), indent+1)
+			fmt.Printf(")\n%s", strings.Repeat("\t", indent))
+		}
+		fmt.Print(")")
+	case reflect.Map:
+		if v.IsNil() {
+			fmt.Print("(map nil)")
+			if err := binary.Write(dst, binary.LittleEndian, uint64(0x0CCC_CCCC_CCCC_CCCC)); err != nil {
+				panic(err)
+			}
+		} else {
+			fmt.Printf("(map\n%s", strings.Repeat("\t", indent))
+			if err := binary.Write(dst, binary.LittleEndian, uint64(0x0DDD_DDDD_DDDD_DDDD)); err != nil {
+				panic(err)
+			}
+			if v.Len() > 10 {
+				panic(fmt.Sprintf("map len %d too long (max 10)", v.Len()))
+			}
+			if err := binary.Write(dst, binary.LittleEndian, uint64(v.Len())<<32); err != nil {
+				panic(err)
+			}
+			mr := v.MapRange()
+			for mr.Next() {
+				fmt.Print("\t(item ")
+				marshalInner(dst, mr.Key(), indent+1)
+				fmt.Print(" ")
+				marshalInner(dst, mr.Value(), indent+1)
+				fmt.Printf(")\n%s", strings.Repeat("\t", indent))
+			}
+			fmt.Print(")")
+		}
+	case reflect.Ptr:
+		if v.IsNil() {
+			fmt.Print("(ptr nil)")
+			if err := binary.Write(dst, binary.LittleEndian, uint64(0x0CCC_CCCC_CCCC_CCCC)); err != nil {
+				panic(err)
+			}
+		} else {
+			fmt.Print("(ptr ")
+			if err := binary.Write(dst, binary.LittleEndian, uint64(0x0DDD_DDDD_DDDD_DDDD)); err != nil {
+				panic(err)
+			}
+			marshalInner(dst, v.Elem(), indent)
+			fmt.Print(")")
+		}
+	case reflect.Slice:
+		if v.IsNil() {
+			fmt.Print("(slice nil)")
+			if err := binary.Write(dst, binary.LittleEndian, uint64(0x0CCC_CCCC_CCCC_CCCC)); err != nil {
+				panic(err)
+			}
+		} else {
+			fmt.Printf("(slice\n%s", strings.Repeat("\t", indent))
+			if err := binary.Write(dst, binary.LittleEndian, uint64(0x0DDD_DDDD_DDDD_DDDD)); err != nil {
+				panic(err)
+			}
+			if v.Len() > 10 {
+				panic(fmt.Sprintf("slice len %d too long (max 10)", v.Len()))
+			}
+			if err := binary.Write(dst, binary.LittleEndian, uint64(v.Len())<<32); err != nil {
+				panic(err)
+			}
+			for i := 0; i < v.Len(); i++ {
+				fmt.Print("\t(item ")
+				marshalInner(dst, v.Index(i), indent+1)
+				fmt.Printf(")\n%s", strings.Repeat("\t", indent))
+			}
+			fmt.Print(")")
+		}
+	case reflect.String:
+		fmt.Printf("(string %+q)", v.String())
+		marshalBytes(dst, []byte(v.String()))
+	case reflect.Struct:
+		t := v.Type()
+		fmt.Printf("(struct '%s\n%s", t.Name(), strings.Repeat("\t", indent))
+		for i := 0; i < v.NumField(); i++ {
+			fmt.Printf("\t(field '%s ", t.Field(i).Name)
+			marshalInner(dst, v.Field(i), indent+1)
+			fmt.Printf(")\n%s", strings.Repeat("\t", indent))
+		}
+		fmt.Print(")")
+	default:
+		panic(fmt.Sprintf("not supported kind %d (line %d) %#v", v.Kind(), v.Kind()+233, v))
+	}
+}
+
+func marshal(v interface{}) []byte {
+	var buf bytes.Buffer
+	// gofuzzFuzzer.NilChance(0.1).NumElements(0, 10)
+	if err := binary.Write(&buf, binary.LittleEndian, byte(128)); err != nil {
+		panic(err)
+	}
+	marshalInner(&buf, reflect.ValueOf(v), 0)
+	fmt.Println()
+	return buf.Bytes()
+}
+
+func marshalAndCheck(t *testing.T, v interface{}, msg string) []byte {
+	data := marshal(v)
+	fmt.Printf("data [%x]\n", data)
+	v2r := reflect.New(reflect.TypeOf(v))
+	reflect.ValueOf(fm.MustUnmarshal).Call([]reflect.Value{reflect.ValueOf(data), v2r})
+	v2 := v2r.Elem().Interface()
+	require.Equal(t, v, v2, msg)
+	return data
+}
+
+func fakeSigned(t *testing.T, body interface{}, msg string, signer signature.PublicKey) signature.Signed {
 	return signature.Signed{
-		Blob: cbor.Marshal(body),
+		Blob: marshalAndCheck(t, body, msg),
 		Signature: signature.Signature{
 			PublicKey: signer,
 			Signature: signature.FakeSignature,
@@ -62,9 +338,9 @@ func fakeSigned(body interface{}, signer signature.PublicKey) signature.Signed {
 	}
 }
 
-func fakeMultiSigned(body interface{}, signers ...signature.PublicKey) signature.MultiSigned {
+func fakeMultiSigned(t *testing.T, body interface{}, msg string, signers ...signature.PublicKey) signature.MultiSigned {
 	ms := signature.MultiSigned{
-		Blob:       cbor.Marshal(body),
+		Blob:       marshalAndCheck(t, body, msg),
 		Signatures: make([]signature.Signature, 0, len(signers)),
 	}
 	for _, pk := range signers {
@@ -99,7 +375,8 @@ func TestFuzz(t *testing.T) {
 		node2Addr           = crypto.PublicKeyToTendermint(&node2Cons).Address()
 		node3Addr           = crypto.PublicKeyToTendermint(&node3Cons).Address()
 	)
-	now := time.Now()
+	nowRich := time.Now()
+	now := time.Unix(nowRich.Unix(), int64(nowRich.Nanosecond()))
 	doc := genesis.Document{
 		Time: now,
 		EpochTime: epochtime.Genesis{
@@ -114,27 +391,27 @@ func TestFuzz(t *testing.T) {
 			},
 			Entities: []*entity.SignedEntity{
 				{
-					fakeSigned(entity.Entity{
+					fakeSigned(t, entity.Entity{
 						ID:    entity1,
 						Nodes: []signature.PublicKey{node1},
-					}, entity1),
+					}, "entity1", entity1),
 				},
 				{
-					fakeSigned(entity.Entity{
+					fakeSigned(t, entity.Entity{
 						ID:    entity2,
 						Nodes: []signature.PublicKey{node2},
-					}, entity2),
+					}, "entity2", entity2),
 				},
 				{
-					fakeSigned(entity.Entity{
+					fakeSigned(t, entity.Entity{
 						ID:    entity3,
 						Nodes: []signature.PublicKey{node3},
-					}, entity3),
+					}, "entity3", entity3),
 				},
 			},
 			Nodes: []*node.MultiSignedNode{
 				{
-					fakeMultiSigned(node.Node{
+					fakeMultiSigned(t, node.Node{
 						ID:       node1,
 						EntityID: entity1,
 						Committee: node.CommitteeInfo{
@@ -152,10 +429,10 @@ func TestFuzz(t *testing.T) {
 							},
 						},
 						Roles: node.RoleValidator,
-					}, node1, node1P2P, node1Cons, node1Com),
+					}, "node1", node1, node1P2P, node1Cons, node1Com),
 				},
 				{
-					fakeMultiSigned(node.Node{
+					fakeMultiSigned(t, node.Node{
 						ID:       node2,
 						EntityID: entity2,
 						Committee: node.CommitteeInfo{
@@ -173,10 +450,10 @@ func TestFuzz(t *testing.T) {
 							},
 						},
 						Roles: node.RoleValidator,
-					}, node2, node2P2P, node2Cons, node2Com),
+					}, "node2", node2, node2P2P, node2Cons, node2Com),
 				},
 				{
-					fakeMultiSigned(node.Node{
+					fakeMultiSigned(t, node.Node{
 						ID:       node3,
 						EntityID: entity3,
 						Committee: node.CommitteeInfo{
@@ -194,7 +471,7 @@ func TestFuzz(t *testing.T) {
 							},
 						},
 						Roles: node.RoleValidator,
-					}, node3, node3P2P, node3Cons, node3Com),
+					}, "node3", node3, node3P2P, node3Cons, node3Com),
 				},
 			},
 			NodeStatuses: map[signature.PublicKey]*registry.NodeStatus{},
@@ -299,15 +576,17 @@ func TestFuzz(t *testing.T) {
 			},
 		},
 	}
-	docCBOR := cbor.Marshal(doc)
+	docFM := marshalAndCheck(t, doc, "doc")
 	msgs := messages{
 		InitReq: types.RequestInitChain{
-			AppStateBytes: docCBOR,
+			Time:          now,
+			AppStateBytes: docFM,
 		},
 		Blocks: []blockMessages{
 			{
 				BeginReq: types.RequestBeginBlock{
 					Header: types.Header{
+						Time:            now,
 						ProposerAddress: node3Addr,
 					},
 					LastCommitInfo: types.LastCommitInfo{
@@ -339,6 +618,7 @@ func TestFuzz(t *testing.T) {
 			{
 				BeginReq: types.RequestBeginBlock{
 					Header: types.Header{
+						Time:            now,
 						ProposerAddress: node1Addr,
 					},
 					LastCommitInfo: types.LastCommitInfo{
@@ -366,27 +646,27 @@ func TestFuzz(t *testing.T) {
 				},
 				TxReqs: []types.RequestDeliverTx{
 					{
-						Tx: cbor.Marshal(transaction.SignedTransaction{
-							Signed: fakeSigned(transaction.Transaction{
+						Tx: marshalAndCheck(t, transaction.SignedTransaction{
+							Signed: fakeSigned(t, transaction.Transaction{
 								Nonce: 0,
 								Fee: &transaction.Fee{
 									Amount: mustInitQuantity(t, 40),
 									Gas:    4,
 								},
 								Method: staking.MethodTransfer,
-								Body: cbor.Marshal(staking.Transfer{
+								Body: marshalAndCheck(t, staking.Transfer{
 									To:     entity2,
 									Tokens: mustInitQuantity(t, 500),
-								}),
-							}, acctRich),
-						}),
+								}, "tx1body"),
+							}, "tx1-inner", acctRich),
+						}, "tx1-outer"),
 					},
 				},
 				EndReq: types.RequestEndBlock{},
 			},
 		},
 	}
-	data := cbor.Marshal(msgs)
+	data := marshalAndCheck(t, msgs, "msgs")
 	require.Equal(t, 1, Fuzz(data), "Fuzz output")
-	require.NoError(t, ioutil.WriteFile("/tmp/oasis-node-fuzz2/corpus/manual.cbor", data, 0644), "saving fuzz input")
+	require.NoError(t, ioutil.WriteFile("/tmp/oasis-node-fuzz2/corpus/manual.fm", data, 0644), "saving fuzz input")
 }

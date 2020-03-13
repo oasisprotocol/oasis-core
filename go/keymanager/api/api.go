@@ -20,7 +20,7 @@ import (
 
 const (
 	// ModuleName is a unique module name for the keymanager module.
-	ModuleName = "keymanager"
+	ModuleName = "km"
 
 	// ChecksumSize is the length of checksum in bytes.
 	ChecksumSize = 32

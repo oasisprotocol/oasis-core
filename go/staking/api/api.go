@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 
+	fuzz "github.com/google/gofuzz"
+
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -15,7 +17,7 @@ import (
 
 const (
 	// ModuleName is a unique module name for the staking module.
-	ModuleName = "staking"
+	ModuleName = "st"
 
 	// LogEventGeneralAdjustment is a log event value that signals adjustment
 	// of an account's general balance due to a roothash message.
@@ -54,7 +56,7 @@ var (
 	// MethodReclaimEscrow is the method name for escrow reclamations.
 	MethodReclaimEscrow = transaction.NewMethodName(ModuleName, "ReclaimEscrow", ReclaimEscrow{})
 	// MethodAmendCommissionSchedule is the method name for amending commission schedules.
-	MethodAmendCommissionSchedule = transaction.NewMethodName(ModuleName, "AmendCommissionSchedule", AmendCommissionSchedule{})
+	MethodAmendCommissionSchedule = transaction.NewMethodName(ModuleName, "AmendCS", AmendCommissionSchedule{})
 
 	// Methods is the list of all methods supported by the staking backend.
 	Methods = []transaction.MethodName{
@@ -363,6 +365,10 @@ func (k ThresholdKind) String() string {
 	}
 }
 
+func (k *ThresholdKind) Fuzz(c fuzz.Continue) {
+	*k = ThresholdKind(c.Int())
+}
+
 // StakeClaim is a unique stake claim identifier.
 type StakeClaim string
 
@@ -557,5 +563,5 @@ const (
 	// GasOpReclaimEscrow is the gas operation identifier for reclaim escrow.
 	GasOpReclaimEscrow transaction.Op = "reclaim_escrow"
 	// GasOpAmendCommissionSchedule is the gas operation identifier for amend commission schedule.
-	GasOpAmendCommissionSchedule transaction.Op = "amend_commission_schedule"
+	GasOpAmendCommissionSchedule transaction.Op = "amend_cs"
 )

@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 
+	fuzz "github.com/google/gofuzz"
+
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
@@ -12,6 +14,10 @@ import (
 // EpochTime is the number of intervals (epochs) since a fixed instant
 // in time (epoch date).
 type EpochTime uint64
+
+func (et *EpochTime) Fuzz(c fuzz.Continue) {
+	*et = EpochTime(c.Uint64())
+}
 
 // EpochInvalid is the placeholder invalid epoch.
 const EpochInvalid EpochTime = 0xffffffffffffffff // ~50 quadrillion years away.

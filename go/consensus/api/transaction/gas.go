@@ -1,7 +1,10 @@
 package transaction
 
 import (
+	"encoding/binary"
 	"math/big"
+
+	fuzz "github.com/google/gofuzz"
 
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
@@ -18,6 +21,10 @@ var (
 
 // Gas is the consensus gas representation.
 type Gas uint64
+
+func (g *Gas) Fuzz(c fuzz.Continue) {
+	*g = Gas(c.Uint64())
+}
 
 // Fee is the consensus transaction fee the sender wishes to pay for
 // operations which require a fee to be paid to validators.
@@ -53,3 +60,15 @@ type Costs map[Op]Gas
 
 // Op identifies an operation that requires gas to run.
 type Op string
+
+func (o *Op) Fuzz(c fuzz.Continue) {
+	var buf [16]byte
+	for i := 0; i < len(buf); i += 8 {
+		binary.LittleEndian.PutUint64(buf[i:], c.Uint64())
+	}
+	end := 16
+	for end > 0 && buf[end - 1] == 0 {
+		end--
+	}
+	*o = Op(buf[:end])
+}

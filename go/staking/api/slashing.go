@@ -1,12 +1,18 @@
 package api
 
 import (
+	fuzz "github.com/google/gofuzz"
+
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
 // SlashReason is the reason why a node was slashed.
 type SlashReason int
+
+func (s *SlashReason) Fuzz(c fuzz.Continue) {
+	*s = SlashReason(c.Int())
+}
 
 const (
 	// SlashDoubleSigning is slashing due to double signing.

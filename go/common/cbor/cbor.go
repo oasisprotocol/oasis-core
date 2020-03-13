@@ -14,7 +14,7 @@ import (
 // RawMessage is a raw encoded CBOR value. It implements Marshaler and
 // Unmarshaler interfaces and can be used to delay CBOR decoding or
 // precompute a CBOR encoding.
-type RawMessage = cbor.RawMessage
+type RawMessage = []byte
 
 var (
 	encOptions = cbor.EncOptions{

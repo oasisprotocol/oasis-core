@@ -19,7 +19,7 @@ import (
 
 const (
 	// ModuleName is a unique module name for the roothash module.
-	ModuleName = "roothash"
+	ModuleName = "rh"
 
 	// LogEventExecutionDiscrepancyDetected is a log event value that signals
 	// an execution discrepancy has been detected.
@@ -52,7 +52,7 @@ var (
 	ErrRuntimeSuspended = errors.New(ModuleName, 5, "roothash: runtime is suspended")
 
 	// MethodExecutorCommit is the method name for executor commit submission.
-	MethodExecutorCommit = transaction.NewMethodName(ModuleName, "ExecutorCommit", ExecutorCommit{})
+	MethodExecutorCommit = transaction.NewMethodName(ModuleName, "ExecCommit", ExecutorCommit{})
 	// MethodMergeCommit is the method name for merge commit submission.
 	MethodMergeCommit = transaction.NewMethodName(ModuleName, "MergeCommit", MergeCommit{})
 

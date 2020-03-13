@@ -2,11 +2,14 @@ package transaction
 
 import (
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"reflect"
 	"sync"
+
+	fuzz "github.com/google/gofuzz"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -103,7 +106,7 @@ func NewTransaction(nonce uint64, fee *Fee, method MethodName, body interface{})
 		Nonce:  nonce,
 		Fee:    fee,
 		Method: method,
-		Body:   cbor.RawMessage(rawBody),
+		Body:   rawBody,
 	}
 }
 
@@ -166,6 +169,17 @@ const MethodSeparator = "."
 // MethodName is a method name.
 type MethodName string
 
+func (m *MethodName) Fuzz(c fuzz.Continue) {
+	var buf [16]byte
+	for i := 0; i < len(buf); i += 8 {
+		binary.LittleEndian.PutUint64(buf[i:], c.Uint64())
+	}
+	end := 16
+	for end > 0 && buf[end - 1] == 0 {
+		end--
+	}
+	*m = MethodName(buf[:end])
+}
 // SanityCheck performs a basic sanity check on the method name.
 func (m MethodName) SanityCheck() error {
 	if len(m) == 0 {
@@ -188,6 +202,9 @@ func (m MethodName) BodyType() interface{} {
 func NewMethodName(module, method string, bodyType interface{}) MethodName {
 	// Check for duplicate method names.
 	name := module + MethodSeparator + method
+	if len(name) > 16 {
+		panic(fmt.Errorf("transaction: method name %s is too long (max 16)", name))
+	}
 	if _, isRegistered := registeredMethods.Load(name); isRegistered {
 		panic(fmt.Errorf("transaction: method already registered: %s", name))
 	}

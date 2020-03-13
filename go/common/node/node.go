@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	fuzz "github.com/google/gofuzz"
+
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -67,6 +69,10 @@ type Node struct {
 
 // RolesMask is Oasis node roles bitmask.
 type RolesMask uint32
+
+func (m *RolesMask) Fuzz(c fuzz.Continue) {
+	*m = RolesMask(c.Uint64())
+}
 
 const (
 	// RoleComputeWorker is Oasis compute worker role.

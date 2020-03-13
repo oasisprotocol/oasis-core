@@ -25,7 +25,7 @@ import (
 )
 
 // ModuleName is a unique module name for the registry module.
-const ModuleName = "registry"
+const ModuleName = "reg"
 
 var (
 	// RegisterEntitySignatureContext is the context used for entity
@@ -132,15 +132,15 @@ var (
 	ErrEntityHasRuntimes = errors.New(ModuleName, 19, "registry: entity still has runtimes")
 
 	// MethodRegisterEntity is the method name for entity registrations.
-	MethodRegisterEntity = transaction.NewMethodName(ModuleName, "RegisterEntity", entity.SignedEntity{})
+	MethodRegisterEntity = transaction.NewMethodName(ModuleName, "RegEnt", entity.SignedEntity{})
 	// MethodDeregisterEntity is the method name for entity deregistrations.
-	MethodDeregisterEntity = transaction.NewMethodName(ModuleName, "DeregisterEntity", nil)
+	MethodDeregisterEntity = transaction.NewMethodName(ModuleName, "DeregEnt", nil)
 	// MethodRegisterNode is the method name for node registrations.
-	MethodRegisterNode = transaction.NewMethodName(ModuleName, "RegisterNode", node.MultiSignedNode{})
+	MethodRegisterNode = transaction.NewMethodName(ModuleName, "RegNode", node.MultiSignedNode{})
 	// MethodUnfreezeNode is the method name for unfreezing nodes.
 	MethodUnfreezeNode = transaction.NewMethodName(ModuleName, "UnfreezeNode", UnfreezeNode{})
 	// MethodRegisterRuntime is the method name for registering runtimes.
-	MethodRegisterRuntime = transaction.NewMethodName(ModuleName, "RegisterRuntime", SignedRuntime{})
+	MethodRegisterRuntime = transaction.NewMethodName(ModuleName, "RegRuntime", SignedRuntime{})
 
 	// Methods is the list of all methods supported by the registry backend.
 	Methods = []transaction.MethodName{
@@ -1292,21 +1292,21 @@ type ConsensusParameters struct {
 
 const (
 	// GasOpRegisterEntity is the gas operation identifier for entity registration.
-	GasOpRegisterEntity transaction.Op = "register_entity"
+	GasOpRegisterEntity transaction.Op = "reg_ent"
 	// GasOpDeregisterEntity is the gas operation identifier for entity deregistration.
-	GasOpDeregisterEntity transaction.Op = "deregister_entity"
+	GasOpDeregisterEntity transaction.Op = "dereg_ent"
 	// GasOpRegisterNode is the gas operation identifier for entity registration.
-	GasOpRegisterNode transaction.Op = "register_node"
+	GasOpRegisterNode transaction.Op = "reg_node"
 	// GasOpUnfreezeNode is the gas operation identifier for unfreezing nodes.
 	GasOpUnfreezeNode transaction.Op = "unfreeze_node"
 	// GasOpRegisterRuntime is the gas operation identifier for runtime registration.
-	GasOpRegisterRuntime transaction.Op = "register_runtime"
+	GasOpRegisterRuntime transaction.Op = "reg_runtime"
 	// GasOpRuntimeEpochMaintenance is the gas operation identifier for per-epoch
 	// runtime maintenance costs.
-	GasOpRuntimeEpochMaintenance transaction.Op = "runtime_epoch_maintenance"
+	GasOpRuntimeEpochMaintenance transaction.Op = "rt_epoch_maint"
 	// GasOpUpdateKeyManager is the gas operation identifier for key manager
 	// policy updates costs.
-	GasOpUpdateKeyManager transaction.Op = "update_keymanager"
+	GasOpUpdateKeyManager transaction.Op = "update_km"
 )
 
 // XXX: Define reasonable default gas costs.

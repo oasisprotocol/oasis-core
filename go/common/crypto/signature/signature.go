@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	encPem "encoding/pem"
@@ -16,6 +17,7 @@ import (
 	"os"
 	"sync"
 
+	fuzz "github.com/google/gofuzz"
 	"github.com/oasislabs/ed25519"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -140,6 +142,12 @@ func (k *PublicKey) UnmarshalHex(text string) error {
 	}
 
 	return k.UnmarshalBinary(b)
+}
+
+func (k *PublicKey) Fuzz(c fuzz.Continue) {
+	for i := 0; i < len(k); i += 8 {
+		binary.LittleEndian.PutUint64(k[i:], c.Uint64())
+	}
 }
 
 // Equal compares vs another public key for equality.
@@ -274,6 +282,12 @@ func (r *RawSignature) UnmarshalPEM(data []byte) error {
 	return nil
 }
 
+func (r *RawSignature) Fuzz(c fuzz.Continue) {
+	for i := 0; i < len(r); i += 8 {
+		binary.LittleEndian.PutUint64(r[i:], c.Uint64())
+	}
+}
+
 // Signature is a signature, bundled with the signing public key.
 type Signature struct {
 	// PublicKey is the public key that produced the signature.
@@ -388,6 +402,7 @@ type Signed struct {
 // SignSigned generates a Signed with the Signer over the context and
 // CBOR-serialized message.
 func SignSigned(signer Signer, context Context, src interface{}) (*Signed, error) {
+	panic("can't serialize lmao")
 	data := cbor.Marshal(src)
 	signature, err := Sign(signer, context, data)
 	if err != nil {
@@ -496,6 +511,7 @@ func (s *MultiSigned) IsOnlySignedBy(pks []PublicKey) bool {
 // SignMultiSigned generates a MultiSigned with the Signers over the context
 // and CBOR-serialized message.
 func SignMultiSigned(signers []Signer, context Context, src interface{}) (*MultiSigned, error) {
+	panic("can't serialize lmao")
 	ms := &MultiSigned{
 		Blob: cbor.Marshal(src),
 	}

@@ -4,6 +4,8 @@ import (
 	"encoding"
 	"errors"
 	"math/big"
+
+	fuzz "github.com/google/gofuzz"
 )
 
 var (
@@ -104,6 +106,12 @@ func (q *Quantity) ToBigInt() *big.Int {
 	tmp.Set(&q.inner)
 
 	return &tmp
+}
+
+func (q *Quantity) Fuzz(c fuzz.Continue) {
+	if err := q.FromUint64(c.Uint64()); err != nil {
+		panic(err)
+	}
 }
 
 // Add adds n to q, returning an error if n < 0 or n == nil.
