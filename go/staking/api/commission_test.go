@@ -691,6 +691,58 @@ func TestCommissionSchedule(t *testing.T) {
 		Rates: []CommissionRateStep{
 			{
 				Start: 0,
+				Rate:  mustInitQuantity(t, 50_000),
+			},
+		},
+		Bounds: []CommissionRateBoundStep{
+			{
+				Start:   0,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 100_000),
+			},
+			{
+				Start:   10,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 90_000),
+			},
+			{
+				Start:   20,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 80_000),
+			},
+		},
+	}
+	require.NoError(t, cs.PruneAndValidateForGenesis(&rules, 0), "valid where len(rates) < len(bounds)")
+
+	cs = CommissionSchedule{
+		Rates: []CommissionRateStep{
+			{
+				Start: 0,
+				Rate:  mustInitQuantity(t, 50_000),
+			},
+			{
+				Start: 10,
+				Rate:  mustInitQuantity(t, 60_000),
+			},
+			{
+				Start: 20,
+				Rate:  mustInitQuantity(t, 70_000),
+			},
+		},
+		Bounds: []CommissionRateBoundStep{
+			{
+				Start:   0,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 100_000),
+			},
+		},
+	}
+	require.NoError(t, cs.PruneAndValidateForGenesis(&rules, 0), "valid where len(bounds) < len(rates)")
+
+	cs = CommissionSchedule{
+		Rates: []CommissionRateStep{
+			{
+				Start: 0,
 				Rate:  mustInitQuantity(t, 10_000),
 			},
 			{
