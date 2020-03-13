@@ -12,6 +12,16 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.4.1 (2020-03-13)
+
+### Bug Fixes
+
+- staking/api/commission: fix possible panic in validation check
+  ([#2763](https://github.com/oasislabs/oasis-core/issues/2763))
+
+  The validation check would panic whenever the number of bound steps was
+  greater than `rate_steps + 2`.
+
 ## 20.4 (2020-03-04)
 
 ### Removals and Breaking changes
