@@ -207,6 +207,12 @@ func randBytes(ptr *[]byte, c gofuzz.Continue, fzgoSrc *randSource) {
 			fmt.Println("sizeField:", sizeField)
 		}
 
+		// 0xFFFE means nil ):
+		if sizeField == 0xFFFE {
+			*ptr = nil
+			return
+		}
+
 		// skip over any zero uint16s for our size field
 		// In other words, the encoding is 0-N 0x0 bytes prior to a useful length
 		// field we will use.
