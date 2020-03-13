@@ -64,8 +64,8 @@ func (cs *CommissionSchedule) validateNondegenerate(rules *CommissionScheduleRul
 		if step.Start%rules.RateChangeInterval != 0 {
 			return fmt.Errorf("bound step %d start epoch %d not aligned with commission rate change interval %d", i, step.Start, rules.RateChangeInterval)
 		}
-		if i > 0 && step.Start <= cs.Rates[i-1].Start {
-			return fmt.Errorf("bound step %d start epoch %d not after previous step start epoch %d", i, step.Start, cs.Rates[i-1].Start)
+		if i > 0 && step.Start <= cs.Bounds[i-1].Start {
+			return fmt.Errorf("bound step %d start epoch %d not after previous step start epoch %d", i, step.Start, cs.Bounds[i-1].Start)
 		}
 		if step.RateMin.Cmp(CommissionRateDenominator) > 0 {
 			return fmt.Errorf("bound step %d minimum rate %v/%v over unity", i, step.RateMin, CommissionRateDenominator)
