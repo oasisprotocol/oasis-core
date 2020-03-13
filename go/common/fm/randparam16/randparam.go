@@ -387,7 +387,7 @@ func randUint32(val *uint32, c gofuzz.Continue) {
 }
 
 func randUint64(val *uint64, c gofuzz.Continue) {
-	*val = uint64(c.Rand.Uint64())
+	*val = c.Rand.Uint64()
 }
 
 func randFloat32(val *float32, c gofuzz.Continue) {
