@@ -40,13 +40,13 @@ func (p *ConsensusParameters) SanityCheck() error {
 // Adds the balances to a running total `total`.
 func SanityCheckAccount(total *quantity.Quantity, parameters *ConsensusParameters, now epochtime.EpochTime, id signature.PublicKey, acct *Account) error {
 	if !acct.General.Balance.IsValid() {
-		return fmt.Errorf("staking: sanity check failed: account balance is invalid")
+		return fmt.Errorf("staking: sanity check failed: general balance is invalid for account with ID: %s", id)
 	}
 	if !acct.Escrow.Active.Balance.IsValid() {
-		return fmt.Errorf("staking: sanity check failed: escrow account active balance is invalid")
+		return fmt.Errorf("staking: sanity check failed: escrow active balance is invalid for account with ID: %s", id)
 	}
 	if !acct.Escrow.Debonding.Balance.IsValid() {
-		return fmt.Errorf("staking: sanity check failed: escrow account debonding balance is invalid")
+		return fmt.Errorf("staking: sanity check failed: escrow debonding balance is invalid for account with ID: %s", id)
 	}
 
 	_ = total.Add(&acct.General.Balance)
@@ -55,14 +55,14 @@ func SanityCheckAccount(total *quantity.Quantity, parameters *ConsensusParameter
 
 	commissionScheduleShallowCopy := acct.Escrow.CommissionSchedule
 	if err := commissionScheduleShallowCopy.PruneAndValidateForGenesis(&parameters.CommissionScheduleRules, now); err != nil {
-		return fmt.Errorf("staking: sanity check failed: commission schedule for %s is invalid: %+v", id, err)
+		return fmt.Errorf("staking: sanity check failed: commission schedule for account with ID %s is invalid: %+v", id, err)
 	}
 
 	return nil
 }
 
 // SanityCheckDelegations examines an account's delegations.
-func SanityCheckDelegations(account *Account, delegations map[signature.PublicKey]*Delegation) error {
+func SanityCheckDelegations(id signature.PublicKey, account *Account, delegations map[signature.PublicKey]*Delegation) error {
 	var shares quantity.Quantity
 	var numDelegations uint64
 	for _, d := range delegations {
@@ -73,13 +73,13 @@ func SanityCheckDelegations(account *Account, delegations map[signature.PublicKe
 	sharesExpected := account.Escrow.Active.TotalShares
 
 	if shares.Cmp(&sharesExpected) != 0 {
-		return fmt.Errorf("staking: sanity check failed: all shares of all delegations for account don't add up to account's total active shares in escrow")
+		return fmt.Errorf("staking: sanity check failed: all shares of all delegations (%s) for account with ID: %s don't add up to account's total active shares in escrow (%s)", shares, id, sharesExpected)
 	}
 
 	// Account's Escrow.Active.Balance must be 0 if account has no delegations.
 	if numDelegations == 0 {
 		if !account.Escrow.Active.Balance.IsZero() {
-			return fmt.Errorf("staking: sanity check failed: account has no delegations, but non-zero active escrow balance")
+			return fmt.Errorf("staking: sanity check failed: account with ID: %s has no delegations, but non-zero active escrow balance", id)
 		}
 	}
 
@@ -87,7 +87,7 @@ func SanityCheckDelegations(account *Account, delegations map[signature.PublicKe
 }
 
 // SanityCheckDebondingDelegations examines an account's debonding delegations.
-func SanityCheckDebondingDelegations(account *Account, delegations map[signature.PublicKey][]*DebondingDelegation) error {
+func SanityCheckDebondingDelegations(id signature.PublicKey, account *Account, delegations map[signature.PublicKey][]*DebondingDelegation) error {
 	var shares quantity.Quantity
 	var numDebondingDelegations uint64
 	for _, dels := range delegations {
@@ -100,20 +100,20 @@ func SanityCheckDebondingDelegations(account *Account, delegations map[signature
 	sharesExpected := account.Escrow.Debonding.TotalShares
 
 	if shares.Cmp(&sharesExpected) != 0 {
-		return fmt.Errorf("staking: sanity check failed: all shares of all debonding delegations for account don't add up to account's total debonding shares in escrow")
+		return fmt.Errorf("staking: sanity check failed: all shares of all debonding delegations (%s) for account with ID: %s don't add up to account's total debonding shares in escrow (%s)", shares, id, sharesExpected)
 	}
 
 	// Account's Escrow.Debonding.Balance must be 0 if account has no debonding delegations.
 	if numDebondingDelegations == 0 {
 		if !account.Escrow.Debonding.Balance.IsZero() {
-			return fmt.Errorf("staking: sanity check failed: account has no debonding delegations, but non-zero debonding escrow balance")
+			return fmt.Errorf("staking: sanity check failed: account with ID: %s has no debonding delegations, but non-zero debonding escrow balance", id)
 		}
 	}
 	return nil
 }
 
-// SanityCheckAccountShares examine's an account's share pools.
-func SanityCheckAccountShares(acct *Account, delegations map[signature.PublicKey]*Delegation, debondingDelegations map[signature.PublicKey][]*DebondingDelegation) error {
+// SanityCheckAccountShares examines an account's share pools.
+func SanityCheckAccountShares(id signature.PublicKey, acct *Account, delegations map[signature.PublicKey]*Delegation, debondingDelegations map[signature.PublicKey][]*DebondingDelegation) error {
 	// Count the delegations for this account and add up the total shares.
 	var shares quantity.Quantity
 	var numDelegations uint64
@@ -123,12 +123,12 @@ func SanityCheckAccountShares(acct *Account, delegations map[signature.PublicKey
 	}
 	// Account's total active shares in escrow should match delegations.
 	if shares.Cmp(&acct.Escrow.Active.TotalShares) != 0 {
-		return fmt.Errorf("staking: sanity check failed: delegations don't match account's total active shares in escrow")
+		return fmt.Errorf("staking: sanity check failed: delegations (%s) for account with ID: %s don't match account's total active shares in escrow (%s)", shares, id, acct.Escrow.Active.TotalShares)
 	}
 	// If there are no delegations, the active escrow balance should be 0.
 	if numDelegations == 0 {
 		if !acct.Escrow.Active.Balance.IsZero() {
-			return fmt.Errorf("staking: sanity check failed: account has no delegations, but non-zero active escrow balance")
+			return fmt.Errorf("staking: sanity check failed: account with ID: %s has no delegations, but non-zero active escrow balance", id)
 		}
 	}
 
@@ -143,12 +143,12 @@ func SanityCheckAccountShares(acct *Account, delegations map[signature.PublicKey
 	}
 	// Account's total debonding shares in escrow should match debonding delegations.
 	if debondingShares.Cmp(&acct.Escrow.Debonding.TotalShares) != 0 {
-		return fmt.Errorf("staking: sanity check failed: debonding delegations don't match account's total debonding shares in escrow")
+		return fmt.Errorf("staking: sanity check failed: debonding delegations (%s) for account with ID: %s don't match account's total debonding shares in escrow (%s)", debondingShares, id, acct.Escrow.Debonding.TotalShares)
 	}
 	// If there are no debonding delegations, the debonding escrow balance should be 0.
 	if numDebondingDelegations == 0 {
 		if !acct.Escrow.Debonding.Balance.IsZero() {
-			return fmt.Errorf("staking: sanity check failed: account has no debonding delegations, but non-zero debonding escrow balance")
+			return fmt.Errorf("staking: sanity check failed: account with ID: %s has no debonding delegations, but non-zero debonding escrow balance", id)
 		}
 	}
 	return nil
@@ -189,33 +189,30 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocycl
 	}
 
 	// All shares of all delegations for a given account must add up to account's Escrow.Active.TotalShares.
-	for acctID, delegations := range g.Delegations {
-		acct := g.Ledger[acctID]
+	for id, delegations := range g.Delegations {
+		acct := g.Ledger[id]
 		if acct == nil {
-			return fmt.Errorf("staking: sanity check failed: delegation specified for a nonexisting account with ID: %v", acctID)
+			return fmt.Errorf("staking: sanity check failed: delegation specified for a nonexisting account with ID: %v", id)
 		}
-		err := SanityCheckDelegations(acct, delegations)
-		if err != nil {
+		if err := SanityCheckDelegations(id, acct, delegations); err != nil {
 			return err
 		}
 	}
 
 	// All shares of all debonding delegations for a given account must add up to account's Escrow.Debonding.TotalShares.
-	for acctID, delegations := range g.DebondingDelegations {
-		acct := g.Ledger[acctID]
+	for id, delegations := range g.DebondingDelegations {
+		acct := g.Ledger[id]
 		if acct == nil {
-			return fmt.Errorf("staking: sanity check failed: debonding delegation specified for a nonexisting account with ID: %v", acctID)
+			return fmt.Errorf("staking: sanity check failed: debonding delegation specified for a nonexisting account with ID: %v", id)
 		}
-		err := SanityCheckDebondingDelegations(acct, delegations)
-		if err != nil {
+		if err := SanityCheckDebondingDelegations(id, acct, delegations); err != nil {
 			return err
 		}
 	}
 
 	// Check the above two invariants for each account as well.
 	for id, acct := range g.Ledger {
-		err := SanityCheckAccountShares(acct, g.Delegations[id], g.DebondingDelegations[id])
-		if err != nil {
+		if err := SanityCheckAccountShares(id, acct, g.Delegations[id], g.DebondingDelegations[id]); err != nil {
 			return err
 		}
 	}
