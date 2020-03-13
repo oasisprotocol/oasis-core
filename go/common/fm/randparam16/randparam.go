@@ -9,6 +9,7 @@ package randparam
 
 import (
 	"fmt"
+	"time"
 
 	gofuzz "github.com/google/gofuzz"
 )
@@ -39,6 +40,7 @@ var randFuncs = []interface{}{
 	randFloat64,
 	randByte,
 	randRune,
+	randDuration,
 }
 
 // NewFuzzer returns a *Fuzzer, initialized with the []byte as an input stream for drawing values via rand.Rand.
@@ -410,3 +412,7 @@ func randRune(val *rune, c gofuzz.Continue) {
 // TODO: Interfaces are also not currently supported by google/gofuzz, or at least not
 // easily as far as I am aware. That said, currently have most of the pieces elsewhere
 // for us to handle common interfaces like io.Writer, io.Reader, etc.
+
+func randDuration(val *time.Duration, c gofuzz.Continue) {
+	*val = time.Duration(c.Uint64())
+}
