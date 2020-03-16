@@ -42,6 +42,8 @@ var (
 	_ syncer.ReadSyncer = (*dummySerialSyncer)(nil)
 )
 
+type NodeDBFactory func() db.NodeDB
+
 type dummySerialSyncer struct {
 	backing syncer.ReadSyncer
 }
@@ -127,7 +129,7 @@ func (s *dummySerialSyncer) SyncIterate(ctx context.Context, request *syncer.Ite
 	return &rs, nil
 }
 
-func testBasic(t *testing.T, ndb db.NodeDB) {
+func testBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
@@ -264,7 +266,7 @@ func testBasic(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, err, ErrClosed, "Commit must return ErrClosed after Close")
 }
 
-func testLongKeys(t *testing.T, ndb db.NodeDB) {
+func testLongKeys(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb, Capacity(0, 512))
 
@@ -310,7 +312,7 @@ func testLongKeys(t *testing.T, ndb db.NodeDB) {
 	require.True(t, root.IsEmpty())
 }
 
-func testEmptyKeys(t *testing.T, ndb db.NodeDB) {
+func testEmptyKeys(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
@@ -481,7 +483,7 @@ func testEmptyKeys(t *testing.T, ndb db.NodeDB) {
 	require.True(t, root.IsEmpty())
 }
 
-func testInsertCommitBatch(t *testing.T, ndb db.NodeDB) {
+func testInsertCommitBatch(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
@@ -500,7 +502,7 @@ func testInsertCommitBatch(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, allItemsRoot, root.String())
 }
 
-func testInsertCommitEach(t *testing.T, ndb db.NodeDB) {
+func testInsertCommitEach(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
@@ -522,7 +524,7 @@ func testInsertCommitEach(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, allItemsRoot, root.String())
 }
 
-func testRemove(t *testing.T, ndb db.NodeDB) {
+func testRemove(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
@@ -598,7 +600,7 @@ func testRemove(t *testing.T, ndb db.NodeDB) {
 	require.True(t, root.IsEmpty())
 }
 
-func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
+func testSyncerBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	keys, values, r, tree := generatePopulatedTree(t, ndb)
 
@@ -619,7 +621,7 @@ func testSyncerBasic(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, 0, stats.SyncIterateCount, "SyncIterate count")
 }
 
-func testSyncerRootEmptyLabelNeedsDeref(t *testing.T, ndb db.NodeDB) {
+func testSyncerRootEmptyLabelNeedsDeref(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
@@ -679,7 +681,7 @@ func testSyncerRootEmptyLabelNeedsDeref(t *testing.T, ndb db.NodeDB) {
 	})
 }
 
-func testSyncerRemove(t *testing.T, ndb db.NodeDB) {
+func testSyncerRemove(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
@@ -716,7 +718,7 @@ func testSyncerRemove(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, 0, stats.SyncIterateCount, "SyncIterate count")
 }
 
-func testSyncerInsert(t *testing.T, ndb db.NodeDB) {
+func testSyncerInsert(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
@@ -748,7 +750,7 @@ func testSyncerInsert(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, 0, stats.SyncIterateCount, "SyncIterate count")
 }
 
-func testSyncerNilNodes(t *testing.T, ndb db.NodeDB) {
+func testSyncerNilNodes(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	var err error
 
 	ctx := context.Background()
@@ -787,7 +789,7 @@ func testSyncerNilNodes(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Insert")
 }
 
-func testSyncerPrefetchPrefixes(t *testing.T, ndb db.NodeDB) {
+func testSyncerPrefetchPrefixes(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	keys, values, root, tree := generatePopulatedTree(t, ndb)
 
@@ -810,7 +812,7 @@ func testSyncerPrefetchPrefixes(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, 0, stats.SyncIterateCount, "SyncIterate should not be called")
 }
 
-func testValueEviction(t *testing.T, ndb db.NodeDB) {
+func testValueEviction(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb, Capacity(0, 512)).(*tree)
 
@@ -828,7 +830,7 @@ func testValueEviction(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, 448, tree.cache.valueSize, "Cache.ValueSize")
 }
 
-func testNodeEviction(t *testing.T, ndb db.NodeDB) {
+func testNodeEviction(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb, Capacity(128, 0)).(*tree)
 
@@ -855,7 +857,7 @@ func testNodeEviction(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, 15904, tree.cache.valueSize, "Cache.LeafValueSize")
 }
 
-func testDoubleInsertWithEviction(t *testing.T, ndb db.NodeDB) {
+func testDoubleInsertWithEviction(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb, Capacity(128, 0))
 
@@ -878,7 +880,7 @@ func testDoubleInsertWithEviction(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Commit")
 }
 
-func testDebugDumpLocal(t *testing.T, ndb db.NodeDB) {
+func testDebugDumpLocal(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
@@ -896,7 +898,7 @@ func testDebugDumpLocal(t *testing.T, ndb db.NodeDB) {
 	require.True(t, len(buffer.Bytes()) > 0)
 }
 
-func testApplyWriteLog(t *testing.T, ndb db.NodeDB) {
+func testApplyWriteLog(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	keys, values := generateKeyValuePairsEx("", 100)
 
 	// Insert some items first.
@@ -933,7 +935,7 @@ func testApplyWriteLog(t *testing.T, ndb db.NodeDB) {
 	require.True(t, rootHash.IsEmpty(), "root hash must be empty after removal of all items")
 }
 
-func testOnCommitHooks(t *testing.T, ndb db.NodeDB) {
+func testOnCommitHooks(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 	root := node.Root{
@@ -942,7 +944,7 @@ func testOnCommitHooks(t *testing.T, ndb db.NodeDB) {
 		Hash:      emptyRoot,
 	}
 
-	batch := ndb.NewBatch(root, false)
+	batch := ndb.NewBatch(root, root.Round, false)
 	defer batch.Reset()
 
 	var calls []int
@@ -964,10 +966,7 @@ func testOnCommitHooks(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, calls, []int{1, 2, 3}, "OnCommit hooks should fire in order")
 }
 
-// TODO: More tests for write logs.
-// TODO: More tests with bad syncer outputs.
-
-func testHasRoot(t *testing.T, ndb db.NodeDB) {
+func testHasRoot(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	// Test that an empty root is always implicitly present.
 	root := node.Root{
 		Namespace: testNs,
@@ -984,7 +983,7 @@ func testHasRoot(t *testing.T, ndb db.NodeDB) {
 	_, rootHash1, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
 	// Finalize round 0.
-	err = ndb.Finalize(ctx, testNs, 0, []hash.Hash{rootHash1})
+	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHash1})
 	require.NoError(t, err, "Finalize")
 
 	// Make sure that HasRoot returns true.
@@ -1004,7 +1003,7 @@ func testHasRoot(t *testing.T, ndb db.NodeDB) {
 	_, rootHash2, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
 	// Finalize round 1.
-	err = ndb.Finalize(ctx, testNs, 1, []hash.Hash{rootHash2})
+	err = ndb.Finalize(ctx, 1, []hash.Hash{rootHash2})
 	require.NoError(t, err, "Finalize")
 
 	// Make sure that HasRoot for root hash from round 0 but with
@@ -1019,7 +1018,7 @@ func testHasRoot(t *testing.T, ndb db.NodeDB) {
 	require.True(t, ndb.HasRoot(root), "HasRoot should return true for existing root")
 }
 
-func testMergeWriteLog(t *testing.T, ndb db.NodeDB) {
+func testMergeWriteLog(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
 	keyZero := []byte("foo")
@@ -1102,7 +1101,7 @@ func testMergeWriteLog(t *testing.T, ndb db.NodeDB) {
 	_ = writelog.DrainIterator(wli)
 }
 
-func testPruneBasic(t *testing.T, ndb db.NodeDB) {
+func testPruneBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
@@ -1114,11 +1113,11 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB) {
 	_, rootHash1, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
 	// Test that we cannot prune non-finalized rounds.
-	_, err = ndb.Prune(ctx, testNs, 0)
+	err = ndb.Prune(ctx, 0)
 	require.Error(t, err, "Prune should fail for non-finalized rounds")
 	require.Equal(t, db.ErrNotFinalized, err)
 	// Finalize round 0.
-	err = ndb.Finalize(ctx, testNs, 0, []hash.Hash{rootHash1})
+	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHash1})
 	require.NoError(t, err, "Finalize")
 
 	// Remove key in round 1.
@@ -1129,11 +1128,11 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB) {
 	_, rootHash2, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
 	// Test that we cannot prune non-finalized rounds.
-	_, err = ndb.Prune(ctx, testNs, 1)
+	err = ndb.Prune(ctx, 1)
 	require.Error(t, err, "Prune should fail for non-finalized rounds")
 	require.Equal(t, db.ErrNotFinalized, err)
 	// Finalize round 1.
-	err = ndb.Finalize(ctx, testNs, 1, []hash.Hash{rootHash2})
+	err = ndb.Finalize(ctx, 1, []hash.Hash{rootHash2})
 	require.NoError(t, err, "Finalize")
 
 	// Add some keys in round 2.
@@ -1142,18 +1141,35 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB) {
 	_, rootHash3, err := tree.Commit(ctx, testNs, 2)
 	require.NoError(t, err, "Commit")
 	// Test that we cannot prune non-finalized rounds.
-	_, err = ndb.Prune(ctx, testNs, 2)
+	err = ndb.Prune(ctx, 2)
 	require.Error(t, err, "Prune should fail for non-finalized rounds")
 	require.Equal(t, db.ErrNotFinalized, err)
 	// Finalize round 2.
-	err = ndb.Finalize(ctx, testNs, 2, []hash.Hash{rootHash3})
+	err = ndb.Finalize(ctx, 2, []hash.Hash{rootHash3})
 	require.NoError(t, err, "Finalize")
 
+	earliestRound, err := ndb.GetEarliestRound(ctx)
+	require.NoError(t, err, "GetEarliestRound")
+	require.EqualValues(t, 0, earliestRound, "earliest round should be correct")
+	latestRound, err := ndb.GetLatestRound(ctx)
+	require.NoError(t, err, "GetLatestRound")
+	require.EqualValues(t, 2, latestRound, "latest round should be correct")
+
 	// Prune round 0.
-	pruned, err := ndb.Prune(ctx, testNs, 0)
+	err = ndb.Prune(ctx, 0)
 	require.NoError(t, err, "Prune")
-	// Two nodes should have been pruned (root and left child).
-	require.EqualValues(t, 2, pruned)
+
+	// Reopen database to force compaction.
+	ndb.Close()
+	ndb = factory()
+	defer ndb.Close()
+
+	earliestRound, err = ndb.GetEarliestRound(ctx)
+	require.NoError(t, err, "GetEarliestRound")
+	require.EqualValues(t, 1, earliestRound, "earliest round should be correct")
+	latestRound, err = ndb.GetLatestRound(ctx)
+	require.NoError(t, err, "GetLatestRound")
+	require.EqualValues(t, 2, latestRound, "latest round should be correct")
 
 	// Keys must still be available in round 2.
 	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 2, Hash: rootHash3})
@@ -1166,7 +1182,7 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB) {
 	value, err = tree.Get(ctx, []byte("another"))
 	require.NoError(t, err, "Get")
 	require.EqualValues(t, []byte("value"), value)
-	// Remove key must be gone.
+	// Removed key must be gone.
 	value, err = tree.Get(ctx, []byte("foo"))
 	require.NoError(t, err, "Get")
 	require.Nil(t, value, "removed key must be gone")
@@ -1177,7 +1193,7 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB) {
 	require.Error(t, err, "Get")
 }
 
-func testPruneManyRounds(t *testing.T, ndb db.NodeDB) {
+func testPruneManyRounds(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
@@ -1194,17 +1210,20 @@ func testPruneManyRounds(t *testing.T, ndb db.NodeDB) {
 
 		_, rootHash, err := tree.Commit(ctx, testNs, uint64(r))
 		require.NoError(t, err, "Commit")
-		err = ndb.Finalize(ctx, testNs, uint64(r), []hash.Hash{rootHash})
+		err = ndb.Finalize(ctx, uint64(r), []hash.Hash{rootHash})
 		require.NoError(t, err, "Finalize")
 	}
 
 	// Prune all rounds except the last one.
-	var totalPruned int
 	for r := 0; r < numRounds-1; r++ {
-		pruned, err := ndb.Prune(ctx, testNs, uint64(r))
+		err := ndb.Prune(ctx, uint64(r))
 		require.NoError(t, err, "Prune")
-		totalPruned += pruned
 	}
+
+	// Reopen database to force compaction.
+	ndb.Close()
+	ndb = factory()
+	defer ndb.Close()
 
 	// Check that the latest version has all the keys.
 	for r := 0; r < numRounds; r++ {
@@ -1215,67 +1234,6 @@ func testPruneManyRounds(t *testing.T, ndb db.NodeDB) {
 			require.EqualValues(t, value, fmt.Sprintf("value %d/%d", r, p))
 		}
 	}
-
-	// We must have pruned some.
-	require.True(t, totalPruned > 0, "pruning must have pruned something")
-}
-
-func testPruneCheckpoints(t *testing.T, ndb db.NodeDB) {
-	ctx := context.Background()
-	tree := New(nil, ndb)
-
-	const numRounds = 50
-	const numPairsPerRound = 50
-	const checkpointEvery = 10
-
-	var roots []hash.Hash
-	for r := 0; r < numRounds; r++ {
-		for p := 0; p < numPairsPerRound; p++ {
-			key := []byte(fmt.Sprintf("key %d/%d", r, p))
-			value := []byte(fmt.Sprintf("value %d/%d", r, p))
-			err := tree.Insert(ctx, key, value)
-			require.NoError(t, err, "Insert")
-		}
-
-		_, rootHash, err := tree.Commit(ctx, testNs, uint64(r))
-		require.NoError(t, err, "Commit")
-		err = ndb.Finalize(ctx, testNs, uint64(r), []hash.Hash{rootHash})
-		require.NoError(t, err, "Finalize")
-		roots = append(roots, rootHash)
-	}
-
-	// Prune all non-checkpoint rounds.
-	var totalPruned int
-	for r := 0; r < numRounds-1; r++ {
-		if r%checkpointEvery == 0 {
-			continue
-		}
-
-		pruned, err := ndb.Prune(ctx, testNs, uint64(r))
-		require.NoError(t, err, "Prune")
-		totalPruned += pruned
-	}
-
-	// Check that checkpoints have all the keys.
-	for r := 0; r < numRounds; r++ {
-		if r%checkpointEvery != 0 {
-			continue
-		}
-
-		tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: uint64(r), Hash: roots[r]})
-
-		for pr := 0; pr <= r; pr++ {
-			for p := 0; p < numPairsPerRound; p++ {
-				key := []byte(fmt.Sprintf("key %d/%d", pr, p))
-				value, err := tree.Get(ctx, key)
-				require.NoError(t, err, "Get(%d, %s)", r, key)
-				require.EqualValues(t, value, fmt.Sprintf("value %d/%d", pr, p))
-			}
-		}
-	}
-
-	// We must have pruned some.
-	require.True(t, totalPruned > 0, "pruning must have pruned something")
 }
 
 // countCreatedNodes counts the number of nodes that have been created in the same
@@ -1292,7 +1250,7 @@ func countCreatedNodes(t *testing.T, ndb db.NodeDB, root node.Root, seenNodes ma
 	return
 }
 
-func testPruneForkedRoots(t *testing.T, ndb db.NodeDB) {
+func testPruneForkedRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
 	// Create a root in round 0.
@@ -1304,7 +1262,7 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB) {
 	_, rootHashR0_1, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
 	// Finalize round 0.
-	err = ndb.Finalize(ctx, testNs, 0, []hash.Hash{rootHashR0_1})
+	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHashR0_1})
 	require.NoError(t, err, "Finalize")
 
 	// Create a derived root A in round 1.
@@ -1325,7 +1283,7 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB) {
 
 	// Finalize round 1. Only derived root B was finalized, so derived root A
 	// should be discarded.
-	err = ndb.Finalize(ctx, testNs, 1, []hash.Hash{rootHashR1_2})
+	err = ndb.Finalize(ctx, 1, []hash.Hash{rootHashR1_2})
 	require.NoError(t, err, "Finalize")
 
 	// Make sure that the write log for the discarded root is gone.
@@ -1345,16 +1303,24 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB) {
 	_, rootHashR2_1, err := tree.Commit(ctx, testNs, 2)
 	require.NoError(t, err, "Commit")
 	// Finalize round 2.
-	err = ndb.Finalize(ctx, testNs, 2, []hash.Hash{rootHashR2_1})
+	err = ndb.Finalize(ctx, 2, []hash.Hash{rootHashR2_1})
 	require.NoError(t, err, "Finalize")
 
-	// Prune round 1.
-	_, err = ndb.Prune(ctx, testNs, 1)
+	// Prune round 1 (should fail as it is not the earliest round).
+	err = ndb.Prune(ctx, 1)
+	require.Error(t, err, "Prune")
+	require.Equal(t, db.ErrNotEarliest, err)
+
+	// Prune rounds 0 and 1.
+	err = ndb.Prune(ctx, 0)
+	require.NoError(t, err, "Prune")
+	err = ndb.Prune(ctx, 1)
 	require.NoError(t, err, "Prune")
 
-	// Prune round 0.
-	_, err = ndb.Prune(ctx, testNs, 0)
-	require.NoError(t, err, "Prune")
+	// Reopen database to force compaction.
+	ndb.Close()
+	ndb = factory()
+	defer ndb.Close()
 
 	// Make sure all the keys are there.
 	for _, root := range []struct {
@@ -1374,7 +1340,7 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB) {
 	}
 }
 
-func testPruneLoneRootsShared(t *testing.T, ndb db.NodeDB) {
+func testPruneLoneRootsShared(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
 	// Create a lone root (e.g., not included among the finalized roots)
@@ -1403,7 +1369,7 @@ func testPruneLoneRootsShared(t *testing.T, ndb db.NodeDB) {
 	_, _, err = tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
 
-	err = ndb.Finalize(ctx, testNs, 0, []hash.Hash{rootHash1})
+	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHash1})
 	require.NoError(t, err, "Finalize")
 
 	// Check that the shared nodes are still there.
@@ -1419,7 +1385,7 @@ func testPruneLoneRootsShared(t *testing.T, ndb db.NodeDB) {
 	require.EqualValues(t, []byte("bar3"), value)
 }
 
-func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
+func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
 	type item struct {
@@ -1540,7 +1506,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
 		}
 	}
 
-	err := ndb.Finalize(ctx, batches[0].Namespace, batches[0].Round, finalizedRoots)
+	err := ndb.Finalize(ctx, batches[0].Round, finalizedRoots)
 	require.NoError(t, err, "Finalize")
 
 	tree := NewWithRoot(nil, ndb, node.Root{
@@ -1560,7 +1526,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, it.Err(), "tree should still be consistent")
 }
 
-func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
+func testPruneLoneRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
 	// Create a root in round 0.
@@ -1594,7 +1560,7 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Commit")
 
 	// Finalize round 0.
-	err = ndb.Finalize(ctx, testNs, 0, []hash.Hash{rootHashR0_1, rootHashR0_2, rootHashR0_3, rootHashR0_4})
+	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHashR0_1, rootHashR0_2, rootHashR0_3, rootHashR0_4})
 	require.NoError(t, err, "Finalize")
 
 	// Create a distinct root in round 1.
@@ -1642,7 +1608,6 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_5, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	nodesR1_5 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_5}, seenNodes)
 	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_5})
 	err = tree.Insert(ctx, []byte("second"), []byte("i am"))
 	require.NoError(t, err, "Insert")
@@ -1650,13 +1615,11 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Remove")
 	_, rootHashR1_6, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	nodesR1_6 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_6}, seenNodes)
 	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_6})
 	err = tree.Insert(ctx, []byte("third"), []byte("i am not"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_7, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	nodesR1_7 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_7}, seenNodes)
 
 	// Create three linked roots inside round 1 where the first root is
 	// derived from a root in round 0, the second root is derived from
@@ -1682,7 +1645,7 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	// and should be garbage collected.
 
 	// Finalize round 1.
-	err = ndb.Finalize(ctx, testNs, 1, []hash.Hash{rootHashR1_1, rootHashR1_2, rootHashR1_4, rootHashR1_7, rootHashR1_10})
+	err = ndb.Finalize(ctx, 1, []hash.Hash{rootHashR1_1, rootHashR1_2, rootHashR1_4, rootHashR1_7, rootHashR1_10})
 	require.NoError(t, err, "Finalize")
 
 	// Create a distinct root in round 2.
@@ -1707,15 +1670,19 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Commit")
 
 	// Finalize round 2.
-	err = ndb.Finalize(ctx, testNs, 2, []hash.Hash{rootHashR2_1, rootHashR2_2, rootHashR2_3})
+	err = ndb.Finalize(ctx, 2, []hash.Hash{rootHashR2_1, rootHashR2_2, rootHashR2_3})
 	require.NoError(t, err, "Finalize")
 
-	// Prune round 1, all of the lone root's node should have been removed.
-	pruned, err := ndb.Prune(ctx, testNs, 1)
+	// Prune rounds 0 and 1, all of the lone root's node should have been removed.
+	err = ndb.Prune(ctx, 0)
 	require.NoError(t, err, "Prune")
-	// Lone roots have nodesR1_1+nodesR1_3+nodesR1_4+nodesR1_5+nodesR1_6+nodesR1_7 nodes,
-	// intermediate lone roots have 3 nodes and derived roots have 2 nodes.
-	require.EqualValues(t, 2+nodesR1_1+nodesR1_3+nodesR1_4+nodesR1_5+nodesR1_6+nodesR1_7+3, pruned)
+	err = ndb.Prune(ctx, 1)
+	require.NoError(t, err, "Prune")
+
+	// Reopen database to force compaction.
+	ndb.Close()
+	ndb = factory()
+	defer ndb.Close()
 
 	// Check that roots in round 0 and 2 are still there.
 	for _, root := range []struct {
@@ -1723,10 +1690,6 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 		Hash  hash.Hash
 		Keys  []string
 	}{
-		{0, rootHashR0_1, []string{"foo", "moo"}},
-		{0, rootHashR0_2, []string{"goo"}},
-		{0, rootHashR0_3, []string{"yet"}},
-		{0, rootHashR0_4, []string{"yet2"}},
 		{2, rootHashR2_1, []string{"blah"}},
 		{2, rootHashR2_2, []string{"goo", "different2", "foo"}},
 		{2, rootHashR2_3, []string{"yet2", "first2", "second2", "third2", "foo2"}},
@@ -1741,7 +1704,7 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB) {
 	}
 }
 
-func testErrors(t *testing.T, ndb db.NodeDB) {
+func testErrors(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
 	// Commit root for round 0.
@@ -1766,7 +1729,7 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Commit")
 
 	// Commit for non-following round should fail.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR1_1})
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 2, Hash: rootHashR2_1})
 	err = tree.Insert(ctx, []byte("moo"), []byte("moo"))
 	require.NoError(t, err, "Insert")
 	_, _, err = tree.Commit(ctx, testNs, 100)
@@ -1779,7 +1742,7 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	require.NoError(t, err, "Insert")
 	_, _, err = tree.Commit(ctx, testNs, 100)
 	require.Error(t, err, "Commit should fail for mismatched round")
-	require.Equal(t, db.ErrPreviousRoundMismatch, err)
+	require.Equal(t, db.ErrRootNotFound, err)
 
 	// Commit with non-existent old root should fail.
 	var bogusRoot hash.Hash
@@ -1790,14 +1753,14 @@ func testErrors(t *testing.T, ndb db.NodeDB) {
 	require.Equal(t, db.ErrRootNotFound, err)
 
 	// Finalizing a round twice should fail.
-	err = ndb.Finalize(ctx, testNs, 0, []hash.Hash{rootHashR0_1})
+	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHashR0_1})
 	require.NoError(t, err, "Finalize")
-	err = ndb.Finalize(ctx, testNs, 0, []hash.Hash{rootHashR0_1})
+	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHashR0_1})
 	require.Error(t, err, "Finalize should fail as round is already finalized")
 	require.Equal(t, db.ErrAlreadyFinalized, err)
 
 	// Finalize of round 2 should fail as round 1 is not finalized.
-	err = ndb.Finalize(ctx, testNs, 2, []hash.Hash{rootHashR2_1})
+	err = ndb.Finalize(ctx, 2, []hash.Hash{rootHashR2_1})
 	require.Error(t, err, "Finalize should fail as previous round not finalized")
 	require.Equal(t, db.ErrNotFinalized, err)
 
@@ -1858,27 +1821,26 @@ func testSpecialCaseFromJSON(t *testing.T, ndb db.NodeDB, fixture string) {
 	}
 }
 
-func testSpecialCase1(t *testing.T, ndb db.NodeDB) {
+func testSpecialCase1(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	testSpecialCaseFromJSON(t, ndb, "case-1.json")
 }
 
-func testSpecialCase2(t *testing.T, ndb db.NodeDB) {
+func testSpecialCase2(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	testSpecialCaseFromJSON(t, ndb, "case-2.json")
 }
 
-func testSpecialCase3(t *testing.T, ndb db.NodeDB) {
+func testSpecialCase3(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	testSpecialCaseFromJSON(t, ndb, "case-3.json")
 }
 
 func testBackend(
 	t *testing.T,
-	initBackend func(t *testing.T) (db.NodeDB, interface{}),
-	finiBackend func(t *testing.T, ndb db.NodeDB, custom interface{}),
+	initBackend func(t *testing.T) (NodeDBFactory, func()),
 	skipTests []string,
 ) {
 	tests := []struct {
 		name string
-		fn   func(*testing.T, db.NodeDB)
+		fn   func(*testing.T, db.NodeDB, NodeDBFactory)
 	}{
 		{"Basic", testBasic},
 		{"LongKeys", testLongKeys},
@@ -1906,7 +1868,6 @@ func testBackend(
 		{"PruneLoneRootsShared", testPruneLoneRootsShared},
 		{"PruneLoneRootsShared2", testPruneLoneRootsShared2},
 		{"PruneForkedRoots", testPruneForkedRoots},
-		{"PruneCheckpoints", testPruneCheckpoints},
 		{"SpecialCase1", testSpecialCase1},
 		{"SpecialCase2", testSpecialCase2},
 		{"SpecialCase3", testSpecialCase3},
@@ -1924,38 +1885,38 @@ func testBackend(
 				t.Skip("skipping test for this backend")
 			}
 
-			backend, custom := initBackend(t)
-			defer finiBackend(t, backend, custom)
-			tc.fn(t, backend)
+			factory, cleanup := initBackend(t)
+			backend := factory()
+			defer cleanup()
+			tc.fn(t, backend, factory)
 		})
 	}
 }
 
 func TestUrkelBadgerBackend(t *testing.T) {
-	testBackend(t, func(t *testing.T) (db.NodeDB, interface{}) {
+	testBackend(t, func(t *testing.T) (NodeDBFactory, func()) {
 		// Create a new random temporary directory under /tmp.
 		dir, err := ioutil.TempDir("", "mkvs.test.badger")
 		require.NoError(t, err, "TempDir")
 
-		// Create a Badger-backed Node DB.
-		ndb, err := badgerDb.New(&db.Config{
-			DB:           dir,
-			DebugNoFsync: true,
-			Namespace:    testNs,
-			MaxCacheSize: 16 * 1024 * 1024,
-		})
-		require.NoError(t, err, "New")
+		// Create a Badger-backed Node DB factory.
+		factory := func() db.NodeDB {
+			ndb, err := badgerDb.New(&db.Config{
+				DB:           dir,
+				NoFsync:      true,
+				Namespace:    testNs,
+				MaxCacheSize: 16 * 1024 * 1024,
+			})
+			require.NoError(t, err, "New")
+			return ndb
+		}
 
-		return ndb, dir
-	},
-		func(t *testing.T, ndb db.NodeDB, custom interface{}) {
-			ndb.Close()
-
-			dir, ok := custom.(string)
-			require.True(t, ok, "finiBackend")
-
+		cleanup := func() {
 			os.RemoveAll(dir)
-		}, nil)
+		}
+
+		return factory, cleanup
+	}, nil)
 }
 
 func BenchmarkInsertCommitBatch1(b *testing.B) {
