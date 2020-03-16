@@ -22,7 +22,6 @@ import (
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/txsource/workload"
-	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 )
 
 const (
@@ -95,9 +94,6 @@ func doRun(cmd *cobra.Command, args []string) error {
 	// Set up the consensus client.
 	cnsc := consensus.NewConsensusClient(conn)
 
-	// Set up the runtime client.
-	rtc := runtimeClient.NewRuntimeClient(conn)
-
 	// Wait for sync before transferring control to the workload.
 	ncc := api.NewNodeControllerClient(conn)
 	logger.Debug("waiting for node sync")
@@ -120,7 +116,7 @@ func doRun(cmd *cobra.Command, args []string) error {
 	}
 
 	logger.Debug("entering workload", "name", name)
-	if err = w.Run(ctx, rng, conn, cnsc, rtc, fundingAccount); err != nil {
+	if err = w.Run(ctx, rng, conn, cnsc, fundingAccount); err != nil {
 		logger.Error("workload error", "err", err)
 		return fmt.Errorf("workload %s: %w", name, err)
 	}
