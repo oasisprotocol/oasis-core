@@ -66,8 +66,8 @@ func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.Reque
 	signingEntities := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
 
 	// Disburse fees from previous block.
-	if err := app.disburseFees(ctx, stakeState, proposingEntity, numEligibleValidators, signingEntities); err != nil {
-		return fmt.Errorf("staking: failed to disburse fees: %w", err)
+	if err := app.disburseFeesVQ(ctx, stakeState, proposingEntity, numEligibleValidators, signingEntities); err != nil {
+		return fmt.Errorf("disburse fees signers and next proposer: %w", err)
 	}
 
 	// Add rewards for proposer.
@@ -147,8 +147,10 @@ func (app *stakingApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Ap
 }
 
 func (app *stakingApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
-	// Persist any block fees so we can transfer them in the next block.
-	stakingState.PersistBlockFees(ctx)
+	fees := stakingState.BlockFees(ctx)
+	if err := app.disburseFeesP(ctx, stakingState.NewMutableState(ctx.State()), stakingState.BlockProposer(ctx), &fees); err != nil {
+		return types.ResponseEndBlock{}, fmt.Errorf("disburse fees proposer: %w", err)
+	}
 
 	if changed, epoch := app.state.EpochChanged(ctx); changed {
 		return types.ResponseEndBlock{}, app.onEpochChange(ctx, epoch)

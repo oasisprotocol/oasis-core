@@ -9,124 +9,155 @@ import (
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 )
 
-// disburseFees disburses fees.
+// disburseFeesP disburses fees to the proposer.
 //
 // In case of errors the state may be inconsistent.
-func (app *stakingApplication) disburseFees(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, numEligibleValidators int, signingEntities []signature.PublicKey) error {
-	totalFees, err := stakeState.LastBlockFees()
+func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, totalFees *quantity.Quantity) error {
+	ctx.Logger().Debug("disbursing proposer fees",
+		"total_amount", totalFees,
+	)
+	if totalFees.IsZero() {
+		stakeState.SetLastBlockFees(totalFees)
+		return nil
+	}
+
+	consensusParameters, err := stakeState.ConsensusParameters()
+	if err != nil {
+		return fmt.Errorf("ConsensusParameters: %w", err)
+	}
+
+	numPersist := consensusParameters.FeeSplitVote.Clone()
+	if err = numPersist.Add(&consensusParameters.FeeSplitNextPropose); err != nil {
+		return fmt.Errorf("add FeeSplitNextPropose: %w", err)
+	}
+	denom := numPersist.Clone()
+	if err = denom.Add(&consensusParameters.FeeSplitPropose); err != nil {
+		return fmt.Errorf("add FeeSplitPropose: %w", err)
+	}
+	feePersistAmt := totalFees.Clone()
+	if err = feePersistAmt.Mul(numPersist); err != nil {
+		return fmt.Errorf("multiply feePersistAmt: %w", err)
+	}
+	if feePersistAmt.Quo(denom) != nil {
+		return fmt.Errorf("divide feePersistAmt: %w", err)
+	}
+
+	feePersist := quantity.NewQuantity()
+	if err = quantity.Move(feePersist, totalFees, feePersistAmt); err != nil {
+		return fmt.Errorf("move feePersist: %w", err)
+	}
+	stakeState.SetLastBlockFees(feePersist)
+
+	feeProposerAmt := totalFees.Clone()
+	if proposerEntity != nil {
+		acct := stakeState.Account(*proposerEntity)
+		if err = quantity.Move(&acct.General.Balance, totalFees, feeProposerAmt); err != nil {
+			return fmt.Errorf("move feeProposerAmt: %w", err)
+		}
+		stakeState.SetAccount(*proposerEntity, acct)
+	}
+
+	if !totalFees.IsZero() {
+		remaining := totalFees.Clone()
+		commonPool, err := stakeState.CommonPool()
+		if err != nil {
+			return fmt.Errorf("CommonPool: %w", err)
+		}
+		if err = quantity.Move(commonPool, totalFees, remaining); err != nil {
+			return fmt.Errorf("move remaining: %w", err)
+		}
+		stakeState.SetCommonPool(commonPool)
+	}
+
+	return nil
+}
+
+// disburseFeesVQ disburses fees to the signers and next proposer.
+//
+// In case of errors the state may be inconsistent.
+func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, numEligibleValidators int, signingEntities []signature.PublicKey) error {
+	lastBlockFees, err := stakeState.LastBlockFees()
 	if err != nil {
 		return fmt.Errorf("staking: failed to query last block fees: %w", err)
 	}
 
-	ctx.Logger().Debug("disbursing fees",
-		"total_amount", totalFees,
-		"numEligibleValidators", numEligibleValidators,
-		"numSigningEntities", len(signingEntities),
+	ctx.Logger().Debug("disbursing signer and next proposer fees",
+		"total_amount", lastBlockFees,
+		"num_eligible_validators", numEligibleValidators,
+		"num_signing_entities", len(signingEntities),
 	)
-	if totalFees.IsZero() {
+	if lastBlockFees.IsZero() {
 		// Nothing to disburse.
 		return nil
 	}
 
-	// (Replicated in staking `ConsensusParameters` struct. Keep both explanations in sync.)
-	// A block's fees are split into $n$ portions, one corresponding to each validator.
-	// For each validator $V$ that signs the block, $V$'s corresponding portion is disbursed between $V$ and the
-	// proposer $P$. The ratio of this split are controlled by `FeeSplitVote` and `FeeSplitPropose`.
-	// Portions corresponding to validators that don't sign the block go to the common pool.
-
 	consensusParameters, err := stakeState.ConsensusParameters()
 	if err != nil {
-		return fmt.Errorf("staking: failed to load consensus parameters: %w", err)
+		return fmt.Errorf("ConsensusParameters: %w", err)
 	}
 
-	// Calculate denom := (FeeSplitVote + FeeSplitPropose) * numEligibleValidators.
-	// This will be used to calculate each portion's vote fee and propose fee.
 	denom := consensusParameters.FeeSplitVote.Clone()
-	if err = denom.Add(&consensusParameters.FeeSplitPropose); err != nil {
-		return fmt.Errorf("add fee splits: %w", err)
+	if err = denom.Add(&consensusParameters.FeeSplitNextPropose); err != nil {
+		return fmt.Errorf("add FeeSplitNextPropose: %w", err)
 	}
+	perValidator := lastBlockFees.Clone()
 	var nEVQ quantity.Quantity
 	if err = nEVQ.FromInt64(int64(numEligibleValidators)); err != nil {
 		return fmt.Errorf("import numEligibleValidators %d: %w", numEligibleValidators, err)
 	}
-	if err = denom.Mul(&nEVQ); err != nil {
-		return fmt.Errorf("multiply denom: %w", err)
+	if err = perValidator.Quo(&nEVQ); err != nil {
+		return fmt.Errorf("divide perValidator: %w", err)
+	}
+	shareNextProposer := perValidator.Clone()
+	if err = shareNextProposer.Mul(&consensusParameters.FeeSplitNextPropose); err != nil {
+		return fmt.Errorf("multiply shareNextProposer: %w", err)
+	}
+	if err = shareNextProposer.Quo(denom); err != nil {
+		return fmt.Errorf("divide shareNextProposer: %w", err)
+	}
+	shareVote := perValidator.Clone()
+	if err = shareVote.Sub(shareNextProposer); err != nil {
+		return fmt.Errorf("subtract shareVote: %w", err)
 	}
 
-	// Calculate each portion's vote fee and propose fee.
-	// Portion vote fee. perVIVote := (totalFees * FeeSplitVote) / denom.
-	perVIVote := totalFees.Clone()
-	if err = perVIVote.Mul(&consensusParameters.FeeSplitVote); err != nil {
-		return fmt.Errorf("multiply perVIVote: %w", err)
-	}
-	if err = perVIVote.Quo(denom); err != nil {
-		return fmt.Errorf("divide perVIVote: %w", err)
-	}
-	// Portion propose fee. perVIPropose := (totalFees * FeeSplitPropose) / denom.
-	perVIPropose := totalFees.Clone()
-	if err = perVIPropose.Mul(&consensusParameters.FeeSplitPropose); err != nil {
-		return fmt.Errorf("multiply perVIPropose: %w", err)
-	}
-	// The per-VoteInfo proposer share is first rounded (down), then multiplied by the number of shares.
-	// This keeps incentives from having nonuniform breakpoints at certain signature counts.
-	if err = perVIPropose.Quo(denom); err != nil {
-		return fmt.Errorf("divide perVIPropose: %w", err)
-	}
 	numSigningEntities := len(signingEntities)
 	var nSEQ quantity.Quantity
 	if err = nSEQ.FromInt64(int64(numSigningEntities)); err != nil {
 		return fmt.Errorf("import numSigningEntities %d: %w", numSigningEntities, err)
 	}
-	// Overall propose fee. proposeTotal := perVIPropose * numSigningEntities.
-	proposeTotal := perVIPropose.Clone()
-	if err = proposeTotal.Mul(&nSEQ); err != nil {
-		return fmt.Errorf("multiply proposeTotal: %w", err)
+	nextProposerTotal := shareNextProposer.Clone()
+	if err = nextProposerTotal.Mul(&nSEQ); err != nil {
+		return fmt.Errorf("multiply nextProposerTotal: %w", err)
 	}
 
-	// Pay proposer.
-	if !proposeTotal.IsZero() {
+	if !nextProposerTotal.IsZero() {
 		if proposerEntity != nil {
-			// Perform the transfer.
 			acct := stakeState.Account(*proposerEntity)
-			if err = quantity.Move(&acct.General.Balance, totalFees, proposeTotal); err != nil {
-				ctx.Logger().Error("failed to disburse fees (propose)",
-					"err", err,
-					"to", *proposerEntity,
-					"amount", proposeTotal,
-				)
-				return fmt.Errorf("staking: failed to disburse fees (propose): %w", err)
+			if err = quantity.Move(&acct.General.Balance, lastBlockFees, nextProposerTotal); err != nil {
+				return fmt.Errorf("move nextProposerTotal: %w", err)
 			}
 			stakeState.SetAccount(*proposerEntity, acct)
 		}
 	}
-	// Pay voters.
-	if !perVIVote.IsZero() {
+
+	if !shareVote.IsZero() {
 		for _, voterEntity := range signingEntities {
-			// Perform the transfer.
 			acct := stakeState.Account(voterEntity)
-			if err = quantity.Move(&acct.General.Balance, totalFees, perVIVote); err != nil {
-				ctx.Logger().Error("failed to disburse fees (vote)",
-					"err", err,
-					"to", voterEntity,
-					"amount", perVIVote,
-				)
-				return fmt.Errorf("staking: failed to disburse fees (vote): %w", err)
+			if err = quantity.Move(&acct.General.Balance, lastBlockFees, shareVote); err != nil {
+				return fmt.Errorf("move shareVote: %w", err)
 			}
 			stakeState.SetAccount(voterEntity, acct)
 		}
 	}
-	// Any remainder goes to the common pool.
-	if !totalFees.IsZero() {
+
+	if !lastBlockFees.IsZero() {
+		remaining := lastBlockFees.Clone()
 		commonPool, err := stakeState.CommonPool()
 		if err != nil {
-			return fmt.Errorf("staking: failed to query common pool: %w", err)
+			return fmt.Errorf("CommonPool: %w", err)
 		}
-		if err := quantity.Move(commonPool, totalFees, totalFees); err != nil {
-			ctx.Logger().Error("failed to move remainder to common pool",
-				"err", err,
-				"amount", totalFees,
-			)
-			return fmt.Errorf("staking: failed to move to common pool: %w", err)
+		if err = quantity.Move(commonPool, lastBlockFees, remaining); err != nil {
+			return fmt.Errorf("move remaining: %w", err)
 		}
 		stakeState.SetCommonPool(commonPool)
 	}

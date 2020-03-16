@@ -7,8 +7,9 @@
       "add_escrow": 10,
       "reclaim_escrow": 10
     },
+    "fee_split_propose": "2",
     "fee_split_vote": "1",
-    "fee_split_propose": "1"
+    "fee_split_next_propose": "1"
   },
   "total_supply": "1200",
   "common_pool": "150",

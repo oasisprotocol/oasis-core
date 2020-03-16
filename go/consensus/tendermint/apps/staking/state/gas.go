@@ -100,11 +100,24 @@ func AuthenticateAndPayFees(
 	return nil
 }
 
-// PersistBlockFees persists the accumulated fee balance for the current block.
-func PersistBlockFees(ctx *abci.Context) {
+// BlockFees returns the accumulated fee balance for the current block.
+func BlockFees(ctx *abci.Context) quantity.Quantity {
 	// Fetch accumulated fees in the current block.
-	fees := ctx.BlockContext().Get(feeAccumulatorKey{}).(*feeAccumulator).balance
+	return ctx.BlockContext().Get(feeAccumulatorKey{}).(*feeAccumulator).balance
+}
 
-	state := NewMutableState(ctx.State())
-	state.SetLastBlockFees(&fees)
+// proposerKey is the block context key.
+type proposerKey struct{}
+
+func (pk proposerKey) NewDefault() interface{} {
+	var empty *signature.PublicKey
+	return empty
+}
+
+func SetBlockProposer(ctx *abci.Context, p *signature.PublicKey) {
+	ctx.BlockContext().Set(proposerKey{}, p)
+}
+
+func BlockProposer(ctx *abci.Context) *signature.PublicKey {
+	return ctx.BlockContext().Get(proposerKey{}).(*signature.PublicKey)
 }

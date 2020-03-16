@@ -535,16 +535,12 @@ type ConsensusParameters struct {
 	DisableDelegation      bool                         `json:"disable_delegation,omitempty"`
 	UndisableTransfersFrom map[signature.PublicKey]bool `json:"undisable_transfers_from,omitempty"`
 
-	// (Replicated in staking app `disburseFees` method. Keep both explanations in sync.)
-	// A block's fees are split into $n$ portions, one corresponding to each validator.
-	// For each validator $V$ that signs the block, $V$'s corresponding portion is disbursed between $V$ and the
-	// proposer $P$. The ratio of this split are controlled by `FeeSplitVote` and `FeeSplitPropose`.
-	// Portions corresponding to validators that don't sign the block go to the common pool.
-
-	// FeeSplitVote is the proportion of block fee portions that go to the validator that signs.
-	FeeSplitVote quantity.Quantity `json:"fee_split_vote"`
 	// FeeSplitPropose is the proportion of block fee portions that go to the proposer.
 	FeeSplitPropose quantity.Quantity `json:"fee_split_propose"`
+	// FeeSplitVote is the proportion of block fee portions that go to the validator that signs.
+	FeeSplitVote quantity.Quantity `json:"fee_split_vote"`
+	// FeeSplitNextPropose is the proportion of block fee portions that go to the next block's proposer.
+	FeeSplitNextPropose quantity.Quantity `json:"fee_split_next_propose"`
 
 	// RewardFactorEpochSigned is the factor for a reward distributed per epoch to
 	// entities that have signed at least a threshold fraction of the blocks.
