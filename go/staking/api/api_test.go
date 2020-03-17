@@ -26,8 +26,8 @@ func TestConsensusParameters(t *testing.T) {
 		KindRuntimeKeyManager: *quantity.NewQuantity(),
 	}
 	validThresholdsParams := ConsensusParameters{
-		Thresholds:   validThresholds,
-		FeeSplitVote: mustInitQuantity(t, 1),
+		Thresholds:         validThresholds,
+		FeeSplitWeightVote: mustInitQuantity(t, 1),
 	}
 	require.NoError(validThresholdsParams.SanityCheck(), "consensus parameters with valid thresholds should be valid")
 
@@ -35,9 +35,9 @@ func TestConsensusParameters(t *testing.T) {
 
 	// Degenerate fee split.
 	degenerateFeeSplit := ConsensusParameters{
-		Thresholds:      validThresholds,
-		FeeSplitVote:    mustInitQuantity(t, 0),
-		FeeSplitPropose: mustInitQuantity(t, 0),
+		Thresholds:            validThresholds,
+		FeeSplitWeightVote:    mustInitQuantity(t, 0),
+		FeeSplitWeightPropose: mustInitQuantity(t, 0),
 	}
 	require.Error(degenerateFeeSplit.SanityCheck(), "consensus parameters with degenerate fee split should be invalid")
 }

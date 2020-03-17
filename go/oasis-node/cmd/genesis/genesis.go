@@ -475,7 +475,7 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 	stakingSt := staking.Genesis{
 		Ledger: make(map[signature.PublicKey]*staking.Account),
 	}
-	if err := stakingSt.Parameters.FeeSplitVote.FromInt64(1); err != nil {
+	if err := stakingSt.Parameters.FeeSplitWeightVote.FromInt64(1); err != nil {
 		return fmt.Errorf("couldn't set default fee split: %w", err)
 	}
 

@@ -59,24 +59,24 @@ func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.Reque
 	// Look up the proposer's entity.
 	proposingEntity := app.resolveEntityIDFromProposer(regState, request, ctx)
 
-	// Go through all signers of the previous block and resolve entities.
+	// Go through all voters of the previous block and resolve entities.
 	// numEligibleValidators is how many total validators are in the validator set, while
-	// signingEntities is from the validators which actually signed.
+	// votingEntities is from the validators which actually voted.
 	numEligibleValidators := len(request.GetLastCommitInfo().Votes)
-	signingEntities := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
+	votingEntities := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
 
 	// Disburse fees from previous block.
-	if err := app.disburseFeesVQ(ctx, stakeState, proposingEntity, numEligibleValidators, signingEntities); err != nil {
-		return fmt.Errorf("disburse fees signers and next proposer: %w", err)
+	if err := app.disburseFeesVQ(ctx, stakeState, proposingEntity, numEligibleValidators, votingEntities); err != nil {
+		return fmt.Errorf("disburse fees voters and next proposer: %w", err)
 	}
 
 	// Add rewards for proposer.
-	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity, numEligibleValidators, len(signingEntities)); err != nil {
+	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity, numEligibleValidators, len(votingEntities)); err != nil {
 		return fmt.Errorf("staking: block proposing reward: %w", err)
 	}
 
 	// Track signing for rewards.
-	if err := app.updateEpochSigning(ctx, stakeState, signingEntities); err != nil {
+	if err := app.updateEpochSigning(ctx, stakeState, votingEntities); err != nil {
 		return fmt.Errorf("staking: failed to update epoch signing info: %w", err)
 	}
 

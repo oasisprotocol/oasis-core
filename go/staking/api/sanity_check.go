@@ -23,13 +23,13 @@ func (p *ConsensusParameters) SanityCheck() error {
 	}
 
 	// Fee splits.
-	if !p.FeeSplitVote.IsValid() {
+	if !p.FeeSplitWeightVote.IsValid() {
 		return fmt.Errorf("fee split vote has invalid value")
 	}
-	if !p.FeeSplitPropose.IsValid() {
+	if !p.FeeSplitWeightPropose.IsValid() {
 		return fmt.Errorf("fee split propose has invalid value")
 	}
-	if p.FeeSplitVote.IsZero() && p.FeeSplitPropose.IsZero() {
+	if p.FeeSplitWeightVote.IsZero() && p.FeeSplitWeightPropose.IsZero() {
 		return fmt.Errorf("fee split proportions are both zero")
 	}
 

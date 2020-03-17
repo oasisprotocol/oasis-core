@@ -26,13 +26,13 @@ func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stak
 		return fmt.Errorf("ConsensusParameters: %w", err)
 	}
 
-	numPersist := consensusParameters.FeeSplitVote.Clone()
-	if err = numPersist.Add(&consensusParameters.FeeSplitNextPropose); err != nil {
-		return fmt.Errorf("add FeeSplitNextPropose: %w", err)
+	numPersist := consensusParameters.FeeSplitWeightVote.Clone()
+	if err = numPersist.Add(&consensusParameters.FeeSplitWeightNextPropose); err != nil {
+		return fmt.Errorf("add FeeSplitWeightNextPropose: %w", err)
 	}
 	denom := numPersist.Clone()
-	if err = denom.Add(&consensusParameters.FeeSplitPropose); err != nil {
-		return fmt.Errorf("add FeeSplitPropose: %w", err)
+	if err = denom.Add(&consensusParameters.FeeSplitWeightPropose); err != nil {
+		return fmt.Errorf("add FeeSplitWeightPropose: %w", err)
 	}
 	feePersistAmt := totalFees.Clone()
 	if err = feePersistAmt.Mul(numPersist); err != nil {
@@ -72,10 +72,10 @@ func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stak
 	return nil
 }
 
-// disburseFeesVQ disburses fees to the signers and next proposer.
+// disburseFeesVQ disburses fees to the voters and next proposer.
 //
 // In case of errors the state may be inconsistent.
-func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, numEligibleValidators int, signingEntities []signature.PublicKey) error {
+func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, numEligibleValidators int, votingEntities []signature.PublicKey) error {
 	lastBlockFees, err := stakeState.LastBlockFees()
 	if err != nil {
 		return fmt.Errorf("staking: failed to query last block fees: %w", err)
@@ -84,7 +84,7 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 	ctx.Logger().Debug("disbursing signer and next proposer fees",
 		"total_amount", lastBlockFees,
 		"num_eligible_validators", numEligibleValidators,
-		"num_signing_entities", len(signingEntities),
+		"num_voting_entities", len(votingEntities),
 	)
 	if lastBlockFees.IsZero() {
 		// Nothing to disburse.
@@ -96,9 +96,9 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 		return fmt.Errorf("ConsensusParameters: %w", err)
 	}
 
-	denom := consensusParameters.FeeSplitVote.Clone()
-	if err = denom.Add(&consensusParameters.FeeSplitNextPropose); err != nil {
-		return fmt.Errorf("add FeeSplitNextPropose: %w", err)
+	denom := consensusParameters.FeeSplitWeightVote.Clone()
+	if err = denom.Add(&consensusParameters.FeeSplitWeightNextPropose); err != nil {
+		return fmt.Errorf("add FeeSplitWeightNextPropose: %w", err)
 	}
 	perValidator := lastBlockFees.Clone()
 	var nEVQ quantity.Quantity
@@ -109,7 +109,7 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 		return fmt.Errorf("divide perValidator: %w", err)
 	}
 	shareNextProposer := perValidator.Clone()
-	if err = shareNextProposer.Mul(&consensusParameters.FeeSplitNextPropose); err != nil {
+	if err = shareNextProposer.Mul(&consensusParameters.FeeSplitWeightNextPropose); err != nil {
 		return fmt.Errorf("multiply shareNextProposer: %w", err)
 	}
 	if err = shareNextProposer.Quo(denom); err != nil {
@@ -120,13 +120,13 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 		return fmt.Errorf("subtract shareVote: %w", err)
 	}
 
-	numSigningEntities := len(signingEntities)
-	var nSEQ quantity.Quantity
-	if err = nSEQ.FromInt64(int64(numSigningEntities)); err != nil {
-		return fmt.Errorf("import numSigningEntities %d: %w", numSigningEntities, err)
+	numVotingEntities := len(votingEntities)
+	var nVEQ quantity.Quantity
+	if err = nVEQ.FromInt64(int64(numVotingEntities)); err != nil {
+		return fmt.Errorf("import numVotingEntities %d: %w", numVotingEntities, err)
 	}
 	nextProposerTotal := shareNextProposer.Clone()
-	if err = nextProposerTotal.Mul(&nSEQ); err != nil {
+	if err = nextProposerTotal.Mul(&nVEQ); err != nil {
 		return fmt.Errorf("multiply nextProposerTotal: %w", err)
 	}
 
@@ -141,7 +141,7 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 	}
 
 	if !shareVote.IsZero() {
-		for _, voterEntity := range signingEntities {
+		for _, voterEntity := range votingEntities {
 			acct := stakeState.Account(voterEntity)
 			if err = quantity.Move(&acct.General.Balance, lastBlockFees, shareVote); err != nil {
 				return fmt.Errorf("move shareVote: %w", err)
