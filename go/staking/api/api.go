@@ -74,6 +74,9 @@ type Backend interface {
 	// CommonPool returns the common pool balance.
 	CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error)
 
+	// LastBlockFees returns the collected fees for previous block.
+	LastBlockFees(ctx context.Context, height int64) (*quantity.Quantity, error)
+
 	// Threshold returns the specific staking threshold by kind.
 	Threshold(ctx context.Context, query *ThresholdQuery) (*quantity.Quantity, error)
 

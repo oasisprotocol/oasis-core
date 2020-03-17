@@ -19,6 +19,8 @@ var (
 	methodTotalSupply = serviceName.NewMethod("TotalSupply", int64(0))
 	// methodCommonPool is the CommonPool method.
 	methodCommonPool = serviceName.NewMethod("CommonPool", int64(0))
+	// methodLastBlockFees is the LastBlockFees method.
+	methodLastBlockFees = serviceName.NewMethod("LastBlockFees", int64(0))
 	// methodThreshold is the Threshold method.
 	methodThreshold = serviceName.NewMethod("Threshold", ThresholdQuery{})
 	// methodAccounts is the Accounts method.
@@ -51,6 +53,10 @@ var (
 			{
 				MethodName: methodCommonPool.ShortName(),
 				Handler:    handlerCommonPool,
+			},
+			{
+				MethodName: methodLastBlockFees.ShortName(),
+				Handler:    handlerLastBlockFees,
 			},
 			{
 				MethodName: methodThreshold.ShortName(),
@@ -139,6 +145,29 @@ func handlerCommonPool( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).CommonPool(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerLastBlockFees( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).LastBlockFees(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodLastBlockFees.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).LastBlockFees(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -385,6 +414,14 @@ func (c *stakingClient) TotalSupply(ctx context.Context, height int64) (*quantit
 func (c *stakingClient) CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
 	if err := c.conn.Invoke(ctx, methodCommonPool.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *stakingClient) LastBlockFees(ctx context.Context, height int64) (*quantity.Quantity, error) {
+	var rsp quantity.Quantity
+	if err := c.conn.Invoke(ctx, methodLastBlockFees.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

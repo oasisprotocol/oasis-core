@@ -123,6 +123,10 @@ func testInitialEnv(t *testing.T, backend api.Backend, consensus consensusAPI.Ba
 	require.NoError(err, "CommonPool")
 	require.True(commonPool.IsZero(), "CommonPool - initial value")
 
+	lastBlockFees, err := backend.LastBlockFees(context.Background(), consensusAPI.HeightLatest)
+	require.NoError(err, "LastBlockFees")
+	require.True(lastBlockFees.IsZero(), "LastBlockFees - initial value")
+
 	for _, kind := range []api.ThresholdKind{
 		api.KindNodeValidator,
 		api.KindNodeCompute,

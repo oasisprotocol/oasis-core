@@ -53,6 +53,15 @@ func (tb *tendermintBackend) CommonPool(ctx context.Context, height int64) (*qua
 	return q.CommonPool(ctx)
 }
 
+func (tb *tendermintBackend) LastBlockFees(ctx context.Context, height int64) (*quantity.Quantity, error) {
+	q, err := tb.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.LastBlockFees(ctx)
+}
+
 func (tb *tendermintBackend) Threshold(ctx context.Context, query *api.ThresholdQuery) (*quantity.Quantity, error) {
 	q, err := tb.querier.QueryAt(ctx, query.Height)
 	if err != nil {
