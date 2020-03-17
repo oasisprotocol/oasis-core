@@ -9,7 +9,7 @@ import (
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 )
 
-// disburseFeesP disburses fees to the proposer.
+// disburseFeesP disburses fees to the proposer and persists the voters' and next proposer's shares.
 //
 // In case of errors the state may be inconsistent.
 func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, totalFees *quantity.Quantity) error {
@@ -26,6 +26,7 @@ func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stak
 		return fmt.Errorf("ConsensusParameters: %w", err)
 	}
 
+	// Compute how much to persist for voters and the next proposer.
 	numPersist := consensusParameters.FeeSplitWeightVote.Clone()
 	if err = numPersist.Add(&consensusParameters.FeeSplitWeightNextPropose); err != nil {
 		return fmt.Errorf("add FeeSplitWeightNextPropose: %w", err)
@@ -42,12 +43,14 @@ func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stak
 		return fmt.Errorf("divide feePersistAmt: %w", err)
 	}
 
+	// Persist voters' and next proposer's shares.
 	feePersist := quantity.NewQuantity()
 	if err = quantity.Move(feePersist, totalFees, feePersistAmt); err != nil {
 		return fmt.Errorf("move feePersist: %w", err)
 	}
 	stakeState.SetLastBlockFees(feePersist)
 
+	// Pay the proposer.
 	feeProposerAmt := totalFees.Clone()
 	if proposerEntity != nil {
 		acct := stakeState.Account(*proposerEntity)
@@ -57,6 +60,7 @@ func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stak
 		stakeState.SetAccount(*proposerEntity, acct)
 	}
 
+	// Put the rest into the common pool.
 	if !totalFees.IsZero() {
 		remaining := totalFees.Clone()
 		commonPool, err := stakeState.CommonPool()
@@ -72,7 +76,7 @@ func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stak
 	return nil
 }
 
-// disburseFeesVQ disburses fees to the voters and next proposer.
+// disburseFeesVQ disburses persisted fees to the voters and next proposer.
 //
 // In case of errors the state may be inconsistent.
 func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, numEligibleValidators int, votingEntities []signature.PublicKey) error {
@@ -96,10 +100,8 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 		return fmt.Errorf("ConsensusParameters: %w", err)
 	}
 
-	denom := consensusParameters.FeeSplitWeightVote.Clone()
-	if err = denom.Add(&consensusParameters.FeeSplitWeightNextPropose); err != nil {
-		return fmt.Errorf("add FeeSplitWeightNextPropose: %w", err)
-	}
+	// Compute the portion associated with each eligible validator's share, and within that, how much goes to the voter
+	// and how much goes to the next proposer.
 	perValidator := lastBlockFees.Clone()
 	var nEVQ quantity.Quantity
 	if err = nEVQ.FromInt64(int64(numEligibleValidators)); err != nil {
@@ -107,6 +109,10 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 	}
 	if err = perValidator.Quo(&nEVQ); err != nil {
 		return fmt.Errorf("divide perValidator: %w", err)
+	}
+	denom := consensusParameters.FeeSplitWeightVote.Clone()
+	if err = denom.Add(&consensusParameters.FeeSplitWeightNextPropose); err != nil {
+		return fmt.Errorf("add FeeSplitWeightNextPropose: %w", err)
 	}
 	shareNextProposer := perValidator.Clone()
 	if err = shareNextProposer.Mul(&consensusParameters.FeeSplitWeightNextPropose); err != nil {
@@ -120,6 +126,7 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 		return fmt.Errorf("subtract shareVote: %w", err)
 	}
 
+	// Multiply to get the next proposer's total payment.
 	numVotingEntities := len(votingEntities)
 	var nVEQ quantity.Quantity
 	if err = nVEQ.FromInt64(int64(numVotingEntities)); err != nil {
@@ -130,6 +137,7 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 		return fmt.Errorf("multiply nextProposerTotal: %w", err)
 	}
 
+	// Pay the next proposer.
 	if !nextProposerTotal.IsZero() {
 		if proposerEntity != nil {
 			acct := stakeState.Account(*proposerEntity)
@@ -140,6 +148,7 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 		}
 	}
 
+	// Pay the voters.
 	if !shareVote.IsZero() {
 		for _, voterEntity := range votingEntities {
 			acct := stakeState.Account(voterEntity)
@@ -150,6 +159,7 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 		}
 	}
 
+	// Put the rest into the common pool.
 	if !lastBlockFees.IsZero() {
 		remaining := lastBlockFees.Clone()
 		commonPool, err := stakeState.CommonPool()
