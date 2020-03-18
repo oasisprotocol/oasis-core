@@ -120,14 +120,15 @@ func (q *Quantity) Pour(dst io.Writer) {
 	}
 }
 
-func (q *Quantity) Fill(src io.Reader) {
+func (q *Quantity) Fill(src io.Reader) error {
 	var u uint64
 	if err := binary.Read(src, binary.LittleEndian, &u); err != nil {
-		panic(err)
+		return fmt.Errorf("low uint64: %w", err)
 	}
 	if err := q.FromUint64(u); err != nil {
-		panic(err)
+		return fmt.Errorf("import low uint64 %d: %w", u, err)
 	}
+	return nil
 }
 
 // Add adds n to q, returning an error if n < 0 or n == nil.

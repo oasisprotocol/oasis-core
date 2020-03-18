@@ -238,109 +238,111 @@ func Marshal(ipv interface{}) []byte {
 }
 
 type Fill interface {
-	Fill(src io.Reader)
+	Fill(src io.Reader) error
 }
 
-func unmarshalValue(src io.Reader, v reflect.Value, indent int) {
+func unmarshalValue(src io.Reader, v reflect.Value, indent int) error {
 	if !v.CanSet() {
 		fmt.Print("(unexported)")
-		return
+		return nil
 	}
 	if fill, ok := v.Addr().Interface().(Fill); ok {
-		fill.Fill(src)
+		if err := fill.Fill(src); err != nil {
+			return fmt.Errorf("fill %s: %w", v.Type().Name(), err)
+		}
 		fmt.Printf("(fill '%s %v)", v.Type().Name(), fill)
-		return
+		return nil
 	}
 	switch v.Type() {
 	case reflect.TypeOf(time.Time{}):
 		var sec int64
 		if err := binary.Read(src, binary.LittleEndian, &sec); err != nil {
-			panic(err)
+			return fmt.Errorf("read time sec: %w", err)
 		}
 		var nsec uint32
 		if err := binary.Read(src, binary.LittleEndian, &nsec); err != nil {
-			panic(err)
+			return fmt.Errorf("read time nsec: %w", err)
 		}
 		t := time.Unix(sec, int64(nsec))
 		fmt.Printf("(time \"%v\")", t)
 		v.Set(reflect.ValueOf(t))
-		return
+		return nil
 	}
 	switch v.Kind() {
 	case reflect.Bool:
 		var b bool
 		if err := binary.Read(src, binary.LittleEndian, &b); err != nil {
-			panic(err)
+			return fmt.Errorf("read bool: %w", err)
 		}
 		fmt.Printf("(bool %v)", b)
 		v.SetBool(b)
 	case reflect.Int:
 		var i int64
 		if err := binary.Read(src, binary.LittleEndian, &i); err != nil {
-			panic(err)
+			return fmt.Errorf("read int: %w", err)
 		}
 		fmt.Printf("(int %v)", i)
 		v.SetInt(i)
 	case reflect.Int8:
 		var i int8
 		if err := binary.Read(src, binary.LittleEndian, &i); err != nil {
-			panic(err)
+			return fmt.Errorf("read int8: %w", err)
 		}
 		fmt.Printf("(int8 %d)", i)
 		v.SetInt(int64(i))
 	case reflect.Int16:
 		var i int16
 		if err := binary.Read(src, binary.LittleEndian, &i); err != nil {
-			panic(err)
+			return fmt.Errorf("read int16: %w", err)
 		}
 		fmt.Printf("(int16 %d)", i)
 		v.SetInt(int64(i))
 	case reflect.Int32:
 		var i int32
 		if err := binary.Read(src, binary.LittleEndian, &i); err != nil {
-			panic(err)
+			return fmt.Errorf("read int32: %w", err)
 		}
 		fmt.Printf("(int32 %d)", i)
 		v.SetInt(int64(i))
 	case reflect.Int64:
 		var i int64
 		if err := binary.Read(src, binary.LittleEndian, &i); err != nil {
-			panic(err)
+			return fmt.Errorf("read int64: %w", err)
 		}
 		fmt.Printf("(int64 %d)", i)
 		v.SetInt(i)
 	case reflect.Uint:
 		var i uint64
 		if err := binary.Read(src, binary.LittleEndian, &i); err != nil {
-			panic(err)
+			return fmt.Errorf("read uint: %w", err)
 		}
 		fmt.Printf("(uint %d)", i)
 		v.SetUint(i)
 	case reflect.Uint8:
 		var i uint8
 		if err := binary.Read(src, binary.LittleEndian, &i); err != nil {
-			panic(err)
+			return fmt.Errorf("read uint8: %w", err)
 		}
 		fmt.Printf("(uint8 %d)", i)
 		v.SetUint(uint64(i))
 	case reflect.Uint16:
 		var i uint16
 		if err := binary.Read(src, binary.LittleEndian, &i); err != nil {
-			panic(err)
+			return fmt.Errorf("read uint16: %w", err)
 		}
 		fmt.Printf("(uint16 %d)", i)
 		v.SetUint(uint64(i))
 	case reflect.Uint32:
 		var i uint32
 		if err := binary.Read(src, binary.LittleEndian, &i); err != nil {
-			panic(err)
+			return fmt.Errorf("read uint32: %w", err)
 		}
 		fmt.Printf("(uint32 %d)", i)
 		v.SetUint(uint64(i))
 	case reflect.Uint64:
 		var i uint64
 		if err := binary.Read(src, binary.LittleEndian, &i); err != nil {
-			panic(err)
+			return fmt.Errorf("read uint64: %w", err)
 		}
 		fmt.Printf("(uint64 %d)", i)
 		v.SetUint(i)
@@ -348,22 +350,24 @@ func unmarshalValue(src io.Reader, v reflect.Value, indent int) {
 		if v.Type().Elem().Kind() == reflect.Uint8 {
 			asBytes := v.Slice(0, v.Len()).Bytes()
 			if _, err := io.ReadFull(src, asBytes); err != nil {
-				panic(err)
+				return fmt.Errorf("read bytearray (len %d): %w", v.Len(), err)
 			}
 			fmt.Printf("(bytearray \"%x\")", asBytes)
-			return
+			return nil
 		}
 		fmt.Printf("(array\n%s", strings.Repeat("\t", indent))
 		for i := 0; i < v.Len(); i++ {
 			fmt.Print("\t(item ")
-			unmarshalValue(src, v.Index(i), indent+1)
+			if err := unmarshalValue(src, v.Index(i), indent+1); err != nil {
+				return fmt.Errorf("array (len %d) index %d: %w", v.Len(), i, err)
+			}
 			fmt.Printf(")\n%s", strings.Repeat("\t", indent))
 		}
 		fmt.Print(")")
 	case reflect.Map:
 		var present bool
 		if err := binary.Read(src, binary.LittleEndian, &present); err != nil {
-			panic(err)
+			return fmt.Errorf("read map present: %w", err)
 		}
 		if !present {
 			fmt.Print("(map nil)")
@@ -372,16 +376,20 @@ func unmarshalValue(src io.Reader, v reflect.Value, indent int) {
 			fmt.Printf("(map\n%s", strings.Repeat("\t", indent))
 			var ll uint8
 			if err := binary.Read(src, binary.LittleEndian, &ll); err != nil {
-				panic(err)
+				return fmt.Errorf("read map len: %w", err)
 			}
 			v.Set(reflect.MakeMap(v.Type()))
 			for i := 0; i < int(ll); i++ {
 				fmt.Print("\t(item ")
 				kk := reflect.New(v.Type().Key()).Elem()
-				unmarshalValue(src, kk, indent+1)
+				if err := unmarshalValue(src, kk, indent+1); err != nil {
+					return fmt.Errorf("map (len %d) index %d key: %w", ll, i, err)
+				}
 				fmt.Print(" ")
 				vv := reflect.New(v.Type().Elem()).Elem()
-				unmarshalValue(src, vv, indent+1)
+				if err := unmarshalValue(src, vv, indent+1); err != nil {
+					return fmt.Errorf("map (len %d) index %d (key %v) value: %w", ll, i, kk, err)
+				}
 				fmt.Printf(")\n%s", strings.Repeat("\t", indent))
 				v.SetMapIndex(kk, vv)
 			}
@@ -390,7 +398,7 @@ func unmarshalValue(src io.Reader, v reflect.Value, indent int) {
 	case reflect.Ptr:
 		var present bool
 		if err := binary.Read(src, binary.LittleEndian, &present); err != nil {
-			panic(err)
+			return fmt.Errorf("read ptr present: %w", err)
 		}
 		if !present {
 			fmt.Print("(ptr nil)")
@@ -398,13 +406,15 @@ func unmarshalValue(src io.Reader, v reflect.Value, indent int) {
 		} else {
 			v.Set(reflect.New(v.Type().Elem()))
 			fmt.Print("(ptr ")
-			unmarshalValue(src, v.Elem(), indent)
+			if err := unmarshalValue(src, v.Elem(), indent); err != nil {
+				return fmt.Errorf("ptr elem: %w", err)
+			}
 			fmt.Print(")")
 		}
 	case reflect.Slice:
 		var present bool
 		if err := binary.Read(src, binary.LittleEndian, &present); err != nil {
-			panic(err)
+			return fmt.Errorf("read slice present: %w", err)
 		}
 		if !present {
 			fmt.Print("(slice nil)")
@@ -413,25 +423,27 @@ func unmarshalValue(src io.Reader, v reflect.Value, indent int) {
 			if v.Type().Elem().Kind() == reflect.Uint8 {
 				var ll uint16
 				if err := binary.Read(src, binary.LittleEndian, &ll); err != nil {
-					panic(err)
+					return fmt.Errorf("read byteslice len: %w", err)
 				}
 				b := make([]byte, ll)
 				if _, err := io.ReadFull(src, b); err != nil {
-					panic(err)
+					return fmt.Errorf("read byteslice (len %d): %w", ll, err)
 				}
 				fmt.Printf("(byteslice \"%x\")", b)
 				v.Set(reflect.ValueOf(b))
-				return
+				return nil
 			}
 			fmt.Printf("(slice\n%s", strings.Repeat("\t", indent))
 			var ll uint8
 			if err := binary.Read(src, binary.LittleEndian, &ll); err != nil {
-				panic(err)
+				return fmt.Errorf("read slice len: %w", err)
 			}
 			v.Set(reflect.MakeSlice(v.Type(), int(ll), int(ll)))
 			for i := 0; i < int(ll); i++ {
 				fmt.Print("\t(item ")
-				unmarshalValue(src, v.Index(i), indent+1)
+				if err := unmarshalValue(src, v.Index(i), indent+1); err != nil {
+					return fmt.Errorf("slice (len %d) index %d: %w", ll, i, err)
+				}
 				fmt.Printf(")\n%s", strings.Repeat("\t", indent))
 			}
 			fmt.Print(")")
@@ -439,11 +451,11 @@ func unmarshalValue(src io.Reader, v reflect.Value, indent int) {
 	case reflect.String:
 		var ll uint8
 		if err := binary.Read(src, binary.LittleEndian, &ll); err != nil {
-			panic(err)
+			return fmt.Errorf("read string len: %w", err)
 		}
 		b := make([]byte, ll)
 		if _, err := io.ReadFull(src, b); err != nil {
-			panic(err)
+			return fmt.Errorf("read string (len %d) bytes: %w", ll, err)
 		}
 		s := string(b)
 		fmt.Printf("(string %+q)", s)
@@ -458,21 +470,33 @@ func unmarshalValue(src io.Reader, v reflect.Value, indent int) {
 				continue
 			}
 			fmt.Printf("\t(field '%s ", tf.Name)
-			unmarshalValue(src, v.Field(i), indent+1)
+			if err := unmarshalValue(src, v.Field(i), indent+1); err != nil {
+				return fmt.Errorf("struct %s field %s: %w", t.Name(), tf.Name, err)
+			}
 			fmt.Printf(")\n%s", strings.Repeat("\t", indent))
 		}
 		fmt.Print(")")
 	default:
 		panic(fmt.Sprintf("not supported kind %d (line %d) %#v", v.Kind(), v.Kind()+233, v))
 	}
+	return nil
 }
 
-func Unmarshal(data []byte, ipv interface{}) {
+func Unmarshal(data []byte, ipv interface{}) error {
 	pv := reflect.ValueOf(ipv)
 	if pv.Kind() != reflect.Ptr {
 		panic("unmarshalling to non-ptr")
 	}
 	fmt.Print("< ")
-	unmarshalValue(bytes.NewReader(data), pv.Elem(), 0)
+	if err := unmarshalValue(bytes.NewReader(data), pv.Elem(), 0); err != nil {
+		return err
+	}
 	fmt.Println()
+	return nil
+}
+
+func MustUnmarshal(data []byte, ipv interface{}) {
+	if err := Unmarshal(data, ipv); err != nil {
+		panic(err)
+	}
 }
