@@ -34,7 +34,14 @@ var parallelLogger = logging.GetLogger("cmd/txsource/workload/parallel")
 
 type parallel struct{}
 
-func (parallel) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient, fundingAccount signature.Signer) error {
+func (parallel) Run(
+	gracefulExit context.Context,
+	rng *rand.Rand,
+	conn *grpc.ClientConn,
+	cnsc consensus.ClientBackend,
+	rtc runtimeClient.RuntimeClient,
+	fundingAccount signature.Signer,
+) error {
 	ctx := context.Background()
 	var err error
 

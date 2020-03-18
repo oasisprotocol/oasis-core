@@ -229,7 +229,14 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, cnsc
 	return nil
 }
 
-func (d *delegation) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient, fundingAccount signature.Signer) error {
+func (d *delegation) Run(
+	gracefulExit context.Context,
+	rng *rand.Rand,
+	conn *grpc.ClientConn,
+	cnsc consensus.ClientBackend,
+	rtc runtimeClient.RuntimeClient,
+	fundingAccount signature.Signer,
+) error {
 	var err error
 	ctx := context.Background()
 

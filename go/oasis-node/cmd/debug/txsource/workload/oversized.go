@@ -28,7 +28,14 @@ var oversizedLogger = logging.GetLogger("cmd/txsource/workload/oversized")
 
 type oversized struct{}
 
-func (oversized) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient, fundingAccount signature.Signer) error {
+func (oversized) Run(
+	gracefulExit context.Context,
+	rng *rand.Rand,
+	conn *grpc.ClientConn,
+	cnsc consensus.ClientBackend,
+	rtc runtimeClient.RuntimeClient,
+	fundingAccount signature.Signer,
+) error {
 	txSignerFactory := memorySigner.NewFactory()
 	txSigner, err := txSignerFactory.Generate(signature.SignerEntity, rng)
 	if err != nil {

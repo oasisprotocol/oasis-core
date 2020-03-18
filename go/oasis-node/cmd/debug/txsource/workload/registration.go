@@ -35,7 +35,7 @@ const (
 	registryNodeMaxEpochUpdate = 5
 )
 
-var registryLogger = logging.GetLogger("cmd/txsource/workload/registry")
+var registrationLogger = logging.GetLogger("cmd/txsource/workload/registration")
 
 type registration struct {
 	ns common.Namespace
@@ -142,7 +142,7 @@ func signNode(identity *identity.Identity, nodeDesc *node.Node) (*node.MultiSign
 
 	sigNode, err := node.MultiSignNode(nodeSigners, registry.RegisterNodeSignatureContext, nodeDesc)
 	if err != nil {
-		registryLogger.Error("failed to sign node descriptor",
+		registrationLogger.Error("failed to sign node descriptor",
 			"err", err,
 		)
 		return nil, err
@@ -151,10 +151,18 @@ func signNode(identity *identity.Identity, nodeDesc *node.Node) (*node.MultiSign
 	return sigNode, nil
 }
 
-func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient, fundingAccount signature.Signer) error { // nolint: gocyclo
+func (r *registration) Run( // nolint: gocyclo
+	gracefulExit context.Context,
+	rng *rand.Rand,
+	conn *grpc.ClientConn,
+	cnsc consensus.ClientBackend,
+	rtc runtimeClient.RuntimeClient,
+	fundingAccount signature.Signer,
+) error {
 	ctx := context.Background()
 	var err error
 
+	// Non-existing runtime.
 	if err = r.ns.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000002"); err != nil {
 		panic(err)
 	}
@@ -162,7 +170,7 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 	baseDir := viper.GetString(cmdCommon.CfgDataDir)
 	nodeIdentitiesDir := filepath.Join(baseDir, "node-identities")
 	if err = common.Mkdir(nodeIdentitiesDir); err != nil {
-		return fmt.Errorf("txsource/registry: failed to create node-identities dir: %w", err)
+		return fmt.Errorf("txsource/registration: failed to create node-identities dir: %w", err)
 	}
 
 	// Load all accounts.
@@ -249,7 +257,7 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 		}
 
 		// Fund entity account to cover registration fees.
-		if err = transferFunds(ctx, registryLogger, cnsc, fundingAccount, entityAccs[i].signer.Public(), feeAmount); err != nil {
+		if err = transferFunds(ctx, registrationLogger, cnsc, fundingAccount, entityAccs[i].signer.Public(), feeAmount); err != nil {
 			return fmt.Errorf("account funding failure: %w", err)
 		}
 
@@ -286,7 +294,7 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 			}
 
 			// Fund entity account to cover entity registration fees.
-			if err = transferFunds(ctx, registryLogger, cnsc, fundingAccount, entityAccs[i].signer.Public(), feeAmount); err != nil {
+			if err = transferFunds(ctx, registrationLogger, cnsc, fundingAccount, entityAccs[i].signer.Public(), feeAmount); err != nil {
 				return fmt.Errorf("account funding failure: %w", err)
 			}
 
@@ -337,7 +345,7 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 		}
 
 		// Fund node account to cover registration fees.
-		if err = transferFunds(ctx, registryLogger, cnsc, fundingAccount, selectedNode.id.NodeSigner.Public(), int64(feeAmount)); err != nil {
+		if err = transferFunds(ctx, registrationLogger, cnsc, fundingAccount, selectedNode.id.NodeSigner.Public(), int64(feeAmount)); err != nil {
 			return fmt.Errorf("account funding failure: %w", err)
 		}
 		selectedNode.reckonedNonce++
@@ -346,20 +354,20 @@ func (r *registration) Run(gracefulExit context.Context, rng *rand.Rand, conn *g
 		if err != nil {
 			return fmt.Errorf("transaction.Sign: %w", err)
 		}
-		registryLogger.Debug("submitting registration",
+		registrationLogger.Debug("submitting registration",
 			"node", selectedNode.nodeDesc,
 		)
 		if err = cnsc.SubmitTx(ctx, signedTx); err != nil {
 			return fmt.Errorf("cnsc.SubmitTx: %w", err)
 		}
-		registryLogger.Debug("registered node",
+		registrationLogger.Debug("registered node",
 			"node", selectedNode.nodeDesc,
 		)
 
 		select {
 		case <-time.After(1 * time.Second):
 		case <-gracefulExit.Done():
-			registryLogger.Debug("time's up")
+			registrationLogger.Debug("time's up")
 			return nil
 		}
 	}
