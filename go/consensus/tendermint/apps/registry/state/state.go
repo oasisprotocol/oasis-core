@@ -10,6 +10,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -95,7 +96,7 @@ func (s *ImmutableState) Entity(id signature.PublicKey) (*entity.Entity, error) 
 		return nil, err
 	}
 	var entity entity.Entity
-	if err = cbor.Unmarshal(signedEntity.Blob, &entity); err != nil {
+	if err = fill2.Unmarshal(signedEntity.Blob, &entity); err != nil {
 		return nil, err
 	}
 	return &entity, nil
@@ -117,7 +118,7 @@ func (s *ImmutableState) Entities() ([]*entity.Entity, error) {
 				panic("tendermint/registry: corrupted state: " + err.Error())
 			}
 			var entity entity.Entity
-			if err := cbor.Unmarshal(signedEntity.Blob, &entity); err != nil {
+			if err := fill2.Unmarshal(signedEntity.Blob, &entity); err != nil {
 				panic("tendermint/registry: corrupted state: " + err.Error())
 			}
 
@@ -174,7 +175,7 @@ func (s *ImmutableState) Node(id signature.PublicKey) (*node.Node, error) {
 		return nil, err
 	}
 	var node node.Node
-	if err = cbor.Unmarshal(signedNode.Blob, &node); err != nil {
+	if err = fill2.Unmarshal(signedNode.Blob, &node); err != nil {
 		return nil, err
 	}
 	return &node, nil
@@ -209,7 +210,7 @@ func (s *ImmutableState) Nodes() ([]*node.Node, error) {
 				panic("tendermint/registry: corrupted state: " + err.Error())
 			}
 			var node node.Node
-			if err := cbor.Unmarshal(signedNode.Blob, &node); err != nil {
+			if err := fill2.Unmarshal(signedNode.Blob, &node); err != nil {
 				panic("tendermint/registry: corrupted state: " + err.Error())
 			}
 
@@ -266,7 +267,7 @@ func (s *ImmutableState) getRuntime(keyFmt *keyformat.KeyFormat, id common.Names
 		return nil, err
 	}
 	var runtime registry.Runtime
-	if err = cbor.Unmarshal(signedRuntime.Blob, &runtime); err != nil {
+	if err = fill2.Unmarshal(signedRuntime.Blob, &runtime); err != nil {
 		return nil, err
 	}
 	return &runtime, nil
@@ -375,7 +376,7 @@ func (s *ImmutableState) Runtimes() ([]*registry.Runtime, error) {
 	var runtimes []*registry.Runtime
 	s.iterateRuntimes(signedRuntimeKeyFmt, func(sigRt *registry.SignedRuntime) {
 		var rt registry.Runtime
-		if err := cbor.Unmarshal(sigRt.Blob, &rt); err != nil {
+		if err := fill2.Unmarshal(sigRt.Blob, &rt); err != nil {
 			panic("tendermint/registry: corrupted state: " + err.Error())
 		}
 		runtimes = append(runtimes, &rt)
@@ -389,7 +390,7 @@ func (s *ImmutableState) AllRuntimes() ([]*registry.Runtime, error) {
 	var runtimes []*registry.Runtime
 	unpackFn := func(sigRt *registry.SignedRuntime) {
 		var rt registry.Runtime
-		if err := cbor.Unmarshal(sigRt.Blob, &rt); err != nil {
+		if err := fill2.Unmarshal(sigRt.Blob, &rt); err != nil {
 			panic("tendermint/registry: corrupted state: " + err.Error())
 		}
 		runtimes = append(runtimes, &rt)
@@ -567,7 +568,7 @@ func (s *MutableState) RemoveEntity(id signature.PublicKey) (*entity.Entity, err
 		var removedEntity entity.Entity
 
 		cbor.MustUnmarshal(data, &removedSignedEntity)
-		cbor.MustUnmarshal(removedSignedEntity.Blob, &removedEntity)
+		fill2.MustUnmarshal(removedSignedEntity.Blob, &removedEntity)
 		return &removedEntity, nil
 	}
 

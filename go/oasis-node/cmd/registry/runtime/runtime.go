@@ -16,9 +16,9 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
@@ -406,7 +406,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 			}
 			vi.Enclaves = append(vi.Enclaves, enclaveID)
 		}
-		rt.Version.TEE = cbor.Marshal(vi)
+		rt.Version.TEE = fill2.Marshal(vi)
 	}
 	switch sap := viper.GetString(CfgAdmissionPolicy); sap {
 	case AdmissionPolicyNameAnyNode:

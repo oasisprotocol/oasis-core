@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/common/version"
@@ -300,7 +300,7 @@ func (c *CapabilityTEE) Verify(ts time.Time) error {
 	switch c.Hardware {
 	case TEEHardwareIntelSGX:
 		var avrBundle ias.AVRBundle
-		if err := cbor.Unmarshal(c.Attestation, &avrBundle); err != nil {
+		if err := fill2.Unmarshal(c.Attestation, &avrBundle); err != nil {
 			return err
 		}
 
@@ -351,7 +351,7 @@ func (s *MultiSignedNode) Open(context signature.Context, node *Node) error {
 // to the given writer.
 func (s MultiSignedNode) PrettyPrint(prefix string, w io.Writer) {
 	var n Node
-	if err := cbor.Unmarshal(s.MultiSigned.Blob, &n); err != nil {
+	if err := fill2.Unmarshal(s.MultiSigned.Blob, &n); err != nil {
 		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, err)
 		return
 	}

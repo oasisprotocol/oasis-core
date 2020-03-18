@@ -8,10 +8,10 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 )
 
@@ -42,7 +42,7 @@ type Transaction struct {
 	// Method is the method that should be called.
 	Method MethodName `json:"method"`
 	// Body is the method call body.
-	Body cbor.RawMessage `json:"body,omitempty"`
+	Body []byte `json:"body,omitempty"`
 }
 
 // PrettyPrint writes a pretty-printed representation of the type
@@ -65,7 +65,7 @@ func (t Transaction) PrettyPrint(prefix string, w io.Writer) {
 
 	// Deserialize into correct type.
 	v := reflect.New(reflect.TypeOf(bodyType)).Interface()
-	if err := cbor.Unmarshal(t.Body, v); err != nil {
+	if err := fill2.Unmarshal(t.Body, v); err != nil {
 		fmt.Fprintf(w, "%s  <error: %s>\n", prefix, err)
 		fmt.Fprintf(w, "%s  <malformed: %s>\n", prefix, base64.StdEncoding.EncodeToString(t.Body))
 		return
@@ -95,14 +95,14 @@ func (t *Transaction) SanityCheck() error {
 func NewTransaction(nonce uint64, fee *Fee, method MethodName, body interface{}) *Transaction {
 	var rawBody []byte
 	if body != nil {
-		rawBody = cbor.Marshal(body)
+		rawBody = fill2.Marshal(body)
 	}
 
 	return &Transaction{
 		Nonce:  nonce,
 		Fee:    fee,
 		Method: method,
-		Body:   cbor.RawMessage(rawBody),
+		Body:   rawBody,
 	}
 }
 
@@ -135,7 +135,7 @@ func (s SignedTransaction) PrettyPrint(prefix string, w io.Writer) {
 	// be useful to look into it regardless.
 	var tx Transaction
 	fmt.Fprintf(w, "%sContent:\n", prefix)
-	if err := cbor.Unmarshal(s.Blob, &tx); err != nil {
+	if err := fill2.Unmarshal(s.Blob, &tx); err != nil {
 		fmt.Fprintf(w, "%s  <error: %s>\n", prefix, err)
 		fmt.Fprintf(w, "%s  <malformed: %s>\n", prefix, base64.StdEncoding.EncodeToString(s.Blob))
 		return

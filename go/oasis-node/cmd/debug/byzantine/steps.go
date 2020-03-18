@@ -11,10 +11,10 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
@@ -102,7 +102,7 @@ func initFakeCapabilitiesSGX() (signature.Signer, *node.Capabilities, error) {
 	fc := node.Capabilities{}
 	fc.TEE = &node.CapabilityTEE{
 		Hardware: node.TEEHardwareIntelSGX,
-		Attestation: cbor.Marshal(ias.AVRBundle{
+		Attestation: fill2.Marshal(ias.AVRBundle{
 			Body: body,
 			// Everything we do is simulated, and we wouldn't be able to get a real signed AVR.
 		}),

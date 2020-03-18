@@ -9,6 +9,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -67,7 +68,7 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Tra
 	switch tx.Method {
 	case registry.MethodRegisterEntity:
 		var sigEnt entity.SignedEntity
-		if err := cbor.Unmarshal(tx.Body, &sigEnt); err != nil {
+		if err := fill2.Unmarshal(tx.Body, &sigEnt); err != nil {
 			return err
 		}
 
@@ -76,21 +77,21 @@ func (app *registryApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Tra
 		return app.deregisterEntity(ctx, state)
 	case registry.MethodRegisterNode:
 		var sigNode node.MultiSignedNode
-		if err := cbor.Unmarshal(tx.Body, &sigNode); err != nil {
+		if err := fill2.Unmarshal(tx.Body, &sigNode); err != nil {
 			return err
 		}
 
 		return app.registerNode(ctx, state, &sigNode)
 	case registry.MethodUnfreezeNode:
 		var unfreeze registry.UnfreezeNode
-		if err := cbor.Unmarshal(tx.Body, &unfreeze); err != nil {
+		if err := fill2.Unmarshal(tx.Body, &unfreeze); err != nil {
 			return err
 		}
 
 		return app.unfreezeNode(ctx, state, &unfreeze)
 	case registry.MethodRegisterRuntime:
 		var sigRt registry.SignedRuntime
-		if err := cbor.Unmarshal(tx.Body, &sigRt); err != nil {
+		if err := fill2.Unmarshal(tx.Body, &sigRt); err != nil {
 			return err
 		}
 

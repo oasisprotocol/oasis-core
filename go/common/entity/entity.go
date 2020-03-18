@@ -9,9 +9,9 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 )
 
@@ -142,7 +142,7 @@ func (s *SignedEntity) Open(context signature.Context, entity *Entity) error { /
 // to the given writer.
 func (s SignedEntity) PrettyPrint(prefix string, w io.Writer) {
 	var e Entity
-	if err := cbor.Unmarshal(s.Signed.Blob, &e); err != nil {
+	if err := fill2.Unmarshal(s.Signed.Blob, &e); err != nil {
 		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, err)
 		return
 	}

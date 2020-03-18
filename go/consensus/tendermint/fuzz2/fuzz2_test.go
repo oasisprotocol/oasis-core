@@ -5,20 +5,21 @@ package fuzz2
 import (
 	"crypto/ed25519"
 	"crypto/tls"
-	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/entity"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -53,9 +54,19 @@ func mustGenerateCert(t *testing.T) (signature.PublicKey, *tls.Certificate) {
 	return memory.NewFromRuntime(cert.PrivateKey.(ed25519.PrivateKey)).Public(), cert
 }
 
-func fakeSigned(body interface{}, signer signature.PublicKey) signature.Signed {
+func marshalAndCheck(t *testing.T, v interface{}, msg string) []byte {
+	data := fill2.Marshal(v)
+	fmt.Printf("data [%x]\n", data)
+	v2r := reflect.New(reflect.TypeOf(v).Elem())
+	reflect.ValueOf(fill2.Unmarshal).Call([]reflect.Value{reflect.ValueOf(data), v2r})
+	v2 := v2r.Interface()
+	require.Equal(t, v, v2, msg)
+	return data
+}
+
+func fakeSigned(t *testing.T, body interface{}, msg string, signer signature.PublicKey) signature.Signed {
 	return signature.Signed{
-		Blob: cbor.Marshal(body),
+		Blob: marshalAndCheck(t, body, msg),
 		Signature: signature.Signature{
 			PublicKey: signer,
 			Signature: signature.FakeSignature,
@@ -63,9 +74,9 @@ func fakeSigned(body interface{}, signer signature.PublicKey) signature.Signed {
 	}
 }
 
-func fakeMultiSigned(body interface{}, signers ...signature.PublicKey) signature.MultiSigned {
+func fakeMultiSigned(t *testing.T, body interface{}, msg string, signers ...signature.PublicKey) signature.MultiSigned {
 	ms := signature.MultiSigned{
-		Blob:       cbor.Marshal(body),
+		Blob:       marshalAndCheck(t, body, msg),
 		Signatures: make([]signature.Signature, 0, len(signers)),
 	}
 	for _, pk := range signers {
@@ -116,27 +127,27 @@ func TestFuzz(t *testing.T) {
 			},
 			Entities: []*entity.SignedEntity{
 				{
-					fakeSigned(entity.Entity{
+					fakeSigned(t, &entity.Entity{
 						ID:    entity1,
 						Nodes: []signature.PublicKey{node1},
-					}, entity1),
+					}, "entity1", entity1),
 				},
 				{
-					fakeSigned(entity.Entity{
+					fakeSigned(t, &entity.Entity{
 						ID:    entity2,
 						Nodes: []signature.PublicKey{node2},
-					}, entity2),
+					}, "entity2", entity2),
 				},
 				{
-					fakeSigned(entity.Entity{
+					fakeSigned(t, &entity.Entity{
 						ID:    entity3,
 						Nodes: []signature.PublicKey{node3},
-					}, entity3),
+					}, "entity3", entity3),
 				},
 			},
 			Nodes: []*node.MultiSignedNode{
 				{
-					fakeMultiSigned(node.Node{
+					fakeMultiSigned(t, &node.Node{
 						ID:       node1,
 						EntityID: entity1,
 						Committee: node.CommitteeInfo{
@@ -154,10 +165,10 @@ func TestFuzz(t *testing.T) {
 							},
 						},
 						Roles: node.RoleValidator,
-					}, node1, node1P2P, node1Cons, node1Com),
+					}, "node1", node1, node1P2P, node1Cons, node1Com),
 				},
 				{
-					fakeMultiSigned(node.Node{
+					fakeMultiSigned(t, &node.Node{
 						ID:       node2,
 						EntityID: entity2,
 						Committee: node.CommitteeInfo{
@@ -175,10 +186,10 @@ func TestFuzz(t *testing.T) {
 							},
 						},
 						Roles: node.RoleValidator,
-					}, node2, node2P2P, node2Cons, node2Com),
+					}, "node2", node2, node2P2P, node2Cons, node2Com),
 				},
 				{
-					fakeMultiSigned(node.Node{
+					fakeMultiSigned(t, &node.Node{
 						ID:       node3,
 						EntityID: entity3,
 						Committee: node.CommitteeInfo{
@@ -196,7 +207,7 @@ func TestFuzz(t *testing.T) {
 							},
 						},
 						Roles: node.RoleValidator,
-					}, node3, node3P2P, node3Cons, node3Com),
+					}, "node3", node3, node3P2P, node3Cons, node3Com),
 				},
 			},
 			NodeStatuses: map[signature.PublicKey]*registry.NodeStatus{},
@@ -301,8 +312,7 @@ func TestFuzz(t *testing.T) {
 			},
 		},
 	}
-	docBytes, err := json.Marshal(doc)
-	require.NoError(t, err, "marhsal genesis document")
+	docBytes := marshalAndCheck(t, &doc, "doc")
 	msgs := messages{
 		InitReq: types.RequestInitChain{
 			Time:          now,
@@ -372,27 +382,27 @@ func TestFuzz(t *testing.T) {
 				},
 				TxReqs: []types.RequestDeliverTx{
 					{
-						Tx: cbor.Marshal(transaction.SignedTransaction{
-							Signed: fakeSigned(transaction.Transaction{
+						Tx: marshalAndCheck(t, &transaction.SignedTransaction{
+							Signed: fakeSigned(t, &transaction.Transaction{
 								Nonce: 0,
 								Fee: &transaction.Fee{
 									Amount: mustInitQuantity(t, 40),
 									Gas:    4,
 								},
 								Method: staking.MethodTransfer,
-								Body: cbor.Marshal(staking.Transfer{
+								Body: marshalAndCheck(t, &staking.Transfer{
 									To:     entity2,
 									Tokens: mustInitQuantity(t, 500),
-								}),
-							}, acctRich),
-						}),
+								}, "tx1body"),
+							}, "tx1tx", acctRich),
+						}, "tx1"),
 					},
 				},
 				EndReq: types.RequestEndBlock{},
 			},
 		},
 	}
-	data := cbor.Marshal(msgs)
+	data := marshalAndCheck(t, &msgs, "msgs")
 	require.Equal(t, 1, Fuzz(data), "Fuzz output")
-	require.NoError(t, ioutil.WriteFile("/tmp/oasis-node-fuzz2/corpus/manual.cbor", data, 0644), "saving fuzz input")
+	require.NoError(t, ioutil.WriteFile("/tmp/oasis-node-fuzz2/corpus/manual.f2", data, 0644), "saving fuzz input")
 }

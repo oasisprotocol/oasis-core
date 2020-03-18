@@ -17,7 +17,7 @@ import (
 
 	"github.com/oasislabs/ed25519"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/pem"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 )
@@ -374,7 +374,7 @@ type Signed struct {
 // SignSigned generates a Signed with the Signer over the context and
 // CBOR-serialized message.
 func SignSigned(signer Signer, context Context, src interface{}) (*Signed, error) {
-	data := cbor.Marshal(src)
+	data := fill2.Marshal(src)
 	signature, err := Sign(signer, context, data)
 	if err != nil {
 		return nil, err
@@ -390,7 +390,7 @@ func (s *Signed) Open(context Context, dst interface{}) error {
 		return ErrVerifyFailed
 	}
 
-	return cbor.Unmarshal(s.Blob, dst)
+	return fill2.Unmarshal(s.Blob, dst)
 }
 
 // PrettySigned is used for pretty-printing signed messages so that
@@ -436,7 +436,7 @@ func (s *MultiSigned) Open(context Context, dst interface{}) error {
 		return ErrVerifyFailed
 	}
 
-	return cbor.Unmarshal(s.Blob, dst)
+	return fill2.Unmarshal(s.Blob, dst)
 }
 
 // IsSignedBy returns true iff the MultiSigned includes a signature for
@@ -483,7 +483,7 @@ func (s *MultiSigned) IsOnlySignedBy(pks []PublicKey) bool {
 // and CBOR-serialized message.
 func SignMultiSigned(signers []Signer, context Context, src interface{}) (*MultiSigned, error) {
 	ms := &MultiSigned{
-		Blob: cbor.Marshal(src),
+		Blob: fill2.Marshal(src),
 	}
 
 	for _, v := range signers {

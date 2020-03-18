@@ -8,7 +8,7 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	beaconapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/beacon"
@@ -74,7 +74,7 @@ func (t *simpleTime) StateToGenesis(context.Context, int64) (*epochtime.Genesis,
 
 func Fuzz(data []byte) int {
 	var msgs messages
-	if err := cbor.Unmarshal(data, &msgs); err != nil {
+	if err := fill2.Unmarshal(data, &msgs); err != nil {
 		return 0
 	}
 

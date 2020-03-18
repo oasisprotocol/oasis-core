@@ -7,9 +7,9 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/fuzz"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -75,7 +75,7 @@ func Fuzz(data []byte) int {
 
 	tx := &transaction.Transaction{
 		Method: methodName,
-		Body: cbor.Marshal(blob),
+		Body: fill2.Marshal(blob),
 	}
 
 	signedTx, err := transaction.Sign(txSigner, tx)
@@ -83,7 +83,7 @@ func Fuzz(data []byte) int {
 		panic("error signing transaction")
 	}
 
-	txBlob := cbor.Marshal(&signedTx)
+	txBlob := fill2.Marshal(&signedTx)
 
 	// Check the transaction.
 	checkReq := types.RequestCheckTx{

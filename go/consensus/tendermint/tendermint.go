@@ -28,10 +28,10 @@ import (
 
 	beaconAPI "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -447,7 +447,7 @@ func (t *tendermintService) RegisterHaltHook(hook func(context.Context, int64, e
 
 func (t *tendermintService) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
 	// Subscribe to the transaction being included in a block.
-	data := cbor.Marshal(tx)
+	data := fill2.Marshal(tx)
 	query := tmtypes.EventQueryTxFor(data)
 	subID := t.newSubscriberID()
 	txSub, err := t.Subscribe(subID, query)

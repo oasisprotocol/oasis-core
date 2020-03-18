@@ -6,7 +6,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	cmnIAS "github.com/oasislabs/oasis-core/go/common/sgx/ias"
@@ -57,7 +57,7 @@ func (st *enclaveStore) addRuntime(runtime *registry.Runtime) (int, error) {
 	}
 
 	var vi registry.VersionInfoIntelSGX
-	if err := cbor.Unmarshal(runtime.Version.TEE, &vi); err != nil {
+	if err := fill2.Unmarshal(runtime.Version.TEE, &vi); err != nil {
 		return len(st.enclaves), err
 	}
 

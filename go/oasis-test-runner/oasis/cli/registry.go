@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
@@ -47,7 +47,7 @@ func (r *RegistryHelpers) GenerateRegisterRuntimeTx(
 	case node.TEEHardwareInvalid:
 	case node.TEEHardwareIntelSGX:
 		var versionIntelSGX registry.VersionInfoIntelSGX
-		if err := cbor.Unmarshal(runtime.Version.TEE, &versionIntelSGX); err != nil {
+		if err := fill2.Unmarshal(runtime.Version.TEE, &versionIntelSGX); err != nil {
 			return fmt.Errorf("failed to unmarshal Intel SGX TEE version: %w", err)
 		}
 

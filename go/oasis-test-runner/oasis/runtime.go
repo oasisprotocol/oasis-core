@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -165,7 +165,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 			"--" + cmdRegRt.CfgVersionEnclave, mrEnclave.String() + cfg.MrSigner.String(),
 		}...)
 
-		descriptor.Version.TEE = cbor.Marshal(registry.VersionInfoIntelSGX{
+		descriptor.Version.TEE = fill2.Marshal(registry.VersionInfoIntelSGX{
 			Enclaves: []sgx.EnclaveIdentity{
 				{MrEnclave: *mrEnclave, MrSigner: *cfg.MrSigner},
 			},

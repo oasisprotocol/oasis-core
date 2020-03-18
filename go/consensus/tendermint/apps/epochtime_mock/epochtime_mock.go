@@ -7,6 +7,7 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/fill2"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
@@ -89,7 +90,7 @@ func (app *epochTimeMockApplication) ExecuteTx(ctx *abci.Context, tx *transactio
 	switch tx.Method {
 	case MethodSetEpoch:
 		var epoch epochtime.EpochTime
-		if err := cbor.Unmarshal(tx.Body, &epoch); err != nil {
+		if err := fill2.Unmarshal(tx.Body, &epoch); err != nil {
 			return err
 		}
 
