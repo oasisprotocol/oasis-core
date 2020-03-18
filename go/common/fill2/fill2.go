@@ -15,7 +15,7 @@ type Pour interface {
 	Pour(dst io.Writer)
 }
 
-func marshalValue(dst io.Writer, v reflect.Value, indent int) {
+func marshalValue(dst io.Writer, v reflect.Value, indent int) { // nolint: gocyclo
 	if !v.CanInterface() {
 		fmt.Print("(unexported)")
 		return
@@ -241,7 +241,7 @@ type Fill interface {
 	Fill(src io.Reader) error
 }
 
-func unmarshalValue(src io.Reader, v reflect.Value, indent int) error {
+func unmarshalValue(src io.Reader, v reflect.Value, indent int) error { // nolint: gocyclo
 	if !v.CanSet() {
 		fmt.Print("(unexported)")
 		return nil
