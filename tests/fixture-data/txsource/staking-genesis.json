@@ -1,14 +1,20 @@
 {
   "params": {
-    "debonding_interval": 2,
-    "gas_costs": {
-      "transfer": 10,
-      "burn": 10,
-      "add_escrow": 10,
-      "reclaim_escrow": 10
+    "commission_schedule_rules": {
+      "max_bound_steps": 12,
+      "max_rate_steps": 12,
+      "rate_bound_lead": 30,
+      "rate_change_interval": 10
     },
+    "debonding_interval": 2,
+    "fee_split_propose": "1",
     "fee_split_vote": "1",
-    "fee_split_propose": "1"
+    "gas_costs": {
+      "add_escrow": 10,
+      "burn": 10,
+      "reclaim_escrow": 10,
+      "transfer": 10
+    }
   },
   "total_supply": "90000000000",
   "ledger": {

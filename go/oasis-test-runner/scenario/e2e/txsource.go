@@ -36,6 +36,7 @@ const (
 var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	basicImpl: *newBasicImpl("txsource-multi-short", "", nil),
 	workloads: []string{
+		workload.NameCommission,
 		workload.NameDelegation,
 		workload.NameOversized,
 		workload.NameParallel,
@@ -52,6 +53,7 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	basicImpl: *newBasicImpl("txsource-multi", "", nil),
 	workloads: []string{
+		workload.NameCommission,
 		workload.NameDelegation,
 		workload.NameOversized,
 		workload.NameParallel,
