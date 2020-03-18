@@ -2,7 +2,11 @@ package quantity
 
 import (
 	"encoding"
+	"encoding/binary"
 	"errors"
+	"fmt"
+	"io"
+	"math"
 	"math/big"
 )
 
@@ -104,6 +108,26 @@ func (q *Quantity) ToBigInt() *big.Int {
 	tmp.Set(&q.inner)
 
 	return &tmp
+}
+
+func (q *Quantity) Pour(dst io.Writer) {
+	bi := q.ToBigInt()
+	if !bi.IsUint64() {
+		panic(fmt.Sprintf("quantity %v is too large (max %d)", q, uint64(math.MaxUint64)))
+	}
+	if err := binary.Write(dst, binary.LittleEndian, bi.Uint64()); err != nil {
+		panic(err)
+	}
+}
+
+func (q *Quantity) Fill(src io.Reader) {
+	var u uint64
+	if err := binary.Read(src, binary.LittleEndian, &u); err != nil {
+		panic(err)
+	}
+	if err := q.FromUint64(u); err != nil {
+		panic(err)
+	}
 }
 
 // Add adds n to q, returning an error if n < 0 or n == nil.
