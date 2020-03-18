@@ -16,7 +16,8 @@ Most systems should already have [Python] pre-installed.
 To install [Oasis Labs' towncrier fork] and [Punch], use [pip]:
 
 ```bash
-pip3 install https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz \
+pip3 install --upgrade \
+  https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz \
   punch.py~=2.0.0
 ```
 
