@@ -157,16 +157,10 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		consensusAddrs = append(consensusAddrs, &consensusAddr)
 	}
 
-	// If we're using sentry nodes, we need to have a static TLS certificate.
-	var persistTLS bool
-	if len(val.sentries) > 0 {
-		persistTLS = true
-	}
-
 	// Load node's identity, so that we can pass the validator's Tendermint
 	// address to sentry node(s) to configure it as a private peer.
 	seed := fmt.Sprintf(validatorIdentitySeedTemplate, len(net.validators))
-	valPublicKey, err := net.provisionNodeIdentity(valDir, seed, persistTLS)
+	valPublicKey, err := net.provisionNodeIdentity(valDir, seed, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/validator: failed to provision node identity")
 	}

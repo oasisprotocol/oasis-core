@@ -625,7 +625,7 @@ func (net *Network) startOasisNode(
 	args = append(args, baseArgs...)
 	args = append(args, extraArgs.vec...)
 
-	if len(net.sentries) == 0 && len(net.byzantine) == 0 && net.iasProxy == nil {
+	if !strings.HasPrefix(node.Name, "sentry-") && len(net.byzantine) == 0 && net.iasProxy == nil {
 		args = append(args, []string{"--" + registration.CfgRegistrationRotateCerts, "1"}...)
 	}
 

@@ -1,11 +1,12 @@
 package grpc
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -21,7 +22,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/service"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
 var _ service.BackgroundService = (*Worker)(nil)
@@ -45,8 +45,6 @@ type Worker struct { // nolint: maligned
 	// Per service policy checkers.
 	grpcPolicyCheckers map[cmnGrpc.ServiceName]*policy.DynamicRuntimePolicyChecker
 
-	registryClient registry.Backend
-
 	*upstreamConn
 
 	upstreamDialer      grpcProxy.Dialer
@@ -54,10 +52,6 @@ type Worker struct { // nolint: maligned
 
 	grpc     *cmnGrpc.Server
 	identity *identity.Identity
-
-	// Set to true when quitting if the master worker shouldn't quit,
-	// but re-init due to changed TLS certificates on the upstream node.
-	AmQuittingBecauseTLSCertsHaveRotated bool
 }
 
 type upstreamConn struct {
@@ -67,8 +61,6 @@ type upstreamConn struct {
 	certs [][]byte
 	// Client connection to the upstream node.
 	conn *grpc.ClientConn
-	// Registry client connection.
-	registryClientConn *grpc.ClientConn
 	// Cleanup callback for the manual resolver.
 	resolverCleanupCb func()
 }
@@ -169,41 +161,29 @@ func (g *Worker) updatePolicies(p policyAPI.ServicePolicies) {
 	}
 }
 
-// Returns true if we need to restart.
-func (g *Worker) checkUpstreamNodeTLSCerts(nodeEvent *registry.NodeEvent) bool {
-	if !nodeEvent.IsRegistration {
-		return false
-	}
-
-	// Check if it's our upstream node.
-	if !nodeEvent.Node.ID.Equal(g.nodeID) {
-		return false
-	}
-
-	// XXX: Not sure if certificates are guaranteed to be sorted,
-	// so we do this slow lookup to be sure.
-	var numCertMatches uint
-	for _, cert1 := range g.certs {
-		for _, addr2 := range nodeEvent.Node.Committee.Addresses {
-			if bytes.Equal(cert1, addr2.Certificate) {
-				numCertMatches++
-			}
-		}
-	}
-
-	// If the number of matching certificates differs, they were rotated,
-	// so a reconnect is required.
-	return numCertMatches != uint(len(g.certs))
-}
-
 func (g *Worker) worker() {
 	defer close(g.quitCh)
 	defer (g.cancelCtx)()
 
 	if g.upstreamConn == nil {
-		_, err := g.upstreamDialer(g.ctx)
+		var numRetries uint
+
+		dialUpstream := func() error {
+			_, err := g.upstreamDialer(g.ctx)
+			if err != nil {
+				if numRetries < 60 {
+					numRetries++
+					return err
+				}
+				return backoff.Permanent(err)
+			}
+			return nil
+		}
+
+		sched := backoff.NewConstantBackOff(1 * time.Second)
+		err := backoff.Retry(dialUpstream, backoff.WithContext(sched, g.ctx))
 		if err != nil {
-			g.logger.Error("failed to establish upstream connection",
+			g.logger.Error("unable to dial upstream node",
 				"err", err,
 			)
 			return
@@ -221,34 +201,12 @@ func (g *Worker) worker() {
 	}
 	defer sub.Close()
 
-	// Initialize registry watcher.
-	g.registryClient = registry.NewRegistryClient(g.registryClientConn)
-	regCh, regSub, regErr := g.registryClient.WatchNodes(g.ctx)
-	if regErr != nil {
-		g.logger.Error("failed to watch registry nodes",
-			"err", regErr,
-		)
-		return
-	}
-	defer regSub.Close()
-
 	// Initialization complete.
 	close(g.initCh)
 
-	// Watch policies and registry.
+	// Watch policies.
 	for {
 		select {
-		case nodeEvent, ok := <-regCh:
-			if !ok {
-				g.logger.Error("WatchNodes stream closed")
-				return
-			}
-
-			if g.checkUpstreamNodeTLSCerts(nodeEvent) {
-				// Upstream node TLS certificates changed, restart is needed.
-				g.AmQuittingBecauseTLSCertsHaveRotated = true
-				return
-			}
 		case p, ok := <-ch:
 			if !ok {
 				g.logger.Error("WatchPolicies stream closed")

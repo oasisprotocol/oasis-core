@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/pkg/errors"
@@ -146,6 +147,43 @@ func DebugForceAllowUnroutableAddresses() {
 }
 
 func (w *Worker) registrationLoop() { // nolint: gocyclo
+	// If we have any sentry nodes, let them know about our TLS certs.
+	sentryAddrs := w.sentryAddresses
+	sentryCerts := w.sentryCerts
+	if len(sentryAddrs) > 0 {
+		for i, sentryAddr := range sentryAddrs {
+			var numRetries uint
+
+			pushCerts := func() error {
+				client, err := sentryClient.New(&sentryAddr, sentryCerts[i], w.identity)
+				if err != nil {
+					if numRetries < 60 {
+						numRetries++
+						return err
+					}
+					return backoff.Permanent(err)
+				}
+				defer client.Close()
+
+				err = client.SetUpstreamTLSCertificates(w.ctx, w.identity.GetTLSCertificate(), w.identity.GetNextTLSCertificate())
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}
+
+			sched := backoff.NewConstantBackOff(1 * time.Second)
+			err := backoff.Retry(pushCerts, backoff.WithContext(sched, w.ctx))
+			if err != nil {
+				w.logger.Error("unable to push upstream TLS certificates to sentry node!",
+					"err", err,
+					"sentry_address", sentryAddr,
+				)
+			}
+		}
+	}
+
 	// Delay node registration till after the consensus service has
 	// finished initial synchronization if applicable.
 	if w.consensus != nil {
@@ -633,6 +671,15 @@ func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.CommitteeAddre
 		sentryAddresses, err := client.GetAddresses(w.ctx)
 		if err != nil {
 			w.logger.Warn("failed to obtain addresses from sentry node",
+				"err", err,
+				"sentry_address", sentryAddr,
+			)
+		}
+
+		// Keep sentries updated with our latest TLS certificates.
+		err = client.SetUpstreamTLSCertificates(w.ctx, w.identity.GetTLSCertificate(), w.identity.GetNextTLSCertificate())
+		if err != nil {
+			w.logger.Warn("failed to provide upstream TLS certificates to sentry node",
 				"err", err,
 				"sentry_address", sentryAddr,
 			)

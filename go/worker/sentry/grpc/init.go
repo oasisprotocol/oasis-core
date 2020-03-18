@@ -6,9 +6,7 @@ import (
 	tlsPkg "crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -23,9 +21,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/file"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	sentry "github.com/oasislabs/oasis-core/go/sentry/api"
 	"github.com/oasislabs/oasis-core/go/worker/common/configparser"
 )
 
@@ -42,9 +39,6 @@ const (
 	CfgClientAddresses = "worker.sentry.grpc.client.address"
 	// CfgClientPort is the sentry node's client port.
 	CfgClientPort = "worker.sentry.grpc.client.port"
-
-	maxRetries    = 3
-	retryInterval = 1 * time.Second
 )
 
 // Flags has the configuration flags.
@@ -59,7 +53,7 @@ func GetNodeAddresses() ([]node.Address, error) {
 	return clientAddresses, nil
 }
 
-func initConnection(ctx context.Context, logger *logging.Logger, ident *identity.Identity) (*upstreamConn, error) {
+func initConnection(ctx context.Context, logger *logging.Logger, ident *identity.Identity, backend sentry.Backend) (*upstreamConn, error) {
 	var err error
 
 	addr := viper.GetString(CfgUpstreamAddress)
@@ -80,107 +74,18 @@ func initConnection(ctx context.Context, logger *logging.Logger, ident *identity
 		"upstream_node_id", upstreamNodeIDRaw,
 	)
 
-	// Get upstream node's certificates from registry.
-	regAddr := viper.GetString(cmdGrpc.CfgAddress)
-	regConn, err := cmnGrpc.Dial(regAddr, []grpc.DialOption{
-		grpc.WithInsecure(),
-		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
-	}...)
+	// Get upstream node's certificates.
+	certs, err := backend.GetUpstreamTLSCertificates(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create registry gRPC client: %w", err)
-	}
-	regClient := registry.NewRegistryClient(regConn)
-
-	var upstreamNode *node.Node
-	var numRetries uint
-
-	retryGetNode := func() error {
-		var grr error
-		upstreamNode, grr = regClient.GetNode(ctx, &registry.IDQuery{
-			Height: 0,
-			ID:     upstreamNodeID,
-		})
-
-		if numRetries < maxRetries {
-			numRetries++
-			return grr
-		}
-		return backoff.Permanent(grr)
-	}
-	retryGetNodeSchedule := backoff.NewConstantBackOff(retryInterval)
-	err = backoff.Retry(retryGetNode, backoff.WithContext(retryGetNodeSchedule, ctx))
-	if err != nil {
-		// Failed to get node from registry, try the genesis doc instead.
-		logger.Warn("unable to get upstream node from registry, falling back to genesis",
-			"err", err,
-		)
-
-		genesisProvider, grr := genesis.DefaultFileProvider()
-		if grr != nil {
-			return nil, fmt.Errorf("failed to get upstream node from both registry and genesis, failure loading genesis file: %w", grr)
-		}
-
-		genDoc, grr := genesisProvider.GetGenesisDocument()
-		if grr != nil {
-			return nil, fmt.Errorf("failed to get upstream node from both registry and genesis, failure getting genesis document: %w", grr)
-		}
-
-		genNodes := genDoc.Registry.Nodes
-		upstreamNode = nil
-		for _, sn := range genNodes {
-			var n node.Node
-			if grr := sn.Open(registry.RegisterGenesisNodeSignatureContext, &n); grr != nil {
-				return nil, fmt.Errorf("failed to open signed node: %w", grr)
-			}
-			if n.ID.Equal(upstreamNodeID) {
-				upstreamNode = &n
-				break
-			}
-		}
-	}
-
-	if upstreamNode == nil {
-		// Wait for the node to register.
-		regCh, regSub, regErr := regClient.WatchNodes(ctx)
-		if regErr != nil {
-			return nil, fmt.Errorf("unable to watch for nodes: %w", regErr)
-		}
-		defer regSub.Close()
-		logger.Info("waiting for upstream node to register...",
-			"upstream_node_id", upstreamNodeID.String(),
-		)
-		for {
-			select {
-			case nodeEvent, ok := <-regCh:
-				if !ok {
-					return nil, fmt.Errorf("WatchNodes channel closed while waiting for upstream node to register")
-				}
-
-				if nodeEvent.Node.ID.Equal(upstreamNodeID) {
-					// Our upstream node finally registered!
-					upstreamNode = nodeEvent.Node
-					break
-				}
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context aborted")
-			}
-
-			if upstreamNode != nil {
-				break
-			}
-		}
-	}
-
-	if upstreamNode == nil {
-		return nil, fmt.Errorf("upstream node not found in registry nor genesis document, nor did it register")
+		return nil, fmt.Errorf("failed to get upstream node's TLS certificates: %w", err)
 	}
 
 	upstreamCerts := [][]byte{}
-	if upstreamNode.Committee.Certificate != nil {
-		upstreamCerts = append(upstreamCerts, upstreamNode.Committee.Certificate)
+	if certs.Certificate != nil {
+		upstreamCerts = append(upstreamCerts, certs.Certificate.Certificate[0])
 	}
-	if upstreamNode.Committee.NextCertificate != nil {
-		upstreamCerts = append(upstreamCerts, upstreamNode.Committee.NextCertificate)
+	if certs.NextCertificate != nil {
+		upstreamCerts = append(upstreamCerts, certs.NextCertificate.Certificate[0])
 	}
 	if len(upstreamCerts) == 0 {
 		return nil, fmt.Errorf("upstream node has no defined TLS certificates")
@@ -227,16 +132,15 @@ func initConnection(ctx context.Context, logger *logging.Logger, ident *identity
 	manualResolver.UpdateState(resolverState)
 
 	return &upstreamConn{
-		nodeID:             upstreamNodeID,
-		certs:              upstreamCerts,
-		conn:               conn,
-		registryClientConn: regConn,
-		resolverCleanupCb:  cleanupCb,
+		nodeID:            upstreamNodeID,
+		certs:             upstreamCerts,
+		conn:              conn,
+		resolverCleanupCb: cleanupCb,
 	}, nil
 }
 
 // New creates a new sentry grpc worker.
-func New(identity *identity.Identity) (*Worker, error) {
+func New(backend sentry.Backend, identity *identity.Identity) (*Worker, error) {
 	logger := logging.GetLogger("sentry/grpc/worker")
 
 	enabled := viper.GetBool(CfgEnabled)
@@ -262,7 +166,7 @@ func New(identity *identity.Identity) (*Worker, error) {
 			g.upstreamDialerMutex.Lock()
 			defer g.upstreamDialerMutex.Unlock()
 
-			upstreamConn, err := initConnection(g.ctx, logger, identity)
+			upstreamConn, err := initConnection(g.ctx, logger, identity, backend)
 			if err != nil {
 				return nil, fmt.Errorf("gRPC sentry worker initializing upstream connection failure: %w", err)
 			}

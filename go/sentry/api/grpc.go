@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
 
 	"google.golang.org/grpc"
 
@@ -15,6 +16,12 @@ var (
 	// methodGetAddresses is the GetAddresses method.
 	methodGetAddresses = serviceName.NewMethod("GetAddresses", nil)
 
+	// methodSetUpstreamTLSCertificates is the SetUpstreamTLSCertificates method.
+	methodSetUpstreamTLSCertificates = serviceName.NewMethod("SetUpstreamTLSCertificates", UpstreamTLSCertificates{})
+
+	// methodGetUpstreamTLSCertificates is the GetUpstreamTLSCertificates method.
+	methodGetUpstreamTLSCertificates = serviceName.NewMethod("GetUpstreamTLSCertificates", nil)
+
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
 		ServiceName: string(serviceName),
@@ -23,6 +30,14 @@ var (
 			{
 				MethodName: methodGetAddresses.ShortName(),
 				Handler:    handlerGetAddresses,
+			},
+			{
+				MethodName: methodSetUpstreamTLSCertificates.ShortName(),
+				Handler:    handlerSetUpstreamTLSCertificates,
+			},
+			{
+				MethodName: methodGetUpstreamTLSCertificates.ShortName(),
+				Handler:    handlerGetUpstreamTLSCertificates,
 			},
 		},
 		Streams: []grpc.StreamDesc{},
@@ -48,6 +63,48 @@ func handlerGetAddresses( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
+func handlerSetUpstreamTLSCertificates( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var req UpstreamTLSCertificates
+	if err := dec(&req); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return nil, srv.(Backend).SetUpstreamTLSCertificates(ctx, req.Certificate, req.NextCertificate)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodSetUpstreamTLSCertificates.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, srv.(Backend).SetUpstreamTLSCertificates(ctx, req.(*UpstreamTLSCertificates).Certificate, req.(*UpstreamTLSCertificates).NextCertificate)
+	}
+	return interceptor(ctx, &req, info, handler)
+}
+
+func handlerGetUpstreamTLSCertificates( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return srv.(Backend).GetUpstreamTLSCertificates(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetUpstreamTLSCertificates.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetUpstreamTLSCertificates(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
+}
+
 // RegisterService registers a new sentry service with the given gRPC server.
 func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
@@ -60,6 +117,25 @@ type sentryClient struct {
 func (c *sentryClient) GetAddresses(ctx context.Context) (*SentryAddresses, error) {
 	var rsp SentryAddresses
 	if err := c.conn.Invoke(ctx, methodGetAddresses.FullName(), nil, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *sentryClient) SetUpstreamTLSCertificates(ctx context.Context, cert *tls.Certificate, certNext *tls.Certificate) error {
+	req := &UpstreamTLSCertificates{
+		Certificate:     cert,
+		NextCertificate: certNext,
+	}
+	if err := c.conn.Invoke(ctx, methodSetUpstreamTLSCertificates.FullName(), req, nil); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *sentryClient) GetUpstreamTLSCertificates(ctx context.Context) (*UpstreamTLSCertificates, error) {
+	var rsp UpstreamTLSCertificates
+	if err := c.conn.Invoke(ctx, methodGetUpstreamTLSCertificates.FullName(), nil, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
