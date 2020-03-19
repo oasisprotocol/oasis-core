@@ -19,19 +19,94 @@ import (
 
 const (
 	// NameTransfer is the name of the transfer workload.
+	//
+	// Transfer workload continiously submits transfer and burn transactions.
 	NameTransfer = "transfer"
 
-	transferNumAccounts  = 10
-	transferAmount       = 1
-	transferFundInterval = 10
-	transferGasCost      = 10
+	transferNumAccounts = 10
+	transferAmount      = 1
+	transferBurnAmount  = 10
 )
 
-var transferLogger = logging.GetLogger("cmd/txsource/workload/transfer")
+type transfer struct {
+	logger *logging.Logger
 
-type transfer struct{}
+	consensus consensus.ClientBackend
 
-func (transfer) Run(
+	accounts []struct {
+		signer          signature.Signer
+		reckonedNonce   uint64
+		reckonedBalance quantity.Quantity
+	}
+	fundingAccount signature.Signer
+}
+
+func (t *transfer) doTransferTx(ctx context.Context, fromIdx int, toIdx int) error {
+	from := &t.accounts[fromIdx]
+	to := &t.accounts[toIdx]
+
+	transfer := staking.Transfer{To: to.signer.Public()}
+	if err := transfer.Tokens.FromInt64(transferAmount); err != nil {
+		return fmt.Errorf("transfer tokens FromInt64 %d: %w", transferAmount, err)
+	}
+	tx := staking.NewTransferTx(from.reckonedNonce, &transaction.Fee{}, &transfer)
+	from.reckonedNonce++
+
+	t.logger.Debug("Transfering tokens",
+		"from", from,
+		"to", to,
+		"amount", transferAmount,
+	)
+	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, from.signer, tx, t.fundingAccount); err != nil {
+		t.logger.Error("failed to sign and submit transfer transaction",
+			"tx", tx,
+			"signer", from.signer,
+		)
+		return fmt.Errorf("failed to sign and submit tx: %w", err)
+	}
+
+	// Update reckoned state.
+	if err := from.reckonedBalance.Sub(&transfer.Tokens); err != nil {
+		return fmt.Errorf("from reckoned balance %v Sub transfer tokens %v: %w", from.reckonedBalance, transfer.Tokens, err)
+	}
+	if err := to.reckonedBalance.Add(&transfer.Tokens); err != nil {
+		return fmt.Errorf("to reckoned balance %v Add transfer tokens %v: %w", to.reckonedBalance, transfer.Tokens, err)
+	}
+
+	return nil
+}
+
+func (t *transfer) doBurnTx(ctx context.Context, idx int) error {
+	acc := &t.accounts[idx]
+
+	// Fund account with tokens that will be burned.
+	if err := transferFunds(ctx, t.logger, t.consensus, t.fundingAccount, acc.signer.Public(), int64(transferBurnAmount)); err != nil {
+		return fmt.Errorf("workload/transfer: account funding failure: %w", err)
+	}
+
+	burn := staking.Burn{}
+	if err := burn.Tokens.FromInt64(transferBurnAmount); err != nil {
+		return fmt.Errorf("burn tokens FromInt64 %d: %w", transferBurnAmount, err)
+	}
+	tx := staking.NewBurnTx(acc.reckonedNonce, &transaction.Fee{}, &burn)
+	acc.reckonedNonce++
+
+	t.logger.Debug("Burning tokens",
+		"account", acc,
+		"amount", transferBurnAmount,
+	)
+	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, acc.signer, tx, t.fundingAccount); err != nil {
+		t.logger.Error("failed to sign and submit transfer transaction",
+			"tx", tx,
+			"signer", acc.signer,
+		)
+		return fmt.Errorf("failed to sign and submit tx: %w", err)
+	}
+
+	return nil
+}
+
+func (t *transfer) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
@@ -42,16 +117,20 @@ func (transfer) Run(
 	var err error
 	ctx := context.Background()
 
-	fac := memorySigner.NewFactory()
-	// Load all the keys up front. Like, how annoyed would you be if down the line one of them turned out to be
-	// corrupted or something, ya know?
-	accounts := make([]struct {
+	t.logger = logging.GetLogger("cmd/txsource/workload/transfer")
+	t.consensus = cnsc
+	t.accounts = make([]struct {
 		signer          signature.Signer
 		reckonedNonce   uint64
 		reckonedBalance quantity.Quantity
 	}, transferNumAccounts)
-	for i := range accounts {
-		accounts[i].signer, err = fac.Generate(signature.SignerEntity, rng)
+	t.fundingAccount = fundingAccount
+
+	fac := memorySigner.NewFactory()
+	// Load all the keys up front. Like, how annoyed would you be if down the line one of them turned out to be
+	// corrupted or something, ya know?
+	for i := range t.accounts {
+		t.accounts[i].signer, err = fac.Generate(signature.SignerEntity, rng)
 		if err != nil {
 			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err)
 		}
@@ -59,105 +138,65 @@ func (transfer) Run(
 
 	// Read all the account info up front.
 	stakingClient := staking.NewStakingClient(conn)
-	for i := range accounts {
-		fundAmount := transferAmount*transferFundInterval + // funds for `transferFundInterval` transfers
-			transferGasCost*gasPrice*transferFundInterval // gas costs for `transferFundInterval` transfers
-		if err = transferFunds(ctx, transferLogger, cnsc, fundingAccount, accounts[i].signer.Public(), int64(fundAmount)); err != nil {
+	for i := range t.accounts {
+		fundAmount := transferAmount // funds for for a transfer
+		if err = transferFunds(ctx, t.logger, cnsc, t.fundingAccount, t.accounts[i].signer.Public(), int64(fundAmount)); err != nil {
 			return fmt.Errorf("workload/transfer: account funding failure: %w", err)
 		}
 		var account *staking.Account
 		account, err = stakingClient.AccountInfo(ctx, &staking.OwnerQuery{
 			Height: consensus.HeightLatest,
-			Owner:  accounts[i].signer.Public(),
+			Owner:  t.accounts[i].signer.Public(),
 		})
 		if err != nil {
-			return fmt.Errorf("stakingClient.AccountInfo %s: %w", accounts[i].signer.Public(), err)
+			return fmt.Errorf("stakingClient.AccountInfo %s: %w", t.accounts[i].signer.Public(), err)
 		}
-		transferLogger.Debug("account info",
+		t.logger.Debug("account info",
 			"i", i,
-			"pub", accounts[i].signer.Public(),
+			"pub", t.accounts[i].signer.Public(),
 			"info", account,
 		)
-		accounts[i].reckonedNonce = account.General.Nonce
-		accounts[i].reckonedBalance = account.General.Balance
-	}
-
-	fee := transaction.Fee{
-		Gas: transferGasCost,
-	}
-	if err = fee.Amount.FromInt64(transferGasCost * gasPrice); err != nil {
-		return fmt.Errorf("Fee amount error: %w", err)
+		t.accounts[i].reckonedNonce = account.General.Nonce
+		t.accounts[i].reckonedBalance = account.General.Balance
 	}
 
 	var minBalance quantity.Quantity
 	if err = minBalance.FromInt64(transferAmount); err != nil {
 		return fmt.Errorf("min balance FromInt64 %d: %w", transferAmount, err)
 	}
-	if err = minBalance.Add(&fee.Amount); err != nil {
-		return fmt.Errorf("min balance %v Add fee amount %v: %w", minBalance, fee.Amount, err)
-	}
 	for {
-		perm := rng.Perm(transferNumAccounts)
-		fromPermIdx := 0
-		for ; fromPermIdx < transferNumAccounts; fromPermIdx++ {
-			if accounts[perm[fromPermIdx]].reckonedBalance.Cmp(&minBalance) >= 0 {
-				break
-			}
-		}
-		if fromPermIdx >= transferNumAccounts {
-			return fmt.Errorf("all accounts %#v have gone broke", accounts)
-		}
-		toPermIdx := (fromPermIdx + 1) % transferNumAccounts
-		from := &accounts[perm[fromPermIdx]]
-		to := &accounts[perm[toPermIdx]]
 
-		transfer := staking.Transfer{
-			To: to.signer.Public(),
-		}
-		if err = transfer.Tokens.FromInt64(transferAmount); err != nil {
-			return fmt.Errorf("transfer tokens FromInt64 %d: %w", transferAmount, err)
-		}
-		tx := staking.NewTransferTx(from.reckonedNonce, &fee, &transfer)
-		signedTx, err := transaction.Sign(from.signer, tx)
-		if err != nil {
-			return fmt.Errorf("transaction.Sign: %w", err)
-		}
-		transferLogger.Debug("submitting transfer",
-			"from", from.signer.Public(),
-			"to", to.signer.Public(),
-		)
-		if err = cnsc.SubmitTx(ctx, signedTx); err != nil {
-			return fmt.Errorf("cnsc.SubmitTx: %w", err)
-		}
-		from.reckonedNonce++
-		if err = from.reckonedBalance.Sub(&fee.Amount); err != nil {
-			return fmt.Errorf("from reckoned balance %v Sub fee amount %v: %w", from.reckonedBalance, fee.Amount, err)
-		}
-		if err = from.reckonedBalance.Sub(&transfer.Tokens); err != nil {
-			return fmt.Errorf("from reckoned balance %v Sub transfer tokens %v: %w", from.reckonedBalance, transfer.Tokens, err)
-		}
-		if err = to.reckonedBalance.Add(&transfer.Tokens); err != nil {
-			return fmt.Errorf("to reckoned balance %v Add transfer tokens %v: %w", to.reckonedBalance, transfer.Tokens, err)
-		}
+		// Decide between doing a transfer or burn tx.
+		switch rng.Intn(2) {
+		case 0:
+			// Transfer tx.
+			perm := rng.Perm(transferNumAccounts)
+			fromPermIdx := 0
+			for ; fromPermIdx < transferNumAccounts; fromPermIdx++ {
+				if t.accounts[perm[fromPermIdx]].reckonedBalance.Cmp(&minBalance) >= 0 {
+					break
+				}
+			}
+			if fromPermIdx >= transferNumAccounts {
+				return fmt.Errorf("all accounts %#v have gone broke", t.accounts)
+			}
+			toPermIdx := (fromPermIdx + 1) % transferNumAccounts
 
-		if from.reckonedNonce%transferFundInterval == 0 {
-			// Re-fund account for next `transferFundInterval` transfers.
-			fundAmount := transferGasCost * gasPrice * transferFundInterval // gas costs for `transferFundInterval` transfers.
-			if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, from.signer.Public(), int64(fundAmount)); err != nil {
-				return fmt.Errorf("account funding failure: %w", err)
+			if err = t.doTransferTx(ctx, perm[fromPermIdx], perm[toPermIdx]); err != nil {
+				return fmt.Errorf("transfer tx failure: %w", err)
 			}
-			var fundAmountQ quantity.Quantity
-			if err = fundAmountQ.FromInt64(int64(fundAmount)); err != nil {
-				return fmt.Errorf("fundAmountQ FromInt64(%d): %w", fundAmount, err)
+		case 1:
+			// Burn tx.
+			if err = t.doBurnTx(ctx, rng.Intn(transferNumAccounts)); err != nil {
+				return fmt.Errorf("burn tx failure: %w", err)
 			}
-			if err = from.reckonedBalance.Add(&fundAmountQ); err != nil {
-				return fmt.Errorf("to reckoned balance %v Add fund amount %v: %w", to.reckonedBalance, fundAmountQ, err)
-			}
-		}
 
+		default:
+			return fmt.Errorf("unimplemented")
+		}
 		select {
 		case <-gracefulExit.Done():
-			transferLogger.Debug("time's up")
+			t.logger.Debug("time's up")
 			return nil
 		default:
 		}

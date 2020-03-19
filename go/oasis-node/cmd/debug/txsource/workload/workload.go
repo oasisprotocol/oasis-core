@@ -181,5 +181,5 @@ var ByName = map[string]Workload{
 	NameParallel:     parallel{},
 	NameRegistration: &registration{},
 	NameRuntime:      &runtime{},
-	NameTransfer:     transfer{},
+	NameTransfer:     &transfer{},
 }
