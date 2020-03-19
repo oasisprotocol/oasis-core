@@ -31,7 +31,14 @@ var transferLogger = logging.GetLogger("cmd/txsource/workload/transfer")
 
 type transfer struct{}
 
-func (transfer) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, rtc runtimeClient.RuntimeClient, fundingAccount signature.Signer) error {
+func (transfer) Run(
+	gracefulExit context.Context,
+	rng *rand.Rand,
+	conn *grpc.ClientConn,
+	cnsc consensus.ClientBackend,
+	rtc runtimeClient.RuntimeClient,
+	fundingAccount signature.Signer,
+) error {
 	var err error
 	ctx := context.Background()
 

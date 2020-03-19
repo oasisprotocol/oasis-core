@@ -22,7 +22,7 @@ const (
 	maxSubmissionRetryElapsedTime = 120 * time.Second
 	maxSubmissionRetryInterval    = 10 * time.Second
 
-	fundAccountAmount = 100000000
+	fundAccountAmount = 10000000000
 	// gasPrice should be at least the configured min gas prices of validators.
 	gasPrice = 1
 )
@@ -122,9 +122,10 @@ type Workload interface {
 
 // ByName is the registry of workloads that you can access with `--workload <name>` on the command line.
 var ByName = map[string]Workload{
-	NameTransfer:     transfer{},
-	NameOversized:    oversized{},
-	NameRegistration: &registration{},
-	NameParallel:     parallel{},
 	NameDelegation:   &delegation{},
+	NameOversized:    oversized{},
+	NameParallel:     parallel{},
+	NameRegistration: &registration{},
+	NameRuntime:      &runtime{},
+	NameTransfer:     transfer{},
 }

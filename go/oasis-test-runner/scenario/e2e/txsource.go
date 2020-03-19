@@ -29,17 +29,19 @@ const (
 
 	nodeRestartIntervalLong = 2 * time.Minute
 	livenessCheckInterval   = 1 * time.Minute
+	txSourceGasPrice        = 1
 )
 
 // TxSourceMultiShort uses multiple workloads for a short time.
 var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	basicImpl: *newBasicImpl("txsource-multi-short", "", nil),
 	workloads: []string{
-		workload.NameTransfer,
-		workload.NameOversized,
-		workload.NameRegistration,
-		workload.NameParallel,
 		workload.NameDelegation,
+		workload.NameOversized,
+		workload.NameParallel,
+		workload.NameRegistration,
+		workload.NameRuntime,
+		workload.NameTransfer,
 	},
 	timeLimit:             timeLimitShort,
 	livenessCheckInterval: livenessCheckInterval,
@@ -49,11 +51,12 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	basicImpl: *newBasicImpl("txsource-multi", "", nil),
 	workloads: []string{
-		workload.NameTransfer,
-		workload.NameOversized,
-		workload.NameRegistration,
-		workload.NameParallel,
 		workload.NameDelegation,
+		workload.NameOversized,
+		workload.NameParallel,
+		workload.NameRegistration,
+		workload.NameRuntime,
+		workload.NameTransfer,
 	},
 	timeLimit:             timeLimitLong,
 	nodeRestartInterval:   nodeRestartIntervalLong,
@@ -76,17 +79,32 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Use deterministic identities as we need to allocate funds to nodes.
+	f.Network.DeterministicIdentities = true
 	f.Network.StakingGenesis = "tests/fixture-data/txsource/staking-genesis.json"
 
 	// Disable CheckTx on the client node so we can submit invalid transactions.
 	f.Clients[0].ConsensusDisableCheckTx = true
 
-	// MinGasPrice
-	f.Validators = []oasis.ValidatorFixture{
-		oasis.ValidatorFixture{Entity: 1, MinGasPrice: 1},
-		oasis.ValidatorFixture{Entity: 1, MinGasPrice: 1},
-		oasis.ValidatorFixture{Entity: 1, MinGasPrice: 1},
+	// Update validators to require fee payments.
+	for i := range f.Validators {
+		f.Validators[i].MinGasPrice = txSourceGasPrice
+		f.Validators[i].SubmissionGasPrice = txSourceGasPrice
 	}
+	// Update all other nodes to use a specific gas price.
+	for i := range f.Keymanagers {
+		f.Keymanagers[i].SubmissionGasPrice = txSourceGasPrice
+	}
+	for i := range f.StorageWorkers {
+		f.StorageWorkers[i].SubmissionGasPrice = txSourceGasPrice
+	}
+	for i := range f.ComputeWorkers {
+		f.ComputeWorkers[i].SubmissionGasPrice = txSourceGasPrice
+	}
+	for i := range f.ByzantineNodes {
+		f.ByzantineNodes[i].SubmissionGasPrice = txSourceGasPrice
+	}
+
 	return f, nil
 }
 
@@ -219,6 +237,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 		"--log.format", logFmt.String(),
 		"--log.level", logLevel.String(),
 		"--" + flags.CfgGenesisFile, sc.net.GenesisPath(),
+		"--" + workload.CfgRuntimeID, runtimeID.String(),
 		"--" + txsource.CfgWorkload, name,
 		"--" + txsource.CfgTimeLimit, sc.timeLimit.String(),
 	}
@@ -256,6 +275,13 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 	// Wait for all nodes to be synced before we proceed.
 	if err := sc.waitNodesSynced(); err != nil {
 		return err
+	}
+
+	ctx := context.Background()
+
+	sc.logger.Info("waiting for network to come up")
+	if err := sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
+		return fmt.Errorf("WaitNodesRegistered: %w", err)
 	}
 
 	// Start all configured workloads.
