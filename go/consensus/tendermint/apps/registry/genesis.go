@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 
 	"github.com/pkg/errors"
@@ -29,7 +30,10 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	state := registryState.NewMutableState(ctx.State())
 	state.SetConsensusParameters(&st.Parameters)
 
-	for _, v := range st.Entities {
+	for i, v := range st.Entities {
+		if v == nil {
+			return fmt.Errorf("registry: genesis entity index %d is nil", i)
+		}
 		ctx.Logger().Debug("InitChain: Registering genesis entity",
 			"entity", v.Signature.PublicKey,
 		)
