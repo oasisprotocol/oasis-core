@@ -74,6 +74,9 @@ func (app *stakingApplication) initLedger(ctx *abci.Context, state *stakingState
 	var ups []ledgerUpdate
 	for k, v := range st.Ledger {
 		id := k
+		if v == nil {
+			return fmt.Errorf("staking/tendermint: genesis ledger account %s is nil", k)
+		}
 
 		if !v.General.Balance.IsValid() {
 			ctx.Logger().Error("InitChain: invalid genesis general balance",
