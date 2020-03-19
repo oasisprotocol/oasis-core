@@ -424,7 +424,12 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	}()
 
 	// TODO: remove stateKeyGenesisRequest here, see oasis-core#2426
-	b, _ = req.Marshal()
+	b, err = req.Marshal()
+	if err != nil {
+		// It's suspected this wouldn't happen normally, because ABCI is meant to go out
+		// through protobuf anyway, so the request ought to be representable.
+		panic(fmt.Sprintf("InitChain: marshalling RequestInitChain back to protobuf: %v", err))
+	}
 	mux.state.deliverTxTree.Set([]byte(stateKeyGenesisRequest), b)
 	mux.state.checkTxTree.Set([]byte(stateKeyGenesisRequest), b)
 
