@@ -243,30 +243,12 @@ func (r *registration) Run( // nolint: gocyclo
 		// Estimate gas and submit transaction.
 		tx := registry.NewRegisterEntityTx(entityAccs[i].reckonedNonce, &transaction.Fee{}, sigEntity)
 		entityAccs[i].reckonedNonce++
-		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-			Caller:      entityAccs[i].signer.Public(),
-			Transaction: tx,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to estimate gas: %w", err)
-		}
-		tx.Fee.Gas = gas
-		feeAmount := int64(gas) * gasPrice
-		if err = tx.Fee.Amount.FromInt64(feeAmount); err != nil {
-			return fmt.Errorf("fee amount from int64: %w", err)
-		}
-
-		// Fund entity account to cover registration fees.
-		if err = transferFunds(ctx, registrationLogger, cnsc, fundingAccount, entityAccs[i].signer.Public(), feeAmount); err != nil {
-			return fmt.Errorf("account funding failure: %w", err)
-		}
-
-		signedTx, err := transaction.Sign(entityAccs[i].signer, tx)
-		if err != nil {
-			return fmt.Errorf("transaction.Sign: %w", err)
-		}
-		if err = cnsc.SubmitTx(ctx, signedTx); err != nil {
-			return fmt.Errorf("cnsc.SubmitTx: %w", err)
+		if err := fundSignAndSubmitTx(ctx, registrationLogger, cnsc, entityAccs[i].signer, tx, fundingAccount); err != nil {
+			registrationLogger.Error("failed to sign and submit regsiter entity transaction",
+				"tx", tx,
+				"signer", entityAccs[i].signer,
+			)
+			return fmt.Errorf("failed to sign and submit tx: %w", err)
 		}
 
 		// Register runtime.
@@ -280,31 +262,13 @@ func (r *registration) Run( // nolint: gocyclo
 			}
 
 			tx := registry.NewRegisterRuntimeTx(entityAccs[i].reckonedNonce, &transaction.Fee{}, sigRuntime)
-			gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-				Caller:      entityAccs[i].signer.Public(),
-				Transaction: tx,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to estimate gas: %w", err)
-			}
-			tx.Fee.Gas = gas
-			feeAmount := int64(gas) * gasPrice
-			if err = tx.Fee.Amount.FromInt64(feeAmount); err != nil {
-				return fmt.Errorf("fee amount from uint64: %w", err)
-			}
-
-			// Fund entity account to cover entity registration fees.
-			if err = transferFunds(ctx, registrationLogger, cnsc, fundingAccount, entityAccs[i].signer.Public(), feeAmount); err != nil {
-				return fmt.Errorf("account funding failure: %w", err)
-			}
-
 			entityAccs[i].reckonedNonce++
-			signedTx, err := transaction.Sign(entityAccs[i].signer, tx)
-			if err != nil {
-				return fmt.Errorf("transaction.Sign: %w", err)
-			}
-			if err = cnsc.SubmitTx(ctx, signedTx); err != nil {
-				return fmt.Errorf("cnsc.SubmitTx: %w", err)
+			if err := fundSignAndSubmitTx(ctx, registrationLogger, cnsc, entityAccs[i].signer, tx, fundingAccount); err != nil {
+				registrationLogger.Error("failed to sign and submit register runtime transaction",
+					"tx", tx,
+					"signer", entityAccs[i].signer,
+				)
+				return fmt.Errorf("failed to sign and submit tx: %w", err)
 			}
 		}
 	}
@@ -331,35 +295,15 @@ func (r *registration) Run( // nolint: gocyclo
 
 		// Register node.
 		tx := registry.NewRegisterNodeTx(selectedNode.reckonedNonce, &transaction.Fee{}, sigNode)
-		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-			Caller:      selectedNode.id.NodeSigner.Public(),
-			Transaction: tx,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to estimate gas: %w", err)
-		}
-		tx.Fee.Gas = gas
-		feeAmount := gas * gasPrice
-		if err = tx.Fee.Amount.FromUint64(uint64(feeAmount)); err != nil {
-			return fmt.Errorf("fee amount from uint64: %w", err)
-		}
-
-		// Fund node account to cover registration fees.
-		if err = transferFunds(ctx, registrationLogger, cnsc, fundingAccount, selectedNode.id.NodeSigner.Public(), int64(feeAmount)); err != nil {
-			return fmt.Errorf("account funding failure: %w", err)
-		}
 		selectedNode.reckonedNonce++
+		if err := fundSignAndSubmitTx(ctx, registrationLogger, cnsc, selectedNode.id.NodeSigner, tx, fundingAccount); err != nil {
+			registrationLogger.Error("failed to sign and submit register node transaction",
+				"tx", tx,
+				"signer", selectedNode.id.NodeSigner,
+			)
+			return fmt.Errorf("failed to sign and submit tx: %w", err)
+		}
 
-		signedTx, err := transaction.Sign(selectedNode.id.NodeSigner, tx)
-		if err != nil {
-			return fmt.Errorf("transaction.Sign: %w", err)
-		}
-		registrationLogger.Debug("submitting registration",
-			"node", selectedNode.nodeDesc,
-		)
-		if err = cnsc.SubmitTx(ctx, signedTx); err != nil {
-			return fmt.Errorf("cnsc.SubmitTx: %w", err)
-		}
 		registrationLogger.Debug("registered node",
 			"node", selectedNode.nodeDesc,
 		)
