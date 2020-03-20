@@ -80,42 +80,14 @@ func (d *delegation) doEscrowTx(ctx context.Context, rng *rand.Rand, cnsc consen
 
 	tx := staking.NewAddEscrowTx(d.accounts[selectedIdx].reckonedNonce, &transaction.Fee{}, escrow)
 	d.accounts[selectedIdx].reckonedNonce++
-
-	// Estimate gas.
-	gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-		Caller:      d.accounts[selectedIdx].signer.Public(),
-		Transaction: tx,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to estimate gas: %w", err)
-	}
-	tx.Fee.Gas = gas
-	feeAmount := int64(gas) * gasPrice
-	if err = tx.Fee.Amount.FromInt64(feeAmount); err != nil {
-		return fmt.Errorf("fee amount from int64: %w", err)
-	}
-
-	// Fund account to cover Escrow fees.
 	// We only do one escrow per account at a time, so `delegateAmount`
 	// funds (that are Escrowed) should already be in the balance.
-	fundAmount := int64(gas) * gasPrice // transaction costs
-	if err = transferFunds(ctx, d.logger, cnsc, d.fundingAccount, d.accounts[selectedIdx].signer.Public(), fundAmount); err != nil {
-		return fmt.Errorf("account funding failure: %w", err)
-	}
-
-	// Sign transaction.
-	signedTx, err := transaction.Sign(d.accounts[selectedIdx].signer, tx)
-	if err != nil {
-		return fmt.Errorf("transaction.Sign: %w", err)
-	}
-	d.logger.Debug("submitting escrow transaction",
-		"from", d.accounts[selectedIdx].signer.Public(),
-		"to", d.accounts[selectedIdx].delegatedTo,
-	)
-
-	// Submit transaction.
-	if err = cnsc.SubmitTx(ctx, signedTx); err != nil {
-		return fmt.Errorf("cnsc.SubmitTx: %w", err)
+	if err := fundSignAndSubmitTx(ctx, d.logger, cnsc, d.accounts[selectedIdx].signer, tx, d.fundingAccount); err != nil {
+		d.logger.Error("failed to sign and submit escrow transaction",
+			"tx", tx,
+			"signer", d.accounts[selectedIdx].signer,
+		)
+		return fmt.Errorf("failed to sign and submit tx: %w", err)
 	}
 
 	return nil
@@ -166,40 +138,12 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, cnsc
 	}
 	tx := staking.NewReclaimEscrowTx(d.accounts[selectedIdx].reckonedNonce, &transaction.Fee{}, reclaim)
 	d.accounts[selectedIdx].reckonedNonce++
-
-	// Estimate gas.
-	gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-		Caller:      d.accounts[selectedIdx].signer.Public(),
-		Transaction: tx,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to estimate gas: %w", err)
-	}
-	tx.Fee.Gas = gas
-	feeAmount := int64(gas) * gasPrice
-	if err = tx.Fee.Amount.FromInt64(feeAmount); err != nil {
-		return fmt.Errorf("fee amount from int64: %w", err)
-	}
-
-	// Fund account to cover reclaim escrow fees.
-	fundAmount := int64(gas) * gasPrice // transaction costs
-	if err = transferFunds(ctx, d.logger, cnsc, d.fundingAccount, d.accounts[selectedIdx].signer.Public(), fundAmount); err != nil {
-		return fmt.Errorf("account funding failure: %w", err)
-	}
-
-	signedTx, err := transaction.Sign(d.accounts[selectedIdx].signer, tx)
-	if err != nil {
-		return fmt.Errorf("transaction.Sign: %w", err)
-	}
-
-	d.logger.Debug("submitting reclaim escrow transaction",
-		"reclaim_from", d.accounts[selectedIdx].delegatedTo,
-		"account", d.accounts[selectedIdx].signer.Public(),
-	)
-
-	// Submit transaction.
-	if err = cnsc.SubmitTx(ctx, signedTx); err != nil {
-		return fmt.Errorf("cnsc.SubmitTx: %w", err)
+	if err = fundSignAndSubmitTx(ctx, d.logger, cnsc, d.accounts[selectedIdx].signer, tx, d.fundingAccount); err != nil {
+		d.logger.Error("failed to sign and submit reclaim escrow transaction",
+			"tx", tx,
+			"signer", d.accounts[selectedIdx].signer,
+		)
+		return fmt.Errorf("failed to sign and submit tx: %w", err)
 	}
 
 	// Query debonding end epoch for the account.

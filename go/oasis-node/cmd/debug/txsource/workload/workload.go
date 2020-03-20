@@ -33,6 +33,60 @@ func FundAccountFromTestEntity(ctx context.Context, logger *logging.Logger, cnsc
 	return transferFunds(ctx, logger, cnsc, testEntitySigner, to, fundAccountAmount)
 }
 
+func fundSignAndSubmitTx(ctx context.Context, logger *logging.Logger, cnsc consensus.ClientBackend, caller signature.Signer, tx *transaction.Transaction, fundingAccount signature.Signer) error {
+	// Estimate gas needed if not set.
+	if tx.Fee.Gas == 0 {
+		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
+			Caller:      caller.Public(),
+			Transaction: tx,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to estimate gas: %w", err)
+		}
+		tx.Fee.Gas = gas
+	}
+
+	// Fund caller to cover transaction fees.
+	feeAmount := int64(tx.Fee.Gas) * gasPrice
+	if err := tx.Fee.Amount.FromInt64(feeAmount); err != nil {
+		return fmt.Errorf("fee amount from int64: %w", err)
+	}
+	if err := transferFunds(ctx, logger, cnsc, fundingAccount, caller.Public(), feeAmount); err != nil {
+		return fmt.Errorf("account funding failure: %w", err)
+	}
+
+	// Sign tx.
+	signedTx, err := transaction.Sign(caller, tx)
+	if err != nil {
+		return fmt.Errorf("transaction.Sign: %w", err)
+	}
+
+	logger.Debug("submitting transaction",
+		"tx", tx,
+		"signed_tx", signedTx,
+		"caller", caller,
+	)
+
+	// SubmitTx.
+	// Wait for a maximum of 60 seconds to submit transaction.
+	submitCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	err = cnsc.SubmitTx(submitCtx, signedTx)
+	switch err {
+	case nil:
+		cancel()
+		return nil
+	default:
+		cancel()
+		logger.Error("failed to submit transaction",
+			"err", err,
+			"tx", tx,
+			"signed_tx", signedTx,
+			"caller", caller,
+		)
+		return fmt.Errorf("cnsc.SubmitTx: %w", err)
+	}
+}
+
 // transferFunds transfer funds between accounts.
 func transferFunds(ctx context.Context, logger *logging.Logger, cnsc consensus.ClientBackend, from signature.Signer, to signature.PublicKey, transferAmount int64) error {
 	sched := backoff.NewExponentialBackOff()
@@ -127,5 +181,5 @@ var ByName = map[string]Workload{
 	NameParallel:     parallel{},
 	NameRegistration: &registration{},
 	NameRuntime:      &runtime{},
-	NameTransfer:     transfer{},
+	NameTransfer:     &transfer{},
 }
