@@ -9,3 +9,4 @@ oasis-remote-signer/oasis-remote-signer
 storage/mkvs/interop/mkvs-test-helpers
 /f2dump
 /fuzz2run
+/debugcover
