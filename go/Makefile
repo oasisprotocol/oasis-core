@@ -23,6 +23,12 @@ $(go-binaries):
 
 build: $(go-binaries)
 
+f2dump:
+	$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -tags gofuzz -o ./$@ ./common/fill2/f2dump
+
+fuzz2run:
+	$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -tags gofuzz -o ./$@ ./consensus/tendermint/fuzz2/fuzz2run
+
 # Build test helpers.
 # List of test helpers to build.
 test-helpers := mkvs
@@ -138,7 +144,7 @@ clean:
 
 # List of targets that are not actual files.
 .PHONY: \
-	generate $(go-binaries) build \
+	generate $(go-binaries) build f2dump fuzz2run \
 	$(test-helpers) build-helpers \
 	$(test-vectors) gen-test-vectors \
 	fmt lint \
