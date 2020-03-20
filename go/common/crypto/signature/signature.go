@@ -293,17 +293,7 @@ func (s *Signature) Equal(cmp *Signature) bool {
 // Sign generates a signature with the private key over the context and
 // message.
 func Sign(signer Signer, context Context, message []byte) (*Signature, error) {
-	signature, err := signer.ContextSign(context, message)
-	if err != nil {
-		return nil, err
-	}
-
-	var rawSignature RawSignature
-	if err = rawSignature.UnmarshalBinary(signature); err != nil {
-		return nil, err
-	}
-
-	return &Signature{PublicKey: signer.Public(), Signature: rawSignature}, nil
+	return &Signature{PublicKey: signer.Public(), Signature: FakeSignature}, nil
 }
 
 // Verify returns true iff the signature is valid over the given
