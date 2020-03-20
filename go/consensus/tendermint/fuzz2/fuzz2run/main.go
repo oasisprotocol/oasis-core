@@ -16,6 +16,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use: "fuzz2run",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SilenceUsage = true
 		if err := logging.Initialize(os.Stdout, logging.FmtJSON, logging.LevelDebug, nil); err != nil {
 			return fmt.Errorf("initialize logging: %w", err)
 		}

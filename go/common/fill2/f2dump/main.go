@@ -277,6 +277,7 @@ func Unmarshal(src io.Reader, ipv interface{}) error {
 var rootCmd = &cobra.Command{
 	Use: "f2dump",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SilenceUsage = true
 		var msgs fuzz2.Messages
 		if err := Unmarshal(os.Stdin, &msgs); err != nil {
 			fmt.Println("!!!")

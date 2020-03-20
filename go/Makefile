@@ -24,10 +24,10 @@ $(go-binaries):
 build: $(go-binaries)
 
 f2dump:
-	$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -tags gofuzz -o ./$@ ./common/fill2/f2dump
+	$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -tags gofuzz ./common/fill2/f2dump
 
 fuzz2run:
-	$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -tags gofuzz -o ./$@ ./consensus/tendermint/fuzz2/fuzz2run
+	$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -tags gofuzz ./consensus/tendermint/fuzz2/fuzz2run
 
 # Build test helpers.
 # List of test helpers to build.
@@ -106,7 +106,7 @@ if [ "$(FUZZ_BUILD_ONLY)" != "1" ]; then \
 	cd "$$WORKDIR"; \
 	$(ECHO) "$(CYAN)*** Running fuzzer for $@...$(OFF)"; \
 	if [ "$(@D)" == "." ]; then \
-		go-fuzz -bin=$$WORKDIR/fuzz.zip -workdir=$$WORKDIR; \
+		go-fuzz -bin=$$WORKDIR/fuzz.zip -workdir=$$WORKDIR -dumpcover; \
 	else \
 		go-fuzz -bin=$$WORKDIR/fuzz.zip -workdir=$$WORKDIR -func Fuzz$(@F); \
 	fi; \
