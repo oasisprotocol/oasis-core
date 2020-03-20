@@ -313,12 +313,12 @@ func TestFuzz(t *testing.T) {
 		},
 	}
 	docBytes := marshalAndCheck(t, &doc, "doc")
-	msgs := messages{
+	msgs := Messages{
 		InitReq: types.RequestInitChain{
 			Time:          now,
 			AppStateBytes: docBytes,
 		},
-		Blocks: []blockMessages{
+		Blocks: []BlockMessages{
 			{
 				BeginReq: types.RequestBeginBlock{
 					Header: types.Header{

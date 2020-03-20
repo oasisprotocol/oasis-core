@@ -27,15 +27,15 @@ import (
 // - pruning is disabled in fuzz2
 // - fuzz2 allows the fuzzer to send multiple transactions
 
-type blockMessages struct {
+type BlockMessages struct {
 	BeginReq types.RequestBeginBlock
 	TxReqs   []types.RequestDeliverTx
 	EndReq   types.RequestEndBlock
 }
 
-type messages struct {
+type Messages struct {
 	InitReq types.RequestInitChain
-	Blocks  []blockMessages
+	Blocks  []BlockMessages
 }
 
 var _ epochtime.Backend = &simpleTime{}
@@ -73,7 +73,7 @@ func (t *simpleTime) StateToGenesis(context.Context, int64) (*epochtime.Genesis,
 }
 
 func Fuzz(data []byte) int {
-	var msgs messages
+	var msgs Messages
 	if err := fill2.Unmarshal(data, &msgs); err != nil {
 		return 0
 	}
