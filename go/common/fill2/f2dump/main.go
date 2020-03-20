@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -15,9 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/oasis-core/go/common/fill2"
-	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/fuzz2"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 )
 
 func unmarshalValue(src io.Reader, v reflect.Value, indent int) error { // nolint: gocyclo
@@ -282,18 +279,6 @@ var rootCmd = &cobra.Command{
 		if err := Unmarshal(os.Stdin, &msgs); err != nil {
 			fmt.Println("!!!")
 			return fmt.Errorf("unmarshal msgs: %w", err)
-		}
-		var doc genesis.Document
-		if err := Unmarshal(bytes.NewReader(msgs.InitReq.AppStateBytes), &doc); err != nil {
-			fmt.Println("!!!")
-			return fmt.Errorf("unmarshal doc: %w", err)
-		}
-		for _, msNode := range doc.Registry.Nodes {
-			var n node.Node
-			if err := Unmarshal(bytes.NewReader(msNode.Blob), &n); err != nil {
-				fmt.Println("!!!")
-				return fmt.Errorf(": %w", err)
-			}
 		}
 		return nil
 	},

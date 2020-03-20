@@ -33,25 +33,55 @@ import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-func mustInitPublicKey(t *testing.T, hex string) (pk signature.PublicKey) {
-	require.NoError(t, pk.UnmarshalHex(hex), "UnmarshalHex %s", hex)
+func mustInitPublicKey(hex string) (pk signature.PublicKey) {
+	if err := pk.UnmarshalHex(hex); err != nil {
+		panic(err)
+	}
 	return
 }
 
-func mustInitQuantity(t *testing.T, i int64) (q quantity.Quantity) {
-	require.NoError(t, q.FromInt64(i), "FromInt64 %d", i)
+func mustInitQuantity(i int64) (q quantity.Quantity) {
+	if err := q.FromInt64(i); err != nil {
+		panic(err)
+	}
 	return
 }
 
-func mustInitAddress(t *testing.T, addr string) (a node.Address) {
-	require.NoError(t, a.UnmarshalText([]byte(addr)), "UnmarshalText %s", addr)
+func mustInitAddress(addr string) (a node.Address) {
+	if err := a.UnmarshalText([]byte(addr)); err != nil {
+		panic(err)
+	}
 	return
 }
 
-func mustGenerateCert(t *testing.T) (signature.PublicKey, *tls.Certificate) {
-	cert, err := tlsCert.Generate(identity.CommonName)
-	require.NoError(t, err, "tlsCert Generate")
+func publicKeyWithCert(cert *tls.Certificate) (signature.PublicKey, *tls.Certificate) {
 	return memory.NewFromRuntime(cert.PrivateKey.(ed25519.PrivateKey)).Public(), cert
+}
+
+func mustGenerateCert() (signature.PublicKey, *tls.Certificate) {
+	cert, err := tlsCert.Generate(identity.CommonName)
+	if err != nil {
+		panic(err)
+	}
+	return publicKeyWithCert(cert)
+}
+
+func TestNondeterministic(t *testing.T) {
+	fmt.Printf("\tnow = time.Unix(%d, 0)\n", time.Now().Unix())
+	for i := 0; i < 3; i++ {
+		_, cert := mustGenerateCert()
+		certPEM, keyPEM, err := tlsCert.ExportPEM(cert)
+		require.NoError(t, err, "ExportPEM")
+		fmt.Printf("\tnode%dCom, node%dCert = mustInitCert([]byte(`\n%s`), []byte(`\n%s`))\n", i+1, i+1, certPEM, keyPEM)
+	}
+}
+
+func mustInitCert(certPEM []byte, keyPEM []byte) (signature.PublicKey, *tls.Certificate) {
+	cert, err := tlsCert.ImportPEM(certPEM, keyPEM)
+	if err != nil {
+		panic(err)
+	}
+	return publicKeyWithCert(cert)
 }
 
 func marshalAndCheck(t *testing.T, v interface{}, msg string) []byte {
@@ -88,31 +118,69 @@ func fakeMultiSigned(t *testing.T, body interface{}, msg string, signers ...sign
 	return ms
 }
 
-func TestFuzz(t *testing.T) {
-	require.NoError(t, logging.Initialize(os.Stdout, logging.FmtJSON, logging.LevelDebug, nil), "logging Initialize") // %%%
-	var (
-		acctRich            = mustInitPublicKey(t, "7200000000000000000000000000000000000000000000000000000000000000")
-		entity1             = mustInitPublicKey(t, "3165000000000000000000000000000000000000000000000000000000000000")
-		entity2             = mustInitPublicKey(t, "3265000000000000000000000000000000000000000000000000000000000000")
-		entity3             = mustInitPublicKey(t, "3365000000000000000000000000000000000000000000000000000000000000")
-		node1               = mustInitPublicKey(t, "316e000000000000000000000000000000000000000000000000000000000000")
-		node2               = mustInitPublicKey(t, "326e000000000000000000000000000000000000000000000000000000000000")
-		node3               = mustInitPublicKey(t, "336e000000000000000000000000000000000000000000000000000000000000")
-		node1Com, node1Cert = mustGenerateCert(t)
-		node2Com, node2Cert = mustGenerateCert(t)
-		node3Com, node3Cert = mustGenerateCert(t)
-		node1P2P            = mustInitPublicKey(t, "31706e0000000000000000000000000000000000000000000000000000000000")
-		node2P2P            = mustInitPublicKey(t, "32706e0000000000000000000000000000000000000000000000000000000000")
-		node3P2P            = mustInitPublicKey(t, "33706e0000000000000000000000000000000000000000000000000000000000")
-		node1Cons           = mustInitPublicKey(t, "31636e0000000000000000000000000000000000000000000000000000000000")
-		node2Cons           = mustInitPublicKey(t, "32636e0000000000000000000000000000000000000000000000000000000000")
-		node3Cons           = mustInitPublicKey(t, "33636e0000000000000000000000000000000000000000000000000000000000")
-		node1Addr           = crypto.PublicKeyToTendermint(&node1Cons).Address()
-		node2Addr           = crypto.PublicKeyToTendermint(&node2Cons).Address()
-		node3Addr           = crypto.PublicKeyToTendermint(&node3Cons).Address()
-	)
-	nowRich := time.Now()
-	now := time.Unix(nowRich.Unix(), int64(nowRich.Nanosecond()))
+var (
+	now                 = time.Unix(1585257884, 0)
+	acctRich            = mustInitPublicKey("7200000000000000000000000000000000000000000000000000000000000000")
+	entity1             = mustInitPublicKey("3165000000000000000000000000000000000000000000000000000000000000")
+	entity2             = mustInitPublicKey("3265000000000000000000000000000000000000000000000000000000000000")
+	entity3             = mustInitPublicKey("3365000000000000000000000000000000000000000000000000000000000000")
+	node1               = mustInitPublicKey("316e000000000000000000000000000000000000000000000000000000000000")
+	node2               = mustInitPublicKey("326e000000000000000000000000000000000000000000000000000000000000")
+	node3               = mustInitPublicKey("336e000000000000000000000000000000000000000000000000000000000000")
+	node1Com, node1Cert = mustInitCert([]byte(`
+-----BEGIN CERTIFICATE-----
+MIIBCTCBvKADAgECAgEBMAUGAytlcDAVMRMwEQYDVQQDEwpvYXNpcy1ub2RlMB4X
+DTIwMDMyNjIwMjQ0NFoXDTIxMDMyNjIxMjQ0NFowFTETMBEGA1UEAxMKb2FzaXMt
+bm9kZTAqMAUGAytlcAMhAPMHK5MydBYSVw1hWDezf5nN1LGZt1Felx1qJzw+fumB
+ozEwLzAOBgNVHQ8BAf8EBAMCAqQwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUF
+BwMCMAUGAytlcANBAAV8WIn3NAacCPvz3M7eZrDU4a+KE6D198wqMHDuQbyRjuk7
+Dh2XPJHycSpisMl1HAJ5OtEu5VUNqEaxk3MkjQc=
+-----END CERTIFICATE-----
+`), []byte(`
+-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIPUgVMPL+CvziUOANxoMkFOpqZo9lYz1UwWe6PMQx+hn
+-----END PRIVATE KEY-----
+`))
+	node2Com, node2Cert = mustInitCert([]byte(`
+-----BEGIN CERTIFICATE-----
+MIIBCTCBvKADAgECAgEBMAUGAytlcDAVMRMwEQYDVQQDEwpvYXNpcy1ub2RlMB4X
+DTIwMDMyNjIwMjQ0NFoXDTIxMDMyNjIxMjQ0NFowFTETMBEGA1UEAxMKb2FzaXMt
+bm9kZTAqMAUGAytlcAMhAC6xkJtfGGVP7RRhWCbf8d2RB/1eoDoKa3mqTBhf7dph
+ozEwLzAOBgNVHQ8BAf8EBAMCAqQwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUF
+BwMCMAUGAytlcANBANimX8YX3A84DBUc5S4Q0GW6HcP3YJF54cQesHr2VQRykzYH
+PZvjSGg6Rmvw/AX0DfrnggIILrZ2hRVgACxmuA8=
+-----END CERTIFICATE-----
+`), []byte(`
+-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIG9cGQgDOvjP06UZ/HWkczolEtU4qUNPbDF6j1Hmjx4/
+-----END PRIVATE KEY-----
+`))
+	node3Com, node3Cert = mustInitCert([]byte(`
+-----BEGIN CERTIFICATE-----
+MIIBCTCBvKADAgECAgEBMAUGAytlcDAVMRMwEQYDVQQDEwpvYXNpcy1ub2RlMB4X
+DTIwMDMyNjIwMjQ0NFoXDTIxMDMyNjIxMjQ0NFowFTETMBEGA1UEAxMKb2FzaXMt
+bm9kZTAqMAUGAytlcAMhAGUANvxC37OUUiJOCqN7Y18RbIJxLNhAl3XxrzZ65zIF
+ozEwLzAOBgNVHQ8BAf8EBAMCAqQwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUF
+BwMCMAUGAytlcANBAHSCGf77cG9n6O2hE/bDH5PNF7Txl6GNaQNyQXIwtfohcjvb
+ZoSC/UGZXIdy3lZOaWkX9kdKUHwE94Qk2IeqLgk=
+-----END CERTIFICATE-----
+`), []byte(`
+-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIKPzSR5SdIQMWMSRMWaBXuTO9jWMmaqEg5r17pztFRvz
+-----END PRIVATE KEY-----
+`))
+	node1P2P  = mustInitPublicKey("31706e0000000000000000000000000000000000000000000000000000000000")
+	node2P2P  = mustInitPublicKey("32706e0000000000000000000000000000000000000000000000000000000000")
+	node3P2P  = mustInitPublicKey("33706e0000000000000000000000000000000000000000000000000000000000")
+	node1Cons = mustInitPublicKey("31636e0000000000000000000000000000000000000000000000000000000000")
+	node2Cons = mustInitPublicKey("32636e0000000000000000000000000000000000000000000000000000000000")
+	node3Cons = mustInitPublicKey("33636e0000000000000000000000000000000000000000000000000000000000")
+	node1Addr = crypto.PublicKeyToTendermint(&node1Cons).Address()
+	node2Addr = crypto.PublicKeyToTendermint(&node2Cons).Address()
+	node3Addr = crypto.PublicKeyToTendermint(&node3Cons).Address()
+)
+
+func TestCannedRIC(t *testing.T) {
 	doc := genesis.Document{
 		Time: now,
 		EpochTime: epochtime.Genesis{
@@ -160,7 +228,7 @@ func TestFuzz(t *testing.T) {
 							ID: node1Cons,
 							Addresses: []node.ConsensusAddress{
 								{
-									Address: mustInitAddress(t, "1.0.0.1:26656"),
+									Address: mustInitAddress("1.0.0.1:26656"),
 								},
 							},
 						},
@@ -181,7 +249,7 @@ func TestFuzz(t *testing.T) {
 							ID: node2Cons,
 							Addresses: []node.ConsensusAddress{
 								{
-									Address: mustInitAddress(t, "1.0.0.2:26656"),
+									Address: mustInitAddress("1.0.0.2:26656"),
 								},
 							},
 						},
@@ -202,7 +270,7 @@ func TestFuzz(t *testing.T) {
 							ID: node3Cons,
 							Addresses: []node.ConsensusAddress{
 								{
-									Address: mustInitAddress(t, "1.0.0.3:26656"),
+									Address: mustInitAddress("1.0.0.3:26656"),
 								},
 							},
 						},
@@ -215,19 +283,19 @@ func TestFuzz(t *testing.T) {
 		Staking: staking.Genesis{
 			Parameters: staking.ConsensusParameters{
 				Thresholds: map[staking.ThresholdKind]quantity.Quantity{
-					staking.KindEntity:            mustInitQuantity(t, 1000),
-					staking.KindNodeValidator:     mustInitQuantity(t, 1000),
-					staking.KindNodeCompute:       mustInitQuantity(t, 1000),
-					staking.KindNodeStorage:       mustInitQuantity(t, 1000),
-					staking.KindNodeKeyManager:    mustInitQuantity(t, 1000),
-					staking.KindRuntimeCompute:    mustInitQuantity(t, 1000),
-					staking.KindRuntimeKeyManager: mustInitQuantity(t, 1000),
+					staking.KindEntity:            mustInitQuantity(1000),
+					staking.KindNodeValidator:     mustInitQuantity(1000),
+					staking.KindNodeCompute:       mustInitQuantity(1000),
+					staking.KindNodeStorage:       mustInitQuantity(1000),
+					staking.KindNodeKeyManager:    mustInitQuantity(1000),
+					staking.KindRuntimeCompute:    mustInitQuantity(1000),
+					staking.KindRuntimeKeyManager: mustInitQuantity(1000),
 				},
 				DebondingInterval: 2,
 				RewardSchedule: []staking.RewardStep{
 					{
 						Until: 32,
-						Scale: mustInitQuantity(t, 1000),
+						Scale: mustInitQuantity(1000),
 					},
 				},
 				SigningRewardThresholdNumerator:   1,
@@ -240,7 +308,7 @@ func TestFuzz(t *testing.T) {
 				},
 				Slashing: map[staking.SlashReason]staking.Slash{
 					staking.SlashDoubleSigning: {
-						Amount:         mustInitQuantity(t, 1000),
+						Amount:         mustInitQuantity(1000),
 						FreezeInterval: 32,
 					},
 				},
@@ -250,37 +318,37 @@ func TestFuzz(t *testing.T) {
 					staking.GasOpReclaimEscrow: 4,
 					staking.GasOpTransfer:      4,
 				},
-				MinDelegationAmount:     mustInitQuantity(t, 1000),
-				FeeSplitVote:            mustInitQuantity(t, 1),
-				FeeSplitPropose:         mustInitQuantity(t, 1),
-				RewardFactorEpochSigned: mustInitQuantity(t, 1),
+				MinDelegationAmount:     mustInitQuantity(1000),
+				FeeSplitVote:            mustInitQuantity(1),
+				FeeSplitPropose:         mustInitQuantity(1),
+				RewardFactorEpochSigned: mustInitQuantity(1),
 			},
-			TotalSupply: mustInitQuantity(t, 2_000_006_000),
-			CommonPool:  mustInitQuantity(t, 1_000_000_000),
+			TotalSupply: mustInitQuantity(2_000_006_000),
+			CommonPool:  mustInitQuantity(1_000_000_000),
 			Ledger: map[signature.PublicKey]*staking.Account{
 				acctRich: {
 					General: staking.GeneralAccount{
-						Balance: mustInitQuantity(t, 1_000_000_000),
+						Balance: mustInitQuantity(1_000_000_000),
 					},
 				},
 				entity1: {
 					Escrow: staking.EscrowAccount{
 						Active: staking.SharePool{
-							Balance:     mustInitQuantity(t, 2000),
-							TotalShares: mustInitQuantity(t, 2000),
+							Balance:     mustInitQuantity(2000),
+							TotalShares: mustInitQuantity(2000),
 						},
 						CommissionSchedule: staking.CommissionSchedule{
 							Rates: []staking.CommissionRateStep{
 								{
 									Start: 0,
-									Rate:  mustInitQuantity(t, 10_000),
+									Rate:  mustInitQuantity(10_000),
 								},
 							},
 							Bounds: []staking.CommissionRateBoundStep{
 								{
 									Start:   0,
-									RateMin: mustInitQuantity(t, 1000),
-									RateMax: mustInitQuantity(t, 50_000),
+									RateMin: mustInitQuantity(1000),
+									RateMax: mustInitQuantity(50_000),
 								},
 							},
 						},
@@ -289,16 +357,16 @@ func TestFuzz(t *testing.T) {
 				entity2: {
 					Escrow: staking.EscrowAccount{
 						Active: staking.SharePool{
-							Balance:     mustInitQuantity(t, 2000),
-							TotalShares: mustInitQuantity(t, 2000),
+							Balance:     mustInitQuantity(2000),
+							TotalShares: mustInitQuantity(2000),
 						},
 					},
 				},
 				entity3: {
 					Escrow: staking.EscrowAccount{
 						Active: staking.SharePool{
-							Balance:     mustInitQuantity(t, 2000),
-							TotalShares: mustInitQuantity(t, 2000),
+							Balance:     mustInitQuantity(2000),
+							TotalShares: mustInitQuantity(2000),
 						},
 					},
 				},
@@ -313,11 +381,64 @@ func TestFuzz(t *testing.T) {
 		},
 	}
 	docBytes := marshalAndCheck(t, &doc, "doc")
-	msgs := Messages{
-		InitReq: types.RequestInitChain{
-			Time:          now,
-			AppStateBytes: docBytes,
+	ric := types.RequestInitChain{
+		Time:          now,
+		AppStateBytes: docBytes,
+	}
+	cannedRIC = marshalAndCheck(t, &ric, "request init chain")
+	fmt.Printf("canned ric %#02v\n", cannedRIC)
+}
+
+func TestSimpleRIC(t *testing.T) {
+	local70 := time.Unix(0, 0)
+	doc := genesis.Document{
+		Time: local70,
+		Staking: staking.Genesis{
+			Parameters: staking.ConsensusParameters{
+				Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+					staking.KindEntity:            mustInitQuantity(0),
+					staking.KindNodeValidator:     mustInitQuantity(0),
+					staking.KindNodeCompute:       mustInitQuantity(0),
+					staking.KindNodeStorage:       mustInitQuantity(0),
+					staking.KindNodeKeyManager:    mustInitQuantity(0),
+					staking.KindRuntimeCompute:    mustInitQuantity(0),
+					staking.KindRuntimeKeyManager: mustInitQuantity(0),
+				},
+				Slashing: map[staking.SlashReason]staking.Slash{
+					staking.SlashDoubleSigning: {
+						Amount:         mustInitQuantity(0),
+						FreezeInterval: 0,
+					},
+				},
+				GasCosts: map[transaction.Op]transaction.Gas{
+					staking.GasOpAddEscrow:     0,
+					staking.GasOpBurn:          0,
+					staking.GasOpReclaimEscrow: 0,
+					staking.GasOpTransfer:      0,
+				},
+				FeeSplitVote: mustInitQuantity(1),
+			},
 		},
+		Scheduler: scheduler.Genesis{
+			Parameters: scheduler.ConsensusParameters{
+				MinValidators:          1,
+				MaxValidators:          1,
+				MaxValidatorsPerEntity: 1,
+			},
+		},
+	}
+	docBytes := marshalAndCheck(t, &doc, "doc")
+	ric := types.RequestInitChain{
+		Time:          local70,
+		AppStateBytes: docBytes,
+	}
+	cannedRIC = marshalAndCheck(t, &ric, "request init chain")
+	fmt.Printf("canned ric %#02v\n", cannedRIC)
+}
+
+func TestFuzz(t *testing.T) {
+	require.NoError(t, logging.Initialize(os.Stdout, logging.FmtJSON, logging.LevelDebug, nil), "logging Initialize") // %%%
+	msgs := Messages{
 		Blocks: []BlockMessages{
 			{
 				BeginReq: types.RequestBeginBlock{
@@ -386,13 +507,13 @@ func TestFuzz(t *testing.T) {
 							Signed: fakeSigned(t, &transaction.Transaction{
 								Nonce: 0,
 								Fee: &transaction.Fee{
-									Amount: mustInitQuantity(t, 40),
+									Amount: mustInitQuantity(40),
 									Gas:    4,
 								},
 								Method: staking.MethodTransfer,
 								Body: marshalAndCheck(t, &staking.Transfer{
 									To:     entity2,
-									Tokens: mustInitQuantity(t, 500),
+									Tokens: mustInitQuantity(500),
 								}, "tx1body"),
 							}, "tx1tx", acctRich),
 						}, "tx1"),
@@ -409,50 +530,7 @@ func TestFuzz(t *testing.T) {
 
 func TestEmpty(t *testing.T) {
 	require.NoError(t, logging.Initialize(os.Stdout, logging.FmtJSON, logging.LevelDebug, nil), "logging Initialize") // %%%
-	local70 := time.Unix(0, 0)
-	doc := genesis.Document{
-		Time: local70,
-		Staking: staking.Genesis{
-			Parameters: staking.ConsensusParameters{
-				Thresholds: map[staking.ThresholdKind]quantity.Quantity{
-					staking.KindEntity:            mustInitQuantity(t, 0),
-					staking.KindNodeValidator:     mustInitQuantity(t, 0),
-					staking.KindNodeCompute:       mustInitQuantity(t, 0),
-					staking.KindNodeStorage:       mustInitQuantity(t, 0),
-					staking.KindNodeKeyManager:    mustInitQuantity(t, 0),
-					staking.KindRuntimeCompute:    mustInitQuantity(t, 0),
-					staking.KindRuntimeKeyManager: mustInitQuantity(t, 0),
-				},
-				Slashing: map[staking.SlashReason]staking.Slash{
-					staking.SlashDoubleSigning: {
-						Amount:         mustInitQuantity(t, 0),
-						FreezeInterval: 0,
-					},
-				},
-				GasCosts: map[transaction.Op]transaction.Gas{
-					staking.GasOpAddEscrow:     0,
-					staking.GasOpBurn:          0,
-					staking.GasOpReclaimEscrow: 0,
-					staking.GasOpTransfer:      0,
-				},
-				FeeSplitVote: mustInitQuantity(t, 1),
-			},
-		},
-		Scheduler: scheduler.Genesis{
-			Parameters: scheduler.ConsensusParameters{
-				MinValidators:          1,
-				MaxValidators:          1,
-				MaxValidatorsPerEntity: 1,
-			},
-		},
-	}
-	docBytes := marshalAndCheck(t, &doc, "doc")
-	msgs := Messages{
-		InitReq: types.RequestInitChain{
-			Time:          local70,
-			AppStateBytes: docBytes,
-		},
-	}
+	msgs := Messages{}
 	data := marshalAndCheck(t, &msgs, "msgs")
 	require.Equal(t, 1, Fuzz(data), "Fuzz output")
 	require.NoError(t, ioutil.WriteFile("/tmp/oasis-node-fuzz2/corpus/blank.f2", data, 0644), "saving fuzz input")
