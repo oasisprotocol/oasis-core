@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/tendermint/tendermint/abci/types"
 
@@ -46,7 +47,10 @@ func (app *keymanagerApplication) InitChain(ctx *abci.Context, request types.Req
 
 	var toEmit []*keymanager.Status
 	state := keymanagerState.NewMutableState(ctx.State())
-	for _, v := range st.Statuses {
+	for i, v := range st.Statuses {
+		if v == nil {
+			return fmt.Errorf("InitChain: Status index %d is nil", i)
+		}
 		rt := rtMap[v.ID]
 		if rt == nil {
 			ctx.Logger().Error("InitChain: State for unknown key manager runtime",
