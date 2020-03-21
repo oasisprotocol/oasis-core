@@ -406,3 +406,54 @@ func TestFuzz(t *testing.T) {
 	require.Equal(t, 1, Fuzz(data), "Fuzz output")
 	require.NoError(t, ioutil.WriteFile("/tmp/oasis-node-fuzz2/corpus/manual.f2", data, 0644), "saving fuzz input")
 }
+
+func TestEmpty(t *testing.T) {
+	require.NoError(t, logging.Initialize(os.Stdout, logging.FmtJSON, logging.LevelDebug, nil), "logging Initialize") // %%%
+	local70 := time.Unix(0, 0)
+	doc := genesis.Document{
+		Time: local70,
+		Staking: staking.Genesis{
+			Parameters: staking.ConsensusParameters{
+				Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+					staking.KindEntity:            mustInitQuantity(t, 0),
+					staking.KindNodeValidator:     mustInitQuantity(t, 0),
+					staking.KindNodeCompute:       mustInitQuantity(t, 0),
+					staking.KindNodeStorage:       mustInitQuantity(t, 0),
+					staking.KindNodeKeyManager:    mustInitQuantity(t, 0),
+					staking.KindRuntimeCompute:    mustInitQuantity(t, 0),
+					staking.KindRuntimeKeyManager: mustInitQuantity(t, 0),
+				},
+				Slashing: map[staking.SlashReason]staking.Slash{
+					staking.SlashDoubleSigning: {
+						Amount:         mustInitQuantity(t, 0),
+						FreezeInterval: 0,
+					},
+				},
+				GasCosts: map[transaction.Op]transaction.Gas{
+					staking.GasOpAddEscrow:     0,
+					staking.GasOpBurn:          0,
+					staking.GasOpReclaimEscrow: 0,
+					staking.GasOpTransfer:      0,
+				},
+				FeeSplitVote: mustInitQuantity(t, 1),
+			},
+		},
+		Scheduler: scheduler.Genesis{
+			Parameters: scheduler.ConsensusParameters{
+				MinValidators:          1,
+				MaxValidators:          1,
+				MaxValidatorsPerEntity: 1,
+			},
+		},
+	}
+	docBytes := marshalAndCheck(t, &doc, "doc")
+	msgs := Messages{
+		InitReq: types.RequestInitChain{
+			Time:          local70,
+			AppStateBytes: docBytes,
+		},
+	}
+	data := marshalAndCheck(t, &msgs, "msgs")
+	require.Equal(t, 1, Fuzz(data), "Fuzz output")
+	require.NoError(t, ioutil.WriteFile("/tmp/oasis-node-fuzz2/corpus/blank.f2", data, 0644), "saving fuzz input")
+}
