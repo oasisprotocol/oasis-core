@@ -1795,20 +1795,49 @@ func testSpecialCaseFromJSON(t *testing.T, ndb db.NodeDB, fixture string) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
+	// Also test all operations against a "remote" tree to test sync operations.
+	var root node.Root
+	var remoteTree Tree
+	var value []byte
+
 	for _, o := range ops {
 		switch o.Op {
 		case mkvsTests.OpInsert:
+			if remoteTree != nil {
+				err = remoteTree.Insert(ctx, o.Key, o.Value)
+				require.NoError(t, err, "Insert")
+			}
+
 			err = tree.Insert(ctx, o.Key, o.Value)
 			require.NoError(t, err, "Insert")
 		case mkvsTests.OpRemove:
+			if remoteTree != nil {
+				err = remoteTree.Remove(ctx, o.Key)
+				require.NoError(t, err, "Remove")
+			}
+
 			err = tree.Remove(ctx, o.Key)
 			require.NoError(t, err, "Remove")
 		case mkvsTests.OpGet:
-			var value []byte
+			if remoteTree != nil {
+				value, err = remoteTree.Get(ctx, o.Key)
+				require.NoError(t, err, "Get")
+				require.EqualValues(t, o.Value, value, "Get should return the correct value")
+			}
+
 			value, err = tree.Get(ctx, o.Key)
 			require.NoError(t, err, "Get")
 			require.EqualValues(t, o.Value, value, "Get should return the correct value")
 		case mkvsTests.OpIteratorSeek:
+			if remoteTree != nil {
+				it := remoteTree.NewIterator(ctx)
+				it.Seek(o.Key)
+				require.NoError(t, it.Err(), "Seek")
+				require.EqualValues(t, o.ExpectedKey, it.Key(), "iterator should be at correct key")
+				require.EqualValues(t, o.Value, it.Value(), "iterator should be at correct value")
+				it.Close()
+			}
+
 			it := tree.NewIterator(ctx)
 			it.Seek(o.Key)
 			require.NoError(t, it.Err(), "Seek")
@@ -1818,6 +1847,12 @@ func testSpecialCaseFromJSON(t *testing.T, ndb db.NodeDB, fixture string) {
 		default:
 			require.Fail(t, "unknown operation: %s", o.Op)
 		}
+
+		// Commit everything and create a new remote tree at the root.
+		_, rootHash, err := tree.Commit(ctx, testNs, 0)
+		require.NoError(t, err, "Commit")
+		root = node.Root{Namespace: testNs, Hash: rootHash}
+		remoteTree = NewWithRoot(tree, nil, root, Capacity(0, 0))
 	}
 }
 
@@ -1831,6 +1866,10 @@ func testSpecialCase2(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 func testSpecialCase3(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	testSpecialCaseFromJSON(t, ndb, "case-3.json")
+}
+
+func testSpecialCase4(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
+	testSpecialCaseFromJSON(t, ndb, "case-4.json")
 }
 
 func testBackend(
@@ -1871,6 +1910,7 @@ func testBackend(
 		{"SpecialCase1", testSpecialCase1},
 		{"SpecialCase2", testSpecialCase2},
 		{"SpecialCase3", testSpecialCase3},
+		{"SpecialCase4", testSpecialCase4},
 		{"Errors", testErrors},
 	}
 

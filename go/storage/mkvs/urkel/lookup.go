@@ -123,6 +123,19 @@ func (t *tree) doGet(
 
 		// Does lookup key end here? Look into LeafNode.
 		if key.BitLength() == bitLength {
+			// Include siblings before disabling the proof builder for the leaf node.
+			if opts.includeSiblings {
+				// Also fetch the left and right siblings.
+				_, err = t.doGet(ctx, n.Left, bitLength, key, opts, true)
+				if err != nil {
+					return nil, err
+				}
+				_, err = t.doGet(ctx, n.Right, bitLength, key, opts, true)
+				if err != nil {
+					return nil, err
+				}
+			}
+
 			// Omit the proof builder as the leaf node is always included with
 			// the internal node itself.
 			opts.proofBuilder = nil
