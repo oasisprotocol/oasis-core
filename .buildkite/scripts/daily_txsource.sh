@@ -6,7 +6,6 @@ set -euxo pipefail
 
 if [[ $BUILDKITE_RETRY_COUNT == 0 ]]; then
     rm -rf /var/tmp/longtests/*
-    make
     ./.buildkite/scripts/test_e2e.sh -t txsource-multi
 else
     curl -H "Content-Type: application/json" \

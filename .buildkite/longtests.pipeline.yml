@@ -7,8 +7,8 @@ docker_plugin_default_config: &docker_plugin_default_config
     - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
     - /var/lib/buildkite-agent/.codecov:/root/.codecov
     # Shared Rust incremental compile caches.
-    - /var/tmp/cargo_ic/debug:/var/tmp/artifacts/debug/incremental
-    - /var/tmp/cargo_ic/debug_sgx:/var/tmp/artifacts/x86_64-unknown-linux-sgx/debug/incremental
+    - /var/tmp/cargo_ic/debug:/var/tmp/artifacts/default/debug/incremental
+    - /var/tmp/cargo_ic/debug_sgx:/var/tmp/artifacts/sgx/x86_64-unknown-linux-sgx/debug/incremental
     # Shared Rust package checkouts directory.
     - /var/tmp/cargo_pkg/git:/root/.cargo/git
     - /var/tmp/cargo_pkg/registry:/root/.cargo/registry
@@ -35,11 +35,74 @@ docker_plugin: &docker_plugin
     <<: *docker_plugin_default_config
 
 steps:
+  ############
+  # Build jobs
+  ############
+  - label: Build Go node
+    command:
+      - .buildkite/go/build.sh
+
+      # Upload the built artifacts.
+      - cd /workdir/go/oasis-node
+      - buildkite-agent artifact upload oasis-node
+      - cd /workdir/go/oasis-node/integrationrunner
+      - buildkite-agent artifact upload integrationrunner.test
+      - cd /workdir/go/oasis-test-runner
+      - buildkite-agent artifact upload oasis-test-runner
+      - cd /workdir/go/oasis-net-runner
+      - buildkite-agent artifact upload oasis-net-runner
+      - cd /workdir/go/oasis-remote-signer
+      - buildkite-agent artifact upload oasis-remote-signer
+    plugins:
+      <<: *docker_plugin
+
+  - label: Build Rust runtime loader
+    command:
+      - .buildkite/rust/build_generic.sh /workdir -p oasis-core-runtime-loader
+      - .buildkite/rust/build_generic.sh /workdir -p test-long-term-client
+      - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-client
+      - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-enc-client
+      - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-ops-client
+
+      # Upload the built artifacts.
+      - cd /var/tmp/artifacts/default/debug
+      - buildkite-agent artifact upload oasis-core-runtime-loader
+      # Clients for E2E tests.
+      - buildkite-agent artifact upload test-long-term-client
+      - buildkite-agent artifact upload simple-keyvalue-client
+      - buildkite-agent artifact upload simple-keyvalue-enc-client
+      - buildkite-agent artifact upload simple-keyvalue-ops-client
+    agents:
+      buildkite_agent_size: large
+    plugins:
+      <<: *docker_plugin
+
+  - label: Build key manager runtime
+    command:
+      - .buildkite/rust/build_runtime.sh keymanager-runtime
+      - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
+
+      # Upload the built artifacts.
+      - cd /var/tmp/artifacts/sgx/x86_64-fortanix-unknown-sgx/debug
+      - buildkite-agent artifact upload oasis-core-keymanager-runtime.sgxs
+      - buildkite-agent artifact upload simple-keyvalue.sgxs
+      - cd /var/tmp/artifacts/default/debug
+      - buildkite-agent artifact upload oasis-core-keymanager-runtime
+      - buildkite-agent artifact upload simple-keyvalue
+    agents:
+      buildkite_agent_size: large
+    plugins:
+      <<: *docker_plugin
+
+  - wait
+
   - label: Transaction source tests
     parallelism: 1
     # Tests are set to run 6 hours + some buffer time.
     timeout_in_minutes: 380
-    command: .buildkite/scripts/daily_txsource.sh
+    command:
+      - .buildkite/scripts/download_e2e_test_artifacts.sh
+      - .buildkite/scripts/daily_txsource.sh
     env:
       TEST_BASE_DIR: /var/tmp/longtests
     agents:
