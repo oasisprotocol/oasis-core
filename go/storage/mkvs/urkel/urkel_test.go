@@ -1800,6 +1800,15 @@ func testSpecialCaseFromJSON(t *testing.T, ndb db.NodeDB, fixture string) {
 	var remoteTree Tree
 	var value []byte
 
+	commitRemote := func() {
+		// Commit everything and create a new remote tree at the root.
+		var rootHash hash.Hash
+		_, rootHash, err = tree.Commit(ctx, testNs, 0)
+		require.NoError(t, err, "Commit")
+		root = node.Root{Namespace: testNs, Hash: rootHash}
+		remoteTree = NewWithRoot(tree, nil, root, Capacity(0, 0))
+	}
+
 	for _, o := range ops {
 		switch o.Op {
 		case mkvsTests.OpInsert:
@@ -1810,14 +1819,24 @@ func testSpecialCaseFromJSON(t *testing.T, ndb db.NodeDB, fixture string) {
 
 			err = tree.Insert(ctx, o.Key, o.Value)
 			require.NoError(t, err, "Insert")
+
+			commitRemote()
 		case mkvsTests.OpRemove:
 			if remoteTree != nil {
 				err = remoteTree.Remove(ctx, o.Key)
 				require.NoError(t, err, "Remove")
+				value, err = remoteTree.Get(ctx, o.Key)
+				require.NoError(t, err, "Get (after Remove)")
+				require.Nil(t, value, "Get (after Remove) should return nil")
 			}
 
 			err = tree.Remove(ctx, o.Key)
 			require.NoError(t, err, "Remove")
+			value, err = tree.Get(ctx, o.Key)
+			require.NoError(t, err, "Get (after Remove)")
+			require.Nil(t, value, "Get (after Remove) should return nil")
+
+			commitRemote()
 		case mkvsTests.OpGet:
 			if remoteTree != nil {
 				value, err = remoteTree.Get(ctx, o.Key)
@@ -1847,12 +1866,6 @@ func testSpecialCaseFromJSON(t *testing.T, ndb db.NodeDB, fixture string) {
 		default:
 			require.Fail(t, "unknown operation: %s", o.Op)
 		}
-
-		// Commit everything and create a new remote tree at the root.
-		_, rootHash, err := tree.Commit(ctx, testNs, 0)
-		require.NoError(t, err, "Commit")
-		root = node.Root{Namespace: testNs, Hash: rootHash}
-		remoteTree = NewWithRoot(tree, nil, root, Capacity(0, 0))
 	}
 }
 
