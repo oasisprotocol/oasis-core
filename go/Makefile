@@ -8,27 +8,25 @@ endif
 # Set all target as the default target.
 all: build
 
-# Build.
-# List of Go binaries to build.
-go-binaries := oasis-node oasis-test-runner oasis-net-runner oasis-remote-signer extra/stats
-# List of test helpers to build.
-test-helpers := urkel
-# List of test vectors to generate.
-test-vectors := staking
-
+# Generate.
 generate:
 	@$(ECHO) "$(MAGENTA)*** Running go generate...$(OFF)"
 	@$(GO) generate ./...
+
+# Build.
+# List of Go binaries to build.
+go-binaries := oasis-node oasis-test-runner oasis-net-runner oasis-remote-signer extra/stats
 
 $(go-binaries):
 	@$(ECHO) "$(MAGENTA)*** Building $@...$(OFF)"
 	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$@/$(notdir $@) ./$@
 
-oasis-node:
-
 build: $(go-binaries)
 
 # Build test helpers.
+# List of test helpers to build.
+test-helpers := urkel
+
 # Urkel interoperability test helpers.
 urkel:
 	@$(ECHO) "$(MAGENTA)*** Building test helpers for $@...$(OFF)"
@@ -36,11 +34,12 @@ urkel:
 
 build-helpers: $(test-helpers)
 
+# List of test vectors to generate.
+test-vectors := staking
+
 $(test-vectors):
 	@$(ECHO) "$(MAGENTA)*** Generating test vectors for $@...$(OFF)"
 	@$(GO) run ./$@/gen_vectors
-
-staking:
 
 gen-test-vectors: $(test-vectors)
 
@@ -55,9 +54,18 @@ lint:
 	@env -u GOPATH golangci-lint run --timeout 2m
 
 # Test.
-test:
+test-targets := test-unit test-node
+
+test-unit:
 	@$(ECHO) "$(CYAN)*** Running Go unit tests...$(OFF)"
-	@$(GO) test -timeout 5m -race -v $(GO_TEST_FLAGS) ./...
+	@$(GO) test -timeout 5m -race -v $(GO_TEST_FLAGS) \
+	  $$($(GO) list ./... | grep --invert-match github.com/oasislabs/oasis-core/go/oasis-node)
+
+test-node:
+	@$(ECHO) "$(CYAN)*** Running Go node tests...$(OFF)"
+	@$(GO) test -timeout 5m -race -v $(GO_TEST_FLAGS) github.com/oasislabs/oasis-core/go/oasis-node/...
+
+test: $(test-targets)
 
 # Test without caching.
 force-test:
@@ -127,7 +135,11 @@ clean:
 # List of targets that are not actual files.
 .PHONY: \
 	generate $(go-binaries) build \
-	$(test-helpers) build-helpers $(test-vectors) gen-test-vectors $(fuzz-targets) \
-	fmt lint test integrationrunner clean all
+	$(test-helpers) build-helpers \
+	$(test-vectors) gen-test-vectors \
+	fmt lint \
+	$(test-targets) test force-test integrationrunner \
+	$(fuzz-targets) build-fuzz \
+	clean all
 
 .FORCE:
