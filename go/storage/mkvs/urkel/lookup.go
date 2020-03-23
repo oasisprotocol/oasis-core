@@ -17,6 +17,13 @@ func (t *tree) Get(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, ErrClosed
 	}
 
+	// If the key has been modified locally, no need to perform any lookups.
+	if !t.withoutWriteLog {
+		if entry := t.pendingWriteLog[node.ToMapKey(key)]; entry != nil {
+			return entry.value, nil
+		}
+	}
+
 	// Remember where the path from root to target node ends (will end).
 	t.cache.markPosition()
 

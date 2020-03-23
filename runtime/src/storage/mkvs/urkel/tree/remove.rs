@@ -14,6 +14,11 @@ impl UrkelTree {
         let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
 
+        // If the key has already been removed locally, don't try to remove it again.
+        if let Some(PendingLogEntry { value: None, .. }) = self.pending_write_log.get(&boxed_key) {
+            return Ok(None);
+        }
+
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 

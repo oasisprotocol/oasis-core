@@ -60,8 +60,14 @@ func PersistEverythingFromSyncer(doit bool) Option {
 }
 
 // WithoutWriteLog disables building a write log when performing operations.
+//
+// Note that this option cannot be used together with specifying a ReadSyncer and trying to use it
+// with a tree that also specifies a non-nil ReadSyncer will cause a panic.
 func WithoutWriteLog() Option {
 	return func(t *tree) {
+		if t.cache.rs != syncer.NopReadSyncer {
+			panic("urkel: WithoutWriteLog cannot be used on a tree with a non-nil ReadSyncer")
+		}
 		t.withoutWriteLog = true
 	}
 }

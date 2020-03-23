@@ -1872,6 +1872,10 @@ func testSpecialCase4(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	testSpecialCaseFromJSON(t, ndb, "case-4.json")
 }
 
+func testSpecialCase5(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
+	testSpecialCaseFromJSON(t, ndb, "case-5.json")
+}
+
 func testBackend(
 	t *testing.T,
 	initBackend func(t *testing.T) (NodeDBFactory, func()),
@@ -1911,6 +1915,7 @@ func testBackend(
 		{"SpecialCase2", testSpecialCase2},
 		{"SpecialCase3", testSpecialCase3},
 		{"SpecialCase4", testSpecialCase4},
+		{"SpecialCase5", testSpecialCase5},
 		{"Errors", testErrors},
 	}
 
