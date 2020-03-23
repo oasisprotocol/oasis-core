@@ -95,7 +95,7 @@ fn test_basic() {
         log,
         [LogEntry {
             key: key_zero.to_vec(),
-            value: value_zero.to_vec(),
+            value: Some(value_zero.to_vec()),
         }]
         .to_vec()
     );
@@ -194,11 +194,11 @@ fn test_basic() {
             [
                 LogEntry {
                     key: key_one.to_vec(),
-                    value: value_one.to_vec(),
+                    value: Some(value_one.to_vec()),
                 },
                 LogEntry {
                     key: key_zero.to_vec(),
-                    value: value_zero.to_vec(),
+                    value: Some(value_zero.to_vec()),
                 }
             ]
             .to_vec()
@@ -226,7 +226,7 @@ fn test_basic() {
         log,
         [LogEntry {
             key: key_one.to_vec(),
-            value: Vec::new(),
+            value: None,
         }]
         .to_vec()
     );
@@ -714,6 +714,39 @@ fn test_syncer_insert() {
     assert_eq!(1000, stats.sync_get_count, "sync_get count");
     assert_eq!(0, stats.sync_get_prefixes_count, "sync_get_prefixes count");
     assert_eq!(0, stats.sync_iterate_count, "sync_iterate count");
+}
+
+#[test]
+fn test_syncer_writelog_remove() {
+    let server = ProtocolServer::new();
+
+    let mut tree = UrkelTree::make()
+        .with_capacity(0, 0)
+        .new(Box::new(NoopReadSyncer {}));
+
+    let (keys, values) = generate_key_value_pairs();
+    for i in 0..keys.len() {
+        tree.insert(
+            Context::background(),
+            keys[i].as_slice(),
+            values[i].as_slice(),
+        )
+        .expect("insert");
+    }
+
+    let (write_log, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+    server.apply(&write_log, hash, Default::default(), 0);
+
+    tree.remove(Context::background(), keys[0].as_slice())
+        .expect("remove");
+
+    let previous_hash = hash;
+    let (write_log, hash) =
+        UrkelTree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+    // Submit the write log to the protocol server. This will fail in case the server interprets the
+    // write log differently.
+    server.apply_existing(&write_log, previous_hash, hash, Default::default(), 0);
 }
 
 #[test]

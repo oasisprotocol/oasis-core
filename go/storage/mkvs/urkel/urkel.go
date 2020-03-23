@@ -128,7 +128,7 @@ func (t *tree) ApplyWriteLog(ctx context.Context, wl writelog.Iterator) error {
 		}
 
 		// Apply operation.
-		if len(entry.Value) == 0 {
+		if entry.Value == nil {
 			err = t.Remove(ctx, entry.Key)
 		} else {
 			err = t.Insert(ctx, entry.Key, entry.Value)
