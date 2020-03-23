@@ -54,9 +54,18 @@ lint:
 	@env -u GOPATH golangci-lint run --timeout 2m
 
 # Test.
-test:
+test-targets := test-unit test-node
+
+test-unit:
 	@$(ECHO) "$(CYAN)*** Running Go unit tests...$(OFF)"
-	@$(GO) test -timeout 5m -race -v $(GO_TEST_FLAGS) ./...
+	@$(GO) test -timeout 5m -race -v $(GO_TEST_FLAGS) \
+	  $$($(GO) list ./... | grep --invert-match github.com/oasislabs/oasis-core/go/oasis-node)
+
+test-node:
+	@$(ECHO) "$(CYAN)*** Running Go node tests...$(OFF)"
+	@$(GO) test -timeout 5m -race -v $(GO_TEST_FLAGS) github.com/oasislabs/oasis-core/go/oasis-node/...
+
+test: $(test-targets)
 
 # Test without caching.
 force-test:
@@ -129,7 +138,7 @@ clean:
 	$(test-helpers) build-helpers \
 	$(test-vectors) gen-test-vectors \
 	fmt lint \
-	test force-test integrationrunner \
+	$(test-targets) test force-test integrationrunner \
 	$(fuzz-targets) build-fuzz \
 	clean all
 
