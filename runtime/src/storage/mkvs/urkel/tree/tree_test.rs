@@ -1,5 +1,6 @@
 use io_context::Context;
-use std::{collections::HashSet, iter::FromIterator};
+use serde_json;
+use std::{collections::HashSet, fs::File, io::BufReader, iter::FromIterator, path::Path};
 
 use crate::{
     common::crypto::hash::Hash,
@@ -8,6 +9,7 @@ use crate::{
             cache::*,
             interop::{Driver, ProtocolServer},
             sync::*,
+            tests,
             tree::*,
         },
         LogEntry, LogEntryKind, WriteLog,
@@ -873,4 +875,151 @@ fn test_node_eviction() {
         tree.cache.borrow().stats().leaf_value_size,
         "cache.leaf_value_size"
     );
+}
+
+/// Location of the test vectors directory (from Go).
+const TEST_VECTORS_DIR: &'static str = "../go/storage/mkvs/urkel/testdata";
+
+fn test_special_case_from_json(fixture: &'static str) {
+    let server = ProtocolServer::new();
+
+    let file =
+        File::open(Path::new(TEST_VECTORS_DIR).join(fixture)).expect("failed to open fixture");
+    let reader = BufReader::new(file);
+
+    let ops: tests::TestVector = serde_json::from_reader(reader).expect("failed to parse fixture");
+
+    let mut tree = UrkelTree::make()
+        .with_capacity(0, 0)
+        .new(Box::new(NoopReadSyncer {}));
+    let mut remote_tree: Option<UrkelTree> = None;
+    let mut root = Hash::empty_hash();
+
+    let mut commit_remote = |tree: &mut UrkelTree, remote_tree: &mut Option<UrkelTree>| {
+        let (write_log, hash) =
+            UrkelTree::commit(tree, Context::background(), Default::default(), 0).expect("commit");
+        server.apply_existing(&write_log, root, hash, Default::default(), 0);
+
+        remote_tree.replace(
+            UrkelTree::make()
+                .with_capacity(0, 0)
+                .with_root(Root {
+                    hash,
+                    ..Default::default()
+                })
+                .new(server.read_sync()),
+        );
+        root = hash;
+    };
+
+    for op in ops {
+        match op.op {
+            tests::OpKind::Insert => {
+                let key = op.key.unwrap();
+                let value = op.value.unwrap_or_default();
+
+                if let Some(ref mut remote_tree) = remote_tree {
+                    remote_tree
+                        .insert(Context::background(), &key, &value)
+                        .expect("insert");
+                }
+
+                tree.insert(Context::background(), &key, &value)
+                    .expect("insert");
+
+                commit_remote(&mut tree, &mut remote_tree);
+            }
+            tests::OpKind::Remove => {
+                let key = op.key.unwrap();
+
+                if let Some(ref mut remote_tree) = remote_tree {
+                    remote_tree
+                        .remove(Context::background(), &key)
+                        .expect("remove");
+                    let value = remote_tree
+                        .get(Context::background(), &key)
+                        .expect("get (after remove)");
+                    assert!(value.is_none(), "get (after remove) should return None");
+                }
+
+                tree.remove(Context::background(), &key).expect("remove");
+                let value = tree
+                    .get(Context::background(), &key)
+                    .expect("get (after remove)");
+                assert!(value.is_none(), "get (after remove) should return None");
+
+                commit_remote(&mut tree, &mut remote_tree);
+            }
+            tests::OpKind::Get => {
+                let value = tree
+                    .get(Context::background(), &op.key.unwrap())
+                    .expect("get");
+                assert_eq!(value, op.value, "get should return the correct value");
+            }
+            tests::OpKind::IteratorSeek => {
+                let key = op.key.unwrap();
+                let expected_key = op.expected_key.as_ref();
+                let value = op.value.as_ref();
+
+                if let Some(ref mut remote_tree) = remote_tree {
+                    let mut it = remote_tree.iter(Context::background());
+                    it.seek(&key);
+                    assert!(it.error().is_none(), "seek");
+
+                    let item = Iterator::next(&mut it);
+                    assert_eq!(
+                        expected_key,
+                        item.as_ref().map(|p| &p.0),
+                        "iterator should be at correct key"
+                    );
+                    assert_eq!(
+                        value,
+                        item.as_ref().map(|p| &p.1),
+                        "iterator should be at correct value"
+                    );
+                }
+
+                let mut it = tree.iter(Context::background());
+                it.seek(&key);
+                assert!(it.error().is_none(), "seek");
+
+                let item = Iterator::next(&mut it);
+                assert_eq!(
+                    expected_key,
+                    item.as_ref().map(|p| &p.0),
+                    "iterator should be at correct key"
+                );
+                assert_eq!(
+                    value,
+                    item.as_ref().map(|p| &p.1),
+                    "iterator should be at correct value"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_special_case_1() {
+    test_special_case_from_json("case-1.json")
+}
+
+#[test]
+fn test_special_case_2() {
+    test_special_case_from_json("case-2.json")
+}
+
+#[test]
+fn test_special_case_3() {
+    test_special_case_from_json("case-3.json")
+}
+
+#[test]
+fn test_special_case_4() {
+    test_special_case_from_json("case-4.json")
+}
+
+#[test]
+fn test_special_case_5() {
+    test_special_case_from_json("case-5.json")
 }

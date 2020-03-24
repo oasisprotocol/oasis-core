@@ -1,3 +1,4 @@
+// Package tests contains helpers for testing MKVS trees.
 package tests
 
 const (
@@ -11,7 +12,7 @@ const (
 	OpIteratorSeek = "IteratorSeek"
 )
 
-// Op is a tree operation.
+// Op is a tree operation used in test vectors.
 type Op struct {
 	// Op is the operation name.
 	Op string `json:"op"`
