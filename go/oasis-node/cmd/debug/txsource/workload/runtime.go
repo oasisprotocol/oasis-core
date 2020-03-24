@@ -257,7 +257,6 @@ func (r *runtime) Run(
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
-	rtc runtimeClient.RuntimeClient,
 	fundingAccount signature.Signer,
 ) error {
 	ctx := context.Background()
@@ -273,6 +272,9 @@ func (r *runtime) Run(
 		return fmt.Errorf("Runtime unmarshal: %w", err)
 	}
 	r.reckonedKeyValueState = make(map[string]string)
+
+	// Set up the runtime client.
+	rtc := runtimeClient.NewRuntimeClient(conn)
 
 	for {
 		p := rng.Intn(runtimeDoInsertRequestWeight + runtimeDoGetRequestTypeWeight + runtimeDoRemoveRequestTypeWeight)

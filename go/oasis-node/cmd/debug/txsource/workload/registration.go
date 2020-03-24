@@ -23,7 +23,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 )
 
 const (
@@ -156,7 +155,6 @@ func (r *registration) Run( // nolint: gocyclo
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
-	rtc runtimeClient.RuntimeClient,
 	fundingAccount signature.Signer,
 ) error {
 	ctx := context.Background()

@@ -13,7 +13,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
@@ -178,7 +177,6 @@ func (d *delegation) Run(
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
-	rtc runtimeClient.RuntimeClient,
 	fundingAccount signature.Signer,
 ) error {
 	var err error

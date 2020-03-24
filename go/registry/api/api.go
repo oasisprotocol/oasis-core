@@ -1048,7 +1048,7 @@ func VerifyRegisterRuntimeArgs(
 				"kind", rt.Kind,
 				"id", rt.ID,
 			)
-			return nil, fmt.Errorf("%w: runtime ID flag missmatch", ErrInvalidArgument)
+			return nil, fmt.Errorf("%w: runtime ID flag mismatch", ErrInvalidArgument)
 		}
 	case KindKeyManager:
 		if rt.KeyManager != nil {
