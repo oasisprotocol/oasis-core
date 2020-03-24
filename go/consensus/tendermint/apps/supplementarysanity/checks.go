@@ -141,7 +141,7 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	_ = total.Add(commonPool)
 	_ = total.Add(totalFees)
 	if total.Cmp(totalSupply) != 0 {
-		return fmt.Errorf("balances in accounts plus common pool (%s) does not add up to total supply (%s)", total.String(), totalSupply.String())
+		return fmt.Errorf("balances in accounts plus common pool (%s) plus last block fees (%s) does not add up to total supply (%s)", total.String(), totalFees.String(), totalSupply.String())
 	}
 
 	// All shares of all delegations for a given account must add up to account's Escrow.Active.TotalShares.

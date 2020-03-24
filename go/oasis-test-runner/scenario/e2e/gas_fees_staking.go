@@ -106,8 +106,13 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
+	// Include fees from genesis.
+	totalFees, err := sc.getInitialCommonPoolBalance(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Run some operations that charge fees.
-	var totalFees quantity.Quantity
 	for _, t := range []struct {
 		name string
 		fn   func(context.Context, signature.Signer) (*quantity.Quantity, error)
@@ -160,7 +165,7 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 	}
 	// Ensure total (entities + common pool) is correct.
 	_ = newTotalEntityBalance.Add(commonPool)
-	if newTotalEntityBalance.Cmp(&totalFees) != 0 {
+	if newTotalEntityBalance.Cmp(totalFees) != 0 {
 		return fmt.Errorf("fee disbursement incorrect (expected: %s actual: %s)",
 			totalFees,
 			newTotalEntityBalance,
@@ -172,6 +177,21 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 	}
 
 	return nil
+}
+
+func (sc *gasFeesImpl) getInitialCommonPoolBalance(ctx context.Context) (*quantity.Quantity, error) {
+	st := sc.net.Controller().Staking
+
+	cmnPool, err := st.CommonPool(ctx, 1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get initial common pool info: %w", err)
+	}
+
+	sc.logger.Debug("fetched common pool balance",
+		"balance", cmnPool,
+	)
+
+	return cmnPool, nil
 }
 
 func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Quantity, error) {
