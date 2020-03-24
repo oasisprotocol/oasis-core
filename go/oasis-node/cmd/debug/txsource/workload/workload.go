@@ -174,6 +174,7 @@ type Workload interface {
 
 // ByName is the registry of workloads that you can access with `--workload <name>` on the command line.
 var ByName = map[string]Workload{
+	NameCommission:   &commission{},
 	NameDelegation:   &delegation{},
 	NameOversized:    oversized{},
 	NameParallel:     parallel{},

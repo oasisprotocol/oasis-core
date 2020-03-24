@@ -23,6 +23,7 @@ type Query interface {
 	Delegations(context.Context, signature.PublicKey) (map[signature.PublicKey]*staking.Delegation, error)
 	DebondingDelegations(context.Context, signature.PublicKey) (map[signature.PublicKey][]*staking.DebondingDelegation, error)
 	Genesis(context.Context) (*staking.Genesis, error)
+	ConsensusParameters(context.Context) (*staking.ConsensusParameters, error)
 }
 
 // QueryFactory is the staking query factory.
@@ -103,6 +104,10 @@ func (sq *stakingQuerier) Delegations(ctx context.Context, id signature.PublicKe
 
 func (sq *stakingQuerier) DebondingDelegations(ctx context.Context, id signature.PublicKey) (map[signature.PublicKey][]*staking.DebondingDelegation, error) {
 	return sq.state.DebondingDelegationsFor(id)
+}
+
+func (sq *stakingQuerier) ConsensusParameters(ctx context.Context) (*staking.ConsensusParameters, error) {
+	return sq.state.ConsensusParameters()
 }
 
 func (app *stakingApplication) QueryFactory() interface{} {

@@ -98,8 +98,8 @@ func (cs *CommissionSchedule) validateAmendmentAcceptable(rules *CommissionSched
 	return nil
 }
 
-// prune discards past steps that aren't in effect anymore.
-func (cs *CommissionSchedule) prune(now epochtime.EpochTime) {
+// Prune discards past steps that aren't in effect anymore.
+func (cs *CommissionSchedule) Prune(now epochtime.EpochTime) {
 	for len(cs.Rates) > 1 {
 		if cs.Rates[1].Start > now {
 			// Remaining steps haven't started yet, so keep them and the current active one.
@@ -245,7 +245,7 @@ func (cs *CommissionSchedule) PruneAndValidateForGenesis(rules *CommissionSchedu
 	}
 	// If we, for example, import a snapshot as a genesis document, the current steps might not be cued up. So run a
 	// prune step too at this time.
-	cs.prune(now)
+	cs.Prune(now)
 	if err := cs.validateWithinBound(now); err != nil {
 		return errors.Wrap(err, "after pruning")
 	}
@@ -264,7 +264,7 @@ func (cs *CommissionSchedule) AmendAndPruneAndValidate(amendment *CommissionSche
 	if err := amendment.validateAmendmentAcceptable(rules, now); err != nil {
 		return errors.Wrap(err, "amendment")
 	}
-	cs.prune(now)
+	cs.Prune(now)
 	cs.amend(amendment)
 	if err := cs.validateComplexity(rules); err != nil {
 		return errors.Wrap(err, "after pruning and amending")

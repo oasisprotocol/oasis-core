@@ -140,6 +140,14 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
+func (tb *tendermintBackend) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+	q, err := tb.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.ConsensusParameters(ctx)
+}
 func (tb *tendermintBackend) Cleanup() {
 	<-tb.closedCh
 }
