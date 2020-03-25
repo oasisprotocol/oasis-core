@@ -4,7 +4,7 @@ use std::sync::{
     Arc, Mutex,
 };
 
-use failure::Fallible;
+use failure::{Fail, Fallible};
 use futures::{
     future,
     prelude::*,

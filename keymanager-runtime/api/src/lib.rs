@@ -1,15 +1,3 @@
-extern crate base64;
-extern crate failure;
-extern crate lazy_static;
-extern crate oasis_core_keymanager_api_common;
-extern crate oasis_core_runtime;
-extern crate rand;
-extern crate rustc_hex;
-extern crate serde;
-extern crate serde_bytes;
-extern crate serde_derive;
-extern crate x25519_dalek;
-
 use std::collections::HashSet;
 
 use oasis_core_runtime::common::crypto::signature::PrivateKey as OasisPrivateKey;

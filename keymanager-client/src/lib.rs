@@ -1,20 +1,13 @@
 //! Key manager client.
-extern crate failure;
-extern crate futures;
-#[cfg(not(target_env = "sgx"))]
-extern crate grpcio;
-extern crate io_context;
-extern crate lru;
-extern crate oasis_core_client;
-extern crate oasis_core_keymanager_api;
-extern crate oasis_core_runtime;
 
 pub mod client;
 pub mod mock;
 
 use std::sync::Arc;
 
-use self::{io_context::Context, oasis_core_client::BoxFuture};
+use io_context::Context;
+use oasis_core_client::BoxFuture;
+use oasis_core_keymanager_api;
 
 /// Key manager client interface.
 pub trait KeyManagerClient: Send + Sync {

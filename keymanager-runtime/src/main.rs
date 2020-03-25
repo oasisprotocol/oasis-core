@@ -1,9 +1,3 @@
-extern crate failure;
-extern crate lazy_static;
-extern crate oasis_core_keymanager_api;
-extern crate oasis_core_keymanager_lib;
-extern crate oasis_core_runtime;
-
 use std::sync::Arc;
 
 mod methods;

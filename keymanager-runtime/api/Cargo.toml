@@ -2,6 +2,7 @@
 name = "oasis-core-keymanager-api"
 version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+edition = "2018"
 
 [dependencies]
 base64 = "0.10.1"

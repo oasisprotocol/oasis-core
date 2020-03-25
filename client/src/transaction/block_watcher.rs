@@ -4,6 +4,7 @@ use std::sync::{
     Arc, Mutex,
 };
 
+use failure::Fail;
 use futures::{prelude::*, stream::Fuse, try_ready};
 use tokio::{spawn, sync::watch};
 

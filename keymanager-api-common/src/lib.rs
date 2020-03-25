@@ -1,15 +1,4 @@
 //! Key manager API common types and functions.
-extern crate base64;
-extern crate failure;
-extern crate lazy_static;
-extern crate oasis_core_runtime;
-extern crate rand;
-extern crate rustc_hex;
-extern crate serde;
-extern crate serde_bytes;
-extern crate serde_derive;
-extern crate x25519_dalek;
-
 use failure::Fallible;
 use lazy_static::lazy_static;
 use oasis_core_runtime::common::{cbor, crypto::signature::PublicKey as OasisPublicKey};
