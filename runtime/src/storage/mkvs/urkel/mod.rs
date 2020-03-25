@@ -8,4 +8,4 @@ pub mod sync;
 #[cfg(test)]
 mod tests;
 
-pub use tree::{Depth, Key, Root, UrkelTree};
+pub use tree::{Depth, Key, NodeBox, Root, UrkelTree};
