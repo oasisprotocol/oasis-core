@@ -66,7 +66,7 @@ const (
 
 // Type returns the type of the write log entry.
 func (k *LogEntry) Type() LogEntryType {
-	if len(k.Value) == 0 {
+	if k.Value == nil {
 		return LogDelete
 	}
 

@@ -36,7 +36,7 @@ impl UrkelTree {
             }
             log.push(LogEntry {
                 key: entry.key.clone(),
-                value: entry.value.clone().unwrap_or_default(),
+                value: entry.value.clone(),
             });
         }
         self.pending_write_log.clear();

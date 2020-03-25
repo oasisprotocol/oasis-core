@@ -27,22 +27,21 @@ pub struct LogEntry {
     pub key: Vec<u8>,
     /// The inserted value (empty if the key was deleted).
     #[serde(with = "serde_bytes")]
-    pub value: Vec<u8>,
+    pub value: Option<Vec<u8>>,
 }
 
 impl LogEntry {
     pub fn new(key: &[u8], value: &[u8]) -> Self {
         Self {
             key: key.to_owned(),
-            value: value.to_owned(),
+            value: Some(value.to_owned()),
         }
     }
 
     pub fn kind(&self) -> LogEntryKind {
-        if self.value.is_empty() {
-            LogEntryKind::Delete
-        } else {
-            LogEntryKind::Insert
+        match self.value {
+            Some(_) => LogEntryKind::Insert,
+            None => LogEntryKind::Delete,
         }
     }
 }
@@ -56,10 +55,10 @@ impl serde::Serialize for LogEntry {
         let mut seq = serializer.serialize_seq(Some(2))?;
         if is_human_readable {
             seq.serialize_element(&base64::encode(&self.key))?;
-            seq.serialize_element(&base64::encode(&self.value))?;
+            seq.serialize_element(&self.value.as_ref().map(|v| base64::encode(v)))?;
         } else {
             seq.serialize_element(&Bytes::new(&self.key))?;
-            seq.serialize_element(&Bytes::new(&self.value))?;
+            seq.serialize_element(&self.value.as_ref().map(|v| Bytes::new(v)))?;
         }
         seq.end()
     }
@@ -153,7 +152,7 @@ mod tests {
     fn test_write_log_serialization() {
         let write_log = vec![LogEntry {
             key: b"foo".to_vec(),
-            value: b"bar".to_vec(),
+            value: Some(b"bar".to_vec()),
         }];
 
         let raw = cbor::to_vec(&write_log);

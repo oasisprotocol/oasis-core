@@ -27,8 +27,12 @@ fn test_nil_pointers() {
     ];
 
     for entry in write_log.iter() {
-        tree.insert(Context::background(), &entry.key, &entry.value)
-            .expect("insert");
+        tree.insert(
+            Context::background(),
+            &entry.key,
+            &entry.value.as_ref().unwrap(),
+        )
+        .expect("insert");
     }
 
     // Verify at least one null pointer somewhere.

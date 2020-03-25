@@ -16,6 +16,14 @@ func (t *tree) RemoveExisting(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, ErrClosed
 	}
 
+	// If the key has already been removed locally, don't try to remove it again.
+	var entry *pendingEntry
+	if !t.withoutWriteLog {
+		if entry = t.pendingWriteLog[node.ToMapKey(key)]; entry != nil && entry.value == nil {
+			return nil, nil
+		}
+	}
+
 	// Remember where the path from root to target node ends (will end).
 	t.cache.markPosition()
 
@@ -26,7 +34,6 @@ func (t *tree) RemoveExisting(ctx context.Context, key []byte) ([]byte, error) {
 
 	// Update the pending write log.
 	if !t.withoutWriteLog {
-		entry := t.pendingWriteLog[node.ToMapKey(key)]
 		if entry == nil {
 			t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{key, nil, changed, nil}
 		} else {

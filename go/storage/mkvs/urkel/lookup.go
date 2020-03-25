@@ -17,6 +17,13 @@ func (t *tree) Get(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, ErrClosed
 	}
 
+	// If the key has been modified locally, no need to perform any lookups.
+	if !t.withoutWriteLog {
+		if entry := t.pendingWriteLog[node.ToMapKey(key)]; entry != nil {
+			return entry.value, nil
+		}
+	}
+
 	// Remember where the path from root to target node ends (will end).
 	t.cache.markPosition()
 
@@ -123,6 +130,19 @@ func (t *tree) doGet(
 
 		// Does lookup key end here? Look into LeafNode.
 		if key.BitLength() == bitLength {
+			// Include siblings before disabling the proof builder for the leaf node.
+			if opts.includeSiblings {
+				// Also fetch the left and right siblings.
+				_, err = t.doGet(ctx, n.Left, bitLength, key, opts, true)
+				if err != nil {
+					return nil, err
+				}
+				_, err = t.doGet(ctx, n.Right, bitLength, key, opts, true)
+				if err != nil {
+					return nil, err
+				}
+			}
+
 			// Omit the proof builder as the leaf node is always included with
 			// the internal node itself.
 			opts.proofBuilder = nil

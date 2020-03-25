@@ -5,5 +5,7 @@ mod cache;
 mod interop;
 pub mod marshal;
 pub mod sync;
+#[cfg(test)]
+mod tests;
 
 pub use tree::{Depth, Key, Root, UrkelTree};

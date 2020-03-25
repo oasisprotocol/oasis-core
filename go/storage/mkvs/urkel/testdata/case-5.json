@@ -1,0 +1,18 @@
+[
+    {
+        "op": "Insert",
+        "key": "AwAA"
+    },
+    {
+        "op": "Insert",
+        "key": "AwAe"
+    },
+    {
+        "op": "Insert",
+        "key": "AAAe"
+    },
+    {
+        "op": "Remove",
+        "key": "AAAe"
+    }
+]

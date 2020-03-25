@@ -9,19 +9,60 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"io/ioutil"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	commonFuzz "github.com/oasislabs/oasis-core/go/common/fuzz"
 	mkvs "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
+	mkvsNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
 	mkvsTests "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/tests"
 )
 
 var treeFuzzer *commonFuzz.InterfaceFuzzer
 
-// TreeFuzz is a wrapper around a mkvs.KeyValueTree for fuzzing purposes.
+// TreeFuzz is a wrapper around a mkvs.Tree for fuzzing purposes.
+//
+// The fuzzer works against two trees, an "inner" one and a "remote" one. Both trees are only
+// in-memory and do not use a node database. The "remote" tree talks to the "inner" tree via the
+// ReadSyncer interface in order to fuzz that part as well.
+//
+//   remote <-- ReadSyncer --> inner
+//
+// Because there is no database, the remote tree can only access the root hash that was committed
+// last and the inner tree must never be dirty. This means that all mutations must first be applied
+// to the remote tree as otherwise the ReadSyncer operations would fail.
+//
+// This could be improved in the future by introducing a separate Commit operation, allowing the
+// fuzzer to generate histories where multiple mutation operations are performed against the remote
+// tree.
 type TreeFuzz struct {
-	inner     mkvs.KeyValueTree
+	inner     mkvs.Tree
+	remote    mkvs.Tree
+
 	reference map[string][]byte
 	history   mkvsTests.TestVector
+}
+
+func (t *TreeFuzz) commitRemote(ctx context.Context) {
+	_, rootHash, err := t.inner.Commit(ctx, common.Namespace{}, 0)
+	if err != nil {
+		t.fail("CommitRemote failed: %s", err)
+	}
+
+	if t.remote != nil {
+		t.remote.Close()
+	}
+	t.remote = mkvs.NewWithRoot(t.inner, nil, mkvsNode.Root{Hash: rootHash}, mkvs.Capacity(0, 0))
+}
+
+func (t *TreeFuzz) insert(ctx context.Context, tree mkvs.Tree, key []byte, value []byte) {
+	if tree == nil {
+		return
+	}
+
+	if err := tree.Insert(ctx, key, value); err != nil {
+		t.fail("Insert failed: %s", err)
+	}
 }
 
 func (t *TreeFuzz) Insert(ctx context.Context, key []byte, value []byte) int {
@@ -30,8 +71,14 @@ func (t *TreeFuzz) Insert(ctx context.Context, key []byte, value []byte) int {
 		return -1
 	}
 
-	if err := t.inner.Insert(ctx, key, value); err != nil {
-		t.fail("Insert failed: %s", err)
+	t.history = append(t.history, &mkvsTests.Op{Op: mkvsTests.OpInsert, Key: key, Value: value})
+
+	t.insert(ctx, t.remote, key, value)
+	t.insert(ctx, t.inner, key, value)
+
+	if value == nil {
+		// Perform the same conversion that is performed internally by tree insert.
+		value = []byte{}
 	}
 
 	// Make sure the key has been set.
@@ -40,8 +87,23 @@ func (t *TreeFuzz) Insert(ctx context.Context, key []byte, value []byte) int {
 	}
 
 	t.reference[string(key)] = value
-	t.history = append(t.history, &mkvsTests.Op{Op: mkvsTests.OpInsert, Key: key, Value: value})
+
+	t.commitRemote(ctx)
+
 	return 0
+}
+
+func (t *TreeFuzz) get(ctx context.Context, tree mkvs.Tree, key []byte) {
+	if tree == nil {
+		return
+	}
+
+	value, err := tree.Get(ctx, key)
+	if err != nil {
+		t.fail("Get failed: %s", err)
+	}
+
+	t.assertCorrectValue(key, value)
 }
 
 func (t *TreeFuzz) Get(ctx context.Context, key []byte) int {
@@ -50,14 +112,30 @@ func (t *TreeFuzz) Get(ctx context.Context, key []byte) int {
 		return -1
 	}
 
-	value, err := t.inner.Get(ctx, key)
+	t.history = append(t.history, &mkvsTests.Op{Op: mkvsTests.OpGet, Key: key, Value: t.reference[string(key)]})
+
+	t.get(ctx, t.remote, key)
+	t.get(ctx, t.inner, key)
+
+	return 0
+}
+
+func (t *TreeFuzz) removeExisting(ctx context.Context, tree mkvs.Tree, key []byte) {
+	if tree == nil {
+		return
+	}
+
+	value, err := tree.RemoveExisting(ctx, key)
 	if err != nil {
-		t.fail("Get failed: %s", err)
+		t.fail("RemoveExisting failed: %s", err)
+	}
+
+	// Make sure the key has been removed.
+	if value, err := tree.Get(ctx, key); err != nil || value != nil {
+		t.fail("RemoveExisting check failed: %s", err)
 	}
 
 	t.assertCorrectValue(key, value)
-
-	return 0
 }
 
 func (t *TreeFuzz) RemoveExisting(ctx context.Context, key []byte) int {
@@ -66,22 +144,31 @@ func (t *TreeFuzz) RemoveExisting(ctx context.Context, key []byte) int {
 		return -1
 	}
 
-	value, err := t.inner.RemoveExisting(ctx, key)
-	if err != nil {
-		t.fail("RemoveExisting failed: %s", err)
+	t.history = append(t.history, &mkvsTests.Op{Op: mkvsTests.OpRemove, Key: key})
+
+	t.removeExisting(ctx, t.remote, key)
+	t.removeExisting(ctx, t.inner, key)
+
+	delete(t.reference, string(key))
+
+	t.commitRemote(ctx)
+
+	return 0
+}
+
+func (t *TreeFuzz) remove(ctx context.Context, tree mkvs.Tree, key []byte) {
+	if tree == nil {
+		return
+	}
+
+	if err := tree.Remove(ctx, key); err != nil {
+		t.fail("Remove failed: %s", err)
 	}
 
 	// Make sure the key has been removed.
-	if value, err := t.inner.Get(ctx, key); err != nil || value != nil {
-		t.fail("RemoveExisting check failed: %s", err)
+	if value, err := tree.Get(ctx, key); err != nil || value != nil {
+		t.fail("Remove check failed: %s", err)
 	}
-
-	t.assertCorrectValue(key, value)
-
-	delete(t.reference, string(key))
-	t.history = append(t.history, &mkvsTests.Op{Op: mkvsTests.OpRemove, Key: key})
-
-	return 0
 }
 
 func (t *TreeFuzz) Remove(ctx context.Context, key []byte) int {
@@ -90,31 +177,19 @@ func (t *TreeFuzz) Remove(ctx context.Context, key []byte) int {
 		return -1
 	}
 
-	if err := t.inner.Remove(ctx, key); err != nil {
-		t.fail("Remove failed: %s", err)
-	}
+	t.history = append(t.history, &mkvsTests.Op{Op: mkvsTests.OpRemove, Key: key})
 
-	// Make sure the key has been removed.
-	if value, err := t.inner.Get(ctx, key); err != nil || value != nil {
-		t.fail("Remove check failed: %s", err)
-	}
+	t.remove(ctx, t.remote, key)
+	t.remove(ctx, t.inner, key)
 
 	delete(t.reference, string(key))
-	t.history = append(t.history, &mkvsTests.Op{Op: mkvsTests.OpRemove, Key: key})
+
+	t.commitRemote(ctx)
 
 	return 0
 }
 
 func (t *TreeFuzz) IteratorSeek(ctx context.Context, key []byte) int {
-	it := t.inner.NewIterator(ctx)
-	defer it.Close()
-
-	it.Seek(key)
-	if it.Err() != nil {
-		t.fail("IteratorSeek failed: %s", it.Err())
-	}
-
-	// Check that the iterator is in the correct position.
 	var ordered []string
 	for k := range t.reference {
 		ordered = append(ordered, k)
@@ -129,15 +204,24 @@ func (t *TreeFuzz) IteratorSeek(ctx context.Context, key []byte) int {
 			break
 		}
 	}
-	if !bytes.Equal(expectedKey, it.Key()) || !bytes.Equal(expectedValue, it.Value()) {
-		// Add the final IteratorSeek operation.
-		t.history = append(t.history, &mkvsTests.Op{
-			Op:          mkvsTests.OpIteratorSeek,
-			Key:         key,
-			Value:       expectedValue,
-			ExpectedKey: expectedKey,
-		})
 
+	t.history = append(t.history, &mkvsTests.Op{
+		Op:          mkvsTests.OpIteratorSeek,
+		Key:         key,
+		Value:       expectedValue,
+		ExpectedKey: expectedKey,
+	})
+
+	it := t.inner.NewIterator(ctx)
+	defer it.Close()
+
+	it.Seek(key)
+	if it.Err() != nil {
+		t.fail("IteratorSeek failed: %s", it.Err())
+	}
+
+	// Check that the iterator is in the correct position.
+	if !bytes.Equal(expectedKey, it.Key()) || !bytes.Equal(expectedValue, it.Value()) {
 		t.fail("iterator Seek returned incorrect key/value (expected: %s/%s got: %s/%s)",
 			hex.EncodeToString(expectedKey),
 			hex.EncodeToString(expectedValue),
@@ -151,9 +235,6 @@ func (t *TreeFuzz) IteratorSeek(ctx context.Context, key []byte) int {
 
 func (t *TreeFuzz) assertCorrectValue(key, value []byte) {
 	if refValue := t.reference[string(key)]; !bytes.Equal(value, refValue) {
-		// Add the final Get operation.
-		t.history = append(t.history, &mkvsTests.Op{Op: mkvsTests.OpGet, Key: key, Value: refValue})
-
 		t.fail("Get returned incorrect value for key %s (expected: %s got: %s)",
 			hex.EncodeToString(key),
 			hex.EncodeToString(refValue),
@@ -166,8 +247,17 @@ func (t *TreeFuzz) fail(format string, a ...interface{}) {
 	// In case there is a failure, dump the operation history so it can be used to create a test
 	// vector for unit tests.
 	fmt.Printf("--- FAILURE: Dumping operation history ---\n")
+
 	history, _ := json.MarshalIndent(t.history, "", "    ")
-	fmt.Printf("%s\n", history)
+	f, err := ioutil.TempFile("", "oasis-node-fuzz-mkvs-dump-*.json")
+	if err == nil {
+		_, _ = f.Write(history)
+		f.Close()
+
+		fmt.Printf("[see %s]\n", f.Name())
+	} else {
+		fmt.Printf("[unable to save dump: %s]", err.Error())
+	}
 	fmt.Printf("------------------------------------------\n")
 
 	panic(fmt.Sprintf(format, a...))
@@ -175,7 +265,7 @@ func (t *TreeFuzz) fail(format string, a ...interface{}) {
 
 func NewTreeFuzz() (*TreeFuzz, *commonFuzz.InterfaceFuzzer) {
 	tf := &TreeFuzz{
-		inner:     mkvs.New(nil, nil, mkvs.WithoutWriteLog()),
+		inner:     mkvs.New(nil, nil, mkvs.Capacity(0, 0)),
 		reference: make(map[string][]byte),
 	}
 	fz := commonFuzz.NewInterfaceFuzzer(tf)

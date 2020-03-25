@@ -455,6 +455,15 @@ func (c *cache) remoteSync(ctx context.Context, ptr *node.Pointer, fetcher readS
 		}
 		return nil
 	}
+
+	if err := c.MergeVerifiedSubtree(ctx, dstPtr, subtree, commitNode); err != nil {
+		if err == errRemoveLocked {
+			// Cache is too small, ignore.
+			return nil
+		}
+		return err
+	}
+
 	// Persist synced nodes to local node database when configured.
 	if c.persistEverythingFromSyncer {
 		if err := dbSubtree.Commit(); err != nil {
@@ -465,12 +474,5 @@ func (c *cache) remoteSync(ctx context.Context, ptr *node.Pointer, fetcher readS
 		}
 	}
 
-	if err := c.MergeVerifiedSubtree(ctx, dstPtr, subtree, commitNode); err != nil {
-		if err == errRemoveLocked {
-			// Cache is too small, ignore.
-			return nil
-		}
-		return err
-	}
 	return nil
 }
