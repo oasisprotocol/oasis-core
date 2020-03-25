@@ -291,20 +291,20 @@ func (b *storageClientBackend) readWithClient(
 	ns common.Namespace,
 	fn func(context.Context, api.Backend) (interface{}, error),
 ) (interface{}, error) {
-	conns := b.committeeClient.GetConnectionsWithMeta()
-	n := len(conns)
-	if n == 0 {
-		b.logger.Error("readWithClient: no connected nodes for runtime",
-			"runtime_id", ns,
-		)
-		return nil, ErrStorageNotAvailable
-	}
-
 	var (
 		numRetries int
 		resp       interface{}
 	)
 	op := func() error {
+		conns := b.committeeClient.GetConnectionsWithMeta()
+		n := len(conns)
+		if n == 0 {
+			b.logger.Error("readWithClient: no connected nodes for runtime",
+				"runtime_id", ns,
+			)
+			return backoff.Permanent(ErrStorageNotAvailable)
+		}
+
 		// TODO: Use a more clever approach to choose the order in which to read
 		// from the connected nodes:
 		// https://github.com/oasislabs/oasis-core/issues/1815.

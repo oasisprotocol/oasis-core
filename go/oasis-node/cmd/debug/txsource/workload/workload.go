@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	flag "github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -182,4 +183,12 @@ var ByName = map[string]Workload{
 	NameRegistration: &registration{},
 	NameRuntime:      &runtime{},
 	NameTransfer:     &transfer{},
+}
+
+// Flags has the workload flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
+
+func init() {
+	Flags.AddFlagSet(QueriesFlags)
+	Flags.AddFlagSet(RuntimeFlags)
 }
