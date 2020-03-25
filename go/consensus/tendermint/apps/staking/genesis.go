@@ -159,6 +159,9 @@ func (app *stakingApplication) initDelegations(ctx *abci.Context, state *staking
 	for escrowID, delegations := range st.Delegations {
 		delegationShares := quantity.NewQuantity()
 		for delegatorID, delegation := range delegations {
+			if delegation == nil {
+				return fmt.Errorf("staking: genesis delegation to %s from %s is nil", escrowID, delegatorID)
+			}
 			if err := delegationShares.Add(&delegation.Shares); err != nil {
 				ctx.Logger().Error("InitChain: failed to add delegation shares",
 					"err", err,
@@ -203,6 +206,9 @@ func (app *stakingApplication) initDebondingDelegations(ctx *abci.Context, state
 		debondingShares := quantity.NewQuantity()
 		for delegatorID, delegations := range delegators {
 			for idx, delegation := range delegations {
+				if delegation == nil {
+					return fmt.Errorf("staking: genesis debonding delegation to %s from %s index %d is nil", escrowID, delegatorID, idx)
+				}
 				if err := debondingShares.Add(&delegation.Shares); err != nil {
 					ctx.Logger().Error("InitChain: failed to add debonding delegation shares",
 						"err", err,
