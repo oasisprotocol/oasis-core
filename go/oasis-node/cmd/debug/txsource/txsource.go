@@ -138,7 +138,7 @@ func init() {
 	_ = viper.BindPFlags(fs)
 	txsourceCmd.Flags().AddFlagSet(fs)
 
-	txsourceCmd.Flags().AddFlagSet(workload.RuntimeFlags)
+	txsourceCmd.Flags().AddFlagSet(workload.Flags)
 	txsourceCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
 	txsourceCmd.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	txsourceCmd.Flags().AddFlagSet(cmdFlags.GenesisFileFlags)

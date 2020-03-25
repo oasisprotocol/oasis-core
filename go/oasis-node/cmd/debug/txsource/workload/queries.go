@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"time"
 
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
@@ -27,9 +28,19 @@ const (
 	// NameQueries is the name of the queries workload.
 	NameQueries = "queries"
 
+	// CfgConsensusNumKeptVersions is the number of last consensus state versions that the nodes are
+	// keeping (e.g., due to a configured pruning policy). Versions older than that will not be
+	// queried.
+	//
+	// Note that this is only for consensus state versions, not runtime versions.
+	CfgConsensusNumKeptVersions = "queries.consensus.num_kept_versions"
+
 	// Ratio of queries that should query height 1.
 	queriesEarliestHeightRatio = 0.1
 )
+
+// QueriesFlags are the queries workload flags.
+var QueriesFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 type queries struct {
 	logger *logging.Logger
@@ -408,16 +419,22 @@ func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.C
 			return fmt.Errorf("consensus.GetBlock error: %w", err)
 		}
 
-		// Select height at which queries should be done. Earliest (height=1)
+		// Determine the earliest height that we can query.
+		earliestHeight := int64(1)
+		if numKept := viper.GetInt64(CfgConsensusNumKeptVersions); numKept < block.Height {
+			earliestHeight = block.Height - numKept
+		}
+
+		// Select height at which queries should be done. Earliest
 		// is special cased with increased probability.
 		var height int64
 		p := rng.Float32()
 		switch {
 		case p < queriesEarliestHeightRatio:
-			height = 1
+			height = earliestHeight
 		default:
-			// [1, block.Height]
-			height = rng.Int63n(block.Height) + 1
+			// [earliestHeight, block.Height]
+			height = rng.Int63n(block.Height-earliestHeight+1) + earliestHeight
 		}
 
 		q.logger.Debug("Doing queries",
@@ -453,4 +470,9 @@ func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.C
 			return nil
 		}
 	}
+}
+
+func init() {
+	QueriesFlags.Int64(CfgConsensusNumKeptVersions, 0, "Number of last versions kept by nodes")
+	_ = viper.BindPFlags(QueriesFlags)
 }
