@@ -396,17 +396,26 @@ func (c *runtimeClient) QueryTxs(ctx context.Context, request *api.QueryTxsReque
 		var blk *block.Block
 		blk, err = c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: round})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to fetch block: %w", err)
 		}
 
 		tree := c.getTxnTree(blk)
 		defer tree.Close()
 
 		// Extract transaction data for the specified indices.
+		var txHashes []hash.Hash
 		for _, txResult := range txResults {
-			tx, err := tree.GetTransaction(ctx, txResult.TxHash)
-			if err != nil {
-				return nil, err
+			txHashes = append(txHashes, txResult.TxHash)
+		}
+
+		txes, err := tree.GetTransactionMultiple(ctx, txHashes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch transaction data: %w", err)
+		}
+		for _, txResult := range txResults {
+			tx, ok := txes[txResult.TxHash]
+			if !ok {
+				return nil, fmt.Errorf("transaction %s not found", txResult.TxHash)
 			}
 
 			output = append(output, &api.TxResult{
