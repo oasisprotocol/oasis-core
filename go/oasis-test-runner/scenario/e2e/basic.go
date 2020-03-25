@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/viper"
@@ -238,6 +239,67 @@ func (sc *basicImpl) cleanTendermintStorage(childEnv *env.Env) error {
 		if err := doClean(kw.DataDir(), []string{"--" + cmdNode.CfgPreserveLocalStorage}); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (sc *basicImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkFixture) error {
+	// Dump-restore network.
+	sc.logger.Info("dumping network state",
+		"child", childEnv,
+	)
+
+	dumpPath := filepath.Join(childEnv.Dir(), "genesis_dump.json")
+	args := []string{
+		"genesis", "dump",
+		"--height", "0",
+		"--genesis.file", dumpPath,
+		"--address", "unix:" + sc.net.Validators()[0].SocketPath(),
+	}
+
+	if err := cli.RunSubCommand(childEnv, logger, "genesis-dump", sc.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("scenario/e2e/dump_restore: failed to dump state: %w", err)
+	}
+
+	// Stop the network.
+	logger.Info("stopping the network")
+	sc.net.Stop()
+
+	if len(sc.net.StorageWorkers()) > 0 {
+		// Dump storage.
+		args = []string{
+			"debug", "storage", "export",
+			"--genesis.file", dumpPath,
+			"--datadir", sc.net.StorageWorkers()[0].DataDir(),
+			"--storage.export.dir", filepath.Join(childEnv.Dir(), "storage_dumps"),
+			"--debug.dont_blame_oasis",
+			"--debug.allow_test_keys",
+		}
+		if err := cli.RunSubCommand(childEnv, logger, "storage-dump", sc.net.Config().NodeBinary, args); err != nil {
+			return fmt.Errorf("scenario/e2e/dump_restore: failed to dump storage: %w", err)
+		}
+	}
+
+	// Reset all the state back to the vanilla state.
+	if err := sc.cleanTendermintStorage(childEnv); err != nil {
+		return fmt.Errorf("scenario/e2e/dump_restore: failed to clean tendemint storage: %w", err)
+	}
+
+	// Start the network and the client again.
+	logger.Info("starting the network again")
+
+	fixture.Network.GenesisFile = dumpPath
+	// Make sure to not overwrite entities.
+	for i, entity := range fixture.Entities {
+		if !entity.IsDebugTestEntity {
+			fixture.Entities[i].Restore = true
+		}
+	}
+
+	var err error
+	if sc.net, err = fixture.Create(childEnv); err != nil {
+		return err
 	}
 
 	return nil

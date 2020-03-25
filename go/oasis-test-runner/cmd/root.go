@@ -237,7 +237,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func doScenario(childEnv *env.Env, scenario scenario.Scenario) (err error) {
+func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("root: panic caught running test case: %v", r)
@@ -245,7 +245,7 @@ func doScenario(childEnv *env.Env, scenario scenario.Scenario) (err error) {
 	}()
 
 	var fixture *oasis.NetworkFixture
-	if fixture, err = scenario.Fixture(); err != nil {
+	if fixture, err = sc.Fixture(); err != nil {
 		err = errors.Wrap(err, "root: failed to initialize network fixture")
 		return
 	}
@@ -260,12 +260,12 @@ func doScenario(childEnv *env.Env, scenario scenario.Scenario) (err error) {
 		}
 	}
 
-	if err = scenario.Init(childEnv, net); err != nil {
+	if err = sc.Init(childEnv, net); err != nil {
 		err = errors.Wrap(err, "root: failed to initialize test case")
 		return
 	}
 
-	if err = scenario.Run(childEnv); err != nil {
+	if err = sc.Run(childEnv); err != nil {
 		err = errors.Wrap(err, "root: failed to run test case")
 		return
 	}
