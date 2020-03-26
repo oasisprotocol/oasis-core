@@ -25,7 +25,24 @@ import (
 var (
 	// GasFeesStaking is the staking gas fees scenario.
 	GasFeesStaking scenario.Scenario = &gasFeesImpl{
+		basicImpl: *newBasicImpl(
+			"gas-fees/staking",
+			"",
+			nil,
+		),
 		logger: logging.GetLogger("scenario/e2e/gas-fees/staking"),
+	}
+
+	// GasFeesStakingDumpRestore is the staking gas fees scenario with
+	// dump-restore.
+	GasFeesStakingDumpRestore scenario.Scenario = &gasFeesImpl{
+		basicImpl: *newBasicImpl(
+			"gas-fees/staking-dump-restore",
+			"",
+			nil,
+		),
+		logger:      logging.GetLogger("scenario/e2e/gas-fees/staking-dump-restore"),
+		dumpRestore: true,
 	}
 
 	// srcSigner is the signer for public key defined in the staking genesis
@@ -35,18 +52,20 @@ var (
 )
 
 type gasFeesImpl struct {
-	net *oasis.Network
+	basicImpl
 
-	logger *logging.Logger
-}
-
-func (sc *gasFeesImpl) Name() string {
-	return "gas-fees/staking"
+	logger      *logging.Logger
+	dumpRestore bool
 }
 
 func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
+	f, err := sc.basicImpl.Fixture()
+	if err != nil {
+		return nil, err
+	}
+
 	var tee node.TEEHardware
-	err := tee.FromString(viper.GetString(cfgTEEHardware))
+	err = tee.FromString(viper.GetString(cfgTEEHardware))
 	if err != nil {
 		return nil, err
 	}
@@ -55,32 +74,32 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		mrSigner = &ias.FortanixTestMrSigner
 	}
 
-	return &oasis.NetworkFixture{
-		TEE: oasis.TEEFixture{
-			Hardware: tee,
-			MrSigner: mrSigner,
-		},
-		Network: oasis.NetworkCfg{
-			NodeBinary:                        viper.GetString(cfgNodeBinary),
-			RuntimeLoaderBinary:               viper.GetString(cfgRuntimeLoader),
-			EpochtimeMock:                     true,
-			StakingGenesis:                    "tests/fixture-data/gas-fees/staking-genesis.json",
-			DefaultLogWatcherHandlerFactories: DefaultBasicLogWatcherHandlerFactories,
-		},
-		Entities: []oasis.EntityCfg{
-			oasis.EntityCfg{IsDebugTestEntity: true},
-			oasis.EntityCfg{},
-			oasis.EntityCfg{},
-			oasis.EntityCfg{},
-		},
-		Validators: []oasis.ValidatorFixture{
-			// Create three validators, each with its own entity so we can test
-			// if gas disbursement works correctly.
-			oasis.ValidatorFixture{Entity: 1, MinGasPrice: 1},
-			oasis.ValidatorFixture{Entity: 2, MinGasPrice: 1},
-			oasis.ValidatorFixture{Entity: 3, MinGasPrice: 1},
-		},
-	}, nil
+	f.TEE = oasis.TEEFixture{
+		Hardware: tee,
+		MrSigner: mrSigner,
+	}
+	f.Network = oasis.NetworkCfg{
+		NodeBinary:                        viper.GetString(cfgNodeBinary),
+		RuntimeLoaderBinary:               viper.GetString(cfgRuntimeLoader),
+		EpochtimeMock:                     true,
+		StakingGenesis:                    "tests/fixture-data/gas-fees/staking-genesis.json",
+		DefaultLogWatcherHandlerFactories: DefaultBasicLogWatcherHandlerFactories,
+	}
+	f.Entities = []oasis.EntityCfg{
+		oasis.EntityCfg{IsDebugTestEntity: true},
+		oasis.EntityCfg{},
+		oasis.EntityCfg{},
+		oasis.EntityCfg{},
+	}
+	f.Validators = []oasis.ValidatorFixture{
+		// Create three validators, each with its own entity so we can test
+		// if gas disbursement works correctly.
+		oasis.ValidatorFixture{Entity: 1, MinGasPrice: 1},
+		oasis.ValidatorFixture{Entity: 2, MinGasPrice: 1},
+		oasis.ValidatorFixture{Entity: 3, MinGasPrice: 1},
+	}
+
+	return f, nil
 }
 
 func (sc *gasFeesImpl) Init(childEnv *env.Env, net *oasis.Network) error {
@@ -89,13 +108,36 @@ func (sc *gasFeesImpl) Init(childEnv *env.Env, net *oasis.Network) error {
 }
 
 func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
+	ctx := context.Background()
+
+	if err := sc.runTests(ctx); err != nil {
+		return err
+	}
+
+	if sc.dumpRestore {
+		// Do a dump-restore of the network and re-run the test.
+		fixture, err := sc.Fixture()
+		if err != nil {
+			return err
+		}
+		if err := sc.dumpRestoreNetwork(childEnv, fixture); err != nil {
+			return err
+		}
+		if err := sc.runTests(ctx); err != nil {
+			return fmt.Errorf("error after dump restore: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 	if err := sc.net.Start(); err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-
 	sc.logger.Info("waiting for network to come up")
+
 	if err := sc.net.Controller().WaitNodesRegistered(ctx, 3); err != nil {
 		return err
 	}
@@ -106,8 +148,13 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
+	// Include common pool from genesis.
+	totalFees, err := sc.getInitialCommonPoolBalance(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Run some operations that charge fees.
-	var totalFees quantity.Quantity
 	for _, t := range []struct {
 		name string
 		fn   func(context.Context, signature.Signer) (*quantity.Quantity, error)
@@ -160,7 +207,7 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 	}
 	// Ensure total (entities + common pool) is correct.
 	_ = newTotalEntityBalance.Add(commonPool)
-	if newTotalEntityBalance.Cmp(&totalFees) != 0 {
+	if newTotalEntityBalance.Cmp(totalFees) != 0 {
 		return fmt.Errorf("fee disbursement incorrect (expected: %s actual: %s)",
 			totalFees,
 			newTotalEntityBalance,
@@ -172,6 +219,21 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 	}
 
 	return nil
+}
+
+func (sc *gasFeesImpl) getInitialCommonPoolBalance(ctx context.Context) (*quantity.Quantity, error) {
+	st := sc.net.Controller().Staking
+
+	cmnPool, err := st.CommonPool(ctx, 1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get initial common pool info: %w", err)
+	}
+
+	sc.logger.Debug("fetched common pool balance",
+		"balance", cmnPool,
+	)
+
+	return cmnPool, nil
 }
 
 func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Quantity, error) {

@@ -130,7 +130,7 @@ func TestGenesisChainContext(t *testing.T) {
 	//       on each run.
 	stableDoc.Staking = staking.Genesis{}
 
-	require.Equal(t, "ce29f2d2241e7eaaa9bd96d20aa075fe18cd8b178e4f9d05b7dacd8b538eabcc", stableDoc.ChainContext())
+	require.Equal(t, "813021fca91663966fa73935b88165713d133ab2073f205050749e5b279fd869", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {
@@ -651,6 +651,10 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d = *testDoc
 	d.Staking.CommonPool = stakingTests.QtyFromInt(100)
 	require.Error(d.SanityCheck(), "invalid common pool should be rejected")
+
+	d = *testDoc
+	d.Staking.LastBlockFees = stakingTests.QtyFromInt(100)
+	require.Error(d.SanityCheck(), "invalid last block fees should be rejected")
 
 	d = *testDoc
 	d.Staking.Ledger[stakingTests.DebugStateSrcID].General.Balance = stakingTests.QtyFromInt(100)

@@ -509,8 +509,9 @@ type DebondingDelegation struct {
 type Genesis struct {
 	Parameters ConsensusParameters `json:"params"`
 
-	TotalSupply quantity.Quantity `json:"total_supply"`
-	CommonPool  quantity.Quantity `json:"common_pool"`
+	TotalSupply   quantity.Quantity `json:"total_supply"`
+	CommonPool    quantity.Quantity `json:"common_pool"`
+	LastBlockFees quantity.Quantity `json:"last_block_fees"`
 
 	Ledger map[signature.PublicKey]*Account `json:"ledger,omitempty"`
 

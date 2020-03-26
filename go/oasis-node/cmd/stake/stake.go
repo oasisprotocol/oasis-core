@@ -108,6 +108,16 @@ func doInfo(cmd *cobra.Command, args []string) {
 		return nil
 	})
 
+	doWithRetries(cmd, "query last block fees", func() error {
+		q, err := client.LastBlockFees(ctx, consensus.HeightLatest)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Last block fees: %v\n", q)
+		return nil
+	})
+
 	thresholdsToQuery := []api.ThresholdKind{
 		api.KindEntity,
 		api.KindNodeValidator,

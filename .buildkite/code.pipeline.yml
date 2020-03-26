@@ -202,7 +202,7 @@ steps:
   # E2E test jobs
   ###############
   - label: E2E tests
-    parallelism: 6
+    parallelism: 7
     timeout_in_minutes: 9
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh

@@ -40,6 +40,31 @@ func (app *stakingApplication) initCommonPool(ctx *abci.Context, st *staking.Gen
 	return nil
 }
 
+func (app *stakingApplication) initLastBlockFees(ctx *abci.Context, st *staking.Genesis, totalSupply *quantity.Quantity) error {
+	if !st.LastBlockFees.IsValid() {
+		return errors.New("staking/tendermint: invalid genesis state LastBlockFees")
+	}
+	if err := totalSupply.Add(&st.LastBlockFees); err != nil {
+		ctx.Logger().Error("InitChain: failed to add last block fees",
+			"err", err,
+		)
+		return errors.Wrap(err, "staking/tendermint: failed to add last block fees")
+	}
+
+	// XXX: Since there would be no LastCommitInfo for the initial block we
+	// move the block fees from genesis into the common pool. And set block fees
+	// to zero.
+	ctx.Logger().Warn("InitChain: moving last block fees into common pool",
+		"last_block_fees", st.LastBlockFees,
+		"common_pool", st.CommonPool,
+	)
+	if err := st.CommonPool.Add(&st.LastBlockFees); err != nil {
+		return errors.New("staking/tendermint: failed to add block fees to common pool")
+	}
+	st.LastBlockFees = *quantity.NewQuantity()
+	return nil
+}
+
 func (app *stakingApplication) initLedger(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	type ledgerUpdate struct {
 		id      signature.PublicKey
@@ -229,6 +254,10 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		return err
 	}
 
+	if err := app.initLastBlockFees(ctx, st, &totalSupply); err != nil {
+		return err
+	}
+
 	if err := app.initLedger(ctx, state, st, &totalSupply); err != nil {
 		return err
 	}
@@ -259,6 +288,11 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 	}
 
 	commonPool, err := sq.state.CommonPool()
+	if err != nil {
+		return nil, err
+	}
+
+	lastBlockFees, err := sq.state.LastBlockFees()
 	if err != nil {
 		return nil, err
 	}
@@ -294,6 +328,7 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		Parameters:           *params,
 		TotalSupply:          *totalSupply,
 		CommonPool:           *commonPool,
+		LastBlockFees:        *lastBlockFees,
 		Ledger:               ledger,
 		Delegations:          delegations,
 		DebondingDelegations: debondingDelegations,

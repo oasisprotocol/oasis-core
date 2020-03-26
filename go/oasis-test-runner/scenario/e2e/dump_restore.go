@@ -1,11 +1,7 @@
 package e2e
 
 import (
-	"fmt"
-	"path/filepath"
-
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 )
 
@@ -45,60 +41,16 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// Dump state.
-	sc.logger.Info("dumping state")
-
-	dumpPath := filepath.Join(childEnv.Dir(), "genesis_dump.json")
-	args := []string{
-		"genesis", "dump",
-		"--height", "0",
-		"--genesis.file", dumpPath,
-		"--address", "unix:" + sc.basicImpl.net.Validators()[0].SocketPath(),
-	}
-	if err = cli.RunSubCommand(childEnv, sc.logger, "genesis-dump", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("scenario/e2e/dump_restore: failed to dump state: %w", err)
-	}
-
-	// Stop the network.
-	sc.logger.Info("stopping the network")
-	sc.basicImpl.net.Stop()
-
-	// Dump storage.
-	args = []string{
-		"debug", "storage", "export",
-		"--genesis.file", dumpPath,
-		"--datadir", sc.basicImpl.net.StorageWorkers()[0].DataDir(),
-		"--storage.export.dir", filepath.Join(childEnv.Dir(), "storage_dumps"),
-		"--debug.dont_blame_oasis",
-		"--debug.allow_test_keys",
-	}
-	if err = cli.RunSubCommand(childEnv, sc.logger, "storage-dump", sc.basicImpl.net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("scenario/e2e/dump_restore: failed to dump storage: %w", err)
-	}
-
-	// Reset all the state back to the vanilla state.
-	if err = sc.basicImpl.cleanTendermintStorage(childEnv); err != nil {
-		return fmt.Errorf("scenario/e2e/dump_restore: failed to clean tendemint storage: %w", err)
-	}
-
-	// Start the network and the client again and check that everything
-	// works with restored state.
-	sc.logger.Info("starting the network again")
-
+	// Dump restore network.
 	fixture, err := sc.Fixture()
 	if err != nil {
 		return err
 	}
-
-	// Use the dumped genesis file.
-	fixture.Network.GenesisFile = dumpPath
-	// Make sure to not overwrite the entity.
-	fixture.Entities[1].Restore = true
-
-	if sc.basicImpl.net, err = fixture.Create(childEnv); err != nil {
+	if err = sc.dumpRestoreNetwork(childEnv, fixture); err != nil {
 		return err
 	}
 
+	// Check that everything works with restored state.
 	sc.basicImpl.clientArgs = []string{"--mode", "part2"}
 	return sc.basicImpl.Run(childEnv)
 }

@@ -168,7 +168,12 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocycl
 		return fmt.Errorf("staking: sanity check failed: common pool is invalid")
 	}
 
-	// Check if the total supply adds up (common pool + all balances in the ledger).
+	if !g.LastBlockFees.IsValid() {
+		return fmt.Errorf("staking: sanity check failed: last block fees is invalid")
+	}
+
+	// Check if the total supply adds up:
+	// common pool + last block fees + all balances in the ledger.
 	// Check all commission schedules.
 	var total quantity.Quantity
 	for id, acct := range g.Ledger {
@@ -184,6 +189,7 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocycl
 		}
 	}
 	_ = total.Add(&g.CommonPool)
+	_ = total.Add(&g.LastBlockFees)
 	if total.Cmp(&g.TotalSupply) != 0 {
 		return fmt.Errorf("staking: sanity check failed: balances in accounts plus common pool (%s) does not add up to total supply (%s)", total.String(), g.TotalSupply.String())
 	}
