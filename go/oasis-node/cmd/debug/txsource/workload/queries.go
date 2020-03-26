@@ -37,6 +37,8 @@ const (
 
 	// Ratio of queries that should query height 1.
 	queriesEarliestHeightRatio = 0.1
+	// Ratio of queries that should query latest available height.
+	queriesLatestHeightRatio = 0.1
 )
 
 // QueriesFlags are the queries workload flags.
@@ -339,6 +341,8 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 	switch {
 	case p < queriesEarliestHeightRatio:
 		round = 1
+	case p < queriesEarliestHeightRatio+queriesLatestHeightRatio:
+		round = latestRound
 	default:
 		// [1, latestRound]
 		round = uint64(rng.Int63n(int64(latestRound) + 1))
@@ -425,13 +429,15 @@ func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.C
 			earliestHeight = block.Height - numKept
 		}
 
-		// Select height at which queries should be done. Earliest
-		// is special cased with increased probability.
+		// Select height at which queries should be done. Earliest and latest
+		// heights are special cased with increased probability to be selected.
 		var height int64
 		p := rng.Float32()
 		switch {
 		case p < queriesEarliestHeightRatio:
 			height = earliestHeight
+		case p < queriesEarliestHeightRatio+queriesLatestHeightRatio:
+			height = block.Height
 		default:
 			// [earliestHeight, block.Height]
 			height = rng.Int63n(block.Height-earliestHeight+1) + earliestHeight
