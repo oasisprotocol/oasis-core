@@ -302,6 +302,10 @@ func (b *storageClientBackend) readWithClient(
 			b.logger.Error("readWithClient: no connected nodes for runtime",
 				"runtime_id", ns,
 			)
+			if numRetries < maxRetries {
+				numRetries++
+				return ErrStorageNotAvailable
+			}
 			return backoff.Permanent(ErrStorageNotAvailable)
 		}
 
