@@ -9,9 +9,8 @@ const (
 	// PathPurpose is set to 44 to indicate use of the BIP-0044 specification.
 	PathPurpose uint32 = 44
 
-	// ListingPathCoinType is set to 118, the number owned by Cosmos via SLIP-0044 registration.
-	// TODO: Update this number after SLIP-0044 registration is complete.
-	ListingPathCoinType uint32 = 118
+	// ListingPathCoinType is set to 474, the index registered to Oasis in the SLIP-0044 registry.
+	ListingPathCoinType uint32 = 474
 	// ListingPathAccount is the account index used to list and connect to Ledger devices by address.
 	ListingPathAccount uint32 = 0
 	// ListingPathChange indicates an external chain.
