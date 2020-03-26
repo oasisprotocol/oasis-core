@@ -18,10 +18,10 @@ type serializedMetadata struct {
 	// Namespace is the namespace this database is for.
 	Namespace common.Namespace `json:"namespace"`
 
-	// EarliestRound is the earliest round.
-	EarliestRound uint64 `json:"earliest_round"`
-	// LastFinalizedRound is the last finalized round.
-	LastFinalizedRound *uint64 `json:"last_finalized_round"`
+	// EarliestVersion is the earliest version.
+	EarliestVersion uint64 `json:"earliest_version"`
+	// LastFinalizedVersion is the last finalized version.
+	LastFinalizedVersion *uint64 `json:"last_finalized_version"`
 }
 
 // metadata is the database metadata.
@@ -31,49 +31,49 @@ type metadata struct {
 	value serializedMetadata
 }
 
-func (m *metadata) getEarliestRound() uint64 {
+func (m *metadata) getEarliestVersion() uint64 {
 	m.RLock()
 	defer m.RUnlock()
 
-	return m.value.EarliestRound
+	return m.value.EarliestVersion
 }
 
-func (m *metadata) setEarliestRound(tx *badger.Txn, round uint64) error {
+func (m *metadata) setEarliestVersion(tx *badger.Txn, version uint64) error {
 	m.Lock()
 	defer m.Unlock()
 
-	// The earliest round can only increase, not decrease.
-	if round < m.value.EarliestRound {
+	// The earliest version can only increase, not decrease.
+	if version < m.value.EarliestVersion {
 		return nil
 	}
 
-	m.value.EarliestRound = round
+	m.value.EarliestVersion = version
 	return m.save(tx)
 }
 
-func (m *metadata) getLastFinalizedRound() (uint64, bool) {
+func (m *metadata) getLastFinalizedVersion() (uint64, bool) {
 	m.RLock()
 	defer m.RUnlock()
 
-	if m.value.LastFinalizedRound == nil {
+	if m.value.LastFinalizedVersion == nil {
 		return 0, false
 	}
-	return *m.value.LastFinalizedRound, true
+	return *m.value.LastFinalizedVersion, true
 }
 
-func (m *metadata) setLastFinalizedRound(tx *badger.Txn, round uint64) error {
+func (m *metadata) setLastFinalizedVersion(tx *badger.Txn, version uint64) error {
 	m.Lock()
 	defer m.Unlock()
 
-	if m.value.LastFinalizedRound != nil && round <= *m.value.LastFinalizedRound {
+	if m.value.LastFinalizedVersion != nil && version <= *m.value.LastFinalizedVersion {
 		return nil
 	}
 
-	if m.value.LastFinalizedRound == nil {
-		m.value.EarliestRound = round
+	if m.value.LastFinalizedVersion == nil {
+		m.value.EarliestVersion = version
 	}
 
-	m.value.LastFinalizedRound = &round
+	m.value.LastFinalizedVersion = &version
 	return m.save(tx)
 }
 
@@ -91,23 +91,23 @@ type updatedNode struct {
 	Hash    hash.Hash
 }
 
-// rootsMetadata manages the roots metadata for a given round.
+// rootsMetadata manages the roots metadata for a given version.
 //
 // NOTE: Public fields of this structure are part of the on-disk format.
 type rootsMetadata struct {
 	_ struct{} `cbor:",toarray"`
 
-	// Roots is the map of a root created in a round to any derived roots (in this or later rounds).
+	// Roots is the map of a root created in a version to any derived roots (in this or later versions).
 	Roots map[hash.Hash][]hash.Hash
 
-	// round is the round this metadata is for.
-	round uint64
+	// version is the version this metadata is for.
+	version uint64
 }
 
-// loadRootsMetadata loads the roots metadata for the given round from the database.
-func loadRootsMetadata(tx *badger.Txn, round uint64) (*rootsMetadata, error) {
-	rootsMeta := &rootsMetadata{round: round}
-	item, err := tx.Get(rootsMetadataKeyFmt.Encode(round))
+// loadRootsMetadata loads the roots metadata for the given version from the database.
+func loadRootsMetadata(tx *badger.Txn, version uint64) (*rootsMetadata, error) {
+	rootsMeta := &rootsMetadata{version: version}
+	item, err := tx.Get(rootsMetadataKeyFmt.Encode(version))
 	switch err {
 	case nil:
 		if err = item.Value(func(val []byte) error { return cbor.Unmarshal(val, &rootsMeta) }); err != nil {
@@ -123,5 +123,5 @@ func loadRootsMetadata(tx *badger.Txn, round uint64) (*rootsMetadata, error) {
 
 // save saves the roots metadata to the database.
 func (rm *rootsMetadata) save(tx *badger.Txn) error {
-	return tx.Set(rootsMetadataKeyFmt.Encode(rm.round), cbor.Marshal(rm))
+	return tx.Set(rootsMetadataKeyFmt.Encode(rm.version), cbor.Marshal(rm))
 }

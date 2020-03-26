@@ -210,7 +210,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 
 		stateRoot := node.Root{
 			Namespace: id,
-			Round:     i,
+			Version:   i,
 			Hash:      blk.Header.StateRoot,
 		}
 		if !oldStateRoot.Hash.Equal(&stateRoot.Hash) {
@@ -218,10 +218,10 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 		}
 		oldStateRoot = stateRoot
 
-		emptyRoot.Round = i
+		emptyRoot.Version = i
 		ioRoot := node.Root{
 			Namespace: id,
-			Round:     i,
+			Version:   i,
 			Hash:      blk.Header.IORoot,
 		}
 		if !ioRoot.Hash.IsEmpty() {

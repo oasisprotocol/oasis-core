@@ -18,12 +18,12 @@ impl UrkelTree {
         &mut self,
         ctx: Context,
         namespace: Namespace,
-        round: u64,
+        version: u64,
     ) -> Fallible<(WriteLog, Hash)> {
         let ctx = ctx.freeze();
         let mut update_list: UpdateList<LRUCache> = UpdateList::new();
         let pending_root = self.cache.borrow().get_pending_root();
-        let new_hash = _commit(&ctx, pending_root.clone(), &mut update_list, Some(round))?;
+        let new_hash = _commit(&ctx, pending_root.clone(), &mut update_list, Some(version))?;
 
         update_list.commit(&mut self.cache.borrow_mut());
 
@@ -42,7 +42,7 @@ impl UrkelTree {
         self.pending_write_log.clear();
         self.cache.borrow_mut().set_sync_root(Root {
             namespace,
-            round,
+            version,
             hash: new_hash,
         });
 
@@ -54,7 +54,7 @@ pub fn _commit<C: Cache>(
     ctx: &Arc<Context>,
     ptr: NodePtrRef,
     update_list: &mut UpdateList<C>,
-    round: Option<u64>,
+    version: Option<u64>,
 ) -> Fallible<Hash> {
     if ptr.borrow().clean {
         return Ok(ptr.borrow().hash);
@@ -73,12 +73,12 @@ pub fn _commit<C: Cache>(
                 let int_left = noderef_as!(some_node_ref, Internal).left.clone();
                 let int_right = noderef_as!(some_node_ref, Internal).right.clone();
 
-                _commit(ctx, int_leaf_node.clone(), update_list, round)?;
-                _commit(ctx, int_left.clone(), update_list, round)?;
-                _commit(ctx, int_right.clone(), update_list, round)?;
+                _commit(ctx, int_leaf_node.clone(), update_list, version)?;
+                _commit(ctx, int_left.clone(), update_list, version)?;
+                _commit(ctx, int_right.clone(), update_list, version)?;
 
-                if let Some(round) = round {
-                    noderef_as_mut!(some_node_ref, Internal).round = round;
+                if let Some(version) = version {
+                    noderef_as_mut!(some_node_ref, Internal).version = version;
                 }
                 some_node_ref.borrow_mut().update_hash();
                 ptr.borrow_mut().hash = some_node_ref.borrow().get_hash();
@@ -94,8 +94,8 @@ pub fn _commit<C: Cache>(
             if node_ref.borrow().is_clean() {
                 ptr.borrow_mut().hash = node_ref.borrow().get_hash();
             } else {
-                if let Some(round) = round {
-                    noderef_as_mut!(node_ref, Leaf).round = round;
+                if let Some(version) = version {
+                    noderef_as_mut!(node_ref, Leaf).version = version;
                 }
                 node_ref.borrow_mut().update_hash();
                 ptr.borrow_mut().hash = node_ref.borrow().get_hash();

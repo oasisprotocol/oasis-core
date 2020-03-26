@@ -39,11 +39,11 @@ impl MKVS for UrkelTree {
         &mut self,
         ctx: Context,
         namespace: Namespace,
-        round: u64,
+        version: u64,
     ) -> Fallible<(WriteLog, Hash)> {
         let lock = self.lock.clone();
         let _guard = lock.lock().unwrap();
-        UrkelTree::commit(self, ctx, namespace, round)
+        UrkelTree::commit(self, ctx, namespace, version)
     }
 
     fn rollback(&mut self) {

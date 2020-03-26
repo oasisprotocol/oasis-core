@@ -118,11 +118,11 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	// Import chunk into the node database.
 	emptyRoot := node.Root{
 		Namespace: chunk.Root.Namespace,
-		Round:     chunk.Root.Round,
+		Version:   chunk.Root.Version,
 	}
 	emptyRoot.Hash.Empty()
 
-	batch := ndb.NewBatch(emptyRoot, chunk.Root.Round, true)
+	batch := ndb.NewBatch(emptyRoot, chunk.Root.Version, true)
 	defer batch.Reset()
 
 	subtree := batch.MaybeStartSubtree(nil, 0, ptr)

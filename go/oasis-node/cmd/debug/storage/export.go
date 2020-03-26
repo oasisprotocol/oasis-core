@@ -101,7 +101,7 @@ func exportRuntime(dataDir, destDir string, id common.Namespace, rtg *registry.R
 
 	root := storageAPI.Root{
 		Namespace: id,
-		Round:     rtg.Round,
+		Version:   rtg.Round,
 		Hash:      rtg.StateRoot,
 	}
 	tree := urkel.NewWithRoot(storageBackend, nil, root)
@@ -110,7 +110,7 @@ func exportRuntime(dataDir, destDir string, id common.Namespace, rtg *registry.R
 
 	fn := fmt.Sprintf("storage-dump-%v-%d.json",
 		root.Namespace.String(),
-		root.Round,
+		root.Version,
 	)
 	fn = filepath.Join(destDir, fn)
 	return exportIterator(fn, &root, it)

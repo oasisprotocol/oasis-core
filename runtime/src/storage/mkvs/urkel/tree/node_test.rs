@@ -98,7 +98,7 @@ fn test_serialization_internal() {
 #[test]
 fn test_hash_leaf() {
     let mut leaf_node = LeafNode {
-        round: 0xDEADBEEF,
+        version: 0xDEADBEEF,
         key: b"a golden key".to_vec(),
         value: b"value".to_vec(),
         ..Default::default()
@@ -118,7 +118,7 @@ fn test_hash_internal() {
     let right_hash = Hash::digest_bytes(b"everyone move to the right");
 
     let mut int_node = InternalNode {
-        round: 0xDEADBEEF,
+        version: 0xDEADBEEF,
         label: b"abc".to_vec(),
         label_bit_length: 23,
         leaf_node: Rc::new(RefCell::new(NodePointer {

@@ -47,7 +47,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "Commit")
 	root := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      rootHash,
 	}
 
@@ -135,7 +135,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 		err = rs.RestoreChunk(ctx, cm, &buf)
 		require.NoError(err, "RestoreChunk")
 	}
-	err = ndb2.Finalize(ctx, root.Round, []hash.Hash{root.Hash})
+	err = ndb2.Finalize(ctx, root.Version, []hash.Hash{root.Hash})
 	require.NoError(err, "Finalize")
 
 	// Verify that everything has been restored.

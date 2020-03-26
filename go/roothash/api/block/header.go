@@ -113,7 +113,7 @@ func (h *Header) StorageRoots() (roots []storage.Root) {
 	} {
 		roots = append(roots, storage.Root{
 			Namespace: h.Namespace,
-			Round:     h.Round,
+			Version:   h.Round,
 			Hash:      rootHash,
 		})
 	}

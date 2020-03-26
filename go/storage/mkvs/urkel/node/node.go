@@ -39,8 +39,8 @@ const (
 	// LeafNodeSize is the minimum size of a leaf node in memory.
 	LeafNodeSize = uint64(unsafe.Sizeof(LeafNode{}))
 
-	// RoundSize is the size of the encoded round.
-	RoundSize = int(unsafe.Sizeof(uint64(0)))
+	// VersionSize is the size of the encoded version.
+	VersionSize = int(unsafe.Sizeof(uint64(0)))
 	// ValueLengthSize is the size of the encoded value length.
 	ValueLengthSize = int(unsafe.Sizeof(uint32(0)))
 )
@@ -54,24 +54,24 @@ var (
 
 // Root is a storage root.
 type Root struct {
-	// Namespace is the chain namespace under which the root is stored.
+	// Namespace is the namespace under which the root is stored.
 	Namespace common.Namespace `json:"ns"`
-	// Round is the chain round in which the root is stored.
-	Round uint64 `json:"round"`
+	// Version is the monotonically increasing version number in which the root is stored.
+	Version uint64 `json:"version"`
 	// Hash is the merkle root hash.
 	Hash hash.Hash `json:"hash"`
 }
 
 // String returns the string representation of a storage root.
 func (r Root) String() string {
-	return fmt.Sprintf("<Root ns=%s round=%d hash=%s>", r.Namespace, r.Round, r.Hash)
+	return fmt.Sprintf("<Root ns=%s version=%d hash=%s>", r.Namespace, r.Version, r.Hash)
 }
 
 // Empty sets the storage root to an empty root.
 func (r *Root) Empty() {
 	var emptyNs common.Namespace
 	r.Namespace = emptyNs
-	r.Round = 0
+	r.Version = 0
 	r.Hash.Empty()
 }
 
@@ -82,7 +82,7 @@ func (r *Root) IsEmpty() bool {
 		return false
 	}
 
-	if r.Round != 0 {
+	if r.Version != 0 {
 		return false
 	}
 
@@ -95,7 +95,7 @@ func (r *Root) Equal(other *Root) bool {
 		return false
 	}
 
-	if r.Round != other.Round {
+	if r.Version != other.Version {
 		return false
 	}
 
@@ -103,7 +103,7 @@ func (r *Root) Equal(other *Root) bool {
 }
 
 // Follows checks if another root follows the given root. A root follows
-// another iff the namespace matches and the round is either equal or
+// another iff the namespace matches and the version is either equal or
 // exactly one higher.
 //
 // It is the responsibility of the caller to check if the merkle roots
@@ -113,7 +113,7 @@ func (r *Root) Follows(other *Root) bool {
 		return false
 	}
 
-	if r.Round != other.Round && r.Round != other.Round+1 {
+	if r.Version != other.Version && r.Version != other.Version+1 {
 		return false
 	}
 
@@ -240,8 +240,8 @@ type Node interface {
 	// GetHash returns the node's cached hash.
 	GetHash() hash.Hash
 
-	// GetCreatedRound returns the round in which the node has been created.
-	GetCreatedRound() uint64
+	// GetCreatedVersion returns the version in which the node has been created.
+	GetCreatedVersion() uint64
 
 	// UpdateHash updates the node's cached hash by recomputing it.
 	//
@@ -267,9 +267,9 @@ type Node interface {
 // Note that Label and LabelBitLength can only be empty iff the internal
 // node is the root of the tree.
 type InternalNode struct {
-	// Round is the round in which the node has been created.
-	Round uint64
-	Hash  hash.Hash
+	// Version is the version in which the node has been created.
+	Version uint64
+	Hash    hash.Hash
 	// Label is the label on the incoming edge.
 	Label Key
 	// LabelBitLength is the length of the label in bits.
@@ -298,8 +298,8 @@ func (n *InternalNode) Size() uint64 {
 //
 // Does not mark the node as clean.
 func (n *InternalNode) UpdateHash() {
-	var round [8]byte
-	binary.LittleEndian.PutUint64(round[:], n.Round)
+	var version [8]byte
+	binary.LittleEndian.PutUint64(version[:], n.Version)
 
 	leafNodeHash := n.LeafNode.GetHash()
 	leftHash := n.Left.GetHash()
@@ -308,7 +308,7 @@ func (n *InternalNode) UpdateHash() {
 
 	n.Hash.FromBytes(
 		[]byte{PrefixInternalNode},
-		round[:],
+		version[:],
 		labelBitLength,
 		n.Label[:],
 		leafNodeHash[:],
@@ -322,9 +322,9 @@ func (n *InternalNode) GetHash() hash.Hash {
 	return n.Hash
 }
 
-// GetCreatedRound returns the round in which the node has been created.
-func (n *InternalNode) GetCreatedRound() uint64 {
-	return n.Round
+// GetCreatedVersion returns the version in which the node has been created.
+func (n *InternalNode) GetCreatedVersion() uint64 {
+	return n.Version
 }
 
 // Extract makes a copy of the node containing only hash references.
@@ -338,7 +338,7 @@ func (n *InternalNode) Extract() Node {
 	}
 	return &InternalNode{
 		Clean:          true,
-		Round:          n.Round,
+		Version:        n.Version,
 		Hash:           n.Hash,
 		Label:          n.Label,
 		LabelBitLength: n.LabelBitLength,
@@ -358,7 +358,7 @@ func (n *InternalNode) Extract() Node {
 func (n *InternalNode) ExtractUnchecked() Node {
 	return &InternalNode{
 		Clean:          true,
-		Round:          n.Round,
+		Version:        n.Version,
 		Hash:           n.Hash,
 		Label:          n.Label,
 		LabelBitLength: n.LabelBitLength,
@@ -383,12 +383,12 @@ func (n *InternalNode) CompactMarshalBinary() (data []byte, err error) {
 		}
 	}
 
-	data = make([]byte, 1+RoundSize+DepthSize+len(n.Label)+len(leafNodeBinary))
+	data = make([]byte, 1+VersionSize+DepthSize+len(n.Label)+len(leafNodeBinary))
 	pos := 0
 	data[pos] = PrefixInternalNode
 	pos++
-	binary.LittleEndian.PutUint64(data[pos:pos+RoundSize], n.Round)
-	pos += RoundSize
+	binary.LittleEndian.PutUint64(data[pos:pos+VersionSize], n.Version)
+	pos += VersionSize
 	copy(data[pos:pos+DepthSize], n.LabelBitLength.MarshalBinary()[:])
 	pos += DepthSize
 	copy(data[pos:pos+len(n.Label)], n.Label)
@@ -420,7 +420,7 @@ func (n *InternalNode) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled internal node.
 func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 1+RoundSize+DepthSize+1 {
+	if len(data) < 1+VersionSize+DepthSize+1 {
 		return 0, ErrMalformedNode
 	}
 
@@ -430,8 +430,8 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 	}
 	pos++
 
-	n.Round = binary.LittleEndian.Uint64(data[pos : pos+RoundSize])
-	pos += RoundSize
+	n.Version = binary.LittleEndian.Uint64(data[pos : pos+VersionSize])
+	pos += VersionSize
 
 	if _, err := n.LabelBitLength.UnmarshalBinary(data[pos:]); err != nil {
 		return 0, errors.Wrap(err, "urkel: failed to unmarshal LabelBitLength")
@@ -508,7 +508,12 @@ func (n *InternalNode) Equal(other Node) bool {
 		if n.Clean && other.Clean {
 			return n.Hash.Equal(&other.Hash)
 		}
-		return n.Round == other.Round && n.LeafNode.Equal(other.LeafNode) && n.Left.Equal(other.Left) && n.Right.Equal(other.Right) && n.LabelBitLength == other.LabelBitLength && bytes.Equal(n.Label, other.Label)
+		return n.Version == other.Version &&
+			n.LeafNode.Equal(other.LeafNode) &&
+			n.Left.Equal(other.Left) &&
+			n.Right.Equal(other.Right) &&
+			n.LabelBitLength == other.LabelBitLength &&
+			bytes.Equal(n.Label, other.Label)
 	}
 	return false
 }
@@ -516,11 +521,11 @@ func (n *InternalNode) Equal(other Node) bool {
 // LeafNode is a leaf node containing a key/value pair.
 type LeafNode struct {
 	Clean bool
-	// Round is the round in which the node has been created.
-	Round uint64
-	Hash  hash.Hash
-	Key   Key
-	Value []byte
+	// Version is the version in which the node has been created.
+	Version uint64
+	Hash    hash.Hash
+	Key     Key
+	Value   []byte
 }
 
 // IsClean returns true if the node is non-dirty.
@@ -541,19 +546,19 @@ func (n *LeafNode) GetHash() hash.Hash {
 	return n.Hash
 }
 
-// GetCreatedRound returns the round in which the node has been created.
-func (n *LeafNode) GetCreatedRound() uint64 {
-	return n.Round
+// GetCreatedVersion returns the version in which the node has been created.
+func (n *LeafNode) GetCreatedVersion() uint64 {
+	return n.Version
 }
 
 // UpdateHash updates the node's cached hash by recomputing it.
 //
 // Does not mark the node as clean.
 func (n *LeafNode) UpdateHash() {
-	var round [RoundSize]byte
-	binary.LittleEndian.PutUint64(round[:], n.Round)
+	var version [VersionSize]byte
+	binary.LittleEndian.PutUint64(version[:], n.Version)
 
-	n.Hash.FromBytes([]byte{PrefixLeafNode}, round[:], n.Key[:], n.Value[:])
+	n.Hash.FromBytes([]byte{PrefixLeafNode}, version[:], n.Key[:], n.Value[:])
 }
 
 // Extract makes a copy of the node containing only hash references.
@@ -568,11 +573,11 @@ func (n *LeafNode) Extract() Node {
 // without checking the dirty flag.
 func (n *LeafNode) ExtractUnchecked() Node {
 	return &LeafNode{
-		Clean: true,
-		Round: n.Round,
-		Hash:  n.Hash,
-		Key:   n.Key,
-		Value: n.Value,
+		Clean:   true,
+		Version: n.Version,
+		Hash:    n.Hash,
+		Key:     n.Key,
+		Value:   n.Value,
 	}
 }
 
@@ -583,12 +588,12 @@ func (n *LeafNode) CompactMarshalBinary() (data []byte, err error) {
 		return nil, err
 	}
 
-	data = make([]byte, 1+RoundSize+len(keyData)+ValueLengthSize+len(n.Value))
+	data = make([]byte, 1+VersionSize+len(keyData)+ValueLengthSize+len(n.Value))
 	pos := 0
 	data[pos] = PrefixLeafNode
 	pos++
-	binary.LittleEndian.PutUint64(data[pos:pos+RoundSize], n.Round)
-	pos += RoundSize
+	binary.LittleEndian.PutUint64(data[pos:pos+VersionSize], n.Version)
+	pos += VersionSize
 	copy(data[pos:pos+len(keyData)], keyData)
 	pos += len(keyData)
 	binary.LittleEndian.PutUint32(data[pos:pos+ValueLengthSize], uint32(len(n.Value)))
@@ -610,13 +615,13 @@ func (n *LeafNode) UnmarshalBinary(data []byte) error {
 
 // SizedUnmarshalBinary decodes a binary marshaled leaf node.
 func (n *LeafNode) SizedUnmarshalBinary(data []byte) (int, error) {
-	if len(data) < 1+RoundSize+DepthSize+ValueLengthSize || data[0] != PrefixLeafNode {
+	if len(data) < 1+VersionSize+DepthSize+ValueLengthSize || data[0] != PrefixLeafNode {
 		return 0, ErrMalformedNode
 	}
 
 	pos := 1
-	n.Round = binary.LittleEndian.Uint64(data[pos : pos+RoundSize])
-	pos += RoundSize
+	n.Version = binary.LittleEndian.Uint64(data[pos : pos+VersionSize])
+	pos += VersionSize
 
 	var key Key
 	keySize, err := key.SizedUnmarshalBinary(data[pos:])
@@ -659,7 +664,9 @@ func (n *LeafNode) Equal(other Node) bool {
 		if n.Clean && other.Clean {
 			return n.Hash.Equal(&other.Hash)
 		}
-		return n.Round == other.Round && n.Key.Equal(other.Key) && bytes.Equal(n.Value, other.Value)
+		return n.Version == other.Version &&
+			n.Key.Equal(other.Key) &&
+			bytes.Equal(n.Value, other.Value)
 	}
 	return false
 }

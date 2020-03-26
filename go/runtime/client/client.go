@@ -231,7 +231,7 @@ func (c *runtimeClient) GetBlock(ctx context.Context, request *api.GetBlockReque
 func (c *runtimeClient) getTxnTree(blk *block.Block) *transaction.Tree {
 	ioRoot := storage.Root{
 		Namespace: blk.Header.Namespace,
-		Round:     blk.Header.Round,
+		Version:   blk.Header.Round,
 		Hash:      blk.Header.IORoot,
 	}
 
@@ -312,8 +312,8 @@ func (c *runtimeClient) GetTxs(ctx context.Context, request *api.GetTxsRequest) 
 	}
 
 	ioRoot := storage.Root{
-		Round: request.Round,
-		Hash:  request.IORoot,
+		Version: request.Round,
+		Hash:    request.IORoot,
 	}
 	copy(ioRoot.Namespace[:], request.RuntimeID[:])
 

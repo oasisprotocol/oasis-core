@@ -12,7 +12,7 @@ import (
 
 // Implements Tree.
 func (t *tree) CommitKnown(ctx context.Context, root node.Root) (writelog.WriteLog, error) {
-	writeLog, _, err := t.commitWithHooks(ctx, root.Namespace, root.Round, func(rootHash hash.Hash) error {
+	writeLog, _, err := t.commitWithHooks(ctx, root.Namespace, root.Version, func(rootHash hash.Hash) error {
 		if !rootHash.Equal(&root.Hash) {
 			return ErrKnownRootMismatch
 		}
@@ -23,14 +23,14 @@ func (t *tree) CommitKnown(ctx context.Context, root node.Root) (writelog.WriteL
 }
 
 // Implements Tree.
-func (t *tree) Commit(ctx context.Context, namespace common.Namespace, round uint64) (writelog.WriteLog, hash.Hash, error) {
-	return t.commitWithHooks(ctx, namespace, round, nil)
+func (t *tree) Commit(ctx context.Context, namespace common.Namespace, version uint64) (writelog.WriteLog, hash.Hash, error) {
+	return t.commitWithHooks(ctx, namespace, version, nil)
 }
 
 func (t *tree) commitWithHooks(
 	ctx context.Context,
 	namespace common.Namespace,
-	round uint64,
+	version uint64,
 	beforeDbCommit func(hash.Hash) error,
 ) (writelog.WriteLog, hash.Hash, error) {
 	t.cache.Lock()
@@ -43,15 +43,15 @@ func (t *tree) commitWithHooks(
 	oldRoot := t.cache.getSyncRoot()
 	if oldRoot.IsEmpty() {
 		oldRoot.Namespace = namespace
-		oldRoot.Round = round
+		oldRoot.Version = version
 	}
 
-	batch := t.cache.db.NewBatch(oldRoot, round, false)
+	batch := t.cache.db.NewBatch(oldRoot, version, false)
 	defer batch.Reset()
 
 	subtree := batch.MaybeStartSubtree(nil, 0, t.cache.pendingRoot)
 
-	rootHash, err := doCommit(ctx, t.cache, batch, subtree, 0, t.cache.pendingRoot, &round)
+	rootHash, err := doCommit(ctx, t.cache, batch, subtree, 0, t.cache.pendingRoot, &version)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
@@ -86,7 +86,7 @@ func (t *tree) commitWithHooks(
 
 	root := node.Root{
 		Namespace: namespace,
-		Round:     round,
+		Version:   version,
 		Hash:      rootHash,
 	}
 	if err := batch.PutWriteLog(log, logAnns); err != nil {
@@ -120,7 +120,7 @@ func doCommit(
 	subtree db.Subtree,
 	depth node.Depth,
 	ptr *node.Pointer,
-	round *uint64,
+	version *uint64,
 ) (h hash.Hash, err error) {
 	if ptr == nil {
 		h.Empty()
@@ -151,13 +151,13 @@ func doCommit(
 		}
 
 		// Commit internal leaf (considered to be on the same depth as the internal node).
-		if _, err = doCommit(ctx, cache, batch, subtree, depth, n.LeafNode, round); err != nil {
+		if _, err = doCommit(ctx, cache, batch, subtree, depth, n.LeafNode, version); err != nil {
 			return
 		}
 
 		for _, subNode := range []*node.Pointer{n.Left, n.Right} {
 			newSubtree := batch.MaybeStartSubtree(subtree, depth+1, subNode)
-			if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, subNode, round); err != nil {
+			if _, err = doCommit(ctx, cache, batch, newSubtree, depth+1, subNode, version); err != nil {
 				return
 			}
 			if newSubtree != subtree {
@@ -167,8 +167,8 @@ func doCommit(
 			}
 		}
 
-		if round != nil {
-			n.Round = *round
+		if version != nil {
+			n.Version = *version
 		}
 		n.UpdateHash()
 
@@ -187,8 +187,8 @@ func doCommit(
 			panic("urkel: non-clean pointer has clean node")
 		}
 
-		if round != nil {
-			n.Round = *round
+		if version != nil {
+			n.Version = *version
 		}
 		n.UpdateHash()
 

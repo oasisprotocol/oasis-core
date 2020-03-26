@@ -20,25 +20,25 @@ import (
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
 )
 
-const dbVersion = 2
+const dbVersion = 3
 
 var (
 	// nodeKeyFmt is the key format for nodes (node hash).
 	//
 	// Value is serialized node.
 	nodeKeyFmt = keyformat.New(0x00, &hash.Hash{})
-	// writeLogKeyFmt is the key format for write logs (round, new root,
+	// writeLogKeyFmt is the key format for write logs (version, new root,
 	// old root).
 	//
 	// Value is CBOR-serialized write log.
 	writeLogKeyFmt = keyformat.New(0x01, uint64(0), &hash.Hash{}, &hash.Hash{})
-	// rootsMetadataKeyFmt is the key format for roots metadata. The key format is (round).
+	// rootsMetadataKeyFmt is the key format for roots metadata. The key format is (version).
 	//
 	// Value is CBOR-serialized rootsMetadata.
 	rootsMetadataKeyFmt = keyformat.New(0x02, uint64(0))
 	// rootUpdatedNodesKeyFmt is the key format for the pending updated nodes for the
 	// given root that need to be removed only in case the given root is not among
-	// the finalized roots. They key format is (round, root).
+	// the finalized roots. They key format is (version, root).
 	//
 	// Value is CBOR-serialized []updatedNode.
 	rootUpdatedNodesKeyFmt = keyformat.New(0x03, uint64(0), &hash.Hash{})
@@ -161,13 +161,13 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 	if err := d.sanityCheckNamespace(root.Namespace); err != nil {
 		return nil, err
 	}
-	// If the round is earlier than the earliest round, we don't have the node (it was pruned).
+	// If the version is earlier than the earliest version, we don't have the node (it was pruned).
 	// Note that the key can still be present in the database until it gets compacted.
-	if root.Round < d.meta.getEarliestRound() {
+	if root.Version < d.meta.getEarliestVersion() {
 		return nil, api.ErrNodeNotFound
 	}
 
-	tx := d.db.NewTransactionAt(roundToTs(root.Round), false)
+	tx := d.db.NewTransactionAt(versionToTs(root.Version), false)
 	defer tx.Discard()
 	item, err := tx.Get(nodeKeyFmt.Encode(&ptr.Hash))
 	switch err {
@@ -206,12 +206,12 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 	if err := d.sanityCheckNamespace(startRoot.Namespace); err != nil {
 		return nil, err
 	}
-	// If the round is earlier than the earliest round, we don't have the roots.
-	if endRoot.Round < d.meta.getEarliestRound() {
+	// If the version is earlier than the earliest version, we don't have the roots.
+	if endRoot.Version < d.meta.getEarliestVersion() {
 		return nil, api.ErrWriteLogNotFound
 	}
 
-	tx := d.db.NewTransactionAt(roundToTs(endRoot.Round), false)
+	tx := d.db.NewTransactionAt(versionToTs(endRoot.Version), false)
 	discardTx := true
 	defer func() {
 		if discardTx {
@@ -249,7 +249,7 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 
 		wl, err := func() (writelog.Iterator, error) {
 			// Iterate over all write logs that result in the current item.
-			prefix := writeLogKeyFmt.Encode(endRoot.Round, &curItem.endRootHash)
+			prefix := writeLogKeyFmt.Encode(endRoot.Version, &curItem.endRootHash)
 			it := tx.NewIterator(badger.IteratorOptions{Prefix: prefix})
 			defer it.Close()
 
@@ -260,11 +260,11 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 
 				item := it.Item()
 
-				var decRound uint64
+				var decVersion uint64
 				var decEndRootHash hash.Hash
 				var decStartRootHash hash.Hash
 
-				if !writeLogKeyFmt.Decode(item.Key(), &decRound, &decEndRootHash, &decStartRootHash) {
+				if !writeLogKeyFmt.Decode(item.Key(), &decVersion, &decEndRootHash, &decStartRootHash) {
 					// This should not happen as the Badger iterator should take care of it.
 					panic("mkvs/badger: bad iterator")
 				}
@@ -292,7 +292,7 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 							key := nextItem.logKeys[index]
 							root := node.Root{
 								Namespace: endRoot.Namespace,
-								Round:     endRoot.Round,
+								Version:   endRoot.Version,
 								Hash:      nextItem.logRoots[index],
 							}
 
@@ -340,25 +340,25 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 	return nil, api.ErrWriteLogNotFound
 }
 
-func (d *badgerNodeDB) GetLatestRound(ctx context.Context) (uint64, error) {
-	round, _ := d.meta.getLastFinalizedRound()
-	return round, nil
+func (d *badgerNodeDB) GetLatestVersion(ctx context.Context) (uint64, error) {
+	version, _ := d.meta.getLastFinalizedVersion()
+	return version, nil
 }
 
-func (d *badgerNodeDB) GetEarliestRound(ctx context.Context) (uint64, error) {
-	return d.meta.getEarliestRound(), nil
+func (d *badgerNodeDB) GetEarliestVersion(ctx context.Context) (uint64, error) {
+	return d.meta.getEarliestVersion(), nil
 }
 
-func (d *badgerNodeDB) GetRootsForRound(ctx context.Context, round uint64) (roots []hash.Hash, err error) {
-	// If the round is earlier than the earliest round, we don't have the roots.
-	if round < d.meta.getEarliestRound() {
+func (d *badgerNodeDB) GetRootsForVersion(ctx context.Context, version uint64) (roots []hash.Hash, err error) {
+	// If the version is earlier than the earliest version, we don't have the roots.
+	if version < d.meta.getEarliestVersion() {
 		return nil, nil
 	}
 
 	tx := d.db.NewTransactionAt(tsMetadata, false)
 	defer tx.Discard()
 
-	rootsMeta, err := loadRootsMetadata(tx, round)
+	rootsMeta, err := loadRootsMetadata(tx, version)
 	if err != nil {
 		return nil, err
 	}
@@ -379,8 +379,8 @@ func (d *badgerNodeDB) HasRoot(root node.Root) bool {
 		return true
 	}
 
-	// If the round is earlier than the earliest round, we don't have the root.
-	if root.Round < d.meta.getEarliestRound() {
+	// If the version is earlier than the earliest version, we don't have the root.
+	if root.Version < d.meta.getEarliestVersion() {
 		return false
 	}
 
@@ -390,31 +390,31 @@ func (d *badgerNodeDB) HasRoot(root node.Root) bool {
 	tx := d.db.NewTransactionAt(tsMetadata, false)
 	defer tx.Discard()
 
-	rootsMeta, err := loadRootsMetadata(tx, root.Round)
+	rootsMeta, err := loadRootsMetadata(tx, root.Version)
 	if err != nil {
 		panic(err)
 	}
 	return rootsMeta.Roots[root.Hash] != nil
 }
 
-func (d *badgerNodeDB) Finalize(ctx context.Context, round uint64, roots []hash.Hash) error { // nolint: gocyclo
+func (d *badgerNodeDB) Finalize(ctx context.Context, version uint64, roots []hash.Hash) error { // nolint: gocyclo
 	d.metaUpdateLock.Lock()
 	defer d.metaUpdateLock.Unlock()
 
-	// Round batch collects removals at the round timestamp.
-	roundBatch := d.db.NewWriteBatchAt(roundToTs(round))
-	defer roundBatch.Cancel()
-	// Transaction is used to read at the round timestamp.
-	tx := d.db.NewTransactionAt(roundToTs(round), true)
+	// Version batch collects removals at the version timestamp.
+	versionBatch := d.db.NewWriteBatchAt(versionToTs(version))
+	defer versionBatch.Cancel()
+	// Transaction is used to read at the version timestamp.
+	tx := d.db.NewTransactionAt(versionToTs(version), true)
 	defer tx.Discard()
 
-	// Make sure that the previous round has been finalized.
-	lastFinalizedRound, exists := d.meta.getLastFinalizedRound()
-	if round > 0 && exists && lastFinalizedRound < (round-1) {
+	// Make sure that the previous version has been finalized.
+	lastFinalizedVersion, exists := d.meta.getLastFinalizedVersion()
+	if version > 0 && exists && lastFinalizedVersion < (version-1) {
 		return api.ErrNotFinalized
 	}
-	// Make sure that this round has not yet been finalized.
-	if exists && round <= lastFinalizedRound {
+	// Make sure that this version has not yet been finalized.
+	if exists && version <= lastFinalizedVersion {
 		return api.ErrAlreadyFinalized
 	}
 
@@ -426,7 +426,7 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, round uint64, roots []hash.
 	}
 
 	var rootsChanged bool
-	rootsMeta, err := loadRootsMetadata(tx, round)
+	rootsMeta, err := loadRootsMetadata(tx, version)
 	if err != nil {
 		return err
 	}
@@ -454,9 +454,9 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, round uint64, roots []hash.
 
 	for rootHash := range rootsMeta.Roots {
 		// TODO: Consider colocating updated nodes with the root metadata.
-		rootUpdatedNodesKey := rootUpdatedNodesKeyFmt.Encode(round, &rootHash)
+		rootUpdatedNodesKey := rootUpdatedNodesKeyFmt.Encode(version, &rootHash)
 
-		// Load hashes of nodes added during this round for this root.
+		// Load hashes of nodes added during this version for this root.
 		item, err := tx.Get(rootUpdatedNodesKey)
 		if err != nil {
 			panic("mkvs/badger: corrupted root added nodes index")
@@ -481,9 +481,9 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, round uint64, roots []hash.
 			}
 		} else {
 			// Remove any non-finalized roots. It is safe to remove these nodes
-			// as they can never be resurrected due to the round being part of the
+			// as they can never be resurrected due to the version being part of the
 			// node hash as long as we make sure that these nodes are not shared
-			// with any finalized roots added in the same round.
+			// with any finalized roots added in the same version.
 			for _, n := range updatedNodes {
 				if !n.Removed {
 					maybeLoneNodes[n.Hash] = true
@@ -496,12 +496,12 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, round uint64, roots []hash.
 			// Remove write logs for the non-finalized root.
 			if !d.discardWriteLogs {
 				if err = func() error {
-					rootWriteLogsPrefix := writeLogKeyFmt.Encode(round, &rootHash)
+					rootWriteLogsPrefix := writeLogKeyFmt.Encode(version, &rootHash)
 					wit := tx.NewIterator(badger.IteratorOptions{Prefix: rootWriteLogsPrefix})
 					defer wit.Close()
 
 					for wit.Rewind(); wit.Valid(); wit.Next() {
-						if err = roundBatch.Delete(wit.Item().KeyCopy(nil)); err != nil {
+						if err = versionBatch.Delete(wit.Item().KeyCopy(nil)); err != nil {
 							return err
 						}
 					}
@@ -525,13 +525,13 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, round uint64, roots []hash.
 		}
 
 		key := nodeKeyFmt.Encode(&h)
-		if err := roundBatch.Delete(key); err != nil {
+		if err := versionBatch.Delete(key); err != nil {
 			return err
 		}
 	}
 
 	// Commit batch.
-	if err := roundBatch.Flush(); err != nil {
+	if err := versionBatch.Flush(); err != nil {
 		return err
 	}
 
@@ -542,9 +542,9 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, round uint64, roots []hash.
 		}
 	}
 
-	// Update last finalized round.
-	if err := d.meta.setLastFinalizedRound(tx, round); err != nil {
-		return fmt.Errorf("mkvs/badger: failed to set last finalized round: %w", err)
+	// Update last finalized version.
+	if err := d.meta.setLastFinalizedVersion(tx, version); err != nil {
+		return fmt.Errorf("mkvs/badger: failed to set last finalized version: %w", err)
 	}
 
 	if err := tx.CommitAt(tsMetadata, nil); err != nil {
@@ -553,27 +553,27 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, round uint64, roots []hash.
 	return nil
 }
 
-func (d *badgerNodeDB) Prune(ctx context.Context, round uint64) error {
+func (d *badgerNodeDB) Prune(ctx context.Context, version uint64) error {
 	d.metaUpdateLock.Lock()
 	defer d.metaUpdateLock.Unlock()
 
-	// Make sure that the round that we try to prune has been finalized.
-	lastFinalizedRound, exists := d.meta.getLastFinalizedRound()
-	if !exists || lastFinalizedRound < round {
+	// Make sure that the version that we try to prune has been finalized.
+	lastFinalizedVersion, exists := d.meta.getLastFinalizedVersion()
+	if !exists || lastFinalizedVersion < version {
 		return api.ErrNotFinalized
 	}
-	// Make sure that the round that we are trying to prune is the earliest round.
-	if round != d.meta.getEarliestRound() {
+	// Make sure that the version that we are trying to prune is the earliest version.
+	if version != d.meta.getEarliestVersion() {
 		return api.ErrNotEarliest
 	}
 
-	// Remove all roots in round.
-	batch := d.db.NewWriteBatchAt(roundToTs(round))
+	// Remove all roots in version.
+	batch := d.db.NewWriteBatchAt(versionToTs(version))
 	defer batch.Cancel()
-	tx := d.db.NewTransactionAt(roundToTs(round), true)
+	tx := d.db.NewTransactionAt(versionToTs(version), true)
 	defer tx.Discard()
 
-	rootsMeta, err := loadRootsMetadata(tx, round)
+	rootsMeta, err := loadRootsMetadata(tx, version)
 	if err != nil {
 		return err
 	}
@@ -595,11 +595,11 @@ func (d *badgerNodeDB) Prune(ctx context.Context, round uint64) error {
 			continue
 		}
 
-		// Traverse the root and prune all items created in this round.
-		root := node.Root{Namespace: d.namespace, Round: round, Hash: rootHash}
+		// Traverse the root and prune all items created in this version.
+		root := node.Root{Namespace: d.namespace, Version: version, Hash: rootHash}
 		var innerErr error
 		err := api.Visit(ctx, d, root, func(ctx context.Context, n node.Node) bool {
-			if n.GetCreatedRound() == round {
+			if n.GetCreatedVersion() == version {
 				h := n.GetHash()
 				if innerErr = batch.Delete(nodeKeyFmt.Encode(&h)); innerErr != nil {
 					return false
@@ -616,16 +616,16 @@ func (d *badgerNodeDB) Prune(ctx context.Context, round uint64) error {
 	}
 
 	// Delete roots metadata.
-	if err := tx.Delete(rootsMetadataKeyFmt.Encode(round)); err != nil {
+	if err := tx.Delete(rootsMetadataKeyFmt.Encode(version)); err != nil {
 		return fmt.Errorf("mkvs/badger: failed to remove roots metadata: %w", err)
 	}
 
-	// Prune all write logs in round.
+	// Prune all write logs in version.
 	if !d.discardWriteLogs {
-		wtx := d.db.NewTransactionAt(roundToTs(round), false)
+		wtx := d.db.NewTransactionAt(versionToTs(version), false)
 		defer wtx.Discard()
 
-		prefix := writeLogKeyFmt.Encode(round)
+		prefix := writeLogKeyFmt.Encode(version)
 		it := wtx.NewIterator(badger.IteratorOptions{Prefix: prefix})
 		defer it.Close()
 
@@ -642,20 +642,20 @@ func (d *badgerNodeDB) Prune(ctx context.Context, round uint64) error {
 	}
 
 	// Update metadata.
-	if err := d.meta.setEarliestRound(tx, round+1); err != nil {
-		return fmt.Errorf("mkvs/badger: failed to set earliest round: %w", err)
+	if err := d.meta.setEarliestVersion(tx, version+1); err != nil {
+		return fmt.Errorf("mkvs/badger: failed to set earliest version: %w", err)
 	}
 	if err := tx.CommitAt(tsMetadata, nil); err != nil {
 		return fmt.Errorf("mkvs/badger: failed to commit: %w", err)
 	}
 
-	// Discard everything invalidated at or below given round.
-	d.db.SetDiscardTs(roundToTs(round + 1))
+	// Discard everything invalidated at or below given version.
+	d.db.SetDiscardTs(versionToTs(version + 1))
 
 	return nil
 }
 
-func (d *badgerNodeDB) NewBatch(oldRoot node.Root, round uint64, chunk bool) api.Batch {
+func (d *badgerNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) api.Batch {
 	// WARNING: There is a maximum batch size and maximum batch entry count.
 	// Both of these things are derived from the MaxTableSize option.
 	//
@@ -665,7 +665,7 @@ func (d *badgerNodeDB) NewBatch(oldRoot node.Root, round uint64, chunk bool) api
 
 	return &badgerBatch{
 		db:      d,
-		bat:     d.db.NewWriteBatchAt(roundToTs(round)),
+		bat:     d.db.NewWriteBatchAt(versionToTs(version)),
 		oldRoot: oldRoot,
 		chunk:   chunk,
 	}
@@ -747,17 +747,17 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 		return api.ErrRootMustFollowOld
 	}
 
-	// Make sure that the round that we try to commit into has not yet been finalized.
-	lastFinalizedRound, exists := ba.db.meta.getLastFinalizedRound()
-	if exists && lastFinalizedRound >= root.Round {
+	// Make sure that the version that we try to commit into has not yet been finalized.
+	lastFinalizedVersion, exists := ba.db.meta.getLastFinalizedVersion()
+	if exists && lastFinalizedVersion >= root.Version {
 		return api.ErrAlreadyFinalized
 	}
 
-	// Update the set of roots for this round.
-	tx := ba.db.db.NewTransactionAt(roundToTs(root.Round), true)
+	// Update the set of roots for this version.
+	tx := ba.db.db.NewTransactionAt(versionToTs(root.Version), true)
 	defer tx.Discard()
 
-	rootsMeta, err := loadRootsMetadata(tx, root.Round)
+	rootsMeta, err := loadRootsMetadata(tx, root.Version)
 	if err != nil {
 		return err
 	}
@@ -782,19 +782,19 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 
 	if ba.chunk {
 		// Skip most of metadata updates if we are just importing chunks.
-		key := rootUpdatedNodesKeyFmt.Encode(root.Round, &root.Hash)
+		key := rootUpdatedNodesKeyFmt.Encode(root.Version, &root.Hash)
 		if err = tx.Set(key, cbor.Marshal([]updatedNode{})); err != nil {
 			return fmt.Errorf("mkvs/badger: set returned error: %w", err)
 		}
 	} else {
 		// Update the root link for the old root.
 		if !ba.oldRoot.Hash.IsEmpty() {
-			if ba.oldRoot.Round < ba.db.meta.getEarliestRound() && ba.oldRoot.Round != root.Round {
-				return api.ErrPreviousRoundMismatch
+			if ba.oldRoot.Version < ba.db.meta.getEarliestVersion() && ba.oldRoot.Version != root.Version {
+				return api.ErrPreviousVersionMismatch
 			}
 
 			var oldRootsMeta *rootsMetadata
-			oldRootsMeta, err = loadRootsMetadata(tx, ba.oldRoot.Round)
+			oldRootsMeta, err = loadRootsMetadata(tx, ba.oldRoot.Version)
 			if err != nil {
 				return err
 			}
@@ -809,8 +809,8 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 			}
 		}
 
-		// Store updated nodes (only needed until the round is finalized).
-		key := rootUpdatedNodesKeyFmt.Encode(root.Round, &root.Hash)
+		// Store updated nodes (only needed until the version is finalized).
+		key := rootUpdatedNodesKeyFmt.Encode(root.Version, &root.Hash)
 		if err = tx.Set(key, cbor.Marshal(ba.updatedNodes)); err != nil {
 			return fmt.Errorf("mkvs/badger: set returned error: %w", err)
 		}
@@ -819,7 +819,7 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 		if ba.writeLog != nil && ba.annotations != nil {
 			log := api.MakeHashedDBWriteLog(ba.writeLog, ba.annotations)
 			bytes := cbor.Marshal(log)
-			key := writeLogKeyFmt.Encode(root.Round, &root.Hash, &ba.oldRoot.Hash)
+			key := writeLogKeyFmt.Encode(root.Version, &root.Hash, &ba.oldRoot.Hash)
 			if err = ba.bat.Set(key, bytes); err != nil {
 				return fmt.Errorf("mkvs/badger: set new write log returned error: %w", err)
 			}

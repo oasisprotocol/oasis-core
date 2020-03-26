@@ -127,12 +127,12 @@ func summaryFromBlock(blk *block.Block) *blockSummary {
 		Round:     blk.Header.Round,
 		IORoot: urkelNode.Root{
 			Namespace: blk.Header.Namespace,
-			Round:     blk.Header.Round,
+			Version:   blk.Header.Round,
 			Hash:      blk.Header.IORoot,
 		},
 		StateRoot: urkelNode.Root{
 			Namespace: blk.Header.Namespace,
-			Round:     blk.Header.Round,
+			Version:   blk.Header.Round,
 			Hash:      blk.Header.StateRoot,
 		},
 	}
@@ -543,9 +543,9 @@ mainLoop:
 			if lastDiff.fetched {
 				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 					Namespace: lastDiff.thisRoot.Namespace,
-					SrcRound:  lastDiff.prevRoot.Round,
+					SrcRound:  lastDiff.prevRoot.Version,
 					SrcRoot:   lastDiff.prevRoot.Hash,
-					DstRound:  lastDiff.thisRoot.Round,
+					DstRound:  lastDiff.thisRoot.Version,
 					DstRoot:   lastDiff.thisRoot.Hash,
 					WriteLog:  lastDiff.writeLog,
 				})
@@ -607,9 +607,9 @@ mainLoop:
 					Round:     lastFullyAppliedRound + 1,
 				}
 				dummy.IORoot.Empty()
-				dummy.IORoot.Round = lastFullyAppliedRound + 1
+				dummy.IORoot.Version = lastFullyAppliedRound + 1
 				dummy.StateRoot.Empty()
-				dummy.StateRoot.Round = lastFullyAppliedRound + 1
+				dummy.StateRoot.Version = lastFullyAppliedRound + 1
 				hashCache[lastFullyAppliedRound] = &dummy
 			}
 			// Determine if we need to fetch any old block summaries. In case the first
@@ -663,7 +663,7 @@ mainLoop:
 				this := hashCache[i]
 				prevIORoot := urkelNode.Root{ // IO roots aren't chained, so clear it (but leave cache intact).
 					Namespace: this.IORoot.Namespace,
-					Round:     this.IORoot.Round,
+					Version:   this.IORoot.Version,
 				}
 				prevIORoot.Hash.Empty()
 

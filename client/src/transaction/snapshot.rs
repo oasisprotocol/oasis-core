@@ -71,7 +71,7 @@ impl Clone for BlockSnapshot {
         let mkvs = UrkelTree::make()
             .with_root(Root {
                 namespace: self.block.header.namespace,
-                round: self.block.header.round,
+                version: self.block.header.round,
                 hash: self.block.header.state_root,
             })
             .new(Box::new(read_syncer.clone()));
@@ -91,7 +91,7 @@ impl BlockSnapshot {
         let mkvs = UrkelTree::make()
             .with_root(Root {
                 namespace: block.header.namespace,
-                round: block.header.round,
+                version: block.header.round,
                 hash: block.header.state_root,
             })
             .new(Box::new(read_syncer.clone()));

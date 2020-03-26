@@ -7,8 +7,8 @@ use crate::{
     storage::mkvs::urkel::{marshal::*, tree::*},
 };
 
-/// Size of the encoded round.
-const ROUND_SIZE: usize = size_of::<u64>();
+/// Size of the encoded version.
+const VERSION_SIZE: usize = size_of::<u64>();
 /// Size of the encoded value length.
 const VALUE_LENGTH_SIZE: usize = size_of::<u32>();
 
@@ -83,9 +83,9 @@ impl Marshal for InternalNode {
         }
 
         let mut result: Vec<u8> =
-            Vec::with_capacity(1 + ROUND_SIZE + leaf_node_binary.len() + 2 * Hash::len());
+            Vec::with_capacity(1 + VERSION_SIZE + leaf_node_binary.len() + 2 * Hash::len());
         result.push(NodeKind::Internal as u8);
-        result.append(&mut self.round.marshal_binary()?);
+        result.append(&mut self.version.marshal_binary()?);
         result.append(&mut self.label_bit_length.marshal_binary()?);
         result.extend_from_slice(&self.label);
         result.extend_from_slice(leaf_node_binary.as_ref());
@@ -97,16 +97,16 @@ impl Marshal for InternalNode {
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
         let mut pos = 0;
-        if data.len() < 1 + ROUND_SIZE + size_of::<Depth>() + 1
+        if data.len() < 1 + VERSION_SIZE + size_of::<Depth>() + 1
             || data[pos] != NodeKind::Internal as u8
         {
             return Err(TreeError::MalformedNode.into());
         }
         pos += 1;
 
-        self.round
-            .unmarshal_binary(&data[pos..(pos + ROUND_SIZE)])?;
-        pos += ROUND_SIZE;
+        self.version
+            .unmarshal_binary(&data[pos..(pos + VERSION_SIZE)])?;
+        pos += VERSION_SIZE;
 
         pos += self.label_bit_length.unmarshal_binary(&data[pos..])?;
         self.label = vec![0; self.label_bit_length.to_bytes()];
@@ -175,9 +175,9 @@ impl Marshal for InternalNode {
 
 impl Marshal for LeafNode {
     fn marshal_binary(&self) -> Fallible<Vec<u8>> {
-        let mut result: Vec<u8> = Vec::with_capacity(1 + ROUND_SIZE + VALUE_LENGTH_SIZE);
+        let mut result: Vec<u8> = Vec::with_capacity(1 + VERSION_SIZE + VALUE_LENGTH_SIZE);
         result.push(NodeKind::Leaf as u8);
-        result.append(&mut self.round.marshal_binary()?);
+        result.append(&mut self.version.marshal_binary()?);
         result.append(&mut self.key.marshal_binary()?);
         result.append(&mut (self.value.len() as u32).marshal_binary()?);
         result.extend_from_slice(&self.value);
@@ -186,7 +186,7 @@ impl Marshal for LeafNode {
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
-        if data.len() < 1 + ROUND_SIZE + size_of::<Depth>() + VALUE_LENGTH_SIZE
+        if data.len() < 1 + VERSION_SIZE + size_of::<Depth>() + VALUE_LENGTH_SIZE
             || data[0] != NodeKind::Leaf as u8
         {
             return Err(TreeError::MalformedNode.into());
@@ -195,9 +195,9 @@ impl Marshal for LeafNode {
         self.clean = true;
 
         let mut pos = 1;
-        self.round
-            .unmarshal_binary(&data[pos..(pos + ROUND_SIZE)])?;
-        pos += ROUND_SIZE;
+        self.version
+            .unmarshal_binary(&data[pos..(pos + VERSION_SIZE)])?;
+        pos += VERSION_SIZE;
 
         self.key = Key::new();
         let key_len = self.key.unmarshal_binary(&data[pos..])?;

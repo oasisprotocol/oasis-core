@@ -124,7 +124,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		// This will store the new Urkel tree root for later lookups.
 		var newRoot storageAPI.Root
 		newRoot.Namespace = ns
-		newRoot.Round = 1
+		newRoot.Version = 1
 		newRoot.Hash.Empty()
 
 		// Apply.

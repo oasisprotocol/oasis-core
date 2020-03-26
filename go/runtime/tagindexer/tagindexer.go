@@ -81,7 +81,7 @@ func (s *Service) worker() {
 
 					ioRoot := storage.Root{
 						Namespace: blk.Header.Namespace,
-						Round:     blk.Header.Round,
+						Version:   blk.Header.Round,
 						Hash:      blk.Header.IORoot,
 					}
 

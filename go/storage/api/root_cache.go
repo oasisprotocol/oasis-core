@@ -38,7 +38,7 @@ func (rc *RootCache) GetTree(ctx context.Context, root Root) (urkel.Tree, error)
 func (rc *RootCache) Merge(
 	ctx context.Context,
 	ns common.Namespace,
-	round uint64,
+	version uint64,
 	base hash.Hash,
 	others []hash.Hash,
 ) (*hash.Hash, error) {
@@ -48,11 +48,11 @@ func (rc *RootCache) Merge(
 	}
 
 	// Make sure that all roots exist in storage before doing any work.
-	if !rc.localDB.HasRoot(Root{Namespace: ns, Round: round, Hash: base}) {
+	if !rc.localDB.HasRoot(Root{Namespace: ns, Version: version, Hash: base}) {
 		return nil, ErrRootNotFound
 	}
 	for _, rootHash := range others {
-		if !rc.localDB.HasRoot(Root{Namespace: ns, Round: round + 1, Hash: rootHash}) {
+		if !rc.localDB.HasRoot(Root{Namespace: ns, Version: version + 1, Hash: rootHash}) {
 			return nil, ErrRootNotFound
 		}
 	}
@@ -64,13 +64,13 @@ func (rc *RootCache) Merge(
 
 	// Start with the first root.
 	// TODO: WithStorageProof.
-	tree := urkel.NewWithRoot(nil, rc.localDB, Root{Namespace: ns, Round: round + 1, Hash: others[0]})
+	tree := urkel.NewWithRoot(nil, rc.localDB, Root{Namespace: ns, Version: version + 1, Hash: others[0]})
 	defer tree.Close()
 
 	// Apply operations from all roots.
-	baseRoot := Root{Namespace: ns, Round: round, Hash: base}
+	baseRoot := Root{Namespace: ns, Version: version, Hash: base}
 	for _, rootHash := range others[1:] {
-		it, err := rc.localDB.GetWriteLog(ctx, baseRoot, Root{Namespace: ns, Round: round + 1, Hash: rootHash})
+		it, err := rc.localDB.GetWriteLog(ctx, baseRoot, Root{Namespace: ns, Version: version + 1, Hash: rootHash})
 		if err != nil {
 			return nil, fmt.Errorf("storage/rootcache: failed to read write log: %w", err)
 		}
@@ -82,7 +82,7 @@ func (rc *RootCache) Merge(
 
 	var mergedRoot hash.Hash
 	var err error
-	if _, mergedRoot, err = tree.Commit(ctx, ns, round+1); err != nil {
+	if _, mergedRoot, err = tree.Commit(ctx, ns, version+1); err != nil {
 		return nil, fmt.Errorf("storage/rootcache: failed to commit write log: %w", err)
 	}
 
@@ -94,20 +94,20 @@ func (rc *RootCache) Merge(
 func (rc *RootCache) Apply(
 	ctx context.Context,
 	ns common.Namespace,
-	srcRound uint64,
+	srcVersion uint64,
 	srcRoot hash.Hash,
-	dstRound uint64,
+	dstVersion uint64,
 	dstRoot hash.Hash,
 	writeLog WriteLog,
 ) (*hash.Hash, error) {
 	root := Root{
 		Namespace: ns,
-		Round:     srcRound,
+		Version:   srcVersion,
 		Hash:      srcRoot,
 	}
 	expectedNewRoot := Root{
 		Namespace: ns,
-		Round:     dstRound,
+		Version:   dstVersion,
 		Hash:      dstRoot,
 	}
 
@@ -140,7 +140,7 @@ func (rc *RootCache) Apply(
 			_, err = tree.CommitKnown(ctx, expectedNewRoot)
 		} else {
 			// Skip known root checks -- only for use in benchmarks.
-			_, r, err = tree.Commit(ctx, ns, dstRound)
+			_, r, err = tree.Commit(ctx, ns, dstVersion)
 			dstRoot = r
 			expectedNewRoot.Hash = r
 		}

@@ -414,5 +414,5 @@ func (t *Tree) GetTags(ctx context.Context) (Tags, error) {
 // Commit commits the updates to the underlying Merkle tree and returns the
 // write log and root hash.
 func (t *Tree) Commit(ctx context.Context) (writelog.WriteLog, hash.Hash, error) {
-	return t.tree.Commit(ctx, t.ioRoot.Namespace, t.ioRoot.Round)
+	return t.tree.Commit(ctx, t.ioRoot.Namespace, t.ioRoot.Version)
 }

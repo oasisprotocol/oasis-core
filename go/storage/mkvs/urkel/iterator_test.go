@@ -64,7 +64,7 @@ func TestIterator(t *testing.T) {
 	})
 
 	var root node.Root
-	_, rootHash, err := tree.Commit(ctx, root.Namespace, root.Round)
+	_, rootHash, err := tree.Commit(ctx, root.Namespace, root.Version)
 	require.NoError(t, err, "Commit")
 	root.Hash = rootHash
 
@@ -199,7 +199,7 @@ func TestIteratorEviction(t *testing.T) {
 	}
 
 	var root node.Root
-	_, rootHash, err := tree.Commit(ctx, root.Namespace, root.Round)
+	_, rootHash, err := tree.Commit(ctx, root.Namespace, root.Version)
 	require.NoError(t, err, "Commit")
 	root.Hash = rootHash
 

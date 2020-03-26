@@ -251,7 +251,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	// Generate a dummy I/O root.
 	ioRoot := storageAPI.Root{
 		Namespace: child.Header.Namespace,
-		Round:     child.Header.Round + 1,
+		Version:   child.Header.Round + 1,
 	}
 	ioRoot.Hash.Empty()
 

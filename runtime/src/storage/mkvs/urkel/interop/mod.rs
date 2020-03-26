@@ -10,7 +10,7 @@ mod rpc;
 /// Urkel interoperability driver.
 pub trait Driver {
     /// Apply the given write log to the protocol server.
-    fn apply(&self, write_log: &WriteLog, hash: Hash, namespace: Namespace, round: u64);
+    fn apply(&self, write_log: &WriteLog, hash: Hash, namespace: Namespace, version: u64);
 
     /// Apply the given write log against an existing root on the protocol server.
     fn apply_existing(
@@ -19,7 +19,7 @@ pub trait Driver {
         existing_root: Hash,
         root_hash: Hash,
         namespace: Namespace,
-        round: u64,
+        version: u64,
     );
 }
 

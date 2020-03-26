@@ -105,7 +105,7 @@ func (b *storageClientBackend) writeWithClient(
 					case status.Code(rerr) == codes.PermissionDenied:
 						// Writes can fail around an epoch transition due to policy errors.
 						return rerr
-					case errors.Is(rerr, api.ErrPreviousRoundMismatch):
+					case errors.Is(rerr, api.ErrPreviousVersionMismatch):
 						// Storage node may not have yet processed the epoch transition.
 						return rerr
 					case errors.Is(rerr, api.ErrRootNotFound):

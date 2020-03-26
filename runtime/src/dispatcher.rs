@@ -283,7 +283,7 @@ impl Dispatcher {
             protocol,
             Root {
                 namespace: block.header.namespace,
-                round: block.header.round,
+                version: block.header.round,
                 hash: block.header.state_root,
             },
         );
@@ -316,7 +316,7 @@ impl Dispatcher {
                 )
                 .expect("state commit must succeed");
             txn_dispatcher.finalize(new_state_root);
-            cache.root.round = block.header.round + 1;
+            cache.root.version = block.header.round + 1;
             cache.root.hash = new_state_root;
 
             // Generate I/O root. Since we already fetched the inputs we avoid the need
@@ -326,7 +326,7 @@ impl Dispatcher {
                 Box::new(NoopReadSyncer {}),
                 Root {
                     namespace: block.header.namespace,
-                    round: block.header.round + 1,
+                    version: block.header.round + 1,
                     hash: Hash::empty_hash(),
                 },
             );
