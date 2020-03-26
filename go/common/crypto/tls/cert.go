@@ -88,6 +88,15 @@ func Load(certPath, keyPath string) (*tls.Certificate, error) {
 	if err != nil {
 		return nil, err // So os.IsNotExist(err) works.
 	}
+	certPEM, err := ioutil.ReadFile(certPath)
+	if err != nil {
+		return nil, err // So os.IsNotExist(err) works.
+	}
+	return ImportPEM(certPEM, keyPEM)
+}
+
+// ImportPEM loads a TLS certificate and private key from in-memory PEM blobs.
+func ImportPEM(certPEM, keyPEM []byte) (*tls.Certificate, error) {
 	blk, _ := pem.Decode(keyPEM)
 	if blk == nil || blk.Type != keyPEMType {
 		return nil, errors.New("tls: failed to parse private key PEM")
@@ -97,7 +106,7 @@ func Load(certPath, keyPath string) (*tls.Certificate, error) {
 		return nil, errors.Wrap(err, "tls: failed to parse private key")
 	}
 
-	cert, err := LoadCertificate(certPath)
+	cert, err := ImportCertificatePEM(certPEM)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +121,11 @@ func LoadCertificate(certPath string) (*tls.Certificate, error) {
 	if err != nil {
 		return nil, err // So os.IsNotExist(err) works.
 	}
+	return ImportCertificatePEM(certPEM)
+}
+
+// ImportCertificatePEM loads a TLS certificate from an in-memory PEM blob.
+func ImportCertificatePEM(certPEM []byte) (*tls.Certificate, error) {
 	blk, _ := pem.Decode(certPEM)
 	if blk == nil || blk.Type != certPEMType {
 		return nil, errors.New("tls: failed to parse certificate PEM")
@@ -124,25 +138,37 @@ func LoadCertificate(certPath string) (*tls.Certificate, error) {
 
 // Save saves a TLS certificate and private key.
 func Save(certPath, keyPath string, cert *tls.Certificate) error {
-	der, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
+	certPEM, keyPEM, err := ExportPEM(cert)
 	if err != nil {
-		return errors.Wrap(err, "tls: failed to serialize private key")
+		return err
 	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  keyPEMType,
-		Bytes: der,
-	})
+
 	if err = ioutil.WriteFile(keyPath, keyPEM, 0600); err != nil {
 		return errors.Wrap(err, "tls: failed to write private key")
 	}
 
-	certPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  certPEMType,
-		Bytes: cert.Certificate[0],
-	})
 	if err = ioutil.WriteFile(certPath, certPEM, 0644); err != nil {
 		return errors.Wrap(err, "tls: failed to write certificate")
 	}
 
 	return nil
+}
+
+// ExportPEM saves a TLS certificate and private key into PEM blobs.
+func ExportPEM(cert *tls.Certificate) ([]byte, []byte, error) {
+	der, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "tls: failed to serialize private key")
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  keyPEMType,
+		Bytes: der,
+	})
+
+	certPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  certPEMType,
+		Bytes: cert.Certificate[0],
+	})
+
+	return certPEM, keyPEM, nil
 }
