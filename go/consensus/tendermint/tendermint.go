@@ -807,13 +807,20 @@ func (t *tendermintService) GetTendermintBlock(ctx context.Context, height int64
 		return nil, ctx.Err()
 	}
 
-	var tmHeight *int64
+	var tmHeight int64
 	if height == consensusAPI.HeightLatest {
-		tmHeight = nil
+		// Do not let Tendermint determine the latest height (e.g., by passing nil here) as that
+		// completely ignores ABCI processing so it can return a block for which local state does
+		// not yet exist. Use our mux notion of latest height instead.
+		tmHeight = t.mux.BlockHeight()
+		if tmHeight == 0 {
+			// No committed blocks yet.
+			return nil, nil
+		}
 	} else {
-		tmHeight = &height
+		tmHeight = height
 	}
-	result, err := t.client.Block(tmHeight)
+	result, err := t.client.Block(&tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: block query failed: %w", err)
 	}
