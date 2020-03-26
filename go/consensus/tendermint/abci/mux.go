@@ -265,6 +265,11 @@ func (a *ApplicationServer) EstimateGas(caller signature.PublicKey, tx *transact
 	return a.mux.EstimateGas(caller, tx)
 }
 
+// BlockHeight returns the last committed block height.
+func (a *ApplicationServer) BlockHeight() int64 {
+	return a.mux.state.BlockHeight()
+}
+
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
 func NewApplicationServer(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationConfig) (*ApplicationServer, error) {
