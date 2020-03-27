@@ -300,8 +300,8 @@ client as follows (substituting the socket path from your log output) in a
 different terminal:
 
 ```
-./target/debug/simple-keyvalue-client \
-  --runtime-id 0000000000000000000000000000000000000000000000000000000000000000 \
+./target/default/debug/simple-keyvalue-client \
+  --runtime-id 8000000000000000000000000000000000000000000000000000000000000000 \
   --node-address unix:/tmp/oasis-net-runner530668299/net-runner/network/client-0/internal.sock
 ```
 
