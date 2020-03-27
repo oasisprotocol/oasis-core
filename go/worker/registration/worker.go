@@ -165,7 +165,15 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 				}
 				defer client.Close()
 
-				err = client.SetUpstreamTLSCertificates(w.ctx, w.identity.GetTLSCertificate(), w.identity.GetNextTLSCertificate())
+				certs := [][]byte{}
+				if c := w.identity.GetTLSCertificate(); c != nil {
+					certs = append(certs, c.Certificate[0])
+				}
+				if c := w.identity.GetNextTLSCertificate(); c != nil {
+					certs = append(certs, c.Certificate[0])
+				}
+
+				err = client.SetUpstreamTLSCertificates(w.ctx, certs)
 				if err != nil {
 					return err
 				}
@@ -677,7 +685,14 @@ func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.CommitteeAddre
 		}
 
 		// Keep sentries updated with our latest TLS certificates.
-		err = client.SetUpstreamTLSCertificates(w.ctx, w.identity.GetTLSCertificate(), w.identity.GetNextTLSCertificate())
+		certs := [][]byte{}
+		if c := w.identity.GetTLSCertificate(); c != nil {
+			certs = append(certs, c.Certificate[0])
+		}
+		if c := w.identity.GetNextTLSCertificate(); c != nil {
+			certs = append(certs, c.Certificate[0])
+		}
+		err = client.SetUpstreamTLSCertificates(w.ctx, certs)
 		if err != nil {
 			w.logger.Warn("failed to provide upstream TLS certificates to sentry node",
 				"err", err,

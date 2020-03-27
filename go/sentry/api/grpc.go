@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/tls"
 
 	"google.golang.org/grpc"
 
@@ -17,7 +16,7 @@ var (
 	methodGetAddresses = serviceName.NewMethod("GetAddresses", nil)
 
 	// methodSetUpstreamTLSCertificates is the SetUpstreamTLSCertificates method.
-	methodSetUpstreamTLSCertificates = serviceName.NewMethod("SetUpstreamTLSCertificates", UpstreamTLSCertificates{})
+	methodSetUpstreamTLSCertificates = serviceName.NewMethod("SetUpstreamTLSCertificates", [][]byte{})
 
 	// methodGetUpstreamTLSCertificates is the GetUpstreamTLSCertificates method.
 	methodGetUpstreamTLSCertificates = serviceName.NewMethod("GetUpstreamTLSCertificates", nil)
@@ -69,19 +68,19 @@ func handlerSetUpstreamTLSCertificates( // nolint: golint
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
-	var req UpstreamTLSCertificates
+	var req [][]byte
 	if err := dec(&req); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return nil, srv.(Backend).SetUpstreamTLSCertificates(ctx, req.Certificate, req.NextCertificate)
+		return nil, srv.(Backend).SetUpstreamTLSCertificates(ctx, req)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodSetUpstreamTLSCertificates.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return nil, srv.(Backend).SetUpstreamTLSCertificates(ctx, req.(*UpstreamTLSCertificates).Certificate, req.(*UpstreamTLSCertificates).NextCertificate)
+		return nil, srv.(Backend).SetUpstreamTLSCertificates(ctx, *req.(*[][]byte))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
@@ -122,23 +121,19 @@ func (c *sentryClient) GetAddresses(ctx context.Context) (*SentryAddresses, erro
 	return &rsp, nil
 }
 
-func (c *sentryClient) SetUpstreamTLSCertificates(ctx context.Context, cert *tls.Certificate, certNext *tls.Certificate) error {
-	req := &UpstreamTLSCertificates{
-		Certificate:     cert,
-		NextCertificate: certNext,
-	}
-	if err := c.conn.Invoke(ctx, methodSetUpstreamTLSCertificates.FullName(), req, nil); err != nil {
+func (c *sentryClient) SetUpstreamTLSCertificates(ctx context.Context, certs [][]byte) error {
+	if err := c.conn.Invoke(ctx, methodSetUpstreamTLSCertificates.FullName(), certs, nil); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *sentryClient) GetUpstreamTLSCertificates(ctx context.Context) (*UpstreamTLSCertificates, error) {
-	var rsp UpstreamTLSCertificates
+func (c *sentryClient) GetUpstreamTLSCertificates(ctx context.Context) ([][]byte, error) {
+	var rsp [][]byte
 	if err := c.conn.Invoke(ctx, methodGetUpstreamTLSCertificates.FullName(), nil, &rsp); err != nil {
 		return nil, err
 	}
-	return &rsp, nil
+	return rsp, nil
 }
 
 // NewSentryClient creates a new gRPC sentry client service.

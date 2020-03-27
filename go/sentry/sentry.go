@@ -3,7 +3,6 @@ package sentry
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"sync"
 
@@ -25,8 +24,7 @@ type backend struct {
 	consensus consensus.Backend
 	identity  *identity.Identity
 
-	upstreamTLSCertificate     *tls.Certificate
-	upstreamTLSCertificateNext *tls.Certificate
+	upstreamTLSCertificates [][]byte
 }
 
 func (b *backend) GetAddresses(ctx context.Context) (*api.SentryAddresses, error) {
@@ -67,24 +65,20 @@ func (b *backend) GetAddresses(ctx context.Context) (*api.SentryAddresses, error
 	}, nil
 }
 
-func (b *backend) SetUpstreamTLSCertificates(ctx context.Context, cert *tls.Certificate, certNext *tls.Certificate) error {
+func (b *backend) SetUpstreamTLSCertificates(ctx context.Context, certs [][]byte) error {
 	b.Lock()
 	defer b.Unlock()
 
-	b.upstreamTLSCertificate = cert
-	b.upstreamTLSCertificateNext = certNext
+	b.upstreamTLSCertificates = certs
 
 	return nil
 }
 
-func (b *backend) GetUpstreamTLSCertificates(ctx context.Context) (*api.UpstreamTLSCertificates, error) {
+func (b *backend) GetUpstreamTLSCertificates(ctx context.Context) ([][]byte, error) {
 	b.RLock()
 	defer b.RUnlock()
 
-	return &api.UpstreamTLSCertificates{
-		Certificate:     b.upstreamTLSCertificate,
-		NextCertificate: b.upstreamTLSCertificateNext,
-	}, nil
+	return b.upstreamTLSCertificates, nil
 }
 
 // New constructs a new sentry Backend instance.

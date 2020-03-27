@@ -75,22 +75,13 @@ func initConnection(ctx context.Context, logger *logging.Logger, ident *identity
 	)
 
 	// Get upstream node's certificates.
-	certs, err := backend.GetUpstreamTLSCertificates(ctx)
+	upstreamCerts, err := backend.GetUpstreamTLSCertificates(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get upstream node's TLS certificates: %w", err)
-	}
-
-	upstreamCerts := [][]byte{}
-	if certs.Certificate != nil {
-		upstreamCerts = append(upstreamCerts, certs.Certificate.Certificate[0])
-	}
-	if certs.NextCertificate != nil {
-		upstreamCerts = append(upstreamCerts, certs.NextCertificate.Certificate[0])
 	}
 	if len(upstreamCerts) == 0 {
 		return nil, fmt.Errorf("upstream node has no defined TLS certificates")
 	}
-
 	logger.Info("found certificates for upstream node",
 		"num_certs", len(upstreamCerts),
 	)
