@@ -25,8 +25,8 @@ import (
 	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
 	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/client"
-	urkelDB "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
-	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	mkvsDB "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
+	mkvsNode "github.com/oasislabs/oasis-core/go/storage/mkvs/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
@@ -100,8 +100,8 @@ type fetchedDiff struct {
 	fetched   bool
 	err       error
 	round     uint64
-	prevRoot  urkelNode.Root
-	thisRoot  urkelNode.Root
+	prevRoot  mkvsNode.Root
+	thisRoot  mkvsNode.Root
 	writeLog  storageApi.WriteLog
 }
 
@@ -113,8 +113,8 @@ func (d *fetchedDiff) GetRound() uint64 {
 type blockSummary struct {
 	Namespace common.Namespace `json:"namespace"`
 	Round     uint64           `json:"round"`
-	IORoot    urkelNode.Root   `json:"io_root"`
-	StateRoot urkelNode.Root   `json:"state_root"`
+	IORoot    mkvsNode.Root    `json:"io_root"`
+	StateRoot mkvsNode.Root    `json:"state_root"`
 }
 
 func (s *blockSummary) GetRound() uint64 {
@@ -125,12 +125,12 @@ func summaryFromBlock(blk *block.Block) *blockSummary {
 	return &blockSummary{
 		Namespace: blk.Header.Namespace,
 		Round:     blk.Header.Round,
-		IORoot: urkelNode.Root{
+		IORoot: mkvsNode.Root{
 			Namespace: blk.Header.Namespace,
 			Version:   blk.Header.Round,
 			Hash:      blk.Header.IORoot,
 		},
-		StateRoot: urkelNode.Root{
+		StateRoot: mkvsNode.Root{
 			Namespace: blk.Header.Namespace,
 			Version:   blk.Header.Round,
 			Hash:      blk.Header.StateRoot,
@@ -354,7 +354,7 @@ func (n *Node) HandleNodeUpdateLocked(update *runtimeCommittee.NodeUpdate, snaps
 // Watcher implementation.
 
 // GetLastSynced returns the height, IORoot hash and StateRoot hash of the last block that was fully synced to.
-func (n *Node) GetLastSynced() (uint64, urkelNode.Root, urkelNode.Root) {
+func (n *Node) GetLastSynced() (uint64, mkvsNode.Root, mkvsNode.Root) {
 	n.syncedLock.RLock()
 	defer n.syncedLock.RUnlock()
 
@@ -385,7 +385,7 @@ func (n *Node) ForceFinalize(ctx context.Context, round uint64) error {
 	})
 }
 
-func (n *Node) fetchDiff(round uint64, prevRoot *urkelNode.Root, thisRoot *urkelNode.Root, fetchMask outstandingMask) {
+func (n *Node) fetchDiff(round uint64, prevRoot *mkvsNode.Root, thisRoot *mkvsNode.Root, fetchMask outstandingMask) {
 	result := &fetchedDiff{
 		fetchMask: fetchMask,
 		fetched:   false,
@@ -661,7 +661,7 @@ mainLoop:
 
 				prev := hashCache[i-1] // Closures take refs, so they need new variables here.
 				this := hashCache[i]
-				prevIORoot := urkelNode.Root{ // IO roots aren't chained, so clear it (but leave cache intact).
+				prevIORoot := mkvsNode.Root{ // IO roots aren't chained, so clear it (but leave cache intact).
 					Namespace: this.IORoot.Namespace,
 					Version:   this.IORoot.Version,
 				}
@@ -755,7 +755,7 @@ func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
 		err := p.node.localStorage.NodeDB().Prune(ctx, round)
 		switch err {
 		case nil:
-		case urkelDB.ErrNotEarliest:
+		case mkvsDB.ErrNotEarliest:
 			p.logger.Debug("skipping non-earliest round",
 				"round", round,
 			)

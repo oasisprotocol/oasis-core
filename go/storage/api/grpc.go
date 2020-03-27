@@ -10,8 +10,8 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
 )
 
 var (

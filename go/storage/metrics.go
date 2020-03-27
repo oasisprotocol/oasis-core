@@ -9,7 +9,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
 )
 
 var (

@@ -8,14 +8,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
 )
 
 func TestTransaction(t *testing.T) {
 	ctx := context.Background()
-	store := urkel.New(nil, nil)
+	store := mkvs.New(nil, nil)
 
 	var emptyRoot node.Root
 	emptyRoot.Empty()

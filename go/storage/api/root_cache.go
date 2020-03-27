@@ -8,10 +8,10 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cache/lru"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
-	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
+	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
 )
 
 // RootCache is a LRU based tree cache.
@@ -24,13 +24,13 @@ type RootCache struct {
 	applyLocks      *lru.Cache
 	applyLocksGuard sync.Mutex
 
-	persistEverything urkel.Option
+	persistEverything mkvs.Option
 }
 
 // GetTree gets a tree entry from the cache by the root iff present, or creates
 // a new tree with the specified root in the node database.
-func (rc *RootCache) GetTree(ctx context.Context, root Root) (urkel.Tree, error) {
-	return urkel.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything), nil
+func (rc *RootCache) GetTree(ctx context.Context, root Root) (mkvs.Tree, error) {
+	return mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything), nil
 }
 
 // Merge performs a 3-way merge operation between the specified roots and returns
@@ -64,7 +64,7 @@ func (rc *RootCache) Merge(
 
 	// Start with the first root.
 	// TODO: WithStorageProof.
-	tree := urkel.NewWithRoot(nil, rc.localDB, Root{Namespace: ns, Version: version + 1, Hash: others[0]})
+	tree := mkvs.NewWithRoot(nil, rc.localDB, Root{Namespace: ns, Version: version + 1, Hash: others[0]})
 	defer tree.Close()
 
 	// Apply operations from all roots.
@@ -128,7 +128,7 @@ func (rc *RootCache) Apply(
 		r = dstRoot
 	} else {
 		// We don't, apply operations.
-		tree := urkel.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
+		tree := mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
 		defer tree.Close()
 
 		if err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog)); err != nil {
@@ -147,7 +147,7 @@ func (rc *RootCache) Apply(
 		switch err {
 		case nil:
 			r = dstRoot
-		case urkel.ErrKnownRootMismatch:
+		case mkvs.ErrKnownRootMismatch:
 			return nil, ErrExpectedRootMismatch
 		default:
 			return nil, err
@@ -194,7 +194,7 @@ func NewRootCache(
 	// When we implement a caching client again, we want to persist
 	// everything that we obtain from the remote syncer in our local
 	// database.
-	persistEverything := urkel.PersistEverythingFromSyncer(remoteSyncer != nil)
+	persistEverything := mkvs.PersistEverythingFromSyncer(remoteSyncer != nil)
 
 	return &RootCache{
 		localDB:            localDB,

@@ -10,7 +10,17 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::common::{crypto::hash::Hash, roothash::Namespace};
 
-pub mod urkel;
+#[macro_use]
+mod tree;
+mod cache;
+#[cfg(test)]
+mod interop;
+pub mod marshal;
+pub mod sync;
+#[cfg(test)]
+mod tests;
+
+pub use tree::{Depth, Key, NodeBox, Root, Tree};
 
 /// The type of entry in the log.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -139,11 +149,8 @@ pub trait MKVS: Send + Sync {
     fn rollback(&mut self);
 }
 
-// Re-exports.
-pub use self::urkel::UrkelTree;
-
 #[cfg(test)]
-mod tests {
+mod _tests {
     use super::*;
 
     use crate::common::cbor;

@@ -13,7 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/runtime/history"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
 )
 
 // CheckpointerConfig is a checkpointer configuration.

@@ -9,11 +9,11 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
-	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
-	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
+	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
+	mkvsNode "github.com/oasislabs/oasis-core/go/storage/mkvs/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
 )
 
 const (
@@ -174,26 +174,26 @@ func SignReceipt(signer signature.Signer, ns common.Namespace, round uint64, roo
 }
 
 // Root is a storage root.
-type Root = urkelNode.Root
+type Root = mkvsNode.Root
 
 // Key is a node's key spelled out from the root to the node.
-type Key = urkelNode.Key
+type Key = mkvsNode.Key
 
 // Depth determines the node's (bit) depth in the tree. It is also used for
 // storing the Key length in bits.
-type Depth = urkelNode.Depth
+type Depth = mkvsNode.Depth
 
 // Node is either an InternalNode or a LeafNode.
-type Node = urkelNode.Node
+type Node = mkvsNode.Node
 
 // Pointer is a pointer to another node.
-type Pointer = urkelNode.Pointer
+type Pointer = mkvsNode.Pointer
 
 // InternalNode is an internal node with two children.
-type InternalNode = urkelNode.InternalNode
+type InternalNode = mkvsNode.InternalNode
 
 // LeafNode is a leaf node containing a key/value pair.
-type LeafNode = urkelNode.LeafNode
+type LeafNode = mkvsNode.LeafNode
 
 // TreeID identifies a specific tree and a position within that tree.
 type TreeID = syncer.TreeID

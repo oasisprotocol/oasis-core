@@ -15,9 +15,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
 )
 
 var testValues = [][]byte{
@@ -54,11 +54,11 @@ func prepareWriteLog(values [][]byte) api.WriteLog {
 }
 
 func CalculateExpectedNewRoot(t *testing.T, wl api.WriteLog, namespace common.Namespace, round uint64) hash.Hash {
-	// Use in-memory Urkel tree to calculate the expected new root.
-	tree := urkel.New(nil, nil)
+	// Use in-memory MKVS tree to calculate the expected new root.
+	tree := mkvs.New(nil, nil)
 	for _, logEntry := range wl {
 		err := tree.Insert(context.Background(), logEntry.Key, logEntry.Value)
-		require.NoError(t, err, "error inserting writeLog entry into Urkel tree")
+		require.NoError(t, err, "error inserting writeLog entry into MKVS tree")
 	}
 	_, expectedNewRoot, err := tree.Commit(context.Background(), namespace, round)
 	require.NoError(t, err, "error calculating mkvs' expectedNewRoot")
@@ -168,7 +168,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 
 	// Test individual fetches.
 	t.Run("SyncGet", func(t *testing.T) {
-		tree := urkel.NewWithRoot(backend, nil, newRoot)
+		tree := mkvs.NewWithRoot(backend, nil, newRoot)
 		defer tree.Close()
 		for _, entry := range wl {
 			value, werr := tree.Get(ctx, entry.Key)
@@ -179,7 +179,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 
 	// Test prefetch.
 	t.Run("SyncGetPrefixes", func(t *testing.T) {
-		tree := urkel.NewWithRoot(backend, nil, newRoot)
+		tree := mkvs.NewWithRoot(backend, nil, newRoot)
 		defer tree.Close()
 		err = tree.PrefetchPrefixes(ctx, [][]byte{[]byte("1")}, 10)
 		require.NoError(t, err, "PrefetchPrefixes")
@@ -187,7 +187,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 
 	// Test iteration.
 	t.Run("SyncIterate", func(t *testing.T) {
-		tree := urkel.NewWithRoot(backend, nil, newRoot)
+		tree := mkvs.NewWithRoot(backend, nil, newRoot)
 		defer tree.Close()
 		it := tree.NewIterator(ctx)
 		defer it.Close()
@@ -300,7 +300,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 		}
 
 		// Generate expected root hash.
-		tree := urkel.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Version: dstRound, Hash: baseRoot})
+		tree := mkvs.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Version: dstRound, Hash: baseRoot})
 		defer tree.Close()
 		err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 		require.NoError(t, err, "ApplyWriteLog")
@@ -356,7 +356,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 
 	// Make sure that the merged root is the same as applying all write logs against
 	// the base root.
-	tree := urkel.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Version: round, Hash: roots[0]})
+	tree := mkvs.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Version: round, Hash: roots[0]})
 	defer tree.Close()
 	for _, writeLog := range writeLogs[1:] {
 		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))

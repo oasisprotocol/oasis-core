@@ -95,7 +95,7 @@ test-targets := test-unit test-e2e
 
 test-unit-rust: build-helpers
 	@$(ECHO) "$(CYAN)*** Running Rust unit tests...$(OFF)"
-	@export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/$(GO_TEST_HELPER_URKEL_PATH)) && \
+	@export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/$(GO_TEST_HELPER_MKVS_PATH)) && \
 		CARGO_TARGET_DIR=target/default cargo test
 
 test-unit-go:

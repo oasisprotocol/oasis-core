@@ -121,7 +121,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		buf := make([]byte, sz)
 		key := []byte(strconv.Itoa(sz))
 
-		// This will store the new Urkel tree root for later lookups.
+		// This will store the new MKVS tree root for later lookups.
 		var newRoot storageAPI.Root
 		newRoot.Namespace = ns
 		newRoot.Version = 1

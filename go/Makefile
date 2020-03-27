@@ -25,12 +25,12 @@ build: $(go-binaries)
 
 # Build test helpers.
 # List of test helpers to build.
-test-helpers := urkel
+test-helpers := mkvs
 
-# Urkel interoperability test helpers.
-urkel:
+# MKVS interoperability test helpers.
+mkvs:
 	@$(ECHO) "$(MAGENTA)*** Building test helpers for $@...$(OFF)"
-	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$(GO_TEST_HELPER_URKEL_PATH) ./$(shell dirname $(GO_TEST_HELPER_URKEL_PATH))
+	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$(GO_TEST_HELPER_MKVS_PATH) ./$(shell dirname $(GO_TEST_HELPER_MKVS_PATH))
 
 build-helpers: $(test-helpers)
 
@@ -116,11 +116,11 @@ fuzz-storage: storage/fuzz/ oasis-node
 	@oasis-node/oasis-node identity init --datadir /tmp/oasis-node-fuzz-storage/identity
 	$(canned-fuzz-run)
 # Fuzz MKVS data structures.
-fuzz-mkvs/Tree: storage/mkvs/urkel/fuzz
+fuzz-mkvs/Tree: storage/mkvs/fuzz
 	$(canned-fuzz-run)
-fuzz-mkvs/Proof: storage/mkvs/urkel/fuzz
+fuzz-mkvs/Proof: storage/mkvs/fuzz
 	$(canned-fuzz-run)
-fuzz-mkvs/Node: storage/mkvs/urkel/fuzz
+fuzz-mkvs/Node: storage/mkvs/fuzz
 	$(canned-fuzz-run)
 
 # Target that only builds all fuzzing infrastructure.

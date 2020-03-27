@@ -15,9 +15,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 )
 
@@ -27,7 +27,7 @@ type computeBatchContext struct {
 
 	ioTree    *transaction.Tree
 	txs       []*transaction.Transaction
-	stateTree urkel.Tree
+	stateTree mkvs.Tree
 
 	stateWriteLog writelog.WriteLog
 	newStateRoot  hash.Hash
@@ -71,7 +71,7 @@ func (cbc *computeBatchContext) openTrees(ctx context.Context, rs syncer.ReadSyn
 		return errors.Wrap(err, "IO tree GetTransactions")
 	}
 
-	cbc.stateTree = urkel.NewWithRoot(rs, nil, storage.Root{
+	cbc.stateTree = mkvs.NewWithRoot(rs, nil, storage.Root{
 		Namespace: cbc.bd.Header.Namespace,
 		Version:   cbc.bd.Header.Round,
 		Hash:      cbc.bd.Header.StateRoot,

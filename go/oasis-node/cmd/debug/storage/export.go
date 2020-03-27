@@ -22,7 +22,7 @@ import (
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	storageDatabase "github.com/oasislabs/oasis-core/go/storage/database"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
 )
 
 const cfgExportDir = "storage.export.dir"
@@ -104,8 +104,8 @@ func exportRuntime(dataDir, destDir string, id common.Namespace, rtg *registry.R
 		Version:   rtg.Round,
 		Hash:      rtg.StateRoot,
 	}
-	tree := urkel.NewWithRoot(storageBackend, nil, root)
-	it := tree.NewIterator(context.Background(), urkel.IteratorPrefetch(10_000))
+	tree := mkvs.NewWithRoot(storageBackend, nil, root)
+	it := tree.NewIterator(context.Background(), mkvs.IteratorPrefetch(10_000))
 	defer it.Close()
 
 	fn := fmt.Sprintf("storage-dump-%v-%d.json",
@@ -116,7 +116,7 @@ func exportRuntime(dataDir, destDir string, id common.Namespace, rtg *registry.R
 	return exportIterator(fn, &root, it)
 }
 
-func exportIterator(fn string, root *storageAPI.Root, it urkel.Iterator) error {
+func exportIterator(fn string, root *storageAPI.Root, it mkvs.Iterator) error {
 	// Create the dump file, and initialize a JSON stream encoder.
 	f, err := os.Create(fn)
 	if err != nil {

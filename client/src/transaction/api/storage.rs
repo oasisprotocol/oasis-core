@@ -5,7 +5,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use oasis_core_runtime::{
     common::{crypto::hash::Hash, roothash::Namespace},
-    storage::mkvs::{urkel::sync, WriteLog},
+    storage::mkvs::{sync, WriteLog},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
