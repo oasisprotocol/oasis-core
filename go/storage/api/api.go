@@ -52,19 +52,19 @@ var (
 	// ErrWriteLogNotFound indicates that a write log for the specified storage hashes
 	// couldn't be found.
 	ErrWriteLogNotFound = nodedb.ErrWriteLogNotFound
-	// ErrNotFinalized indicates that the operation requires a round to be finalized
-	// but the round is not yet finalized.
+	// ErrNotFinalized indicates that the operation requires a version to be finalized
+	// but the version is not yet finalized.
 	ErrNotFinalized = nodedb.ErrNotFinalized
-	// ErrAlreadyFinalized indicates that the given round has already been finalized.
+	// ErrAlreadyFinalized indicates that the given version has already been finalized.
 	ErrAlreadyFinalized = nodedb.ErrAlreadyFinalized
-	// ErrRoundNotFound indicates that the given round cannot be found.
-	ErrRoundNotFound = nodedb.ErrRoundNotFound
-	// ErrPreviousRoundMismatch indicates that the round given for the old root does
-	// not match the previous round.
-	ErrPreviousRoundMismatch = nodedb.ErrPreviousRoundMismatch
-	// ErrRoundWentBackwards indicates that the new round is earlier than an already
-	// inserted round.
-	ErrRoundWentBackwards = nodedb.ErrRoundWentBackwards
+	// ErrVersionNotFound indicates that the given version cannot be found.
+	ErrVersionNotFound = nodedb.ErrVersionNotFound
+	// ErrPreviousVersionMismatch indicates that the version given for the old root does
+	// not match the previous version.
+	ErrPreviousVersionMismatch = nodedb.ErrPreviousVersionMismatch
+	// ErrVersionWentBackwards indicates that the new version is earlier than an already
+	// inserted version.
+	ErrVersionWentBackwards = nodedb.ErrVersionWentBackwards
 	// ErrRootNotFound indicates that the given root cannot be found.
 	ErrRootNotFound = nodedb.ErrRootNotFound
 	// ErrRootMustFollowOld indicates that the passed new root does not follow old root.

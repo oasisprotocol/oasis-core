@@ -419,7 +419,7 @@ func (c *cache) remoteSync(ctx context.Context, ptr *node.Pointer, fetcher readS
 	if c.persistEverythingFromSyncer {
 		// NOTE: This is a dummy batch, we assume that the node database backend is a
 		//       cache-only backend and does not care about correct values.
-		batch = c.db.NewBatch(c.syncRoot, c.syncRoot.Round, false)
+		batch = c.db.NewBatch(c.syncRoot, c.syncRoot.Version, false)
 		dbSubtree = batch.MaybeStartSubtree(nil, 0, subtree)
 	}
 

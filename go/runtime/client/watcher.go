@@ -61,7 +61,7 @@ func (w *blockWatcher) checkBlock(blk *block.Block) {
 	ctx := w.common.ctx
 	ioRoot := storage.Root{
 		Namespace: blk.Header.Namespace,
-		Round:     blk.Header.Round,
+		Version:   blk.Header.Round,
 		Hash:      blk.Header.IORoot,
 	}
 

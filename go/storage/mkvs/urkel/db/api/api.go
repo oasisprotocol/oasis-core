@@ -21,19 +21,19 @@ var (
 	// ErrWriteLogNotFound indicates that a write log for the specified storage hashes
 	// couldn't be found.
 	ErrWriteLogNotFound = errors.New(ModuleName, 2, "urkel: write log not found in node db")
-	// ErrNotFinalized indicates that the operation requires a round to be finalized
-	// but the round is not yet finalized.
-	ErrNotFinalized = errors.New(ModuleName, 3, "urkel: round is not yet finalized")
-	// ErrAlreadyFinalized indicates that the given round has already been finalized.
-	ErrAlreadyFinalized = errors.New(ModuleName, 4, "urkel: round has already been finalized")
-	// ErrRoundNotFound indicates that the given round cannot be found.
-	ErrRoundNotFound = errors.New(ModuleName, 5, "urkel: round not found")
-	// ErrPreviousRoundMismatch indicates that the round given for the old root does
-	// not match the previous round.
-	ErrPreviousRoundMismatch = errors.New(ModuleName, 6, "urkel: previous round mismatch")
-	// ErrRoundWentBackwards indicates that the new round is earlier than an already
-	// inserted round.
-	ErrRoundWentBackwards = errors.New(ModuleName, 7, "urkel: round went backwards")
+	// ErrNotFinalized indicates that the operation requires a version to be finalized
+	// but the version is not yet finalized.
+	ErrNotFinalized = errors.New(ModuleName, 3, "urkel: version is not yet finalized")
+	// ErrAlreadyFinalized indicates that the given version has already been finalized.
+	ErrAlreadyFinalized = errors.New(ModuleName, 4, "urkel: version has already been finalized")
+	// ErrVersionNotFound indicates that the given version cannot be found.
+	ErrVersionNotFound = errors.New(ModuleName, 5, "urkel: version not found")
+	// ErrPreviousVersionMismatch indicates that the version given for the old root does
+	// not match the previous version.
+	ErrPreviousVersionMismatch = errors.New(ModuleName, 6, "urkel: previous version mismatch")
+	// ErrVersionWentBackwards indicates that the new version is earlier than an already
+	// inserted version.
+	ErrVersionWentBackwards = errors.New(ModuleName, 7, "urkel: version went backwards")
 	// ErrRootNotFound indicates that the given root cannot be found.
 	ErrRootNotFound = errors.New(ModuleName, 8, "urkel: root not found")
 	// ErrRootMustFollowOld indicates that the passed new root does not follow old root.
@@ -41,8 +41,8 @@ var (
 	// ErrBadNamespace indicates that the passed namespace does not match what is
 	// actually contained within the database.
 	ErrBadNamespace = errors.New(ModuleName, 10, "urkel: bad namespace")
-	// ErrNotEarliest indicates that the given round is not the earliest round.
-	ErrNotEarliest = errors.New(ModuleName, 11, "urkel: round is not the earliest round")
+	// ErrNotEarliest indicates that the given version is not the earliest version.
+	ErrNotEarliest = errors.New(ModuleName, 11, "urkel: version is not the earliest version")
 )
 
 // Config is the node database backend configuration.
@@ -71,35 +71,35 @@ type NodeDB interface {
 	// GetWriteLog retrieves a write log between two storage instances from the database.
 	GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (writelog.Iterator, error)
 
-	// GetLatestRound returns the most recent round in the node database.
-	GetLatestRound(ctx context.Context) (uint64, error)
+	// GetLatestVersion returns the most recent version in the node database.
+	GetLatestVersion(ctx context.Context) (uint64, error)
 
-	// GetEarliestRound returns the earliest round in the node database.
-	GetEarliestRound(ctx context.Context) (uint64, error)
+	// GetEarliestVersion returns the earliest version in the node database.
+	GetEarliestVersion(ctx context.Context) (uint64, error)
 
-	// GetRootsForRound returns a list of roots stored under the given round.
-	GetRootsForRound(ctx context.Context, round uint64) ([]hash.Hash, error)
+	// GetRootsForVersion returns a list of roots stored under the given version.
+	GetRootsForVersion(ctx context.Context, version uint64) ([]hash.Hash, error)
 
 	// NewBatch starts a new batch.
 	//
 	// The chunk argument specifies whether the given batch is being used to import a chunk of an
 	// existing root. Chunks may contain unresolved pointers (e.g., pointers that point to hashes
-	// which are not present in the database). Committing a chunk batch will prevent the round from
-	// being finalized.
-	NewBatch(oldRoot node.Root, round uint64, chunk bool) Batch
+	// which are not present in the database). Committing a chunk batch will prevent the version
+	// from being finalized.
+	NewBatch(oldRoot node.Root, version uint64, chunk bool) Batch
 
 	// HasRoot checks whether the given root exists.
 	HasRoot(root node.Root) bool
 
-	// Finalize finalizes the specified round. The passed list of roots are the
-	// roots within the round that have been finalized. All non-finalized roots
+	// Finalize finalizes the specified version. The passed list of roots are the
+	// roots within the version that have been finalized. All non-finalized roots
 	// can be discarded.
-	Finalize(ctx context.Context, round uint64, roots []hash.Hash) error
+	Finalize(ctx context.Context, version uint64, roots []hash.Hash) error
 
-	// Prune removes all roots recorded under the given round.
+	// Prune removes all roots recorded under the given version.
 	//
-	// Only the earliest round can be pruned, passing any other round will result in an error.
-	Prune(ctx context.Context, round uint64) error
+	// Only the earliest version can be pruned, passing any other version will result in an error.
+	Prune(ctx context.Context, version uint64) error
 
 	// Size returns the size of the database in bytes.
 	Size() (int64, error)
@@ -185,15 +185,15 @@ func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoo
 	return nil, ErrWriteLogNotFound
 }
 
-func (d *nopNodeDB) GetLatestRound(ctx context.Context) (uint64, error) {
+func (d *nopNodeDB) GetLatestVersion(ctx context.Context) (uint64, error) {
 	return 0, nil
 }
 
-func (d *nopNodeDB) GetEarliestRound(ctx context.Context) (uint64, error) {
+func (d *nopNodeDB) GetEarliestVersion(ctx context.Context) (uint64, error) {
 	return 0, nil
 }
 
-func (d *nopNodeDB) GetRootsForRound(ctx context.Context, round uint64) ([]hash.Hash, error) {
+func (d *nopNodeDB) GetRootsForVersion(ctx context.Context, version uint64) ([]hash.Hash, error) {
 	return nil, nil
 }
 
@@ -201,11 +201,11 @@ func (d *nopNodeDB) HasRoot(root node.Root) bool {
 	return false
 }
 
-func (d *nopNodeDB) Finalize(ctx context.Context, round uint64, roots []hash.Hash) error {
+func (d *nopNodeDB) Finalize(ctx context.Context, version uint64, roots []hash.Hash) error {
 	return nil
 }
 
-func (d *nopNodeDB) Prune(ctx context.Context, round uint64) error {
+func (d *nopNodeDB) Prune(ctx context.Context, version uint64) error {
 	return nil
 }
 
@@ -221,7 +221,7 @@ type nopBatch struct {
 	BaseBatch
 }
 
-func (d *nopNodeDB) NewBatch(oldRoot node.Root, round uint64, chunk bool) Batch {
+func (d *nopNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) Batch {
 	return &nopBatch{}
 }
 

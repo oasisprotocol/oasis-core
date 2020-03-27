@@ -63,7 +63,7 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 
 			emptyRoot := urkelNode.Root{
 				Namespace: rq.Block.Header.Namespace,
-				Round:     rq.Block.Header.Round + 1,
+				Version:   rq.Block.Header.Round + 1,
 			}
 			emptyRoot.Hash.Empty()
 

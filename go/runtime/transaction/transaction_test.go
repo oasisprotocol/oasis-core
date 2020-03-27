@@ -136,7 +136,7 @@ func TestTransaction(t *testing.T) {
 	// Apply write log to tree and check if everything is still there.
 	err = store.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 	require.NoError(t, err, "ApplyWriteLog")
-	_, storeRootHash, err := store.Commit(ctx, emptyRoot.Namespace, emptyRoot.Round)
+	_, storeRootHash, err := store.Commit(ctx, emptyRoot.Namespace, emptyRoot.Version)
 	require.NoError(t, err, "Commit")
 	require.EqualValues(t, rootHash, storeRootHash)
 

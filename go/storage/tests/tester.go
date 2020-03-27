@@ -162,7 +162,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 
 	newRoot := api.Root{
 		Namespace: namespace,
-		Round:     round,
+		Version:   round,
 		Hash:      receiptBody.Roots[0],
 	}
 
@@ -203,7 +203,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 	// Get the write log, it should be the same as what we stuffed in.
 	root := api.Root{
 		Namespace: namespace,
-		Round:     round,
+		Version:   round,
 		Hash:      rootHash,
 	}
 	it, err := backend.GetDiff(ctx, &api.GetDiffRequest{StartRoot: root, EndRoot: newRoot})
@@ -300,7 +300,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 		}
 
 		// Generate expected root hash.
-		tree := urkel.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Round: dstRound, Hash: baseRoot})
+		tree := urkel.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Version: dstRound, Hash: baseRoot})
 		defer tree.Close()
 		err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
 		require.NoError(t, err, "ApplyWriteLog")
@@ -356,7 +356,7 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 
 	// Make sure that the merged root is the same as applying all write logs against
 	// the base root.
-	tree := urkel.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Round: round, Hash: roots[0]})
+	tree := urkel.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Version: round, Hash: roots[0]})
 	defer tree.Close()
 	for _, writeLog := range writeLogs[1:] {
 		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))

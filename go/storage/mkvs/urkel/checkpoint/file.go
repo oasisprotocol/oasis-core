@@ -35,7 +35,7 @@ func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chu
 	// Create checkpoint directory.
 	checkpointDir := filepath.Join(
 		fc.dataDir,
-		strconv.FormatUint(root.Round, 10),
+		strconv.FormatUint(root.Version, 10),
 		root.Hash.String(),
 	)
 	if err = common.Mkdir(checkpointDir); err != nil {
@@ -140,7 +140,7 @@ func (fc *fileCreator) GetCheckpoint(ctx context.Context, request *GetCheckpoint
 
 	checkpointFilename := filepath.Join(
 		fc.dataDir,
-		strconv.FormatUint(request.Root.Round, 10),
+		strconv.FormatUint(request.Root.Version, 10),
 		request.Root.Hash.String(),
 		checkpointMetadataFile,
 	)
@@ -164,7 +164,7 @@ func (fc *fileCreator) DeleteCheckpoint(ctx context.Context, request *DeleteChec
 
 	checkpointDir := filepath.Join(
 		fc.dataDir,
-		strconv.FormatUint(request.Root.Round, 10),
+		strconv.FormatUint(request.Root.Version, 10),
 		request.Root.Hash.String(),
 	)
 	if _, err := os.Stat(checkpointDir); err != nil {
@@ -182,7 +182,7 @@ func (fc *fileCreator) GetCheckpointChunk(ctx context.Context, chunk *ChunkMetad
 
 	chunkFilename := filepath.Join(
 		fc.dataDir,
-		strconv.FormatUint(chunk.Root.Round, 10),
+		strconv.FormatUint(chunk.Root.Version, 10),
 		chunk.Root.Hash.String(),
 		chunksDir,
 		strconv.FormatUint(chunk.Index, 10),

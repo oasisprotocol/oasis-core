@@ -226,7 +226,7 @@ impl Tree {
     /// log and root hash.
     pub fn commit(&mut self, ctx: Context) -> Fallible<(WriteLog, Hash)> {
         self.tree
-            .commit(ctx, self.io_root.namespace, self.io_root.round)
+            .commit(ctx, self.io_root.namespace, self.io_root.version)
     }
 }
 

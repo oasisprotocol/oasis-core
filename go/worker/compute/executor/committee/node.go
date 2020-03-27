@@ -272,7 +272,7 @@ func (n *Node) queueBatchBlocking(
 	// Fetch inputs from storage.
 	ioRoot := storage.Root{
 		Namespace: hdr.Namespace,
-		Round:     hdr.Round + 1,
+		Version:   hdr.Round + 1,
 		Hash:      ioRootHash,
 	}
 	txs := transaction.NewTree(n.commonNode.Storage, ioRoot)

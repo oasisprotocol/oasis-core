@@ -132,7 +132,7 @@ pub trait MKVS: Send + Sync {
         &mut self,
         ctx: Context,
         namespace: Namespace,
-        round: u64,
+        version: u64,
     ) -> Fallible<(WriteLog, Hash)>;
 
     /// Rollback any pending changes.

@@ -87,12 +87,12 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, rt *registry.Runtime
 	var cpRounds []uint64
 	cpsByRound := make(map[uint64][]storage.Root)
 	for _, cp := range cps {
-		if cpsByRound[cp.Root.Round] == nil {
-			cpRounds = append(cpRounds, cp.Root.Round)
+		if cpsByRound[cp.Root.Version] == nil {
+			cpRounds = append(cpRounds, cp.Root.Version)
 		}
-		cpsByRound[cp.Root.Round] = append(cpsByRound[cp.Root.Round], cp.Root)
-		if len(cpsByRound[cp.Root.Round]) == 2 && cp.Root.Round > lastCheckpointRound {
-			lastCheckpointRound = cp.Root.Round
+		cpsByRound[cp.Root.Version] = append(cpsByRound[cp.Root.Version], cp.Root)
+		if len(cpsByRound[cp.Root.Version]) == 2 && cp.Root.Version > lastCheckpointRound {
+			lastCheckpointRound = cp.Root.Version
 		}
 	}
 	sort.Slice(cpRounds, func(i, j int) bool { return cpRounds[i] < cpRounds[j] })

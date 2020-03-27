@@ -380,7 +380,7 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error
 	// tags will be added later by the executor nodes).
 	emptyRoot := storage.Root{
 		Namespace: lastHeader.Namespace,
-		Round:     lastHeader.Round + 1,
+		Version:   lastHeader.Round + 1,
 	}
 	emptyRoot.Hash.Empty()
 

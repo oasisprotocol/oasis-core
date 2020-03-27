@@ -207,7 +207,7 @@ func testBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	// Create a new tree backed by the same database.
 	tree = NewWithRoot(nil, ndb, node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      root,
 	})
 
@@ -232,7 +232,7 @@ func testBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	_, err = tree.CommitKnown(ctx, node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      root,
 	})
 	require.NoError(t, err, "CommitKnown")
@@ -241,7 +241,7 @@ func testBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	bogusRoot.FromBytes([]byte("bogus root"))
 	_, err = tree.CommitKnown(ctx, node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      bogusRoot,
 	})
 	require.Error(t, err, "CommitKnown")
@@ -637,7 +637,7 @@ func testSyncerRootEmptyLabelNeedsDeref(t *testing.T, ndb db.NodeDB, factory Nod
 
 	root := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      rootHash,
 	}
 
@@ -698,7 +698,7 @@ func testSyncerRemove(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	root := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      roots[len(roots)-1],
 	}
 	stats := syncer.NewStatsCollector(tree)
@@ -733,7 +733,7 @@ func testSyncerInsert(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	root := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      rootHash,
 	}
 	stats := syncer.NewStatsCollector(tree)
@@ -779,7 +779,7 @@ func testSyncerNilNodes(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	}
 	remote := NewWithRoot(wire, nil, node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      root,
 	})
 
@@ -940,11 +940,11 @@ func testOnCommitHooks(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	emptyRoot.Empty()
 	root := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      emptyRoot,
 	}
 
-	batch := ndb.NewBatch(root, root.Round, false)
+	batch := ndb.NewBatch(root, root.Version, false)
 	defer batch.Reset()
 
 	var calls []int
@@ -970,47 +970,47 @@ func testHasRoot(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	// Test that an empty root is always implicitly present.
 	root := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 	}
 	root.Hash.Empty()
 	require.True(t, ndb.HasRoot(root), "HasRoot should return true on empty root")
 
-	// Create a root in round 0.
+	// Create a root in version 0.
 	ctx := context.Background()
 	tree := New(nil, ndb)
 	err := tree.Insert(ctx, []byte("foo"), []byte("bar"))
 	require.NoError(t, err, "Insert")
 	_, rootHash1, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
-	// Finalize round 0.
+	// Finalize version 0.
 	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHash1})
 	require.NoError(t, err, "Finalize")
 
 	// Make sure that HasRoot returns true.
 	root = node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      rootHash1,
 	}
 	require.True(t, ndb.HasRoot(root), "HasRoot should return true for existing root")
 	root.Hash.FromBytes([]byte("invalid root"))
 	require.False(t, ndb.HasRoot(root), "HasRoot should return false for non-existing root")
 
-	// Create a different root in round 1.
+	// Create a different root in version 1.
 	tree = New(nil, ndb)
 	err = tree.Insert(ctx, []byte("goo"), []byte("bar"))
 	require.NoError(t, err, "Insert")
 	_, rootHash2, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	// Finalize round 1.
+	// Finalize version 1.
 	err = ndb.Finalize(ctx, 1, []hash.Hash{rootHash2})
 	require.NoError(t, err, "Finalize")
 
-	// Make sure that HasRoot for root hash from round 0 but with
-	// round 1 passed returns false.
+	// Make sure that HasRoot for root hash from version 0 but with
+	// version 1 passed returns false.
 	root = node.Root{
 		Namespace: testNs,
-		Round:     1,
+		Version:   1,
 		Hash:      rootHash1,
 	}
 	require.False(t, ndb.HasRoot(root), "HasRoot should return false for non-existing root")
@@ -1028,7 +1028,7 @@ func testMergeWriteLog(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	emptyRoot := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 	}
 	emptyRoot.Hash.Empty()
 
@@ -1041,7 +1041,7 @@ func testMergeWriteLog(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	root1 := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      rootHash1,
 	}
 
@@ -1059,7 +1059,7 @@ func testMergeWriteLog(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	root2 := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      rootHash2,
 	}
 
@@ -1090,7 +1090,7 @@ func testMergeWriteLog(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	root3 := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      rootHash3,
 	}
 
@@ -1105,57 +1105,57 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
-	// Create some keys in round 0.
+	// Create some keys in version 0.
 	err := tree.Insert(ctx, []byte("foo"), []byte("bar"))
 	require.NoError(t, err, "Insert")
 	err = tree.Insert(ctx, []byte("moo"), []byte("bar"))
 	require.NoError(t, err, "Insert")
 	_, rootHash1, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
-	// Test that we cannot prune non-finalized rounds.
+	// Test that we cannot prune non-finalized versions.
 	err = ndb.Prune(ctx, 0)
-	require.Error(t, err, "Prune should fail for non-finalized rounds")
+	require.Error(t, err, "Prune should fail for non-finalized versions")
 	require.Equal(t, db.ErrNotFinalized, err)
-	// Finalize round 0.
+	// Finalize version 0.
 	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHash1})
 	require.NoError(t, err, "Finalize")
 
-	// Remove key in round 1.
+	// Remove key in version 1.
 	err = tree.Remove(ctx, []byte("foo"))
 	require.NoError(t, err, "Remove")
 	err = tree.Insert(ctx, []byte("another"), []byte("value"))
 	require.NoError(t, err, "Insert")
 	_, rootHash2, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	// Test that we cannot prune non-finalized rounds.
+	// Test that we cannot prune non-finalized versions.
 	err = ndb.Prune(ctx, 1)
-	require.Error(t, err, "Prune should fail for non-finalized rounds")
+	require.Error(t, err, "Prune should fail for non-finalized versions")
 	require.Equal(t, db.ErrNotFinalized, err)
-	// Finalize round 1.
+	// Finalize version 1.
 	err = ndb.Finalize(ctx, 1, []hash.Hash{rootHash2})
 	require.NoError(t, err, "Finalize")
 
-	// Add some keys in round 2.
+	// Add some keys in version 2.
 	err = tree.Insert(ctx, []byte("blah"), []byte("ugh"))
 	require.NoError(t, err, "Insert")
 	_, rootHash3, err := tree.Commit(ctx, testNs, 2)
 	require.NoError(t, err, "Commit")
-	// Test that we cannot prune non-finalized rounds.
+	// Test that we cannot prune non-finalized versions.
 	err = ndb.Prune(ctx, 2)
-	require.Error(t, err, "Prune should fail for non-finalized rounds")
+	require.Error(t, err, "Prune should fail for non-finalized versions")
 	require.Equal(t, db.ErrNotFinalized, err)
-	// Finalize round 2.
+	// Finalize version 2.
 	err = ndb.Finalize(ctx, 2, []hash.Hash{rootHash3})
 	require.NoError(t, err, "Finalize")
 
-	earliestRound, err := ndb.GetEarliestRound(ctx)
-	require.NoError(t, err, "GetEarliestRound")
-	require.EqualValues(t, 0, earliestRound, "earliest round should be correct")
-	latestRound, err := ndb.GetLatestRound(ctx)
-	require.NoError(t, err, "GetLatestRound")
-	require.EqualValues(t, 2, latestRound, "latest round should be correct")
+	earliestVersion, err := ndb.GetEarliestVersion(ctx)
+	require.NoError(t, err, "GetEarliestVersion")
+	require.EqualValues(t, 0, earliestVersion, "earliest version should be correct")
+	latestVersion, err := ndb.GetLatestVersion(ctx)
+	require.NoError(t, err, "GetLatestVersion")
+	require.EqualValues(t, 2, latestVersion, "latest version should be correct")
 
-	// Prune round 0.
+	// Prune version 0.
 	err = ndb.Prune(ctx, 0)
 	require.NoError(t, err, "Prune")
 
@@ -1164,15 +1164,15 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ndb = factory()
 	defer ndb.Close()
 
-	earliestRound, err = ndb.GetEarliestRound(ctx)
-	require.NoError(t, err, "GetEarliestRound")
-	require.EqualValues(t, 1, earliestRound, "earliest round should be correct")
-	latestRound, err = ndb.GetLatestRound(ctx)
-	require.NoError(t, err, "GetLatestRound")
-	require.EqualValues(t, 2, latestRound, "latest round should be correct")
+	earliestVersion, err = ndb.GetEarliestVersion(ctx)
+	require.NoError(t, err, "GetEarliestVersion")
+	require.EqualValues(t, 1, earliestVersion, "earliest version should be correct")
+	latestVersion, err = ndb.GetLatestVersion(ctx)
+	require.NoError(t, err, "GetLatestVersion")
+	require.EqualValues(t, 2, latestVersion, "latest version should be correct")
 
-	// Keys must still be available in round 2.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 2, Hash: rootHash3})
+	// Keys must still be available in version 2.
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 2, Hash: rootHash3})
 	value, err := tree.Get(ctx, []byte("blah"))
 	require.NoError(t, err, "Get")
 	require.EqualValues(t, []byte("ugh"), value)
@@ -1187,21 +1187,21 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	require.NoError(t, err, "Get")
 	require.Nil(t, value, "removed key must be gone")
 
-	// Round 0 must be gone.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHash1})
+	// Version 0 must be gone.
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 0, Hash: rootHash1})
 	_, err = tree.Get(ctx, []byte("foo"))
 	require.Error(t, err, "Get")
 }
 
-func testPruneManyRounds(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
+func testPruneManyVersions(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 	tree := New(nil, ndb)
 
-	const numRounds = 50
-	const numPairsPerRound = 50
+	const numVersions = 50
+	const numPairsPerVersion = 50
 
-	for r := 0; r < numRounds; r++ {
-		for p := 0; p < numPairsPerRound; p++ {
+	for r := 0; r < numVersions; r++ {
+		for p := 0; p < numPairsPerVersion; p++ {
 			key := []byte(fmt.Sprintf("key %d/%d", r, p))
 			value := []byte(fmt.Sprintf("value %d/%d", r, p))
 			err := tree.Insert(ctx, key, value)
@@ -1214,8 +1214,8 @@ func testPruneManyRounds(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 		require.NoError(t, err, "Finalize")
 	}
 
-	// Prune all rounds except the last one.
-	for r := 0; r < numRounds-1; r++ {
+	// Prune all versions except the last one.
+	for r := 0; r < numVersions-1; r++ {
 		err := ndb.Prune(ctx, uint64(r))
 		require.NoError(t, err, "Prune")
 	}
@@ -1226,8 +1226,8 @@ func testPruneManyRounds(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	defer ndb.Close()
 
 	// Check that the latest version has all the keys.
-	for r := 0; r < numRounds; r++ {
-		for p := 0; p < numPairsPerRound; p++ {
+	for r := 0; r < numVersions; r++ {
+		for p := 0; p < numPairsPerVersion; p++ {
 			key := []byte(fmt.Sprintf("key %d/%d", r, p))
 			value, err := tree.Get(ctx, key)
 			require.NoError(t, err, "Get")
@@ -1237,10 +1237,10 @@ func testPruneManyRounds(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 }
 
 // countCreatedNodes counts the number of nodes that have been created in the same
-// round as the root is in and have not been previously seen.
+// version as the root is in and have not been previously seen.
 func countCreatedNodes(t *testing.T, ndb db.NodeDB, root node.Root, seenNodes map[hash.Hash]bool) (nodes int) {
 	err := db.Visit(context.Background(), ndb, root, func(ctx context.Context, n node.Node) bool {
-		if n.GetCreatedRound() == root.Round && !seenNodes[n.GetHash()] {
+		if n.GetCreatedVersion() == root.Version && !seenNodes[n.GetHash()] {
 			seenNodes[n.GetHash()] = true
 			nodes++
 		}
@@ -1253,7 +1253,7 @@ func countCreatedNodes(t *testing.T, ndb db.NodeDB, root node.Root, seenNodes ma
 func testPruneForkedRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
-	// Create a root in round 0.
+	// Create a root in version 0.
 	tree := New(nil, ndb)
 	err := tree.Insert(ctx, []byte("foo"), []byte("bar"))
 	require.NoError(t, err, "Insert")
@@ -1261,12 +1261,12 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	require.NoError(t, err, "Insert")
 	_, rootHashR0_1, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
-	// Finalize round 0.
+	// Finalize version 0.
 	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHashR0_1})
 	require.NoError(t, err, "Finalize")
 
-	// Create a derived root A in round 1.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_1})
+	// Create a derived root A in version 1.
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 0, Hash: rootHashR0_1})
 	err = tree.Insert(ctx, []byte("dr"), []byte("A"))
 	require.NoError(t, err, "Insert")
 	err = tree.Remove(ctx, []byte("moo"))
@@ -1274,44 +1274,44 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	_, rootHashR1_1, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
 
-	// Create a derived root B in round 1.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_1})
+	// Create a derived root B in version 1.
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 0, Hash: rootHashR0_1})
 	err = tree.Insert(ctx, []byte("dr"), []byte("B"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_2, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
 
-	// Finalize round 1. Only derived root B was finalized, so derived root A
+	// Finalize version 1. Only derived root B was finalized, so derived root A
 	// should be discarded.
 	err = ndb.Finalize(ctx, 1, []hash.Hash{rootHashR1_2})
 	require.NoError(t, err, "Finalize")
 
 	// Make sure that the write log for the discarded root is gone.
-	rootR0_1 := node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_1}
-	rootR1_1 := node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_1}
-	rootR1_2 := node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_2}
+	rootR0_1 := node.Root{Namespace: testNs, Version: 0, Hash: rootHashR0_1}
+	rootR1_1 := node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_1}
+	rootR1_2 := node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_2}
 	_, err = ndb.GetWriteLog(ctx, rootR0_1, rootR1_1)
 	require.Error(t, err, "GetWriteLog")
 	// Make sure that the write log for the non-discarded root exists.
 	_, err = ndb.GetWriteLog(ctx, rootR0_1, rootR1_2)
 	require.NoError(t, err, "GetWriteLog")
 
-	// Create a derived root C from derived root B in round 2.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_2})
+	// Create a derived root C from derived root B in version 2.
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_2})
 	err = tree.Insert(ctx, []byte("yet"), []byte("another"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR2_1, err := tree.Commit(ctx, testNs, 2)
 	require.NoError(t, err, "Commit")
-	// Finalize round 2.
+	// Finalize version 2.
 	err = ndb.Finalize(ctx, 2, []hash.Hash{rootHashR2_1})
 	require.NoError(t, err, "Finalize")
 
-	// Prune round 1 (should fail as it is not the earliest round).
+	// Prune version 1 (should fail as it is not the earliest version).
 	err = ndb.Prune(ctx, 1)
 	require.Error(t, err, "Prune")
 	require.Equal(t, db.ErrNotEarliest, err)
 
-	// Prune rounds 0 and 1.
+	// Prune versions 0 and 1.
 	err = ndb.Prune(ctx, 0)
 	require.NoError(t, err, "Prune")
 	err = ndb.Prune(ctx, 1)
@@ -1324,18 +1324,18 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	// Make sure all the keys are there.
 	for _, root := range []struct {
-		Round uint64
-		Hash  hash.Hash
-		Keys  []string
+		Version uint64
+		Hash    hash.Hash
+		Keys    []string
 	}{
 		{2, rootHashR2_1, []string{"foo", "moo", "dr", "yet"}},
 	} {
-		tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: root.Round, Hash: root.Hash})
+		tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: root.Version, Hash: root.Hash})
 
 		for _, key := range root.Keys {
 			value, err := tree.Get(ctx, []byte(key))
-			require.NoError(t, err, "Get(%d, %s)", root.Round, key)
-			require.NotNil(t, value, "value should exist (%d, %s)", root.Round, key)
+			require.NoError(t, err, "Get(%d, %s)", root.Version, key)
+			require.NotNil(t, value, "value should exist (%d, %s)", root.Version, key)
 		}
 	}
 }
@@ -1373,7 +1373,7 @@ func testPruneLoneRootsShared(t *testing.T, ndb db.NodeDB, factory NodeDBFactory
 	require.NoError(t, err, "Finalize")
 
 	// Check that the shared nodes are still there.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHash1})
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 0, Hash: rootHash1})
 	value, err := tree.Get(ctx, []byte("foo"))
 	require.NoError(t, err, "Get")
 	require.EqualValues(t, []byte("bar"), value)
@@ -1394,7 +1394,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB, factory NodeDBFactor
 	}
 	batches := []struct {
 		Namespace common.Namespace
-		Round     uint64
+		Version   uint64
 		SrcRoot   string
 		DstRoot   string
 		Finalized bool
@@ -1402,7 +1402,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB, factory NodeDBFactor
 	}{
 		{
 			Namespace: testNs,
-			Round:     4,
+			Version:   4,
 			SrcRoot:   "xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
 			DstRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
 			Items: []item{
@@ -1419,7 +1419,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB, factory NodeDBFactor
 		},
 		{
 			Namespace: testNs,
-			Round:     4,
+			Version:   4,
 			SrcRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
 			DstRoot:   "XeNxDPHiY0PAQI5vFxFNxjwgAj++Sf0kCohpaUvImUg=",
 			Finalized: true,
@@ -1441,7 +1441,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB, factory NodeDBFactor
 		},
 		{
 			Namespace: testNs,
-			Round:     4,
+			Version:   4,
 			SrcRoot:   "lBnLyljpBdIweInarStbMkAGn8qq2sftGfJJWsvHCTk=",
 			DstRoot:   "rgbZz2sV2QlI/XG/+GiQoYlDpmxrMbY/hFs6PhTu1hA=",
 			Items: []item{
@@ -1476,7 +1476,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB, factory NodeDBFactor
 
 		tree := NewWithRoot(nil, ndb, node.Root{
 			Namespace: batch.Namespace,
-			Round:     batch.Round,
+			Version:   batch.Version,
 			Hash:      srcRootHash,
 		})
 		defer tree.Close()
@@ -1491,7 +1491,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB, factory NodeDBFactor
 			require.NoError(t, err, "Insert")
 		}
 
-		_, rootHash, err := tree.Commit(ctx, batch.Namespace, batch.Round)
+		_, rootHash, err := tree.Commit(ctx, batch.Namespace, batch.Version)
 		require.NoError(t, err, "Commit")
 
 		dstRootHashRaw, err := base64.StdEncoding.DecodeString(batch.DstRoot)
@@ -1506,12 +1506,12 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB, factory NodeDBFactor
 		}
 	}
 
-	err := ndb.Finalize(ctx, batches[0].Round, finalizedRoots)
+	err := ndb.Finalize(ctx, batches[0].Version, finalizedRoots)
 	require.NoError(t, err, "Finalize")
 
 	tree := NewWithRoot(nil, ndb, node.Root{
 		Namespace: batches[0].Namespace,
-		Round:     batches[0].Round,
+		Version:   batches[0].Version,
 		Hash:      finalizedRoots[0],
 	})
 	defer tree.Close()
@@ -1529,7 +1529,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB, factory NodeDBFactor
 func testPruneLoneRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
-	// Create a root in round 0.
+	// Create a root in version 0.
 	tree := New(nil, ndb)
 	err := tree.Insert(ctx, []byte("foo"), []byte("bar"))
 	require.NoError(t, err, "Insert")
@@ -1538,105 +1538,105 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	_, rootHashR0_1, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
 
-	// Create another root in round 0.
+	// Create another root in version 0.
 	tree = New(nil, ndb)
 	err = tree.Insert(ctx, []byte("goo"), []byte("blah"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR0_2, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
 
-	// Create yet another root in round 0.
+	// Create yet another root in version 0.
 	tree = New(nil, ndb)
 	err = tree.Insert(ctx, []byte("yet"), []byte("another"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR0_3, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
 
-	// Create yet another root in round 0.
+	// Create yet another root in version 0.
 	tree = New(nil, ndb)
 	err = tree.Insert(ctx, []byte("yet2"), []byte("another2"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR0_4, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
 
-	// Finalize round 0.
+	// Finalize version 0.
 	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHashR0_1, rootHashR0_2, rootHashR0_3, rootHashR0_4})
 	require.NoError(t, err, "Finalize")
 
-	// Create a distinct root in round 1.
+	// Create a distinct root in version 1.
 	seenNodes := make(map[hash.Hash]bool)
 	tree = New(nil, ndb)
 	err = tree.Insert(ctx, []byte("different"), []byte("boo"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_1, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	nodesR1_1 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_1}, seenNodes)
+	nodesR1_1 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_1}, seenNodes)
 	require.EqualValues(t, 1, nodesR1_1)
 
-	// Create a derived root in round 1.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_2})
+	// Create a derived root in version 1.
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 0, Hash: rootHashR0_2})
 	err = tree.Insert(ctx, []byte("different2"), []byte("boo"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_2, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
 
-	// Create two linked roots inside round 1 which will not be referenced
-	// in subsequent rounds and so should be garbage collected.
+	// Create two linked roots inside version 1 which will not be referenced
+	// in subsequent versions and so should be garbage collected.
 	tree = New(nil, ndb)
 	err = tree.Insert(ctx, []byte("first"), []byte("am i"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_3, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	nodesR1_3 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_3}, seenNodes)
+	nodesR1_3 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_3}, seenNodes)
 	require.EqualValues(t, 1, nodesR1_3)
 
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_3})
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_3})
 	err = tree.Insert(ctx, []byte("second"), []byte("i am"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_4, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	nodesR1_4 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_4}, seenNodes)
+	nodesR1_4 := countCreatedNodes(t, ndb, node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_4}, seenNodes)
 	require.EqualValues(t, 2, nodesR1_4)
 
-	// Create three linked roots inside round 1 where the first root is
-	// derived from a root in round 0, the second root is derived from
+	// Create three linked roots inside version 1 where the first root is
+	// derived from a root in version 0, the second root is derived from
 	// the first root and the third root is derived from the second root
-	// (both in the same round). All three should be garbage collected
-	// as they are not referenced in subsequent rounds.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_3})
+	// (both in the same version). All three should be garbage collected
+	// as they are not referenced in subsequent versions.
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 0, Hash: rootHashR0_3})
 	err = tree.Insert(ctx, []byte("first"), []byte("am i"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_5, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_5})
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_5})
 	err = tree.Insert(ctx, []byte("second"), []byte("i am"))
 	require.NoError(t, err, "Insert")
 	err = tree.Remove(ctx, []byte("yet"))
 	require.NoError(t, err, "Remove")
 	_, rootHashR1_6, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_6})
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_6})
 	err = tree.Insert(ctx, []byte("third"), []byte("i am not"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_7, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
 
-	// Create three linked roots inside round 1 where the first root is
-	// derived from a root in round 0, the second root is derived from
+	// Create three linked roots inside version 1 where the first root is
+	// derived from a root in version 0, the second root is derived from
 	// the first root and the third root is derived from the second root
-	// (both in the same round). The third root is then referenced in round
+	// (both in the same version). The third root is then referenced in version
 	// 2 so only intermediate nodes should be garbage collected.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: rootHashR0_4})
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 0, Hash: rootHashR0_4})
 	err = tree.Insert(ctx, []byte("first2"), []byte("am i"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_8, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_8})
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_8})
 	err = tree.Insert(ctx, []byte("second2"), []byte("i am"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_9, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_9})
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_9})
 	err = tree.Insert(ctx, []byte("third2"), []byte("i am not"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_10, err := tree.Commit(ctx, testNs, 1)
@@ -1644,36 +1644,36 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	// After these commits, 3 nodes are only referenced in intermediate roots
 	// and should be garbage collected.
 
-	// Finalize round 1.
+	// Finalize version 1.
 	err = ndb.Finalize(ctx, 1, []hash.Hash{rootHashR1_1, rootHashR1_2, rootHashR1_4, rootHashR1_7, rootHashR1_10})
 	require.NoError(t, err, "Finalize")
 
-	// Create a distinct root in round 2.
+	// Create a distinct root in version 2.
 	tree = New(nil, ndb)
 	err = tree.Insert(ctx, []byte("blah"), []byte("brah"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR2_1, err := tree.Commit(ctx, testNs, 2)
 	require.NoError(t, err, "Commit")
 
-	// Create a derived root in round 2.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_2})
+	// Create a derived root in version 2.
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_2})
 	err = tree.Insert(ctx, []byte("foo"), []byte("boo"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR2_2, err := tree.Commit(ctx, testNs, 2)
 	require.NoError(t, err, "Commit")
 
-	// Create another derived root in round 2.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 1, Hash: rootHashR1_10})
+	// Create another derived root in version 2.
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 1, Hash: rootHashR1_10})
 	err = tree.Insert(ctx, []byte("foo2"), []byte("boo"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR2_3, err := tree.Commit(ctx, testNs, 2)
 	require.NoError(t, err, "Commit")
 
-	// Finalize round 2.
+	// Finalize version 2.
 	err = ndb.Finalize(ctx, 2, []hash.Hash{rootHashR2_1, rootHashR2_2, rootHashR2_3})
 	require.NoError(t, err, "Finalize")
 
-	// Prune rounds 0 and 1, all of the lone root's node should have been removed.
+	// Prune versions 0 and 1, all of the lone root's node should have been removed.
 	err = ndb.Prune(ctx, 0)
 	require.NoError(t, err, "Prune")
 	err = ndb.Prune(ctx, 1)
@@ -1684,22 +1684,22 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ndb = factory()
 	defer ndb.Close()
 
-	// Check that roots in round 0 and 2 are still there.
+	// Check that roots in version 0 and 2 are still there.
 	for _, root := range []struct {
-		Round uint64
-		Hash  hash.Hash
-		Keys  []string
+		Version uint64
+		Hash    hash.Hash
+		Keys    []string
 	}{
 		{2, rootHashR2_1, []string{"blah"}},
 		{2, rootHashR2_2, []string{"goo", "different2", "foo"}},
 		{2, rootHashR2_3, []string{"yet2", "first2", "second2", "third2", "foo2"}},
 	} {
-		tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: root.Round, Hash: root.Hash})
+		tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: root.Version, Hash: root.Hash})
 
 		for _, key := range root.Keys {
 			value, err := tree.Get(ctx, []byte(key))
-			require.NoError(t, err, "Get(%d, %s)", root.Round, key)
-			require.NotNil(t, value, "value should exist (%d, %s)", root.Round, key)
+			require.NoError(t, err, "Get(%d, %s)", root.Version, key)
+			require.NotNil(t, value, "value should exist (%d, %s)", root.Version, key)
 		}
 	}
 }
@@ -1707,69 +1707,69 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 func testErrors(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
-	// Commit root for round 0.
+	// Commit root for version 0.
 	tree := New(nil, ndb)
 	err := tree.Insert(ctx, []byte("foo"), []byte("bar"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR0_1, err := tree.Commit(ctx, testNs, 0)
 	require.NoError(t, err, "Commit")
 
-	// Commit root for round 1.
+	// Commit root for version 1.
 	tree = New(nil, ndb)
 	err = tree.Insert(ctx, []byte("another"), []byte("bar"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR1_1, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(t, err, "Commit")
 
-	// Commit root for round 2.
+	// Commit root for version 2.
 	tree = New(nil, ndb)
 	err = tree.Insert(ctx, []byte("another2"), []byte("bar"))
 	require.NoError(t, err, "Insert")
 	_, rootHashR2_1, err := tree.Commit(ctx, testNs, 2)
 	require.NoError(t, err, "Commit")
 
-	// Commit for non-following round should fail.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 2, Hash: rootHashR2_1})
+	// Commit for non-following version should fail.
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 2, Hash: rootHashR2_1})
 	err = tree.Insert(ctx, []byte("moo"), []byte("moo"))
 	require.NoError(t, err, "Insert")
 	_, _, err = tree.Commit(ctx, testNs, 100)
-	require.Error(t, err, "Commit should fail for non-following round")
+	require.Error(t, err, "Commit should fail for non-following version")
 	require.Equal(t, db.ErrRootMustFollowOld, err)
 
 	// Commit with mismatched old root should fail.
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 99, Hash: rootHashR1_1})
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 99, Hash: rootHashR1_1})
 	err = tree.Insert(ctx, []byte("moo"), []byte("moo"))
 	require.NoError(t, err, "Insert")
 	_, _, err = tree.Commit(ctx, testNs, 100)
-	require.Error(t, err, "Commit should fail for mismatched round")
+	require.Error(t, err, "Commit should fail for mismatched version")
 	require.Equal(t, db.ErrRootNotFound, err)
 
 	// Commit with non-existent old root should fail.
 	var bogusRoot hash.Hash
 	bogusRoot.FromBytes([]byte("bogus root"))
-	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Round: 0, Hash: bogusRoot})
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 0, Hash: bogusRoot})
 	_, _, err = tree.Commit(ctx, testNs, 1)
 	require.Error(t, err, "Commit should fail for invalid root")
 	require.Equal(t, db.ErrRootNotFound, err)
 
-	// Finalizing a round twice should fail.
+	// Finalizing a version twice should fail.
 	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHashR0_1})
 	require.NoError(t, err, "Finalize")
 	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHashR0_1})
-	require.Error(t, err, "Finalize should fail as round is already finalized")
+	require.Error(t, err, "Finalize should fail as version is already finalized")
 	require.Equal(t, db.ErrAlreadyFinalized, err)
 
-	// Finalize of round 2 should fail as round 1 is not finalized.
+	// Finalize of version 2 should fail as version 1 is not finalized.
 	err = ndb.Finalize(ctx, 2, []hash.Hash{rootHashR2_1})
-	require.Error(t, err, "Finalize should fail as previous round not finalized")
+	require.Error(t, err, "Finalize should fail as previous version not finalized")
 	require.Equal(t, db.ErrNotFinalized, err)
 
-	// Commit into an already finalized round should fail.
+	// Commit into an already finalized version should fail.
 	tree = New(nil, ndb)
 	err = tree.Insert(ctx, []byte("already finalized"), []byte("woohoo"))
 	require.NoError(t, err, "Insert")
 	_, _, err = tree.Commit(ctx, testNs, 0)
-	require.Error(t, err, "Commit should fail for already finalized round")
+	require.Error(t, err, "Commit should fail for already finalized version")
 	require.Equal(t, db.ErrAlreadyFinalized, err)
 
 	// Commit for a different namespace should fail.
@@ -1919,7 +1919,7 @@ func testBackend(
 		{"MergeWriteLog", testMergeWriteLog},
 		{"HasRoot", testHasRoot},
 		{"PruneBasic", testPruneBasic},
-		{"PruneManyRounds", testPruneManyRounds},
+		{"PruneManyVersions", testPruneManyVersions},
 		{"PruneLoneRoots", testPruneLoneRoots},
 		{"PruneLoneRootsShared", testPruneLoneRootsShared},
 		{"PruneLoneRootsShared2", testPruneLoneRootsShared2},
@@ -2079,7 +2079,7 @@ func generatePopulatedTree(t *testing.T, ndb db.NodeDB) ([][]byte, [][]byte, nod
 
 	root := node.Root{
 		Namespace: testNs,
-		Round:     0,
+		Version:   0,
 		Hash:      rootHash,
 	}
 	return keys, values, root, tree

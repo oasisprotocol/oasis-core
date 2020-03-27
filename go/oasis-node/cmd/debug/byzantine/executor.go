@@ -62,7 +62,7 @@ func (cbc *computeBatchContext) openTrees(ctx context.Context, rs syncer.ReadSyn
 	var err error
 	cbc.ioTree = transaction.NewTree(rs, storage.Root{
 		Namespace: cbc.bd.Header.Namespace,
-		Round:     cbc.bd.Header.Round + 1,
+		Version:   cbc.bd.Header.Round + 1,
 		Hash:      cbc.bd.IORoot,
 	})
 
@@ -73,7 +73,7 @@ func (cbc *computeBatchContext) openTrees(ctx context.Context, rs syncer.ReadSyn
 
 	cbc.stateTree = urkel.NewWithRoot(rs, nil, storage.Root{
 		Namespace: cbc.bd.Header.Namespace,
-		Round:     cbc.bd.Header.Round,
+		Version:   cbc.bd.Header.Round,
 		Hash:      cbc.bd.Header.StateRoot,
 	})
 

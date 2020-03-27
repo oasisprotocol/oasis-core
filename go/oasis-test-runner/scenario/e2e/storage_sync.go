@@ -130,7 +130,7 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 			return fmt.Errorf("failed to get block %d: %w", checkpoint, err)
 		}
 		for _, cp := range cps {
-			if cp.Root.Round != blk.Header.Round {
+			if cp.Root.Version != blk.Header.Round {
 				continue
 			}
 			var found bool
