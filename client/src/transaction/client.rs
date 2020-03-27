@@ -1,7 +1,7 @@
 //! Transaction client.
 use std::time::Duration;
 
-use failure::{Error, Fallible};
+use failure::{Error, Fail, Fallible};
 use futures::{future, prelude::*};
 use grpcio::{Channel, Error::RpcFailure, RpcStatus, RpcStatusCode};
 use rustracing::{sampler::AllSampler, tag};

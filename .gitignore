@@ -7,6 +7,8 @@ target/
 **/generated
 /dist/
 /__pycache__/
+hfuzz_target
+hfuzz_workspace
 
 # IDE.
 .idea/*

@@ -1,5 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
+use arbitrary::Arbitrary;
 use failure::{format_err, Fallible};
 use io_context::Context;
 use serde_bytes;
@@ -16,7 +17,7 @@ const PROOF_ENTRY_FULL: u8 = 0x01;
 const PROOF_ENTRY_HASH: u8 = 0x02;
 
 /// A raw proof entry.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Arbitrary)]
 pub struct RawProofEntry(#[serde(with = "serde_bytes")] pub Vec<u8>);
 
 impl AsRef<[u8]> for RawProofEntry {
