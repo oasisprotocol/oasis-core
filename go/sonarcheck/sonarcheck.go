@@ -15,13 +15,16 @@ func Fuzz(data []byte) int {
 	var mnBuf []byte
 	var ll uint8
 	if err := binary.Read(src, binary.LittleEndian, &ll); err != nil {
-		return 0
+		return -1
 	}
 	mnBuf = make([]byte, ll)
 	if err := binary.Read(src, binary.LittleEndian, &mnBuf); err != nil {
-		return 0
+		return -1
 	}
 	mn := string(mnBuf)
+	if src.Len() > 0 {
+		return -1
+	}
 
 	cb, ok := callbacks[mn]
 	if !ok {
