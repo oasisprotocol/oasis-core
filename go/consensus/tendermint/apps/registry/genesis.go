@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 
 	"github.com/pkg/errors"
@@ -29,7 +30,10 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	state := registryState.NewMutableState(ctx.State())
 	state.SetConsensusParameters(&st.Parameters)
 
-	for _, v := range st.Entities {
+	for i, v := range st.Entities {
+		if v == nil {
+			return fmt.Errorf("registry: genesis entity index %d is nil", i)
+		}
 		ctx.Logger().Debug("InitChain: Registering genesis entity",
 			"entity", v.Signature.PublicKey,
 		)
@@ -43,7 +47,10 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	}
 	// Register runtimes. First key manager and then compute runtime(s).
 	for _, k := range []registry.RuntimeKind{registry.KindKeyManager, registry.KindCompute} {
-		for _, v := range st.Runtimes {
+		for i, v := range st.Runtimes {
+			if v == nil {
+				return fmt.Errorf("registry: genesis runtime index %d is nil", i)
+			}
 			rt, err := registry.VerifyRegisterRuntimeArgs(&st.Parameters, ctx.Logger(), v, ctx.IsInitChain())
 			if err != nil {
 				return err
@@ -63,7 +70,10 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 			}
 		}
 	}
-	for _, v := range st.SuspendedRuntimes {
+	for i, v := range st.SuspendedRuntimes {
+		if v == nil {
+			return fmt.Errorf("registry: genesis suspended runtime index %d is nil", i)
+		}
 		ctx.Logger().Debug("InitChain: Registering genesis suspended runtime",
 			"runtime_owner", v.Signature.PublicKey,
 		)
@@ -82,7 +92,10 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 			return errors.Wrap(err, "registry: failed to suspend runtime at genesis")
 		}
 	}
-	for _, v := range st.Nodes {
+	for i, v := range st.Nodes {
+		if v == nil {
+			return fmt.Errorf("registry: genesis node index %d is nil", i)
+		}
 		// The node signer isn't guaranteed to be the owner, and in most cases
 		// will just be the node self signing.
 		ctx.Logger().Debug("InitChain: Registering genesis node",
@@ -103,6 +116,9 @@ func (app *registryApplication) InitChain(ctx *abci.Context, request types.Reque
 	}
 	var ns []*nodeStatus
 	for k, v := range st.NodeStatuses {
+		if v == nil {
+			return fmt.Errorf("registry: genesis node status %s is nil", k)
+		}
 		ns = append(ns, &nodeStatus{k, v})
 	}
 	// Make sure that we apply node status updates in a canonical order.

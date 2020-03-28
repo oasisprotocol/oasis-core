@@ -784,7 +784,7 @@ func (t *tendermintService) initialize() error {
 	}
 	t.svcMgr.RegisterCleanupOnly(t.scheduler, "scheduler backend")
 
-	if t.roothash, err = tmroothash.New(t.ctx, t.dataDir, t.beacon, t); err != nil {
+	if t.roothash, err = tmroothash.New(t.ctx, t.dataDir, t); err != nil {
 		t.Logger.Error("roothash: failed to initialize roothash backend",
 			"err", err,
 		)

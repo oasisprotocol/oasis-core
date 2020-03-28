@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"github.com/oasislabs/ed25519"
+
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/pem"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
