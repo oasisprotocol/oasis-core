@@ -8,10 +8,7 @@ use serde_derive::Deserialize;
 use super::tags::Tags;
 use crate::{
     common::{cbor, crypto::hash::Hash, key_format::KeyFormat},
-    storage::mkvs::{
-        urkel::{sync::ReadSync, Root, UrkelTree},
-        WriteLog,
-    },
+    storage::mkvs::{self, sync::ReadSync, Root, WriteLog},
 };
 
 // NOTE: This should be kept in sync with go/runtime/transaction/transaction.go.
@@ -153,7 +150,7 @@ impl serde::Serialize for OutputArtifacts {
 /// A Merkle tree containing transaction artifacts.
 pub struct Tree {
     io_root: Root,
-    tree: UrkelTree,
+    tree: mkvs::Tree,
 }
 
 impl Tree {
@@ -161,7 +158,7 @@ impl Tree {
     pub fn new(read_syncer: Box<dyn ReadSync>, io_root: Root) -> Self {
         Self {
             io_root,
-            tree: UrkelTree::make().with_root(io_root).new(read_syncer),
+            tree: mkvs::Tree::make().with_root(io_root).new(read_syncer),
         }
     }
 
@@ -234,7 +231,7 @@ impl Tree {
 mod test {
     use io_context::Context;
 
-    use crate::storage::mkvs::urkel::sync::*;
+    use crate::storage::mkvs::sync::*;
 
     use super::{super::tags::Tag, *};
 

@@ -96,8 +96,8 @@ endif
 # Go build command to use by default.
 GO_BUILD_CMD := env -u GOPATH $(OASIS_GO) build $(GOFLAGS)
 
-# Path to the Urkel interoperability test helpers binary in go/.
-GO_TEST_HELPER_URKEL_PATH := storage/mkvs/urkel/interop/urkel-test-helpers
+# Path to the MKVS interoperability test helpers binary in go/.
+GO_TEST_HELPER_MKVS_PATH := storage/mkvs/interop/mkvs-test-helpers
 
 # Helper that ensures $(NEXT_VERSION) variable is not empty.
 define ENSURE_NEXT_VERSION =

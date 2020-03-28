@@ -1,7 +1,7 @@
 use honggfuzz::fuzz;
 use io_context::Context;
 
-use oasis_core_runtime::storage::mkvs::urkel::sync::{Proof, ProofVerifier, RawProofEntry};
+use oasis_core_runtime::storage::mkvs::sync::{Proof, ProofVerifier, RawProofEntry};
 
 fn main() {
     loop {

@@ -13,7 +13,7 @@ use crate::{
         runtime::RuntimeId,
         sgx::avr::AVR,
     },
-    storage::mkvs::{urkel::sync, WriteLog},
+    storage::mkvs::{sync, WriteLog},
     transaction::types::TxnBatch,
 };
 

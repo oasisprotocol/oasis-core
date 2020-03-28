@@ -11,9 +11,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
-	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/api"
-	badgerNodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/db/badger"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
+	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
+	badgerNodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/db/badger"
 )
 
 const (

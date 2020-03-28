@@ -8,7 +8,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
-	urkelNode "github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	mkvsNode "github.com/oasislabs/oasis-core/go/storage/mkvs/node"
 	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
@@ -61,7 +61,7 @@ func (h *mockHost) MakeRequest(ctx context.Context, body *protocol.Body) (<-chan
 				transaction.Tag{Key: []byte("txn_foo"), Value: []byte("txn_bar")},
 			}
 
-			emptyRoot := urkelNode.Root{
+			emptyRoot := mkvsNode.Root{
 				Namespace: rq.Block.Header.Namespace,
 				Version:   rq.Block.Header.Round + 1,
 			}

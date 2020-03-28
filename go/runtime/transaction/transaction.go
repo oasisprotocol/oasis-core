@@ -11,10 +11,10 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/writelog"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
 )
 
 // NOTE: This should be kept in sync with runtime/src/transaction/tree.rs.
@@ -154,14 +154,14 @@ func (t Transaction) asOutputArtifacts() outputArtifacts {
 // Tree is a Merkle tree containing transaction artifacts.
 type Tree struct {
 	ioRoot node.Root
-	tree   urkel.Tree
+	tree   mkvs.Tree
 }
 
 // NewTree creates a new transaction artifacts tree.
 func NewTree(rs syncer.ReadSyncer, ioRoot node.Root) *Tree {
 	return &Tree{
 		ioRoot: ioRoot,
-		tree:   urkel.NewWithRoot(rs, nil, ioRoot, urkel.Capacity(50000, 16*1024*1024)),
+		tree:   mkvs.NewWithRoot(rs, nil, ioRoot, mkvs.Capacity(50000, 16*1024*1024)),
 	}
 }
 
@@ -216,7 +216,7 @@ func (bo inBatchOrder) Less(i, j int) bool { return bo.order[i] < bo.order[j] }
 
 // GetInputBatch returns a batch of transaction input artifacts in batch order.
 func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
-	it := t.tree.NewIterator(ctx, urkel.IteratorPrefetch(prefetchArtifactCount))
+	it := t.tree.NewIterator(ctx, mkvs.IteratorPrefetch(prefetchArtifactCount))
 	defer it.Close()
 
 	var curTx hash.Hash
@@ -256,7 +256,7 @@ func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
 // GetTransactions returns a list of all transaction artifacts in the tree
 // in a stable order (transactions are ordered by their hash).
 func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
-	it := t.tree.NewIterator(ctx, urkel.IteratorPrefetch(prefetchArtifactCount))
+	it := t.tree.NewIterator(ctx, mkvs.IteratorPrefetch(prefetchArtifactCount))
 	defer it.Close()
 
 	var curTx hash.Hash
@@ -384,7 +384,7 @@ func (t *Tree) GetTransactionMultiple(ctx context.Context, txHashes []hash.Hash)
 
 // GetTags retrieves all tags emitted in this tree.
 func (t *Tree) GetTags(ctx context.Context) (Tags, error) {
-	it := t.tree.NewIterator(ctx, urkel.IteratorPrefetch(prefetchArtifactCount))
+	it := t.tree.NewIterator(ctx, mkvs.IteratorPrefetch(prefetchArtifactCount))
 	defer it.Close()
 
 	var curTx hash.Hash

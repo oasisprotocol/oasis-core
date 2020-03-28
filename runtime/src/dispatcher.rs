@@ -31,11 +31,8 @@ use crate::{
     },
     storage::{
         mkvs::{
-            urkel::{
-                sync::{HostReadSyncer, NoopReadSyncer},
-                Root,
-            },
-            UrkelTree,
+            sync::{HostReadSyncer, NoopReadSyncer},
+            Root, Tree,
         },
         StorageContext,
     },
@@ -458,7 +455,7 @@ impl Dispatcher {
                     // Request, dispatch.
                     let ctx = ctx.freeze();
                     let read_syncer = HostReadSyncer::new(protocol.clone());
-                    let mut mkvs = UrkelTree::make()
+                    let mut mkvs = Tree::make()
                         .with_root(Root {
                             hash: state_root,
                             ..Default::default()
@@ -554,7 +551,7 @@ impl Dispatcher {
         // Request, dispatch.
         let ctx = ctx.freeze();
         let read_syncer = HostReadSyncer::new(protocol.clone());
-        let mut mkvs = UrkelTree::make()
+        let mut mkvs = Tree::make()
             .with_root(Root {
                 hash: state_root,
                 ..Default::default()
@@ -582,14 +579,14 @@ impl Dispatcher {
 }
 
 struct Cache {
-    mkvs: UrkelTree,
+    mkvs: Tree,
     root: Root,
 }
 
 impl Cache {
     fn new(protocol: &Arc<Protocol>, root: Root) -> Self {
         let read_syncer = HostReadSyncer::new(protocol.clone());
-        let mkvs = UrkelTree::make()
+        let mkvs = Tree::make()
             .with_capacity(100_000, 10_000_000)
             .with_root(root)
             .new(Box::new(read_syncer));

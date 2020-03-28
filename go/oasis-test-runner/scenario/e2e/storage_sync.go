@@ -11,7 +11,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	"github.com/oasislabs/oasis-core/go/storage/database"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
 )
 
 var (

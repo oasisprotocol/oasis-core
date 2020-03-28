@@ -11,10 +11,7 @@ use oasis_core_runtime::{
         roothash::{Block, Namespace},
     },
     storage::{
-        mkvs::{
-            urkel::{sync::*, Root},
-            Prefix, UrkelTree, WriteLog,
-        },
+        mkvs::{sync::*, Prefix, Root, Tree, WriteLog},
         MKVS,
     },
     transaction::types::{TxnCall, TxnOutput},
@@ -60,7 +57,7 @@ pub struct BlockSnapshot {
     pub block_hash: Hash,
 
     read_syncer: RemoteReadSync,
-    mkvs: UrkelTree,
+    mkvs: Tree,
 }
 
 impl Clone for BlockSnapshot {
@@ -68,7 +65,7 @@ impl Clone for BlockSnapshot {
         let block = self.block.clone();
         let block_hash = self.block_hash;
         let read_syncer = self.read_syncer.clone();
-        let mkvs = UrkelTree::make()
+        let mkvs = Tree::make()
             .with_root(Root {
                 namespace: self.block.header.namespace,
                 version: self.block.header.round,
@@ -88,7 +85,7 @@ impl Clone for BlockSnapshot {
 impl BlockSnapshot {
     pub(super) fn new(storage_client: api::storage::StorageClient, block: Block) -> Self {
         let read_syncer = RemoteReadSync(storage_client);
-        let mkvs = UrkelTree::make()
+        let mkvs = Tree::make()
             .with_root(Root {
                 namespace: block.header.namespace,
                 version: block.header.round,

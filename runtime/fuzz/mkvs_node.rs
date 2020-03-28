@@ -1,6 +1,6 @@
 use honggfuzz::fuzz;
 
-use oasis_core_runtime::storage::mkvs::urkel::{marshal::Marshal, NodeBox};
+use oasis_core_runtime::storage::mkvs::{marshal::Marshal, NodeBox};
 
 fn main() {
     loop {

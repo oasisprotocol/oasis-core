@@ -31,7 +31,7 @@ import (
 	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
 )
 
 const (
@@ -324,8 +324,8 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 			return nil, nil, err
 		}
 
-		// Use in-memory Urkel tree to calculate the new root.
-		tree := urkel.New(nil, nil)
+		// Use in-memory MKVS tree to calculate the new root.
+		tree := mkvs.New(nil, nil)
 		ctx := context.Background()
 		for _, logEntry := range log {
 			err = tree.Insert(ctx, logEntry.Key, logEntry.Value)

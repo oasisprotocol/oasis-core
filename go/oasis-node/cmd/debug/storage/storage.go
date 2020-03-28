@@ -18,7 +18,7 @@ import (
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	"github.com/oasislabs/oasis-core/go/storage"
 	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/node"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
 	storageWorkerAPI "github.com/oasislabs/oasis-core/go/worker/storage/api"
 	"github.com/oasislabs/oasis-core/go/worker/storage/committee"
 )

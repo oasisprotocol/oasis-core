@@ -20,8 +20,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/checkpoint"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/urkel/syncer"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
 )
 
 var _ storage.Backend = (*honestNodeStorage)(nil)
