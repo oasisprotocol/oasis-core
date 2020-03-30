@@ -70,6 +70,9 @@ func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.Reque
 		return fmt.Errorf("disburse fees voters and next proposer: %w", err)
 	}
 
+	// Save block proposer for fee disbursements.
+	stakingState.SetBlockProposer(ctx, proposingEntity)
+
 	// Add rewards for proposer.
 	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity, numEligibleValidators, len(votingEntities)); err != nil {
 		return fmt.Errorf("staking: block proposing reward: %w", err)
