@@ -190,6 +190,22 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 		return err
 	}
 
+	// As of the last time this comment was updated:
+	// - total fees has 150 tokens from genesis common pool
+	// - total fees has 50 tokens from genesis last block fees
+	// - for each of 12 transactions that pay for gas:
+	//   - 10 tokens paid for gas in a block on its own
+	//   - (2+2)/(1+2+2) = 80% => 8 tokens persisted for VQ share
+	//   - 10 - 8 = 2 tokens paid to P
+	//   - VQ share divided into 3 validator portions, for 2 tokens each
+	//   - (2)/(2+2) = 50% => 1 token per validator for Q
+	//   - 2 - 1 = 1 token per validator for V
+	//   - remaining 2 tokens moved to common pool
+	// - 150 + 50 + 12 * 10 = 320 tokens `total_fees`
+	// - 12 * 2 = 24 tokens paid for P role
+	// - 12 * 1 * 3 = 36 tokens paid for V roles
+	// - 12 * 1 * 3 = 36 tokens paid for Q role
+	// - 24 + 36 + 36 = 96 tokens `disbursed_fees`
 	sc.logger.Info("making sure that fees have been disbursed",
 		"total_fees", totalFees,
 		"disbursed_fees", newTotalEntityBalance,
