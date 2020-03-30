@@ -7,8 +7,9 @@
       "rate_change_interval": 10
     },
     "debonding_interval": 2,
-    "fee_split_propose": "1",
-    "fee_split_vote": "1",
+    "fee_split_weight_propose": "2",
+    "fee_split_weight_vote": "1",
+    "fee_split_weight_next_propose": "1",
     "gas_costs": {
       "add_escrow": 10,
       "burn": 10,

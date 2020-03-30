@@ -59,24 +59,27 @@ func (app *stakingApplication) BeginBlock(ctx *abci.Context, request types.Reque
 	// Look up the proposer's entity.
 	proposingEntity := app.resolveEntityIDFromProposer(regState, request, ctx)
 
-	// Go through all signers of the previous block and resolve entities.
+	// Go through all voters of the previous block and resolve entities.
 	// numEligibleValidators is how many total validators are in the validator set, while
-	// signingEntities is from the validators which actually signed.
+	// votingEntities is from the validators which actually voted.
 	numEligibleValidators := len(request.GetLastCommitInfo().Votes)
-	signingEntities := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
+	votingEntities := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
 
 	// Disburse fees from previous block.
-	if err := app.disburseFees(ctx, stakeState, proposingEntity, numEligibleValidators, signingEntities); err != nil {
-		return fmt.Errorf("staking: failed to disburse fees: %w", err)
+	if err := app.disburseFeesVQ(ctx, stakeState, proposingEntity, numEligibleValidators, votingEntities); err != nil {
+		return fmt.Errorf("disburse fees voters and next proposer: %w", err)
 	}
 
+	// Save block proposer for fee disbursements.
+	stakingState.SetBlockProposer(ctx, proposingEntity)
+
 	// Add rewards for proposer.
-	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity, numEligibleValidators, len(signingEntities)); err != nil {
+	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity, numEligibleValidators, len(votingEntities)); err != nil {
 		return fmt.Errorf("staking: block proposing reward: %w", err)
 	}
 
 	// Track signing for rewards.
-	if err := app.updateEpochSigning(ctx, stakeState, signingEntities); err != nil {
+	if err := app.updateEpochSigning(ctx, stakeState, votingEntities); err != nil {
 		return fmt.Errorf("staking: failed to update epoch signing info: %w", err)
 	}
 
@@ -147,8 +150,10 @@ func (app *stakingApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Ap
 }
 
 func (app *stakingApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
-	// Persist any block fees so we can transfer them in the next block.
-	stakingState.PersistBlockFees(ctx)
+	fees := stakingState.BlockFees(ctx)
+	if err := app.disburseFeesP(ctx, stakingState.NewMutableState(ctx.State()), stakingState.BlockProposer(ctx), &fees); err != nil {
+		return types.ResponseEndBlock{}, fmt.Errorf("disburse fees proposer: %w", err)
+	}
 
 	if changed, epoch := app.state.EpochChanged(ctx); changed {
 		return types.ResponseEndBlock{}, app.onEpochChange(ctx, epoch)
