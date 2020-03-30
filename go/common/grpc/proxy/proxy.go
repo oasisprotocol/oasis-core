@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -73,6 +74,12 @@ func (p *proxy) handler(srv interface{}, stream grpc.ServerStream) error {
 	}
 	// Pass subject header upstream.
 	upstreamCtx = metadata.AppendToOutgoingContext(upstreamCtx, policy.ForwardedSubjectMD, sub)
+
+	// Check if upstream connection was disconnected.
+	if p.upstreamConn != nil && p.upstreamConn.GetState() == connectivity.Shutdown {
+		// We need to redial if the connection was shut down.
+		p.upstreamConn = nil
+	}
 
 	// Dial upstream if necessary.
 	if p.upstreamConn == nil {
