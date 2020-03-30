@@ -43,7 +43,7 @@ func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stak
 		return fmt.Errorf("divide feePersistAmt: %w", err)
 	}
 
-	// Persist voters' and next proposer's shares.
+	// Persist voters' and next proposer's shares of the fees.
 	feePersist := quantity.NewQuantity()
 	if err = quantity.Move(feePersist, totalFees, feePersistAmt); err != nil {
 		return fmt.Errorf("move feePersist: %w", err)
@@ -100,8 +100,8 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 		return fmt.Errorf("ConsensusParameters: %w", err)
 	}
 
-	// Compute the portion associated with each eligible validator's share, and within that, how much goes to the voter
-	// and how much goes to the next proposer.
+	// Compute the portion associated with each eligible validator's share of the fees, and within that, how much goes
+	// to the voter and how much goes to the next proposer.
 	perValidator := lastBlockFees.Clone()
 	var nEVQ quantity.Quantity
 	if err = nEVQ.FromInt64(int64(numEligibleValidators)); err != nil {
