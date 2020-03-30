@@ -9,7 +9,7 @@ import (
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 )
 
-// disburseFeesP disburses fees to the proposer and persists the voters' and next proposer's shares.
+// disburseFeesP disburses fees to the proposer and persists the voters' and next proposer's shares of the fees.
 //
 // In case of errors the state may be inconsistent.
 func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, totalFees *quantity.Quantity) error {
