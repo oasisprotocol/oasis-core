@@ -60,7 +60,7 @@ func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stak
 		stakeState.SetAccount(*proposerEntity, acct)
 	}
 
-	// Put the rest into the common pool.
+	// Put the rest into the common pool (in case there is no proposer entity to pay).
 	if !totalFees.IsZero() {
 		remaining := totalFees.Clone()
 		commonPool, err := stakeState.CommonPool()
