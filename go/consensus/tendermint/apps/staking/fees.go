@@ -27,19 +27,19 @@ func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stak
 	}
 
 	// Compute how much to persist for voters and the next proposer.
-	numPersist := consensusParameters.FeeSplitWeightVote.Clone()
-	if err = numPersist.Add(&consensusParameters.FeeSplitWeightNextPropose); err != nil {
+	weightVQ := consensusParameters.FeeSplitWeightVote.Clone()
+	if err = weightVQ.Add(&consensusParameters.FeeSplitWeightNextPropose); err != nil {
 		return fmt.Errorf("add FeeSplitWeightNextPropose: %w", err)
 	}
-	denom := numPersist.Clone()
-	if err = denom.Add(&consensusParameters.FeeSplitWeightPropose); err != nil {
+	weightPVQ := weightVQ.Clone()
+	if err = weightPVQ.Add(&consensusParameters.FeeSplitWeightPropose); err != nil {
 		return fmt.Errorf("add FeeSplitWeightPropose: %w", err)
 	}
 	feePersistAmt := totalFees.Clone()
-	if err = feePersistAmt.Mul(numPersist); err != nil {
+	if err = feePersistAmt.Mul(weightVQ); err != nil {
 		return fmt.Errorf("multiply feePersistAmt: %w", err)
 	}
-	if feePersistAmt.Quo(denom) != nil {
+	if feePersistAmt.Quo(weightPVQ) != nil {
 		return fmt.Errorf("divide feePersistAmt: %w", err)
 	}
 
