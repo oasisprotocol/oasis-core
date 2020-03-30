@@ -35,9 +35,10 @@ func TestConsensusParameters(t *testing.T) {
 
 	// Degenerate fee split.
 	degenerateFeeSplit := ConsensusParameters{
-		Thresholds:            validThresholds,
-		FeeSplitWeightVote:    mustInitQuantity(t, 0),
-		FeeSplitWeightPropose: mustInitQuantity(t, 0),
+		Thresholds:                validThresholds,
+		FeeSplitWeightPropose:     mustInitQuantity(t, 0),
+		FeeSplitWeightVote:        mustInitQuantity(t, 0),
+		FeeSplitWeightNextPropose: mustInitQuantity(t, 0),
 	}
 	require.Error(degenerateFeeSplit.SanityCheck(), "consensus parameters with degenerate fee split should be invalid")
 }
