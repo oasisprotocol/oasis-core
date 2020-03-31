@@ -318,10 +318,11 @@ func TestCannedRIC(t *testing.T) {
 					staking.GasOpReclaimEscrow: 4,
 					staking.GasOpTransfer:      4,
 				},
-				MinDelegationAmount:     mustInitQuantity(1000),
-				FeeSplitVote:            mustInitQuantity(1),
-				FeeSplitPropose:         mustInitQuantity(1),
-				RewardFactorEpochSigned: mustInitQuantity(1),
+				MinDelegationAmount:       mustInitQuantity(1000),
+				FeeSplitWeightPropose:     mustInitQuantity(2),
+				FeeSplitWeightVote:        mustInitQuantity(1),
+				FeeSplitWeightNextPropose: mustInitQuantity(1),
+				RewardFactorEpochSigned:   mustInitQuantity(1),
 			},
 			TotalSupply: mustInitQuantity(2_000_006_000),
 			CommonPool:  mustInitQuantity(1_000_000_000),
@@ -386,7 +387,7 @@ func TestCannedRIC(t *testing.T) {
 		AppStateBytes: docBytes,
 	}
 	cannedRIC = marshalAndCheck(t, &ric, "request init chain")
-	fmt.Printf("canned ric %#02v\n", cannedRIC)
+	fmt.Printf("canned ric [%x]\n", cannedRIC)
 }
 
 func TestSimpleRIC(t *testing.T) {
@@ -416,7 +417,7 @@ func TestSimpleRIC(t *testing.T) {
 					staking.GasOpReclaimEscrow: 0,
 					staking.GasOpTransfer:      0,
 				},
-				FeeSplitVote: mustInitQuantity(1),
+				FeeSplitWeightVote: mustInitQuantity(1),
 			},
 		},
 		Scheduler: scheduler.Genesis{
@@ -433,7 +434,7 @@ func TestSimpleRIC(t *testing.T) {
 		AppStateBytes: docBytes,
 	}
 	cannedRIC = marshalAndCheck(t, &ric, "request init chain")
-	fmt.Printf("canned ric %#02v\n", cannedRIC)
+	fmt.Printf("canned ric [%x]\n", cannedRIC)
 }
 
 func TestFuzz(t *testing.T) {
