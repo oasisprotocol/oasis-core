@@ -57,6 +57,8 @@ type queries struct {
 	registry  registry.Backend
 	scheduler scheduler.Backend
 	runtime   runtimeClient.RuntimeClient
+
+	runtimeGenesisRound uint64
 }
 
 // doConsensusQueries does GetEpoch, GetBlock, GetTransaction queries for the
@@ -340,11 +342,11 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 	p := rng.Float32()
 	switch {
 	case p < queriesEarliestHeightRatio:
-		round = 1
+		round = q.runtimeGenesisRound
 	case p < queriesEarliestHeightRatio+queriesLatestHeightRatio:
 		round = latestRound
 	default:
-		// [1, latestRound]
+		// [q.runtimeGenesisRound, latestRound]
 		round = uint64(rng.Int63n(int64(latestRound) + 1))
 	}
 
@@ -354,6 +356,11 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 		Round:     round,
 	})
 	if err != nil {
+		q.logger.Error("Runtime GetBlock failure",
+			"round", round,
+			"latest_round", latestRound,
+			"err", err,
+		)
 		return fmt.Errorf("runtimeClient.GetBlock, round: %d: %w", round, err)
 	}
 	block2, err := q.runtime.GetBlockByHash(ctx, &runtimeClient.GetBlockByHashRequest{
@@ -361,9 +368,20 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 		BlockHash: block.Header.EncodedHash(),
 	})
 	if err != nil {
+		q.logger.Error("Runtime GetBlockByHash failure",
+			"hash", block.Header.EncodedHash(),
+			"latest_round", latestRound,
+			"err", err,
+		)
 		return fmt.Errorf("runtimeClient.GetBlockByHash, hash: %s: %w", block.Header.EncodedHash(), err)
 	}
 	if block.Header.EncodedHash() != block2.Header.EncodedHash() {
+		q.logger.Error("Runtime block header hash missmatch",
+			"round", round,
+			"latest_round", latestRound,
+			"round_hash", block.Header.EncodedHash(),
+			"hash", block2.Header.EncodedHash(),
+		)
 		return fmt.Errorf("Expected equal blocks, got: byRound: %s byHash: %s", block.Header.EncodedHash(), block2.Header.EncodedHash())
 	}
 
@@ -375,6 +393,11 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 		},
 	})
 	if err != nil {
+		q.logger.Error("Runtime QueryTxs failure",
+			"round", round,
+			"latest_round", latestRound,
+			"err", err,
+		)
 		return fmt.Errorf("runtimeClient.QueryTxs: %w", err)
 	}
 
@@ -416,6 +439,11 @@ func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.C
 		)
 		return fmt.Errorf("Runtime unmarshal: %w", err)
 	}
+	rtState, ok := doc.RootHash.RuntimeStates[q.runtimeID]
+	if !ok {
+		return fmt.Errorf("Missing runtime genesis state for runtime: %s", q.runtimeID)
+	}
+	q.runtimeGenesisRound = rtState.Round
 
 	for {
 		block, err := q.consensus.GetBlock(ctx, consensus.HeightLatest)
