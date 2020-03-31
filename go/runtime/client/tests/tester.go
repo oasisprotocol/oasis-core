@@ -83,6 +83,10 @@ func testQuery(
 	require.NoError(t, err, "GetBlock")
 	require.EqualValues(t, 4, blk.Header.Round)
 
+	blkLatest, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: api.RoundLatest})
+	require.NoError(t, err, "GetBlock(RoundLatest)")
+	require.EqualValues(t, 4, blkLatest.Header.Round)
+
 	// Out of bounds block round.
 	_, err = c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: 5})
 	require.Error(t, err, "GetBlock")

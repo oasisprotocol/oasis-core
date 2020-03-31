@@ -32,4 +32,7 @@ type BlockHistory interface {
 
 	// GetBlock returns the block at a specific round.
 	GetBlock(ctx context.Context, round uint64) (*block.Block, error)
+
+	// GetLatestBlock returns the block at latest round.
+	GetLatestBlock(ctx context.Context) (*block.Block, error)
 }

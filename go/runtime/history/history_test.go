@@ -41,6 +41,10 @@ func TestHistory(t *testing.T) {
 	require.Error(err, "GetBlock should fail for non-indexed block")
 	require.Equal(roothash.ErrNotFound, err)
 
+	_, err = history.GetLatestBlock(context.Background())
+	require.Error(err, "GetLatestBlock should fail for no indexed block")
+	require.Equal(roothash.ErrNotFound, err)
+
 	err = history.ConsensusCheckpoint(42)
 	require.NoError(err, "ConsensusCheckpoint")
 	err = history.ConsensusCheckpoint(40)
@@ -82,6 +86,10 @@ func TestHistory(t *testing.T) {
 	require.NoError(err, "GetBlock")
 	require.Equal(&putBlk, gotBlk, "GetBlock should return the correct block")
 
+	gotLatestBlk, err := history.GetLatestBlock(context.Background())
+	require.NoError(err, "GetLatestBlock")
+	require.Equal(&putBlk, gotLatestBlk, "GetLatestBlock should return the correct block")
+
 	// Close history and try to reopen and continue.
 	history.Close()
 
@@ -102,6 +110,10 @@ func TestHistory(t *testing.T) {
 	gotBlk, err = history.GetBlock(context.Background(), 10)
 	require.NoError(err, "GetBlock")
 	require.Equal(&putBlk, gotBlk, "GetBlock should return the correct block")
+
+	gotLatestBlk, err = history.GetLatestBlock(context.Background())
+	require.NoError(err, "GetLatestBlock")
+	require.Equal(&putBlk, gotLatestBlk, "GetLatestBlock should return the correct block")
 }
 
 type testPruneHandler struct {
