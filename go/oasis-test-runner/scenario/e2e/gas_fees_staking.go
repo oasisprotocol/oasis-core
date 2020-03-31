@@ -84,6 +84,7 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		EpochtimeMock:                     true,
 		StakingGenesis:                    "tests/fixture-data/gas-fees/staking-genesis.json",
 		DefaultLogWatcherHandlerFactories: DefaultBasicLogWatcherHandlerFactories,
+		ConsensusGasCostsTxByte:           0, // So we can control gas more easily.
 	}
 	f.Entities = []oasis.EntityCfg{
 		oasis.EntityCfg{IsDebugTestEntity: true},
