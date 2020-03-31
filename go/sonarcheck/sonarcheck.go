@@ -8,7 +8,33 @@ import (
 	"fmt"
 )
 
-var callbacks = make(map[string]func())
+func methodEasy() {
+	fmt.Println("ok easy")
+}
+
+func methodTransfer() {
+	fmt.Println("ok t")
+}
+
+func methodBurn() {
+	fmt.Println("ok b")
+}
+
+func methodAddEscrow() {
+	panic("problem ae")
+}
+
+func methodReclaimEscrow() {
+	panic("problem re")
+}
+
+var callbacks = map[string]func(){
+	"easy": methodEasy,
+	"staking.Transfer": methodTransfer,
+	"staking.Burn": methodBurn,
+	"staking.AddEscrow": methodAddEscrow,
+	"staking.ReclaimEscrow": methodReclaimEscrow,
+}
 
 func Fuzz(data []byte) int {
 	src := bytes.NewReader(data)
@@ -32,22 +58,4 @@ func Fuzz(data []byte) int {
 	}
 	cb()
 	return 1
-}
-
-func init() {
-	callbacks["easy"] = func() {
-		fmt.Println("ok easy")
-	}
-	callbacks["staking.Transfer"] = func() {
-		fmt.Println("ok t")
-	}
-	callbacks["staking.Burn"] = func() {
-		fmt.Println("ok b")
-	}
-	callbacks["staking.AddEscrow"] = func() {
-		panic("problem ae")
-	}
-	callbacks["staking.ReclaimEscrow"] = func() {
-		panic("problem re")
-	}
 }
