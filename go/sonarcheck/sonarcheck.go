@@ -41,15 +41,15 @@ func Fuzz(data []byte) int {
 	var mnBuf []byte
 	var ll uint8
 	if err := binary.Read(src, binary.LittleEndian, &ll); err != nil {
-		return -1
+		return 0
 	}
 	mnBuf = make([]byte, ll)
 	if err := binary.Read(src, binary.LittleEndian, &mnBuf); err != nil {
-		return -1
+		return 0
 	}
 	mn := string(mnBuf)
 	if src.Len() > 0 {
-		return -1
+		return 0
 	}
 
 	cb, ok := callbacks[mn]
