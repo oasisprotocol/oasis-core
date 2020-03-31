@@ -192,8 +192,8 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 	}
 
 	// As of the last time this comment was updated:
-	// - total fees has 150 tokens from genesis common pool
-	// - total fees has 50 tokens from genesis last block fees
+	// - total fees has 150 tokens from genesis common pool (different in dump-restore variant)
+	// - total fees has 50 tokens from genesis last block fees (different in dump-restore variant)
 	// - for each of 12 transactions that pay for gas:
 	//   - 10 tokens paid for gas in a block on its own
 	//   - (2+2)/(1+2+2) = 80% => 8 tokens persisted for VQ share
@@ -202,7 +202,7 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 	//   - (2)/(2+2) = 50% => 1 token per validator for Q
 	//   - 2 - 1 = 1 token per validator for V
 	//   - remaining 2 tokens moved to common pool
-	// - 150 + 50 + 12 * 10 = 320 tokens `total_fees`
+	// - 150 + 50 + 12 * 10 = 320 tokens `total_fees` (different in dump-restore variant)
 	// - 12 * 2 = 24 tokens paid for P role
 	// - 12 * 1 * 3 = 36 tokens paid for V roles
 	// - 12 * 1 * 3 = 36 tokens paid for Q role
@@ -213,10 +213,15 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 		"common_pool", commonPool,
 	)
 
-	// Ensure that at least some fees have been disbursed to entity accounts.
-	if newTotalEntityBalance.IsZero() {
-		return fmt.Errorf("no fees disbursed to entity accounts")
+	// Ensure that the correct fees have been disbursed to entity accounts.
+	var referenceDisbursement quantity.Quantity
+	if err := referenceDisbursement.FromUint64(96); err != nil {
+		return fmt.Errorf("import reference disbursement: %w", err)
 	}
+	if newTotalEntityBalance.Cmp(&referenceDisbursement) != 0 {
+		return fmt.Errorf("total disbursed fees %v wrong (should be %v)", newTotalEntityBalance, &referenceDisbursement)
+	}
+
 	// Ensure that at least some fees ended up in the common pool due to loss
 	// of precision (see comment above).
 	if commonPool.IsZero() {
