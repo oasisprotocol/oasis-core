@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oasislabs/oasis-core/go/common/fill2"
+	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/fuzz2"
 )
 
@@ -279,6 +281,17 @@ var rootCmd = &cobra.Command{
 		if err := Unmarshal(os.Stdin, &msgs); err != nil {
 			fmt.Println("!!!")
 			return fmt.Errorf("unmarshal msgs: %w", err)
+		}
+		for bi, b := range msgs.Blocks {
+			for ti, t := range b.TxReqs {
+				var st transaction.SignedTransaction
+				if err := Unmarshal(bytes.NewReader(t.Tx), &st); err != nil {
+					fmt.Println("!!!")
+					fmt.Printf("unmarshal block %d tx %d: %+v\n", bi, ti, err)
+					continue
+				}
+				st.PrettyPrint("", os.Stdout)
+			}
 		}
 		return nil
 	},
