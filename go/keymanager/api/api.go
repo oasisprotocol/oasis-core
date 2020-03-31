@@ -35,7 +35,7 @@ var (
 	ErrNoSuchStatus = errors.New(ModuleName, 1, "keymanager: no such status")
 
 	// MethodUpdatePolicy is the method name for policy updates.
-	MethodUpdatePolicy = transaction.NewMethodName(ModuleName, "UpdatePolicy", SignedPolicySGX{})
+	MethodUpdatePolicy = transaction.NewMethodName(ModuleName, "UpdatePolicy", 0x31, SignedPolicySGX{})
 
 	// TestPublicKey is the insecure hardcoded key manager public key, used
 	// in insecure builds when a RAK is unavailable.

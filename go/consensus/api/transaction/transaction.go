@@ -162,13 +162,18 @@ func Sign(signer signature.Signer, tx *Transaction) (*SignedTransaction, error) 
 // MethodSeparator is the separator used to separate backend name from method name.
 const MethodSeparator = "."
 
+type methodInfo struct {
+	name     string
+	bodyType interface{}
+}
+
 // MethodName is a method name.
-type MethodName string
+type MethodName uint8
 
 // SanityCheck performs a basic sanity check on the method name.
 func (m MethodName) SanityCheck() error {
-	if len(m) == 0 {
-		return fmt.Errorf("transaction: empty method")
+	if m == 0 {
+		return fmt.Errorf("transaction: unset method")
 	}
 
 	return nil
@@ -176,21 +181,32 @@ func (m MethodName) SanityCheck() error {
 
 // BodyType returns the registered body type associated with this method.
 func (m MethodName) BodyType() interface{} {
-	bodyType, _ := registeredMethods.Load(string(m))
-	return bodyType
+	mi, ok := registeredMethods.Load(uint8(m))
+	if !ok {
+		return nil
+	}
+	return mi.(methodInfo).bodyType
+}
+
+func (m MethodName) String() string {
+	mi, ok := registeredMethods.Load(uint8(m))
+	if !ok {
+		return fmt.Sprintf("(unregistered) (0x%02x)", uint8(m))
+	}
+	return fmt.Sprintf("%s (0x%02x)", mi.(methodInfo).name, uint8(m))
 }
 
 // NewMethodName creates a new method name.
 //
 // Module and method pair must be unique. If they are not, this method
 // will panic.
-func NewMethodName(module, method string, bodyType interface{}) MethodName {
-	// Check for duplicate method names.
+func NewMethodName(module, method string, code uint8, bodyType interface{}) MethodName {
 	name := module + MethodSeparator + method
-	if _, isRegistered := registeredMethods.Load(name); isRegistered {
-		panic(fmt.Errorf("transaction: method already registered: %s", name))
+	// Check for duplicate method codes.
+	if other, isRegistered := registeredMethods.Load(code); isRegistered {
+		panic(fmt.Errorf("transaction: method %d already registered as %s", code, other.(methodInfo).name))
 	}
-	registeredMethods.Store(name, bodyType)
+	registeredMethods.Store(code, methodInfo{name, bodyType})
 
-	return MethodName(name)
+	return MethodName(code)
 }

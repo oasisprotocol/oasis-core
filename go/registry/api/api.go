@@ -132,15 +132,15 @@ var (
 	ErrEntityHasRuntimes = errors.New(ModuleName, 19, "registry: entity still has runtimes")
 
 	// MethodRegisterEntity is the method name for entity registrations.
-	MethodRegisterEntity = transaction.NewMethodName(ModuleName, "RegisterEntity", entity.SignedEntity{})
+	MethodRegisterEntity = transaction.NewMethodName(ModuleName, "RegisterEntity", 0x41, entity.SignedEntity{})
 	// MethodDeregisterEntity is the method name for entity deregistrations.
-	MethodDeregisterEntity = transaction.NewMethodName(ModuleName, "DeregisterEntity", nil)
+	MethodDeregisterEntity = transaction.NewMethodName(ModuleName, "DeregisterEntity", 0x42, nil)
 	// MethodRegisterNode is the method name for node registrations.
-	MethodRegisterNode = transaction.NewMethodName(ModuleName, "RegisterNode", node.MultiSignedNode{})
+	MethodRegisterNode = transaction.NewMethodName(ModuleName, "RegisterNode", 0x43, node.MultiSignedNode{})
 	// MethodUnfreezeNode is the method name for unfreezing nodes.
-	MethodUnfreezeNode = transaction.NewMethodName(ModuleName, "UnfreezeNode", UnfreezeNode{})
+	MethodUnfreezeNode = transaction.NewMethodName(ModuleName, "UnfreezeNode", 0x44, UnfreezeNode{})
 	// MethodRegisterRuntime is the method name for registering runtimes.
-	MethodRegisterRuntime = transaction.NewMethodName(ModuleName, "RegisterRuntime", SignedRuntime{})
+	MethodRegisterRuntime = transaction.NewMethodName(ModuleName, "RegisterRuntime", 0x45, SignedRuntime{})
 
 	// Methods is the list of all methods supported by the registry backend.
 	Methods = []transaction.MethodName{

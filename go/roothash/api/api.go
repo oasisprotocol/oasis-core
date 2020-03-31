@@ -52,9 +52,9 @@ var (
 	ErrRuntimeSuspended = errors.New(ModuleName, 5, "roothash: runtime is suspended")
 
 	// MethodExecutorCommit is the method name for executor commit submission.
-	MethodExecutorCommit = transaction.NewMethodName(ModuleName, "ExecutorCommit", ExecutorCommit{})
+	MethodExecutorCommit = transaction.NewMethodName(ModuleName, "ExecutorCommit", 0x71, ExecutorCommit{})
 	// MethodMergeCommit is the method name for merge commit submission.
-	MethodMergeCommit = transaction.NewMethodName(ModuleName, "MergeCommit", MergeCommit{})
+	MethodMergeCommit = transaction.NewMethodName(ModuleName, "MergeCommit", 0x72, MergeCommit{})
 
 	// Methods is a list of all methods supported by the roothash backend.
 	Methods = []transaction.MethodName{

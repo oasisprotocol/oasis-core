@@ -29,7 +29,7 @@ var (
 	KeyEpoch = []byte("epoch")
 
 	// MethodSetEpoch is the method name for setting epochs.
-	MethodSetEpoch = transaction.NewMethodName(AppName, "SetEpoch", epochtime.EpochTime(0))
+	MethodSetEpoch = transaction.NewMethodName(AppName, "SetEpoch", 0x11, epochtime.EpochTime(0))
 
 	// Methods is a list of all methods supported by the epochtime mock application.
 	Methods = []transaction.MethodName{

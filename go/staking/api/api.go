@@ -46,15 +46,15 @@ var (
 	ErrInvalidThreshold = errors.New(ModuleName, 6, "staking: invalid threshold")
 
 	// MethodTransfer is the method name for transfers.
-	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", Transfer{})
+	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", 0x51, Transfer{})
 	// MethodBurn is the method name for burns.
-	MethodBurn = transaction.NewMethodName(ModuleName, "Burn", Burn{})
+	MethodBurn = transaction.NewMethodName(ModuleName, "Burn", 0x52, Burn{})
 	// MethodAddEscrow is the method name for escrows.
-	MethodAddEscrow = transaction.NewMethodName(ModuleName, "AddEscrow", Escrow{})
+	MethodAddEscrow = transaction.NewMethodName(ModuleName, "AddEscrow", 0x53, Escrow{})
 	// MethodReclaimEscrow is the method name for escrow reclamations.
-	MethodReclaimEscrow = transaction.NewMethodName(ModuleName, "ReclaimEscrow", ReclaimEscrow{})
+	MethodReclaimEscrow = transaction.NewMethodName(ModuleName, "ReclaimEscrow", 0x54, ReclaimEscrow{})
 	// MethodAmendCommissionSchedule is the method name for amending commission schedules.
-	MethodAmendCommissionSchedule = transaction.NewMethodName(ModuleName, "AmendCommissionSchedule", AmendCommissionSchedule{})
+	MethodAmendCommissionSchedule = transaction.NewMethodName(ModuleName, "AmendCommissionSchedule", 0x55, AmendCommissionSchedule{})
 
 	// Methods is the list of all methods supported by the staking backend.
 	Methods = []transaction.MethodName{
