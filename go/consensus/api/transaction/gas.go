@@ -1,8 +1,6 @@
 package transaction
 
 import (
-	"math/big"
-
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 )
@@ -35,7 +33,7 @@ func (f Fee) GasPrice() *quantity.Quantity {
 	}
 
 	var gasQ quantity.Quantity
-	if err := gasQ.FromBigInt(big.NewInt(int64(f.Gas))); err != nil {
+	if err := gasQ.FromUint64(uint64(f.Gas)); err != nil {
 		// Should never happen.
 		panic(err)
 	}
