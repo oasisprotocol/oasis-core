@@ -76,6 +76,10 @@ func (h *nopHistory) GetBlock(ctx context.Context, round uint64) (*block.Block, 
 	return nil, errNopHistory
 }
 
+func (h *nopHistory) GetLatestBlock(ctx context.Context) (*block.Block, error) {
+	return nil, errNopHistory
+}
+
 func (h *nopHistory) Pruner() Pruner {
 	pruner, _ := NewNonePruner()(nil)
 	return pruner
@@ -137,6 +141,19 @@ func (h *runtimeHistory) LastConsensusHeight() (int64, error) {
 
 func (h *runtimeHistory) GetBlock(ctx context.Context, round uint64) (*block.Block, error) {
 	annBlk, err := h.db.getBlock(round)
+	if err != nil {
+		return nil, err
+	}
+
+	return annBlk.Block, nil
+}
+
+func (h *runtimeHistory) GetLatestBlock(ctx context.Context) (*block.Block, error) {
+	meta, err := h.db.metadata()
+	if err != nil {
+		return nil, err
+	}
+	annBlk, err := h.db.getBlock(meta.LastRound)
 	if err != nil {
 		return nil, err
 	}

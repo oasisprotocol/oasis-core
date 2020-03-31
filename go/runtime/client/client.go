@@ -216,16 +216,17 @@ func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namesp
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) GetBlock(ctx context.Context, request *api.GetBlockRequest) (*block.Block, error) {
-	if request.Round == api.RoundLatest {
-		return c.common.consensus.RootHash().GetLatestBlock(ctx, request.RuntimeID, consensus.HeightLatest)
-	}
-
 	rt, err := c.common.runtimeRegistry.GetRuntime(request.RuntimeID)
 	if err != nil {
 		return nil, err
 	}
 
-	return rt.History().GetBlock(ctx, request.Round)
+	switch request.Round {
+	case api.RoundLatest:
+		return rt.History().GetLatestBlock(ctx)
+	default:
+		return rt.History().GetBlock(ctx, request.Round)
+	}
 }
 
 func (c *runtimeClient) getTxnTree(blk *block.Block) *transaction.Tree {
