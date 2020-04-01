@@ -23,6 +23,8 @@ var (
 
 	// methodSubmitTx is the SubmitTx method.
 	methodSubmitTx = serviceName.NewMethod("SubmitTx", SubmitTxRequest{})
+	// methodGetGenesisBlock is the GetGenesisBlock method.
+	methodGetGenesisBlock = serviceName.NewMethod("GetGenesisBlock", common.Namespace{})
 	// methodGetBlock is the GetBlock method.
 	methodGetBlock = serviceName.NewMethod("GetBlock", GetBlockRequest{})
 	// methodGetBlockByHash is the GetBlockByHash method.
@@ -51,6 +53,10 @@ var (
 			{
 				MethodName: methodSubmitTx.ShortName(),
 				Handler:    handlerSubmitTx,
+			},
+			{
+				MethodName: methodGetGenesisBlock.ShortName(),
+				Handler:    handlerGetGenesisBlock,
 			},
 			{
 				MethodName: methodGetBlock.ShortName(),
@@ -143,6 +149,31 @@ func errorWrapNotFound(err error) error {
 	}
 
 	return wrappedErrNotFound{err}
+}
+
+func handlerGetGenesisBlock( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var runtimeID common.Namespace
+	if err := dec(&runtimeID); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		rsp, err := srv.(RuntimeClient).GetGenesisBlock(ctx, runtimeID)
+		return rsp, errorWrapNotFound(err)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetGenesisBlock.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		rsp, err := srv.(RuntimeClient).GetGenesisBlock(ctx, req.(common.Namespace))
+		return rsp, errorWrapNotFound(err)
+	}
+	return interceptor(ctx, runtimeID, info, handler)
 }
 
 func handlerGetBlock( // nolint: golint
@@ -385,6 +416,14 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *SubmitTxRequest) 
 		return nil, err
 	}
 	return rsp, nil
+}
+
+func (c *runtimeClient) GetGenesisBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error) {
+	var rsp block.Block
+	if err := c.conn.Invoke(ctx, methodGetGenesisBlock.FullName(), runtimeID, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
 }
 
 func (c *runtimeClient) GetBlock(ctx context.Context, request *GetBlockRequest) (*block.Block, error) {

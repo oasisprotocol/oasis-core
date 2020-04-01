@@ -439,11 +439,11 @@ func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.C
 		)
 		return fmt.Errorf("Runtime unmarshal: %w", err)
 	}
-	rtState, ok := doc.RootHash.RuntimeStates[q.runtimeID]
-	if !ok {
-		return fmt.Errorf("Missing runtime genesis state for runtime: %s", q.runtimeID)
+	resp, err := q.runtime.GetGenesisBlock(ctx, q.runtimeID)
+	if err != nil {
+		return fmt.Errorf("Error querying runtime genesis block: %w", err)
 	}
-	q.runtimeGenesisRound = rtState.Round
+	q.runtimeGenesisRound = resp.Header.Round
 
 	for {
 		block, err := q.consensus.GetBlock(ctx, consensus.HeightLatest)
