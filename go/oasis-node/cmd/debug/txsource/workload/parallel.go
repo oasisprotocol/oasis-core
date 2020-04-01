@@ -24,7 +24,6 @@ const (
 	parallelSendWaitTimeoutInterval = 30 * time.Second
 	parallelSendTimeoutInterval     = 60 * time.Second
 	parallelConcurency              = 200
-	parallelTxGasAmount             = 10
 	parallelTxTransferAmount        = 100
 	parallelTxFundInterval          = 10
 )
@@ -43,6 +42,22 @@ func (parallel) Run(
 	ctx := context.Background()
 	var err error
 
+	// Estimate gas needed for the used transfer transaction.
+	var txGasAmount transaction.Gas
+	xfer := &staking.Transfer{
+		To: fundingAccount.Public(),
+	}
+	if err = xfer.Tokens.FromInt64(parallelTxTransferAmount); err != nil {
+		return fmt.Errorf("transfer tokens FromInt64 %d: %w", parallelTxTransferAmount, err)
+	}
+	txGasAmount, err = cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
+		Caller:      fundingAccount.Public(),
+		Transaction: staking.NewTransferTx(0, nil, xfer),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to estimate gas: %w", err)
+	}
+
 	accounts := make([]signature.Signer, parallelConcurency)
 	fac := memorySigner.NewFactory()
 	for i := range accounts {
@@ -53,7 +68,7 @@ func (parallel) Run(
 
 		// Initial funding of accounts.
 		fundAmount := parallelTxTransferAmount + // self transfer amount
-			parallelTxFundInterval*parallelTxGasAmount*gasPrice // gas for `parallelTxFundInterval` transfers.
+			parallelTxFundInterval*txGasAmount*gasPrice // gas for `parallelTxFundInterval` transfers.
 		if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, accounts[i].Public(), int64(fundAmount)); err != nil {
 			return fmt.Errorf("account funding failure: %w", err)
 		}
@@ -63,9 +78,9 @@ func (parallel) Run(
 	// complete before proceeding with a new batch.
 	var nonce uint64
 	fee := transaction.Fee{
-		Gas: parallelTxGasAmount,
+		Gas: txGasAmount,
 	}
-	if err = fee.Amount.FromInt64(parallelTxGasAmount); err != nil {
+	if err = fee.Amount.FromUint64(uint64(txGasAmount) * gasPrice); err != nil {
 		return fmt.Errorf("Fee amount error: %w", err)
 	}
 
@@ -136,7 +151,7 @@ func (parallel) Run(
 		if i%parallelTxFundInterval == 0 {
 			// Re-fund accounts for next `parallelTxFundInterval` transfers.
 			for i := range accounts {
-				fundAmount := parallelTxFundInterval * parallelTxGasAmount * gasPrice // gas for `parallelTxFundInterval` transfers.
+				fundAmount := parallelTxFundInterval * txGasAmount * gasPrice // gas for `parallelTxFundInterval` transfers.
 				if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, accounts[i].Public(), int64(fundAmount)); err != nil {
 					return fmt.Errorf("account funding failure: %w", err)
 				}

@@ -86,6 +86,7 @@ const (
 	cfgConsensusMaxBlockSizeBytes  = "consensus.tendermint.max_block_size"
 	cfgConsensusMaxBlockGas        = "consensus.tendermint.max_block_gas"
 	cfgConsensusMaxEvidenceAge     = "consensus.tendermint.max_evidence_age"
+	CfgConsensusGasCostsTxByte     = "consensus.gas_costs.tx_byte"
 
 	// Consensus backend config flag.
 	cfgConsensusBackend = "consensus.backend"
@@ -223,6 +224,9 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			MaxBlockSize:       uint64(viper.GetSizeInBytes(cfgConsensusMaxBlockSizeBytes)),
 			MaxBlockGas:        transaction.Gas(viper.GetUint64(cfgConsensusMaxBlockGas)),
 			MaxEvidenceAge:     viper.GetUint64(cfgConsensusMaxEvidenceAge),
+			GasCosts: transaction.Costs{
+				consensusGenesis.GasOpTxByte: transaction.Gas(viper.GetUint64(CfgConsensusGasCostsTxByte)),
+			},
 		},
 	}
 
@@ -720,6 +724,7 @@ func init() {
 	initGenesisFlags.String(cfgConsensusMaxBlockSizeBytes, "21mb", "tendermint maximum block size (in bytes)")
 	initGenesisFlags.Uint64(cfgConsensusMaxBlockGas, 0, "tendermint max gas used per block")
 	initGenesisFlags.Uint64(cfgConsensusMaxEvidenceAge, 100000, "tendermint max evidence age (in blocks)")
+	initGenesisFlags.Uint64(CfgConsensusGasCostsTxByte, 1, "consensus gas costs: each transaction byte")
 
 	// Consensus backend flag.
 	initGenesisFlags.String(cfgConsensusBackend, tendermint.BackendName, "consensus backend")

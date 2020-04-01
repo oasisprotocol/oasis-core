@@ -220,6 +220,9 @@ type NetworkCfg struct { // nolint: maligned
 	// ConsensusTimeoutCommit is the consensus commit timeout.
 	ConsensusTimeoutCommit time.Duration `json:"consensus_timeout_commit"`
 
+	// ConsensusGasCostsTxByte is the gas cost of each transaction byte.
+	ConsensusGasCostsTxByte uint64 `json:"consensus_gas_costs_tx_byte"`
+
 	// HaltEpoch is the halt epoch height flag.
 	HaltEpoch uint64 `json:"halt_epoch"`
 
@@ -678,6 +681,7 @@ func (net *Network) makeGenesis() error {
 		"--registry.debug.allow_unroutable_addresses", "true",
 		"--" + genesis.CfgRegistryDebugAllowTestRuntimes, "true",
 		"--scheduler.max_validators_per_entity", strconv.Itoa(len(net.Validators())),
+		"--" + genesis.CfgConsensusGasCostsTxByte, strconv.FormatUint(net.cfg.ConsensusGasCostsTxByte, 10),
 	}
 	if net.cfg.EpochtimeMock {
 		args = append(args, "--epochtime.debug.mock_backend")

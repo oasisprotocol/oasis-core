@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/version"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	consensusGenesis "github.com/oasislabs/oasis-core/go/consensus/genesis"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
@@ -621,7 +623,7 @@ func (mux *abciMux) decodeTx(ctx *Context, rawTx []byte) (*transaction.Transacti
 	return &tx, &sigTx, nil
 }
 
-func (mux *abciMux) processTx(ctx *Context, tx *transaction.Transaction) error {
+func (mux *abciMux) processTx(ctx *Context, tx *transaction.Transaction, txSize int) error {
 	// Pass the transaction through the fee handler if configured.
 	if txAuthHandler := mux.state.txAuthHandler; txAuthHandler != nil {
 		if err := txAuthHandler.AuthenticateTx(ctx, tx); err != nil {
@@ -633,6 +635,15 @@ func (mux *abciMux) processTx(ctx *Context, tx *transaction.Transaction) error {
 			)
 			return err
 		}
+	}
+
+	// Charge gas based on the size of the transaction.
+	params, err := mux.state.ConsensusParameters()
+	if err != nil {
+		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
+	}
+	if err = ctx.Gas().UseGas(txSize, consensusGenesis.GasOpTxByte, params.GasCosts); err != nil {
+		return err
 	}
 
 	// Route to correct handler.
@@ -678,7 +689,7 @@ func (mux *abciMux) executeTx(ctx *Context, rawTx []byte) error {
 	// Set authenticated transaction signer.
 	ctx.SetTxSigner(sigTx.Signature.PublicKey)
 
-	return mux.processTx(ctx, tx)
+	return mux.processTx(ctx, tx, len(rawTx))
 }
 
 func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error) {
@@ -689,11 +700,26 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 	ctx := mux.state.NewContext(ContextSimulateTx, time.Time{})
 	defer ctx.Close()
 
+	// Modify transaction to include maximum possible gas in order to estimate the upper limit on
+	// the serialized transaction size. For amount, use a reasonable amount (in theory the actual
+	// amount could be bigger depending on the gas price).
+	tx.Fee = &transaction.Fee{
+		Gas: transaction.Gas(math.MaxUint64),
+	}
+	_ = tx.Fee.Amount.FromUint64(math.MaxUint64)
+
 	ctx.SetTxSigner(caller)
+	mockSignedTx := transaction.SignedTransaction{
+		Signed: signature.Signed{
+			Blob: cbor.Marshal(tx),
+			// Signature is fixed-size, so we can leave it as default.
+		},
+	}
+	txSize := len(cbor.Marshal(mockSignedTx))
 
 	// Ignore any errors that occurred during simulation as we only need to estimate gas even if the
 	// transaction seems like it will fail.
-	_ = mux.processTx(ctx, tx)
+	_ = mux.processTx(ctx, tx, txSize)
 
 	return ctx.Gas().GasUsed(), nil
 }

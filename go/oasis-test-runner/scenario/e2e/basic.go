@@ -95,6 +95,7 @@ func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 			NodeBinary:                        viper.GetString(cfgNodeBinary),
 			RuntimeLoaderBinary:               viper.GetString(cfgRuntimeLoader),
 			DefaultLogWatcherHandlerFactories: DefaultBasicLogWatcherHandlerFactories,
+			ConsensusGasCostsTxByte:           1,
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},

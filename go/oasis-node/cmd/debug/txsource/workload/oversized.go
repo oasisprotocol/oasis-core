@@ -13,6 +13,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	consensusGenesis "github.com/oasislabs/oasis-core/go/consensus/genesis"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
@@ -48,10 +49,11 @@ func (oversized) Run(
 	if err != nil {
 		return fmt.Errorf("failed to query state at genesis: %w", err)
 	}
+	params := genesisDoc.Consensus.Parameters
 
 	var nonce uint64
 	fee := transaction.Fee{
-		Gas: oversizedTxGasAmount,
+		Gas: oversizedTxGasAmount + transaction.Gas(params.MaxTxSize)*params.GasCosts[consensusGenesis.GasOpTxByte],
 	}
 	if err = fee.Amount.FromInt64(oversizedTxGasAmount * gasPrice); err != nil {
 		return fmt.Errorf("Fee amount error: %w", err)

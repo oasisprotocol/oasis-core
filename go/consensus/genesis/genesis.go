@@ -24,7 +24,15 @@ type Parameters struct {
 	MaxBlockSize   uint64          `json:"max_block_size"`
 	MaxBlockGas    transaction.Gas `json:"max_block_gas"`
 	MaxEvidenceAge uint64          `json:"max_evidence_age"`
+
+	// GasCosts are the base transaction gas costs.
+	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
 }
+
+const (
+	// GasOpTxByte is the gas operation identifier for costing each transaction byte.
+	GasOpTxByte transaction.Op = "tx_byte"
+)
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {

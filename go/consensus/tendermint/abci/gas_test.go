@@ -1,6 +1,7 @@
 package abci
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -44,13 +45,13 @@ func TestBasicGasAccountant(t *testing.T) {
 	// Overflow.
 	err = a.UseGas(1, overflowOp, costs)
 	require.Error(err, "UseGas should fail on overflow")
-	require.Equal(ErrGasOverflow, err)
+	require.True(errors.Is(err, ErrGasOverflow))
 	require.EqualValues(30, a.GasUsed(), "GasUsed")
 
 	// Out of gas.
 	err = a.UseGas(1, expensiveOp, costs)
 	require.Error(err, "UseGas should fail when out of gas")
-	require.Equal(ErrOutOfGas, err)
+	require.True(errors.Is(err, ErrOutOfGas))
 	require.EqualValues(30, a.GasUsed(), "GasUsed")
 
 	require.EqualValues(100, a.GasWanted(), "GasWanted")
@@ -123,7 +124,7 @@ func TestCompositeGasAccountant(t *testing.T) {
 	// Overflow.
 	err = c.UseGas(1, overflowOp, costs)
 	require.Error(err, "UseGas should fail on overflow")
-	require.Equal(ErrGasOverflow, err)
+	require.True(errors.Is(err, ErrGasOverflow))
 	require.EqualValues(10, c.GasUsed(), "GasUsed")
 	require.EqualValues(10, a.GasUsed(), "GasUsed")
 	require.EqualValues(10, b.GasUsed(), "GasUsed")
@@ -131,7 +132,7 @@ func TestCompositeGasAccountant(t *testing.T) {
 	// Out of gas.
 	err = a.UseGas(1, expensiveOp, costs)
 	require.Error(err, "UseGas should fail when out of gas")
-	require.Equal(ErrOutOfGas, err)
+	require.True(errors.Is(err, ErrOutOfGas))
 	require.EqualValues(10, c.GasUsed(), "GasUsed")
 	require.EqualValues(10, a.GasUsed(), "GasUsed")
 	require.EqualValues(10, b.GasUsed(), "GasUsed")
@@ -146,7 +147,7 @@ func TestCompositeGasAccountant(t *testing.T) {
 
 	err = c.UseGas(1, cheapOp, costs)
 	require.Error(err, "UseGas should fail when out of gas")
-	require.Equal(ErrOutOfGas, err)
+	require.True(errors.Is(err, ErrOutOfGas))
 	require.EqualValues(10, c.GasUsed(), "GasUsed")
 	require.EqualValues(10, a.GasUsed(), "GasUsed")
 	require.EqualValues(10, b.GasUsed(), "GasUsed")

@@ -2,6 +2,7 @@ package abci
 
 import (
 	"errors"
+	"fmt"
 	"math"
 
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
@@ -53,7 +54,7 @@ func (ga *basicGasAccountant) UseGas(multiplier int, op transaction.Op, costs tr
 	}
 
 	if ga.usedGas+amount > ga.maxUsedGas {
-		return ErrOutOfGas
+		return fmt.Errorf("%w (limit: %d wanted: %d)", ErrOutOfGas, ga.maxUsedGas, ga.usedGas+amount)
 	}
 
 	ga.usedGas += amount
