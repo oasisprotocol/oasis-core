@@ -27,14 +27,23 @@ var (
 		TagsMd:        cbor.TagsForbidden,
 	}
 
+	// decOptions are decoding options for UNTRUSTED inputs (used by default).
 	decOptions = cbor.DecOptions{
 		DupMapKey:   cbor.DupMapKeyEnforcedAPF,
 		IndefLength: cbor.IndefLengthForbidden,
 		TagsMd:      cbor.TagsForbidden,
 	}
 
-	encMode cbor.EncMode
-	decMode cbor.DecMode
+	// decOptionsTrusted are decoding options for TRUSTED inputs. They are only used when explicitly
+	// requested by using the UnmarshalTrusted method.
+	decOptionsTrusted = cbor.DecOptions{
+		MaxArrayElements: 134217728, // Maximum allowed.
+		MaxMapPairs:      134217728, // Maximum allowed.
+	}
+
+	encMode        cbor.EncMode
+	decMode        cbor.DecMode
+	decModeTrusted cbor.DecMode
 )
 
 func init() {
@@ -43,6 +52,9 @@ func init() {
 		panic(err)
 	}
 	if decMode, err = decOptions.DecMode(); err != nil {
+		panic(err)
+	}
+	if decModeTrusted, err = decOptionsTrusted.DecMode(); err != nil {
 		panic(err)
 	}
 }
@@ -72,6 +84,17 @@ func Unmarshal(data []byte, dst interface{}) error {
 	}
 
 	return decMode.Unmarshal(data, dst)
+}
+
+// UnmarshalTrusted deserializes a CBOR byte vector into a given type.
+//
+// This method MUST ONLY BE USED FOR TRUSTED INPUTS as it relaxes some decoding restrictions.
+func UnmarshalTrusted(data []byte, dst interface{}) error {
+	if data == nil {
+		return nil
+	}
+
+	return decModeTrusted.Unmarshal(data, dst)
 }
 
 // MustUnmarshal deserializes a CBOR byte vector into a given type.
