@@ -1889,6 +1889,23 @@ func testSpecialCase5(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	testSpecialCaseFromJSON(t, ndb, "case-5.json")
 }
 
+func testLargeUpdates(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
+	ctx := context.Background()
+	tree := New(nil, ndb)
+
+	// The number of elements is such that it would overflow the maximum number of allowed array
+	// elements in the default (untrusted) CBOR decoder.
+	for i := 0; i < 132_000; i++ {
+		err := tree.Insert(ctx, []byte(fmt.Sprintf("%d", i)), []byte(fmt.Sprintf("%d", i)))
+		require.NoError(t, err, "Insert")
+	}
+
+	_, rootHash, err := tree.Commit(ctx, testNs, 0)
+	require.NoError(t, err, "Commit")
+	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHash})
+	require.NoError(t, err, "Finalize")
+}
+
 func testBackend(
 	t *testing.T,
 	initBackend func(t *testing.T) (NodeDBFactory, func()),
@@ -1929,6 +1946,7 @@ func testBackend(
 		{"SpecialCase3", testSpecialCase3},
 		{"SpecialCase4", testSpecialCase4},
 		{"SpecialCase5", testSpecialCase5},
+		{"LargeUpdates", testLargeUpdates},
 		{"Errors", testErrors},
 	}
 

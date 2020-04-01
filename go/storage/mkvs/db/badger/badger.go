@@ -114,7 +114,7 @@ func (d *badgerNodeDB) load() error {
 		// Metadata already exists, just load it and verify that it is
 		// compatible with what we have here.
 		err = item.Value(func(data []byte) error {
-			return cbor.Unmarshal(data, &d.meta.value)
+			return cbor.UnmarshalTrusted(data, &d.meta.value)
 		})
 		if err != nil {
 			return err
@@ -303,7 +303,7 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 
 							var log api.HashedDBWriteLog
 							err = item.Value(func(data []byte) error {
-								return cbor.Unmarshal(data, &log)
+								return cbor.UnmarshalTrusted(data, &log)
 							})
 							if err != nil {
 								return node.Root{}, nil, err
@@ -464,7 +464,7 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, version uint64, roots []has
 
 		var updatedNodes []updatedNode
 		err = item.Value(func(data []byte) error {
-			return cbor.Unmarshal(data, &updatedNodes)
+			return cbor.UnmarshalTrusted(data, &updatedNodes)
 		})
 		if err != nil {
 			panic(fmt.Errorf("mkvs/badger: corrupted root updated nodes index: %w", err))
