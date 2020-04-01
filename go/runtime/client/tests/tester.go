@@ -61,6 +61,11 @@ func testQuery(
 	err := c.WaitBlockIndexed(ctx, &api.WaitBlockIndexedRequest{RuntimeID: runtimeID, Round: 4})
 	require.NoError(t, err, "WaitBlockIndexed")
 
+	// Fetch genesis block.
+	genBlk, err := c.GetGenesisBlock(ctx, runtimeID)
+	require.NoError(t, err, "GetGenesisBlock")
+	require.EqualValues(t, 0, genBlk.Header.Round, "GetGenesisBlock should have Round: 0")
+
 	// Based on SubmitTx and the mock worker.
 	testInput := []byte("octopus")
 	testOutput := testInput
@@ -163,4 +168,10 @@ func testQuery(
 	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall
 	require.EqualValues(t, []byte("hello world"), results[0].Input)
 	require.EqualValues(t, []byte("hello world"), results[0].Output)
+
+	// Query genesis block again.
+	genBlk2, err := c.GetGenesisBlock(ctx, runtimeID)
+	require.NoError(t, err, "GetGenesisBlock2")
+	require.EqualValues(t, genBlk, genBlk2, "GetGenesisBlock should match previous GetGenesisBlock")
+
 }

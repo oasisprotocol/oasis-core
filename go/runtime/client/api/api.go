@@ -35,6 +35,9 @@ type RuntimeClient interface {
 	// SubmitTx submits a transaction to the runtime transaction scheduler.
 	SubmitTx(ctx context.Context, request *SubmitTxRequest) ([]byte, error)
 
+	// GetGenesisBlock returns the genesis block.
+	GetGenesisBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error)
+
 	// GetBlock fetches the given runtime block.
 	GetBlock(ctx context.Context, request *GetBlockRequest) (*block.Block, error)
 

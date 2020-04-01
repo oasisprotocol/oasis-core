@@ -215,6 +215,11 @@ func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namesp
 }
 
 // Implements api.RuntimeClient.
+func (c *runtimeClient) GetGenesisBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error) {
+	return c.common.consensus.RootHash().GetGenesisBlock(ctx, runtimeID, consensus.HeightLatest)
+}
+
+// Implements api.RuntimeClient.
 func (c *runtimeClient) GetBlock(ctx context.Context, request *api.GetBlockRequest) (*block.Block, error) {
 	rt, err := c.common.runtimeRegistry.GetRuntime(request.RuntimeID)
 	if err != nil {
