@@ -459,7 +459,7 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, version uint64, roots []has
 		// Load hashes of nodes added during this version for this root.
 		item, err := tx.Get(rootUpdatedNodesKey)
 		if err != nil {
-			panic("mkvs/badger: corrupted root added nodes index")
+			panic(fmt.Errorf("mkvs/badger: corrupted/missing root updated nodes index: %w", err))
 		}
 
 		var updatedNodes []updatedNode
@@ -467,7 +467,7 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, version uint64, roots []has
 			return cbor.Unmarshal(data, &updatedNodes)
 		})
 		if err != nil {
-			panic("mkvs/badger: corrupted root updated nodes index")
+			panic(fmt.Errorf("mkvs/badger: corrupted root updated nodes index: %w", err))
 		}
 
 		if finalizedRoots[rootHash] {
