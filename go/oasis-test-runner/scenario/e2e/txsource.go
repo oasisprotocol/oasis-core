@@ -65,6 +65,10 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	timeLimit:             timeLimitLong,
 	nodeRestartInterval:   nodeRestartIntervalLong,
 	livenessCheckInterval: livenessCheckInterval,
+	// Nodes getting killed commonly result in corrupted tendermint WAL when the
+	// node is restarted. Enable automatic corrupted WAL recovery for validator
+	// nodes.
+	tendermintRecoverCorruptedWAL: true,
 }
 
 type txSourceImpl struct {
@@ -74,6 +78,8 @@ type txSourceImpl struct {
 	timeLimit             time.Duration
 	nodeRestartInterval   time.Duration
 	livenessCheckInterval time.Duration
+
+	tendermintRecoverCorruptedWAL bool
 
 	rng *rand.Rand
 }
@@ -94,6 +100,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	for i := range f.Validators {
 		f.Validators[i].MinGasPrice = txSourceGasPrice
 		f.Validators[i].SubmissionGasPrice = txSourceGasPrice
+		f.Validators[i].TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
 	}
 	// Update all other nodes to use a specific gas price.
 	for i := range f.Keymanagers {

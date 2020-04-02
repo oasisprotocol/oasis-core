@@ -98,6 +98,13 @@ func (args *argBuilder) tendermintDebugDisableCheckTx(disable bool) *argBuilder 
 	return args
 }
 
+func (args *argBuilder) tendermintRecoverCorruptedWAL(enable bool) *argBuilder {
+	if enable {
+		args.vec = append(args.vec, "--"+tendermint.CfgDebugUnsafeReplayRecoverCorruptedWAL)
+	}
+	return args
+}
+
 func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + tendermint.CfgCoreListenAddress, "tcp://0.0.0.0:" + strconv.Itoa(int(port)),
