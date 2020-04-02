@@ -137,16 +137,19 @@ func (app *stakingApplication) initLedger(ctx *abci.Context, state *stakingState
 	return nil
 }
 
-func (app *stakingApplication) initTotalSupply(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) {
+func (app *stakingApplication) initTotalSupply(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis, totalSupply *quantity.Quantity) error {
 	if totalSupply.Cmp(&st.TotalSupply) != 0 {
 		ctx.Logger().Error("InitChain: total supply mismatch",
 			"expected", st.TotalSupply,
 			"actual", totalSupply,
 		)
+		return fmt.Errorf("staking: total supply mismatch (expected: %s actual: %s)", st.TotalSupply, totalSupply)
 	}
 
 	state.SetCommonPool(&st.CommonPool)
 	state.SetTotalSupply(totalSupply)
+
+	return nil
 }
 
 func (app *stakingApplication) initDelegations(ctx *abci.Context, state *stakingState.MutableState, st *staking.Genesis) error {
@@ -271,7 +274,9 @@ func (app *stakingApplication) InitChain(ctx *abci.Context, request types.Reques
 		return err
 	}
 
-	app.initTotalSupply(ctx, state, st, &totalSupply)
+	if err := app.initTotalSupply(ctx, state, st, &totalSupply); err != nil {
+		return err
+	}
 
 	if err := app.initDelegations(ctx, state, st); err != nil {
 		return err

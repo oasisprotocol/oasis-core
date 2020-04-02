@@ -15,8 +15,8 @@ var CommissionRateDenominator *quantity.Quantity
 type CommissionScheduleRules struct {
 	RateChangeInterval epochtime.EpochTime `json:"rate_change_interval,omitempty"`
 	RateBoundLead      epochtime.EpochTime `json:"rate_bound_lead,omitempty"`
-	MaxRateSteps       int                 `json:"max_rate_steps,omitempty"`
-	MaxBoundSteps      int                 `json:"max_bound_steps,omitempty"`
+	MaxRateSteps       uint16              `json:"max_rate_steps,omitempty"`
+	MaxBoundSteps      uint16              `json:"max_bound_steps,omitempty"`
 }
 
 type CommissionRateStep struct {
@@ -36,10 +36,10 @@ type CommissionSchedule struct {
 }
 
 func (cs *CommissionSchedule) validateComplexity(rules *CommissionScheduleRules) error {
-	if len(cs.Rates) > rules.MaxRateSteps {
+	if len(cs.Rates) > int(rules.MaxRateSteps) {
 		return fmt.Errorf("rate schedule %d steps exceeds maximum %d", len(cs.Rates), rules.MaxRateSteps)
 	}
-	if len(cs.Bounds) > rules.MaxBoundSteps {
+	if len(cs.Bounds) > int(rules.MaxBoundSteps) {
 		return fmt.Errorf("bound schedule %d steps exceeds maximum %d", len(cs.Bounds), rules.MaxBoundSteps)
 	}
 
