@@ -85,7 +85,8 @@ func (val *Validator) startNode() error {
 		tendermintSubmissionGasPrice(val.submissionGasPrice).
 		storageBackend("client").
 		appendNetwork(val.net).
-		appendEntity(val.entity)
+		appendEntity(val.entity).
+		tendermintRecoverCorruptedWAL(val.tendermintRecoverCorruptedWAL)
 
 	if len(val.sentries) > 0 {
 		args = args.addSentries(val.sentries).
@@ -128,6 +129,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			submissionGasPrice:                       cfg.SubmissionGasPrice,
+			tendermintRecoverCorruptedWAL:            cfg.TendermintRecoverCorruptedWAL,
 		},
 		entity:        cfg.Entity,
 		minGasPrice:   cfg.MinGasPrice,

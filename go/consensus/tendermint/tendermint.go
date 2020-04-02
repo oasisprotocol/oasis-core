@@ -104,6 +104,10 @@ const (
 	// CfgP2PDebugAllowDuplicateIP allows multiple connections from the same IP.
 	CfgDebugP2PAllowDuplicateIP = "tendermint.debug.allow_duplicate_ip"
 
+	// CfgDebugUnsafeReplayRecoverCorruptedWAL enables the debug and unsafe
+	// automatic corrupted WAL recovery during replay.
+	CfgDebugUnsafeReplayRecoverCorruptedWAL = "tendermint.debug.unsafe_replay_recover_corrupted_wal"
+
 	// CfgConsensusMinGasPrice configures the minimum gas price for this validator.
 	CfgConsensusMinGasPrice = "consensus.tendermint.min_gas_price"
 	// CfgConsensusSubmissionGasPrice configures the gas price used when submitting transactions.
@@ -931,6 +935,7 @@ func (t *tendermintService) lazyInit() error {
 	tenderConfig.Consensus.SkipTimeoutCommit = t.genesis.Consensus.Parameters.SkipTimeoutCommit
 	tenderConfig.Consensus.CreateEmptyBlocks = true
 	tenderConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
+	tenderConfig.Consensus.DebugUnsafeReplayRecoverCorruptedWAL = viper.GetBool(CfgDebugUnsafeReplayRecoverCorruptedWAL) && cmflags.DebugDontBlameOasis()
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.Instrumentation.PrometheusListenAddr = ""
 	tenderConfig.TxIndex.Indexer = "null"
@@ -1376,11 +1381,13 @@ func init() {
 	Flags.Uint64(CfgConsensusSubmissionGasPrice, 0, "gas price used when submitting consensus transactions")
 	Flags.Uint64(CfgConsensusSubmissionMaxFee, 0, "maximum transaction fee when submitting consensus transactions")
 	Flags.Bool(CfgConsensusDebugDisableCheckTx, false, "do not perform CheckTx on incoming transactions (UNSAFE)")
+	Flags.Bool(CfgDebugUnsafeReplayRecoverCorruptedWAL, false, "Enable automatic recovery from corrupted WAL during replay (UNSAFE).")
 
 	_ = Flags.MarkHidden(cfgLogDebug)
 	_ = Flags.MarkHidden(CfgDebugP2PAddrBookLenient)
 	_ = Flags.MarkHidden(CfgDebugP2PAllowDuplicateIP)
 	_ = Flags.MarkHidden(CfgConsensusDebugDisableCheckTx)
+	_ = Flags.MarkHidden(CfgDebugUnsafeReplayRecoverCorruptedWAL)
 
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(db.Flags)

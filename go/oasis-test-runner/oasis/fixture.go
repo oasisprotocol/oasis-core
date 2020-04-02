@@ -117,7 +117,7 @@ type TEEFixture struct {
 }
 
 // ValidatorFixture is a validator fixture.
-type ValidatorFixture struct {
+type ValidatorFixture struct { // nolint: maligned
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
@@ -129,6 +129,8 @@ type ValidatorFixture struct {
 	SubmissionGasPrice uint64 `json:"submission_gas_price"`
 
 	Sentries []int `json:"sentries,omitempty"`
+
+	TendermintRecoverCorruptedWAL bool `json:"tendermint_recover_corrupted_wal"`
 }
 
 // Create instantiates the validator described by the fixture.
@@ -144,10 +146,11 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 
 	return net.NewValidator(&ValidatorCfg{
 		NodeCfg: NodeCfg{
-			AllowEarlyTermination:      f.AllowEarlyTermination,
-			AllowErrorTermination:      f.AllowErrorTermination,
-			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
-			SubmissionGasPrice:         f.SubmissionGasPrice,
+			AllowEarlyTermination:         f.AllowEarlyTermination,
+			AllowErrorTermination:         f.AllowErrorTermination,
+			LogWatcherHandlerFactories:    f.LogWatcherHandlerFactories,
+			SubmissionGasPrice:            f.SubmissionGasPrice,
+			TendermintRecoverCorruptedWAL: f.TendermintRecoverCorruptedWAL,
 		},
 		Entity:      entity,
 		MinGasPrice: f.MinGasPrice,
