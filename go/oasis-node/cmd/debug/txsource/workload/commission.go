@@ -168,7 +168,7 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 
 	// Generate bound steps.
 	// [1, maxBoundSteps]
-	nBoundSteps := rng.Intn(maxBoundSteps) + 1
+	nBoundSteps := rng.Intn(int(maxBoundSteps)) + 1
 	var amendSchedule staking.AmendCommissionSchedule
 	boundEpoch := nextAlignedBoundChangeEpoch
 	for i := 0; i < nBoundSteps; i++ {
@@ -240,7 +240,7 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 		break
 	}
 	// [1, maxRateSteps]
-	nMinRateSteps := rng.Intn(maxRateSteps) + 1
+	nMinRateSteps := rng.Intn(int(maxRateSteps)) + 1
 
 	// In some cases we might need more rate steps to satisfy all bound steps.
 	var needMoreRateStpes bool
@@ -304,7 +304,7 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 	// In some cases the above procedure can produce invalid amendment.
 	// This happens when more than number of allowed amendment rate steps are
 	// needed to satisfy all bound steps.
-	if len(amendSchedule.Amendment.Rates) > maxRateSteps {
+	if len(amendSchedule.Amendment.Rates) > int(maxRateSteps) {
 		c.logger.Debug("To many rate steps needed to satisfy bonds, skipping amendment",
 			"amendment", amendSchedule,
 		)
