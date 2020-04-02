@@ -96,6 +96,15 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Disable CheckTx on the client node so we can submit invalid transactions.
 	f.Clients[0].ConsensusDisableCheckTx = true
 
+	// Use at least 4 validators so that consensus can keep making progress
+	// when a node is being killed and restarted.
+	f.Validators = []oasis.ValidatorFixture{
+		oasis.ValidatorFixture{Entity: 1},
+		oasis.ValidatorFixture{Entity: 1},
+		oasis.ValidatorFixture{Entity: 1},
+		oasis.ValidatorFixture{Entity: 1},
+	}
+
 	// Update validators to require fee payments.
 	for i := range f.Validators {
 		f.Validators[i].MinGasPrice = txSourceGasPrice
