@@ -363,6 +363,18 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 		)
 		return fmt.Errorf("runtimeClient.GetBlock, round: %d: %w", round, err)
 	}
+	// GetBlockByHash requires that the block was actually indexed, so wait for it.
+	err = q.runtime.WaitBlockIndexed(ctx, &runtimeClient.WaitBlockIndexedRequest{
+		RuntimeID: q.runtimeID,
+		Round:     round,
+	})
+	if err != nil {
+		q.logger.Error("Runtime WaitBlockIndexed failure",
+			"round", round,
+			"err", err,
+		)
+		return fmt.Errorf("runtimeClient.WaitBlockIndexed, round: %d: %w", round, err)
+	}
 	block2, err := q.runtime.GetBlockByHash(ctx, &runtimeClient.GetBlockByHashRequest{
 		RuntimeID: q.runtimeID,
 		BlockHash: block.Header.EncodedHash(),
