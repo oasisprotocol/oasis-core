@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/txsource"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/txsource/workload"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
 )
@@ -92,6 +93,15 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Use deterministic identities as we need to allocate funds to nodes.
 	f.Network.DeterministicIdentities = true
 	f.Network.StakingGenesis = "tests/fixture-data/txsource/staking-genesis.json"
+
+	if sc.nodeRestartInterval > 0 {
+		// If node restarts enabled, do not enable round timeouts log watcher.
+		f.Network.DefaultLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
+			oasis.LogAssertNoRoundFailures(),
+			oasis.LogAssertNoExecutionDiscrepancyDetected(),
+			oasis.LogAssertNoMergeDiscrepancyDetected(),
+		}
+	}
 
 	// Disable CheckTx on the client node so we can submit invalid transactions.
 	f.Clients[0].ConsensusDisableCheckTx = true
