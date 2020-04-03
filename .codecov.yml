@@ -1,3 +1,0 @@
-ignore:
-  - "**/*.pb.go"
-  - "runtime/src/storage/mkvs/interop" # MKVS interoperability test helpers.

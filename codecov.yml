@@ -1,0 +1,11 @@
+ignore:
+  - "**/*.pb.go"
+  - "runtime/src/storage/mkvs/interop" # MKVS interoperability test helpers.
+  - "go/storage/mkvs/interop" # MKVS interoperability test helpers.
+  - "go/oasis-node/cmd/debug" # Debug and test utilities.
+  - "go/oasis-test-runner" # E2E test runner.
+  - "go/oasis-net-runner" # Test local network runner.
+  - "go/staking/gen_vectors" # Staking test vector generator.
+  - "go/storage/fuzz" # Fuzz tests.
+  - "go/storage/mkvs/fuzz" # Fuzz tests.
+  - "go/consensus/tendermint/fuzz" # Fuzz tests.
