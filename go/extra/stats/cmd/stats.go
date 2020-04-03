@@ -97,10 +97,10 @@ func (s stats) printEntitySignatures(topN int) {
 	})
 
 	// Print results.
-	fmt.Printf("|%-5s|%-64s|%-6s|%10s|%10s|%18s|\n", "Rank", "Entity ID", "Nodes", "Signatures", "Proposals", "Availability score")
-	fmt.Println(strings.Repeat("-", 5+64+6+10+10+18+7))
+	fmt.Printf("|%-5s|%-64s|%-6s|%10s|%10s|%18s|\n", "Rank", "Entity ID", "Nodes", "Signatures", "Proposals (round 0)", "Availability score")
+	fmt.Println(strings.Repeat("-", 5+64+6+10+19+18+7))
 	for idx, r := range res {
-		fmt.Printf("|%-5d|%-64s|%6d|%10d|%10d|%18d|\n", idx+1, r.entityID, r.nodes, r.signatures, r.proposals, r.availablityScore)
+		fmt.Printf("|%-5d|%-64s|%6d|%10d|%19d|%18d|\n", idx+1, r.entityID, r.nodes, r.signatures, r.proposals, r.availablityScore)
 	}
 }
 
@@ -263,6 +263,9 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 		os.Exit(1)
 	}
 
+	// Track previous proposer address.
+	var previousProposerAddr string
+
 	// Block traversal.
 	for height := start; height <= end; height++ {
 		if height%1000 == 0 {
@@ -316,24 +319,30 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 			}
 		}
 
-		// Proposer.
-		nodeTmAddr := tmBlockMeta.Header.ProposerAddress.String()
+		// Add proposer sum (previous proposer).
+		if previousProposerAddr != "" {
+			// Only count round 0 proposals.
+			if tmBlockMeta.LastCommit.Round() == 0 {
+				if err := ensureNodeTracking(ctx, stats, previousProposerAddr, height, registry); err != nil {
+					logger.Error("failed to query registry",
+						"err", err,
+						"height", height,
+					)
+					os.Exit(1)
+				}
 
-		if err := ensureNodeTracking(ctx, stats, nodeTmAddr, height, registry); err != nil {
-			logger.Error("failed to query registry",
-				"err", err,
-				"height", height,
-			)
-			os.Exit(1)
+				// Add proposal.
+				if err := stats.addNodeProposal(previousProposerAddr); err != nil {
+					logger.Error("failure adding proposal",
+						"err", err,
+					)
+					os.Exit(1)
+				}
+			}
 		}
 
-		// Add proposal.
-		if err := stats.addNodeProposal(nodeTmAddr); err != nil {
-			logger.Error("failure adding proposal",
-				"err", err,
-			)
-			os.Exit(1)
-		}
+		// Update previous proposer address.
+		previousProposerAddr = tmBlockMeta.Header.ProposerAddress.String()
 	}
 
 	return stats
