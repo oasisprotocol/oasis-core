@@ -166,21 +166,15 @@ func (g *Worker) worker() {
 	defer (g.cancelCtx)()
 
 	if g.upstreamConn == nil {
-		var numRetries uint
-
 		dialUpstream := func() error {
 			_, err := g.upstreamDialer(g.ctx)
 			if err != nil {
-				if numRetries < 60 {
-					numRetries++
-					return err
-				}
-				return backoff.Permanent(err)
+				return err
 			}
 			return nil
 		}
 
-		sched := backoff.NewConstantBackOff(1 * time.Second)
+		sched := backoff.WithMaxRetries(backoff.NewConstantBackOff(1*time.Second), 60)
 		err := backoff.Retry(dialUpstream, backoff.WithContext(sched, g.ctx))
 		if err != nil {
 			g.logger.Error("unable to dial upstream node",

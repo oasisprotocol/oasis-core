@@ -30,6 +30,10 @@ const (
 
 	tlsKeyFilename  = "tls_identity.pem"
 	tlsCertFilename = "tls_identity_cert.pem"
+
+	// These are used for the sentry client connection to the sentry node and are never rotated.
+	tlsSentryClientKeyFilename  = "sentry_client_tls_identity.pem"
+	tlsSentryClientCertFilename = "sentry_client_tls_identity_cert.pem"
 )
 
 // ErrCertificateRotationForbidden is returned by RotateCertificates if
@@ -48,14 +52,17 @@ type Identity struct {
 	P2PSigner signature.Signer
 	// ConsensusSigner is a node consensus key signer.
 	ConsensusSigner signature.Signer
+	// TLSSentryClientCertificate is the client certificate used for
+	// connecting to the sentry node's control connection.  It is never rotated.
+	TLSSentryClientCertificate *tls.Certificate
+	// DoNotRotateTLS flag is true if we mustn't rotate the TLS certificates below.
+	DoNotRotateTLS bool
 	// tlsSigner is a node TLS certificate signer.
 	tlsSigner signature.Signer
 	// tlsCertificate is a certificate that can be used for TLS.
 	tlsCertificate *tls.Certificate
 	// nextTLSCertificate is a certificate that can be used for TLS in the next rotation.
 	nextTLSCertificate *tls.Certificate
-	// DoNotRotateTLS flag is true if we mustn't rotate the TLS certificates.
-	DoNotRotateTLS bool
 }
 
 // RotateCertificates rotates the identity's TLS certificates.
@@ -218,14 +225,31 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 		}
 	}
 
+	// Load or generate the sentry client certificate for this node.
+	tlsSentryClientCertPath, tlsSentryClientKeyPath := TLSSentryClientCertPaths(dataDir)
+	sentryClientCert, err := tlsCert.Load(tlsSentryClientCertPath, tlsSentryClientKeyPath)
+	if err != nil {
+		// Load failed, generate fresh sentry client cert.
+		sentryClientCert, err = tlsCert.Generate(CommonName)
+		if err != nil {
+			return nil, err
+		}
+		// And save it to disk.
+		err = tlsCert.Save(tlsSentryClientCertPath, tlsSentryClientKeyPath, sentryClientCert)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &Identity{
-		NodeSigner:         signers[0],
-		P2PSigner:          signers[1],
-		ConsensusSigner:    signers[2],
-		tlsSigner:          memory.NewFromRuntime(cert.PrivateKey.(ed25519.PrivateKey)),
-		tlsCertificate:     cert,
-		nextTLSCertificate: nextCert,
-		DoNotRotateTLS:     dnr,
+		NodeSigner:                 signers[0],
+		P2PSigner:                  signers[1],
+		ConsensusSigner:            signers[2],
+		tlsSigner:                  memory.NewFromRuntime(cert.PrivateKey.(ed25519.PrivateKey)),
+		tlsCertificate:             cert,
+		nextTLSCertificate:         nextCert,
+		DoNotRotateTLS:             dnr,
+		TLSSentryClientCertificate: sentryClientCert,
 	}, nil
 }
 
@@ -235,6 +259,17 @@ func TLSCertPaths(dataDir string) (string, string) {
 	var (
 		tlsKeyPath  = filepath.Join(dataDir, tlsKeyFilename)
 		tlsCertPath = filepath.Join(dataDir, tlsCertFilename)
+	)
+
+	return tlsCertPath, tlsKeyPath
+}
+
+// TLSSentryClientCertPaths returns the sentry client TLS private key and
+// certificate paths relative to the passed data directory.
+func TLSSentryClientCertPaths(dataDir string) (string, string) {
+	var (
+		tlsKeyPath  = filepath.Join(dataDir, tlsSentryClientKeyFilename)
+		tlsCertPath = filepath.Join(dataDir, tlsSentryClientCertFilename)
 	)
 
 	return tlsCertPath, tlsKeyPath
