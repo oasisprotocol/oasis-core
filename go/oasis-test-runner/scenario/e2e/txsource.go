@@ -95,11 +95,11 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.StakingGenesis = "tests/fixture-data/txsource/staking-genesis.json"
 
 	if sc.nodeRestartInterval > 0 {
-		// If node restarts enabled, do not enable round timeouts log watcher.
+		// If node restarts enabled, do not enable round timeouts and merge
+		// discrepancy log watchers.
 		f.Network.DefaultLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 			oasis.LogAssertNoRoundFailures(),
 			oasis.LogAssertNoExecutionDiscrepancyDetected(),
-			oasis.LogAssertNoMergeDiscrepancyDetected(),
 		}
 	}
 
