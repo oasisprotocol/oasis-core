@@ -83,7 +83,7 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
-	publicKey, err := net.provisionNodeIdentity(byzantineDir, cfg.IdentitySeed)
+	publicKey, err := net.provisionNodeIdentity(byzantineDir, cfg.IdentitySeed, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/byzantine: failed to provision node identity")
 	}

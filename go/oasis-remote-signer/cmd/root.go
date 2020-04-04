@@ -18,6 +18,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/version"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -170,12 +171,14 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	peerCertAuth.AllowPeerCertificate(clientCert)
 
 	// Initialize the gRPC server.
-	svr, err := grpc.NewServer(&grpc.ServerConfig{
-		Name:        "remote-signer",
-		Port:        uint16(viper.GetInt(cmdGrpc.CfgServerPort)),
-		Certificate: cert,
-		AuthFunc:    peerCertAuth.AuthFunc,
-	})
+	svrCfg := &grpc.ServerConfig{
+		Name:     "remote-signer",
+		Port:     uint16(viper.GetInt(cmdGrpc.CfgServerPort)),
+		Identity: &identity.Identity{},
+		AuthFunc: peerCertAuth.AuthFunc,
+	}
+	svrCfg.Identity.SetTLSCertificate(cert)
+	svr, err := grpc.NewServer(svrCfg)
 	if err != nil {
 		logger.Error("failed to instantiate gRPC server",
 			"err", err,

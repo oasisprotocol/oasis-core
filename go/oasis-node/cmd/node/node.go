@@ -372,13 +372,13 @@ func (n *Node) startWorkers(logger *logging.Logger) error {
 		return err
 	}
 
-	// Start the sentry worker.
-	if err := n.SentryWorker.Start(); err != nil {
+	// Start the worker registration service.
+	if err := n.RegistrationWorker.Start(); err != nil {
 		return err
 	}
 
-	// Start the worker registration service.
-	if err := n.RegistrationWorker.Start(); err != nil {
+	// Start the sentry worker.
+	if err := n.SentryWorker.Start(); err != nil {
 		return err
 	}
 
@@ -526,7 +526,7 @@ func newNode(testNode bool) (*Node, error) { // nolint: gocyclo
 		)
 		return nil, err
 	}
-	node.Identity, err = identity.LoadOrGenerate(dataDir, signerFactory)
+	node.Identity, err = identity.LoadOrGenerate(dataDir, signerFactory, false)
 	if err != nil {
 		logger.Error("failed to load/generate identity",
 			"err", err,

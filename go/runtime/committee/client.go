@@ -264,9 +264,11 @@ func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
 		RootCAs:    certPool,
 		ServerName: identity.CommonName,
 	}
-	if cc.clientIdentity != nil {
+	if cc.clientIdentity != nil && cc.clientIdentity.GetTLSCertificate() != nil {
 		// Configure TLS client authentication if required.
-		tlsCfg.Certificates = []tls.Certificate{*cc.clientIdentity.TLSCertificate}
+		tlsCfg.GetClientCertificate = func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			return cc.clientIdentity.GetTLSCertificate(), nil
+		}
 	}
 	creds := credentials.NewTLS(&tlsCfg)
 

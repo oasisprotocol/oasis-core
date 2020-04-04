@@ -61,7 +61,8 @@ func (sentry *Sentry) startNode() error {
 		workerSentryControlPort(sentry.controlPort).
 		tendermintCoreListenAddress(sentry.consensusPort).
 		appendNetwork(sentry.net).
-		appendSeedNodes(sentry.net)
+		appendSeedNodes(sentry.net).
+		internalSocketAddress(sentry.net.validators[0].SocketPath())
 
 	if len(validators) > 0 {
 		args = args.addValidatorsAsSentryUpstreams(validators)
@@ -112,7 +113,7 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 		)
 		return nil, fmt.Errorf("oasis/sentry: failed to create sentry file signer: %w", err)
 	}
-	sentryIdentity, err := identity.LoadOrGenerate(sentryDir.String(), signerFactory)
+	sentryIdentity, err := identity.LoadOrGenerate(sentryDir.String(), signerFactory, true)
 	if err != nil {
 		net.logger.Error("failed to provision sentry identity",
 			"err", err,

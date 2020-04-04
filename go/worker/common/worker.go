@@ -267,9 +267,9 @@ func New(
 
 	// Create externally-accessible gRPC server.
 	serverConfig := &grpc.ServerConfig{
-		Name:        "external",
-		Port:        cfg.ClientPort,
-		Certificate: identity.TLSCertificate,
+		Name:     "external",
+		Port:     cfg.ClientPort,
+		Identity: identity,
 	}
 	grpc, err := grpc.NewServer(serverConfig)
 	if err != nil {

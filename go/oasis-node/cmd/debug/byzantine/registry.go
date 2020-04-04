@@ -37,7 +37,7 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 	var committeeAddresses []node.CommitteeAddress
 	for _, addr := range addresses {
 		committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
-			Certificate: id.TLSCertificate.Certificate[0],
+			Certificate: id.GetTLSCertificate().Certificate[0],
 			Address:     addr,
 		})
 	}
@@ -47,7 +47,7 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 		EntityID:   entityID,
 		Expiration: 1000,
 		Committee: node.CommitteeInfo{
-			Certificate: id.TLSCertificate.Certificate[0],
+			Certificate: id.GetTLSCertificate().Certificate[0],
 			Addresses:   committeeAddresses,
 		},
 		P2P: node.P2PInfo{
@@ -68,7 +68,7 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 			registrationSigner,
 			id.P2PSigner,
 			id.ConsensusSigner,
-			id.TLSSigner,
+			id.GetTLSSigner(),
 		},
 		registry.RegisterGenesisNodeSignatureContext,
 		nodeDesc,

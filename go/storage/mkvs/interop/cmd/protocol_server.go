@@ -45,7 +45,7 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 	genesisTestHelpers.SetTestChainContext()
 
 	// Generate dummy identity.
-	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory())
+	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory(), false)
 	if err != nil {
 		logger.Error("failed to generate identity",
 			"err", err,

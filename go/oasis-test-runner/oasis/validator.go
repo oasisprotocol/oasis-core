@@ -160,7 +160,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	// Load node's identity, so that we can pass the validator's Tendermint
 	// address to sentry node(s) to configure it as a private peer.
 	seed := fmt.Sprintf(validatorIdentitySeedTemplate, len(net.validators))
-	valPublicKey, err := net.provisionNodeIdentity(valDir, seed)
+	valPublicKey, err := net.provisionNodeIdentity(valDir, seed, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/validator: failed to provision node identity")
 	}

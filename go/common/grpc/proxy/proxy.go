@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -17,21 +18,29 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 )
 
-// Handler returns a grpc StreamHandler than can be used
-// to proxy requests to provided client.
-// XXX: potentially the connection should be established in this package,
-// with some sensible defaults e.g. KeepAlive set.
-// We might also want to establish a pool of connections to the upstream.
-func Handler(conn *grpc.ClientConn) grpc.StreamHandler {
+// Dialer should return a gRPC ClientConn that will be used
+// to forward calls to.
+type Dialer func(ctx context.Context) (*grpc.ClientConn, error)
+
+// Handler returns a gRPC StreamHandler than can be used
+// to proxy requests to the client returned by the proxy dialer.
+func Handler(dialer Dialer) grpc.StreamHandler {
 	proxy := &proxy{
 		logger:       logging.GetLogger("grpc/proxy"),
-		upstreamConn: conn,
+		dialer:       dialer,
+		upstreamConn: nil, // Will be dialed on-demand.
 	}
 
 	return grpc.StreamHandler(proxy.handler)
 }
 
 type proxy struct {
+	// This is the dialer callback we use to make new connections to the
+	// upstream server if the connection drops, etc.
+	dialer Dialer
+
+	// This is a cached client connection to the upstream server, so we
+	// don't have to re-dial it on every call.
 	upstreamConn *grpc.ClientConn
 
 	logger *logging.Logger
@@ -66,6 +75,21 @@ func (p *proxy) handler(srv interface{}, stream grpc.ServerStream) error {
 	// Pass subject header upstream.
 	upstreamCtx = metadata.AppendToOutgoingContext(upstreamCtx, policy.ForwardedSubjectMD, sub)
 
+	// Check if upstream connection was disconnected.
+	if p.upstreamConn != nil && p.upstreamConn.GetState() == connectivity.Shutdown {
+		// We need to redial if the connection was shut down.
+		p.upstreamConn = nil
+	}
+
+	// Dial upstream if necessary.
+	if p.upstreamConn == nil {
+		var grr error
+		p.upstreamConn, grr = p.dialer(stream.Context())
+		if grr != nil {
+			return grr
+		}
+	}
+
 	upstreamStream, err := grpc.NewClientStream(
 		upstreamCtx,
 		desc,
@@ -92,7 +116,7 @@ func (p *proxy) handler(srv interface{}, stream grpc.ServerStream) error {
 				// can still be in progress.
 				p.logger.Debug("downstream EOF")
 				if err = upstreamStream.CloseSend(); err != nil {
-					p.logger.Error("failrue closing upstream stream",
+					p.logger.Error("failure closing upstream stream",
 						"err", err,
 					)
 				}
@@ -154,6 +178,7 @@ func (p *proxy) proxyUpstream(downstream grpc.ServerStream, upstream grpc.Client
 func (p *proxy) proxyDownstream(upstream grpc.ClientStream, downstream grpc.ServerStream) <-chan error {
 	errCh := make(chan error, 1)
 	var headerSent bool
+
 	go func() {
 		for {
 			// Wait for stream msg (from upstream).

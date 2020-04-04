@@ -50,7 +50,7 @@ func doNodeInit(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	if _, err = identity.LoadOrGenerate(dataDir, nodeSignerFactory); err != nil {
+	if _, err = identity.LoadOrGenerate(dataDir, nodeSignerFactory, true); err != nil {
 		logger.Error("failed to load or generate node identity",
 			"err", err,
 		)

@@ -4,6 +4,7 @@ package sentry
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -16,10 +17,14 @@ import (
 var _ api.Backend = (*backend)(nil)
 
 type backend struct {
+	sync.RWMutex
+
 	logger *logging.Logger
 
 	consensus consensus.Backend
 	identity  *identity.Identity
+
+	upstreamTLSCertificates [][]byte
 }
 
 func (b *backend) GetAddresses(ctx context.Context) (*api.SentryAddresses, error) {
@@ -38,17 +43,42 @@ func (b *backend) GetAddresses(ctx context.Context) (*api.SentryAddresses, error
 		return nil, fmt.Errorf("sentry: error obtaining sentry worker addresses: %w", err)
 	}
 	var committeeAddresses []node.CommitteeAddress
+
 	for _, addr := range committeeAddrs {
 		committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
-			Certificate: b.identity.TLSCertificate.Certificate[0],
+			Certificate: b.identity.GetTLSCertificate().Certificate[0],
 			Address:     addr,
 		})
+		// Make sure to also include the certificate that will be valid
+		// in the next epoch, so that the node remains reachable.
+		if nextCert := b.identity.GetNextTLSCertificate(); nextCert != nil {
+			committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
+				Certificate: nextCert.Certificate[0],
+				Address:     addr,
+			})
+		}
 	}
 
 	return &api.SentryAddresses{
 		Committee: committeeAddresses,
 		Consensus: consensusAddrs,
 	}, nil
+}
+
+func (b *backend) SetUpstreamTLSCertificates(ctx context.Context, certs [][]byte) error {
+	b.Lock()
+	defer b.Unlock()
+
+	b.upstreamTLSCertificates = certs
+
+	return nil
+}
+
+func (b *backend) GetUpstreamTLSCertificates(ctx context.Context) ([][]byte, error) {
+	b.RLock()
+	defer b.RUnlock()
+
+	return b.upstreamTLSCertificates, nil
 }
 
 // New constructs a new sentry Backend instance.

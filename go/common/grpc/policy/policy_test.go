@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	"github.com/oasislabs/oasis-core/go/common/grpc/policy/api"
 	cmnTesting "github.com/oasislabs/oasis-core/go/common/grpc/testing"
+	"github.com/oasislabs/oasis-core/go/common/identity"
 )
 
 var testNs = common.NewTestNamespaceFromSeed([]byte("oasis common grpc policy test ns"), 0)
@@ -60,9 +61,10 @@ func TestAccessPolicy(t *testing.T) {
 	serverConfig := &cmnGrpc.ServerConfig{
 		Name:          host,
 		Port:          port,
-		Certificate:   serverTLSCert,
+		Identity:      &identity.Identity{},
 		CustomOptions: []grpc.ServerOption{grpc.CustomCodec(&cmnGrpc.CBORCodec{})},
 	}
+	serverConfig.Identity.SetTLSCertificate(serverTLSCert)
 	grpcServer, err := cmnGrpc.NewServer(serverConfig)
 	require.NoErrorf(err, "Failed to create a new gRPC server: %v", err)
 

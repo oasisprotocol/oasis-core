@@ -597,12 +597,12 @@ func randomIdentity(rng *drbg.Drbg) *identity.Identity {
 		ConsensusSigner: mustGenerateSigner(),
 	}
 
-	var err error
-	ident.TLSCertificate, err = tls.Generate(identity.CommonName)
+	cert, err := tls.Generate(identity.CommonName)
 	if err != nil {
 		panic(err)
 	}
-	ident.TLSSigner = memorySigner.NewFromRuntime(ident.TLSCertificate.PrivateKey.(ed25519.PrivateKey))
+	ident.SetTLSCertificate(cert)
+	ident.SetTLSSigner(memorySigner.NewFromRuntime(cert.PrivateKey.(ed25519.PrivateKey)))
 
 	return ident
 }
@@ -628,7 +628,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 			ent.Signer,
 			nodeIdentity.P2PSigner,
 			nodeIdentity.ConsensusSigner,
-			nodeIdentity.TLSSigner,
+			nodeIdentity.GetTLSSigner(),
 		}
 		invalidIdentity := randomIdentity(rng)
 
@@ -660,7 +660,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		nod.Node.P2P.Addresses = append(nod.Node.P2P.Addresses, addr)
 		nod.Node.Consensus.ID = nodeIdentity.ConsensusSigner.Public()
 		// Generate dummy TLS certificate.
-		nod.Node.Committee.Certificate = nodeIdentity.TLSCertificate.Certificate[0]
+		nod.Node.Committee.Certificate = nodeIdentity.GetTLSCertificate().Certificate[0]
 		nod.Node.Committee.Addresses = []node.CommitteeAddress{
 			node.CommitteeAddress{
 				Certificate: nod.Node.Committee.Certificate,
@@ -756,7 +756,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 					nodeIdentity.NodeSigner,
 					ent.Signer,
 					nodeIdentity.ConsensusSigner,
-					nodeIdentity.TLSSigner,
+					nodeIdentity.GetTLSSigner(),
 				},
 				api.RegisterNodeSignatureContext,
 				&invNode6,
@@ -821,7 +821,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 				nodeIdentity.NodeSigner,
 				ent.Signer,
 				nodeIdentity.P2PSigner,
-				nodeIdentity.TLSSigner,
+				nodeIdentity.GetTLSSigner(),
 			},
 			api.RegisterNodeSignatureContext,
 			&invNode10,
@@ -838,14 +838,14 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		invNode11 := *nod.Node
 		invNode11.ID = invalidIdentity.NodeSigner.Public()
 		invNode11.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
-		invNode11.Committee.Certificate = invalidIdentity.TLSCertificate.Certificate[0]
+		invNode11.Committee.Certificate = invalidIdentity.GetTLSCertificate().Certificate[0]
 		invalid11.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				invalidIdentity.NodeSigner,
 				ent.Signer,
 				invalidIdentity.ConsensusSigner,
 				nodeIdentity.P2PSigner,
-				invalidIdentity.TLSSigner,
+				invalidIdentity.GetTLSSigner(),
 			},
 			api.RegisterNodeSignatureContext,
 			&invNode11,
@@ -862,14 +862,14 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		invNode12 := *nod.Node
 		invNode12.ID = invalidIdentity.NodeSigner.Public()
 		invNode12.P2P.ID = invalidIdentity.ConsensusSigner.Public()
-		invNode12.Committee.Certificate = invalidIdentity.TLSCertificate.Certificate[0]
+		invNode12.Committee.Certificate = invalidIdentity.GetTLSCertificate().Certificate[0]
 		invalid12.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				invalidIdentity.NodeSigner,
 				ent.Signer,
 				nodeIdentity.ConsensusSigner,
 				invalidIdentity.P2PSigner,
-				invalidIdentity.TLSSigner,
+				invalidIdentity.GetTLSSigner(),
 			},
 			api.RegisterNodeSignatureContext,
 			&invNode12,
@@ -893,7 +893,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 				ent.Signer,
 				invalidIdentity.ConsensusSigner,
 				invalidIdentity.P2PSigner,
-				nodeIdentity.TLSSigner,
+				nodeIdentity.GetTLSSigner(),
 			},
 			api.RegisterNodeSignatureContext,
 			&invNode13,
@@ -945,14 +945,14 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		}
 		newNode.P2P.ID = invalidIdentity.P2PSigner.Public()
 		newNode.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
-		newNode.Committee.Certificate = invalidIdentity.TLSCertificate.Certificate[0]
+		newNode.Committee.Certificate = invalidIdentity.GetTLSCertificate().Certificate[0]
 		invalid14.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				nodeIdentity.NodeSigner,
 				ent.Signer,
 				invalidIdentity.ConsensusSigner,
 				invalidIdentity.P2PSigner,
-				invalidIdentity.TLSSigner,
+				invalidIdentity.GetTLSSigner(),
 			},
 			api.RegisterNodeSignatureContext,
 			newNode,

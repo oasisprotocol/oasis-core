@@ -143,7 +143,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 
 	// Pre-provision the node identity so that we can update the entity.
 	seed := fmt.Sprintf(storageIdentitySeedTemplate, len(net.storageWorkers))
-	publicKey, err := net.provisionNodeIdentity(storageDir, seed)
+	publicKey, err := net.provisionNodeIdentity(storageDir, seed, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/storage: failed to provision node identity")
 	}

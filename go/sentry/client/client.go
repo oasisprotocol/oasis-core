@@ -45,9 +45,9 @@ func (c *Client) createConnection() error {
 	certPool := x509.NewCertPool()
 	certPool.AddCert(c.sentryCert)
 	creds := credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{*c.nodeIdentity.TLSCertificate},
 		RootCAs:      certPool,
 		ServerName:   identity.CommonName,
+		Certificates: []tls.Certificate{*c.nodeIdentity.TLSSentryClientCertificate},
 	})
 	opts := grpc.WithTransportCredentials(creds)
 

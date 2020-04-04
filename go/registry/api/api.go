@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	goEd25519 "crypto/ed25519"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -572,18 +573,38 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, err
 	}
-	certPub, err := verifyNodeCertificate(logger, &n)
+
+	certPub, err := verifyNodeCertificate(logger, &n, false)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	if !sigNode.MultiSigned.IsSignedBy(certPub) {
-		logger.Error("RegisterNode: not signed by TLS certificate key",
-			"signed_node", sigNode,
-			"node", n,
-		)
-		return nil, nil, fmt.Errorf("%w: registration not signed by TLS certificate key", ErrInvalidArgument)
+		if n.Committee.NextCertificate != nil {
+			nextCertPub, grr := verifyNodeCertificate(logger, &n, true)
+			if grr != nil {
+				return nil, nil, grr
+			}
+
+			if !sigNode.MultiSigned.IsSignedBy(nextCertPub) {
+				logger.Error("RegisterNode: not signed by any TLS certificate key",
+					"signed_node", sigNode,
+					"node", n,
+				)
+				return nil, nil, fmt.Errorf("%w: registration not signed by any TLS certificate key", ErrInvalidArgument)
+			}
+
+			expectedSigners = append(expectedSigners, nextCertPub)
+		} else {
+			logger.Error("RegisterNode: not signed by TLS certificate key",
+				"signed_node", sigNode,
+				"node", n,
+			)
+			return nil, nil, fmt.Errorf("%w: registration not signed by TLS certificate key", ErrInvalidArgument)
+		}
+	} else {
+		expectedSigners = append(expectedSigners, certPub)
 	}
-	expectedSigners = append(expectedSigners, certPub)
 
 	// Validate P2PInfo.
 	if !n.P2P.ID.IsValid() {
@@ -682,14 +703,23 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	return &n, runtimes, nil
 }
 
-func verifyNodeCertificate(logger *logging.Logger, node *node.Node) (signature.PublicKey, error) {
-	var certPub signature.PublicKey
+func verifyNodeCertificate(logger *logging.Logger, node *node.Node, useNextCert bool) (signature.PublicKey, error) {
+	var (
+		cert    *x509.Certificate
+		certPub signature.PublicKey
+		err     error
+	)
 
-	cert, err := node.Committee.ParseCertificate()
+	if useNextCert {
+		cert, err = node.Committee.ParseNextCertificate()
+	} else {
+		cert, err = node.Committee.ParseCertificate()
+	}
 	if err != nil {
 		logger.Error("RegisterNode: failed to parse committee certificate",
 			"err", err,
 			"node", node,
+			"use_next_cert", useNextCert,
 		)
 		return certPub, fmt.Errorf("%w: failed to parse committee certificate", ErrInvalidArgument)
 	}
@@ -698,6 +728,7 @@ func verifyNodeCertificate(logger *logging.Logger, node *node.Node) (signature.P
 	if !ok {
 		logger.Error("RegisterNode: incorrect committee certifiate signing algorithm",
 			"node", node,
+			"use_next_cert", useNextCert,
 		)
 		return certPub, fmt.Errorf("%w: incorrect committee certificate signing algorithm", ErrInvalidArgument)
 	}
@@ -707,6 +738,7 @@ func verifyNodeCertificate(logger *logging.Logger, node *node.Node) (signature.P
 		logger.Error("RegisterNode: malformed committee certificate signing key",
 			"err", err,
 			"node", node,
+			"use_next_cert", useNextCert,
 		)
 		return certPub, fmt.Errorf("%w: malformed committee certificate signing key", ErrInvalidArgument)
 	}

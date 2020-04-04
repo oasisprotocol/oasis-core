@@ -4,17 +4,21 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
 	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	policyAPI "github.com/oasislabs/oasis-core/go/common/grpc/policy/api"
+	grpcProxy "github.com/oasislabs/oasis-core/go/common/grpc/proxy"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/service"
@@ -23,7 +27,7 @@ import (
 var _ service.BackgroundService = (*Worker)(nil)
 
 // Worker is a gRPC sentry node worker proxying gRPC requests to upstream node.
-type Worker struct {
+type Worker struct { // nolint: maligned
 	sync.RWMutex
 
 	enabled bool
@@ -43,12 +47,21 @@ type Worker struct {
 
 	*upstreamConn
 
+	upstreamDialer      grpcProxy.Dialer
+	upstreamDialerMutex sync.Mutex
+
 	grpc     *cmnGrpc.Server
 	identity *identity.Identity
 }
 
 type upstreamConn struct {
-	conn              *grpc.ClientConn
+	// ID of the upstream node.
+	nodeID signature.PublicKey
+	// TLS certificates for the upstream node.
+	certs [][]byte
+	// Client connection to the upstream node.
+	conn *grpc.ClientConn
+	// Cleanup callback for the manual resolver.
 	resolverCleanupCb func()
 }
 
@@ -152,6 +165,26 @@ func (g *Worker) worker() {
 	defer close(g.quitCh)
 	defer (g.cancelCtx)()
 
+	if g.upstreamConn == nil {
+		dialUpstream := func() error {
+			_, err := g.upstreamDialer(g.ctx)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+
+		sched := backoff.WithMaxRetries(backoff.NewConstantBackOff(1*time.Second), 60)
+		err := backoff.Retry(dialUpstream, backoff.WithContext(sched, g.ctx))
+		if err != nil {
+			g.logger.Error("unable to dial upstream node",
+				"err", err,
+			)
+			return
+		}
+	}
+
+	// Initialize policy watcher.
 	g.policyWatcher = policyAPI.NewPolicyWatcherClient(g.conn)
 	ch, sub, err := g.policyWatcher.WatchPolicies(g.ctx)
 	if err != nil {
@@ -162,9 +195,10 @@ func (g *Worker) worker() {
 	}
 	defer sub.Close()
 
+	// Initialization complete.
 	close(g.initCh)
 
-	// Watch Policies.
+	// Watch policies.
 	for {
 		select {
 		case p, ok := <-ch:

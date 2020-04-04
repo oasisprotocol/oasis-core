@@ -241,7 +241,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	// Pre-provision the node identity so that we can update the entity.
 	// TODO: Use proper key manager index when multiple key managers are supported.
 	seed := fmt.Sprintf(keymanagerIdentitySeedTemplate, 0)
-	publicKey, err := net.provisionNodeIdentity(kmDir, seed)
+	publicKey, err := net.provisionNodeIdentity(kmDir, seed, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/keymanager: failed to provision node identity")
 	}

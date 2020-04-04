@@ -3,6 +3,7 @@ package ias
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -19,8 +20,7 @@ import (
 type registryAuthenticator struct {
 	logger *logging.Logger
 
-	conn   *grpc.ClientConn
-	client registry.Backend
+	cmd *cobra.Command
 
 	enclaves *enclaveStore
 
@@ -53,15 +53,40 @@ func (auth *registryAuthenticator) VerifyEvidence(ctx context.Context, evidence 
 	return nil
 }
 
-func (auth *registryAuthenticator) worker(ctx context.Context) {
-	defer auth.conn.Close()
+func (auth *registryAuthenticator) dialRegistry(ctx context.Context) (*grpc.ClientConn, error) {
+	conn, err := cmdGrpc.NewClient(auth.cmd)
+	if err != nil {
+		return nil, errors.Wrap(err, "ias: failed to create gRPC client")
+	}
+	return conn, nil
+}
 
+func (auth *registryAuthenticator) worker(ctx context.Context) {
 	waitRuntimes := viper.GetInt(cfgWaitRuntimes)
 	if waitRuntimes <= 0 {
 		close(auth.initCh)
 	}
 
-	ch, sub, err := auth.client.WatchRuntimes(ctx)
+	var redialAttempts uint
+
+Redial:
+	redialAttempts++
+	conn, err := auth.dialRegistry(ctx)
+	if err != nil {
+		auth.logger.Error("unable to connect to registry",
+			"err", err,
+		)
+		if redialAttempts < 10 {
+			time.Sleep(2 * time.Second)
+			auth.logger.Info("attempting to re-dial registry")
+			goto Redial
+		}
+		panic("unable to connect to registry")
+	}
+	defer conn.Close()
+	client := registry.NewRegistryClient(conn)
+
+	ch, sub, err := client.WatchRuntimes(ctx)
 	if err != nil {
 		auth.logger.Error("failed to start the WatchRuntimes stream",
 			"err", err,
@@ -70,13 +95,15 @@ func (auth *registryAuthenticator) worker(ctx context.Context) {
 	}
 	defer sub.Close()
 
+	redialAttempts = 0
+
 	for {
 		var runtime *registry.Runtime
 		select {
 		case runtime = <-ch:
 			if runtime == nil {
-				auth.logger.Error("data source stream closed by peer")
-				panic("data source disappeared")
+				auth.logger.Warn("data source stream closed by peer, re-dialing")
+				goto Redial
 			}
 		case <-ctx.Done():
 			return
@@ -100,15 +127,9 @@ func (auth *registryAuthenticator) worker(ctx context.Context) {
 }
 
 func newRegistryAuthenticator(ctx context.Context, cmd *cobra.Command) (iasProxy.Authenticator, error) {
-	conn, err := cmdGrpc.NewClient(cmd)
-	if err != nil {
-		return nil, errors.Wrap(err, "ias: failed to create gRPC client")
-	}
-
 	auth := &registryAuthenticator{
 		logger:   logging.GetLogger("cmd/ias/proxy/auth/registry"),
-		conn:     conn,
-		client:   registry.NewRegistryClient(conn),
+		cmd:      cmd,
 		enclaves: newEnclaveStore(),
 		initCh:   make(chan struct{}),
 	}

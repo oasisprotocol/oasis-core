@@ -57,7 +57,7 @@ func (net *Network) newSeedNode() (*seedNode, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/seed: failed to create seed signer factory")
 	}
-	seedIdentity, err := identity.LoadOrGenerate(seedDir.String(), signerFactory)
+	seedIdentity, err := identity.LoadOrGenerate(seedDir.String(), signerFactory, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/seed: failed to provision seed identity")
 	}

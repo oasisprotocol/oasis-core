@@ -28,6 +28,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/genesis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
+	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
 
 const (
@@ -624,6 +625,10 @@ func (net *Network) startOasisNode(
 	args = append(args, baseArgs...)
 	args = append(args, extraArgs.vec...)
 
+	if !strings.HasPrefix(node.Name, "sentry-") && !strings.HasPrefix(node.Name, "ias-proxy") && len(net.byzantine) == 0 {
+		args = append(args, []string{"--" + registration.CfgRegistrationRotateCerts, "1"}...)
+	}
+
 	w, err := node.dir.NewLogWriter(logConsoleFile)
 	if err != nil {
 		return err
@@ -746,7 +751,7 @@ func (net *Network) BasePath() string {
 	return net.baseDir.String()
 }
 
-func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string) (signature.PublicKey, error) {
+func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string, persistTLS bool) (signature.PublicKey, error) {
 	if net.cfg.DeterministicIdentities {
 		if err := net.generateDeterministicNodeIdentity(dataDir, seed); err != nil {
 			return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to generate deterministic identity")
@@ -757,7 +762,7 @@ func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string) (signat
 	if err != nil {
 		return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to create node file signer factory")
 	}
-	nodeIdentity, err := identity.LoadOrGenerate(dataDir.String(), signerFactory)
+	nodeIdentity, err := identity.LoadOrGenerate(dataDir.String(), signerFactory, persistTLS)
 	if err != nil {
 		return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to provision node identity")
 	}

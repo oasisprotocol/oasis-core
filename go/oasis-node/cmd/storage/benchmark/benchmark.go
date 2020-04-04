@@ -70,7 +70,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	}
 
 	// Create an identity.
-	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory())
+	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory(), false)
 	if err != nil {
 		logger.Error("failed to generate a new identity",
 			"err", err,
