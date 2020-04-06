@@ -88,37 +88,30 @@ func (b *storageClientBackend) writeWithClient(
 	ch := make(chan *grpcResponse, n)
 	for _, conn := range conns {
 		go func(conn *committee.ClientConnWithMeta) {
-			var (
-				resp       interface{}
-				numRetries int
-			)
+			var resp interface{}
 			op := func() error {
 				var rerr error
 				resp, rerr = fn(ctx, api.NewStorageClient(conn.ClientConn), conn.Node)
-				if numRetries < maxRetries {
-					numRetries++
-
-					switch {
-					case status.Code(rerr) == codes.Unavailable:
-						// Storage node may be temporarily unavailable.
-						return rerr
-					case status.Code(rerr) == codes.PermissionDenied:
-						// Writes can fail around an epoch transition due to policy errors.
-						return rerr
-					case errors.Is(rerr, api.ErrPreviousVersionMismatch):
-						// Storage node may not have yet processed the epoch transition.
-						return rerr
-					case errors.Is(rerr, api.ErrRootNotFound):
-						// Storage node may not have yet processed the epoch transition.
-						return rerr
-					default:
-						// All other errors are permanent.
-					}
+				switch {
+				case status.Code(rerr) == codes.Unavailable:
+					// Storage node may be temporarily unavailable.
+					return rerr
+				case status.Code(rerr) == codes.PermissionDenied:
+					// Writes can fail around an epoch transition due to policy errors.
+					return rerr
+				case errors.Is(rerr, api.ErrPreviousVersionMismatch):
+					// Storage node may not have yet processed the epoch transition.
+					return rerr
+				case errors.Is(rerr, api.ErrRootNotFound):
+					// Storage node may not have yet processed the epoch transition.
+					return rerr
+				default:
+					// All other errors are permanent.
+					return backoff.Permanent(rerr)
 				}
-				return backoff.Permanent(rerr)
 			}
 
-			sched := backoff.NewConstantBackOff(retryInterval)
+			sched := backoff.WithMaxRetries(backoff.NewConstantBackOff(retryInterval), maxRetries)
 			rerr := backoff.Retry(op, backoff.WithContext(sched, ctx))
 
 			ch <- &grpcResponse{
@@ -291,10 +284,7 @@ func (b *storageClientBackend) readWithClient(
 	ns common.Namespace,
 	fn func(context.Context, api.Backend) (interface{}, error),
 ) (interface{}, error) {
-	var (
-		numRetries int
-		resp       interface{}
-	)
+	var resp interface{}
 	op := func() error {
 		conns := b.committeeClient.GetConnectionsWithMeta()
 		n := len(conns)
@@ -302,11 +292,7 @@ func (b *storageClientBackend) readWithClient(
 			b.logger.Error("readWithClient: no connected nodes for runtime",
 				"runtime_id", ns,
 			)
-			if numRetries < maxRetries {
-				numRetries++
-				return ErrStorageNotAvailable
-			}
-			return backoff.Permanent(ErrStorageNotAvailable)
+			return ErrStorageNotAvailable
 		}
 
 		// TODO: Use a more clever approach to choose the order in which to read
@@ -332,14 +318,10 @@ func (b *storageClientBackend) readWithClient(
 			}
 			return nil
 		}
-		if numRetries < maxRetries {
-			numRetries++
-			return err
-		}
-		return backoff.Permanent(err)
+		return err
 	}
 
-	sched := backoff.NewConstantBackOff(retryInterval)
+	sched := backoff.WithMaxRetries(backoff.NewConstantBackOff(retryInterval), maxRetries)
 	err := backoff.Retry(op, backoff.WithContext(sched, ctx))
 	return resp, err
 }
