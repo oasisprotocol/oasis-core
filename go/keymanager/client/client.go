@@ -65,10 +65,7 @@ func (c *Client) CallRemote(ctx context.Context, data []byte) ([]byte, error) {
 		"data", base64.StdEncoding.EncodeToString(data),
 	)
 
-	var (
-		resp       []byte
-		numRetries int
-	)
+	var resp []byte
 	call := func() error {
 		conn := c.committeeClient.GetConnection()
 		if conn == nil {
@@ -83,10 +80,9 @@ func (c *Client) CallRemote(ctx context.Context, data []byte) ([]byte, error) {
 			Endpoint:  api.EnclaveRPCEndpoint,
 			Payload:   data,
 		})
-		if status.Code(err) == codes.PermissionDenied && numRetries < maxRetries {
+		if status.Code(err) == codes.PermissionDenied {
 			// Calls can fail around epoch transitions, as the access policy
-			// is being updated, so we must retry (up to maxRetries).
-			numRetries++
+			// is being updated, so we must retry.
 			return err
 		}
 		// Request failed, communicate that to the node selection policy.
@@ -94,7 +90,7 @@ func (c *Client) CallRemote(ctx context.Context, data []byte) ([]byte, error) {
 		return backoff.Permanent(err)
 	}
 
-	retry := backoff.NewConstantBackOff(retryInterval)
+	retry := backoff.WithMaxRetries(backoff.NewConstantBackOff(retryInterval), maxRetries)
 	err := backoff.Retry(call, backoff.WithContext(retry, ctx))
 
 	return resp, err
