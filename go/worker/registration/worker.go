@@ -246,6 +246,8 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 	}
 
 	var epoch epochtime.EpochTime
+	var lastTLSRotationEpoch epochtime.EpochTime
+	tlsRotationPending := true
 	first := true
 Loop:
 	for {
@@ -259,38 +261,28 @@ Loop:
 			// Epoch updated, check if we can submit a registration.
 
 			// Check if we need to rotate the node's TLS certificate.
-			if !w.identity.DoNotRotateTLS {
+			if !w.identity.DoNotRotateTLS && !tlsRotationPending {
 				// Per how many epochs should we do rotations?
+				// TODO: Make this time-based instead.
 				rotateTLSCertsPer := epochtime.EpochTime(viper.GetUint64(CfgRegistrationRotateCerts))
-				if rotateTLSCertsPer != 0 && epoch%rotateTLSCertsPer == 0 {
-					baseEpoch, err := w.epochtime.GetBaseEpoch(w.ctx)
+				if rotateTLSCertsPer != 0 && (epoch-lastTLSRotationEpoch) >= rotateTLSCertsPer {
+					// Rotate node TLS certificates.
+					err := w.identity.RotateCertificates()
 					if err != nil {
-						w.logger.Error("failed to get base epoch, node TLS certificate rotation failed",
+						w.logger.Error("node TLS certificate rotation failed",
 							"new_epoch", epoch,
 							"err", err,
 						)
 					} else {
-						// Rotate node TLS certificates (but not on the
-						// first epoch).
-						// TODO: Make this time-based instead.
-						if epoch != baseEpoch {
-							err := w.identity.RotateCertificates()
-							if err != nil {
-								w.logger.Error("node TLS certificate rotation failed",
-									"new_epoch", epoch,
-									"err", err,
-								)
-							} else {
-								cert1 := w.identity.GetTLSCertificate().Certificate[0]
-								cert2 := w.identity.GetNextTLSCertificate().Certificate[0]
+						cert1 := w.identity.GetTLSCertificate().Certificate[0]
+						cert2 := w.identity.GetNextTLSCertificate().Certificate[0]
+						tlsRotationPending = true
 
-								w.logger.Info("node TLS certificates have been rotated",
-									"new_epoch", epoch,
-									"new_cert1", accessctl.SubjectFromDER(cert1),
-									"new_cert2", accessctl.SubjectFromDER(cert2),
-								)
-							}
-						}
+						w.logger.Info("node TLS certificates have been rotated",
+							"new_epoch", epoch,
+							"new_cert1", accessctl.SubjectFromDER(cert1),
+							"new_cert2", accessctl.SubjectFromDER(cert2),
+						)
 					}
 				}
 			}
@@ -355,6 +347,12 @@ Loop:
 		if first {
 			close(w.initialRegCh)
 			first = false
+		}
+
+		// Do not perform TLS rotation unless we have successfully (re-)registered.
+		if tlsRotationPending {
+			lastTLSRotationEpoch = epoch
+			tlsRotationPending = false
 		}
 	}
 }
