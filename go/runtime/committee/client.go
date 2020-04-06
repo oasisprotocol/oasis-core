@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -22,6 +23,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 )
+
+const defaultCloseDelay = 5 * time.Second
 
 // NodeSelectionFeedback is feedback to the node selection policy.
 type NodeSelectionFeedback struct {
@@ -132,6 +135,26 @@ type clientConnState struct {
 	resolverCleanupCb func()
 }
 
+// DelayedClose closes the connection after the given delay. This method does not block the caller.
+func (cs *clientConnState) DelayedClose(delay time.Duration) {
+	go func() {
+		time.Sleep(delay)
+		cs.Close()
+	}()
+}
+
+// Close closes the connection.
+func (cs *clientConnState) Close() {
+	if cs.conn != nil {
+		cs.conn.Close()
+		cs.conn = nil
+	}
+	if cs.resolverCleanupCb != nil {
+		cs.resolverCleanupCb()
+		cs.resolverCleanupCb = nil
+	}
+}
+
 type committeeClient struct {
 	sync.RWMutex
 
@@ -143,6 +166,7 @@ type committeeClient struct {
 
 	clientIdentity      *identity.Identity
 	nodeSelectionPolicy NodeSelectionPolicy
+	closeDelay          time.Duration
 
 	logger *logging.Logger
 }
@@ -231,16 +255,11 @@ func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
 			return nil
 		}
 
-		if cs.conn != nil {
-			cs.conn.Close()
-		}
-		if cs.resolverCleanupCb != nil {
-			cs.resolverCleanupCb()
-		}
-	} else {
-		cs = new(clientConnState)
-		cc.conns[n.ID] = cs
+		cs.DelayedClose(cc.closeDelay)
 	}
+
+	cs = new(clientConnState)
+	cc.conns[n.ID] = cs
 	cs.node = n
 
 	// Setup resolver.
@@ -306,12 +325,7 @@ func (cc *committeeClient) deleteConnectionLocked(id signature.PublicKey) {
 		return
 	}
 
-	if cs.conn != nil {
-		cs.conn.Close()
-	}
-	if cs.resolverCleanupCb != nil {
-		cs.resolverCleanupCb()
-	}
+	cs.DelayedClose(cc.closeDelay)
 	delete(cc.conns, id)
 }
 
@@ -391,6 +405,16 @@ func WithNodeSelectionPolicy(policy NodeSelectionPolicy) ClientOption {
 	}
 }
 
+// WithCloseDelay is an option for configuring the connection close delay after rotating a
+// connection.
+//
+// If not configured it defaults to 5 seconds.
+func WithCloseDelay(delay time.Duration) ClientOption {
+	return func(cc *committeeClient) {
+		cc.closeDelay = delay
+	}
+}
+
 // NewClient creates a new committee client.
 func NewClient(ctx context.Context, nw NodeDescriptorLookup, options ...ClientOption) (Client, error) {
 	ch, sub, err := nw.WatchNodeUpdates()
@@ -404,6 +428,7 @@ func NewClient(ctx context.Context, nw NodeDescriptorLookup, options ...ClientOp
 		notifier:            pubsub.NewBroker(false),
 		initCh:              make(chan struct{}),
 		nodeSelectionPolicy: NewRoundRobinNodeSelectionPolicy(),
+		closeDelay:          defaultCloseDelay,
 		logger:              logging.GetLogger("runtime/committee/client"),
 	}
 
