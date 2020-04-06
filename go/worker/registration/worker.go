@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/accessctl"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
@@ -280,8 +281,13 @@ Loop:
 									"err", err,
 								)
 							} else {
+								cert1 := w.identity.GetTLSCertificate().Certificate[0]
+								cert2 := w.identity.GetNextTLSCertificate().Certificate[0]
+
 								w.logger.Info("node TLS certificates have been rotated",
 									"new_epoch", epoch,
+									"new_cert1", accessctl.SubjectFromDER(cert1),
+									"new_cert2", accessctl.SubjectFromDER(cert2),
 								)
 							}
 						}
