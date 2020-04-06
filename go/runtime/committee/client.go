@@ -357,12 +357,16 @@ func (cc *committeeClient) worker(ctx context.Context, ch <-chan *NodeUpdate, su
 					cc.nodeSelectionPolicy.UpdateNodes(nodes)
 
 					cc.version = u.Freeze.Version
-					cc.notifier.Broadcast(u.Freeze.Version)
+					cc.notifier.Broadcast(cc.version)
 
 					if !initialized {
 						close(cc.initCh)
 						initialized = true
 					}
+				case u.BumpVersion != nil:
+					// Committee version has been bumped while committee stayed the same.
+					cc.version = u.BumpVersion.Version
+					cc.notifier.Broadcast(cc.version)
 				case u.Update != nil:
 					// Node information updated.
 					cc.logger.Debug("updating node connection",

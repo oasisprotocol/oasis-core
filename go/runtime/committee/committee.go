@@ -1,10 +1,13 @@
 package committee
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -30,6 +33,8 @@ type committeeWatcher struct { // nolint: maligned
 	filters   []Filter
 	autoEpoch bool
 
+	lastCommitteeID hash.Hash
+
 	logger *logging.Logger
 }
 
@@ -37,16 +42,22 @@ func (cw *committeeWatcher) Nodes() NodeDescriptorLookup {
 	return cw.nw
 }
 
-func (cw *committeeWatcher) EpochTransition(ctx context.Context, height int64) error {
+func (cw *committeeWatcher) EpochTransition(ctx context.Context, height int64) (err error) {
 	if cw.autoEpoch {
 		return fmt.Errorf("committee: manual epoch transition not allowed when automatic is enabled")
 	}
 
-	// Clear all previous nodes.
-	cw.nw.Reset()
+	defer func() {
+		// Make sure to not watch any nodes in case we fail to update the committee.
+		if err != nil {
+			cw.lastCommitteeID.Empty()
+			cw.nw.Reset()
+		}
+	}()
 
 	// TODO: Support request for only a specific committee kind.
-	committees, err := cw.scheduler.GetCommittees(ctx, &scheduler.GetCommitteesRequest{
+	var committees []*scheduler.Committee
+	committees, err = cw.scheduler.GetCommittees(ctx, &scheduler.GetCommitteesRequest{
 		RuntimeID: cw.runtimeID,
 		Height:    height,
 	})
@@ -73,10 +84,12 @@ func (cw *committeeWatcher) update(ctx context.Context, version int64, committee
 	defer func() {
 		// Make sure to not watch any nodes in case we fail to update the committee.
 		if err != nil {
+			cw.lastCommitteeID.Empty()
 			cw.nw.Reset()
 		}
 	}()
 
+	var filtered []*scheduler.CommitteeNode
 Members:
 	for _, member := range committee.Members {
 		// Filter members.
@@ -86,14 +99,39 @@ Members:
 			}
 		}
 
-		_, err := cw.nw.WatchNode(ctx, member.PublicKey)
-		if err != nil {
+		filtered = append(filtered, member)
+	}
+	// Sort list to ensure a canonical identifier.
+	sort.Slice(filtered, func(i, j int) bool {
+		return bytes.Compare(filtered[i].PublicKey[:], filtered[j].PublicKey[:]) < 0
+	})
+
+	// If the set of (filtered) committee members did not change, there is no need to trigger a
+	// reset and recreate everything. Nodes will be updated anyway.
+	var cid hash.Hash
+	cid.From(filtered)
+
+	if cw.lastCommitteeID.Equal(&cid) {
+		cw.logger.Debug("not updating committee as members/roles have not changed",
+			"filtered_committee_id", cid,
+		)
+		// Bump committee version as that might have changed.
+		cw.nw.BumpVersion(version)
+		return nil
+	}
+
+	// Clear all previous nodes.
+	cw.nw.Reset()
+
+	for _, member := range filtered {
+		if _, err = cw.nw.WatchNode(ctx, member.PublicKey); err != nil {
 			return fmt.Errorf("committee: failed to watch node: %w", err)
 		}
 	}
 
 	// Freeze the node watcher as we will not be watching any additional nodes.
 	cw.nw.Freeze(version)
+	cw.lastCommitteeID = cid
 
 	return nil
 }
@@ -115,9 +153,6 @@ func (cw *committeeWatcher) watchCommittees(ctx context.Context, ch <-chan *sche
 			if c.Kind != cw.kind {
 				continue
 			}
-
-			// Clear all previous nodes.
-			cw.nw.Reset()
 
 			if err := cw.update(ctx, int64(c.ValidFor), c); err != nil {
 				cw.logger.Error("failed to update committee",
@@ -169,8 +204,12 @@ func NewWatcher(
 		scheduler: scheduler,
 		runtimeID: runtimeID,
 		kind:      kind,
-		logger:    logging.GetLogger("runtime/committee/watcher"),
+		logger: logging.GetLogger("runtime/committee/watcher").With(
+			"runtime_id", runtimeID,
+			"kind", kind,
+		),
 	}
+	cw.lastCommitteeID.Empty()
 
 	for _, o := range options {
 		o(cw)
