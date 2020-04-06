@@ -10,6 +10,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 )
 
+// SignerName is the name used to identify the memory backed signer.
+const SignerName = "memory"
+
 var (
 	_ signature.SignerFactory = (*Factory)(nil)
 	_ signature.Signer        = (*Signer)(nil)
